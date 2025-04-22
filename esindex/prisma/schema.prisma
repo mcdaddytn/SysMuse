@@ -1,0 +1,55 @@
+// This is the initial code file outlining the import/index and BM25 term extraction
+// with MySQL + Prisma + Elasticsearch for keyword/phrase suggestion.
+
+// === 1. Prisma schema (schema.prisma) ===
+// Run `npx prisma init` first and replace the content of schema.prisma:
+
+// schema.prisma
+// ---
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Corpus {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  documents Document[]
+}
+
+model Document {
+  id        Int        @id @default(autoincrement())
+  corpusId  Int
+  content   String     // Could be message (enron) or transcript (TED)
+  esId      String     // Corresponding Elasticsearch ID
+  createdAt DateTime   @default(now())
+
+  corpus    Corpus     @relation(fields: [corpusId], references: [id])
+  terms     SearchTerm[]
+}
+
+model SearchTerm {
+  id        Int      @id @default(autoincrement())
+  term      String
+  bm25      Float
+  tf        Int      // term freq
+  df        Int      // doc freq
+  docId     Int
+  document  Document @relation(fields: [docId], references: [id])
+
+  @@unique([term, docId])
+}
+
+model Stopword {
+  id       Int    @id @default(autoincrement())
+  term     String
+  category String
+
+  @@unique([term, category])
+}
+

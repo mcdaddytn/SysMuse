@@ -1,0 +1,6 @@
+{
+  "corpus": "enron",
+  "index": "enron_emails",
+  "topN": 5,
+  "maxPhraseLength": 3
+}

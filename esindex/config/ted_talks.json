@@ -1,0 +1,6 @@
+{
+  "corpus": "ted_talks",
+  "index": "ted_talks",
+  "topN": 5,
+  "maxPhraseLength": 3
+}

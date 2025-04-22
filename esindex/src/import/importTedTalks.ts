@@ -3,7 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import csv from 'csv-parser';
 import { esClient } from '../lib/es';
-import { setupTedIndex } from '../setup/setupIndices';
+import { setupTedIndex, writeCsvSubset } from '../setup/setupIndices';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -26,54 +26,41 @@ function cleanTags(raw: string): string[] {
   }
 }
 
-async function loadTranscripts(): Promise<Record<string, string>> {
-  const map: Record<string, string> = {};
-  return new Promise((resolve) => {
+export async function importTEDTalks(indexName = 'ted_talks', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
+  await setupTedIndex(indexName, keywordSearch);
+  const transcripts: Record<string, string> = {};
+  const transcriptRows: any[] = [];
+
+  await new Promise<void>((resolve) => {
     fs.createReadStream(TRANSCRIPTS_CSV)
       .pipe(csv())
       .on('data', row => {
-        //map[row.url] = row.transcript;
-        map[normalizeUrl(row.url)] = row.transcript;
+        transcripts[normalizeUrl(row.url)] = row.transcript;
+        transcriptRows.push(row);
       })
-      .on('end', () => resolve(map));
+      .on('end', resolve);
   });
-}
 
-async function importTEDTalks() {
-  await setupTedIndex();
-  console.log(`Loading transcripts from file ${TRANSCRIPTS_CSV}`);  
-  const transcripts = await loadTranscripts();
-  console.log(`Loading main data from file ${MAIN_CSV}`);  
-  
-  const readStream = fs.createReadStream(MAIN_CSV).pipe(csv());
+  const readRows: any[] = [];
+  const stream = fs.createReadStream(MAIN_CSV).pipe(csv());
   let bulk: any[] = [];
   let count = 0;
-  let skippedCount = 0;
 
-  for await (const row of readStream) {
-    //const url = row.url?.trim();
+  for await (const row of stream) {
     const url = normalizeUrl(row.url);
-    if (!url || !transcripts[url]) {
-      console.warn(`Skipping unmatched URL: ${url}`);
-      skippedCount++;
-      continue;
-    }
-    
     if (!url || !transcripts[url]) continue;
 
-    //console.log(`Row.tags ${row.tags}`);  
-
+    readRows.push(row);
     const doc = {
       title: row.title,
       speaker: row.main_speaker,
-      //tags: JSON.parse(row.tags || '[]'),
-      tags: cleanTags(row.tags),
+      tags: JSON.parse(row.tags || '[]'),
       published_date: new Date(parseInt(row.published_date) * 1000).toISOString(),
       transcript: transcripts[url],
       url
     };
 
-    bulk.push({ index: { _index: 'ted_talks' } });
+    bulk.push({ index: { _index: indexName } });
     bulk.push(doc);
     count++;
 
@@ -81,11 +68,15 @@ async function importTEDTalks() {
       await esClient.bulk({ body: bulk });
       bulk = [];
     }
+
+    if (numRecords && count >= numRecords) break;
   }
 
   if (bulk.length > 0) await esClient.bulk({ body: bulk });
-  console.log(`Imported ${count} TED documents`);
-  console.log(`Skipped ${skippedCount} TED documents`);
-}
+  console.log(`Imported ${count} TED documents into index ${indexName}`);
 
-importTEDTalks().catch(console.error);
+  if (outputFileSuffix && count > 0) {
+    writeCsvSubset(MAIN_CSV, readRows.slice(0, count), outputFileSuffix);
+    writeCsvSubset(TRANSCRIPTS_CSV, transcriptRows.filter(r => readRows.find(doc => normalizeUrl(doc.url) === normalizeUrl(r.url))), outputFileSuffix);
+  }
+}

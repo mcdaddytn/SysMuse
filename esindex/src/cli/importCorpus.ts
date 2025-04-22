@@ -20,7 +20,8 @@ async function createCorpus(name: string) {
 }
 
 function analyzeTextStats(text: string) {
-  const words = text.match(/\b\w+\b/g) || [];
+  //const words = text.match(/\b\w+\b/g) || [];
+  const words: string[] = text.match(/\b\w+\b/g) || [];
   const wordCount = words.length;
   const docLength = text.length;
   const uniqueWords = new Set(words.map(w => w.toLowerCase()));
@@ -32,6 +33,10 @@ function analyzeTextStats(text: string) {
 
 export async function importCorpus(configPath: string) {
   const config = loadConfig(configPath);
+  //console.log(`importCorpus config.corpus ${config.corpus}`);
+  //const configText = JSON.stringify(config);
+  //console.log(`importCorpus config ${configText}`);
+
   const stopwords = await getAllStopwords();
   const corpus = await createCorpus(config.corpus);
   const maxPhraseLength = config.maxPhraseLength || 1; // Default to keywords only

@@ -1,20 +1,25 @@
 // === src/index.ts ===
-import { importCorpus } from './cli/importCorpus';
-import { setupEnronIndex, setupTedIndex } from './setup/setupIndices';
-import { importStopwords } from './setup/importStopwords';
+import { execSync } from 'child_process';
+import * as path from 'path';
 
-async function run() {
-  //await setupEnronIndex();
-  //await setupTedIndex();
-  await importStopwords('general', 'general_stopwords.txt', "\n");
+async function main() {
+  const args = process.argv.slice(2);
 
-  const configFile = process.argv[2];
-  if (!configFile) {
-    console.error("Usage: ts-node src/index.ts <config.json>");
+  if (args.length === 0) {
+    console.error("Usage: ts-node src/index.ts <config1.json> <config2.json> ...");
     process.exit(1);
   }
 
-  await importCorpus(configFile);
+  for (const configPath of args) {
+    const absPath = path.resolve(configPath);
+    console.log(`Running task for config: ${absPath}`);
+    try {
+      execSync(`ts-node src/cli/runImporter.ts ${absPath}`, { stdio: 'inherit' });
+    } catch (err) {
+      console.error(`Failed to run task for ${absPath}`);
+      process.exit(1);
+    }
+  }
 }
 
-run();
+main();

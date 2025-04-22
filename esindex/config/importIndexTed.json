@@ -1,0 +1,7 @@
+{
+  "task": "importIndex",
+  "dataset": "ted",
+  "index": "ted_talks",
+  "keywordSearch": false
+}
+

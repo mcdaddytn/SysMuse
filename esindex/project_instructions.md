@@ -32,12 +32,15 @@ Initialize database:
 
 npx prisma migrate dev --name init
 
-Set up Elasticsearch indices (optional callout script in future step):
-	await setupEnronIndex();
-	await setupTedIndex();
 
-Run import and BM25 extraction:
+Now can run this sequence
 
-ts-node src/index.ts config/enron.json
-# or
-ts-node src/index.ts config/ted_talks.json
+In mysql client:
+DROP SCHEMA `search_gen` ;
+CREATE SCHEMA `search_gen` ;
+
+npx prisma generate
+npx prisma db push
+
+ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
+

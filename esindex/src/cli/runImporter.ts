@@ -1,7 +1,8 @@
 // === src/cli/runImporter.ts ===
 import { importTEDTalks } from '../import/importTedTalks';
 import { importEnronEmails } from '../import/importEnron';
-import { setupTedIndex, setupEnronIndex } from '../setup/setupIndices';
+import { importStopwords } from '../setup/importStopwords';
+import { importCorpus } from './importCorpus';
 import { PrismaClient } from '@prisma/client';
 import { loadConfig } from '../lib/config';
 import * as dotenv from 'dotenv';
@@ -20,22 +21,14 @@ async function run() {
   const config = loadConfig(configPath);
 
   const dataset = config.dataset || 'ted';
-  const task = config.task || 'import';
+  //const task = config.task || 'import';
+  const task = config.task || 'summary';  
   const indexName = config.index || (dataset === 'ted' ? 'ted_talks' : 'enron_emails');
   const keywordSearch = config.keywordSearch !== false; // default true
   const numRecords = config.numRecords;
   const outputFileSuffix = config.outputFileSuffix;
   
-  if (task === 'setup') {
-    if (dataset === 'ted') {
-      await setupTedIndex(indexName, keywordSearch);
-    } else if (dataset === 'enron') {
-      await setupEnronIndex(indexName, keywordSearch);
-    } else {
-      console.error(`Unknown dataset: ${dataset}`);
-      process.exit(1);
-    }
-  } else if (task === 'import') {
+  if (task === 'importIndex') {
     if (dataset === 'ted') {
       await importTEDTalks(indexName, keywordSearch, numRecords, outputFileSuffix);
     } else if (dataset === 'enron') {
@@ -44,6 +37,15 @@ async function run() {
       console.error(`Unknown dataset: ${dataset}`);
       process.exit(1);
     }
+  } else if (task === 'importStopwords') {
+    const { category, fileName, delimiter } = config;
+    if (!category || !fileName || !delimiter) {
+      console.error("importStopwords task requires category, fileName, and delimiter fields");
+      process.exit(1);
+    }
+    await importStopwords(category, fileName, delimiter);
+  } else if (task === 'importCorpus') {
+    await importCorpus(configPath);
   } else if (task === 'summary') {
     const corpus = await prisma.corpus.findUnique({
       where: { name: dataset },

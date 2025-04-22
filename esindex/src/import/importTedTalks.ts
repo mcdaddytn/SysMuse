@@ -27,8 +27,8 @@ function cleanTags(raw: string): string[] {
 }
 
 export async function importTEDTalks(indexName = 'ted_talks', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
-  //gm: lets not do this here, separate step for this, can integrate this later, maybe do it optionally if indexName provided (do not default)
-  //await setupTedIndex(indexName, keywordSearch);
+  //gm: if do this here, do not need separate step for this
+  await setupTedIndex(indexName, keywordSearch);
   const transcripts: Record<string, string> = {};
   const transcriptRows: any[] = [];
 

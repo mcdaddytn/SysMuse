@@ -19,6 +19,17 @@ async function createCorpus(name: string) {
   });
 }
 
+function analyzeTextStats(text: string) {
+  const words = text.match(/\b\w+\b/g) || [];
+  const wordCount = words.length;
+  const docLength = text.length;
+  const uniqueWords = new Set(words.map(w => w.toLowerCase()));
+  const distinctWordCount = uniqueWords.size;
+  const avgWordLength = wordCount > 0 ? words.reduce((sum, w) => sum + w.length, 0) / wordCount : 0;
+
+  return { docLength, wordCount, distinctWordCount, avgWordLength };
+}
+
 export async function importCorpus(configPath: string) {
   const config = loadConfig(configPath);
   const stopwords = await getAllStopwords();
@@ -43,16 +54,25 @@ export async function importCorpus(configPath: string) {
   for (const hit of docs.hits.hits) {
     const esId = hit._id;
     const source = hit._source as any;
-    //const content = source.message || source.transcript;
-    let content = source.message || source.transcript;
+    const content = source.message || source.transcript;
+    //let content = source.message || source.transcript;
     if (!content) continue;
     console.log(`Indexing doc ${esId}: ${content?.substring(0, 60)}...`);
     // gm, blanking it for now to save space, why do I need this in mysql ?
-    content = ""
+    //content = ""
+
+    const stats = analyzeTextStats(content);
 
     const doc = await prisma.document.create({
-      data: { corpusId: corpus.id, content, esId }
-      //data: { corpusId: corpus.id, esId }
+      data: {
+        corpusId: corpus.id,
+        content: '', // no need to persist actual content
+        esId,
+        docLength: stats.docLength,
+        wordCount: stats.wordCount,
+        distinctWordCount: stats.distinctWordCount,
+        avgWordLength: stats.avgWordLength
+      }
     });
 
     const vector: any = await esClient.termvectors({
@@ -66,17 +86,20 @@ export async function importCorpus(configPath: string) {
     if (!field) continue;
 
     const terms: Record<string, any> = field.terms;
-    const stats = field.field_statistics;
+    const fieldStats = field.field_statistics;
     
-    const avgdl: number = stats.sum_ttf && stats.doc_count ? stats.sum_ttf / stats.doc_count : 1;
+    const avgdl: number = fieldStats.sum_ttf && fieldStats.doc_count ? fieldStats.sum_ttf / fieldStats.doc_count : 1;
     const dl = Object.values(terms).reduce((sum: number, t) => sum + (t.term_freq || 0), 0);
-    const docCount: number = stats.doc_count || 1;
+    const docCount: number = fieldStats.doc_count || 1;
 
     const rankedTerms: {
       term: string;
       bm25: number;
       tf: number;
       df: number;
+      termLength: number;
+      termLengthRatio: number;
+      adjbm25: number;
     }[] = [];
 
     for (const [term, stat] of Object.entries(terms)) {
@@ -91,10 +114,15 @@ export async function importCorpus(configPath: string) {
       const norm = (tf * 2.2) / (tf + 1.2 * (1 - 0.75 + 0.75 * (dl / avgdl)));
       const bm25 = idf * norm;
 
-      rankedTerms.push({ term, bm25, tf, df });
+      const termLength = term.length;
+      const termLengthRatio = stats.avgWordLength > 0 ? termLength / stats.avgWordLength : 1;
+      const adjbm25 = bm25 * termLengthRatio; // simplistic weighting
+
+      rankedTerms.push({ term, bm25, tf, df, termLength, termLengthRatio, adjbm25 });
     }
 
-    rankedTerms.sort((a, b) => b.bm25 - a.bm25);
+    //rankedTerms.sort((a, b) => b.bm25 - a.bm25);
+    rankedTerms.sort((a, b) => b.adjbm25 - a.adjbm25);
     const topTerms = rankedTerms.slice(0, topN);
 
     for (const termEntry of topTerms) {
@@ -104,6 +132,9 @@ export async function importCorpus(configPath: string) {
           bm25: termEntry.bm25,
           tf: termEntry.tf,
           df: termEntry.df,
+          termLength: termEntry.termLength,
+          termLengthRatio: termEntry.termLengthRatio,
+          adjbm25: termEntry.adjbm25,
           docId: doc.id
         }
       });

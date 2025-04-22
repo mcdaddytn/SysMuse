@@ -28,6 +28,10 @@ model Document {
   content   String     // Could be message (enron) or transcript (TED)
   esId      String     // Corresponding Elasticsearch ID
   createdAt DateTime   @default(now())
+  docLength         Int        // number of characters
+  wordCount         Int
+  distinctWordCount Int
+  avgWordLength     Float
 
   corpus    Corpus     @relation(fields: [corpusId], references: [id])
   terms     SearchTerm[]
@@ -39,6 +43,10 @@ model SearchTerm {
   bm25      Float
   tf        Int      // term freq
   df        Int      // doc freq
+  termLength      Int
+  termLengthRatio Float
+  adjbm25         Float
+  
   docId     Int
   document  Document @relation(fields: [docId], references: [id])
 

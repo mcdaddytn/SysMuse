@@ -1,8 +1,10 @@
 // === src/setup/importStopwords.ts ===
-import fs from 'fs';
+//import fs from 'fs';
+import * as fs from 'fs';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import dotenv from 'dotenv';
+//import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 dotenv.config();
 
 const prisma = new PrismaClient();

@@ -2,24 +2,18 @@
 import { esClient } from '../lib/es';
 
 export async function setupEnronIndex() {
+  const indexName = 'enron_emails';
+  const exists = await esClient.indices.exists({ index: indexName });
+  if (exists) await esClient.indices.delete({ index: indexName });
+
   await esClient.indices.create({
-    index: 'enron_emails',
+    index: indexName,
     body: {
       settings: {
         analysis: {
           analyzer: {
-            shingle_analyzer: {
-              type: 'custom',
-              tokenizer: 'standard',
-              filter: ['lowercase', 'stop', 'shingle']
-            }
-          },
-          filter: {
-            shingle: {
-              type: 'shingle',
-              min_shingle_size: 2,
-              max_shingle_size: 3,
-              output_unigrams: true
+            default: {
+              type: 'standard'
             }
           }
         }
@@ -29,34 +23,38 @@ export async function setupEnronIndex() {
           file: { type: 'keyword' },
           message: {
             type: 'text',
-            analyzer: 'shingle_analyzer',
-            term_vector: 'yes'
+            analyzer: 'standard',
+            term_vector: 'yes',
+            fielddata: true
           }
+//          message: {
+//            type: 'text',
+//            analyzer: 'standard',
+//            term_vector: 'yes',
+//            fields: {
+//              keyword: { type: 'keyword' }
+//            }
+//          }
         }
       }
-    }
-  }, { ignore: [400] });
+    } as Record<string, any>
+  });
+  console.log(`Enron index recreated`);
 }
 
 export async function setupTedIndex() {
+  const indexName = 'ted_talks';
+  const exists = await esClient.indices.exists({ index: indexName });
+  if (exists) await esClient.indices.delete({ index: indexName });
+
   await esClient.indices.create({
-    index: 'ted_talks',
+    index: indexName,
     body: {
       settings: {
         analysis: {
           analyzer: {
-            shingle_analyzer: {
-              type: 'custom',
-              tokenizer: 'standard',
-              filter: ['lowercase', 'stop', 'shingle']
-            }
-          },
-          filter: {
-            shingle: {
-              type: 'shingle',
-              min_shingle_size: 2,
-              max_shingle_size: 3,
-              output_unigrams: true
+            default: {
+              type: 'standard'
             }
           }
         }
@@ -67,14 +65,24 @@ export async function setupTedIndex() {
           speaker: { type: 'keyword' },
           tags: { type: 'keyword' },
           url: { type: 'keyword' },
-          published_date: { type: 'date' },
+          published_date: { type: 'date' },          
           transcript: {
             type: 'text',
-            analyzer: 'shingle_analyzer',
-            term_vector: 'yes'
+            analyzer: 'standard',
+            term_vector: 'yes',
+            fielddata: true
           }
+//          transcript: {
+//            type: 'text',
+//            analyzer: 'standard',
+//            term_vector: 'yes',
+//            fields: {
+//              keyword: { type: 'keyword' } 
+//            }
+//          }
         }
       }
-    }
-  }, { ignore: [400] });
+    } as Record<string, any>
+  });
+  console.log(`TED index recreated`);
 }

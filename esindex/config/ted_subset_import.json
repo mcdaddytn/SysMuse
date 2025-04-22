@@ -1,0 +1,8 @@
+{
+  "task": "import",
+  "dataset": "ted",
+  "index": "ted_talks",
+  "keywordSearch": true,
+  "numRecords": 200,
+  "outputFileSuffix": "subset"
+}

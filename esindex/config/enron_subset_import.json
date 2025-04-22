@@ -1,0 +1,8 @@
+{
+  "task": "import",
+  "dataset": "enron",
+  "index": "enron_emails",
+  "keywordSearch": true,
+  "numRecords": 20000,
+  "outputFileSuffix": "subset"
+}

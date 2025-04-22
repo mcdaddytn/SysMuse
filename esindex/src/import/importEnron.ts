@@ -11,7 +11,8 @@ const DATA_PATH = process.env.DATA_PATH!;
 const EMAILS_CSV = path.join(DATA_PATH, 'emails.csv');
 
 export async function importEnronEmails(indexName = 'enron_emails', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
-  await setupEnronIndex(indexName, keywordSearch);
+  //gm: lets not do this here, separate step for this, can integrate this later, maybe do it optionally if indexName provided (do not default)
+  //await setupEnronIndex(indexName, keywordSearch);
   const readRows: any[] = [];
   const stream = fs.createReadStream(EMAILS_CSV).pipe(csv());
   let bulk: any[] = [];

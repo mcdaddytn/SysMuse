@@ -5,7 +5,10 @@ import { setupTedIndex, setupEnronIndex } from '../setup/setupIndices';
 import { PrismaClient } from '@prisma/client';
 import { loadConfig } from '../lib/config';
 import * as dotenv from 'dotenv';
+
 dotenv.config();
+
+const prisma = new PrismaClient();
 
 async function run() {
   const configPath = process.argv[2];

@@ -6,7 +6,8 @@ import path from 'path';
 export function writeCsvSubset(filePath: string, rows: any[], suffix: string) {
   const ext = path.extname(filePath);
   const base = path.basename(filePath, ext);
-  const fullPath = path.join(path.dirname(filePath), `${base}.${suffix}${ext}`);
+  //const fullPath = path.join(path.dirname(filePath), `${base}.${suffix}${ext}`);
+  const fullPath = path.join(path.dirname(filePath), `${base}_${suffix}${ext}`);
   const headers = Object.keys(rows[0] || {}).join(',');
   const lines = rows.map(r => Object.values(r).map(v => JSON.stringify(v)).join(',')).join('\n');
   fs.writeFileSync(fullPath, `${headers}\n${lines}`);

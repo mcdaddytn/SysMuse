@@ -4,6 +4,6 @@
   "index": "ted_talks",
   "topN": 5,
   "maxPhraseLength": 1,
-  "dfMin": 5,
+  "dfMin": 1,
   "dfMax": 500
 }

@@ -1,0 +1,12 @@
+{
+  "size": 0,
+  "aggs": {
+    "candidate_terms": {
+      "terms": {
+        "field": "transcript.keyword",
+        "size": 1000,
+        "min_doc_count": 1
+      }
+    }
+  }
+}

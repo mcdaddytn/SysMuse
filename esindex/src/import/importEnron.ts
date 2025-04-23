@@ -10,7 +10,9 @@ dotenv.config();
 const DATA_PATH = process.env.DATA_PATH!;
 const EMAILS_CSV = path.join(DATA_PATH, 'emails.csv');
 
-export async function importEnronEmails(indexName = 'enron_emails', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
+// keywordSearch: boolean | Record<string, boolean> = true
+// export async function importEnronEmails(indexName = 'enron_emails', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
+export async function importEnronEmails(indexName = 'enron_emails', keywordSearch: boolean | Record<string, boolean>, numRecords?: number, outputFileSuffix?: string) {
   //gm: if do this here, do not need separate step for this
   await setupEnronIndex(indexName, keywordSearch);
   const readRows: any[] = [];

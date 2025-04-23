@@ -30,7 +30,9 @@ function cleanTags(raw: string): string[] {
   }
 }
 
-export async function importTEDTalks(indexName = 'ted_talks', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
+// keywordSearch: boolean | Record<string, boolean> = true
+// export async function importTEDTalks(indexName = 'ted_talks', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
+export async function importTEDTalks(indexName = 'ted_talks', keywordSearch: boolean | Record<string, boolean> = true, numRecords?: number, outputFileSuffix?: string) {
   await setupTedIndex(indexName, keywordSearch);
   const transcripts: Record<string, string> = {};
   const transcriptRows: any[] = [];
@@ -59,8 +61,11 @@ export async function importTEDTalks(indexName = 'ted_talks', keywordSearch = tr
     mainLine++;
     const rawUrl = row.url;
     const url = normalizeUrl(rawUrl);
+    //const urlMismatch: boolean = !url || !transcripts[url];
+    const urlMismatch: boolean = false;
 
-    if (!url || !transcripts[url]) {
+    // if (!url || !transcripts[url]) {
+    if (urlMismatch) {
       console.log(`URL mismatch at line ${mainLine}: main CSV url="${rawUrl}" => normalized="${url}"`);
       const match = transcriptRows.find(r => normalizeUrl(r.url) === url);
       if (match) console.log(`Matched in transcripts at line ${match.line}`);

@@ -42,7 +42,51 @@ Stop and clear all data	docker-compose down -v
 Check ES is running	curl http://localhost:9200
 Open Kibana UI	http://localhost:5601
 
+Basic Connectivity
+curl http://localhost:9200
 
+Cluster Health
+curl http://localhost:9200/_cluster/health?pretty
+
+List All Indices
+curl http://localhost:9200/_cat/indices?v
+
+Get Index Mappings
+curl http://localhost:9200/_mapping?pretty
+
+For a specific index (e.g., ted_talks):
+curl http://localhost:9200/ted_talks/_mapping?pretty
+
+View Index Settings
+curl http://localhost:9200/ted_talks/_settings?pretty
+
+Get Document Count for an Index
+curl http://localhost:9200/ted_talks/_count
+
+Or count only those with a match:
+curl -X GET "localhost:9200/ted_talks/_count" -H 'Content-Type: application/json' -d'
+{
+  "query": {
+    "match_all": {}
+  }
+}'
+
+View Documents (sample)
+curl http://localhost:9200/ted_talks/_search?pretty
+
+Or limit the output:
+curl -X GET "localhost:9200/ted_talks/_search?size=1&pretty"
+
+Summary Table
+
+Purpose	Command
+Cluster status	/_cluster/health?pretty
+List indices	/_cat/indices?v
+Get all mappings	/_mapping?pretty
+Index-specific mapping	/INDEX/_mapping?pretty
+Index settings	/INDEX/_settings?pretty
+Document count	/INDEX/_count
+Preview data	/INDEX/_search?size=1&pretty
 
 
 
@@ -78,10 +122,21 @@ ts-node src/index.ts config/importStopwords.json config/importIndexTed.json conf
 npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
 
 
+npx ts-node src/index.ts config/importStopwords.json config/importIndexTedKeyword.json config/importCorpusTed.json config/summaryTed.json
+
+
+npx ts-node src/index.ts config/importStopwords.json config/importIndexTedMixed.json config/importCorpusTedOptions.json config/summaryTed.json
+
+
+
+
 
 ts-node src/index.ts config/importStopwordsConvert.json
 
 
 npx ts-node src/index.ts config/importStopwordsConvert.json
+
+curl -X POST "localhost:9200/ted_talks/_search?pretty" -H "Content-Type: application/json" --data "@config/testagg.json"
+
 
 

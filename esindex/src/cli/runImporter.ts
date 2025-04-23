@@ -20,10 +20,23 @@ export async function runImporterTask(config: any, configPath: string) {
   const outputFileSuffix = config.outputFileSuffix;
 
   if (task === 'importIndex') {
+    const { dataset, index, keywordSearch } = config;
+
+    let keywordSearchParam: boolean | Record<string, boolean> = keywordSearch;
+    if (typeof keywordSearch === 'string') {
+      try {
+        keywordSearchParam = JSON.parse(keywordSearch);
+      } catch {
+        keywordSearchParam = keywordSearch === 'true';
+      }
+    }
+
     if (dataset === 'ted') {
-      await importTEDTalks(indexName, keywordSearch, numRecords, outputFileSuffix);
+      //await importTEDTalks(indexName, keywordSearch, numRecords, outputFileSuffix);
+      await importTEDTalks(indexName, keywordSearchParam, numRecords, outputFileSuffix);
     } else if (dataset === 'enron') {
-      await importEnronEmails(indexName, keywordSearch, numRecords, outputFileSuffix);
+      //await importEnronEmails(indexName, keywordSearch, numRecords, outputFileSuffix);
+      await importEnronEmails(indexName, keywordSearchParam, numRecords, outputFileSuffix);
     } else {
       console.error(`Unknown dataset: ${dataset}`);
       process.exit(1);

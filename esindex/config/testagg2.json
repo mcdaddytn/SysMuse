@@ -1,0 +1,14 @@
+{
+  "size": 0,
+  "aggs": {
+    "candidate_terms": {
+      "terms": {
+        "field": "transcript",
+        "size": 1000,
+        "min_doc_count": 1,
+        "shard_min_doc_count": 1,
+        "order": { "_count": "desc" }
+      }
+    }
+  }
+}

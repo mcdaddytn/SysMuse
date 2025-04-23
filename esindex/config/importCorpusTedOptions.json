@@ -1,0 +1,14 @@
+{
+  "task": "importCorpus",
+  "corpus": "ted",
+  "index": "ted_talks",
+  "topN": 5,
+  "maxPhraseLength": 1,
+  "dfMin": 2,
+  "dfMax": 100,
+  "fields": ["transcript", "title"],
+  "fieldModes": {
+    "transcript": "token",
+    "title": "keyword"
+  }
+}

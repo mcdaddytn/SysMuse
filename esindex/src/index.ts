@@ -1,22 +1,25 @@
 // === src/index.ts ===
-import { execSync } from 'child_process';
-import * as path from 'path';
+import { runImporterTask } from './cli/runImporter';
+import { loadConfig } from './lib/config';
 
 async function main() {
-  const args = process.argv.slice(2);
+  const configFiles = process.argv.slice(2);
 
-  if (args.length === 0) {
+  if (configFiles.length === 0) {
     console.error("Usage: ts-node src/index.ts <config1.json> <config2.json> ...");
     process.exit(1);
   }
 
-  for (const configPath of args) {
-    const absPath = path.resolve(configPath);
-    console.log(`Running task for config: ${absPath}`);
+  const taskCount: number = configFiles.length;
+  console.log(`Running ${taskCount} tasks, list of files: ${configFiles}`);
+  for (const file of configFiles) {
+    console.log(`Running task from: ${file}`);
+    const config = loadConfig(file);
     try {
-      execSync(`ts-node src/cli/runImporter.ts ${absPath}`, { stdio: 'inherit' });
+      //await runImporterTask(config);
+      await runImporterTask(config, file);      
     } catch (err) {
-      console.error(`Failed to run task for ${absPath}`);
+      console.error(`Task failed for ${file}:`, err);
       process.exit(1);
     }
   }

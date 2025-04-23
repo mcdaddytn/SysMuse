@@ -1,0 +1,7 @@
+{
+  "task": "importStopwords",
+  "category": "general",
+  "fileName": "general_stopwords.txt",
+  "delimiter": "\n",
+  "convertCsv": true
+}

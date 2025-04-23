@@ -17,6 +17,36 @@ project-root/
 ¦   +-- index.ts               # CLI entry point
 
 
+Run docker
+docker-compose up -d
+
+Check Elasticsearch:
+curl http://localhost:9200
+
+Check Kibana:
+http://localhost:5601
+
+Stop the Services
+docker-compose down
+
+To remove persistent data volume:
+docker-compose down -v
+
+
+Summary
+
+Task	Command
+Start	docker-compose up -d
+Stop	docker-compose down
+Stop and clear all data	docker-compose down -v
+Check ES is running	curl http://localhost:9200
+Open Kibana UI	http://localhost:5601
+
+
+
+
+
+
 
 Setup Instructions
 Install dependencies:
@@ -43,4 +73,15 @@ npx prisma generate
 npx prisma db push
 
 ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
+
+
+npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
+
+
+
+ts-node src/index.ts config/importStopwordsConvert.json
+
+
+npx ts-node src/index.ts config/importStopwordsConvert.json
+
 

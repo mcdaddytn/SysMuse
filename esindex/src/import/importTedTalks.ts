@@ -11,8 +11,12 @@ const DATA_PATH = process.env.DATA_PATH!;
 const MAIN_CSV = path.join(DATA_PATH, 'ted_main.csv');
 const TRANSCRIPTS_CSV = path.join(DATA_PATH, 'transcripts.csv');
 
-function normalizeUrl(u: string): string {
+function normalizeUrl_Old(u: string): string {
   return u.trim().toLowerCase();
+}
+
+function normalizeUrl(u: string): string {
+  return u?.trim().replace(/\s+$/, '').toLowerCase();
 }
 
 function cleanTags(raw: string): string[] {
@@ -27,6 +31,82 @@ function cleanTags(raw: string): string[] {
 }
 
 export async function importTEDTalks(indexName = 'ted_talks', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
+  await setupTedIndex(indexName, keywordSearch);
+  const transcripts: Record<string, string> = {};
+  const transcriptRows: any[] = [];
+  const readRows: any[] = [];
+  const unmatchedUrls: { mainUrl: string; transUrl: string; lineMain: number; lineTrans?: number }[] = [];
+
+  let transLine = 0;
+  await new Promise<void>((resolve) => {
+    fs.createReadStream(TRANSCRIPTS_CSV)
+      .pipe(csv())
+      .on('data', row => {
+        transLine++;
+        const normUrl = normalizeUrl(row.url);
+        transcripts[normUrl] = row.transcript;
+        transcriptRows.push({ ...row, line: transLine });
+      })
+      .on('end', resolve);
+  });
+
+  const stream = fs.createReadStream(MAIN_CSV).pipe(csv({ strict: false }));
+  let bulk: any[] = [];
+  let count = 0;
+  let mainLine: number = 0;
+
+  for await (const row of stream) {
+    mainLine++;
+    const rawUrl = row.url;
+    const url = normalizeUrl(rawUrl);
+
+    if (!url || !transcripts[url]) {
+      console.log(`URL mismatch at line ${mainLine}: main CSV url="${rawUrl}" => normalized="${url}"`);
+      const match = transcriptRows.find(r => normalizeUrl(r.url) === url);
+      if (match) console.log(`Matched in transcripts at line ${match.line}`);
+      unmatchedUrls.push({ mainUrl: rawUrl, transUrl: url, lineMain: mainLine });
+      continue;
+    }
+
+    readRows.push(row);
+    const doc = {
+      title: row.title,
+      speaker: row.main_speaker,
+      tags: cleanTags(row.tags),
+      published_date: new Date(parseInt(row.published_date) * 1000).toISOString(),
+      transcript: transcripts[url],
+      url
+    };
+
+    bulk.push({ index: { _index: indexName } });
+    bulk.push(doc);
+    count++;
+
+    if (bulk.length >= 1000) {
+      await esClient.bulk({ body: bulk });
+      bulk = [];
+    }
+
+    if (numRecords && count >= numRecords) break;
+  }
+
+  if (bulk.length > 0) await esClient.bulk({ body: bulk });
+  console.log(`Imported ${count} TED documents into index ${indexName}`);
+
+  if (outputFileSuffix && count > 0) {
+    writeCsvSubset(MAIN_CSV, readRows.slice(0, count), outputFileSuffix);
+    const matchedUrls = new Set(readRows.map(r => normalizeUrl(r.url)));
+    const matchedTrans = transcriptRows.filter(r => matchedUrls.has(normalizeUrl(r.url)));
+    writeCsvSubset(TRANSCRIPTS_CSV, matchedTrans, outputFileSuffix);
+  }
+
+  if (unmatchedUrls.length) {
+    console.warn(`${unmatchedUrls.length} unmatched URL(s) found during import.`);
+    unmatchedUrls.forEach(e => console.warn(`- main line ${e.lineMain}: ${e.mainUrl}`));
+  }
+}
+
+export async function importTEDTalks_Old(indexName = 'ted_talks', keywordSearch = true, numRecords?: number, outputFileSuffix?: string) {
   //gm: if do this here, do not need separate step for this
   await setupTedIndex(indexName, keywordSearch);
   const transcripts: Record<string, string> = {};

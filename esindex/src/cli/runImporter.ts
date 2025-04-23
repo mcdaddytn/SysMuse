@@ -11,23 +11,14 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 
-async function run() {
-  const configPath = process.argv[2];
-  if (!configPath) {
-    console.error("Please provide a JSON config file path.");
-    process.exit(1);
-  }
-
-  const config = loadConfig(configPath);
-
+export async function runImporterTask(config: any, configPath: string) {
   const dataset = config.dataset || 'ted';
-  //const task = config.task || 'import';
-  const task = config.task || 'summary';  
+  const task = config.task;
   const indexName = config.index || (dataset === 'ted' ? 'ted_talks' : 'enron_emails');
   const keywordSearch = config.keywordSearch !== false; // default true
   const numRecords = config.numRecords;
   const outputFileSuffix = config.outputFileSuffix;
-  
+
   if (task === 'importIndex') {
     if (dataset === 'ted') {
       await importTEDTalks(indexName, keywordSearch, numRecords, outputFileSuffix);
@@ -38,12 +29,13 @@ async function run() {
       process.exit(1);
     }
   } else if (task === 'importStopwords') {
-    const { category, fileName, delimiter } = config;
+    const { category, fileName, delimiter, convertCsv } = config;
     if (!category || !fileName || !delimiter) {
-      console.error("importStopwords task requires category, fileName, and delimiter fields");
+      console.error(`Missing required field(s) in stopword import config: ${configPath}`);
       process.exit(1);
     }
-    await importStopwords(category, fileName, delimiter);
+    console.log(`Importing stopwords from file ${fileName}`);
+    await importStopwords(category, fileName, delimiter, convertCsv);
   } else if (task === 'importCorpus') {
     await importCorpus(configPath);
   } else if (task === 'summary') {
@@ -75,7 +67,21 @@ async function run() {
   }
 }
 
-run().catch(err => {
-  console.error("Import failed:", err);
-  process.exit(1);
-});
+// gm: changed name from run, old code here
+async function run() {
+  const configPath = process.argv[2];
+  if (!configPath) {
+    console.error("Please provide a JSON config file path.");
+    process.exit(1);
+  }
+
+  console.error("runImporter.run configPath: ${configPath}");
+  const config = loadConfig(configPath);
+  runImporterTask(config, configPath);
+}
+
+// gm: this is run from index.ts directly now
+//run().catch(err => {
+//  console.error("Import failed:", err);
+//  process.exit(1);
+//});

@@ -11,11 +11,11 @@ const DATA_PATH = process.env.DATA_PATH!;
 const MAIN_CSV = path.join(DATA_PATH, 'ted_main.csv');
 const TRANSCRIPTS_CSV = path.join(DATA_PATH, 'transcripts.csv');
 
-function normalizeUrl_Old(u: string): string {
+function normalizeUrl(u: string): string {
   return u.trim().toLowerCase();
 }
 
-function normalizeUrl(u: string): string {
+function normalizeUrl_New(u: string): string {
   return u?.trim().replace(/\s+$/, '').toLowerCase();
 }
 
@@ -38,6 +38,7 @@ export async function importTEDTalks(indexName = 'ted_talks', keywordSearch: boo
   const transcriptRows: any[] = [];
   const readRows: any[] = [];
   const unmatchedUrls: { mainUrl: string; transUrl: string; lineMain: number; lineTrans?: number }[] = [];
+  const maxUrlLen = 1000;
 
   let transLine = 0;
   await new Promise<void>((resolve) => {
@@ -45,9 +46,17 @@ export async function importTEDTalks(indexName = 'ted_talks', keywordSearch: boo
       .pipe(csv())
       .on('data', row => {
         transLine++;
-        const normUrl = normalizeUrl(row.url);
-        transcripts[normUrl] = row.transcript;
-        transcriptRows.push({ ...row, line: transLine });
+        const rowUrl: string = row.url;
+        const urlLen = rowUrl.length;
+
+        console.info(`Processing line ${transLine}, urlLen ${urlLen}`);
+        if (urlLen < maxUrlLen) {
+          const normUrl = normalizeUrl(row.url);
+          console.info(`Normalized URL ${row.url} to ${normUrl}`);
+          //console.info(`Adding transcript for URL ${normUrl}`);
+          transcripts[normUrl] = row.transcript;
+          transcriptRows.push({ ...row, line: transLine });  
+        }
       })
       .on('end', resolve);
   });
@@ -56,21 +65,35 @@ export async function importTEDTalks(indexName = 'ted_talks', keywordSearch: boo
   let bulk: any[] = [];
   let count = 0;
   let mainLine: number = 0;
+  let skipped = 0;
 
   for await (const row of stream) {
     mainLine++;
-    const rawUrl = row.url;
+    const rawUrl: string = row.url;
+    const urlLen = rawUrl.length;
     const url = normalizeUrl(rawUrl);
+    //const urlMismatch: boolean = false;
     //const urlMismatch: boolean = !url || !transcripts[url];
-    const urlMismatch: boolean = false;
-
+    const urlMismatch: boolean = !url || !transcripts[url] || urlLen >= maxUrlLen;
+    
     // if (!url || !transcripts[url]) {
     if (urlMismatch) {
       console.log(`URL mismatch at line ${mainLine}: main CSV url="${rawUrl}" => normalized="${url}"`);
       const match = transcriptRows.find(r => normalizeUrl(r.url) === url);
       if (match) console.log(`Matched in transcripts at line ${match.line}`);
       unmatchedUrls.push({ mainUrl: rawUrl, transUrl: url, lineMain: mainLine });
+      skipped++;
       continue;
+    }
+    else {
+      const transcript = transcripts[url];
+
+      if (!transcript) {
+        //console.warn(`Skipping: No transcript found for URL ${url}`);
+        console.warn(`Skipping: No transcript found for URL ${url}`);
+        skipped++;
+        continue;
+      }  
     }
 
     readRows.push(row);
@@ -87,11 +110,18 @@ export async function importTEDTalks(indexName = 'ted_talks', keywordSearch: boo
     bulk.push(doc);
     count++;
 
-    if (bulk.length >= 1000) {
+    if (bulk.length > 0) {
+    //if (bulk.length >= 1000) {
       await esClient.bulk({ body: bulk });
       bulk = [];
+      console.log(`Imported ${count} TED documents into index ${indexName}`);
+      if (skipped > 0) {
+        console.log(`Skipped ${skipped} documents due to missing transcript`);
+      }
+    } else {
+      console.log('No TED documents to import.');
     }
-
+  
     if (numRecords && count >= numRecords) break;
   }
 

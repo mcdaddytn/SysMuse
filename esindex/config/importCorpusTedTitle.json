@@ -3,14 +3,13 @@
   "corpus": "ted_talks",
   "index": "ted_talks",
   "dataFile": "ted_talks.json",
-  "topN": 5,
+  "topN": 10,
   "maxPhraseLength": 1,
-  "dfMin": 10,
+  "dfMin": 1,
   "dfMax": 200,
-  "fields": ["transcript", "title"],
   "longFormField": "transcript",
+  "fields": ["title"],
   "fieldModes": {
-    "transcript": "token",
     "title": "keyword"
   }
 }

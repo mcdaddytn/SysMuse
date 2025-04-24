@@ -8,6 +8,7 @@
   "dfMin": 1,
   "dfMax": 100,
   "fields": ["message", "Subject"],
+  "longFormField": "message",
   "fieldModes": {
     "message": "token",
     "Subject": "keyword"

@@ -38,6 +38,8 @@ export async function importCorpus(configPath: string) {
   const dfMax = config.dfMax ?? 100;
   const topN = config.topN ?? 5;
   const fields = config.fields || ['transcript'];
+  //const longFormField: string = config.longFormField || undefined;
+  const longFormField: string = config.longFormField;
   const fieldModes = config.fieldModes || {};
 
   const jsonPath = path.join(process.env.IMPORT_DATA_PATH || './import', jsonFile);
@@ -54,10 +56,15 @@ export async function importCorpus(configPath: string) {
 
   // pass 1
   for (const record of records) {
+    // gm, this is strange, could this return more than one, or just first ?
     const contentField = fields.find(f => record[f]);
-    const textFilename = record[contentField];
+    //const textFilename = record[contentField];
+    // might be text to search itself or a filename
+    const recordTextContent = record[contentField];
     const recordIndex: number = record["recordIndex"];
-    const text = fs.readFileSync(path.join(longTextPath, textFilename), 'utf8');
+    // gm: this is wrong text might be in record if not a long text field
+    //const text = fs.readFileSync(path.join(longTextPath, textFilename), 'utf8');
+    const text = longFormField && contentField === longFormField ? fs.readFileSync(path.join(longTextPath, recordTextContent), 'utf8') : recordTextContent;
     const wordStats: WordStats = analyzeTextStats(text);
     const { wordCount, docLength, distinctWordCount, avgWordLength } = wordStats;
 
@@ -67,13 +74,15 @@ export async function importCorpus(configPath: string) {
     //const esResult = await esClient.index({ index, document: esDoc });
     const esResult = await esClient.index({ index, refresh: true, document: esDoc });
     //esClient.indices.refresh({ index })
+    const esId: string = esResult._id;
+    console.log(`Indexed field: ${contentField}, textContent: ${recordTextContent}, esId: ${esId}`);
 
     // need to insert recordId from json here, could be used as id of table really
     const doc = await prisma.document.create({
       data: {
         corpusId: corpus.id,
         content: '',
-        esId: esResult._id,
+        esId: esId,
         wordCount,
         docLength,
         distinctWordCount,
@@ -81,7 +90,7 @@ export async function importCorpus(configPath: string) {
       }
     });
 
-    esmap[recordIndex] = esResult._id;
+    esmap[recordIndex] = esId;
     statsmap[recordIndex] = wordStats;
     idmap[recordIndex] = doc.id;
   }
@@ -96,6 +105,7 @@ export async function importCorpus(configPath: string) {
     const wordStats: WordStats = statsmap[recordIndex];
     const { wordCount, docLength, distinctWordCount, avgWordLength } = wordStats;
     const docId: number = idmap[recordIndex];
+    const contentField = fields.find(f => record[f]);
 
     const vector = await esClient.termvectors({
       index,
@@ -107,14 +117,18 @@ export async function importCorpus(configPath: string) {
     for (const field of fields) {
       const fieldTerms = vector.term_vectors?.[field]?.terms;
       const stats = vector.term_vectors?.[field]?.field_statistics;
-      if (!fieldTerms || !stats) continue;
+      if (!fieldTerms || !stats) {
+        console.log(`Missing from termvectors fieldTerms ${fieldTerms}, stats ${stats}`);
+        continue;
+      }
 
       const avgdl = stats.sum_ttf / stats.doc_count;
       const dl = Object.values(fieldTerms).reduce((sum: number, t: any) => sum + (t.term_freq || 0), 0);
       const docCount = stats.doc_count;
 
       const terms = Object.entries(fieldTerms)
-        .filter(([term]) => candidateSet.has(term) && !stopwords.has(term))
+        //.filter(([term]) => candidateSet.has(term) && !stopwords.has(term))
+        .filter(([term]) => longFormField && contentField === longFormField ? candidateSet.has(term) && !stopwords.has(term) : !stopwords.has(term))
         .map(([term, stat]: [string, any]) => {
           const tf = stat.term_freq;
           const df = stat.doc_freq;
@@ -128,6 +142,8 @@ export async function importCorpus(configPath: string) {
         })
         .sort((a, b) => b.adjbm25 - a.adjbm25)
         .slice(0, topN);
+        
+        //console.log(`Termvectors terms.length ${terms.length}, field ${field}`);
 
       for (const t of terms) {
         // gm, can surround below with try/catch block

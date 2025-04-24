@@ -1,0 +1,15 @@
+{
+  "task": "importCorpus",
+  "corpus": "enron_emails",
+  "index": "enron_emails",
+  "dataFile": "enron_emails.json",
+  "topN": 5,
+  "maxPhraseLength": 1,
+  "dfMin": 2,
+  "dfMax": 100,
+  "fields": ["message", "Subject"],
+  "fieldModes": {
+    "message": "token",
+    "Subject": "keyword"
+  }
+}

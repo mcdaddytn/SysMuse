@@ -131,6 +131,20 @@ npx ts-node src/index.ts config/importStopwords.json config/importIndexTedMixed.
 npx ts-node src/index.ts config/convertTedTalksSubset.json
 npx ts-node src/index.ts config/convertEnronEmailsSubset.json
 
+npx ts-node src/index.ts config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
+npx ts-node src/index.ts config/importIndexEnron.json config/importCorpusEnron.json config/summaryEnron.json
+
+
+npx ts-node src/index.ts config/importIndexTed.json
+npx ts-node src/index.ts config/importCorpusTed.json
+npx ts-node src/index.ts config/summaryTed.json
+
+npx ts-node src/index.ts config/importIndexEnron.json 
+npx ts-node src/index.ts config/importCorpusEnron.json 
+npx ts-node src/index.ts config/summaryEnron.json
+
+
+
 
 
 

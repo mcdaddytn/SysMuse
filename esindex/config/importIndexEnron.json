@@ -1,0 +1,5 @@
+{
+  "task": "importIndex",
+  "dataset": "enron_emails",
+  "index": "enron_emails"
+}

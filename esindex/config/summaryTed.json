@@ -1,4 +1,4 @@
 {
   "task": "summary",
-  "dataset": "ted"
+  "corpus": "ted_talks"
 }

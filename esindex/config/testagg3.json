@@ -1,0 +1,11 @@
+{
+  "size": 0,
+  "aggs": {
+    "candidate_terms": {
+      "terms": {
+        "field": "title.keyword",
+        "size": 10
+      }
+    }
+  }
+}

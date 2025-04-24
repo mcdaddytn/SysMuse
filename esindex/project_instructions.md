@@ -135,6 +135,9 @@ npx ts-node src/index.ts config/importIndexTed.json config/importCorpusTed.json 
 npx ts-node src/index.ts config/importIndexEnron.json config/importCorpusEnron.json config/summaryEnron.json
 
 
+npx ts-node src/index.ts config/importIndexTed.json config/importCorpusTed.json
+
+
 npx ts-node src/index.ts config/importIndexTed.json
 npx ts-node src/index.ts config/importCorpusTed.json
 npx ts-node src/index.ts config/summaryTed.json
@@ -158,5 +161,8 @@ npx ts-node src/index.ts config/importStopwordsConvert.json
 
 curl -X POST "localhost:9200/ted_talks/_search?pretty" -H "Content-Type: application/json" --data "@config/testagg.json"
 
+curl -X POST "localhost:9200/ted_talks/_search?pretty" -H "Content-Type: application/json" --data "@config/testagg3.json"
+
+curl -X POST "localhost:9200/ted_talks/_search?pretty" -H "Content-Type: application/json" --data "@config/testagg-title.json"
 
 

@@ -12,7 +12,14 @@ dotenv.config();
 const prisma = new PrismaClient();
 const longTextPath = process.env.LONG_TEXT_PATH || './longform';
 
-function analyzeTextStats(text: string) {
+interface WordStats {
+  wordCount: number;
+  docLength: number;
+  distinctWordCount: number;
+  avgWordLength: number;
+}
+
+function analyzeTextStats(text: string): WordStats {
   const words: string[] = text.match(/\b\w+\b/g) || [];
   const wordCount = words.length;
   const docLength = text.length;
@@ -35,24 +42,33 @@ export async function importCorpus(configPath: string) {
 
   const jsonPath = path.join(process.env.IMPORT_DATA_PATH || './import', jsonFile);
   const records = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-  const candidateSet = await getTopCorpusTerms({ index, fields, dfMin, dfMax, fieldModes });
-  console.log(`Found ${candidateSet.size} candidates for ${index}`);
+  //const candidateSet = await getTopCorpusTerms({ index, fields, dfMin, dfMax, fieldModes });
+  //console.log(`Found ${candidateSet.size} candidates for ${index}`);
 
   const corpus = await prisma.corpus.upsert({ where: { name: corpusName }, update: {}, create: { name: corpusName } });
   const stopwords = await StopwordCache.load();
   let docCount = 0;
+  const esmap = new Map<number, string>();
+  const statsmap = new Map<number, WordStats>();
+  const idmap = new Map<number, number>();
 
+  // pass 1
   for (const record of records) {
     const contentField = fields.find(f => record[f]);
     const textFilename = record[contentField];
+    const recordIndex: number = record["recordIndex"];
     const text = fs.readFileSync(path.join(longTextPath, textFilename), 'utf8');
-    const { wordCount, docLength, distinctWordCount, avgWordLength } = analyzeTextStats(text);
+    const wordStats: WordStats = analyzeTextStats(text);
+    const { wordCount, docLength, distinctWordCount, avgWordLength } = wordStats;
 
     const esDoc = { ...record };
     esDoc[contentField] = text;
 
-    const esResult = await esClient.index({ index, document: esDoc });
+    //const esResult = await esClient.index({ index, document: esDoc });
+    const esResult = await esClient.index({ index, refresh: true, document: esDoc });
+    //esClient.indices.refresh({ index })
 
+    // need to insert recordId from json here, could be used as id of table really
     const doc = await prisma.document.create({
       data: {
         corpusId: corpus.id,
@@ -65,9 +81,24 @@ export async function importCorpus(configPath: string) {
       }
     });
 
+    esmap[recordIndex] = esResult._id;
+    statsmap[recordIndex] = wordStats;
+    idmap[recordIndex] = doc.id;
+  }
+
+  const candidateSet = await getTopCorpusTerms({ index, fields, dfMin, dfMax, fieldModes });
+  console.log(`Found ${candidateSet.size} candidates for ${index}`);
+
+  for (const record of records) {
+    const recordIndex: number = record["recordIndex"];
+    const esid: string = esmap[recordIndex];
+    const wordStats: WordStats = statsmap[recordIndex];
+    const { wordCount, docLength, distinctWordCount, avgWordLength } = wordStats;
+    const docId: number = idmap[recordIndex];
+
     const vector = await esClient.termvectors({
       index,
-      id: esResult._id,
+      id: esid,
       fields,
       term_statistics: true
     });
@@ -107,7 +138,7 @@ export async function importCorpus(configPath: string) {
             termLength: t.termLength,
             termLengthRatio: t.termLengthRatio,
             adjbm25: t.adjbm25,
-            docId: doc.id
+            docId: docId
           }
         });
       }

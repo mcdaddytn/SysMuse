@@ -1,0 +1,13 @@
+{
+  "size": 0,
+  "aggs": {
+    "candidate_terms": {
+      "terms": {
+        "field": "title.keyword",
+        "size": 100,
+        "min_doc_count": 1,
+        "order": { "_count": "desc" }
+      }
+    }
+  }
+}

@@ -127,8 +127,9 @@ export async function importCorpus(configPath: string) {
       const docCount = stats.doc_count;
 
       const terms = Object.entries(fieldTerms)
-        //.filter(([term]) => candidateSet.has(term) && !stopwords.has(term))
-        .filter(([term]) => longFormField && contentField === longFormField ? candidateSet.has(term) && !stopwords.has(term) : !stopwords.has(term))
+      //workaround to bypass corpus candidates
+      //.filter(([term]) => longFormField && contentField === longFormField ? candidateSet.has(term) && !stopwords.has(term) : !stopwords.has(term))
+      .filter(([term]) => candidateSet.has(term) && !stopwords.has(term))
         .map(([term, stat]: [string, any]) => {
           const tf = stat.term_freq;
           const df = stat.doc_freq;

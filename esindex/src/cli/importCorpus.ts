@@ -88,6 +88,7 @@ export async function importCorpus(configPath: string) {
 
   const candidateSet = await getTopCorpusTerms({ index, fields, dfMin, dfMax, fieldModes });
   console.log(`Found ${candidateSet.size} candidates for ${index}`);
+  const termSet: Set<string> = new Set<string>();
 
   for (const record of records) {
     const recordIndex: number = record["recordIndex"];
@@ -129,18 +130,25 @@ export async function importCorpus(configPath: string) {
         .slice(0, topN);
 
       for (const t of terms) {
-        await prisma.searchTerm.create({
-          data: {
-            term: t.term,
-            bm25: t.bm25,
-            tf: t.tf,
-            df: t.df,
-            termLength: t.termLength,
-            termLengthRatio: t.termLengthRatio,
-            adjbm25: t.adjbm25,
-            docId: docId
-          }
-        });
+        // gm, can surround below with try/catch block
+        // for now use hashset solution
+        let termhash: string = `${t.term}.${docId}`
+        if (!termSet.has(termhash)) {
+          //console.log(`Term creation term: ${t.term}, docId: ${docId}`);
+          await prisma.searchTerm.create({
+            data: {
+              term: t.term,
+              bm25: t.bm25,
+              tf: t.tf,
+              df: t.df,
+              termLength: t.termLength,
+              termLengthRatio: t.termLengthRatio,
+              adjbm25: t.adjbm25,
+              docId: docId
+            }
+          });
+        }
+        termSet.add(termhash);
       }
     }
     docCount++;

@@ -135,6 +135,11 @@ npx ts-node src/index.ts config/importIndexTed.json config/importCorpusTed.json 
 npx ts-node src/index.ts config/importIndexEnron.json config/importCorpusEnron.json config/summaryEnron.json
 
 
+
+npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
+
+
+
 npx ts-node src/index.ts config/importIndexTed.json config/importCorpusTed.json
 
 

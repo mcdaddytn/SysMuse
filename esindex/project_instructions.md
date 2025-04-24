@@ -125,7 +125,10 @@ npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json 
 npx ts-node src/index.ts config/importStopwords.json config/importIndexTedKeyword.json config/importCorpusTed.json config/summaryTed.json
 
 
-npx ts-node src/index.ts config/importStopwords.json config/importIndexTedMixed.json config/importCorpusTedOptions.json config/summaryTed.json
+npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTedPhrase.json config/summaryTed.json
+
+
+
 
 
 npx ts-node src/index.ts config/convertTedTalksSubset.json
@@ -139,6 +142,8 @@ npx ts-node src/index.ts config/importIndexEnron.json config/importCorpusEnron.j
 npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json
 
 npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTedTitle.json config/summaryTed.json
+
+npx ts-node src/index.ts config/importStopwords.json config/importIndexTed.json config/importCorpusTedDesc.json config/summaryTed.json
 
 
 npx ts-node src/index.ts config/importIndexTed.json config/importCorpusTed.json

@@ -1,0 +1,16 @@
+{
+  "task": "importCorpus",
+  "corpus": "ted_talks",
+  "index": "ted_talks",
+  "dataFile": "ted_talks.json",
+  "topN": 5,
+  "maxPhraseLength": 3,  
+  "dfMin": 10,
+  "dfMax": 200,
+  "fields": ["transcript", "title"],
+  "longFormField": "transcript",
+  "fieldModes": {
+    "transcript": "token",
+    "title": "keyword"
+  }
+}

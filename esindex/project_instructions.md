@@ -128,6 +128,12 @@ npx ts-node src/index.ts config/importStopwords.json config/importIndexTedKeywor
 npx ts-node src/index.ts config/importStopwords.json config/importIndexTedMixed.json config/importCorpusTedOptions.json config/summaryTed.json
 
 
+npx ts-node src/index.ts config/convertTedTalksSubset.json
+npx ts-node src/index.ts config/convertEnronEmailsSubset.json
+
+
+
+
 
 
 

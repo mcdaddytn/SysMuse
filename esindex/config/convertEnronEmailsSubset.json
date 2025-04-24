@@ -1,0 +1,6 @@
+{
+  "task": "convert",
+  "dataset": "enron_emails",
+  "csv": "emails.csv",
+  "maxRecords": 1000
+}

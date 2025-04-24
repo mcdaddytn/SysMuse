@@ -1,0 +1,14 @@
+{
+  "ted_talks": {
+    "transcript": "token",
+    "title": "keyword",
+    "tags": "keyword",
+    "speaker": "keyword"
+  },
+  "enron_emails": {
+    "message": "token",
+    "Subject": "keyword",
+    "From": "keyword",
+    "To": "keyword"
+  }
+}

@@ -1,100 +1,44 @@
-// === src/cli/runImporter.ts ===
-import { importTEDTalks } from '../import/importTedTalks';
-import { importEnronEmails } from '../import/importEnron';
-import { importStopwords } from '../setup/importStopwords';
+// === src/cli/runImporter.ts — up to date with full task support ===
 import { importCorpus } from './importCorpus';
-import { PrismaClient } from '@prisma/client';
+import { importStopwords } from '../setup/importStopwords';
+import { setupIndex } from '../setup/setupIndices';
+import { summarizeCorpus } from './summarize';
+import { convertTedTalks } from '../convert/convertTed';
+import { convertEnronEmails } from '../convert/convertEnron';
 import { loadConfig } from '../lib/config';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
-
-const prisma = new PrismaClient();
 
 export async function runImporterTask(config: any, configPath: string) {
-  const dataset = config.dataset || 'ted';
   const task = config.task;
-  const indexName = config.index || (dataset === 'ted' ? 'ted_talks' : 'enron_emails');
-  const keywordSearch = config.keywordSearch !== false; // default true
-  const numRecords = config.numRecords;
-  const outputFileSuffix = config.outputFileSuffix;
 
-  if (task === 'importIndex') {
-    const { dataset, index, keywordSearch } = config;
-
-    let keywordSearchParam: boolean | Record<string, boolean> = keywordSearch;
-    if (typeof keywordSearch === 'string') {
-      try {
-        keywordSearchParam = JSON.parse(keywordSearch);
-      } catch {
-        keywordSearchParam = keywordSearch === 'true';
-      }
-    }
-
-    if (dataset === 'ted') {
-      //await importTEDTalks(indexName, keywordSearch, numRecords, outputFileSuffix);
-      await importTEDTalks(indexName, keywordSearchParam, numRecords, outputFileSuffix);
-    } else if (dataset === 'enron') {
-      //await importEnronEmails(indexName, keywordSearch, numRecords, outputFileSuffix);
-      await importEnronEmails(indexName, keywordSearchParam, numRecords, outputFileSuffix);
-    } else {
-      console.error(`Unknown dataset: ${dataset}`);
-      process.exit(1);
-    }
-  } else if (task === 'importStopwords') {
+  if (task === 'importStopwords') {
     const { category, fileName, delimiter, convertCsv } = config;
-    if (!category || !fileName || !delimiter) {
-      console.error(`Missing required field(s) in stopword import config: ${configPath}`);
-      process.exit(1);
-    }
     console.log(`Importing stopwords from file ${fileName}`);
     await importStopwords(category, fileName, delimiter, convertCsv);
+
+  } else if (task === 'importIndex') {
+    const { index, dataset } = config;
+    if (!index || !dataset) {
+      throw new Error(`Missing 'index' or 'dataset' in config: ${configPath}`);
+    }
+    await setupIndex(index, dataset);
+
   } else if (task === 'importCorpus') {
     await importCorpus(configPath);
-  } else if (task === 'summary') {
-    const corpus = await prisma.corpus.findUnique({
-      where: { name: dataset },
-      include: { documents: { include: { terms: true } } }
-    });
 
-    if (!corpus) {
-      console.error(`No corpus found for: ${dataset}`);
-      process.exit(1);
+  } else if (task === 'summary') {
+    await summarizeCorpus(configPath);
+
+  } else if (task === 'convert') {
+    const { dataset } = config;
+    if (dataset === 'ted_talks') {
+      await convertTedTalks(config);
+    } else if (dataset === 'enron_emails') {
+      await convertEnronEmails(config);
+    } else {
+      throw new Error(`Unknown dataset for conversion '${dataset}'`);
     }
 
-    const totalDocs = corpus.documents.length;
-    const allTerms = corpus.documents.flatMap(doc => doc.terms);
-    const avgTermsPerDoc = totalDocs > 0 ? (allTerms.length / totalDocs).toFixed(2) : 0;
-
-    console.log(`Summary for dataset: ${dataset}`);
-    console.log(`  Total documents: ${totalDocs}`);
-    console.log(`  Total terms extracted: ${allTerms.length}`);
-    console.log(`  Avg terms per doc: ${avgTermsPerDoc}`);
-
-    const docLengths = corpus.documents.map(d => d.docLength);
-    const avgLength = docLengths.length ? (docLengths.reduce((a, b) => a + b, 0) / docLengths.length).toFixed(2) : 0;
-    console.log(`  Avg document length: ${avgLength} characters`);
   } else {
-    console.error(`Unknown task: ${task}`);
-    process.exit(1);
+    throw new Error(`Unknown task '${task}' in config: ${configPath}`);
   }
 }
-
-// gm: changed name from run, old code here
-async function run() {
-  const configPath = process.argv[2];
-  if (!configPath) {
-    console.error("Please provide a JSON config file path.");
-    process.exit(1);
-  }
-
-  console.error("runImporter.run configPath: ${configPath}");
-  const config = loadConfig(configPath);
-  runImporterTask(config, configPath);
-}
-
-// gm: this is run from index.ts directly now
-//run().catch(err => {
-//  console.error("Import failed:", err);
-//  process.exit(1);
-//});

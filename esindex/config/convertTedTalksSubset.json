@@ -1,0 +1,7 @@
+{
+  "task": "convert",
+  "dataset": "ted_talks",
+  "mainCsv": "ted_main.csv",
+  "transcriptCsv": "transcripts.csv",
+  "maxRecords": 200
+}

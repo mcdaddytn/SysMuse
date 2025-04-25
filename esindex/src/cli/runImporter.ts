@@ -56,12 +56,19 @@ export async function runImporterTask(config: any, configPath: string) {
     await setupDocumentTypes(corpusType, documentTypes);
   
   } else if (task === 'corpusOperation') {
-    const { corpus, operation, name, operationText, delimiter, batchSize } = config;
+    const { corpus, operation, name, operationText, delimiter, batchSize, startIndex } = config;
     if (!corpus || !operation) {
       throw new Error(`Missing 'corpus' or 'operation' in config: ${configPath}`);
     }
-    await executeCorpusOperation(corpus, operation, name, operationText, delimiter, batchSize);
-
+    await executeCorpusOperation(
+      corpus, 
+      operation, 
+      name, 
+      operationText, 
+      delimiter, 
+      batchSize, 
+      startIndex
+    );
   } else {
     throw new Error(`Unknown task '${task}' in config: ${configPath}`);
   }

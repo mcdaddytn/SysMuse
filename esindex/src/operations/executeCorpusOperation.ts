@@ -17,7 +17,8 @@ export async function executeCorpusOperation(
   operationName?: string, 
   operationText?: string, 
   delimiter?: string,
-  batchSize: number = 100
+  batchSize: number = 100,
+  startIndex: number = 0  // New parameter with default value of 0
 ): Promise<void> {
   // Find the corpus
   const corpus = await prisma.corpus.findUnique({
@@ -68,7 +69,7 @@ export async function executeCorpusOperation(
       await executeJsonFileSearch(corpus.id, operation.id, operationText);
       break;
     case 'ESSEARCHTERMTEST':
-      await executeSearchTermTest(corpus.id, operation.id, batchSize);
+      await executeSearchTermTest(corpus.id, operation.id, batchSize, startIndex);
       break;
     default:
       throw new Error(`Unknown operation type: ${searchType}`);
@@ -573,7 +574,8 @@ async function executeJsonFileSearch(
 async function executeSearchTermTest(
   corpusId: number, 
   operationId: number,
-  batchSize: number = 100
+  batchSize: number = 100,
+  startIndex: number = 0  // New parameter with default value of 0
 ): Promise<void> {
   // Get all search terms for this corpus
   const searchTerms = await prisma.searchTerm.findMany({
@@ -589,6 +591,13 @@ async function executeSearchTermTest(
   });
 
   console.log(`Found ${searchTerms.length} unique search terms to test`);
+  console.log(`Starting at index ${startIndex} with batch size ${batchSize}`);
+
+  // Validate startIndex
+  if (startIndex >= searchTerms.length) {
+    console.log(`Start index ${startIndex} exceeds available terms (${searchTerms.length})`);
+    return;
+  }
 
   // Get corpus information
   const corpus = await prisma.corpus.findUnique({
@@ -601,84 +610,91 @@ async function executeSearchTermTest(
 
   const esIndex = corpus.name; // Assuming corpus name matches index name
   
-  // Process in batches
+  // Process in batches, starting from startIndex
   let processed = 0;
-  for (let i = 0; i < searchTerms.length; i += batchSize) {
-    const batch = searchTerms.slice(i, i + batchSize);
-    console.log(`Processing batch ${i/batchSize + 1} of ${Math.ceil(searchTerms.length/batchSize)}`);
-    
-    // Process each term in parallel
-    await Promise.all(batch.map(async (term) => {
-      try {
-        // Create a document set for this term
-        const termSet = await prisma.corpusDocumentSet.create({
-          data: {
-            name: `Term_${term.term.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`,
-            corpus: { connect: { id: corpusId } },
-            operation: { connect: { id: operationId } }
-          }
-        });
-        
-        // Execute simple match query for this term - updated ES client call
-        const searchResult = await esClient.search({
-          index: esIndex,
-          size: 50, // Limit results
-          query: {
-            match: {
-              _all: term.term
-            }
-          }
-        });
-        
-        const hits = searchResult.hits.hits;
-        
-        // Map ES results to database documents
-        const esIdsToFind = hits.map(hit => hit._id);
-        
-        const dbDocuments = await prisma.document.findMany({
-          where: {
-            corpusId,
-            esId: { in: esIdsToFind }
-          }
-        });
-        
-        // Create results with metrics
-        for (let j = 0; j < dbDocuments.length; j++) {
-          const doc = dbDocuments[j];
-          const hit = hits.find(h => h._id === doc.esId);
-          
-          if (hit) {
-            const setDoc = await prisma.setDocument.create({
-              data: {
-                documentSet: { connect: { id: termSet.id } },
-                document: { connect: { id: doc.id } }
-              }
-            });
-            
-            await prisma.documentMetrics.create({
-              data: {
-                relevanceScore: hit._score || 0,
-                rank: j + 1,
-                setDocument: { connect: { id: setDoc.id } }
-              }
-            });
-          }
-        }
-        
-        // Calculate set metrics
-        await calculateSetMetrics(termSet.id);
-        
-        processed++;
-        if (processed % 10 === 0) {
-          console.log(`Processed ${processed} search terms`);
-        }
-      } catch (err) {
-        console.error(`Error processing term "${term.term}": ${err.message}`);
-      }
-    }));
-  }
+  const endIndex = Math.min(startIndex + batchSize, searchTerms.length);
   
-  console.log(`Completed search term test operation for ${processed} terms`);
+  console.log(`Processing terms from index ${startIndex} to ${endIndex - 1}`);
+  
+  // Process only the specified range
+  const termsToProcess = searchTerms.slice(startIndex, endIndex);
+  
+  // Process each term in parallel
+  await Promise.all(termsToProcess.map(async (term) => {
+    try {
+      // Create a document set for this term
+      const termSet = await prisma.corpusDocumentSet.create({
+        data: {
+          name: `Term_${term.term.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`,
+          corpus: { connect: { id: corpusId } },
+          operation: { connect: { id: operationId } }
+        }
+      });
+      
+      // Execute simple match query for this term
+      const searchResult = await esClient.search({
+        index: esIndex,
+        size: 50, // Limit results
+        query: {
+          match: {
+            _all: term.term
+          }
+        }
+      });
+      
+      const hits = searchResult.hits.hits;
+      
+      // Map ES results to database documents
+      const esIdsToFind = hits.map(hit => hit._id);
+      
+      const dbDocuments = await prisma.document.findMany({
+        where: {
+          corpusId,
+          esId: { in: esIdsToFind }
+        }
+      });
+      
+      // Create results with metrics
+      for (let j = 0; j < dbDocuments.length; j++) {
+        const doc = dbDocuments[j];
+        const hit = hits.find(h => h._id === doc.esId);
+        
+        if (hit) {
+          const setDoc = await prisma.setDocument.create({
+            data: {
+              documentSet: { connect: { id: termSet.id } },
+              document: { connect: { id: doc.id } }
+            }
+          });
+          
+          await prisma.documentMetrics.create({
+            data: {
+              relevanceScore: hit._score || 0,
+              rank: j + 1,
+              setDocument: { connect: { id: setDoc.id } }
+            }
+          });
+        }
+      }
+      
+      // Calculate set metrics
+      await calculateSetMetrics(termSet.id);
+      
+      processed++;
+      if (processed % 10 === 0) {
+        console.log(`Processed ${processed}/${termsToProcess.length} terms in current batch`);
+      }
+    } catch (err) {
+      console.error(`Error processing term "${term.term}": ${err.message}`);
+    }
+  }));
+  
+  console.log(`Completed search term test operation for batch ${startIndex}-${endIndex-1} (${processed} terms)`);
+  console.log(`Total terms: ${searchTerms.length}, Remaining: ${searchTerms.length - endIndex}`);
+  
+  if (endIndex < searchTerms.length) {
+    console.log(`To process the next batch, use startIndex: ${endIndex}`);
+  }
 }
 
 /**

@@ -4,7 +4,7 @@
   "index": "enron_emails",
   "dataFile": "enron_emails.json",
   "topN": 5,
-  "maxPhraseLength": 1,
+  "maxPhraseLength": 2,
   "dfMin": 1,
   "dfMax": 100,
   "fields": ["message", "Subject"],

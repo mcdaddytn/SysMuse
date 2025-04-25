@@ -1,0 +1,7 @@
+{
+  "task": "corpusOperation",
+  "corpus": "enron_emails",
+  "operation": "ESKEYWORDSEARCH",
+  "name": "Enron_Business_Search",
+  "operationText": "business meeting financial report"
+}

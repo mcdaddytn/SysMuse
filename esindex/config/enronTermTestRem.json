@@ -1,0 +1,8 @@
+{
+  "task": "corpusOperation",
+  "corpus": "enron_emails",
+  "operation": "ESSEARCHTERMTEST",
+  "name": "Enron_Term_Test_Remaining",
+  "batchSize": 10000,
+  "startIndex": 100
+}

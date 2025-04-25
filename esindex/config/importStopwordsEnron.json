@@ -1,0 +1,8 @@
+{
+  "task": "importStopwords",
+  "category": "emails",
+  "fileName": "email_stopwords.txt",
+  "delimiter": "\n",
+  "convertCsv": true,
+  "corpusName": "enron_emails"
+}

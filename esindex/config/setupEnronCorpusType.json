@@ -3,6 +3,7 @@
   "name": "ENRON_EMAILS",
   "description": "Enron email corpus with metadata",
   "defaultMetadata": {
-    "source": "Enron Email Dataset"
+    "source": "Enron Email Dataset",
+    "description": "Emails from the Enron Corporation dataset"
   }
 }

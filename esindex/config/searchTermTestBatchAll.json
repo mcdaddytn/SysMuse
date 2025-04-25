@@ -1,0 +1,8 @@
+{
+  "task": "corpusOperation",
+  "corpus": "ted_talks",
+  "operation": "ESSEARCHTERMTEST",
+  "name": "Term_Test_Remaining",
+  "batchSize": 10000,
+  "startIndex": 0
+}

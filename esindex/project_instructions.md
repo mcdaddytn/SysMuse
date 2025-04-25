@@ -160,18 +160,25 @@ npx ts-node src/index.ts config/summaryEnron.json
 
 
 New sequence after database refactor:
+
 [First, set up the corpus types:]
 npx ts-node src/index.ts config/setupTedCorpusType.json
+
 [Then, define the document types and fields:]
 npx ts-node src/index.ts config/setupTedDocumentTypes.json
+
 [Import stopwords, now linked to the corpus:]
 npx ts-node src/index.ts config/importStopwords.json
+
 [Set up the Elasticsearch index:]
 npx ts-node src/index.ts config/importIndexTed.json
+
 [Import the corpus data:]
 npx ts-node src/index.ts config/importCorpusTed.json
+
 [Run the summary to verify:]
 npx ts-node src/index.ts config/summaryTed.json
+
 [Optionally, create an initial snapshot:]
 npx ts-node src/index.ts config/corpusSnapshotExample.json
 
@@ -179,6 +186,101 @@ npx ts-node src/index.ts config/corpusSnapshotExample.json
 All in one command:
 npx ts-node src/index.ts config/setupTedCorpusType.json config/setupTedDocumentTypes.json config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json config/corpusSnapshotExample.json
 
+
+[Run the first batch:]
+npx ts-node src/index.ts config/searchTermTestBatch1.json
+
+[Run the next batch:]
+npx ts-node src/index.ts config/searchTermTestBatch2.json
+
+[Run the remaining:]
+npx ts-node src/index.ts config/searchTermTestBatchRem.json
+
+
+
+[Run the remaining:]
+npx ts-node src/index.ts config/searchTermTestBatchAll.json
+
+
+
+
+
+
+
+-- SQL query to get record counts for all tables in the database
+SELECT 
+  table_name, 
+  table_rows,
+  ROUND((data_length + index_length) / 1024 / 1024, 2) AS size_mb
+FROM 
+  information_schema.tables
+WHERE 
+  table_schema = 'search_gen' -- Replace with your database name if different
+ORDER BY 
+  table_rows DESC, size_mb DESC;
+
+-- For more accurate counts (tables may have estimated counts in information_schema)
+-- You can run this second query which gets exact counts but is slower:
+
+SELECT 'Corpus' AS table_name, COUNT(*) AS row_count FROM `Corpus`
+UNION
+SELECT 'CorpusType' AS table_name, COUNT(*) AS row_count FROM `CorpusType`
+UNION
+SELECT 'CorpusDocumentType' AS table_name, COUNT(*) AS row_count FROM `CorpusDocumentType`
+UNION
+SELECT 'Document' AS table_name, COUNT(*) AS row_count FROM `Document`
+UNION
+SELECT 'DocumentTypeField' AS table_name, COUNT(*) AS row_count FROM `DocumentTypeField`
+UNION
+SELECT 'SearchTerm' AS table_name, COUNT(*) AS row_count FROM `SearchTerm`
+UNION
+SELECT 'Stopword' AS table_name, COUNT(*) AS row_count FROM `Stopword`
+UNION
+SELECT 'CorpusSetOperation' AS table_name, COUNT(*) AS row_count FROM `CorpusSetOperation`
+UNION
+SELECT 'CorpusDocumentSet' AS table_name, COUNT(*) AS row_count FROM `CorpusDocumentSet`
+UNION
+SELECT 'SetDocument' AS table_name, COUNT(*) AS row_count FROM `SetDocument`
+UNION
+SELECT 'SetMetrics' AS table_name, COUNT(*) AS row_count FROM `SetMetrics`
+UNION
+SELECT 'DocumentMetrics' AS table_name, COUNT(*) AS row_count FROM `DocumentMetrics`
+ORDER BY row_count DESC;
+
+
+
+
+
+After 1st batch:
+
+searchterm	981	0.19
+setdocument	913	0.09
+documentmetrics	713	0.08
+document	200	0.08
+stopword	190	0.05
+corpusdocumentset	51	0.05
+setmetrics	51	0.03
+documenttypefield	7	0.03
+corpussetoperation	2	0.03
+corpus	1	0.05
+corpusdocumenttype	1	0.05
+corpustype	1	0.05
+
+After 2nd batch (not refreshing) ?:
+
+
+searchterm	981	0.19
+setdocument	913	0.09
+documentmetrics	713	0.08
+document	200	0.08
+stopword	190	0.05
+corpusdocumentset	51	0.05
+setmetrics	51	0.03
+documenttypefield	7	0.03
+corpussetoperation	2	0.03
+corpus	1	0.05
+corpusdocumenttype	1	0.05
+corpustype	1	0.05
 
 
 

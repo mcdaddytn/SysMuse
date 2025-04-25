@@ -575,7 +575,7 @@ async function executeSearchTermTest(
   corpusId: number, 
   operationId: number,
   batchSize: number = 100,
-  startIndex: number = 0  // New parameter with default value of 0
+  startIndex: number = 0
 ): Promise<void> {
   // Get all search terms for this corpus
   const searchTerms = await prisma.searchTerm.findMany({
@@ -610,8 +610,26 @@ async function executeSearchTermTest(
 
   const esIndex = corpus.name; // Assuming corpus name matches index name
   
+  // Check if index exists
+  try {
+    const indexExists = await esClient.indices.exists({ index: esIndex });
+    console.log(`Elasticsearch index '${esIndex}' exists: ${indexExists}`);
+    
+    // Get document count in index
+    const countResult = await esClient.count({ index: esIndex });
+    console.log(`Documents in index '${esIndex}': ${countResult.count}`);
+    
+    // Get available fields in the index
+    const mappingResult = await esClient.indices.getMapping({ index: esIndex });
+    const fieldsList = Object.keys(mappingResult[esIndex].mappings.properties || {});
+    console.log(`Available fields in index: ${fieldsList.join(', ')}`);
+  } catch (error) {
+    console.error(`Error checking Elasticsearch index: ${error}`);
+  }
+  
   // Process in batches, starting from startIndex
   let processed = 0;
+  let successfulSearches = 0;
   const endIndex = Math.min(startIndex + batchSize, searchTerms.length);
   
   console.log(`Processing terms from index ${startIndex} to ${endIndex - 1}`);
@@ -619,9 +637,11 @@ async function executeSearchTermTest(
   // Process only the specified range
   const termsToProcess = searchTerms.slice(startIndex, endIndex);
   
-  // Process each term in parallel
-  await Promise.all(termsToProcess.map(async (term) => {
+  // Process each term sequentially for better debugging
+  for (const term of termsToProcess) {
     try {
+      console.log(`Processing term: "${term.term}" [${processed + 1}/${termsToProcess.length}]`);
+      
       // Create a document set for this term
       const termSet = await prisma.corpusDocumentSet.create({
         data: {
@@ -631,18 +651,72 @@ async function executeSearchTermTest(
         }
       });
       
-      // Execute simple match query for this term
-      const searchResult = await esClient.search({
-        index: esIndex,
-        size: 50, // Limit results
-        query: {
-          match: {
-            _all: term.term
+      console.log(`Created document set for term: "${term.term}" with ID ${termSet.id}`);
+      
+      // Try different search approaches
+      let searchResult;
+      try {
+        // First attempt: basic match query
+        console.log(`Searching for term: "${term.term}" using match query`);
+        searchResult = await esClient.search({
+          index: esIndex,
+          size: 50,
+          query: {
+            match: {
+              _all: term.term
+            }
           }
+        });
+        
+        // If no results, try a different approach
+        if (searchResult.hits.hits.length === 0) {
+          console.log(`No results with _all field, trying multi_match across all fields`);
+          
+          searchResult = await esClient.search({
+            index: esIndex,
+            size: 50,
+            query: {
+              multi_match: {
+                query: term.term,
+                fields: ["*"],
+                type: "best_fields",
+                operator: "or" as const
+              }
+            }
+          });
         }
-      });
+      } catch (searchError) {
+        console.error(`Search error for term "${term.term}": ${searchError}`);
+        console.log(`Trying fallback query without _all field...`);
+        
+        // Get available fields from the mapping and use them explicitly
+        const mappingResult = await esClient.indices.getMapping({ index: esIndex });
+        const textFields = Object.entries(mappingResult[esIndex].mappings.properties || {})
+          .filter(([_, prop]: [string, any]) => prop.type === 'text')
+          .map(([field, _]) => field);
+        
+        console.log(`Using explicit fields: ${textFields.join(', ')}`);
+        
+        searchResult = await esClient.search({
+          index: esIndex,
+          size: 50,
+          query: {
+            multi_match: {
+              query: term.term,
+              fields: textFields.length > 0 ? textFields : ["*"],
+              type: "best_fields",
+              operator: "or" as const
+            }
+          }
+        });
+      }
       
       const hits = searchResult.hits.hits;
+      console.log(`Found ${hits.length} results for term: "${term.term}"`);
+      
+      if (hits.length > 0) {
+        successfulSearches++;
+      }
       
       // Map ES results to database documents
       const esIdsToFind = hits.map(hit => hit._id);
@@ -653,6 +727,25 @@ async function executeSearchTermTest(
           esId: { in: esIdsToFind }
         }
       });
+      
+      console.log(`Found ${dbDocuments.length} matching documents in database for term: "${term.term}"`);
+      
+      if (dbDocuments.length === 0 && hits.length > 0) {
+        console.log(`Warning: Found hits in ES but no matching documents in DB. First hit ID: ${hits[0]._id}`);
+        
+        // Check if the ES IDs exist in the database at all
+        const anyDoc = await prisma.document.findFirst({
+          where: {
+            esId: hits[0]._id
+          }
+        });
+        
+        if (anyDoc) {
+          console.log(`ES ID ${hits[0]._id} exists in DB but has corpusId ${anyDoc.corpusId} vs expected ${corpusId}`);
+        } else {
+          console.log(`ES ID ${hits[0]._id} does not exist in DB at all`);
+        }
+      }
       
       // Create results with metrics
       for (let j = 0; j < dbDocuments.length; j++) {
@@ -683,13 +776,15 @@ async function executeSearchTermTest(
       processed++;
       if (processed % 10 === 0) {
         console.log(`Processed ${processed}/${termsToProcess.length} terms in current batch`);
+        console.log(`Successful searches so far: ${successfulSearches}/${processed} (${(successfulSearches/processed*100).toFixed(1)}%)`);
       }
     } catch (err) {
-      console.error(`Error processing term "${term.term}": ${err.message}`);
+      console.error(`Error processing term "${term.term}": ${err}`);
     }
-  }));
+  }
   
   console.log(`Completed search term test operation for batch ${startIndex}-${endIndex-1} (${processed} terms)`);
+  console.log(`Successful searches: ${successfulSearches}/${processed} (${(successfulSearches/processed*100).toFixed(1)}%)`);
   console.log(`Total terms: ${searchTerms.length}, Remaining: ${searchTerms.length - endIndex}`);
   
   if (endIndex < searchTerms.length) {

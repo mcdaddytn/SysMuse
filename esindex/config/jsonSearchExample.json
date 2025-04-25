@@ -1,0 +1,7 @@
+{
+  "task": "corpusOperation",
+  "corpus": "ted_talks",
+  "operation": "ESJSONSEARCH",
+  "name": "Complex_Query",
+  "operationText": "{\"query\":{\"bool\":{\"must\":[{\"match\":{\"transcript\":\"climate\"}},{\"match\":{\"transcript\":\"change\"}}],\"filter\":[{\"range\":{\"published_date\":{\"gte\":\"2015-01-01\"}}}]}}}"
+}

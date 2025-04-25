@@ -1,0 +1,7 @@
+{
+  "task": "corpusOperation",
+  "corpus": "ted_talks",
+  "operation": "ESKEYWORDSEARCH",
+  "name": "Technology_Search",
+  "operationText": "technology innovation future"
+}

@@ -15,49 +15,232 @@ generator client {
   provider = "prisma-client-js"
 }
 
+
+// Enums
+enum DocType {
+  OTHER
+  ESJSON
+  TEDTALK
+  ENRONEMAIL
+}
+
+enum DocFieldType {
+  STRING
+  NUMBER
+  LONGTEXT
+  DATE
+  JSON
+  URL
+  OTHER
+}
+
+enum ESIndexType {
+  KEYWORD
+  TOKEN
+  NONE
+}
+
+enum CorpusOperationType {
+  CORPUSSNAPSHOT
+  SETUNION
+  SETINTERSECTION
+  ESKEYWORDSEARCH
+  ESJSONSEARCH
+  ESJSONFILESEARCH
+  ESSEARCHTERMTEST
+}
+
 model Corpus {
-  id        Int        @id @default(autoincrement())
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  documents Document[]
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  createdAt    DateTime      @default(now())
+  
+  // New fields and relationships
+  corpusTypeId Int?
+  corpusType   CorpusType?   @relation(fields: [corpusTypeId], references: [id])
+  
+  // Existing relationships
+  documents    Document[]
+  
+  // New relationships
+  setOperations    CorpusSetOperation[]
+  documentSets     CorpusDocumentSet[]
+  stopwords        Stopword[]
 }
 
 model Document {
-  id        Int        @id @default(autoincrement())
-  corpusId  Int
-  content   String     // Could be message (enron) or transcript (TED)
-  esId      String     // Corresponding Elasticsearch ID
-  createdAt DateTime   @default(now())
-  docLength         Int        // number of characters
+  id                Int               @id @default(autoincrement())
+  corpusId          Int
+  content           String            // Could be message (enron) or transcript (TED)
+  esId              String            // Corresponding Elasticsearch ID
+  createdAt         DateTime          @default(now())
+  docLength         Int               // number of characters
   wordCount         Int
   distinctWordCount Int
   avgWordLength     Float
 
-  corpus    Corpus     @relation(fields: [corpusId], references: [id])
-  terms     SearchTerm[]
+  corpus            Corpus            @relation(fields: [corpusId], references: [id])
+  terms             SearchTerm[]
+  
+  // New relationships
+  documentTypeId    Int?
+  documentType      CorpusDocumentType? @relation(fields: [documentTypeId], references: [id])
+  documentSets      SetDocument[]
 }
 
 model SearchTerm {
-  id        Int      @id @default(autoincrement())
-  term      String
-  bm25      Float
-  tf        Int      // term freq
-  df        Int      // doc freq
-  termLength      Int
-  termLengthRatio Float
-  adjbm25         Float
+  id               Int      @id @default(autoincrement())
+  term             String
+  bm25             Float
+  tf               Int      // term freq
+  df               Int      // doc freq
+  termLength       Int
+  termLengthRatio  Float
+  adjbm25          Float
+  createdAt        DateTime @default(now())
   
-  docId     Int
-  document  Document @relation(fields: [docId], references: [id])
+  docId            Int
+  document         Document @relation(fields: [docId], references: [id])
+  
+  // New relationship
+  fieldId          Int?
+  field            DocumentTypeField? @relation(fields: [fieldId], references: [id])
 
   @@unique([term, docId])
 }
 
 model Stopword {
-  id       Int    @id @default(autoincrement())
-  term     String
-  category String
+  id         Int      @id @default(autoincrement())
+  term       String
+  category   String
+  createdAt  DateTime @default(now())
+  
+  // New relationship
+  corpusId   Int?
+  corpus     Corpus?  @relation(fields: [corpusId], references: [id])
 
   @@unique([term, category])
 }
+
+
+// New models
+model CorpusType {
+  id              Int                 @id @default(autoincrement())
+  name            String              @unique @db.VarChar(255)
+  description     String?             @db.Text
+  defaultMetadata Json?
+  createdAt       DateTime            @default(now())
+  
+  corpora         Corpus[]
+  documentTypes   CorpusDocumentType[]
+  defaultDocTypeId Int?
+  defaultDocType   CorpusDocumentType? @relation("DefaultDocType", fields: [defaultDocTypeId], references: [id])
+}
+
+model CorpusDocumentType {
+  id          Int         @id @default(autoincrement())
+  name        String      @unique @db.VarChar(255)
+  docType     DocType     @default(OTHER)
+  createdAt   DateTime    @default(now())
+  
+  corpusTypeId Int
+  corpusType   CorpusType @relation(fields: [corpusTypeId], references: [id])
+  
+  documents    Document[]
+  fields       DocumentTypeField[]
+  
+  // For optional default relationship
+  defaultFor   CorpusType[] @relation("DefaultDocType")
+}
+
+model DocumentTypeField {
+  id            Int          @id @default(autoincrement())
+  name          String       @db.VarChar(255)
+  fieldType     DocFieldType @default(STRING)
+  esIndexType   ESIndexType  @default(NONE)
+  createdAt     DateTime     @default(now())
+  
+  documentTypeId Int
+  documentType   CorpusDocumentType @relation(fields: [documentTypeId], references: [id])
+  
+  searchTerms    SearchTerm[]
+  
+  @@unique([documentTypeId, name])
+}
+
+model CorpusSetOperation {
+  id                Int                 @id @default(autoincrement())
+  name              String              @db.VarChar(255)
+  searchType        CorpusOperationType @default(CORPUSSNAPSHOT)
+  operationText     String?             @db.Text
+  operationDelimiter String?            @db.VarChar(50)
+  createdAt         DateTime            @default(now())
+  
+  corpusId          Int
+  corpus            Corpus              @relation(fields: [corpusId], references: [id])
+  
+  documentSets      CorpusDocumentSet[]
+  
+  @@unique([corpusId, name])
+}
+
+model CorpusDocumentSet {
+  id                Int                 @id @default(autoincrement())
+  name              String              @db.VarChar(255)
+  createdAt         DateTime            @default(now())
+  
+  corpusId          Int
+  corpus            Corpus              @relation(fields: [corpusId], references: [id])
+  
+  operationId       Int
+  operation         CorpusSetOperation  @relation(fields: [operationId], references: [id])
+  
+  documents         SetDocument[]
+  metrics           SetMetrics?
+  
+  @@unique([corpusId, name])
+}
+
+// Join table for many-to-many relationship
+model SetDocument {
+  id          Int               @id @default(autoincrement())
+  createdAt   DateTime          @default(now())
+  
+  setId       Int
+  documentSet CorpusDocumentSet @relation(fields: [setId], references: [id])
+  
+  documentId  Int
+  document    Document          @relation(fields: [documentId], references: [id])
+  
+  metrics     DocumentMetrics?
+  
+  @@unique([setId, documentId])
+}
+
+model SetMetrics {
+  id               Int               @id @default(autoincrement())
+  wordCount        Int
+  documentCount    Int
+  avgWordCount     Float
+  avgDocLength     Float
+  distinctWordCount Int
+  avgWordLength    Float
+  createdAt        DateTime          @default(now())
+  
+  setId            Int               @unique
+  documentSet      CorpusDocumentSet @relation(fields: [setId], references: [id])
+}
+
+model DocumentMetrics {
+  id               Int          @id @default(autoincrement())
+  relevanceScore   Float?       // For search operations
+  rank             Int?         // Position in search results
+  customMetrics    Json?        // For operation-specific metrics
+  createdAt        DateTime     @default(now())
+  
+  setDocumentId    Int          @unique
+  setDocument      SetDocument  @relation(fields: [setDocumentId], references: [id])
+}
+
+
 

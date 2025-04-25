@@ -1,0 +1,48 @@
+{
+  "task": "setupDocumentTypes",
+  "corpusType": "TED_TALKS",
+  "documentTypes": [
+    {
+      "name": "TED_TALK",
+      "docType": "TEDTALK",
+      "isDefault": true,
+      "fields": [
+        {
+          "name": "title",
+          "fieldType": "STRING",
+          "esIndexType": "KEYWORD"
+        },
+        {
+          "name": "speaker",
+          "fieldType": "STRING",
+          "esIndexType": "KEYWORD"
+        },
+        {
+          "name": "description",
+          "fieldType": "STRING",
+          "esIndexType": "TOKEN"
+        },
+        {
+          "name": "transcript",
+          "fieldType": "LONGTEXT",
+          "esIndexType": "TOKEN"
+        },
+        {
+          "name": "tags",
+          "fieldType": "STRING",
+          "esIndexType": "KEYWORD"
+        },
+        {
+          "name": "published_date",
+          "fieldType": "DATE",
+          "esIndexType": "NONE"
+        },
+        {
+          "name": "url",
+          "fieldType": "URL",
+          "esIndexType": "KEYWORD"
+        }
+      ]
+    }
+  ]
+}

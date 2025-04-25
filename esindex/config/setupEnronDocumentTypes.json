@@ -1,0 +1,38 @@
+{
+  "task": "setupDocumentTypes",
+  "corpusType": "ENRON_EMAILS",
+  "documentTypes": [
+    {
+      "name": "ENRON_EMAIL",
+      "docType": "ENRONEMAIL",
+      "isDefault": true,
+      "fields": [
+        {
+          "name": "Subject",
+          "fieldType": "STRING",
+          "esIndexType": "KEYWORD"
+        },
+        {
+          "name": "From",
+          "fieldType": "STRING",
+          "esIndexType": "KEYWORD"
+        },
+        {
+          "name": "To",
+          "fieldType": "STRING",
+          "esIndexType": "KEYWORD"
+        },
+        {
+          "name": "message",
+          "fieldType": "LONGTEXT",
+          "esIndexType": "TOKEN"
+        },
+        {
+          "name": "Date",
+          "fieldType": "DATE",
+          "esIndexType": "NONE"
+        }
+      ]
+    }
+  ]
+}

@@ -159,6 +159,36 @@ npx ts-node src/index.ts config/summaryEnron.json
 
 
 
+New sequence after database refactor:
+[First, set up the corpus types:]
+npx ts-node src/index.ts config/setupTedCorpusType.json
+[Then, define the document types and fields:]
+npx ts-node src/index.ts config/setupTedDocumentTypes.json
+[Import stopwords, now linked to the corpus:]
+npx ts-node src/index.ts config/importStopwords.json
+[Set up the Elasticsearch index:]
+npx ts-node src/index.ts config/importIndexTed.json
+[Import the corpus data:]
+npx ts-node src/index.ts config/importCorpusTed.json
+[Run the summary to verify:]
+npx ts-node src/index.ts config/summaryTed.json
+[Optionally, create an initial snapshot:]
+npx ts-node src/index.ts config/corpusSnapshotExample.json
+
+
+All in one command:
+npx ts-node src/index.ts config/setupTedCorpusType.json config/setupTedDocumentTypes.json config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json config/corpusSnapshotExample.json
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,0 +1,8 @@
+{
+  "task": "corpusOperation",
+  "corpus": "ted_talks",
+  "operation": "SETUNION",
+  "name": "Tech_Or_Climate",
+  "operationText": "Technology_Search,Climate_Search",
+  "delimiter": ","
+}

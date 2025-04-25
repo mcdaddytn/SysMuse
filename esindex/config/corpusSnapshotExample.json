@@ -1,0 +1,6 @@
+{
+  "task": "corpusOperation",
+  "corpus": "ted_talks",
+  "operation": "CORPUSSNAPSHOT",
+  "name": "Initial_Snapshot"
+}

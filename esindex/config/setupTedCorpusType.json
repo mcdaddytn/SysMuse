@@ -1,0 +1,9 @@
+{
+  "task": "setupCorpusType",
+  "name": "TED_TALKS",
+  "description": "TED Talks transcripts with metadata",
+  "defaultMetadata": {
+    "source": "TED.com",
+    "license": "Creative Commons"
+  }
+}

@@ -20,7 +20,13 @@ function toCsvFormat(words: string[]): string {
   return words.map(w => `"${w}"`).join(',');
 }
 
-export async function importStopwords(category: string, filename: string, delimiter: string, convertCsv?: boolean) {
+export async function importStopwords(
+  category: string, 
+  filename: string, 
+  delimiter: string, 
+  convertCsv?: boolean,
+  corpusName?: string
+): Promise<void> {
   const filePath = path.join(dataPath, filename);
   const raw = fs.readFileSync(filePath, 'utf-8');
 
@@ -30,7 +36,6 @@ export async function importStopwords(category: string, filename: string, delimi
   const uniqueWords: string[] = Array.from(new Set(words));
   const uniqueWordsExcerpt: string[] = uniqueWords.slice(0, 10);
 
-  //console.log(`uniqueWordsExcerpt ${uniqueWordsExcerpt}`);
   console.log(`Imported ${uniqueWords.length} stopwords for category: ${category} with delimiter: ${delimiter} from filePath: ${filePath}`);
 
   if (convertCsv && delimiter !== ',') {
@@ -40,22 +45,47 @@ export async function importStopwords(category: string, filename: string, delimi
     console.log(`Converted and wrote cleaned CSV stopwords to ${outputCsvPath}`);
   }
 
-  await prisma.stopword.deleteMany({ where: { category } });
+  // Find corpus if specified
+  let corpus = null;
+  if (corpusName) {
+    corpus = await prisma.corpus.findUnique({
+      where: { name: corpusName }
+    });
+    
+    if (!corpus) {
+      console.warn(`Corpus "${corpusName}" not found, stopwords will not be linked to a corpus`);
+    }
+  }
 
+  // Delete existing stopwords for this category
+  await prisma.stopword.deleteMany({ 
+    where: { 
+      category,
+      ...(corpus ? { corpusId: corpus.id } : {})
+    } 
+  });
+
+  // Insert new stopwords
   for (const word of uniqueWords) {
     try {
-      //console.log(`Adding ${word} for category: ${category}`);
-      await prisma.stopword.create({ data: { term: word, category } });
+      await prisma.stopword.create({ 
+        data: { 
+          term: word, 
+          category,
+          ...(corpus ? { corpus: { connect: { id: corpus.id } } } : {})
+        } 
+      });
     } catch (err: any) {
       console.warn(`Skipping duplicate or error for term '${word}': ${err.message}`);
     }
   }
 
-  console.log(`Finished importing ${uniqueWords.length} unique stopwords for category: ${category}`);
+  console.log(`Finished importing ${uniqueWords.length} unique stopwords for category: ${category}${corpus ? ` linked to corpus "${corpusName}"` : ''}`);
 }
 
-export async function getAllStopwords(): Promise<Set<string>> {
-  const words = await prisma.stopword.findMany();
+export async function getAllStopwords(corpusId?: number): Promise<Set<string>> {
+  const words = await prisma.stopword.findMany({
+    where: corpusId ? { corpusId } : undefined
+  });
   return new Set(words.map(w => w.term));
 }
-

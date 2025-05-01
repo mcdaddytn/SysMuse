@@ -1,9 +1,12 @@
 // === src/operations/executeCorpusOperation.ts ===
-import { PrismaClient, CorpusOperationType } from '@prisma/client';
+import { PrismaClient, CorpusOperationType, 
+  DocSetExhSearchSelectMode, DocSetExhSearchEvalMode } from '@prisma/client';
 import { esClient } from '../lib/es';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { generateDocSetExhaustiveSearch } from './generateExhaustiveSearch';
+
 dotenv.config();
 
 const prisma = new PrismaClient();
@@ -18,7 +21,12 @@ export async function executeCorpusOperation(
   operationText?: string, 
   delimiter?: string,
   batchSize: number = 100,
-  startIndex: number = 0  // New parameter with default value of 0
+  startIndex: number = 0,
+  docSetName?: string,
+  nextTermSelectMode?: string,
+  nextTermEvalMode?: string,
+  evalTermCount?: number,
+  exhaustivenessThreshold?: number
 ): Promise<void> {
   // Find the corpus
   const corpus = await prisma.corpus.findUnique({
@@ -51,7 +59,7 @@ export async function executeCorpusOperation(
   // Execute the operation based on the type
   switch (searchType) {
     case 'CORPUSSNAPSHOT':
-      await createCorpusSnapshot(corpus.id, operation.id);
+      await createCorpusSnapshot(corpus.id, operation.id, docSetName);
       break;
     case 'SETUNION':
       await executeSetUnion(corpus.id, operation.id, operationText, delimiter);
@@ -71,9 +79,30 @@ export async function executeCorpusOperation(
     case 'ESSEARCHTERMTEST':
       await executeSearchTermTest(corpus.id, operation.id, batchSize, startIndex);
       break;
-    default:
-      throw new Error(`Unknown operation type: ${searchType}`);
-  }
+      case 'GENDSEXHQUERY':
+        if (!docSetName) {
+          throw new Error('Document set name is required for GENDSEXHQUERY operation');
+        }
+        if (!nextTermSelectMode) {
+          throw new Error('Next term select mode is required for GENDSEXHQUERY operation');
+        }
+        if (!nextTermEvalMode) {
+          throw new Error('Next term evaluation mode is required for GENDSEXHQUERY operation');
+        }
+        
+        await generateDocSetExhaustiveSearch({
+          corpusName,
+          corpusDocumentSetName: docSetName,
+          name: operationName,
+          nextTermSelectMode: nextTermSelectMode as DocSetExhSearchSelectMode,
+          nextTermEvalMode: nextTermEvalMode as DocSetExhSearchEvalMode,
+          evalTermCount,
+          exhaustivenessThreshold
+        });
+        break;
+      default:
+        throw new Error(`Unknown operation type: ${searchType}`);
+    }
 
   console.log(`Completed corpus operation: ${operation.name}`);
 }
@@ -81,10 +110,17 @@ export async function executeCorpusOperation(
 /**
  * Create a snapshot of all documents in the corpus
  */
-async function createCorpusSnapshot(corpusId: number, operationId: number): Promise<void> {
+async function createCorpusSnapshot(
+  corpusId: number, 
+  operationId: number,
+  snapshotName?: string // New parameter
+): Promise<void> {
+  // Use provided name or generate one with timestamp if not provided
+  const documentSetName = snapshotName || `Snapshot_${Date.now()}`;
+  
   const documentSet = await prisma.corpusDocumentSet.create({
     data: {
-      name: `Snapshot_${Date.now()}`,
+      name: documentSetName,
       corpus: { connect: { id: corpusId } },
       operation: { connect: { id: operationId } }
     }
@@ -653,6 +689,33 @@ async function executeSearchTermTest(
       
       console.log(`Created document set for term: "${term.term}" with ID ${termSet.id}`);
       
+      // NEW: Create ESSearch and TermSearch records
+      // First, determine if this is a phrase or keyword
+      const isPhrase = term.term.includes(' ');
+      
+      // Create the ESSearch record
+      const searchName = isPhrase 
+        ? `term_phrase_${term.term.replace(/\s+/g, '_')}`
+        : `term_keyword_${term.term}`;
+      
+      const search = await prisma.eSSearch.create({
+        data: {
+          name: searchName,
+          invert: false
+        }
+      });
+      
+      // Create the TermSearch record
+      await prisma.termSearch.create({
+        data: {
+          termSearchType: isPhrase ? 'PHRASE' : 'KEYWORD',
+          term: term.term,
+          search: { connect: { id: search.id } }
+        }
+      });
+      
+      console.log(`Created ESSearch (ID: ${search.id}) and TermSearch records for term: "${term.term}"`);
+      
       // Try different search approaches
       let searchResult;
       try {
@@ -769,6 +832,16 @@ async function executeSearchTermTest(
           });
         }
       }
+      
+      // NEW: Create ESQueryExecution record to link search with result set
+      await prisma.eSQueryExecution.create({
+        data: {
+          search: { connect: { id: search.id } },
+          resultSet: { connect: { id: termSet.id } }
+        }
+      });
+      
+      console.log(`Created ESQueryExecution to link search ${search.id} with result set ${termSet.id}`);
       
       // Calculate set metrics
       await calculateSetMetrics(termSet.id);

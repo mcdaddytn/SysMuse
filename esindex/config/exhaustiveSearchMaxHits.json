@@ -1,0 +1,11 @@
+{
+  "task": "corpusOperation",
+  "corpus": "ted_talks",
+  "operation": "GENDSEXHQUERY",
+  "name": "TedTalks_ExhaustiveSearch_MaxHits",
+  "documentSetName": "Initial_Snapshot",
+  "nextTermSelectMode": "MAXHITS",
+  "nextTermEvalMode": "INCMAX",
+  "evalTermCount": 20,
+  "exhaustivenessThreshold": 0.95
+}

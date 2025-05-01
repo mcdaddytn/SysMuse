@@ -2,5 +2,6 @@
   "task": "corpusOperation",
   "corpus": "enron_emails",
   "operation": "CORPUSSNAPSHOT",
-  "name": "Enron_Initial_Snapshot"
+  "name": "Create_Enron_Initial_Snapshot",
+  "documentSetName": "Enron_Initial_Snapshot"
 }

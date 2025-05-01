@@ -40,6 +40,27 @@ enum ESIndexType {
   NONE
 }
 
+enum DocSetExhSearchSelectMode {
+  MINHITS
+  MAXHITS
+  RANDOM
+}
+
+enum DocSetExhSearchEvalMode {
+  INCMIN
+  INCMAX
+}
+
+enum TermSearchType {
+  KEYWORD
+  PHRASE
+}
+
+enum SearchLogicOperator {
+  AND
+  OR
+}
+
 enum CorpusOperationType {
   CORPUSSNAPSHOT
   SETUNION
@@ -48,6 +69,7 @@ enum CorpusOperationType {
   ESJSONSEARCH
   ESJSONFILESEARCH
   ESSEARCHTERMTEST
+  GENDSEXHQUERY  
 }
 
 model Corpus {
@@ -198,6 +220,10 @@ model CorpusDocumentSet {
   documents         SetDocument[]
   metrics           SetMetrics?
   
+  // New relationships
+  exhaustiveSearches      DocSetExhaustiveSearch[]
+  queryExecutions         ESQueryExecution[]
+  
   @@unique([corpusId, name])
 }
 
@@ -242,5 +268,121 @@ model DocumentMetrics {
   setDocument      SetDocument  @relation(fields: [setDocumentId], references: [id])
 }
 
+// New models for search functionality
+model DocSetExhaustiveSearch {
+  id                      Int                     @id @default(autoincrement())
+  name                    String                  @db.VarChar(255)
+  nextTermSelectMode      DocSetExhSearchSelectMode
+  nextTermEvalMode        DocSetExhSearchEvalMode
+  evalTermCount           Int                     @default(0)
+  exhaustivenessThreshold Float                   @default(1.0)
+  searchText              String                  @db.Text
+  createdAt               DateTime                @default(now())
+  
+  corpusDocumentSetId     Int
+  corpusDocumentSet       CorpusDocumentSet       @relation(fields: [corpusDocumentSetId], references: [id])
+  
+  // The resulting search
+  resultSearchId          Int?
+  resultSearch            ESSearch?               @relation(fields: [resultSearchId], references: [id])
+  
+  @@unique([corpusDocumentSetId, name])
+}
+
+// Base search model (MTI pattern)
+model ESSearch {
+  id                      Int                     @id @default(autoincrement())
+  name                    String                  @db.VarChar(255)
+  invert                  Boolean                 @default(false)
+  createdAt               DateTime                @default(now())
+  
+  // Relationships
+  termSearch              TermSearch?
+  compoundSearch          CompoundSearch?
+  
+  // Executions of this search
+  executions              ESQueryExecution[]
+  
+  // Used as result in exhaustive searches
+  exhaustiveSearches      DocSetExhaustiveSearch[]
+
+  // gm: added this, was not done by claude, 
+  // Subqueries
+  subqueries              CompoundSearchSubquery[]
+}
+
+// Term search model
+model TermSearch {
+  id                      Int                     @id @default(autoincrement())
+  termSearchType          TermSearchType
+  term                    String                  @db.VarChar(255)
+  
+  // ESSearch backlink
+  searchId                Int                     @unique
+  search                  ESSearch                @relation(fields: [searchId], references: [id])
+}
+
+// Compound search model
+model CompoundSearch {
+  id                      Int                     @id @default(autoincrement())
+  logicOperator           SearchLogicOperator
+  
+  // ESSearch backlink
+  searchId                Int                     @unique
+  search                  ESSearch                @relation(fields: [searchId], references: [id])
+  
+  // Subqueries
+  subqueries              CompoundSearchSubquery[]
+}
+
+// Join table for compound searches
+model CompoundSearchSubquery {
+  id                      Int                     @id @default(autoincrement())
+  createdAt               DateTime                @default(now())
+  
+  compoundSearchId        Int
+  compoundSearch          CompoundSearch          @relation(fields: [compoundSearchId], references: [id])
+  
+  subqueryId              Int
+  subquery                ESSearch                @relation(fields: [subqueryId], references: [id])
+  
+  position                Int                     @default(0)
+  
+  @@unique([compoundSearchId, subqueryId])
+  @@index([position])
+}
+
+// Link between search executions and result sets
+model ESQueryExecution {
+  id                      Int                     @id @default(autoincrement())
+  executedAt              DateTime                @default(now())
+  
+  searchId                Int
+  search                  ESSearch                @relation(fields: [searchId], references: [id])
+  
+  resultSetId             Int
+  resultSet               CorpusDocumentSet       @relation(fields: [resultSetId], references: [id])
+  
+  // Metrics for this execution
+  metrics                 QueryMetrics?
+  
+  @@unique([searchId, resultSetId])
+}
+
+// Query metrics
+model QueryMetrics {
+  id                      Int                     @id @default(autoincrement())
+  hitsPerWord             Float
+  hitsPerTerm             Float
+  hitsPerQuery            Float
+  wordCount               Int
+  termCount               Int
+  queryComplexity         Int
+  createdAt               DateTime                @default(now())
+  
+  // Relation to execution
+  executionId             Int                     @unique
+  execution               ESQueryExecution        @relation(fields: [executionId], references: [id])
+}
 
 

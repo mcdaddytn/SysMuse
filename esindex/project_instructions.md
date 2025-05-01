@@ -186,6 +186,19 @@ npx ts-node src/index.ts config/corpusSnapshotExample.json
 All in one command:
 npx ts-node src/index.ts config/setupTedCorpusType.json config/setupTedDocumentTypes.json config/importStopwords.json config/importIndexTed.json config/importCorpusTed.json config/summaryTed.json config/corpusSnapshotExample.json
 
+npx ts-node src/index.ts config/searchTermTestBatch1.json config/searchTermTestBatch2.json config/searchTermTestBatchRem.json
+
+OR
+
+npx ts-node src/index.ts config/searchTermTestBatchAll.json
+
+npx ts-node src/index.ts config/exhaustiveSearchMaxHits.json
+
+npx ts-node src/index.ts config/exhaustiveSearchMinHits.json
+
+npx ts-node src/index.ts config/exhaustiveSearchRandom.json
+
+
 
 [Run the first batch:]
 npx ts-node src/index.ts config/searchTermTestBatch1.json
@@ -202,7 +215,61 @@ npx ts-node src/index.ts config/searchTermTestBatchRem.json
 npx ts-node src/index.ts config/searchTermTestBatchAll.json
 
 
+[run exh search test]
+npx ts-node src/index.ts config/exhaustiveSearchMaxHits.json
 
+
+
+#!/bin/bash
+# Enron Dataset Processing Sequence
+# Copy these commands to execute them one by one
+
+# NOTE: Before running these commands, ensure you have:
+# 1. The Enron emails dataset converted to JSON using convertEnronEmails
+# 2. Elasticsearch running
+# 3. A file named 'email_stopwords.txt' in your data directory
+
+# Step 1: Setup corpus type
+npx ts-node src/index.ts config/setupEnronCorpusType.json
+
+# Step 2: Setup document types
+npx ts-node src/index.ts config/setupEnronDocumentTypes.json
+
+# Step 3: Import stopwords
+npx ts-node src/index.ts config/importStopwordsEnron.json
+
+# Step 4: Set up Elasticsearch index
+npx ts-node src/index.ts config/importIndexEnron.json
+
+# Step 5: Import corpus data
+npx ts-node src/index.ts config/importCorpusEnron.json
+
+# Step 6: Generate corpus summary
+npx ts-node src/index.ts config/summaryEnron.json
+
+# Step 7: Create corpus snapshot (baseline)
+npx ts-node src/index.ts config/enronSnapshotOperation.json
+
+# Step 8: Run search term tests in batches
+npx ts-node src/index.ts config/enronTermTestBatch1.json
+# Check results before continuing
+
+npx ts-node src/index.ts config/enronTermTestBatch2.json
+# Check results before continuing
+
+npx ts-node src/index.ts config/enronTermTestRemaining.json
+
+# Step 9: Run keyword search example
+npx ts-node src/index.ts config/enronKeywordSearch.json
+
+# --- Running multiple operations in sequence ---
+# For initial setup (through corpus import):
+npx ts-node src/index.ts config/setupEnronCorpusType.json config/setupEnronDocumentTypes.json config/importStopwordsEnron.json config/importIndexEnron.json config/importCorpusEnron.json config/summaryEnron.json
+
+# For operations and testing:
+npx ts-node src/index.ts config/enronSnapshotOperation.json config/enronTermTestBatch1.json
+
+npx ts-node src/index.ts config/enronSnapshotOperation.json config/enronTermTestBatch1.json config/enronTermTestBatch2.json config/enronTermTestRem.json
 
 
 

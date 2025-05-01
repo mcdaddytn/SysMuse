@@ -56,7 +56,21 @@ export async function runImporterTask(config: any, configPath: string) {
     await setupDocumentTypes(corpusType, documentTypes);
   
   } else if (task === 'corpusOperation') {
-    const { corpus, operation, name, operationText, delimiter, batchSize, startIndex } = config;
+    const { 
+      corpus, 
+      operation, 
+      name, 
+      operationText, 
+      delimiter, 
+      batchSize, 
+      startIndex,
+      // New parameters for exhaustive search
+      documentSetName,
+      nextTermSelectMode,
+      nextTermEvalMode,
+      evalTermCount,
+      exhaustivenessThreshold
+    } = config;
     if (!corpus || !operation) {
       throw new Error(`Missing 'corpus' or 'operation' in config: ${configPath}`);
     }
@@ -67,7 +81,13 @@ export async function runImporterTask(config: any, configPath: string) {
       operationText, 
       delimiter, 
       batchSize, 
-      startIndex
+      startIndex,
+      // New parameters for exhaustive search
+      documentSetName,
+      nextTermSelectMode,
+      nextTermEvalMode,
+      evalTermCount,
+      exhaustivenessThreshold
     );
   } else {
     throw new Error(`Unknown task '${task}' in config: ${configPath}`);

@@ -51,9 +51,20 @@ enum DocSetExhSearchEvalMode {
   INCMAX
 }
 
+enum TopSearchTermMode {
+  LITERAL
+  WORDRATIO
+  DISTINCTRATIO
+}
+
 enum TermSearchType {
   KEYWORD
   PHRASE
+}
+
+enum TermBoostMode {
+  EXACT
+  CONTAINS
 }
 
 enum SearchLogicOperator {
@@ -119,6 +130,7 @@ model SearchTerm {
   termLength       Int
   termLengthRatio  Float
   adjbm25          Float
+  termType         TermSearchType @default(KEYWORD)
   createdAt        DateTime @default(now())
   
   docId            Int
@@ -144,8 +156,29 @@ model Stopword {
   @@unique([term, category])
 }
 
+model TermBoostCategory {
+  id              Int         @id @default(autoincrement())
+  name            String      @unique
+  boost           Float       @default(1.0)
+  createdAt       DateTime    @default(now())
+  
+  termBoosts      TermBoost[]
+}
 
-// New models
+model TermBoost {
+  id              Int            @id @default(autoincrement())
+  term            String
+  boost           Float          @default(1.0)
+  boostMode       TermBoostMode  @default(EXACT)
+  createdAt       DateTime       @default(now())
+  
+  categoryId      Int
+  category        TermBoostCategory @relation(fields: [categoryId], references: [id])
+  
+  @@unique([term, categoryId])
+  @@index([term])
+}
+
 model CorpusType {
   id              Int                 @id @default(autoincrement())
   name            String              @unique @db.VarChar(255)

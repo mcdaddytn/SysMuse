@@ -1,6 +1,7 @@
 // === src/operations/generateExhaustiveSearch.ts ===
 import { PrismaClient, DocSetExhSearchSelectMode, DocSetExhSearchEvalMode, 
          TermSearchType, SearchLogicOperator } from '@prisma/client';
+import { formatDateForFilename } from '../lib/dateUtils';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -52,9 +53,12 @@ export async function generateDocSetExhaustiveSearch(params: ExhaustiveSearchPar
   console.log(`Generating exhaustive search for document set ${documentSet.name} with ${documentSet.documents.length} documents`);
 
   // Create a default name if not provided
+//  const name = params.name || 
+//    `ExhaustiveSearch_${documentSet.name}_${params.nextTermSelectMode}_${params.nextTermEvalMode}_${Date.now()}`;
+
   const name = params.name || 
-    `ExhaustiveSearch_${documentSet.name}_${params.nextTermSelectMode}_${params.nextTermEvalMode}_${Date.now()}`;
-  
+    `ExhaustiveSearch_${documentSet.name}_${params.nextTermSelectMode}_${params.nextTermEvalMode}_${formatDateForFilename()}`;
+    
   // Get the evaluation term count or default to 0 (all terms)
   const evalTermCount = params.evalTermCount || 0;
   
@@ -214,6 +218,10 @@ export async function generateDocSetExhaustiveSearch(params: ExhaustiveSearchPar
     const searchName = isPhrase 
       ? `term_phrase_${bestTerm.replace(/\s+/g, '_')}`
       : `term_keyword_${bestTerm}`;
+//    const searchName = isPhrase 
+//      ? `term_phrase_${bestTerm.replace(/\s+/g, '_')}_${formatDateForFilename()}`
+//      : `term_keyword_${bestTerm}_${formatDateForFilename()}`;
+    
     
     // First create the base ESSearch
     const search = await prisma.eSSearch.create({
@@ -262,7 +270,8 @@ export async function generateDocSetExhaustiveSearch(params: ExhaustiveSearchPar
     //gm: generatinng above search was too long, appending all ids, for now use doc set name
     // lets have option for new name
     //const compoundSearchName = params.corpusDocumentSetName;
-    const compoundSearchName = `${params.corpusDocumentSetName}_${Date.now()}`;
+    //const compoundSearchName = `${params.corpusDocumentSetName}_${Date.now()}`;
+    const compoundSearchName = `${params.corpusDocumentSetName}_${formatDateForFilename()}`;
 
     console.log(`Adding compound search compoundSearchName: ${compoundSearchName}`);
     

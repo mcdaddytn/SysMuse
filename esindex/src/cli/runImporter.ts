@@ -1,6 +1,7 @@
 // === src/cli/runImporter.ts — Updated to support new CorpusSetOperation tasks ===
 import { importCorpus } from './importCorpus';
 import { importStopwords } from '../setup/importStopwords';
+import { loadBoostCategories } from '../setup/loadBoostCategories';
 import { setupIndex } from '../setup/setupIndices';
 import { summarizeCorpus } from './summarize';
 import { convertTedTalks } from '../convert/convertTed';
@@ -18,6 +19,11 @@ export async function runImporterTask(config: any, configPath: string) {
     console.log(`Importing stopwords from file ${fileName}`);
     await importStopwords(category, fileName, delimiter, convertCsv, corpusName);
 
+  } else if (task === 'loadBoostCategories') {
+    const { fileName, deleteExisting } = config;
+    console.log(`Loading boost categories from ${fileName}`);
+    await loadBoostCategories(fileName, deleteExisting);
+    
   } else if (task === 'importIndex') {
     const { index, dataset } = config;
     if (!index || !dataset) {

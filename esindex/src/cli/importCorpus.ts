@@ -1,11 +1,13 @@
-// === src/cli/importCorpus.ts — Complete implementation with phrase extraction ===
+// === src/cli/importCorpus.ts — Enhanced with TopSearchTermMode and term boosting ===
 import fs from 'fs';
 import path from 'path';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TopSearchTermMode, TermSearchType } from '@prisma/client';
 import { esClient } from '../lib/es';
 import { getTopCorpusTerms } from '../lib/getTopCorpusTerms';
 import { loadConfig } from '../lib/config';
 import { StopwordCache } from '../lib/stopwords';
+import { TermBooster } from '../lib/termBooster';
+//import { formatDateForFilename } from '../lib/dateUtils';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -18,6 +20,19 @@ interface WordStats {
   distinctWordCount: number;
   avgWordLength: number;
 }
+
+// Helper function to format date for filenames
+//function formatDateForFilename(): string {
+//  const now = new Date();
+//  const mm = String(now.getMonth() + 1).padStart(2, '0');
+//  const dd = String(now.getDate()).padStart(2, '0');
+//  const yyyy = now.getFullYear();
+//  const hh = String(now.getHours()).padStart(2, '0');
+//  const min = String(now.getMinutes()).padStart(2, '0');
+//  const ss = String(now.getSeconds()).padStart(2, '0');
+//  
+//  return `${mm}${dd}${yyyy}_${hh}${min}${ss}`;
+//}
 
 function analyzeTextStats(text: string): WordStats {
   const words: string[] = text.match(/\b\w+\b/g) || [];
@@ -37,21 +52,63 @@ export async function importCorpus(configPath: string) {
   const dfMin = config.dfMin ?? 2;
   const dfMax = config.dfMax ?? 100;
   const topN = config.topN ?? 5;
+  const topSearchTermMode = config.topSearchTermMode || 'LITERAL';
   const fields = config.fields || ['transcript'];
   const longFormField: string = config.longFormField;
   const fieldModes = config.fieldModes || {};
   const maxPhraseLength = config.maxPhraseLength || 1;
+  const termBoostCategories = config.termBoostCategories || [];
 
   const jsonPath = path.join(process.env.IMPORT_DATA_PATH || './import', jsonFile);
   const records = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
-  const corpus = await prisma.corpus.upsert({ where: { name: corpusName }, update: {}, create: { name: corpusName } });
-  const stopwords = await StopwordCache.load();
+  // Initialize term booster with specified categories
+  const termBooster = new TermBooster();
+  await termBooster.loadCategories(termBoostCategories);
+
+  // Get or create the corpus
+  const corpus = await prisma.corpus.upsert({ 
+    where: { name: corpusName }, 
+    update: {}, 
+    create: { name: corpusName } 
+  });
+  
+  const stopwords = await StopwordCache.load(corpus.id);
+  
   let docCount = 0;
   const esmap = new Map<number, string>();
   const statsmap = new Map<number, WordStats>();
   const idmap = new Map<number, number>();
   const docTextMap = new Map<number, string>();
+  
+  // First calculate total corpus statistics for ratio-based topN
+  let totalCorpusWords = 0;
+  let totalCorpusDistinctWords = 0;
+  const distinctWordsSet = new Set<string>();
+  
+  if (topSearchTermMode === 'WORDRATIO' || topSearchTermMode === 'DISTINCTRATIO') {
+    console.log(`Calculating corpus-wide statistics for ${topSearchTermMode} mode...`);
+    
+    for (const record of records) {
+      const contentField = fields.find(f => record[f]);
+      const recordTextContent = record[contentField];
+      
+      // Handle longform field content or direct content
+      const text = longFormField && contentField === longFormField ? 
+        fs.readFileSync(path.join(longTextPath, recordTextContent), 'utf8') : 
+        recordTextContent;
+      
+      const stats = analyzeTextStats(text);
+      totalCorpusWords += stats.wordCount;
+      
+      // Add words to distinct word set
+      const words = text.match(/\b\w+\b/g) || [];
+      words.forEach(w => distinctWordsSet.add(w.toLowerCase()));
+    }
+    
+    totalCorpusDistinctWords = distinctWordsSet.size;
+    console.log(`Corpus stats: Total words: ${totalCorpusWords}, Total distinct words: ${totalCorpusDistinctWords}`);
+  }
 
   // pass 1 - index documents and collect statistics
   for (const record of records) {
@@ -105,6 +162,46 @@ export async function importCorpus(configPath: string) {
 
   const termSet: Set<string> = new Set<string>();
 
+  // Find field IDs for each field name
+  const fieldIdMap = new Map<string, number>();
+  for (const fieldName of fields) {
+    // First, find the document types associated with this corpus
+    const corpusDocTypes = await prisma.corpusDocumentType.findMany({
+      where: {
+        corpusType: {
+          corpora: {
+            some: {
+              id: corpus.id
+            }
+          }
+        }
+      }
+    });
+    
+    const docTypeIds = corpusDocTypes.map(dt => dt.id);
+    
+    // Then find fields with the given name in these document types
+    if (docTypeIds.length > 0) {
+      const field = await prisma.documentTypeField.findFirst({
+        where: {
+          name: fieldName,
+          documentTypeId: {
+            in: docTypeIds
+          }
+        }
+      });
+      
+      if (field) {
+        fieldIdMap.set(fieldName, field.id);
+        console.log(`Found field ID ${field.id} for field ${fieldName}`);
+      } else {
+        console.log(`Warning: No field ID found for field ${fieldName}`);
+      }
+    } else {
+      console.log(`Warning: No document types found for corpus ${corpus.name}`);
+    }
+  }
+  
   // pass 2 - extract terms for each document
   for (const record of records) {
     const recordIndex: number = record["recordIndex"];
@@ -112,6 +209,22 @@ export async function importCorpus(configPath: string) {
     const docId: number = idmap[recordIndex];
     const contentField = fields.find(f => record[f]);
     const fullText = docTextMap[recordIndex] || '';
+    
+    // Calculate dynamic topN based on mode
+    let dynamicTopN = topN;
+    
+    if (topSearchTermMode === 'WORDRATIO' && totalCorpusWords > 0) {
+      const docWords = statsmap[recordIndex].wordCount;
+      const ratio = docWords / totalCorpusWords;
+      dynamicTopN = Math.max(1, Math.round(topN * ratio * records.length));
+      console.log(`Document ${recordIndex}: Word ratio ${ratio.toFixed(4)}, dynamic topN = ${dynamicTopN}`);
+    } 
+    else if (topSearchTermMode === 'DISTINCTRATIO' && totalCorpusDistinctWords > 0) {
+      const docDistinctWords = statsmap[recordIndex].distinctWordCount;
+      const ratio = docDistinctWords / totalCorpusDistinctWords;
+      dynamicTopN = Math.max(1, Math.round(topN * ratio * records.length));
+      console.log(`Document ${recordIndex}: Distinct word ratio ${ratio.toFixed(4)}, dynamic topN = ${dynamicTopN}`);
+    }
     
     const allTerms = [];
     
@@ -138,7 +251,11 @@ export async function importCorpus(configPath: string) {
 
       // Process single-word terms
       const singleTerms = Object.entries(fieldTerms)
-        .filter(([term]) => candidateSet.has(term) && !stopwords.has(term))
+        // Filter out terms that are only numbers or non-alphanumeric
+        .filter(([term]) => {
+          // Keep only terms that have at least one alphabetic character
+          return /[a-zA-Z]/.test(term) && candidateSet.has(term) && !stopwords.has(term);
+        })
         .map(([term, stat]: [string, any]) => {
           const tf = stat.term_freq;
           const df = stat.doc_freq;
@@ -148,8 +265,23 @@ export async function importCorpus(configPath: string) {
           const termLength = term.length;
           const termLengthRatio = statsmap[recordIndex].avgWordLength > 0 ? 
             termLength / statsmap[recordIndex].avgWordLength : 1;
-          const adjbm25 = bm25 * termLengthRatio;
-          return { term, bm25, tf, df, termLength, termLengthRatio, adjbm25 };
+          
+          // Apply term boost
+          const boostFactor = termBooster.getBoostForTerm(term);
+          const adjbm25 = bm25 * termLengthRatio * boostFactor;
+          
+          return { 
+            term, 
+            bm25, 
+            tf, 
+            df, 
+            termLength, 
+            termLengthRatio, 
+            adjbm25,
+            termType: TermSearchType.KEYWORD,
+            fieldName: field,
+            boostFactor
+          };
         });
       
       allTerms.push(...singleTerms);
@@ -167,8 +299,15 @@ export async function importCorpus(configPath: string) {
             docCount,
             avgdl,
             dl,
-            statsmap[recordIndex].avgWordLength
+            statsmap[recordIndex].avgWordLength,
+            termBooster
           );
+          
+          // Add field name to phrase terms
+          phraseTerms.forEach(term => {
+            term.fieldName = field;
+            term.termType = TermSearchType.PHRASE;
+          });
           
           allTerms.push(...phraseTerms);
         }
@@ -178,15 +317,18 @@ export async function importCorpus(configPath: string) {
     // Sort all terms by score and take top N
     const terms = allTerms
       .sort((a, b) => b.adjbm25 - a.adjbm25)
-      .slice(0, topN);
+      .slice(0, dynamicTopN);
     
-    console.log(`Processing document ${recordIndex}: found ${terms.length} terms (incl. phrases)`);
+    console.log(`Processing document ${recordIndex}: found ${terms.length} terms (incl. phrases) using dynamic topN=${dynamicTopN}`);
 
     for (const t of terms) {
       // Avoid duplicates using a hash set
       let termhash: string = `${t.term}.${docId}`;
       if (!termSet.has(termhash)) {
         try {
+          // Get field ID if available
+          const fieldId = fieldIdMap.get(t.fieldName);
+          
           await prisma.searchTerm.create({
             data: {
               term: t.term,
@@ -196,9 +338,15 @@ export async function importCorpus(configPath: string) {
               termLength: t.termLength,
               termLengthRatio: t.termLengthRatio,
               adjbm25: t.adjbm25,
-              docId: docId
+              termType: t.termType,
+              docId: docId,
+              fieldId: fieldId || null
             }
           });
+          
+          if (t.boostFactor !== 1.0) {
+            console.log(`Applied boost factor ${t.boostFactor} to term "${t.term}"`);
+          }
         } catch (err) {
           console.error(`Failed to create term: ${t.term} for doc: ${docId}`, err);
         }
@@ -222,6 +370,7 @@ export async function importCorpus(configPath: string) {
  * @param avgdl Average document length
  * @param dl Current document length
  * @param avgWordLength Average word length in document
+ * @param termBooster Term booster for applying category and term-specific boosts
  */
 function extractDocumentPhrases(
   text: string,
@@ -231,7 +380,8 @@ function extractDocumentPhrases(
   docCount: number,
   avgdl: number,
   dl: number,
-  avgWordLength: number
+  avgWordLength: number,
+  termBooster: TermBooster
 ): any[] {
   const phraseTerms = [];
   
@@ -246,6 +396,9 @@ function extractDocumentPhrases(
   for (let length = 2; length <= maxPhraseLength; length++) {
     for (let i = 0; i <= tokens.length - length; i++) {
       const phrase = tokens.slice(i, i + length).join(' ');
+      
+      // Filter out phrases that are just numbers with no alphabetic characters
+      if (!/[a-zA-Z]/.test(phrase)) continue;
       
       // Only process phrases in the candidate set
       if (candidateSet.has(phrase)) {
@@ -280,10 +433,12 @@ function extractDocumentPhrases(
           const termLengthRatio = avgWordLength > 0 ? termLength / avgWordLength : 1;
           
           // Boost phrases slightly in scoring
-          //const lengthBoost = 1 + (length - 1) * 0.1; // 10% boost per additional word
-          //gm, not getting through, lets up the boost
-          const lengthBoost = 1 + (length - 1) * 0.5; // 10% boost per additional word
-          const adjbm25 = bm25 * termLengthRatio * lengthBoost;
+          const lengthBoost = 1 + (length - 1) * 0.5; // 50% boost per additional word
+          
+          // Apply term boost
+          const boostFactor = termBooster.getBoostForTerm(phrase);
+          
+          const adjbm25 = bm25 * termLengthRatio * lengthBoost * boostFactor;
           
           phraseTerms.push({
             term: phrase,
@@ -292,7 +447,8 @@ function extractDocumentPhrases(
             df: phraseDf,
             termLength,
             termLengthRatio,
-            adjbm25
+            adjbm25,
+            boostFactor
           });
         }
       }

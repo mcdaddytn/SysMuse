@@ -203,6 +203,9 @@ public class ConversionHub {
         // Load or generate configuration - Need to do this first to identify uniqueKey field if using multiple files
         configGenerator = loadConfigGenerator();
 
+        // Track the actual first file path for output name generation
+        String firstActualFilePath = inputFilePath;
+
         // Check whether input is a single file or multiple files
         boolean useMultipleFiles = false;
         String csvFilename = "";
@@ -215,6 +218,14 @@ public class ConversionHub {
             if (inputCsvFilename.contains(",")) {
                 useMultipleFiles = true;
                 csvFilename = inputCsvFilename;
+
+                // Get the first file name for output generation
+                String firstFile = inputCsvFilename.split(",")[0].trim();
+                if (!new File(firstFile).isAbsolute()) {
+                    firstActualFilePath = Paths.get(inputDirectory, firstFile).toString();
+                } else {
+                    firstActualFilePath = firstFile;
+                }
             } else {
                 // Check if the specified filename is a .list file
                 File potentialListFile = new File(Paths.get(inputCsvPath, inputCsvFilename).toString());
@@ -222,6 +233,22 @@ public class ConversionHub {
                         potentialListFile.getName().endsWith(".list")) {
                     useMultipleFiles = true;
                     csvFilename = inputCsvFilename;
+
+                    // Read the first filename from the list file
+                    try {
+                        List<String> fileList = Files.readAllLines(potentialListFile.toPath());
+                        if (!fileList.isEmpty()) {
+                            String firstFile = fileList.get(0).trim();
+                            if (!new File(firstFile).isAbsolute()) {
+                                firstActualFilePath = Paths.get(inputDirectory, firstFile).toString();
+                            } else {
+                                firstActualFilePath = firstFile;
+                            }
+                        }
+                    } catch (IOException e) {
+                        System.out.println("Warning: Could not read list file: " + e.getMessage());
+                        // Keep default inputFilePath as fallback
+                    }
                 } else {
                     // Single file (normal behavior)
                     useMultipleFiles = false;
@@ -320,8 +347,8 @@ public class ConversionHub {
                 File outputDir = new File(inputDirectory);
                 outputJsonPath = new File(outputDir, outputFilename).getPath();
             } else {
-                // Otherwise, derive from input filename
-                outputJsonPath = inputFilePath.replaceAll("\\.[^.]+$", ".json");
+                // Otherwise, derive from first actual file path
+                outputJsonPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".json");
             }
 
             jsonConverter.exportFromRepository(repository, outputJsonPath);
@@ -339,11 +366,11 @@ public class ConversionHub {
                 File outputDir = new File(inputDirectory);
                 outputCsvPath = new File(outputDir, outputFilename).getPath();
             } else if (outputCsvSuffix != null && !outputCsvSuffix.isEmpty()) {
-                // If a suffix is specified, apply it to the input filename
-                outputCsvPath = inputFilePath.replaceAll("\\.[^.]+$", outputCsvSuffix);
+                // If a suffix is specified, apply it to the first actual file path, not the file list
+                outputCsvPath = firstActualFilePath.replaceAll("\\.[^.]+$", outputCsvSuffix);
             } else {
                 // Default behavior: just change the extension to .csv
-                outputCsvPath = inputFilePath.replaceAll("\\.[^.]+$", ".csv");
+                outputCsvPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".csv");
             }
 
             csvConverter.exportFromRepository(repository, outputCsvPath);

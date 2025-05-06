@@ -343,25 +343,162 @@ public class CsvConverter {
             throw new IllegalStateException("Multiple input files specified but no uniqueKey field defined in configuration");
         }
 
-        // Import the first file normally
+        // Import the first file normally, but don't process derived fields yet
         if (filePaths.length > 0) {
             System.out.println("Importing base file: " + filePaths[0]);
-            importToRepository(filePaths[0], repository);
+            importToRepositoryWithoutProcessing(filePaths[0], repository);
         }
 
         // Process overlay files if there are more than one
         for (int i = 1; i < filePaths.length; i++) {
             System.out.println("Importing overlay file " + (i+1) + ": " + filePaths[i]);
-            importOverlayFile(filePaths[i], repository, uniqueKeyField);
+            importOverlayFileWithoutProcessing(filePaths[i], repository, uniqueKeyField);
         }
+
+        // Now that all data is imported, process derived fields, aggregation, and suppression
+        System.out.println("Processing derived fields and transformations on complete dataset...");
+        processRepositoryRows(repository);
     }
 
     /**
-     * Import an overlay file and merge with existing repository data based on the unique key
+     * Import data from a CSV file into the repository without processing derived fields
      */
-    private void importOverlayFile(String overlayFilePath, ConversionRepository repository,
-                                   String uniqueKeyField) throws IOException {
-        System.out.println("Importing overlay file: " + overlayFilePath);
+    private void importToRepositoryWithoutProcessing(String csvFilePath, ConversionRepository repository) throws IOException {
+        System.out.println("Importing data from CSV file (without processing): " + csvFilePath);
+
+        // First read the entire file
+        System.out.println("Reading file: " + csvFilePath);
+        String fileContent = new String(Files.readAllBytes(Paths.get(csvFilePath)));
+        System.out.println("File size: " + fileContent.length() + " characters");
+
+        // Split the content by newlines, but respect quotes
+        boolean inQuotes = false;
+        int rowStartIndex = 0;
+        List<String> rowStrings = new ArrayList<>();
+
+        // Skip the header
+        System.out.println("Skipping header row...");
+        for (int i = 0; i < fileContent.length(); i++) {
+            if (fileContent.charAt(i) == '\n' && !inQuotes) {
+                rowStartIndex = i + 1;
+                break;
+            } else if (fileContent.charAt(i) == '"') {
+                inQuotes = !inQuotes;
+            }
+        }
+
+        // Check if maxImportRows is set in the configuration
+        Integer maxRows = null;
+        Map<String, Object> configParams = repository.getConfigParameters();
+        if (configParams.containsKey("maxImportRows")) {
+            Object maxRowsObj = configParams.get("maxImportRows");
+            if (maxRowsObj instanceof Long) {
+                maxRows = ((Long) maxRowsObj).intValue();
+            } else if (maxRowsObj instanceof Integer) {
+                maxRows = (Integer) maxRowsObj;
+            }
+
+            if (maxRows != null) {
+                System.out.println("Will import at most " + maxRows + " rows as specified in configuration");
+            }
+        } else {
+            // Check if maxImportRows is set in properties
+            String maxRowsStr = properties.getProperty("maxImportRows");
+            if (maxRowsStr != null && !maxRowsStr.equals("0")) {
+                try {
+                    maxRows = Integer.parseInt(maxRowsStr);
+                    System.out.println("Will import at most " + maxRows + " rows as specified in properties");
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid maxImportRows property value: " + maxRowsStr);
+                }
+            }
+        }
+
+        // Parse remaining rows
+        int rowCount = 0;
+        System.out.println("Parsing data rows...");
+        for (int i = rowStartIndex; i < fileContent.length(); i++) {
+            char c = fileContent.charAt(i);
+
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == '\n' && !inQuotes) {
+                // End of row
+                String rowData = fileContent.substring(rowStartIndex, i);
+                rowStrings.add(rowData);
+                rowStartIndex = i + 1;
+
+                rowCount++;
+                if (rowCount % 100 == 0) {
+                    System.out.println("Processed " + rowCount + " rows so far");
+                }
+
+                // Check if we've reached the maximum number of rows to import
+                if (maxRows != null && rowCount >= maxRows) {
+                    System.out.println("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
+                    break;
+                }
+            }
+        }
+
+        // Add the last row if there is one and we haven't reached maxRows
+        if (rowStartIndex < fileContent.length() && (maxRows == null || rowCount < maxRows)) {
+            String rowData = fileContent.substring(rowStartIndex);
+            rowStrings.add(rowData);
+            rowCount++;
+        }
+
+        System.out.println("Found " + rowCount + " data rows. Processing...");
+
+        // Get the headers from the repository
+        String[] headers = repository.getHeaders();
+
+        // Parse each row string and add to repository
+        int processedRows = 0;
+        for (String rowString : rowStrings) {
+            String[] values = parseCSVRow(rowString);
+
+            // Create a map for the current row's values
+            Map<String, Object> rowValues = new LinkedHashMap<>();
+
+            // Process the direct column mappings
+            for (int colIndex = 0; colIndex < headers.length && colIndex < values.length; colIndex++) {
+                String columnName = headers[colIndex];
+
+                // Skip empty column names
+                if (columnName == null || columnName.trim().isEmpty()) {
+                    continue;
+                }
+
+                String value = colIndex < values.length ? values[colIndex] : "";
+
+                // Convert value based on column type
+                ConversionRepository.DataType type = repository.getColumnTypes().getOrDefault(columnName,
+                        ConversionRepository.DataType.STRING);
+                Object convertedValue = repository.convertValue(value, type);
+
+                rowValues.put(columnName, convertedValue);
+            }
+
+            // Add the processed row to the repository without processing derived fields
+            repository.addDataRow(rowValues);
+
+            processedRows++;
+            if (processedRows % 100 == 0) {
+                System.out.println("Processed details for " + processedRows + " rows");
+            }
+        }
+
+        System.out.println("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
+    }
+
+    /**
+     * Import an overlay file and merge with existing repository data based on the unique key,
+     * without processing derived fields
+     */
+    private void importOverlayFileWithoutProcessing(String overlayFilePath, ConversionRepository repository,
+                                                    String uniqueKeyField) throws IOException {
+        System.out.println("Importing overlay file (without processing): " + overlayFilePath);
 
         // Read file content
         String fileContent = new String(Files.readAllBytes(Paths.get(overlayFilePath)));
@@ -465,20 +602,18 @@ public class CsvConverter {
             }
 
             // Update the existing row with values from the overlay row
-            for (String fieldName : configFieldNames) {
-                if (overlayColumnMap.containsKey(fieldName)) {
-                    int columnIndex = overlayColumnMap.get(fieldName);
-                    if (columnIndex < values.length) {
-                        String value = values[columnIndex];
-                        if (value != null && !value.isEmpty()) {
-                            // Convert value based on column type
-                            ConversionRepository.DataType type = columnTypes.getOrDefault(fieldName,
-                                    ConversionRepository.DataType.STRING);
-                            Object convertedValue = repository.convertValue(value, type);
+            for (String fieldName : overlayColumnMap.keySet()) {
+                int columnIndex = overlayColumnMap.get(fieldName);
+                if (columnIndex < values.length) {
+                    String value = values[columnIndex];
+                    if (value != null && !value.isEmpty()) {
+                        // Convert value based on column type
+                        ConversionRepository.DataType type = columnTypes.getOrDefault(fieldName,
+                                ConversionRepository.DataType.STRING);
+                        Object convertedValue = repository.convertValue(value, type);
 
-                            // Update the existing row with the new value
-                            existingRow.put(fieldName, convertedValue);
-                        }
+                        // Update the existing row with the new value
+                        existingRow.put(fieldName, convertedValue);
                     }
                 }
             }
@@ -487,27 +622,34 @@ public class CsvConverter {
         }
 
         System.out.println("Updated " + updatedCount + " rows from overlay file");
-
-        // Reprocess derived fields and other transformations for all rows
-        reprocessRepositoryRows(repository);
     }
 
     /**
-     * Reprocess all rows in the repository to apply derived fields and transformations
+     * Process all rows in the repository to apply derived fields and transformations
      */
-    private void reprocessRepositoryRows(ConversionRepository repository) {
+    public void processRepositoryRows(ConversionRepository repository) {
         List<Map<String, Object>> rows = repository.getDataRows();
 
+        System.out.println("Processing derived fields, aggregation, and suppression for " + rows.size() + " rows");
+        int processedCount = 0;
+
         for (Map<String, Object> row : rows) {
-            // Reapply derived boolean fields
+            // Apply derived boolean fields
             repository.processDerivedFields(row);
 
-            // Reapply aggregate text fields
+            // Apply aggregate text fields
             repository.processAggregateFields(row);
 
-            // Reapply field suppression
+            // Apply field suppression
             repository.applySuppression(row);
+
+            processedCount++;
+            if (processedCount % 100 == 0) {
+                System.out.println("Processed transformations for " + processedCount + " rows");
+            }
         }
+
+        System.out.println("Completed processing of transformations for all rows");
     }
 
     /**

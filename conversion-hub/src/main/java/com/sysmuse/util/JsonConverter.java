@@ -1,0 +1,329 @@
+package com.sysmuse.util;
+
+import java.io.*;
+import java.util.*;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+/**
+ * JsonConverter - Handles importing from and exporting to JSON format
+ * using Jackson library.
+ */
+public class JsonConverter {
+
+    private Properties properties;
+    private ObjectMapper mapper;
+    private boolean prettyPrint;
+
+    /**
+     * Constructor
+     */
+    public JsonConverter(Properties properties) {
+        this.properties = properties;
+        this.mapper = new ObjectMapper();
+        
+        // Check if pretty printing is enabled in properties
+        this.prettyPrint = Boolean.parseBoolean(properties.getProperty("output.pretty", "true"));
+        if (prettyPrint) {
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        }
+    }
+
+    /**
+     * Import data from a JSON file into the repository
+     */
+    public void importToRepository(String jsonFilePath, ConversionRepository repository) throws IOException {
+        System.out.println("Importing data from JSON file: " + jsonFilePath);
+        
+        // Parse the JSON file
+        File jsonFile = new File(jsonFilePath);
+        JsonNode rootNode = mapper.readTree(jsonFile);
+        
+        // Check if it's an array (data rows) or an object with a config and data structure
+        if (rootNode.isArray()) {
+            // Simple array of objects, each representing a row
+            importSimpleJsonArray(rootNode, repository);
+        } else if (rootNode.isObject()) {
+            // Object with possible configuration and data
+            importConfiguredJsonObject(rootNode, repository);
+        } else {
+            throw new IllegalArgumentException("Unsupported JSON structure: root node must be array or object");
+        }
+        
+        System.out.println("Imported " + repository.getDataRows().size() + " rows from JSON file");
+    }
+    
+    /**
+     * Import a simple JSON array of objects, each representing a row
+     */
+    private void importSimpleJsonArray(JsonNode rootNode, ConversionRepository repository) {
+        // Collect all field names first
+        Set<String> allFields = new LinkedHashSet<>();
+        for (JsonNode row : rootNode) {
+            Iterator<String> fieldNames = row.fieldNames();
+            while (fieldNames.hasNext()) {
+                allFields.add(fieldNames.next());
+            }
+        }
+        
+        // Convert to array and set as headers
+        String[] headers = allFields.toArray(new String[0]);
+        repository.setHeaders(headers);
+        
+        // If we have at least one row, use it for type inference
+        if (rootNode.size() > 0) {
+            JsonNode firstRow = rootNode.get(0);
+            String[] firstDataRow = new String[headers.length];
+            
+            for (int i = 0; i < headers.length; i++) {
+                String field = headers[i];
+                JsonNode valueNode = firstRow.get(field);
+                firstDataRow[i] = (valueNode != null) ? valueNode.asText() : "";
+            }
+            
+            repository.setFirstDataRow(firstDataRow);
+            repository.inferTypes(headers, firstDataRow);
+        }
+        
+        // Process each row and add to repository
+        for (JsonNode rowNode : rootNode) {
+            Map<String, Object> rowValues = new LinkedHashMap<>();
+            
+            // Extract values for all fields
+            for (String field : headers) {
+                JsonNode valueNode = rowNode.get(field);
+                if (valueNode != null) {
+                    if (valueNode.isInt()) {
+                        rowValues.put(field, valueNode.asInt());
+                    } else if (valueNode.isLong()) {
+                        rowValues.put(field, valueNode.asLong());
+                    } else if (valueNode.isDouble() || valueNode.isFloat()) {
+                        rowValues.put(field, valueNode.asDouble());
+                    } else if (valueNode.isBoolean()) {
+                        rowValues.put(field, valueNode.asBoolean());
+                    } else if (valueNode.isTextual()) {
+                        rowValues.put(field, valueNode.asText());
+                    } else if (valueNode.isNull()) {
+                        rowValues.put(field, null);
+                    } else {
+                        // For other types, convert to string
+                        rowValues.put(field, valueNode.toString());
+                    }
+                } else {
+                    rowValues.put(field, null);
+                }
+            }
+            
+            // Add the row to the repository
+            repository.addDataRow(rowValues);
+        }
+    }
+    
+    /**
+     * Import a JSON object with configuration and data
+     */
+    private void importConfiguredJsonObject(JsonNode rootNode, ConversionRepository repository) {
+        // Extract configuration if present
+        repository.extractConfigFromJSON(rootNode);
+        
+        // Check if there's a data array
+        if (rootNode.has("data") && rootNode.get("data").isArray()) {
+            JsonNode dataArray = rootNode.get("data");
+            importSimpleJsonArray(dataArray, repository);
+        } else {
+            // If no data array, treat the entire object as a single row
+            Map<String, Object> rowValues = new LinkedHashMap<>();
+            
+            Iterator<String> fieldNames = rootNode.fieldNames();
+            List<String> headersList = new ArrayList<>();
+            
+            while (fieldNames.hasNext()) {
+                String field = fieldNames.next();
+                headersList.add(field);
+                
+                JsonNode valueNode = rootNode.get(field);
+                if (valueNode.isInt()) {
+                    rowValues.put(field, valueNode.asInt());
+                } else if (valueNode.isLong()) {
+                    rowValues.put(field, valueNode.asLong());
+                } else if (valueNode.isDouble() || valueNode.isFloat()) {
+                    rowValues.put(field, valueNode.asDouble());
+                } else if (valueNode.isBoolean()) {
+                    rowValues.put(field, valueNode.asBoolean());
+                } else if (valueNode.isTextual()) {
+                    rowValues.put(field, valueNode.asText());
+                } else if (valueNode.isNull()) {
+                    rowValues.put(field, null);
+                } else {
+                    // For complex types, convert to string
+                    rowValues.put(field, valueNode.toString());
+                }
+            }
+            
+            // Set headers and add the row
+            repository.setHeaders(headersList.toArray(new String[0]));
+            repository.addDataRow(rowValues);
+        }
+    }
+
+    /**
+     * Export data from the repository to a JSON file
+     */
+    public void exportFromRepository(ConversionRepository repository, String jsonFilePath) throws IOException {
+        System.out.println("Exporting data to JSON file: " + jsonFilePath);
+        
+        // Create the root array node
+        ArrayNode rootArray = mapper.createArrayNode();
+        
+        // Get visible fields in order
+        List<String> visibleFields = repository.getVisibleFieldNames();
+        
+        // Add each data row to the array
+        for (Map<String, Object> row : repository.getDataRows()) {
+            ObjectNode jsonRow = mapper.createObjectNode();
+            
+            // Add fields in the specified order
+            for (String field : visibleFields) {
+                if (row.containsKey(field)) {
+                    Object value = row.get(field);
+                    addValueToNode(jsonRow, field, value);
+                }
+            }
+            
+            rootArray.add(jsonRow);
+        }
+        
+        // Write to file
+        mapper.writeValue(new File(jsonFilePath), rootArray);
+        
+        System.out.println("Exported " + repository.getDataRows().size() + 
+                " rows to JSON file: " + jsonFilePath);
+    }
+    
+    /**
+     * Export both data and configuration from the repository to a JSON file
+     */
+    public void exportWithConfigToRepository(ConversionRepository repository, String jsonFilePath) throws IOException {
+        System.out.println("Exporting data with configuration to JSON file: " + jsonFilePath);
+        
+        // Create the root object node
+        ObjectNode rootNode = mapper.createObjectNode();
+        
+        // Add parameters section
+        ObjectNode paramsNode = mapper.createObjectNode();
+        for (Map.Entry<String, Object> entry : repository.getConfigParameters().entrySet()) {
+            addValueToNode(paramsNode, entry.getKey(), entry.getValue());
+        }
+        rootNode.set("parameters", paramsNode);
+        
+        // Add columns section
+        ObjectNode columnsNode = mapper.createObjectNode();
+        Map<String, ConversionRepository.DataType> columnTypes = repository.getColumnTypes();
+        Map<String, Boolean> columnVisibility = repository.getColumnVisibility();
+        
+        for (String columnName : repository.getHeaders()) {
+            if (columnName != null && !columnName.isEmpty()) {
+                ObjectNode columnConfig = mapper.createObjectNode();
+                
+                // Add type if available
+                if (columnTypes.containsKey(columnName)) {
+                    columnConfig.put("type", columnTypes.get(columnName).toString());
+                } else {
+                    columnConfig.put("type", "STRING");
+                }
+                
+                // Add visibility if available
+                if (columnVisibility.containsKey(columnName)) {
+                    columnConfig.put("visible", columnVisibility.get(columnName));
+                } else {
+                    columnConfig.put("visible", true);
+                }
+                
+                columnsNode.set(columnName, columnConfig);
+            }
+        }
+        rootNode.set("columns", columnsNode);
+        
+        // Add derived boolean fields if any
+        if (!repository.getDerivedBooleanFields().isEmpty()) {
+            ObjectNode derivedNode = mapper.createObjectNode();
+            for (Map.Entry<String, JsonNode> entry : repository.getDerivedBooleanFields().entrySet()) {
+                derivedNode.set(entry.getKey(), entry.getValue());
+            }
+            rootNode.set("derivedBooleanFields", derivedNode);
+        }
+        
+        // Add aggregate text fields if any
+        if (!repository.getAggregateTextFields().isEmpty()) {
+            ObjectNode aggregateNode = mapper.createObjectNode();
+            for (Map.Entry<String, JsonNode> entry : repository.getAggregateTextFields().entrySet()) {
+                aggregateNode.set(entry.getKey(), entry.getValue());
+            }
+            rootNode.set("aggregateTextFields", aggregateNode);
+        }
+        
+        // Add suppressed fields if any
+        if (!repository.getSuppressedFields().isEmpty()) {
+            ObjectNode suppressedNode = mapper.createObjectNode();
+            for (Map.Entry<String, String> entry : repository.getSuppressedFields().entrySet()) {
+                suppressedNode.put(entry.getKey(), entry.getValue());
+            }
+            rootNode.set("suppressedFields", suppressedNode);
+        }
+        
+        // Add data array
+        ArrayNode dataArray = mapper.createArrayNode();
+        List<String> visibleFields = repository.getVisibleFieldNames();
+        
+        for (Map<String, Object> row : repository.getDataRows()) {
+            ObjectNode jsonRow = mapper.createObjectNode();
+            
+            // Add fields in the specified order
+            for (String field : visibleFields) {
+                if (row.containsKey(field)) {
+                    Object value = row.get(field);
+                    addValueToNode(jsonRow, field, value);
+                }
+            }
+            
+            dataArray.add(jsonRow);
+        }
+        rootNode.set("data", dataArray);
+        
+        // Write to file
+        mapper.writeValue(new File(jsonFilePath), rootNode);
+        
+        System.out.println("Exported " + repository.getDataRows().size() + 
+                " rows with configuration to JSON file: " + jsonFilePath);
+    }
+    
+    /**
+     * Add a value to a Jackson ObjectNode with proper type conversion
+     */
+    private void addValueToNode(ObjectNode node, String fieldName, Object value) {
+        if (value == null) {
+            node.putNull(fieldName);
+        } else if (value instanceof String) {
+            node.put(fieldName, (String) value);
+        } else if (value instanceof Integer) {
+            node.put(fieldName, (Integer) value);
+        } else if (value instanceof Long) {
+            node.put(fieldName, (Long) value);
+        } else if (value instanceof Double) {
+            node.put(fieldName, (Double) value);
+        } else if (value instanceof Float) {
+            node.put(fieldName, (Float) value);
+        } else if (value instanceof Boolean) {
+            node.put(fieldName, (Boolean) value);
+        } else if (value instanceof JsonNode) {
+            node.set(fieldName, (JsonNode) value);
+        } else {
+            // Default to string for other types
+            node.put(fieldName, value.toString());
+        }
+    }
+}

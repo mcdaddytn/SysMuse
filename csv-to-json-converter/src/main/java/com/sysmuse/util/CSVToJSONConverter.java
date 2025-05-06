@@ -19,20 +19,20 @@ public class CSVToJSONConverter {
         STRING, INTEGER, FLOAT, BOOLEAN
     }
 
-    // Map of column names to their indices
-    private Map<String, Integer> columnMap = new HashMap<>();
+    // Map of column names to their indices (preserving order)
+    private LinkedHashMap<String, Integer> columnMap = new LinkedHashMap<>();
 
     // Map of column names to their data types (from config or inferred)
     private Map<String, DataType> columnTypes = new HashMap<>();
 
     // Map for derived boolean fields (name -> expression)
-    private Map<String, JSONObject> derivedBooleanFields = new HashMap<>();
+    private Map<String, JSONObject> derivedBooleanFields = new LinkedHashMap<>();
 
     // Map for text aggregation fields (name -> configuration)
-    private Map<String, JSONObject> aggregateTextFields = new HashMap<>();
+    private Map<String, JSONObject> aggregateTextFields = new LinkedHashMap<>();
 
     // Map for conditional text suppression (field to suppress -> condition field)
-    private Map<String, String> suppressedFields = new HashMap<>();
+    private Map<String, String> suppressedFields = new LinkedHashMap<>();
 
     // The directory containing the input file
     private String inputDirectory;
@@ -48,6 +48,9 @@ public class CSVToJSONConverter {
 
     // Config Generator class
     private ConfigGenerator configGenerator;
+
+    // Maximum text length
+    private int maxTextLength;
 
     // Main entry point
     public static void main(String[] args) {
@@ -98,6 +101,11 @@ public class CSVToJSONConverter {
                         configFilePath = args[1];
                     }
 
+                    // gm: added
+                    if (configDir == null) {
+                        configDir = defaultProps.getProperty("config.directory", "");
+                    }
+
                     // Use default config directory from properties
                     configDir = defaultProps.getProperty("config.directory");
                 }
@@ -119,9 +127,15 @@ public class CSVToJSONConverter {
             }
 
             // gm: added
+
+/*
             if (configDir == null) {
                 configDir = defaultProps.getProperty("config.directory", "");
             }
+            if (configFilePath == null) {
+                configFilePath = defaultProps.getProperty("config.directory", "");
+            }
+ */
 
             // Set config directory
             converter.setConfigDirectory(configDir);
@@ -130,9 +144,7 @@ public class CSVToJSONConverter {
             if (configFilePath == null) {
                 String defaultConfigFilename = defaultProps.getProperty("config.filename", "config.json");
 
-                //gm, changed condition
-                // if (configDir != null) {
-                if (configDir != null && !configDir.isEmpty()) {
+                if (configDir != null) {
                     Path configPath = Paths.get(configDir, defaultConfigFilename);
                     if (Files.exists(configPath)) {
                         configFilePath = configPath.toString();
@@ -154,6 +166,7 @@ public class CSVToJSONConverter {
      */
     public CSVToJSONConverter() {
         this.properties = new Properties();
+        this.maxTextLength = 0; // Default is no truncation
     }
 
     /**
@@ -168,6 +181,14 @@ public class CSVToJSONConverter {
      */
     public void setProperties(Properties properties) {
         this.properties = properties;
+
+        // Get maxTextLength from properties
+        String maxTextLengthStr = properties.getProperty("maxTextLength", "0");
+        try {
+            this.maxTextLength = Integer.parseInt(maxTextLengthStr);
+        } catch (NumberFormatException e) {
+            this.maxTextLength = 0; // Default is no truncation
+        }
     }
 
     /**
@@ -180,28 +201,43 @@ public class CSVToJSONConverter {
         try {
             Class<?> generatorClass = Class.forName(generatorClassName);
 
-            // Try to find constructor that takes a string parameter (for compound expressions)
+            // Try to find constructor that takes properties
             try {
-                if (generatorClass.getName().contains("ApplicableFormatConfigGenerator")) {
-                    // Get compound expressions from properties
-                    String expressions = properties.getProperty("applicable.format.compound.expressions", "");
-
-                    // Create with expressions parameter if available
-                    if (!expressions.isEmpty()) {
-                        return (ConfigGenerator) generatorClass.getConstructor(String.class)
-                                .newInstance(expressions);
-                    }
-                }
+                return (ConfigGenerator) generatorClass.getConstructor(Properties.class)
+                        .newInstance(properties);
             } catch (Exception e) {
-                System.out.println("Could not instantiate with compound expressions: " + e.getMessage());
-            }
+                // Try constructor that takes a string parameter (for compound expressions)
+                try {
+                    if (generatorClass.getName().contains("ApplicableFormatConfigGenerator")) {
+                        // Get compound expressions from properties
+                        String expressions = properties.getProperty("applicable.format.compound.expressions", "");
 
-            // Fallback to default constructor
-            return (ConfigGenerator) generatorClass.getConstructor().newInstance();
+                        // Create with expressions parameter if available
+                        if (!expressions.isEmpty()) {
+                            return (ConfigGenerator) generatorClass.getConstructor(String.class, Properties.class)
+                                    .newInstance(expressions, properties);
+                        }
+                    }
+                } catch (Exception ex) {
+                    System.out.println("Could not instantiate with compound expressions: " + ex.getMessage());
+                }
+
+                // Fallback to default constructor
+                ConfigGenerator generator = (ConfigGenerator) generatorClass.getConstructor().newInstance();
+
+                // Set properties if the generator has a setProperties method
+                try {
+                    generatorClass.getMethod("setProperties", Properties.class).invoke(generator, properties);
+                } catch (Exception ex) {
+                    // Ignore if the method doesn't exist
+                }
+
+                return generator;
+            }
         } catch (Exception e) {
             System.out.println("Error loading config generator class: " + e.getMessage());
             System.out.println("Falling back to StandardConfigGenerator");
-            return new StandardConfigGenerator();
+            return new StandardConfigGenerator(properties);
         }
     }
 
@@ -318,9 +354,24 @@ public class CSVToJSONConverter {
         JSONArray jsonArray = convertToJSON(headers, data);
         System.out.println("Conversion to JSON successful.");
 
-        String outputPath = csvFilePath.replaceAll("\\.csv$", ".json");
-        System.out.println("Writing JSON to file: " + outputPath);
-        writeJSON(jsonArray, outputPath);
+        String outputJsonPath = csvFilePath.replaceAll("\\.csv$", ".json");
+        System.out.println("Writing JSON to file: " + outputJsonPath);
+        writeJSON(jsonArray, outputJsonPath);
+
+        // Convert JSON back to CSV if outputCsvSuffix is specified
+        String outputCsvSuffix = properties.getProperty("output.csvSuffix");
+        if (outputCsvSuffix != null && !outputCsvSuffix.isEmpty()) {
+            System.out.println("Converting JSON back to CSV...");
+            String outputCsvPath = csvFilePath.replaceAll("\\.csv$", outputCsvSuffix);
+            JSONToCSVConverter jsonToCsvConverter = new JSONToCSVConverter(outputJsonPath, outputCsvPath);
+
+            // Use the original CSV header order for the output CSV
+            jsonToCsvConverter.setColumnOrder(Arrays.asList(headers));
+
+            // Convert
+            jsonToCsvConverter.convert();
+            System.out.println("CSV conversion completed. Output file: " + outputCsvPath);
+        }
 
         System.out.println("Conversion completed successfully.");
     }
@@ -440,7 +491,12 @@ public class CSVToJSONConverter {
 
             if (c == ',' && !inQuotes) {
                 // End of current value
-                values.add(currentValue.toString().trim());
+                String value = currentValue.toString().trim();
+                // Apply text truncation if needed
+                if (maxTextLength > 0 && columnTypes.getOrDefault(values.size(), DataType.STRING) == DataType.STRING) {
+                    value = truncateText(value, maxTextLength);
+                }
+                values.add(value);
                 currentValue = new StringBuilder();
                 continue;
             }
@@ -450,10 +506,26 @@ public class CSVToJSONConverter {
 
         // Add the last value
         if (currentValue.length() > 0) {
-            values.add(currentValue.toString().trim());
+            String value = currentValue.toString().trim();
+            // Apply text truncation if needed
+            if (maxTextLength > 0 && columnTypes.getOrDefault(values.size(), DataType.STRING) == DataType.STRING) {
+                value = truncateText(value, maxTextLength);
+            }
+            values.add(value);
         }
 
         return values.toArray(new String[0]);
+    }
+
+    /**
+     * Truncate text to a maximum length
+     */
+    private String truncateText(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+
+        return text.substring(0, maxLength);
     }
 
     /**
@@ -716,6 +788,10 @@ public class CSVToJSONConverter {
                 return Boolean.parseBoolean(value);
             case STRING:
             default:
+                // Apply text truncation if needed
+                if (maxTextLength > 0) {
+                    return truncateText(value, maxTextLength);
+                }
                 return value;
         }
     }
@@ -734,8 +810,8 @@ public class CSVToJSONConverter {
                 System.out.println("Converting row " + rowIndex + " to JSON");
             }
 
-            // Create a map for the current row's values
-            Map<String, Object> rowValues = new HashMap<>();
+            // Create a map for the current row's values (preserving order)
+            LinkedHashMap<String, Object> rowValues = new LinkedHashMap<>();
 
             // First process the direct column mappings
             for (int colIndex = 0; colIndex < headers.length && colIndex < row.length; colIndex++) {

@@ -366,13 +366,14 @@ public class CSVToJSONConverter {
                 typesMap.put(entry.getKey(), entry.getValue().toString());
             }
 
-            // Generate configuration
+            // Generate configuration - passing headers ensures order is preserved
+            // in the config generator implementation
             JSONObject config = configGenerator.generateConfig(headers, firstDataRow, typesMap);
 
             // Extract configuration sections
             extractConfigFromJSON(config);
 
-            // Save the generated config
+            // Save the generated config with ordered fields
             saveGeneratedConfig(config);
 
             return;
@@ -584,12 +585,12 @@ public class CSVToJSONConverter {
             configFilePath = Paths.get(inputDirectory, configFilename).toString();
         }
 
-        try (FileWriter file = new FileWriter(configFilePath)) {
-            // Format JSON with indentation for readability
-            StringBuilder sb = new StringBuilder();
-            formatJSONObject(config, sb, 0, 2);
-            file.write(sb.toString());
-        }
+        // Create list of fields in original CSV header order
+        List<String> orderedFields = Arrays.asList(headers);
+
+        // Use OrderedJsonConverter to write the config file while preserving order
+        boolean prettyPrint = Boolean.parseBoolean(properties.getProperty("output.pretty", "true"));
+        OrderedJsonConverter.convertAndWriteToFile(config, orderedFields, configFilePath, prettyPrint);
 
         System.out.println("Generated configuration saved to: " + configFilePath);
     }
@@ -1072,18 +1073,25 @@ public class CSVToJSONConverter {
     private void writeJSON(JSONArray jsonArray, String outputFilePath) throws IOException {
         boolean prettyPrint = Boolean.parseBoolean(properties.getProperty("output.pretty", "true"));
 
-        try (FileWriter file = new FileWriter(outputFilePath)) {
-            if (prettyPrint) {
-                // Format JSON with indentation
-                int indent = Integer.parseInt(properties.getProperty("output.indent", "2"));
-                StringBuilder sb = new StringBuilder();
-                formatJSON(jsonArray, sb, 0, indent);
-                file.write(sb.toString());
-            } else {
-                // Write compact JSON
-                file.write(jsonArray.toJSONString());
+        // Create ordered list of all possible fields (preserving original header order)
+        List<String> orderedFieldList = new ArrayList<>(Arrays.asList(headers));
+
+        // Add derived fields at the end of the ordered list
+        for (String derivedField : derivedBooleanFields.keySet()) {
+            if (!orderedFieldList.contains(derivedField)) {
+                orderedFieldList.add(derivedField);
             }
         }
+
+        // Add aggregate fields at the end of the ordered list
+        for (String aggregateField : aggregateTextFields.keySet()) {
+            if (!orderedFieldList.contains(aggregateField)) {
+                orderedFieldList.add(aggregateField);
+            }
+        }
+
+        // Use OrderedJsonConverter to write the JSON file while preserving order
+        OrderedJsonConverter.convertAndWriteToFile(jsonArray, orderedFieldList, outputFilePath, prettyPrint);
     }
 
     /**

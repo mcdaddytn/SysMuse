@@ -9,7 +9,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Standard implementation of ConfigGenerator that creates a basic configuration
- * based on the CSV headers and inferred data types
+ * based on the CSV headers and inferred data types.
+ * Updated to support uniqueKey field for multi-file overlay functionality.
  */
 public class StandardConfigGenerator implements ConfigGenerator {
 
@@ -67,6 +68,9 @@ public class StandardConfigGenerator implements ConfigGenerator {
         // Add column configurations (preserving original order)
         ObjectNode columns = mapper.createObjectNode();
 
+        // Check if a uniqueKey field is specified in properties
+        String uniqueKeyField = properties.getProperty("uniqueKey.field");
+
         for (String header : headers) {
             if (header == null || header.trim().isEmpty()) {
                 continue; // Skip empty headers
@@ -80,6 +84,23 @@ public class StandardConfigGenerator implements ConfigGenerator {
 
             // Add visibility property (default to true)
             columnConfig.put("visible", true);
+
+            // Check if this is the unique key field
+            if (uniqueKeyField != null && header.equals(uniqueKeyField)) {
+                columnConfig.put("uniqueKey", true);
+                System.out.println("Setting " + header + " as uniqueKey field based on properties");
+            } else if (uniqueKeyField == null &&
+                    (header.toLowerCase().contains("id") ||
+                            header.toLowerCase().endsWith("key") ||
+                            header.toLowerCase().equals("identifier"))) {
+                // If no explicit uniqueKey is set, try to identify a likely candidate
+                // like fields with 'id', 'key', or 'identifier' in their name
+                columnConfig.put("uniqueKey", true);
+                System.out.println("Auto-detected " + header + " as a potential uniqueKey field");
+
+                // Only set the first one we find as unique key
+                uniqueKeyField = header;
+            }
 
             columns.set(header, columnConfig);
         }

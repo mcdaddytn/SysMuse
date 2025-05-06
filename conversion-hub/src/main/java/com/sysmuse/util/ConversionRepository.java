@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * ConversionRepository - Core data storage class that maintains data in memory
  * with type information and configuration settings.
+ * Updated to support unique key field for multi-file overlay functionality.
  */
 public class ConversionRepository {
 
@@ -19,10 +20,10 @@ public class ConversionRepository {
 
     // Core data storage
     private List<Map<String, Object>> dataRows = new ArrayList<>();
-    
+
     // Original column headers in order
     private String[] headers;
-    
+
     // Map of column names to their indices (preserving order)
     private LinkedHashMap<String, Integer> columnMap = new LinkedHashMap<>();
 
@@ -43,25 +44,28 @@ public class ConversionRepository {
 
     // Configuration parameters
     private Map<String, Object> configParameters = new HashMap<>();
-    
+
     // Store the first data row for reuse
     private String[] firstDataRow;
-    
+
     // Maximum text length (0 for unlimited)
     private int maxTextLength = 0;
+
+    // Unique key field for multi-file overlay
+    private String uniqueKeyField = null;
 
     /**
      * Constructor
      */
     public ConversionRepository() {
     }
-    
+
     /**
      * Set the headers array and create the column map
      */
     public void setHeaders(String[] headers) {
         this.headers = headers;
-        
+
         // Create column map (name to index)
         for (int i = 0; i < headers.length; i++) {
             if (headers[i] != null && !headers[i].trim().isEmpty()) {
@@ -70,105 +74,119 @@ public class ConversionRepository {
         }
         System.out.println("Column map created with " + columnMap.size() + " entries");
     }
-    
+
     /**
      * Get the headers array
      */
     public String[] getHeaders() {
         return headers;
     }
-    
+
     /**
      * Store first data row
      */
     public void setFirstDataRow(String[] firstDataRow) {
         this.firstDataRow = firstDataRow;
     }
-    
+
     /**
      * Get first data row
      */
     public String[] getFirstDataRow() {
         return firstDataRow;
     }
-    
+
     /**
      * Get the column map
      */
     public Map<String, Integer> getColumnMap() {
         return columnMap;
     }
-    
+
     /**
      * Add a data row to the repository
      */
     public void addDataRow(Map<String, Object> row) {
         dataRows.add(row);
     }
-    
+
     /**
      * Get all data rows
      */
     public List<Map<String, Object>> getDataRows() {
         return dataRows;
     }
-    
+
     /**
      * Set maximum text length
      */
     public void setMaxTextLength(int maxLength) {
         this.maxTextLength = maxLength;
     }
-    
+
     /**
      * Get maximum text length
      */
     public int getMaxTextLength() {
         return maxTextLength;
     }
-    
+
     /**
      * Get column types
      */
     public Map<String, DataType> getColumnTypes() {
         return columnTypes;
     }
-    
+
     /**
      * Get derived boolean fields
      */
     public Map<String, JsonNode> getDerivedBooleanFields() {
         return derivedBooleanFields;
     }
-    
+
     /**
      * Get aggregate text fields
      */
     public Map<String, JsonNode> getAggregateTextFields() {
         return aggregateTextFields;
     }
-    
+
     /**
      * Get suppressed fields
      */
     public Map<String, String> getSuppressedFields() {
         return suppressedFields;
     }
-    
+
     /**
      * Get column visibility
      */
     public Map<String, Boolean> getColumnVisibility() {
         return columnVisibility;
     }
-    
+
     /**
      * Get configuration parameters
      */
     public Map<String, Object> getConfigParameters() {
         return configParameters;
     }
-    
+
+    /**
+     * Get the unique key field
+     */
+    public String getUniqueKeyField() {
+        return uniqueKeyField;
+    }
+
+    /**
+     * Set the unique key field
+     */
+    public void setUniqueKeyField(String uniqueKeyField) {
+        this.uniqueKeyField = uniqueKeyField;
+    }
+
     /**
      * Infer column types from first data row
      */
@@ -204,7 +222,7 @@ public class ConversionRepository {
         }
         System.out.println("Inferred types for " + columnTypes.size() + " columns");
     }
-    
+
     /**
      * Convert a string value to the appropriate type
      */
@@ -233,7 +251,7 @@ public class ConversionRepository {
                 return value;
         }
     }
-    
+
     /**
      * Truncate text to a maximum length
      */
@@ -243,7 +261,7 @@ public class ConversionRepository {
         }
         return text.substring(0, maxLength);
     }
-    
+
     /**
      * Extract all configuration sections from a JSON node
      */
@@ -254,6 +272,7 @@ public class ConversionRepository {
         aggregateTextFields.clear();
         suppressedFields.clear();
         columnVisibility.clear();
+        uniqueKeyField = null;
 
         // Parse parameters section
         if (config.has("parameters")) {
@@ -262,7 +281,7 @@ public class ConversionRepository {
             while (fieldNames.hasNext()) {
                 String paramName = fieldNames.next();
                 JsonNode paramValue = params.get(paramName);
-                
+
                 if (paramValue.isInt()) {
                     configParameters.put(paramName, paramValue.asInt());
                 } else if (paramValue.isLong()) {
@@ -276,7 +295,7 @@ public class ConversionRepository {
                 } else if (paramValue.isNull()) {
                     configParameters.put(paramName, null);
                 }
-                System.out.println("Found parameter: " + paramName + " = " + 
+                System.out.println("Found parameter: " + paramName + " = " +
                         configParameters.get(paramName));
             }
         }
@@ -324,6 +343,23 @@ public class ConversionRepository {
                         }
                     }
                     columnVisibility.put(columnName, isVisible);
+
+                    // Check if this column is marked as unique key
+                    if (columnConfig.has("uniqueKey")) {
+                        JsonNode uniqueKeyValue = columnConfig.get("uniqueKey");
+                        boolean isUniqueKey = false;
+
+                        if (uniqueKeyValue.isBoolean()) {
+                            isUniqueKey = uniqueKeyValue.asBoolean();
+                        } else if (uniqueKeyValue.isTextual()) {
+                            isUniqueKey = Boolean.parseBoolean(uniqueKeyValue.asText());
+                        }
+
+                        if (isUniqueKey) {
+                            uniqueKeyField = columnName;
+                            System.out.println("Found unique key field: " + uniqueKeyField);
+                        }
+                    }
 
                     System.out.println("Column '" + columnName + "' configured with type: " + type +
                             ", visibility: " + isVisible);
@@ -422,6 +458,7 @@ public class ConversionRepository {
         System.out.println("- Derived boolean fields: " + derivedBooleanFields.size());
         System.out.println("- Aggregate text fields: " + aggregateTextFields.size());
         System.out.println("- Suppressed fields: " + suppressedFields.size());
+        System.out.println("- Unique key field: " + uniqueKeyField);
 
         // Count visible and hidden fields
         int visibleCount = 0;
@@ -465,7 +502,7 @@ public class ConversionRepository {
         for (Map.Entry<String, JsonNode> entry : aggregateTextFields.entrySet()) {
             String fieldName = entry.getKey();
             JsonNode config = entry.getValue();
-            
+
             try {
                 // Process the aggregate field configuration
                 String aggregatedText = TextFieldProcessor.processAggregateField(config, rowValues);
@@ -478,7 +515,7 @@ public class ConversionRepository {
             }
         }
     }
-    
+
     /**
      * Apply field suppression rules to a row
      */
@@ -495,43 +532,43 @@ public class ConversionRepository {
             }
         }
     }
-    
+
     /**
      * Get a list of all field names in the repository, including derived and aggregated fields
      */
     public List<String> getAllFieldNames() {
         // Start with original headers
         List<String> allFields = new ArrayList<>(Arrays.asList(headers));
-        
+
         // Add derived fields
         for (String field : derivedBooleanFields.keySet()) {
             if (!allFields.contains(field)) {
                 allFields.add(field);
             }
         }
-        
+
         // Add aggregate fields
         for (String field : aggregateTextFields.keySet()) {
             if (!allFields.contains(field)) {
                 allFields.add(field);
             }
         }
-        
+
         return allFields;
     }
-    
+
     /**
      * Get a list of visible field names in the repository
      */
     public List<String> getVisibleFieldNames() {
         List<String> visibleFields = new ArrayList<>();
-        
+
         for (String field : getAllFieldNames()) {
             if (columnVisibility.getOrDefault(field, true)) {
                 visibleFields.add(field);
             }
         }
-        
+
         return visibleFields;
     }
 }

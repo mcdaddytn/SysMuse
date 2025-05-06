@@ -7,6 +7,7 @@ import java.util.*;
 /**
  * ConversionHub - Main application class that coordinates the conversion process
  * between different data formats like CSV and JSON.
+ * Updated to support multi-file overlay functionality.
  */
 public class ConversionHub {
 
@@ -57,7 +58,7 @@ public class ConversionHub {
                         // Check if there's a config file specified
                         if (args.length > 2) {
                             configFilePath = args[2];
-                            
+
                             // Check if output format is specified
                             if (args.length > 3) {
                                 outputFormat = args[3];
@@ -71,7 +72,7 @@ public class ConversionHub {
                     // Check if there's a config file specified
                     if (args.length > 1) {
                         configFilePath = args[1];
-                        
+
                         // Check if output format is specified
                         if (args.length > 2) {
                             outputFormat = args[2];
@@ -122,25 +123,32 @@ public class ConversionHub {
                 System.out.println("Using config file path: " + configFilePath);
             }
 
-            // If no output format specified, determine from input file extension
+            // If no output format specified, try to get from properties or determine from input file extension
             if (outputFormat == null) {
-                if (inputFilePath.toLowerCase().endsWith(".csv")) {
-                    outputFormat = "json";
-                } else if (inputFilePath.toLowerCase().endsWith(".json")) {
-                    outputFormat = "csv";
+                outputFormat = hub.properties.getProperty("output.format");
+
+                if (outputFormat == null) {
+                    // If not in properties either, determine from input file extension
+                    if (inputFilePath.toLowerCase().endsWith(".csv")) {
+                        outputFormat = "json";
+                    } else if (inputFilePath.toLowerCase().endsWith(".json")) {
+                        outputFormat = "csv";
+                    } else {
+                        // Default to JSON if can't determine
+                        outputFormat = "json";
+                    }
+                    System.out.println("Output format determined from input file: " + outputFormat);
                 } else {
-                    // Default to JSON if can't determine
-                    outputFormat = "json";
+                    System.out.println("Using output format from properties: " + outputFormat);
                 }
-                System.out.println("Output format determined from input file: " + outputFormat);
             }
 
             // Initialize the repository
             hub.repository = new ConversionRepository();
-            
+
             // Start conversion process
             hub.process(inputFilePath, configFilePath, outputFormat);
-            
+
         } catch (Exception e) {
             System.err.println("Error during processing: " + e.getMessage());
             e.printStackTrace();
@@ -191,62 +199,159 @@ public class ConversionHub {
         } else {
             throw new IllegalArgumentException("Unsupported input file format. Supported formats: .csv, .json");
         }
-        
+
+        // Load or generate configuration - Need to do this first to identify uniqueKey field if using multiple files
+        configGenerator = loadConfigGenerator();
+
+        // Check whether input is a single file or multiple files
+        boolean useMultipleFiles = false;
+        String csvFilename = "";
+
+        if ("csv".equals(inputFormat)) {
+            String inputCsvPath = properties.getProperty("input.csv.path", "");
+            String inputCsvFilename = properties.getProperty("input.csv.filename", "");
+
+            // Check if filename contains commas (indicating multiple files)
+            if (inputCsvFilename.contains(",")) {
+                useMultipleFiles = true;
+                csvFilename = inputCsvFilename;
+            } else {
+                // Check if the specified filename is a .list file
+                File potentialListFile = new File(Paths.get(inputCsvPath, inputCsvFilename).toString());
+                if (potentialListFile.exists() && potentialListFile.isFile() &&
+                        potentialListFile.getName().endsWith(".list")) {
+                    useMultipleFiles = true;
+                    csvFilename = inputCsvFilename;
+                } else {
+                    // Single file (normal behavior)
+                    useMultipleFiles = false;
+                    csvFilename = inputCsvFilename;
+                }
+            }
+        }
+
         // Load the appropriate converter based on the input format
         if ("csv".equals(inputFormat)) {
             CsvConverter csvConverter = new CsvConverter(properties);
-            
-            // Parse the CSV header and first data row for initial configuration
-            String[] headers = csvConverter.parseCSVHeader(inputFilePath);
-            String[] firstDataRow = csvConverter.parseFirstDataRow(inputFilePath);
-            
-            // Initialize the repository with header information
-            repository.setHeaders(headers);
-            
-            // Infer data types from the first row
-            repository.inferTypes(headers, firstDataRow);
-            
-            // Load or generate configuration
-            configGenerator = loadConfigGenerator();
-            loadConfiguration(configFilePath, headers, firstDataRow);
-            
-            // Import the data into the repository
-            csvConverter.importToRepository(inputFilePath, repository);
+
+            if (useMultipleFiles) {
+                // We need to use the first file to determine headers and types
+                System.out.println("Using multiple CSV files mode");
+
+                // Extract the first file name (before the first comma or the list file itself)
+                String firstFilePath;
+                if (csvFilename.contains(",")) {
+                    firstFilePath = csvFilename.split(",")[0].trim();
+                    if (!new File(firstFilePath).isAbsolute()) {
+                        firstFilePath = Paths.get(inputDirectory, firstFilePath).toString();
+                    }
+                } else {
+                    // Must be a list file
+                    File listFile = new File(Paths.get(inputDirectory, csvFilename).toString());
+                    List<String> fileList = Files.readAllLines(listFile.toPath());
+                    if (fileList.isEmpty()) {
+                        throw new IllegalStateException("File list is empty: " + listFile.getPath());
+                    }
+                    firstFilePath = fileList.get(0).trim();
+                    if (!new File(firstFilePath).isAbsolute()) {
+                        firstFilePath = Paths.get(inputDirectory, firstFilePath).toString();
+                    }
+                }
+
+                // Parse the CSV header and first data row for initial configuration
+                String[] headers = csvConverter.parseCSVHeader(firstFilePath);
+                String[] firstDataRow = csvConverter.parseFirstDataRow(firstFilePath);
+
+                // Initialize the repository with header information
+                repository.setHeaders(headers);
+
+                // Infer data types from the first row
+                repository.inferTypes(headers, firstDataRow);
+
+                // Load configuration
+                loadConfiguration(configFilePath, headers, firstDataRow);
+
+                // Check if a unique key field is defined when using multiple files
+                String uniqueKeyField = repository.getUniqueKeyField();
+                if (uniqueKeyField == null) {
+                    throw new IllegalStateException("Multiple input files specified but no uniqueKey field defined in configuration");
+                }
+
+                // Now process all CSV files with the overlay functionality
+                csvConverter.importMultipleFilesToRepository(csvFilename, inputDirectory, repository);
+            } else {
+                // Single file mode (original behavior)
+                // Parse the CSV header and first data row for initial configuration
+                String[] headers = csvConverter.parseCSVHeader(inputFilePath);
+                String[] firstDataRow = csvConverter.parseFirstDataRow(inputFilePath);
+
+                // Initialize the repository with header information
+                repository.setHeaders(headers);
+
+                // Infer data types from the first row
+                repository.inferTypes(headers, firstDataRow);
+
+                // Load or generate configuration
+                loadConfiguration(configFilePath, headers, firstDataRow);
+
+                // Import the data into the repository
+                csvConverter.importToRepository(inputFilePath, repository);
+            }
         } else if ("json".equals(inputFormat)) {
             JsonConverter jsonConverter = new JsonConverter(properties);
-            
+
             // Import the data into the repository
             jsonConverter.importToRepository(inputFilePath, repository);
-            
+
             // Configuration should be embedded in the JSON file
             // No need to load separately
         }
-        
+
         // Export to the desired output format
-        if ("json".equals(outputFormat)) {
+        if ("json".equals(outputFormat.toLowerCase())) {
             JsonConverter jsonConverter = new JsonConverter(properties);
-            String outputJsonPath = inputFilePath.replaceAll("\\.[^.]+$", ".json");
+
+            // Generate output filename
+            String outputFilename = properties.getProperty("output.json.filename");
+            String outputJsonPath;
+
+            if (outputFilename != null && !outputFilename.isEmpty()) {
+                // If a specific output filename is provided in properties, use it
+                File outputDir = new File(inputDirectory);
+                outputJsonPath = new File(outputDir, outputFilename).getPath();
+            } else {
+                // Otherwise, derive from input filename
+                outputJsonPath = inputFilePath.replaceAll("\\.[^.]+$", ".json");
+            }
+
             jsonConverter.exportFromRepository(repository, outputJsonPath);
             System.out.println("Exported data to JSON: " + outputJsonPath);
-        } else if ("csv".equals(outputFormat)) {
+        } else if ("csv".equals(outputFormat.toLowerCase())) {
             CsvConverter csvConverter = new CsvConverter(properties);
-            
-            // Check if we should use a specific suffix for the output CSV
+
+            // Check if we should use a specific suffix or filename for the output CSV
+            String outputFilename = properties.getProperty("output.csv.filename");
             String outputCsvSuffix = properties.getProperty("output.csvSuffix");
             String outputCsvPath;
-            
-            if (outputCsvSuffix != null && !outputCsvSuffix.isEmpty()) {
+
+            if (outputFilename != null && !outputFilename.isEmpty()) {
+                // If a specific output filename is provided in properties, use it
+                File outputDir = new File(inputDirectory);
+                outputCsvPath = new File(outputDir, outputFilename).getPath();
+            } else if (outputCsvSuffix != null && !outputCsvSuffix.isEmpty()) {
+                // If a suffix is specified, apply it to the input filename
                 outputCsvPath = inputFilePath.replaceAll("\\.[^.]+$", outputCsvSuffix);
             } else {
+                // Default behavior: just change the extension to .csv
                 outputCsvPath = inputFilePath.replaceAll("\\.[^.]+$", ".csv");
             }
-            
+
             csvConverter.exportFromRepository(repository, outputCsvPath);
             System.out.println("Exported data to CSV: " + outputCsvPath);
         } else {
             throw new IllegalArgumentException("Unsupported output format: " + outputFormat);
         }
-        
+
         System.out.println("Conversion completed successfully.");
     }
 
@@ -337,7 +442,7 @@ public class ConversionHub {
         try {
             com.fasterxml.jackson.databind.JsonNode config = mapper.readTree(configFile);
             System.out.println("Successfully parsed config file: " + configFilePath);
-            
+
             // Extract configuration and apply to repository
             repository.extractConfigFromJSON(config);
         } catch (Exception e) {

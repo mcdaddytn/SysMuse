@@ -6,6 +6,7 @@ import java.util.*;
 
 /**
  * CsvConverter - Handles importing from and exporting to CSV format.
+ * Updated to support multiple file overlay functionality.
  */
 public class CsvConverter {
 
@@ -241,12 +242,12 @@ public class CsvConverter {
 
         // Get the headers from the repository
         String[] headers = repository.getHeaders();
-        
+
         // Parse each row string and add to repository
         int processedRows = 0;
         for (String rowString : rowStrings) {
             String[] values = parseCSVRow(rowString);
-            
+
             // Create a map for the current row's values
             Map<String, Object> rowValues = new LinkedHashMap<>();
 
@@ -262,22 +263,22 @@ public class CsvConverter {
                 String value = colIndex < values.length ? values[colIndex] : "";
 
                 // Convert value based on column type
-                ConversionRepository.DataType type = repository.getColumnTypes().getOrDefault(columnName, 
-                                                    ConversionRepository.DataType.STRING);
+                ConversionRepository.DataType type = repository.getColumnTypes().getOrDefault(columnName,
+                        ConversionRepository.DataType.STRING);
                 Object convertedValue = repository.convertValue(value, type);
 
                 rowValues.put(columnName, convertedValue);
             }
-            
+
             // Process derived boolean fields
             repository.processDerivedFields(rowValues);
-            
+
             // Process aggregate text fields
             repository.processAggregateFields(rowValues);
-            
+
             // Apply field suppression
             repository.applySuppression(rowValues);
-            
+
             // Add the processed row to the repository
             repository.addDataRow(rowValues);
 
@@ -291,14 +292,233 @@ public class CsvConverter {
     }
 
     /**
+     * Import data from multiple CSV files into the repository with overlay functionality
+     */
+    public void importMultipleFilesToRepository(String csvFilePathsInput, String inputDirectory,
+                                                ConversionRepository repository) throws IOException {
+        // Check if csvFilePathsInput contains multiple files (comma-separated)
+        String[] filePaths;
+
+        if (csvFilePathsInput.contains(",")) {
+            // Multiple files specified directly in the input
+            filePaths = csvFilePathsInput.split(",");
+            for (int i = 0; i < filePaths.length; i++) {
+                filePaths[i] = filePaths[i].trim();
+
+                // Check if path is absolute, if not prepend the input directory
+                if (!new File(filePaths[i]).isAbsolute()) {
+                    filePaths[i] = Paths.get(inputDirectory, filePaths[i]).toString();
+                }
+            }
+        } else {
+            // Check if it's a file containing a list of files
+            File potentialListFile = new File(Paths.get(inputDirectory, csvFilePathsInput).toString());
+            if (potentialListFile.exists() && potentialListFile.isFile() &&
+                    potentialListFile.getName().endsWith(".list")) {
+
+                // Read file list from the list file
+                List<String> fileList = Files.readAllLines(potentialListFile.toPath());
+                filePaths = new String[fileList.size()];
+
+                for (int i = 0; i < fileList.size(); i++) {
+                    String filePath = fileList.get(i).trim();
+                    if (!new File(filePath).isAbsolute()) {
+                        filePaths[i] = Paths.get(inputDirectory, filePath).toString();
+                    } else {
+                        filePaths[i] = filePath;
+                    }
+                }
+            } else {
+                // Single file, make into array for uniform processing
+                filePaths = new String[1];
+                filePaths[0] = Paths.get(inputDirectory, csvFilePathsInput).toString();
+            }
+        }
+
+        System.out.println("Processing " + filePaths.length + " CSV files for import");
+
+        // Get the unique key field from the repository
+        String uniqueKeyField = repository.getUniqueKeyField();
+        if (uniqueKeyField == null && filePaths.length > 1) {
+            throw new IllegalStateException("Multiple input files specified but no uniqueKey field defined in configuration");
+        }
+
+        // Import the first file normally
+        if (filePaths.length > 0) {
+            System.out.println("Importing base file: " + filePaths[0]);
+            importToRepository(filePaths[0], repository);
+        }
+
+        // Process overlay files if there are more than one
+        for (int i = 1; i < filePaths.length; i++) {
+            System.out.println("Importing overlay file " + (i+1) + ": " + filePaths[i]);
+            importOverlayFile(filePaths[i], repository, uniqueKeyField);
+        }
+    }
+
+    /**
+     * Import an overlay file and merge with existing repository data based on the unique key
+     */
+    private void importOverlayFile(String overlayFilePath, ConversionRepository repository,
+                                   String uniqueKeyField) throws IOException {
+        System.out.println("Importing overlay file: " + overlayFilePath);
+
+        // Read file content
+        String fileContent = new String(Files.readAllBytes(Paths.get(overlayFilePath)));
+
+        // Parse the header to identify column mapping
+        String[] overlayHeaders = parseCSVHeader(overlayFilePath);
+
+        // Create a map to quickly find column indices
+        Map<String, Integer> overlayColumnMap = new HashMap<>();
+        for (int i = 0; i < overlayHeaders.length; i++) {
+            if (overlayHeaders[i] != null && !overlayHeaders[i].trim().isEmpty()) {
+                overlayColumnMap.put(overlayHeaders[i], i);
+            }
+        }
+
+        // Check if the unique key field exists in the overlay file
+        if (!overlayColumnMap.containsKey(uniqueKeyField)) {
+            throw new IllegalStateException("Unique key field '" + uniqueKeyField +
+                    "' not found in overlay file: " + overlayFilePath);
+        }
+
+        // Parse rest of the file into rows, similar to importToRepository method
+        boolean inQuotes = false;
+        int rowStartIndex = 0;
+        List<String> rowStrings = new ArrayList<>();
+
+        // Skip the header row
+        for (int i = 0; i < fileContent.length(); i++) {
+            if (fileContent.charAt(i) == '\n' && !inQuotes) {
+                rowStartIndex = i + 1;
+                break;
+            } else if (fileContent.charAt(i) == '"') {
+                inQuotes = !inQuotes;
+            }
+        }
+
+        // Parse remaining rows
+        for (int i = rowStartIndex; i < fileContent.length(); i++) {
+            char c = fileContent.charAt(i);
+
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == '\n' && !inQuotes) {
+                // End of row
+                String rowData = fileContent.substring(rowStartIndex, i);
+                rowStrings.add(rowData);
+                rowStartIndex = i + 1;
+            }
+        }
+
+        // Add the last row if there is one
+        if (rowStartIndex < fileContent.length()) {
+            String rowData = fileContent.substring(rowStartIndex);
+            rowStrings.add(rowData);
+        }
+
+        // Get config parameters for type conversion
+        Map<String, ConversionRepository.DataType> columnTypes = repository.getColumnTypes();
+        List<String> configFieldNames = repository.getAllFieldNames();
+
+        // Get the list of existing rows from the repository
+        List<Map<String, Object>> existingRows = repository.getDataRows();
+
+        // Create a map for quick lookups by unique key
+        Map<Object, Map<String, Object>> keyToRowMap = new HashMap<>();
+        for (Map<String, Object> existingRow : existingRows) {
+            if (existingRow.containsKey(uniqueKeyField)) {
+                Object keyValue = existingRow.get(uniqueKeyField);
+                if (keyValue != null) {
+                    keyToRowMap.put(keyValue, existingRow);
+                }
+            }
+        }
+
+        // Process each overlay row
+        int updatedCount = 0;
+        for (String rowString : rowStrings) {
+            String[] values = parseCSVRow(rowString);
+
+            // Get the unique key value from this row
+            int keyIndex = overlayColumnMap.get(uniqueKeyField);
+            if (keyIndex >= values.length) {
+                continue; // Skip rows where the key index is out of bounds
+            }
+
+            String keyValue = keyIndex < values.length ? values[keyIndex] : "";
+            if (keyValue.isEmpty()) {
+                continue; // Skip rows with empty key values
+            }
+
+            // Convert key value to appropriate type
+            ConversionRepository.DataType keyType = columnTypes.getOrDefault(uniqueKeyField,
+                    ConversionRepository.DataType.STRING);
+            Object convertedKeyValue = repository.convertValue(keyValue, keyType);
+
+            // Find existing row with this key
+            Map<String, Object> existingRow = keyToRowMap.get(convertedKeyValue);
+            if (existingRow == null) {
+                // No matching row found, skip this overlay row
+                continue;
+            }
+
+            // Update the existing row with values from the overlay row
+            for (String fieldName : configFieldNames) {
+                if (overlayColumnMap.containsKey(fieldName)) {
+                    int columnIndex = overlayColumnMap.get(fieldName);
+                    if (columnIndex < values.length) {
+                        String value = values[columnIndex];
+                        if (value != null && !value.isEmpty()) {
+                            // Convert value based on column type
+                            ConversionRepository.DataType type = columnTypes.getOrDefault(fieldName,
+                                    ConversionRepository.DataType.STRING);
+                            Object convertedValue = repository.convertValue(value, type);
+
+                            // Update the existing row with the new value
+                            existingRow.put(fieldName, convertedValue);
+                        }
+                    }
+                }
+            }
+
+            updatedCount++;
+        }
+
+        System.out.println("Updated " + updatedCount + " rows from overlay file");
+
+        // Reprocess derived fields and other transformations for all rows
+        reprocessRepositoryRows(repository);
+    }
+
+    /**
+     * Reprocess all rows in the repository to apply derived fields and transformations
+     */
+    private void reprocessRepositoryRows(ConversionRepository repository) {
+        List<Map<String, Object>> rows = repository.getDataRows();
+
+        for (Map<String, Object> row : rows) {
+            // Reapply derived boolean fields
+            repository.processDerivedFields(row);
+
+            // Reapply aggregate text fields
+            repository.processAggregateFields(row);
+
+            // Reapply field suppression
+            repository.applySuppression(row);
+        }
+    }
+
+    /**
      * Export data from the repository to a CSV file
      */
     public void exportFromRepository(ConversionRepository repository, String csvFilePath) throws IOException {
         System.out.println("Exporting data to CSV file: " + csvFilePath);
-        
+
         // Get visible fields in order
         List<String> visibleFields = repository.getVisibleFieldNames();
-        
+
         // Open the CSV file for writing
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(csvFilePath))) {
             // Write the header row
@@ -321,8 +541,8 @@ public class CsvConverter {
             }
         }
 
-        System.out.println("Exported " + repository.getDataRows().size() + 
-                          " rows to CSV file: " + csvFilePath);
+        System.out.println("Exported " + repository.getDataRows().size() +
+                " rows to CSV file: " + csvFilePath);
     }
 
     /**

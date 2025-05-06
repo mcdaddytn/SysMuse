@@ -71,6 +71,10 @@ public class StandardConfigGenerator implements ConfigGenerator {
             String type = columnTypes.containsKey(header) ?
                     columnTypes.get(header).toString() : "STRING";
             columnConfig.put("type", type);
+
+            // Add visibility property (default to true)
+            columnConfig.put("visible", true);
+
             columns.put(header, columnConfig);
         }
 

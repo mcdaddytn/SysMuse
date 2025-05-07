@@ -23,6 +23,9 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     // Pattern to match quoted strings or unquoted words
     private static final Pattern FIELD_PATTERN = Pattern.compile("\"([^\"]+)\"|([^\\s\"]+)");
 
+    // Default text suffixes - will be overridden by properties if available
+    private List<String> textSuffixes = new ArrayList<>();
+
     /**
      * Default constructor
      */
@@ -30,6 +33,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         this.compoundExpressionsString = null;
         this.properties = new Properties();
         this.mapper = new ObjectMapper();
+        initializeTextSuffixes();
     }
 
     /**
@@ -39,6 +43,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         this.compoundExpressionsString = compoundExpressionsString;
         this.properties = new Properties();
         this.mapper = new ObjectMapper();
+        initializeTextSuffixes();
     }
 
     /**
@@ -48,6 +53,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         this.properties = properties;
         this.compoundExpressionsString = properties.getProperty("applicable.format.compound.expressions");
         this.mapper = new ObjectMapper();
+        initializeTextSuffixes();
     }
 
     /**
@@ -57,6 +63,37 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         this.compoundExpressionsString = compoundExpressionsString;
         this.properties = properties;
         this.mapper = new ObjectMapper();
+        initializeTextSuffixes();
+    }
+
+    /**
+     * Initialize text suffixes from properties or use defaults
+     */
+    private void initializeTextSuffixes() {
+        // Clear the list first
+        textSuffixes.clear();
+
+        // Try to get text suffixes from properties
+        String suffixesProperty = properties.getProperty("applicable.format.text.suffixes");
+
+        if (suffixesProperty != null && !suffixesProperty.trim().isEmpty()) {
+            // Split by comma and trim each suffix
+            String[] suffixArray = suffixesProperty.split(",");
+            for (String suffix : suffixArray) {
+                String trimmedSuffix = suffix.trim();
+                if (!trimmedSuffix.isEmpty()) {
+                    textSuffixes.add(trimmedSuffix);
+                }
+            }
+        }
+
+        // If no suffixes defined in properties, use defaults
+        if (textSuffixes.isEmpty()) {
+            textSuffixes.add(" reasoning");
+            textSuffixes.add(" snippets");
+        }
+
+        System.out.println("Using text suffixes: " + textSuffixes);
     }
 
     /**
@@ -64,6 +101,8 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      */
     public void setProperties(Properties properties) {
         this.properties = properties;
+        // Reinitialize text suffixes when properties change
+        initializeTextSuffixes();
     }
 
     /**
@@ -104,7 +143,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             }
 
             ObjectNode columnConfig = mapper.createObjectNode();
-            
+
             // Get the type from the columnTypes map or default to STRING
             String type = columnTypes.containsKey(header) ?
                     columnTypes.get(header).toString() : "STRING";
@@ -115,17 +154,25 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
             columns.set(header, columnConfig);
 
-            // Find field prefix (everything before " reasoning" or " snippets")
+            // Find field prefix based on text suffixes
             String prefix = header;
-            if (header.endsWith(" reasoning") || header.endsWith(" snippets")) {
-                prefix = header.substring(0, header.lastIndexOf(" "));
+            boolean foundSuffix = false;
+
+            for (String suffix : textSuffixes) {
+                if (header.endsWith(suffix)) {
+                    prefix = header.substring(0, header.lastIndexOf(suffix));
+                    foundSuffix = true;
+                    break;
+                }
             }
 
-            // Add to prefix map
-            if (!prefixToFields.containsKey(prefix)) {
-                prefixToFields.put(prefix, new ArrayList<>());
+            // Only add to prefix map if it actually has a suffix or is a base field
+            if (foundSuffix || !hasSuffix(header)) {
+                if (!prefixToFields.containsKey(prefix)) {
+                    prefixToFields.put(prefix, new ArrayList<>());
+                }
+                prefixToFields.get(prefix).add(header);
             }
-            prefixToFields.get(prefix).add(header);
         }
 
         config.set("columns", columns);
@@ -162,7 +209,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         if (compoundExpressionsString != null && !compoundExpressionsString.isEmpty()) {
             ObjectNode aggregateTextFields = mapper.createObjectNode();
             ObjectNode derivedBooleanFields = mapper.createObjectNode();
-            
+
             String[] expressions = compoundExpressionsString.split(",");
 
             int aggregateFieldIndex = 1;
@@ -170,13 +217,15 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                 // Parse the expression
                 ObjectNode booleanExpression = parseCompoundExpression(expression.trim());
 
-                // Find all suffix types (reasoning, snippets)
+                // Find all suffix types from our list of suffixes
                 Set<String> suffixTypes = new LinkedHashSet<>();
                 for (String header : headers) {
-                    if (header.endsWith(" reasoning")) {
-                        suffixTypes.add("reasoning");
-                    } else if (header.endsWith(" snippets")) {
-                        suffixTypes.add("snippets");
+                    for (String suffix : textSuffixes) {
+                        if (header.endsWith(suffix)) {
+                            // Extract just the suffix name without space
+                            String suffixName = suffix.trim();
+                            suffixTypes.add(suffixName);
+                        }
                     }
                 }
 
@@ -196,7 +245,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
                     // Add fields with the current suffix
                     for (String fieldName : fieldNames) {
-                        String fieldWithSuffix = fieldName + " " + suffix;
+                        String fieldWithSuffix = fieldName + suffix;
                         if (Arrays.asList(headers).contains(fieldWithSuffix)) {
                             sourceFields.add(fieldWithSuffix);
                         }
@@ -215,8 +264,15 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                         aggregateConfig.set("sourceFields", sourcesArray);
                         aggregateConfig.put("separator", "\n\n");
 
-                        String aggregateFieldName = "Aggregated" + suffix.substring(0, 1).toUpperCase() +
-                                suffix.substring(1) + aggregateFieldIndex;
+                        // Format the suffix for the aggregate field name
+                        // Remove leading space and capitalize first letter
+                        String formattedSuffix = suffix.trim();
+                        if (!formattedSuffix.isEmpty()) {
+                            formattedSuffix = formattedSuffix.substring(0, 1).toUpperCase() +
+                                    formattedSuffix.substring(1);
+                        }
+
+                        String aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
                         aggregateTextFields.set(aggregateFieldName, aggregateConfig);
                     }
                 }
@@ -227,13 +283,25 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             if (derivedBooleanFields.size() > 0) {
                 config.set("derivedBooleanFields", derivedBooleanFields);
             }
-            
+
             if (aggregateTextFields.size() > 0) {
                 config.set("aggregateTextFields", aggregateTextFields);
             }
         }
 
         return config;
+    }
+
+    /**
+     * Check if a field has any of the known suffixes
+     */
+    private boolean hasSuffix(String fieldName) {
+        for (String suffix : textSuffixes) {
+            if (fieldName.endsWith(suffix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -30,8 +30,10 @@ public class TextFieldProcessor {
                 }
             }
         } else {
-            System.out.println("Warning: Condition field '" + conditionField +
+            System.out.println("Warning: processAggregateField condition field '" + conditionField +
                     "' not found in row values. Available fields: " + rowValues.keySet());
+//            System.out.println("Warning: Condition field '" + conditionField +
+//                    "' not found in row values. Available fields: " + rowValues.keySet());
         }
 
         if (!condition) {
@@ -61,8 +63,10 @@ public class TextFieldProcessor {
                     aggregated.append(val.toString());
                 }
             } else {
-                System.out.println("Warning: Source field '" + fieldToAggregate +
+                System.out.println("Warning: processAggregateField dource field '" + fieldToAggregate +
                         "' not found for aggregation. Available fields: " + rowValues.keySet());
+//                System.out.println("Warning: Source field '" + fieldToAggregate +
+//                        "' not found for aggregation. Available fields: " + rowValues.keySet());
             }
         }
 

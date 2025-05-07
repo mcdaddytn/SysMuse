@@ -56,7 +56,8 @@ public class BooleanExpressionEvaluator {
     private static Boolean evaluateFieldReference(JsonNode expression, Map<String, Object> rowValues) {
         String fieldName = expression.get("field").asText();
         if (!rowValues.containsKey(fieldName)) {
-            System.out.println("Warning: Referenced field '" + fieldName + "' not found in row values");
+            System.out.println("Warning: evaluateFieldReference referenced field '" + fieldName + "' not found in row values");
+            //System.out.println("Warning: Referenced field '" + fieldName + "' not found in row values");
             System.out.println("Available fields: " + rowValues.keySet());
             return false;
         }
@@ -68,7 +69,8 @@ public class BooleanExpressionEvaluator {
             // Handle string values like "true" or "false"
             return Boolean.parseBoolean((String) value);
         } else {
-            System.out.println("Warning: Field '" + fieldName + "' is not a boolean value: " + value);
+            System.out.println("Warning: evaluateFieldReference field '" + fieldName + "' is not a boolean value: " + value);
+            //System.out.println("Warning: Field '" + fieldName + "' is not a boolean value: " + value);
             // Default to false for non-boolean values
             return false;
         }

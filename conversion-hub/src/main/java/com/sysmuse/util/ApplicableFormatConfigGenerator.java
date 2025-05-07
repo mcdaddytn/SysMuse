@@ -140,12 +140,17 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         String suffixesProperty = properties.getProperty("applicable.format.text.suffixes");
 
         if (suffixesProperty != null && !suffixesProperty.trim().isEmpty()) {
-            // Split by comma and trim each suffix
+            // Split by comma
             String[] suffixArray = suffixesProperty.split(",");
             for (String suffix : suffixArray) {
-                String trimmedSuffix = suffix.trim();
-                if (!trimmedSuffix.isEmpty()) {
-                    textSuffixes.add(trimmedSuffix);
+                // Just trim the suffix itself, but preserve the leading space if present
+                String processedSuffix = suffix.trim();
+                // If no space at the beginning, add one
+                if (!processedSuffix.startsWith(" ")) {
+                    processedSuffix = " " + processedSuffix;
+                }
+                if (!processedSuffix.isEmpty()) {
+                    textSuffixes.add(processedSuffix);
                 }
             }
         }
@@ -158,7 +163,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
         System.out.println("Using text suffixes: " + textSuffixes);
     }
-
+    
     /**
      * Set properties
      */
@@ -166,6 +171,145 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         this.properties = properties;
         // Reinitialize text suffixes when properties change
         initializeTextSuffixes();
+    }
+
+    /**
+     * Process compound expressions to create derived boolean fields and aggregate text fields
+     */
+    private void processCompoundExpressions(ObjectNode config, String[] headers) {
+        if (compoundExpressions.isEmpty()) {
+            return;  // No expressions to process
+        }
+
+        ObjectNode derivedBooleanFields = mapper.createObjectNode();
+        ObjectNode aggregateTextFields = mapper.createObjectNode();
+
+        // Find all actual header combinations that match our suffixes
+        Map<String, Set<String>> fieldsWithSuffixes = new HashMap<>();
+
+        // Initialize the map for each suffix
+        for (String suffix : textSuffixes) {
+            fieldsWithSuffixes.put(suffix, new HashSet<>());
+        }
+
+        // Populate the map with headers that have our suffixes
+        for (String header : headers) {
+            for (String suffix : textSuffixes) {
+                if (header.endsWith(suffix)) {
+                    fieldsWithSuffixes.get(suffix).add(header);
+                }
+            }
+        }
+
+        // Debug
+        System.out.println("Found headers with suffixes:");
+        for (String suffix : textSuffixes) {
+            System.out.println("  Suffix '" + suffix + "': " + fieldsWithSuffixes.get(suffix).size() + " headers");
+        }
+
+        int aggregateFieldIndex = 1;
+        for (String expression : compoundExpressions) {
+            // Extract field names from the expression for logging
+            List<String> fieldNames = extractFieldNames(expression);
+            System.out.println("Processing expression: " + expression);
+            System.out.println("  - Referenced fields: " + fieldNames);
+
+            // Parse the expression into a boolean expression JSON
+            ObjectNode booleanExpression = parseCompoundExpression(expression);
+
+            // Create derived boolean field name
+            String derivedFieldName = "DerivedExpression" + aggregateFieldIndex;
+
+            // Add derived boolean field to config
+            derivedBooleanFields.set(derivedFieldName, booleanExpression);
+            System.out.println("  - Created derived field: " + derivedFieldName);
+
+            // For each suffix type, create an aggregate text field
+            for (String suffix : textSuffixes) {
+                // Find all related fields with this suffix
+                List<String> sourceFields = new ArrayList<>();
+
+                // Get the set of all headers with this suffix
+                Set<String> headersWithSuffix = fieldsWithSuffixes.get(suffix);
+
+                // Check which of our field names appear in the headers with this suffix
+                for (String fieldName : fieldNames) {
+                    // Look for exact matches with this field name and suffix
+                    // For example, if fieldName is "Subscribed Newsletter" and suffix is " reasoning",
+                    // we're looking for "Subscribed Newsletter reasoning" exactly
+                    String exactFieldWithSuffix = fieldName + suffix;
+
+                    if (Arrays.asList(headers).contains(exactFieldWithSuffix)) {
+                        sourceFields.add(exactFieldWithSuffix);
+                        continue;
+                    }
+
+                    // If no exact match, try a different approach: look for headers that
+                    // end with the suffix and contain the field name
+                    for (String header : headersWithSuffix) {
+                        // Get the part before the suffix
+                        String headerPrefix = header.substring(0, header.length() - suffix.length());
+
+                        // Check if this matches our field name
+                        if (headerPrefix.equals(fieldName)) {
+                            sourceFields.add(header);
+                            break;
+                        }
+                    }
+                }
+
+                // Only create aggregate field if we found source fields
+                if (!sourceFields.isEmpty()) {
+                    ObjectNode aggregateConfig = mapper.createObjectNode();
+
+                    // Set the condition to the derived field name
+                    aggregateConfig.put("condition", derivedFieldName);
+                    aggregateConfig.put("visible", true);
+
+                    // Add source fields as an array
+                    ArrayNode sourcesArray = mapper.createArrayNode();
+                    for (String source : sourceFields) {
+                        sourcesArray.add(source);
+                    }
+                    aggregateConfig.set("sourceFields", sourcesArray);
+
+                    // Set separator (default to double newline)
+                    aggregateConfig.put("separator", "\n\n");
+
+                    // Format the suffix for the aggregate field name
+                    // Remove leading space and capitalize first letter
+                    String formattedSuffix = suffix.trim();
+                    if (!formattedSuffix.isEmpty()) {
+                        formattedSuffix = formattedSuffix.substring(0, 1).toUpperCase() +
+                                formattedSuffix.substring(1);
+                    }
+
+                    // Create aggregate field name
+                    String aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
+
+                    // Add to config
+                    aggregateTextFields.set(aggregateFieldName, aggregateConfig);
+                    System.out.println("  - Created aggregate field: " + aggregateFieldName +
+                            " with " + sourceFields.size() + " source fields: " + sourceFields);
+                } else {
+                    System.out.println("  - No fields found with suffix '" + suffix +
+                            "' for the fields referenced in the expression");
+                }
+            }
+
+            aggregateFieldIndex++;
+        }
+
+        // Add to config if we have any fields
+        if (derivedBooleanFields.size() > 0) {
+            config.set("derivedBooleanFields", derivedBooleanFields);
+            System.out.println("Added " + derivedBooleanFields.size() + " derived boolean fields to config");
+        }
+
+        if (aggregateTextFields.size() > 0) {
+            config.set("aggregateTextFields", aggregateTextFields);
+            System.out.println("Added " + aggregateTextFields.size() + " aggregate text fields to config");
+        }
     }
 
     /**
@@ -295,84 +439,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         config.set("suppressedFields", suppressedFields);
 
         // Process compound expressions for text aggregation if provided
-        if (!compoundExpressions.isEmpty()) {
-            ObjectNode aggregateTextFields = mapper.createObjectNode();
-            ObjectNode derivedBooleanFields = mapper.createObjectNode();
-
-            int aggregateFieldIndex = 1;
-            for (String expression : compoundExpressions) {
-                // Parse the expression
-                ObjectNode booleanExpression = parseCompoundExpression(expression);
-
-                // Find all suffix types from our list of suffixes
-                Set<String> suffixTypes = new LinkedHashSet<>();
-                for (String header : headers) {
-                    for (String suffix : textSuffixes) {
-                        if (header.endsWith(suffix)) {
-                            suffixTypes.add(suffix);
-                        }
-                    }
-                }
-
-                // Create derived boolean field for this expression
-                String derivedFieldName = "DerivedExpression" + aggregateFieldIndex;
-
-                // Add derived boolean field to config
-                derivedBooleanFields.set(derivedFieldName, booleanExpression);
-
-                // Create aggregate text fields for each suffix type
-                for (String suffix : suffixTypes) {
-                    // Find all related fields with this suffix
-                    List<String> sourceFields = new ArrayList<>();
-
-                    // Extract field names from the expression
-                    List<String> fieldNames = extractFieldNames(expression);
-
-                    // Add fields with the current suffix
-                    for (String fieldName : fieldNames) {
-                        String fieldWithSuffix = fieldName + suffix;
-                        if (Arrays.asList(headers).contains(fieldWithSuffix)) {
-                            sourceFields.add(fieldWithSuffix);
-                        }
-                    }
-
-                    if (!sourceFields.isEmpty()) {
-                        ObjectNode aggregateConfig = mapper.createObjectNode();
-                        aggregateConfig.put("condition", derivedFieldName);
-                        aggregateConfig.put("visible", true);  // Add visibility property
-
-                        ArrayNode sourcesArray = mapper.createArrayNode();
-                        for (String source : sourceFields) {
-                            sourcesArray.add(source);
-                        }
-
-                        aggregateConfig.set("sourceFields", sourcesArray);
-                        aggregateConfig.put("separator", "\n\n");
-
-                        // Format the suffix for the aggregate field name
-                        // Remove leading space and capitalize first letter
-                        String formattedSuffix = suffix.trim();
-                        if (!formattedSuffix.isEmpty()) {
-                            formattedSuffix = formattedSuffix.substring(0, 1).toUpperCase() +
-                                    formattedSuffix.substring(1);
-                        }
-
-                        String aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
-                        aggregateTextFields.set(aggregateFieldName, aggregateConfig);
-                    }
-                }
-
-                aggregateFieldIndex++;
-            }
-
-            if (derivedBooleanFields.size() > 0) {
-                config.set("derivedBooleanFields", derivedBooleanFields);
-            }
-
-            if (aggregateTextFields.size() > 0) {
-                config.set("aggregateTextFields", aggregateTextFields);
-            }
-        }
+        processCompoundExpressions(config, headers);
 
         return config;
     }

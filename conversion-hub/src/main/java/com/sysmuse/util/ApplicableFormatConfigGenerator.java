@@ -196,10 +196,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         // Add column configurations
         ObjectNode columns = mapper.createObjectNode();
 
-        // Map to store field prefixes
-        Map<String, List<String>> prefixToFields = new LinkedHashMap<>();
-
-        // Process headers to identify field patterns
+        // First pass: Add all columns to the config
         for (String header : headers) {
             if (header == null || header.trim().isEmpty()) {
                 continue; // Skip empty headers
@@ -216,29 +213,58 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             columnConfig.put("visible", true);
 
             columns.set(header, columnConfig);
+        }
 
-            // Find field prefix based on text suffixes
-            String prefix = header;
-            boolean foundSuffix = false;
+        config.set("columns", columns);
 
+        // Second pass: Identify field prefixes and group related fields
+        // Map to store field prefixes
+        Map<String, List<String>> prefixToFields = new LinkedHashMap<>();
+
+        // First, identify all base fields (without suffixes)
+        for (String header : headers) {
+            if (header == null || header.trim().isEmpty()) {
+                continue;
+            }
+
+            boolean hasSuffix = false;
             for (String suffix : textSuffixes) {
                 if (header.endsWith(suffix)) {
-                    prefix = header.substring(0, header.lastIndexOf(suffix));
-                    foundSuffix = true;
+                    hasSuffix = true;
                     break;
                 }
             }
 
-            // Only add to prefix map if it actually has a suffix or is a base field
-            if (foundSuffix || !hasSuffix(header)) {
-                if (!prefixToFields.containsKey(prefix)) {
-                    prefixToFields.put(prefix, new ArrayList<>());
+            if (!hasSuffix) {
+                // This is a base field - add it as a prefix
+                if (!prefixToFields.containsKey(header)) {
+                    prefixToFields.put(header, new ArrayList<>());
                 }
-                prefixToFields.get(prefix).add(header);
+                prefixToFields.get(header).add(header);
             }
         }
 
-        config.set("columns", columns);
+        // Now add fields with suffixes to their corresponding prefix groups
+        for (String header : headers) {
+            if (header == null || header.trim().isEmpty()) {
+                continue;
+            }
+
+            for (String suffix : textSuffixes) {
+                if (header.endsWith(suffix)) {
+                    String prefix = header.substring(0, header.lastIndexOf(suffix));
+
+                    // If the prefix doesn't exist as a key yet, add it
+                    if (!prefixToFields.containsKey(prefix)) {
+                        prefixToFields.put(prefix, new ArrayList<>());
+                    }
+
+                    // Add this field to its prefix group
+                    prefixToFields.get(prefix).add(header);
+                    break;
+                }
+            }
+        }
 
         // Process derived boolean fields and suppressed fields
         ObjectNode suppressedFields = mapper.createObjectNode();
@@ -248,20 +274,20 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             String prefix = entry.getKey();
             List<String> fields = entry.getValue();
 
-            // Sort fields by length (shortest is usually the boolean field)
-            fields.sort(Comparator.comparing(String::length));
-
             if (fields.size() > 1) {
-                String boolField = fields.get(0);
+                // Check if the prefix itself is a boolean field
+                if (columnTypes.containsKey(prefix) &&
+                        columnTypes.get(prefix).toString().equals("BOOLEAN")) {
 
-                // Check if the shortest field is actually a boolean
-                if (columnTypes.containsKey(boolField) &&
-                        columnTypes.get(boolField).toString().equals("BOOLEAN")) {
-
-                    // Add suppression rules for related text fields
-                    for (int i = 1; i < fields.size(); i++) {
-                        suppressedFields.put(fields.get(i), boolField);
+                    // The prefix field is a boolean - use it to suppress related fields
+                    for (String field : fields) {
+                        if (!field.equals(prefix)) {
+                            suppressedFields.put(field, prefix);
+                        }
                     }
+
+                    System.out.println("Boolean field '" + prefix + "' will suppress " +
+                            (fields.size() - 1) + " related fields");
                 }
             }
         }
@@ -269,25 +295,21 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         config.set("suppressedFields", suppressedFields);
 
         // Process compound expressions for text aggregation if provided
-        if (compoundExpressionsString != null && !compoundExpressionsString.isEmpty()) {
+        if (!compoundExpressions.isEmpty()) {
             ObjectNode aggregateTextFields = mapper.createObjectNode();
             ObjectNode derivedBooleanFields = mapper.createObjectNode();
 
-            String[] expressions = compoundExpressionsString.split(",");
-
             int aggregateFieldIndex = 1;
-            for (String expression : expressions) {
+            for (String expression : compoundExpressions) {
                 // Parse the expression
-                ObjectNode booleanExpression = parseCompoundExpression(expression.trim());
+                ObjectNode booleanExpression = parseCompoundExpression(expression);
 
                 // Find all suffix types from our list of suffixes
                 Set<String> suffixTypes = new LinkedHashSet<>();
                 for (String header : headers) {
                     for (String suffix : textSuffixes) {
                         if (header.endsWith(suffix)) {
-                            // Extract just the suffix name without space
-                            String suffixName = suffix.trim();
-                            suffixTypes.add(suffixName);
+                            suffixTypes.add(suffix);
                         }
                     }
                 }
@@ -371,55 +393,67 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      * Parse a compound expression string into a JsonNode representing the boolean expression
      */
     private ObjectNode parseCompoundExpression(String expression) {
-        // Replace quoted strings with a temporary placeholder
-        Map<String, String> placeholders = new HashMap<>();
-        int placeholderCount = 0;
-
-        Matcher matcher = FIELD_PATTERN.matcher(expression);
-        StringBuffer sb = new StringBuffer();
-
-        while (matcher.find()) {
-            String field = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
-            String placeholder = "FIELD_" + placeholderCount++;
-            placeholders.put(placeholder, field);
-            matcher.appendReplacement(sb, placeholder);
-        }
-        matcher.appendTail(sb);
-
-        String processedExpression = sb.toString();
-
-        // Now parse the expression with placeholders
-        if (processedExpression.contains(" AND ")) {
-            String[] parts = processedExpression.split(" AND ");
+        // Detect logical operators in the expression
+        if (expression.contains(" AND ")) {
+            String[] parts = expression.split(" AND ");
 
             ObjectNode andExpr = mapper.createObjectNode();
             andExpr.put("type", "AND");
 
             ArrayNode operands = mapper.createArrayNode();
             for (String part : parts) {
-                operands.add(parseCompoundExpressionWithPlaceholders(part.trim(), placeholders));
+                operands.add(parseSubExpression(part.trim()));
             }
 
             andExpr.set("operands", operands);
             return andExpr;
 
-        } else if (processedExpression.contains(" OR ")) {
-            String[] parts = processedExpression.split(" OR ");
+        } else if (expression.contains(" OR ")) {
+            String[] parts = expression.split(" OR ");
 
             ObjectNode orExpr = mapper.createObjectNode();
             orExpr.put("type", "OR");
 
             ArrayNode operands = mapper.createArrayNode();
             for (String part : parts) {
-                operands.add(parseCompoundExpressionWithPlaceholders(part.trim(), placeholders));
+                operands.add(parseSubExpression(part.trim()));
             }
 
             orExpr.set("operands", operands);
             return orExpr;
 
         } else {
-            return parseCompoundExpressionWithPlaceholders(processedExpression, placeholders);
+            // It's a simple field reference
+            return parseFieldReference(expression.trim());
         }
+    }
+
+    /**
+     * Parse a field reference or quoted field name
+     */
+    private ObjectNode parseFieldReference(String fieldExpr) {
+        ObjectNode fieldRef = mapper.createObjectNode();
+        fieldRef.put("type", "FIELD");
+
+        // Check if it's a quoted field name
+        if (fieldExpr.startsWith("\"") && fieldExpr.endsWith("\"")) {
+            // Remove the quotes
+            String fieldName = fieldExpr.substring(1, fieldExpr.length() - 1);
+            fieldRef.put("field", fieldName);
+        } else {
+            // Just use as is
+            fieldRef.put("field", fieldExpr);
+        }
+
+        return fieldRef;
+    }
+
+    /**
+     * Parse a sub-expression which could be a field reference or a quoted field
+     */
+    private JsonNode parseSubExpression(String expr) {
+        // This sub-expression could be a quoted field name or a simple field reference
+        return parseFieldReference(expr);
     }
 
     /**

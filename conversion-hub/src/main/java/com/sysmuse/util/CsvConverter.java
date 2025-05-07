@@ -697,6 +697,8 @@ public class CsvConverter {
 
         // For tracking unfiltered records
         Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
+        //gm: adding
+        Set<String> exportedKeys = new HashSet<String>();
 
         // Get visible fields in order, add a check to ensure we have headers
         List<String> visibleFields;
@@ -807,7 +809,14 @@ public class CsvConverter {
                                 " - interpreted as " + matches);
                     }
 
-                    if (matches) {
+                    //gm: adding
+                    //String uniqueKeyField = "Filename";
+                    String uniqueKeyField = (String) row.keySet().toArray()[0];
+                    String rowKey = (String) row.get(uniqueKeyField);
+                    boolean keyAlreadyExported = exportedKeys.contains(rowKey);
+
+                    // if (matches) {
+                    if (matches && !keyAlreadyExported) {
                         List<String> rowValues = new ArrayList<>();
 
                         // Extract values in the order specified by visibleFields
@@ -822,6 +831,8 @@ public class CsvConverter {
 
                         // Remove from unfiltered set
                         unfilteredRows.remove(row);
+                        //gm: adding
+                        exportedKeys.add(rowKey);
                     }
                 }
 

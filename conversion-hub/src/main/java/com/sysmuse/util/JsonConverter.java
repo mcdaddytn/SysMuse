@@ -214,6 +214,8 @@ public class JsonConverter {
 
         // For tracking unfiltered records
         Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
+        //gm: adding
+        Set<String> exportedKeys = new HashSet<String>();
 
         // Get visible fields in order, add a check to ensure we have headers
         List<String> visibleFields;
@@ -320,7 +322,14 @@ public class JsonConverter {
                             " - interpreted as " + matches);
                 }
 
-                if (matches) {
+                //gm: adding
+                //String uniqueKeyField = "Filename";
+                String uniqueKeyField = (String) row.keySet().toArray()[0];
+                String rowKey = (String) row.get(uniqueKeyField);
+                boolean keyAlreadyExported = exportedKeys.contains(rowKey);
+
+                // if (matches) {
+                if (matches && !keyAlreadyExported) {
                     // Create JSON object for this row
                     ObjectNode jsonRow = mapper.createObjectNode();
 
@@ -338,6 +347,8 @@ public class JsonConverter {
 
                     // Remove from unfiltered set
                     unfilteredRows.remove(row);
+                    //gm: adding
+                    exportedKeys.add(rowKey);
                 }
             }
 

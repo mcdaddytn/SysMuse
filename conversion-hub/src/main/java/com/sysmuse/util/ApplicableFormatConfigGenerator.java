@@ -1,5 +1,7 @@
 package com.sysmuse.util;
 
+import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,6 +19,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
     private String compoundExpressionsString;
+    //gm: added
+    private String configDirectory;
+    private List<String> compoundExpressions = new ArrayList<>();
     private Properties properties;
     private ObjectMapper mapper;
 
@@ -30,19 +35,18 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      * Default constructor
      */
     public ApplicableFormatConfigGenerator() {
-        this.compoundExpressionsString = null;
         this.properties = new Properties();
         this.mapper = new ObjectMapper();
         initializeTextSuffixes();
     }
 
     /**
-     * Constructor with compound expressions
+     * Constructor with compound expressions string
      */
     public ApplicableFormatConfigGenerator(String compoundExpressionsString) {
-        this.compoundExpressionsString = compoundExpressionsString;
         this.properties = new Properties();
         this.mapper = new ObjectMapper();
+        loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
     }
 
@@ -51,8 +55,10 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      */
     public ApplicableFormatConfigGenerator(Properties properties) {
         this.properties = properties;
-        this.compoundExpressionsString = properties.getProperty("applicable.format.compound.expressions");
         this.mapper = new ObjectMapper();
+        String compoundExpressionsString = properties.getProperty("applicable.format.compound.expressions");
+        this.configDirectory = properties.getProperty("config.directory", "");
+        loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
     }
 
@@ -60,10 +66,67 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      * Constructor with compound expressions and properties
      */
     public ApplicableFormatConfigGenerator(String compoundExpressionsString, Properties properties) {
-        this.compoundExpressionsString = compoundExpressionsString;
         this.properties = properties;
         this.mapper = new ObjectMapper();
+        this.configDirectory = properties.getProperty("config.directory", "");
+        loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
+    }
+
+    /**
+     * Load compound expressions from string or file
+     */
+    private void loadCompoundExpressions(String expressionsInput) {
+        compoundExpressions.clear();
+
+        if (expressionsInput != null && !expressionsInput.trim().isEmpty()) {
+            // Check if it's a list file
+            if (expressionsInput.trim().endsWith(".list") && !configDirectory.isEmpty()) {
+                // It's a list file - read from the config directory
+                File listFile = new File(Paths.get(configDirectory, expressionsInput).toString());
+                if (listFile.exists() && listFile.isFile()) {
+                    try {
+                        List<String> lines = Files.readAllLines(listFile.toPath());
+                        for (String line : lines) {
+                            String trimmedLine = line.trim();
+                            if (!trimmedLine.isEmpty()) {
+                                compoundExpressions.add(trimmedLine);
+                            }
+                        }
+                        System.out.println("Loaded " + compoundExpressions.size() +
+                                " compound expressions from list file: " + listFile.getPath());
+                    } catch (IOException e) {
+                        System.out.println("Error reading compound expressions list file: " + e.getMessage());
+                        // If file reading fails, try to parse as comma-separated as fallback
+                        parseCommaSeparatedExpressions(expressionsInput);
+                    }
+                } else {
+                    System.out.println("Compound expressions list file not found: " + listFile.getPath());
+                    // If file not found, try to parse as comma-separated as fallback
+                    parseCommaSeparatedExpressions(expressionsInput);
+                }
+            } else {
+                // It's a comma-separated list
+                parseCommaSeparatedExpressions(expressionsInput);
+            }
+        }
+    }
+
+    /**
+     * Parse comma-separated expressions
+     */
+    private void parseCommaSeparatedExpressions(String expressionsInput) {
+        if (expressionsInput != null && !expressionsInput.trim().isEmpty()) {
+            String[] expressions = expressionsInput.split(",");
+            for (String expr : expressions) {
+                String trimmedExpr = expr.trim();
+                if (!trimmedExpr.isEmpty()) {
+                    compoundExpressions.add(trimmedExpr);
+                }
+            }
+            System.out.println("Loaded " + compoundExpressions.size() +
+                    " compound expressions from comma-separated list");
+        }
     }
 
     /**

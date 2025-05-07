@@ -177,6 +177,100 @@ public class ConversionHub {
     }
 
     /**
+     * Parse subset configuration from properties
+     */
+    private Map<String, String> parseSubsetConfig(String subsetConfig) {
+        Map<String, String> filterToSuffix = new LinkedHashMap<>();
+
+        if (subsetConfig == null || subsetConfig.trim().isEmpty()) {
+            return filterToSuffix;
+        }
+
+        System.out.println("Parsing subset configuration: " + subsetConfig);
+
+        // Track current parsing state
+        StringBuilder currentFilter = new StringBuilder();
+        StringBuilder currentSuffix = new StringBuilder();
+        boolean inQuotes = false;
+        boolean foundColon = false;
+
+        for (int i = 0; i < subsetConfig.length(); i++) {
+            char c = subsetConfig.charAt(i);
+
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                // When leaving quotes, check if we're in filter or suffix part
+                if (!inQuotes && !foundColon) {
+                    // Finished parsing filter name in quotes
+                    continue;
+                } else if (!inQuotes && foundColon) {
+                    // Finished parsing suffix in quotes
+                    continue;
+                }
+            } else if (c == ':' && !inQuotes) {
+                // Found the separator between filter and suffix
+                foundColon = true;
+                continue;
+            } else if (c == ',' && !inQuotes) {
+                // Found end of a pair, add to map and reset
+                if (foundColon && currentFilter.length() > 0 && currentSuffix.length() > 0) {
+                    String filter = currentFilter.toString().trim();
+                    String suffix = currentSuffix.toString().trim();
+
+                    // Remove quotes if present
+                    if (filter.startsWith("\"") && filter.endsWith("\"")) {
+                        filter = filter.substring(1, filter.length() - 1);
+                    }
+                    if (suffix.startsWith("\"") && suffix.endsWith("\"")) {
+                        suffix = suffix.substring(1, suffix.length() - 1);
+                    }
+
+                    System.out.println("Parsed subset filter: '" + filter + "' with suffix: '" + suffix + "'");
+                    filterToSuffix.put(filter, suffix);
+
+                    // Reset for next pair
+                    currentFilter = new StringBuilder();
+                    currentSuffix = new StringBuilder();
+                    foundColon = false;
+                }
+                continue;
+            }
+
+            // Add character to current part
+            if (!foundColon) {
+                currentFilter.append(c);
+            } else {
+                currentSuffix.append(c);
+            }
+        }
+
+        // Process the last pair if any
+        if (foundColon && currentFilter.length() > 0 && currentSuffix.length() > 0) {
+            String filter = currentFilter.toString().trim();
+            String suffix = currentSuffix.toString().trim();
+
+            // Remove quotes if present
+            if (filter.startsWith("\"") && filter.endsWith("\"")) {
+                filter = filter.substring(1, filter.length() - 1);
+            }
+            if (suffix.startsWith("\"") && suffix.endsWith("\"")) {
+                suffix = suffix.substring(1, suffix.length() - 1);
+            }
+
+            System.out.println("Parsed subset filter: '" + filter + "' with suffix: '" + suffix + "'");
+            filterToSuffix.put(filter, suffix);
+        }
+
+        // Output the complete map
+        System.out.println("Parsed " + filterToSuffix.size() + " subset filters:");
+        for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
+            System.out.println("  - '" + entry.getKey() + "': '" + entry.getValue() + "'");
+        }
+
+        return filterToSuffix;
+    }
+
+    /**
      * Main processing method that orchestrates the conversion
      */
     public void process(String inputFilePath, String configFilePath, String outputFormat) throws Exception {
@@ -203,12 +297,12 @@ public class ConversionHub {
         // Load or generate configuration - Need to do this first to identify uniqueKey field if using multiple files
         configGenerator = loadConfigGenerator();
 
-        // Track the actual first file path for output name generation
-        String firstActualFilePath = inputFilePath;
-
         // Check whether input is a single file or multiple files
         boolean useMultipleFiles = false;
         String csvFilename = "";
+
+        // Track the actual first file path for output name generation
+        String firstActualFilePath = inputFilePath;
 
         if ("csv".equals(inputFormat)) {
             String inputCsvPath = properties.getProperty("input.csv.path", "");
@@ -257,71 +351,44 @@ public class ConversionHub {
             }
         }
 
+        // Initialize the CSV converter (needed for header parsing)
+        CsvConverter csvConverter = new CsvConverter(properties);
+
         // Load the appropriate converter based on the input format
         if ("csv".equals(inputFormat)) {
-            CsvConverter csvConverter = new CsvConverter(properties);
-
+            // Parse the header to set up the repository structure
             if (useMultipleFiles) {
-                // We need to use the first file to determine headers and types
-                System.out.println("Using multiple CSV files mode");
-
-                // Extract the first file name (before the first comma or the list file itself)
-                String firstFilePath;
-                if (csvFilename.contains(",")) {
-                    firstFilePath = csvFilename.split(",")[0].trim();
-                    if (!new File(firstFilePath).isAbsolute()) {
-                        firstFilePath = Paths.get(inputDirectory, firstFilePath).toString();
-                    }
-                } else {
-                    // Must be a list file
-                    File listFile = new File(Paths.get(inputDirectory, csvFilename).toString());
-                    List<String> fileList = Files.readAllLines(listFile.toPath());
-                    if (fileList.isEmpty()) {
-                        throw new IllegalStateException("File list is empty: " + listFile.getPath());
-                    }
-                    firstFilePath = fileList.get(0).trim();
-                    if (!new File(firstFilePath).isAbsolute()) {
-                        firstFilePath = Paths.get(inputDirectory, firstFilePath).toString();
-                    }
-                }
-
-                // Parse the CSV header and first data row for initial configuration
-                String[] headers = csvConverter.parseCSVHeader(firstFilePath);
-                String[] firstDataRow = csvConverter.parseFirstDataRow(firstFilePath);
-
-                // Initialize the repository with header information
+                // For multiple files, parse the first file's header
+                String firstFile = firstActualFilePath;
+                System.out.println("Parsing headers from first file: " + firstFile);
+                String[] headers = csvConverter.parseCSVHeader(firstFile);
                 repository.setHeaders(headers);
 
-                // Infer data types from the first row
+                // Also parse the first data row for type inference
+                String[] firstDataRow = csvConverter.parseFirstDataRow(firstFile);
+                repository.setFirstDataRow(firstDataRow);
                 repository.inferTypes(headers, firstDataRow);
 
-                // Load configuration
-                loadConfiguration(configFilePath, headers, firstDataRow);
-
-                // Check if a unique key field is defined when using multiple files
-                String uniqueKeyField = repository.getUniqueKeyField();
-                if (uniqueKeyField == null) {
-                    throw new IllegalStateException("Multiple input files specified but no uniqueKey field defined in configuration");
-                }
-
-                // Now process all CSV files with the overlay functionality
+                // Multi-file processing
                 csvConverter.importMultipleFilesToRepository(csvFilename, inputDirectory, repository);
-            } else {
-                // Single file mode (original behavior)
-                // Parse the CSV header and first data row for initial configuration
-                String[] headers = csvConverter.parseCSVHeader(inputFilePath);
-                String[] firstDataRow = csvConverter.parseFirstDataRow(inputFilePath);
 
-                // Initialize the repository with header information
+                // Try to load or generate configuration
+                loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
+            } else {
+                // Single file mode
+                System.out.println("Parsing headers from file: " + inputFilePath);
+                String[] headers = csvConverter.parseCSVHeader(inputFilePath);
                 repository.setHeaders(headers);
 
-                // Infer data types from the first row
+                // Parse the first data row for type inference
+                String[] firstDataRow = csvConverter.parseFirstDataRow(inputFilePath);
+                repository.setFirstDataRow(firstDataRow);
                 repository.inferTypes(headers, firstDataRow);
 
-                // Load or generate configuration
+                // Try to load or generate configuration
                 loadConfiguration(configFilePath, headers, firstDataRow);
 
-                // Import the data into the repository
+                // Import data
                 csvConverter.importToRepository(inputFilePath, repository);
             }
         } else if ("json".equals(inputFormat)) {
@@ -334,11 +401,106 @@ public class ConversionHub {
             // No need to load separately
         }
 
+        // Make sure headers are set if we're working with JSON
+        if ("json".equals(inputFormat) && repository.getHeaders() == null) {
+            // Get all field names from the first data row if available
+            if (!repository.getDataRows().isEmpty()) {
+                Map<String, Object> firstRow = repository.getDataRows().get(0);
+                String[] headers = firstRow.keySet().toArray(new String[0]);
+                repository.setHeaders(headers);
+                System.out.println("Set headers from first JSON data row with " + headers.length + " fields");
+            } else {
+                System.out.println("Warning: No data rows to extract headers from JSON file");
+            }
+        }
+
+        // Check if headers are still null - this could cause problems during export
+        if (repository.getHeaders() == null) {
+            System.out.println("Warning: Headers are still null after processing. Creating empty headers array.");
+            repository.setHeaders(new String[0]);
+        }
+
+        // Ensure all derived fields are processed for all rows
+        System.out.println("Ensuring all derived fields are processed before export...");
+        int rowCount = repository.getDataRows().size();
+        int processedFields = 0;
+
+        // First, make sure all derived boolean fields are evaluated
+        for (Map<String, Object> row : repository.getDataRows()) {
+            repository.processDerivedFields(row);
+            repository.processAggregateFields(row);
+            repository.applySuppression(row);
+            processedFields++;
+
+            if (processedFields % 100 == 0) {
+                System.out.println("Processed derived fields for " + processedFields + " out of " + rowCount + " rows");
+            }
+        }
+
+        // Print some sample rows to verify data
+        if (!repository.getDataRows().isEmpty()) {
+            System.out.println("\nSample data verification (first row):");
+            Map<String, Object> sampleRow = repository.getDataRows().get(0);
+
+            // Print derived boolean fields
+            for (String field : repository.getDerivedBooleanFields().keySet()) {
+                System.out.println("Derived field '" + field + "' = " + sampleRow.get(field));
+            }
+
+            // Print subset filter fields if available
+            String subsetConfig = properties.getProperty("output." + outputFormat.toLowerCase() + "Subsets");
+            if (subsetConfig != null && !subsetConfig.trim().isEmpty()) {
+                Map<String, String> filterToSuffix = parseSubsetConfig(subsetConfig);
+                for (String filterField : filterToSuffix.keySet()) {
+                    if (sampleRow.containsKey(filterField)) {
+                        System.out.println("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
+                    } else {
+                        System.out.println("Filter field '" + filterField + "' not found in sample row");
+                    }
+                }
+            }
+        }
+
+        // Print list of all available fields for debugging
+        System.out.println("\nAvailable fields in repository:");
+        List<String> allFields = repository.getAllFieldNames();
+        for (String field : allFields) {
+            System.out.println("  - " + field);
+        }
+
         // Export to the desired output format
         if ("json".equals(outputFormat.toLowerCase())) {
             JsonConverter jsonConverter = new JsonConverter(properties);
 
-            // Generate output filename
+            // Check if subset exports are configured
+            String subsetConfig = properties.getProperty("output.jsonSubsets");
+            if (subsetConfig != null && !subsetConfig.trim().isEmpty()) {
+                // Parse subset configuration
+                Map<String, String> filterToSuffix = parseSubsetConfig(subsetConfig);
+
+                if (!filterToSuffix.isEmpty()) {
+                    System.out.println("Found " + filterToSuffix.size() + " subset filters for JSON export");
+
+                    // Generate base output path for JSON
+                    String baseJsonPath;
+                    String outputFilename = properties.getProperty("output.json.filename");
+
+                    if (outputFilename != null && !outputFilename.isEmpty()) {
+                        // If a specific output filename is provided in properties, use it
+                        File outputDir = new File(inputDirectory);
+                        baseJsonPath = new File(outputDir, outputFilename).getPath();
+                    } else {
+                        // Otherwise, derive from first actual file path
+                        baseJsonPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".json");
+                    }
+
+                    // Export subsets
+                    jsonConverter.exportSubsetsFromRepository(repository, baseJsonPath, filterToSuffix);
+                    return; // Skip standard export since we've done subset exports
+                }
+            }
+
+            // Standard export (no subsets)
             String outputFilename = properties.getProperty("output.json.filename");
             String outputJsonPath;
 
@@ -347,30 +509,70 @@ public class ConversionHub {
                 File outputDir = new File(inputDirectory);
                 outputJsonPath = new File(outputDir, outputFilename).getPath();
             } else {
-                // Otherwise, derive from first actual file path
-                outputJsonPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".json");
+                // Check if we should use a suffix
+                String jsonSuffix = properties.getProperty("output.jsonSuffix");
+                if (jsonSuffix != null && !jsonSuffix.isEmpty()) {
+                    // Extract base path without extension
+                    String basePathWithoutExt = firstActualFilePath.replaceAll("\\.[^.]+$", "");
+                    // Add suffix and extension
+                    outputJsonPath = basePathWithoutExt + jsonSuffix + ".json";
+                } else {
+                    // Just replace extension with .json
+                    outputJsonPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".json");
+                }
             }
 
             jsonConverter.exportFromRepository(repository, outputJsonPath);
             System.out.println("Exported data to JSON: " + outputJsonPath);
         } else if ("csv".equals(outputFormat.toLowerCase())) {
-            CsvConverter csvConverter = new CsvConverter(properties);
+            // Check if subset exports are configured
+            String subsetConfig = properties.getProperty("output.csvSubsets");
+            if (subsetConfig != null && !subsetConfig.trim().isEmpty()) {
+                // Parse subset configuration
+                Map<String, String> filterToSuffix = parseSubsetConfig(subsetConfig);
 
-            // Check if we should use a specific suffix or filename for the output CSV
+                if (!filterToSuffix.isEmpty()) {
+                    System.out.println("Found " + filterToSuffix.size() + " subset filters for CSV export");
+
+                    // Generate base output path for CSV
+                    String baseCsvPath;
+                    String outputFilename = properties.getProperty("output.csv.filename");
+
+                    if (outputFilename != null && !outputFilename.isEmpty()) {
+                        // If a specific output filename is provided in properties, use it
+                        File outputDir = new File(inputDirectory);
+                        baseCsvPath = new File(outputDir, outputFilename).getPath();
+                    } else {
+                        // Otherwise, derive from first actual file path
+                        baseCsvPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".csv");
+                    }
+
+                    // Export subsets
+                    csvConverter.exportSubsetsFromRepository(repository, baseCsvPath, filterToSuffix);
+                    return; // Skip standard export since we've done subset exports
+                }
+            }
+
+            // Standard export (no subsets)
             String outputFilename = properties.getProperty("output.csv.filename");
-            String outputCsvSuffix = properties.getProperty("output.csvSuffix");
             String outputCsvPath;
 
             if (outputFilename != null && !outputFilename.isEmpty()) {
                 // If a specific output filename is provided in properties, use it
                 File outputDir = new File(inputDirectory);
                 outputCsvPath = new File(outputDir, outputFilename).getPath();
-            } else if (outputCsvSuffix != null && !outputCsvSuffix.isEmpty()) {
-                // If a suffix is specified, apply it to the first actual file path, not the file list
-                outputCsvPath = firstActualFilePath.replaceAll("\\.[^.]+$", outputCsvSuffix);
             } else {
-                // Default behavior: just change the extension to .csv
-                outputCsvPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".csv");
+                // Check if we should use a suffix
+                String csvSuffix = properties.getProperty("output.csvSuffix");
+                if (csvSuffix != null && !csvSuffix.isEmpty()) {
+                    // Extract base path without extension
+                    String basePathWithoutExt = firstActualFilePath.replaceAll("\\.[^.]+$", "");
+                    // Add suffix and extension
+                    outputCsvPath = basePathWithoutExt + csvSuffix + ".csv";
+                } else {
+                    // Just replace extension with .csv
+                    outputCsvPath = firstActualFilePath.replaceAll("\\.[^.]+$", ".csv");
+                }
             }
 
             csvConverter.exportFromRepository(repository, outputCsvPath);

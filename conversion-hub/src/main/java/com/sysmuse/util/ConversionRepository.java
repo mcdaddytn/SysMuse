@@ -537,8 +537,16 @@ public class ConversionRepository {
      * Get a list of all field names in the repository, including derived and aggregated fields
      */
     public List<String> getAllFieldNames() {
-        // Start with original headers
-        List<String> allFields = new ArrayList<>(Arrays.asList(headers));
+        // Start with original headers, handling null case
+        List<String> allFields = new ArrayList<>();
+
+        // Add headers if not null
+        if (headers != null) {
+            allFields.addAll(Arrays.asList(headers));
+        } else {
+            // If headers are null, use column map keys as a fallback
+            allFields.addAll(columnMap.keySet());
+        }
 
         // Add derived fields
         for (String field : derivedBooleanFields.keySet()) {

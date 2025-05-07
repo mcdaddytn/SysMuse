@@ -688,6 +688,189 @@ public class CsvConverter {
     }
 
     /**
+     * Export filtered subsets of data from the repository to multiple CSV files
+     */
+    public void exportSubsetsFromRepository(ConversionRepository repository, String baseCsvFilePath,
+                                            Map<String, String> filterToSuffix) throws IOException {
+
+        System.out.println("Exporting filtered subsets to CSV files");
+
+        // For tracking unfiltered records
+        Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
+
+        // Get visible fields in order, add a check to ensure we have headers
+        List<String> visibleFields;
+        try {
+            visibleFields = repository.getVisibleFieldNames();
+        } catch (NullPointerException e) {
+            System.out.println("Warning: Unable to get visible field names. Using all fields from first row.");
+            // Fallback to the fields from the first data row if available
+            visibleFields = new ArrayList<>();
+            if (!repository.getDataRows().isEmpty()) {
+                visibleFields.addAll(repository.getDataRows().get(0).keySet());
+            }
+        }
+
+        // Check if we have fields to export
+        if (visibleFields.isEmpty()) {
+            System.out.println("No fields to export. Checking if data rows exist to extract field names.");
+            if (!repository.getDataRows().isEmpty()) {
+                visibleFields.addAll(repository.getDataRows().get(0).keySet());
+            } else {
+                System.out.println("Error: No data to export and no field names available.");
+                return;
+            }
+        }
+
+        // Process each filter
+        for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
+            String filterField = entry.getKey();
+            String suffix = entry.getValue();
+
+            // Enhanced debug about filter field existence
+            int rowsWithField = 0;
+            int rowsWithTrueValue = 0;
+            boolean filterExists = false;
+
+            for (Map<String, Object> row : repository.getDataRows()) {
+                if (row.containsKey(filterField)) {
+                    filterExists = true;
+                    rowsWithField++;
+
+                    // Check if this field would evaluate to true
+                    Object fieldValue = row.get(filterField);
+                    boolean wouldMatch = false;
+
+                    if (fieldValue instanceof Boolean) {
+                        wouldMatch = (Boolean) fieldValue;
+                    } else if (fieldValue instanceof String) {
+                        wouldMatch = Boolean.parseBoolean((String) fieldValue);
+                    } else if (fieldValue instanceof Integer) {
+                        wouldMatch = ((Integer) fieldValue) != 0;
+                    } else if (fieldValue instanceof Long) {
+                        wouldMatch = ((Long) fieldValue) != 0L;
+                    } else if (fieldValue != null) {
+                        wouldMatch = "true".equalsIgnoreCase(fieldValue.toString()) ||
+                                "yes".equalsIgnoreCase(fieldValue.toString()) ||
+                                "1".equals(fieldValue.toString());
+                    }
+
+                    if (wouldMatch) {
+                        rowsWithTrueValue++;
+                    }
+                }
+            }
+
+            if (!filterExists) {
+                System.out.println("Warning: Filter field '" + filterField + "' not found in repository, skipping subset");
+                continue;
+            }
+
+            System.out.println("Debug: Filter field '" + filterField + "' exists in " + rowsWithField +
+                    " rows out of " + repository.getDataRows().size() +
+                    ". " + rowsWithTrueValue + " rows have 'true' values.");
+
+            // Create output file path with suffix
+            String outputPath = getOutputPathWithSuffix(baseCsvFilePath, suffix, ".csv");
+
+            System.out.println("Exporting subset for filter '" + filterField + "' to: " + outputPath);
+
+            // Open the CSV file for writing
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+                // Write the header row
+                writer.write(String.join(",", escapeColumns(visibleFields)));
+                writer.newLine();
+
+                int matchCount = 0;
+
+                // Filter rows based on the filter field
+                for (Map<String, Object> row : repository.getDataRows()) {
+                    Object fieldValue = row.get(filterField);
+                    boolean matches = false;
+
+                    // Check if the field has a boolean true value
+                    if (fieldValue instanceof Boolean) {
+                        matches = (Boolean) fieldValue;
+                    } else if (fieldValue instanceof String) {
+                        matches = Boolean.parseBoolean((String) fieldValue);
+                    } else if (fieldValue instanceof Integer) {
+                        matches = ((Integer) fieldValue) != 0;
+                    } else if (fieldValue instanceof Long) {
+                        matches = ((Long) fieldValue) != 0L;
+                    } else if (fieldValue != null) {
+                        // Try to interpret as boolean if possible
+                        matches = "true".equalsIgnoreCase(fieldValue.toString()) ||
+                                "yes".equalsIgnoreCase(fieldValue.toString()) ||
+                                "1".equals(fieldValue.toString());
+                        System.out.println("Filter field '" + filterField + "' has value of type " +
+                                fieldValue.getClass().getName() + ": " + fieldValue +
+                                " - interpreted as " + matches);
+                    }
+
+                    if (matches) {
+                        List<String> rowValues = new ArrayList<>();
+
+                        // Extract values in the order specified by visibleFields
+                        for (String field : visibleFields) {
+                            Object value = row.get(field);
+                            rowValues.add(escapeValue(value));
+                        }
+
+                        writer.write(String.join(",", rowValues));
+                        writer.newLine();
+                        matchCount++;
+
+                        // Remove from unfiltered set
+                        unfilteredRows.remove(row);
+                    }
+                }
+
+                System.out.println("Exported " + matchCount + " rows to subset file: " + outputPath);
+            }
+        }
+
+        // If we need to output remaining unfiltered rows
+        if (!unfilteredRows.isEmpty() && properties.getProperty("output.csvSuffix") != null) {
+            String defaultSuffix = properties.getProperty("output.csvSuffix");
+            String unfilteredPath = getOutputPathWithSuffix(baseCsvFilePath, defaultSuffix, ".csv");
+
+            System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);
+
+            // Open the CSV file for writing
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(unfilteredPath))) {
+                // Write the header row
+                writer.write(String.join(",", escapeColumns(visibleFields)));
+                writer.newLine();
+
+                // Write each unfiltered row
+                for (Map<String, Object> row : unfilteredRows) {
+                    List<String> rowValues = new ArrayList<>();
+
+                    // Extract values in the order specified by visibleFields
+                    for (String field : visibleFields) {
+                        Object value = row.get(field);
+                        rowValues.add(escapeValue(value));
+                    }
+
+                    writer.write(String.join(",", rowValues));
+                    writer.newLine();
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper method to generate an output path with a suffix
+     */
+    private String getOutputPathWithSuffix(String basePath, String suffix, String extension) {
+        // Extract base path without extension
+        String basePathWithoutExt = basePath.replaceAll("\\.[^.]+$", "");
+
+        // Add suffix and extension
+        return basePathWithoutExt + suffix + extension;
+    }
+
+    /**
      * Escape a list of column names for CSV format
      */
     private List<String> escapeColumns(List<String> columns) {

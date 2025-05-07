@@ -321,7 +321,8 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                     // Create aggregate field name - use custom name if available
                     String aggregateFieldName;
                     if (customFieldName != null) {
-                        aggregateFieldName = customFieldName + formattedSuffix;
+                        //aggregateFieldName = customFieldName + formattedSuffix;
+                        aggregateFieldName = customFieldName + " " + formattedSuffix;
                     } else {
                         aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
                     }

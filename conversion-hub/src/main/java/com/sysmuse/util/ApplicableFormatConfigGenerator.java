@@ -163,7 +163,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
         System.out.println("Using text suffixes: " + textSuffixes);
     }
-    
+
     /**
      * Set properties
      */
@@ -208,7 +208,36 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         }
 
         int aggregateFieldIndex = 1;
-        for (String expression : compoundExpressions) {
+        for (String expressionLine : compoundExpressions) {
+            // Check if this expression has a custom name (using colon delimiter)
+            String customFieldName = null;
+            String expression = expressionLine;
+
+            // Look for the pattern "CustomName":"Expression"
+            if (expressionLine.contains(":")) {
+                // Find the position of the first colon
+                int colonPos = expressionLine.indexOf(":");
+
+                // Extract the custom name part (before the colon)
+                String potentialCustomName = expressionLine.substring(0, colonPos).trim();
+
+                // If the custom name is quoted, remove the quotes
+                if (potentialCustomName.startsWith("\"") && potentialCustomName.endsWith("\"")) {
+                    potentialCustomName = potentialCustomName.substring(1, potentialCustomName.length() - 1);
+                }
+
+                // If we have a valid custom name, use it
+                if (!potentialCustomName.isEmpty()) {
+                    customFieldName = potentialCustomName;
+
+                    // Extract the actual expression part (after the colon)
+                    expression = expressionLine.substring(colonPos + 1).trim();
+
+                    System.out.println("Found custom field name: '" + customFieldName +
+                            "' for expression: " + expression);
+                }
+            }
+
             // Extract field names from the expression for logging
             List<String> fieldNames = extractFieldNames(expression);
             System.out.println("Processing expression: " + expression);
@@ -217,8 +246,13 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             // Parse the expression into a boolean expression JSON
             ObjectNode booleanExpression = parseCompoundExpression(expression);
 
-            // Create derived boolean field name
-            String derivedFieldName = "DerivedExpression" + aggregateFieldIndex;
+            // Create derived boolean field name - use custom name if available
+            String derivedFieldName;
+            if (customFieldName != null) {
+                derivedFieldName = customFieldName;
+            } else {
+                derivedFieldName = "DerivedExpression" + aggregateFieldIndex;
+            }
 
             // Add derived boolean field to config
             derivedBooleanFields.set(derivedFieldName, booleanExpression);
@@ -284,8 +318,13 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                                 formattedSuffix.substring(1);
                     }
 
-                    // Create aggregate field name
-                    String aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
+                    // Create aggregate field name - use custom name if available
+                    String aggregateFieldName;
+                    if (customFieldName != null) {
+                        aggregateFieldName = customFieldName + formattedSuffix;
+                    } else {
+                        aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
+                    }
 
                     // Add to config
                     aggregateTextFields.set(aggregateFieldName, aggregateConfig);

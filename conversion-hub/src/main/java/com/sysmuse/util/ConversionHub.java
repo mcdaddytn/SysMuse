@@ -96,18 +96,8 @@ public class ConversionHub {
             hub.loadSystemConfig(sysConfigPath);
             hub.systemConfig.printDebug();
 
-            //gm: to remove
-            // Update properties with system config (for backward compatibility)
-            /*
-            Properties combinedProps = hub.getSystemConfigAsProperties();
-            combinedProps.putAll(defaultProps); // Allow application.properties to override
-            hub.setProperties(combinedProps);
-             */
-
             // Set text field processor config
             TextFieldProcessor.setSystemConfig(hub.systemConfig);
-            // gm: to remove
-            //TextFieldProcessor.setProperties(combinedProps);
 
             // If no input file specified, use from system config
             if (inputFilePath == null) {
@@ -237,16 +227,6 @@ public class ConversionHub {
             this.systemConfig = new SystemConfig(); // Use defaults
         }
     }
-
-    /**
-     * Get properties from system config for backward compatibility
-     */
-    // gm: to remove
-    /*
-    public Properties getSystemConfigAsProperties() {
-        return this.systemConfig.toProperties();
-    }
-     */
 
     /**
      * Main processing method that orchestrates the conversion
@@ -498,21 +478,6 @@ public class ConversionHub {
 
         // Export to the desired output format
         if ("json".equals(outputFormat.toLowerCase())) {
-
-            // gm: to remove
-            // Create JSON converter with properties that include system config
-            /*
-            Properties exportProps = new Properties();
-            exportProps.putAll(properties);
-
-            // Override with system config
-            exportProps.setProperty("output.subsets", mapToSubsetString(systemConfig.getSubsets()));
-            exportProps.setProperty("output.suffix", systemConfig.getOutputSuffix());
-            exportProps.setProperty("output.pretty", String.valueOf(systemConfig.isPrettyPrint()));
-            exportProps.setProperty("output.indent", String.valueOf(systemConfig.getIndentSize()));
-            exportProps.setProperty("exclusiveSubsets", String.valueOf(systemConfig.isExclusiveSubsets()));
-             */
-
             JsonConverter jsonConverter = new JsonConverter(systemConfig);
 
             // Create SubsetProcessor with the combined properties

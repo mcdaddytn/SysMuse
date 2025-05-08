@@ -1,0 +1,42 @@
+{
+  "input": {
+    "format": "csv",
+    "path": "F:\\docs\\rj\\Matters\\XTone\\tavrnruns\\run2",
+    "files": [
+      "collection_tags_report_noext.csv"
+    ]
+  },
+  "output": {
+    "format": "csv",
+    "suffix": "_converted",
+    "pretty": true,
+    "indent": 2
+  },
+  "limits": {
+    "maxImportRows": 15000,
+    "maxTextLength": 0
+  },
+  "applicableFormat": {
+    "compoundExpressionsFile": "expressions.list",
+    "textSuffixes": [
+      "reasoning",
+      "snippets"
+    ]
+  },
+  "textAggregation": {
+    "mode": "FIELDNAME",
+    "fieldNamePrefix": "[",
+    "fieldNameSuffix": "]",
+    "newlineChar": "\n"
+  },
+  "subsets": {
+    "exclusive": true,
+    "filters": {
+      "Junk Email": "_junk_email",
+      "Potential Legal Docs": "_legal",
+      "Unreadable": "_unreadable",
+      "Internal Design Marketing Tech": "_internal",
+      "Sparse Emails": "_sparse_emails"
+    }
+  }
+}

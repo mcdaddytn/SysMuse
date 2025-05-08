@@ -7,16 +7,18 @@ import java.nio.file.*;
 /**
  * Utility class for processing data subsets for both CSV and JSON formats.
  * Handles the subset filtering, tracking, and configuration parsing.
+ * Updated to work with SystemConfig.
  */
 public class SubsetProcessor {
 
     private Properties properties;
+    private SystemConfig systemConfig;
     private Map<String, String> filterToSuffix = new LinkedHashMap<>();
     private boolean exclusiveSubsets = false;
     private String uniqueKeyField = null;
 
     /**
-     * Constructor
+     * Constructor with properties and repository
      */
     public SubsetProcessor(Properties properties, ConversionRepository repository) {
         this.properties = properties;
@@ -28,6 +30,32 @@ public class SubsetProcessor {
         // Parse the subset configuration
         String subsetConfig = properties.getProperty("output.subsets");
         this.filterToSuffix = parseSubsetConfig(subsetConfig);
+
+        // Get the unique key field from the repository if exclusive subsets are enabled
+        if (exclusiveSubsets) {
+            this.uniqueKeyField = repository.getUniqueKeyField();
+
+            if (uniqueKeyField == null) {
+                System.out.println("Warning: exclusiveSubsets is enabled but no uniqueKey field is defined. " +
+                        "Subsets will not be processed exclusively.");
+                this.exclusiveSubsets = false;
+            } else {
+                System.out.println("Exclusive subsets enabled with unique key field: " + uniqueKeyField);
+            }
+        }
+    }
+
+    /**
+     * Constructor with system config and repository
+     */
+    public SubsetProcessor(SystemConfig systemConfig, ConversionRepository repository) {
+        this.systemConfig = systemConfig;
+
+        // Get subset configuration from system config
+        this.filterToSuffix = systemConfig.getSubsets();
+
+        // Check if exclusive subsets are enabled
+        this.exclusiveSubsets = systemConfig.isExclusiveSubsets();
 
         // Get the unique key field from the repository if exclusive subsets are enabled
         if (exclusiveSubsets) {

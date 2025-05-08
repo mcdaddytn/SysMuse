@@ -3,11 +3,30 @@ package com.sysmuse.util;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * Utility class for processing text fields based on conditions
+ * Updated to support different aggregation modes from system configuration
  */
 public class TextFieldProcessor {
+
+    private static SystemConfig systemConfig;
+    private static Properties properties;
+
+    /**
+     * Set the system configuration for aggregation modes
+     */
+    public static void setSystemConfig(SystemConfig config) {
+        systemConfig = config;
+    }
+
+    /**
+     * Set properties for backward compatibility
+     */
+    public static void setProperties(Properties props) {
+        properties = props;
+    }
 
     /**
      * Process aggregate text fields based on configuration
@@ -32,8 +51,6 @@ public class TextFieldProcessor {
         } else {
             System.out.println("Warning: processAggregateField condition field '" + conditionField +
                     "' not found in row values. Available fields: " + rowValues.keySet());
-//            System.out.println("Warning: Condition field '" + conditionField +
-//                    "' not found in row values. Available fields: " + rowValues.keySet());
         }
 
         if (!condition) {
@@ -45,9 +62,49 @@ public class TextFieldProcessor {
         ArrayNode sourceFields = (ArrayNode) config.get("sourceFields");
         StringBuilder aggregated = new StringBuilder();
 
-        // Get separator if specified
-        String separator = config.has("separator") ?
-                config.get("separator").asText() : " ";
+        // Determine aggregation mode and settings
+        SystemConfig.TextAggregationMode mode = SystemConfig.TextAggregationMode.NEWLINE;
+        String separator = "\n";
+        String fieldNamePrefix = "[";
+        String fieldNameSuffix = "]";
+
+        // Check for explicit separator in config
+        if (config.has("separator")) {
+            // If explicit separator is specified in the field config, use it directly
+            separator = config.get("separator").asText();
+        } else if (systemConfig != null) {
+            // Otherwise use system config
+            mode = systemConfig.getTextAggregationMode();
+
+            if (mode == SystemConfig.TextAggregationMode.NEWLINE) {
+                separator = systemConfig.getNewlineChar();
+            } else if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                // For FIELDNAME mode, the separator becomes newline plus field name
+                separator = systemConfig.getNewlineChar();
+                fieldNamePrefix = systemConfig.getFieldNamePrefix();
+                fieldNameSuffix = systemConfig.getFieldNameSuffix();
+            }
+        } else if (properties != null) {
+            // For backward compatibility
+            separator = properties.getProperty("default.text.separator", " ");
+
+            // Check if we have textAggregation.mode property
+            String modeStr = properties.getProperty("textAggregation.mode");
+            if (modeStr != null) {
+                try {
+                    mode = SystemConfig.TextAggregationMode.valueOf(modeStr.toUpperCase());
+                    if (mode == SystemConfig.TextAggregationMode.NEWLINE) {
+                        separator = properties.getProperty("textAggregation.newlineChar", "\n");
+                    } else if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                        separator = properties.getProperty("textAggregation.newlineChar", "\n");
+                        fieldNamePrefix = properties.getProperty("textAggregation.fieldNamePrefix", "[");
+                        fieldNameSuffix = properties.getProperty("textAggregation.fieldNameSuffix", "]");
+                    }
+                } catch (IllegalArgumentException e) {
+                    // Invalid mode, leave as is
+                }
+            }
+        }
 
         boolean isFirst = true;
         for (int i = 0; i < sourceFields.size(); i++) {
@@ -57,16 +114,30 @@ public class TextFieldProcessor {
                 if (val != null && !val.toString().isEmpty()) {
                     if (!isFirst) {
                         aggregated.append(separator);
+
+                        // In FIELDNAME mode, add field name as prefix
+                        if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                            aggregated.append(fieldNamePrefix)
+                                    .append(fieldToAggregate)
+                                    .append(fieldNameSuffix)
+                                    .append(" ");
+                        }
                     } else {
                         isFirst = false;
+
+                        // For first field in FIELDNAME mode, add field name as prefix
+                        if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                            aggregated.append(fieldNamePrefix)
+                                    .append(fieldToAggregate)
+                                    .append(fieldNameSuffix)
+                                    .append(" ");
+                        }
                     }
                     aggregated.append(val.toString());
                 }
             } else {
-                System.out.println("Warning: processAggregateField dource field '" + fieldToAggregate +
+                System.out.println("Warning: processAggregateField source field '" + fieldToAggregate +
                         "' not found for aggregation. Available fields: " + rowValues.keySet());
-//                System.out.println("Warning: Source field '" + fieldToAggregate +
-//                        "' not found for aggregation. Available fields: " + rowValues.keySet());
             }
         }
 

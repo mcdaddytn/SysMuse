@@ -7,11 +7,12 @@ import java.util.*;
 /**
  * ConversionHub - Main application class that coordinates the conversion process
  * between different data formats like CSV and JSON.
- * Updated to support multi-file overlay functionality and consolidated parameters.
+ * Updated to use SystemConfig for configuration management.
  */
 public class ConversionHub {
 
     private Properties properties;
+    private SystemConfig systemConfig;
     private ConversionRepository repository;
     private String configDirectory;
     private String inputDirectory;
@@ -81,39 +82,68 @@ public class ConversionHub {
                 }
             }
 
-            // If no input file specified, use from properties
-            if (inputFilePath == null) {
-                String inputPath = defaultProps.getProperty("input.csv.path", "");
-                String inputFilename = defaultProps.getProperty("input.csv.filename", "");
-
-                if (!inputPath.isEmpty() && !inputFilename.isEmpty()) {
-                    inputFilePath = Paths.get(inputPath, inputFilename).toString();
-                    System.out.println("Using input file from properties: " + inputFilePath);
-                } else {
-                    System.out.println("No input file specified in arguments or properties");
-                    System.out.println("Usage: ConversionHub [config_directory] <input_file> [config_json_file] [output_format]");
-                    System.exit(1);
-                }
-            }
-
-            // If no config directory specified, use from properties
+            // Set config directory
             if (configDir == null) {
                 configDir = defaultProps.getProperty("config.directory", "");
-                if (!configDir.isEmpty()) {
-                    System.out.println("Using config directory from properties: " + configDir);
+            }
+            hub.setConfigDirectory(configDir);
+
+            // Load system configuration first
+            String sysConfigDir = defaultProps.getProperty("sysconfig.directory", configDir);
+            String sysConfigFile = defaultProps.getProperty("sysconfig.filename", "sysconfig.json");
+            String sysConfigPath = Paths.get(sysConfigDir, sysConfigFile).toString();
+
+            hub.loadSystemConfig(sysConfigPath);
+
+            // Update properties with system config (for backward compatibility)
+            Properties combinedProps = hub.getSystemConfigAsProperties();
+            combinedProps.putAll(defaultProps); // Allow application.properties to override
+            hub.setProperties(combinedProps);
+
+            // Set text field processor config
+            TextFieldProcessor.setSystemConfig(hub.systemConfig);
+            TextFieldProcessor.setProperties(combinedProps);
+
+            // If no input file specified, use from system config
+            if (inputFilePath == null) {
+                // Try to use the first input file from system config
+                List<String> inputFiles = hub.systemConfig.getInputFiles();
+                String inputPath = hub.systemConfig.getInputPath();
+
+                if (!inputFiles.isEmpty() && !inputPath.isEmpty()) {
+                    inputFilePath = Paths.get(inputPath, inputFiles.get(0)).toString();
+                    System.out.println("Using input file from system config: " + inputFilePath);
                 } else {
-                    // Default to input directory if not specified
-                    File inputFile = new File(inputFilePath);
-                    configDir = inputFile.getParent();
-                    if (configDir == null) {
-                        configDir = "."; // Current directory if no path specified
+                    // Fallback to application.properties
+                    inputPath = defaultProps.getProperty("input.path", "");
+                    String inputFilename = defaultProps.getProperty("input.filename", "");
+
+                    if (inputPath.isEmpty() || inputFilename.isEmpty()) {
+                        // Legacy properties
+                        String csvPath = defaultProps.getProperty("input.csv.path", "");
+                        String csvFilename = defaultProps.getProperty("input.csv.filename", "");
+                        String jsonPath = defaultProps.getProperty("input.json.path", "");
+                        String jsonFilename = defaultProps.getProperty("input.json.filename", "");
+
+                        if (!csvPath.isEmpty() && !csvFilename.isEmpty()) {
+                            inputPath = csvPath;
+                            inputFilename = csvFilename;
+                        } else if (!jsonPath.isEmpty() && !jsonFilename.isEmpty()) {
+                            inputPath = jsonPath;
+                            inputFilename = jsonFilename;
+                        }
                     }
-                    System.out.println("No config directory specified, defaulting to input directory: " + configDir);
+
+                    if (!inputPath.isEmpty() && !inputFilename.isEmpty()) {
+                        inputFilePath = Paths.get(inputPath, inputFilename).toString();
+                        System.out.println("Using input file from properties: " + inputFilePath);
+                    } else {
+                        System.out.println("No input file specified in arguments, system config, or properties");
+                        System.out.println("Usage: ConversionHub [config_directory] <input_file> [config_json_file] [output_format]");
+                        System.exit(1);
+                    }
                 }
             }
-
-            // Set config directory
-            hub.setConfigDirectory(configDir);
 
             // If no config file specified, try to use default from the config directory
             if (configFilePath == null) {
@@ -123,28 +153,38 @@ public class ConversionHub {
                 System.out.println("Using config file path: " + configFilePath);
             }
 
-            // If no output format specified, try to get from properties or determine from input file extension
+            // If no output format specified, try to get from system config or properties
             if (outputFormat == null) {
-                outputFormat = hub.properties.getProperty("output.format");
+                outputFormat = hub.systemConfig.getOutputFormat();
 
-                if (outputFormat == null) {
-                    // If not in properties either, determine from input file extension
-                    if (inputFilePath.toLowerCase().endsWith(".csv")) {
-                        outputFormat = "json";
-                    } else if (inputFilePath.toLowerCase().endsWith(".json")) {
-                        outputFormat = "csv";
+                if (outputFormat == null || outputFormat.isEmpty()) {
+                    // Try properties
+                    outputFormat = hub.properties.getProperty("output.format");
+
+                    if (outputFormat == null || outputFormat.isEmpty()) {
+                        // If not in properties either, determine from input file extension
+                        if (inputFilePath.toLowerCase().endsWith(".csv")) {
+                            outputFormat = "json";
+                        } else if (inputFilePath.toLowerCase().endsWith(".json")) {
+                            outputFormat = "csv";
+                        } else {
+                            // Default to JSON if can't determine
+                            outputFormat = "json";
+                        }
+                        System.out.println("Output format determined from input file: " + outputFormat);
                     } else {
-                        // Default to JSON if can't determine
-                        outputFormat = "json";
+                        System.out.println("Using output format from properties: " + outputFormat);
                     }
-                    System.out.println("Output format determined from input file: " + outputFormat);
                 } else {
-                    System.out.println("Using output format from properties: " + outputFormat);
+                    System.out.println("Using output format from system config: " + outputFormat);
                 }
             }
 
             // Initialize the repository
             hub.repository = new ConversionRepository();
+
+            // Set max text length from system config
+            hub.repository.setMaxTextLength(hub.systemConfig.getMaxTextLength());
 
             // Start conversion process
             hub.process(inputFilePath, configFilePath, outputFormat);
@@ -160,6 +200,7 @@ public class ConversionHub {
      */
     public ConversionHub() {
         this.properties = new Properties();
+        this.systemConfig = new SystemConfig(); // Initialize with defaults
     }
 
     /**
@@ -177,6 +218,29 @@ public class ConversionHub {
     }
 
     /**
+     * Load system configuration from file
+     */
+    public void loadSystemConfig(String configFilePath) {
+        try {
+            SystemConfig config = new SystemConfig();
+            config.loadFromFile(configFilePath);
+            this.systemConfig = config;
+            System.out.println("Loaded system configuration from: " + configFilePath);
+        } catch (IOException e) {
+            System.out.println("Could not load system configuration: " + e.getMessage());
+            System.out.println("Using default system configuration");
+            this.systemConfig = new SystemConfig(); // Use defaults
+        }
+    }
+
+    /**
+     * Get properties from system config for backward compatibility
+     */
+    public Properties getSystemConfigAsProperties() {
+        return this.systemConfig.toProperties();
+    }
+
+    /**
      * Main processing method that orchestrates the conversion
      */
     public void process(String inputFilePath, String configFilePath, String outputFormat) throws Exception {
@@ -190,20 +254,27 @@ public class ConversionHub {
         }
         System.out.println("Input directory: " + inputDirectory);
 
-        // Determine file format from extension
-        String inputFormat = "";
-        if (inputFilePath.toLowerCase().endsWith(".csv")) {
-            inputFormat = "csv";
-        } else if (inputFilePath.toLowerCase().endsWith(".json")) {
-            inputFormat = "json";
+        // Determine file format from extension or system config
+        String inputFormat = systemConfig.getInputFormat();
+
+        // Override with file extension if needed
+        if (inputFormat == null || inputFormat.isEmpty() || !inputFormat.equalsIgnoreCase("csv") && !inputFormat.equalsIgnoreCase("json")) {
+            if (inputFilePath.toLowerCase().endsWith(".csv")) {
+                inputFormat = "csv";
+            } else if (inputFilePath.toLowerCase().endsWith(".json")) {
+                inputFormat = "json";
+            } else {
+                throw new IllegalArgumentException("Unsupported input file format. Supported formats: .csv, .json");
+            }
+            System.out.println("Using input format determined from file extension: " + inputFormat);
         } else {
-            throw new IllegalArgumentException("Unsupported input file format. Supported formats: .csv, .json");
+            System.out.println("Using input format from system configuration: " + inputFormat);
         }
 
         // Load or generate configuration - Need to do this first to identify uniqueKey field if using multiple files
         configGenerator = loadConfigGenerator();
 
-        // Check whether input is a single file or multiple files
+        // Variables for CSV multi-file handling
         boolean useMultipleFiles = false;
         String csvFilename = "";
 
@@ -211,49 +282,75 @@ public class ConversionHub {
         String firstActualFilePath = inputFilePath;
 
         if ("csv".equals(inputFormat)) {
-            String inputCsvPath = properties.getProperty("input.csv.path", "");
-            String inputCsvFilename = properties.getProperty("input.csv.filename", "");
+            List<String> inputFiles = systemConfig.getInputFiles();
+            String inputPath = systemConfig.getInputPath();
 
-            // Check if filename contains commas (indicating multiple files)
-            if (inputCsvFilename.contains(",")) {
+            // If system config has no input files, check properties
+            if (inputFiles.isEmpty()) {
+                String inputCsvFilename = properties.getProperty("input.csv.filename", "");
+                if (inputCsvFilename.contains(",")) {
+                    // Multiple files in comma-separated list
+                    String[] files = inputCsvFilename.split(",");
+                    for (String file : files) {
+                        inputFiles.add(file.trim());
+                    }
+                } else if (inputCsvFilename.endsWith(".list")) {
+                    // List file
+                    String inputCsvPath = properties.getProperty("input.csv.path", "");
+                    File listFile = new File(Paths.get(inputCsvPath, inputCsvFilename).toString());
+                    if (listFile.exists() && listFile.isFile()) {
+                        try {
+                            List<String> fileLines = Files.readAllLines(listFile.toPath());
+                            for (String file : fileLines) {
+                                if (!file.trim().isEmpty()) {
+                                    inputFiles.add(file.trim());
+                                }
+                            }
+                        } catch (IOException e) {
+                            System.out.println("Warning: Could not read list file: " + e.getMessage());
+                            // Add the single file as fallback
+                            inputFiles.add(inputCsvFilename);
+                        }
+                    } else {
+                        // Just add as single file
+                        inputFiles.add(inputCsvFilename);
+                    }
+                } else if (!inputCsvFilename.isEmpty()) {
+                    // Single file
+                    inputFiles.add(inputCsvFilename);
+                }
+
+                // Update input path if needed
+                if (inputPath.isEmpty()) {
+                    inputPath = properties.getProperty("input.csv.path", inputDirectory);
+                }
+            }
+
+            // Check if we have multiple files now
+            if (inputFiles.size() > 1) {
                 useMultipleFiles = true;
-                csvFilename = inputCsvFilename;
+                csvFilename = String.join(",", inputFiles);
 
-                // Get the first file name for output generation
-                String firstFile = inputCsvFilename.split(",")[0].trim();
+                // Get the first file for output generation
+                String firstFile = inputFiles.get(0);
                 if (!new File(firstFile).isAbsolute()) {
-                    firstActualFilePath = Paths.get(inputDirectory, firstFile).toString();
+                    firstActualFilePath = Paths.get(inputPath, firstFile).toString();
                 } else {
                     firstActualFilePath = firstFile;
                 }
-            } else {
-                // Check if the specified filename is a .list file
-                File potentialListFile = new File(Paths.get(inputCsvPath, inputCsvFilename).toString());
-                if (potentialListFile.exists() && potentialListFile.isFile() &&
-                        potentialListFile.getName().endsWith(".list")) {
-                    useMultipleFiles = true;
-                    csvFilename = inputCsvFilename;
+            } else if (inputFiles.size() == 1) {
+                // Single file
+                useMultipleFiles = false;
+                csvFilename = inputFiles.get(0);
 
-                    // Read the first filename from the list file
-                    try {
-                        List<String> fileList = Files.readAllLines(potentialListFile.toPath());
-                        if (!fileList.isEmpty()) {
-                            String firstFile = fileList.get(0).trim();
-                            if (!new File(firstFile).isAbsolute()) {
-                                firstActualFilePath = Paths.get(inputDirectory, firstFile).toString();
-                            } else {
-                                firstActualFilePath = firstFile;
-                            }
-                        }
-                    } catch (IOException e) {
-                        System.out.println("Warning: Could not read list file: " + e.getMessage());
-                        // Keep default inputFilePath as fallback
-                    }
-                } else {
-                    // Single file (normal behavior)
-                    useMultipleFiles = false;
-                    csvFilename = inputCsvFilename;
+                // Update first actual file path if needed
+                if (!new File(csvFilename).isAbsolute() && !inputPath.isEmpty()) {
+                    firstActualFilePath = Paths.get(inputPath, csvFilename).toString();
                 }
+            } else {
+                // No files found in config, just use the input file path
+                useMultipleFiles = false;
+                csvFilename = new File(inputFilePath).getName();
             }
         }
 
@@ -354,16 +451,28 @@ public class ConversionHub {
             }
 
             // Print subset filter fields if available
-            String subsetConfig = properties.getProperty("output.subsets");
-            if (subsetConfig != null && !subsetConfig.trim().isEmpty()) {
-                SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
-                Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
-
-                for (String filterField : filterToSuffix.keySet()) {
+            Map<String, String> subsets = systemConfig.getSubsets();
+            if (!subsets.isEmpty()) {
+                for (String filterField : subsets.keySet()) {
                     if (sampleRow.containsKey(filterField)) {
                         System.out.println("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
                     } else {
                         System.out.println("Filter field '" + filterField + "' not found in sample row");
+                    }
+                }
+            } else {
+                // Check legacy properties
+                String subsetConfig = properties.getProperty("output.subsets");
+                if (subsetConfig != null && !subsetConfig.trim().isEmpty()) {
+                    SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+                    Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
+
+                    for (String filterField : filterToSuffix.keySet()) {
+                        if (sampleRow.containsKey(filterField)) {
+                            System.out.println("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
+                        } else {
+                            System.out.println("Filter field '" + filterField + "' not found in sample row");
+                        }
                     }
                 }
             }
@@ -378,12 +487,23 @@ public class ConversionHub {
 
         // Export to the desired output format
         if ("json".equals(outputFormat.toLowerCase())) {
-            JsonConverter jsonConverter = new JsonConverter(properties);
+            // Create JSON converter with properties that include system config
+            Properties exportProps = new Properties();
+            exportProps.putAll(properties);
 
-            // Check if subset exports are configured
-            SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+            // Override with system config
+            exportProps.setProperty("output.subsets", mapToSubsetString(systemConfig.getSubsets()));
+            exportProps.setProperty("output.suffix", systemConfig.getOutputSuffix());
+            exportProps.setProperty("output.pretty", String.valueOf(systemConfig.isPrettyPrint()));
+            exportProps.setProperty("output.indent", String.valueOf(systemConfig.getIndentSize()));
+            exportProps.setProperty("exclusiveSubsets", String.valueOf(systemConfig.isExclusiveSubsets()));
 
-            if (subsetProcessor.hasSubsets()) {
+            JsonConverter jsonConverter = new JsonConverter(exportProps);
+
+            // Create SubsetProcessor with the combined properties
+            SubsetProcessor subsetProcessor = new SubsetProcessor(exportProps, repository);
+
+            if (subsetProcessor.hasSubsets() || !systemConfig.getSubsets().isEmpty()) {
                 // Generate base output path for JSON
                 String baseJsonPath;
                 String outputFilename = properties.getProperty("output.json.filename");
@@ -411,8 +531,13 @@ public class ConversionHub {
                 File outputDir = new File(inputDirectory);
                 outputJsonPath = new File(outputDir, outputFilename).getPath();
             } else {
-                // Check if we should use a suffix
-                String suffix = properties.getProperty("output.suffix");
+                // Get suffix from system config
+                String suffix = systemConfig.getOutputSuffix();
+                if (suffix == null || suffix.isEmpty()) {
+                    // Try from properties
+                    suffix = properties.getProperty("output.suffix");
+                }
+
                 if (suffix != null && !suffix.isEmpty()) {
                     // Extract base path without extension
                     String basePathWithoutExt = firstActualFilePath.replaceAll("\\.[^.]+$", "");
@@ -427,10 +552,23 @@ public class ConversionHub {
             jsonConverter.exportFromRepository(repository, outputJsonPath);
             System.out.println("Exported data to JSON: " + outputJsonPath);
         } else if ("csv".equals(outputFormat.toLowerCase())) {
-            // Check if subset exports are configured
-            SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+            // Create properties that include system config
+            Properties exportProps = new Properties();
+            exportProps.putAll(properties);
 
-            if (subsetProcessor.hasSubsets()) {
+            // Override with system config
+            exportProps.setProperty("output.subsets", mapToSubsetString(systemConfig.getSubsets()));
+            exportProps.setProperty("output.suffix", systemConfig.getOutputSuffix());
+            exportProps.setProperty("exclusiveSubsets", String.valueOf(systemConfig.isExclusiveSubsets()));
+
+            // gm: changed this
+            csvConverter = new CsvConverter(exportProps);
+            //CsvConverter csvConverter = new CsvConverter(exportProps);
+
+            // Create SubsetProcessor with the combined properties
+            SubsetProcessor subsetProcessor = new SubsetProcessor(exportProps, repository);
+
+            if (subsetProcessor.hasSubsets() || !systemConfig.getSubsets().isEmpty()) {
                 // Generate base output path for CSV
                 String baseCsvPath;
                 String outputFilename = properties.getProperty("output.csv.filename");
@@ -458,8 +596,13 @@ public class ConversionHub {
                 File outputDir = new File(inputDirectory);
                 outputCsvPath = new File(outputDir, outputFilename).getPath();
             } else {
-                // Check if we should use a suffix
-                String suffix = properties.getProperty("output.suffix");
+                // Get suffix from system config
+                String suffix = systemConfig.getOutputSuffix();
+                if (suffix == null || suffix.isEmpty()) {
+                    // Try from properties
+                    suffix = properties.getProperty("output.suffix");
+                }
+
                 if (suffix != null && !suffix.isEmpty()) {
                     // Extract base path without extension
                     String basePathWithoutExt = firstActualFilePath.replaceAll("\\.[^.]+$", "");
@@ -481,6 +624,31 @@ public class ConversionHub {
     }
 
     /**
+     * Helper method to convert a map of subsets to the legacy string format
+     */
+    private String mapToSubsetString(Map<String, String> subsets) {
+        if (subsets.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        boolean first = true;
+
+        for (Map.Entry<String, String> entry : subsets.entrySet()) {
+            if (!first) {
+                result.append(",");
+            }
+            first = false;
+
+            result.append(entry.getKey())
+                    .append(":")
+                    .append(entry.getValue());
+        }
+
+        return result.toString();
+    }
+
+    /**
      * Load and instantiate a config generator class
      */
     private ConfigGenerator loadConfigGenerator() {
@@ -498,8 +666,12 @@ public class ConversionHub {
                 // Try constructor that takes a string parameter (for compound expressions)
                 try {
                     if (generatorClass.getName().contains("ApplicableFormatConfigGenerator")) {
-                        // Get compound expressions from properties
-                        String expressions = properties.getProperty("applicable.format.compound.expressions", "");
+                        // Get compound expressions from properties or system config
+                        String expressions = systemConfig.getCompoundExpressionsFile();
+                        if (expressions.isEmpty()) {
+                            // Fallback to properties
+                            expressions = properties.getProperty("applicable.format.compound.expressions", "");
+                        }
 
                         // Create with expressions parameter if available
                         if (!expressions.isEmpty()) {

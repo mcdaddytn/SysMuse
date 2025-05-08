@@ -44,7 +44,7 @@ dist/
 nbdist/
 
 # Generated config files
-config/*.json
+# config/*.json
 !config/config-template.json
 
 # OS specific

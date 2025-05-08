@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * SystemConfig - Handles loading and managing system configuration from JSON file
- * Updated to include expressions directly in config
+ * Central configuration class for the Conversion Hub system
  */
 public class SystemConfig {
 
@@ -44,6 +44,16 @@ public class SystemConfig {
     // Expressions directly in config (no separate file)
     private Map<String, String> expressions = new LinkedHashMap<>();
 
+    // Configuration paths
+    private String configDirectory = "";
+    private String configFilename = "config.json";
+
+    // Logging configuration
+    private String loggingLevel = "INFO";
+    private boolean consoleLoggingEnabled = true;
+    private boolean fileLoggingEnabled = false;
+    private String logFileName = "converter.log";
+
     // Raw JSON config
     private JsonNode configJson;
 
@@ -69,8 +79,8 @@ public class SystemConfig {
     public void loadFromFile(String configFilePath) throws IOException {
         File configFile = new File(configFilePath);
         if (!configFile.exists()) {
-            System.out.println("System config file not found: " + configFilePath);
-            System.out.println("Using default system configuration");
+            LoggingUtil.warn("System config file not found: " + configFilePath);
+            LoggingUtil.info("Using default system configuration");
             return;
         }
 
@@ -109,7 +119,7 @@ public class SystemConfig {
                                 }
                             }
                         } catch (IOException e) {
-                            System.out.println("Warning: Could not read list file: " + e.getMessage());
+                            LoggingUtil.warn("Could not read list file: " + e.getMessage());
                             // Add the list file itself as a fallback
                             inputFiles.add(fileValue);
                         }
@@ -185,7 +195,7 @@ public class SystemConfig {
                     expressions.put(name, expressionsNode.get(name).asText());
                 }
 
-                System.out.println("Loaded " + expressions.size() + " expressions from config");
+                LoggingUtil.info("Loaded " + expressions.size() + " expressions from config");
             }
         }
 
@@ -198,7 +208,7 @@ public class SystemConfig {
                 try {
                     textAggregationMode = TextAggregationMode.valueOf(modeString);
                 } catch (IllegalArgumentException e) {
-                    System.out.println("Warning: Invalid text aggregation mode: " + modeString +
+                    LoggingUtil.warn("Invalid text aggregation mode: " + modeString +
                             ". Using default: " + textAggregationMode);
                 }
             }
@@ -235,7 +245,41 @@ public class SystemConfig {
             }
         }
 
-        System.out.println("Loaded system configuration from: " + configFilePath);
+        // Parse configuration paths
+        if (configJson.has("paths")) {
+            JsonNode pathsNode = configJson.get("paths");
+
+            if (pathsNode.has("configDirectory")) {
+                configDirectory = pathsNode.get("configDirectory").asText();
+            }
+
+            if (pathsNode.has("configFilename")) {
+                configFilename = pathsNode.get("configFilename").asText();
+            }
+        }
+
+        // Parse logging configuration
+        if (configJson.has("logging")) {
+            JsonNode loggingNode = configJson.get("logging");
+
+            if (loggingNode.has("level")) {
+                loggingLevel = loggingNode.get("level").asText();
+            }
+
+            if (loggingNode.has("console")) {
+                consoleLoggingEnabled = loggingNode.get("console").asBoolean();
+            }
+
+            if (loggingNode.has("file")) {
+                fileLoggingEnabled = loggingNode.get("file").asBoolean();
+            }
+
+            if (loggingNode.has("filename")) {
+                logFileName = loggingNode.get("filename").asText();
+            }
+        }
+
+        LoggingUtil.info("Loaded system configuration from: " + configFilePath);
     }
 
     /**
@@ -305,9 +349,21 @@ public class SystemConfig {
             filtersNode.put(entry.getKey(), entry.getValue());
         }
 
+        // Configuration paths
+        ObjectNode pathsNode = rootNode.putObject("paths");
+        pathsNode.put("configDirectory", configDirectory);
+        pathsNode.put("configFilename", configFilename);
+
+        // Logging configuration
+        ObjectNode loggingNode = rootNode.putObject("logging");
+        loggingNode.put("level", loggingLevel);
+        loggingNode.put("console", consoleLoggingEnabled);
+        loggingNode.put("file", fileLoggingEnabled);
+        loggingNode.put("filename", logFileName);
+
         // Write to file
         mapper.writeValue(new File(configFilePath), rootNode);
-        System.out.println("Saved system configuration to: " + configFilePath);
+        LoggingUtil.info("Saved system configuration to: " + configFilePath);
     }
 
     /**
@@ -348,112 +404,28 @@ public class SystemConfig {
     }
 
     /**
-     * Convert system configuration to properties for backward compatibility
-     */
-    public Properties toProperties() {
-        Properties props = new Properties();
-
-        // Input configuration
-        props.setProperty("input.format", inputFormat);
-        props.setProperty("input.path", inputPath);
-
-        if (!inputFiles.isEmpty()) {
-            if (inputFiles.size() == 1) {
-                props.setProperty("input.filename", inputFiles.get(0));
-            } else {
-                // Join multiple files with commas
-                props.setProperty("input.filename", String.join(",", inputFiles));
-            }
-
-            // Legacy properties for backward compatibility
-            if ("csv".equalsIgnoreCase(inputFormat)) {
-                props.setProperty("input.csv.path", inputPath);
-                props.setProperty("input.csv.filename", props.getProperty("input.filename"));
-            } else if ("json".equalsIgnoreCase(inputFormat)) {
-                props.setProperty("input.json.path", inputPath);
-                props.setProperty("input.json.filename", props.getProperty("input.filename"));
-            }
-        }
-
-        // Output configuration
-        props.setProperty("output.format", outputFormat);
-        props.setProperty("output.suffix", outputSuffix);
-        props.setProperty("output.pretty", String.valueOf(prettyPrint));
-        props.setProperty("output.indent", String.valueOf(indentSize));
-
-        // Legacy properties for backward compatibility
-        props.setProperty("output.csvSuffix", outputSuffix);
-        props.setProperty("output.jsonSuffix", outputSuffix);
-
-        // Processing limits
-        props.setProperty("maxImportRows", String.valueOf(maxImportRows));
-        props.setProperty("maxTextLength", String.valueOf(maxTextLength));
-
-        // Applicable format configuration
-        if (!expressions.isEmpty()) {
-            // Create a comma-separated list for legacy format
-            props.setProperty("applicable.format.compound.expressions", getCompoundExpressionsString());
-        }
-
-        props.setProperty("applicable.format.text.suffixes", String.join(",", textSuffixes));
-
-        // Text aggregation configuration
-        props.setProperty("textAggregation.mode", textAggregationMode.name());
-        props.setProperty("textAggregation.fieldNamePrefix", fieldNamePrefix);
-        props.setProperty("textAggregation.fieldNameSuffix", fieldNameSuffix);
-        props.setProperty("textAggregation.newlineChar", newlineChar);
-
-        // For backward compatibility with default.text.separator
-        if (textAggregationMode == TextAggregationMode.NEWLINE) {
-            props.setProperty("default.text.separator", newlineChar);
-        } else {
-            props.setProperty("default.text.separator", "");
-        }
-
-        // Subset configuration
-        if (!subsets.isEmpty()) {
-            StringBuilder subsetConfig = new StringBuilder();
-            boolean first = true;
-
-            for (Map.Entry<String, String> entry : subsets.entrySet()) {
-                if (!first) {
-                    subsetConfig.append(",");
-                }
-                first = false;
-
-                subsetConfig.append(entry.getKey())
-                        .append(":")
-                        .append(entry.getValue());
-            }
-
-            props.setProperty("output.subsets", subsetConfig.toString());
-            // Legacy properties for backward compatibility
-            props.setProperty("output.csvSubsets", subsetConfig.toString());
-            props.setProperty("output.jsonSubsets", subsetConfig.toString());
-        }
-
-        props.setProperty("exclusiveSubsets", String.valueOf(exclusiveSubsets));
-
-        return props;
-    }
-
-    /**
      * Print debug information about the current configuration
      */
     public void printDebug() {
-        System.out.println("==== SystemConfig Debug Information ====");
-        System.out.println("Input Format: " + this.inputFormat);
-        System.out.println("Input Path: " + this.inputPath);
-        System.out.println("Input Files: " + this.inputFiles);
-        System.out.println("Output Format: " + this.outputFormat);
-        System.out.println("Output Suffix: " + this.outputSuffix);
-        System.out.println("Max Import Rows: " + this.maxImportRows);
-        System.out.println("Max Text Length: " + this.maxTextLength);
-        System.out.println("Text Aggregation Mode: " + this.textAggregationMode);
-        System.out.println("Exclusive Subsets: " + this.exclusiveSubsets);
-        System.out.println("Number of Subsets: " + this.subsets.size());
-        System.out.println("Number of Expressions: " + this.expressions.size());
-        System.out.println("========================================");
+        LoggingUtil.debug("==== SystemConfig Debug Information ====");
+        LoggingUtil.debug("Input Format: " + this.inputFormat);
+        LoggingUtil.debug("Input Path: " + this.inputPath);
+        LoggingUtil.debug("Input Files: " + this.inputFiles);
+        LoggingUtil.debug("Output Format: " + this.outputFormat);
+        LoggingUtil.debug("Output Suffix: " + this.outputSuffix);
+        LoggingUtil.debug("Max Import Rows: " + this.maxImportRows);
+        LoggingUtil.debug("Max Text Length: " + this.maxTextLength);
+        LoggingUtil.debug("Text Aggregation Mode: " + this.textAggregationMode);
+        LoggingUtil.debug("Exclusive Subsets: " + this.exclusiveSubsets);
+        LoggingUtil.debug("Number of Subsets: " + this.subsets.size());
+        LoggingUtil.debug("Number of Expressions: " + this.expressions.size());
+        LoggingUtil.debug("Config Directory: " + this.configDirectory);
+        LoggingUtil.debug("Config Filename: " + this.configFilename);
+        LoggingUtil.debug("Logging Level: " + this.loggingLevel);
+        LoggingUtil.debug("Console Logging: " + this.consoleLoggingEnabled);
+        LoggingUtil.debug("File Logging: " + this.fileLoggingEnabled);
+        LoggingUtil.debug("Log Filename: " + this.logFileName);
+        LoggingUtil.debug("========================================");
     }
 
     // Getters and setters
@@ -584,6 +556,54 @@ public class SystemConfig {
 
     public void setNewlineChar(String newlineChar) {
         this.newlineChar = newlineChar;
+    }
+
+    public String getConfigDirectory() {
+        return configDirectory;
+    }
+
+    public void setConfigDirectory(String configDirectory) {
+        this.configDirectory = configDirectory;
+    }
+
+    public String getConfigFilename() {
+        return configFilename;
+    }
+
+    public void setConfigFilename(String configFilename) {
+        this.configFilename = configFilename;
+    }
+
+    public String getLoggingLevel() {
+        return loggingLevel;
+    }
+
+    public void setLoggingLevel(String loggingLevel) {
+        this.loggingLevel = loggingLevel;
+    }
+
+    public boolean isConsoleLoggingEnabled() {
+        return consoleLoggingEnabled;
+    }
+
+    public void setConsoleLoggingEnabled(boolean consoleLoggingEnabled) {
+        this.consoleLoggingEnabled = consoleLoggingEnabled;
+    }
+
+    public boolean isFileLoggingEnabled() {
+        return fileLoggingEnabled;
+    }
+
+    public void setFileLoggingEnabled(boolean fileLoggingEnabled) {
+        this.fileLoggingEnabled = fileLoggingEnabled;
+    }
+
+    public String getLogFileName() {
+        return logFileName;
+    }
+
+    public void setLogFileName(String logFileName) {
+        this.logFileName = logFileName;
     }
 
     public JsonNode getConfigJson() {

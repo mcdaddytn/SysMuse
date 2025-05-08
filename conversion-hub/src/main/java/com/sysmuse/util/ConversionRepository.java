@@ -54,10 +54,22 @@ public class ConversionRepository {
     // Unique key field for multi-file overlay
     private String uniqueKeyField = null;
 
+    // Configuration instance
+    private SystemConfig systemConfig;
+
     /**
      * Constructor
      */
     public ConversionRepository() {
+        this.systemConfig = new SystemConfig();
+    }
+
+    /**
+     * Constructor with SystemConfig
+     */
+    public ConversionRepository(SystemConfig config) {
+        this.systemConfig = config;
+        this.maxTextLength = config.getMaxTextLength();
     }
 
     /**
@@ -72,7 +84,7 @@ public class ConversionRepository {
                 columnMap.put(headers[i], i);
             }
         }
-        System.out.println("Column map created with " + columnMap.size() + " entries");
+        LoggingUtil.info("Column map created with " + columnMap.size() + " entries");
     }
 
     /**
@@ -188,6 +200,21 @@ public class ConversionRepository {
     }
 
     /**
+     * Get SystemConfig instance
+     */
+    public SystemConfig getSystemConfig() {
+        return systemConfig;
+    }
+
+    /**
+     * Set SystemConfig instance
+     */
+    public void setSystemConfig(SystemConfig config) {
+        this.systemConfig = config;
+        this.maxTextLength = config.getMaxTextLength();
+    }
+
+    /**
      * Infer column types from first data row
      */
     public void inferTypes(String[] headers, String[] firstDataRow) {
@@ -220,7 +247,7 @@ public class ConversionRepository {
                 columnTypes.put(columnName, DataType.STRING);
             }
         }
-        System.out.println("Inferred types for " + columnTypes.size() + " columns");
+        LoggingUtil.info("Inferred types for " + columnTypes.size() + " columns");
     }
 
     /**
@@ -295,7 +322,7 @@ public class ConversionRepository {
                 } else if (paramValue.isNull()) {
                     configParameters.put(paramName, null);
                 }
-                System.out.println("Found parameter: " + paramName + " = " +
+                LoggingUtil.debug("Found parameter: " + paramName + " = " +
                         configParameters.get(paramName));
             }
         }
@@ -357,11 +384,11 @@ public class ConversionRepository {
 
                         if (isUniqueKey) {
                             uniqueKeyField = columnName;
-                            System.out.println("Found unique key field: " + uniqueKeyField);
+                            LoggingUtil.info("Found unique key field: " + uniqueKeyField);
                         }
                     }
 
-                    System.out.println("Column '" + columnName + "' configured with type: " + type +
+                    LoggingUtil.debug("Column '" + columnName + "' configured with type: " + type +
                             ", visibility: " + isVisible);
                 }
             }
@@ -370,7 +397,7 @@ public class ConversionRepository {
         // Parse derived boolean fields
         if (config.has("derivedBooleanFields")) {
             JsonNode derivedFields = config.get("derivedBooleanFields");
-            System.out.println("Found " + derivedFields.size() + " derived boolean fields in config");
+            LoggingUtil.info("Found " + derivedFields.size() + " derived boolean fields in config");
 
             Iterator<String> fieldNames = derivedFields.fieldNames();
             while (fieldNames.hasNext()) {
@@ -392,7 +419,7 @@ public class ConversionRepository {
                 }
                 columnVisibility.put(fieldName, isVisible);
 
-                System.out.println("Derived boolean field '" + fieldName + "' configured with expression: " +
+                LoggingUtil.debug("Derived boolean field '" + fieldName + "' configured with expression: " +
                         fieldConfig + ", visibility: " + isVisible);
             }
         }
@@ -400,7 +427,7 @@ public class ConversionRepository {
         // Parse aggregate text fields
         if (config.has("aggregateTextFields")) {
             JsonNode aggregateFields = config.get("aggregateTextFields");
-            System.out.println("Found " + aggregateFields.size() + " aggregate text fields in config");
+            LoggingUtil.info("Found " + aggregateFields.size() + " aggregate text fields in config");
 
             Iterator<String> fieldNames = aggregateFields.fieldNames();
             while (fieldNames.hasNext()) {
@@ -422,7 +449,7 @@ public class ConversionRepository {
                 }
                 columnVisibility.put(fieldName, isVisible);
 
-                System.out.println("Aggregate text field '" + fieldName + "' configured with condition: "
+                LoggingUtil.debug("Aggregate text field '" + fieldName + "' configured with condition: "
                         + fieldConfig.get("condition").asText() + ", visibility: " + isVisible);
 
                 // Log source fields
@@ -432,7 +459,7 @@ public class ConversionRepository {
                     if (i > 0) sb.append(", ");
                     sb.append(sourceFields.get(i).asText());
                 }
-                System.out.println("Source fields for '" + fieldName + "': " + sb.toString());
+                LoggingUtil.debug("Source fields for '" + fieldName + "': " + sb.toString());
             }
         }
 
@@ -446,19 +473,19 @@ public class ConversionRepository {
 
                 suppressedFields.put(fieldToSuppress, conditionField);
 
-                System.out.println("Field '" + fieldToSuppress + "' will be suppressed when '" +
+                LoggingUtil.debug("Field '" + fieldToSuppress + "' will be suppressed when '" +
                         conditionField + "' is false");
             }
         }
 
         // Print summary of configuration
-        System.out.println("Configuration summary:");
-        System.out.println("- Parameters: " + configParameters.size());
-        System.out.println("- Column types: " + columnTypes.size());
-        System.out.println("- Derived boolean fields: " + derivedBooleanFields.size());
-        System.out.println("- Aggregate text fields: " + aggregateTextFields.size());
-        System.out.println("- Suppressed fields: " + suppressedFields.size());
-        System.out.println("- Unique key field: " + uniqueKeyField);
+        LoggingUtil.info("Configuration summary:");
+        LoggingUtil.info("- Parameters: " + configParameters.size());
+        LoggingUtil.info("- Column types: " + columnTypes.size());
+        LoggingUtil.info("- Derived boolean fields: " + derivedBooleanFields.size());
+        LoggingUtil.info("- Aggregate text fields: " + aggregateTextFields.size());
+        LoggingUtil.info("- Suppressed fields: " + suppressedFields.size());
+        LoggingUtil.info("- Unique key field: " + uniqueKeyField);
 
         // Count visible and hidden fields
         int visibleCount = 0;
@@ -470,8 +497,8 @@ public class ConversionRepository {
                 hiddenCount++;
             }
         }
-        System.out.println("- Visible fields: " + visibleCount);
-        System.out.println("- Hidden fields: " + hiddenCount);
+        LoggingUtil.info("- Visible fields: " + visibleCount);
+        LoggingUtil.info("- Hidden fields: " + hiddenCount);
     }
 
     /**
@@ -487,8 +514,7 @@ public class ConversionRepository {
                 Boolean result = BooleanExpressionEvaluator.evaluate(expression, rowValues);
                 rowValues.put(fieldName, result);
             } catch (Exception e) {
-                System.err.println("Error evaluating derived field '" + fieldName + "': " + e.getMessage());
-                e.printStackTrace();
+                LoggingUtil.error("Error evaluating derived field '" + fieldName + "': " + e.getMessage(), e);
                 // Set default value to false if evaluation fails
                 rowValues.put(fieldName, false);
             }
@@ -508,8 +534,7 @@ public class ConversionRepository {
                 String aggregatedText = TextFieldProcessor.processAggregateField(config, rowValues);
                 rowValues.put(fieldName, aggregatedText);
             } catch (Exception e) {
-                System.err.println("Error processing aggregate field '" + fieldName + "': " + e.getMessage());
-                e.printStackTrace();
+                LoggingUtil.error("Error processing aggregate field '" + fieldName + "': " + e.getMessage(), e);
                 // Set empty string if processing fails
                 rowValues.put(fieldName, "");
             }
@@ -527,7 +552,7 @@ public class ConversionRepository {
                     rowValues.put(fieldName, null);
                 }
             } catch (Exception e) {
-                System.err.println("Error checking field suppression for '" + fieldName + "': " + e.getMessage());
+                LoggingUtil.error("Error checking field suppression for '" + fieldName + "': " + e.getMessage(), e);
                 // Don't modify the field if suppression check fails
             }
         }

@@ -3,29 +3,20 @@ package com.sysmuse.util;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Utility class for processing text fields based on conditions
- * Updated to support different aggregation modes from system configuration
+ * Updated to use SystemConfig exclusively and proper logging
  */
 public class TextFieldProcessor {
 
     private static SystemConfig systemConfig;
-    private static Properties properties;
 
     /**
-     * Set the system configuration for aggregation modes
+     * Set the system configuration for text field processing
      */
     public static void setSystemConfig(SystemConfig config) {
         systemConfig = config;
-    }
-
-    /**
-     * Set properties for backward compatibility
-     */
-    public static void setProperties(Properties props) {
-        properties = props;
     }
 
     /**
@@ -41,7 +32,7 @@ public class TextFieldProcessor {
             if (condValue instanceof Boolean) {
                 condition = (Boolean) condValue;
             } else {
-                System.out.println("Warning: Condition field '" + conditionField +
+                LoggingUtil.debug("Condition field '" + conditionField +
                         "' has non-boolean value: " + condValue);
                 // Convert String "true"/"false" to boolean if needed
                 if (condValue instanceof String) {
@@ -49,7 +40,7 @@ public class TextFieldProcessor {
                 }
             }
         } else {
-            System.out.println("Warning: processAggregateField condition field '" + conditionField +
+            LoggingUtil.debug("Condition field '" + conditionField +
                     "' not found in row values. Available fields: " + rowValues.keySet());
         }
 
@@ -84,26 +75,8 @@ public class TextFieldProcessor {
                 fieldNamePrefix = systemConfig.getFieldNamePrefix();
                 fieldNameSuffix = systemConfig.getFieldNameSuffix();
             }
-        } else if (properties != null) {
-            // For backward compatibility
-            separator = properties.getProperty("default.text.separator", " ");
-
-            // Check if we have textAggregation.mode property
-            String modeStr = properties.getProperty("textAggregation.mode");
-            if (modeStr != null) {
-                try {
-                    mode = SystemConfig.TextAggregationMode.valueOf(modeStr.toUpperCase());
-                    if (mode == SystemConfig.TextAggregationMode.NEWLINE) {
-                        separator = properties.getProperty("textAggregation.newlineChar", "\n");
-                    } else if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
-                        separator = properties.getProperty("textAggregation.newlineChar", "\n");
-                        fieldNamePrefix = properties.getProperty("textAggregation.fieldNamePrefix", "[");
-                        fieldNameSuffix = properties.getProperty("textAggregation.fieldNameSuffix", "]");
-                    }
-                } catch (IllegalArgumentException e) {
-                    // Invalid mode, leave as is
-                }
-            }
+        } else {
+            LoggingUtil.warn("No system configuration set for text field processing, using defaults");
         }
 
         boolean isFirst = true;
@@ -136,7 +109,7 @@ public class TextFieldProcessor {
                     aggregated.append(val.toString());
                 }
             } else {
-                System.out.println("Warning: processAggregateField source field '" + fieldToAggregate +
+                LoggingUtil.debug("Source field '" + fieldToAggregate +
                         "' not found for aggregation. Available fields: " + rowValues.keySet());
             }
         }
@@ -159,7 +132,7 @@ public class TextFieldProcessor {
 
         // Check if condition field exists
         if (!rowValues.containsKey(conditionField)) {
-            System.out.println("Warning: Condition field '" + conditionField +
+            LoggingUtil.debug("Condition field '" + conditionField +
                     "' not found for suppression rule. Available fields: " + rowValues.keySet());
             return false;
         }
@@ -173,7 +146,7 @@ public class TextFieldProcessor {
         } else if (condValue instanceof String) {
             condition = Boolean.parseBoolean((String) condValue);
         } else {
-            System.out.println("Warning: Condition field '" + conditionField +
+            LoggingUtil.debug("Condition field '" + conditionField +
                     "' has unexpected type: " + (condValue != null ? condValue.getClass().getName() : "null"));
             return false;
         }

@@ -12,12 +12,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * JsonConverter - Handles importing from and exporting to JSON format
  * using Jackson library.
- * Updated to support exclusive subsets processing.
+ * Updated to use SystemConfig exclusively and proper logging.
  */
 public class JsonConverter {
 
-    private SystemConfig config;
-    private Properties properties; // For backward compatibility
+    private SystemConfig systemConfig;
     private ObjectMapper mapper;
     private boolean prettyPrint;
     private int indentSize;
@@ -26,8 +25,7 @@ public class JsonConverter {
      * Constructor with SystemConfig
      */
     public JsonConverter(SystemConfig config) {
-        this.config = config;
-        this.properties = config.toProperties(); // Convert for backward compatibility
+        this.systemConfig = config;
         this.mapper = new ObjectMapper();
 
         // Get pretty print settings from config
@@ -40,34 +38,10 @@ public class JsonConverter {
     }
 
     /**
-     * Constructor with Properties (for backward compatibility)
-     */
-    public JsonConverter(Properties properties) {
-        this.properties = properties;
-        this.mapper = new ObjectMapper();
-
-        // Create default config
-        this.config = new SystemConfig();
-
-        // Check if pretty printing is enabled in properties
-        this.prettyPrint = Boolean.parseBoolean(properties.getProperty("output.pretty", "true"));
-        if (prettyPrint) {
-            mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        }
-
-        // Get indent size if specified
-        try {
-            this.indentSize = Integer.parseInt(properties.getProperty("output.indent", "2"));
-        } catch (NumberFormatException e) {
-            this.indentSize = 2; // Default indent
-        }
-    }
-
-    /**
      * Import data from a JSON file into the repository
      */
     public void importToRepository(String jsonFilePath, ConversionRepository repository) throws IOException {
-        System.out.println("Importing data from JSON file: " + jsonFilePath);
+        LoggingUtil.info("Importing data from JSON file: " + jsonFilePath);
 
         // Parse the JSON file
         File jsonFile = new File(jsonFilePath);
@@ -84,7 +58,7 @@ public class JsonConverter {
             throw new IllegalArgumentException("Unsupported JSON structure: root node must be array or object");
         }
 
-        System.out.println("Imported " + repository.getDataRows().size() + " rows from JSON file");
+        LoggingUtil.info("Imported " + repository.getDataRows().size() + " rows from JSON file");
     }
 
     /**
@@ -204,7 +178,7 @@ public class JsonConverter {
      * Export data from the repository to a JSON file
      */
     public void exportFromRepository(ConversionRepository repository, String jsonFilePath) throws IOException {
-        System.out.println("Exporting data to JSON file: " + jsonFilePath);
+        LoggingUtil.info("Exporting data to JSON file: " + jsonFilePath);
 
         // Create the root array node
         ArrayNode rootArray = mapper.createArrayNode();
@@ -230,7 +204,7 @@ public class JsonConverter {
         // Write to file
         mapper.writeValue(new File(jsonFilePath), rootArray);
 
-        System.out.println("Exported " + repository.getDataRows().size() +
+        LoggingUtil.info("Exported " + repository.getDataRows().size() +
                 " rows to JSON file: " + jsonFilePath);
     }
 
@@ -240,14 +214,14 @@ public class JsonConverter {
      */
     public void exportSubsetsFromRepository(ConversionRepository repository, String baseJsonFilePath) throws IOException {
         // Create the subset processor with system config
-        SubsetProcessor subsetProcessor = new SubsetProcessor(config, repository);
+        SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
 
         if (!subsetProcessor.hasSubsets()) {
-            System.out.println("No subsets configured for export.");
+            LoggingUtil.info("No subsets configured for export.");
             return;
         }
 
-        System.out.println("Exporting filtered subsets to JSON files");
+        LoggingUtil.info("Exporting filtered subsets to JSON files");
 
         // For tracking unfiltered records
         Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
@@ -259,7 +233,7 @@ public class JsonConverter {
         try {
             visibleFields = repository.getVisibleFieldNames();
         } catch (NullPointerException e) {
-            System.out.println("Warning: Unable to get visible field names. Using all fields from first row.");
+            LoggingUtil.warn("Unable to get visible field names. Using all fields from first row.");
             // Fallback to the fields from the first data row if available
             visibleFields = new ArrayList<>();
             if (!repository.getDataRows().isEmpty()) {
@@ -269,11 +243,11 @@ public class JsonConverter {
 
         // Check if we have fields to export
         if (visibleFields.isEmpty()) {
-            System.out.println("No fields to export. Checking if data rows exist to extract field names.");
+            LoggingUtil.warn("No fields to export. Checking if data rows exist to extract field names.");
             if (!repository.getDataRows().isEmpty()) {
                 visibleFields.addAll(repository.getDataRows().get(0).keySet());
             } else {
-                System.out.println("Error: No data to export and no field names available.");
+                LoggingUtil.error("No data to export and no field names available.");
                 return;
             }
         }
@@ -302,18 +276,18 @@ public class JsonConverter {
             }
 
             if (!filterExists) {
-                System.out.println("Warning: Filter field '" + filterField + "' not found in repository data, skipping subset");
+                LoggingUtil.warn("Filter field '" + filterField + "' not found in repository data, skipping subset");
                 continue;
             }
 
-            System.out.println("Debug: Filter field '" + filterField + "' exists in " + rowsWithField +
+            LoggingUtil.debug("Filter field '" + filterField + "' exists in " + rowsWithField +
                     " rows out of " + repository.getDataRows().size() +
                     ". " + rowsWithTrueValue + " rows have 'true' values.");
 
             // Create output file path with suffix
             String outputPath = subsetProcessor.getOutputPathWithSuffix(baseJsonFilePath, suffix, ".json");
 
-            System.out.println("Exporting subset for filter '" + filterField + "' to: " + outputPath);
+            LoggingUtil.info("Exporting subset for filter '" + filterField + "' to: " + outputPath);
 
             // Create a JSON array for this subset
             ArrayNode subsetArray = mapper.createArrayNode();
@@ -350,18 +324,18 @@ public class JsonConverter {
             // Write to file
             mapper.writeValue(new File(outputPath), subsetArray);
 
-            System.out.println("Exported " + matchCount + " rows to subset file: " + outputPath);
+            LoggingUtil.info("Exported " + matchCount + " rows to subset file: " + outputPath);
         }
 
         // If we need to output remaining unfiltered rows
         if (!unfilteredRows.isEmpty()) {
-            String defaultSuffix = config.getOutputSuffix();
+            String defaultSuffix = systemConfig.getOutputSuffix();
             if (defaultSuffix == null || defaultSuffix.isEmpty()) {
-                defaultSuffix = properties.getProperty("output.suffix", "_default");
+                defaultSuffix = "_default";
             }
             String unfilteredPath = subsetProcessor.getOutputPathWithSuffix(baseJsonFilePath, defaultSuffix, ".json");
 
-            System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);
+            LoggingUtil.info("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);
 
             // Create JSON array for unfiltered rows
             ArrayNode unfilteredArray = mapper.createArrayNode();
@@ -390,7 +364,7 @@ public class JsonConverter {
      * Export both data and configuration from the repository to a JSON file
      */
     public void exportWithConfigToRepository(ConversionRepository repository, String jsonFilePath) throws IOException {
-        System.out.println("Exporting data with configuration to JSON file: " + jsonFilePath);
+        LoggingUtil.info("Exporting data with configuration to JSON file: " + jsonFilePath);
 
         // Create the root object node
         ObjectNode rootNode = mapper.createObjectNode();
@@ -479,7 +453,7 @@ public class JsonConverter {
         // Write to file
         mapper.writeValue(new File(jsonFilePath), rootNode);
 
-        System.out.println("Exported " + repository.getDataRows().size() +
+        LoggingUtil.info("Exported " + repository.getDataRows().size() +
                 " rows with configuration to JSON file: " + jsonFilePath);
     }
 

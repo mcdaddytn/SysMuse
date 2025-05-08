@@ -11,47 +11,28 @@ import java.util.*;
  */
 public class CsvConverter {
 
-    private SystemConfig config;
-    private Properties properties; // For backward compatibility
+    private SystemConfig systemConfig;
     private int maxTextLength;
 
     /**
      * Constructor with SystemConfig
      */
     public CsvConverter(SystemConfig config) {
-        this.config = config;
-        this.properties = config.toProperties(); // Convert for backward compatibility
+        this.systemConfig = config;
         this.maxTextLength = config.getMaxTextLength();
-    }
-
-    /**
-     * Constructor with Properties (for backward compatibility)
-     */
-    public CsvConverter(Properties properties) {
-        this.properties = properties;
-
-        // Create default config
-        this.config = new SystemConfig();
-
-        // Get maxTextLength from properties
-        String maxTextLengthStr = properties.getProperty("maxTextLength", "0");
-        try {
-            this.maxTextLength = Integer.parseInt(maxTextLengthStr);
-            this.config.setMaxTextLength(this.maxTextLength);
-        } catch (NumberFormatException e) {
-            this.maxTextLength = 0; // Default is no truncation
-        }
     }
 
     /**
      * Parse only the CSV header
      */
     public String[] parseCSVHeader(String csvFilePath) throws IOException {
+        LoggingUtil.debug("Parsing CSV header from: " + csvFilePath);
         BufferedReader reader = new BufferedReader(new FileReader(csvFilePath));
         String headerLine = reader.readLine();
         reader.close();
 
         if (headerLine == null) {
+            LoggingUtil.warn("Empty CSV file: " + csvFilePath);
             return new String[0];
         }
 
@@ -65,6 +46,7 @@ public class CsvConverter {
             }
         }
 
+        LoggingUtil.debug("Found " + headers.length + " headers in CSV file");
         return headers;
     }
 
@@ -72,6 +54,7 @@ public class CsvConverter {
      * Parse only the first data row after the header
      */
     public String[] parseFirstDataRow(String csvFilePath) throws IOException {
+        LoggingUtil.debug("Parsing first data row from: " + csvFilePath);
         BufferedReader reader = new BufferedReader(new FileReader(csvFilePath));
 
         // Skip the header
@@ -94,6 +77,7 @@ public class CsvConverter {
                     // End of the first data row
                     reader.close();
                     String rowData = firstRowBuilder.toString();
+                    LoggingUtil.debug("Read first data row with " + rowData.length() + " characters");
                     return parseCSVRow(rowData);
                 }
             }
@@ -103,9 +87,11 @@ public class CsvConverter {
 
         // If we reached here, there's only one row or the file is empty
         if (firstRowBuilder.length() > 0) {
+            LoggingUtil.debug("File has only header and one data row");
             return parseCSVRow(firstRowBuilder.toString());
         }
 
+        LoggingUtil.warn("No data rows found in CSV file");
         return null;
     }
 
@@ -169,12 +155,12 @@ public class CsvConverter {
      * Import data from a CSV file into the repository
      */
     public void importToRepository(String csvFilePath, ConversionRepository repository) throws IOException {
-        System.out.println("Importing data from CSV file: " + csvFilePath);
+        LoggingUtil.info("Importing data from CSV file: " + csvFilePath);
 
         // First read the entire file
-        System.out.println("Reading file: " + csvFilePath);
+        LoggingUtil.debug("Reading file: " + csvFilePath);
         String fileContent = new String(Files.readAllBytes(Paths.get(csvFilePath)));
-        System.out.println("File size: " + fileContent.length() + " characters");
+        LoggingUtil.debug("File size: " + fileContent.length() + " characters");
 
         // Split the content by newlines, but respect quotes
         boolean inQuotes = false;
@@ -182,7 +168,7 @@ public class CsvConverter {
         List<String> rowStrings = new ArrayList<>();
 
         // Skip the header
-        System.out.println("Skipping header row...");
+        LoggingUtil.debug("Skipping header row...");
         for (int i = 0; i < fileContent.length(); i++) {
             if (fileContent.charAt(i) == '\n' && !inQuotes) {
                 rowStartIndex = i + 1;
@@ -204,20 +190,20 @@ public class CsvConverter {
             }
 
             if (maxRows != null) {
-                System.out.println("Will import at most " + maxRows + " rows as specified in configuration");
+                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in configuration");
             }
         } else {
             // Check if maxImportRows is set in config
-            int configMaxRows = config.getMaxImportRows();
+            int configMaxRows = systemConfig.getMaxImportRows();
             if (configMaxRows > 0) {
                 maxRows = configMaxRows;
-                System.out.println("Will import at most " + maxRows + " rows as specified in system config");
+                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in system config");
             }
         }
 
         // Parse remaining rows
         int rowCount = 0;
-        System.out.println("Parsing data rows...");
+        LoggingUtil.debug("Parsing data rows...");
         for (int i = rowStartIndex; i < fileContent.length(); i++) {
             char c = fileContent.charAt(i);
 
@@ -231,12 +217,12 @@ public class CsvConverter {
 
                 rowCount++;
                 if (rowCount % 100 == 0) {
-                    System.out.println("Processed " + rowCount + " rows so far");
+                    LoggingUtil.debug("Processed " + rowCount + " rows so far");
                 }
 
                 // Check if we've reached the maximum number of rows to import
                 if (maxRows != null && rowCount >= maxRows) {
-                    System.out.println("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
+                    LoggingUtil.info("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
                     break;
                 }
             }
@@ -249,7 +235,7 @@ public class CsvConverter {
             rowCount++;
         }
 
-        System.out.println("Found " + rowCount + " data rows. Processing...");
+        LoggingUtil.info("Found " + rowCount + " data rows. Processing...");
 
         // Get the headers from the repository
         String[] headers = repository.getHeaders();
@@ -295,11 +281,11 @@ public class CsvConverter {
 
             processedRows++;
             if (processedRows % 100 == 0) {
-                System.out.println("Processed details for " + processedRows + " rows");
+                LoggingUtil.debug("Processed details for " + processedRows + " rows");
             }
         }
 
-        System.out.println("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
+        LoggingUtil.info("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
     }
 
     /**
@@ -346,7 +332,7 @@ public class CsvConverter {
             }
         }
 
-        System.out.println("Processing " + filePaths.length + " CSV files for import");
+        LoggingUtil.info("Processing " + filePaths.length + " CSV files for import");
 
         // Get the unique key field from the repository
         String uniqueKeyField = repository.getUniqueKeyField();
@@ -356,18 +342,18 @@ public class CsvConverter {
 
         // Import the first file normally, but don't process derived fields yet
         if (filePaths.length > 0) {
-            System.out.println("Importing base file: " + filePaths[0]);
+            LoggingUtil.info("Importing base file: " + filePaths[0]);
             importToRepositoryWithoutProcessing(filePaths[0], repository);
         }
 
         // Process overlay files if there are more than one
         for (int i = 1; i < filePaths.length; i++) {
-            System.out.println("Importing overlay file " + (i+1) + ": " + filePaths[i]);
+            LoggingUtil.info("Importing overlay file " + (i+1) + ": " + filePaths[i]);
             importOverlayFileWithoutProcessing(filePaths[i], repository, uniqueKeyField);
         }
 
         // Now that all data is imported, process derived fields, aggregation, and suppression
-        System.out.println("Processing derived fields and transformations on complete dataset...");
+        LoggingUtil.info("Processing derived fields and transformations on complete dataset...");
         processRepositoryRows(repository);
     }
 
@@ -375,12 +361,12 @@ public class CsvConverter {
      * Import data from a CSV file into the repository without processing derived fields
      */
     private void importToRepositoryWithoutProcessing(String csvFilePath, ConversionRepository repository) throws IOException {
-        System.out.println("Importing data from CSV file (without processing): " + csvFilePath);
+        LoggingUtil.info("Importing data from CSV file (without processing): " + csvFilePath);
 
         // First read the entire file
-        System.out.println("Reading file: " + csvFilePath);
+        LoggingUtil.debug("Reading file: " + csvFilePath);
         String fileContent = new String(Files.readAllBytes(Paths.get(csvFilePath)));
-        System.out.println("File size: " + fileContent.length() + " characters");
+        LoggingUtil.debug("File size: " + fileContent.length() + " characters");
 
         // Split the content by newlines, but respect quotes
         boolean inQuotes = false;
@@ -388,7 +374,7 @@ public class CsvConverter {
         List<String> rowStrings = new ArrayList<>();
 
         // Skip the header
-        System.out.println("Skipping header row...");
+        LoggingUtil.debug("Skipping header row...");
         for (int i = 0; i < fileContent.length(); i++) {
             if (fileContent.charAt(i) == '\n' && !inQuotes) {
                 rowStartIndex = i + 1;
@@ -410,20 +396,20 @@ public class CsvConverter {
             }
 
             if (maxRows != null) {
-                System.out.println("Will import at most " + maxRows + " rows as specified in configuration");
+                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in configuration");
             }
         } else {
             // Check if maxImportRows is set in config
-            int configMaxRows = config.getMaxImportRows();
+            int configMaxRows = systemConfig.getMaxImportRows();
             if (configMaxRows > 0) {
                 maxRows = configMaxRows;
-                System.out.println("Will import at most " + maxRows + " rows as specified in system config");
+                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in system config");
             }
         }
 
         // Parse remaining rows
         int rowCount = 0;
-        System.out.println("Parsing data rows...");
+        LoggingUtil.debug("Parsing data rows...");
         for (int i = rowStartIndex; i < fileContent.length(); i++) {
             char c = fileContent.charAt(i);
 
@@ -437,12 +423,12 @@ public class CsvConverter {
 
                 rowCount++;
                 if (rowCount % 100 == 0) {
-                    System.out.println("Processed " + rowCount + " rows so far");
+                    LoggingUtil.debug("Processed " + rowCount + " rows so far");
                 }
 
                 // Check if we've reached the maximum number of rows to import
                 if (maxRows != null && rowCount >= maxRows) {
-                    System.out.println("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
+                    LoggingUtil.info("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
                     break;
                 }
             }
@@ -455,7 +441,7 @@ public class CsvConverter {
             rowCount++;
         }
 
-        System.out.println("Found " + rowCount + " data rows. Processing...");
+        LoggingUtil.info("Found " + rowCount + " data rows. Processing...");
 
         // Get the headers from the repository
         String[] headers = repository.getHeaders();
@@ -492,11 +478,11 @@ public class CsvConverter {
 
             processedRows++;
             if (processedRows % 100 == 0) {
-                System.out.println("Processed details for " + processedRows + " rows");
+                LoggingUtil.debug("Processed details for " + processedRows + " rows");
             }
         }
 
-        System.out.println("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
+        LoggingUtil.info("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
     }
 
     /**
@@ -505,7 +491,7 @@ public class CsvConverter {
      */
     private void importOverlayFileWithoutProcessing(String overlayFilePath, ConversionRepository repository,
                                                     String uniqueKeyField) throws IOException {
-        System.out.println("Importing overlay file (without processing): " + overlayFilePath);
+        LoggingUtil.info("Importing overlay file (without processing): " + overlayFilePath);
 
         // Read file content
         String fileContent = new String(Files.readAllBytes(Paths.get(overlayFilePath)));
@@ -628,7 +614,7 @@ public class CsvConverter {
             updatedCount++;
         }
 
-        System.out.println("Updated " + updatedCount + " rows from overlay file");
+        LoggingUtil.info("Updated " + updatedCount + " rows from overlay file");
     }
 
     /**
@@ -637,7 +623,7 @@ public class CsvConverter {
     public void processRepositoryRows(ConversionRepository repository) {
         List<Map<String, Object>> rows = repository.getDataRows();
 
-        System.out.println("Processing derived fields, aggregation, and suppression for " + rows.size() + " rows");
+        LoggingUtil.info("Processing derived fields, aggregation, and suppression for " + rows.size() + " rows");
         int processedCount = 0;
 
         for (Map<String, Object> row : rows) {
@@ -652,18 +638,18 @@ public class CsvConverter {
 
             processedCount++;
             if (processedCount % 100 == 0) {
-                System.out.println("Processed transformations for " + processedCount + " rows");
+                LoggingUtil.debug("Processed transformations for " + processedCount + " rows");
             }
         }
 
-        System.out.println("Completed processing of transformations for all rows");
+        LoggingUtil.info("Completed processing of transformations for all rows");
     }
 
     /**
      * Export data from the repository to a CSV file
      */
     public void exportFromRepository(ConversionRepository repository, String csvFilePath) throws IOException {
-        System.out.println("Exporting data to CSV file: " + csvFilePath);
+        LoggingUtil.info("Exporting data to CSV file: " + csvFilePath);
 
         // Get visible fields in order
         List<String> visibleFields = repository.getVisibleFieldNames();
@@ -690,7 +676,7 @@ public class CsvConverter {
             }
         }
 
-        System.out.println("Exported " + repository.getDataRows().size() +
+        LoggingUtil.info("Exported " + repository.getDataRows().size() +
                 " rows to CSV file: " + csvFilePath);
     }
 
@@ -700,7 +686,7 @@ public class CsvConverter {
      */
     public void exportSubsetsFromRepository(ConversionRepository repository, String baseCsvFilePath) throws IOException {
         // Create the subset processor
-        SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+        SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
 
         if (!subsetProcessor.hasSubsets()) {
             System.out.println("No subsets configured for export.");
@@ -814,7 +800,7 @@ public class CsvConverter {
 
         // If we need to output remaining unfiltered rows
         if (!unfilteredRows.isEmpty()) {
-            String defaultSuffix = properties.getProperty("output.suffix", "_default");
+            String defaultSuffix = systemConfig.getOutputSuffix();
             String unfilteredPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, defaultSuffix, ".csv");
 
             System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);

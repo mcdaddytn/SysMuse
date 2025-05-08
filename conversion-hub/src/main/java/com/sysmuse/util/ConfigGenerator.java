@@ -18,4 +18,11 @@ public interface ConfigGenerator {
      * @return A JsonNode containing the full configuration
      */
     JsonNode generateConfig(String[] headers, String[] firstDataRow, Map<String, Object> columnTypes);
+
+    /**
+     * Set the system configuration for the generator
+     *
+     * @param config The system configuration
+     */
+    void setSystemConfig(SystemConfig config);
 }

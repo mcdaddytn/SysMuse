@@ -29,12 +29,12 @@ public class ConversionHub {
             try (InputStream in = ConversionHub.class.getClassLoader().getResourceAsStream("application.properties")) {
                 if (in != null) {
                     defaultProps.load(in);
-                    System.out.println("Loaded default properties");
+                    LoggingUtil.info("Loaded default properties");
                 } else {
-                    System.out.println("Default properties file not found, using built-in defaults");
+                    LoggingUtil.info("Default properties file not found, using built-in defaults");
                 }
             } catch (IOException e) {
-                System.out.println("Error loading default properties: " + e.getMessage());
+                LoggingUtil.error("Error loading default properties: " + e.getMessage());
             }
 
             hub.setProperties(defaultProps);
@@ -50,7 +50,7 @@ public class ConversionHub {
                 File firstArg = new File(args[0]);
                 if (firstArg.isDirectory()) {
                     configDir = args[0];
-                    System.out.println("Using config directory from arguments: " + configDir);
+                    LoggingUtil.info("Using config directory from arguments: " + configDir);
 
                     // Next argument would be input file
                     if (args.length > 1) {
@@ -96,14 +96,18 @@ public class ConversionHub {
             hub.loadSystemConfig(sysConfigPath);
             hub.systemConfig.printDebug();
 
+            //gm: to remove
             // Update properties with system config (for backward compatibility)
+            /*
             Properties combinedProps = hub.getSystemConfigAsProperties();
             combinedProps.putAll(defaultProps); // Allow application.properties to override
             hub.setProperties(combinedProps);
+             */
 
             // Set text field processor config
             TextFieldProcessor.setSystemConfig(hub.systemConfig);
-            TextFieldProcessor.setProperties(combinedProps);
+            // gm: to remove
+            //TextFieldProcessor.setProperties(combinedProps);
 
             // If no input file specified, use from system config
             if (inputFilePath == null) {
@@ -113,7 +117,7 @@ public class ConversionHub {
 
                 if (!inputFiles.isEmpty() && !inputPath.isEmpty()) {
                     inputFilePath = Paths.get(inputPath, inputFiles.get(0)).toString();
-                    System.out.println("Using input file from system config: " + inputFilePath);
+                    LoggingUtil.info("Using input file from system config: " + inputFilePath);
                 } else {
                     // Fallback to application.properties
                     inputPath = defaultProps.getProperty("input.path", "");
@@ -137,10 +141,10 @@ public class ConversionHub {
 
                     if (!inputPath.isEmpty() && !inputFilename.isEmpty()) {
                         inputFilePath = Paths.get(inputPath, inputFilename).toString();
-                        System.out.println("Using input file from properties: " + inputFilePath);
+                        LoggingUtil.info("Using input file from properties: " + inputFilePath);
                     } else {
-                        System.out.println("No input file specified in arguments, system config, or properties");
-                        System.out.println("Usage: ConversionHub [config_directory] <input_file> [config_json_file] [output_format]");
+                        LoggingUtil.info("No input file specified in arguments, system config, or properties");
+                        LoggingUtil.info("Usage: ConversionHub [config_directory] <input_file> [config_json_file] [output_format]");
                         System.exit(1);
                     }
                 }
@@ -151,7 +155,7 @@ public class ConversionHub {
                 String defaultConfigFilename = defaultProps.getProperty("config.filename", "config.json");
                 Path configPath = Paths.get(configDir, defaultConfigFilename);
                 configFilePath = configPath.toString();
-                System.out.println("Using config file path: " + configFilePath);
+                LoggingUtil.info("Using config file path: " + configFilePath);
             }
 
             // If no output format specified, try to get from system config or properties
@@ -172,12 +176,12 @@ public class ConversionHub {
                             // Default to JSON if can't determine
                             outputFormat = "json";
                         }
-                        System.out.println("Output format determined from input file: " + outputFormat);
+                        LoggingUtil.info("Output format determined from input file: " + outputFormat);
                     } else {
-                        System.out.println("Using output format from properties: " + outputFormat);
+                        LoggingUtil.info("Using output format from properties: " + outputFormat);
                     }
                 } else {
-                    System.out.println("Using output format from system config: " + outputFormat);
+                    LoggingUtil.info("Using output format from system config: " + outputFormat);
                 }
             }
 
@@ -226,10 +230,10 @@ public class ConversionHub {
             SystemConfig config = new SystemConfig();
             config.loadFromFile(configFilePath);
             this.systemConfig = config;
-            System.out.println("Loaded system configuration from: " + configFilePath);
+            LoggingUtil.info("Loaded system configuration from: " + configFilePath);
         } catch (IOException e) {
-            System.out.println("Could not load system configuration: " + e.getMessage());
-            System.out.println("Using default system configuration");
+            LoggingUtil.error("Could not load system configuration: " + e.getMessage());
+            LoggingUtil.error("Using default system configuration");
             this.systemConfig = new SystemConfig(); // Use defaults
         }
     }
@@ -237,15 +241,18 @@ public class ConversionHub {
     /**
      * Get properties from system config for backward compatibility
      */
+    // gm: to remove
+    /*
     public Properties getSystemConfigAsProperties() {
         return this.systemConfig.toProperties();
     }
+     */
 
     /**
      * Main processing method that orchestrates the conversion
      */
     public void process(String inputFilePath, String configFilePath, String outputFormat) throws Exception {
-        System.out.println("Starting conversion process for: " + inputFilePath);
+        LoggingUtil.info("Starting conversion process for: " + inputFilePath);
 
         // Store directory for output files
         File inputFile = new File(inputFilePath);
@@ -253,7 +260,7 @@ public class ConversionHub {
         if (inputDirectory == null) {
             inputDirectory = "."; // Current directory if no path specified
         }
-        System.out.println("Input directory: " + inputDirectory);
+        LoggingUtil.info("Input directory: " + inputDirectory);
 
         // Determine file format from extension or system config
         String inputFormat = systemConfig.getInputFormat();
@@ -267,9 +274,9 @@ public class ConversionHub {
             } else {
                 throw new IllegalArgumentException("Unsupported input file format. Supported formats: .csv, .json");
             }
-            System.out.println("Using input format determined from file extension: " + inputFormat);
+            LoggingUtil.info("Using input format determined from file extension: " + inputFormat);
         } else {
-            System.out.println("Using input format from system configuration: " + inputFormat);
+            LoggingUtil.info("Using input format from system configuration: " + inputFormat);
         }
 
         // Load or generate configuration - Need to do this first to identify uniqueKey field if using multiple files
@@ -308,7 +315,7 @@ public class ConversionHub {
                                 }
                             }
                         } catch (IOException e) {
-                            System.out.println("Warning: Could not read list file: " + e.getMessage());
+                            LoggingUtil.error("Warning: Could not read list file: " + e.getMessage());
                             // Add the single file as fallback
                             inputFiles.add(inputCsvFilename);
                         }
@@ -356,7 +363,7 @@ public class ConversionHub {
         }
 
         // Initialize the CSV converter (needed for header parsing)
-        CsvConverter csvConverter = new CsvConverter(properties);
+        CsvConverter csvConverter = new CsvConverter(systemConfig);
 
         // Load the appropriate converter based on the input format
         if ("csv".equals(inputFormat)) {
@@ -364,7 +371,7 @@ public class ConversionHub {
             if (useMultipleFiles) {
                 // For multiple files, parse the first file's header
                 String firstFile = firstActualFilePath;
-                System.out.println("Parsing headers from first file: " + firstFile);
+                LoggingUtil.info("Parsing headers from first file: " + firstFile);
                 String[] headers = csvConverter.parseCSVHeader(firstFile);
                 repository.setHeaders(headers);
 
@@ -380,7 +387,7 @@ public class ConversionHub {
                 loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
             } else {
                 // Single file mode
-                System.out.println("Parsing headers from file: " + inputFilePath);
+                LoggingUtil.info("Parsing headers from file: " + inputFilePath);
                 String[] headers = csvConverter.parseCSVHeader(inputFilePath);
                 repository.setHeaders(headers);
 
@@ -396,7 +403,7 @@ public class ConversionHub {
                 csvConverter.importToRepository(inputFilePath, repository);
             }
         } else if ("json".equals(inputFormat)) {
-            JsonConverter jsonConverter = new JsonConverter(properties);
+            JsonConverter jsonConverter = new JsonConverter(systemConfig);
 
             // Import the data into the repository
             jsonConverter.importToRepository(inputFilePath, repository);
@@ -412,20 +419,20 @@ public class ConversionHub {
                 Map<String, Object> firstRow = repository.getDataRows().get(0);
                 String[] headers = firstRow.keySet().toArray(new String[0]);
                 repository.setHeaders(headers);
-                System.out.println("Set headers from first JSON data row with " + headers.length + " fields");
+                LoggingUtil.info("Set headers from first JSON data row with " + headers.length + " fields");
             } else {
-                System.out.println("Warning: No data rows to extract headers from JSON file");
+                LoggingUtil.info("Warning: No data rows to extract headers from JSON file");
             }
         }
 
         // Check if headers are still null - this could cause problems during export
         if (repository.getHeaders() == null) {
-            System.out.println("Warning: Headers are still null after processing. Creating empty headers array.");
+            LoggingUtil.info("Warning: Headers are still null after processing. Creating empty headers array.");
             repository.setHeaders(new String[0]);
         }
 
         // Ensure all derived fields are processed for all rows
-        System.out.println("Ensuring all derived fields are processed before export...");
+        LoggingUtil.info("Ensuring all derived fields are processed before export...");
         int rowCount = repository.getDataRows().size();
         int processedFields = 0;
 
@@ -437,18 +444,18 @@ public class ConversionHub {
             processedFields++;
 
             if (processedFields % 100 == 0) {
-                System.out.println("Processed derived fields for " + processedFields + " out of " + rowCount + " rows");
+                LoggingUtil.info("Processed derived fields for " + processedFields + " out of " + rowCount + " rows");
             }
         }
 
         // Print some sample rows to verify data
         if (!repository.getDataRows().isEmpty()) {
-            System.out.println("\nSample data verification (first row):");
+            LoggingUtil.info("\nSample data verification (first row):");
             Map<String, Object> sampleRow = repository.getDataRows().get(0);
 
             // Print derived boolean fields
             for (String field : repository.getDerivedBooleanFields().keySet()) {
-                System.out.println("Derived field '" + field + "' = " + sampleRow.get(field));
+                LoggingUtil.info("Derived field '" + field + "' = " + sampleRow.get(field));
             }
 
             // Print subset filter fields if available
@@ -456,23 +463,23 @@ public class ConversionHub {
             if (!subsets.isEmpty()) {
                 for (String filterField : subsets.keySet()) {
                     if (sampleRow.containsKey(filterField)) {
-                        System.out.println("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
+                        LoggingUtil.info("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
                     } else {
-                        System.out.println("Filter field '" + filterField + "' not found in sample row");
+                        LoggingUtil.info("Filter field '" + filterField + "' not found in sample row");
                     }
                 }
             } else {
                 // Check legacy properties
                 String subsetConfig = properties.getProperty("output.subsets");
                 if (subsetConfig != null && !subsetConfig.trim().isEmpty()) {
-                    SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+                    SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
                     Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
 
                     for (String filterField : filterToSuffix.keySet()) {
                         if (sampleRow.containsKey(filterField)) {
-                            System.out.println("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
+                            LoggingUtil.info("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
                         } else {
-                            System.out.println("Filter field '" + filterField + "' not found in sample row");
+                            LoggingUtil.info("Filter field '" + filterField + "' not found in sample row");
                         }
                     }
                 }
@@ -480,18 +487,21 @@ public class ConversionHub {
         }
 
         // Print list of all available fields for debugging
-        System.out.println("\nAvailable fields in repository:");
+        LoggingUtil.info("\nAvailable fields in repository:");
         List<String> allFields = repository.getAllFieldNames();
         for (String field : allFields) {
-            System.out.println("  - " + field);
+            LoggingUtil.info("  - " + field);
         }
 
-        System.out.println("About to process output in format: " + outputFormat);
-        System.out.println("System config output format: " + systemConfig.getOutputFormat());
+        LoggingUtil.info("About to process output in format: " + outputFormat);
+        LoggingUtil.info("System config output format: " + systemConfig.getOutputFormat());
 
         // Export to the desired output format
         if ("json".equals(outputFormat.toLowerCase())) {
+
+            // gm: to remove
             // Create JSON converter with properties that include system config
+            /*
             Properties exportProps = new Properties();
             exportProps.putAll(properties);
 
@@ -501,11 +511,12 @@ public class ConversionHub {
             exportProps.setProperty("output.pretty", String.valueOf(systemConfig.isPrettyPrint()));
             exportProps.setProperty("output.indent", String.valueOf(systemConfig.getIndentSize()));
             exportProps.setProperty("exclusiveSubsets", String.valueOf(systemConfig.isExclusiveSubsets()));
+             */
 
-            JsonConverter jsonConverter = new JsonConverter(exportProps);
+            JsonConverter jsonConverter = new JsonConverter(systemConfig);
 
             // Create SubsetProcessor with the combined properties
-            SubsetProcessor subsetProcessor = new SubsetProcessor(exportProps, repository);
+            SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
 
             if (subsetProcessor.hasSubsets() || !systemConfig.getSubsets().isEmpty()) {
                 // Generate base output path for JSON
@@ -554,7 +565,7 @@ public class ConversionHub {
             }
 
             jsonConverter.exportFromRepository(repository, outputJsonPath);
-            System.out.println("Exported data to JSON: " + outputJsonPath);
+            LoggingUtil.info("Exported data to JSON: " + outputJsonPath);
         } else if ("csv".equals(outputFormat.toLowerCase())) {
             // Create properties that include system config
             Properties exportProps = new Properties();
@@ -566,11 +577,11 @@ public class ConversionHub {
             exportProps.setProperty("exclusiveSubsets", String.valueOf(systemConfig.isExclusiveSubsets()));
 
             // gm: changed this
-            csvConverter = new CsvConverter(exportProps);
+            csvConverter = new CsvConverter(systemConfig);
             //CsvConverter csvConverter = new CsvConverter(exportProps);
 
             // Create SubsetProcessor with the combined properties
-            SubsetProcessor subsetProcessor = new SubsetProcessor(exportProps, repository);
+            SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
 
             if (subsetProcessor.hasSubsets() || !systemConfig.getSubsets().isEmpty()) {
                 // Generate base output path for CSV
@@ -619,12 +630,12 @@ public class ConversionHub {
             }
 
             csvConverter.exportFromRepository(repository, outputCsvPath);
-            System.out.println("Exported data to CSV: " + outputCsvPath);
+            LoggingUtil.info("Exported data to CSV: " + outputCsvPath);
         } else {
             throw new IllegalArgumentException("Unsupported output format: " + outputFormat);
         }
 
-        System.out.println("Conversion completed successfully.");
+        LoggingUtil.info("Conversion completed successfully.");
     }
 
     /**
@@ -690,7 +701,7 @@ public class ConversionHub {
                         }
                     }
                 } catch (Exception ex) {
-                    System.out.println("Could not instantiate with compound expressions: " + ex.getMessage());
+                    LoggingUtil.error("Could not instantiate with compound expressions: " + ex.getMessage());
                 }
 
                 // Fallback to default constructor
@@ -715,9 +726,9 @@ public class ConversionHub {
                 return generator;
             }
         } catch (Exception e) {
-            System.out.println("Error loading config generator class: " + e.getMessage());
-            System.out.println("Falling back to StandardConfigGenerator");
-            return new StandardConfigGenerator(properties);
+            LoggingUtil.error("Error loading config generator class: " + e.getMessage());
+            LoggingUtil.error("Falling back to StandardConfigGenerator");
+            return new StandardConfigGenerator(systemConfig);
         }
     }
 
@@ -725,13 +736,13 @@ public class ConversionHub {
      * Load or generate configuration
      */
     private void loadConfiguration(String configFilePath, String[] headers, String[] firstDataRow) throws Exception {
-        System.out.println("Checking for configuration file: " + configFilePath);
+        LoggingUtil.info("Checking for configuration file: " + configFilePath);
 
         // Check if the file exists before trying to parse it
         File configFile = new File(configFilePath);
         if (!configFile.exists()) {
-            System.out.println("Configuration file not found: " + configFilePath);
-            System.out.println("Will generate a new configuration file.");
+            LoggingUtil.info("Configuration file not found: " + configFilePath);
+            LoggingUtil.info("Will generate a new configuration file.");
 
             // Convert repository's type map to Object map for the generator
             Map<String, Object> typesMap = new HashMap<>();
@@ -757,7 +768,7 @@ public class ConversionHub {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         try {
             com.fasterxml.jackson.databind.JsonNode config = mapper.readTree(configFile);
-            System.out.println("Successfully parsed config file: " + configFilePath);
+            LoggingUtil.info("Successfully parsed config file: " + configFilePath);
 
             // Extract configuration and apply to repository
             repository.extractConfigFromJSON(config);
@@ -780,7 +791,7 @@ public class ConversionHub {
             Path configDir = Paths.get(configDirectory);
             if (!Files.exists(configDir)) {
                 Files.createDirectories(configDir);
-                System.out.println("Created config directory: " + configDirectory);
+                LoggingUtil.info("Created config directory: " + configDirectory);
             }
             configFilePath = Paths.get(configDirectory, configFilename).toString();
         } else {
@@ -792,6 +803,6 @@ public class ConversionHub {
         mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
         mapper.writeValue(new File(configFilePath), config);
 
-        System.out.println("Generated configuration saved to: " + configFilePath);
+        LoggingUtil.info("Generated configuration saved to: " + configFilePath);
     }
 }

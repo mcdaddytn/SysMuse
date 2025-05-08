@@ -6,12 +6,11 @@ import java.nio.file.*;
 
 /**
  * Utility class for processing data subsets for both CSV and JSON formats.
- * Handles the subset filtering, tracking, and configuration parsing.
- * Updated to work with SystemConfig directly.
+ * Handles the subset filtering, tracking, and configuration.
+ * Updated to use SystemConfig exclusively and proper logging.
  */
 public class SubsetProcessor {
 
-    private Properties properties; // For backward compatibility
     private SystemConfig systemConfig;
     private Map<String, String> filterToSuffix = new LinkedHashMap<>();
     private boolean exclusiveSubsets = false;
@@ -34,135 +33,13 @@ public class SubsetProcessor {
             this.uniqueKeyField = repository.getUniqueKeyField();
 
             if (uniqueKeyField == null) {
-                System.out.println("Warning: exclusiveSubsets is enabled but no uniqueKey field is defined. " +
+                LoggingUtil.warn("Exclusive subsets is enabled but no uniqueKey field is defined. " +
                         "Subsets will not be processed exclusively.");
                 this.exclusiveSubsets = false;
             } else {
-                System.out.println("Exclusive subsets enabled with unique key field: " + uniqueKeyField);
+                LoggingUtil.info("Exclusive subsets enabled with unique key field: " + uniqueKeyField);
             }
         }
-    }
-
-    /**
-     * Constructor with properties and repository (for backward compatibility)
-     */
-    public SubsetProcessor(Properties properties, ConversionRepository repository) {
-        this.properties = properties;
-
-        // Check if exclusive subsets are enabled
-        this.exclusiveSubsets = Boolean.parseBoolean(
-                properties.getProperty("exclusiveSubsets", "false"));
-
-        // Parse the subset configuration
-        String subsetConfig = properties.getProperty("output.subsets");
-        this.filterToSuffix = parseSubsetConfig(subsetConfig);
-
-        // Get the unique key field from the repository if exclusive subsets are enabled
-        if (exclusiveSubsets) {
-            this.uniqueKeyField = repository.getUniqueKeyField();
-
-            if (uniqueKeyField == null) {
-                System.out.println("Warning: exclusiveSubsets is enabled but no uniqueKey field is defined. " +
-                        "Subsets will not be processed exclusively.");
-                this.exclusiveSubsets = false;
-            } else {
-                System.out.println("Exclusive subsets enabled with unique key field: " + uniqueKeyField);
-            }
-        }
-    }
-
-    /**
-     * Parse subset configuration from properties
-     */
-    public Map<String, String> parseSubsetConfig(String subsetConfig) {
-        Map<String, String> filterToSuffix = new LinkedHashMap<>();
-
-        if (subsetConfig == null || subsetConfig.trim().isEmpty()) {
-            return filterToSuffix;
-        }
-
-        System.out.println("Parsing subset configuration: " + subsetConfig);
-
-        // Track current parsing state
-        StringBuilder currentFilter = new StringBuilder();
-        StringBuilder currentSuffix = new StringBuilder();
-        boolean inQuotes = false;
-        boolean foundColon = false;
-
-        for (int i = 0; i < subsetConfig.length(); i++) {
-            char c = subsetConfig.charAt(i);
-
-            if (c == '"') {
-                inQuotes = !inQuotes;
-                // When leaving quotes, check if we're in filter or suffix part
-                if (!inQuotes && !foundColon) {
-                    // Finished parsing filter name in quotes
-                    continue;
-                } else if (!inQuotes && foundColon) {
-                    // Finished parsing suffix in quotes
-                    continue;
-                }
-            } else if (c == ':' && !inQuotes) {
-                // Found the separator between filter and suffix
-                foundColon = true;
-                continue;
-            } else if (c == ',' && !inQuotes) {
-                // Found end of a pair, add to map and reset
-                if (foundColon && currentFilter.length() > 0 && currentSuffix.length() > 0) {
-                    String filter = currentFilter.toString().trim();
-                    String suffix = currentSuffix.toString().trim();
-
-                    // Remove quotes if present
-                    if (filter.startsWith("\"") && filter.endsWith("\"")) {
-                        filter = filter.substring(1, filter.length() - 1);
-                    }
-                    if (suffix.startsWith("\"") && suffix.endsWith("\"")) {
-                        suffix = suffix.substring(1, suffix.length() - 1);
-                    }
-
-                    System.out.println("Parsed subset filter: '" + filter + "' with suffix: '" + suffix + "'");
-                    filterToSuffix.put(filter, suffix);
-
-                    // Reset for next pair
-                    currentFilter = new StringBuilder();
-                    currentSuffix = new StringBuilder();
-                    foundColon = false;
-                }
-                continue;
-            }
-
-            // Add character to current part
-            if (!foundColon) {
-                currentFilter.append(c);
-            } else {
-                currentSuffix.append(c);
-            }
-        }
-
-        // Process the last pair if any
-        if (foundColon && currentFilter.length() > 0 && currentSuffix.length() > 0) {
-            String filter = currentFilter.toString().trim();
-            String suffix = currentSuffix.toString().trim();
-
-            // Remove quotes if present
-            if (filter.startsWith("\"") && filter.endsWith("\"")) {
-                filter = filter.substring(1, filter.length() - 1);
-            }
-            if (suffix.startsWith("\"") && suffix.endsWith("\"")) {
-                suffix = suffix.substring(1, suffix.length() - 1);
-            }
-
-            System.out.println("Parsed subset filter: '" + filter + "' with suffix: '" + suffix + "'");
-            filterToSuffix.put(filter, suffix);
-        }
-
-        // Output the complete map
-        System.out.println("Parsed " + filterToSuffix.size() + " subset filters:");
-        for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
-            System.out.println("  - '" + entry.getKey() + "': '" + entry.getValue() + "'");
-        }
-
-        return filterToSuffix;
     }
 
     /**

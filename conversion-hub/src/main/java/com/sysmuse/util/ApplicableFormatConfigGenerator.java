@@ -15,15 +15,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Specialized ConfigGenerator for the "Applicable Format" structure,
  * which handles boolean fields and their related text fields,
  * as well as compound expressions for text aggregation.
- * Updated to work with SystemConfig.
+ * Updated to use SystemConfig exclusively and proper logging.
  */
 public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
     private SystemConfig systemConfig;
     private String compoundExpressionsString;
-    private String configDirectory;
     private List<String> compoundExpressions = new ArrayList<>();
-    private Properties properties;
     private ObjectMapper mapper;
 
     // Pattern to match quoted strings or unquoted words
@@ -36,7 +34,6 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      * Default constructor
      */
     public ApplicableFormatConfigGenerator() {
-        this.properties = new Properties();
         this.mapper = new ObjectMapper();
         this.systemConfig = new SystemConfig();
         initializeTextSuffixes();
@@ -46,23 +43,8 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      * Constructor with compound expressions string
      */
     public ApplicableFormatConfigGenerator(String compoundExpressionsString) {
-        this.properties = new Properties();
         this.mapper = new ObjectMapper();
         this.systemConfig = new SystemConfig();
-        loadCompoundExpressions(compoundExpressionsString);
-        initializeTextSuffixes();
-    }
-
-    /**
-     * Constructor with properties
-     */
-    public ApplicableFormatConfigGenerator(Properties properties) {
-        this.properties = properties;
-        this.mapper = new ObjectMapper();
-        this.systemConfig = new SystemConfig();
-
-        String compoundExpressionsString = properties.getProperty("applicable.format.compound.expressions");
-        this.configDirectory = properties.getProperty("config.directory", "");
         loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
     }
@@ -72,7 +54,6 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
      */
     public ApplicableFormatConfigGenerator(SystemConfig config) {
         this.systemConfig = config;
-        this.properties = config.toProperties(); // For backward compatibility
         this.mapper = new ObjectMapper();
 
         // Load expressions from system config
@@ -92,15 +73,16 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     }
 
     /**
-     * Constructor with compound expressions and properties
+     * Set system configuration
      */
-    public ApplicableFormatConfigGenerator(String compoundExpressionsString, Properties properties) {
-        this.properties = properties;
-        this.mapper = new ObjectMapper();
-        this.systemConfig = new SystemConfig();
-        this.configDirectory = properties.getProperty("config.directory", "");
-        loadCompoundExpressions(compoundExpressionsString);
-        initializeTextSuffixes();
+    @Override
+    public void setSystemConfig(SystemConfig config) {
+        this.systemConfig = config;
+        // Reload expressions and suffixes
+        if (!config.getExpressions().isEmpty()) {
+            loadExpressionsFromMap(config.getExpressions());
+        }
+        initializeTextSuffixesFromConfig();
     }
 
     /**
@@ -114,7 +96,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             compoundExpressions.add(expr);
         }
 
-        System.out.println("Loaded " + compoundExpressions.size() + " expressions from config map");
+        LoggingUtil.info("Loaded " + compoundExpressions.size() + " expressions from config map");
     }
 
     /**
@@ -125,6 +107,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
         if (expressionsInput != null && !expressionsInput.trim().isEmpty()) {
             // Check if it's a list file
+            String configDirectory = systemConfig.getConfigDirectory();
             if (expressionsInput.trim().endsWith(".list") && !configDirectory.isEmpty()) {
                 // It's a list file - read from the config directory
                 File listFile = new File(Paths.get(configDirectory, expressionsInput).toString());
@@ -137,15 +120,15 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                                 compoundExpressions.add(trimmedLine);
                             }
                         }
-                        System.out.println("Loaded " + compoundExpressions.size() +
+                        LoggingUtil.info("Loaded " + compoundExpressions.size() +
                                 " compound expressions from list file: " + listFile.getPath());
                     } catch (IOException e) {
-                        System.out.println("Error reading compound expressions list file: " + e.getMessage());
+                        LoggingUtil.warn("Error reading compound expressions list file: " + e.getMessage());
                         // If file reading fails, try to parse as comma-separated as fallback
                         parseCommaSeparatedExpressions(expressionsInput);
                     }
                 } else {
-                    System.out.println("Compound expressions list file not found: " + listFile.getPath());
+                    LoggingUtil.warn("Compound expressions list file not found: " + listFile.getPath());
                     // If file not found, try to parse as comma-separated as fallback
                     parseCommaSeparatedExpressions(expressionsInput);
                 }
@@ -160,7 +143,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                             compoundExpressions.add(trimmedLine);
                         }
                     }
-                    System.out.println("Loaded " + compoundExpressions.size() +
+                    LoggingUtil.info("Loaded " + compoundExpressions.size() +
                             " compound expressions from multi-line string");
                 } else {
                     // It's a comma-separated list
@@ -182,44 +165,25 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                     compoundExpressions.add(trimmedExpr);
                 }
             }
-            System.out.println("Loaded " + compoundExpressions.size() +
+            LoggingUtil.info("Loaded " + compoundExpressions.size() +
                     " compound expressions from comma-separated list");
         }
     }
 
     /**
-     * Initialize text suffixes from properties or use defaults
+     * Initialize text suffixes from config or use defaults
      */
     private void initializeTextSuffixes() {
         // Clear the list first
         textSuffixes.clear();
 
-        // Try to get text suffixes from properties
-        String suffixesProperty = properties.getProperty("applicable.format.text.suffixes");
-
-        if (suffixesProperty != null && !suffixesProperty.trim().isEmpty()) {
-            // Split by comma
-            String[] suffixArray = suffixesProperty.split(",");
-            for (String suffix : suffixArray) {
-                // Just trim the suffix itself, but preserve the leading space if present
-                String processedSuffix = suffix.trim();
-                // If no space at the beginning, add one
-                if (!processedSuffix.startsWith(" ")) {
-                    processedSuffix = " " + processedSuffix;
-                }
-                if (!processedSuffix.isEmpty()) {
-                    textSuffixes.add(processedSuffix);
-                }
-            }
-        }
-
-        // If no suffixes defined in properties, use defaults
+        // If no suffixes defined in config, use defaults
         if (textSuffixes.isEmpty()) {
             textSuffixes.add(" reasoning");
             textSuffixes.add(" snippets");
         }
 
-        System.out.println("Using text suffixes from properties: " + textSuffixes);
+        LoggingUtil.debug("Using default text suffixes: " + textSuffixes);
     }
 
     /**
@@ -233,32 +197,11 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         List<String> configSuffixes = systemConfig.getTextSuffixes();
         if (configSuffixes != null && !configSuffixes.isEmpty()) {
             textSuffixes.addAll(configSuffixes);
-            System.out.println("Using text suffixes from system config: " + textSuffixes);
+            LoggingUtil.info("Using text suffixes from system config: " + textSuffixes);
         } else {
-            // Fall back to properties or defaults
+            // Fall back to defaults
             initializeTextSuffixes();
         }
-    }
-
-    /**
-     * Set properties
-     */
-    public void setProperties(Properties properties) {
-        this.properties = properties;
-        // Reinitialize text suffixes when properties change
-        initializeTextSuffixes();
-    }
-
-    /**
-     * Set SystemConfig
-     */
-    public void setSystemConfig(SystemConfig config) {
-        this.systemConfig = config;
-        // Reload expressions and suffixes
-        if (!config.getExpressions().isEmpty()) {
-            loadExpressionsFromMap(config.getExpressions());
-        }
-        initializeTextSuffixesFromConfig();
     }
 
     /**
@@ -290,9 +233,9 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         }
 
         // Debug
-        System.out.println("Found headers with suffixes:");
+        LoggingUtil.debug("Found headers with suffixes:");
         for (String suffix : textSuffixes) {
-            System.out.println("  Suffix '" + suffix + "': " + fieldsWithSuffixes.get(suffix).size() + " headers");
+            LoggingUtil.debug("  Suffix '" + suffix + "': " + fieldsWithSuffixes.get(suffix).size() + " headers");
         }
 
         int aggregateFieldIndex = 1;
@@ -321,15 +264,15 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                     // Extract the actual expression part (after the colon)
                     expression = expressionLine.substring(colonPos + 1).trim();
 
-                    System.out.println("Found custom field name: '" + customFieldName +
+                    LoggingUtil.debug("Found custom field name: '" + customFieldName +
                             "' for expression: " + expression);
                 }
             }
 
             // Extract field names from the expression for logging
             List<String> fieldNames = extractFieldNames(expression);
-            System.out.println("Processing expression: " + expression);
-            System.out.println("  - Referenced fields: " + fieldNames);
+            LoggingUtil.debug("Processing expression: " + expression);
+            LoggingUtil.debug("  - Referenced fields: " + fieldNames);
 
             // Parse the expression into a boolean expression JSON
             ObjectNode booleanExpression = parseCompoundExpression(expression);
@@ -344,7 +287,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
             // Add derived boolean field to config
             derivedBooleanFields.set(derivedFieldName, booleanExpression);
-            System.out.println("  - Created derived field: " + derivedFieldName);
+            LoggingUtil.debug("  - Created derived field: " + derivedFieldName);
 
             // For each suffix type, create an aggregate text field
             for (String suffix : textSuffixes) {
@@ -422,10 +365,10 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
                     // Add to config
                     aggregateTextFields.set(aggregateFieldName, aggregateConfig);
-                    System.out.println("  - Created aggregate field: " + aggregateFieldName +
+                    LoggingUtil.debug("  - Created aggregate field: " + aggregateFieldName +
                             " with " + sourceFields.size() + " source fields: " + sourceFields);
                 } else {
-                    System.out.println("  - No fields found with suffix '" + suffix +
+                    LoggingUtil.debug("  - No fields found with suffix '" + suffix +
                             "' for the fields referenced in the expression");
                 }
             }
@@ -436,12 +379,12 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         // Add to config if we have any fields
         if (derivedBooleanFields.size() > 0) {
             config.set("derivedBooleanFields", derivedBooleanFields);
-            System.out.println("Added " + derivedBooleanFields.size() + " derived boolean fields to config");
+            LoggingUtil.info("Added " + derivedBooleanFields.size() + " derived boolean fields to config");
         }
 
         if (aggregateTextFields.size() > 0) {
             config.set("aggregateTextFields", aggregateTextFields);
-            System.out.println("Added " + aggregateTextFields.size() + " aggregate text fields to config");
+            LoggingUtil.info("Added " + aggregateTextFields.size() + " aggregate text fields to config");
         }
     }
 
@@ -452,23 +395,11 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     public JsonNode generateConfig(String[] headers, String[] firstDataRow, Map<String, Object> columnTypes) {
         ObjectNode config = mapper.createObjectNode();
 
-        // Add parameters from properties or system config
+        // Add parameters from system config
         ObjectNode parameters = mapper.createObjectNode();
 
         // Set maxImportRows if available
-        int maxImportRows = systemConfig != null ? systemConfig.getMaxImportRows() : 0;
-        if (maxImportRows <= 0) {
-            // Try from properties
-            String maxImportRowsStr = properties.getProperty("maxImportRows");
-            if (maxImportRowsStr != null && !maxImportRowsStr.equals("0")) {
-                try {
-                    maxImportRows = Integer.parseInt(maxImportRowsStr);
-                } catch (NumberFormatException e) {
-                    maxImportRows = 0;
-                }
-            }
-        }
-
+        int maxImportRows = systemConfig.getMaxImportRows();
         if (maxImportRows > 0) {
             parameters.put("maxImportRows", maxImportRows);
         } else {
@@ -501,7 +432,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             if (!uniqueKeySet) {
                 columnConfig.put("uniqueKey", true);
                 uniqueKeySet = true;
-                System.out.println("Setting first column '" + header + "' as uniqueKey");
+                LoggingUtil.info("Setting first column '" + header + "' as uniqueKey");
             }
 
             columns.set(header, columnConfig);
@@ -578,7 +509,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                         }
                     }
 
-                    System.out.println("Boolean field '" + prefix + "' will suppress " +
+                    LoggingUtil.debug("Boolean field '" + prefix + "' will suppress " +
                             (fields.size() - 1) + " related fields");
                 }
             }
@@ -669,24 +600,6 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     private JsonNode parseSubExpression(String expr) {
         // This sub-expression could be a quoted field name or a simple field reference
         return parseFieldReference(expr);
-    }
-
-    /**
-     * Helper method to parse expressions with placeholders
-     */
-    private ObjectNode parseCompoundExpressionWithPlaceholders(String expr, Map<String, String> placeholders) {
-        String trimmedExpr = expr.trim();
-        ObjectNode fieldRef = mapper.createObjectNode();
-        fieldRef.put("type", "FIELD");
-
-        // Replace placeholder with original field name
-        if (placeholders.containsKey(trimmedExpr)) {
-            fieldRef.put("field", placeholders.get(trimmedExpr));
-        } else {
-            fieldRef.put("field", trimmedExpr);
-        }
-
-        return fieldRef;
     }
 
     /**

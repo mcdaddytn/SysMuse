@@ -8,7 +8,7 @@ import java.util.Set;
 
 /**
  * Utility class for evaluating boolean expressions defined in JSON
- * Enhanced with string comparison operations
+ * Enhanced with string comparison operations and proper logging
  */
 public class BooleanExpressionEvaluator {
 
@@ -56,9 +56,8 @@ public class BooleanExpressionEvaluator {
     private static Boolean evaluateFieldReference(JsonNode expression, Map<String, Object> rowValues) {
         String fieldName = expression.get("field").asText();
         if (!rowValues.containsKey(fieldName)) {
-            System.out.println("Warning: evaluateFieldReference referenced field '" + fieldName + "' not found in row values");
-            //System.out.println("Warning: Referenced field '" + fieldName + "' not found in row values");
-            System.out.println("Available fields: " + rowValues.keySet());
+            LoggingUtil.debug("Referenced field '" + fieldName + "' not found in row values");
+            LoggingUtil.debug("Available fields: " + rowValues.keySet());
             return false;
         }
 
@@ -69,8 +68,7 @@ public class BooleanExpressionEvaluator {
             // Handle string values like "true" or "false"
             return Boolean.parseBoolean((String) value);
         } else {
-            System.out.println("Warning: evaluateFieldReference field '" + fieldName + "' is not a boolean value: " + value);
-            //System.out.println("Warning: Field '" + fieldName + "' is not a boolean value: " + value);
+            LoggingUtil.debug("Field '" + fieldName + "' is not a boolean value: " + value);
             // Default to false for non-boolean values
             return false;
         }
@@ -141,7 +139,7 @@ public class BooleanExpressionEvaluator {
 
         // Check if field exists in row values
         if (!rowValues.containsKey(fieldName)) {
-            System.out.println("Warning: Field '" + fieldName + "' not found for string comparison");
+            LoggingUtil.debug("Field '" + fieldName + "' not found for string comparison");
             return false;
         }
 
@@ -169,7 +167,7 @@ public class BooleanExpressionEvaluator {
 
         // Check if field exists in row values
         if (!rowValues.containsKey(fieldName)) {
-            System.out.println("Warning: Field '" + fieldName + "' not found for case-insensitive comparison");
+            LoggingUtil.debug("Field '" + fieldName + "' not found for case-insensitive comparison");
             return false;
         }
 
@@ -196,7 +194,7 @@ public class BooleanExpressionEvaluator {
 
         // Check if field exists in row values
         if (!rowValues.containsKey(fieldName)) {
-            System.out.println("Warning: Field '" + fieldName + "' not found for in-set comparison");
+            LoggingUtil.debug("Field '" + fieldName + "' not found for in-set comparison");
             return false;
         }
 

@@ -11,19 +11,33 @@ import java.util.*;
  */
 public class CsvConverter {
 
-    private Properties properties;
+    private SystemConfig config;
+    private Properties properties; // For backward compatibility
     private int maxTextLength;
 
     /**
-     * Constructor
+     * Constructor with SystemConfig
+     */
+    public CsvConverter(SystemConfig config) {
+        this.config = config;
+        this.properties = config.toProperties(); // Convert for backward compatibility
+        this.maxTextLength = config.getMaxTextLength();
+    }
+
+    /**
+     * Constructor with Properties (for backward compatibility)
      */
     public CsvConverter(Properties properties) {
         this.properties = properties;
+
+        // Create default config
+        this.config = new SystemConfig();
 
         // Get maxTextLength from properties
         String maxTextLengthStr = properties.getProperty("maxTextLength", "0");
         try {
             this.maxTextLength = Integer.parseInt(maxTextLengthStr);
+            this.config.setMaxTextLength(this.maxTextLength);
         } catch (NumberFormatException e) {
             this.maxTextLength = 0; // Default is no truncation
         }
@@ -193,15 +207,11 @@ public class CsvConverter {
                 System.out.println("Will import at most " + maxRows + " rows as specified in configuration");
             }
         } else {
-            // Check if maxImportRows is set in properties
-            String maxRowsStr = properties.getProperty("maxImportRows");
-            if (maxRowsStr != null && !maxRowsStr.equals("0")) {
-                try {
-                    maxRows = Integer.parseInt(maxRowsStr);
-                    System.out.println("Will import at most " + maxRows + " rows as specified in properties");
-                } catch (NumberFormatException e) {
-                    System.out.println("Invalid maxImportRows property value: " + maxRowsStr);
-                }
+            // Check if maxImportRows is set in config
+            int configMaxRows = config.getMaxImportRows();
+            if (configMaxRows > 0) {
+                maxRows = configMaxRows;
+                System.out.println("Will import at most " + maxRows + " rows as specified in system config");
             }
         }
 
@@ -352,7 +362,7 @@ public class CsvConverter {
 
         // Process overlay files if there are more than one
         for (int i = 1; i < filePaths.length; i++) {
-            System.out.println("Importing overlay file " + (i + 1) + ": " + filePaths[i]);
+            System.out.println("Importing overlay file " + (i+1) + ": " + filePaths[i]);
             importOverlayFileWithoutProcessing(filePaths[i], repository, uniqueKeyField);
         }
 
@@ -403,15 +413,11 @@ public class CsvConverter {
                 System.out.println("Will import at most " + maxRows + " rows as specified in configuration");
             }
         } else {
-            // Check if maxImportRows is set in properties
-            String maxRowsStr = properties.getProperty("maxImportRows");
-            if (maxRowsStr != null && !maxRowsStr.equals("0")) {
-                try {
-                    maxRows = Integer.parseInt(maxRowsStr);
-                    System.out.println("Will import at most " + maxRows + " rows as specified in properties");
-                } catch (NumberFormatException e) {
-                    System.out.println("Invalid maxImportRows property value: " + maxRowsStr);
-                }
+            // Check if maxImportRows is set in config
+            int configMaxRows = config.getMaxImportRows();
+            if (configMaxRows > 0) {
+                maxRows = configMaxRows;
+                System.out.println("Will import at most " + maxRows + " rows as specified in system config");
             }
         }
 

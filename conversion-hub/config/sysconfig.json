@@ -21,7 +21,14 @@
     "textSuffixes": [
       "reasoning",
       "snippets"
-    ]
+    ],
+    "expressions": {
+      "Junk Email": "\"Automated Email\" OR \"Domain Services\" OR \"Subscribed News\" OR \"Subscribed Newsletter\" OR \"Shipment Tracking Info\" OR \"Zoom or Meeting Invite\" OR \"Solicitation\"",
+      "Potential Legal Docs": "\"Legal Agreements\" OR \"Legal Agreements 2\" OR \"Legal General\" OR \"General Patents/IP\"",
+      "Unreadable": "\"Non-English\" OR \"OCR Bad Scan\" OR \"System XML\"",
+      "Internal Design Marketing Tech": "\"Google Sites Wiki\" OR \"Marketing or Design\" OR \"System Reqs or Specs\" OR \"Tabular Data\" OR \"Technical Documentation\"",
+      "Sparse Emails": "\"Email Attach Only\" OR \"Email Corporate Footer\""
+    }
   },
   "textAggregation": {
     "mode": "FIELDNAME",

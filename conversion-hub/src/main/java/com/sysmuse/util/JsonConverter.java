@@ -16,21 +16,50 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public class JsonConverter {
 
-    private Properties properties;
+    private SystemConfig config;
+    private Properties properties; // For backward compatibility
     private ObjectMapper mapper;
     private boolean prettyPrint;
+    private int indentSize;
 
     /**
-     * Constructor
+     * Constructor with SystemConfig
+     */
+    public JsonConverter(SystemConfig config) {
+        this.config = config;
+        this.properties = config.toProperties(); // Convert for backward compatibility
+        this.mapper = new ObjectMapper();
+
+        // Get pretty print settings from config
+        this.prettyPrint = config.isPrettyPrint();
+        this.indentSize = config.getIndentSize();
+
+        if (prettyPrint) {
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        }
+    }
+
+    /**
+     * Constructor with Properties (for backward compatibility)
      */
     public JsonConverter(Properties properties) {
         this.properties = properties;
         this.mapper = new ObjectMapper();
 
+        // Create default config
+        this.config = new SystemConfig();
+
         // Check if pretty printing is enabled in properties
         this.prettyPrint = Boolean.parseBoolean(properties.getProperty("output.pretty", "true"));
         if (prettyPrint) {
             mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        }
+
+        // Get indent size if specified
+        try {
+            this.indentSize = Integer.parseInt(properties.getProperty("output.indent", "2"));
+        } catch (NumberFormatException e) {
+            this.indentSize = 2; // Default indent
         }
     }
 
@@ -210,8 +239,8 @@ public class JsonConverter {
      * using the SubsetProcessor to handle subset filtering and configuration
      */
     public void exportSubsetsFromRepository(ConversionRepository repository, String baseJsonFilePath) throws IOException {
-        // Create the subset processor
-        SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+        // Create the subset processor with system config
+        SubsetProcessor subsetProcessor = new SubsetProcessor(config, repository);
 
         if (!subsetProcessor.hasSubsets()) {
             System.out.println("No subsets configured for export.");
@@ -326,7 +355,10 @@ public class JsonConverter {
 
         // If we need to output remaining unfiltered rows
         if (!unfilteredRows.isEmpty()) {
-            String defaultSuffix = properties.getProperty("output.suffix", "_default");
+            String defaultSuffix = config.getOutputSuffix();
+            if (defaultSuffix == null || defaultSuffix.isEmpty()) {
+                defaultSuffix = properties.getProperty("output.suffix", "_default");
+            }
             String unfilteredPath = subsetProcessor.getOutputPathWithSuffix(baseJsonFilePath, defaultSuffix, ".json");
 
             System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);

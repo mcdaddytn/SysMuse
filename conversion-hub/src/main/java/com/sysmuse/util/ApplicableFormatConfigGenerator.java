@@ -15,11 +15,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Specialized ConfigGenerator for the "Applicable Format" structure,
  * which handles boolean fields and their related text fields,
  * as well as compound expressions for text aggregation.
+ * Updated to work with SystemConfig.
  */
 public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
+    private SystemConfig systemConfig;
     private String compoundExpressionsString;
-    //gm: added
     private String configDirectory;
     private List<String> compoundExpressions = new ArrayList<>();
     private Properties properties;
@@ -28,7 +29,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     // Pattern to match quoted strings or unquoted words
     private static final Pattern FIELD_PATTERN = Pattern.compile("\"([^\"]+)\"|([^\\s\"]+)");
 
-    // Default text suffixes - will be overridden by properties if available
+    // Default text suffixes - will be overridden by config if available
     private List<String> textSuffixes = new ArrayList<>();
 
     /**
@@ -37,6 +38,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     public ApplicableFormatConfigGenerator() {
         this.properties = new Properties();
         this.mapper = new ObjectMapper();
+        this.systemConfig = new SystemConfig();
         initializeTextSuffixes();
     }
 
@@ -46,6 +48,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     public ApplicableFormatConfigGenerator(String compoundExpressionsString) {
         this.properties = new Properties();
         this.mapper = new ObjectMapper();
+        this.systemConfig = new SystemConfig();
         loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
     }
@@ -56,10 +59,36 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     public ApplicableFormatConfigGenerator(Properties properties) {
         this.properties = properties;
         this.mapper = new ObjectMapper();
+        this.systemConfig = new SystemConfig();
+
         String compoundExpressionsString = properties.getProperty("applicable.format.compound.expressions");
         this.configDirectory = properties.getProperty("config.directory", "");
         loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
+    }
+
+    /**
+     * Constructor with SystemConfig
+     */
+    public ApplicableFormatConfigGenerator(SystemConfig config) {
+        this.systemConfig = config;
+        this.properties = config.toProperties(); // For backward compatibility
+        this.mapper = new ObjectMapper();
+
+        // Load expressions from system config
+        Map<String, String> expressions = config.getExpressions();
+        if (!expressions.isEmpty()) {
+            loadExpressionsFromMap(expressions);
+        } else {
+            // Fall back to compound expressions string or file
+            String expressionsStr = config.getCompoundExpressionsString();
+            if (expressionsStr != null && !expressionsStr.isEmpty()) {
+                loadCompoundExpressions(expressionsStr);
+            }
+        }
+
+        // Initialize text suffixes from config
+        initializeTextSuffixesFromConfig();
     }
 
     /**
@@ -68,9 +97,24 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     public ApplicableFormatConfigGenerator(String compoundExpressionsString, Properties properties) {
         this.properties = properties;
         this.mapper = new ObjectMapper();
+        this.systemConfig = new SystemConfig();
         this.configDirectory = properties.getProperty("config.directory", "");
         loadCompoundExpressions(compoundExpressionsString);
         initializeTextSuffixes();
+    }
+
+    /**
+     * Load expressions directly from a map
+     */
+    private void loadExpressionsFromMap(Map<String, String> expressions) {
+        compoundExpressions.clear();
+
+        for (Map.Entry<String, String> entry : expressions.entrySet()) {
+            String expr = "\"" + entry.getKey() + "\":" + entry.getValue();
+            compoundExpressions.add(expr);
+        }
+
+        System.out.println("Loaded " + compoundExpressions.size() + " expressions from config map");
     }
 
     /**
@@ -106,8 +150,22 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                     parseCommaSeparatedExpressions(expressionsInput);
                 }
             } else {
-                // It's a comma-separated list
-                parseCommaSeparatedExpressions(expressionsInput);
+                // Check if it might be multi-line expression string
+                if (expressionsInput.contains("\n")) {
+                    // Split by newlines
+                    String[] lines = expressionsInput.split("\n");
+                    for (String line : lines) {
+                        String trimmedLine = line.trim();
+                        if (!trimmedLine.isEmpty()) {
+                            compoundExpressions.add(trimmedLine);
+                        }
+                    }
+                    System.out.println("Loaded " + compoundExpressions.size() +
+                            " compound expressions from multi-line string");
+                } else {
+                    // It's a comma-separated list
+                    parseCommaSeparatedExpressions(expressionsInput);
+                }
             }
         }
     }
@@ -161,7 +219,25 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             textSuffixes.add(" snippets");
         }
 
-        System.out.println("Using text suffixes: " + textSuffixes);
+        System.out.println("Using text suffixes from properties: " + textSuffixes);
+    }
+
+    /**
+     * Initialize text suffixes from SystemConfig
+     */
+    private void initializeTextSuffixesFromConfig() {
+        // Clear the list first
+        textSuffixes.clear();
+
+        // Get suffixes from system config
+        List<String> configSuffixes = systemConfig.getTextSuffixes();
+        if (configSuffixes != null && !configSuffixes.isEmpty()) {
+            textSuffixes.addAll(configSuffixes);
+            System.out.println("Using text suffixes from system config: " + textSuffixes);
+        } else {
+            // Fall back to properties or defaults
+            initializeTextSuffixes();
+        }
     }
 
     /**
@@ -171,6 +247,18 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         this.properties = properties;
         // Reinitialize text suffixes when properties change
         initializeTextSuffixes();
+    }
+
+    /**
+     * Set SystemConfig
+     */
+    public void setSystemConfig(SystemConfig config) {
+        this.systemConfig = config;
+        // Reload expressions and suffixes
+        if (!config.getExpressions().isEmpty()) {
+            loadExpressionsFromMap(config.getExpressions());
+        }
+        initializeTextSuffixesFromConfig();
     }
 
     /**
@@ -307,8 +395,14 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                     }
                     aggregateConfig.set("sourceFields", sourcesArray);
 
-                    // Set separator (default to double newline)
-                    aggregateConfig.put("separator", "\n\n");
+                    // Configure separator based on aggregation mode
+                    String separator = "\n\n";  // Default
+                    if (systemConfig != null) {
+                        if (systemConfig.getTextAggregationMode() == SystemConfig.TextAggregationMode.NEWLINE) {
+                            separator = systemConfig.getNewlineChar() + systemConfig.getNewlineChar();
+                        }
+                    }
+                    aggregateConfig.put("separator", separator);
 
                     // Format the suffix for the aggregate field name
                     // Remove leading space and capitalize first letter
@@ -321,7 +415,6 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
                     // Create aggregate field name - use custom name if available
                     String aggregateFieldName;
                     if (customFieldName != null) {
-                        //aggregateFieldName = customFieldName + formattedSuffix;
                         aggregateFieldName = customFieldName + " " + formattedSuffix;
                     } else {
                         aggregateFieldName = "Aggregated" + formattedSuffix + aggregateFieldIndex;
@@ -359,18 +452,25 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     public JsonNode generateConfig(String[] headers, String[] firstDataRow, Map<String, Object> columnTypes) {
         ObjectNode config = mapper.createObjectNode();
 
-        // Add parameters from properties
+        // Add parameters from properties or system config
         ObjectNode parameters = mapper.createObjectNode();
 
-        // Set maxImportRows from properties if available
-        String maxImportRows = properties.getProperty("maxImportRows");
-        if (maxImportRows != null && !maxImportRows.equals("0")) {
-            try {
-                int maxRows = Integer.parseInt(maxImportRows);
-                parameters.put("maxImportRows", maxRows);
-            } catch (NumberFormatException e) {
-                parameters.putNull("maxImportRows");
+        // Set maxImportRows if available
+        int maxImportRows = systemConfig != null ? systemConfig.getMaxImportRows() : 0;
+        if (maxImportRows <= 0) {
+            // Try from properties
+            String maxImportRowsStr = properties.getProperty("maxImportRows");
+            if (maxImportRowsStr != null && !maxImportRowsStr.equals("0")) {
+                try {
+                    maxImportRows = Integer.parseInt(maxImportRowsStr);
+                } catch (NumberFormatException e) {
+                    maxImportRows = 0;
+                }
             }
+        }
+
+        if (maxImportRows > 0) {
+            parameters.put("maxImportRows", maxImportRows);
         } else {
             parameters.putNull("maxImportRows");
         }
@@ -381,6 +481,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         ObjectNode columns = mapper.createObjectNode();
 
         // First pass: Add all columns to the config
+        boolean uniqueKeySet = false;
         for (String header : headers) {
             if (header == null || header.trim().isEmpty()) {
                 continue; // Skip empty headers
@@ -395,6 +496,13 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
             // Add visibility property (default to true)
             columnConfig.put("visible", true);
+
+            // Set the first valid column as uniqueKey if no uniqueKey is set yet
+            if (!uniqueKeySet) {
+                columnConfig.put("uniqueKey", true);
+                uniqueKeySet = true;
+                System.out.println("Setting first column '" + header + "' as uniqueKey");
+            }
 
             columns.set(header, columnConfig);
         }

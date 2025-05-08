@@ -7,29 +7,27 @@ import java.nio.file.*;
 /**
  * Utility class for processing data subsets for both CSV and JSON formats.
  * Handles the subset filtering, tracking, and configuration parsing.
- * Updated to work with SystemConfig.
+ * Updated to work with SystemConfig directly.
  */
 public class SubsetProcessor {
 
-    private Properties properties;
+    private Properties properties; // For backward compatibility
     private SystemConfig systemConfig;
     private Map<String, String> filterToSuffix = new LinkedHashMap<>();
     private boolean exclusiveSubsets = false;
     private String uniqueKeyField = null;
 
     /**
-     * Constructor with properties and repository
+     * Constructor with SystemConfig and repository
      */
-    public SubsetProcessor(Properties properties, ConversionRepository repository) {
-        this.properties = properties;
+    public SubsetProcessor(SystemConfig config, ConversionRepository repository) {
+        this.systemConfig = config;
+
+        // Get subset configuration from system config
+        this.filterToSuffix = systemConfig.getSubsets();
 
         // Check if exclusive subsets are enabled
-        this.exclusiveSubsets = Boolean.parseBoolean(
-                properties.getProperty("exclusiveSubsets", "false"));
-
-        // Parse the subset configuration
-        String subsetConfig = properties.getProperty("output.subsets");
-        this.filterToSuffix = parseSubsetConfig(subsetConfig);
+        this.exclusiveSubsets = systemConfig.isExclusiveSubsets();
 
         // Get the unique key field from the repository if exclusive subsets are enabled
         if (exclusiveSubsets) {
@@ -46,16 +44,18 @@ public class SubsetProcessor {
     }
 
     /**
-     * Constructor with system config and repository
+     * Constructor with properties and repository (for backward compatibility)
      */
-    public SubsetProcessor(SystemConfig systemConfig, ConversionRepository repository) {
-        this.systemConfig = systemConfig;
-
-        // Get subset configuration from system config
-        this.filterToSuffix = systemConfig.getSubsets();
+    public SubsetProcessor(Properties properties, ConversionRepository repository) {
+        this.properties = properties;
 
         // Check if exclusive subsets are enabled
-        this.exclusiveSubsets = systemConfig.isExclusiveSubsets();
+        this.exclusiveSubsets = Boolean.parseBoolean(
+                properties.getProperty("exclusiveSubsets", "false"));
+
+        // Parse the subset configuration
+        String subsetConfig = properties.getProperty("output.subsets");
+        this.filterToSuffix = parseSubsetConfig(subsetConfig);
 
         // Get the unique key field from the repository if exclusive subsets are enabled
         if (exclusiveSubsets) {

@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * SystemConfig - Handles loading and managing system configuration from JSON file
+ * Updated to include expressions directly in config
  */
 public class SystemConfig {
 
@@ -27,7 +28,6 @@ public class SystemConfig {
     private String outputFormat = "csv";
     private int maxImportRows = 0;
     private int maxTextLength = 0;
-    private String compoundExpressionsFile = "";
     private List<String> textSuffixes = new ArrayList<>();
     private Map<String, String> subsets = new LinkedHashMap<>();
     private String outputSuffix = "_converted";
@@ -40,6 +40,9 @@ public class SystemConfig {
     private String fieldNamePrefix = "[";
     private String fieldNameSuffix = "]";
     private String newlineChar = "\n";
+
+    // Expressions directly in config (no separate file)
+    private Map<String, String> expressions = new LinkedHashMap<>();
 
     // Raw JSON config
     private JsonNode configJson;
@@ -156,10 +159,6 @@ public class SystemConfig {
         if (configJson.has("applicableFormat")) {
             JsonNode formatNode = configJson.get("applicableFormat");
 
-            if (formatNode.has("compoundExpressionsFile")) {
-                compoundExpressionsFile = formatNode.get("compoundExpressionsFile").asText();
-            }
-
             if (formatNode.has("textSuffixes")) {
                 textSuffixes.clear();
                 JsonNode suffixesNode = formatNode.get("textSuffixes");
@@ -173,6 +172,20 @@ public class SystemConfig {
                         textSuffixes.add(suffix);
                     }
                 }
+            }
+
+            // Parse expressions directly from config
+            if (formatNode.has("expressions")) {
+                JsonNode expressionsNode = formatNode.get("expressions");
+                expressions.clear();
+
+                Iterator<String> fieldNames = expressionsNode.fieldNames();
+                while (fieldNames.hasNext()) {
+                    String name = fieldNames.next();
+                    expressions.put(name, expressionsNode.get(name).asText());
+                }
+
+                System.out.println("Loaded " + expressions.size() + " expressions from config");
             }
         }
 
@@ -262,7 +275,14 @@ public class SystemConfig {
 
         // Applicable format configuration
         ObjectNode formatNode = rootNode.putObject("applicableFormat");
-        formatNode.put("compoundExpressionsFile", compoundExpressionsFile);
+
+        // Add expressions directly to config
+        if (!expressions.isEmpty()) {
+            ObjectNode expressionsNode = formatNode.putObject("expressions");
+            for (Map.Entry<String, String> entry : expressions.entrySet()) {
+                expressionsNode.put(entry.getKey(), entry.getValue());
+            }
+        }
 
         ArrayNode suffixesArray = formatNode.putArray("textSuffixes");
         for (String suffix : textSuffixes) {
@@ -288,6 +308,43 @@ public class SystemConfig {
         // Write to file
         mapper.writeValue(new File(configFilePath), rootNode);
         System.out.println("Saved system configuration to: " + configFilePath);
+    }
+
+    /**
+     * Generate compound expressions for ApplicableFormatConfigGenerator
+     */
+    public String getCompoundExpressionsString() {
+        if (expressions.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        boolean first = true;
+
+        for (Map.Entry<String, String> entry : expressions.entrySet()) {
+            if (!first) {
+                result.append("\n");
+            }
+            first = false;
+
+            result.append("\"").append(entry.getKey()).append("\":").append(entry.getValue());
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Add an expression
+     */
+    public void addExpression(String name, String expression) {
+        expressions.put(name, expression);
+    }
+
+    /**
+     * Get expressions map
+     */
+    public Map<String, String> getExpressions() {
+        return expressions;
     }
 
     /**
@@ -333,7 +390,11 @@ public class SystemConfig {
         props.setProperty("maxTextLength", String.valueOf(maxTextLength));
 
         // Applicable format configuration
-        props.setProperty("applicable.format.compound.expressions", compoundExpressionsFile);
+        if (!expressions.isEmpty()) {
+            // Create a comma-separated list for legacy format
+            props.setProperty("applicable.format.compound.expressions", getCompoundExpressionsString());
+        }
+
         props.setProperty("applicable.format.text.suffixes", String.join(",", textSuffixes));
 
         // Text aggregation configuration
@@ -374,6 +435,25 @@ public class SystemConfig {
         props.setProperty("exclusiveSubsets", String.valueOf(exclusiveSubsets));
 
         return props;
+    }
+
+    /**
+     * Print debug information about the current configuration
+     */
+    public void printDebug() {
+        System.out.println("==== SystemConfig Debug Information ====");
+        System.out.println("Input Format: " + this.inputFormat);
+        System.out.println("Input Path: " + this.inputPath);
+        System.out.println("Input Files: " + this.inputFiles);
+        System.out.println("Output Format: " + this.outputFormat);
+        System.out.println("Output Suffix: " + this.outputSuffix);
+        System.out.println("Max Import Rows: " + this.maxImportRows);
+        System.out.println("Max Text Length: " + this.maxTextLength);
+        System.out.println("Text Aggregation Mode: " + this.textAggregationMode);
+        System.out.println("Exclusive Subsets: " + this.exclusiveSubsets);
+        System.out.println("Number of Subsets: " + this.subsets.size());
+        System.out.println("Number of Expressions: " + this.expressions.size());
+        System.out.println("========================================");
     }
 
     // Getters and setters
@@ -424,14 +504,6 @@ public class SystemConfig {
 
     public void setMaxTextLength(int maxTextLength) {
         this.maxTextLength = maxTextLength;
-    }
-
-    public String getCompoundExpressionsFile() {
-        return compoundExpressionsFile;
-    }
-
-    public void setCompoundExpressionsFile(String compoundExpressionsFile) {
-        this.compoundExpressionsFile = compoundExpressionsFile;
     }
 
     public List<String> getTextSuffixes() {

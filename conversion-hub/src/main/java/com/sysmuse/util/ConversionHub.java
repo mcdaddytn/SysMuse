@@ -94,6 +94,7 @@ public class ConversionHub {
             String sysConfigPath = Paths.get(sysConfigDir, sysConfigFile).toString();
 
             hub.loadSystemConfig(sysConfigPath);
+            hub.systemConfig.printDebug();
 
             // Update properties with system config (for backward compatibility)
             Properties combinedProps = hub.getSystemConfigAsProperties();
@@ -485,6 +486,9 @@ public class ConversionHub {
             System.out.println("  - " + field);
         }
 
+        System.out.println("About to process output in format: " + outputFormat);
+        System.out.println("System config output format: " + systemConfig.getOutputFormat());
+
         // Export to the desired output format
         if ("json".equals(outputFormat.toLowerCase())) {
             // Create JSON converter with properties that include system config
@@ -667,7 +671,13 @@ public class ConversionHub {
                 try {
                     if (generatorClass.getName().contains("ApplicableFormatConfigGenerator")) {
                         // Get compound expressions from properties or system config
-                        String expressions = systemConfig.getCompoundExpressionsFile();
+                        String expressions = "";
+
+                        if (systemConfig != null) {
+                            // Get the expressions string from SystemConfig
+                            expressions = systemConfig.getCompoundExpressionsString();
+                        }
+
                         if (expressions.isEmpty()) {
                             // Fallback to properties
                             expressions = properties.getProperty("applicable.format.compound.expressions", "");
@@ -691,6 +701,15 @@ public class ConversionHub {
                     generatorClass.getMethod("setProperties", Properties.class).invoke(generator, properties);
                 } catch (Exception ex) {
                     // Ignore if the method doesn't exist
+                }
+
+                // Set SystemConfig if the generator has a setSystemConfig method
+                if (systemConfig != null) {
+                    try {
+                        generatorClass.getMethod("setSystemConfig", SystemConfig.class).invoke(generator, systemConfig);
+                    } catch (Exception ex) {
+                        // Ignore if the method doesn't exist
+                    }
                 }
 
                 return generator;

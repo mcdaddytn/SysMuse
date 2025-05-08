@@ -6,7 +6,8 @@ import java.util.*;
 
 /**
  * CsvConverter - Handles importing from and exporting to CSV format.
- * Updated to support multiple file overlay functionality.
+ * Updated to support multiple file overlay functionality and
+ * exclusive subsets processing.
  */
 public class CsvConverter {
 
@@ -351,7 +352,7 @@ public class CsvConverter {
 
         // Process overlay files if there are more than one
         for (int i = 1; i < filePaths.length; i++) {
-            System.out.println("Importing overlay file " + (i+1) + ": " + filePaths[i]);
+            System.out.println("Importing overlay file " + (i + 1) + ": " + filePaths[i]);
             importOverlayFileWithoutProcessing(filePaths[i], repository, uniqueKeyField);
         }
 
@@ -689,18 +690,25 @@ public class CsvConverter {
 
     /**
      * Export filtered subsets of data from the repository to multiple CSV files
+     * using the SubsetProcessor to handle subset filtering and configuration
      */
-    public void exportSubsetsFromRepository(ConversionRepository repository, String baseCsvFilePath,
-                                            Map<String, String> filterToSuffix) throws IOException {
+    public void exportSubsetsFromRepository(ConversionRepository repository, String baseCsvFilePath) throws IOException {
+        // Create the subset processor
+        SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+
+        if (!subsetProcessor.hasSubsets()) {
+            System.out.println("No subsets configured for export.");
+            return;
+        }
 
         System.out.println("Exporting filtered subsets to CSV files");
 
         // For tracking unfiltered records
         Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
-        //gm: adding
-        Set<String> exportedKeys = new HashSet<String>();
+        // For tracking exported keys (for exclusive subsets)
+        Set<String> exportedKeys = new HashSet<>();
 
-        // Get visible fields in order, add a check to ensure we have headers
+        // Get visible fields in order
         List<String> visibleFields;
         try {
             visibleFields = repository.getVisibleFieldNames();
@@ -725,6 +733,7 @@ public class CsvConverter {
         }
 
         // Process each filter
+        Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
         for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
             String filterField = entry.getKey();
             String suffix = entry.getValue();
@@ -740,24 +749,7 @@ public class CsvConverter {
                     rowsWithField++;
 
                     // Check if this field would evaluate to true
-                    Object fieldValue = row.get(filterField);
-                    boolean wouldMatch = false;
-
-                    if (fieldValue instanceof Boolean) {
-                        wouldMatch = (Boolean) fieldValue;
-                    } else if (fieldValue instanceof String) {
-                        wouldMatch = Boolean.parseBoolean((String) fieldValue);
-                    } else if (fieldValue instanceof Integer) {
-                        wouldMatch = ((Integer) fieldValue) != 0;
-                    } else if (fieldValue instanceof Long) {
-                        wouldMatch = ((Long) fieldValue) != 0L;
-                    } else if (fieldValue != null) {
-                        wouldMatch = "true".equalsIgnoreCase(fieldValue.toString()) ||
-                                "yes".equalsIgnoreCase(fieldValue.toString()) ||
-                                "1".equals(fieldValue.toString());
-                    }
-
-                    if (wouldMatch) {
+                    if (subsetProcessor.rowMatchesFilter(row, filterField)) {
                         rowsWithTrueValue++;
                     }
                 }
@@ -773,7 +765,7 @@ public class CsvConverter {
                     ". " + rowsWithTrueValue + " rows have 'true' values.");
 
             // Create output file path with suffix
-            String outputPath = getOutputPathWithSuffix(baseCsvFilePath, suffix, ".csv");
+            String outputPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, suffix, ".csv");
 
             System.out.println("Exporting subset for filter '" + filterField + "' to: " + outputPath);
 
@@ -787,35 +779,9 @@ public class CsvConverter {
 
                 // Filter rows based on the filter field
                 for (Map<String, Object> row : repository.getDataRows()) {
-                    Object fieldValue = row.get(filterField);
-                    boolean matches = false;
+                    boolean matches = subsetProcessor.rowMatchesFilter(row, filterField);
+                    boolean keyAlreadyExported = subsetProcessor.isRowKeyInExportedSet(row, exportedKeys);
 
-                    // Check if the field has a boolean true value
-                    if (fieldValue instanceof Boolean) {
-                        matches = (Boolean) fieldValue;
-                    } else if (fieldValue instanceof String) {
-                        matches = Boolean.parseBoolean((String) fieldValue);
-                    } else if (fieldValue instanceof Integer) {
-                        matches = ((Integer) fieldValue) != 0;
-                    } else if (fieldValue instanceof Long) {
-                        matches = ((Long) fieldValue) != 0L;
-                    } else if (fieldValue != null) {
-                        // Try to interpret as boolean if possible
-                        matches = "true".equalsIgnoreCase(fieldValue.toString()) ||
-                                "yes".equalsIgnoreCase(fieldValue.toString()) ||
-                                "1".equals(fieldValue.toString());
-                        System.out.println("Filter field '" + filterField + "' has value of type " +
-                                fieldValue.getClass().getName() + ": " + fieldValue +
-                                " - interpreted as " + matches);
-                    }
-
-                    //gm: adding
-                    //String uniqueKeyField = "Filename";
-                    String uniqueKeyField = (String) row.keySet().toArray()[0];
-                    String rowKey = (String) row.get(uniqueKeyField);
-                    boolean keyAlreadyExported = exportedKeys.contains(rowKey);
-
-                    // if (matches) {
                     if (matches && !keyAlreadyExported) {
                         List<String> rowValues = new ArrayList<>();
 
@@ -831,8 +797,8 @@ public class CsvConverter {
 
                         // Remove from unfiltered set
                         unfilteredRows.remove(row);
-                        //gm: adding
-                        exportedKeys.add(rowKey);
+                        // Add to exported keys set if exclusive subsets are enabled
+                        subsetProcessor.addRowKeyToExportedSet(row, exportedKeys);
                     }
                 }
 
@@ -841,9 +807,9 @@ public class CsvConverter {
         }
 
         // If we need to output remaining unfiltered rows
-        if (!unfilteredRows.isEmpty() && properties.getProperty("output.csvSuffix") != null) {
-            String defaultSuffix = properties.getProperty("output.csvSuffix");
-            String unfilteredPath = getOutputPathWithSuffix(baseCsvFilePath, defaultSuffix, ".csv");
+        if (!unfilteredRows.isEmpty()) {
+            String defaultSuffix = properties.getProperty("output.suffix", "_default");
+            String unfilteredPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, defaultSuffix, ".csv");
 
             System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);
 
@@ -868,17 +834,6 @@ public class CsvConverter {
                 }
             }
         }
-    }
-
-    /**
-     * Helper method to generate an output path with a suffix
-     */
-    private String getOutputPathWithSuffix(String basePath, String suffix, String extension) {
-        // Extract base path without extension
-        String basePathWithoutExt = basePath.replaceAll("\\.[^.]+$", "");
-
-        // Add suffix and extension
-        return basePathWithoutExt + suffix + extension;
     }
 
     /**

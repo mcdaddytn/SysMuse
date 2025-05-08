@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * JsonConverter - Handles importing from and exporting to JSON format
  * using Jackson library.
+ * Updated to support exclusive subsets processing.
  */
 public class JsonConverter {
 
@@ -25,7 +26,7 @@ public class JsonConverter {
     public JsonConverter(Properties properties) {
         this.properties = properties;
         this.mapper = new ObjectMapper();
-        
+
         // Check if pretty printing is enabled in properties
         this.prettyPrint = Boolean.parseBoolean(properties.getProperty("output.pretty", "true"));
         if (prettyPrint) {
@@ -38,11 +39,11 @@ public class JsonConverter {
      */
     public void importToRepository(String jsonFilePath, ConversionRepository repository) throws IOException {
         System.out.println("Importing data from JSON file: " + jsonFilePath);
-        
+
         // Parse the JSON file
         File jsonFile = new File(jsonFilePath);
         JsonNode rootNode = mapper.readTree(jsonFile);
-        
+
         // Check if it's an array (data rows) or an object with a config and data structure
         if (rootNode.isArray()) {
             // Simple array of objects, each representing a row
@@ -53,10 +54,10 @@ public class JsonConverter {
         } else {
             throw new IllegalArgumentException("Unsupported JSON structure: root node must be array or object");
         }
-        
+
         System.out.println("Imported " + repository.getDataRows().size() + " rows from JSON file");
     }
-    
+
     /**
      * Import a simple JSON array of objects, each representing a row
      */
@@ -69,30 +70,30 @@ public class JsonConverter {
                 allFields.add(fieldNames.next());
             }
         }
-        
+
         // Convert to array and set as headers
         String[] headers = allFields.toArray(new String[0]);
         repository.setHeaders(headers);
-        
+
         // If we have at least one row, use it for type inference
         if (rootNode.size() > 0) {
             JsonNode firstRow = rootNode.get(0);
             String[] firstDataRow = new String[headers.length];
-            
+
             for (int i = 0; i < headers.length; i++) {
                 String field = headers[i];
                 JsonNode valueNode = firstRow.get(field);
                 firstDataRow[i] = (valueNode != null) ? valueNode.asText() : "";
             }
-            
+
             repository.setFirstDataRow(firstDataRow);
             repository.inferTypes(headers, firstDataRow);
         }
-        
+
         // Process each row and add to repository
         for (JsonNode rowNode : rootNode) {
             Map<String, Object> rowValues = new LinkedHashMap<>();
-            
+
             // Extract values for all fields
             for (String field : headers) {
                 JsonNode valueNode = rowNode.get(field);
@@ -117,19 +118,19 @@ public class JsonConverter {
                     rowValues.put(field, null);
                 }
             }
-            
+
             // Add the row to the repository
             repository.addDataRow(rowValues);
         }
     }
-    
+
     /**
      * Import a JSON object with configuration and data
      */
     private void importConfiguredJsonObject(JsonNode rootNode, ConversionRepository repository) {
         // Extract configuration if present
         repository.extractConfigFromJSON(rootNode);
-        
+
         // Check if there's a data array
         if (rootNode.has("data") && rootNode.get("data").isArray()) {
             JsonNode dataArray = rootNode.get("data");
@@ -137,14 +138,14 @@ public class JsonConverter {
         } else {
             // If no data array, treat the entire object as a single row
             Map<String, Object> rowValues = new LinkedHashMap<>();
-            
+
             Iterator<String> fieldNames = rootNode.fieldNames();
             List<String> headersList = new ArrayList<>();
-            
+
             while (fieldNames.hasNext()) {
                 String field = fieldNames.next();
                 headersList.add(field);
-                
+
                 JsonNode valueNode = rootNode.get(field);
                 if (valueNode.isInt()) {
                     rowValues.put(field, valueNode.asInt());
@@ -163,7 +164,7 @@ public class JsonConverter {
                     rowValues.put(field, valueNode.toString());
                 }
             }
-            
+
             // Set headers and add the row
             repository.setHeaders(headersList.toArray(new String[0]));
             repository.addDataRow(rowValues);
@@ -206,18 +207,25 @@ public class JsonConverter {
 
     /**
      * Export filtered subsets of data from the repository to multiple JSON files
+     * using the SubsetProcessor to handle subset filtering and configuration
      */
-    public void exportSubsetsFromRepository(ConversionRepository repository, String baseJsonFilePath,
-                                            Map<String, String> filterToSuffix) throws IOException {
+    public void exportSubsetsFromRepository(ConversionRepository repository, String baseJsonFilePath) throws IOException {
+        // Create the subset processor
+        SubsetProcessor subsetProcessor = new SubsetProcessor(properties, repository);
+
+        if (!subsetProcessor.hasSubsets()) {
+            System.out.println("No subsets configured for export.");
+            return;
+        }
 
         System.out.println("Exporting filtered subsets to JSON files");
 
         // For tracking unfiltered records
         Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
-        //gm: adding
-        Set<String> exportedKeys = new HashSet<String>();
+        // For tracking exported keys (for exclusive subsets)
+        Set<String> exportedKeys = new HashSet<>();
 
-        // Get visible fields in order, add a check to ensure we have headers
+        // Get visible fields in order
         List<String> visibleFields;
         try {
             visibleFields = repository.getVisibleFieldNames();
@@ -242,6 +250,7 @@ public class JsonConverter {
         }
 
         // Process each filter
+        Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
         for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
             String filterField = entry.getKey();
             String suffix = entry.getValue();
@@ -257,24 +266,7 @@ public class JsonConverter {
                     rowsWithField++;
 
                     // Check if this field would evaluate to true
-                    Object fieldValue = row.get(filterField);
-                    boolean wouldMatch = false;
-
-                    if (fieldValue instanceof Boolean) {
-                        wouldMatch = (Boolean) fieldValue;
-                    } else if (fieldValue instanceof String) {
-                        wouldMatch = Boolean.parseBoolean((String) fieldValue);
-                    } else if (fieldValue instanceof Integer) {
-                        wouldMatch = ((Integer) fieldValue) != 0;
-                    } else if (fieldValue instanceof Long) {
-                        wouldMatch = ((Long) fieldValue) != 0L;
-                    } else if (fieldValue != null) {
-                        wouldMatch = "true".equalsIgnoreCase(fieldValue.toString()) ||
-                                "yes".equalsIgnoreCase(fieldValue.toString()) ||
-                                "1".equals(fieldValue.toString());
-                    }
-
-                    if (wouldMatch) {
+                    if (subsetProcessor.rowMatchesFilter(row, filterField)) {
                         rowsWithTrueValue++;
                     }
                 }
@@ -290,7 +282,7 @@ public class JsonConverter {
                     ". " + rowsWithTrueValue + " rows have 'true' values.");
 
             // Create output file path with suffix
-            String outputPath = getOutputPathWithSuffix(baseJsonFilePath, suffix, ".json");
+            String outputPath = subsetProcessor.getOutputPathWithSuffix(baseJsonFilePath, suffix, ".json");
 
             System.out.println("Exporting subset for filter '" + filterField + "' to: " + outputPath);
 
@@ -300,35 +292,9 @@ public class JsonConverter {
 
             // Filter rows based on the filter field
             for (Map<String, Object> row : repository.getDataRows()) {
-                Object fieldValue = row.get(filterField);
-                boolean matches = false;
+                boolean matches = subsetProcessor.rowMatchesFilter(row, filterField);
+                boolean keyAlreadyExported = subsetProcessor.isRowKeyInExportedSet(row, exportedKeys);
 
-                // Check if the field has a boolean true value
-                if (fieldValue instanceof Boolean) {
-                    matches = (Boolean) fieldValue;
-                } else if (fieldValue instanceof String) {
-                    matches = Boolean.parseBoolean((String) fieldValue);
-                } else if (fieldValue instanceof Integer) {
-                    matches = ((Integer) fieldValue) != 0;
-                } else if (fieldValue instanceof Long) {
-                    matches = ((Long) fieldValue) != 0L;
-                } else if (fieldValue != null) {
-                    // Try to interpret as boolean if possible
-                    matches = "true".equalsIgnoreCase(fieldValue.toString()) ||
-                            "yes".equalsIgnoreCase(fieldValue.toString()) ||
-                            "1".equals(fieldValue.toString());
-                    System.out.println("Filter field '" + filterField + "' has value of type " +
-                            fieldValue.getClass().getName() + ": " + fieldValue +
-                            " - interpreted as " + matches);
-                }
-
-                //gm: adding
-                //String uniqueKeyField = "Filename";
-                String uniqueKeyField = (String) row.keySet().toArray()[0];
-                String rowKey = (String) row.get(uniqueKeyField);
-                boolean keyAlreadyExported = exportedKeys.contains(rowKey);
-
-                // if (matches) {
                 if (matches && !keyAlreadyExported) {
                     // Create JSON object for this row
                     ObjectNode jsonRow = mapper.createObjectNode();
@@ -347,8 +313,8 @@ public class JsonConverter {
 
                     // Remove from unfiltered set
                     unfilteredRows.remove(row);
-                    //gm: adding
-                    exportedKeys.add(rowKey);
+                    // Add to exported keys set if exclusive subsets are enabled
+                    subsetProcessor.addRowKeyToExportedSet(row, exportedKeys);
                 }
             }
 
@@ -359,9 +325,9 @@ public class JsonConverter {
         }
 
         // If we need to output remaining unfiltered rows
-        if (!unfilteredRows.isEmpty() && properties.getProperty("output.jsonSuffix") != null) {
-            String defaultSuffix = properties.getProperty("output.jsonSuffix");
-            String unfilteredPath = getOutputPathWithSuffix(baseJsonFilePath, defaultSuffix, ".json");
+        if (!unfilteredRows.isEmpty()) {
+            String defaultSuffix = properties.getProperty("output.suffix", "_default");
+            String unfilteredPath = subsetProcessor.getOutputPathWithSuffix(baseJsonFilePath, defaultSuffix, ".json");
 
             System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);
 
@@ -389,60 +355,49 @@ public class JsonConverter {
     }
 
     /**
-     * Helper method to generate an output path with a suffix
-     */
-    private String getOutputPathWithSuffix(String basePath, String suffix, String extension) {
-        // Extract base path without extension
-        String basePathWithoutExt = basePath.replaceAll("\\.[^.]+$", "");
-
-        // Add suffix and extension
-        return basePathWithoutExt + suffix + extension;
-    }
-
-    /**
      * Export both data and configuration from the repository to a JSON file
      */
     public void exportWithConfigToRepository(ConversionRepository repository, String jsonFilePath) throws IOException {
         System.out.println("Exporting data with configuration to JSON file: " + jsonFilePath);
-        
+
         // Create the root object node
         ObjectNode rootNode = mapper.createObjectNode();
-        
+
         // Add parameters section
         ObjectNode paramsNode = mapper.createObjectNode();
         for (Map.Entry<String, Object> entry : repository.getConfigParameters().entrySet()) {
             addValueToNode(paramsNode, entry.getKey(), entry.getValue());
         }
         rootNode.set("parameters", paramsNode);
-        
+
         // Add columns section
         ObjectNode columnsNode = mapper.createObjectNode();
         Map<String, ConversionRepository.DataType> columnTypes = repository.getColumnTypes();
         Map<String, Boolean> columnVisibility = repository.getColumnVisibility();
-        
+
         for (String columnName : repository.getHeaders()) {
             if (columnName != null && !columnName.isEmpty()) {
                 ObjectNode columnConfig = mapper.createObjectNode();
-                
+
                 // Add type if available
                 if (columnTypes.containsKey(columnName)) {
                     columnConfig.put("type", columnTypes.get(columnName).toString());
                 } else {
                     columnConfig.put("type", "STRING");
                 }
-                
+
                 // Add visibility if available
                 if (columnVisibility.containsKey(columnName)) {
                     columnConfig.put("visible", columnVisibility.get(columnName));
                 } else {
                     columnConfig.put("visible", true);
                 }
-                
+
                 columnsNode.set(columnName, columnConfig);
             }
         }
         rootNode.set("columns", columnsNode);
-        
+
         // Add derived boolean fields if any
         if (!repository.getDerivedBooleanFields().isEmpty()) {
             ObjectNode derivedNode = mapper.createObjectNode();
@@ -451,7 +406,7 @@ public class JsonConverter {
             }
             rootNode.set("derivedBooleanFields", derivedNode);
         }
-        
+
         // Add aggregate text fields if any
         if (!repository.getAggregateTextFields().isEmpty()) {
             ObjectNode aggregateNode = mapper.createObjectNode();
@@ -460,7 +415,7 @@ public class JsonConverter {
             }
             rootNode.set("aggregateTextFields", aggregateNode);
         }
-        
+
         // Add suppressed fields if any
         if (!repository.getSuppressedFields().isEmpty()) {
             ObjectNode suppressedNode = mapper.createObjectNode();
@@ -469,14 +424,14 @@ public class JsonConverter {
             }
             rootNode.set("suppressedFields", suppressedNode);
         }
-        
+
         // Add data array
         ArrayNode dataArray = mapper.createArrayNode();
         List<String> visibleFields = repository.getVisibleFieldNames();
-        
+
         for (Map<String, Object> row : repository.getDataRows()) {
             ObjectNode jsonRow = mapper.createObjectNode();
-            
+
             // Add fields in the specified order
             for (String field : visibleFields) {
                 if (row.containsKey(field)) {
@@ -484,18 +439,18 @@ public class JsonConverter {
                     addValueToNode(jsonRow, field, value);
                 }
             }
-            
+
             dataArray.add(jsonRow);
         }
         rootNode.set("data", dataArray);
-        
+
         // Write to file
         mapper.writeValue(new File(jsonFilePath), rootNode);
-        
-        System.out.println("Exported " + repository.getDataRows().size() + 
+
+        System.out.println("Exported " + repository.getDataRows().size() +
                 " rows with configuration to JSON file: " + jsonFilePath);
     }
-    
+
     /**
      * Add a value to a Jackson ObjectNode with proper type conversion
      */

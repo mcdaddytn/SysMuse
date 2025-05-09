@@ -1,0 +1,9 @@
+{
+  "isUserAdmin": "equals(username, \"admin\")",
+  "isMod": "contains(role, \"mod\")",
+  "inPriceRange": "price > 100 && price < 200",
+  "notAGuest": "not(isGuest)",
+  "vipCheck": "isVIP(email)",
+  "flaggedOrAdmin": "isFlaggedOrAdmin(user, role)",
+  "finalCheck": "vipCheck && flaggedOrAdmin && notAGuest"
+}

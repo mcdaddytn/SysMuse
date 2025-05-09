@@ -1,0 +1,9 @@
+{
+  "username": "admin",
+  "role": "moderator",
+  "price": 120,
+  "isAdmin": true,
+  "isGuest": false,
+  "email": "jim@domain.com",
+  "user": "fraudster"
+}

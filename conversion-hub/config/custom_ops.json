@@ -1,0 +1,15 @@
+{
+  "customOps": [
+    {
+      "name": "isVIP",
+      "type": "setMembership",
+      "args": ["email"],
+      "set": ["jim@domain.com", "mary@domain.com", "ceo@corp.com"]
+    },
+    {
+      "name": "ceoIsVIP",
+      "type": "literal",
+      "value": true
+    }
+  ]
+}

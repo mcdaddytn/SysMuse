@@ -17,6 +17,7 @@ public class LoggingUtil {
     private static final Logger logger = Logger.getLogger("com.sysmuse.util");
     private static boolean initialized = false;
     private static Level currentLevel = Level.INFO;
+    //private static Level currentLevel = Level.DEBUG;
     private static boolean consoleLogging = true;
     private static boolean fileLogging = false;
     private static String logFileName = "converter.log";

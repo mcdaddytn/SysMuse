@@ -14,7 +14,7 @@ public class ExpressionManager {
     public final Map<String, Operation> registeredOps = new HashMap<>();
     public final Map<String, List<String>> opArgOrder = new HashMap<>();
 
-    public void registerDefaultOps() {
+    public void registerDefaultOps_Simple() {
         register("equals", (vars, ctx) -> Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
         register("contains", (vars, ctx) -> {
             Object l = vars.get("left"), r = vars.get("right");
@@ -28,6 +28,38 @@ public class ExpressionManager {
 
         register("==", (vars, ctx) -> Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
         register("!=", (vars, ctx) -> !Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
+    }
+
+    public void registerDefaultOps() {
+        register("equals", (vars, ctx) -> Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
+        register("contains", (vars, ctx) -> {
+            Object l = vars.get("left"), r = vars.get("right");
+            return (l instanceof String && r instanceof String) && ((String) l).contains((String) r);
+        }, List.of("left", "right"));
+
+        // Numeric comparisons (safe for numbers only)
+        register(">", (vars, ctx) -> toDouble(vars.get("left")) > toDouble(vars.get("right")), List.of("left", "right"));
+        register("<", (vars, ctx) -> toDouble(vars.get("left")) < toDouble(vars.get("right")), List.of("left", "right"));
+        register(">=", (vars, ctx) -> toDouble(vars.get("left")) >= toDouble(vars.get("right")), List.of("left", "right"));
+        register("<=", (vars, ctx) -> toDouble(vars.get("left")) <= toDouble(vars.get("right")), List.of("left", "right"));
+
+        // Generic equality
+        register("==", (vars, ctx) -> Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
+        register("!=", (vars, ctx) -> !Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
+
+        // Boolean logic
+        register("not", (vars, ctx) -> !((Boolean) vars.get("value")), List.of("value"));
+        register("and", (vars, ctx) -> (Boolean) vars.get("left") && (Boolean) vars.get("right"), List.of("left", "right"));
+        register("or", (vars, ctx) -> (Boolean) vars.get("left") || (Boolean) vars.get("right"), List.of("left", "right"));
+
+        // Set membership
+        register("oneOf", (vars, ctx) -> {
+            Object val = vars.get("value");
+            Object list = vars.get("set");
+            if (list instanceof List) return ((List<?>) list).contains(val);
+            if (list instanceof Set) return ((Set<?>) list).contains(val);
+            return false;
+        }, List.of("value", "set"));
     }
 
     private void register(String name, Operation op, List<String> args) {

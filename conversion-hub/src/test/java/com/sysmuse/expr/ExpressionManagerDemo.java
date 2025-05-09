@@ -62,6 +62,17 @@ public class ExpressionManagerDemo {
         expressions.put("flaggedOrAdmin", "isFlaggedOrAdmin(user, role)");
         expressions.put("finalCheck", "vipCheck && flaggedOrAdmin && notAGuest");
 
+        expressions.put("textMatch", "equals(role, \"moderator\")");
+        expressions.put("textIncludes", "contains(role, \"mod\")");
+        expressions.put("mathEqual", "price == 120");
+        expressions.put("mathNotEqual", "price != 999");
+        expressions.put("mathGT", "price > 100");
+        expressions.put("mathLT", "price < 200");
+
+        //gm: these not yet working
+        //expressions.put("inOneOf", "oneOf(username, [\"admin\", \"superuser\"])");
+        //expressions.put("notAdmin", "not(username == \"guest\")");
+
         Map<String, Boolean> results = manager.evaluateExpressions(expressions, inputParams);
 
         for (Map.Entry<String, Boolean> entry : results.entrySet()) {

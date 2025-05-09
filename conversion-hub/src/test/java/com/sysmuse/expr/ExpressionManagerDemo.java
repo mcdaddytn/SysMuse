@@ -6,8 +6,8 @@ import com.sysmuse.util.LoggingUtil;
 
 public class ExpressionManagerDemo {
     public static void main(String[] args) {
-        //test1();
-        test2();
+        test1();
+        //test2();
     }
 
     public static void test2() {
@@ -52,9 +52,9 @@ public class ExpressionManagerDemo {
         inputParams.put("user", "fraudster");
 
         LinkedHashMap<String, String> expressions = new LinkedHashMap<>();
-        //expressions.put("isUserAdmin", "equals(username, \"admin\")");
+        expressions.put("isUserAdmin", "equals(username, \"admin\")");
         //expressions.put("isUserAdmin", "username == \"admin\"");
-        expressions.put("isUserAdmin", "equals(username, \\\"admin\\\")");
+        //expressions.put("isUserAdmin", "equals(username, \\\"admin\\\")");
         expressions.put("isMod", "contains(role, \"mod\")");
         expressions.put("inPriceRange", "price > 100 && price < 200");
         expressions.put("notAGuest", "not(isGuest)");

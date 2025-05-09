@@ -25,6 +25,9 @@ public class ExpressionManager {
         register("not", (vars, ctx) -> !((Boolean) vars.get("value")), List.of("value"));
         register("and", (vars, ctx) -> (Boolean) vars.get("left") && (Boolean) vars.get("right"), List.of("left", "right"));
         register("or", (vars, ctx) -> (Boolean) vars.get("left") || (Boolean) vars.get("right"), List.of("left", "right"));
+
+        register("==", (vars, ctx) -> Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
+        register("!=", (vars, ctx) -> !Objects.equals(vars.get("left"), vars.get("right")), List.of("left", "right"));
     }
 
     private void register(String name, Operation op, List<String> args) {
@@ -103,7 +106,7 @@ public class ExpressionManager {
 
         private Function<Map<String, Object>, Object> parseComparison() {
             Function<Map<String, Object>, Object> left = parsePrimary();
-            if (peek(">") || peek("<")) {
+            if (peek("==") || peek("!=") || peek(">=") || peek("<=") || peek(">") || peek("<")) {
                 String op = parseOperator();
                 Function<Map<String, Object>, Object> right = parsePrimary();
                 return vars -> {
@@ -231,6 +234,10 @@ public class ExpressionManager {
         }
 
         private String parseOperator() {
+            if (match(">=")) return ">=";
+            if (match("<=")) return "<=";
+            if (match("==")) return "==";
+            if (match("!=")) return "!=";
             if (match(">")) return ">";
             if (match("<")) return "<";
             throw new RuntimeException("Expected comparison operator at pos " + pos);

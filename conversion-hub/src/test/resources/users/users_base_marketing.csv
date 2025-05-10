@@ -1,5 +1,5 @@
 user_id,username,email,full_name,is_active,registration_date,is_high_value_customer,requires_verification,communication_eligible,user_details,transaction_insights
 1,johndoe,,John Doe,true,2022-01-15,false,false,true,,
-3,adminuser,,System Administrator,true,2021-11-01,false,false,true,,
+3,adminuser,admin@company.com,System Administrator,true,2021-11-01,false,true,true,,
 5,vipuser,,VIP Customer,true,2021-09-05,false,false,true,,
-6,moderator,,Site Moderator,true,2022-03-15,false,false,true,,
+6,moderator,mod@company.com,Site Moderator,true,2022-03-15,false,true,true,,

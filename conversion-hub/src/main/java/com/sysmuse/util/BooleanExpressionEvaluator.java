@@ -25,6 +25,9 @@ public class BooleanExpressionEvaluator {
 
         switch (type) {
             case "FIELD":
+                if (expression.has("comparison")) {
+                    return evaluateFieldComparison(expression, rowValues);
+                }
                 return evaluateFieldReference(expression, rowValues);
 
             case "AND":
@@ -72,6 +75,87 @@ public class BooleanExpressionEvaluator {
             // Default to false for non-boolean values
             return false;
         }
+    }
+
+    private static Boolean evaluateFieldComparison(JsonNode expression, Map<String, Object> rowValues) {
+        String fieldName = expression.get("field").asText();
+
+        // Check if the field exists in row values
+        if (!rowValues.containsKey(fieldName)) {
+            LoggingUtil.debug("Field '" + fieldName + "' not found for comparison");
+            return false;
+        }
+
+        Object fieldValue = rowValues.get(fieldName);
+
+        // If no comparison specified, treat as boolean field
+        if (!expression.has("comparison")) {
+            return evaluateFieldReference(expression, rowValues);
+        }
+
+        // Get comparison and value to compare against
+        String comparisonType = expression.get("comparison").asText();
+        JsonNode valueNode = expression.get("value");
+
+        // Convert values for comparison
+        Object compareValue = convertToAppropriateType(valueNode, fieldValue);
+
+        // Perform comparison based on type
+        if (fieldValue instanceof Number && compareValue instanceof Number) {
+            double fieldNumValue = ((Number) fieldValue).doubleValue();
+            double compareNumValue = ((Number) compareValue).doubleValue();
+
+            switch (comparisonType) {
+                case ">": return fieldNumValue > compareNumValue;
+                case ">=": return fieldNumValue >= compareNumValue;
+                case "<": return fieldNumValue < compareNumValue;
+                case "<=": return fieldNumValue <= compareNumValue;
+                case "==": return fieldNumValue == compareNumValue;
+                case "!=": return fieldNumValue != compareNumValue;
+            }
+        } else if (fieldValue instanceof String && compareValue instanceof String) {
+            switch (comparisonType) {
+                case "==": return fieldValue.equals(compareValue);
+                case "!=": return !fieldValue.equals(compareValue);
+            }
+        } else if (fieldValue instanceof Boolean && compareValue instanceof Boolean) {
+            switch (comparisonType) {
+                case "==": return fieldValue.equals(compareValue);
+                case "!=": return !fieldValue.equals(compareValue);
+            }
+        }
+
+        LoggingUtil.debug("Unsupported comparison type or incompatible types for field '" + fieldName + "'");
+        return false;
+    }
+
+    private static Object convertToAppropriateType(JsonNode valueNode, Object referenceValue) {
+        if (valueNode.isInt()) {
+            return valueNode.asInt();
+        } else if (valueNode.isLong()) {
+            return valueNode.asLong();
+        } else if (valueNode.isDouble()) {
+            return valueNode.asDouble();
+        } else if (valueNode.isBoolean()) {
+            return valueNode.asBoolean();
+        } else if (valueNode.isTextual()) {
+            String textValue = valueNode.asText();
+
+            // Try to convert based on reference value type
+            if (referenceValue instanceof Integer) {
+                return Integer.parseInt(textValue);
+            } else if (referenceValue instanceof Long) {
+                return Long.parseLong(textValue);
+            } else if (referenceValue instanceof Double) {
+                return Double.parseDouble(textValue);
+            } else if (referenceValue instanceof Boolean) {
+                return Boolean.parseBoolean(textValue);
+            }
+
+            return textValue;
+        }
+
+        return null;
     }
 
     /**

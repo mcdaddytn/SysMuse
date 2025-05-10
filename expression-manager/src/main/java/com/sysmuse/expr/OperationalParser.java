@@ -16,11 +16,11 @@ public class OperationalParser {
     }
 
     public Function<Map<String, Object>, Object> parseAny() {
-        return parseExpr();
+        return parseComparison();
     }
 
     public Predicate<Map<String, Object>> parse() {
-        Function<Map<String, Object>, Object> root = parseExpr();
+        Function<Map<String, Object>, Object> root = parseComparison();
         return ctx -> {
             Object val = root.apply(ctx);
             if (!(val instanceof Boolean)) {
@@ -30,7 +30,18 @@ public class OperationalParser {
         };
     }
 
+    private Function<Map<String, Object>, Object> parseComparison() {
+        Function<Map<String, Object>, Object> left = parseExpr();
+        while (peek("==") || peek("!=") || peek(">=") || peek("<=") || peek(">") || peek("<")) {
+            String op = parseComparisonOperator();
+            Function<Map<String, Object>, Object> right = parseExpr();
+            left = wrapBoolean(op, left, right);
+        }
+        return left;
+    }
+
     private Function<Map<String, Object>, Object> parseExpr() {
+        System.out.println("parseExpr: starting at pos=" + pos + " char='" + current() + "'");
         Function<Map<String, Object>, Object> left = parseTerm();
         while (peek("+") || peek("-")) {
             String op = parseOperator();
@@ -41,6 +52,7 @@ public class OperationalParser {
     }
 
     private Function<Map<String, Object>, Object> parseTerm() {
+        System.out.println("parseTerm: starting at pos=" + pos + " char='" + current() + "'");
         Function<Map<String, Object>, Object> left = parseFactor();
         while (peek("*") || peek("/") || peek("%")) {
             String op = parseOperator();
@@ -51,8 +63,9 @@ public class OperationalParser {
     }
 
     private Function<Map<String, Object>, Object> parseFactor() {
+        System.out.println("parseFactor: starting at pos=" + pos + " char='" + current() + "'");
         if (match("(")) {
-            Function<Map<String, Object>, Object> expr = parseExpr();
+            Function<Map<String, Object>, Object> expr = parseComparison();
             match(")");
             return expr;
         }
@@ -116,10 +129,18 @@ public class OperationalParser {
     }
 
     private String parseOperator() {
+        System.out.println("parseOperator at pos=" + pos);
         for (String op : List.of("+", "-", "*", "/", "%")) {
             if (match(op)) return op;
         }
         throw new RuntimeException("Expected operator at pos " + pos);
+    }
+
+    private String parseComparisonOperator() {
+        for (String op : List.of("==", "!=", ">=", "<=", ">", "<")) {
+            if (match(op)) return op;
+        }
+        throw new RuntimeException("Expected comparison operator at pos " + pos);
     }
 
     private Function<Map<String, Object>, Object> wrapNumeric(String op,
@@ -134,5 +155,17 @@ public class OperationalParser {
             call.put(args.get(1), r.apply(ctx));
             return nOp.apply(call, ctx);
         };
+    }
+
+    private Function<Map<String, Object>, Object> wrapBoolean(String op,
+                                                              Function<Map<String, Object>, Object> l,
+                                                              Function<Map<String, Object>, Object> r) {
+        BooleanOperation bOp = registry.getBoolean(op);
+        if (bOp == null) throw new RuntimeException("Unknown boolean operator: " + op);
+        List<String> args = registry.getArgOrder(op);
+        return ctx -> bOp.apply(Map.of(
+                args.get(0), l.apply(ctx),
+                args.get(1), r.apply(ctx)
+        ), ctx);
     }
 }

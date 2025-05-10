@@ -17,11 +17,15 @@ public class ExpressionManager {
 
     public static void main(String[] args) throws Exception {
         String jsonPath = null;
+        Map<String, Object> result = null;
+        ExpressionMode expressionMode = ExpressionMode.FUNCTIONAL;
+
         if (args.length != 1) {
             //System.err.println("Usage: java ExpressionManager <path-to-json>");
             //System.exit(1);
             //jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_verified_pass.json";
             jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_operational_expressions.json";
+            expressionMode = ExpressionMode.OPERATIONAL;
         }
         else {
             jsonPath = args[0];
@@ -51,7 +55,8 @@ public class ExpressionManager {
 
         // Evaluate
         System.out.println("=== Evaluating Expressions ===");
-        Map<String, Object> result = mgr.evaluateAll(expressions, params, ExpressionMode.FUNCTIONAL);
+        //Map<String, Object> result = mgr.evaluateAll(expressions, params, ExpressionMode.FUNCTIONAL);
+        result = mgr.evaluateAll(expressions, params, expressionMode);
 
         // Output final results
         System.out.println("=== Final Context ===");

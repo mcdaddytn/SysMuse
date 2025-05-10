@@ -2,6 +2,7 @@ package com.sysmuse.expr;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class NumericOperations {
 
@@ -64,6 +65,14 @@ public class NumericOperations {
         registry.registerBoolean("lessThanOrEqual",
                 (args, ctx) -> get(args, "a") <= get(args, "b"),
                 List.of("a", "b"), "<=");
+
+        registry.registerBoolean("equals",
+                (args, ctx) -> Objects.equals(args.get("a"), args.get("b")),
+                List.of("a", "b"), "==", "eq");
+
+        registry.registerBoolean("notEquals",
+                (args, ctx) -> !Objects.equals(args.get("a"), args.get("b")),
+                List.of("a", "b"), "!=");
     }
 
     private static double get(Map<String, Object> args, String key) {

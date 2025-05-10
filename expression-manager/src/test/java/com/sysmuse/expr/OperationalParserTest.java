@@ -46,7 +46,6 @@ public class OperationalParserTest {
 
         Map<String, Object> result = manager.evaluateAll(expressions, params, ExpressionMode.OPERATIONAL);
 
-        //assertEquals(7, result.get("sum"));
         assertEquals(7.0, result.get("sum"));
         assertEquals(14.0, result.get("product"));
         assertEquals(true, result.get("isBig"));

@@ -7,6 +7,7 @@ public class OperationRegistry {
     private final Map<String, BooleanOperation> booleanOps = new HashMap<>();
     private final Map<String, StringOperation> stringOps = new HashMap<>();
     private final Map<String, NumericOperation> numericOps = new HashMap<>();
+    private final Map<String, NumericOperation> numericOperators = new HashMap<>();
     private final Map<String, List<String>> argOrder = new HashMap<>();
     private final Map<String, String> aliases = new HashMap<>();
 
@@ -31,6 +32,11 @@ public class OperationRegistry {
         for (String alias : alternativeNames) aliases.put(alias.toLowerCase(), key);
     }
 
+    public void registerNumericOperator(String symbol, NumericOperation op, List<String> argNames) {
+        numericOperators.put(symbol, op);
+        argOrder.put(symbol, argNames);
+    }
+
     public BooleanOperation getBoolean(String name) {
         return booleanOps.get(resolve(name));
     }
@@ -41,6 +47,10 @@ public class OperationRegistry {
 
     public NumericOperation getNumeric(String name) {
         return numericOps.get(resolve(name));
+    }
+
+    public NumericOperation getNumericOperator(String symbol) {
+        return numericOperators.get(symbol);
     }
 
     public List<String> getArgOrder(String name) {
@@ -58,3 +68,5 @@ public class OperationRegistry {
         return aliases.getOrDefault(name.toLowerCase(), name.toLowerCase());
     }
 }
+
+

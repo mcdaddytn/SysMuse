@@ -11,18 +11,16 @@ public class OperationalParser {
     private final OperationRegistry registry;
 
     public OperationalParser(String expr, OperationRegistry registry) {
-        this.expr = expr.replaceAll("\\s+", ""); // Strip whitespace for easier parsing
+        this.expr = expr.replaceAll("\\s+", "");
         this.registry = registry;
     }
 
-    /** General object-returning version (used in evaluateAll) */
     public Function<Map<String, Object>, Object> parseAny() {
-        return parseOr();
+        return parseExpr();
     }
 
-    /** Legacy boolean-only support */
     public Predicate<Map<String, Object>> parse() {
-        Function<Map<String, Object>, Object> root = parseOr();
+        Function<Map<String, Object>, Object> root = parseExpr();
         return ctx -> {
             Object val = root.apply(ctx);
             if (!(val instanceof Boolean)) {
@@ -32,54 +30,38 @@ public class OperationalParser {
         };
     }
 
-    private Function<Map<String, Object>, Object> parseOr() {
-        Function<Map<String, Object>, Object> left = parseAnd();
-        while (match("||")) {
-            Function<Map<String, Object>, Object> right = parseAnd();
-            left = wrapBoolean("or", left, right);
-        }
-        return left;
-    }
-
-    private Function<Map<String, Object>, Object> parseAnd() {
-        Function<Map<String, Object>, Object> left = parseComparison();
-        while (match("&&")) {
-            Function<Map<String, Object>, Object> right = parseComparison();
-            left = wrapBoolean("and", left, right);
-        }
-        return left;
-    }
-
-    private Function<Map<String, Object>, Object> parseComparison() {
-        Function<Map<String, Object>, Object> left = parseValue();
-        if (peek("==") || peek("!=") || peek(">=") || peek("<=") || peek(">") || peek("<")) {
+    private Function<Map<String, Object>, Object> parseExpr() {
+        Function<Map<String, Object>, Object> left = parseTerm();
+        while (peek("+") || peek("-")) {
             String op = parseOperator();
-            Function<Map<String, Object>, Object> right = parseValue();
-            return wrapBoolean(op, left, right);
+            Function<Map<String, Object>, Object> right = parseTerm();
+            left = wrapNumeric(op, left, right);
         }
         return left;
     }
 
-    private Function<Map<String, Object>, Object> parseValue() {
+    private Function<Map<String, Object>, Object> parseTerm() {
+        Function<Map<String, Object>, Object> left = parseFactor();
+        while (peek("*") || peek("/") || peek("%")) {
+            String op = parseOperator();
+            Function<Map<String, Object>, Object> right = parseFactor();
+            left = wrapNumeric(op, left, right);
+        }
+        return left;
+    }
+
+    private Function<Map<String, Object>, Object> parseFactor() {
+        if (match("(")) {
+            Function<Map<String, Object>, Object> expr = parseExpr();
+            match(")");
+            return expr;
+        }
+
         if (match("true")) return ctx -> true;
         if (match("false")) return ctx -> false;
 
-        if (peek("\"")) {
-            match("\"");
-            int start = pos;
-            while (pos < expr.length() && expr.charAt(pos) != '"') pos++;
-            String s = expr.substring(start, pos);
-            match("\"");
-            return ctx -> s;
-        }
-
-        if (Character.isDigit(current())) {
-            int start = pos;
-            while (pos < expr.length() &&
-                    (Character.isDigit(expr.charAt(pos)) || expr.charAt(pos) == '.')) pos++;
-            String num = expr.substring(start, pos);
-            return ctx -> num.contains(".") ? Double.parseDouble(num) : Integer.parseInt(num);
-        }
+        if (peek("\"")) return parseStringLiteral();
+        if (Character.isDigit(current()) || peek("-")) return parseNumberLiteral();
 
         return parseVariable();
     }
@@ -87,6 +69,25 @@ public class OperationalParser {
     private Function<Map<String, Object>, Object> parseVariable() {
         String name = parseIdentifier();
         return ctx -> ctx.get(name);
+    }
+
+    private Function<Map<String, Object>, Object> parseNumberLiteral() {
+        int start = pos;
+        if (peek("-")) pos++;
+        while (pos < expr.length() && (Character.isDigit(expr.charAt(pos)) || expr.charAt(pos) == '.')) {
+            pos++;
+        }
+        String num = expr.substring(start, pos);
+        return ctx -> num.contains(".") ? Double.parseDouble(num) : Integer.parseInt(num);
+    }
+
+    private Function<Map<String, Object>, Object> parseStringLiteral() {
+        match("\"");
+        int start = pos;
+        while (pos < expr.length() && expr.charAt(pos) != '"') pos++;
+        String s = expr.substring(start, pos);
+        match("\"");
+        return ctx -> s;
     }
 
     private String parseIdentifier() {
@@ -115,23 +116,23 @@ public class OperationalParser {
     }
 
     private String parseOperator() {
-        for (String op : List.of("==", "!=", ">=", "<=", ">", "<")) {
+        for (String op : List.of("+", "-", "*", "/", "%")) {
             if (match(op)) return op;
         }
-        throw new RuntimeException("Expected comparison operator at pos " + pos);
+        throw new RuntimeException("Expected operator at pos " + pos);
     }
 
-    private Function<Map<String, Object>, Object> wrapBoolean(String opName,
+    private Function<Map<String, Object>, Object> wrapNumeric(String op,
                                                               Function<Map<String, Object>, Object> l,
                                                               Function<Map<String, Object>, Object> r) {
-        List<String> argNames = registry.getArgOrder(opName);
-        BooleanOperation op = registry.getBoolean(opName);
+        NumericOperation nOp = registry.getNumericOperator(op);
+        if (nOp == null) throw new RuntimeException("Unknown numeric operator: " + op);
+        List<String> args = registry.getArgOrder(op);
         return ctx -> {
-            Map<String, Object> args = new HashMap<>();
-            args.put(argNames.get(0), l.apply(ctx));
-            args.put(argNames.get(1), r.apply(ctx));
-            return op.apply(args, ctx);
+            Map<String, Object> call = new HashMap<>();
+            call.put(args.get(0), l.apply(ctx));
+            call.put(args.get(1), r.apply(ctx));
+            return nOp.apply(call, ctx);
         };
     }
 }
-

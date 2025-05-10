@@ -71,12 +71,9 @@ public class StringOperations {
 
         registry.registerString("template",
                 (Map<String, Object> args, Map<String, Object> ctx) -> {
-                    String template = String.valueOf(args.get("template"));
-                    String start = String.valueOf(args.getOrDefault("start", "{"));
-                    String end = String.valueOf(args.getOrDefault("end", "}"));
-                    return TemplateFormatter.format(template, ctx, start, end);
+                    String tmpl = String.valueOf(args.get("template"));
+                    return TemplateFormatter.format(tmpl, ctx, "{", "}");
                 },
-                List.of("template", "start", "end"));
+                List.of("template"));
     }
 }
-

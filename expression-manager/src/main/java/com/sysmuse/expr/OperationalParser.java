@@ -5,20 +5,29 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 public class OperationalParser {
+
     private final String expr;
     private int pos = 0;
     private final OperationRegistry registry;
 
     public OperationalParser(String expr, OperationRegistry registry) {
-        this.expr = expr.replaceAll("\\s+", ""); // Remove all whitespace
+        this.expr = expr.replaceAll("\\s+", ""); // Strip whitespace for easier parsing
         this.registry = registry;
     }
 
+    /** General object-returning version (used in evaluateAll) */
+    public Function<Map<String, Object>, Object> parseAny() {
+        return parseOr();
+    }
+
+    /** Legacy boolean-only support */
     public Predicate<Map<String, Object>> parse() {
-        Function<Map<String, Object>, Object> node = parseOr();
+        Function<Map<String, Object>, Object> root = parseOr();
         return ctx -> {
-            Object val = node.apply(ctx);
-            if (!(val instanceof Boolean)) throw new RuntimeException("Expected boolean expression result.");
+            Object val = root.apply(ctx);
+            if (!(val instanceof Boolean)) {
+                throw new RuntimeException("Expected boolean result but got: " + val);
+            }
             return (Boolean) val;
         };
     }
@@ -66,7 +75,8 @@ public class OperationalParser {
 
         if (Character.isDigit(current())) {
             int start = pos;
-            while (pos < expr.length() && (Character.isDigit(expr.charAt(pos)) || expr.charAt(pos) == '.')) pos++;
+            while (pos < expr.length() &&
+                    (Character.isDigit(expr.charAt(pos)) || expr.charAt(pos) == '.')) pos++;
             String num = expr.substring(start, pos);
             return ctx -> num.contains(".") ? Double.parseDouble(num) : Integer.parseInt(num);
         }
@@ -81,7 +91,10 @@ public class OperationalParser {
 
     private String parseIdentifier() {
         int start = pos;
-        while (pos < expr.length() && (Character.isLetterOrDigit(expr.charAt(pos)) || expr.charAt(pos) == '_')) pos++;
+        while (pos < expr.length() &&
+                (Character.isLetterOrDigit(expr.charAt(pos)) || expr.charAt(pos) == '_')) {
+            pos++;
+        }
         return expr.substring(start, pos);
     }
 
@@ -121,3 +134,4 @@ public class OperationalParser {
         };
     }
 }
+

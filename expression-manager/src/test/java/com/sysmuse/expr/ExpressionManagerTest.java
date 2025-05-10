@@ -18,11 +18,11 @@ public class ExpressionManagerTest {
         manager = new ExpressionManager();
         manager.setTypeMismatchMode(TypeMismatchMode.EXCEPTION);
 
-        // Register all built-in ops
+        // Register core operations
         NumericOperations.register(manager.getRegistry());
         StringOperations.register(manager.getRegistry());
 
-        // Basic Boolean op for tests
+        // Register basic equality op
         manager.getRegistry().registerBoolean("equals",
                 (Map<String, Object> args, Map<String, Object> ctx) ->
                         args.get("a").equals(args.get("b")),
@@ -52,17 +52,17 @@ public class ExpressionManagerTest {
         Map<String, Object> params = Map.of("filename", "archive.tar.gz");
 
         Map<String, String> expressions = new LinkedHashMap<>();
-        expressions.put("name", "removeExt(filename)");
-        expressions.put("caps", "toUpper(name)");
+        expressions.put("base", "removeExt(filename)");
+        expressions.put("caps", "toUpper(base)");
 
         Map<String, Object> result = manager.evaluateAll(expressions, params, ExpressionMode.FUNCTIONAL);
 
-        assertEquals("archive.tar", result.get("name"));
+        assertEquals("archive.tar", result.get("base"));
         assertEquals("ARCHIVE.TAR", result.get("caps"));
     }
 
     @Test
-    public void testTemplateIntegration() {
+    public void testTemplateComposition() {
         Map<String, Object> params = Map.of(
                 "username", "alice",
                 "score", 92

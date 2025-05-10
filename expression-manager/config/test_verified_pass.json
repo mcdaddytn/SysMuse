@@ -1,0 +1,18 @@
+{
+  "params": {
+    "x": 4,
+    "y": 3,
+    "username": "admin",
+    "role": "user",
+    "score": 92
+  },
+  "expressions": {
+    "sum": "add(x, y)",
+    "product": "mul(sum, 2)",
+    "isBig": "greaterThan(product, 10)",
+    "nameTag": "template(\"User {username} is active\")",
+    "roleCaps": "toUpper(role)",
+    "hasHighScore": "greaterThan(score, 90)",
+    "status": "template(\"{username} score: {score} > 90? {hasHighScore}\")"
+  }
+}

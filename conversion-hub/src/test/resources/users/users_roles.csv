@@ -1,0 +1,9 @@
+user_id,role,access_level,is_admin,department
+1,user,standard,false,marketing
+2,user,standard,false,sales
+3,admin,superuser,true,it
+4,guest,limited,false,none
+5,vip,premium,false,executive
+6,moderator,advanced,false,support
+7,suspended,none,false,none
+8,user,standard,false,engineering

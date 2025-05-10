@@ -13,7 +13,8 @@ public class ConversionHub {
 
     private Properties properties;
     private SystemConfig systemConfig;
-    private ConversionRepository repository;
+    //private ConversionRepository repository;
+    protected ConversionRepository repository;
     private String configDirectory;
     private String inputDirectory;
     private ConfigGenerator configGenerator;
@@ -199,6 +200,14 @@ public class ConversionHub {
     }
 
     /**
+     * Additional constructor to explicitly set SystemConfig
+     */
+    public ConversionHub(SystemConfig systemConfig) {
+        this.systemConfig = systemConfig != null ? systemConfig : new SystemConfig();
+        this.properties = new Properties();
+    }
+
+    /**
      * Set the configuration directory
      */
     public void setConfigDirectory(String configDirectory) {
@@ -210,6 +219,14 @@ public class ConversionHub {
      */
     public void setProperties(Properties properties) {
         this.properties = properties;
+    }
+
+    public ConversionRepository getRepository() {
+        return repository;
+    }
+
+    public void setRepository(ConversionRepository repository) {
+        this.repository = repository;
     }
 
     /**
@@ -226,6 +243,32 @@ public class ConversionHub {
             LoggingUtil.error("Using default system configuration");
             this.systemConfig = new SystemConfig(); // Use defaults
         }
+    }
+
+    /**
+     * Set the system configuration for the ConversionHub
+     *
+     * @param config The SystemConfig to set
+     */
+    public void setSystemConfig(SystemConfig config) {
+        // Update the system configuration
+        this.systemConfig = config;
+
+        // Reset components that depend on system configuration
+        // Update the text field processor
+        TextFieldProcessor.setSystemConfig(config);
+
+        // Log the configuration change
+        LoggingUtil.info("System configuration updated in ConversionHub");
+    }
+
+    /**
+     * Get the current system configuration
+     *
+     * @return The current SystemConfig
+     */
+    public SystemConfig getSystemConfig() {
+        return this.systemConfig;
     }
 
     /**

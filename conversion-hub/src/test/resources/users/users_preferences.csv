@@ -1,0 +1,9 @@
+user_id,communication_pref,theme_preference,newsletter_subscription,account_verified
+1,email,dark,true,true
+2,sms,light,false,true
+3,email,dark,true,true
+4,none,default,false,false
+5,email,dark,true,true
+6,sms,light,true,true
+7,none,default,false,false
+8,email,light,true,false

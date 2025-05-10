@@ -1,0 +1,177 @@
+package com.sysmuse.util;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class UserDataProcessingTest {
+    private ConversionHub hub;
+    private ConversionRepository repository;
+    private SystemConfig systemConfig;
+
+    @BeforeEach
+    public void setUp() throws Exception {
+        // Initialize configuration
+        systemConfig = new SystemConfig();
+        systemConfig.loadFromFile("src/test/resources/users/users_sysconfig.json");
+
+        // Create conversion hub
+        hub = new ConversionHub();
+        hub.setSystemConfig(systemConfig);
+
+        // Initialize repository using the same system config
+        hub.repository = new ConversionRepository(systemConfig);
+
+        //gm, should not need to do this
+        // Explicitly set the unique key field
+        hub.repository.setUniqueKeyField("user_id");
+        repository = hub.repository;
+    }
+
+    @Test
+    public void testUserDataProcessing() throws Exception {
+        // Process the user data files
+        hub.process(
+            "src/test/resources/users/users_base.csv", 
+            "src/test/resources/users/users_config.json", 
+            "csv"
+        );
+
+        // Retrieve processed data
+        List<Map<String, Object>> processedRows = repository.getDataRows();
+
+        // Basic validation
+        assertNotNull(processedRows);
+        assertEquals(8, processedRows.size(), "Should process all user records");
+
+        // Validate derived fields
+        validateHighValueCustomers(processedRows);
+        validateVerificationRequirements(processedRows);
+        validateCommunicationEligibility(processedRows);
+    }
+
+    private void validateHighValueCustomers(List<Map<String, Object>> rows) {
+        // High-value customer criteria: 
+        // 1. Spend > $1000
+        // 2. More than 5 transactions
+        // 3. Active account
+        List<Map<String, Object>> highValueCustomers = rows.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("is_high_value_customer")))
+            .collect(Collectors.toList());
+
+        assertEquals(1, highValueCustomers.size(), "Should have one high-value customer");
+        
+        Map<String, Object> highValueCustomer = highValueCustomers.get(0);
+        assertEquals(5, highValueCustomer.get("user_id"), "High-value customer should be user with ID 5");
+        assertEquals(10, highValueCustomer.get("transaction_count"), "Should have 10 transactions");
+        assertTrue((Double) highValueCustomer.get("total_spend") > 1000.0, "Total spend should be over $1000");
+        assertTrue(Boolean.TRUE.equals(highValueCustomer.get("is_active")), "High-value customer must be active");
+    }
+
+    private void validateVerificationRequirements(List<Map<String, Object>> rows) {
+        // Verification required for:
+        // 1. High-value customers
+        // 2. Admin and moderator roles
+        List<Map<String, Object>> requiresVerification = rows.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("requires_verification")))
+            .collect(Collectors.toList());
+
+        assertEquals(3, requiresVerification.size(), "Should have three records requiring verification");
+
+        // Verify specific user IDs requiring verification
+        Set<Integer> expectedUserIds = Set.of(3, 5, 6);
+        Set<Integer> actualUserIds = requiresVerification.stream()
+            .map(row -> (Integer) row.get("user_id"))
+            .collect(Collectors.toSet());
+
+        assertEquals(expectedUserIds, actualUserIds, "Specific users should require verification");
+    }
+
+    private void validateCommunicationEligibility(List<Map<String, Object>> rows) {
+        // Communication eligibility criteria:
+        // 1. Active account
+        // 2. Verified account
+        // 3. Subscribed to newsletter
+        List<Map<String, Object>> communicationEligible = rows.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("communication_eligible")))
+            .collect(Collectors.toList());
+
+        assertEquals(4, communicationEligible.size(), "Should have four communication-eligible users");
+
+        // Verify specific user IDs are communication eligible
+        Set<Integer> expectedUserIds = Set.of(1, 2, 3, 5, 6);
+        Set<Integer> actualUserIds = communicationEligible.stream()
+            .map(row -> (Integer) row.get("user_id"))
+            .collect(Collectors.toSet());
+
+        assertTrue(actualUserIds.containsAll(expectedUserIds), "Specific users should be communication eligible");
+    }
+
+    @Test
+    public void testAggregateFieldGeneration() throws Exception {
+        // Process the user data files
+        hub.process(
+            "src/test/resources/users/users_base.csv", 
+            "src/test/resources/users/users_config.json", 
+            "csv"
+        );
+
+        // Retrieve processed data
+        List<Map<String, Object>> processedRows = repository.getDataRows();
+
+        // Find high-value customer
+        Optional<Map<String, Object>> highValueCustomer = processedRows.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("is_high_value_customer")))
+            .findFirst();
+
+        assertTrue(highValueCustomer.isPresent(), "High-value customer should exist");
+
+        // Validate user_details aggregate field
+        String userDetails = (String) highValueCustomer.get().get("user_details");
+        assertNotNull(userDetails, "User details aggregate field should be generated");
+        assertTrue(userDetails.contains("VIP Customer"), "User details should include full name");
+        assertTrue(userDetails.contains("vip@premium.com"), "User details should include email");
+        assertTrue(userDetails.contains("executive"), "User details should include department");
+
+        // Validate transaction_insights aggregate field
+        String transactionInsights = (String) highValueCustomer.get().get("transaction_insights");
+        assertNotNull(transactionInsights, "Transaction insights aggregate field should be generated");
+        assertTrue(transactionInsights.contains("10"), "Transaction insights should include transaction count");
+        assertTrue(transactionInsights.contains("2500.75"), "Transaction insights should include total spend");
+        assertTrue(transactionInsights.contains("250.08"), "Transaction insights should include average transaction value");
+    }
+
+    @Test
+    public void testSubsetGeneration() throws Exception {
+        // Process the user data files
+        hub.process(
+            "src/test/resources/users/users_base.csv", 
+            "src/test/resources/users/users_config.json", 
+            "csv"
+        );
+
+        // Check generated subset files
+        Path outputDir = Paths.get("src/test/resources/users");
+        
+        // High-value customer subset
+        Path highValueFile = outputDir.resolve("users_base_processed_high_value.csv");
+        assertTrue(Files.exists(highValueFile), "High-value customer subset file should be generated");
+
+        // Marketing communication subset
+        Path marketingFile = outputDir.resolve("users_base_processed_marketing.csv");
+        assertTrue(Files.exists(marketingFile), "Marketing communication subset file should be generated");
+
+        // Verify contents of high-value subset
+        List<String> highValueLines = Files.readAllLines(highValueFile);
+        assertEquals(2, highValueLines.size(), "High-value subset should have header + 1 data row");
+        assertTrue(highValueLines.get(1).contains("5,"), "High-value subset should contain user ID 5");
+
+        // Verify contents of marketing subset
+        List<String> marketingLines = Files.readAllLines(marketingFile);
+        assertEquals(5, marketingLines.size(), "Marketing subset should have header + 4 data rows");
+    }
+}

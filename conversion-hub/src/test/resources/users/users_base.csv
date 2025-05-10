@@ -1,0 +1,9 @@
+user_id,username,email,full_name,is_active,registration_date
+1,johndoe,john.doe@example.com,John Doe,true,2022-01-15
+2,janedoe,jane.doe@example.com,Jane Doe,true,2022-02-20
+3,adminuser,admin@company.com,System Administrator,true,2021-11-01
+4,guestuser,guest@example.com,Guest User,false,2023-05-10
+5,vipuser,vip@premium.com,VIP Customer,true,2021-09-05
+6,moderator,mod@company.com,Site Moderator,true,2022-03-15
+7,suspendeduser,suspended@example.com,Suspended Account,false,2023-01-20
+8,newuser,new@example.com,New User,true,2023-06-01

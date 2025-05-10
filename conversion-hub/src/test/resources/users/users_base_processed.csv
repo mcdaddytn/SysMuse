@@ -1,0 +1,5 @@
+user_id,username,email,full_name,is_active,registration_date,is_high_value_customer,requires_verification,communication_eligible,user_details,transaction_insights
+2,janedoe,,Jane Doe,true,2022-02-20,false,false,false,,
+7,suspendeduser,,Suspended Account,false,2023-01-20,false,false,false,,
+4,guestuser,,Guest User,false,2023-05-10,false,false,false,,
+8,newuser,,New User,true,2023-06-01,false,false,false,,

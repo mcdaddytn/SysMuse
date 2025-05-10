@@ -1,0 +1,16 @@
+{
+  "params": {
+    "x": 4,
+    "y": 3,
+    "username": "admin",
+    "role": "user",
+    "score": 92
+  },
+  "expressions": {
+    "sum": "x + y",
+    "product": "sum * 2",
+    "isBig": "product > 10",
+    "roleCaps": "role == \"user\"",
+    "hasHighScore": "score > 90"
+  }
+}

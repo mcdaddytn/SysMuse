@@ -20,7 +20,8 @@ public class ExpressionManager {
         if (args.length != 1) {
             //System.err.println("Usage: java ExpressionManager <path-to-json>");
             //System.exit(1);
-            jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_verified_pass.json";
+            //jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_verified_pass.json";
+            jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_operational_expressions.json";
         }
         else {
             jsonPath = args[0];

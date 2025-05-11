@@ -48,31 +48,6 @@ public class NumericOperations {
         registry.registerNumericOperator("%",
                 (args, ctx) -> get(args, "left") % get(args, "right"),
                 List.of("left", "right"));
-
-        // Comparisons (still Boolean, likely also needs separate registration in future)
-        registry.registerBoolean("greaterThan",
-                (args, ctx) -> get(args, "a") > get(args, "b"),
-                List.of("a", "b"), ">");
-
-        registry.registerBoolean("lessThan",
-                (args, ctx) -> get(args, "a") < get(args, "b"),
-                List.of("a", "b"), "<");
-
-        registry.registerBoolean("greaterThanOrEqual",
-                (args, ctx) -> get(args, "a") >= get(args, "b"),
-                List.of("a", "b"), ">=");
-
-        registry.registerBoolean("lessThanOrEqual",
-                (args, ctx) -> get(args, "a") <= get(args, "b"),
-                List.of("a", "b"), "<=");
-
-        registry.registerBoolean("equals",
-                (args, ctx) -> Objects.equals(args.get("a"), args.get("b")),
-                List.of("a", "b"), "==", "eq");
-
-        registry.registerBoolean("notEquals",
-                (args, ctx) -> !Objects.equals(args.get("a"), args.get("b")),
-                List.of("a", "b"), "!=");
     }
 
     private static double get(Map<String, Object> args, String key) {

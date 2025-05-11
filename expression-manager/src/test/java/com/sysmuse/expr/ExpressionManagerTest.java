@@ -21,6 +21,7 @@ public class ExpressionManagerTest {
         // Register core operations
         NumericOperations.register(manager.getRegistry());
         StringOperations.register(manager.getRegistry());
+        BooleanOperations.register(manager.getRegistry());
 
         // Register basic equality op
         manager.getRegistry().registerBoolean("equals",

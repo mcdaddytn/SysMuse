@@ -52,6 +52,7 @@ public class ExpressionManager {
         mgr.setTypeMismatchMode(TypeMismatchMode.WARNING);
         NumericOperations.register(mgr.getRegistry());
         StringOperations.register(mgr.getRegistry());
+        BooleanOperations.register(mgr.getRegistry());
 
         // Evaluate
         System.out.println("=== Evaluating Expressions ===");

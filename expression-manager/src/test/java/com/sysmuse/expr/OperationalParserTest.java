@@ -21,6 +21,7 @@ public class OperationalParserTest {
         // Register core operations
         NumericOperations.register(manager.getRegistry());
         StringOperations.register(manager.getRegistry());
+        BooleanOperations.register(manager.getRegistry());
 
         // Basic equality for strings
         manager.getRegistry().registerBoolean("equals",

@@ -16,6 +16,7 @@ public class ExpressionManager {
     private final OperationRegistry registry = new OperationRegistry();
     private final Map<String, Class<?>> typeHints = new HashMap<>();
     private TypeMismatchMode typeMismatchMode = TypeMismatchMode.WARNING;
+    private TypeConversionMode typeConversionMode = TypeConversionMode.NONE;
 
     public static void simpleMathTest() throws Exception {
         Integer int1 = null;

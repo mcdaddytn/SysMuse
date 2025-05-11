@@ -22,6 +22,8 @@ public class LoggingUtil {
     private static boolean fileLogging = false;
     private static String logFileName = "converter.log";
     private static ConsoleOutputMode consoleOutputMode = ConsoleOutputMode.SPLIT_SEVERE_TO_ERR;
+    private static boolean debugToInfo = false;
+    //private static boolean debugToInfo = true;
 
     // Console Handlers
     private static class StdOutHandler extends StreamHandler {
@@ -50,6 +52,10 @@ public class LoggingUtil {
         }
     }
 
+    public static void setDebugToInfo(Boolean dti) {
+        debugToInfo = dti;
+    }
+
     /**
      * Configure where log messages go in console
      */
@@ -61,46 +67,7 @@ public class LoggingUtil {
      * Initialize the logging system based on system configuration
      */
     public static void initialize(SystemConfig config) {
-        if (initialized) {
-            return;
-        }
-
-        String levelStr = config.getLoggingLevel();
-        boolean consoleEnabled = config.isConsoleLoggingEnabled();
-        boolean fileEnabled = config.isFileLoggingEnabled();
-        String fileName = config.getLogFileName();
-
-        setLoggingLevel(levelStr);
-
-        clearHandlers();
-
-        // Console logging
-        if (consoleEnabled) {
-            setupConsoleHandlers();
-        }
-
-        // File logging
-        if (fileEnabled && fileName != null && !fileName.isEmpty()) {
-            try {
-                FileHandler fileHandler = new FileHandler(fileName);
-                fileHandler.setFormatter(new SimpleFormatter());
-                fileHandler.setLevel(currentLevel);
-                logger.addHandler(fileHandler);
-                fileLogging = true;
-                logFileName = fileName;
-            } catch (IOException e) {
-                error("Failed to create log file: " + e.getMessage());
-                fileLogging = false;
-            }
-        }
-
-        logger.setLevel(currentLevel);
-        logger.setUseParentHandlers(false);
-        initialized = true;
-
-        info("Logging initialized: level=" + currentLevel +
-                ", console=" + consoleLogging +
-                ", file=" + (fileLogging ? logFileName : "disabled"));
+        initialize(config.getLoggingLevel(), config.isConsoleLoggingEnabled(), config.isFileLoggingEnabled(), config.getLogFileName());
     }
 
     /**
@@ -180,14 +147,18 @@ public class LoggingUtil {
 
     public static void debug(String message) {
         ensureInitialized();
-        //logger.fine(message);
-        logger.info(message);
+        if (debugToInfo)
+            logger.info(message);
+        else
+            logger.fine(message);
     }
 
     public static void debug(String message, Throwable t) {
         ensureInitialized();
-        //logger.log(Level.FINE, message, t);
-        logger.log(Level.INFO, message, t);
+        if (debugToInfo)
+            logger.log(Level.INFO, message, t);
+        else
+            logger.log(Level.FINE, message, t);
     }
 
     public static void info(String message) {

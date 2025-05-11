@@ -315,7 +315,7 @@ public class ConversionRepository {
                 // Special handling for unique key field
                 if (paramName.equals("uniqueKeyField")) {
                     uniqueKeyField = paramValue.asText();
-                    LoggingUtil.info("Set unique key field: " + uniqueKeyField);
+                    LoggingUtil.debug("Set unique key field: " + uniqueKeyField);
                 }
 
                 // Generic parameter parsing
@@ -483,7 +483,7 @@ public class ConversionRepository {
         LoggingUtil.debug("Derived boolean fields to process: " + derivedBooleanFields.keySet());
 
         if (derivedBooleanFields.isEmpty()) {
-            LoggingUtil.warn("No derived boolean fields configured to process");
+            LoggingUtil.debug("No derived boolean fields configured to process");
             return;
         }
 
@@ -502,7 +502,7 @@ public class ConversionRepository {
                 // Add the result to the row values
                 rowValues.put(fieldName, result);
 
-                LoggingUtil.info("Derived field '" + fieldName + "' = " + result);
+                LoggingUtil.debug("Derived field '" + fieldName + "' = " + result);
             } catch (Exception e) {
                 LoggingUtil.error("Error evaluating derived field '" + fieldName + "': " + e.getMessage(), e);
                 // Set default value to false if evaluation fails

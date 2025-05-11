@@ -455,7 +455,7 @@ public class ConversionHub {
         }
 
         // Ensure all derived fields are processed for all rows
-        LoggingUtil.info("Ensuring all derived fields are processed before export...");
+        LoggingUtil.debug("Ensuring all derived fields are processed before export...");
         int rowCount = repository.getDataRows().size();
         int processedFields = 0;
 
@@ -467,18 +467,18 @@ public class ConversionHub {
             processedFields++;
 
             if (processedFields % 100 == 0) {
-                LoggingUtil.info("Processed derived fields for " + processedFields + " out of " + rowCount + " rows");
+                LoggingUtil.debug("Processed derived fields for " + processedFields + " out of " + rowCount + " rows");
             }
         }
 
         // Print some sample rows to verify data
         if (!repository.getDataRows().isEmpty()) {
-            LoggingUtil.info("\nSample data verification (first row):");
+            LoggingUtil.debug("\nSample data verification (first row):");
             Map<String, Object> sampleRow = repository.getDataRows().get(0);
 
             // Print derived boolean fields
             for (String field : repository.getDerivedBooleanFields().keySet()) {
-                LoggingUtil.info("Derived field '" + field + "' = " + sampleRow.get(field));
+                LoggingUtil.debug("Derived field '" + field + "' = " + sampleRow.get(field));
             }
 
             // Print subset filter fields if available
@@ -486,9 +486,9 @@ public class ConversionHub {
             if (!subsets.isEmpty()) {
                 for (String filterField : subsets.keySet()) {
                     if (sampleRow.containsKey(filterField)) {
-                        LoggingUtil.info("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
+                        LoggingUtil.debug("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
                     } else {
-                        LoggingUtil.info("Filter field '" + filterField + "' not found in sample row");
+                        LoggingUtil.debug("Filter field '" + filterField + "' not found in sample row");
                     }
                 }
             } else {
@@ -500,9 +500,9 @@ public class ConversionHub {
 
                     for (String filterField : filterToSuffix.keySet()) {
                         if (sampleRow.containsKey(filterField)) {
-                            LoggingUtil.info("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
+                            LoggingUtil.debug("Filter field '" + filterField + "' = " + sampleRow.get(filterField));
                         } else {
-                            LoggingUtil.info("Filter field '" + filterField + "' not found in sample row");
+                            LoggingUtil.debug("Filter field '" + filterField + "' not found in sample row");
                         }
                     }
                 }
@@ -510,14 +510,14 @@ public class ConversionHub {
         }
 
         // Print list of all available fields for debugging
-        LoggingUtil.info("\nAvailable fields in repository:");
+        LoggingUtil.debug("\nAvailable fields in repository:");
         List<String> allFields = repository.getAllFieldNames();
         for (String field : allFields) {
-            LoggingUtil.info("  - " + field);
+            LoggingUtil.debug("Repository field: " + field);
         }
 
-        LoggingUtil.info("About to process output in format: " + outputFormat);
-        LoggingUtil.info("System config output format: " + systemConfig.getOutputFormat());
+        LoggingUtil.debug("About to process output in format: " + outputFormat);
+        LoggingUtil.debug("System config output format: " + systemConfig.getOutputFormat());
 
         // Export to the desired output format
         if ("json".equals(outputFormat.toLowerCase())) {

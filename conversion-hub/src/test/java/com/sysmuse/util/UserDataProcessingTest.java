@@ -30,6 +30,8 @@ public class UserDataProcessingTest {
         // Explicitly set the unique key field
         hub.repository.setUniqueKeyField("user_id");
         repository = hub.repository;
+
+        //LoggingUtil.setDebugToInfo(true);
     }
 
     @Test
@@ -56,14 +58,14 @@ public class UserDataProcessingTest {
 
     private void validateHighValueCustomers(List<Map<String, Object>> rows) {
         // Log all rows to help diagnose the issue
-        System.out.println("All Rows:");
+        LoggingUtil.debug("All Rows:");
         for (Map<String, Object> row : rows) {
-            System.out.println("User ID: " + row.get("user_id"));
-            System.out.println("Total Spend: " + row.get("total_spend"));
-            System.out.println("Transaction Count: " + row.get("transaction_count"));
-            System.out.println("Is Active: " + row.get("is_active"));
-            System.out.println("Is High-Value Customer: " + row.get("is_high_value_customer"));
-            System.out.println("---");
+            LoggingUtil.debug("User ID: " + row.get("user_id"));
+            LoggingUtil.debug("Total Spend: " + row.get("total_spend"));
+            LoggingUtil.debug("Transaction Count: " + row.get("transaction_count"));
+            LoggingUtil.debug("Is Active: " + row.get("is_active"));
+            LoggingUtil.debug("Is High-Value Customer: " + row.get("is_high_value_customer"));
+            LoggingUtil.debug("---");
         }
 
         // High-value customer criteria:
@@ -108,12 +110,12 @@ public class UserDataProcessingTest {
                 .filter(row -> Boolean.TRUE.equals(row.get("requires_verification")))
                 .collect(Collectors.toList());
 
-        System.out.println("Rows Requiring Verification:");
+        LoggingUtil.debug("Rows Requiring Verification:");
         for (Map<String, Object> row : requiresVerification) {
-            System.out.println("User ID: " + row.get("user_id"));
-            System.out.println("Role: " + row.get("role"));
-            System.out.println("Is High-Value Customer: " + row.get("is_high_value_customer"));
-            System.out.println("---");
+            LoggingUtil.debug("User ID: " + row.get("user_id"));
+            LoggingUtil.debug("Role: " + row.get("role"));
+            LoggingUtil.debug("Is High-Value Customer: " + row.get("is_high_value_customer"));
+            LoggingUtil.debug("---");
         }
 
         assertEquals(3, requiresVerification.size(), "Should have three records requiring verification");
@@ -136,13 +138,13 @@ public class UserDataProcessingTest {
                 .filter(row -> Boolean.TRUE.equals(row.get("communication_eligible")))
                 .collect(Collectors.toList());
 
-        System.out.println("Communication Eligible Rows:");
+        LoggingUtil.debug("Communication Eligible Rows:");
         for (Map<String, Object> row : communicationEligible) {
-            System.out.println("User ID: " + row.get("user_id"));
-            System.out.println("Is Active: " + row.get("is_active"));
-            System.out.println("Account Verified: " + row.get("account_verified"));
-            System.out.println("Newsletter Subscription: " + row.get("newsletter_subscription"));
-            System.out.println("---");
+            LoggingUtil.debug("User ID: " + row.get("user_id"));
+            LoggingUtil.debug("Is Active: " + row.get("is_active"));
+            LoggingUtil.debug("Account Verified: " + row.get("account_verified"));
+            LoggingUtil.debug("Newsletter Subscription: " + row.get("newsletter_subscription"));
+            LoggingUtil.debug("---");
         }
 
         //assertEquals(4, communicationEligible.size(), "Should have four communication-eligible users");
@@ -157,12 +159,12 @@ public class UserDataProcessingTest {
     }
 
     private void printAllRowsAllFields(List<Map<String, Object>> rows) {
-        System.out.println("All Rows, All Fields: ");
+        LoggingUtil.debug("All Rows, All Fields: ");
         for (Map<String, Object> row : rows) {
             for (String fieldName : row.keySet()) {
-                System.out.println(fieldName + " : " + row.get(fieldName));
+                LoggingUtil.debug(fieldName + " : " + row.get(fieldName));
             }
-            System.out.println("");
+            LoggingUtil.debug("");
         }
     }
 

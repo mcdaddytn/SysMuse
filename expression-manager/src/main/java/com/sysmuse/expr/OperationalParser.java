@@ -1,5 +1,7 @@
 package com.sysmuse.expr;
 
+import com.sysmuse.util.LoggingUtil;
+
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -41,7 +43,7 @@ public class OperationalParser {
     }
 
     private Function<Map<String, Object>, Object> parseExpr() {
-        //System.out.println("parseExpr: starting at pos=" + pos + " char='" + current() + "'");
+        LoggingUtil.debug("parseExpr: starting at pos=" + pos + " char='" + current() + "'");
         Function<Map<String, Object>, Object> left = parseTerm();
         while (peek("+") || peek("-")) {
             String op = parseOperator();
@@ -52,7 +54,7 @@ public class OperationalParser {
     }
 
     private Function<Map<String, Object>, Object> parseTerm() {
-        //System.out.println("parseTerm: starting at pos=" + pos + " char='" + current() + "'");
+        LoggingUtil.debug("parseTerm: starting at pos=" + pos + " char='" + current() + "'");
         Function<Map<String, Object>, Object> left = parseFactor();
         while (peek("*") || peek("/") || peek("%")) {
             String op = parseOperator();
@@ -63,7 +65,7 @@ public class OperationalParser {
     }
 
     private Function<Map<String, Object>, Object> parseFactor() {
-        System.out.println("parseFactor: starting at pos=" + pos + " char='" + current() + "'");
+        LoggingUtil.debug("parseFactor: starting at pos=" + pos + " char='" + current() + "'");
         if (match("(")) {
             Function<Map<String, Object>, Object> expr = parseComparison();
             match(")");
@@ -129,7 +131,7 @@ public class OperationalParser {
     }
 
     private String parseOperator() {
-        //System.out.println("parseOperator at pos=" + pos);
+        LoggingUtil.debug("parseOperator at pos=" + pos);
         for (String op : List.of("+", "-", "*", "/", "%")) {
             if (match(op)) return op;
         }

@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.sysmuse.util.LoggingUtil;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class OperationalParserTest {
@@ -52,5 +54,6 @@ public class OperationalParserTest {
         assertEquals(true, result.get("isBig"));
         assertEquals(true, result.get("roleIsUser"));
         assertEquals(true, result.get("hasHighScore"));
+        LoggingUtil.info("testBasicOperationalExpressions passed");
     }
 }

@@ -1,5 +1,7 @@
 package com.sysmuse.expr;
 
+import com.sysmuse.util.LoggingUtil;
+
 import java.io.File;
 import java.util.*;
 import java.util.function.Function;
@@ -9,11 +11,39 @@ import java.util.regex.Pattern;
 
 public class ExpressionManager {
 
-    private static final Logger log = Logger.getLogger("ExpressionManager");
+    //private static final Logger log = Logger.getLogger("ExpressionManager");
 
     private final OperationRegistry registry = new OperationRegistry();
     private final Map<String, Class<?>> typeHints = new HashMap<>();
     private TypeMismatchMode typeMismatchMode = TypeMismatchMode.WARNING;
+
+    public static void simpleMathTest() throws Exception {
+        Integer int1 = null;
+        Integer int2 = null;
+        Integer int3 = null;
+        Float flt1 = null;
+        Float flt2 = null;
+        Float flt3 = null;
+        Number num1 = null;
+        Number num2 = null;
+        Number num3 = null;
+
+        int1= 7;
+        int2= 2;
+
+        //num1 = int1;
+        //num2 = int2;
+        num1 = int1.doubleValue();
+        num2 = int2.doubleValue();
+        flt1 = int1.floatValue();
+        flt2 = int2.floatValue();
+        //num3 = num1 / num2;
+        num3 = int1 / int2;
+        flt3 = (float) (int1 / int2);
+        flt3 = flt1 / flt2;
+
+        LoggingUtil.info(String.format("result num3(Class%s)=: %d", num3.getClass().toString(), num3));
+    }
 
     public static void main(String[] args) throws Exception {
         String jsonPath = null;
@@ -26,6 +56,8 @@ public class ExpressionManager {
             //jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_verified_pass.json";
             jsonPath = "F:\\syscode\\SysMuse\\expression-manager\\config\\test_operational_expressions.json";
             expressionMode = ExpressionMode.OPERATIONAL;
+            //simpleMathTest();
+            //LoggingUtil.setDebugToInfo(true);
         }
         else {
             jsonPath = args[0];
@@ -55,13 +87,14 @@ public class ExpressionManager {
         BooleanOperations.register(mgr.getRegistry());
 
         // Evaluate
-        System.out.println("=== Evaluating Expressions ===");
+        LoggingUtil.debug("=== Evaluating Expressions ===");
         //Map<String, Object> result = mgr.evaluateAll(expressions, params, ExpressionMode.FUNCTIONAL);
         result = mgr.evaluateAll(expressions, params, expressionMode);
 
         // Output final results
-        System.out.println("=== Final Context ===");
-        result.forEach((k, v) -> System.out.printf("%-15s : %s%n", k, v));
+        LoggingUtil.debug("=== Final Context ===");
+        //result.forEach((k, v) -> LoggingUtil.debug("%-15s : %s%n", k, v));
+        result.forEach((k, v) -> LoggingUtil.debug("%-15s : %s", k, v));
     }
 
     public OperationRegistry getRegistry() {
@@ -85,7 +118,7 @@ public class ExpressionManager {
         for (String key : ordered) {
             String expr = expressions.get(key);
             Function<Map<String, Object>, Object> fn = parse(expr, mode);
-            log.info("Evaluating [" + key + "]: " + expr);
+            LoggingUtil.debug("Evaluating [" + key + "]: " + expr);
             logContextSnapshot(context);
             try {
                 Object result = fn.apply(context);
@@ -93,10 +126,10 @@ public class ExpressionManager {
                 if (result != null) {
                     typeHints.put(key, result.getClass());
                 }
-                log.info("Result for [" + key + "]: " + result + "\n");
+                LoggingUtil.debug("Result for [" + key + "]: " + result + "\n");
             } catch (Exception e) {
                 if (typeMismatchMode == TypeMismatchMode.EXCEPTION) throw e;
-                log.warning("Failed to evaluate [" + key + "]: " + e.getMessage());
+                LoggingUtil.warn("Failed to evaluate [" + key + "]: " + e.getMessage());
                 context.put(key, null);
                 typeHints.put(key, Object.class);
             }
@@ -181,9 +214,9 @@ public class ExpressionManager {
     }
 
     private void logContextSnapshot(Map<String, Object> ctx) {
-        log.info("Current context:");
+        LoggingUtil.debug("Current context:");
         for (Map.Entry<String, Object> e : ctx.entrySet()) {
-            log.info("  " + e.getKey() + " = " + e.getValue());
+            LoggingUtil.debug("  " + e.getKey() + " = " + e.getValue());
         }
     }
 
@@ -200,7 +233,7 @@ public class ExpressionManager {
                 case EXCEPTION:
                     throw new RuntimeException("Type mismatch for " + name + ": expected " + expected + ", found " + actual);
                 case WARNING:
-                    log.warning("Type mismatch for " + name + ": expected " + expected + ", found " + actual);
+                    LoggingUtil.warn("Type mismatch for " + name + ": expected " + expected + ", found " + actual);
                     break;
                 case ACCEPT:
                     return true;

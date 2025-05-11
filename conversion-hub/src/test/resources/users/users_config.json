@@ -1,0 +1,98 @@
+{
+  "parameters": {
+    "maxImportRows": 10000,
+    "uniqueKeyField": "user_id"
+  },
+  "columns": {
+    "user_id": {
+      "type": "INTEGER",
+      "visible": true,
+      "uniqueKey": true
+    },
+    "username": {"type": "STRING", "visible": true},
+    "email": {"type": "STRING", "visible": true},
+    "full_name": {"type": "STRING", "visible": true},
+    "is_active": {"type": "BOOLEAN", "visible": true},
+    "registration_date": {"type": "STRING", "visible": true},
+    "role": {"type": "STRING", "visible": true},
+    "access_level": {"type": "STRING", "visible": true},
+    "is_admin": {"type": "BOOLEAN", "visible": true},
+    "department": {"type": "STRING", "visible": true},
+    "transaction_count": {"type": "INTEGER", "visible": true},
+    "total_spend": {"type": "FLOAT", "visible": true},
+    "last_purchase_date": {"type": "STRING", "visible": true},
+    "avg_transaction_value": {"type": "FLOAT", "visible": true},
+    "communication_pref": {"type": "STRING", "visible": true},
+    "theme_preference": {"type": "STRING", "visible": true},
+    "newsletter_subscription": {"type": "BOOLEAN", "visible": true},
+    "account_verified": {"type": "BOOLEAN", "visible": true}
+  },
+  "derivedBooleanFields": {
+    "is_high_value_customer": {
+      "type": "AND",
+      "operands": [
+        {
+          "type": "FIELD",
+          "field": "total_spend",
+          "comparison": ">",
+          "value": 1000
+        },
+        {
+          "type": "FIELD",
+          "field": "transaction_count",
+          "comparison": ">",
+          "value": 5
+        },
+        {"type": "FIELD", "field": "is_active"}
+      ]
+    },
+    "requires_verification": {
+      "type": "OR",
+      "operands": [
+        {"type": "FIELD", "field": "is_high_value_customer"},
+        {
+          "type": "OR",
+          "operands": [
+            {
+              "type": "FIELD",
+              "field": "role",
+              "comparison": "==",
+              "value": "admin"
+            },
+            {
+              "type": "FIELD",
+              "field": "role",
+              "comparison": "==",
+              "value": "moderator"
+            }
+          ]
+        }
+      ]
+    },
+    "communication_eligible": {
+      "type": "AND",
+      "operands": [
+        {"type": "FIELD", "field": "is_active"},
+        {"type": "FIELD", "field": "account_verified"},
+        {"type": "FIELD", "field": "newsletter_subscription"}
+      ]
+    }
+  },
+  "aggregateTextFields": {
+    "user_details": {
+      "condition": "is_high_value_customer",
+      "sourceFields": ["full_name", "email", "department"],
+      "separator": " | ",
+      "visible": true
+    },
+    "transaction_insights": {
+      "condition": "is_high_value_customer",
+      "sourceFields": ["transaction_count", "total_spend", "avg_transaction_value"],
+      "separator": " | ",
+      "visible": true
+    }
+  },
+  "suppressedFields": {
+    "email": "requires_verification"
+  }
+}

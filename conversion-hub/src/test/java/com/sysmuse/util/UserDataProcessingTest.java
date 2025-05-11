@@ -264,15 +264,12 @@ public class UserDataProcessingTest {
 
         // Use the actual count from eligibleCount for the assertion
         // We expect the header line (1) + eligibleCount data rows
-//        assertEquals(eligibleCount + 1, marketingLines.size(),
-//                "Marketing subset should contain header plus " + eligibleCount + " eligible rows");
-        //gm: fixing test for now, can't get explanation on what this should be
-        assertEquals(eligibleCount, marketingLines.size(),
+        assertEquals(eligibleCount + 1, marketingLines.size(),
                 "Marketing subset should contain header plus " + eligibleCount + " eligible rows");
 
-        //gm: changing this test for now until we figure this out, let's clean up expressions first
-        //int expectedCount = 5;
-        int expectedCount = 4;
+        //gm: expectedCount = 5 if non-exclusive subsets, otherwise 4, depends on parameter subsets.exclusive in users_sysconfig.json
+        int expectedCount = 5;
+        //int expectedCount = 4;
 
         // Alternative for historical expectation of 5 rows (header + 4 data rows)
         // This matches the test's original expectation since we need to maintain compatibility

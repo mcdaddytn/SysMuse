@@ -704,8 +704,11 @@ public class ConversionHub {
 
                         // Create with expressions parameter if available
                         if (!expressions.isEmpty()) {
-                            return (ConfigGenerator) generatorClass.getConstructor(String.class, Properties.class)
-                                    .newInstance(expressions, properties);
+                            //return (ConfigGenerator) generatorClass.getConstructor(String.class, Properties.class)
+                            //        .newInstance(expressions, properties);
+
+                            return (ConfigGenerator) generatorClass.getConstructor(SystemConfig.class)
+                                    .newInstance(systemConfig);
                         }
                     }
                 } catch (Exception ex) {

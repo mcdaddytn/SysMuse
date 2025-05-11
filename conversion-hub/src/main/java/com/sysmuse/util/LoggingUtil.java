@@ -66,9 +66,11 @@ public class LoggingUtil {
     /**
      * Initialize the logging system based on system configuration
      */
+    /*
     public static void initialize(SystemConfig config) {
         initialize(config.getLoggingLevel(), config.isConsoleLoggingEnabled(), config.isFileLoggingEnabled(), config.getLogFileName());
     }
+     */
 
     /**
      * Alternate initializer (backward compatible)

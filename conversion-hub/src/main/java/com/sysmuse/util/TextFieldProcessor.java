@@ -52,7 +52,66 @@ public class TextFieldProcessor {
         ArrayNode sourceFields = (ArrayNode) config.get("sourceFields");
         StringBuilder aggregated = new StringBuilder();
 
-        // Rest of the method remains the same...
+        // Determine aggregation mode and settings
+        SystemConfig.TextAggregationMode mode = SystemConfig.TextAggregationMode.NEWLINE;
+        String separator = "\n";
+        String fieldNamePrefix = "[";
+        String fieldNameSuffix = "]";
+
+        // Check for explicit separator in config
+        if (config.has("separator")) {
+            // If explicit separator is specified in the field config, use it directly
+            separator = config.get("separator").asText();
+        } else if (systemConfig != null) {
+            // Otherwise use system config
+            mode = systemConfig.getTextAggregationMode();
+
+            if (mode == SystemConfig.TextAggregationMode.NEWLINE) {
+                separator = systemConfig.getNewlineChar();
+            } else if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                // For FIELDNAME mode, the separator becomes newline plus field name
+                separator = systemConfig.getNewlineChar();
+                fieldNamePrefix = systemConfig.getFieldNamePrefix();
+                fieldNameSuffix = systemConfig.getFieldNameSuffix();
+            }
+        } else {
+            LoggingUtil.warn("No system configuration set for text field processing, using defaults");
+        }
+
+        boolean isFirst = true;
+        for (int i = 0; i < sourceFields.size(); i++) {
+            String fieldToAggregate = sourceFields.get(i).asText();
+            if (rowValues.containsKey(fieldToAggregate)) {
+                Object val = rowValues.get(fieldToAggregate);
+                if (val != null && !val.toString().isEmpty()) {
+                    if (!isFirst) {
+                        aggregated.append(separator);
+
+                        // In FIELDNAME mode, add field name as prefix
+                        if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                            aggregated.append(fieldNamePrefix)
+                                    .append(fieldToAggregate)
+                                    .append(fieldNameSuffix)
+                                    .append(" ");
+                        }
+                    } else {
+                        isFirst = false;
+
+                        // For first field in FIELDNAME mode, add field name as prefix
+                        if (mode == SystemConfig.TextAggregationMode.FIELDNAME) {
+                            aggregated.append(fieldNamePrefix)
+                                    .append(fieldToAggregate)
+                                    .append(fieldNameSuffix)
+                                    .append(" ");
+                        }
+                    }
+                    aggregated.append(val.toString());
+                }
+            } else {
+                LoggingUtil.debug("Source field '" + fieldToAggregate +
+                        "' not found for aggregation. Available fields: " + rowValues.keySet());
+            }
+        }
 
         return aggregated.toString();
     }

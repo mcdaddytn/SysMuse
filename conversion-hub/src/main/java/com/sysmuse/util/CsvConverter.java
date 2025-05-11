@@ -246,9 +246,11 @@ public class CsvConverter {
             String[] values = parseCSVRow(rowString);
 
             // Create a map for the current row's values
-            Map<String, Object> rowValues = new LinkedHashMap<>();
+            Map<String, Object> rowValues = processRow(headers, values, repository);
 
             // Process the direct column mappings
+            /*
+            Map<String, Object> rowValues = new LinkedHashMap<>();
             for (int colIndex = 0; colIndex < headers.length && colIndex < values.length; colIndex++) {
                 String columnName = headers[colIndex];
 
@@ -266,6 +268,7 @@ public class CsvConverter {
 
                 rowValues.put(columnName, convertedValue);
             }
+            */
 
             // Process derived boolean fields
             repository.processDerivedFields(rowValues);
@@ -469,10 +472,11 @@ public class CsvConverter {
         int processedRows = 0;
         for (String rowString : rowStrings) {
             String[] values = parseCSVRow(rowString);
+            Map<String, Object> rowValues = processRow(headers, values, repository);
 
+/*
             // Create a map for the current row's values
             Map<String, Object> rowValues = new LinkedHashMap<>();
-
             // Process the direct column mappings
             for (int colIndex = 0; colIndex < headers.length && colIndex < values.length; colIndex++) {
                 String columnName = headers[colIndex];
@@ -491,6 +495,7 @@ public class CsvConverter {
 
                 rowValues.put(columnName, convertedValue);
             }
+ */
 
             // Add the processed row to the repository without processing derived fields
             repository.addDataRow(rowValues);
@@ -502,6 +507,60 @@ public class CsvConverter {
         }
 
         LoggingUtil.info("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
+    }
+
+    private Map<String, Object> processRow(String[] headers, String[] values, ConversionRepository repository) {
+        Map<String, Object> rowValues = new LinkedHashMap<>();
+        for (int colIndex = 0; colIndex < headers.length && colIndex < values.length; colIndex++) {
+            String columnName = headers[colIndex];
+
+            // Skip empty column names
+            if (columnName == null || columnName.trim().isEmpty()) {
+                continue;
+            }
+
+            String value = colIndex < values.length ? values[colIndex] : "";
+
+            // Get the data type from repository
+            ConversionRepository.DataType type = repository.getColumnTypes().getOrDefault(
+                    columnName, ConversionRepository.DataType.STRING);
+
+            // Convert value based on column type - ensure proper conversion to the right type
+            Object convertedValue = null;
+            switch (type) {
+                case INTEGER:
+                    try {
+                        convertedValue = Integer.parseInt(value.trim());
+                    } catch (NumberFormatException e) {
+                        LoggingUtil.debug("Could not convert '" + value + "' to INTEGER for field '" +
+                                columnName + "', defaulting to 0");
+                        convertedValue = 0;
+                    }
+                    break;
+                case FLOAT:
+                    try {
+                        convertedValue = Double.parseDouble(value.trim());
+                    } catch (NumberFormatException e) {
+                        LoggingUtil.debug("Could not convert '" + value + "' to FLOAT for field '" +
+                                columnName + "', defaulting to 0.0");
+                        convertedValue = 0.0;
+                    }
+                    break;
+                case BOOLEAN:
+                    convertedValue = Boolean.parseBoolean(value.trim());
+                    break;
+                case STRING:
+                default:
+                    // Apply text truncation if needed
+                    if (maxTextLength > 0) {
+                        convertedValue = truncateText(value, maxTextLength);
+                    } else {
+                        convertedValue = value;
+                    }
+            }
+            rowValues.put(columnName, convertedValue);
+        }
+        return rowValues;
     }
 
     /**

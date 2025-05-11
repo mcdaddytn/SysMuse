@@ -92,3 +92,9 @@ esindex/package-lock.json
 *.sql
 
 *.toml
+
+conversion-hub/src/test/resources/users/users_base_processed_high_value.csv
+
+conversion-hub/src/test/resources/users/users_base_processed_marketing.csv
+
+conversion-hub/src/test/resources/users/users_base_processed_processed.csv

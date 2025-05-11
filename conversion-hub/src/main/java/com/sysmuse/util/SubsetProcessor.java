@@ -83,32 +83,6 @@ public class SubsetProcessor {
     }
 
     /**
-     * Check if a row matches a filter field
-     */
-    public boolean rowMatchesFilter_Old(Map<String, Object> row, String filterField) {
-        Object fieldValue = row.get(filterField);
-        if (fieldValue == null) {
-            return false;
-        }
-
-        // Check if the field has a boolean true value
-        if (fieldValue instanceof Boolean) {
-            return (Boolean) fieldValue;
-        } else if (fieldValue instanceof String) {
-            return Boolean.parseBoolean((String) fieldValue);
-        } else if (fieldValue instanceof Integer) {
-            return ((Integer) fieldValue) != 0;
-        } else if (fieldValue instanceof Long) {
-            return ((Long) fieldValue) != 0L;
-        } else {
-            // Try to interpret as boolean if possible
-            return "true".equalsIgnoreCase(fieldValue.toString()) ||
-                    "yes".equalsIgnoreCase(fieldValue.toString()) ||
-                    "1".equals(fieldValue.toString());
-        }
-    }
-
-    /**
      * Get a map of filter field to suffix mapping
      */
     public Map<String, String> getFilterToSuffix() {
@@ -161,18 +135,8 @@ public class SubsetProcessor {
         String outputSuffix = systemConfig.getOutputSuffix();
 
         // Add output suffix and filter suffix and extension
+        //return basePathWithoutExt + suffix + extension;
         return basePathWithoutExt + outputSuffix + suffix + extension;
-    }
-
-    /**
-     * Helper method to generate an output path with a suffix
-     */
-    public String getOutputPathWithSuffix_Old(String basePath, String suffix, String extension) {
-        // Extract base path without extension
-        String basePathWithoutExt = basePath.replaceAll("\\.[^.]+$", "");
-
-        // Add suffix and extension
-        return basePathWithoutExt + suffix + extension;
     }
 
     /**

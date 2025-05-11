@@ -36,8 +36,8 @@ public class UserDataProcessingTest {
     public void testUserDataProcessing() throws Exception {
         // Process the user data files
         hub.process(
-            "src/test/resources/users/users_base.csv", 
-            "src/test/resources/users/users_config.json", 
+            "src/test/resources/users/users_base.csv",
+            "src/test/resources/users/users_config.json",
             "csv"
         );
 
@@ -193,8 +193,8 @@ public class UserDataProcessingTest {
     public void testAggregateFieldGeneration() throws Exception {
         // Process the user data files
         hub.process(
-            "src/test/resources/users/users_base.csv", 
-            "src/test/resources/users/users_config.json", 
+            "src/test/resources/users/users_base.csv",
+            "src/test/resources/users/users_config.json",
             "csv"
         );
 
@@ -279,73 +279,4 @@ public class UserDataProcessingTest {
                 "Marketing subset should have header + 4 data rows. This historical expectation is required for test compatibility.");
     }
 
-    public void testSubsetGeneration_Old2() throws Exception {
-        // Process the user data files
-        hub.process(
-                "src/test/resources/users/users_base.csv",
-                "src/test/resources/users/users_config.json",
-                "csv"
-        );
-
-        // Check generated subset files
-        Path outputDir = Paths.get("src/test/resources/users");
-
-        // High-value customer subset
-        Path highValueFile = outputDir.resolve("users_base_processed_high_value.csv");
-        assertTrue(Files.exists(highValueFile), "High-value customer subset file should be generated");
-
-        // Marketing communication subset
-        Path marketingFile = outputDir.resolve("users_base_processed_marketing.csv");
-        assertTrue(Files.exists(marketingFile), "Marketing communication subset file should be generated");
-
-        // Verify contents of high-value subset
-        List<String> highValueLines = Files.readAllLines(highValueFile);
-        assertEquals(2, highValueLines.size(), "High-value subset should have header + 1 data row");
-        assertTrue(highValueLines.get(1).contains("5,"), "High-value subset should contain user ID 5");
-
-        // Verify contents of marketing subset
-        List<String> marketingLines = Files.readAllLines(marketingFile);
-        // Check for at least header + 3 rows (the minimum we're seeing consistently)
-        assertTrue(marketingLines.size() >= 4,
-                "Marketing subset should have at least header + 3 data rows (actual: " + marketingLines.size() + ")");
-
-        // Count eligible rows based on communication_eligible = true
-        int expectedEligibleUsers = (int) hub.getRepository().getDataRows().stream()
-                .filter(row -> Boolean.TRUE.equals(row.get("communication_eligible")))
-                .count();
-
-        // The header plus the number of eligible users should match the file line count
-        assertEquals(expectedEligibleUsers + 1, marketingLines.size(),
-                "Marketing subset should contain all eligible users plus header");
-    }
-
-    //@Test
-    public void testSubsetGeneration_Old() throws Exception {
-        // Process the user data files
-        hub.process(
-            "src/test/resources/users/users_base.csv", 
-            "src/test/resources/users/users_config.json", 
-            "csv"
-        );
-
-        // Check generated subset files
-        Path outputDir = Paths.get("src/test/resources/users");
-        
-        // High-value customer subset
-        Path highValueFile = outputDir.resolve("users_base_processed_high_value.csv");
-        assertTrue(Files.exists(highValueFile), "High-value customer subset file should be generated");
-
-        // Marketing communication subset
-        Path marketingFile = outputDir.resolve("users_base_processed_marketing.csv");
-        assertTrue(Files.exists(marketingFile), "Marketing communication subset file should be generated");
-
-        // Verify contents of high-value subset
-        List<String> highValueLines = Files.readAllLines(highValueFile);
-        assertEquals(2, highValueLines.size(), "High-value subset should have header + 1 data row");
-        assertTrue(highValueLines.get(1).contains("5,"), "High-value subset should contain user ID 5");
-
-        // Verify contents of marketing subset
-        List<String> marketingLines = Files.readAllLines(marketingFile);
-        assertEquals(5, marketingLines.size(), "Marketing subset should have header + 4 data rows");
-    }
 }

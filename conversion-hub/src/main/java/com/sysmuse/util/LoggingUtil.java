@@ -180,12 +180,14 @@ public class LoggingUtil {
 
     public static void debug(String message) {
         ensureInitialized();
-        logger.fine(message);
+        //logger.fine(message);
+        logger.info(message);
     }
 
     public static void debug(String message, Throwable t) {
         ensureInitialized();
-        logger.log(Level.FINE, message, t);
+        //logger.log(Level.FINE, message, t);
+        logger.log(Level.INFO, message, t);
     }
 
     public static void info(String message) {

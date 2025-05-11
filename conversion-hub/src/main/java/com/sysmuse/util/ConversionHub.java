@@ -740,10 +740,57 @@ public class ConversionHub {
         }
     }
 
+    private void loadConfiguration(String configFilePath, String[] headers, String[] firstDataRow) throws Exception {
+        LoggingUtil.info("Checking for configuration file: " + configFilePath);
+
+        // Check if the file exists before trying to parse it
+        File configFile = new File(configFilePath);
+        if (!configFile.exists()) {
+            LoggingUtil.info("Configuration file not found: " + configFilePath);
+            LoggingUtil.info("Will generate a new configuration file.");
+
+            // Convert repository's type map to Object map for the generator
+            Map<String, Object> typesMap = new HashMap<>();
+            for (Map.Entry<String, ConversionRepository.DataType> entry : repository.getColumnTypes().entrySet()) {
+                typesMap.put(entry.getKey(), entry.getValue().toString());
+            }
+
+            // Generate configuration - passing headers ensures order is preserved
+            // in the config generator implementation
+            com.fasterxml.jackson.databind.JsonNode config = configGenerator.generateConfig(
+                    headers, firstDataRow, typesMap);
+
+            // Extract configuration and apply to repository
+            repository.extractConfigFromJSON(config);
+
+            // Save the generated config
+            saveGeneratedConfig(config);
+
+            return;
+        }
+
+        // Parse the existing config file using Jackson
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        try {
+            com.fasterxml.jackson.databind.JsonNode config = mapper.readTree(configFile);
+            LoggingUtil.info("Successfully parsed config file: " + configFilePath);
+
+            // Extract configuration and apply to repository
+            repository.extractConfigFromJSON(config);
+
+            // Additional logging to verify configuration
+            LoggingUtil.info("Unique key field from configuration: " + repository.getUniqueKeyField());
+            LoggingUtil.info("Derived boolean fields: " + repository.getDerivedBooleanFields().keySet());
+        } catch (Exception e) {
+            System.err.println("Error parsing config file: " + e.getMessage());
+            throw e;
+        }
+    }
+
     /**
      * Load or generate configuration
      */
-    private void loadConfiguration(String configFilePath, String[] headers, String[] firstDataRow) throws Exception {
+    private void loadConfiguration_Old(String configFilePath, String[] headers, String[] firstDataRow) throws Exception {
         LoggingUtil.info("Checking for configuration file: " + configFilePath);
 
         // Check if the file exists before trying to parse it

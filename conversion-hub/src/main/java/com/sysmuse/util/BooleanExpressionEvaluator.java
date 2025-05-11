@@ -87,6 +87,150 @@ public class BooleanExpressionEvaluator {
         }
 
         Object fieldValue = rowValues.get(fieldName);
+        if (fieldValue == null) {
+            return false;
+        }
+
+        // If no comparison specified, treat as boolean field
+        if (!expression.has("comparison")) {
+            return evaluateFieldReference(expression, rowValues);
+        }
+
+        // Get comparison and value to compare against
+        String comparisonType = expression.get("comparison").asText();
+        JsonNode valueNode = expression.get("value");
+
+        // Debug the comparison
+        LoggingUtil.debug("Comparing field '" + fieldName + "' with value " + fieldValue +
+                " " + comparisonType + " " + valueNode);
+
+        // Convert field value and comparison value to appropriate types for numeric comparison
+        try {
+            double fieldNumValue;
+            double compareNumValue;
+
+            // Convert field value to double
+            if (fieldValue instanceof Number) {
+                fieldNumValue = ((Number) fieldValue).doubleValue();
+            } else {
+                fieldNumValue = Double.parseDouble(fieldValue.toString());
+            }
+
+            // Convert comparison value to double
+            if (valueNode.isNumber()) {
+                compareNumValue = valueNode.asDouble();
+            } else {
+                compareNumValue = Double.parseDouble(valueNode.asText());
+            }
+
+            // Perform numeric comparison
+            switch (comparisonType) {
+                case ">": return fieldNumValue > compareNumValue;
+                case ">=": return fieldNumValue >= compareNumValue;
+                case "<": return fieldNumValue < compareNumValue;
+                case "<=": return fieldNumValue <= compareNumValue;
+                case "==": return fieldNumValue == compareNumValue;
+                case "!=": return fieldNumValue != compareNumValue;
+                default:
+                    LoggingUtil.debug("Unsupported comparison operator: " + comparisonType);
+                    return false;
+            }
+        } catch (NumberFormatException e) {
+            // If values can't be converted to numbers, fall back to string comparison
+            String fieldStrValue = fieldValue.toString();
+            String compareStrValue = valueNode.asText();
+
+            switch (comparisonType) {
+                case "==": return fieldStrValue.equals(compareStrValue);
+                case "!=": return !fieldStrValue.equals(compareStrValue);
+                default:
+                    LoggingUtil.debug("Cannot perform numeric comparison with non-numeric values");
+                    return false;
+            }
+        }
+    }
+
+    private static Boolean evaluateFieldCompariso_Old(JsonNode expression, Map<String, Object> rowValues) {
+        String fieldName = expression.get("field").asText();
+
+        // Check if the field exists in row values
+        if (!rowValues.containsKey(fieldName)) {
+            LoggingUtil.debug("Field '" + fieldName + "' not found for comparison");
+            return false;
+        }
+
+        Object fieldValue = rowValues.get(fieldName);
+        if (fieldValue == null) {
+            return false;
+        }
+
+        // If no comparison specified, treat as boolean field
+        if (!expression.has("comparison")) {
+            return evaluateFieldReference(expression, rowValues);
+        }
+
+        // Get comparison and value to compare against
+        String comparisonType = expression.get("comparison").asText();
+        JsonNode valueNode = expression.get("value");
+
+        // Debug the comparison
+        LoggingUtil.debug("Comparing field '" + fieldName + "' with value " + fieldValue +
+                " " + comparisonType + " " + valueNode);
+
+        // Convert field value and comparison value to appropriate numeric types
+        double fieldNumValue;
+        double compareNumValue;
+
+        try {
+            if (fieldValue instanceof Number) {
+                fieldNumValue = ((Number) fieldValue).doubleValue();
+            } else {
+                fieldNumValue = Double.parseDouble(fieldValue.toString());
+            }
+
+            if (valueNode.isNumber()) {
+                compareNumValue = valueNode.asDouble();
+            } else {
+                compareNumValue = Double.parseDouble(valueNode.asText());
+            }
+
+            // Perform numeric comparison
+            switch (comparisonType) {
+                case ">": return fieldNumValue > compareNumValue;
+                case ">=": return fieldNumValue >= compareNumValue;
+                case "<": return fieldNumValue < compareNumValue;
+                case "<=": return fieldNumValue <= compareNumValue;
+                case "==": return fieldNumValue == compareNumValue;
+                case "!=": return fieldNumValue != compareNumValue;
+                default:
+                    LoggingUtil.debug("Unsupported comparison operator: " + comparisonType);
+                    return false;
+            }
+        } catch (NumberFormatException e) {
+            // If values can't be converted to numbers, fall back to string comparison
+            String fieldStrValue = fieldValue.toString();
+            String compareStrValue = valueNode.asText();
+
+            switch (comparisonType) {
+                case "==": return fieldStrValue.equals(compareStrValue);
+                case "!=": return !fieldStrValue.equals(compareStrValue);
+                default:
+                    LoggingUtil.debug("Cannot perform numeric comparison with non-numeric values");
+                    return false;
+            }
+        }
+    }
+
+    private static Boolean evaluateFieldComparison_Old(JsonNode expression, Map<String, Object> rowValues) {
+        String fieldName = expression.get("field").asText();
+
+        // Check if the field exists in row values
+        if (!rowValues.containsKey(fieldName)) {
+            LoggingUtil.debug("Field '" + fieldName + "' not found for comparison");
+            return false;
+        }
+
+        Object fieldValue = rowValues.get(fieldName);
 
         // If no comparison specified, treat as boolean field
         if (!expression.has("comparison")) {

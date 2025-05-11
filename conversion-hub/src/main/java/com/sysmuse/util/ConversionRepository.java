@@ -289,10 +289,199 @@ public class ConversionRepository {
         return text.substring(0, maxLength);
     }
 
+    public void extractConfigFromJSON(JsonNode config) {
+        // Logging setup
+        LoggingUtil.info("Starting comprehensive configuration extraction");
+
+        // Clear existing configurations to prevent duplicate entries
+        configParameters.clear();
+        derivedBooleanFields.clear();
+        aggregateTextFields.clear();
+        suppressedFields.clear();
+        columnVisibility.clear();
+        columnTypes.clear();
+        uniqueKeyField = null;
+
+        // 1. Parameters Extraction
+        if (config.has("parameters")) {
+            JsonNode params = config.get("parameters");
+            Iterator<String> paramNames = params.fieldNames();
+
+            LoggingUtil.info("Processing configuration parameters");
+            while (paramNames.hasNext()) {
+                String paramName = paramNames.next();
+                JsonNode paramValue = params.get(paramName);
+
+                // Special handling for unique key field
+                if (paramName.equals("uniqueKeyField")) {
+                    uniqueKeyField = paramValue.asText();
+                    LoggingUtil.info("Set unique key field: " + uniqueKeyField);
+                }
+
+                // Generic parameter parsing
+                Object processedValue = processParameterValue(paramValue);
+                if (processedValue != null) {
+                    configParameters.put(paramName, processedValue);
+                    LoggingUtil.debug("Processed parameter: " + paramName + " = " + processedValue);
+                }
+            }
+        }
+
+        // 2. Columns Configuration
+        if (config.has("columns")) {
+            JsonNode columns = config.get("columns");
+            Iterator<String> columnNames = columns.fieldNames();
+
+            LoggingUtil.info("Processing column configurations");
+            while (columnNames.hasNext()) {
+                String columnName = columnNames.next();
+                JsonNode columnConfig = columns.get(columnName);
+
+                // Process column type
+                if (columnConfig.has("type")) {
+                    String typeStr = columnConfig.get("type").asText().toUpperCase();
+                    try {
+                        DataType type = DataType.valueOf(typeStr);
+                        columnTypes.put(columnName, type);
+                    } catch (IllegalArgumentException e) {
+                        LoggingUtil.warn("Unknown data type for column " + columnName + ": " + typeStr);
+                    }
+                }
+
+                // Process column visibility
+                boolean isVisible = columnConfig.has("visible") ?
+                        columnConfig.get("visible").asBoolean() : true;
+                columnVisibility.put(columnName, isVisible);
+
+                // Check for unique key
+                if (columnConfig.has("uniqueKey") && columnConfig.get("uniqueKey").asBoolean()) {
+                    uniqueKeyField = columnName;
+                    LoggingUtil.info("Unique key set to column: " + columnName);
+                }
+
+                LoggingUtil.debug("Configured column: " + columnName +
+                        ", Type: " + columnTypes.get(columnName) +
+                        ", Visible: " + isVisible);
+            }
+        }
+
+        // 3. Derived Boolean Fields
+        if (config.has("derivedBooleanFields")) {
+            JsonNode derivedFields = config.get("derivedBooleanFields");
+            Iterator<String> fieldNames = derivedFields.fieldNames();
+
+            LoggingUtil.info("Processing derived boolean fields");
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                JsonNode fieldConfig = derivedFields.get(fieldName);
+
+                // Store the entire field configuration
+                derivedBooleanFields.put(fieldName, fieldConfig);
+
+                // Ensure it's registered as a boolean type
+                columnTypes.put(fieldName, DataType.BOOLEAN);
+
+                // Process visibility (default to true)
+                boolean isVisible = fieldConfig.has("visible") ?
+                        fieldConfig.get("visible").asBoolean() : true;
+                columnVisibility.put(fieldName, isVisible);
+
+                LoggingUtil.info("Added derived boolean field: " + fieldName +
+                        ", Visible: " + isVisible);
+            }
+        }
+
+        // 4. Aggregate Text Fields
+        if (config.has("aggregateTextFields")) {
+            JsonNode aggregateFields = config.get("aggregateTextFields");
+            Iterator<String> fieldNames = aggregateFields.fieldNames();
+
+            LoggingUtil.info("Processing aggregate text fields");
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                JsonNode fieldConfig = aggregateFields.get(fieldName);
+
+                // Store the entire field configuration
+                aggregateTextFields.put(fieldName, fieldConfig);
+
+                // Ensure it's registered as a string type
+                columnTypes.put(fieldName, DataType.STRING);
+
+                // Process visibility (default to true)
+                boolean isVisible = fieldConfig.has("visible") ?
+                        fieldConfig.get("visible").asBoolean() : true;
+                columnVisibility.put(fieldName, isVisible);
+
+                LoggingUtil.info("Added aggregate text field: " + fieldName +
+                        ", Visible: " + isVisible);
+            }
+        }
+
+        // 5. Suppressed Fields
+        if (config.has("suppressedFields")) {
+            JsonNode suppressedFieldsNode = config.get("suppressedFields");
+            Iterator<String> fieldNames = suppressedFieldsNode.fieldNames();
+
+            LoggingUtil.info("Processing suppressed fields");
+            while (fieldNames.hasNext()) {
+                String fieldToSuppress = fieldNames.next();
+                String conditionField = suppressedFieldsNode.get(fieldToSuppress).asText();
+
+                suppressedFields.put(fieldToSuppress, conditionField);
+                LoggingUtil.info("Added suppressed field: " + fieldToSuppress +
+                        " with condition: " + conditionField);
+            }
+        }
+
+        // Final configuration summary logging
+        LoggingUtil.info("Configuration extraction complete");
+        LoggingUtil.info("- Unique Key Field: " + uniqueKeyField);
+        LoggingUtil.info("- Total Columns: " + columnTypes.size());
+        LoggingUtil.info("- Derived Boolean Fields: " + derivedBooleanFields.size());
+        LoggingUtil.info("- Aggregate Text Fields: " + aggregateTextFields.size());
+        LoggingUtil.info("- Suppressed Fields: " + suppressedFields.size());
+    }
+
+    /**
+     * Helper method to process parameter values safely
+     *
+     * @param paramValue JsonNode containing the parameter value
+     * @return Processed parameter value or null if unable to process
+     */
+    private Object processParameterValue(JsonNode paramValue) {
+        if (paramValue.isNull()) {
+            return null;
+        } else if (paramValue.isInt()) {
+            return paramValue.asInt();
+        } else if (paramValue.isLong()) {
+            return paramValue.asLong();
+        } else if (paramValue.isDouble()) {
+            return paramValue.asDouble();
+        } else if (paramValue.isBoolean()) {
+            return paramValue.asBoolean();
+        } else if (paramValue.isTextual()) {
+            return paramValue.asText();
+        } else if (paramValue.isArray()) {
+            // Convert array to list if needed
+            List<Object> arrayValues = new ArrayList<>();
+            for (JsonNode element : paramValue) {
+                Object processedElement = processParameterValue(element);
+                if (processedElement != null) {
+                    arrayValues.add(processedElement);
+                }
+            }
+            return arrayValues;
+        }
+
+        // Fallback for complex or unhandled types
+        LoggingUtil.warn("Unhandled parameter type: " + paramValue.getNodeType());
+        return paramValue.toString();
+    }
+
     /**
      * Extract all configuration sections from a JSON node
      */
-    public void extractConfigFromJSON(JsonNode config) {
+    public void extractConfigFromJSON_Old(JsonNode config) {
         // Clear existing maps to avoid duplicate entries
         configParameters.clear();
         derivedBooleanFields.clear();
@@ -501,10 +690,77 @@ public class ConversionRepository {
         LoggingUtil.info("- Hidden fields: " + hiddenCount);
     }
 
+    public void processDerivedFields(Map<String, Object> rowValues) {
+        LoggingUtil.debug("Processing derived fields. Available row fields: " + rowValues.keySet());
+        LoggingUtil.debug("Derived boolean fields to process: " + derivedBooleanFields.keySet());
+
+        if (derivedBooleanFields.isEmpty()) {
+            LoggingUtil.warn("No derived boolean fields configured to process");
+            return;
+        }
+
+        for (Map.Entry<String, JsonNode> entry : derivedBooleanFields.entrySet()) {
+            String fieldName = entry.getKey();
+            JsonNode expression = entry.getValue();
+
+            try {
+                // Log the specific expression being evaluated
+                LoggingUtil.debug("Evaluating derived field: " + fieldName);
+                LoggingUtil.debug("Expression details: " + expression.toString());
+
+                // Evaluate the boolean expression using the current row values
+                Boolean result = BooleanExpressionEvaluator.evaluate(expression, rowValues);
+
+                // Add the result to the row values
+                rowValues.put(fieldName, result);
+
+                LoggingUtil.info("Derived field '" + fieldName + "' = " + result);
+            } catch (Exception e) {
+                LoggingUtil.error("Error evaluating derived field '" + fieldName + "': " + e.getMessage(), e);
+                // Set default value to false if evaluation fails
+                rowValues.put(fieldName, false);
+            }
+        }
+    }
+
+    public void processDerivedFields_Old2(Map<String, Object> rowValues) {
+        LoggingUtil.debug("Processing derived fields. Available row fields: " + rowValues.keySet());
+        LoggingUtil.debug("Derived boolean fields to process: " + derivedBooleanFields.keySet());
+
+        // Add extensive logging
+        if (derivedBooleanFields.isEmpty()) {
+            LoggingUtil.warn("No derived boolean fields configured to process");
+            return;
+        }
+
+        for (Map.Entry<String, JsonNode> entry : derivedBooleanFields.entrySet()) {
+            String fieldName = entry.getKey();
+            JsonNode expression = entry.getValue();
+
+            try {
+                // Log the specific expression being evaluated
+                LoggingUtil.debug("Evaluating derived field: " + fieldName);
+                LoggingUtil.debug("Expression details: " + expression.toString());
+
+                // Evaluate the boolean expression using the current row values
+                Boolean result = BooleanExpressionEvaluator.evaluate(expression, rowValues);
+
+                // Add the result to the row values
+                rowValues.put(fieldName, result);
+
+                LoggingUtil.info("Derived field '" + fieldName + "' = " + result);
+            } catch (Exception e) {
+                LoggingUtil.error("Error evaluating derived field '" + fieldName + "': " + e.getMessage(), e);
+                // Set default value to false if evaluation fails
+                rowValues.put(fieldName, false);
+            }
+        }
+    }
+
     /**
      * Process the derived boolean fields for a row
      */
-    public void processDerivedFields(Map<String, Object> rowValues) {
+    public void processDerivedFields_Old(Map<String, Object> rowValues) {
         for (Map.Entry<String, JsonNode> entry : derivedBooleanFields.entrySet()) {
             String fieldName = entry.getKey();
             JsonNode expression = entry.getValue();

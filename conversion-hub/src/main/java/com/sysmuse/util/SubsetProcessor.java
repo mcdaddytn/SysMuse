@@ -42,10 +42,50 @@ public class SubsetProcessor {
         }
     }
 
+    public boolean rowMatchesFilter(Map<String, Object> row, String filterField) {
+        // Log detailed information about filter check
+        LoggingUtil.debug("Checking filter field: " + filterField);
+        LoggingUtil.debug("Available row fields: " + row.keySet());
+
+        Object fieldValue = row.get(filterField);
+        LoggingUtil.debug("Field value for '" + filterField + "': " + fieldValue);
+
+        if (fieldValue == null) {
+            LoggingUtil.debug("Filter field '" + filterField + "' is null. Returning false.");
+            return false;
+        }
+
+        // Check if the field has a boolean true value
+        if (fieldValue instanceof Boolean) {
+            LoggingUtil.debug("Boolean filter: " + fieldValue);
+            return (Boolean) fieldValue;
+        } else if (fieldValue instanceof String) {
+            boolean booleanValue = Boolean.parseBoolean((String) fieldValue);
+            LoggingUtil.debug("String parsed to boolean: " + booleanValue);
+            return booleanValue;
+        } else if (fieldValue instanceof Integer) {
+            boolean intValue = ((Integer) fieldValue) != 0;
+            LoggingUtil.debug("Integer converted to boolean: " + intValue);
+            return intValue;
+        } else if (fieldValue instanceof Long) {
+            boolean longValue = ((Long) fieldValue) != 0L;
+            LoggingUtil.debug("Long converted to boolean: " + longValue);
+            return longValue;
+        } else {
+            // Try to interpret as boolean if possible
+            boolean interpretedValue = "true".equalsIgnoreCase(fieldValue.toString()) ||
+                    "yes".equalsIgnoreCase(fieldValue.toString()) ||
+                    "1".equals(fieldValue.toString());
+
+            LoggingUtil.debug("Interpreted value: " + interpretedValue + " from string: " + fieldValue);
+            return interpretedValue;
+        }
+    }
+
     /**
      * Check if a row matches a filter field
      */
-    public boolean rowMatchesFilter(Map<String, Object> row, String filterField) {
+    public boolean rowMatchesFilter_Old(Map<String, Object> row, String filterField) {
         Object fieldValue = row.get(filterField);
         if (fieldValue == null) {
             return false;
@@ -111,10 +151,23 @@ public class SubsetProcessor {
         exportedKeys.add(rowKey);
     }
 
+// In SubsetProcessor.java, find the getOutputPathWithSuffix method and modify it:
+
+    public String getOutputPathWithSuffix(String basePath, String suffix, String extension) {
+        // Extract base path without extension
+        String basePathWithoutExt = basePath.replaceAll("\\.[^.]+$", "");
+
+        // Get the output suffix from systemConfig
+        String outputSuffix = systemConfig.getOutputSuffix();
+
+        // Add output suffix and filter suffix and extension
+        return basePathWithoutExt + outputSuffix + suffix + extension;
+    }
+
     /**
      * Helper method to generate an output path with a suffix
      */
-    public String getOutputPathWithSuffix(String basePath, String suffix, String extension) {
+    public String getOutputPathWithSuffix_Old(String basePath, String suffix, String extension) {
         // Extract base path without extension
         String basePathWithoutExt = basePath.replaceAll("\\.[^.]+$", "");
 

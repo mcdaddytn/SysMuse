@@ -55,20 +55,33 @@ public class UserDataProcessingTest {
     }
 
     private void validateHighValueCustomers(List<Map<String, Object>> rows) {
-        // High-value customer criteria: 
+        // Log all rows to help diagnose the issue
+        System.out.println("All Rows:");
+        for (Map<String, Object> row : rows) {
+            System.out.println("User ID: " + row.get("user_id"));
+            System.out.println("Total Spend: " + row.get("total_spend"));
+            System.out.println("Transaction Count: " + row.get("transaction_count"));
+            System.out.println("Is Active: " + row.get("is_active"));
+            System.out.println("Is High-Value Customer: " + row.get("is_high_value_customer"));
+            System.out.println("---");
+        }
+
+        // High-value customer criteria:
         // 1. Spend > $1000
         // 2. More than 5 transactions
         // 3. Active account
         List<Map<String, Object>> highValueCustomers = rows.stream()
-            .filter(row -> Boolean.TRUE.equals(row.get("is_high_value_customer")))
-            .collect(Collectors.toList());
+                .filter(row -> Boolean.TRUE.equals(row.get("is_high_value_customer")))
+                .collect(Collectors.toList());
 
         assertEquals(1, highValueCustomers.size(), "Should have one high-value customer");
-        
+
         Map<String, Object> highValueCustomer = highValueCustomers.get(0);
         assertEquals(5, highValueCustomer.get("user_id"), "High-value customer should be user with ID 5");
-        assertEquals(10, highValueCustomer.get("transaction_count"), "Should have 10 transactions");
-        assertTrue((Double) highValueCustomer.get("total_spend") > 1000.0, "Total spend should be over $1000");
+        //assertEquals(10, highValueCustomer.get("transaction_count"), "Should have 10 transactions");
+        assertEquals(10, Integer.parseInt(highValueCustomer.get("transaction_count").toString()), "Should have 10 transactions");
+        //assertTrue((Double) highValueCustomer.get("total_spend") > 1000.0, "Total spend should be over $1000");
+        assertTrue(Double.parseDouble(highValueCustomer.get("total_spend").toString()) > 1000.0, "Total spend should be over $1000");
         assertTrue(Boolean.TRUE.equals(highValueCustomer.get("is_active")), "High-value customer must be active");
     }
 
@@ -77,16 +90,24 @@ public class UserDataProcessingTest {
         // 1. High-value customers
         // 2. Admin and moderator roles
         List<Map<String, Object>> requiresVerification = rows.stream()
-            .filter(row -> Boolean.TRUE.equals(row.get("requires_verification")))
-            .collect(Collectors.toList());
+                .filter(row -> Boolean.TRUE.equals(row.get("requires_verification")))
+                .collect(Collectors.toList());
+
+        System.out.println("Rows Requiring Verification:");
+        for (Map<String, Object> row : requiresVerification) {
+            System.out.println("User ID: " + row.get("user_id"));
+            System.out.println("Role: " + row.get("role"));
+            System.out.println("Is High-Value Customer: " + row.get("is_high_value_customer"));
+            System.out.println("---");
+        }
 
         assertEquals(3, requiresVerification.size(), "Should have three records requiring verification");
 
         // Verify specific user IDs requiring verification
         Set<Integer> expectedUserIds = Set.of(3, 5, 6);
         Set<Integer> actualUserIds = requiresVerification.stream()
-            .map(row -> (Integer) row.get("user_id"))
-            .collect(Collectors.toSet());
+                .map(row -> (Integer) row.get("user_id"))
+                .collect(Collectors.toSet());
 
         assertEquals(expectedUserIds, actualUserIds, "Specific users should require verification");
     }
@@ -97,16 +118,25 @@ public class UserDataProcessingTest {
         // 2. Verified account
         // 3. Subscribed to newsletter
         List<Map<String, Object>> communicationEligible = rows.stream()
-            .filter(row -> Boolean.TRUE.equals(row.get("communication_eligible")))
-            .collect(Collectors.toList());
+                .filter(row -> Boolean.TRUE.equals(row.get("communication_eligible")))
+                .collect(Collectors.toList());
+
+        System.out.println("Communication Eligible Rows:");
+        for (Map<String, Object> row : communicationEligible) {
+            System.out.println("User ID: " + row.get("user_id"));
+            System.out.println("Is Active: " + row.get("is_active"));
+            System.out.println("Account Verified: " + row.get("account_verified"));
+            System.out.println("Newsletter Subscription: " + row.get("newsletter_subscription"));
+            System.out.println("---");
+        }
 
         assertEquals(4, communicationEligible.size(), "Should have four communication-eligible users");
 
         // Verify specific user IDs are communication eligible
         Set<Integer> expectedUserIds = Set.of(1, 2, 3, 5, 6);
         Set<Integer> actualUserIds = communicationEligible.stream()
-            .map(row -> (Integer) row.get("user_id"))
-            .collect(Collectors.toSet());
+                .map(row -> (Integer) row.get("user_id"))
+                .collect(Collectors.toSet());
 
         assertTrue(actualUserIds.containsAll(expectedUserIds), "Specific users should be communication eligible");
     }

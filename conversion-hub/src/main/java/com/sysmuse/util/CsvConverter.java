@@ -296,6 +296,25 @@ public class CsvConverter {
         // Check if csvFilePathsInput contains multiple files (comma-separated)
         String[] filePaths;
 
+        if (repository.getUniqueKeyField() == null) {
+            // Try to get unique key from configuration or system config
+            String uniqueKey = repository.getConfigParameters().containsKey("uniqueKeyField")
+                    ? repository.getConfigParameters().get("uniqueKeyField").toString()
+                    : null;
+                    /*
+            String uniqueKey = repository.getConfigParameters().containsKey("uniqueKeyField")
+                    ? repository.getConfigParameters().get("uniqueKeyField").toString()
+                    : systemConfig.getParameters().get("uniqueKeyField");
+                     */
+
+            if (uniqueKey != null) {
+                repository.setUniqueKeyField(uniqueKey);
+                LoggingUtil.info("Set unique key field to: " + uniqueKey);
+            } else {
+                throw new IllegalStateException("No unique key field defined for multi-file processing");
+            }
+        }
+
         if (csvFilePathsInput.contains(",")) {
             // Multiple files specified directly in the input
             filePaths = csvFilePathsInput.split(",");

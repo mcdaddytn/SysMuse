@@ -188,6 +188,34 @@ public class LoggingUtil {
         logger.log(Level.SEVERE, message, t);
     }
 
+    public static void debug(String format, Object... args) {
+        debug(String.format(format, args));
+    }
+
+    public static void debug(String format, Throwable t, Object... args) {
+        debug(String.format(format, args), t);
+    }
+
+    public static void info(String format, Object... args) {
+        info(String.format(format, args));
+    }
+
+    public static void warn(String format, Object... args) {
+        warn(String.format(format, args));
+    }
+
+    public static void warn(String format, Throwable t, Object... args) {
+        warn(String.format(format, args), t);
+    }
+
+    public static void error(String format, Object... args) {
+        error(String.format(format, args));
+    }
+
+    public static void error(String format, Throwable t, Object... args) {
+        error(String.format(format, args), t);
+    }
+
     public static boolean isDebugEnabled() {
         return currentLevel.intValue() <= Level.FINE.intValue();
     }

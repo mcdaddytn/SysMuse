@@ -289,230 +289,220 @@ public class ConversionRepository {
         return text.substring(0, maxLength);
     }
 
-    /**
-     * Extract all configuration sections from a JSON node
-     */
     public void extractConfigFromJSON(JsonNode config) {
-        // Clear existing maps to avoid duplicate entries
+        // Logging setup
+        LoggingUtil.info("Starting comprehensive configuration extraction");
+
+        // Clear existing configurations to prevent duplicate entries
         configParameters.clear();
         derivedBooleanFields.clear();
         aggregateTextFields.clear();
         suppressedFields.clear();
         columnVisibility.clear();
+        columnTypes.clear();
         uniqueKeyField = null;
 
-        // Parse parameters section
+        // 1. Parameters Extraction
         if (config.has("parameters")) {
             JsonNode params = config.get("parameters");
-            Iterator<String> fieldNames = params.fieldNames();
-            while (fieldNames.hasNext()) {
-                String paramName = fieldNames.next();
+            Iterator<String> paramNames = params.fieldNames();
+
+            LoggingUtil.info("Processing configuration parameters");
+            while (paramNames.hasNext()) {
+                String paramName = paramNames.next();
                 JsonNode paramValue = params.get(paramName);
 
-                if (paramValue.isInt()) {
-                    configParameters.put(paramName, paramValue.asInt());
-                } else if (paramValue.isLong()) {
-                    configParameters.put(paramName, paramValue.asLong());
-                } else if (paramValue.isDouble()) {
-                    configParameters.put(paramName, paramValue.asDouble());
-                } else if (paramValue.isBoolean()) {
-                    configParameters.put(paramName, paramValue.asBoolean());
-                } else if (paramValue.isTextual()) {
-                    configParameters.put(paramName, paramValue.asText());
-                } else if (paramValue.isNull()) {
-                    configParameters.put(paramName, null);
+                // Special handling for unique key field
+                if (paramName.equals("uniqueKeyField")) {
+                    uniqueKeyField = paramValue.asText();
+                    LoggingUtil.debug("Set unique key field: " + uniqueKeyField);
                 }
-                LoggingUtil.debug("Found parameter: " + paramName + " = " +
-                        configParameters.get(paramName));
+
+                // Generic parameter parsing
+                Object processedValue = processParameterValue(paramValue);
+                if (processedValue != null) {
+                    configParameters.put(paramName, processedValue);
+                    LoggingUtil.debug("Processed parameter: " + paramName + " = " + processedValue);
+                }
             }
         }
 
-        // Parse column definitions
+        // 2. Columns Configuration
         if (config.has("columns")) {
             JsonNode columns = config.get("columns");
             Iterator<String> columnNames = columns.fieldNames();
+
+            LoggingUtil.info("Processing column configurations");
             while (columnNames.hasNext()) {
                 String columnName = columnNames.next();
                 JsonNode columnConfig = columns.get(columnName);
 
-                // Check if this is a standard type definition
+                // Process column type
                 if (columnConfig.has("type")) {
-                    String typeStr = columnConfig.get("type").asText();
-
-                    DataType type;
-                    switch (typeStr.toUpperCase()) {
-                        case "STRING":
-                            type = DataType.STRING;
-                            break;
-                        case "INTEGER":
-                            type = DataType.INTEGER;
-                            break;
-                        case "FLOAT":
-                            type = DataType.FLOAT;
-                            break;
-                        case "BOOLEAN":
-                            type = DataType.BOOLEAN;
-                            break;
-                        default:
-                            throw new IllegalArgumentException("Unknown data type: " + typeStr);
+                    String typeStr = columnConfig.get("type").asText().toUpperCase();
+                    try {
+                        DataType type = DataType.valueOf(typeStr);
+                        columnTypes.put(columnName, type);
+                    } catch (IllegalArgumentException e) {
+                        LoggingUtil.warn("Unknown data type for column " + columnName + ": " + typeStr);
                     }
-
-                    columnTypes.put(columnName, type);
-
-                    // Process visibility property
-                    boolean isVisible = true; // Default is visible
-                    if (columnConfig.has("visible")) {
-                        JsonNode visibleValue = columnConfig.get("visible");
-                        if (visibleValue.isBoolean()) {
-                            isVisible = visibleValue.asBoolean();
-                        } else if (visibleValue.isTextual()) {
-                            isVisible = Boolean.parseBoolean(visibleValue.asText());
-                        }
-                    }
-                    columnVisibility.put(columnName, isVisible);
-
-                    // Check if this column is marked as unique key
-                    if (columnConfig.has("uniqueKey")) {
-                        JsonNode uniqueKeyValue = columnConfig.get("uniqueKey");
-                        boolean isUniqueKey = false;
-
-                        if (uniqueKeyValue.isBoolean()) {
-                            isUniqueKey = uniqueKeyValue.asBoolean();
-                        } else if (uniqueKeyValue.isTextual()) {
-                            isUniqueKey = Boolean.parseBoolean(uniqueKeyValue.asText());
-                        }
-
-                        if (isUniqueKey) {
-                            uniqueKeyField = columnName;
-                            LoggingUtil.info("Found unique key field: " + uniqueKeyField);
-                        }
-                    }
-
-                    LoggingUtil.debug("Column '" + columnName + "' configured with type: " + type +
-                            ", visibility: " + isVisible);
                 }
+
+                // Process column visibility
+                boolean isVisible = columnConfig.has("visible") ?
+                        columnConfig.get("visible").asBoolean() : true;
+                columnVisibility.put(columnName, isVisible);
+
+                // Check for unique key
+                if (columnConfig.has("uniqueKey") && columnConfig.get("uniqueKey").asBoolean()) {
+                    uniqueKeyField = columnName;
+                    LoggingUtil.info("Unique key set to column: " + columnName);
+                }
+
+                LoggingUtil.debug("Configured column: " + columnName +
+                        ", Type: " + columnTypes.get(columnName) +
+                        ", Visible: " + isVisible);
             }
         }
 
-        // Parse derived boolean fields
+        // 3. Derived Boolean Fields
         if (config.has("derivedBooleanFields")) {
             JsonNode derivedFields = config.get("derivedBooleanFields");
-            LoggingUtil.info("Found " + derivedFields.size() + " derived boolean fields in config");
-
             Iterator<String> fieldNames = derivedFields.fieldNames();
+
+            LoggingUtil.info("Processing derived boolean fields");
             while (fieldNames.hasNext()) {
                 String fieldName = fieldNames.next();
                 JsonNode fieldConfig = derivedFields.get(fieldName);
 
+                // Store the entire field configuration
                 derivedBooleanFields.put(fieldName, fieldConfig);
-                columnTypes.put(fieldName, DataType.BOOLEAN); // Register as a boolean column
 
-                // Process visibility property for derived fields
-                boolean isVisible = true; // Default is visible
-                if (fieldConfig.has("visible")) {
-                    JsonNode visibleValue = fieldConfig.get("visible");
-                    if (visibleValue.isBoolean()) {
-                        isVisible = visibleValue.asBoolean();
-                    } else if (visibleValue.isTextual()) {
-                        isVisible = Boolean.parseBoolean(visibleValue.asText());
-                    }
-                }
+                // Ensure it's registered as a boolean type
+                columnTypes.put(fieldName, DataType.BOOLEAN);
+
+                // Process visibility (default to true)
+                boolean isVisible = fieldConfig.has("visible") ?
+                        fieldConfig.get("visible").asBoolean() : true;
                 columnVisibility.put(fieldName, isVisible);
 
-                LoggingUtil.debug("Derived boolean field '" + fieldName + "' configured with expression: " +
-                        fieldConfig + ", visibility: " + isVisible);
+                LoggingUtil.info("Added derived boolean field: " + fieldName +
+                        ", Visible: " + isVisible);
             }
         }
 
-        // Parse aggregate text fields
+        // 4. Aggregate Text Fields
         if (config.has("aggregateTextFields")) {
             JsonNode aggregateFields = config.get("aggregateTextFields");
-            LoggingUtil.info("Found " + aggregateFields.size() + " aggregate text fields in config");
-
             Iterator<String> fieldNames = aggregateFields.fieldNames();
+
+            LoggingUtil.info("Processing aggregate text fields");
             while (fieldNames.hasNext()) {
                 String fieldName = fieldNames.next();
                 JsonNode fieldConfig = aggregateFields.get(fieldName);
 
+                // Store the entire field configuration
                 aggregateTextFields.put(fieldName, fieldConfig);
-                columnTypes.put(fieldName, DataType.STRING); // Register as a string column
 
-                // Process visibility property for aggregate fields
-                boolean isVisible = true; // Default is visible
-                if (fieldConfig.has("visible")) {
-                    JsonNode visibleValue = fieldConfig.get("visible");
-                    if (visibleValue.isBoolean()) {
-                        isVisible = visibleValue.asBoolean();
-                    } else if (visibleValue.isTextual()) {
-                        isVisible = Boolean.parseBoolean(visibleValue.asText());
-                    }
-                }
+                // Ensure it's registered as a string type
+                columnTypes.put(fieldName, DataType.STRING);
+
+                // Process visibility (default to true)
+                boolean isVisible = fieldConfig.has("visible") ?
+                        fieldConfig.get("visible").asBoolean() : true;
                 columnVisibility.put(fieldName, isVisible);
 
-                LoggingUtil.debug("Aggregate text field '" + fieldName + "' configured with condition: "
-                        + fieldConfig.get("condition").asText() + ", visibility: " + isVisible);
-
-                // Log source fields
-                ArrayNode sourceFields = (ArrayNode) fieldConfig.get("sourceFields");
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < sourceFields.size(); i++) {
-                    if (i > 0) sb.append(", ");
-                    sb.append(sourceFields.get(i).asText());
-                }
-                LoggingUtil.debug("Source fields for '" + fieldName + "': " + sb.toString());
+                LoggingUtil.info("Added aggregate text field: " + fieldName +
+                        ", Visible: " + isVisible);
             }
         }
 
-        // Parse suppressed fields
+        // 5. Suppressed Fields
         if (config.has("suppressedFields")) {
-            JsonNode suppressed = config.get("suppressedFields");
-            Iterator<String> fieldNames = suppressed.fieldNames();
+            JsonNode suppressedFieldsNode = config.get("suppressedFields");
+            Iterator<String> fieldNames = suppressedFieldsNode.fieldNames();
+
+            LoggingUtil.info("Processing suppressed fields");
             while (fieldNames.hasNext()) {
                 String fieldToSuppress = fieldNames.next();
-                String conditionField = suppressed.get(fieldToSuppress).asText();
+                String conditionField = suppressedFieldsNode.get(fieldToSuppress).asText();
 
                 suppressedFields.put(fieldToSuppress, conditionField);
-
-                LoggingUtil.debug("Field '" + fieldToSuppress + "' will be suppressed when '" +
-                        conditionField + "' is false");
+                LoggingUtil.info("Added suppressed field: " + fieldToSuppress +
+                        " with condition: " + conditionField);
             }
         }
 
-        // Print summary of configuration
-        LoggingUtil.info("Configuration summary:");
-        LoggingUtil.info("- Parameters: " + configParameters.size());
-        LoggingUtil.info("- Column types: " + columnTypes.size());
-        LoggingUtil.info("- Derived boolean fields: " + derivedBooleanFields.size());
-        LoggingUtil.info("- Aggregate text fields: " + aggregateTextFields.size());
-        LoggingUtil.info("- Suppressed fields: " + suppressedFields.size());
-        LoggingUtil.info("- Unique key field: " + uniqueKeyField);
-
-        // Count visible and hidden fields
-        int visibleCount = 0;
-        int hiddenCount = 0;
-        for (Boolean visible : columnVisibility.values()) {
-            if (visible) {
-                visibleCount++;
-            } else {
-                hiddenCount++;
-            }
-        }
-        LoggingUtil.info("- Visible fields: " + visibleCount);
-        LoggingUtil.info("- Hidden fields: " + hiddenCount);
+        // Final configuration summary logging
+        LoggingUtil.info("Configuration extraction complete");
+        LoggingUtil.info("- Unique Key Field: " + uniqueKeyField);
+        LoggingUtil.info("- Total Columns: " + columnTypes.size());
+        LoggingUtil.info("- Derived Boolean Fields: " + derivedBooleanFields.size());
+        LoggingUtil.info("- Aggregate Text Fields: " + aggregateTextFields.size());
+        LoggingUtil.info("- Suppressed Fields: " + suppressedFields.size());
     }
 
     /**
-     * Process the derived boolean fields for a row
+     * Helper method to process parameter values safely
+     *
+     * @param paramValue JsonNode containing the parameter value
+     * @return Processed parameter value or null if unable to process
      */
+    private Object processParameterValue(JsonNode paramValue) {
+        if (paramValue.isNull()) {
+            return null;
+        } else if (paramValue.isInt()) {
+            return paramValue.asInt();
+        } else if (paramValue.isLong()) {
+            return paramValue.asLong();
+        } else if (paramValue.isDouble()) {
+            return paramValue.asDouble();
+        } else if (paramValue.isBoolean()) {
+            return paramValue.asBoolean();
+        } else if (paramValue.isTextual()) {
+            return paramValue.asText();
+        } else if (paramValue.isArray()) {
+            // Convert array to list if needed
+            List<Object> arrayValues = new ArrayList<>();
+            for (JsonNode element : paramValue) {
+                Object processedElement = processParameterValue(element);
+                if (processedElement != null) {
+                    arrayValues.add(processedElement);
+                }
+            }
+            return arrayValues;
+        }
+
+        // Fallback for complex or unhandled types
+        LoggingUtil.warn("Unhandled parameter type: " + paramValue.getNodeType());
+        return paramValue.toString();
+    }
+
     public void processDerivedFields(Map<String, Object> rowValues) {
+        LoggingUtil.debug("Processing derived fields. Available row fields: " + rowValues.keySet());
+        LoggingUtil.debug("Derived boolean fields to process: " + derivedBooleanFields.keySet());
+
+        if (derivedBooleanFields.isEmpty()) {
+            LoggingUtil.debug("No derived boolean fields configured to process");
+            return;
+        }
+
         for (Map.Entry<String, JsonNode> entry : derivedBooleanFields.entrySet()) {
             String fieldName = entry.getKey();
             JsonNode expression = entry.getValue();
 
             try {
+                // Log the specific expression being evaluated
+                LoggingUtil.debug("Evaluating derived field: " + fieldName);
+                LoggingUtil.debug("Expression details: " + expression.toString());
+
                 // Evaluate the boolean expression using the current row values
                 Boolean result = BooleanExpressionEvaluator.evaluate(expression, rowValues);
+
+                // Add the result to the row values
                 rowValues.put(fieldName, result);
+
+                LoggingUtil.debug("Derived field '" + fieldName + "' = " + result);
             } catch (Exception e) {
                 LoggingUtil.error("Error evaluating derived field '" + fieldName + "': " + e.getMessage(), e);
                 // Set default value to false if evaluation fails

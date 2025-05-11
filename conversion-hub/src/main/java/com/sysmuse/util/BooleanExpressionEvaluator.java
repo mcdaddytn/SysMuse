@@ -87,6 +87,9 @@ public class BooleanExpressionEvaluator {
         }
 
         Object fieldValue = rowValues.get(fieldName);
+        if (fieldValue == null) {
+            return false;
+        }
 
         // If no comparison specified, treat as boolean field
         if (!expression.has("comparison")) {
@@ -97,14 +100,30 @@ public class BooleanExpressionEvaluator {
         String comparisonType = expression.get("comparison").asText();
         JsonNode valueNode = expression.get("value");
 
-        // Convert values for comparison
-        Object compareValue = convertToAppropriateType(valueNode, fieldValue);
+        // Debug the comparison
+        LoggingUtil.debug("Comparing field '" + fieldName + "' with value " + fieldValue +
+                " " + comparisonType + " " + valueNode);
 
-        // Perform comparison based on type
-        if (fieldValue instanceof Number && compareValue instanceof Number) {
-            double fieldNumValue = ((Number) fieldValue).doubleValue();
-            double compareNumValue = ((Number) compareValue).doubleValue();
+        // Convert field value and comparison value to appropriate types for numeric comparison
+        try {
+            double fieldNumValue;
+            double compareNumValue;
 
+            // Convert field value to double
+            if (fieldValue instanceof Number) {
+                fieldNumValue = ((Number) fieldValue).doubleValue();
+            } else {
+                fieldNumValue = Double.parseDouble(fieldValue.toString());
+            }
+
+            // Convert comparison value to double
+            if (valueNode.isNumber()) {
+                compareNumValue = valueNode.asDouble();
+            } else {
+                compareNumValue = Double.parseDouble(valueNode.asText());
+            }
+
+            // Perform numeric comparison
             switch (comparisonType) {
                 case ">": return fieldNumValue > compareNumValue;
                 case ">=": return fieldNumValue >= compareNumValue;
@@ -112,21 +131,23 @@ public class BooleanExpressionEvaluator {
                 case "<=": return fieldNumValue <= compareNumValue;
                 case "==": return fieldNumValue == compareNumValue;
                 case "!=": return fieldNumValue != compareNumValue;
+                default:
+                    LoggingUtil.debug("Unsupported comparison operator: " + comparisonType);
+                    return false;
             }
-        } else if (fieldValue instanceof String && compareValue instanceof String) {
+        } catch (NumberFormatException e) {
+            // If values can't be converted to numbers, fall back to string comparison
+            String fieldStrValue = fieldValue.toString();
+            String compareStrValue = valueNode.asText();
+
             switch (comparisonType) {
-                case "==": return fieldValue.equals(compareValue);
-                case "!=": return !fieldValue.equals(compareValue);
-            }
-        } else if (fieldValue instanceof Boolean && compareValue instanceof Boolean) {
-            switch (comparisonType) {
-                case "==": return fieldValue.equals(compareValue);
-                case "!=": return !fieldValue.equals(compareValue);
+                case "==": return fieldStrValue.equals(compareStrValue);
+                case "!=": return !fieldStrValue.equals(compareStrValue);
+                default:
+                    LoggingUtil.debug("Cannot perform numeric comparison with non-numeric values");
+                    return false;
             }
         }
-
-        LoggingUtil.debug("Unsupported comparison type or incompatible types for field '" + fieldName + "'");
-        return false;
     }
 
     private static Object convertToAppropriateType(JsonNode valueNode, Object referenceValue) {

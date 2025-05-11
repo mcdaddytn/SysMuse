@@ -19,9 +19,6 @@ public class TextFieldProcessor {
         systemConfig = config;
     }
 
-    /**
-     * Process aggregate text fields based on configuration
-     */
     public static String processAggregateField(JsonNode config, Map<String, Object> rowValues) {
         // Check if the condition field exists and is true
         String conditionField = config.get("condition").asText();
@@ -29,27 +26,29 @@ public class TextFieldProcessor {
 
         if (rowValues.containsKey(conditionField)) {
             Object condValue = rowValues.get(conditionField);
+            LoggingUtil.debug("Condition field '" + conditionField + "' has value: " + condValue);
+
             if (condValue instanceof Boolean) {
                 condition = (Boolean) condValue;
             } else {
-                LoggingUtil.debug("Condition field '" + conditionField +
-                        "' has non-boolean value: " + condValue);
+                LoggingUtil.debug("Condition field '" + conditionField + "' has non-boolean value: " + condValue);
                 // Convert String "true"/"false" to boolean if needed
                 if (condValue instanceof String) {
                     condition = Boolean.parseBoolean((String) condValue);
                 }
             }
         } else {
-            LoggingUtil.debug("Condition field '" + conditionField +
-                    "' not found in row values. Available fields: " + rowValues.keySet());
+            LoggingUtil.debug("Condition field '" + conditionField + "' not found in row values. Available fields: " + rowValues.keySet());
         }
 
         if (!condition) {
             // Condition is false, return empty string
+            LoggingUtil.debug("Condition for aggregate field is false, returning empty string");
             return "";
         }
 
         // Condition is true, create the aggregate text
+        LoggingUtil.debug("Condition for aggregate field is true, creating aggregate text");
         ArrayNode sourceFields = (ArrayNode) config.get("sourceFields");
         StringBuilder aggregated = new StringBuilder();
 

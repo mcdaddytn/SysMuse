@@ -1,5 +1,9 @@
 user_id,username,email,full_name,is_active,registration_date,is_high_value_customer,requires_verification,communication_eligible,user_details,transaction_insights
+1,johndoe,,John Doe,true,2022-01-15,false,false,true,,
 2,janedoe,,Jane Doe,true,2022-02-20,false,false,false,,
-7,suspendeduser,,Suspended Account,false,2023-01-20,false,false,false,,
+3,adminuser,admin@company.com,System Administrator,true,2021-11-01,false,true,true,,
 4,guestuser,,Guest User,false,2023-05-10,false,false,false,,
+5,vipuser,vip@premium.com,VIP Customer,true,2021-09-05,true,true,true,VIP Customer | vip@premium.com | executive,10 | 2500.75 | 250.08
+6,moderator,mod@company.com,Site Moderator,true,2022-03-15,false,true,true,,
+7,suspendeduser,,Suspended Account,false,2023-01-20,false,false,false,,
 8,newuser,,New User,true,2023-06-01,false,false,false,,

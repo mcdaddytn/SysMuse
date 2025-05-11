@@ -1,0 +1,47 @@
+{
+  "input": {
+    "format": "csv",
+    "path": "src/test/resources/users",
+    "files": [
+      "users_base.csv",
+      "users_roles.csv",
+      "users_transactions.csv",
+      "users_preferences.csv"
+    ]
+  },
+  "output": {
+    "format": "csv",
+    "suffix": "_processed",
+    "pretty": true,
+    "indent": 2
+  },
+  "limits": {
+    "maxImportRows": 10000,
+    "maxTextLength": 0,
+    "uniqueKeyField": "user_id"
+  },
+  "applicableFormat": {
+    "textSuffixes": [
+      "details",
+      "insights"
+    ]
+  },
+  "textAggregation": {
+    "mode": "FIELDNAME",
+    "fieldNamePrefix": "[",
+    "fieldNameSuffix": "]",
+    "newlineChar": "\n"
+  },
+  "subsets": {vbf
+    "exclusive": false,
+    "filters": {
+      "is_high_value_customer": "_high_value",
+      "communication_eligible": "_marketing"
+    }
+  },
+  "logging": {
+    "level": "DEBUG",
+    "console": true,
+    "file": false
+  }
+}

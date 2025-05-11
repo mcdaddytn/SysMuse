@@ -65,5 +65,5 @@ yarn-error.log*
 
 # CSV and JSON files in test/resources should be included for testing
 # but ignore dynamically generated ones
-# src/test/resources/**/*.json
-# !src/test/resources/sample.csv
+src/test/resources/**/*.json
+!src/test/resources/sample.csv

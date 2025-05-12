@@ -33,8 +33,22 @@ public class OperationRegistry {
     }
 
     public void registerNumericOperator(String symbol, NumericOperation op, List<String> argNames) {
-        numericOperators.put(symbol, op);
-        argOrder.put(symbol, argNames);
+        String key = symbol;
+        numericOperators.put(key, op);
+        argOrder.put(key, argNames);
+    }
+
+    public void registerCustom(String name, CustomOperation op, List<String> argNames, String... aliases) {
+        Class<?> returnType = op.getReturnType();
+        if (Number.class.isAssignableFrom(returnType)) {
+            registerNumeric(name, op, argNames, aliases);
+        } else if (Boolean.class.equals(returnType)) {
+            registerBoolean(name, op, argNames, aliases);
+        } else if (String.class.equals(returnType)) {
+            registerString(name, op, argNames, aliases);
+        } else {
+            throw new IllegalArgumentException("Unsupported return type for custom operation: " + returnType);
+        }
     }
 
     public BooleanOperation getBoolean(String name) {
@@ -68,5 +82,3 @@ public class OperationRegistry {
         return aliases.getOrDefault(name.toLowerCase(), name.toLowerCase());
     }
 }
-
-

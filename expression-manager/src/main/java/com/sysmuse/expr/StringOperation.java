@@ -1,8 +1,4 @@
 package com.sysmuse.expr;
 
-import java.util.Map;
-
-@FunctionalInterface
-public interface StringOperation {
-    String apply(Map<String, Object> args, Map<String, Object> context);
+public interface StringOperation extends GenericOperation {
 }

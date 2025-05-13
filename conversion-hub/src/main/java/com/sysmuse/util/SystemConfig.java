@@ -54,6 +54,12 @@ public class SystemConfig {
     private boolean fileLoggingEnabled = false;
     private String logFileName = "converter.log";
 
+    // Archive configuration
+    private boolean archiveEnabled = false;
+    private String archiveSuffix = "_archive";
+    private String archivePassword = null;
+    private boolean keepOriginalFiles = true;
+
     // Raw JSON config
     private JsonNode configJson;
 
@@ -279,6 +285,28 @@ public class SystemConfig {
             }
         }
 
+        if (configJson.has("archive")) {
+            JsonNode archiveNode = configJson.get("archive");
+
+            if (archiveNode.has("enabled")) {
+                archiveEnabled = archiveNode.get("enabled").asBoolean();
+            }
+
+            if (archiveNode.has("suffix")) {
+                archiveSuffix = archiveNode.get("suffix").asText();
+            }
+
+            if (archiveNode.has("password")) {
+                archivePassword = archiveNode.get("password").asText();
+                // Don't log the password for security
+                LoggingUtil.info("Archive password configured (not logged for security)");
+            }
+
+            if (archiveNode.has("keepOriginals")) {
+                keepOriginalFiles = archiveNode.get("keepOriginals").asBoolean();
+            }
+        }
+
         LoggingUtil.info("Loaded system configuration from: " + configFilePath);
     }
 
@@ -348,6 +376,14 @@ public class SystemConfig {
         for (Map.Entry<String, String> entry : subsets.entrySet()) {
             filtersNode.put(entry.getKey(), entry.getValue());
         }
+
+        ObjectNode archiveNode = rootNode.putObject("archive");
+        archiveNode.put("enabled", archiveEnabled);
+        archiveNode.put("suffix", archiveSuffix);
+        if (archivePassword != null) {
+            archiveNode.put("password", archivePassword);
+        }
+        archiveNode.put("keepOriginals", keepOriginalFiles);
 
         // Configuration paths
         ObjectNode pathsNode = rootNode.putObject("paths");
@@ -608,5 +644,38 @@ public class SystemConfig {
 
     public JsonNode getConfigJson() {
         return configJson;
+    }
+
+    // Getters and setters for archive configuration
+    public boolean isArchiveEnabled() {
+        return archiveEnabled;
+    }
+
+    public void setArchiveEnabled(boolean archiveEnabled) {
+        this.archiveEnabled = archiveEnabled;
+    }
+
+    public String getArchiveSuffix() {
+        return archiveSuffix;
+    }
+
+    public void setArchiveSuffix(String archiveSuffix) {
+        this.archiveSuffix = archiveSuffix;
+    }
+
+    public String getArchivePassword() {
+        return archivePassword;
+    }
+
+    public void setArchivePassword(String archivePassword) {
+        this.archivePassword = archivePassword;
+    }
+
+    public boolean isKeepOriginalFiles() {
+        return keepOriginalFiles;
+    }
+
+    public void setKeepOriginalFiles(boolean keepOriginalFiles) {
+        this.keepOriginalFiles = keepOriginalFiles;
     }
 }

@@ -1,7 +1,7 @@
 {
   "input": {
     "format": "csv",
-    "path": "F:\\docs\\rj\\Matters\\XTone\\tavrnruns\\run2",
+    "path": "F:\\docs\\rj\\Matters\\XTone\\tavrnruns\\run7",
     "files": [
       "collection_tags_report_noext.csv"
     ]
@@ -13,8 +13,14 @@
     "indent": 2
   },
   "limits": {
-    "maxImportRows": 15000,
+    "maxImportRows": 75000,
     "maxTextLength": 0
+  },
+  "archive": {
+    "enabled": false,
+    "suffix": "_archive",
+    "password": "9841076d-2fe8-42f9-90da-8bd5f112da53",
+    "keepOriginals": true
   },
   "applicableFormat": {
     "compoundExpressionsFile": "expressions.list",
@@ -23,11 +29,6 @@
       "snippets"
     ],
     "expressions": {
-      "Junk Email": "\"Automated Email\" OR \"Domain Services\" OR \"Subscribed News\" OR \"Subscribed Newsletter\" OR \"Shipment Tracking Info\" OR \"Zoom or Meeting Invite\" OR \"Solicitation\"",
-      "Potential Legal Docs": "\"Legal Agreements\" OR \"Legal Agreements 2\" OR \"Legal General\" OR \"General Patents/IP\"",
-      "Unreadable": "\"Non-English\" OR \"OCR Bad Scan\" OR \"System XML\"",
-      "Internal Design Marketing Tech": "\"Google Sites Wiki\" OR \"Marketing or Design\" OR \"System Reqs or Specs\" OR \"Tabular Data\" OR \"Technical Documentation\"",
-      "Sparse Emails": "\"Email Attach Only\" OR \"Email Corporate Footer\""
     }
   },
   "textAggregation": {
@@ -39,11 +40,6 @@
   "subsets": {
     "exclusive": true,
     "filters": {
-      "Junk Email": "_junk_email",
-      "Potential Legal Docs": "_legal",
-      "Unreadable": "_unreadable",
-      "Internal Design Marketing Tech": "_internal",
-      "Sparse Emails": "_sparse_emails"
     }
   }
 }

@@ -1,5 +1,9 @@
 
-Sub ProcessApplicabilityData()
+Sub ProcessApplicabilityDataNoArgs()
+    Call ProcessApplicabilityData("Data with AI", "Field Summary")
+End Sub
+
+Sub ProcessApplicabilityData(dataSheetName As String, summarySheetName As String)
     Dim dataWS As Worksheet, summaryWS As Worksheet, fieldSummaryWS As Worksheet
     Dim lastRow As Long, lastCol As Long, i As Long, j As Long, k As Long
     Dim colMap As Object, comboDict As Object
@@ -10,8 +14,8 @@ Sub ProcessApplicabilityData()
     Dim reasonField As String, snippetField As String, appFieldStr As String
     Dim formulaStr As String
 
-    Set dataWS = ThisWorkbook.Sheets("Data with AI")
-    Set fieldSummaryWS = ThisWorkbook.Sheets("Field Summary")
+    Set dataWS = ThisWorkbook.Sheets(dataSheetName)
+    Set fieldSummaryWS = ThisWorkbook.Sheets(summarySheetName)
 
     Set colMap = CreateObject("Scripting.Dictionary")
     lastCol = dataWS.Cells(1, dataWS.Columns.Count).End(xlToLeft).Column

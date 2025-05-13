@@ -4,24 +4,16 @@ import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
-import java.util.zip.*;
-import javax.crypto.Cipher;
-import javax.crypto.CipherOutputStream;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.spec.IvParameterSpec;
-import java.security.SecureRandom;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
+import net.lingala.zip4j.model.enums.AesKeyStrength;
 
 /**
  * Utility class for creating ZIP archives with optional password protection
+ * Updated to use Zip4j for standard password-protected ZIP files
  */
 public class ArchiveUtil {
-
-    private static final String ENCRYPTION_ALGORITHM = "AES";
-    private static final String TRANSFORMATION = "AES/CBC/PKCS5Padding";
-    private static final int KEY_LENGTH = 256;
-    private static final int IV_LENGTH = 16;
 
     /**
      * Archive a single file into a ZIP archive
@@ -58,154 +50,68 @@ public class ArchiveUtil {
      * @throws IOException If archiving fails
      */
     public static void archiveFiles(List<Path> sourceFiles, Path zipPath, String password, String baseDir) throws IOException {
-        LoggingUtil.info("Creating ZIP archive: %s", zipPath);
-        LoggingUtil.info("Archiving %d files", sourceFiles.size());
+        LoggingUtil.info("Creating ZIP archive: " + zipPath);
+        LoggingUtil.info("Archiving " + sourceFiles.size() + " files");
 
         // Create parent directories if they don't exist
         Files.createDirectories(zipPath.getParent());
-        /*
-        try (FileOutputStream fos = new FileOutputStream(zipPath.toFile());
-             ZipOutputStream zos = new ZipOutputStream(fos)) {
-
-         */
 
         try {
-            FileOutputStream fos = new FileOutputStream(zipPath.toFile());
-            ZipOutputStream zos = new ZipOutputStream(fos);
+            // Create ZipFile object
+            ZipFile zipFile = new ZipFile(zipPath.toFile());
 
-            // If password is provided, we'll use a simple ZIP-based encryption approach
-            // Note: For production use, consider using zip4j library for better security
+            // Set password if provided
+            if (password != null && !password.trim().isEmpty()) {
+                LoggingUtil.info("Creating password-protected archive");
 
-            for (Path sourceFile : sourceFiles) {
-                if (!Files.exists(sourceFile)) {
-                    LoggingUtil.warn("Source file does not exist, skipping: %s", sourceFile);
-                    continue;
-                }
+                // Set password on the ZipFile object
+                zipFile.setPassword(password.toCharArray());
 
-                String entryName = baseDir.isEmpty() ? sourceFile.getFileName().toString() :
-                        baseDir + "/" + sourceFile.getFileName().toString();
+                // Set encryption parameters
+                ZipParameters zipParameters = new ZipParameters();
+                zipParameters.setEncryptFiles(true);
+                zipParameters.setEncryptionMethod(EncryptionMethod.AES);
+                zipParameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
 
-                ZipEntry zipEntry = new ZipEntry(entryName);
-                zos.putNextEntry(zipEntry);
-
-                if (password != null && !password.trim().isEmpty()) {
-                    // Write encrypted content
-                    writeEncryptedFile(sourceFile, zos, password);
-                } else {
-                    // Write plain content
-                    Files.copy(sourceFile, zos);
-                }
-
-                // exception here, stream is closed
-                zos.closeEntry();
-                LoggingUtil.debug("Added to archive: %s", entryName);
-            }
-            // gm: adding this
-            zos.close();
-
-            LoggingUtil.info("ZIP archive created successfully: %s", zipPath);
-        }
-        catch (Exception e) {
-            LoggingUtil.debug("archiveFiles exception: %s", e.getMessage());
-        }
-    }
-
-    /**
-     * Write an encrypted file to the ZIP output stream
-     */
-    private static void writeEncryptedFile(Path sourceFile, ZipOutputStream zos, String password) throws IOException {
-        LoggingUtil.info("writeEncryptedFile: " + sourceFile);
-        try {
-            // Generate key from password
-            SecretKey secretKey = generateKeyFromPassword(password);
-
-            // Generate IV
-            byte[] iv = new byte[IV_LENGTH];
-            new SecureRandom().nextBytes(iv);
-            IvParameterSpec ivSpec = new IvParameterSpec(iv);
-
-            // Write IV first (needed for decryption)
-            zos.write(iv);
-
-            // Create cipher
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
-
-            // Write encrypted content
-            try (FileInputStream fis = new FileInputStream(sourceFile.toFile())) {
-                // Create cipher output stream that wraps the zip stream but doesn't close it
-                CipherOutputStream cos = new CipherOutputStream(zos, cipher) {
-                    @Override
-                    public void close() throws IOException {
-                        // Override close to just flush instead of closing the underlying stream
-                        flush();
+                // Add each file to the archive
+                for (Path sourceFile : sourceFiles) {
+                    if (!Files.exists(sourceFile)) {
+                        LoggingUtil.warn("Source file does not exist, skipping: " + sourceFile);
+                        continue;
                     }
-                };
 
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = fis.read(buffer)) != -1) {
-                    cos.write(buffer, 0, bytesRead);
+                    // Set the file name in archive (with optional base directory)
+                    String fileNameInZip = baseDir.isEmpty() ? sourceFile.getFileName().toString() :
+                            baseDir + "/" + sourceFile.getFileName().toString();
+                    zipParameters.setFileNameInZip(fileNameInZip);
+
+                    // Add file to archive with password
+                    zipFile.addFile(sourceFile.toFile(), zipParameters);
+
+                    LoggingUtil.debug("Added to archive: " + fileNameInZip);
                 }
-                cos.close(); // This will now just flush, not close the ZipOutputStream
-            }
-        } catch (Exception e) {
-            throw new IOException("Failed to encrypt file: " + sourceFile, e);
-        }
-        LoggingUtil.info("writeEncryptedFile completed: " + sourceFile);
-    }
+            } else {
+                LoggingUtil.info("Creating unencrypted archive");
 
-    /**
-     * Write an encrypted file to the ZIP output stream
-     */
-    private static void writeEncryptedFile_Old(Path sourceFile, ZipOutputStream zos, String password) throws IOException {
-        LoggingUtil.info("writeEncryptedFile: %s", sourceFile);
-        try {
-            // Generate key from password
-            SecretKey secretKey = generateKeyFromPassword(password);
+                // No password - create unencrypted archive
+                for (Path sourceFile : sourceFiles) {
+                    if (!Files.exists(sourceFile)) {
+                        LoggingUtil.warn("Source file does not exist, skipping: " + sourceFile);
+                        continue;
+                    }
 
-            // Generate IV
-            byte[] iv = new byte[IV_LENGTH];
-            new SecureRandom().nextBytes(iv);
-            IvParameterSpec ivSpec = new IvParameterSpec(iv);
-
-            // Write IV first (needed for decryption)
-            zos.write(iv);
-
-            // Create cipher
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
-
-            // Write encrypted content
-            try (FileInputStream fis = new FileInputStream(sourceFile.toFile());
-                 CipherOutputStream cos = new CipherOutputStream(zos, cipher)) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = fis.read(buffer)) != -1) {
-                    cos.write(buffer, 0, bytesRead);
+                    // Add file to archive without encryption
+                    zipFile.addFile(sourceFile.toFile());
+                    LoggingUtil.debug("Added to archive: " + sourceFile.getFileName().toString());
                 }
             }
+
+            LoggingUtil.info("ZIP archive created successfully: " + zipPath);
+
         } catch (Exception e) {
-            throw new IOException("Failed to encrypt file: " + sourceFile, e);
+            LoggingUtil.error("Failed to create archive: " + e.getMessage(), e);
+            throw new IOException("Failed to create archive", e);
         }
-        LoggingUtil.info("writeEncryptedFile completed: %s", sourceFile);
-    }
-
-    /**
-     * Generate a secret key from password using PBKDF2
-     */
-    private static SecretKey generateKeyFromPassword(String password) throws Exception {
-        // For simplicity, using a basic approach
-        // In production, use PBKDF2 with proper salt
-        byte[] passwordBytes = password.getBytes("UTF-8");
-        byte[] keyBytes = new byte[32]; // 256 bits
-
-        // Simple key derivation (not secure for production)
-        System.arraycopy(passwordBytes, 0, keyBytes, 0,
-                Math.min(passwordBytes.length, keyBytes.length));
-
-        return new SecretKeySpec(keyBytes, ENCRYPTION_ALGORITHM);
     }
 
     /**
@@ -236,7 +142,7 @@ public class ArchiveUtil {
         }
 
         if (outputFiles.isEmpty()) {
-            LoggingUtil.warn("No output files found to archive in directory: %s", outputDirectory);
+            LoggingUtil.warn("No output files found to archive in directory: " + outputDirectory);
             return;
         }
 
@@ -246,7 +152,7 @@ public class ArchiveUtil {
         // Archive all found files
         archiveFiles(outputFiles, archivePath, password, "");
 
-        LoggingUtil.info("Archived %d files into: %s", outputFiles.size(), archivePath);
+        LoggingUtil.info("Archived " + outputFiles.size() + " files into: " + archivePath);
     }
 
     /**
@@ -269,15 +175,59 @@ public class ArchiveUtil {
             return;
         }
 
-        LoggingUtil.info("Cleaning up %d archived files", archivedFiles.size());
+        LoggingUtil.info("Cleaning up " + archivedFiles.size() + " archived files");
 
         for (Path file : archivedFiles) {
             try {
                 Files.deleteIfExists(file);
-                LoggingUtil.debug("Deleted: %s", file);
+                LoggingUtil.debug("Deleted: " + file);
             } catch (IOException e) {
-                LoggingUtil.warn("Failed to delete file: %s - %s", file, e.getMessage());
+                LoggingUtil.warn("Failed to delete file: " + file + " - " + e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Test if a ZIP file is password protected
+     *
+     * @param zipPath Path to the ZIP file
+     * @return true if the file is password protected
+     */
+    public static boolean isPasswordProtected(Path zipPath) {
+        try {
+            ZipFile zipFile = new ZipFile(zipPath.toFile());
+            return zipFile.isEncrypted();
+        } catch (Exception e) {
+            LoggingUtil.error("Error checking if ZIP is password protected: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Extract files from a password-protected ZIP archive
+     *
+     * @param zipPath Path to the ZIP file
+     * @param extractPath Directory to extract files to
+     * @param password Password for decryption
+     * @throws IOException If extraction fails
+     */
+    public static void extractPasswordProtectedZip(Path zipPath, Path extractPath, String password) throws IOException {
+        try {
+            ZipFile zipFile = new ZipFile(zipPath.toFile());
+
+            if (zipFile.isEncrypted()) {
+                if (password == null || password.trim().isEmpty()) {
+                    throw new IOException("ZIP file is password protected but no password provided");
+                }
+                zipFile.setPassword(password.toCharArray());
+            }
+
+            zipFile.extractAll(extractPath.toString());
+            LoggingUtil.info("Extracted ZIP archive to: " + extractPath);
+
+        } catch (Exception e) {
+            LoggingUtil.error("Failed to extract archive: " + e.getMessage(), e);
+            throw new IOException("Failed to extract archive", e);
         }
     }
 }

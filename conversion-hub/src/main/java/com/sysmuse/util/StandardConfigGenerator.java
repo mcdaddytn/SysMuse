@@ -1,6 +1,6 @@
 package com.sysmuse.util;
 
-import java.util.Map;
+import java.util.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -79,6 +79,15 @@ public class StandardConfigGenerator implements ConfigGenerator {
                     columnTypes.get(header).toString() : "STRING";
             columnConfig.put("type", type);
 
+            // Add format for DATE and DATETIME types
+            if ("DATE".equals(type) || "DATETIME".equals(type)) {
+                // Try to find the format that was used during type inference
+                String format = findFormatForColumn(header, firstDataRow, headers, type);
+                if (format != null) {
+                    columnConfig.put("format", format);
+                }
+            }
+
             // Add visibility property (default to true)
             columnConfig.put("visible", true);
 
@@ -113,5 +122,56 @@ public class StandardConfigGenerator implements ConfigGenerator {
         config.set("columns", columns);
 
         return config;
+    }
+
+    /**
+     * Find the format that was used for a DATE or DATETIME column during type inference
+     * Move these to a base class
+     */
+    private String findFormatForColumn(String header, String[] firstDataRow, String[] headers, String type) {
+        // Find the value for this header in the first data row
+        for (int i = 0; i < headers.length && i < firstDataRow.length; i++) {
+            if (header.equals(headers[i])) {
+                String value = firstDataRow[i];
+                return findMatchingFormat(value, type);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find the matching format for a value of the given type
+     */
+    private String findMatchingFormat(String value, String type) {
+        if (systemConfig == null) {
+            return null;
+        }
+
+        List<String> formats = "DATE".equals(type) ?
+                systemConfig.getDateFormats() : systemConfig.getDateTimeFormats();
+
+        for (String format : formats) {
+            if (tryParseWithFormat(value, format, type)) {
+                return format;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Try to parse a value with the given format and type
+     */
+    private boolean tryParseWithFormat(String value, String format, String type) {
+        try {
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern(format);
+            if ("DATE".equals(type)) {
+                java.time.LocalDate.parse(value, formatter);
+            } else {
+                java.time.LocalDateTime.parse(value, formatter);
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

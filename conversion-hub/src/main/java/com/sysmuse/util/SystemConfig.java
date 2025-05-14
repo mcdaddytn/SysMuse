@@ -41,6 +41,10 @@ public class SystemConfig {
     private String fieldNameSuffix = "]";
     private String newlineChar = "\n";
 
+    // Date and DateTime formats for auto-detection
+    private List<String> dateFormats = new ArrayList<>();
+    private List<String> dateTimeFormats = new ArrayList<>();
+
     // Expressions directly in config (no separate file)
     private Map<String, String> expressions = new LinkedHashMap<>();
 
@@ -59,6 +63,14 @@ public class SystemConfig {
     private String archiveSuffix = "_archive";
     private String archivePassword = null;
     private boolean keepOriginalFiles = true;
+    private boolean isSqlEnabled = false;
+    private boolean isSqlDropTableBeforeCreate = true;
+    private boolean isSqlUseDateSuffix = false;
+
+    private boolean isUtf8WithBom = false;
+
+    private String sqlSchemaName = null;
+    private String sqlTableName = null;
 
     // Raw JSON config
     private JsonNode configJson;
@@ -677,5 +689,37 @@ public class SystemConfig {
 
     public void setKeepOriginalFiles(boolean keepOriginalFiles) {
         this.keepOriginalFiles = keepOriginalFiles;
+    }
+
+    public List<String> getDateFormats() {
+        return dateFormats;
+    }
+
+    public List<String> getDateTimeFormats() {
+        return dateTimeFormats;
+    }
+
+    public boolean isSqlEnabled() {
+        return isSqlEnabled;
+    }
+
+    public boolean isSqlDropTableBeforeCreate() {
+        return isSqlDropTableBeforeCreate;
+    }
+
+    public String getSqlSchemaName() {
+        return sqlSchemaName;
+    }
+
+    public String getSqlTableName() {
+        return sqlTableName;
+    }
+
+    public boolean isSqlUseDateSuffix() {
+        return isSqlUseDateSuffix;
+    }
+
+    public boolean isUtf8WithBom() {
+        return isUtf8WithBom;
     }
 }

@@ -32,7 +32,7 @@
     "fieldNameSuffix": "]",
     "newlineChar": "\n"
   },
-  "subsets": {vbf
+  "subsets": {
     "exclusive": false,
     "filters": {
       "is_high_value_customer": "_high_value",

@@ -1,6 +1,9 @@
 package com.sysmuse.util;
 
 import java.util.*;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -15,7 +18,7 @@ public class ConversionRepository {
 
     // Supported data types
     public enum DataType {
-        STRING, INTEGER, FLOAT, BOOLEAN
+        STRING, INTEGER, FLOAT, BOOLEAN, DATE, DATETIME
     }
 
     // Core data storage
@@ -29,6 +32,9 @@ public class ConversionRepository {
 
     // Map of column names to their data types (from config or inferred)
     private Map<String, DataType> columnTypes = new HashMap<>();
+
+    // Map of column names to their date/datetime formats
+    private Map<String, String> columnFormats = new HashMap<>();
 
     // Map for derived boolean fields (name -> expression)
     private Map<String, JsonNode> derivedBooleanFields = new LinkedHashMap<>();
@@ -51,11 +57,15 @@ public class ConversionRepository {
     // Maximum text length (0 for unlimited)
     private int maxTextLength = 0;
 
+    // Helper variable to track current column during inference
+    private String currentColumnName = null;
+
     // Unique key field for multi-file overlay
     private String uniqueKeyField = null;
 
     // Configuration instance
     private SystemConfig systemConfig;
+
 
     /**
      * Constructor
@@ -88,10 +98,21 @@ public class ConversionRepository {
     }
 
     /**
+     * Get column formats map
+     */
+    public Map<String, String> getColumnFormats() {
+        return columnFormats;
+    }
+
+    /**
      * Get the headers array
      */
     public String[] getHeaders() {
         return headers;
+    }
+
+    private String getCurrentColumnName() {
+        return currentColumnName;
     }
 
     /**
@@ -217,7 +238,7 @@ public class ConversionRepository {
     /**
      * Infer column types from first data row
      */
-    public void inferTypes(String[] headers, String[] firstDataRow) {
+    public void inferTypes_Old(String[] headers, String[] firstDataRow) {
         for (int i = 0; i < headers.length && i < firstDataRow.length; i++) {
             String value = firstDataRow[i];
             String columnName = headers[i];
@@ -251,9 +272,182 @@ public class ConversionRepository {
     }
 
     /**
-     * Convert a string value to the appropriate type
+     * Infer column types from first data row - UPDATED to include DATE and DATETIME
+     */
+    public void inferTypes(String[] headers, String[] firstDataRow) {
+        for (int i = 0; i < headers.length && i < firstDataRow.length; i++) {
+            String value = firstDataRow[i];
+            String columnName = headers[i];
+
+            // Skip empty column names
+            if (columnName == null || columnName.trim().isEmpty()) {
+                continue;
+            }
+
+            this.currentColumnName = columnName;
+            DataType detectedType = inferTypeFromValue(value);
+            columnTypes.put(columnName, detectedType);
+        }
+        LoggingUtil.info("Inferred types for " + columnTypes.size() + " columns");
+    }
+
+    /**
+     * Infer the data type of a single value
+     */
+    private DataType inferTypeFromValue(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return DataType.STRING;
+        }
+
+        value = value.trim();
+
+        // Check if it's a boolean
+        if (value.equalsIgnoreCase("true") || value.equalsIgnoreCase("false")) {
+            return DataType.BOOLEAN;
+        }
+
+        // Try to detect DATE and DATETIME using configured formats
+        if (systemConfig != null) {
+            // Try DATETIME formats first (they're more specific)
+            List<String> dateTimeFormats = systemConfig.getDateTimeFormats();
+            for (String format : dateTimeFormats) {
+                if (tryParseDateTime(value, format)) {
+                    columnFormats.put(getCurrentColumnName(), format);
+                    return DataType.DATETIME;
+                }
+            }
+
+            // Try DATE formats
+            List<String> dateFormats = systemConfig.getDateFormats();
+            for (String format : dateFormats) {
+                if (tryParseDate(value, format)) {
+                    columnFormats.put(getCurrentColumnName(), format);
+                    return DataType.DATE;
+                }
+            }
+        }
+
+        // Check if it's a number
+        try {
+            if (value.contains(".")) {
+                Double.parseDouble(value);
+                return DataType.FLOAT;
+            } else {
+                Integer.parseInt(value);
+                return DataType.INTEGER;
+            }
+        } catch (NumberFormatException e) {
+            // Default to string if parsing fails
+            return DataType.STRING;
+        }
+    }
+
+
+    /**
+     * Try to parse a value as a DateTime with the given format
+     */
+    private boolean tryParseDateTime(String value, String format) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+            LocalDateTime.parse(value, formatter);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Try to parse a value as a Date with the given format
+     */
+    private boolean tryParseDate(String value, String format) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+            LocalDate.parse(value, formatter);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Convert a string value to the appropriate type (backward compatibility)
      */
     public Object convertValue(String value, DataType type) {
+        return convertValue(value, type, null);
+    }
+
+    /**
+     * Convert value to Date using configured format for specific column
+     */
+    private Object convertToDate(String value, String columnName) {
+        // First try to get the specific format for this column
+        String format = columnFormats.get(columnName);
+
+        if (format != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                return LocalDate.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse date '" + value + "' with configured format '" + format + "' for column '" + columnName + "'");
+            }
+        }
+
+        // If no specific format or parsing failed, try all configured DATE formats
+        String foundFormat = findFormatForColumn(DataType.DATE, value);
+        if (foundFormat != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(foundFormat);
+                return LocalDate.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse date '" + value + "' with format '" + foundFormat + "'");
+            }
+        }
+
+        // If parsing fails, return as string
+        return value;
+    }
+
+    /**
+     * Convert value to DateTime using configured format for specific column
+     */
+    private Object convertToDateTime(String value, String columnName) {
+        // First try to get the specific format for this column
+        String format = columnFormats.get(columnName);
+
+        if (format != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                return LocalDateTime.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse datetime '" + value + "' with configured format '" + format + "' for column '" + columnName + "'");
+            }
+        }
+
+        // If no specific format or parsing failed, try all configured DATETIME formats
+        String foundFormat = findFormatForColumn(DataType.DATETIME, value);
+        if (foundFormat != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(foundFormat);
+                return LocalDateTime.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse datetime '" + value + "' with format '" + foundFormat + "'");
+            }
+        }
+
+        // If parsing fails, return as string
+        return value;
+    }
+
+    /**
+     * Convert a string value to the appropriate type with column context
+     */
+    public Object convertValue(String value, DataType type, String columnName) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        value = value.trim();
+
         switch (type) {
             case INTEGER:
                 try {
@@ -269,6 +463,10 @@ public class ConversionRepository {
                 }
             case BOOLEAN:
                 return Boolean.parseBoolean(value);
+            case DATE:
+                return convertToDate(value, columnName);
+            case DATETIME:
+                return convertToDateTime(value, columnName);
             case STRING:
             default:
                 // Apply text truncation if needed
@@ -277,6 +475,37 @@ public class ConversionRepository {
                 }
                 return value;
         }
+    }
+
+    /**
+     * Find the appropriate format for a column of the given type
+     */
+    private String findFormatForColumn(DataType type, String value) {
+        // First, check if we have a stored format for a specific column
+        // This requires knowing which column we're processing
+        // For now, try all configured formats
+
+        if (systemConfig == null) {
+            return null;
+        }
+
+        List<String> formats = type == DataType.DATE ?
+                systemConfig.getDateFormats() : systemConfig.getDateTimeFormats();
+
+        for (String format : formats) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                if (type == DataType.DATE) {
+                    LocalDate.parse(value, formatter);
+                } else {
+                    LocalDateTime.parse(value, formatter);
+                }
+                return format;
+            } catch (DateTimeParseException e) {
+                // Try next format
+            }
+        }
+        return null;
     }
 
     /**

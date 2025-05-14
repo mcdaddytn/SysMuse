@@ -670,6 +670,20 @@ public class ConversionHub {
             // Add to output files and create archive
             addOutputFile(outputCsvPath);
             archiveOutputFiles(outputCsvPath.replaceAll("\\.[^.]+$", ""));
+
+            // Export to SQL database if enabled
+            if (systemConfig.isSqlEnabled()) {
+                try {
+                    LoggingUtil.info("Exporting to SQL database...");
+                    SqlExporter sqlExporter = new SqlExporter(systemConfig, properties);
+                    sqlExporter.exportToDatabase(repository);
+                    LoggingUtil.info("SQL export completed successfully");
+                } catch (Exception e) {
+                    LoggingUtil.error("Failed to export to SQL database: " + e.getMessage(), e);
+                    // Don't fail the entire process if SQL export fails
+                }
+            }
+
         } else {
             throw new IllegalArgumentException("Unsupported output format: " + outputFormat);
         }

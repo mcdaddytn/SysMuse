@@ -377,6 +377,8 @@ public class SqlQueryBuilder {
         String outputPath = Paths.get(systemConfig.getInputPath(),
                 tableName + "_nested_aggregation.csv").toString();
 
+        boolean includeConstraints = false;
+
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
             // Write header
             List<String> headers = new ArrayList<>();
@@ -384,13 +386,16 @@ public class SqlQueryBuilder {
             headers.add("TotalCount");
 
             // Add constraint columns
-            for (String field : booleanFields) {
-                headers.add("Constraint_" + field);
+            if (includeConstraints) {
+                for (String field : booleanFields) {
+                    headers.add("Constraint_" + field);
+                }
             }
 
             // Add aggregate columns
             for (String field : booleanFields) {
-                headers.add("Sum_" + field);
+                //headers.add("Sum_" + field);
+                headers.add(field);
             }
 
             writer.write(String.join(",", headers));
@@ -405,12 +410,14 @@ public class SqlQueryBuilder {
                 row.add(String.valueOf(result.getTotalCount()));
 
                 // Constraint values (1 for true constraint, 0 for false, empty for no constraint)
-                for (String field : booleanFields) {
-                    Boolean constraint = result.getConstraints().get(field);
-                    if (constraint != null) {
-                        row.add(constraint ? "1" : "0");
-                    } else {
-                        row.add("");
+                if (includeConstraints) {
+                    for (String field : booleanFields) {
+                        Boolean constraint = result.getConstraints().get(field);
+                        if (constraint != null) {
+                            row.add(constraint ? "1" : "0");
+                        } else {
+                            row.add("");
+                        }
                     }
                 }
 

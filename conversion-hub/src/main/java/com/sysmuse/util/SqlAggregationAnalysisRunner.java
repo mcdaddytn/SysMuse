@@ -35,7 +35,7 @@ public class SqlAggregationAnalysisRunner {
                     defaultProps.getProperty("database.password"));
 
             // Parse command line arguments for analysis parameters
-            int maxDepth = 1;
+            int maxDepth = 2;
             int subsetThreshold = 500;
             int maxAggregateRecords = 200;
 
@@ -50,12 +50,14 @@ public class SqlAggregationAnalysisRunner {
             }
 
             // Initialize logging
+            /*
             LoggingUtil.initialize(
                     defaultProps.getProperty("logging.level", "INFO"),
                     Boolean.parseBoolean(defaultProps.getProperty("logging.console", "true")),
                     Boolean.parseBoolean(defaultProps.getProperty("logging.file", "false")),
                     defaultProps.getProperty("logging.filename", "aggregation_analysis.log")
             );
+             */
 
             LoggingUtil.info("=== SQL Boolean Aggregation Analysis ===");
             LoggingUtil.info("Analysis Parameters:");

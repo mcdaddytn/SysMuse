@@ -63,7 +63,8 @@ public class SystemConfig {
     private String archiveSuffix = "_archive";
     private String archivePassword = null;
     private boolean keepOriginalFiles = true;
-    private boolean isSqlEnabled = false;
+    private boolean isSqlEnabled = true;
+    //private boolean isSqlEnabled = false;
     private boolean isSqlDropTableBeforeCreate = true;
     private boolean isSqlUseDateSuffix = false;
 
@@ -89,6 +90,143 @@ public class SystemConfig {
         // Initialize with default values
         textSuffixes.add(" reasoning");
         textSuffixes.add(" snippets");
+        initializeDefaultFormats();
+    }
+
+    /**
+     * Initialize default date and datetime formats
+     */
+    private void initializeDefaultFormats() {
+        // Initialize with common date formats if empty
+        if (dateFormats.isEmpty()) {
+            dateFormats.addAll(Arrays.asList(
+                    "yyyy-MM-dd",
+                    "MM/dd/yyyy",
+                    "dd/MM/yyyy",
+                    "MM-dd-yyyy",
+                    "dd-MM-yyyy",
+                    "yyyy/MM/dd",
+                    "M/d/yyyy",
+                    "d/M/yyyy",
+                    "MMM dd, yyyy",
+                    "dd MMM yyyy",
+                    "yyyy-MM-dd",
+                    "yyyy.MM.dd"
+            ));
+        }
+
+        // Initialize with common datetime formats if empty
+        if (dateTimeFormats.isEmpty()) {
+            dateTimeFormats.addAll(Arrays.asList(
+                    // ISO formats with seconds
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+
+                    // ISO formats without seconds
+                    "yyyy-MM-dd HH:mm",
+                    "yyyy-MM-dd'T'HH:mm",
+                    "yyyy-MM-dd'T'HH:mm'Z'",
+
+                    // US formats with seconds
+                    "MM/dd/yyyy HH:mm:ss",
+                    "MM/dd/yyyy h:mm:ss a",
+                    "M/d/yyyy H:mm:ss",
+                    "M/d/yyyy h:mm:ss a",
+
+                    // US formats without seconds (common in your data)
+                    "MM/dd/yyyy HH:mm",
+                    "MM/dd/yyyy h:mm a",
+                    "M/d/yyyy H:mm",
+                    "M/d/yyyy h:mm a",
+                    "M/d/yyyy H:mm",  // For formats like "1/1/1900 5:00"
+
+                    // European formats with seconds
+                    "dd/MM/yyyy HH:mm:ss",
+                    "dd/MM/yyyy h:mm:ss a",
+                    "d/M/yyyy H:mm:ss",
+                    "d/M/yyyy h:mm:ss a",
+
+                    // European formats without seconds
+                    "dd/MM/yyyy HH:mm",
+                    "dd/MM/yyyy h:mm a",
+                    "d/M/yyyy H:mm",
+                    "d/M/yyyy h:mm a",
+
+                    // Dash-separated formats with seconds
+                    "MM-dd-yyyy HH:mm:ss",
+                    "dd-MM-yyyy HH:mm:ss",
+                    "MM-dd-yyyy h:mm:ss a",
+                    "dd-MM-yyyy h:mm:ss a",
+
+                    // Dash-separated formats without seconds
+                    "MM-dd-yyyy HH:mm",
+                    "dd-MM-yyyy HH:mm",
+                    "MM-dd-yyyy h:mm a",
+                    "dd-MM-yyyy h:mm a",
+
+                    // Month name formats with seconds
+                    "MMM dd, yyyy HH:mm:ss",
+                    "dd MMM yyyy HH:mm:ss",
+                    "MMM d, yyyy H:mm:ss",
+                    "d MMM yyyy H:mm:ss",
+                    "MMM dd, yyyy h:mm:ss a",
+                    "dd MMM yyyy h:mm:ss a",
+
+                    // Month name formats without seconds
+                    "MMM dd, yyyy HH:mm",
+                    "dd MMM yyyy HH:mm",
+                    "MMM d, yyyy H:mm",
+                    "d MMM yyyy H:mm",
+                    "MMM dd, yyyy h:mm a",
+                    "dd MMM yyyy h:mm a",
+
+                    // Dot-separated formats with seconds
+                    "yyyy.MM.dd HH:mm:ss",
+                    "dd.MM.yyyy HH:mm:ss",
+                    "MM.dd.yyyy HH:mm:ss",
+
+                    // Dot-separated formats without seconds
+                    "yyyy.MM.dd HH:mm",
+                    "dd.MM.yyyy HH:mm",
+                    "MM.dd.yyyy HH:mm",
+
+                    // Additional flexible formats for single digit days/months without seconds
+                    "M/d/yyyy H:mm",      // This should catch "1/1/1900 5:00"
+                    "M/dd/yyyy H:mm",
+                    "MM/d/yyyy H:mm",
+                    "M/d/yyyy h:mm a",
+                    "M/dd/yyyy h:mm a",
+                    "MM/d/yyyy h:mm a"
+            ));
+
+        /*
+            dateTimeFormats.addAll(Arrays.asList(
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+                    "MM/dd/yyyy HH:mm:ss",
+                    "dd/MM/yyyy HH:mm:ss",
+                    "MM-dd-yyyy HH:mm:ss",
+                    "dd-MM-yyyy HH:mm:ss",
+                    "M/d/yyyy H:mm:ss",
+                    "d/M/yyyy H:mm:ss",
+                    "M/d/yyyy h:mm:ss a",
+                    "d/M/yyyy h:mm:ss a",
+                    "MMM dd, yyyy HH:mm:ss",
+                    "dd MMM yyyy HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+            ));
+
+         */
+        }
     }
 
     /**
@@ -277,6 +415,7 @@ public class SystemConfig {
         }
 
         // Parse logging configuration
+        /*
         if (configJson.has("logging")) {
             JsonNode loggingNode = configJson.get("logging");
 
@@ -294,6 +433,32 @@ public class SystemConfig {
 
             if (loggingNode.has("filename")) {
                 logFileName = loggingNode.get("filename").asText();
+            }
+        }
+         */
+
+        // Parse SQL configuration
+        if (configJson.has("sql")) {
+            JsonNode sqlNode = configJson.get("sql");
+
+            if (sqlNode.has("enabled")) {
+                isSqlEnabled = sqlNode.get("enabled").asBoolean();
+            }
+
+            if (sqlNode.has("dropTableBeforeCreate")) {
+                isSqlDropTableBeforeCreate = sqlNode.get("dropTableBeforeCreate").asBoolean();
+            }
+
+            if (sqlNode.has("useDateSuffix")) {
+                isSqlUseDateSuffix = sqlNode.get("useDateSuffix").asBoolean();
+            }
+
+            if (sqlNode.has("schemaName")) {
+                sqlSchemaName = sqlNode.get("schemaName").asText();
+            }
+
+            if (sqlNode.has("tableName")) {
+                sqlTableName = sqlNode.get("tableName").asText();
             }
         }
 

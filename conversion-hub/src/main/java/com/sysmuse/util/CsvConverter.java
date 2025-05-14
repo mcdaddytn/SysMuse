@@ -146,153 +146,6 @@ public class CsvConverter extends BaseConverter {
     /**
      * Import data from a CSV file into the repository
      */
-    public void importToRepository_Old(String csvFilePath, ConversionRepository repository) throws IOException {
-        LoggingUtil.info("Importing data from CSV file: " + csvFilePath);
-
-        // First read the entire file
-        LoggingUtil.debug("Reading file: " + csvFilePath);
-        String fileContent = new String(Files.readAllBytes(Paths.get(csvFilePath)));
-
-        // Remove BOM if present
-        if (fileContent.length() > 0 && fileContent.charAt(0) == '\uFEFF') {
-            fileContent = fileContent.substring(1);
-            LoggingUtil.debug("Removed BOM from file content");
-        }
-
-        LoggingUtil.debug("File size: " + fileContent.length() + " characters");
-
-        // Split the content by newlines, but respect quotes
-        boolean inQuotes = false;
-        int rowStartIndex = 0;
-        List<String> rowStrings = new ArrayList<>();
-
-        // Skip the header
-        LoggingUtil.debug("Skipping header row...");
-        for (int i = 0; i < fileContent.length(); i++) {
-            if (fileContent.charAt(i) == '\n' && !inQuotes) {
-                rowStartIndex = i + 1;
-                break;
-            } else if (fileContent.charAt(i) == '"') {
-                inQuotes = !inQuotes;
-            }
-        }
-
-        // Check if maxImportRows is set in the configuration
-        Integer maxRows = null;
-        Map<String, Object> configParams = repository.getConfigParameters();
-        if (configParams.containsKey("maxImportRows")) {
-            Object maxRowsObj = configParams.get("maxImportRows");
-            if (maxRowsObj instanceof Long) {
-                maxRows = ((Long) maxRowsObj).intValue();
-            } else if (maxRowsObj instanceof Integer) {
-                maxRows = (Integer) maxRowsObj;
-            }
-
-            if (maxRows != null) {
-                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in configuration");
-            }
-        } else {
-            // Check if maxImportRows is set in config
-            int configMaxRows = systemConfig.getMaxImportRows();
-            if (configMaxRows > 0) {
-                maxRows = configMaxRows;
-                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in system config");
-            }
-        }
-
-        // Parse remaining rows
-        int rowCount = 0;
-        LoggingUtil.debug("Parsing data rows...");
-        for (int i = rowStartIndex; i < fileContent.length(); i++) {
-            char c = fileContent.charAt(i);
-
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == '\n' && !inQuotes) {
-                // End of row
-                String rowData = fileContent.substring(rowStartIndex, i);
-                rowStrings.add(rowData);
-                rowStartIndex = i + 1;
-
-                rowCount++;
-                if (rowCount % 100 == 0) {
-                    LoggingUtil.debug("Processed " + rowCount + " rows so far");
-                }
-
-                // Check if we've reached the maximum number of rows to import
-                if (maxRows != null && rowCount >= maxRows) {
-                    LoggingUtil.info("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
-                    break;
-                }
-            }
-        }
-
-        // Add the last row if there is one and we haven't reached maxRows
-        if (rowStartIndex < fileContent.length() && (maxRows == null || rowCount < maxRows)) {
-            String rowData = fileContent.substring(rowStartIndex);
-            rowStrings.add(rowData);
-            rowCount++;
-        }
-
-        LoggingUtil.info("Found " + rowCount + " data rows. Processing...");
-
-        // Get the headers from the repository
-        String[] headers = repository.getHeaders();
-
-        // Parse each row string and add to repository
-        int processedRows = 0;
-        for (String rowString : rowStrings) {
-            String[] values = parseCSVRow(rowString);
-
-            // Create a map for the current row's values
-            Map<String, Object> rowValues = processRow(headers, values, repository);
-
-            // Process the direct column mappings
-            /*
-            Map<String, Object> rowValues = new LinkedHashMap<>();
-            for (int colIndex = 0; colIndex < headers.length && colIndex < values.length; colIndex++) {
-                String columnName = headers[colIndex];
-
-                // Skip empty column names
-                if (columnName == null || columnName.trim().isEmpty()) {
-                    continue;
-                }
-
-                String value = colIndex < values.length ? values[colIndex] : "";
-
-                // Convert value based on column type
-                ConversionRepository.DataType type = repository.getColumnTypes().getOrDefault(columnName,
-                        ConversionRepository.DataType.STRING);
-                Object convertedValue = repository.convertValue(value, type);
-
-                rowValues.put(columnName, convertedValue);
-            }
-            */
-
-            // Process derived boolean fields
-            repository.processDerivedFields(rowValues);
-
-            // Process aggregate text fields
-            repository.processAggregateFields(rowValues);
-
-            // Apply field suppression
-            repository.applySuppression(rowValues);
-
-            // Add the processed row to the repository
-            repository.addDataRow(rowValues);
-
-            processedRows++;
-            if (processedRows % 100 == 0) {
-                LoggingUtil.debug("Processed details for " + processedRows + " rows");
-            }
-        }
-
-        LoggingUtil.info("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
-    }
-
-    /**
-     * Import data from a CSV file into the repository
-     */
     public void importToRepository(String csvFilePath, ConversionRepository repository) throws IOException {
         LoggingUtil.info("Importing data from CSV file: " + csvFilePath);
 
@@ -444,95 +297,6 @@ public class CsvConverter extends BaseConverter {
     /**
      * Import data from multiple CSV files into the repository with overlay functionality
      */
-    public void importMultipleFilesToRepository_Old(String csvFilePathsInput, String inputDirectory,
-                                                ConversionRepository repository) throws IOException {
-        // Check if csvFilePathsInput contains multiple files (comma-separated)
-        String[] filePaths;
-
-        if (repository.getUniqueKeyField() == null) {
-            // Try to get unique key from configuration or system config
-            String uniqueKey = repository.getConfigParameters().containsKey("uniqueKeyField")
-                    ? repository.getConfigParameters().get("uniqueKeyField").toString()
-                    : null;
-                    /*
-            String uniqueKey = repository.getConfigParameters().containsKey("uniqueKeyField")
-                    ? repository.getConfigParameters().get("uniqueKeyField").toString()
-                    : systemConfig.getParameters().get("uniqueKeyField");
-                     */
-
-            if (uniqueKey != null) {
-                repository.setUniqueKeyField(uniqueKey);
-                LoggingUtil.info("Set unique key field to: " + uniqueKey);
-            } else {
-                throw new IllegalStateException("No unique key field defined for multi-file processing");
-            }
-        }
-
-        if (csvFilePathsInput.contains(",")) {
-            // Multiple files specified directly in the input
-            filePaths = csvFilePathsInput.split(",");
-            for (int i = 0; i < filePaths.length; i++) {
-                filePaths[i] = filePaths[i].trim();
-
-                // Check if path is absolute, if not prepend the input directory
-                if (!new File(filePaths[i]).isAbsolute()) {
-                    filePaths[i] = Paths.get(inputDirectory, filePaths[i]).toString();
-                }
-            }
-        } else {
-            // Check if it's a file containing a list of files
-            File potentialListFile = new File(Paths.get(inputDirectory, csvFilePathsInput).toString());
-            if (potentialListFile.exists() && potentialListFile.isFile() &&
-                    potentialListFile.getName().endsWith(".list")) {
-
-                // Read file list from the list file
-                List<String> fileList = Files.readAllLines(potentialListFile.toPath());
-                filePaths = new String[fileList.size()];
-
-                for (int i = 0; i < fileList.size(); i++) {
-                    String filePath = fileList.get(i).trim();
-                    if (!new File(filePath).isAbsolute()) {
-                        filePaths[i] = Paths.get(inputDirectory, filePath).toString();
-                    } else {
-                        filePaths[i] = filePath;
-                    }
-                }
-            } else {
-                // Single file, make into array for uniform processing
-                filePaths = new String[1];
-                filePaths[0] = Paths.get(inputDirectory, csvFilePathsInput).toString();
-            }
-        }
-
-        LoggingUtil.info("Processing " + filePaths.length + " CSV files for import");
-
-        // Get the unique key field from the repository
-        String uniqueKeyField = repository.getUniqueKeyField();
-        if (uniqueKeyField == null && filePaths.length > 1) {
-            throw new IllegalStateException("Multiple input files specified but no uniqueKey field defined in configuration");
-        }
-
-        // Import the first file normally, but don't process derived fields yet
-        if (filePaths.length > 0) {
-            LoggingUtil.info("Importing base file: " + filePaths[0]);
-            importToRepositoryWithoutProcessing(filePaths[0], repository);
-        }
-
-        // Process overlay files if there are more than one
-        for (int i = 1; i < filePaths.length; i++) {
-            LoggingUtil.info("Importing overlay file " + (i+1) + ": " + filePaths[i]);
-            importOverlayFileWithoutProcessing(filePaths[i], repository, uniqueKeyField);
-        }
-
-        // Now that all data is imported, process derived fields, aggregation, and suppression
-        LoggingUtil.info("Processing derived fields and transformations on complete dataset...");
-        processRepositoryRows(repository);
-    }
-
-
-    /**
-     * Import data from multiple CSV files into the repository with overlay functionality
-     */
     public void importMultipleFilesToRepository(String csvFilePathsInput, String inputDirectory,
                                                 ConversionRepository repository) throws IOException {
         // Prepare file paths
@@ -620,137 +384,6 @@ public class CsvConverter extends BaseConverter {
             }
         }
     }
-
-    /**
-     * Import data from a CSV file into the repository without processing derived fields
-     */
-    private void importToRepositoryWithoutProcessing_Old(String csvFilePath, ConversionRepository repository) throws IOException {
-        LoggingUtil.info("Importing data from CSV file (without processing): " + csvFilePath);
-
-        // First read the entire file
-        LoggingUtil.debug("Reading file: " + csvFilePath);
-        String fileContent = new String(Files.readAllBytes(Paths.get(csvFilePath)));
-        LoggingUtil.debug("File size: " + fileContent.length() + " characters");
-
-        // Split the content by newlines, but respect quotes
-        boolean inQuotes = false;
-        int rowStartIndex = 0;
-        List<String> rowStrings = new ArrayList<>();
-
-        // Skip the header
-        LoggingUtil.debug("Skipping header row...");
-        for (int i = 0; i < fileContent.length(); i++) {
-            if (fileContent.charAt(i) == '\n' && !inQuotes) {
-                rowStartIndex = i + 1;
-                break;
-            } else if (fileContent.charAt(i) == '"') {
-                inQuotes = !inQuotes;
-            }
-        }
-
-        // Check if maxImportRows is set in the configuration
-        Integer maxRows = null;
-        Map<String, Object> configParams = repository.getConfigParameters();
-        if (configParams.containsKey("maxImportRows")) {
-            Object maxRowsObj = configParams.get("maxImportRows");
-            if (maxRowsObj instanceof Long) {
-                maxRows = ((Long) maxRowsObj).intValue();
-            } else if (maxRowsObj instanceof Integer) {
-                maxRows = (Integer) maxRowsObj;
-            }
-
-            if (maxRows != null) {
-                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in configuration");
-            }
-        } else {
-            // Check if maxImportRows is set in config
-            int configMaxRows = systemConfig.getMaxImportRows();
-            if (configMaxRows > 0) {
-                maxRows = configMaxRows;
-                LoggingUtil.info("Will import at most " + maxRows + " rows as specified in system config");
-            }
-        }
-
-        // Parse remaining rows
-        int rowCount = 0;
-        LoggingUtil.debug("Parsing data rows...");
-        for (int i = rowStartIndex; i < fileContent.length(); i++) {
-            char c = fileContent.charAt(i);
-
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == '\n' && !inQuotes) {
-                // End of row
-                String rowData = fileContent.substring(rowStartIndex, i);
-                rowStrings.add(rowData);
-                rowStartIndex = i + 1;
-
-                rowCount++;
-                if (rowCount % 100 == 0) {
-                    LoggingUtil.debug("Processed " + rowCount + " rows so far");
-                }
-
-                // Check if we've reached the maximum number of rows to import
-                if (maxRows != null && rowCount >= maxRows) {
-                    LoggingUtil.info("Reached maximum number of rows to import (" + maxRows + "). Stopping.");
-                    break;
-                }
-            }
-        }
-
-        // Add the last row if there is one and we haven't reached maxRows
-        if (rowStartIndex < fileContent.length() && (maxRows == null || rowCount < maxRows)) {
-            String rowData = fileContent.substring(rowStartIndex);
-            rowStrings.add(rowData);
-            rowCount++;
-        }
-
-        LoggingUtil.info("Found " + rowCount + " data rows. Processing...");
-
-        // Get the headers from the repository
-        String[] headers = repository.getHeaders();
-
-        // Parse each row string and add to repository
-        int processedRows = 0;
-        for (String rowString : rowStrings) {
-            String[] values = parseCSVRow(rowString);
-            Map<String, Object> rowValues = processRow(headers, values, repository);
-
-/*
-            // Create a map for the current row's values
-            Map<String, Object> rowValues = new LinkedHashMap<>();
-            // Process the direct column mappings
-            for (int colIndex = 0; colIndex < headers.length && colIndex < values.length; colIndex++) {
-                String columnName = headers[colIndex];
-
-                // Skip empty column names
-                if (columnName == null || columnName.trim().isEmpty()) {
-                    continue;
-                }
-
-                String value = colIndex < values.length ? values[colIndex] : "";
-
-                // Convert value based on column type
-                ConversionRepository.DataType type = repository.getColumnTypes().getOrDefault(columnName,
-                        ConversionRepository.DataType.STRING);
-                Object convertedValue = repository.convertValue(value, type);
-
-                rowValues.put(columnName, convertedValue);
-            }
- */
-
-            // Add the processed row to the repository without processing derived fields
-            repository.addDataRow(rowValues);
-
-            processedRows++;
-            if (processedRows % 100 == 0) {
-                LoggingUtil.debug("Processed details for " + processedRows + " rows");
-            }
-        }
-
-        LoggingUtil.info("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
-    }
-
 
     /**
      * Import data from a CSV file into the repository without processing derived fields
@@ -874,6 +507,56 @@ public class CsvConverter extends BaseConverter {
                     "' not found in overlay file: " + overlayFilePath);
         }
 
+        // ENHANCEMENT: Check for new columns in overlay file
+        Set<String> existingHeaders = new HashSet<>(Arrays.asList(repository.getHeaders()));
+        List<String> newColumns = new ArrayList<>();
+
+        for (String overlayHeader : overlayHeaders) {
+            if (overlayHeader != null && !overlayHeader.trim().isEmpty() &&
+                    !existingHeaders.contains(overlayHeader)) {
+                newColumns.add(overlayHeader);
+            }
+        }
+
+        if (!newColumns.isEmpty()) {
+            LoggingUtil.info("Found " + newColumns.size() + " new columns in overlay file: " + newColumns);
+
+            // Add new columns to repository headers
+            List<String> allHeaders = new ArrayList<>(Arrays.asList(repository.getHeaders()));
+            allHeaders.addAll(newColumns);
+            repository.setHeaders(allHeaders.toArray(new String[0]));
+
+            // Infer types for new columns using first data row from overlay
+            String[] firstOverlayRow = parseFirstDataRow(overlayFilePath);
+            if (firstOverlayRow != null) {
+                // Create a temporary repository to infer types for new columns
+                ConversionRepository tempRepo = new ConversionRepository(repository.getSystemConfig());
+                tempRepo.setHeaders(overlayHeaders);
+                tempRepo.setFirstDataRow(firstOverlayRow);
+                tempRepo.inferTypes(overlayHeaders, firstOverlayRow);
+
+                // Copy inferred types for new columns
+                Map<String, ConversionRepository.DataType> overlayTypes = tempRepo.getColumnTypes();
+                Map<String, String> overlayFormats = tempRepo.getColumnFormats();
+
+                for (String newColumn : newColumns) {
+                    if (overlayTypes.containsKey(newColumn)) {
+                        repository.getColumnTypes().put(newColumn, overlayTypes.get(newColumn));
+                        LoggingUtil.info("Inferred type for new column '" + newColumn + "': " + overlayTypes.get(newColumn));
+
+                        // Copy format if it's a date/datetime
+                        if (overlayFormats.containsKey(newColumn)) {
+                            repository.getColumnFormats().put(newColumn, overlayFormats.get(newColumn));
+                            LoggingUtil.info("Detected format for new column '" + newColumn + "': " + overlayFormats.get(newColumn));
+                        }
+                    }
+
+                    // Set visibility for new columns
+                    repository.getColumnVisibility().put(newColumn, true);
+                }
+            }
+        }
+
         // Parse rows from overlay file
         List<String> rowStrings = parseFileContent(fileContent);
 
@@ -953,6 +636,7 @@ public class CsvConverter extends BaseConverter {
 
         // Get visible fields in order
         List<String> visibleFields = repository.getVisibleFieldNames();
+        LoggingUtil.info("Exporting data to CSV file, visibleFields.size(): %d ", visibleFields.size());
 
         // Open the CSV file for writing
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(csvFilePath))) {
@@ -981,11 +665,11 @@ public class CsvConverter extends BaseConverter {
         }
     }
 
-/**
- * Export filtered subsets of data from the repository to multiple CSV files
- * using the SubsetProcessor to handle subset filtering and configuration
- */
-public void exportSubsetsFromRepository(ConversionRepository repository, String baseCsvFilePath) throws IOException {
+    /**
+     * Export filtered subsets of data from the repository to multiple CSV files
+     * using the SubsetProcessor to handle subset filtering and configuration
+     */
+    public void exportSubsetsFromRepository(ConversionRepository repository, String baseCsvFilePath) throws IOException {
         // Create the subset processor
         SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
 
@@ -1010,23 +694,23 @@ public void exportSubsetsFromRepository(ConversionRepository repository, String 
         // Process each filter
         Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
         for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
-        String filterField = entry.getKey();
-        String suffix = entry.getValue();
+            String filterField = entry.getKey();
+            String suffix = entry.getValue();
 
-        // Check if filter field exists and log debug info
-        if (!validateFilterField(repository, filterField)) {
-        continue;
-        }
+            // Check if filter field exists and log debug info
+            if (!validateFilterField(repository, filterField)) {
+                continue;
+            }
 
-        // Create output file path with suffix
-        String outputPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, suffix, ".csv");
-        LoggingUtil.info("Exporting subset for filter '" + filterField + "' to: " + outputPath);
+            // Create output file path with suffix
+            String outputPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, suffix, ".csv");
+            LoggingUtil.info("Exporting subset for filter '" + filterField + "' to: " + outputPath);
 
-        // Export subset to file
-        int matchCount = exportSubsetToFile(repository, subsetProcessor, visibleFields, columnTypes,
-        filterField, outputPath, unfilteredRows, exportedKeys);
+            // Export subset to file
+            int matchCount = exportSubsetToFile(repository, subsetProcessor, visibleFields, columnTypes,
+            filterField, outputPath, unfilteredRows, exportedKeys);
 
-        LoggingUtil.info("Exported " + matchCount + " rows to subset file: " + outputPath);
+            LoggingUtil.info("Exported " + matchCount + " rows to subset file: " + outputPath);
         }
 
         // Export unfiltered rows if needed
@@ -1184,41 +868,40 @@ public void exportSubsetsFromRepository(ConversionRepository repository, String 
         }
     }
 
-
-/**
- * Get visible fields with fallback to all fields if needed
- */
-private List<String> getVisibleFieldsWithFallback(ConversionRepository repository) {
+    /**
+     * Get visible fields with fallback to all fields if needed
+     */
+    private List<String> getVisibleFieldsWithFallback(ConversionRepository repository) {
         List<String> visibleFields;
         try {
-        visibleFields = repository.getVisibleFieldNames();
+            visibleFields = repository.getVisibleFieldNames();
         } catch (NullPointerException e) {
-        LoggingUtil.warn("Unable to get visible field names. Using all fields from first row.");
-        // Fallback to the fields from the first data row if available
-        visibleFields = new ArrayList<>();
-        if (!repository.getDataRows().isEmpty()) {
-        visibleFields.addAll(repository.getDataRows().get(0).keySet());
-        }
+            LoggingUtil.warn("Unable to get visible field names. Using all fields from first row.");
+            // Fallback to the fields from the first data row if available
+            visibleFields = new ArrayList<>();
+            if (!repository.getDataRows().isEmpty()) {
+                visibleFields.addAll(repository.getDataRows().get(0).keySet());
+            }
         }
 
         // Check if we have fields to export
         if (visibleFields.isEmpty()) {
-        LoggingUtil.warn("No fields to export. Checking if data rows exist to extract field names.");
-        if (!repository.getDataRows().isEmpty()) {
-        visibleFields.addAll(repository.getDataRows().get(0).keySet());
-        } else {
-        LoggingUtil.error("No data to export and no field names available.");
-        return new ArrayList<>();
-        }
+            LoggingUtil.warn("No fields to export. Checking if data rows exist to extract field names.");
+            if (!repository.getDataRows().isEmpty()) {
+                visibleFields.addAll(repository.getDataRows().get(0).keySet());
+            } else {
+                LoggingUtil.error("No data to export and no field names available.");
+                return new ArrayList<>();
+            }
         }
 
         return visibleFields;
         }
 
-/**
- * Validate filter field exists in repository data
- */
-private boolean validateFilterField(ConversionRepository repository, String filterField) {
+    /**
+     * Validate filter field exists in repository data
+     */
+    private boolean validateFilterField(ConversionRepository repository, String filterField) {
         int rowsWithField = 0;
         int rowsWithTrueValue = 0;
         boolean filterExists = false;
@@ -1226,20 +909,20 @@ private boolean validateFilterField(ConversionRepository repository, String filt
         SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
 
         for (Map<String, Object> row : repository.getDataRows()) {
-        if (row.containsKey(filterField)) {
-        filterExists = true;
-        rowsWithField++;
+            if (row.containsKey(filterField)) {
+                filterExists = true;
+                rowsWithField++;
 
-        // Check if this field would evaluate to true
-        if (subsetProcessor.rowMatchesFilter(row, filterField)) {
-        rowsWithTrueValue++;
-        }
-        }
+                // Check if this field would evaluate to true
+                if (subsetProcessor.rowMatchesFilter(row, filterField)) {
+                    rowsWithTrueValue++;
+                }
+            }
         }
 
         if (!filterExists) {
-        LoggingUtil.warn("Filter field '" + filterField + "' not found in repository data, skipping subset");
-        return false;
+            LoggingUtil.warn("Filter field '" + filterField + "' not found in repository data, skipping subset");
+            return false;
         }
 
         LoggingUtil.debug("Filter field '" + filterField + "' exists in " + rowsWithField +
@@ -1247,12 +930,12 @@ private boolean validateFilterField(ConversionRepository repository, String filt
         ". " + rowsWithTrueValue + " rows have 'true' values.");
 
         return true;
-        }
+    }
 
-/**
- * Export subset data to a single file
- */
-private int exportSubsetToFile(ConversionRepository repository, SubsetProcessor subsetProcessor,
+    /**
+     * Export subset data to a single file
+     */
+    private int exportSubsetToFile(ConversionRepository repository, SubsetProcessor subsetProcessor,
         List<String> visibleFields, Map<String, ConversionRepository.DataType> columnTypes,
         String filterField, String outputPath, Set<Map<String, Object>> unfilteredRows,
         Set<String> exportedKeys) throws IOException {
@@ -1261,41 +944,40 @@ private int exportSubsetToFile(ConversionRepository repository, SubsetProcessor 
 
         // Open the CSV file for writing
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
-        // Write the header row
-        writer.write(String.join(",", escapeColumns(visibleFields)));
-        writer.newLine();
+            // Write the header row
+            writer.write(String.join(",", escapeColumns(visibleFields)));
+            writer.newLine();
 
-        // Filter rows based on the filter field
-        for (Map<String, Object> row : repository.getDataRows()) {
-        boolean matches = subsetProcessor.rowMatchesFilter(row, filterField);
-        boolean keyAlreadyExported = subsetProcessor.isRowKeyInExportedSet(row, exportedKeys);
+            // Filter rows based on the filter field
+            for (Map<String, Object> row : repository.getDataRows()) {
+                boolean matches = subsetProcessor.rowMatchesFilter(row, filterField);
+                boolean keyAlreadyExported = subsetProcessor.isRowKeyInExportedSet(row, exportedKeys);
 
-        if (matches && !keyAlreadyExported) {
-        List<String> rowValues = new ArrayList<>();
+                if (matches && !keyAlreadyExported) {
+                    List<String> rowValues = new ArrayList<>();
 
-        // Extract values in the order specified by visibleFields
-        for (String field : visibleFields) {
-        Object value = row.get(field);
-        ConversionRepository.DataType type = columnTypes.getOrDefault(field,
-        ConversionRepository.DataType.STRING);
-        rowValues.add(escapeValue(value, type, field, repository));
-        }
+                    // Extract values in the order specified by visibleFields
+                    for (String field : visibleFields) {
+                        Object value = row.get(field);
+                        ConversionRepository.DataType type = columnTypes.getOrDefault(field,
+                        ConversionRepository.DataType.STRING);
+                        rowValues.add(escapeValue(value, type, field, repository));
+                    }
 
-        writer.write(String.join(",", rowValues));
-        writer.newLine();
-        matchCount++;
+                    writer.write(String.join(",", rowValues));
+                    writer.newLine();
+                    matchCount++;
 
-        // Remove from unfiltered set
-        unfilteredRows.remove(row);
-        // Add to exported keys set if exclusive subsets are enabled
-        subsetProcessor.addRowKeyToExportedSet(row, exportedKeys);
-        }
-        }
+                    // Remove from unfiltered set
+                    unfilteredRows.remove(row);
+                    // Add to exported keys set if exclusive subsets are enabled
+                    subsetProcessor.addRowKeyToExportedSet(row, exportedKeys);
+                }
+            }
         }
 
         return matchCount;
-        }
-
+    }
 
     /**
      * Import an overlay file and merge with existing repository data based on the unique key,
@@ -1455,189 +1137,6 @@ private int exportSubsetToFile(ConversionRepository repository, SubsetProcessor 
         }
 
         LoggingUtil.info("Completed processing of transformations for all rows");
-    }
-
-    /**
-     * Export data from the repository to a CSV file
-     */
-    public void exportFromRepository_Old(ConversionRepository repository, String csvFilePath) throws IOException {
-        LoggingUtil.info("Exporting data to CSV file: " + csvFilePath);
-
-        // Get visible fields in order
-        List<String> visibleFields = repository.getVisibleFieldNames();
-
-        // Open the CSV file for writing
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(csvFilePath))) {
-            // Write the header row
-            writer.write(String.join(",", escapeColumns(visibleFields)));
-            writer.newLine();
-
-            // Write each data row
-            List<Map<String, Object>> dataRows = repository.getDataRows();
-            for (Map<String, Object> row : dataRows) {
-                List<String> rowValues = new ArrayList<>();
-
-                // Extract values in the order specified by visibleFields
-                for (String field : visibleFields) {
-                    Object value = row.get(field);
-                    rowValues.add(escapeValue(value));
-                }
-
-                writer.write(String.join(",", rowValues));
-                writer.newLine();
-            }
-        }
-
-        LoggingUtil.info("Exported " + repository.getDataRows().size() +
-                " rows to CSV file: " + csvFilePath);
-    }
-
-    /**
-     * Export filtered subsets of data from the repository to multiple CSV files
-     * using the SubsetProcessor to handle subset filtering and configuration
-     */
-    public void exportSubsetsFromRepository_Old(ConversionRepository repository, String baseCsvFilePath) throws IOException {
-        // Create the subset processor
-        SubsetProcessor subsetProcessor = new SubsetProcessor(systemConfig, repository);
-
-        if (!subsetProcessor.hasSubsets()) {
-            System.out.println("No subsets configured for export.");
-            return;
-        }
-
-        System.out.println("Exporting filtered subsets to CSV files");
-
-        // For tracking unfiltered records
-        Set<Map<String, Object>> unfilteredRows = new HashSet<>(repository.getDataRows());
-        // For tracking exported keys (for exclusive subsets)
-        Set<String> exportedKeys = new HashSet<>();
-
-        // Get visible fields in order
-        List<String> visibleFields;
-        try {
-            visibleFields = repository.getVisibleFieldNames();
-        } catch (NullPointerException e) {
-            System.out.println("Warning: Unable to get visible field names. Using all fields from first row.");
-            // Fallback to the fields from the first data row if available
-            visibleFields = new ArrayList<>();
-            if (!repository.getDataRows().isEmpty()) {
-                visibleFields.addAll(repository.getDataRows().get(0).keySet());
-            }
-        }
-
-        // Check if we have fields to export
-        if (visibleFields.isEmpty()) {
-            System.out.println("No fields to export. Checking if data rows exist to extract field names.");
-            if (!repository.getDataRows().isEmpty()) {
-                visibleFields.addAll(repository.getDataRows().get(0).keySet());
-            } else {
-                System.out.println("Error: No data to export and no field names available.");
-                return;
-            }
-        }
-
-        // Process each filter
-        Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
-        for (Map.Entry<String, String> entry : filterToSuffix.entrySet()) {
-            String filterField = entry.getKey();
-            String suffix = entry.getValue();
-
-            // Enhanced debug about filter field existence
-            int rowsWithField = 0;
-            int rowsWithTrueValue = 0;
-            boolean filterExists = false;
-
-            for (Map<String, Object> row : repository.getDataRows()) {
-                if (row.containsKey(filterField)) {
-                    filterExists = true;
-                    rowsWithField++;
-
-                    // Check if this field would evaluate to true
-                    if (subsetProcessor.rowMatchesFilter(row, filterField)) {
-                        rowsWithTrueValue++;
-                    }
-                }
-            }
-
-            if (!filterExists) {
-                System.out.println("Warning: Filter field '" + filterField + "' not found in repository, skipping subset");
-                continue;
-            }
-
-            System.out.println("Debug: Filter field '" + filterField + "' exists in " + rowsWithField +
-                    " rows out of " + repository.getDataRows().size() +
-                    ". " + rowsWithTrueValue + " rows have 'true' values.");
-
-            // Create output file path with suffix
-            String outputPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, suffix, ".csv");
-
-            System.out.println("Exporting subset for filter '" + filterField + "' to: " + outputPath);
-
-            // Open the CSV file for writing
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
-                // Write the header row
-                writer.write(String.join(",", escapeColumns(visibleFields)));
-                writer.newLine();
-
-                int matchCount = 0;
-
-                // Filter rows based on the filter field
-                for (Map<String, Object> row : repository.getDataRows()) {
-                    boolean matches = subsetProcessor.rowMatchesFilter(row, filterField);
-                    boolean keyAlreadyExported = subsetProcessor.isRowKeyInExportedSet(row, exportedKeys);
-
-                    if (matches && !keyAlreadyExported) {
-                        List<String> rowValues = new ArrayList<>();
-
-                        // Extract values in the order specified by visibleFields
-                        for (String field : visibleFields) {
-                            Object value = row.get(field);
-                            rowValues.add(escapeValue(value));
-                        }
-
-                        writer.write(String.join(",", rowValues));
-                        writer.newLine();
-                        matchCount++;
-
-                        // Remove from unfiltered set
-                        unfilteredRows.remove(row);
-                        // Add to exported keys set if exclusive subsets are enabled
-                        subsetProcessor.addRowKeyToExportedSet(row, exportedKeys);
-                    }
-                }
-
-                System.out.println("Exported " + matchCount + " rows to subset file: " + outputPath);
-            }
-        }
-
-        // If we need to output remaining unfiltered rows
-        if (!unfilteredRows.isEmpty()) {
-            String defaultSuffix = systemConfig.getOutputSuffix();
-            String unfilteredPath = subsetProcessor.getOutputPathWithSuffix(baseCsvFilePath, defaultSuffix, ".csv");
-
-            System.out.println("Exporting " + unfilteredRows.size() + " unfiltered rows to: " + unfilteredPath);
-
-            // Open the CSV file for writing
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(unfilteredPath))) {
-                // Write the header row
-                writer.write(String.join(",", escapeColumns(visibleFields)));
-                writer.newLine();
-
-                // Write each unfiltered row
-                for (Map<String, Object> row : unfilteredRows) {
-                    List<String> rowValues = new ArrayList<>();
-
-                    // Extract values in the order specified by visibleFields
-                    for (String field : visibleFields) {
-                        Object value = row.get(field);
-                        rowValues.add(escapeValue(value));
-                    }
-
-                    writer.write(String.join(",", rowValues));
-                    writer.newLine();
-                }
-            }
-        }
     }
 
     /**

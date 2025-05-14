@@ -389,10 +389,217 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     }
 
     /**
-     * Generate a configuration based on the "Applicable Format" structure
+     * Enhanced configuration generation for Applicable Format with comprehensive type inference
      */
     @Override
     public JsonNode generateConfig(String[] headers, String[] firstDataRow, Map<String, Object> columnTypes) {
+        ObjectNode config = mapper.createObjectNode();
+
+        // Add parameters from system config
+        ObjectNode parameters = mapper.createObjectNode();
+
+        // Set maxImportRows if available
+        int maxImportRows = systemConfig.getMaxImportRows();
+        if (maxImportRows > 0) {
+            parameters.put("maxImportRows", maxImportRows);
+        } else {
+            parameters.putNull("maxImportRows");
+        }
+
+        config.set("parameters", parameters);
+
+        // Enhanced type inference with format detection
+        ConversionRepository tempRepository = new ConversionRepository(systemConfig);
+        tempRepository.setHeaders(headers);
+        tempRepository.setFirstDataRow(firstDataRow);
+
+        // Perform comprehensive type inference
+        tempRepository.inferTypes(headers, firstDataRow);
+
+        // Get the inferred types and detected formats
+        Map<String, ConversionRepository.DataType> inferredTypes = tempRepository.getColumnTypes();
+        Map<String, String> detectedFormats = tempRepository.getColumnFormats();
+
+        // Add column configurations with inferred types and formats
+        ObjectNode columns = mapper.createObjectNode();
+
+        // First pass: Add all columns to the config with proper type inference
+        boolean uniqueKeySet = false;
+        for (String header : headers) {
+            if (header == null || header.trim().isEmpty()) {
+                continue; // Skip empty headers
+            }
+
+            ObjectNode columnConfig = mapper.createObjectNode();
+
+            // Use the inferred type instead of the passed columnTypes map
+            ConversionRepository.DataType inferredType = inferredTypes.getOrDefault(header,
+                    ConversionRepository.DataType.STRING);
+            columnConfig.put("type", inferredType.toString());
+
+            // Add detected format for DATE and DATETIME types
+            if ((inferredType == ConversionRepository.DataType.DATE ||
+                    inferredType == ConversionRepository.DataType.DATETIME) &&
+                    detectedFormats.containsKey(header)) {
+                String detectedFormat = detectedFormats.get(header);
+                columnConfig.put("format", detectedFormat);
+                LoggingUtil.info("ApplicableFormat: Detected " + inferredType + " format for '" +
+                        header + "': " + detectedFormat);
+            }
+
+            // Add visibility property (default to true)
+            columnConfig.put("visible", true);
+
+            // Set the first valid column as uniqueKey if no uniqueKey is set yet
+            if (!uniqueKeySet) {
+                columnConfig.put("uniqueKey", true);
+                uniqueKeySet = true;
+                LoggingUtil.info("Setting first column '" + header + "' as uniqueKey");
+            }
+
+            columns.set(header, columnConfig);
+        }
+
+        config.set("columns", columns);
+
+        // Second pass: Identify field prefixes and group related fields
+        // This logic remains the same as before...
+        Map<String, List<String>> prefixToFields = groupFieldsByPrefix(headers);
+
+        // Process derived boolean fields and suppressed fields
+        ObjectNode suppressedFields = mapper.createObjectNode();
+
+        // Identify boolean fields and their related text fields
+        for (Map.Entry<String, List<String>> entry : prefixToFields.entrySet()) {
+            String prefix = entry.getKey();
+            List<String> fields = entry.getValue();
+
+            if (fields.size() > 1) {
+                // Check if the prefix itself is a boolean field (using inferred types)
+                ConversionRepository.DataType prefixType = inferredTypes.getOrDefault(prefix,
+                        ConversionRepository.DataType.STRING);
+
+                if (prefixType == ConversionRepository.DataType.BOOLEAN) {
+                    // The prefix field is a boolean - use it to suppress related fields
+                    for (String field : fields) {
+                        if (!field.equals(prefix)) {
+                            suppressedFields.put(field, prefix);
+                        }
+                    }
+
+                    LoggingUtil.debug("Boolean field '" + prefix + "' will suppress " +
+                            (fields.size() - 1) + " related fields");
+                }
+            }
+        }
+
+        config.set("suppressedFields", suppressedFields);
+
+        // Process compound expressions for text aggregation if provided
+        processCompoundExpressions(config, headers);
+
+        // Log comprehensive type inference summary
+        logExtendedTypeInferenceSummary(inferredTypes, detectedFormats, prefixToFields);
+
+        return config;
+    }
+
+    /**
+     * Group fields by their prefixes for applicable format processing
+     */
+    private Map<String, List<String>> groupFieldsByPrefix(String[] headers) {
+        Map<String, List<String>> prefixToFields = new LinkedHashMap<>();
+
+        // First, identify all base fields (without suffixes)
+        for (String header : headers) {
+            if (header == null || header.trim().isEmpty()) {
+                continue;
+            }
+
+            boolean hasSuffix = false;
+            for (String suffix : textSuffixes) {
+                if (header.endsWith(suffix)) {
+                    hasSuffix = true;
+                    break;
+                }
+            }
+
+            if (!hasSuffix) {
+                // This is a base field - add it as a prefix
+                if (!prefixToFields.containsKey(header)) {
+                    prefixToFields.put(header, new ArrayList<>());
+                }
+                prefixToFields.get(header).add(header);
+            }
+        }
+
+        // Now add fields with suffixes to their corresponding prefix groups
+        for (String header : headers) {
+            if (header == null || header.trim().isEmpty()) {
+                continue;
+            }
+
+            for (String suffix : textSuffixes) {
+                if (header.endsWith(suffix)) {
+                    String prefix = header.substring(0, header.lastIndexOf(suffix));
+
+                    // If the prefix doesn't exist as a key yet, add it
+                    if (!prefixToFields.containsKey(prefix)) {
+                        prefixToFields.put(prefix, new ArrayList<>());
+                    }
+
+                    // Add this field to its prefix group
+                    prefixToFields.get(prefix).add(header);
+                    break;
+                }
+            }
+        }
+
+        return prefixToFields;
+    }
+
+    /**
+     * Log extended type inference summary including field groupings
+     */
+    private void logExtendedTypeInferenceSummary(Map<String, ConversionRepository.DataType> inferredTypes,
+                                                 Map<String, String> detectedFormats,
+                                                 Map<String, List<String>> prefixToFields) {
+        LoggingUtil.info("=== ApplicableFormat Type Inference Summary ===");
+
+        // Type counts
+        Map<ConversionRepository.DataType, Integer> typeCounts = new HashMap<>();
+        for (ConversionRepository.DataType type : inferredTypes.values()) {
+            typeCounts.put(type, typeCounts.getOrDefault(type, 0) + 1);
+        }
+
+        for (Map.Entry<ConversionRepository.DataType, Integer> entry : typeCounts.entrySet()) {
+            LoggingUtil.info(entry.getKey() + ": " + entry.getValue() + " columns");
+        }
+
+        // Date/DateTime formats
+        if (!detectedFormats.isEmpty()) {
+            LoggingUtil.info("Date/DateTime formats detected:");
+            for (Map.Entry<String, String> entry : detectedFormats.entrySet()) {
+                LoggingUtil.info("  " + entry.getKey() + ": " + entry.getValue());
+            }
+        }
+
+        // Field groupings
+        LoggingUtil.info("Field groupings detected:");
+        for (Map.Entry<String, List<String>> entry : prefixToFields.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                LoggingUtil.info("  " + entry.getKey() + ": " + entry.getValue().size() + " related fields");
+            }
+        }
+
+        LoggingUtil.info("============================================");
+    }
+
+    /**
+     * Generate a configuration based on the "Applicable Format" structure
+     */
+    //@Override
+    public JsonNode generateConfig_Old(String[] headers, String[] firstDataRow, Map<String, Object> columnTypes) {
         ObjectNode config = mapper.createObjectNode();
 
         // Add parameters from system config

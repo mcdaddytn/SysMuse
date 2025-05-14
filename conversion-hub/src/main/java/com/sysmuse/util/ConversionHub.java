@@ -404,11 +404,15 @@ public class ConversionHub {
                 repository.setFirstDataRow(firstDataRow);
                 repository.inferTypes(headers, firstDataRow);
 
+                // gm, this needs to be called first
+                // Try to load or generate configuration
+                loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
+
                 // Multi-file processing
                 csvConverter.importMultipleFilesToRepository(csvFilename, inputDirectory, repository);
 
                 // Try to load or generate configuration
-                loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
+                //loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
             } else {
                 // Single file mode
                 LoggingUtil.info("Parsing headers from file: " + inputFilePath);

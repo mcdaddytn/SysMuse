@@ -133,6 +133,7 @@ public class SqlExporter {
     private Map<String, Integer> analyzeStringFieldLengths(ConversionRepository repository) {
         Map<String, Integer> maxLengths = new HashMap<>();
         Map<String, ConversionRepository.DataType> columnTypes = repository.getColumnTypes();
+        String uniqueKeyField = repository.getUniqueKeyField();
 
         LoggingUtil.info("Analyzing string field lengths...");
 
@@ -141,45 +142,96 @@ public class SqlExporter {
                 String fieldName = entry.getKey();
                 Object value = entry.getValue();
 
-                // Only analyze STRING type fields
+                // Only analyze STRING type fields that have non-null values
                 if (columnTypes.get(fieldName) == ConversionRepository.DataType.STRING && value != null) {
                     String stringValue = value.toString();
-                    int length = stringValue.length();
-                    maxLengths.put(fieldName, Math.max(maxLengths.getOrDefault(fieldName, 0), length));
+                    int currentLength = stringValue.length();
+
+                    // Update maximum length found so far
+                    int previousMax = maxLengths.getOrDefault(fieldName, 0);
+                    if (currentLength > previousMax) {
+                        maxLengths.put(fieldName, currentLength);
+                        //LoggingUtil.debug("Field '" + fieldName + "': new max length " + currentLength +
+                        //        " (was " + previousMax + ")");
+                        LoggingUtil.info("Field '" + fieldName + "': new max length " + currentLength +
+                                " (was " + previousMax + ")");
+                    }
                 }
             }
         }
 
-        // Round up to logical sizes
+        // Second pass: Optimize the lengths with appropriate buffer
         Map<String, Integer> optimizedLengths = new HashMap<>();
         for (Map.Entry<String, Integer> entry : maxLengths.entrySet()) {
-            int actualLength = entry.getValue();
-            int optimizedLength = getOptimizedVarcharLength(actualLength);
-            optimizedLengths.put(entry.getKey(), optimizedLength);
+            String fieldName = entry.getKey();
+            int actualMaxLength = entry.getValue();
+            int optimizedLength = getOptimizedVarcharLength(actualMaxLength);
 
-            LoggingUtil.debug("Field '" + entry.getKey() + "': max length " + actualLength +
-                    " -> optimized to " + optimizedLength);
+            // Special handling for unique key field - ensure it's not too large for indexing
+            if (fieldName.equals(uniqueKeyField)) {
+                if (optimizedLength > 255) {
+                    LoggingUtil.warn("Unique key field '" + fieldName + "' has max length " + actualMaxLength +
+                            ". Limiting to VARCHAR(255) for indexing performance.");
+                    optimizedLength = Math.min(255, optimizedLength);
+                } else if (actualMaxLength == 0) {
+                    // Handle case where unique key field might be empty in sample data
+                    optimizedLength = 50; // Default reasonable size for unique keys
+                    LoggingUtil.warn("Unique key field '" + fieldName + "' appears empty in sample data. " +
+                            "Setting default size of " + optimizedLength);
+                }
+            }
+
+            optimizedLengths.put(fieldName, optimizedLength);
+
+            LoggingUtil.info("Field '" + fieldName + "': actual max = " + actualMaxLength +
+                    ", optimized = " + optimizedLength +
+                    (fieldName.equals(uniqueKeyField) ? " (PRIMARY KEY)" : ""));
+        }
+
+        // Third pass: Handle string fields that weren't found in the data but are in column types
+        for (String fieldName : columnTypes.keySet()) {
+            if (columnTypes.get(fieldName) == ConversionRepository.DataType.STRING &&
+                    !optimizedLengths.containsKey(fieldName)) {
+                // This field exists in the schema but had no data, set a reasonable default
+                int defaultLength = fieldName.equals(uniqueKeyField) ? 50 : 255;
+                optimizedLengths.put(fieldName, defaultLength);
+                LoggingUtil.warn("String field '" + fieldName + "' found no data. Setting default length: " + defaultLength);
+            }
         }
 
         return optimizedLengths;
     }
 
+
     /**
-     * Get optimized VARCHAR length based on actual usage
+     * Get optimized VARCHAR length based on actual usage with proper buffer
      */
     private int getOptimizedVarcharLength(int actualLength) {
-        // Add some buffer (20% or minimum 10 characters)
-        int bufferedLength = actualLength + Math.max(10, actualLength / 5);
+        if (actualLength == 0) {
+            return 50; // Minimum reasonable size for empty fields
+        }
 
-        // Find the next standard size
+        // Add buffer: 25% extra or minimum 20 characters, whichever is larger
+        int buffer = Math.max(20, actualLength / 4);
+        int bufferedLength = actualLength + buffer;
+
+        // Find the next standard size that accommodates the buffered length
         for (int size : VARCHAR_SIZES) {
             if (bufferedLength <= size) {
                 return size;
             }
         }
 
-        // If too large for VARCHAR, use TEXT types
-        return VARCHAR_THRESHOLD;
+        // If larger than largest VARCHAR size, determine TEXT type
+        if (bufferedLength <= VARCHAR_THRESHOLD) {
+            return VARCHAR_THRESHOLD; // Use largest VARCHAR
+        } else if (bufferedLength <= TEXT_THRESHOLD) {
+            return TEXT_THRESHOLD; // Will be converted to TEXT type
+        } else if (bufferedLength <= MEDIUMTEXT_THRESHOLD) {
+            return MEDIUMTEXT_THRESHOLD; // Will be converted to MEDIUMTEXT
+        } else {
+            return Integer.MAX_VALUE; // Will be converted to LONGTEXT
+        }
     }
 
     /**
@@ -194,41 +246,47 @@ public class SqlExporter {
         List<String> visibleFields = repository.getVisibleFieldNames();
         Map<String, ConversionRepository.DataType> columnTypes = repository.getColumnTypes();
         Map<String, String> columnFormats = repository.getColumnFormats();
+        String uniqueKeyField = repository.getUniqueKeyField();
 
         List<String> columnDefinitions = new ArrayList<>();
 
         for (String fieldName : visibleFields) {
             ConversionRepository.DataType type = columnTypes.getOrDefault(fieldName,
                     ConversionRepository.DataType.STRING);
-            String columnDef = generateColumnDefinition(fieldName, type, stringFieldLengths.get(fieldName));
+            // Check if this field is the unique key (primary key)
+            boolean isPrimaryKey = fieldName.equals(uniqueKeyField);
+            String columnDef = generateColumnDefinition(fieldName, type, stringFieldLengths.get(fieldName), isPrimaryKey);
             columnDefinitions.add(columnDef);
         }
 
         sql.append(String.join(",\n", columnDefinitions));
         sql.append("\n");
 
-        // Add primary key if unique key field is defined
-        String uniqueKeyField = repository.getUniqueKeyField();
         if (uniqueKeyField != null && visibleFields.contains(uniqueKeyField)) {
             sql.append(",\nPRIMARY KEY (`").append(uniqueKeyField).append("`)");
         }
 
         sql.append("\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-        LoggingUtil.debug("Generated CREATE TABLE SQL:\n" + sql.toString());
+        //LoggingUtil.debug("Generated CREATE TABLE SQL:\n" + sql.toString());
+        LoggingUtil.info("Generated CREATE TABLE SQL:\n" + sql.toString());
         return sql.toString();
     }
 
     /**
      * Generate column definition for a specific field
      */
-    private String generateColumnDefinition(String fieldName, ConversionRepository.DataType type, Integer maxLength) {
+    private String generateColumnDefinition(String fieldName, ConversionRepository.DataType type, Integer maxLength, boolean isPrimaryKey) {
         StringBuilder def = new StringBuilder();
         def.append("  `").append(escapeFieldName(fieldName)).append("` ");
 
         switch (type) {
             case INTEGER:
-                def.append("INT");
+                if (isPrimaryKey) {
+                    def.append("INT NOT NULL AUTO_INCREMENT");
+                } else {
+                    def.append("INT");
+                }
                 break;
 
             case FLOAT:
@@ -263,7 +321,11 @@ public class SqlExporter {
         }
 
         // Add NULL/NOT NULL constraint
-        def.append(" NULL");
+        if (isPrimaryKey) {
+            // Primary key is already NOT NULL, don't add it again
+        } else {
+            def.append(" NULL");
+        }
 
         return def.toString();
     }

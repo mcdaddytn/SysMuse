@@ -1,9 +1,9 @@
 {
   "input": {
     "format": "csv",
-    "path": "F:\\docs\\rj\\Matters\\XTone\\tavrnruns\\run7",
+    "path": "F:\\docs\\rj\\Matters\\XTone\\tavrnruns\\run8",
     "files": [
-      "collection_tags_report_noext.csv"
+      "export_rel_metadata.csv"
     ]
   },
   "output": {

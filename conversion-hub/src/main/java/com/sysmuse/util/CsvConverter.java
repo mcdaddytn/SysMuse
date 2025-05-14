@@ -36,6 +36,12 @@ public class CsvConverter {
             return new String[0];
         }
 
+        // Remove BOM if present (EF BB BF in UTF-8)
+        if (headerLine.length() > 0 && headerLine.charAt(0) == '\uFEFF') {
+            headerLine = headerLine.substring(1);
+            LoggingUtil.debug("Removed BOM from header line");
+        }
+
         // Split the header by commas
         String[] headers = headerLine.split(",");
         // Trim whitespace and quotes
@@ -160,6 +166,13 @@ public class CsvConverter {
         // First read the entire file
         LoggingUtil.debug("Reading file: " + csvFilePath);
         String fileContent = new String(Files.readAllBytes(Paths.get(csvFilePath)));
+
+        // Remove BOM if present
+        if (fileContent.length() > 0 && fileContent.charAt(0) == '\uFEFF') {
+            fileContent = fileContent.substring(1);
+            LoggingUtil.debug("Removed BOM from file content");
+        }
+
         LoggingUtil.debug("File size: " + fileContent.length() + " characters");
 
         // Split the content by newlines, but respect quotes

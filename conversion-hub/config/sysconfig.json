@@ -121,6 +121,12 @@
     "schemaName": "conversion_hub",
     "tableName": "exported_data"
   },
+  "sqlAnalysis": {
+    "booleanAggregation": true,
+    "maxDepth": 3,
+    "subsetThreshold": 500,
+    "maxAggregateRecords": 200
+  },
   "subsets": {
     "exclusive": true,
     "filters": {

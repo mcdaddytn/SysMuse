@@ -5,10 +5,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.io.*;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
- * SQL Query Builder for performing nested aggregation analysis on boolean fields.
- * Creates hierarchical subsets based on boolean field combinations.
+ * SQL Query Builder for performing nested aggregation analysis on specified field sets.
+ * Creates hierarchical subsets based on field combinations with configurable constraints.
  */
 public class SqlQueryBuilder {
 
@@ -23,9 +26,13 @@ public class SqlQueryBuilder {
     private int subsetThreshold = 500;
     private int maxAggregateRecords = 200;
 
+    // Field configuration
+    private Set<String> aggregationFields = new LinkedHashSet<>();
+    private Map<String, Object> baseWhereClause = new HashMap<>();
+    private Map<String, String> fieldTypes = new HashMap<>();
+
     // Results storage
     private List<AggregationResult> allResults = new ArrayList<>();
-    private List<String> booleanFields = new ArrayList<>();
 
     /**
      * Represents a single aggregation result with depth and constraints
@@ -34,25 +41,28 @@ public class SqlQueryBuilder {
         private int depth;
         private Map<String, Integer> aggregates;
         private Map<String, Boolean> constraints;
+        private Map<String, Object> baseConstraints;
         private int totalCount;
 
         public AggregationResult(int depth) {
             this.depth = depth;
             this.aggregates = new LinkedHashMap<>();
             this.constraints = new LinkedHashMap<>();
+            this.baseConstraints = new LinkedHashMap<>();
         }
 
         // Getters and setters
         public int getDepth() { return depth; }
         public Map<String, Integer> getAggregates() { return aggregates; }
         public Map<String, Boolean> getConstraints() { return constraints; }
+        public Map<String, Object> getBaseConstraints() { return baseConstraints; }
         public int getTotalCount() { return totalCount; }
         public void setTotalCount(int totalCount) { this.totalCount = totalCount; }
 
         @Override
         public String toString() {
-            return String.format("Depth %d, Constraints: %s, Aggregates: %s, Total: %d",
-                    depth, constraints, aggregates, totalCount);
+            return String.format("Depth %d, Base: %s, Constraints: %s, Aggregates: %s, Total: %d",
+                    depth, baseConstraints, constraints, aggregates, totalCount);
         }
     }
 
@@ -73,22 +83,86 @@ public class SqlQueryBuilder {
     }
 
     /**
-     * Perform nested aggregation analysis on boolean fields
+     * Set the fields to use for aggregation
+     */
+    public void setAggregationFields(Set<String> fields) {
+        this.aggregationFields = new LinkedHashSet<>(fields);
+    }
+
+    /**
+     * Set base where clause constraints
+     */
+    public void setBaseWhereClause(Map<String, Object> whereClause) {
+        this.baseWhereClause = new HashMap<>(whereClause);
+    }
+
+    /**
+     * Helper method to get all boolean fields
+     */
+    public Set<String> getAllBooleanFields() throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            connect();
+        }
+        return new LinkedHashSet<>(getBooleanFields());
+    }
+
+    /**
+     * Helper method to create a new field collection by adding/removing fields
+     */
+    public static Set<String> modifyFieldSet(Set<String> baseFields,
+                                             Set<String> fieldsToAdd,
+                                             Set<String> fieldsToRemove) {
+        Set<String> result = new LinkedHashSet<>(baseFields);
+
+        if (fieldsToAdd != null) {
+            result.addAll(fieldsToAdd);
+        }
+
+        if (fieldsToRemove != null) {
+            result.removeAll(fieldsToRemove);
+        }
+
+        return result;
+    }
+
+    /**
+     * Convenience method for adding fields only
+     */
+    public static Set<String> addFields(Set<String> baseFields, Set<String> fieldsToAdd) {
+        return modifyFieldSet(baseFields, fieldsToAdd, null);
+    }
+
+    /**
+     * Convenience method for removing fields only
+     */
+    public static Set<String> removeFields(Set<String> baseFields, Set<String> fieldsToRemove) {
+        return modifyFieldSet(baseFields, null, fieldsToRemove);
+    }
+
+    /**
+     * Perform nested aggregation analysis
      */
     public void performNestedAggregation() throws SQLException, IOException {
         try {
             connect();
 
-            // Get all boolean fields from the table
-            booleanFields = getBooleanFields();
-            LoggingUtil.info("Found " + booleanFields.size() + " boolean fields: " + booleanFields);
+            // If no aggregation fields specified, use all boolean fields
+            if (aggregationFields.isEmpty()) {
+                aggregationFields = getAllBooleanFields();
+                LoggingUtil.info("No aggregation fields specified, using all boolean fields");
+            }
 
-            if (booleanFields.isEmpty()) {
-                LoggingUtil.warn("No boolean fields found in table. Cannot perform aggregation analysis.");
+            LoggingUtil.info("Using " + aggregationFields.size() + " fields for aggregation: " + aggregationFields);
+
+            if (aggregationFields.isEmpty()) {
+                LoggingUtil.warn("No aggregation fields available. Cannot perform analysis.");
                 return;
             }
 
-            // Perform depth 0 aggregation (no constraints)
+            // Get field types for proper where clause formatting
+            loadFieldTypes();
+
+            // Perform depth 0 aggregation (no constraints beyond base where clause)
             AggregationResult depthZero = performAggregation(0, new HashMap<>());
             allResults.add(depthZero);
             LoggingUtil.info("Depth 0 aggregation completed. Total count: " + depthZero.getTotalCount());
@@ -132,6 +206,36 @@ public class SqlQueryBuilder {
                 stmt.execute("USE `" + schemaName + "`");
             }
         }
+    }
+
+    /**
+     * Load field types from the database
+     */
+    private void loadFieldTypes() throws SQLException {
+        String sql = "SHOW COLUMNS FROM `" + tableName + "`";
+
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                String fieldName = rs.getString("Field");
+                String fieldType = rs.getString("Type").toLowerCase();
+
+                // Simplify type classification
+                if (fieldType.contains("int") || fieldType.contains("decimal") ||
+                        fieldType.contains("float") || fieldType.contains("double")) {
+                    fieldTypes.put(fieldName, "NUMERIC");
+                } else if (fieldType.contains("date") || fieldType.contains("time")) {
+                    fieldTypes.put(fieldName, "DATE");
+                } else if (fieldType.contains("char") || fieldType.contains("text")) {
+                    fieldTypes.put(fieldName, "STRING");
+                } else {
+                    fieldTypes.put(fieldName, "OTHER");
+                }
+            }
+        }
+
+        LoggingUtil.debug("Loaded types for " + fieldTypes.size() + " fields");
     }
 
     /**
@@ -214,6 +318,70 @@ public class SqlQueryBuilder {
     }
 
     /**
+     * Format a value for SQL where clause based on field type
+     */
+    private String formatValueForWhereClause(String fieldName, Object value) {
+        if (value == null) {
+            return "NULL";
+        }
+
+        String fieldType = fieldTypes.getOrDefault(fieldName, "OTHER");
+
+        switch (fieldType) {
+            case "NUMERIC":
+                return value.toString();
+
+            case "DATE":
+                if (value instanceof LocalDate) {
+                    return "'" + ((LocalDate) value).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + "'";
+                } else if (value instanceof LocalDateTime) {
+                    return "'" + ((LocalDateTime) value).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + "'";
+                } else {
+                    // Assume string representation of date
+                    return "'" + value.toString() + "'";
+                }
+
+            case "STRING":
+                // Escape single quotes in string values
+                String stringValue = value.toString().replace("'", "''");
+                return "'" + stringValue + "'";
+
+            default:
+                // For other types, try to determine if it's numeric
+                try {
+                    Double.parseDouble(value.toString());
+                    return value.toString();
+                } catch (NumberFormatException e) {
+                    // Treat as string
+                    String otherValue = value.toString().replace("'", "''");
+                    return "'" + otherValue + "'";
+                }
+        }
+    }
+
+    /**
+     * Build where clause from base constraints and depth constraints
+     */
+    private String buildWhereClause(Map<String, Boolean> depthConstraints) {
+        List<String> whereConditions = new ArrayList<>();
+
+        // Add base where clause conditions
+        for (Map.Entry<String, Object> entry : baseWhereClause.entrySet()) {
+            String field = entry.getKey();
+            Object value = entry.getValue();
+            String formattedValue = formatValueForWhereClause(field, value);
+            whereConditions.add("`" + field + "` = " + formattedValue);
+        }
+
+        // Add depth-specific constraints
+        for (Map.Entry<String, Boolean> constraint : depthConstraints.entrySet()) {
+            whereConditions.add("`" + constraint.getKey() + "` = " + (constraint.getValue() ? "1" : "0"));
+        }
+
+        return whereConditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", whereConditions);
+    }
+
+    /**
      * Perform aggregation with given constraints
      */
     private AggregationResult performAggregation(int depth, Map<String, Boolean> constraints) throws SQLException {
@@ -223,7 +391,7 @@ public class SqlQueryBuilder {
         sql.append("SELECT ");
 
         List<String> selectClauses = new ArrayList<>();
-        for (String field : booleanFields) {
+        for (String field : aggregationFields) {
             if (constraints.containsKey(field)) {
                 selectClauses.add("NULL AS `" + field + "`");
             } else {
@@ -234,16 +402,12 @@ public class SqlQueryBuilder {
         sql.append(String.join(", ", selectClauses));
         sql.append(" FROM `").append(tableName).append("`");
 
-        // Build WHERE clause
-        if (!constraints.isEmpty()) {
-            sql.append(" WHERE ");
-            List<String> whereConditions = new ArrayList<>();
-            for (Map.Entry<String, Boolean> constraint : constraints.entrySet()) {
-                whereConditions.add("`" + constraint.getKey() + "` = " + (constraint.getValue() ? "1" : "0"));
-            }
-            sql.append(String.join(" AND ", whereConditions));
+        // Build WHERE clause combining base where clause and constraints
+        String whereClause = buildWhereClause(constraints);
+        sql.append(whereClause);
 
-            // Build GROUP BY clause for constrained fields
+        // Build GROUP BY clause for constrained fields
+        if (!constraints.isEmpty()) {
             sql.append(" GROUP BY ");
             sql.append(constraints.keySet().stream()
                     .map(field -> "`" + field + "`")
@@ -254,13 +418,14 @@ public class SqlQueryBuilder {
 
         AggregationResult result = new AggregationResult(depth);
         result.constraints.putAll(constraints);
+        result.baseConstraints.putAll(baseWhereClause);
 
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql.toString())) {
 
             if (rs.next()) {
                 int totalCount = 0;
-                for (String field : booleanFields) {
+                for (String field : aggregationFields) {
                     Object value = rs.getObject(field);
                     if (value != null && value instanceof Number) {
                         int count = ((Number) value).intValue();
@@ -275,7 +440,7 @@ public class SqlQueryBuilder {
 
                 // Calculate total count more accurately
                 if (constraints.isEmpty()) {
-                    // For depth 0, total is the sum of all boolean fields
+                    // For depth 0, total is the sum of all aggregation fields
                     result.setTotalCount(totalCount);
                 } else {
                     // For deeper levels, count all records matching constraints
@@ -288,20 +453,14 @@ public class SqlQueryBuilder {
     }
 
     /**
-     * Count total records matching the given constraints
+     * Count total records matching the given constraints and base where clause
      */
     private int countRecordsWithConstraints(Map<String, Boolean> constraints) throws SQLException {
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT COUNT(*) as total FROM `").append(tableName).append("`");
 
-        if (!constraints.isEmpty()) {
-            sql.append(" WHERE ");
-            List<String> whereConditions = new ArrayList<>();
-            for (Map.Entry<String, Boolean> constraint : constraints.entrySet()) {
-                whereConditions.add("`" + constraint.getKey() + "` = " + (constraint.getValue() ? "1" : "0"));
-            }
-            sql.append(String.join(" AND ", whereConditions));
-        }
+        String whereClause = buildWhereClause(constraints);
+        sql.append(whereClause);
 
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql.toString())) {
@@ -376,7 +535,6 @@ public class SqlQueryBuilder {
     private void exportResultsToCSV() throws IOException {
         String outputPath = Paths.get(systemConfig.getInputPath(),
                 tableName + "_nested_aggregation.csv").toString();
-
         boolean includeConstraints = false;
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
@@ -385,15 +543,20 @@ public class SqlQueryBuilder {
             headers.add("Depth");
             headers.add("TotalCount");
 
-            // Add constraint columns
+            // Add base constraint columns
+            for (String field : baseWhereClause.keySet()) {
+                headers.add("BaseConstraint_" + field);
+            }
+
+            // Add constraint columns for aggregation fields
             if (includeConstraints) {
-                for (String field : booleanFields) {
+                for (String field : aggregationFields) {
                     headers.add("Constraint_" + field);
                 }
             }
 
             // Add aggregate columns
-            for (String field : booleanFields) {
+            for (String field : aggregationFields) {
                 //headers.add("Sum_" + field);
                 headers.add(field);
             }
@@ -409,9 +572,15 @@ public class SqlQueryBuilder {
                 row.add(String.valueOf(result.getDepth()));
                 row.add(String.valueOf(result.getTotalCount()));
 
+                // Base constraint values
+                for (String field : baseWhereClause.keySet()) {
+                    Object value = result.getBaseConstraints().get(field);
+                    row.add(value != null ? value.toString() : "");
+                }
+
                 // Constraint values (1 for true constraint, 0 for false, empty for no constraint)
                 if (includeConstraints) {
-                    for (String field : booleanFields) {
+                    for (String field : aggregationFields) {
                         Boolean constraint = result.getConstraints().get(field);
                         if (constraint != null) {
                             row.add(constraint ? "1" : "0");
@@ -422,7 +591,7 @@ public class SqlQueryBuilder {
                 }
 
                 // Aggregate values (null becomes empty string)
-                for (String field : booleanFields) {
+                for (String field : aggregationFields) {
                     Integer aggregate = result.getAggregates().get(field);
                     row.add(aggregate != null ? aggregate.toString() : "");
                 }
@@ -448,7 +617,9 @@ public class SqlQueryBuilder {
         }
 
         LoggingUtil.info("=== Nested Aggregation Analysis Summary ===");
-        LoggingUtil.info("Total boolean fields analyzed: " + booleanFields.size());
+        LoggingUtil.info("Total aggregation fields analyzed: " + aggregationFields.size());
+        LoggingUtil.info("Aggregation fields: " + aggregationFields);
+        LoggingUtil.info("Base where clause: " + baseWhereClause);
         LoggingUtil.info("Total aggregation results: " + allResults.size());
         LoggingUtil.info("Results by depth:");
 
@@ -464,6 +635,20 @@ public class SqlQueryBuilder {
     }
 
     /**
+     * Get the current aggregation fields
+     */
+    public Set<String> getAggregationFields() {
+        return new LinkedHashSet<>(aggregationFields);
+    }
+
+    /**
+     * Get the current base where clause
+     */
+    public Map<String, Object> getBaseWhereClause() {
+        return new HashMap<>(baseWhereClause);
+    }
+
+    /**
      * Main method for testing
      */
     public static void main(String[] args) {
@@ -472,21 +657,25 @@ public class SqlQueryBuilder {
             SystemConfig systemConfig = new SystemConfig();
             Properties connectionProperties = new Properties();
 
-            // Load connection properties from file or set manually
-            // connectionProperties.setProperty("database.url", "jdbc:mysql://localhost:3306/conversion_hub");
-            // connectionProperties.setProperty("database.username", "conversion_user");
-            // connectionProperties.setProperty("database.password", "your_password");
-
+            // Example usage
             SqlQueryBuilder queryBuilder = new SqlQueryBuilder(systemConfig, connectionProperties);
 
             // Set analysis parameters
-            queryBuilder.setAnalysisParameters(
-                    2,      // maxDepth
-                    500,    // subsetThreshold
-                    200     // maxAggregateRecords
-            );
+            queryBuilder.setAnalysisParameters(2, 500, 200);
 
-            // Perform analysis
+            // Example 1: Use all boolean fields (default behavior)
+            queryBuilder.performNestedAggregation();
+
+            // Example 2: Use custom field set
+            Set<String> customFields = Set.of("Spam", "Newsletter", "Promotional");
+            queryBuilder.setAggregationFields(customFields);
+
+            // Example 3: Add base where clause
+            Map<String, Object> whereClause = new HashMap<>();
+            whereClause.put("Category", "Email");
+            whereClause.put("Active", 1);
+            queryBuilder.setBaseWhereClause(whereClause);
+
             queryBuilder.performNestedAggregation();
             queryBuilder.printAnalysisSummary();
 

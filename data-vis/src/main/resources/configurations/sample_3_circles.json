@@ -1,0 +1,26 @@
+{
+  "dotSize": 2,
+  "dotSpacing": 4,
+  "outerRadius": 280,
+  "numOuterConcentric": 3,
+  "canvasWidth": 800,
+  "canvasHeight": 600,
+  "outerCenter": {
+    "x": 400.0,
+    "y": 300.0
+  },
+  "vennCircles": [
+    {
+      "radius": 150,
+      "numConcentricCircles": 2
+    },
+    {
+      "radius": 150,
+      "numConcentricCircles": 2
+    },
+    {
+      "radius": 150,
+      "numConcentricCircles": 2
+    }
+  ]
+}

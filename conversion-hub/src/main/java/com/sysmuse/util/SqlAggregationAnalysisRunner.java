@@ -38,13 +38,56 @@ public class SqlAggregationAnalysisRunner {
             Set<String> fieldsToAdd = null;
             Set<String> fieldsToRemove = null;
 
+/*
+Communications_with_Counsel
+11685
+Customer_Partner_Correspondence
+7613
+Financial_Records
+7142
+Internal_Wiki_Knowledge_Base
+7934
+Inventor_Communications
+4894
+Investor_Updates
+9626
+Marketing_and_Sales
+10489
+News_and_Newsletters
+10722
+Other_Patents_and_Applications
+6284
+Press_and_Media
+10078
+Prior_Art_Analysis
+4941
+Spam
+11430
+
+ */
+
             Map<String, Object> whereClause = null;
+            //String applicBool = "Communications_with_Counsel";
+            //String applicBool = "Marketing_and_Sales";
+            //String applicBool = "News_and_Newsletters";
+            //String applicBool = "Press_and_Media";
+            //String applicBool = "Internal_Wiki_Knowledge_Base";
+            //String applicBool = "Agreements_and_Licenses";
+            //String applicBool = "Board_Communications";
+            //String applicBool = "Corporate_Records";
+            //String applicBool = "Customer_Partner_Correspondence";
+            //String applicBool = "Financial_Records";
+            //String applicBool = "Investor_Updates";
+            String applicBool = "Inventor_Communications";
 
             whereClause = new HashMap<>();
-            whereClause.put("Spam", 1);
-            whereClause.put("RJ_FILE_TYPE", "Email");
+            //whereClause.put("Spam", 1);
+            //whereClause.put("RJ_FILE_TYPE", "Email");
+            whereClause.put(applicBool, 1);
+
             fieldsToRemove = new HashSet<String>();
-            fieldsToRemove.add("Spam");
+            //fieldsToRemove.add("Spam");
+            fieldsToRemove.add(applicBool);
 
             SqlQueryBuilder tempQB = new SqlQueryBuilder(systemConfig, connectionProperties);
             Set<String> allBoolFields = tempQB.getAllBooleanFields();

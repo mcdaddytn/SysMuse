@@ -1,20 +1,27 @@
 //package com.sysmuse.geom.test;
-package com.sysmuse.geom.test;
+package com.sysmuse.geom;
 
 import com.sysmuse.geom.configuration.*;
 import com.sysmuse.geom.analysis.*;
 import com.sysmuse.geom.simulation.*;
 import com.sysmuse.geom.output.*;
+import java.io.File;
 
 /**
  * Comprehensive test suite for the Venn Diagram Generator system.
  */
 public class IntegrationTest {
 
+    // Create output directory for test files
+    private static final String TEST_OUTPUT_DIR = "test-output";
+
     public static void main(String[] args) {
         System.out.println("=== Venn Diagram Generator Integration Test ===\n");
 
         try {
+            // Create test output directory
+            setupTestEnvironment();
+
             // Test 1: Configuration Management
             testConfigurationManagement();
 
@@ -28,6 +35,7 @@ public class IntegrationTest {
             testOutputGeneration();
 
             System.out.println("All tests completed successfully!");
+            System.out.println("Test files created in: " + TEST_OUTPUT_DIR);
 
         } catch (Exception e) {
             System.err.println("Test failed: " + e.getMessage());
@@ -35,24 +43,33 @@ public class IntegrationTest {
         }
     }
 
+    private static void setupTestEnvironment() {
+        File outputDir = new File(TEST_OUTPUT_DIR);
+        if (!outputDir.exists()) {
+            outputDir.mkdirs();
+        }
+        System.out.println("Created test output directory: " + TEST_OUTPUT_DIR);
+    }
+
     private static void testConfigurationManagement() throws Exception {
         System.out.println("Test 1: Configuration Management");
 
         // Create a test configuration
         Configuration config = Configuration.createDefault3Circle();
-        System.out.println("Created default 3-circle configuration");
+        System.out.println("  Created default 3-circle configuration");
 
-        // Test JSON serialization
+        // Test JSON serialization with proper path
         ConfigurationLoader loader = new ConfigurationLoader();
-        loader.saveConfigurationToJSON(config, "test_config.json");
-        Configuration loadedConfig = loader.loadFromJSON("test_config.json");
-        System.out.println("JSON serialization/deserialization works");
+        String configPath = TEST_OUTPUT_DIR + "/test_config.json";
+        loader.saveConfigurationToJSON(config, configPath);
+        Configuration loadedConfig = loader.loadFromJSON(configPath);
+        System.out.println("  JSON serialization/deserialization works");
 
         // Verify configuration
         assert loadedConfig.getNumVennCircles() == 3;
-        System.out.println("Configuration validation passed");
+        System.out.println("  Configuration validation passed");
 
-        System.out.println("Configuration: " + config + "\n");
+        System.out.println("  Configuration: " + config + "\n");
     }
 
     private static void testRegionAnalysis() throws Exception {
@@ -95,9 +112,14 @@ public class IntegrationTest {
 
         System.out.println("  Simulation completed");
         System.out.println("  Best fitness score: " +
-            String.format("%.2f", simulator.getBestFitnessScore()));
+                String.format("%.2f", simulator.getBestFitnessScore()));
         System.out.println("  Best regions: " +
-            simulator.getBestMetrics().getTotalRegions());
+                simulator.getBestMetrics().getTotalRegions());
+
+        // Save simulation results to test directory
+        String resultsPath = TEST_OUTPUT_DIR + "/test_simulation_results.json";
+        simulator.saveResultsToJSON(resultsPath);
+        System.out.println("  Simulation results saved to " + resultsPath);
 
         System.out.println();
     }
@@ -121,7 +143,8 @@ public class IntegrationTest {
         java.util.Map<String, Object> testData = new java.util.HashMap<>();
         testData.put("configuration", config);
         testData.put("metrics", metrics);
-        jsonExporter.exportToFile(testData, "test_output.json");
+        String jsonPath = TEST_OUTPUT_DIR + "/test_output.json";
+        jsonExporter.exportToFile(testData, jsonPath);
         System.out.println("  JSON export works");
 
         // Test HTML report (simplified)
@@ -130,10 +153,17 @@ public class IntegrationTest {
         reportData.put("bestConfiguration", config);
         reportData.put("targetCriteria", new TargetCriteria(100, 5, 50, 20, 15));
         reportData.put("bestResults", java.util.List.of(
-            new SimulationResult(config, metrics, 10.5, 1, "test")
+                new SimulationResult(config, metrics, 10.5, 1, "test")
         ));
-        htmlGen.generateReport(reportData, "test_report.html");
+        String htmlPath = TEST_OUTPUT_DIR + "/test_report.html";
+        htmlGen.generateReport(reportData, htmlPath);
         System.out.println("  HTML report generation works");
+
+        // Save SVG for inspection
+        try (java.io.FileWriter writer = new java.io.FileWriter(TEST_OUTPUT_DIR + "/test_diagram.svg")) {
+            writer.write(svg);
+        }
+        System.out.println("  SVG saved for inspection");
 
         System.out.println();
     }

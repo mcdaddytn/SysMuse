@@ -48,6 +48,9 @@ public class SystemConfig {
     // Expressions directly in config (no separate file)
     private Map<String, String> expressions = new LinkedHashMap<>();
 
+    // Derived text field operation mappings
+    private Map<String, String> derivedTextOperations = new LinkedHashMap<>();
+
     // Configuration paths
     private String configDirectory = "";
     private String configFilename = "config.json";
@@ -355,6 +358,21 @@ public class SystemConfig {
             }
         }
 
+        // Parse derived text configuration
+        if (configJson.has("derivedTextOperations")) {
+            JsonNode operationsNode = configJson.get("derivedTextOperations");
+
+            derivedTextOperations.clear();
+            Iterator<String> fieldNames = operationsNode.fieldNames();
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                String operation = operationsNode.get(fieldName).asText();
+                derivedTextOperations.put(fieldName, operation);
+            }
+
+            LoggingUtil.info("Loaded " + derivedTextOperations.size() + " derived text operations");
+        }
+
         // Parse text aggregation configuration
         if (configJson.has("textAggregation")) {
             JsonNode aggregationNode = configJson.get("textAggregation");
@@ -530,6 +548,14 @@ public class SystemConfig {
             ObjectNode expressionsNode = formatNode.putObject("expressions");
             for (Map.Entry<String, String> entry : expressions.entrySet()) {
                 expressionsNode.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Derived Text Operations
+        if (!derivedTextOperations.isEmpty()) {
+            ObjectNode derivedTextNode = rootNode.putObject("derivedTextOperations");
+            for (Map.Entry<String, String> entry : derivedTextOperations.entrySet()) {
+                derivedTextNode.put(entry.getKey(), entry.getValue());
             }
         }
 
@@ -886,5 +912,9 @@ public class SystemConfig {
 
     public boolean isUtf8WithBom() {
         return isUtf8WithBom;
+    }
+
+    public Map<String, String> getDerivedTextOperations() {
+        return derivedTextOperations;
     }
 }

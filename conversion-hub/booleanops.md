@@ -1,6 +1,6 @@
 # String Matching Operations in Conversion Hub
 
-The Conversion Hub now supports three new string matching operations for use in boolean expressions. These operations allow you to perform various string comparisons that can be used in:
+The Conversion Hub supports various string matching operations for use in boolean expressions. These operations allow you to perform different types of string comparisons that can be used in:
 
 1. Derived boolean fields
 2. Condition fields for text aggregation
@@ -61,6 +61,45 @@ This operation checks if a field value is a member of a specified set of strings
 
 This expression evaluates to `true` if the field value matches any of the strings in the `values` array.
 
+### 4. Regular Expression Match (`STRING_REGEX_MATCH`)
+
+This operation checks if a field value matches a specified regular expression pattern.
+
+```json
+{
+  "type": "STRING_REGEX_MATCH",
+  "field": "Email",
+  "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+}
+```
+
+- `field`: The name of the field to check
+- `pattern`: The regular expression pattern to match against the field value
+
+This expression evaluates to `true` if the field value matches the regex pattern.
+
+### 5. Regular Expression Set Test (`STRING_IN_REGEXSET`)
+
+This operation checks if a field value matches any of the regular expression patterns in a specified set.
+
+```json
+{
+  "type": "STRING_IN_REGEXSET",
+  "field": "FileExtension",
+  "patterns": [
+    "(?i)jpg",
+    "(?i)jpeg",
+    "(?i)png",
+    "(?i)gif"
+  ]
+}
+```
+
+- `field`: The name of the field to check
+- `patterns`: Array of regex patterns to match against the field value
+
+This expression evaluates to `true` if the field value matches any of the patterns in the set.
+
 ## Combining with Other Boolean Operations
 
 The string matching operations can be combined with standard boolean operations:
@@ -77,9 +116,9 @@ The string matching operations can be combined with standard boolean operations:
       "value": "Premium"
     },
     {
-      "type": "STRING_EXACT_MATCH",
-      "field": "SubscriptionStatus",
-      "value": "Active"
+      "type": "STRING_REGEX_MATCH",
+      "field": "Email",
+      "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
     }
   ]
 }
@@ -124,6 +163,11 @@ The string matching operations can be combined with standard boolean operations:
           "value": "Business"
         }
       ]
+    },
+    {
+      "type": "STRING_REGEX_MATCH",
+      "field": "PhoneNumber",
+      "pattern": "^\\+1-\\d{3}-\\d{3}-\\d{4}$"
     }
   ]
 }
@@ -150,6 +194,12 @@ String operations can be used to create derived boolean fields:
       }
     ],
     "visible": true
+  },
+  "HasValidEmail": {
+    "type": "STRING_REGEX_MATCH",
+    "field": "Email",
+    "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+    "visible": true
   }
 }
 ```
@@ -161,7 +211,7 @@ These derived fields can then be used as conditions for text aggregation:
 ```json
 "aggregateTextFields": {
   "ContactInfo": {
-    "condition": "IsPremiumUser",
+    "condition": "HasValidEmail",
     "sourceFields": ["Email", "PhoneNumber"],
     "separator": " | ",
     "visible": true
@@ -175,7 +225,8 @@ Similarly, derived boolean fields can be used for field suppression:
 
 ```json
 "suppressedFields": {
-  "BillingAddress": "UsesPopularPayment"
+  "BillingAddress": "UsesPopularPayment",
+  "PhoneNumber": "NOT:HasValidEmail"
 }
 ```
 
@@ -183,4 +234,5 @@ Similarly, derived boolean fields can be used for field suppression:
 
 - String operations are evaluated at runtime for each row of data.
 - For performance reasons, it's recommended to use the simplest expressions that meet your needs.
-- When working with potentially null values, the operations handle them safely (null doesn't match any string).
+- When working with potentially null values, the operations handle them safely (null doesn't match any string)
+- Regex operations may be more computationally intensive; use them only when necessary.

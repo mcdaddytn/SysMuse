@@ -66,6 +66,9 @@ public class ConversionRepository {
     // Configuration instance
     private SystemConfig systemConfig;
 
+    // Map for derived text fields (name -> configuration)
+    private Map<String, JsonNode> derivedTextFields = new LinkedHashMap<>();
+
 
     /**
      * Constructor
@@ -233,77 +236,6 @@ public class ConversionRepository {
     public void setSystemConfig(SystemConfig config) {
         this.systemConfig = config;
         this.maxTextLength = config.getMaxTextLength();
-    }
-
-    /**
-     * Infer column types from first data row - UPDATED to include DATE and DATETIME
-     */
-    public void inferTypes_Old(String[] headers, String[] firstDataRow) {
-        for (int i = 0; i < headers.length && i < firstDataRow.length; i++) {
-            String value = firstDataRow[i];
-            String columnName = headers[i];
-
-            // Skip empty column names
-            if (columnName == null || columnName.trim().isEmpty()) {
-                continue;
-            }
-
-            this.currentColumnName = columnName;
-            DataType detectedType = inferTypeFromValue(value);
-            columnTypes.put(columnName, detectedType);
-        }
-        LoggingUtil.info("Inferred types for " + columnTypes.size() + " columns");
-    }
-
-    /**
-     * Infer the data type of a single value
-     */
-    private DataType inferTypeFromValue_Old(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return DataType.STRING;
-        }
-
-        value = value.trim();
-
-        // Check if it's a boolean
-        if (value.equalsIgnoreCase("true") || value.equalsIgnoreCase("false")) {
-            return DataType.BOOLEAN;
-        }
-
-        // Try to detect DATE and DATETIME using configured formats
-        if (systemConfig != null) {
-            // Try DATETIME formats first (they're more specific)
-            List<String> dateTimeFormats = systemConfig.getDateTimeFormats();
-            for (String format : dateTimeFormats) {
-                if (tryParseDateTime(value, format)) {
-                    columnFormats.put(getCurrentColumnName(), format);
-                    return DataType.DATETIME;
-                }
-            }
-
-            // Try DATE formats
-            List<String> dateFormats = systemConfig.getDateFormats();
-            for (String format : dateFormats) {
-                if (tryParseDate(value, format)) {
-                    columnFormats.put(getCurrentColumnName(), format);
-                    return DataType.DATE;
-                }
-            }
-        }
-
-        // Check if it's a number
-        try {
-            if (value.contains(".")) {
-                Double.parseDouble(value);
-                return DataType.FLOAT;
-            } else {
-                Integer.parseInt(value);
-                return DataType.INTEGER;
-            }
-        } catch (NumberFormatException e) {
-            // Default to string if parsing fails
-            return DataType.STRING;
-        }
     }
 
     /**
@@ -645,6 +577,7 @@ public class ConversionRepository {
         columnVisibility.clear();
         columnTypes.clear();
         uniqueKeyField = null;
+        derivedTextFields.clear();
 
         // 1. Parameters Extraction
         if (config.has("parameters")) {
@@ -731,6 +664,32 @@ public class ConversionRepository {
                 columnVisibility.put(fieldName, isVisible);
 
                 LoggingUtil.info("Added derived boolean field: " + fieldName +
+                        ", Visible: " + isVisible);
+            }
+        }
+
+        // 3.5 Derived Text Fields
+        if (config.has("derivedTextFields")) {
+            JsonNode derivedTextFieldsNode = config.get("derivedTextFields");
+            Iterator<String> fieldNames = derivedTextFieldsNode.fieldNames();
+
+            LoggingUtil.info("Processing derived text fields");
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                JsonNode fieldConfig = derivedTextFieldsNode.get(fieldName);
+
+                // Store the entire field configuration
+                derivedTextFields.put(fieldName, fieldConfig);
+
+                // Ensure it's registered as a string type
+                columnTypes.put(fieldName, DataType.STRING);
+
+                // Process visibility (default to true)
+                boolean isVisible = fieldConfig.has("visible") ?
+                        fieldConfig.get("visible").asBoolean() : true;
+                columnVisibility.put(fieldName, isVisible);
+
+                LoggingUtil.info("Added derived text field: " + fieldName +
                         ", Visible: " + isVisible);
             }
         }

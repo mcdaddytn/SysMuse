@@ -21,21 +21,20 @@ Sub ParseFileNameComponents()
         Exit Sub
     End If
 
-    ' Determine first blank column after data to insert new fields
+    ' Determine first blank column after data
     Dim insertCol As Long
     insertCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 2 ' Leave one blank column
 
     ws.Cells(1, insertCol).Value = "FileRoot"
     ws.Cells(1, insertCol + 1).Value = "FileExt"
     ws.Cells(1, insertCol + 2).Value = "AlphaPrefix"
+    ws.Cells(1, insertCol + 3).Value = "AlphaRegex"
 
     Dim i As Long, fName As String
     For i = 2 To lastRow
         fName = Trim(ws.Cells(i, fileNameCol).Value)
         If Len(fName) > 0 Then
-            Dim lastDot As Long
-            lastDot = InStrRev(fName, ".")
-
+            Dim lastDot As Long: lastDot = InStrRev(fName, ".")
             Dim root As String, ext As String
             If lastDot > 0 Then
                 root = Left(fName, lastDot - 1)
@@ -45,11 +44,11 @@ Sub ParseFileNameComponents()
                 ext = ""
             End If
 
-            ' Build AlphaPrefix by keeping all chars until the first numeric or non-allowed character
+            ' Extract AlphaPrefix
+            Dim ch As String
             Dim prefix As String: prefix = ""
             Dim j As Long
             For j = 1 To Len(root)
-                Dim ch As String
                 ch = Mid(root, j, 1)
                 If ch Like "[A-Za-z]" Or ch = " " Or ch = "_" Or ch = "-" Then
                     prefix = prefix & ch
@@ -58,13 +57,29 @@ Sub ParseFileNameComponents()
                 End If
             Next j
 
+            ' Build regex from root
+            Dim regexStr As String: regexStr = ""
+            For j = 1 To Len(root)
+                ch = Mid(root, j, 1)
+                If ch Like "[A-Za-z]" Then
+                    regexStr = regexStr & ch
+                ElseIf ch = " " Or ch = "_" Or ch = "-" Then
+                    regexStr = regexStr & "[ _-]+"
+                ElseIf ch Like "[0-9]" Then
+                    If Right(regexStr, 3) <> "\d" Then regexStr = regexStr & "\d+"
+                Else
+                    If Right(regexStr, 2) <> "\W" Then regexStr = regexStr & "\W+"
+                End If
+            Next j
+
             ws.Cells(i, insertCol).Value = root
             ws.Cells(i, insertCol + 1).Value = ext
             ws.Cells(i, insertCol + 2).Value = Trim(prefix)
+            ws.Cells(i, insertCol + 3).Value = regexStr
         End If
     Next i
 
-    MsgBox "File Name parsing complete. Results written starting at column " & insertCol & "."
+    MsgBox "Parsing complete with AlphaRegex."
 End Sub
 
 Sub CountDistinctValues(targetHeader As String, Optional outputSheetName As String = "")
@@ -241,6 +256,68 @@ Sub FilterByFileExtToSheet(fileExt As String, outputSheetName As String)
     Next i
 End Sub
 
+Sub FilterByRegexToSheet(pattern As String, outputSheetName As String)
+    Dim wsSource As Worksheet
+    Set wsSource = ActiveSheet
+
+    Dim lastRow As Long
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+
+    ' Get columns
+    Dim colBegDoc As Long, colFileName As Long, colFileRoot As Long
+    colBegDoc = 0: colFileName = 0: colFileRoot = 0
+
+    Dim col As Long
+    For col = 1 To wsSource.Cells(1, wsSource.Columns.Count).End(xlToLeft).Column
+        Select Case Trim(wsSource.Cells(1, col).Value)
+            Case "BegDoc": colBegDoc = col
+            Case "File Name": colFileName = col
+            Case "FileRoot": colFileRoot = col
+        End Select
+    Next col
+
+    If colBegDoc = 0 Or colFileName = 0 Or colFileRoot = 0 Then
+        MsgBox "Missing required columns (BegDoc, File Name, FileRoot)."
+        Exit Sub
+    End If
+
+    ' Output worksheet (append or create)
+    Dim wsOut As Worksheet
+    On Error Resume Next
+    Set wsOut = Worksheets(outputSheetName)
+    On Error GoTo 0
+
+    If wsOut Is Nothing Then
+        Set wsOut = Worksheets.Add
+        wsOut.Name = Left(outputSheetName, 31)
+        wsOut.Cells(1, 1).Value = "BegDoc"
+        wsOut.Cells(1, 2).Value = "File Name"
+    End If
+
+    Dim outRow As Long
+    outRow = wsOut.Cells(wsOut.Rows.Count, 1).End(xlUp).Row + 1
+
+    ' Prepare regex
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = pattern
+    re.IgnoreCase = True
+    re.Global = False
+
+    ' Filter
+    Dim i As Long, value As String
+    For i = 2 To lastRow
+        value = Trim(wsSource.Cells(i, colFileRoot).Value)
+        If re.test(value) Then
+            wsOut.Cells(outRow, 1).Value = wsSource.Cells(i, colBegDoc).Value
+            wsOut.Cells(outRow, 2).Value = wsSource.Cells(i, colFileName).Value
+            outRow = outRow + 1
+        End If
+    Next i
+
+    MsgBox "Regex filter complete to worksheet '" & outputSheetName & "'."
+End Sub
+
 Sub RunExampleFilters()
     ' Appends all matches for AlphaPrefix "Secretary Cert -" to "CertDocs"
     'Call FilterByAlphaPrefixToSheet("Secretary Cert -", "CertDocs")
@@ -248,4 +325,11 @@ Sub RunExampleFilters()
     ' Appends all .pdf matches to "PDFDocs"
     'Call FilterByFileExtToSheet("pdf", "PDFDocs")
     Call FilterByFileExtToSheet("detail", "detail")
+End Sub
+
+Sub RunAlphaRegexFilter()
+    Dim pattern As String
+    pattern = "SAS[ _-]+\d+\.\w+" ' Adjust based on desired root structure
+
+    Call FilterByRegexToSheet(pattern, "RegexFiltered")
 End Sub

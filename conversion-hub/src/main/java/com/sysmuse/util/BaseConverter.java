@@ -338,6 +338,12 @@ public abstract class BaseConverter {
         int processedCount = 0;
 
         for (Map<String, Object> row : rows) {
+            // Process derived text fields first (NEW)
+            repository.processDerivedTextFields(row);
+
+            // Apply derived boolean fields
+            repository.processDerivedFields(row);
+
             // Apply derived boolean fields
             repository.processDerivedFields(row);
 

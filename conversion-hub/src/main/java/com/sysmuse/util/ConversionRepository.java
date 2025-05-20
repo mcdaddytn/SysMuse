@@ -814,6 +814,47 @@ public class ConversionRepository {
         }
     }
 
+
+    /**
+     * Process the derived text fields for a row
+     */
+    public void processDerivedTextFields(Map<String, Object> rowValues) {
+        for (Map.Entry<String, JsonNode> entry : derivedTextFields.entrySet()) {
+            String fieldName = entry.getKey();
+            JsonNode config = entry.getValue();
+
+            try {
+                // Process the derived text field configuration
+                String derivedText = processDerivedTextField(config, rowValues);
+                rowValues.put(fieldName, derivedText);
+            } catch (Exception e) {
+                LoggingUtil.error("Error processing derived text field '" + fieldName + "': " + e.getMessage(), e);
+                // Set empty string if processing fails
+                rowValues.put(fieldName, "");
+            }
+        }
+    }
+
+    /**
+     * Process a single derived text field configuration
+     */
+    private String processDerivedTextField(JsonNode config, Map<String, Object> rowValues) {
+        String operation = config.get("operation").asText().toUpperCase();
+        String sourceField = config.get("sourceField").asText();
+
+        // Convert string operation to enum
+        TextFieldDerivation.Operation op;
+        try {
+            op = TextFieldDerivation.Operation.valueOf(operation);
+        } catch (IllegalArgumentException e) {
+            LoggingUtil.warn("Unknown text field derivation operation: " + operation);
+            return "";
+        }
+
+        // Process the operation
+        return TextFieldDerivation.processOperation(op, sourceField, rowValues);
+    }
+
     /**
      * Process the aggregate text fields for a row
      */
@@ -864,6 +905,13 @@ public class ConversionRepository {
         } else {
             // If headers are null, use column map keys as a fallback
             allFields.addAll(columnMap.keySet());
+        }
+
+        // Add derived text fields (NEW)
+        for (String field : derivedTextFields.keySet()) {
+            if (!allFields.contains(field)) {
+                allFields.add(field);
+            }
         }
 
         // Add derived fields

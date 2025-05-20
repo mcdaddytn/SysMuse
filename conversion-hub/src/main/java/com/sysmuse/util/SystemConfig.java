@@ -66,8 +66,8 @@ public class SystemConfig {
     private String archiveSuffix = "_archive";
     private String archivePassword = null;
     private boolean keepOriginalFiles = true;
-    private boolean isSqlEnabled = true;
-    //private boolean isSqlEnabled = false;
+    //private boolean isSqlEnabled = true;
+    private boolean isSqlEnabled = false;
     private boolean isSqlDropTableBeforeCreate = true;
     private boolean isSqlUseDateSuffix = false;
 

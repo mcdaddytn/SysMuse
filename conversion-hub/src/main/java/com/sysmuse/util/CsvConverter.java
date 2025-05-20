@@ -191,6 +191,11 @@ public class CsvConverter extends BaseConverter {
         // Parse each row string and add to repository
         processRows(rowStrings, headers, repository);
 
+        // gm: adding, added to processRows derived text, need a refactor
+        // Now that all data is imported, process derived fields, aggregation, and suppression
+        //LoggingUtil.info("Processing derived fields and transformations on complete dataset...");
+        //processRepositoryRows(repository);
+
         LoggingUtil.info("Finished importing CSV data. Total data rows: " + repository.getDataRows().size());
     }
 
@@ -274,6 +279,9 @@ public class CsvConverter extends BaseConverter {
 
             // Create a map for the current row's values using base class method
             Map<String, Object> rowValues = processRow(headers, values, repository);
+
+            // Process derived text fields first (NEW)
+            repository.processDerivedTextFields(rowValues);
 
             // Process derived boolean fields
             repository.processDerivedFields(rowValues);

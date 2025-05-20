@@ -1,11 +1,11 @@
 Sub ParseFileNameComponents()
     Dim ws As Worksheet
     Set ws = ActiveSheet
-    
+
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    
-    ' Find the column number of "File Name"
+
+    ' Find "File Name" column
     Dim fileNameCol As Long
     fileNameCol = 0
     Dim col As Long
@@ -15,27 +15,27 @@ Sub ParseFileNameComponents()
             Exit For
         End If
     Next col
-    
+
     If fileNameCol = 0 Then
         MsgBox "File Name column not found."
         Exit Sub
     End If
 
-    ' Insert columns for FileRoot, FileExt, AlphaPrefix
-    ws.Cells(1, fileNameCol + 1).EntireColumn.Insert
-    ws.Cells(1, fileNameCol + 1).Value = "FileRoot"
-    ws.Cells(1, fileNameCol + 2).EntireColumn.Insert
-    ws.Cells(1, fileNameCol + 2).Value = "FileExt"
-    ws.Cells(1, fileNameCol + 3).EntireColumn.Insert
-    ws.Cells(1, fileNameCol + 3).Value = "AlphaPrefix"
-    
+    ' Determine first blank column after data to insert new fields
+    Dim insertCol As Long
+    insertCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 2 ' Leave one blank column
+
+    ws.Cells(1, insertCol).Value = "FileRoot"
+    ws.Cells(1, insertCol + 1).Value = "FileExt"
+    ws.Cells(1, insertCol + 2).Value = "AlphaPrefix"
+
     Dim i As Long, fName As String
     For i = 2 To lastRow
-        fName = ws.Cells(i, fileNameCol).Value
+        fName = Trim(ws.Cells(i, fileNameCol).Value)
         If Len(fName) > 0 Then
             Dim lastDot As Long
             lastDot = InStrRev(fName, ".")
-            
+
             Dim root As String, ext As String
             If lastDot > 0 Then
                 root = Left(fName, lastDot - 1)
@@ -44,30 +44,27 @@ Sub ParseFileNameComponents()
                 root = fName
                 ext = ""
             End If
-            
-            ' Extract AlphaPrefix
-            Dim prefix As String
+
+            ' Build AlphaPrefix by keeping all chars until the first numeric or non-allowed character
+            Dim prefix As String: prefix = ""
             Dim j As Long
-            prefix = ""
             For j = 1 To Len(root)
                 Dim ch As String
                 ch = Mid(root, j, 1)
-                If ch Like "[A-Za-z]" Then
+                If ch Like "[A-Za-z]" Or ch = " " Or ch = "_" Or ch = "-" Then
                     prefix = prefix & ch
-                ElseIf ch Like "[_ -]" Then
-                    prefix = prefix
                 Else
                     Exit For
                 End If
             Next j
-            
-            ws.Cells(i, fileNameCol + 1).Value = root
-            ws.Cells(i, fileNameCol + 2).Value = ext
-            ws.Cells(i, fileNameCol + 3).Value = prefix
+
+            ws.Cells(i, insertCol).Value = root
+            ws.Cells(i, insertCol + 1).Value = ext
+            ws.Cells(i, insertCol + 2).Value = Trim(prefix)
         End If
     Next i
-    
-    MsgBox "File Name parsing complete."
+
+    MsgBox "File Name parsing complete. Results written starting at column " & insertCol & "."
 End Sub
 
 Sub CountDistinctValues(targetHeader As String, Optional outputSheetName As String = "")
@@ -142,15 +139,113 @@ Sub CountDistinctValues(targetHeader As String, Optional outputSheetName As Stri
     MsgBox "Distinct values for '" & targetHeader & "' written to worksheet '" & outputSheetName & "'."
 End Sub
 
-Sub CountAlphaPrefixValues()
-    Call CountDistinctValues("AlphaPrefix")
+Sub FilterByAlphaPrefixToSheet(prefix As String, outputSheetName As String)
+    Dim wsSource As Worksheet
+    Set wsSource = ActiveSheet
+
+    Dim lastRow As Long
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+
+    ' Get column indexes
+    Dim colBegDoc As Long, colFileName As Long, colAlphaPrefix As Long
+    colBegDoc = 0: colFileName = 0: colAlphaPrefix = 0
+
+    Dim col As Long
+    For col = 1 To wsSource.Cells(1, wsSource.Columns.Count).End(xlToLeft).Column
+        Select Case Trim(wsSource.Cells(1, col).Value)
+            Case "BegDoc": colBegDoc = col
+            Case "File Name": colFileName = col
+            Case "AlphaPrefix": colAlphaPrefix = col
+        End Select
+    Next col
+
+    If colBegDoc = 0 Or colFileName = 0 Or colAlphaPrefix = 0 Then
+        MsgBox "Missing required columns (BegDoc, File Name, AlphaPrefix)."
+        Exit Sub
+    End If
+
+    ' Get or create output sheet
+    Dim wsOut As Worksheet
+    On Error Resume Next
+    Set wsOut = Worksheets(outputSheetName)
+    On Error GoTo 0
+
+    If wsOut Is Nothing Then
+        Set wsOut = Worksheets.Add
+        wsOut.Name = Left(outputSheetName, 31)
+        wsOut.Cells(1, 1).Value = "BegDoc"
+        wsOut.Cells(1, 2).Value = "File Name"
+    End If
+
+    Dim outRow As Long
+    outRow = wsOut.Cells(wsOut.Rows.Count, 1).End(xlUp).Row + 1
+
+    Dim i As Long
+    For i = 2 To lastRow
+        If Trim(wsSource.Cells(i, colAlphaPrefix).Value) = prefix Then
+            wsOut.Cells(outRow, 1).Value = wsSource.Cells(i, colBegDoc).Value
+            wsOut.Cells(outRow, 2).Value = wsSource.Cells(i, colFileName).Value
+            outRow = outRow + 1
+        End If
+    Next i
 End Sub
 
-Sub CountFileRootValues()
-    Call CountDistinctValues("FileRoot")
+Sub FilterByFileExtToSheet(fileExt As String, outputSheetName As String)
+    Dim wsSource As Worksheet
+    Set wsSource = ActiveSheet
+
+    Dim lastRow As Long
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+
+    ' Get column indexes
+    Dim colBegDoc As Long, colFileName As Long, colFileExt As Long
+    colBegDoc = 0: colFileName = 0: colFileExt = 0
+
+    Dim col As Long
+    For col = 1 To wsSource.Cells(1, wsSource.Columns.Count).End(xlToLeft).Column
+        Select Case Trim(wsSource.Cells(1, col).Value)
+            Case "BegDoc": colBegDoc = col
+            Case "File Name": colFileName = col
+            Case "FileExt": colFileExt = col
+        End Select
+    Next col
+
+    If colBegDoc = 0 Or colFileName = 0 Or colFileExt = 0 Then
+        MsgBox "Missing required columns (BegDoc, File Name, FileExt)."
+        Exit Sub
+    End If
+
+    ' Get or create output sheet
+    Dim wsOut As Worksheet
+    On Error Resume Next
+    Set wsOut = Worksheets(outputSheetName)
+    On Error GoTo 0
+
+    If wsOut Is Nothing Then
+        Set wsOut = Worksheets.Add
+        wsOut.Name = Left(outputSheetName, 31)
+        wsOut.Cells(1, 1).Value = "BegDoc"
+        wsOut.Cells(1, 2).Value = "File Name"
+    End If
+
+    Dim outRow As Long
+    outRow = wsOut.Cells(wsOut.Rows.Count, 1).End(xlUp).Row + 1
+
+    Dim i As Long
+    For i = 2 To lastRow
+        If Trim(wsSource.Cells(i, colFileExt).Value) = fileExt Then
+            wsOut.Cells(outRow, 1).Value = wsSource.Cells(i, colBegDoc).Value
+            wsOut.Cells(outRow, 2).Value = wsSource.Cells(i, colFileName).Value
+            outRow = outRow + 1
+        End If
+    Next i
 End Sub
 
-Sub CountFileExtValues()
-    Call CountDistinctValues("FileExt")
-End Sub
+Sub RunExampleFilters()
+    ' Appends all matches for AlphaPrefix "Secretary Cert -" to "CertDocs"
+    'Call FilterByAlphaPrefixToSheet("Secretary Cert -", "CertDocs")
 
+    ' Appends all .pdf matches to "PDFDocs"
+    'Call FilterByFileExtToSheet("pdf", "PDFDocs")
+    Call FilterByFileExtToSheet("detail", "detail")
+End Sub

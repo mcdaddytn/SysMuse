@@ -25,12 +25,14 @@ Sub ParseFileNameComponents()
     Dim insertCol As Long
     insertCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 2 ' Leave one blank column
 
+    ' Add headers
     ws.Cells(1, insertCol).Value = "FileRoot"
     ws.Cells(1, insertCol + 1).Value = "FileExt"
     ws.Cells(1, insertCol + 2).Value = "AlphaPrefix"
     ws.Cells(1, insertCol + 3).Value = "AlphaRegex"
+    ws.Cells(1, insertCol + 4).Value = "FileNameRegex"
 
-    Dim i As Long, fName As String
+    Dim i As Long, fName As String, ch As String
     For i = 2 To lastRow
         fName = Trim(ws.Cells(i, fileNameCol).Value)
         If Len(fName) > 0 Then
@@ -45,7 +47,6 @@ Sub ParseFileNameComponents()
             End If
 
             ' Extract AlphaPrefix
-            Dim ch As String
             Dim prefix As String: prefix = ""
             Dim j As Long
             For j = 1 To Len(root)
@@ -56,45 +57,50 @@ Sub ParseFileNameComponents()
                     Exit For
                 End If
             Next j
-            
-            ' Build regex from root
+
+            ' Build AlphaRegex (from root)
             Dim regexStr As String: regexStr = ""
-						Dim digitRunLength As Integer: digitRunLength = 0
+            Dim digitRunLength As Integer: digitRunLength = 0
+            For j = 1 To Len(root)
+                ch = Mid(root, j, 1)
+                If ch Like "[0-9]" Then
+                    digitRunLength = digitRunLength + 1
+                Else
+                    If digitRunLength > 0 Then
+                        regexStr = regexStr & "\d{" & digitRunLength & "}"
+                        digitRunLength = 0
+                    End If
 
-						For j = 1 To Len(root)
-								ch = Mid(root, j, 1)
+                    If ch Like "[A-Za-z]" Then
+                        regexStr = regexStr & ch
+                    ElseIf ch = " " Or ch = "_" Or ch = "-" Then
+                        regexStr = regexStr & "[ _-]+"
+                    Else
+                        regexStr = regexStr & "\W+"
+                    End If
+                End If
+            Next j
+            If digitRunLength > 0 Then
+                regexStr = regexStr & "\d{" & digitRunLength & "}"
+            End If
 
-								If ch Like "[0-9]" Then
-										digitRunLength = digitRunLength + 1
-								Else
-										If digitRunLength > 0 Then
-												regexStr = regexStr & "\d{" & digitRunLength & "}"
-												digitRunLength = 0
-										End If
+            ' Build FileNameRegex (append escaped extension)
+            Dim fileRegex As String
+            fileRegex = regexStr
+            If ext <> "" Then
+                fileRegex = fileRegex & "\." & LCase(ext)
+            End If
 
-										If ch Like "[A-Za-z]" Then
-												regexStr = regexStr & ch
-										ElseIf ch = " " Or ch = "_" Or ch = "-" Then
-												regexStr = regexStr & "[ _-]+"
-										Else
-												regexStr = regexStr & "\W+"
-										End If
-								End If
-						Next j
-
-						' If file ends in digits, flush the remaining digit pattern
-						If digitRunLength > 0 Then
-								regexStr = regexStr & "\d{" & digitRunLength & "}"
-						End If
-
+            ' Write outputs
             ws.Cells(i, insertCol).Value = root
             ws.Cells(i, insertCol + 1).Value = ext
             ws.Cells(i, insertCol + 2).Value = Trim(prefix)
             ws.Cells(i, insertCol + 3).Value = regexStr
+            ws.Cells(i, insertCol + 4).Value = fileRegex
         End If
     Next i
 
-    MsgBox "Parsing complete with AlphaRegex."
+    MsgBox "Parsing complete with AlphaRegex and FileNameRegex."
 End Sub
 
 Sub CountDistinctValues(targetHeader As String, Optional outputSheetName As String = "")
@@ -333,6 +339,67 @@ Sub FilterByRegexToSheet(pattern As String, outputSheetName As String)
     MsgBox "Regex filter complete to worksheet '" & outputSheetName & "'."
 End Sub
 
+Sub FilterByFileNameRegexToSheet(pattern As String, outputSheetName As String)
+    Dim wsSource As Worksheet
+    Set wsSource = ActiveSheet
+
+    Dim lastRow As Long
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+
+    ' Get column indexes
+    Dim colBegDoc As Long, colFileName As Long
+    colBegDoc = 0: colFileName = 0
+
+    Dim col As Long
+    For col = 1 To wsSource.Cells(1, wsSource.Columns.Count).End(xlToLeft).Column
+        Select Case Trim(wsSource.Cells(1, col).Value)
+            Case "BegDoc": colBegDoc = col
+            Case "File Name": colFileName = col
+        End Select
+    Next col
+
+    If colBegDoc = 0 Or colFileName = 0 Then
+        MsgBox "Required columns (BegDoc, File Name) not found."
+        Exit Sub
+    End If
+
+    ' Output sheet
+    Dim wsOut As Worksheet
+    On Error Resume Next
+    Set wsOut = Worksheets(outputSheetName)
+    On Error GoTo 0
+
+    If wsOut Is Nothing Then
+        Set wsOut = Worksheets.Add
+        wsOut.Name = Left(outputSheetName, 31)
+        wsOut.Cells(1, 1).Value = "BegDoc"
+        wsOut.Cells(1, 2).Value = "File Name"
+    End If
+
+    Dim outRow As Long
+    outRow = wsOut.Cells(wsOut.Rows.Count, 1).End(xlUp).Row + 1
+
+    ' Setup regex
+    Dim re As Object
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = pattern
+    re.IgnoreCase = True
+    re.Global = False
+
+    ' Filter rows
+    Dim i As Long, value As String
+    For i = 2 To lastRow
+        value = Trim(wsSource.Cells(i, colFileName).Value)
+        If re.test(value) Then
+            wsOut.Cells(outRow, 1).Value = wsSource.Cells(i, colBegDoc).Value
+            wsOut.Cells(outRow, 2).Value = value
+            outRow = outRow + 1
+        End If
+    Next i
+
+    MsgBox "Filtered using FileNameRegex to '" & outputSheetName & "'"
+End Sub
+
 Sub RunExampleFilters()
     ' Appends all matches for AlphaPrefix "Secretary Cert -" to "CertDocs"
     'Call FilterByAlphaPrefixToSheet("Secretary Cert -", "CertDocs")
@@ -348,3 +415,13 @@ Sub RunAlphaRegexFilter()
 
     Call FilterByRegexToSheet(pattern, "RegexFiltered")
 End Sub
+
+Sub RunFileNameRegexFilter()
+    Dim pattern As String
+    'pattern = "SAS[ _-]+\d{3}\.jpg" ' Example pattern
+    pattern = "SAS[ _-]+Photos[ _-]+\d{3}b?\.jpg"
+        
+    Call FilterByFileNameRegexToSheet(pattern, "SASPhotoJPG")
+End Sub
+
+

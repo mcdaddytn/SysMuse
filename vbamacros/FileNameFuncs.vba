@@ -56,21 +56,36 @@ Sub ParseFileNameComponents()
                     Exit For
                 End If
             Next j
-
+            
             ' Build regex from root
             Dim regexStr As String: regexStr = ""
-            For j = 1 To Len(root)
-                ch = Mid(root, j, 1)
-                If ch Like "[A-Za-z]" Then
-                    regexStr = regexStr & ch
-                ElseIf ch = " " Or ch = "_" Or ch = "-" Then
-                    regexStr = regexStr & "[ _-]+"
-                ElseIf ch Like "[0-9]" Then
-                    If Right(regexStr, 3) <> "\d" Then regexStr = regexStr & "\d+"
-                Else
-                    If Right(regexStr, 2) <> "\W" Then regexStr = regexStr & "\W+"
-                End If
-            Next j
+						Dim digitRunLength As Integer: digitRunLength = 0
+
+						For j = 1 To Len(root)
+								ch = Mid(root, j, 1)
+
+								If ch Like "[0-9]" Then
+										digitRunLength = digitRunLength + 1
+								Else
+										If digitRunLength > 0 Then
+												regexStr = regexStr & "\d{" & digitRunLength & "}"
+												digitRunLength = 0
+										End If
+
+										If ch Like "[A-Za-z]" Then
+												regexStr = regexStr & ch
+										ElseIf ch = " " Or ch = "_" Or ch = "-" Then
+												regexStr = regexStr & "[ _-]+"
+										Else
+												regexStr = regexStr & "\W+"
+										End If
+								End If
+						Next j
+
+						' If file ends in digits, flush the remaining digit pattern
+						If digitRunLength > 0 Then
+								regexStr = regexStr & "\d{" & digitRunLength & "}"
+						End If
 
             ws.Cells(i, insertCol).Value = root
             ws.Cells(i, insertCol + 1).Value = ext

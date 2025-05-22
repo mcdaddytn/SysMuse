@@ -1,7 +1,18 @@
-#include <JuceHeader.h>
 #include <iostream>
 #include <memory>
 #include <vector>
+
+//#include <JuceHeader.h>
+#include <juce_core/juce_core.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_data_structures/juce_data_structures.h>
+#include <juce_events/juce_events.h>
+#include <juce_graphics/juce_graphics.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 //==============================================================================
 struct PluginConfig
@@ -38,7 +49,7 @@ public:
 
         auto jsonText = configFile.loadFileAsString();
         auto json = juce::JSON::parse(jsonText);
-        
+
         if (!json.isObject())
         {
             std::cerr << "Invalid JSON configuration" << std::endl;
@@ -53,10 +64,10 @@ public:
         // Load input audio file
         juce::AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
-        
+
         juce::File inputFile(config.inputFile);
         std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(inputFile));
-        
+
         if (!reader)
         {
             std::cerr << "Could not read input file: " << config.inputFile << std::endl;
@@ -66,7 +77,7 @@ public:
         // Setup audio buffer
         auto numChannels = static_cast<int>(reader->numChannels);
         auto numSamples = static_cast<int>(reader->lengthInSamples);
-        
+
         juce::AudioBuffer<float> audioBuffer(numChannels, numSamples);
         reader->read(&audioBuffer, 0, numSamples, 0, true, true);
 
@@ -113,7 +124,7 @@ private:
         {
             auto pluginJson = pluginsArray[i];
             PluginConfig pluginConfig;
-            
+
             pluginConfig.pluginPath = pluginJson["path"].toString();
             pluginConfig.presetPath = pluginJson.getProperty("preset", "");
             pluginConfig.parameters = pluginJson.getProperty("parameters", juce::var());
@@ -133,7 +144,7 @@ private:
     bool initializePlugins(double sampleRate, int numChannels)
     {
         pluginFormatManager.addDefaultFormats();
-        
+
         for (const auto& pluginConfig : config.plugins)
         {
             // Load plugin
@@ -153,10 +164,10 @@ private:
 
             juce::String errorMessage;
             auto plugin = pluginFormatManager.createPluginInstance(description, sampleRate, config.bufferSize, errorMessage);
-            
+
             if (!plugin)
             {
-                std::cerr << "Failed to load plugin: " << pluginConfig.pluginPath 
+                std::cerr << "Failed to load plugin: " << pluginConfig.pluginPath
                          << " Error: " << errorMessage << std::endl;
                 return false;
             }
@@ -181,7 +192,7 @@ private:
             }
 
             pluginChain.push_back(std::move(plugin));
-            
+
             std::cout << "Loaded plugin: " << description.name << std::endl;
         }
 
@@ -204,7 +215,7 @@ private:
                 return true;
             }
         }
-        
+
         // Try to load as generic state
         auto presetText = presetFile.loadFileAsString();
         if (presetText.isNotEmpty())
@@ -251,12 +262,12 @@ private:
     {
         auto numSamples = buffer.getNumSamples();
         auto blockSize = config.bufferSize;
-        
+
         // Process in chunks
         for (int startSample = 0; startSample < numSamples; startSample += blockSize)
         {
             auto samplesToProcess = juce::jmin(blockSize, numSamples - startSample);
-            
+
             // Create a view of the current block
             juce::AudioBuffer<float> blockBuffer(buffer.getArrayOfWritePointers(),
                                                buffer.getNumChannels(),
@@ -270,22 +281,22 @@ private:
                 plugin->processBlock(blockBuffer, midiBuffer);
             }
         }
-        
-        std::cout << "Processed " << numSamples << " samples through " 
+
+        std::cout << "Processed " << numSamples << " samples through "
                   << pluginChain.size() << " plugins" << std::endl;
     }
 
     bool writeAudioFile(const juce::AudioBuffer<float>& buffer, double sampleRate, int numChannels)
     {
         juce::File outputFile(config.outputFile);
-        
+
         // Create output directory if it doesn't exist
         outputFile.getParentDirectory().createDirectory();
 
         // Setup audio format
         juce::AudioFormatManager formatManager;
         formatManager.registerBasicFormats();
-        
+
         std::unique_ptr<juce::AudioFormat> format(formatManager.findFormatForFileExtension(outputFile.getFileExtension()));
         if (!format)
         {
@@ -334,7 +345,7 @@ public:
     void initialise(const juce::String& commandLine) override
     {
         auto args = getCommandLineParameterArray();
-        
+
         if (args.size() < 1)
         {
             std::cout << "Usage: " << getApplicationName() << " <config.json>" << std::endl;
@@ -344,7 +355,7 @@ public:
         }
 
         AudioPluginHost host;
-        
+
         if (!host.loadConfiguration(args[0]))
         {
             std::cerr << "Failed to load configuration" << std::endl;
@@ -354,7 +365,7 @@ public:
         }
 
         std::cout << "Processing audio file..." << std::endl;
-        
+
         if (!host.processAudioFile())
         {
             std::cerr << "Failed to process audio file" << std::endl;

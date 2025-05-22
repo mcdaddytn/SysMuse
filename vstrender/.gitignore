@@ -1,0 +1,208 @@
+# VST Plugin Host Project .gitignore
+
+# JUCE Framework - exclude the linked/copied JUCE directory
+# Users should link their own JUCE installation
+JUCE/
+juce/
+
+# Build directories
+build/
+Build/
+builds/
+Builds/
+cmake-build-*/
+out/
+
+# Visual Studio generated files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Executables and binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.app
+*.dSYM/
+
+# Object files
+*.o
+*.obj
+*.lib
+*.a
+*.la
+*.lo
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux specific
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+
+# IDE specific files
+*.sublime-workspace
+*.sublime-project
+
+# Xcode (for macOS builds)
+xcuserdata/
+*.xcworkspace
+!default.xcworkspace
+*.xcodeproj
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+
+# Audio files (typically large, exclude from repo)
+*.wav
+*.mp3
+*.flac
+*.aiff
+*.au
+*.m4a
+*.ogg
+
+# VST Plugin files (these are typically installed separately)
+*.vst
+*.vst3
+*.component
+*.vstpreset
+
+# Configuration files with sensitive paths (create templates instead)
+# Uncomment these if you don't want to commit actual config files
+# *.json
+# configs/*.json
+# !configs/*_template.json
+
+# Test output files
+test_output/
+processed_*
+output_*
+
+# Documentation build files
+docs/_build/
+docs/html/
+docs/latex/
+
+# Package files
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# JetBrains IDEs
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Coverage reports
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# Profiling data
+*.prof
+gmon.out
+
+# Static analysis
+cppcheck-results.xml
+*.sarif
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Project specific - exclude large test files and user-specific configs
+my_configs/
+personal_plugins/
+test_audio/
+large_files/

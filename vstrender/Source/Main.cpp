@@ -20,6 +20,8 @@ struct PluginConfig
     juce::String pluginPath;
     juce::String pluginName;  // Optional: specify which plugin from a multi-plugin file
     juce::String presetPath;
+    juce::String parametersBefore;  // Optional: output JSON with parameters before preset
+    juce::String parametersAfter;   // Optional: output JSON with parameters after preset
     juce::var parameters;
 };
 
@@ -129,6 +131,8 @@ private:
             pluginConfig.pluginPath = pluginJson["path"].toString();
             pluginConfig.pluginName = pluginJson.getProperty("plugin_name", "");
             pluginConfig.presetPath = pluginJson.getProperty("preset", "");
+            pluginConfig.parametersBefore = pluginJson.getProperty("export_parameters_before", "");
+            pluginConfig.parametersAfter = pluginJson.getProperty("export_parameters_after", "");
             pluginConfig.parameters = pluginJson.getProperty("parameters", juce::var());
 
             if (pluginConfig.pluginPath.isEmpty())
@@ -158,12 +162,46 @@ private:
         {
             std::cout << "=== Loading Plugin ===" << std::endl;
             std::cout << "Plugin path: " << pluginConfig.pluginPath << std::endl;
+            std::cout << "Plugin path length: " << pluginConfig.pluginPath.length() << " characters" << std::endl;
+
+            // Debug: Print each character to see if there are hidden characters
+            std::cout << "Path characters: ";
+            for (int i = 0; i < pluginConfig.pluginPath.length(); ++i)
+            {
+                auto c = pluginConfig.pluginPath[i];
+                if (c >= 32 && c <= 126) // Printable ASCII
+                    std::cout << c;
+                else
+                    std::cout << "[" << (int)c << "]";
+            }
+            std::cout << std::endl;
 
             // Load plugin
             juce::File pluginFile(pluginConfig.pluginPath);
+            std::cout << "JUCE File object created" << std::endl;
+            std::cout << "File.getFullPathName(): " << pluginFile.getFullPathName() << std::endl;
+            std::cout << "File.exists(): " << (pluginFile.exists() ? "true" : "false") << std::endl;
+            std::cout << "File.existsAsFile(): " << (pluginFile.existsAsFile() ? "true" : "false") << std::endl;
+
             if (!pluginFile.existsAsFile())
             {
                 std::cerr << "Plugin file not found: " << pluginConfig.pluginPath << std::endl;
+
+                // Try to find similar files
+                auto parentDir = pluginFile.getParentDirectory();
+                std::cout << "Parent directory: " << parentDir.getFullPathName() << std::endl;
+                std::cout << "Parent directory exists: " << (parentDir.exists() ? "true" : "false") << std::endl;
+
+                if (parentDir.exists())
+                {
+                    std::cout << "Files in parent directory:" << std::endl;
+                    auto files = parentDir.findChildFiles(juce::File::findFiles, false, "*.vst3");
+                    for (auto& file : files)
+                    {
+                        std::cout << "  " << file.getFileName() << std::endl;
+                    }
+                }
+
                 return false;
             }
 
@@ -260,6 +298,13 @@ private:
             plugin->prepareToPlay(sampleRate, config.bufferSize);
             plugin->setPlayConfigDetails(numChannels, numChannels, sampleRate, config.bufferSize);
 
+            // Export parameters before preset loading if requested
+            if (!pluginConfig.parametersBefore.isEmpty())
+            {
+                std::cout << "Exporting parameters BEFORE preset to: " << pluginConfig.parametersBefore << std::endl;
+                exportPluginParameters(plugin.get(), pluginConfig.parametersBefore, "before_preset");
+            }
+
             // Load preset if specified
             if (!pluginConfig.presetPath.isEmpty())
             {
@@ -274,10 +319,17 @@ private:
                 }
             }
 
-            // Set parameters if specified
+            // Export parameters after preset loading if requested
+            if (!pluginConfig.parametersAfter.isEmpty())
+            {
+                std::cout << "Exporting parameters AFTER preset to: " << pluginConfig.parametersAfter << std::endl;
+                exportPluginParameters(plugin.get(), pluginConfig.parametersAfter, "after_preset");
+            }
+
+            // Set additional parameters if specified
             if (pluginConfig.parameters.isObject())
             {
-                std::cout << "Setting parameters..." << std::endl;
+                std::cout << "Setting additional parameters..." << std::endl;
                 setPluginParameters(plugin.get(), pluginConfig.parameters);
             }
 
@@ -323,6 +375,66 @@ private:
         return false;
     }
 
+    void exportPluginParameters(juce::AudioPluginInstance* plugin, const juce::String& outputPath, const juce::String& context)
+    {
+        juce::var jsonRoot = juce::var(new juce::DynamicObject());
+        auto* rootObject = jsonRoot.getDynamicObject();
+
+        // Add metadata
+        rootObject->setProperty("plugin_name", plugin->getName());
+        rootObject->setProperty("context", context);
+        rootObject->setProperty("timestamp", juce::Time::getCurrentTime().toString(true, true));
+        rootObject->setProperty("total_parameters", plugin->getParameters().size());
+
+        // Create parameters object
+        juce::var parametersObject = juce::var(new juce::DynamicObject());
+        auto* paramsObject = parametersObject.getDynamicObject();
+
+        const auto& params = plugin->getParameters();
+        std::cout << "Exporting " << params.size() << " parameters:" << std::endl;
+
+        for (int i = 0; i < params.size(); ++i)
+        {
+            auto* param = params[i];
+            auto paramName = param->getName(256);
+            auto paramValue = param->getValue();
+            auto paramText = param->getText(paramValue, 256);
+
+            // Create parameter info object
+            juce::var paramInfo = juce::var(new juce::DynamicObject());
+            auto* paramInfoObj = paramInfo.getDynamicObject();
+
+            paramInfoObj->setProperty("value", paramValue);
+            paramInfoObj->setProperty("text", paramText);
+            paramInfoObj->setProperty("index", i);
+            paramInfoObj->setProperty("label", param->getLabel());
+            paramInfoObj->setProperty("category", param->getCategory());
+            paramInfoObj->setProperty("default_value", param->getDefaultValue());
+
+            paramsObject->setProperty(paramName, paramInfo);
+
+            std::cout << "  [" << i << "] " << paramName << " = " << paramValue << " (" << paramText << ")" << std::endl;
+        }
+
+        rootObject->setProperty("parameters", parametersObject);
+
+        // Write to file
+        juce::File outputFile(outputPath);
+        outputFile.getParentDirectory().createDirectory();
+
+        juce::FileOutputStream outputStream(outputFile);
+        if (outputStream.openedOk())
+        {
+            juce::JSON::writeToStream(outputStream, jsonRoot, true);
+            outputStream.flush();
+            std::cout << "Parameters exported successfully to: " << outputPath << std::endl;
+        }
+        else
+        {
+            std::cerr << "Could not write parameters to: " << outputPath << std::endl;
+        }
+    }
+
     void setPluginParameters(juce::AudioPluginInstance* plugin, const juce::var& parameters)
     {
         if (!parameters.isObject())
@@ -332,6 +444,8 @@ private:
         if (!paramObject)
             return;
 
+        std::cout << "Setting " << paramObject->getProperties().size() << " parameters:" << std::endl;
+
         for (auto& prop : paramObject->getProperties())
         {
             auto paramName = prop.name.toString();
@@ -339,13 +453,39 @@ private:
 
             // Find parameter by name using JUCE 7.x compatible API
             const auto& params = plugin->getParameters();
+            bool paramFound = false;
+
             for (int i = 0; i < params.size(); ++i)
             {
                 if (params[i]->getName(256) == paramName)
                 {
+                    auto oldValue = params[i]->getValue();
+                    auto oldText = params[i]->getText(oldValue, 256);
+
                     params[i]->setValue(paramValue);
-                    std::cout << "Set parameter '" << paramName << "' to " << paramValue << std::endl;
+
+                    auto newText = params[i]->getText(paramValue, 256);
+
+                    std::cout << "  ✓ " << paramName << ": " << oldValue << " (" << oldText << ") → "
+                              << paramValue << " (" << newText << ")" << std::endl;
+                    paramFound = true;
                     break;
+                }
+            }
+
+            if (!paramFound)
+            {
+                std::cout << "  ✗ Parameter '" << paramName << "' not found" << std::endl;
+
+                // Suggest similar parameter names
+                std::cout << "    Available parameters containing '" << paramName << "':" << std::endl;
+                for (int i = 0; i < params.size(); ++i)
+                {
+                    auto availableName = params[i]->getName(256);
+                    if (availableName.containsIgnoreCase(paramName))
+                    {
+                        std::cout << "      - " << availableName << std::endl;
+                    }
                 }
             }
         }

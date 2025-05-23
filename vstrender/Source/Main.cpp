@@ -30,8 +30,9 @@ struct ProcessingConfig
     juce::String inputFile;
     juce::String outputFile;
     std::vector<PluginConfig> plugins;
-    double sampleRate = 44100.0;
-    int bufferSize = 512;
+    double sampleRate = 0.0;  // 0 = use input file sample rate
+    int bitDepth = 0;         // 0 = use input file bit depth
+    int bufferSize = 2048;    // Default to 2048 for better performance in offline rendering
 };
 
 //==============================================================================
@@ -81,21 +82,35 @@ public:
         auto numChannels = static_cast<int>(reader->numChannels);
         auto numSamples = static_cast<int>(reader->lengthInSamples);
 
+        // Determine final sample rate and bit depth
+        double finalSampleRate = (config.sampleRate > 0) ? config.sampleRate : reader->sampleRate;
+        int finalBitDepth = (config.bitDepth > 0) ? config.bitDepth : static_cast<int>(reader->bitsPerSample);
+
+        std::cout << "Input file info:" << std::endl;
+        std::cout << "  Sample rate: " << reader->sampleRate << " Hz" << std::endl;
+        std::cout << "  Bit depth: " << reader->bitsPerSample << " bits" << std::endl;
+        std::cout << "  Channels: " << numChannels << std::endl;
+        std::cout << "  Samples: " << numSamples << std::endl;
+        std::cout << "Processing settings:" << std::endl;
+        std::cout << "  Sample rate: " << finalSampleRate << " Hz" << (config.sampleRate > 0 ? " (configured)" : " (from input)") << std::endl;
+        std::cout << "  Bit depth: " << finalBitDepth << " bits" << (config.bitDepth > 0 ? " (configured)" : " (from input)") << std::endl;
+        std::cout << "  Buffer size: " << config.bufferSize << " samples" << std::endl;
+
         juce::AudioBuffer<float> audioBuffer(numChannels, numSamples);
         reader->read(&audioBuffer, 0, numSamples, 0, true, true);
 
         // Initialize plugin chain
-        if (!initializePlugins(reader->sampleRate, audioBuffer.getNumChannels()))
+        if (!initializePlugins(finalSampleRate, audioBuffer.getNumChannels()))
         {
             std::cerr << "Failed to initialize plugin chain" << std::endl;
             return false;
         }
 
         // Process audio through plugin chain
-        processAudioBuffer(audioBuffer, reader->sampleRate);
+        processAudioBuffer(audioBuffer, finalSampleRate);
 
         // Write output file
-        return writeAudioFile(audioBuffer, reader->sampleRate, numChannels);
+        return writeAudioFile(audioBuffer, finalSampleRate, numChannels, finalBitDepth);
     }
 
 private:
@@ -107,8 +122,9 @@ private:
     {
         config.inputFile = json["input_file"].toString();
         config.outputFile = json["output_file"].toString();
-        config.sampleRate = json.getProperty("sample_rate", 44100.0);
-        config.bufferSize = json.getProperty("buffer_size", 512);
+        config.sampleRate = json.getProperty("sample_rate", 0.0);      // 0 = auto-detect from input
+        config.bitDepth = json.getProperty("bit_depth", 0);            // 0 = auto-detect from input
+        config.bufferSize = json.getProperty("buffer_size", 2048);     // Default 2048 for offline rendering
 
         if (config.inputFile.isEmpty() || config.outputFile.isEmpty())
         {
@@ -378,8 +394,7 @@ private:
         return false;
     }
 
-	// void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 10)
-    void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 30)
+    void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 100)
     {
         const auto& params = plugin->getParameters();
         std::cout << "Current parameter values (showing first " << juce::jmin(maxParams, params.size()) << " of " << params.size() << "):" << std::endl;
@@ -401,6 +416,14 @@ private:
 
     void exportPluginParameters(juce::AudioPluginInstance* plugin, const juce::String& outputPath, const juce::String& context)
     {
+        // Delete existing file to avoid appending
+        juce::File outputFile(outputPath);
+        if (outputFile.exists())
+        {
+            std::cout << "Deleting existing file: " << outputPath << std::endl;
+            outputFile.deleteFile();
+        }
+
         juce::var jsonRoot = juce::var(new juce::DynamicObject());
         auto* rootObject = jsonRoot.getDynamicObject();
 
@@ -440,20 +463,20 @@ private:
 
         rootObject->setProperty("parameters", parametersObject);
 
-        // Write to file
-        juce::File outputFile(outputPath);
+        // Create parent directory if needed
         outputFile.getParentDirectory().createDirectory();
 
+        // Write to file (create new file)
         juce::FileOutputStream outputStream(outputFile);
         if (outputStream.openedOk())
         {
             juce::JSON::writeToStream(outputStream, jsonRoot, true);
             outputStream.flush();
-            std::cout << "“ Parameters exported successfully to: " << outputPath << std::endl;
+            std::cout << "Parameters exported successfully to: " << outputPath << std::endl;
         }
         else
         {
-            std::cerr << "— Could not write parameters to: " << outputPath << std::endl;
+            std::cerr << "Could not write parameters to: " << outputPath << std::endl;
         }
     }
 
@@ -529,7 +552,7 @@ private:
 
             if (!paramFound)
             {
-                std::cout << "  — Parameter '" << paramName << "' not found" << std::endl;
+                std::cout << "  Parameter '" << paramName << "' not found" << std::endl;
                 failCount++;
 
                 // Find similar parameter names
@@ -563,7 +586,7 @@ private:
         if (successCount > 0)
         {
             std::cout << "\nUpdated parameter values:" << std::endl;
-            logCurrentParameters(plugin, 15);  // Show more parameters after changes
+            logCurrentParameters(plugin, 100);  // Show up to 100 parameters after changes
         }
     }
 
@@ -595,9 +618,16 @@ private:
                   << pluginChain.size() << " plugins" << std::endl;
     }
 
-    bool writeAudioFile(const juce::AudioBuffer<float>& buffer, double sampleRate, int numChannels)
+    bool writeAudioFile(const juce::AudioBuffer<float>& buffer, double sampleRate, int numChannels, int bitDepth)
     {
         juce::File outputFile(config.outputFile);
+
+        // Delete existing output file to avoid appending
+        if (outputFile.exists())
+        {
+            std::cout << "Deleting existing output file: " << config.outputFile << std::endl;
+            outputFile.deleteFile();
+        }
 
         // Create output directory if it doesn't exist
         outputFile.getParentDirectory().createDirectory();
@@ -621,12 +651,18 @@ private:
             return false;
         }
 
-		//int bitDepth = 24;
-		int bitDepth = 16;
+        // Clamp bit depth to supported values
+        int finalBitDepth = bitDepth;
+        if (finalBitDepth != 16 && finalBitDepth != 24 && finalBitDepth != 32)
+        {
+            finalBitDepth = 24; // Default to 24-bit if unsupported
+            std::cout << "Bit depth " << bitDepth << " not supported, using " << finalBitDepth << " bits" << std::endl;
+        }
+
         std::unique_ptr<juce::AudioFormatWriter> writer(format->createWriterFor(fileStream.get(),
                                                                               sampleRate,
                                                                               static_cast<unsigned int>(numChannels),
-                                                                              bitDepth,
+                                                                              finalBitDepth,
                                                                               {},
                                                                               0));
         if (!writer)
@@ -642,6 +678,11 @@ private:
         writer->flush();
 
         std::cout << "Output written to: " << config.outputFile << std::endl;
+        std::cout << "  Sample rate: " << sampleRate << " Hz" << std::endl;
+        std::cout << "  Bit depth: " << finalBitDepth << " bits" << std::endl;
+        std::cout << "  Channels: " << numChannels << std::endl;
+        std::cout << "  Samples: " << buffer.getNumSamples() << std::endl;
+
         return true;
     }
 };

@@ -298,11 +298,11 @@ private:
             plugin->prepareToPlay(sampleRate, config.bufferSize);
             plugin->setPlayConfigDetails(numChannels, numChannels, sampleRate, config.bufferSize);
 
-            // Export parameters before preset loading if requested
+            // Export parameters before any changes if requested
             if (!pluginConfig.parametersBefore.isEmpty())
             {
-                std::cout << "Exporting parameters BEFORE preset to: " << pluginConfig.parametersBefore << std::endl;
-                exportPluginParameters(plugin.get(), pluginConfig.parametersBefore, "before_preset");
+                std::cout << "Exporting parameters BEFORE any changes to: " << pluginConfig.parametersBefore << std::endl;
+                exportPluginParameters(plugin.get(), pluginConfig.parametersBefore, "initial_state");
             }
 
             // Load preset if specified
@@ -316,21 +316,24 @@ private:
                 else
                 {
                     std::cout << "Preset loaded successfully!" << std::endl;
+                    std::cout << "Parameters after preset loading:" << std::endl;
+                    logCurrentParameters(plugin.get());
                 }
             }
 
-            // Export parameters after preset loading if requested
-            if (!pluginConfig.parametersAfter.isEmpty())
-            {
-                std::cout << "Exporting parameters AFTER preset to: " << pluginConfig.parametersAfter << std::endl;
-                exportPluginParameters(plugin.get(), pluginConfig.parametersAfter, "after_preset");
-            }
-
-            // Set additional parameters if specified
+            // Set additional parameters if specified (AFTER preset loading)
             if (pluginConfig.parameters.isObject())
             {
-                std::cout << "Setting additional parameters..." << std::endl;
+                std::cout << "\n=== Applying Manual Parameter Changes ===" << std::endl;
                 setPluginParameters(plugin.get(), pluginConfig.parameters);
+                std::cout << "=== Manual Parameter Changes Complete ===" << std::endl;
+            }
+
+            // Export parameters after ALL changes if requested
+            if (!pluginConfig.parametersAfter.isEmpty())
+            {
+                std::cout << "Exporting parameters AFTER all changes to: " << pluginConfig.parametersAfter << std::endl;
+                exportPluginParameters(plugin.get(), pluginConfig.parametersAfter, "final_state");
             }
 
             pluginChain.push_back(std::move(plugin));
@@ -375,6 +378,27 @@ private:
         return false;
     }
 
+	// void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 10)
+    void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 30)
+    {
+        const auto& params = plugin->getParameters();
+        std::cout << "Current parameter values (showing first " << juce::jmin(maxParams, params.size()) << " of " << params.size() << "):" << std::endl;
+
+        for (int i = 0; i < juce::jmin(maxParams, params.size()); ++i)
+        {
+            auto* param = params[i];
+            auto paramName = param->getName(256);
+            auto paramValue = param->getValue();
+            auto paramText = param->getText(paramValue, 256);
+
+            std::cout << "  [" << i << "] " << paramName << " = " << paramValue << " (" << paramText << ")" << std::endl;
+        }
+        if (params.size() > maxParams)
+        {
+            std::cout << "  ... and " << (params.size() - maxParams) << " more parameters" << std::endl;
+        }
+    }
+
     void exportPluginParameters(juce::AudioPluginInstance* plugin, const juce::String& outputPath, const juce::String& context)
     {
         juce::var jsonRoot = juce::var(new juce::DynamicObject());
@@ -391,7 +415,7 @@ private:
         auto* paramsObject = parametersObject.getDynamicObject();
 
         const auto& params = plugin->getParameters();
-        std::cout << "Exporting " << params.size() << " parameters:" << std::endl;
+        std::cout << "Exporting " << params.size() << " parameters to " << outputPath << std::endl;
 
         for (int i = 0; i < params.size(); ++i)
         {
@@ -412,8 +436,6 @@ private:
             paramInfoObj->setProperty("default_value", param->getDefaultValue());
 
             paramsObject->setProperty(paramName, paramInfo);
-
-            std::cout << "  [" << i << "] " << paramName << " = " << paramValue << " (" << paramText << ")" << std::endl;
         }
 
         rootObject->setProperty("parameters", parametersObject);
@@ -427,29 +449,41 @@ private:
         {
             juce::JSON::writeToStream(outputStream, jsonRoot, true);
             outputStream.flush();
-            std::cout << "Parameters exported successfully to: " << outputPath << std::endl;
+            std::cout << "“ Parameters exported successfully to: " << outputPath << std::endl;
         }
         else
         {
-            std::cerr << "Could not write parameters to: " << outputPath << std::endl;
+            std::cerr << "— Could not write parameters to: " << outputPath << std::endl;
         }
     }
 
     void setPluginParameters(juce::AudioPluginInstance* plugin, const juce::var& parameters)
     {
         if (!parameters.isObject())
+        {
+            std::cout << "No parameters to set (not an object)" << std::endl;
             return;
+        }
 
         auto* paramObject = parameters.getDynamicObject();
         if (!paramObject)
+        {
+            std::cout << "No parameters to set (null object)" << std::endl;
             return;
+        }
 
-        std::cout << "Setting " << paramObject->getProperties().size() << " parameters:" << std::endl;
+        auto& properties = paramObject->getProperties();
+        std::cout << "Attempting to set " << properties.size() << " parameters:" << std::endl;
 
-        for (auto& prop : paramObject->getProperties())
+        int successCount = 0;
+        int failCount = 0;
+
+        for (auto& prop : properties)
         {
             auto paramName = prop.name.toString();
-            auto paramValue = static_cast<float>(prop.value);
+            auto requestedValue = static_cast<float>(prop.value);
+
+            std::cout << "\nSetting parameter: " << paramName << " to " << requestedValue << std::endl;
 
             // Find parameter by name using JUCE 7.x compatible API
             const auto& params = plugin->getParameters();
@@ -457,17 +491,37 @@ private:
 
             for (int i = 0; i < params.size(); ++i)
             {
-                if (params[i]->getName(256) == paramName)
+                auto* param = params[i];
+                auto currentName = param->getName(256);
+
+                if (currentName == paramName || currentName.containsIgnoreCase(paramName))
                 {
-                    auto oldValue = params[i]->getValue();
-                    auto oldText = params[i]->getText(oldValue, 256);
+                    auto oldValue = param->getValue();
+                    auto oldText = param->getText(oldValue, 256);
 
-                    params[i]->setValue(paramValue);
+                    std::cout << "  Found parameter [" << i << "] '" << currentName << "'" << std::endl;
+                    std::cout << "  Before: " << oldValue << " (" << oldText << ")" << std::endl;
 
-                    auto newText = params[i]->getText(paramValue, 256);
+                    // Set the new value
+                    param->setValue(requestedValue);
 
-                    std::cout << "  âœ“ " << paramName << ": " << oldValue << " (" << oldText << ") â†’ "
-                              << paramValue << " (" << newText << ")" << std::endl;
+                    // Verify the change
+                    auto newValue = param->getValue();
+                    auto newText = param->getText(newValue, 256);
+
+                    std::cout << "  After:  " << newValue << " (" << newText << ")" << std::endl;
+
+                    if (std::abs(newValue - requestedValue) < 0.001f)
+                    {
+                        std::cout << "  Parameter set successfully!" << std::endl;
+                        successCount++;
+                    }
+                    else
+                    {
+                        std::cout << "  Parameter value differs from requested (plugin may have quantized it)" << std::endl;
+                        successCount++;
+                    }
+
                     paramFound = true;
                     break;
                 }
@@ -475,19 +529,41 @@ private:
 
             if (!paramFound)
             {
-                std::cout << "  âœ— Parameter '" << paramName << "' not found" << std::endl;
+                std::cout << "  — Parameter '" << paramName << "' not found" << std::endl;
+                failCount++;
 
-                // Suggest similar parameter names
-                std::cout << "    Available parameters containing '" << paramName << "':" << std::endl;
+                // Find similar parameter names
+                std::vector<juce::String> similarNames;
                 for (int i = 0; i < params.size(); ++i)
                 {
                     auto availableName = params[i]->getName(256);
-                    if (availableName.containsIgnoreCase(paramName))
+                    if (availableName.containsIgnoreCase(paramName) || paramName.containsIgnoreCase(availableName))
                     {
-                        std::cout << "      - " << availableName << std::endl;
+                        similarNames.push_back(availableName);
                     }
                 }
+
+                if (!similarNames.empty())
+                {
+                    std::cout << "    Similar parameter names found:" << std::endl;
+                    for (auto& name : similarNames)
+                    {
+                        std::cout << "      - " << name << std::endl;
+                    }
+                }
+                else
+                {
+                    std::cout << "    No similar parameter names found. Try exporting parameters to see available names." << std::endl;
+                }
             }
+        }
+
+        std::cout << "\nParameter setting summary: " << successCount << " succeeded, " << failCount << " failed" << std::endl;
+
+        if (successCount > 0)
+        {
+            std::cout << "\nUpdated parameter values:" << std::endl;
+            logCurrentParameters(plugin, 15);  // Show more parameters after changes
         }
     }
 
@@ -545,10 +621,12 @@ private:
             return false;
         }
 
+		//int bitDepth = 24;
+		int bitDepth = 16;
         std::unique_ptr<juce::AudioFormatWriter> writer(format->createWriterFor(fileStream.get(),
                                                                               sampleRate,
                                                                               static_cast<unsigned int>(numChannels),
-                                                                              24, // bit depth
+                                                                              bitDepth,
                                                                               {},
                                                                               0));
         if (!writer)

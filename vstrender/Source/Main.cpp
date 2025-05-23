@@ -198,10 +198,12 @@ private:
             std::cout << "File.getFullPathName(): " << pluginFile.getFullPathName() << std::endl;
             std::cout << "File.exists(): " << (pluginFile.exists() ? "true" : "false") << std::endl;
             std::cout << "File.existsAsFile(): " << (pluginFile.existsAsFile() ? "true" : "false") << std::endl;
+            std::cout << "File.isDirectory(): " << (pluginFile.isDirectory() ? "true" : "false") << std::endl;
 
-            if (!pluginFile.existsAsFile())
+            // VST3 bundles can be either files or directories
+            if (!pluginFile.exists())
             {
-                std::cerr << "Plugin file not found: " << pluginConfig.pluginPath << std::endl;
+                std::cerr << "Plugin path not found: " << pluginConfig.pluginPath << std::endl;
 
                 // Try to find similar files
                 auto parentDir = pluginFile.getParentDirectory();
@@ -221,7 +223,27 @@ private:
                 return false;
             }
 
-            std::cout << "Plugin file exists, size: " << pluginFile.getSize() << " bytes" << std::endl;
+            // For directories, check if it's a valid VST3 bundle
+            if (pluginFile.isDirectory())
+            {
+                std::cout << "VST3 bundle detected (directory)" << std::endl;
+                // Check for Contents directory (typical VST3 bundle structure)
+                auto contentsDir = pluginFile.getChildFile("Contents");
+                if (contentsDir.exists())
+                {
+                    std::cout << "Found Contents directory - appears to be valid VST3 bundle" << std::endl;
+                }
+                else
+                {
+                    std::cout << "No Contents directory found - may be a simple directory bundle" << std::endl;
+                }
+            }
+            else
+            {
+                std::cout << "VST3 file detected (single file)" << std::endl;
+            }
+
+            std::cout << "Plugin file/bundle exists, size: " << pluginFile.getSize() << " bytes" << std::endl;
 
             // Find plugin descriptions - Fixed for JUCE 7.x API
             juce::OwnedArray<juce::PluginDescription> descriptions;

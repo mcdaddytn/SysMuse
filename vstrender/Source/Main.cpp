@@ -18,6 +18,7 @@
 struct PluginConfig
 {
     juce::String pluginPath;
+    juce::String pluginName;  // Optional: specify which plugin from a multi-plugin file
     juce::String presetPath;
     juce::var parameters;
 };
@@ -126,6 +127,7 @@ private:
             PluginConfig pluginConfig;
 
             pluginConfig.pluginPath = pluginJson["path"].toString();
+            pluginConfig.pluginName = pluginJson.getProperty("plugin_name", "");
             pluginConfig.presetPath = pluginJson.getProperty("preset", "");
             pluginConfig.parameters = pluginJson.getProperty("parameters", juce::var());
 
@@ -145,8 +147,18 @@ private:
     {
         pluginFormatManager.addDefaultFormats();
 
+        std::cout << "Found " << pluginFormatManager.getFormats().size() << " plugin formats:" << std::endl;
+        for (auto* format : pluginFormatManager.getFormats())
+        {
+            std::cout << "  - " << format->getName() << std::endl;
+        }
+        std::cout << std::endl;
+
         for (const auto& pluginConfig : config.plugins)
         {
+            std::cout << "=== Loading Plugin ===" << std::endl;
+            std::cout << "Plugin path: " << pluginConfig.pluginPath << std::endl;
+
             // Load plugin
             juce::File pluginFile(pluginConfig.pluginPath);
             if (!pluginFile.existsAsFile())
@@ -155,22 +167,94 @@ private:
                 return false;
             }
 
-            juce::PluginDescription description;
+            std::cout << "Plugin file exists, size: " << pluginFile.getSize() << " bytes" << std::endl;
+
+            // Find plugin descriptions - Fixed for JUCE 7.x API
+            juce::OwnedArray<juce::PluginDescription> descriptions;
+            bool pluginFound = false;
+
+            std::cout << "Scanning plugin file for available plugins..." << std::endl;
+
             for (auto* format : pluginFormatManager.getFormats())
             {
-                if (format->findAllTypesForFile(description, pluginConfig.pluginPath))
-                    break;
+                std::cout << "  Trying format: " << format->getName() << std::endl;
+                format->findAllTypesForFile(descriptions, pluginConfig.pluginPath);
+                if (descriptions.size() > 0)
+                {
+                    std::cout << "  Found " << descriptions.size() << " plugin(s) with " << format->getName() << std::endl;
+                    pluginFound = true;
+                    // Don't break here - let it find all plugins from all formats
+                }
             }
 
+            if (!pluginFound || descriptions.size() == 0)
+            {
+                std::cerr << "No valid plugin found in file: " << pluginConfig.pluginPath << std::endl;
+                return false;
+            }
+
+            // List all found plugins
+            std::cout << "\nFound plugins in file:" << std::endl;
+            for (int i = 0; i < descriptions.size(); ++i)
+            {
+                auto& desc = *descriptions[i];
+                std::cout << "  [" << i << "] " << desc.name << " (" << desc.manufacturerName << ")" << std::endl;
+                std::cout << "      Category: " << desc.category << std::endl;
+                std::cout << "      Plugin Type: " << desc.pluginFormatName << std::endl;
+                std::cout << "      Version: " << desc.version << std::endl;
+                std::cout << "      Unique ID: " << desc.createIdentifierString() << std::endl;
+            }
+
+            // Select which plugin to use
+            juce::PluginDescription* selectedDescription = nullptr;
+
+            if (!pluginConfig.pluginName.isEmpty())
+            {
+                // Look for plugin by name
+                std::cout << "\nLooking for plugin named: " << pluginConfig.pluginName << std::endl;
+                for (int i = 0; i < descriptions.size(); ++i)
+                {
+                    auto& desc = *descriptions[i];
+                    if (desc.name.containsIgnoreCase(pluginConfig.pluginName))
+                    {
+                        selectedDescription = &desc;
+                        std::cout << "Found matching plugin: " << desc.name << std::endl;
+                        break;
+                    }
+                }
+
+                if (!selectedDescription)
+                {
+                    std::cerr << "Could not find plugin named '" << pluginConfig.pluginName << "' in the file." << std::endl;
+                    std::cerr << "Available plugins are listed above." << std::endl;
+                    return false;
+                }
+            }
+            else
+            {
+                // Use the first plugin
+                selectedDescription = descriptions[0];
+                std::cout << "\nNo plugin name specified, using first plugin: " << selectedDescription->name << std::endl;
+            }
+
+            std::cout << "Selected plugin: " << selectedDescription->name << std::endl;
+
             juce::String errorMessage;
-            auto plugin = pluginFormatManager.createPluginInstance(description, sampleRate, config.bufferSize, errorMessage);
+            auto plugin = pluginFormatManager.createPluginInstance(*selectedDescription, sampleRate, config.bufferSize, errorMessage);
 
             if (!plugin)
             {
                 std::cerr << "Failed to load plugin: " << pluginConfig.pluginPath
-                         << " Error: " << errorMessage << std::endl;
+                         << "\nError: " << errorMessage << std::endl;
                 return false;
             }
+
+            std::cout << "Successfully created plugin instance!" << std::endl;
+            std::cout << "Plugin info:" << std::endl;
+            std::cout << "  Name: " << plugin->getName() << std::endl;
+            std::cout << "  Inputs: " << plugin->getTotalNumInputChannels() << std::endl;
+            std::cout << "  Outputs: " << plugin->getTotalNumOutputChannels() << std::endl;
+            std::cout << "  Parameters: " << plugin->getParameters().size() << std::endl;
 
             // Configure plugin
             plugin->prepareToPlay(sampleRate, config.bufferSize);
@@ -179,23 +263,31 @@ private:
             // Load preset if specified
             if (!pluginConfig.presetPath.isEmpty())
             {
+                std::cout << "Loading preset: " << pluginConfig.presetPath << std::endl;
                 if (!loadPreset(plugin.get(), pluginConfig.presetPath))
                 {
                     std::cerr << "Warning: Could not load preset: " << pluginConfig.presetPath << std::endl;
+                }
+                else
+                {
+                    std::cout << "Preset loaded successfully!" << std::endl;
                 }
             }
 
             // Set parameters if specified
             if (pluginConfig.parameters.isObject())
             {
+                std::cout << "Setting parameters..." << std::endl;
                 setPluginParameters(plugin.get(), pluginConfig.parameters);
             }
 
             pluginChain.push_back(std::move(plugin));
 
-            std::cout << "Loaded plugin: " << description.name << std::endl;
+            std::cout << "Plugin added to chain successfully!" << std::endl;
+            std::cout << "=========================" << std::endl << std::endl;
         }
 
+        std::cout << "Total plugins in chain: " << pluginChain.size() << std::endl;
         return true;
     }
 
@@ -245,12 +337,13 @@ private:
             auto paramName = prop.name.toString();
             auto paramValue = static_cast<float>(prop.value);
 
-            // Find parameter by name
-            for (auto* param : plugin->getParameters())
+            // Find parameter by name using JUCE 7.x compatible API
+            const auto& params = plugin->getParameters();
+            for (int i = 0; i < params.size(); ++i)
             {
-                if (param->getName(256) == paramName)
+                if (params[i]->getName(256) == paramName)
                 {
-                    param->setValue(paramValue);
+                    params[i]->setValue(paramValue);
                     std::cout << "Set parameter '" << paramName << "' to " << paramValue << std::endl;
                     break;
                 }
@@ -336,51 +429,44 @@ private:
 };
 
 //==============================================================================
-class ConsoleApplication : public juce::JUCEApplicationBase
+// Simple function-based approach instead of application class
+int main(int argc, char* argv[])
 {
-public:
-    const juce::String getApplicationName() override { return "VST Plugin Host"; }
-    const juce::String getApplicationVersion() override { return "1.0.0"; }
+    // Initialize JUCE
+    juce::initialiseJuce_GUI();
 
-    void initialise(const juce::String& commandLine) override
+    if (argc < 2)
     {
-        auto args = getCommandLineParameterArray();
-
-        if (args.size() < 1)
-        {
-            std::cout << "Usage: " << getApplicationName() << " <config.json>" << std::endl;
-            std::cout << "Example: " << getApplicationName() << " processing_config.json" << std::endl;
-            quit();
-            return;
-        }
-
-        AudioPluginHost host;
-
-        if (!host.loadConfiguration(args[0]))
-        {
-            std::cerr << "Failed to load configuration" << std::endl;
-            setApplicationReturnValue(1);
-            quit();
-            return;
-        }
-
-        std::cout << "Processing audio file..." << std::endl;
-
-        if (!host.processAudioFile())
-        {
-            std::cerr << "Failed to process audio file" << std::endl;
-            setApplicationReturnValue(1);
-        }
-        else
-        {
-            std::cout << "Processing completed successfully!" << std::endl;
-        }
-
-        quit();
+        std::cout << "Usage: VSTPluginHost <config.json>" << std::endl;
+        std::cout << "Example: VSTPluginHost processing_config.json" << std::endl;
+        juce::shutdownJuce_GUI();
+        return 1;
     }
 
-    void shutdown() override {}
-};
+    AudioPluginHost host;
 
-//==============================================================================
-START_JUCE_APPLICATION(ConsoleApplication)
+    if (!host.loadConfiguration(juce::String(argv[1])))
+    {
+        std::cerr << "Failed to load configuration" << std::endl;
+        juce::shutdownJuce_GUI();
+        return 1;
+    }
+
+    std::cout << "Processing audio file..." << std::endl;
+
+    bool success = host.processAudioFile();
+
+    if (!success)
+    {
+        std::cerr << "Failed to process audio file" << std::endl;
+        juce::shutdownJuce_GUI();
+        return 1;
+    }
+    else
+    {
+        std::cout << "Processing completed successfully!" << std::endl;
+    }
+
+    juce::shutdownJuce_GUI();
+    return 0;
+}

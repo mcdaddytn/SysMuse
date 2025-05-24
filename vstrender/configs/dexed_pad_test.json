@@ -1,0 +1,34 @@
+{
+  "_comment": "Dexed Pad with Long Release",
+  "output_file": "F:\\syscode\\SysMuse\\vstrender\\dexed_pad_ambient.wav",
+  "sample_rate": 48000,
+  "bit_depth": 32,
+  "buffer_size": 4096,
+  "render_length": 90.0,
+  "instrument_channels": 2,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Dexed.vst3",
+      "plugin_name": "Dexed",
+      "is_instrument": true,
+      "midi_file": "F:\\syscode\\SysMuse\\vstrender\\midi\\ambient_chords.mid",
+      "sysex_file": "F:\\syscode\\SysMuse\\vstrender\\patches\\ambient_bank.syx",
+      "sysex_patch_number": 2,
+      "parameters": {
+        "Volume": 0.7,
+        "Cutoff": 0.9,
+        "Resonance": 0.2
+      }
+    },
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\ValhallaSupermassive.vst3",
+      "is_instrument": false,
+      "parameters": {
+        "Mode": 0.2,
+        "Density": 0.8,
+        "Mix": 0.6,
+        "Width": 0.9
+      }
+    }
+  ]
+}

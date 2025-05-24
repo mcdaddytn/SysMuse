@@ -18,11 +18,17 @@
 struct PluginConfig
 {
     juce::String pluginPath;
-    juce::String pluginName;  // Optional: specify which plugin from a multi-plugin file
+    juce::String pluginName;
     juce::String presetPath;
-    juce::String parametersBefore;  // Optional: output JSON with parameters before preset
-    juce::String parametersAfter;   // Optional: output JSON with parameters after preset
+    juce::String parametersBefore;
+    juce::String parametersAfter;
     juce::var parameters;
+
+    // VSTi-specific configuration
+    bool isInstrument = false;
+    juce::String midiFile;
+    double instrumentLength = 0.0;
+    int programNumber = -1;  // For program change selection
 };
 
 struct ProcessingConfig
@@ -30,9 +36,252 @@ struct ProcessingConfig
     juce::String inputFile;
     juce::String outputFile;
     std::vector<PluginConfig> plugins;
-    double sampleRate = 0.0;  // 0 = use input file sample rate
-    int bitDepth = 0;         // 0 = use input file bit depth
-    int bufferSize = 2048;    // Default to 2048 for better performance in offline rendering
+    double sampleRate = 0.0;
+    int bitDepth = 0;
+    int bufferSize = 2048;
+
+    // VSTi-specific settings
+    bool hasInstrument = false;
+    double renderLength = 0.0;
+    int instrumentChannels = 2;
+};
+
+//==============================================================================
+// Simple MIDI sequence for VSTi processing
+class SimpleMidiSequence
+{
+public:
+    struct MidiEvent
+    {
+        double timeStamp;
+        juce::MidiMessage message;
+
+        MidiEvent(double time, const juce::MidiMessage& msg)
+            : timeStamp(time), message(msg) {}
+    };
+
+    std::vector<MidiEvent> events;
+    double totalLength = 0.0;
+
+	bool loadFromFile(const juce::String& midiFilePath)
+	{
+		juce::File midiFile(midiFilePath);
+		if (!midiFile.existsAsFile())
+		{
+			std::cerr << "MIDI file not found: " << midiFilePath << std::endl;
+			return false;
+		}
+
+		std::cout << "=== DETAILED MIDI FILE ANALYSIS ===" << std::endl;
+		std::cout << "File: " << midiFilePath << std::endl;
+		std::cout << "Size: " << midiFile.getSize() << " bytes" << std::endl;
+
+		juce::FileInputStream fileStream(midiFile);
+		if (!fileStream.openedOk())
+		{
+			std::cerr << "Could not open MIDI file: " << midiFilePath << std::endl;
+			return false;
+		}
+
+		juce::MidiFile midi;
+		if (!midi.readFrom(fileStream))
+		{
+			std::cerr << "Could not parse MIDI file: " << midiFilePath << std::endl;
+			return false;
+		}
+
+		std::cout << "MIDI file loaded successfully:" << std::endl;
+		std::cout << "  Tracks: " << midi.getNumTracks() << std::endl;
+		std::cout << "  Time format: " << midi.getTimeFormat() << std::endl;
+
+		events.clear();
+		totalLength = 0.0;
+
+		// Default tempo: 120 BPM = 500,000 microseconds per quarter note
+		double microsecondsPerQuarter = 500000.0;  // Default tempo
+		int timeFormat = midi.getTimeFormat();
+		bool isTicksPerQuarter = (timeFormat > 0);
+
+		int totalNoteOnEvents = 0;
+		int totalNoteOffEvents = 0;
+		int totalOtherEvents = 0;
+
+		std::cout << "\n=== PROCESSING TRACKS ===" << std::endl;
+
+		for (int trackIndex = 0; trackIndex < midi.getNumTracks(); ++trackIndex)
+		{
+			const auto* track = midi.getTrack(trackIndex);
+			std::cout << "\nTrack " << trackIndex << ": " << track->getNumEvents() << " events" << std::endl;
+
+			for (int eventIndex = 0; eventIndex < track->getNumEvents(); ++eventIndex)
+			{
+				const auto* midiEventHolder = track->getEventPointer(eventIndex);
+				const juce::MidiMessage& message = midiEventHolder->message;
+
+				double timeInSeconds = 0.0;
+
+				if (isTicksPerQuarter)
+				{
+					// FIXED: Proper conversion from ticks to seconds
+					// timeInSeconds = ticks / ticksPerQuarter * secondsPerQuarter
+					double ticksPerQuarter = static_cast<double>(timeFormat);
+					double secondsPerQuarter = microsecondsPerQuarter / 1000000.0;
+					timeInSeconds = message.getTimeStamp() / ticksPerQuarter * secondsPerQuarter;
+
+					std::cout << "  Event at tick " << message.getTimeStamp()
+							  << " -> " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+				}
+				else
+				{
+					// SMPTE format - direct time conversion
+					timeInSeconds = message.getTimeStamp();
+				}
+
+				// Update tempo if tempo change event
+				if (message.isTempoMetaEvent())
+				{
+					microsecondsPerQuarter = message.getTempoSecondsPerQuarterNote() * 1000000.0;
+					double bpm = 60000000.0 / microsecondsPerQuarter;
+					std::cout << "  TEMPO CHANGE: " << std::fixed << std::setprecision(1) << bpm << " BPM"
+							  << " (" << microsecondsPerQuarter << " us/quarter) at " << timeInSeconds << "s" << std::endl;
+					totalOtherEvents++;
+				}
+				else if (message.isNoteOn())
+				{
+					std::cout << "  NOTE ON:  Note " << message.getNoteNumber()
+							  << " (" << getNoteNameFromNumber(message.getNoteNumber()) << ")"
+							  << ", Vel " << (int)message.getVelocity()
+							  << ", Ch " << message.getChannel()
+							  << " at " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+					totalNoteOnEvents++;
+				}
+				else if (message.isNoteOff())
+				{
+					std::cout << "  NOTE OFF: Note " << message.getNoteNumber()
+							  << " (" << getNoteNameFromNumber(message.getNoteNumber()) << ")"
+							  << ", Vel " << (int)message.getVelocity()
+							  << ", Ch " << message.getChannel()
+							  << " at " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+					totalNoteOffEvents++;
+				}
+				else if (message.isTrackNameEvent())
+				{
+					std::cout << "  TRACK NAME: " << message.getTextFromTextMetaEvent() << std::endl;
+					totalOtherEvents++;
+				}
+				else if (message.isEndOfTrackMetaEvent())
+				{
+					std::cout << "  END OF TRACK at " << timeInSeconds << "s" << std::endl;
+					totalOtherEvents++;
+				}
+				else
+				{
+					// Don't spam with every meta event, just count them
+					totalOtherEvents++;
+				}
+
+				events.emplace_back(timeInSeconds, message);
+				totalLength = juce::jmax(totalLength, timeInSeconds);
+			}
+		}
+
+		// Sort events by time
+		std::sort(events.begin(), events.end(),
+				  [](const MidiEvent& a, const MidiEvent& b) {
+					  return a.timeStamp < b.timeStamp;
+				  });
+
+		std::cout << "\n=== SUMMARY ===" << std::endl;
+		std::cout << "Note On events: " << totalNoteOnEvents << std::endl;
+		std::cout << "Note Off events: " << totalNoteOffEvents << std::endl;
+		std::cout << "Other events: " << totalOtherEvents << std::endl;
+		std::cout << "Total events loaded: " << events.size() << std::endl;
+		std::cout << "Total duration: " << std::fixed << std::setprecision(3) << totalLength << " seconds" << std::endl;
+
+		if (totalNoteOnEvents == 0)
+		{
+			std::cout << "*** ERROR: No Note On events found! ***" << std::endl;
+			return false;
+		}
+
+		if (totalNoteOnEvents != totalNoteOffEvents)
+		{
+			std::cout << "*** WARNING: Mismatched Note On/Off events! ***" << std::endl;
+		}
+
+		// Find first and last note times
+		double firstNoteTime = -1;
+		double lastNoteTime = -1;
+
+		for (const auto& event : events)
+		{
+			if (event.message.isNoteOn())
+			{
+				if (firstNoteTime < 0)
+					firstNoteTime = event.timeStamp;
+				lastNoteTime = event.timeStamp;
+			}
+		}
+
+		std::cout << "First note at: " << std::fixed << std::setprecision(3) << firstNoteTime << "s" << std::endl;
+		std::cout << "Last note at: " << std::fixed << std::setprecision(3) << lastNoteTime << "s" << std::endl;
+		std::cout << "Actual note span: " << std::fixed << std::setprecision(3) << (lastNoteTime - firstNoteTime) << "s" << std::endl;
+
+		// Add note-off events for any hanging notes
+		addNoteOffEvents();
+
+		std::cout << "Events after cleanup: " << events.size() << std::endl;
+		std::cout << "=== END ANALYSIS ===" << std::endl;
+
+		return true;
+	}
+
+	// Helper function - add this to your SimpleMidiSequence class:
+	static juce::String getNoteNameFromNumber(int noteNumber)
+	{
+		if (noteNumber < 0 || noteNumber > 127)
+			return "Invalid";
+
+		const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+		int octave = (noteNumber / 12) - 1;
+		int noteIndex = noteNumber % 12;
+
+		return juce::String(noteNames[noteIndex]) + juce::String(octave);
+	}
+
+private:
+    void addNoteOffEvents()
+    {
+        // Track note-on events that don't have corresponding note-offs
+        std::map<int, double> hangingNotes; // note number -> start time
+
+        for (const auto& event : events)
+        {
+            if (event.message.isNoteOn())
+            {
+                hangingNotes[event.message.getNoteNumber()] = event.timeStamp;
+            }
+            else if (event.message.isNoteOff())
+            {
+                hangingNotes.erase(event.message.getNoteNumber());
+            }
+        }
+
+        // Add note-off events for hanging notes
+        for (const auto& note : hangingNotes)
+        {
+            auto noteOffTime = totalLength + 0.1; // Add 100ms after end
+            auto noteOffMessage = juce::MidiMessage::noteOff(1, note.first, (juce::uint8)64);
+            events.emplace_back(noteOffTime, noteOffMessage);
+            totalLength = juce::jmax(totalLength, noteOffTime);
+        }
+
+        // Re-sort after adding note-offs
+        std::sort(events.begin(), events.end(),
+                  [](const MidiEvent& a, const MidiEvent& b) {
+                      return a.timeStamp < b.timeStamp;
+                  });
+    }
 };
 
 //==============================================================================
@@ -63,72 +312,37 @@ public:
         return parseConfiguration(json);
     }
 
-    bool processAudioFile()
+    bool processAudio()
     {
-        // Load input audio file
-        juce::AudioFormatManager formatManager;
-        formatManager.registerBasicFormats();
-
-        juce::File inputFile(config.inputFile);
-        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(inputFile));
-
-        if (!reader)
+        if (config.hasInstrument)
         {
-            std::cerr << "Could not read input file: " << config.inputFile << std::endl;
-            return false;
+            return processWithInstrument();
         }
-
-        // Setup audio buffer
-        auto numChannels = static_cast<int>(reader->numChannels);
-        auto numSamples = static_cast<int>(reader->lengthInSamples);
-
-        // Determine final sample rate and bit depth
-        double finalSampleRate = (config.sampleRate > 0) ? config.sampleRate : reader->sampleRate;
-        int finalBitDepth = (config.bitDepth > 0) ? config.bitDepth : static_cast<int>(reader->bitsPerSample);
-
-        std::cout << "Input file info:" << std::endl;
-        std::cout << "  Sample rate: " << reader->sampleRate << " Hz" << std::endl;
-        std::cout << "  Bit depth: " << reader->bitsPerSample << " bits" << std::endl;
-        std::cout << "  Channels: " << numChannels << std::endl;
-        std::cout << "  Samples: " << numSamples << std::endl;
-        std::cout << "Processing settings:" << std::endl;
-        std::cout << "  Sample rate: " << finalSampleRate << " Hz" << (config.sampleRate > 0 ? " (configured)" : " (from input)") << std::endl;
-        std::cout << "  Bit depth: " << finalBitDepth << " bits" << (config.bitDepth > 0 ? " (configured)" : " (from input)") << std::endl;
-        std::cout << "  Buffer size: " << config.bufferSize << " samples" << std::endl;
-
-        juce::AudioBuffer<float> audioBuffer(numChannels, numSamples);
-        reader->read(&audioBuffer, 0, numSamples, 0, true, true);
-
-        // Initialize plugin chain
-        if (!initializePlugins(finalSampleRate, audioBuffer.getNumChannels()))
+        else
         {
-            std::cerr << "Failed to initialize plugin chain" << std::endl;
-            return false;
+            return processAudioFile();
         }
-
-        // Process audio through plugin chain
-        processAudioBuffer(audioBuffer, finalSampleRate);
-
-        // Write output file
-        return writeAudioFile(audioBuffer, finalSampleRate, numChannels, finalBitDepth);
     }
 
 private:
     ProcessingConfig config;
     std::vector<std::unique_ptr<juce::AudioPluginInstance>> pluginChain;
     juce::AudioPluginFormatManager pluginFormatManager;
+    SimpleMidiSequence midiSequence;
 
     bool parseConfiguration(const juce::var& json)
     {
-        config.inputFile = json["input_file"].toString();
+        config.inputFile = json.getProperty("input_file", "");
         config.outputFile = json["output_file"].toString();
-        config.sampleRate = json.getProperty("sample_rate", 0.0);      // 0 = auto-detect from input
-        config.bitDepth = json.getProperty("bit_depth", 0);            // 0 = auto-detect from input
-        config.bufferSize = json.getProperty("buffer_size", 2048);     // Default 2048 for offline rendering
+        config.sampleRate = json.getProperty("sample_rate", 44100.0);
+        config.bitDepth = json.getProperty("bit_depth", 24);
+        config.bufferSize = json.getProperty("buffer_size", 2048);
+        config.renderLength = json.getProperty("render_length", 0.0);
+        config.instrumentChannels = json.getProperty("instrument_channels", 2);
 
-        if (config.inputFile.isEmpty() || config.outputFile.isEmpty())
+        if (config.outputFile.isEmpty())
         {
-            std::cerr << "Input and output file paths are required" << std::endl;
+            std::cerr << "Output file path is required" << std::endl;
             return false;
         }
 
@@ -151,116 +365,308 @@ private:
             pluginConfig.parametersAfter = pluginJson.getProperty("export_parameters_after", "");
             pluginConfig.parameters = pluginJson.getProperty("parameters", juce::var());
 
+            // VSTi-specific settings
+            pluginConfig.isInstrument = pluginJson.getProperty("is_instrument", false);
+            pluginConfig.midiFile = pluginJson.getProperty("midi_file", "");
+            pluginConfig.instrumentLength = pluginJson.getProperty("instrument_length", 0.0);
+            pluginConfig.programNumber = pluginJson.getProperty("program_number", -1);
+
             if (pluginConfig.pluginPath.isEmpty())
             {
                 std::cerr << "Plugin path is required for plugin " << i << std::endl;
                 return false;
             }
 
+            if (pluginConfig.isInstrument)
+            {
+                config.hasInstrument = true;
+                if (pluginConfig.midiFile.isEmpty())
+                {
+                    std::cerr << "MIDI file is required for instrument plugin " << i << std::endl;
+                    return false;
+                }
+            }
+
             config.plugins.push_back(std::move(pluginConfig));
+        }
+
+        // Validate configuration
+        if (!config.hasInstrument && config.inputFile.isEmpty())
+        {
+            std::cerr << "Either input_file or an instrument plugin is required" << std::endl;
+            return false;
         }
 
         return true;
     }
 
-    void analyzePresetFile(const juce::String& presetPath)
+    bool processWithInstrument()
     {
-        std::cout << "========================================" << std::endl;
-        std::cout << "PRESET FILE ANALYSIS" << std::endl;
-        std::cout << "========================================" << std::endl;
-        std::cout << "File: " << presetPath << std::endl;
+        std::cout << "=== Processing with Virtual Instrument ===" << std::endl;
 
-        juce::File presetFile(presetPath);
-        if (!presetFile.existsAsFile())
+        // Determine final sample rate and bit depth
+        double finalSampleRate = (config.sampleRate > 0) ? config.sampleRate : 44100.0;
+        int finalBitDepth = (config.bitDepth > 0) ? config.bitDepth : 24;
+
+        std::cout << "Processing settings:" << std::endl;
+        std::cout << "  Sample rate: " << finalSampleRate << " Hz" << std::endl;
+        std::cout << "  Bit depth: " << finalBitDepth << " bits" << std::endl;
+        std::cout << "  Buffer size: " << config.bufferSize << " samples" << std::endl;
+        std::cout << "  Instrument channels: " << config.instrumentChannels << std::endl;
+
+        // Initialize plugin chain
+        if (!initializePlugins(finalSampleRate, config.instrumentChannels))
         {
-            std::cout << "ERROR: File does not exist!" << std::endl;
-            return;
+            std::cerr << "Failed to initialize plugin chain" << std::endl;
+            return false;
         }
 
-        auto fileSize = presetFile.getSize();
-        std::cout << "Size: " << fileSize << " bytes" << std::endl;
-        std::cout << "Extension: " << presetFile.getFileExtension() << std::endl;
-        std::cout << "Modified: " << presetFile.getLastModificationTime().toString(true, true) << std::endl;
-
-        // Load file as binary data
-        juce::MemoryBlock data;
-        if (presetFile.loadFileAsData(data))
+        // Load MIDI sequence from the first instrument
+        for (const auto& pluginConfig : config.plugins)
         {
-            std::cout << "\nBinary analysis:" << std::endl;
-            std::cout << "Loaded " << data.getSize() << " bytes" << std::endl;
-
-            auto dataPtr = static_cast<const uint8_t*>(data.getData());
-
-            // Show first 64 bytes as hex
-            std::cout << "First 64 bytes (hex):" << std::endl;
-            for (size_t i = 0; i < std::min(static_cast<size_t>(64), data.getSize()); ++i)
+            if (pluginConfig.isInstrument && !pluginConfig.midiFile.isEmpty())
             {
-                if (i % 16 == 0) std::cout << std::endl << std::setfill('0') << std::setw(4) << std::hex << i << ": ";
-                std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)dataPtr[i] << " ";
-            }
-            std::cout << std::dec << std::endl;
-
-            // Look for readable strings
-            std::cout << "\nSearching for readable strings..." << std::endl;
-            std::string currentString;
-            for (size_t i = 0; i < data.getSize(); ++i)
-            {
-                char c = static_cast<char>(dataPtr[i]);
-                if (c >= 32 && c <= 126) // Printable ASCII
+                std::cout << "Loading MIDI sequence: " << pluginConfig.midiFile << std::endl;
+                if (!midiSequence.loadFromFile(pluginConfig.midiFile))
                 {
-                    currentString += c;
+                    std::cerr << "Failed to load MIDI sequence" << std::endl;
+                    return false;
                 }
-                else
-                {
-                    if (currentString.length() >= 4) // Only show strings of 4+ chars
-                    {
-                        std::cout << "  String at offset " << std::hex << (i - currentString.length()) << std::dec << ": \"" << currentString << "\"" << std::endl;
-                    }
-                    currentString.clear();
-                }
-            }
-
-            // Check if it looks like a VST3 preset
-            bool hasVST3Signature = false;
-            if (data.getSize() >= 4)
-            {
-                // Look for common VST3 preset signatures
-                std::string signature(reinterpret_cast<const char*>(dataPtr), 4);
-                if (signature == "VST3" || signature == "VSTX")
-                {
-                    hasVST3Signature = true;
-                    std::cout << "\nVST3 preset signature found: " << signature << std::endl;
-                }
-            }
-
-            if (!hasVST3Signature)
-            {
-                std::cout << "\nWARNING: No recognized VST3 preset signature found!" << std::endl;
-                std::cout << "This file may not be a valid VST3 preset." << std::endl;
+                break; // Use first instrument's MIDI file
             }
         }
-        else
+
+        // Determine render length
+        double renderLength = config.renderLength;
+        if (renderLength <= 0.0)
         {
-            std::cout << "ERROR: Could not load file as binary data!" << std::endl;
+            renderLength = midiSequence.totalLength + 2.0; // Add 2 seconds tail
         }
 
-        // Try to load as text
-        auto textContent = presetFile.loadFileAsString();
-        if (textContent.isNotEmpty())
-        {
-            std::cout << "\nText analysis:" << std::endl;
-            std::cout << "File contains " << textContent.length() << " characters" << std::endl;
-            std::cout << "First 200 characters:" << std::endl;
-            std::cout << "\"" << textContent.substring(0, 200) << "\"" << std::endl;
+        std::cout << "Render length: " << renderLength << " seconds" << std::endl;
 
-            if (textContent.containsIgnoreCase("base64") || textContent.length() > 100)
-            {
-                std::cout << "File might be base64 encoded." << std::endl;
-            }
-        }
+        // Calculate total samples
+        auto totalSamples = static_cast<int>(renderLength * finalSampleRate);
+        std::cout << "Total samples to render: " << totalSamples << std::endl;
 
-        std::cout << "========================================" << std::endl;
+        // Create audio buffer for rendering
+        juce::AudioBuffer<float> audioBuffer(config.instrumentChannels, totalSamples);
+        audioBuffer.clear();
+
+        // Render instrument and process through effects chain
+        renderInstrumentChain(audioBuffer, finalSampleRate, renderLength);
+
+        // Write output file
+        return writeAudioFile(audioBuffer, finalSampleRate, config.instrumentChannels, finalBitDepth);
     }
+
+    bool processAudioFile()
+    {
+        // Original audio file processing code
+        juce::AudioFormatManager formatManager;
+        formatManager.registerBasicFormats();
+
+        juce::File inputFile(config.inputFile);
+        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(inputFile));
+
+        if (!reader)
+        {
+            std::cerr << "Could not read input file: " << config.inputFile << std::endl;
+            return false;
+        }
+
+        auto numChannels = static_cast<int>(reader->numChannels);
+        auto numSamples = static_cast<int>(reader->lengthInSamples);
+
+        double finalSampleRate = (config.sampleRate > 0) ? config.sampleRate : reader->sampleRate;
+        int finalBitDepth = (config.bitDepth > 0) ? config.bitDepth : static_cast<int>(reader->bitsPerSample);
+
+        std::cout << "Input file info:" << std::endl;
+        std::cout << "  Sample rate: " << reader->sampleRate << " Hz" << std::endl;
+        std::cout << "  Bit depth: " << reader->bitsPerSample << " bits" << std::endl;
+        std::cout << "  Channels: " << numChannels << std::endl;
+        std::cout << "  Samples: " << numSamples << std::endl;
+
+        juce::AudioBuffer<float> audioBuffer(numChannels, numSamples);
+        reader->read(&audioBuffer, 0, numSamples, 0, true, true);
+
+        if (!initializePlugins(finalSampleRate, audioBuffer.getNumChannels()))
+        {
+            std::cerr << "Failed to initialize plugin chain" << std::endl;
+            return false;
+        }
+
+        processAudioBuffer(audioBuffer, finalSampleRate);
+
+        return writeAudioFile(audioBuffer, finalSampleRate, numChannels, finalBitDepth);
+    }
+
+	void renderInstrumentChain(juce::AudioBuffer<float>& buffer, double sampleRate, double renderLength)
+	{
+		auto totalSamples = buffer.getNumSamples();
+		auto blockSize = config.bufferSize;
+		auto numChannels = buffer.getNumChannels();
+
+		std::cout << "\n=== RENDER DEBUG INFO ===" << std::endl;
+		std::cout << "Rendering instrument chain..." << std::endl;
+		std::cout << "  Total samples: " << totalSamples << std::endl;
+		std::cout << "  Block size: " << blockSize << std::endl;
+		std::cout << "  Channels: " << numChannels << std::endl;
+		std::cout << "  Sample rate: " << sampleRate << " Hz" << std::endl;
+		std::cout << "  Render length: " << renderLength << " seconds" << std::endl;
+		std::cout << "  Total MIDI events: " << midiSequence.events.size() << std::endl;
+
+		// Track current MIDI event index
+		size_t currentMidiEventIndex = 0;
+		int totalMidiEventsSent = 0;
+		int totalNoteOnsSent = 0;
+		int totalNoteOffsSent = 0;
+
+		// Process in chunks
+		for (int startSample = 0; startSample < totalSamples; startSample += blockSize)
+		{
+			auto samplesToProcess = juce::jmin(blockSize, totalSamples - startSample);
+			double currentTimeStart = startSample / sampleRate;
+			double currentTimeEnd = (startSample + samplesToProcess) / sampleRate;
+
+			// Create MIDI buffer for this block
+			juce::MidiBuffer midiBuffer;
+			int eventsInThisBuffer = 0;
+
+			// Add MIDI events that occur in this time range
+			while (currentMidiEventIndex < midiSequence.events.size())
+			{
+				const auto& event = midiSequence.events[currentMidiEventIndex];
+
+				if (event.timeStamp >= currentTimeEnd)
+					break; // Event is in future blocks
+
+				if (event.timeStamp >= currentTimeStart)
+				{
+					// Event occurs in this block
+					int sampleOffset = static_cast<int>((event.timeStamp - currentTimeStart) * sampleRate);
+					sampleOffset = juce::jlimit(0, samplesToProcess - 1, sampleOffset);
+
+					midiBuffer.addEvent(event.message, sampleOffset);
+					eventsInThisBuffer++;
+					totalMidiEventsSent++;
+
+					// Debug: Log all MIDI events
+					if (event.message.isNoteOn())
+					{
+						std::cout << "SENT: Note On  - Note " << event.message.getNoteNumber()
+								  << " (" << SimpleMidiSequence::getNoteNameFromNumber(event.message.getNoteNumber()) << ")"
+								  << ", Vel " << (int)event.message.getVelocity()
+								  << " at time " << std::fixed << std::setprecision(3) << event.timeStamp
+								  << "s, sample " << (startSample + sampleOffset) << std::endl;
+						totalNoteOnsSent++;
+					}
+					else if (event.message.isNoteOff())
+					{
+						std::cout << "SENT: Note Off - Note " << event.message.getNoteNumber()
+								  << " (" << SimpleMidiSequence::getNoteNameFromNumber(event.message.getNoteNumber()) << ")"
+								  << " at time " << std::fixed << std::setprecision(3) << event.timeStamp
+								  << "s, sample " << (startSample + sampleOffset) << std::endl;
+						totalNoteOffsSent++;
+					}
+					else
+					{
+						std::cout << "SENT: Other event - " << event.message.getDescription()
+								  << " at time " << event.timeStamp << "s" << std::endl;
+					}
+				}
+
+				currentMidiEventIndex++;
+			}
+
+			// Create a view of the current block
+			juce::AudioBuffer<float> blockBuffer(buffer.getArrayOfWritePointers(),
+											   buffer.getNumChannels(),
+											   startSample,
+											   samplesToProcess);
+
+			// Clear the block initially
+			blockBuffer.clear();
+
+			// Check if we have audio before processing
+			float preProcessLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
+
+			// Process through each plugin in the chain
+			for (size_t pluginIndex = 0; pluginIndex < pluginChain.size(); ++pluginIndex)
+			{
+				auto& plugin = pluginChain[pluginIndex];
+
+				if (config.plugins[pluginIndex].isInstrument)
+				{
+					// For instruments, pass MIDI and let them generate audio
+					std::cout << "Processing instrument with " << eventsInThisBuffer << " MIDI events" << std::endl;
+					plugin->processBlock(blockBuffer, midiBuffer);
+
+					// Check if we now have audio after instrument processing
+					float postInstrumentLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
+					if (postInstrumentLevel > 0.0001f)
+					{
+						std::cout << "*** AUDIO GENERATED! *** Level: " << postInstrumentLevel
+								  << " at sample " << startSample << std::endl;
+					}
+					else if (eventsInThisBuffer > 0)
+					{
+						std::cout << "*** NO AUDIO *** despite " << eventsInThisBuffer
+								  << " MIDI events at sample " << startSample << std::endl;
+					}
+
+					// Clear MIDI buffer after instrument processing
+					midiBuffer.clear();
+				}
+				else
+				{
+					// For audio effects, process the audio (no MIDI)
+					juce::MidiBuffer emptyMidi;
+					plugin->processBlock(blockBuffer, emptyMidi);
+				}
+			}
+
+			// Final audio level check
+			float finalLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
+			if (finalLevel > 0.0001f)
+			{
+				std::cout << "Block " << (startSample / blockSize) << " final audio level: " << finalLevel << std::endl;
+			}
+
+			// Progress indicator (less frequent to reduce spam)
+			if (startSample % (blockSize * 50) == 0)
+			{
+				double progress = (double)startSample / totalSamples * 100.0;
+				std::cout << "Progress: " << std::fixed << std::setprecision(1) << progress << "%" << std::endl;
+			}
+		}
+
+		std::cout << "\n=== RENDER SUMMARY ===" << std::endl;
+		std::cout << "Total MIDI events processed: " << totalMidiEventsSent << std::endl;
+		std::cout << "Note On events sent: " << totalNoteOnsSent << std::endl;
+		std::cout << "Note Off events sent: " << totalNoteOffsSent << std::endl;
+		std::cout << "Plugins in chain: " << pluginChain.size() << std::endl;
+
+		// Check final audio buffer for any content
+		float totalRMS = 0.0f;
+		for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+		{
+			float channelRMS = buffer.getRMSLevel(ch, 0, buffer.getNumSamples());
+			totalRMS += channelRMS;
+			std::cout << "Channel " << ch << " RMS level: " << channelRMS << std::endl;
+		}
+
+		if (totalRMS > 0.0001f)
+		{
+			std::cout << "*** SUCCESS: Audio content detected in final buffer! ***" << std::endl;
+		}
+		else
+		{
+			std::cout << "*** PROBLEM: No audio content in final buffer! ***" << std::endl;
+		}
+
+		std::cout << "=== END RENDER ===" << std::endl;
+	}
 
     bool initializePlugins(double sampleRate, int numChannels)
     {
@@ -273,10 +679,13 @@ private:
         }
         std::cout << std::endl;
 
-        for (const auto& pluginConfig : config.plugins)
+        for (size_t configIndex = 0; configIndex < config.plugins.size(); ++configIndex)
         {
-            std::cout << "=== Loading Plugin ===" << std::endl;
+            const auto& pluginConfig = config.plugins[configIndex];
+
+            std::cout << "=== Loading Plugin " << (configIndex + 1) << " ===" << std::endl;
             std::cout << "Plugin path: " << pluginConfig.pluginPath << std::endl;
+            std::cout << "Is instrument: " << (pluginConfig.isInstrument ? "YES" : "NO") << std::endl;
 
             // Load plugin
             juce::File pluginFile(pluginConfig.pluginPath);
@@ -286,8 +695,6 @@ private:
                 return false;
             }
 
-            std::cout << "Plugin file/bundle exists, size: " << pluginFile.getSize() << " bytes" << std::endl;
-
             // Find plugin descriptions
             juce::OwnedArray<juce::PluginDescription> descriptions;
             bool pluginFound = false;
@@ -296,32 +703,28 @@ private:
 
             for (auto* format : pluginFormatManager.getFormats())
             {
-                std::cout << "  Trying format: " << format->getName() << std::endl;
                 descriptions.clear();
 
                 try
                 {
                     format->findAllTypesForFile(descriptions, pluginConfig.pluginPath);
-                    std::cout << "  Scan completed for " << format->getName() << ", found " << descriptions.size() << " plugins" << std::endl;
 
                     if (descriptions.size() > 0)
                     {
                         pluginFound = true;
-                        std::cout << "  Plugins found with " << format->getName() << ":" << std::endl;
+                        std::cout << "  Found " << descriptions.size() << " plugins with " << format->getName() << std::endl;
                         for (int i = 0; i < descriptions.size(); ++i)
                         {
                             auto& desc = *descriptions[i];
                             std::cout << "    [" << i << "] " << desc.name << " (" << desc.manufacturerName << ")" << std::endl;
+                            std::cout << "        Is Instrument: " << (desc.isInstrument ? "YES" : "NO") << std::endl;
                         }
+                        break;  // Use first format that finds plugins
                     }
-                }
-                catch (const std::exception& e)
-                {
-                    std::cout << "  Exception during scan with " << format->getName() << ": " << e.what() << std::endl;
                 }
                 catch (...)
                 {
-                    std::cout << "  Unknown exception during scan with " << format->getName() << std::endl;
+                    // Continue with next format
                 }
             }
 
@@ -331,46 +734,47 @@ private:
                 return false;
             }
 
-            // List all found plugins
-            std::cout << "\nFound plugins in file:" << std::endl;
-            for (int i = 0; i < descriptions.size(); ++i)
-            {
-                auto& desc = *descriptions[i];
-                std::cout << "  [" << i << "] " << desc.name << " (" << desc.manufacturerName << ")" << std::endl;
-                std::cout << "      Category: " << desc.category << std::endl;
-                std::cout << "      Plugin Type: " << desc.pluginFormatName << std::endl;
-                std::cout << "      Version: " << desc.version << std::endl;
-                std::cout << "      Unique ID: " << desc.createIdentifierString() << std::endl;
-            }
-
             // Select which plugin to use
             juce::PluginDescription* selectedDescription = nullptr;
 
             if (!pluginConfig.pluginName.isEmpty())
             {
-                std::cout << "\nLooking for plugin named: " << pluginConfig.pluginName << std::endl;
                 for (int i = 0; i < descriptions.size(); ++i)
                 {
                     auto& desc = *descriptions[i];
                     if (desc.name.containsIgnoreCase(pluginConfig.pluginName))
                     {
                         selectedDescription = &desc;
-                        std::cout << "Found matching plugin: " << desc.name << std::endl;
                         break;
+                    }
+                }
+            }
+            else
+            {
+                // If looking for instrument, prefer instrument plugins
+                if (pluginConfig.isInstrument)
+                {
+                    for (int i = 0; i < descriptions.size(); ++i)
+                    {
+                        auto& desc = *descriptions[i];
+                        if (desc.isInstrument)
+                        {
+                            selectedDescription = &desc;
+                            break;
+                        }
                     }
                 }
 
                 if (!selectedDescription)
                 {
-                    std::cerr << "Could not find plugin named '" << pluginConfig.pluginName << "' in the file." << std::endl;
-                    std::cerr << "Available plugins are listed above." << std::endl;
-                    return false;
+                    selectedDescription = descriptions[0];
                 }
             }
-            else
+
+            if (!selectedDescription)
             {
-                selectedDescription = descriptions[0];
-                std::cout << "\nNo plugin name specified, using first plugin: " << selectedDescription->name << std::endl;
+                std::cerr << "Could not select appropriate plugin" << std::endl;
+                return false;
             }
 
             std::cout << "Selected plugin: " << selectedDescription->name << std::endl;
@@ -380,66 +784,45 @@ private:
 
             if (!plugin)
             {
-                std::cerr << "Failed to load plugin: " << pluginConfig.pluginPath
-                         << "\nError: " << errorMessage << std::endl;
+                std::cerr << "Failed to load plugin: " << errorMessage << std::endl;
                 return false;
             }
 
             std::cout << "Successfully created plugin instance!" << std::endl;
-            std::cout << "Plugin info:" << std::endl;
-            std::cout << "  Name: " << plugin->getName() << std::endl;
-            std::cout << "  Inputs: " << plugin->getTotalNumInputChannels() << std::endl;
-            std::cout << "  Outputs: " << plugin->getTotalNumOutputChannels() << std::endl;
-
-            // Enhanced parameter discovery
-            discoverAllParameters(plugin.get());
+            std::cout << "  Accepts MIDI: " << (plugin->acceptsMidi() ? "YES" : "NO") << std::endl;
 
             // Configure plugin
             plugin->prepareToPlay(sampleRate, config.bufferSize);
-            plugin->setPlayConfigDetails(numChannels, numChannels, sampleRate, config.bufferSize);
 
-            // Export parameters before any changes if requested
-            if (!pluginConfig.parametersBefore.isEmpty())
-            {
-                std::cout << "Exporting parameters BEFORE any changes to: " << pluginConfig.parametersBefore << std::endl;
-                exportPluginParameters(plugin.get(), pluginConfig.parametersBefore, "initial_state");
-            }
+            int inputChannels = pluginConfig.isInstrument ? 0 : numChannels;
+            int outputChannels = pluginConfig.isInstrument ? config.instrumentChannels : numChannels;
+            plugin->setPlayConfigDetails(inputChannels, outputChannels, sampleRate, config.bufferSize);
 
-            // Analyze preset file if specified
-            if (!pluginConfig.presetPath.isEmpty())
+            // Set program if specified
+            if (pluginConfig.programNumber >= 0)
             {
-                analyzePresetFile(pluginConfig.presetPath);
+                if (plugin->getNumPrograms() > pluginConfig.programNumber)
+                {
+                    plugin->setCurrentProgram(pluginConfig.programNumber);
+                    std::cout << "Set program to: " << pluginConfig.programNumber << std::endl;
+                    std::cout << "Program name: " << plugin->getProgramName(pluginConfig.programNumber) << std::endl;
+                }
+                else
+                {
+                    std::cout << "Warning: Program " << pluginConfig.programNumber << " not available (max: " << (plugin->getNumPrograms() - 1) << ")" << std::endl;
+                }
             }
 
             // Load preset if specified
             if (!pluginConfig.presetPath.isEmpty())
             {
-                std::cout << "Loading preset: " << pluginConfig.presetPath << std::endl;
-                if (!loadPreset(plugin.get(), pluginConfig.presetPath))
-                {
-                    std::cerr << "Warning: Could not load preset: " << pluginConfig.presetPath << std::endl;
-                }
-                else
-                {
-                    std::cout << "Preset loaded successfully!" << std::endl;
-                    std::cout << "Parameters after preset loading:" << std::endl;
-                    logCurrentParameters(plugin.get());
-                }
+                loadPreset(plugin.get(), pluginConfig.presetPath);
             }
 
-            // Set additional parameters if specified (AFTER preset loading)
+            // Set parameters if specified
             if (pluginConfig.parameters.isObject())
             {
-                std::cout << "\n=== Applying Manual Parameter Changes ===" << std::endl;
                 setPluginParameters(plugin.get(), pluginConfig.parameters);
-                std::cout << "=== Manual Parameter Changes Complete ===" << std::endl;
-            }
-
-            // Export parameters after ALL changes if requested
-            if (!pluginConfig.parametersAfter.isEmpty())
-            {
-                std::cout << "Exporting parameters AFTER all changes to: " << pluginConfig.parametersAfter << std::endl;
-                exportPluginParameters(plugin.get(), pluginConfig.parametersAfter, "final_state");
             }
 
             pluginChain.push_back(std::move(plugin));
@@ -452,73 +835,9 @@ private:
         return true;
     }
 
-    void discoverAllParameters(juce::AudioPluginInstance* plugin)
-    {
-        std::cout << "\n=== ENHANCED PARAMETER DISCOVERY ===" << std::endl;
-
-        // Standard parameters
-        const auto& params = plugin->getParameters();
-        std::cout << "Standard VST3 parameters: " << params.size() << std::endl;
-
-        for (int i = 0; i < params.size(); ++i)
-        {
-            auto* param = params[i];
-            auto paramName = param->getName(256);
-            auto paramValue = param->getValue();
-            auto paramText = param->getText(paramValue, 256);
-            auto paramLabel = param->getLabel();
-
-            std::cout << "  [" << i << "] " << paramName << " = " << paramValue
-                      << " (" << paramText << ")" << (paramLabel.isNotEmpty() ? " " + paramLabel : "") << std::endl;
-            std::cout << "      Default: " << param->getDefaultValue() << std::endl;
-            std::cout << "      Category: " << param->getCategory() << std::endl;
-        }
-
-        // Try to discover hidden/internal parameters
-        std::cout << "\nAttempting to discover additional plugin capabilities..." << std::endl;
-
-        // Check plugin state size
-        juce::MemoryBlock currentState;
-        plugin->getStateInformation(currentState);
-        std::cout << "Plugin state size: " << currentState.getSize() << " bytes" << std::endl;
-
-        if (currentState.getSize() > 100)
-        {
-            std::cout << "Large state size suggests many internal parameters!" << std::endl;
-
-            // Show first part of state as hex
-            std::cout << "State data preview (first 64 bytes):" << std::endl;
-            auto statePtr = static_cast<const uint8_t*>(currentState.getData());
-            for (size_t i = 0; i < std::min(static_cast<size_t>(64), currentState.getSize()); ++i)
-            {
-                if (i % 16 == 0) std::cout << std::endl << std::setfill('0') << std::setw(4) << std::hex << i << ": ";
-                std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)statePtr[i] << " ";
-            }
-            std::cout << std::dec << std::endl;
-        }
-
-        // Check if plugin supports programs/presets
-        std::cout << "\nProgram/Preset support:" << std::endl;
-        std::cout << "Number of programs: " << plugin->getNumPrograms() << std::endl;
-        std::cout << "Current program: " << plugin->getCurrentProgram() << std::endl;
-        std::cout << "Current program name: " << plugin->getProgramName(plugin->getCurrentProgram()) << std::endl;
-
-        if (plugin->getNumPrograms() > 1)
-        {
-            std::cout << "Available programs:" << std::endl;
-            for (int i = 0; i < std::min(10, plugin->getNumPrograms()); ++i)
-            {
-                std::cout << "  [" << i << "] " << plugin->getProgramName(i) << std::endl;
-            }
-        }
-
-        std::cout << "=== END PARAMETER DISCOVERY ===" << std::endl;
-    }
-
     bool loadPreset(juce::AudioPluginInstance* plugin, const juce::String& presetPath)
     {
-        std::cout << "\n=== ENHANCED PRESET LOADING DEBUG ===" << std::endl;
-        std::cout << "Preset path: " << presetPath << std::endl;
+        std::cout << "Loading preset: " << presetPath << std::endl;
 
         juce::File presetFile(presetPath);
         if (!presetFile.existsAsFile())
@@ -527,217 +846,48 @@ private:
             return false;
         }
 
-        std::cout << "Preset file exists, size: " << presetFile.getSize() << " bytes" << std::endl;
-
-        // Get plugin state before loading preset
-        juce::MemoryBlock stateBefore;
-        plugin->getStateInformation(stateBefore);
-        std::cout << "Plugin state before preset: " << stateBefore.getSize() << " bytes" << std::endl;
-
-        // Capture parameter values before preset
-        std::vector<float> paramValuesBefore;
-        const auto& params = plugin->getParameters();
-        for (int i = 0; i < params.size(); ++i)
-        {
-            paramValuesBefore.push_back(params[i]->getValue());
-        }
-
-        bool presetLoaded = false;
-
         // Try to load as VST3 preset
         if (presetPath.endsWithIgnoreCase(".vstpreset"))
         {
-            std::cout << "Attempting to load as VST3 preset..." << std::endl;
-
             juce::MemoryBlock presetData;
             if (presetFile.loadFileAsData(presetData))
             {
-                std::cout << "Preset file loaded into memory: " << presetData.getSize() << " bytes" << std::endl;
-
                 try
                 {
                     plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
-                    std::cout << "setStateInformation called successfully" << std::endl;
-                    presetLoaded = true;
-                }
-                catch (const std::exception& e)
-                {
-                    std::cout << "Exception during setStateInformation: " << e.what() << std::endl;
+                    std::cout << "Preset loaded successfully!" << std::endl;
+                    return true;
                 }
                 catch (...)
                 {
-                    std::cout << "Unknown exception during setStateInformation" << std::endl;
+                    std::cout << "Failed to load preset" << std::endl;
                 }
             }
-            else
-            {
-                std::cout << "Failed to load preset file into memory" << std::endl;
-            }
         }
 
-        // Check if plugin state actually changed
-        juce::MemoryBlock stateAfter;
-        plugin->getStateInformation(stateAfter);
-        std::cout << "Plugin state after preset: " << stateAfter.getSize() << " bytes" << std::endl;
-
-        bool stateChanged = (stateBefore.getSize() != stateAfter.getSize()) ||
-                           (memcmp(stateBefore.getData(), stateAfter.getData(), stateBefore.getSize()) != 0);
-
-        std::cout << "Plugin state changed: " << (stateChanged ? "YES" : "NO") << std::endl;
-
-        // Check if any standard parameters changed
-        std::vector<int> changedParams;
-        for (int i = 0; i < params.size(); ++i)
-        {
-            float newValue = params[i]->getValue();
-            if (std::abs(newValue - paramValuesBefore[i]) > 0.001f)
-            {
-                changedParams.push_back(i);
-            }
-        }
-
-        std::cout << "Standard parameters changed: " << changedParams.size() << std::endl;
-        for (int paramIndex : changedParams)
-        {
-            auto* param = params[paramIndex];
-            std::cout << "  [" << paramIndex << "] " << param->getName(256)
-                      << ": " << paramValuesBefore[paramIndex]
-                      << " -> " << param->getValue()
-                      << " (" << param->getText(param->getValue(), 256) << ")" << std::endl;
-        }
-
-        if (stateChanged && changedParams.empty())
-        {
-            std::cout << "*** IMPORTANT: Plugin state changed but NO standard parameters changed!" << std::endl;
-            std::cout << "*** This confirms the preset affects INTERNAL/HIDDEN parameters!" << std::endl;
-            std::cout << "*** The preset IS working, but on parameters not exposed via VST3 interface." << std::endl;
-        }
-
-        std::cout << "=== END PRESET LOADING DEBUG ===" << std::endl;
-        return presetLoaded && stateChanged;
-    }
-
-    void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 100)
-    {
-        const auto& params = plugin->getParameters();
-        std::cout << "Current parameter values (showing first " << juce::jmin(maxParams, params.size()) << " of " << params.size() << "):" << std::endl;
-
-        for (int i = 0; i < juce::jmin(maxParams, params.size()); ++i)
-        {
-            auto* param = params[i];
-            auto paramName = param->getName(256);
-            auto paramValue = param->getValue();
-            auto paramText = param->getText(paramValue, 256);
-
-            std::cout << "  [" << i << "] " << paramName << " = " << paramValue << " (" << paramText << ")" << std::endl;
-        }
-        if (params.size() > maxParams)
-        {
-            std::cout << "  ... and " << (params.size() - maxParams) << " more parameters" << std::endl;
-        }
-    }
-
-    void exportPluginParameters(juce::AudioPluginInstance* plugin, const juce::String& outputPath, const juce::String& context)
-    {
-        // Delete existing file to avoid appending
-        juce::File outputFile(outputPath);
-        if (outputFile.exists())
-        {
-            std::cout << "Deleting existing file: " << outputPath << std::endl;
-            outputFile.deleteFile();
-        }
-
-        juce::var jsonRoot = juce::var(new juce::DynamicObject());
-        auto* rootObject = jsonRoot.getDynamicObject();
-
-        // Add metadata
-        rootObject->setProperty("plugin_name", plugin->getName());
-        rootObject->setProperty("context", context);
-        rootObject->setProperty("timestamp", juce::Time::getCurrentTime().toString(true, true));
-        rootObject->setProperty("total_parameters", plugin->getParameters().size());
-
-        // Add state information
-        juce::MemoryBlock currentState;
-        plugin->getStateInformation(currentState);
-        //rootObject->setProperty("state_size_bytes", static_cast<int64>(currentState.getSize()));
-        rootObject->setProperty("state_size_bytes", static_cast<int>(currentState.getSize()));
-
-        // Create parameters object
-        juce::var parametersObject = juce::var(new juce::DynamicObject());
-        auto* paramsObject = parametersObject.getDynamicObject();
-
-        const auto& params = plugin->getParameters();
-        std::cout << "Exporting " << params.size() << " parameters to " << outputPath << std::endl;
-
-        for (int i = 0; i < params.size(); ++i)
-        {
-            auto* param = params[i];
-            auto paramName = param->getName(256);
-            auto paramValue = param->getValue();
-            auto paramText = param->getText(paramValue, 256);
-
-            // Create parameter info object
-            juce::var paramInfo = juce::var(new juce::DynamicObject());
-            auto* paramInfoObj = paramInfo.getDynamicObject();
-
-            paramInfoObj->setProperty("value", paramValue);
-            paramInfoObj->setProperty("text", paramText);
-            paramInfoObj->setProperty("index", i);
-            paramInfoObj->setProperty("label", param->getLabel());
-            paramInfoObj->setProperty("category", param->getCategory());
-            paramInfoObj->setProperty("default_value", param->getDefaultValue());
-
-            paramsObject->setProperty(paramName, paramInfo);
-        }
-
-        rootObject->setProperty("parameters", parametersObject);
-
-        // Create parent directory if needed
-        outputFile.getParentDirectory().createDirectory();
-
-        // Write to file (create new file)
-        juce::FileOutputStream outputStream(outputFile);
-        if (outputStream.openedOk())
-        {
-            juce::JSON::writeToStream(outputStream, jsonRoot, true);
-            outputStream.flush();
-            std::cout << "Parameters exported successfully to: " << outputPath << std::endl;
-        }
-        else
-        {
-            std::cerr << "Could not write parameters to: " << outputPath << std::endl;
-        }
+        return false;
     }
 
     void setPluginParameters(juce::AudioPluginInstance* plugin, const juce::var& parameters)
     {
         if (!parameters.isObject())
-        {
-            std::cout << "No parameters to set (not an object)" << std::endl;
             return;
-        }
 
         auto* paramObject = parameters.getDynamicObject();
         if (!paramObject)
-        {
-            std::cout << "No parameters to set (null object)" << std::endl;
             return;
-        }
 
         auto& properties = paramObject->getProperties();
-        std::cout << "Attempting to set " << properties.size() << " parameters:" << std::endl;
-
-        int successCount = 0;
-        int failCount = 0;
+        std::cout << "Setting " << properties.size() << " parameters:" << std::endl;
 
         for (auto& prop : properties)
         {
             auto paramName = prop.name.toString();
             auto requestedValue = static_cast<float>(prop.value);
 
-            std::cout << "\nSetting parameter: " << paramName << " to " << requestedValue << std::endl;
+            std::cout << "  Setting: " << paramName << " = " << requestedValue << std::endl;
 
-            // Find parameter by name using JUCE 7.x compatible API
+            // Find parameter by name
             const auto& params = plugin->getParameters();
             bool paramFound = false;
 
@@ -748,32 +898,8 @@ private:
 
                 if (currentName == paramName || currentName.containsIgnoreCase(paramName))
                 {
-                    auto oldValue = param->getValue();
-                    auto oldText = param->getText(oldValue, 256);
-
-                    std::cout << "  Found parameter [" << i << "] '" << currentName << "'" << std::endl;
-                    std::cout << "  Before: " << oldValue << " (" << oldText << ")" << std::endl;
-
-                    // Set the new value
                     param->setValue(requestedValue);
-
-                    // Verify the change
-                    auto newValue = param->getValue();
-                    auto newText = param->getText(newValue, 256);
-
-                    std::cout << "  After:  " << newValue << " (" << newText << ")" << std::endl;
-
-                    if (std::abs(newValue - requestedValue) < 0.001f)
-                    {
-                        std::cout << "  Parameter set successfully!" << std::endl;
-                        successCount++;
-                    }
-                    else
-                    {
-                        std::cout << "  Parameter value differs from requested (plugin may have quantized it)" << std::endl;
-                        successCount++;
-                    }
-
+                    std::cout << "    Parameter set: " << currentName << " = " << param->getValue() << std::endl;
                     paramFound = true;
                     break;
                 }
@@ -781,41 +907,8 @@ private:
 
             if (!paramFound)
             {
-                std::cout << "  Parameter '" << paramName << "' not found" << std::endl;
-                failCount++;
-
-                // Find similar parameter names
-                std::vector<juce::String> similarNames;
-                for (int i = 0; i < params.size(); ++i)
-                {
-                    auto availableName = params[i]->getName(256);
-                    if (availableName.containsIgnoreCase(paramName) || paramName.containsIgnoreCase(availableName))
-                    {
-                        similarNames.push_back(availableName);
-                    }
-                }
-
-                if (!similarNames.empty())
-                {
-                    std::cout << "    Similar parameter names found:" << std::endl;
-                    for (auto& name : similarNames)
-                    {
-                        std::cout << "      - " << name << std::endl;
-                    }
-                }
-                else
-                {
-                    std::cout << "    No similar parameter names found. Try exporting parameters to see available names." << std::endl;
-                }
+                std::cout << "    Parameter '" << paramName << "' not found" << std::endl;
             }
-        }
-
-        std::cout << "\nParameter setting summary: " << successCount << " succeeded, " << failCount << " failed" << std::endl;
-
-        if (successCount > 0)
-        {
-            std::cout << "\nUpdated parameter values:" << std::endl;
-            logCurrentParameters(plugin, 100);  // Show up to 100 parameters after changes
         }
     }
 
@@ -851,14 +944,13 @@ private:
     {
         juce::File outputFile(config.outputFile);
 
-        // Delete existing output file to avoid appending
+        // Delete existing output file
         if (outputFile.exists())
         {
-            std::cout << "Deleting existing output file: " << config.outputFile << std::endl;
             outputFile.deleteFile();
         }
 
-        // Create output directory if it doesn't exist
+        // Create output directory if needed
         outputFile.getParentDirectory().createDirectory();
 
         // Setup audio format
@@ -884,8 +976,7 @@ private:
         int finalBitDepth = bitDepth;
         if (finalBitDepth != 16 && finalBitDepth != 24 && finalBitDepth != 32)
         {
-            finalBitDepth = 24; // Default to 24-bit if unsupported
-            std::cout << "Bit depth " << bitDepth << " not supported, using " << finalBitDepth << " bits" << std::endl;
+            finalBitDepth = 24;
         }
 
         std::unique_ptr<juce::AudioFormatWriter> writer(format->createWriterFor(fileStream.get(),
@@ -917,7 +1008,6 @@ private:
 };
 
 //==============================================================================
-// Simple function-based approach instead of application class
 int main(int argc, char* argv[])
 {
     // Initialize JUCE
@@ -925,8 +1015,14 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
+        std::cout << "VST Plugin Host with VSTi Support" << std::endl;
         std::cout << "Usage: VSTPluginHost <config.json>" << std::endl;
-        std::cout << "Example: VSTPluginHost processing_config.json" << std::endl;
+        std::cout << "Example: VSTPluginHost dexed_config.json" << std::endl;
+        std::cout << std::endl;
+        std::cout << "Supports:" << std::endl;
+        std::cout << "  - Virtual Instruments (VSTi) with MIDI input" << std::endl;
+        std::cout << "  - Audio Effects processing" << std::endl;
+        std::cout << "  - Hybrid chains: VSTi -> Effects" << std::endl;
         juce::shutdownJuce_GUI();
         return 1;
     }
@@ -940,13 +1036,13 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    std::cout << "Processing audio file..." << std::endl;
+    std::cout << "Processing audio..." << std::endl;
 
-    bool success = host.processAudioFile();
+    bool success = host.processAudio();
 
     if (!success)
     {
-        std::cerr << "Failed to process audio file" << std::endl;
+        std::cerr << "Failed to process audio" << std::endl;
         juce::shutdownJuce_GUI();
         return 1;
     }

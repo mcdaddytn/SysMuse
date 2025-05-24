@@ -1,0 +1,35 @@
+{
+  "_comment": "Dexed Bass Patch Rendering",
+  "output_file": "F:\\syscode\\SysMuse\\vstrender\\dexed_bass.wav",
+  "sample_rate": 44100,
+  "bit_depth": 24,
+  "buffer_size": 1024,
+  "render_length": 60.0,
+  "instrument_channels": 2,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Dexed.vst3",
+      "plugin_name": "Dexed",
+      "is_instrument": true,
+      "midi_file": "F:\\syscode\\SysMuse\\vstrender\\midi\\bass_line.mid",
+      "program_number": 8,
+      "parameters": {
+        "Volume": 0.9,
+        "Cutoff": 0.6,
+        "Resonance": 0.4,
+        "Transpose": -12
+      }
+    },
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Compressor.vst3",
+      "is_instrument": false,
+      "parameters": {
+        "Threshold": -8.0,
+        "Ratio": 4.0,
+        "Attack": 5.0,
+        "Release": 80.0,
+        "Makeup": 2.0
+      }
+    }
+  ]
+}

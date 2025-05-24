@@ -8,9 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Windows-specific settings
 if(WIN32)
-    # Set the Windows SDK version if needed
-    # set(CMAKE_SYSTEM_VERSION "10.0")
-    
     # Ensure we're building for x64
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         set(CMAKE_GENERATOR_PLATFORM x64)
@@ -21,7 +18,6 @@ if(WIN32)
 endif()
 
 # Add JUCE as subdirectory
-# JUCE should be linked/copied to the JUCE subdirectory
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
     message(STATUS "Found JUCE at: ${CMAKE_CURRENT_SOURCE_DIR}/JUCE")
     add_subdirectory(JUCE)
@@ -29,12 +25,12 @@ else()
     message(FATAL_ERROR "JUCE not found! Please ensure JUCE is linked or copied to the JUCE subdirectory.")
 endif()
 
-# Create the console application
+# Create the main console application
 juce_add_console_app(VSTPluginHost
     PRODUCT_NAME "VST Plugin Host"
     COMPANY_NAME "AudioTools"
     VERSION "1.0.0"
-    DESCRIPTION "Command-line VST3 plugin host for audio processing"
+    DESCRIPTION "Command-line VST3 plugin host for audio processing with VSTi support"
     ICON_BIG ""
     ICON_SMALL "")
 
@@ -85,11 +81,10 @@ target_compile_definitions(VSTPluginHost PRIVATE
 set_target_properties(VSTPluginHost PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
-    WIN32_EXECUTABLE FALSE)  # Ensure it's a console app, not Windows app
+    WIN32_EXECUTABLE FALSE)
 
 # Windows-specific linker settings
 if(WIN32)
-    # Link against Windows system libraries
     target_link_libraries(VSTPluginHost PRIVATE
         winmm
         ole32
@@ -100,7 +95,6 @@ if(WIN32)
         rpcrt4
         wininet)
     
-    # Set subsystem to console
     set_target_properties(VSTPluginHost PROPERTIES
         LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 endif()

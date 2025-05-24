@@ -521,6 +521,7 @@ private:
 		int totalMidiEventsSent = 0;
 		int totalNoteOnsSent = 0;
 		int totalNoteOffsSent = 0;
+		int blocksWithAudio = 0;
 
 		// Process in chunks
 		for (int startSample = 0; startSample < totalSamples; startSample += blockSize)
@@ -551,7 +552,7 @@ private:
 					eventsInThisBuffer++;
 					totalMidiEventsSent++;
 
-					// Debug: Log all MIDI events
+					// Only log important MIDI events (notes)
 					if (event.message.isNoteOn())
 					{
 						std::cout << "SENT: Note On  - Note " << event.message.getNoteNumber()
@@ -569,11 +570,7 @@ private:
 								  << "s, sample " << (startSample + sampleOffset) << std::endl;
 						totalNoteOffsSent++;
 					}
-					else
-					{
-						std::cout << "SENT: Other event - " << event.message.getDescription()
-								  << " at time " << event.timeStamp << "s" << std::endl;
-					}
+					// Skip logging meta events to reduce spam
 				}
 
 				currentMidiEventIndex++;
@@ -588,9 +585,6 @@ private:
 			// Clear the block initially
 			blockBuffer.clear();
 
-			// Check if we have audio before processing
-			float preProcessLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
-
 			// Process through each plugin in the chain
 			for (size_t pluginIndex = 0; pluginIndex < pluginChain.size(); ++pluginIndex)
 			{
@@ -599,20 +593,19 @@ private:
 				if (config.plugins[pluginIndex].isInstrument)
 				{
 					// For instruments, pass MIDI and let them generate audio
-					std::cout << "Processing instrument with " << eventsInThisBuffer << " MIDI events" << std::endl;
 					plugin->processBlock(blockBuffer, midiBuffer);
 
 					// Check if we now have audio after instrument processing
 					float postInstrumentLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
-					if (postInstrumentLevel > 0.0001f)
+					if (postInstrumentLevel > 0.001f)  // Higher threshold to reduce spam
 					{
-						std::cout << "*** AUDIO GENERATED! *** Level: " << postInstrumentLevel
-								  << " at sample " << startSample << std::endl;
-					}
-					else if (eventsInThisBuffer > 0)
-					{
-						std::cout << "*** NO AUDIO *** despite " << eventsInThisBuffer
-								  << " MIDI events at sample " << startSample << std::endl;
+						std::cout << "Audio generated at sample " << startSample
+								  << " (time " << std::fixed << std::setprecision(3) << currentTimeStart << "s)"
+								  << ", level: " << std::fixed << std::setprecision(3) << postInstrumentLevel;
+						if (eventsInThisBuffer > 0)
+							std::cout << " [" << eventsInThisBuffer << " MIDI events]";
+						std::cout << std::endl;
+						blocksWithAudio++;
 					}
 
 					// Clear MIDI buffer after instrument processing
@@ -626,15 +619,8 @@ private:
 				}
 			}
 
-			// Final audio level check
-			float finalLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
-			if (finalLevel > 0.0001f)
-			{
-				std::cout << "Block " << (startSample / blockSize) << " final audio level: " << finalLevel << std::endl;
-			}
-
-			// Progress indicator (less frequent to reduce spam)
-			if (startSample % (blockSize * 50) == 0)
+			// Progress indicator (less frequent)
+			if (startSample % (blockSize * 200) == 0)  // Every 200 blocks instead of 50
 			{
 				double progress = (double)startSample / totalSamples * 100.0;
 				std::cout << "Progress: " << std::fixed << std::setprecision(1) << progress << "%" << std::endl;
@@ -645,6 +631,7 @@ private:
 		std::cout << "Total MIDI events processed: " << totalMidiEventsSent << std::endl;
 		std::cout << "Note On events sent: " << totalNoteOnsSent << std::endl;
 		std::cout << "Note Off events sent: " << totalNoteOffsSent << std::endl;
+		std::cout << "Blocks with audio content: " << blocksWithAudio << std::endl;
 		std::cout << "Plugins in chain: " << pluginChain.size() << std::endl;
 
 		// Check final audio buffer for any content
@@ -653,7 +640,7 @@ private:
 		{
 			float channelRMS = buffer.getRMSLevel(ch, 0, buffer.getNumSamples());
 			totalRMS += channelRMS;
-			std::cout << "Channel " << ch << " RMS level: " << channelRMS << std::endl;
+			std::cout << "Channel " << ch << " RMS level: " << std::fixed << std::setprecision(4) << channelRMS << std::endl;
 		}
 
 		if (totalRMS > 0.0001f)

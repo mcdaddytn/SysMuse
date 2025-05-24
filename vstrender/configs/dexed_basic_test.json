@@ -4,7 +4,7 @@
   "sample_rate": 44100,
   "bit_depth": 24,
   "buffer_size": 2048,
-  "render_length": 20.0,
+  "render_length": 0.0,
   "instrument_channels": 2,
   "plugins": [
     {

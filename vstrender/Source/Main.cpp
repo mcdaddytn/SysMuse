@@ -163,6 +163,105 @@ private:
         return true;
     }
 
+    void analyzePresetFile(const juce::String& presetPath)
+    {
+        std::cout << "========================================" << std::endl;
+        std::cout << "PRESET FILE ANALYSIS" << std::endl;
+        std::cout << "========================================" << std::endl;
+        std::cout << "File: " << presetPath << std::endl;
+
+        juce::File presetFile(presetPath);
+        if (!presetFile.existsAsFile())
+        {
+            std::cout << "ERROR: File does not exist!" << std::endl;
+            return;
+        }
+
+        auto fileSize = presetFile.getSize();
+        std::cout << "Size: " << fileSize << " bytes" << std::endl;
+        std::cout << "Extension: " << presetFile.getFileExtension() << std::endl;
+        std::cout << "Modified: " << presetFile.getLastModificationTime().toString(true, true) << std::endl;
+
+        // Load file as binary data
+        juce::MemoryBlock data;
+        if (presetFile.loadFileAsData(data))
+        {
+            std::cout << "\nBinary analysis:" << std::endl;
+            std::cout << "Loaded " << data.getSize() << " bytes" << std::endl;
+
+            auto dataPtr = static_cast<const uint8_t*>(data.getData());
+
+            // Show first 64 bytes as hex
+            std::cout << "First 64 bytes (hex):" << std::endl;
+            for (size_t i = 0; i < std::min(static_cast<size_t>(64), data.getSize()); ++i)
+            {
+                if (i % 16 == 0) std::cout << std::endl << std::setfill('0') << std::setw(4) << std::hex << i << ": ";
+                std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)dataPtr[i] << " ";
+            }
+            std::cout << std::dec << std::endl;
+
+            // Look for readable strings
+            std::cout << "\nSearching for readable strings..." << std::endl;
+            std::string currentString;
+            for (size_t i = 0; i < data.getSize(); ++i)
+            {
+                char c = static_cast<char>(dataPtr[i]);
+                if (c >= 32 && c <= 126) // Printable ASCII
+                {
+                    currentString += c;
+                }
+                else
+                {
+                    if (currentString.length() >= 4) // Only show strings of 4+ chars
+                    {
+                        std::cout << "  String at offset " << std::hex << (i - currentString.length()) << std::dec << ": \"" << currentString << "\"" << std::endl;
+                    }
+                    currentString.clear();
+                }
+            }
+
+            // Check if it looks like a VST3 preset
+            bool hasVST3Signature = false;
+            if (data.getSize() >= 4)
+            {
+                // Look for common VST3 preset signatures
+                std::string signature(reinterpret_cast<const char*>(dataPtr), 4);
+                if (signature == "VST3" || signature == "VSTX")
+                {
+                    hasVST3Signature = true;
+                    std::cout << "\nVST3 preset signature found: " << signature << std::endl;
+                }
+            }
+
+            if (!hasVST3Signature)
+            {
+                std::cout << "\nWARNING: No recognized VST3 preset signature found!" << std::endl;
+                std::cout << "This file may not be a valid VST3 preset." << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "ERROR: Could not load file as binary data!" << std::endl;
+        }
+
+        // Try to load as text
+        auto textContent = presetFile.loadFileAsString();
+        if (textContent.isNotEmpty())
+        {
+            std::cout << "\nText analysis:" << std::endl;
+            std::cout << "File contains " << textContent.length() << " characters" << std::endl;
+            std::cout << "First 200 characters:" << std::endl;
+            std::cout << "\"" << textContent.substring(0, 200) << "\"" << std::endl;
+
+            if (textContent.containsIgnoreCase("base64") || textContent.length() > 100)
+            {
+                std::cout << "File might be base64 encoded." << std::endl;
+            }
+        }
+
+        std::cout << "========================================" << std::endl;
+    }
+
     bool initializePlugins(double sampleRate, int numChannels)
     {
         pluginFormatManager.addDefaultFormats();
@@ -178,74 +277,18 @@ private:
         {
             std::cout << "=== Loading Plugin ===" << std::endl;
             std::cout << "Plugin path: " << pluginConfig.pluginPath << std::endl;
-            std::cout << "Plugin path length: " << pluginConfig.pluginPath.length() << " characters" << std::endl;
-
-            // Debug: Print each character to see if there are hidden characters
-            std::cout << "Path characters: ";
-            for (int i = 0; i < pluginConfig.pluginPath.length(); ++i)
-            {
-                auto c = pluginConfig.pluginPath[i];
-                if (c >= 32 && c <= 126) // Printable ASCII
-                    std::cout << c;
-                else
-                    std::cout << "[" << (int)c << "]";
-            }
-            std::cout << std::endl;
 
             // Load plugin
             juce::File pluginFile(pluginConfig.pluginPath);
-            std::cout << "JUCE File object created" << std::endl;
-            std::cout << "File.getFullPathName(): " << pluginFile.getFullPathName() << std::endl;
-            std::cout << "File.exists(): " << (pluginFile.exists() ? "true" : "false") << std::endl;
-            std::cout << "File.existsAsFile(): " << (pluginFile.existsAsFile() ? "true" : "false") << std::endl;
-            std::cout << "File.isDirectory(): " << (pluginFile.isDirectory() ? "true" : "false") << std::endl;
-
-            // VST3 bundles can be either files or directories
             if (!pluginFile.exists())
             {
                 std::cerr << "Plugin path not found: " << pluginConfig.pluginPath << std::endl;
-
-                // Try to find similar files
-                auto parentDir = pluginFile.getParentDirectory();
-                std::cout << "Parent directory: " << parentDir.getFullPathName() << std::endl;
-                std::cout << "Parent directory exists: " << (parentDir.exists() ? "true" : "false") << std::endl;
-
-                if (parentDir.exists())
-                {
-                    std::cout << "Files in parent directory:" << std::endl;
-                    auto files = parentDir.findChildFiles(juce::File::findFiles, false, "*.vst3");
-                    for (auto& file : files)
-                    {
-                        std::cout << "  " << file.getFileName() << std::endl;
-                    }
-                }
-
                 return false;
-            }
-
-            // For directories, check if it's a valid VST3 bundle
-            if (pluginFile.isDirectory())
-            {
-                std::cout << "VST3 bundle detected (directory)" << std::endl;
-                // Check for Contents directory (typical VST3 bundle structure)
-                auto contentsDir = pluginFile.getChildFile("Contents");
-                if (contentsDir.exists())
-                {
-                    std::cout << "Found Contents directory - appears to be valid VST3 bundle" << std::endl;
-                }
-                else
-                {
-                    std::cout << "No Contents directory found - may be a simple directory bundle" << std::endl;
-                }
-            }
-            else
-            {
-                std::cout << "VST3 file detected (single file)" << std::endl;
             }
 
             std::cout << "Plugin file/bundle exists, size: " << pluginFile.getSize() << " bytes" << std::endl;
 
-            // Find plugin descriptions - Fixed for JUCE 7.x API
+            // Find plugin descriptions
             juce::OwnedArray<juce::PluginDescription> descriptions;
             bool pluginFound = false;
 
@@ -254,12 +297,31 @@ private:
             for (auto* format : pluginFormatManager.getFormats())
             {
                 std::cout << "  Trying format: " << format->getName() << std::endl;
-                format->findAllTypesForFile(descriptions, pluginConfig.pluginPath);
-                if (descriptions.size() > 0)
+                descriptions.clear();
+
+                try
                 {
-                    std::cout << "  Found " << descriptions.size() << " plugin(s) with " << format->getName() << std::endl;
-                    pluginFound = true;
-                    // Don't break here - let it find all plugins from all formats
+                    format->findAllTypesForFile(descriptions, pluginConfig.pluginPath);
+                    std::cout << "  Scan completed for " << format->getName() << ", found " << descriptions.size() << " plugins" << std::endl;
+
+                    if (descriptions.size() > 0)
+                    {
+                        pluginFound = true;
+                        std::cout << "  Plugins found with " << format->getName() << ":" << std::endl;
+                        for (int i = 0; i < descriptions.size(); ++i)
+                        {
+                            auto& desc = *descriptions[i];
+                            std::cout << "    [" << i << "] " << desc.name << " (" << desc.manufacturerName << ")" << std::endl;
+                        }
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    std::cout << "  Exception during scan with " << format->getName() << ": " << e.what() << std::endl;
+                }
+                catch (...)
+                {
+                    std::cout << "  Unknown exception during scan with " << format->getName() << std::endl;
                 }
             }
 
@@ -286,7 +348,6 @@ private:
 
             if (!pluginConfig.pluginName.isEmpty())
             {
-                // Look for plugin by name
                 std::cout << "\nLooking for plugin named: " << pluginConfig.pluginName << std::endl;
                 for (int i = 0; i < descriptions.size(); ++i)
                 {
@@ -308,7 +369,6 @@ private:
             }
             else
             {
-                // Use the first plugin
                 selectedDescription = descriptions[0];
                 std::cout << "\nNo plugin name specified, using first plugin: " << selectedDescription->name << std::endl;
             }
@@ -330,7 +390,9 @@ private:
             std::cout << "  Name: " << plugin->getName() << std::endl;
             std::cout << "  Inputs: " << plugin->getTotalNumInputChannels() << std::endl;
             std::cout << "  Outputs: " << plugin->getTotalNumOutputChannels() << std::endl;
-            std::cout << "  Parameters: " << plugin->getParameters().size() << std::endl;
+
+            // Enhanced parameter discovery
+            discoverAllParameters(plugin.get());
 
             // Configure plugin
             plugin->prepareToPlay(sampleRate, config.bufferSize);
@@ -341,6 +403,12 @@ private:
             {
                 std::cout << "Exporting parameters BEFORE any changes to: " << pluginConfig.parametersBefore << std::endl;
                 exportPluginParameters(plugin.get(), pluginConfig.parametersBefore, "initial_state");
+            }
+
+            // Analyze preset file if specified
+            if (!pluginConfig.presetPath.isEmpty())
+            {
+                analyzePresetFile(pluginConfig.presetPath);
             }
 
             // Load preset if specified
@@ -384,36 +452,169 @@ private:
         return true;
     }
 
+    void discoverAllParameters(juce::AudioPluginInstance* plugin)
+    {
+        std::cout << "\n=== ENHANCED PARAMETER DISCOVERY ===" << std::endl;
+
+        // Standard parameters
+        const auto& params = plugin->getParameters();
+        std::cout << "Standard VST3 parameters: " << params.size() << std::endl;
+
+        for (int i = 0; i < params.size(); ++i)
+        {
+            auto* param = params[i];
+            auto paramName = param->getName(256);
+            auto paramValue = param->getValue();
+            auto paramText = param->getText(paramValue, 256);
+            auto paramLabel = param->getLabel();
+
+            std::cout << "  [" << i << "] " << paramName << " = " << paramValue
+                      << " (" << paramText << ")" << (paramLabel.isNotEmpty() ? " " + paramLabel : "") << std::endl;
+            std::cout << "      Default: " << param->getDefaultValue() << std::endl;
+            std::cout << "      Category: " << param->getCategory() << std::endl;
+        }
+
+        // Try to discover hidden/internal parameters
+        std::cout << "\nAttempting to discover additional plugin capabilities..." << std::endl;
+
+        // Check plugin state size
+        juce::MemoryBlock currentState;
+        plugin->getStateInformation(currentState);
+        std::cout << "Plugin state size: " << currentState.getSize() << " bytes" << std::endl;
+
+        if (currentState.getSize() > 100)
+        {
+            std::cout << "Large state size suggests many internal parameters!" << std::endl;
+
+            // Show first part of state as hex
+            std::cout << "State data preview (first 64 bytes):" << std::endl;
+            auto statePtr = static_cast<const uint8_t*>(currentState.getData());
+            for (size_t i = 0; i < std::min(static_cast<size_t>(64), currentState.getSize()); ++i)
+            {
+                if (i % 16 == 0) std::cout << std::endl << std::setfill('0') << std::setw(4) << std::hex << i << ": ";
+                std::cout << std::setfill('0') << std::setw(2) << std::hex << (int)statePtr[i] << " ";
+            }
+            std::cout << std::dec << std::endl;
+        }
+
+        // Check if plugin supports programs/presets
+        std::cout << "\nProgram/Preset support:" << std::endl;
+        std::cout << "Number of programs: " << plugin->getNumPrograms() << std::endl;
+        std::cout << "Current program: " << plugin->getCurrentProgram() << std::endl;
+        std::cout << "Current program name: " << plugin->getProgramName(plugin->getCurrentProgram()) << std::endl;
+
+        if (plugin->getNumPrograms() > 1)
+        {
+            std::cout << "Available programs:" << std::endl;
+            for (int i = 0; i < std::min(10, plugin->getNumPrograms()); ++i)
+            {
+                std::cout << "  [" << i << "] " << plugin->getProgramName(i) << std::endl;
+            }
+        }
+
+        std::cout << "=== END PARAMETER DISCOVERY ===" << std::endl;
+    }
+
     bool loadPreset(juce::AudioPluginInstance* plugin, const juce::String& presetPath)
     {
+        std::cout << "\n=== ENHANCED PRESET LOADING DEBUG ===" << std::endl;
+        std::cout << "Preset path: " << presetPath << std::endl;
+
         juce::File presetFile(presetPath);
         if (!presetFile.existsAsFile())
+        {
+            std::cout << "Preset file does not exist!" << std::endl;
             return false;
+        }
+
+        std::cout << "Preset file exists, size: " << presetFile.getSize() << " bytes" << std::endl;
+
+        // Get plugin state before loading preset
+        juce::MemoryBlock stateBefore;
+        plugin->getStateInformation(stateBefore);
+        std::cout << "Plugin state before preset: " << stateBefore.getSize() << " bytes" << std::endl;
+
+        // Capture parameter values before preset
+        std::vector<float> paramValuesBefore;
+        const auto& params = plugin->getParameters();
+        for (int i = 0; i < params.size(); ++i)
+        {
+            paramValuesBefore.push_back(params[i]->getValue());
+        }
+
+        bool presetLoaded = false;
 
         // Try to load as VST3 preset
         if (presetPath.endsWithIgnoreCase(".vstpreset"))
         {
+            std::cout << "Attempting to load as VST3 preset..." << std::endl;
+
             juce::MemoryBlock presetData;
             if (presetFile.loadFileAsData(presetData))
             {
-                plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
-                return true;
-            }
-        }
+                std::cout << "Preset file loaded into memory: " << presetData.getSize() << " bytes" << std::endl;
 
-        // Try to load as generic state
-        auto presetText = presetFile.loadFileAsString();
-        if (presetText.isNotEmpty())
-        {
-            juce::MemoryOutputStream stream;
-            if (juce::Base64::convertFromBase64(stream, presetText))
+                try
+                {
+                    plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
+                    std::cout << "setStateInformation called successfully" << std::endl;
+                    presetLoaded = true;
+                }
+                catch (const std::exception& e)
+                {
+                    std::cout << "Exception during setStateInformation: " << e.what() << std::endl;
+                }
+                catch (...)
+                {
+                    std::cout << "Unknown exception during setStateInformation" << std::endl;
+                }
+            }
+            else
             {
-                plugin->setStateInformation(stream.getData(), static_cast<int>(stream.getDataSize()));
-                return true;
+                std::cout << "Failed to load preset file into memory" << std::endl;
             }
         }
 
-        return false;
+        // Check if plugin state actually changed
+        juce::MemoryBlock stateAfter;
+        plugin->getStateInformation(stateAfter);
+        std::cout << "Plugin state after preset: " << stateAfter.getSize() << " bytes" << std::endl;
+
+        bool stateChanged = (stateBefore.getSize() != stateAfter.getSize()) ||
+                           (memcmp(stateBefore.getData(), stateAfter.getData(), stateBefore.getSize()) != 0);
+
+        std::cout << "Plugin state changed: " << (stateChanged ? "YES" : "NO") << std::endl;
+
+        // Check if any standard parameters changed
+        std::vector<int> changedParams;
+        for (int i = 0; i < params.size(); ++i)
+        {
+            float newValue = params[i]->getValue();
+            if (std::abs(newValue - paramValuesBefore[i]) > 0.001f)
+            {
+                changedParams.push_back(i);
+            }
+        }
+
+        std::cout << "Standard parameters changed: " << changedParams.size() << std::endl;
+        for (int paramIndex : changedParams)
+        {
+            auto* param = params[paramIndex];
+            std::cout << "  [" << paramIndex << "] " << param->getName(256)
+                      << ": " << paramValuesBefore[paramIndex]
+                      << " -> " << param->getValue()
+                      << " (" << param->getText(param->getValue(), 256) << ")" << std::endl;
+        }
+
+        if (stateChanged && changedParams.empty())
+        {
+            std::cout << "*** IMPORTANT: Plugin state changed but NO standard parameters changed!" << std::endl;
+            std::cout << "*** This confirms the preset affects INTERNAL/HIDDEN parameters!" << std::endl;
+            std::cout << "*** The preset IS working, but on parameters not exposed via VST3 interface." << std::endl;
+        }
+
+        std::cout << "=== END PRESET LOADING DEBUG ===" << std::endl;
+        return presetLoaded && stateChanged;
     }
 
     void logCurrentParameters(juce::AudioPluginInstance* plugin, int maxParams = 100)
@@ -454,6 +655,12 @@ private:
         rootObject->setProperty("context", context);
         rootObject->setProperty("timestamp", juce::Time::getCurrentTime().toString(true, true));
         rootObject->setProperty("total_parameters", plugin->getParameters().size());
+
+        // Add state information
+        juce::MemoryBlock currentState;
+        plugin->getStateInformation(currentState);
+        //rootObject->setProperty("state_size_bytes", static_cast<int64>(currentState.getSize()));
+        rootObject->setProperty("state_size_bytes", static_cast<int>(currentState.getSize()));
 
         // Create parameters object
         juce::var parametersObject = juce::var(new juce::DynamicObject());

@@ -1,0 +1,21 @@
+{
+  "input_file": "F:\\data\\vstrender\\test_input.wav",
+  "output_file": "F:\\data\\vstrender\\test_output_crveq_minus8.wav",
+  "sample_rate": 0,
+  "bit_depth": 0,
+  "buffer_size": 4096,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\CurveEQ.vst3",
+      "preset": "F:\\data\\vstrender\\GM CurveEQ HiLo Boost Minus8db.vstpreset",
+      "plugin_name": "CurveEQ",
+      "export_parameters_before": "F:\\data\\vstrender\\params_crveq_before.json",
+      "export_parameters_after": "F:\\data\\vstrender\\params_crveq_after.json",
+      "parameters": {
+        "Bypass": 0.0
+      }
+    }
+  ]
+}
+
+

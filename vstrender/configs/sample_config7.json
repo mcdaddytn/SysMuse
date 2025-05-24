@@ -1,8 +1,9 @@
 {
   "input_file": "F:\\data\\vstrender\\test_input.wav",
   "output_file": "F:\\data\\vstrender\\test_output_cub_chain.wav",
-  "sample_rate": 44100,
-  "buffer_size": 512,
+  "sample_rate": 0,
+  "bit_depth": 0,
+  "buffer_size": 4096,
   "plugins": [
     {
       "path": "C:\\Program Files\\Steinberg\\Cubase 11\\VST3\\Cubase Plug-in Set.vst3\\Contents\\x86_64-win\\Cubase Plug-in Set.vst3",

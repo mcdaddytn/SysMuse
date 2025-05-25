@@ -302,7 +302,13 @@ class AudioPluginHost
 {
 public:
     AudioPluginHost() = default;
-    ~AudioPluginHost() = default;
+
+    // CRITICAL: Add explicit destructor to ensure proper cleanup order
+    ~AudioPluginHost()
+    {
+        std::cout << "AudioPluginHost destructor called" << std::endl;
+        cleanup();
+    }
 
     bool loadConfiguration(const juce::String& configPath)
     {
@@ -335,6 +341,33 @@ public:
         {
             return processAudioFile();
         }
+    }
+
+    // CRITICAL: Add explicit cleanup method
+    void cleanup()
+    {
+        std::cout << "Starting cleanup..." << std::endl;
+
+        // Clean up plugins in reverse order
+        for (int i = static_cast<int>(pluginChain.size()) - 1; i >= 0; --i)
+        {
+            if (pluginChain[i])
+            {
+                std::cout << "Releasing plugin " << i << std::endl;
+                try
+                {
+                    pluginChain[i]->releaseResources();
+                    pluginChain[i].reset();
+                }
+                catch (...)
+                {
+                    std::cout << "Exception during plugin " << i << " cleanup" << std::endl;
+                }
+            }
+        }
+        pluginChain.clear();
+
+        std::cout << "Plugin cleanup complete" << std::endl;
     }
 
 private:
@@ -1230,32 +1263,41 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    AudioPluginHost host;
-
-    if (!host.loadConfiguration(juce::String(argv[1])))
+    // Use a block to ensure AudioPluginHost is destroyed before JUCE shutdown
+    int returnCode = 0;
     {
-        std::cerr << "Failed to load configuration" << std::endl;
-        juce::shutdownJuce_GUI();
-        return 1;
-    }
+        AudioPluginHost host;
 
-    std::cout << "Processing audio..." << std::endl;
+        if (!host.loadConfiguration(juce::String(argv[1])))
+        {
+            std::cerr << "Failed to load configuration" << std::endl;
+            returnCode = 1;
+        }
+        else
+        {
+            std::cout << "Processing audio..." << std::endl;
 
-    bool success = host.processAudio();
+            bool success = host.processAudio();
 
-    if (!success)
-    {
-        std::cerr << "Failed to process audio" << std::endl;
-        juce::shutdownJuce_GUI();
-        return 1;
-    }
-    else
-    {
-        std::cout << "Processing completed successfully!" << std::endl;
-    }
+            if (!success)
+            {
+                std::cerr << "Failed to process audio" << std::endl;
+                returnCode = 1;
+            }
+            else
+            {
+                std::cout << "Processing completed successfully!" << std::endl;
+            }
+        }
 
-    std::cout << "Shutting JUCE down" << std::endl;
+        // Explicit cleanup before JUCE shutdown
+        std::cout << "Cleaning up host..." << std::endl;
+        host.cleanup();
+
+    } // AudioPluginHost destructor called here
+
+    std::cout << "Shutting down JUCE..." << std::endl;
     juce::shutdownJuce_GUI();
-    std::cout << "Shut JUCE down successfully" << std::endl;
-    return 0;
+    std::cout << "JUCE shutdown complete" << std::endl;
+    return returnCode;
 }

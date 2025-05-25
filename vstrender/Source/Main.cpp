@@ -29,6 +29,10 @@ struct PluginConfig
     juce::String midiFile;
     double instrumentLength = 0.0;
     int programNumber = -1;  // For program change selection
+
+    // SYSEX patch support:
+    juce::String sysexFile;        // Path to .syx file
+    int sysexPatchNumber = -1;     // Which patch from bank (0-31)
 };
 
 struct ProcessingConfig
@@ -62,6 +66,8 @@ public:
 
     std::vector<MidiEvent> events;
     double totalLength = 0.0;
+    bool logNoteDetails = false;
+    //bool logNoteDetails = true;
 
 	bool loadFromFile(const juce::String& midiFilePath)
 	{
@@ -128,8 +134,10 @@ public:
 					double secondsPerQuarter = microsecondsPerQuarter / 1000000.0;
 					timeInSeconds = message.getTimeStamp() / ticksPerQuarter * secondsPerQuarter;
 
-					std::cout << "  Event at tick " << message.getTimeStamp()
-							  << " -> " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+					if (logNoteDetails) {
+						std::cout << "  Event at tick " << message.getTimeStamp()
+								  << " -> " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+					}
 				}
 				else
 				{
@@ -148,20 +156,25 @@ public:
 				}
 				else if (message.isNoteOn())
 				{
-					std::cout << "  NOTE ON:  Note " << message.getNoteNumber()
-							  << " (" << getNoteNameFromNumber(message.getNoteNumber()) << ")"
-							  << ", Vel " << (int)message.getVelocity()
-							  << ", Ch " << message.getChannel()
-							  << " at " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+
+					if (logNoteDetails) {
+						std::cout << "  NOTE ON:  Note " << message.getNoteNumber()
+								  << " (" << getNoteNameFromNumber(message.getNoteNumber()) << ")"
+								  << ", Vel " << (int)message.getVelocity()
+								  << ", Ch " << message.getChannel()
+								  << " at " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+					}
 					totalNoteOnEvents++;
 				}
 				else if (message.isNoteOff())
 				{
-					std::cout << "  NOTE OFF: Note " << message.getNoteNumber()
-							  << " (" << getNoteNameFromNumber(message.getNoteNumber()) << ")"
-							  << ", Vel " << (int)message.getVelocity()
-							  << ", Ch " << message.getChannel()
-							  << " at " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+					if (logNoteDetails) {
+						std::cout << "  NOTE OFF: Note " << message.getNoteNumber()
+								  << " (" << getNoteNameFromNumber(message.getNoteNumber()) << ")"
+								  << ", Vel " << (int)message.getVelocity()
+								  << ", Ch " << message.getChannel()
+								  << " at " << std::fixed << std::setprecision(3) << timeInSeconds << "s" << std::endl;
+						}
 					totalNoteOffEvents++;
 				}
 				else if (message.isTrackNameEvent())
@@ -329,6 +342,8 @@ private:
     std::vector<std::unique_ptr<juce::AudioPluginInstance>> pluginChain;
     juce::AudioPluginFormatManager pluginFormatManager;
     SimpleMidiSequence midiSequence;
+    bool logNoteDetails = false;
+    //bool logNoteDetails = true;
 
     bool parseConfiguration(const juce::var& json)
     {
@@ -370,6 +385,8 @@ private:
             pluginConfig.midiFile = pluginJson.getProperty("midi_file", "");
             pluginConfig.instrumentLength = pluginJson.getProperty("instrument_length", 0.0);
             pluginConfig.programNumber = pluginJson.getProperty("program_number", -1);
+            pluginConfig.sysexFile = pluginJson.getProperty("sysex_file", "");
+            pluginConfig.sysexPatchNumber = pluginJson.getProperty("sysex_patch_number", -1);
 
             if (pluginConfig.pluginPath.isEmpty())
             {
@@ -555,19 +572,23 @@ private:
 					// Only log important MIDI events (notes)
 					if (event.message.isNoteOn())
 					{
-						std::cout << "SENT: Note On  - Note " << event.message.getNoteNumber()
-								  << " (" << SimpleMidiSequence::getNoteNameFromNumber(event.message.getNoteNumber()) << ")"
-								  << ", Vel " << (int)event.message.getVelocity()
-								  << " at time " << std::fixed << std::setprecision(3) << event.timeStamp
-								  << "s, sample " << (startSample + sampleOffset) << std::endl;
+						if (logNoteDetails) {
+							std::cout << "SENT: Note On  - Note " << event.message.getNoteNumber()
+									  << " (" << SimpleMidiSequence::getNoteNameFromNumber(event.message.getNoteNumber()) << ")"
+									  << ", Vel " << (int)event.message.getVelocity()
+									  << " at time " << std::fixed << std::setprecision(3) << event.timeStamp
+									  << "s, sample " << (startSample + sampleOffset) << std::endl;
+						}
 						totalNoteOnsSent++;
 					}
 					else if (event.message.isNoteOff())
 					{
-						std::cout << "SENT: Note Off - Note " << event.message.getNoteNumber()
-								  << " (" << SimpleMidiSequence::getNoteNameFromNumber(event.message.getNoteNumber()) << ")"
-								  << " at time " << std::fixed << std::setprecision(3) << event.timeStamp
-								  << "s, sample " << (startSample + sampleOffset) << std::endl;
+						if (logNoteDetails) {
+							std::cout << "SENT: Note Off - Note " << event.message.getNoteNumber()
+									  << " (" << SimpleMidiSequence::getNoteNameFromNumber(event.message.getNoteNumber()) << ")"
+									  << " at time " << std::fixed << std::setprecision(3) << event.timeStamp
+									  << "s, sample " << (startSample + sampleOffset) << std::endl;
+						}
 						totalNoteOffsSent++;
 					}
 					// Skip logging meta events to reduce spam
@@ -599,12 +620,15 @@ private:
 					float postInstrumentLevel = blockBuffer.getRMSLevel(0, 0, samplesToProcess);
 					if (postInstrumentLevel > 0.001f)  // Higher threshold to reduce spam
 					{
-						std::cout << "Audio generated at sample " << startSample
-								  << " (time " << std::fixed << std::setprecision(3) << currentTimeStart << "s)"
-								  << ", level: " << std::fixed << std::setprecision(3) << postInstrumentLevel;
-						if (eventsInThisBuffer > 0)
+						if (logNoteDetails) {
+							std::cout << "Audio generated at sample " << startSample
+									  << " (time " << std::fixed << std::setprecision(3) << currentTimeStart << "s)"
+									  << ", level: " << std::fixed << std::setprecision(3) << postInstrumentLevel;
+						}
+						if (eventsInThisBuffer > 0 && logNoteDetails) {
 							std::cout << " [" << eventsInThisBuffer << " MIDI events]";
-						std::cout << std::endl;
+							std::cout << std::endl;
+						}
 						blocksWithAudio++;
 					}
 
@@ -800,6 +824,19 @@ private:
                 }
             }
 
+            if (!pluginConfig.sysexFile.isEmpty())
+            {
+                std::cout << "Loading SysEx file: " << pluginConfig.sysexFile << std::endl;
+                if (loadSysExPatch(plugin.get(), pluginConfig.sysexFile, pluginConfig.sysexPatchNumber))
+                {
+                    std::cout << "SysEx patch loaded successfully" << std::endl;
+                }
+                else
+                {
+                    std::cout << "Warning: Could not load SysEx patch" << std::endl;
+                }
+            }
+
             // Load preset if specified
             if (!pluginConfig.presetPath.isEmpty())
             {
@@ -992,6 +1029,178 @@ private:
 
         return true;
     }
+
+    bool loadSysExPatch(juce::AudioPluginInstance* plugin, const juce::String& sysexPath, int patchNumber)
+    {
+        juce::File sysexFile(sysexPath);
+        if (!sysexFile.existsAsFile())
+        {
+            std::cerr << "SysEx file not found: " << sysexPath << std::endl;
+            return false;
+        }
+
+        std::cout << "SysEx file: " << sysexPath << " (" << sysexFile.getSize() << " bytes)" << std::endl;
+
+        juce::MemoryBlock fileData;
+        if (!sysexFile.loadFileAsData(fileData))
+        {
+            std::cerr << "Could not load SysEx file data" << std::endl;
+            return false;
+        }
+
+        const uint8_t* data = static_cast<const uint8_t*>(fileData.getData());
+        size_t dataSize = fileData.getSize();
+
+        // Parse DX7 bank and extract patch
+        auto patches = parseDX7Bank(data, dataSize);
+        if (patches.empty())
+        {
+            std::cout << "No valid patches found in SysEx file" << std::endl;
+            return false;
+        }
+
+        std::cout << "Found " << patches.size() << " patches in SysEx bank" << std::endl;
+
+        // Select patch
+        int targetPatch = (patchNumber >= 0) ? patchNumber : 0;
+        if (targetPatch >= static_cast<int>(patches.size()))
+        {
+            std::cout << "Warning: Patch " << targetPatch << " not available, using patch 0" << std::endl;
+            targetPatch = 0;
+        }
+
+        const auto& patch = patches[targetPatch];
+        std::cout << "Loading patch " << targetPatch << ": " << patch.name << std::endl;
+
+        return sendSysExToPlugin(plugin, patch.data);
+    }
+
+    struct SysExPatch
+    {
+        juce::String name;
+        std::vector<uint8_t> data;
+    };
+
+    std::vector<SysExPatch> parseDX7Bank(const uint8_t* data, size_t dataSize)
+    {
+        std::vector<SysExPatch> patches;
+
+        // Check for DX7 32-voice bank: F0 43 00 09 20 00 [4096 bytes] [checksum] F7
+        if (dataSize >= 4104 && data[0] == 0xF0 && data[1] == 0x43 &&
+            data[3] == 0x09 && data[4] == 0x20 && data[5] == 0x00)
+        {
+            std::cout << "Detected DX7 32-voice bank format" << std::endl;
+
+            // Extract 32 voices (128 bytes each)
+            for (int voice = 0; voice < 32; ++voice)
+            {
+                size_t voiceOffset = 6 + (voice * 128);
+
+                if (voiceOffset + 128 > dataSize)
+                    break;
+
+                SysExPatch patch;
+                patch.data.assign(data + voiceOffset, data + voiceOffset + 128);
+
+                // Extract voice name (last 10 bytes)
+                patch.name = "";
+                for (int i = 118; i < 128; ++i)
+                {
+                    char c = static_cast<char>(patch.data[i]);
+                    if (c >= 32 && c <= 126)
+                        patch.name += c;
+                    else
+                        patch.name += " ";
+                }
+                patch.name = patch.name.trim();
+
+                if (patch.name.isEmpty())
+                    patch.name = "Patch " + juce::String(voice + 1);
+
+                patches.push_back(patch);
+            }
+        }
+        // Check for single voice: F0 43 00 00 01 1B [128 bytes] [checksum] F7
+        else if (dataSize >= 140 && data[0] == 0xF0 && data[1] == 0x43 &&
+                 data[4] == 0x01 && data[5] == 0x1B)
+        {
+            std::cout << "Detected DX7 single voice format" << std::endl;
+
+            SysExPatch patch;
+            patch.data.assign(data + 6, data + 6 + 128);
+            patch.name = "Single Voice";
+            patches.push_back(patch);
+        }
+        else
+        {
+            std::cout << "Unknown SysEx format (size: " << dataSize << " bytes)" << std::endl;
+        }
+
+        return patches;
+    }
+
+    bool sendSysExToPlugin(juce::AudioPluginInstance* plugin, const std::vector<uint8_t>& patchData)
+    {
+        if (!plugin || patchData.empty())
+            return false;
+
+        std::cout << "Sending SysEx patch to plugin (" << patchData.size() << " bytes)" << std::endl;
+
+        try
+        {
+            // Create DX7 Single Voice Dump SysEx: F0 43 00 00 01 1B [128 bytes] [checksum] F7
+            std::vector<uint8_t> sysexMessage;
+            sysexMessage.push_back(0xF0);  // SysEx start
+            sysexMessage.push_back(0x43);  // Yamaha ID
+            sysexMessage.push_back(0x00);  // Sub-status & channel
+            sysexMessage.push_back(0x00);  // Format number
+            sysexMessage.push_back(0x01);  // Byte count MSB
+            sysexMessage.push_back(0x1B);  // Byte count LSB
+
+            // Add patch data (128 bytes)
+            size_t dataSize = std::min(static_cast<size_t>(128), patchData.size());
+            for (size_t i = 0; i < dataSize; ++i)
+            {
+                sysexMessage.push_back(patchData[i]);
+            }
+
+            // Pad if needed
+            while (sysexMessage.size() < 134) // 6 header + 128 data
+            {
+                sysexMessage.push_back(0x00);
+            }
+
+            // Calculate checksum
+            uint8_t checksum = 0;
+            for (size_t i = 6; i < sysexMessage.size(); ++i)
+            {
+                checksum += sysexMessage[i];
+            }
+            checksum = (~checksum + 1) & 0x7F;
+            sysexMessage.push_back(checksum);
+            sysexMessage.push_back(0xF7);  // SysEx end
+
+            // Send to plugin
+            juce::MidiMessage midiSysEx(sysexMessage.data(), static_cast<int>(sysexMessage.size()));
+            juce::MidiBuffer midiBuffer;
+            midiBuffer.addEvent(midiSysEx, 0);
+
+            juce::AudioBuffer<float> audioBuffer(2, 512);
+            audioBuffer.clear();
+
+            plugin->processBlock(audioBuffer, midiBuffer);
+            juce::Thread::sleep(100);  // Give plugin time to process
+
+            std::cout << "SysEx sent successfully" << std::endl;
+            return true;
+        }
+        catch (...)
+        {
+            std::cout << "Error sending SysEx to plugin" << std::endl;
+            return false;
+        }
+    }
+
 };
 
 //==============================================================================
@@ -1038,6 +1247,8 @@ int main(int argc, char* argv[])
         std::cout << "Processing completed successfully!" << std::endl;
     }
 
+    std::cout << "Shutting JUCE down" << std::endl;
     juce::shutdownJuce_GUI();
+    std::cout << "Shut JUCE down successfully" << std::endl;
     return 0;
 }

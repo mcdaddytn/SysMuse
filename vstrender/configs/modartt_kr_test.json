@@ -1,0 +1,19 @@
+{
+  "_comment": "Basic Dexed Test - Default Patch",
+  "output_file": "/Volumes/PortFat2/data/vstrender/modartt_kr_test.wav",
+  "sample_rate": 44100,
+  "bit_depth": 24,
+  "buffer_size": 4096,
+  "render_length": 0.0,
+  "instrument_channels": 2,
+  "plugins": [
+    {
+      "path": "/Library/Audio/Plug-Ins/VST3/Pianoteq 7.vst3",
+      "is_instrument": true,
+      "midi_file": "/Volumes/PortFat2/data/vstrender/KentuckyRhapsody.mid",
+      "parameters": {
+      }
+    }
+  ]
+}
+

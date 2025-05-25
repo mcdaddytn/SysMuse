@@ -474,7 +474,9 @@ private:
         renderInstrumentChain(audioBuffer, finalSampleRate, renderLength);
 
         // Write output file
-        return writeAudioFile(audioBuffer, finalSampleRate, config.instrumentChannels, finalBitDepth);
+        bool rc = writeAudioFile(audioBuffer, finalSampleRate, config.instrumentChannels, finalBitDepth);
+        std::cout << "Wrote audio file" << std::endl;
+        return rc;
     }
 
     bool processAudioFile()
@@ -515,7 +517,11 @@ private:
 
         processAudioBuffer(audioBuffer, finalSampleRate);
 
-        return writeAudioFile(audioBuffer, finalSampleRate, numChannels, finalBitDepth);
+        // Write output file
+        bool rc = writeAudioFile(audioBuffer, finalSampleRate, numChannels, finalBitDepth);
+        std::cout << "Wrote audio file" << std::endl;
+        return rc;
+
     }
 
 	void renderInstrumentChain(juce::AudioBuffer<float>& buffer, double sampleRate, double renderLength)
@@ -966,6 +972,7 @@ private:
 
     bool writeAudioFile(const juce::AudioBuffer<float>& buffer, double sampleRate, int numChannels, int bitDepth)
     {
+        std::cout << "Writing output file: " << config.outputFile << std::endl;
         juce::File outputFile(config.outputFile);
 
         // Delete existing output file

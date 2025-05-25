@@ -12,6 +12,7 @@
       "plugin_name": "Dexed",
       "is_instrument": true,
       "midi_file": "F:\\data\\vstrender\\dexed_test.mid",
+      "program_number": 5,
       "export_parameters_before": "F:\\data\\vstrender\\dexed_params_before.json",
       "export_parameters_after": "F:\\data\\vstrender\\dexed_params_after.json",
       "parameters": {

@@ -1066,6 +1066,7 @@ private:
         std::cout << "  Bit depth: " << finalBitDepth << " bits" << std::endl;
         std::cout << "  Channels: " << numChannels << std::endl;
         std::cout << "  Samples: " << buffer.getNumSamples() << std::endl;
+        std::cout << "Completed" << std::endl;
 
         return true;
     }

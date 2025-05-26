@@ -130,9 +130,9 @@ public:
             info.isDiscrete = (info.numSteps > 0 && info.numSteps < 1000);
             info.isBoolean = param->isBoolean();
             info.isMetaParameter = param->isMetaParameter();
-            // gm: enum code below not compiling, just hardcode
 			info.category = "Unknown";
 
+			// gm: below not compiling
             // Convert category enum to string
             /*
             auto category = param->getCategory();
@@ -166,7 +166,8 @@ public:
                     info.category = "Unknown";
                     break;
             }
-			*/
+            */
+
             info.print();
             parameters.push_back(info);
         }
@@ -184,7 +185,9 @@ public:
     {
         std::vector<std::string> presetKeywords = {
             "program", "preset", "patch", "bank", "sound", "voice",
-            "Program", "Preset", "Patch", "Bank", "Sound", "Voice"
+            "Program", "Preset", "Patch", "Bank", "Sound", "Voice",
+            // Pianoteq-specific keywords
+            "instrument", "piano", "model", "type", "variant", "style"
         };
 
         std::cout << "Looking for preset/program-related parameters:" << std::endl;
@@ -211,10 +214,34 @@ public:
             }
         }
 
+        // Look for discrete parameters that might be instrument selectors
+        std::cout << "\nDiscrete parameters that might control instruments/sounds:" << std::endl;
+        for (const auto& param : parameters)
+        {
+            if (param.isDiscrete && param.numSteps > 1 && param.numSteps < 100 &&
+                !param.name.startsWith("MIDI CC"))
+            {
+                // Skip obvious non-instrument parameters
+                juce::String lowerName = param.name.toLowerCase();
+                if (!lowerName.contains("volume") && !lowerName.contains("gain") &&
+                    !lowerName.contains("mix") && !lowerName.contains("level") &&
+                    !lowerName.contains("delay") && !lowerName.contains("reverb") &&
+                    !lowerName.contains("bypass"))
+                {
+                    std::cout << "  [" << param.index << "] " << param.name
+                              << " = " << param.value << " (\"" << param.text << "\") "
+                              << "[" << param.numSteps << " options]" << std::endl;
+                    foundAny = true;
+                }
+            }
+        }
+
         if (!foundAny)
         {
             std::cout << "  No obvious preset/program parameters found." << std::endl;
             std::cout << "  Try looking for parameters with discrete values or specific names." << std::endl;
+            std::cout << "  For Pianoteq, the instrument selection might be handled via .fxp presets" << std::endl;
+            std::cout << "  or through the plugin's internal preset system rather than parameters." << std::endl;
         }
     }
 
@@ -1174,22 +1201,196 @@ private:
             return false;
         }
 
+        juce::MemoryBlock presetData;
+        if (!presetFile.loadFileAsData(presetData))
+        {
+            std::cout << "Could not load preset file data!" << std::endl;
+            return false;
+        }
+
+        std::cout << "Preset file size: " << presetData.getSize() << " bytes" << std::endl;
+
+        bool success = false;
+
+        // Try VST3 preset format first
         if (presetPath.endsWithIgnoreCase(".vstpreset"))
         {
-            juce::MemoryBlock presetData;
-            if (presetFile.loadFileAsData(presetData))
+            std::cout << "Attempting to load as VST3 preset..." << std::endl;
+            try
             {
-                try
-                {
-                    plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
-                    std::cout << "Preset loaded successfully!" << std::endl;
-                    return true;
-                }
-                catch (...)
-                {
-                    std::cout << "Failed to load preset" << std::endl;
-                }
+                plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
+                std::cout << "VST3 preset loaded successfully!" << std::endl;
+                success = true;
             }
+            catch (...)
+            {
+                std::cout << "Failed to load as VST3 preset" << std::endl;
+            }
+        }
+        // Try FXP preset format
+        else if (presetPath.endsWithIgnoreCase(".fxp") || presetPath.endsWithIgnoreCase(".fxb"))
+        {
+            std::cout << "Attempting to load as FXP/FXB preset..." << std::endl;
+            success = loadFXPPreset(plugin, presetData);
+        }
+        // Try as raw state data for any other extension
+        else
+        {
+            std::cout << "Attempting to load as raw state data..." << std::endl;
+            try
+            {
+                plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
+                std::cout << "Raw state data loaded successfully!" << std::endl;
+                success = true;
+            }
+            catch (...)
+            {
+                std::cout << "Failed to load as raw state data" << std::endl;
+
+                // If that fails, try FXP format as fallback
+                std::cout << "Trying FXP format as fallback..." << std::endl;
+                success = loadFXPPreset(plugin, presetData);
+            }
+        }
+
+        if (success)
+        {
+            std::cout << "Preset loaded - plugin state updated" << std::endl;
+        }
+
+        return success;
+    }
+
+    bool loadFXPPreset(juce::AudioPluginInstance* plugin, const juce::MemoryBlock& presetData)
+    {
+        if (presetData.getSize() < 28) // Minimum FXP header size
+        {
+            std::cout << "File too small to be a valid FXP preset" << std::endl;
+            return false;
+        }
+
+        const uint8_t* data = static_cast<const uint8_t*>(presetData.getData());
+
+        // Check FXP header signature
+        if (data[0] != 'C' || data[1] != 'c' || data[2] != 'n' || data[3] != 'K')
+        {
+            std::cout << "Invalid FXP header signature" << std::endl;
+            return false;
+        }
+
+        // Read header information
+        uint32_t version = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
+        uint32_t fxID = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+        uint32_t fxVersion = (data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15];
+        uint32_t numParams = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
+
+        std::cout << "FXP Header Info:" << std::endl;
+        std::cout << "  Version: " << version << std::endl;
+        std::cout << "  FX ID: 0x" << std::hex << fxID << std::dec << std::endl;
+        std::cout << "  FX Version: " << fxVersion << std::endl;
+        std::cout << "  Num Parameters: " << numParams << std::endl;
+
+        // Check if it's a bank (FXB) or single preset (FXP)
+        if (data[20] == 'F' && data[21] == 'x' && data[22] == 'B' && data[23] == 'k')
+        {
+            std::cout << "Detected FXB bank format" << std::endl;
+            return loadFXBBank(plugin, data, presetData.getSize());
+        }
+        else if (data[20] == 'F' && data[21] == 'x' && data[22] == 'C' && data[23] == 'k')
+        {
+            std::cout << "Detected FXP chunk format" << std::endl;
+            return loadFXPChunk(plugin, data, presetData.getSize());
+        }
+        else if (data[20] == 'F' && data[21] == 'P' && data[22] == 'a' && data[23] == 'r')
+        {
+            std::cout << "Detected FXP parameter format" << std::endl;
+            return loadFXPParameters(plugin, data, presetData.getSize(), numParams);
+        }
+        else
+        {
+            std::cout << "Unknown FXP format type" << std::endl;
+            return false;
+        }
+    }
+
+    bool loadFXPChunk(juce::AudioPluginInstance* plugin, const uint8_t* data, size_t dataSize)
+    {
+        if (dataSize < 32)
+            return false;
+
+        // Read chunk size
+        uint32_t chunkSize = (data[24] << 24) | (data[25] << 16) | (data[26] << 8) | data[27];
+        std::cout << "FXP chunk size: " << chunkSize << " bytes" << std::endl;
+
+        if (dataSize < 28 + chunkSize)
+        {
+            std::cout << "File too small for declared chunk size" << std::endl;
+            return false;
+        }
+
+        // The chunk data starts at offset 28
+        try
+        {
+            plugin->setStateInformation(data + 28, static_cast<int>(chunkSize));
+            std::cout << "FXP chunk loaded successfully!" << std::endl;
+            return true;
+        }
+        catch (...)
+        {
+            std::cout << "Failed to load FXP chunk data" << std::endl;
+            return false;
+        }
+    }
+
+    bool loadFXPParameters(juce::AudioPluginInstance* plugin, const uint8_t* data, size_t dataSize, uint32_t numParams)
+    {
+        std::cout << "Loading FXP parameter data..." << std::endl;
+
+        if (dataSize < 28 + (numParams * 4))
+        {
+            std::cout << "File too small for declared parameter count" << std::endl;
+            return false;
+        }
+
+        const auto& pluginParams = plugin->getParameters();
+        uint32_t actualParams = static_cast<uint32_t>(pluginParams.size());
+        uint32_t paramsToLoad = juce::jmin(numParams, actualParams);
+
+        std::cout << "Plugin has " << actualParams << " parameters, FXP has " << numParams
+                  << ", loading " << paramsToLoad << std::endl;
+
+        // Parameters start at offset 28, each is 4 bytes (32-bit float)
+        const float* paramData = reinterpret_cast<const float*>(data + 28);
+
+        for (uint32_t i = 0; i < paramsToLoad; ++i)
+        {
+            // Convert from big-endian if necessary
+            union { uint32_t i; float f; } converter;
+            converter.i = (static_cast<uint32_t>(data[28 + i*4]) << 24) |
+                         (static_cast<uint32_t>(data[28 + i*4 + 1]) << 16) |
+                         (static_cast<uint32_t>(data[28 + i*4 + 2]) << 8) |
+                         static_cast<uint32_t>(data[28 + i*4 + 3]);
+
+            float paramValue = converter.f;
+
+            if (paramValue >= 0.0f && paramValue <= 1.0f) // Basic sanity check
+            {
+                pluginParams[i]->setValue(paramValue);
+            }
+        }
+
+        std::cout << "FXP parameters loaded!" << std::endl;
+        return true;
+    }
+
+    bool loadFXBBank(juce::AudioPluginInstance* plugin, const uint8_t* data, size_t dataSize)
+    {
+        std::cout << "FXB bank loading not fully implemented - trying as chunk data" << std::endl;
+
+        // For now, try to load the first preset from the bank
+        if (dataSize > 156) // Skip bank header and try first preset
+        {
+            return loadFXPChunk(plugin, data + 156, dataSize - 156);
         }
 
         return false;

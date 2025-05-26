@@ -197,7 +197,8 @@ public:
         {
             for (const auto& keyword : presetKeywords)
             {
-                if (param.name.contains(juce::String(keyword)))
+				// if (param.name.contains(juce::String(keyword)))
+                if (param.name.contains(juce::String(keyword)) && !param.name.startsWith("MIDI CC"))
                 {
                     std::cout << "  *** PRESET PARAM: [" << param.index << "] "
                               << param.name << " = " << param.value

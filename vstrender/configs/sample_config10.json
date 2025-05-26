@@ -1,0 +1,18 @@
+{
+  "input_file": "F:\\data\\vstrender\\test_input.wav",
+  "output_file": "F:\\data\\vstrender\\test_output_crveq_nochange.wav",
+  "sample_rate": 0,
+  "bit_depth": 0,
+  "buffer_size": 4096,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\CurveEQ.vst3",
+      "plugin_name": "CurveEQ",
+      "parameters": {
+        "Bypass": 0.0
+      }
+    }
+  ]
+}
+
+

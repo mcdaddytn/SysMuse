@@ -165,10 +165,6 @@ public:
             }
             */
 
-            info.print();
-            parameters.push_back(info);
-        }
-
         // Look for common program/preset parameters
         std::cout << "\n=== PRESET/PROGRAM PARAMETERS ===" << std::endl;
         findPresetParameters(parameters);

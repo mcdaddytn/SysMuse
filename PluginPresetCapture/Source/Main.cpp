@@ -19,16 +19,79 @@ public:
     //==============================================================================
     void initialise(const juce::String& commandLine) override
     {
-        // Parse command line arguments
-        juce::StringArray args = juce::StringArray::fromTokens(commandLine, true);
+        std::cout << "=== Plugin Preset Capture Tool Started ===" << std::endl;
+        std::cout << "Raw command line: [" << commandLine << "]" << std::endl;
 
-        if (args.size() < 1)
+        // Parse command line arguments more carefully
+        juce::StringArray args;
+
+        if (commandLine.isNotEmpty())
+        {
+            // Try different parsing methods
+
+            // Method 1: JUCE's built-in parsing
+            args = juce::StringArray::fromTokens(commandLine, true);
+            std::cout << "Method 1 - JUCE tokens (" << args.size() << " args):" << std::endl;
+            for (int i = 0; i < args.size(); ++i)
+            {
+                std::cout << "  [" << i << "] = [" << args[i] << "]" << std::endl;
+            }
+
+            // Method 2: If Method 1 gives us empty or wrong results, try manual parsing
+            if (args.size() == 0 || (args.size() == 1 && args[0].trim().isEmpty()))
+            {
+                std::cout << "Method 1 failed, trying Method 2 - manual parsing" << std::endl;
+
+                // Remove surrounding quotes if present
+                juce::String cleaned = commandLine.trim();
+                if (cleaned.startsWith("\"") && cleaned.endsWithIgnoreCase("\""))
+                {
+                    cleaned = cleaned.substring(1, cleaned.length() - 1);
+                }
+
+                args.clear();
+                args.add(cleaned);
+
+                std::cout << "Method 2 result: [" << cleaned << "]" << std::endl;
+            }
+
+            // Method 3: If we still don't have a good result, try splitting on quotes
+            if (args.size() == 0 || args[0].trim().isEmpty())
+            {
+                std::cout << "Method 2 failed, trying Method 3 - quote splitting" << std::endl;
+
+                args = juce::StringArray::fromTokens(commandLine, "\"", "");
+                args.removeEmptyStrings();
+                args.trim();
+
+                std::cout << "Method 3 - Quote split (" << args.size() << " args):" << std::endl;
+                for (int i = 0; i < args.size(); ++i)
+                {
+                    std::cout << "  [" << i << "] = [" << args[i] << "]" << std::endl;
+                }
+            }
+        }
+
+        // Validate we have at least one argument
+        if (args.size() < 1 || args[0].trim().isEmpty())
         {
             showUsageAndExit();
             return;
         }
 
-        juce::String pluginPath = args[0];
+        juce::String pluginPath = args[0].trim();
+
+        // Additional path cleaning
+        std::cout << "Final plugin path: [" << pluginPath << "]" << std::endl;
+
+        // Test if the file exists before proceeding
+        juce::File testFile(pluginPath);
+        std::cout << "File exists check: " << (testFile.exists() ? "YES" : "NO") << std::endl;
+        if (testFile.exists())
+        {
+            std::cout << "File size: " << testFile.getSize() << " bytes" << std::endl;
+            std::cout << "Full path: " << testFile.getFullPathName() << std::endl;
+        }
 
         // Create main window
         mainWindow.reset(new MainWindow(getApplicationName(), pluginPath));

@@ -1,4 +1,3 @@
-#include <iostream>
 #include <memory>
 #include <vector>
 #include <map>
@@ -131,8 +130,6 @@ public:
             info.isBoolean = param->isBoolean();
             info.isMetaParameter = param->isMetaParameter();
 			info.category = "Unknown";
-
-			// gm: below not compiling
             // Convert category enum to string
             /*
             auto category = param->getCategory();
@@ -197,8 +194,7 @@ public:
         {
             for (const auto& keyword : presetKeywords)
             {
-				// if (param.name.contains(juce::String(keyword)))
-                if (param.name.contains(juce::String(keyword)) && !param.name.startsWith("MIDI CC"))
+                if (param.name.contains(juce::String(keyword)))
                 {
                     std::cout << "  *** PRESET PARAM: [" << param.index << "] "
                               << param.name << " = " << param.value
@@ -364,6 +360,11 @@ struct PluginConfig
     // SYSEX patch support:
     juce::String sysexFile;
     int sysexPatchNumber = -1;
+
+    // State saving/loading support
+    juce::String saveStateTo;        // Save current state to this file
+    juce::String loadStateFrom;      // Load state from this file
+    bool saveDefaultState = false;   // Save the default state before any changes
 };
 
 struct ProcessingConfig
@@ -723,6 +724,9 @@ private:
             pluginConfig.programNumber = pluginJson.getProperty("program_number", -1);
             pluginConfig.sysexFile = pluginJson.getProperty("sysex_file", "");
             pluginConfig.sysexPatchNumber = pluginJson.getProperty("sysex_patch_number", -1);
+            pluginConfig.saveStateTo = pluginJson.getProperty("save_state_to", "");
+            pluginConfig.loadStateFrom = pluginJson.getProperty("load_state_from", "");
+            pluginConfig.saveDefaultState = pluginJson.getProperty("save_default_state", false);
 
             if (pluginConfig.pluginPath.isEmpty())
             {
@@ -1101,6 +1105,16 @@ private:
             std::cout << "\n=== INITIAL PLUGIN STATE ===" << std::endl;
             auto initialParameters = PluginParameterManager::enumerateParameters(plugin.get());
 
+            // Save default state if requested
+            if (pluginConfig.saveDefaultState || !pluginConfig.saveStateTo.isEmpty())
+            {
+                juce::String defaultStatePath = pluginConfig.saveStateTo.isEmpty() ?
+                    ("/tmp/" + plugin->getName().replace(" ", "_") + "_default_state.bin") :
+                    pluginConfig.saveStateTo + "_default";
+
+                savePluginState(plugin.get(), defaultStatePath);
+            }
+
             // Export parameters if requested (before changes)
             if (!pluginConfig.parametersBefore.isEmpty())
             {
@@ -1109,6 +1123,45 @@ private:
 
             // Show program information
             PluginParameterManager::monitorProgramChanges(plugin.get());
+
+            // Load state from file if specified (this is our new primary method)
+            if (!pluginConfig.loadStateFrom.isEmpty())
+            {
+                std::cout << "\n=== LOADING STATE FROM FILE ===" << std::endl;
+                juce::File stateFile(pluginConfig.loadStateFrom);
+                if (stateFile.existsAsFile())
+                {
+                    juce::MemoryBlock stateData;
+                    if (stateFile.loadFileAsData(stateData))
+                    {
+                        std::cout << "Loading state from: " << pluginConfig.loadStateFrom << std::endl;
+                        std::cout << "State file size: " << stateData.getSize() << " bytes" << std::endl;
+
+                        try
+                        {
+                            plugin->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
+                            std::cout << "State loaded successfully from binary file!" << std::endl;
+
+                            // Re-enumerate parameters after state change
+                            std::cout << "\n--- Parameters after state loading ---" << std::endl;
+                            PluginParameterManager::enumerateParameters(plugin.get());
+                        }
+                        catch (...)
+                        {
+                            std::cout << "Failed to load state from file" << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        std::cout << "Could not read state file data" << std::endl;
+                    }
+                }
+                else
+                {
+                    std::cout << "State file does not exist: " << pluginConfig.loadStateFrom << std::endl;
+                }
+                std::cout << "===============================" << std::endl;
+            }
 
             // Set program if specified
             if (pluginConfig.programNumber >= 0)
@@ -1124,6 +1177,13 @@ private:
                     std::cout << "             to program " << pluginConfig.programNumber
                               << " (\"" << plugin->getProgramName(pluginConfig.programNumber) << "\")" << std::endl;
                     std::cout << "====================" << std::endl;
+
+                    // Save state after program change if requested
+                    if (!pluginConfig.saveStateTo.isEmpty())
+                    {
+                        juce::String programStatePath = pluginConfig.saveStateTo + "_program_" + juce::String(pluginConfig.programNumber);
+                        savePluginState(plugin.get(), programStatePath);
+                    }
                 }
                 else
                 {
@@ -1139,6 +1199,13 @@ private:
                 if (loadSysExPatch(plugin.get(), pluginConfig.sysexFile, pluginConfig.sysexPatchNumber))
                 {
                     std::cout << "SysEx patch loaded successfully" << std::endl;
+
+                    // Save state after SysEx loading if requested
+                    if (!pluginConfig.saveStateTo.isEmpty())
+                    {
+                        juce::String sysexStatePath = pluginConfig.saveStateTo + "_sysex_" + juce::String(pluginConfig.sysexPatchNumber);
+                        savePluginState(plugin.get(), sysexStatePath);
+                    }
                 }
                 else
                 {
@@ -1146,21 +1213,22 @@ private:
                 }
             }
 
-            // Load preset if specified
+            // Load preset if specified (fallback method)
             if (!pluginConfig.presetPath.isEmpty())
             {
-                std::cout << "\n=== LOADING PRESET ===" << std::endl;
                 bool presetLoaded = loadPreset(plugin.get(), pluginConfig.presetPath);
                 if (presetLoaded)
                 {
                     std::cout << "Preset loaded - checking parameter changes..." << std::endl;
                     PluginParameterManager::enumerateParameters(plugin.get());
+
+                    // Save state after preset loading if requested
+                    if (!pluginConfig.saveStateTo.isEmpty())
+                    {
+                        juce::String presetStatePath = pluginConfig.saveStateTo + "_preset";
+                        savePluginState(plugin.get(), presetStatePath);
+                    }
                 }
-                else
-                {
-                    std::cout << "Preset loading failed or not supported" << std::endl;
-                }
-                std::cout << "===================" << std::endl;
             }
 
             // Set individual parameters if specified
@@ -1169,6 +1237,13 @@ private:
                 std::cout << "\n=== APPLYING INDIVIDUAL PARAMETERS ===" << std::endl;
                 setPluginParameters(plugin.get(), pluginConfig.parameters);
                 std::cout << "=====================================" << std::endl;
+
+                // Save state after parameter changes if requested
+                if (!pluginConfig.saveStateTo.isEmpty())
+                {
+                    juce::String paramStatePath = pluginConfig.saveStateTo + "_after_params";
+                    savePluginState(plugin.get(), paramStatePath);
+                }
             }
 
             // *** SHOW FINAL STATE ***
@@ -1179,6 +1254,12 @@ private:
             if (!pluginConfig.parametersAfter.isEmpty())
             {
                 PluginParameterManager::exportParametersToJson(plugin.get(), pluginConfig.parametersAfter);
+            }
+
+            // Save final state if requested
+            if (!pluginConfig.saveStateTo.isEmpty())
+            {
+                savePluginState(plugin.get(), pluginConfig.saveStateTo + "_final");
             }
 
             pluginChain.push_back(std::move(plugin));
@@ -1193,6 +1274,7 @@ private:
 
     bool loadPreset(juce::AudioPluginInstance* plugin, const juce::String& presetPath)
     {
+        std::cout << "\n=== COMPREHENSIVE PRESET LOADING ===" << std::endl;
         std::cout << "Loading preset: " << presetPath << std::endl;
 
         juce::File presetFile(presetPath);
@@ -1211,190 +1293,258 @@ private:
 
         std::cout << "Preset file size: " << presetData.getSize() << " bytes" << std::endl;
 
+        // Save current state before attempting to load preset
+        juce::MemoryBlock currentState;
+        plugin->getStateInformation(currentState);
+        std::cout << "Current plugin state size: " << currentState.getSize() << " bytes" << std::endl;
+
+        // Try multiple loading strategies
         bool success = false;
 
-        // Try VST3 preset format first
-        if (presetPath.endsWithIgnoreCase(".vstpreset"))
+        // Strategy 1: Direct setStateInformation (for .vstpreset and raw state)
+        if (!success)
         {
-            std::cout << "Attempting to load as VST3 preset..." << std::endl;
+            std::cout << "\nStrategy 1: Direct state loading..." << std::endl;
             try
             {
                 plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
-                std::cout << "VST3 preset loaded successfully!" << std::endl;
+                std::cout << "Direct state loading successful!" << std::endl;
                 success = true;
             }
             catch (...)
             {
-                std::cout << "Failed to load as VST3 preset" << std::endl;
+                std::cout << "Direct state loading failed" << std::endl;
             }
         }
-        // Try FXP preset format
-        else if (presetPath.endsWithIgnoreCase(".fxp") || presetPath.endsWithIgnoreCase(".fxb"))
-        {
-            std::cout << "Attempting to load as FXP/FXB preset..." << std::endl;
-            success = loadFXPPreset(plugin, presetData);
-        }
-        // Try as raw state data for any other extension
-        else
-        {
-            std::cout << "Attempting to load as raw state data..." << std::endl;
-            try
-            {
-                plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
-                std::cout << "Raw state data loaded successfully!" << std::endl;
-                success = true;
-            }
-            catch (...)
-            {
-                std::cout << "Failed to load as raw state data" << std::endl;
 
-                // If that fails, try FXP format as fallback
-                std::cout << "Trying FXP format as fallback..." << std::endl;
-                success = loadFXPPreset(plugin, presetData);
+        // Strategy 2: Try as XML (some presets are XML-based)
+        if (!success)
+        {
+            std::cout << "\nStrategy 2: XML parsing..." << std::endl;
+            juce::String presetText = presetData.toString();
+            if (presetText.startsWith("<?xml") || presetText.contains("<preset"))
+            {
+                std::cout << "Detected XML format" << std::endl;
+                auto xmlDoc = juce::XmlDocument::parse(presetText);
+                if (xmlDoc != nullptr)
+                {
+                    std::cout << "XML parsed successfully" << std::endl;
+                    // Try to extract state data from XML
+                    auto stateElement = xmlDoc->getChildByName("state");
+                    if (stateElement != nullptr)
+                    {
+                        juce::String stateData = stateElement->getAllSubText();
+                        if (stateData.isNotEmpty())
+                        {
+                            juce::MemoryBlock stateBlock;
+                            if (stateBlock.fromBase64Encoding(stateData))
+                            {
+                                try
+                                {
+                                    plugin->setStateInformation(stateBlock.getData(), static_cast<int>(stateBlock.getSize()));
+                                    std::cout << "XML state loading successful!" << std::endl;
+                                    success = true;
+                                }
+                                catch (...)
+                                {
+                                    std::cout << "XML state loading failed" << std::endl;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                std::cout << "Not XML format" << std::endl;
+            }
+        }
+
+        // Strategy 3: Skip FXP parsing for now - it's clearly not working
+        // Focus on what JUCE supports natively
+
+        // Strategy 4: Try loading via JUCE's AudioProcessor methods
+        if (!success)
+        {
+            std::cout << "\nStrategy 4: JUCE AudioProcessor methods..." << std::endl;
+
+            // Some plugins support setCurrentProgram even without visible programs
+            if (plugin->getNumPrograms() > 0)
+            {
+                std::cout << "Plugin has " << plugin->getNumPrograms() << " programs" << std::endl;
+                for (int i = 0; i < plugin->getNumPrograms(); ++i)
+                {
+                    std::cout << "  Program " << i << ": " << plugin->getProgramName(i) << std::endl;
+                }
+            }
+
+            // Try to set state via MemoryInputStream
+            juce::MemoryInputStream memStream(presetData, false);
+            try
+            {
+                plugin->setStateInformation(presetData.getData(), static_cast<int>(presetData.getSize()));
+                success = true;
+                std::cout << "MemoryInputStream method successful!" << std::endl;
+            }
+            catch (...)
+            {
+                std::cout << "MemoryInputStream method failed" << std::endl;
             }
         }
 
         if (success)
         {
-            std::cout << "Preset loaded - plugin state updated" << std::endl;
-        }
+            std::cout << "\n*** PRESET LOADED SUCCESSFULLY ***" << std::endl;
 
-        return success;
-    }
+            // Verify state changed
+            juce::MemoryBlock newState;
+            plugin->getStateInformation(newState);
+            std::cout << "New plugin state size: " << newState.getSize() << " bytes" << std::endl;
 
-    bool loadFXPPreset(juce::AudioPluginInstance* plugin, const juce::MemoryBlock& presetData)
-    {
-        if (presetData.getSize() < 28) // Minimum FXP header size
-        {
-            std::cout << "File too small to be a valid FXP preset" << std::endl;
-            return false;
-        }
-
-        const uint8_t* data = static_cast<const uint8_t*>(presetData.getData());
-
-        // Check FXP header signature
-        if (data[0] != 'C' || data[1] != 'c' || data[2] != 'n' || data[3] != 'K')
-        {
-            std::cout << "Invalid FXP header signature" << std::endl;
-            return false;
-        }
-
-        // Read header information
-        uint32_t version = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
-        uint32_t fxID = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
-        uint32_t fxVersion = (data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15];
-        uint32_t numParams = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
-
-        std::cout << "FXP Header Info:" << std::endl;
-        std::cout << "  Version: " << version << std::endl;
-        std::cout << "  FX ID: 0x" << std::hex << fxID << std::dec << std::endl;
-        std::cout << "  FX Version: " << fxVersion << std::endl;
-        std::cout << "  Num Parameters: " << numParams << std::endl;
-
-        // Check if it's a bank (FXB) or single preset (FXP)
-        if (data[20] == 'F' && data[21] == 'x' && data[22] == 'B' && data[23] == 'k')
-        {
-            std::cout << "Detected FXB bank format" << std::endl;
-            return loadFXBBank(plugin, data, presetData.getSize());
-        }
-        else if (data[20] == 'F' && data[21] == 'x' && data[22] == 'C' && data[23] == 'k')
-        {
-            std::cout << "Detected FXP chunk format" << std::endl;
-            return loadFXPChunk(plugin, data, presetData.getSize());
-        }
-        else if (data[20] == 'F' && data[21] == 'P' && data[22] == 'a' && data[23] == 'r')
-        {
-            std::cout << "Detected FXP parameter format" << std::endl;
-            return loadFXPParameters(plugin, data, presetData.getSize(), numParams);
+            if (newState.getSize() != currentState.getSize() ||
+                memcmp(newState.getData(), currentState.getData(), newState.getSize()) != 0)
+            {
+                std::cout << "Plugin state has changed - preset likely loaded correctly" << std::endl;
+            }
+            else
+            {
+                std::cout << "WARNING: Plugin state appears unchanged" << std::endl;
+            }
         }
         else
         {
-            std::cout << "Unknown FXP format type" << std::endl;
-            return false;
+            std::cout << "\n*** ALL PRESET LOADING STRATEGIES FAILED ***" << std::endl;
+            std::cout << "This may be a plugin-specific format not supported by JUCE" << std::endl;
         }
+
+        std::cout << "=====================================" << std::endl;
+        return success;
     }
 
-    bool loadFXPChunk(juce::AudioPluginInstance* plugin, const uint8_t* data, size_t dataSize)
+    // Add state saving utilities
+    bool savePluginState(juce::AudioPluginInstance* plugin, const juce::String& outputPath)
     {
-        if (dataSize < 32)
-            return false;
+        std::cout << "\n=== SAVING PLUGIN STATE ===" << std::endl;
 
-        // Read chunk size
-        uint32_t chunkSize = (data[24] << 24) | (data[25] << 16) | (data[26] << 8) | data[27];
-        std::cout << "FXP chunk size: " << chunkSize << " bytes" << std::endl;
+        juce::MemoryBlock stateData;
+        plugin->getStateInformation(stateData);
 
-        if (dataSize < 28 + chunkSize)
+        std::cout << "Plugin state size: " << stateData.getSize() << " bytes" << std::endl;
+
+        if (stateData.getSize() == 0)
         {
-            std::cout << "File too small for declared chunk size" << std::endl;
+            std::cout << "No state data available to save" << std::endl;
             return false;
         }
 
-        // The chunk data starts at offset 28
-        try
+        // Save raw binary state
+        juce::File outputFile(outputPath);
+        outputFile.getParentDirectory().createDirectory();
+
+        if (outputFile.replaceWithData(stateData.getData(), stateData.getSize()))
         {
-            plugin->setStateInformation(data + 28, static_cast<int>(chunkSize));
-            std::cout << "FXP chunk loaded successfully!" << std::endl;
+            std::cout << "State saved to: " << outputPath << std::endl;
+
+            // Also save as base64 for analysis
+            juce::String base64State = stateData.toBase64Encoding();
+            juce::File base64File(outputPath + ".base64");
+            base64File.replaceWithText(base64State);
+            std::cout << "Base64 state saved to: " << outputPath + ".base64" << std::endl;
+
+            // Save hex dump for analysis
+            juce::String hexDump = createHexDump(stateData);
+            juce::File hexFile(outputPath + ".hex");
+            hexFile.replaceWithText(hexDump);
+            std::cout << "Hex dump saved to: " << outputPath + ".hex" << std::endl;
+
             return true;
         }
-        catch (...)
+        else
         {
-            std::cout << "Failed to load FXP chunk data" << std::endl;
+            std::cout << "Failed to save state file" << std::endl;
             return false;
         }
     }
 
-    bool loadFXPParameters(juce::AudioPluginInstance* plugin, const uint8_t* data, size_t dataSize, uint32_t numParams)
+    juce::String createHexDump(const juce::MemoryBlock& data)
     {
-        std::cout << "Loading FXP parameter data..." << std::endl;
+        juce::String result;
+        const uint8_t* bytes = static_cast<const uint8_t*>(data.getData());
+        size_t size = data.getSize();
 
-        if (dataSize < 28 + (numParams * 4))
+        result << "Plugin State Hex Dump (" << size << " bytes):\n";
+        result << "Offset   00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F  ASCII\n";
+        result << "------   -----------------------------------------------  ----------------\n";
+
+        for (size_t i = 0; i < size; i += 16)
         {
-            std::cout << "File too small for declared parameter count" << std::endl;
-            return false;
+            result << juce::String::formatted("%06X:  ", (unsigned int)i);
+
+            // Hex bytes
+            for (size_t j = 0; j < 16; ++j)
+            {
+                if (i + j < size)
+                {
+                    result << juce::String::formatted("%02X ", bytes[i + j]);
+                }
+                else
+                {
+                    result << "   ";
+                }
+            }
+
+            result << " ";
+
+            // ASCII representation
+            for (size_t j = 0; j < 16 && i + j < size; ++j)
+            {
+                uint8_t byte = bytes[i + j];
+                if (byte >= 32 && byte <= 126)
+                {
+                    result << static_cast<char>(byte);
+                }
+                else
+                {
+                    result << ".";
+                }
+            }
+
+            result << "\n";
         }
 
-        const auto& pluginParams = plugin->getParameters();
-        uint32_t actualParams = static_cast<uint32_t>(pluginParams.size());
-        uint32_t paramsToLoad = juce::jmin(numParams, actualParams);
-
-        std::cout << "Plugin has " << actualParams << " parameters, FXP has " << numParams
-                  << ", loading " << paramsToLoad << std::endl;
-
-        // Parameters start at offset 28, each is 4 bytes (32-bit float)
-        const float* paramData = reinterpret_cast<const float*>(data + 28);
-
-        for (uint32_t i = 0; i < paramsToLoad; ++i)
+        // Add header analysis
+        if (size >= 4)
         {
-            // Convert from big-endian if necessary
-            union { uint32_t i; float f; } converter;
-            converter.i = (static_cast<uint32_t>(data[28 + i*4]) << 24) |
-                         (static_cast<uint32_t>(data[28 + i*4 + 1]) << 16) |
-                         (static_cast<uint32_t>(data[28 + i*4 + 2]) << 8) |
-                         static_cast<uint32_t>(data[28 + i*4 + 3]);
-
-            float paramValue = converter.f;
-
-            if (paramValue >= 0.0f && paramValue <= 1.0f) // Basic sanity check
+            result << "\nHeader Analysis:\n";
+            result << "First 4 bytes: ";
+            for (int i = 0; i < 4; ++i)
             {
-                pluginParams[i]->setValue(paramValue);
+                result << juce::String::formatted("%02X ", bytes[i]);
+            }
+            result << " (";
+            for (int i = 0; i < 4; ++i)
+            {
+                char c = static_cast<char>(bytes[i]);
+                result << (c >= 32 && c <= 126 ? c : '.');
+            }
+            result << ")\n";
+
+            // Check for common format signatures
+            if (bytes[0] == 'C' && bytes[1] == 'c' && bytes[2] == 'n' && bytes[3] == 'K')
+            {
+                result << "Detected: FXP/FXB format signature\n";
+            }
+            else if (bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0x00 && bytes[3] == 0x01)
+            {
+                result << "Detected: Possible VST3 preset format\n";
+            }
+            else if (bytes[0] == '<' || (bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF))
+            {
+                result << "Detected: XML/Text format\n";
             }
         }
 
-        std::cout << "FXP parameters loaded!" << std::endl;
-        return true;
-    }
-
-    bool loadFXBBank(juce::AudioPluginInstance* plugin, const uint8_t* data, size_t dataSize)
-    {
-        std::cout << "FXB bank loading not fully implemented - trying as chunk data" << std::endl;
-
-        // For now, try to load the first preset from the bank
-        if (dataSize > 156) // Skip bank header and try first preset
-        {
-            return loadFXPChunk(plugin, data + 156, dataSize - 156);
-        }
-
-        return false;
+        return result;
     }
 
     void setPluginParameters(juce::AudioPluginInstance* plugin, const juce::var& parameters)

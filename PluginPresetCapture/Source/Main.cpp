@@ -3,6 +3,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 
 #include "MainComponent.h"
+#include "ProjectInfo.h"
 
 //==============================================================================
 class PluginPresetCaptureApplication : public juce::JUCEApplication
@@ -20,15 +21,15 @@ public:
     {
         // Parse command line arguments
         juce::StringArray args = juce::StringArray::fromTokens(commandLine, true);
-        
+
         if (args.size() < 1)
         {
             showUsageAndExit();
             return;
         }
-        
+
         juce::String pluginPath = args[0];
-        
+
         // Create main window
         mainWindow.reset(new MainWindow(getApplicationName(), pluginPath));
     }
@@ -83,7 +84,7 @@ public:
 
 private:
     std::unique_ptr<MainWindow> mainWindow;
-    
+
     void showUsageAndExit()
     {
         std::cout << "Plugin Preset Capture Tool" << std::endl;
@@ -97,7 +98,7 @@ private:
         std::cout << "  - Load presets using the plugin's interface" << std::endl;
         std::cout << "  - Adjust parameters as needed" << std::endl;
         std::cout << "  - Close the window to automatically save the state" << std::endl;
-        
+
         quit();
     }
 };

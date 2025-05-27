@@ -1,0 +1,30 @@
+{
+  "_comment": "Test loading Dexed state captured with PluginPresetCapture",
+  "output_file": "F:/data/vstrender/dexed_state_test.wav",
+  "sample_rate": 44100,
+  "bit_depth": 24,
+  "buffer_size": 2048,
+  "render_length": 15.0,
+  "instrument_channels": 2,
+  "plugins": [
+    {
+      "path": "F:/data/vstrender/Dexed.vst3",
+      "is_instrument": true,
+      "midi_file": "F:/data/vstrender/dexed_test.mid",
+      
+      "_comment": "Replace with your actual .bin file from PluginPresetCapture",
+      "load_state_from": "F:/data/vstrender/Dexed_20250527_152535.bin",
+      
+      "_comment": "Export parameters to verify state was loaded",
+      "export_parameters_before": "F:/data/vstrender/dexed_default_params.json",
+      "export_parameters_after": "F:/data/vstrender/dexed_loaded_params.json",
+      
+      "_comment": "Save final state for verification", 
+      "save_state_to": "F:/data/vstrender/dexed_verification_state",
+      
+      "parameters": {
+        "Volume": 0.8
+      }
+    }
+  ]
+}

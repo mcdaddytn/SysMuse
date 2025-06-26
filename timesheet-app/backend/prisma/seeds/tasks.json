@@ -1,0 +1,84 @@
+{
+  "tasks": [
+    {
+      "id": "task1",
+      "description": "Due diligence review",
+      "matterId": "matter1"
+    },
+    {
+      "id": "task2",
+      "description": "Draft purchase agreement",
+      "matterId": "matter1"
+    },
+    {
+      "id": "task3",
+      "description": "Patent application drafting",
+      "matterId": "matter2"
+    },
+    {
+      "id": "task4",
+      "description": "Prior art search",
+      "matterId": "matter2"
+    },
+    {
+      "id": "task5",
+      "description": "Trust document preparation",
+      "matterId": "matter3"
+    },
+    {
+      "id": "task6",
+      "description": "Tax planning analysis",
+      "matterId": "matter3"
+    },
+    {
+      "id": "task7",
+      "description": "Term sheet negotiation",
+      "matterId": "matter4"
+    },
+    {
+      "id": "task8",
+      "description": "Investment agreement drafting",
+      "matterId": "matter4"
+    },
+    {
+      "id": "task9",
+      "description": "Contract review",
+      "matterId": "matter5"
+    },
+    {
+      "id": "task10",
+      "description": "Regulatory filing preparation",
+      "matterId": "matter6"
+    },
+    {
+      "id": "task11",
+      "description": "Discovery document review",
+      "matterId": "matter7"
+    },
+    {
+      "id": "task12",
+      "description": "Motion drafting",
+      "matterId": "matter7"
+    },
+    {
+      "id": "task13",
+      "description": "Team meeting",
+      "matterId": "matter8"
+    },
+    {
+      "id": "task14",
+      "description": "CLE training",
+      "matterId": "matter8"
+    },
+    {
+      "id": "task15",
+      "description": "Legal research",
+      "matterId": "matter9"
+    },
+    {
+      "id": "task16",
+      "description": "Client consultation",
+      "matterId": "matter9"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
@@ -13,6 +14,33 @@ services:
       POSTGRES_DB: timesheet_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - timesheet_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: timesheet_pgadmin
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@timesheet.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin-servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgres
+    networks:
+      - timesheet_network
 
 volumes:
   postgres_data:
+  pgadmin_data:
+
+networks:
+  timesheet_network:
+    driver: bridge
+    

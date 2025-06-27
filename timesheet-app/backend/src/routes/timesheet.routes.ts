@@ -1,6 +1,6 @@
 // src/routes/timesheet.routes.ts
 
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { PrismaClient, Urgency } from '@prisma/client';
 
 const router = Router();
@@ -15,7 +15,7 @@ interface TimesheetEntryInput {
 }
 
 // Get timesheet for a specific team member and week
-router.get('/:teamMemberId/:weekStartDate', async (req, res) => {
+router.get('/:teamMemberId/:weekStartDate', async (req: Request, res: Response) => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
     const startDate = new Date(weekStartDate);
@@ -79,7 +79,7 @@ router.get('/:teamMemberId/:weekStartDate', async (req, res) => {
 });
 
 // Save or update timesheet entries
-router.post('/:teamMemberId/:weekStartDate', async (req, res) => {
+router.post('/:teamMemberId/:weekStartDate', async (req: Request, res: Response) => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
     const { entries }: { entries: TimesheetEntryInput[] } = req.body;
@@ -194,7 +194,7 @@ router.post('/:teamMemberId/:weekStartDate', async (req, res) => {
 });
 
 // Copy timesheet from previous week
-router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req, res) => {
+router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Request, res: Response) => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
     const currentWeekStart = new Date(weekStartDate);
@@ -247,7 +247,7 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req, res)
     // Copy entries from previous week
     const newEntries = await prisma.timesheetEntry.createMany({
       data: previousTimesheet.entries.map(entry => ({
-        timesheetId: currentTimesheet.id,
+        timesheetId: currentTimesheet!.id,
         matterId: entry.matterId,
         taskDescription: entry.taskDescription,
         urgency: entry.urgency,

@@ -4,8 +4,11 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:studio": "prisma studio",
+    "db:reset": "prisma db push --force-reset && npm run prisma:seed",
     "setup": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed"
   },
   "name": "backend",

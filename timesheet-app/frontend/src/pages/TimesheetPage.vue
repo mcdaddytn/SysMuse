@@ -50,8 +50,6 @@
                       @update:model-value="onDateSelected"
                       mask="YYYY-MM-DD"
                       :options="sundayOnly"
-                      :navigation-min-year-month="'2024/01'"
-                      :navigation-max-year-month="'2026/12'"
                     />
                   </q-popup-proxy>
                 </q-icon>
@@ -329,16 +327,21 @@ export default defineComponent({
       return `${date.formatDate(start, 'MMM D')} - ${date.formatDate(end, 'MMM D, YYYY')}`;
     });
 
-    function sundayOnly(dateValue: string | Date): boolean {
-      // Quasar might pass a Date object or string
-      let checkDate: Date;
-      if (typeof dateValue === 'string') {
-        // Use date.extractDate for consistent parsing with Quasar
-        checkDate = date.extractDate(dateValue, 'YYYY-MM-DD');
-      } else {
-        checkDate = dateValue;
+    function sundayOnly(dateStr: string): boolean {
+      // Quasar passes dates as 'YYYY/MM/DD' format in the options function
+      const parts = dateStr.split('/');
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1; // JavaScript months are 0-based
+      const day = parseInt(parts[2]);
+      const checkDate = new Date(year, month, day);
+      const isSunday = checkDate.getDay() === 0;
+      
+      // Debug first few calls
+      if (Math.random() < 0.01) { // Log ~1% of calls to avoid spam
+        console.log('Date check:', dateStr, '-> Day:', checkDate.getDay(), 'Is Sunday:', isSunday);
       }
-      return checkDate.getDay() === 0;
+      
+      return isSunday;
     }
 
     function calculateHours(percentage: number): string {
@@ -492,15 +495,13 @@ export default defineComponent({
     async function saveTimesheet(): Promise<void> {
       if (!selectedTeamMember.value || !entries.value.some(e => e.matter)) return;
 
-      // Show warning if totals don't sum to 100%
-      if (projectedTotal.value !== 100 || actualTotal.value !== 100) {
+      // Show warning only if projected hours don't sum to 100%
+      if (projectedTotal.value !== 100) {
         Dialog.create({
           title: 'Warning',
-          message: `Projected hours: ${projectedTotal.value}%, Actual hours: ${actualTotal.value}%. Both should total 100%. Continue anyway?`,
+          message: `Projected hours total ${projectedTotal.value}%, but should be 100%. Continue anyway?`,
           cancel: true,
           persistent: true
-        }).onCancel(() => {
-          return;
         }).onOk(async () => {
           await performSave();
         });

@@ -46,10 +46,12 @@
                 <q-icon name="event" class="cursor-pointer">
                   <q-popup-proxy cover transition-show="scale" transition-hide="scale">
                     <q-date
-                      v-model="currentWeekStart"
+                      :model-value="currentWeekStart"
+                      @update:model-value="onDateSelected"
                       mask="YYYY-MM-DD"
                       :options="sundayOnly"
-                      @update:model-value="loadTimesheet"
+                      :navigation-min-year-month="'2024/01'"
+                      :navigation-max-year-month="'2026/12'"
                     />
                   </q-popup-proxy>
                 </q-icon>
@@ -261,8 +263,18 @@ interface EntryRow {
 export default defineComponent({
   name: 'TimesheetPage',
   setup() {
+    // Ensure we start with a proper Sunday
+    const getInitialSunday = (): string => {
+      const today = new Date();
+      const day = today.getDay();
+      if (day !== 0) {
+        today.setDate(today.getDate() - day);
+      }
+      return date.formatDate(today, 'YYYY-MM-DD');
+    };
+
     const selectedTeamMember = ref<TeamMember | null>(null);
-    const currentWeekStart = ref<string>(getThisSunday());
+    const currentWeekStart = ref<string>(getInitialSunday());
     const teamMembers = ref<TeamMember[]>([]);
     const matters = ref<Matter[]>([]);
     const entries = ref<EntryRow[]>([]);
@@ -285,15 +297,7 @@ export default defineComponent({
         errors.push('Duplicate entries found for the same matter and task');
       }
 
-      // Check percentage totals
-      if (projectedTotal.value !== 100 && entries.value.some(e => e.matter)) {
-        errors.push('Projected hours must total 100%');
-      }
-      if (actualTotal.value !== 100 && entries.value.some(e => e.matter)) {
-        errors.push('Actual hours must total 100%');
-      }
-
-      // Check individual percentages
+      // Check individual percentages (just for display, not blocking)
       entries.value.forEach((entry, index) => {
         if (entry.projectedHours < 0 || entry.projectedHours > 100) {
           errors.push(`Row ${index + 1}: Projected hours must be between 0 and 100`);
@@ -308,8 +312,7 @@ export default defineComponent({
 
     const canSave = computed(() => {
       return selectedTeamMember.value && 
-             entries.value.some(e => e.matter) && 
-             validationErrors.value.length === 0;
+             entries.value.some(e => e.matter);
     });
 
     const projectedTotal = computed(() => {
@@ -321,22 +324,21 @@ export default defineComponent({
     });
 
     const formattedWeekRange = computed(() => {
-      const start = new Date(currentWeekStart.value);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 6);
+      const start = date.extractDate(currentWeekStart.value, 'YYYY-MM-DD');
+      const end = date.addToDate(start, { days: 6 });
       return `${date.formatDate(start, 'MMM D')} - ${date.formatDate(end, 'MMM D, YYYY')}`;
     });
 
-    function getThisSunday(): string {
-      const today = new Date();
-      const day = today.getDay();
-      const diff = today.getDate() - day;
-      const sunday = new Date(today.setDate(diff));
-      return date.formatDate(sunday, 'YYYY-MM-DD');
-    }
-
-    function sundayOnly(dateStr: string): boolean {
-      return new Date(dateStr).getDay() === 0;
+    function sundayOnly(dateValue: string | Date): boolean {
+      // Quasar might pass a Date object or string
+      let checkDate: Date;
+      if (typeof dateValue === 'string') {
+        // Use date.extractDate for consistent parsing with Quasar
+        checkDate = date.extractDate(dateValue, 'YYYY-MM-DD');
+      } else {
+        checkDate = dateValue;
+      }
+      return checkDate.getDay() === 0;
     }
 
     function calculateHours(percentage: number): string {
@@ -346,9 +348,36 @@ export default defineComponent({
     }
 
     function changeWeek(direction: number): void {
-      const current = new Date(currentWeekStart.value);
-      current.setDate(current.getDate() + (direction * 7));
-      currentWeekStart.value = date.formatDate(current, 'YYYY-MM-DD');
+      // Use Quasar's date utilities for consistent date handling
+      const current = date.extractDate(currentWeekStart.value, 'YYYY-MM-DD');
+      const newDate = date.addToDate(current, { days: direction * 7 });
+      
+      // Ensure we're on a Sunday
+      const day = newDate.getDay();
+      if (day !== 0) {
+        // Adjust to previous Sunday
+        const daysToSubtract = day;
+        newDate.setDate(newDate.getDate() - daysToSubtract);
+      }
+      
+      currentWeekStart.value = date.formatDate(newDate, 'YYYY-MM-DD');
+      loadTimesheet();
+    }
+
+    function onDateSelected(dateValue: string): void {
+      if (!dateValue) return;
+      
+      // Use Quasar's date utilities
+      const selectedDate = date.extractDate(dateValue, 'YYYY-MM-DD');
+      const day = selectedDate.getDay();
+      
+      if (day !== 0) {
+        // Adjust to previous Sunday
+        const daysToSubtract = day;
+        selectedDate.setDate(selectedDate.getDate() - daysToSubtract);
+      }
+      
+      currentWeekStart.value = date.formatDate(selectedDate, 'YYYY-MM-DD');
       loadTimesheet();
     }
 
@@ -452,18 +481,35 @@ export default defineComponent({
           addEntry();
         }
       } catch (error) {
-        Notify.create({
-          type: 'negative',
-          message: 'Failed to load timesheet',
-        });
+        // Silently handle - just start with empty timesheet
+        entries.value = [];
+        addEntry();
       } finally {
         loading.value = false;
       }
     }
 
     async function saveTimesheet(): Promise<void> {
-      if (!canSave.value) return;
+      if (!selectedTeamMember.value || !entries.value.some(e => e.matter)) return;
 
+      // Show warning if totals don't sum to 100%
+      if (projectedTotal.value !== 100 || actualTotal.value !== 100) {
+        Dialog.create({
+          title: 'Warning',
+          message: `Projected hours: ${projectedTotal.value}%, Actual hours: ${actualTotal.value}%. Both should total 100%. Continue anyway?`,
+          cancel: true,
+          persistent: true
+        }).onCancel(() => {
+          return;
+        }).onOk(async () => {
+          await performSave();
+        });
+      } else {
+        await performSave();
+      }
+    }
+
+    async function performSave(): Promise<void> {
       saving.value = true;
       try {
         const validEntries = entries.value
@@ -472,8 +518,8 @@ export default defineComponent({
             matterId: e.matter!.id,
             taskDescription: e.taskDescription,
             urgency: e.urgency,
-            projectedHours: e.projectedHours,
-            actualHours: e.actualHours,
+            projectedHours: e.projectedHours || 0,
+            actualHours: e.actualHours || 0,
           }));
 
         await api.post(
@@ -537,6 +583,11 @@ export default defineComponent({
     }
 
     onMounted(async () => {
+      // Debug: Check what day we're starting with
+      const startDate = currentWeekStart.value;
+      const parsedDate = date.extractDate(startDate, 'YYYY-MM-DD');
+      console.log('Initial date:', startDate, 'Day of week:', parsedDate.getDay(), '(0=Sunday)');
+      
       await Promise.all([loadTeamMembers(), loadMatters()]);
     });
 
@@ -556,6 +607,7 @@ export default defineComponent({
       sundayOnly,
       calculateHours,
       changeWeek,
+      onDateSelected,
       addEntry,
       removeEntry,
       onMatterChange,

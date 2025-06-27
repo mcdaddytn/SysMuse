@@ -1,6 +1,9 @@
 # frontend/.gitignore
 # Place this file in: timesheet-app/frontend/.gitignore
 
+# npm packages
+package-lock.json
+
 # Quasar core related directories
 .DS_Store
 .thumbs.db
@@ -17,6 +20,25 @@ src-capacitor/node_modules/
 .env
 .env.local
 .env.*.local
+
+# Quasar build output
+dist/
+.ssr-dist/
+.pwa-dist/
+.spa-dist/
+.ssr/
+.spa/
+.pwa/
+
+# Quasar build cache and temp files
+.quasar/
+.quasar/
+.quasar-build-*
+
+# Vite cache (if using Quasar with Vite)
+node_modules/.vite/
+node_modules/.vite-inspect/
+
 
 # Log files
 npm-debug.log*

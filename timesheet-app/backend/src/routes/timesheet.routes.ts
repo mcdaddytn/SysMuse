@@ -93,17 +93,13 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
       return;
     }
 
-    // Validate percentages
+    // Validate percentages - now just warn, don't block
     const projectedSum = entries.reduce((sum, entry) => sum + entry.projectedHours, 0);
     const actualSum = entries.reduce((sum, entry) => sum + entry.actualHours, 0);
 
+    // We'll accept any values but could log a warning
     if (projectedSum !== 100 || actualSum !== 100) {
-      res.status(400).json({ 
-        error: 'Projected and actual hours must each sum to 100%',
-        projectedSum,
-        actualSum,
-      });
-      return;
+      console.warn(`Warning: Hours don't sum to 100% - Projected: ${projectedSum}%, Actual: ${actualSum}%`);
     }
 
     // Validate no duplicate entries

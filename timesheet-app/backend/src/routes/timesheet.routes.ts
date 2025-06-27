@@ -1,9 +1,9 @@
 // src/routes/timesheet.routes.ts
 
-import { Router, Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient, Urgency } from '@prisma/client';
 
-const router = Router();
+const router = express.Router();
 const prisma = new PrismaClient();
 
 interface TimesheetEntryInput {
@@ -15,7 +15,7 @@ interface TimesheetEntryInput {
 }
 
 // Get timesheet for a specific team member and week
-router.get('/:teamMemberId/:weekStartDate', async (req: Request, res: Response) => {
+router.get('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: string, weekStartDate: string}>, res: Response): Promise<void> => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
     const startDate = new Date(weekStartDate);
@@ -23,7 +23,8 @@ router.get('/:teamMemberId/:weekStartDate', async (req: Request, res: Response) 
     // Ensure the date is a Sunday
     const day = startDate.getDay();
     if (day !== 0) {
-      return res.status(400).json({ error: 'Week start date must be a Sunday' });
+      res.status(400).json({ error: 'Week start date must be a Sunday' });
+      return;
     }
 
     let timesheet = await prisma.timesheet.findUnique({
@@ -79,16 +80,17 @@ router.get('/:teamMemberId/:weekStartDate', async (req: Request, res: Response) 
 });
 
 // Save or update timesheet entries
-router.post('/:teamMemberId/:weekStartDate', async (req: Request, res: Response) => {
+router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: string, weekStartDate: string}, any, {entries: TimesheetEntryInput[]}>, res: Response): Promise<void> => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
-    const { entries }: { entries: TimesheetEntryInput[] } = req.body;
+    const { entries } = req.body;
     const startDate = new Date(weekStartDate);
 
     // Validate that the date is a Sunday
     const day = startDate.getDay();
     if (day !== 0) {
-      return res.status(400).json({ error: 'Week start date must be a Sunday' });
+      res.status(400).json({ error: 'Week start date must be a Sunday' });
+      return;
     }
 
     // Validate percentages
@@ -96,11 +98,12 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request, res: Response)
     const actualSum = entries.reduce((sum, entry) => sum + entry.actualHours, 0);
 
     if (projectedSum !== 100 || actualSum !== 100) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Projected and actual hours must each sum to 100%',
         projectedSum,
         actualSum,
       });
+      return;
     }
 
     // Validate no duplicate entries
@@ -108,9 +111,10 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request, res: Response)
       entries.map(e => `${e.matterId}-${e.taskDescription}`)
     );
     if (uniqueEntries.size !== entries.length) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Duplicate entries found for the same matter and task description' 
       });
+      return;
     }
 
     // Create or update timesheet
@@ -138,7 +142,7 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request, res: Response)
     });
 
     // Create new entries
-    const newEntries = await prisma.timesheetEntry.createMany({
+    await prisma.timesheetEntry.createMany({
       data: entries.map(entry => ({
         timesheetId: timesheet.id,
         matterId: entry.matterId,
@@ -194,7 +198,7 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request, res: Response)
 });
 
 // Copy timesheet from previous week
-router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Request, res: Response) => {
+router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Request<{teamMemberId: string, weekStartDate: string}>, res: Response): Promise<void> => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
     const currentWeekStart = new Date(weekStartDate);
@@ -217,7 +221,8 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Requ
     });
 
     if (!previousTimesheet || previousTimesheet.entries.length === 0) {
-      return res.status(404).json({ error: 'No previous week data found to copy' });
+      res.status(404).json({ error: 'No previous week data found to copy' });
+      return;
     }
 
     // Create or get current week's timesheet
@@ -245,7 +250,7 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Requ
     });
 
     // Copy entries from previous week
-    const newEntries = await prisma.timesheetEntry.createMany({
+    await prisma.timesheetEntry.createMany({
       data: previousTimesheet.entries.map(entry => ({
         timesheetId: currentTimesheet!.id,
         matterId: entry.matterId,

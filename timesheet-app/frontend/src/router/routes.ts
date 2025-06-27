@@ -1,5 +1,4 @@
-<!-- src/router/routes.ts -->
-<script lang="ts">
+// src/router/routes.ts
 import { RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
@@ -20,4 +19,3 @@ const routes: RouteRecordRaw[] = [
 ];
 
 export default routes;
-</script>

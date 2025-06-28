@@ -18,11 +18,13 @@ interface TimesheetEntryInput {
 router.get('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: string, weekStartDate: string}>, res: Response): Promise<void> => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
-    const startDate = new Date(weekStartDate);
+    // Parse date ensuring it's treated as local date
+    const startDate = new Date(weekStartDate + 'T00:00:00');
     
     // Ensure the date is a Sunday
     const day = startDate.getDay();
     if (day !== 0) {
+      console.log(`Date ${weekStartDate} is not a Sunday (day: ${day})`);
       res.status(400).json({ error: 'Week start date must be a Sunday' });
       return;
     }
@@ -84,11 +86,13 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
   try {
     const { teamMemberId, weekStartDate } = req.params;
     const { entries } = req.body;
-    const startDate = new Date(weekStartDate);
+    // Parse date ensuring it's treated as local date
+    const startDate = new Date(weekStartDate + 'T00:00:00');
 
     // Validate that the date is a Sunday
     const day = startDate.getDay();
     if (day !== 0) {
+      console.log(`Date ${weekStartDate} is not a Sunday (day: ${day})`);
       res.status(400).json({ error: 'Week start date must be a Sunday' });
       return;
     }
@@ -197,7 +201,8 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
 router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Request<{teamMemberId: string, weekStartDate: string}>, res: Response): Promise<void> => {
   try {
     const { teamMemberId, weekStartDate } = req.params;
-    const currentWeekStart = new Date(weekStartDate);
+    // Parse date ensuring it's treated as local date
+    const currentWeekStart = new Date(weekStartDate + 'T00:00:00');
     
     // Calculate previous week start date
     const previousWeekStart = new Date(currentWeekStart);
@@ -283,4 +288,3 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Requ
 });
 
 export default router;
-

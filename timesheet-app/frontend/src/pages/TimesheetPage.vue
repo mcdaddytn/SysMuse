@@ -523,6 +523,13 @@ export default defineComponent({
             actualHours: e.actualHours || 0,
           }));
 
+        // Debug: Log what we're sending
+        console.log('Saving timesheet for:', {
+          teamMemberId: selectedTeamMember.value!.id,
+          weekStartDate: currentWeekStart.value,
+          dayOfWeek: new Date(currentWeekStart.value).getDay()
+        });
+
         await api.post(
           `/timesheets/${selectedTeamMember.value!.id}/${currentWeekStart.value}`,
           { entries: validEntries }
@@ -533,6 +540,7 @@ export default defineComponent({
           message: 'Timesheet saved successfully',
         });
       } catch (error: any) {
+        console.error('Save error:', error.response?.data);
         Notify.create({
           type: 'negative',
           message: error.response?.data?.error || 'Failed to save timesheet',

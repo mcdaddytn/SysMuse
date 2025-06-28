@@ -1,0 +1,19 @@
+{
+  "input_file": "F:\\data\\vstrender\\test_input.wav",
+  "output_file": "F:\\data\\vstrender\\test_output_vsm.wav",
+  "sample_rate": 0,
+  "bit_depth": 0,
+  "buffer_size": 4096,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\ValhallaSupermassive.vst3",
+      "preset": "F:\\data\\vstrender\\GM Valhalla SM Scorpio.vstpreset",
+      "plugin_name": "ValhallaSupermassive",
+      "export_parameters_before": "F:\\data\\vstrender\\parameters_vsm.json",
+      "export_parameters_after": "F:\\data\\vstrender\\parameters_vsm.json",
+      "parameters": {
+        "Bypass": 0.0
+      }
+    }
+  ]
+}

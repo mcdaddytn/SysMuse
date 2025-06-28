@@ -1,0 +1,22 @@
+{
+  "_comment": "Basic Dexed Test - Default Patch",
+  "output_file": "F:\\data\\vstrender\\dexed_kr_test.wav",
+  "sample_rate": 44100,
+  "bit_depth": 24,
+  "buffer_size": 2048,
+  "render_length": 0.0,
+  "instrument_channels": 2,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Dexed.vst3",
+      "plugin_name": "Dexed",
+      "is_instrument": true,
+      "midi_file": "F:\\data\\vstrender\\KentuckyRhapsody.mid",
+      "sysex_file": "F:\\data\\vstrender\\rom1b.syx",
+      "sysex_patch_number": 1,
+      "parameters": {
+      }
+    }
+  ]
+}
+

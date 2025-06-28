@@ -6,8 +6,8 @@ import java.util.function.Predicate;
 =======
 import com.sysmuse.util.LoggingUtil;
 
-import java.io.File;
 import java.util.*;
+<<<<<<< HEAD
 import java.util.function.Function;
 >>>>>>> origin/main
 import java.util.logging.Logger;
@@ -113,6 +113,15 @@ public class ExpressionManager {
         result.forEach((k, v) -> LoggingUtil.debug("%-15s : %s", k, v));
 >>>>>>> origin/main
     }
+=======
+
+public class ExpressionManager {
+
+    private final OperationRegistry registry = new OperationRegistry();
+    private TypeMismatchMode typeMismatchMode = TypeMismatchMode.EXCEPTION;
+    private TypeConversionMode typeConversionMode = TypeConversionMode.LOSSLESS;
+    private final Map<String, Class<?>> expectedTypes = new HashMap<>();
+>>>>>>> origin/main
 
     public OperationRegistry getRegistry() {
         return registry;
@@ -130,7 +139,28 @@ public class ExpressionManager {
 >>>>>>> origin/main
     }
 
+    public TypeMismatchMode getTypeMismatchMode() {
+        return typeMismatchMode;
+    }
+
+    public void setTypeConversionMode(TypeConversionMode mode) {
+        this.typeConversionMode = mode;
+    }
+
+    public TypeConversionMode getTypeConversionMode() {
+        return typeConversionMode;
+    }
+
+    public void setExpectedType(String key, Class<?> type) {
+        expectedTypes.put(key, type);
+    }
+
+    public Class<?> getExpectedType(String key) {
+        return expectedTypes.get(key);
+    }
+
     public Map<String, Object> evaluateAll(Map<String, String> expressions,
+<<<<<<< HEAD
                                            Map<String, Object> initialContext,
 <<<<<<< HEAD
                                            Mode mode) {
@@ -148,14 +178,17 @@ public class ExpressionManager {
                 log.warning("Failed to evaluate " + key + ": " + e.getMessage());
                 context.put(key, false);
 =======
+=======
+                                           Map<String, Object> params,
+>>>>>>> origin/main
                                            ExpressionMode mode) {
-        Map<String, Object> context = new LinkedHashMap<>(initialContext);
-        for (Map.Entry<String, Object> entry : initialContext.entrySet()) {
-            typeHints.put(entry.getKey(), entry.getValue() != null ? entry.getValue().getClass() : Object.class);
-        }
+        Map<String, Object> context = new LinkedHashMap<>(params);
 
-        List<String> ordered = resolveExecutionOrder(expressions);
+        for (Map.Entry<String, String> entry : expressions.entrySet()) {
+            String key = entry.getKey();
+            String expression = entry.getValue();
 
+<<<<<<< HEAD
         for (String key : ordered) {
             String expr = expressions.get(key);
             Function<Map<String, Object>, Object> fn = parse(expr, mode);
@@ -175,11 +208,17 @@ public class ExpressionManager {
                 typeHints.put(key, Object.class);
 >>>>>>> origin/main
             }
+=======
+            Object result = evaluateExpression(expression, context, mode);
+            LoggingUtil.debug("Evaluated expression '" + key + "': " + expression + " => " + result);
+            context.put(key, result);
+>>>>>>> origin/main
         }
 
         return context;
     }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     public List<String> resolveExecutionOrder(Map<String, String> expressions) {
         Map<String, Set<String>> dependencies = new HashMap<>();
@@ -219,15 +258,51 @@ public class ExpressionManager {
             // Template expression dependencies
 =======
             Set<String> refVars = new HashSet<>();
+=======
+    public Object evaluateExpression(String expression,
+                                     Map<String, Object> context,
+                                     ExpressionMode mode) {
+        Map<String, Object> workingContext = new LinkedHashMap<>(context);
 
-            Matcher matcher = wordPattern.matcher(expr);
-            while (matcher.find()) {
-                String token = matcher.group();
-                if (!token.equals(key) && expressions.containsKey(token)) {
-                    refVars.add(token);
+        if (mode == ExpressionMode.FUNCTIONAL) {
+            FunctionalParser parser = new FunctionalParser(expression, registry);
+            return parser.parseAny().apply(workingContext);
+        } else {
+            OperationalParser parser = new OperationalParser(expression, registry);
+            return parser.parseAny().apply(workingContext);
+        }
+    }
+
+    public Object evaluateOperation(GenericOperation op,
+                                    Map<String, Object> args,
+                                    ExpressionMode mode) {
+        if (op instanceof CustomOperation co) {
+            return co.execute(args, this);
+        }
+        return op.apply(args, Map.of());
+    }
+
+    public static Object convert(Object input, Class<?> targetType,
+                                 TypeConversionMode convMode,
+                                 TypeMismatchMode mismatchMode) {
+        if (input == null) return null;
+        if (targetType.isInstance(input)) return input;
+>>>>>>> origin/main
+
+        if (Number.class.isAssignableFrom(targetType)) {
+            if (input instanceof String s) {
+                try {
+                    input = Double.parseDouble(s);
+                } catch (NumberFormatException ex) {
+                    if (mismatchMode == TypeMismatchMode.EXCEPTION)
+                        throw new IllegalArgumentException("Cannot convert string to number: " + s);
+                    if (mismatchMode == TypeMismatchMode.WARNING)
+                        LoggingUtil.warn("Lossy or invalid conversion: " + s);
+                    return null;
                 }
             }
 
+<<<<<<< HEAD
 >>>>>>> origin/main
             if (expr.startsWith("template(")) {
                 int quoteStart = expr.indexOf('"');
@@ -244,10 +319,31 @@ public class ExpressionManager {
                             refVars.add(var);
 >>>>>>> origin/main
                         }
+=======
+            if (input instanceof Number n) {
+                Number converted = switch (targetType.getSimpleName()) {
+                    case "Integer" -> n.intValue();
+                    case "Double" -> n.doubleValue();
+                    case "Float" -> n.floatValue();
+                    case "Long" -> n.longValue();
+                    case "Short" -> n.shortValue();
+                    case "Byte" -> n.byteValue();
+                    default -> throw new IllegalArgumentException("Unsupported numeric type: " + targetType);
+                };
+
+                if (convMode == TypeConversionMode.LOSSLESS && !targetType.isInstance(n)) {
+                    double original = n.doubleValue();
+                    double roundtrip = ((Number) converted).doubleValue();
+                    if (Math.abs(original - roundtrip) > 1e-10) {
+                        if (mismatchMode == TypeMismatchMode.EXCEPTION)
+                            throw new IllegalArgumentException("Lossy conversion blocked: " + original + " to " + targetType);
+                        if (mismatchMode == TypeMismatchMode.WARNING)
+                            LoggingUtil.warn("Lossy conversion: " + original + " to " + targetType);
+>>>>>>> origin/main
                     }
                 }
-            }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
             dependencies.put(key, deps);
         }
@@ -333,9 +429,24 @@ public class ExpressionManager {
                     break;
                 case ACCEPT:
                     return true;
+=======
+                return converted;
+>>>>>>> origin/main
             }
         }
-        return match;
+
+        if (targetType == Boolean.class && input instanceof String s) {
+            return Boolean.parseBoolean(s);
+        }
+
+        if (targetType == String.class) return input.toString();
+
+        if (mismatchMode == TypeMismatchMode.EXCEPTION)
+            throw new IllegalArgumentException("Cannot convert from " + input.getClass() + " to " + targetType);
+        if (mismatchMode == TypeMismatchMode.WARNING)
+            LoggingUtil.warn("Unsupported conversion from " + input.getClass() + " to " + targetType);
+
+        return null;
     }
 >>>>>>> origin/main
 }

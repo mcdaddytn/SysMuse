@@ -41,8 +41,15 @@ public class SystemConfig {
     private String fieldNameSuffix = "]";
     private String newlineChar = "\n";
 
+    // Date and DateTime formats for auto-detection
+    private List<String> dateFormats = new ArrayList<>();
+    private List<String> dateTimeFormats = new ArrayList<>();
+
     // Expressions directly in config (no separate file)
     private Map<String, String> expressions = new LinkedHashMap<>();
+
+    // Derived text field operation mappings
+    private Map<String, String> derivedTextOperations = new LinkedHashMap<>();
 
     // Configuration paths
     private String configDirectory = "";
@@ -53,6 +60,21 @@ public class SystemConfig {
     private boolean consoleLoggingEnabled = true;
     private boolean fileLoggingEnabled = false;
     private String logFileName = "converter.log";
+
+    // Archive configuration
+    private boolean archiveEnabled = false;
+    private String archiveSuffix = "_archive";
+    private String archivePassword = null;
+    private boolean keepOriginalFiles = true;
+    //private boolean isSqlEnabled = true;
+    private boolean isSqlEnabled = false;
+    private boolean isSqlDropTableBeforeCreate = true;
+    private boolean isSqlUseDateSuffix = false;
+
+    private boolean isUtf8WithBom = false;
+
+    private String sqlSchemaName = null;
+    private String sqlTableName = null;
 
     // Raw JSON config
     private JsonNode configJson;
@@ -71,6 +93,143 @@ public class SystemConfig {
         // Initialize with default values
         textSuffixes.add(" reasoning");
         textSuffixes.add(" snippets");
+        initializeDefaultFormats();
+    }
+
+    /**
+     * Initialize default date and datetime formats
+     */
+    private void initializeDefaultFormats() {
+        // Initialize with common date formats if empty
+        if (dateFormats.isEmpty()) {
+            dateFormats.addAll(Arrays.asList(
+                    "yyyy-MM-dd",
+                    "MM/dd/yyyy",
+                    "dd/MM/yyyy",
+                    "MM-dd-yyyy",
+                    "dd-MM-yyyy",
+                    "yyyy/MM/dd",
+                    "M/d/yyyy",
+                    "d/M/yyyy",
+                    "MMM dd, yyyy",
+                    "dd MMM yyyy",
+                    "yyyy-MM-dd",
+                    "yyyy.MM.dd"
+            ));
+        }
+
+        // Initialize with common datetime formats if empty
+        if (dateTimeFormats.isEmpty()) {
+            dateTimeFormats.addAll(Arrays.asList(
+                    // ISO formats with seconds
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+
+                    // ISO formats without seconds
+                    "yyyy-MM-dd HH:mm",
+                    "yyyy-MM-dd'T'HH:mm",
+                    "yyyy-MM-dd'T'HH:mm'Z'",
+
+                    // US formats with seconds
+                    "MM/dd/yyyy HH:mm:ss",
+                    "MM/dd/yyyy h:mm:ss a",
+                    "M/d/yyyy H:mm:ss",
+                    "M/d/yyyy h:mm:ss a",
+
+                    // US formats without seconds (common in your data)
+                    "MM/dd/yyyy HH:mm",
+                    "MM/dd/yyyy h:mm a",
+                    "M/d/yyyy H:mm",
+                    "M/d/yyyy h:mm a",
+                    "M/d/yyyy H:mm",  // For formats like "1/1/1900 5:00"
+
+                    // European formats with seconds
+                    "dd/MM/yyyy HH:mm:ss",
+                    "dd/MM/yyyy h:mm:ss a",
+                    "d/M/yyyy H:mm:ss",
+                    "d/M/yyyy h:mm:ss a",
+
+                    // European formats without seconds
+                    "dd/MM/yyyy HH:mm",
+                    "dd/MM/yyyy h:mm a",
+                    "d/M/yyyy H:mm",
+                    "d/M/yyyy h:mm a",
+
+                    // Dash-separated formats with seconds
+                    "MM-dd-yyyy HH:mm:ss",
+                    "dd-MM-yyyy HH:mm:ss",
+                    "MM-dd-yyyy h:mm:ss a",
+                    "dd-MM-yyyy h:mm:ss a",
+
+                    // Dash-separated formats without seconds
+                    "MM-dd-yyyy HH:mm",
+                    "dd-MM-yyyy HH:mm",
+                    "MM-dd-yyyy h:mm a",
+                    "dd-MM-yyyy h:mm a",
+
+                    // Month name formats with seconds
+                    "MMM dd, yyyy HH:mm:ss",
+                    "dd MMM yyyy HH:mm:ss",
+                    "MMM d, yyyy H:mm:ss",
+                    "d MMM yyyy H:mm:ss",
+                    "MMM dd, yyyy h:mm:ss a",
+                    "dd MMM yyyy h:mm:ss a",
+
+                    // Month name formats without seconds
+                    "MMM dd, yyyy HH:mm",
+                    "dd MMM yyyy HH:mm",
+                    "MMM d, yyyy H:mm",
+                    "d MMM yyyy H:mm",
+                    "MMM dd, yyyy h:mm a",
+                    "dd MMM yyyy h:mm a",
+
+                    // Dot-separated formats with seconds
+                    "yyyy.MM.dd HH:mm:ss",
+                    "dd.MM.yyyy HH:mm:ss",
+                    "MM.dd.yyyy HH:mm:ss",
+
+                    // Dot-separated formats without seconds
+                    "yyyy.MM.dd HH:mm",
+                    "dd.MM.yyyy HH:mm",
+                    "MM.dd.yyyy HH:mm",
+
+                    // Additional flexible formats for single digit days/months without seconds
+                    "M/d/yyyy H:mm",      // This should catch "1/1/1900 5:00"
+                    "M/dd/yyyy H:mm",
+                    "MM/d/yyyy H:mm",
+                    "M/d/yyyy h:mm a",
+                    "M/dd/yyyy h:mm a",
+                    "MM/d/yyyy h:mm a"
+            ));
+
+        /*
+            dateTimeFormats.addAll(Arrays.asList(
+                    "yyyy-MM-dd HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+                    "MM/dd/yyyy HH:mm:ss",
+                    "dd/MM/yyyy HH:mm:ss",
+                    "MM-dd-yyyy HH:mm:ss",
+                    "dd-MM-yyyy HH:mm:ss",
+                    "M/d/yyyy H:mm:ss",
+                    "d/M/yyyy H:mm:ss",
+                    "M/d/yyyy h:mm:ss a",
+                    "d/M/yyyy h:mm:ss a",
+                    "MMM dd, yyyy HH:mm:ss",
+                    "dd MMM yyyy HH:mm:ss",
+                    "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+            ));
+
+         */
+        }
     }
 
     /**
@@ -199,6 +358,21 @@ public class SystemConfig {
             }
         }
 
+        // Parse derived text configuration
+        if (configJson.has("derivedTextOperations")) {
+            JsonNode operationsNode = configJson.get("derivedTextOperations");
+
+            derivedTextOperations.clear();
+            Iterator<String> fieldNames = operationsNode.fieldNames();
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                String operation = operationsNode.get(fieldName).asText();
+                derivedTextOperations.put(fieldName, operation);
+            }
+
+            LoggingUtil.info("Loaded " + derivedTextOperations.size() + " derived text operations");
+        }
+
         // Parse text aggregation configuration
         if (configJson.has("textAggregation")) {
             JsonNode aggregationNode = configJson.get("textAggregation");
@@ -259,6 +433,7 @@ public class SystemConfig {
         }
 
         // Parse logging configuration
+        /*
         if (configJson.has("logging")) {
             JsonNode loggingNode = configJson.get("logging");
 
@@ -276,6 +451,54 @@ public class SystemConfig {
 
             if (loggingNode.has("filename")) {
                 logFileName = loggingNode.get("filename").asText();
+            }
+        }
+         */
+
+        // Parse SQL configuration
+        if (configJson.has("sql")) {
+            JsonNode sqlNode = configJson.get("sql");
+
+            if (sqlNode.has("enabled")) {
+                isSqlEnabled = sqlNode.get("enabled").asBoolean();
+            }
+
+            if (sqlNode.has("dropTableBeforeCreate")) {
+                isSqlDropTableBeforeCreate = sqlNode.get("dropTableBeforeCreate").asBoolean();
+            }
+
+            if (sqlNode.has("useDateSuffix")) {
+                isSqlUseDateSuffix = sqlNode.get("useDateSuffix").asBoolean();
+            }
+
+            if (sqlNode.has("schemaName")) {
+                sqlSchemaName = sqlNode.get("schemaName").asText();
+            }
+
+            if (sqlNode.has("tableName")) {
+                sqlTableName = sqlNode.get("tableName").asText();
+            }
+        }
+
+        if (configJson.has("archive")) {
+            JsonNode archiveNode = configJson.get("archive");
+
+            if (archiveNode.has("enabled")) {
+                archiveEnabled = archiveNode.get("enabled").asBoolean();
+            }
+
+            if (archiveNode.has("suffix")) {
+                archiveSuffix = archiveNode.get("suffix").asText();
+            }
+
+            if (archiveNode.has("password")) {
+                archivePassword = archiveNode.get("password").asText();
+                // Don't log the password for security
+                LoggingUtil.info("Archive password configured (not logged for security)");
+            }
+
+            if (archiveNode.has("keepOriginals")) {
+                keepOriginalFiles = archiveNode.get("keepOriginals").asBoolean();
             }
         }
 
@@ -328,6 +551,14 @@ public class SystemConfig {
             }
         }
 
+        // Derived Text Operations
+        if (!derivedTextOperations.isEmpty()) {
+            ObjectNode derivedTextNode = rootNode.putObject("derivedTextOperations");
+            for (Map.Entry<String, String> entry : derivedTextOperations.entrySet()) {
+                derivedTextNode.put(entry.getKey(), entry.getValue());
+            }
+        }
+
         ArrayNode suffixesArray = formatNode.putArray("textSuffixes");
         for (String suffix : textSuffixes) {
             suffixesArray.add(suffix.trim());
@@ -348,6 +579,14 @@ public class SystemConfig {
         for (Map.Entry<String, String> entry : subsets.entrySet()) {
             filtersNode.put(entry.getKey(), entry.getValue());
         }
+
+        ObjectNode archiveNode = rootNode.putObject("archive");
+        archiveNode.put("enabled", archiveEnabled);
+        archiveNode.put("suffix", archiveSuffix);
+        if (archivePassword != null) {
+            archiveNode.put("password", archivePassword);
+        }
+        archiveNode.put("keepOriginals", keepOriginalFiles);
 
         // Configuration paths
         ObjectNode pathsNode = rootNode.putObject("paths");
@@ -608,5 +847,74 @@ public class SystemConfig {
 
     public JsonNode getConfigJson() {
         return configJson;
+    }
+
+    // Getters and setters for archive configuration
+    public boolean isArchiveEnabled() {
+        return archiveEnabled;
+    }
+
+    public void setArchiveEnabled(boolean archiveEnabled) {
+        this.archiveEnabled = archiveEnabled;
+    }
+
+    public String getArchiveSuffix() {
+        return archiveSuffix;
+    }
+
+    public void setArchiveSuffix(String archiveSuffix) {
+        this.archiveSuffix = archiveSuffix;
+    }
+
+    public String getArchivePassword() {
+        return archivePassword;
+    }
+
+    public void setArchivePassword(String archivePassword) {
+        this.archivePassword = archivePassword;
+    }
+
+    public boolean isKeepOriginalFiles() {
+        return keepOriginalFiles;
+    }
+
+    public void setKeepOriginalFiles(boolean keepOriginalFiles) {
+        this.keepOriginalFiles = keepOriginalFiles;
+    }
+
+    public List<String> getDateFormats() {
+        return dateFormats;
+    }
+
+    public List<String> getDateTimeFormats() {
+        return dateTimeFormats;
+    }
+
+    public boolean isSqlEnabled() {
+        return isSqlEnabled;
+    }
+
+    public boolean isSqlDropTableBeforeCreate() {
+        return isSqlDropTableBeforeCreate;
+    }
+
+    public String getSqlSchemaName() {
+        return sqlSchemaName;
+    }
+
+    public String getSqlTableName() {
+        return sqlTableName;
+    }
+
+    public boolean isSqlUseDateSuffix() {
+        return isSqlUseDateSuffix;
+    }
+
+    public boolean isUtf8WithBom() {
+        return isUtf8WithBom;
+    }
+
+    public Map<String, String> getDerivedTextOperations() {
+        return derivedTextOperations;
     }
 }

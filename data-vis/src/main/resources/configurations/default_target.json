@@ -1,0 +1,9 @@
+{
+  "targetRegions": 150,
+  "targetMinArea": 5.0,
+  "targetMaxArea": 100.0,
+  "targetMeanArea": 25.0,
+  "targetMedianArea": 20.0,
+  "toleranceRegions": 10,
+  "toleranceArea": 5.0
+}

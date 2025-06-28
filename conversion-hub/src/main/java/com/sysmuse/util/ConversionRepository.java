@@ -1,6 +1,9 @@
 package com.sysmuse.util;
 
 import java.util.*;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -15,7 +18,7 @@ public class ConversionRepository {
 
     // Supported data types
     public enum DataType {
-        STRING, INTEGER, FLOAT, BOOLEAN
+        STRING, INTEGER, FLOAT, BOOLEAN, DATE, DATETIME
     }
 
     // Core data storage
@@ -29,6 +32,9 @@ public class ConversionRepository {
 
     // Map of column names to their data types (from config or inferred)
     private Map<String, DataType> columnTypes = new HashMap<>();
+
+    // Map of column names to their date/datetime formats
+    private Map<String, String> columnFormats = new HashMap<>();
 
     // Map for derived boolean fields (name -> expression)
     private Map<String, JsonNode> derivedBooleanFields = new LinkedHashMap<>();
@@ -51,11 +57,18 @@ public class ConversionRepository {
     // Maximum text length (0 for unlimited)
     private int maxTextLength = 0;
 
+    // Helper variable to track current column during inference
+    private String currentColumnName = null;
+
     // Unique key field for multi-file overlay
     private String uniqueKeyField = null;
 
     // Configuration instance
     private SystemConfig systemConfig;
+
+    // Map for derived text fields (name -> configuration)
+    private Map<String, JsonNode> derivedTextFields = new LinkedHashMap<>();
+
 
     /**
      * Constructor
@@ -88,10 +101,21 @@ public class ConversionRepository {
     }
 
     /**
+     * Get column formats map
+     */
+    public Map<String, String> getColumnFormats() {
+        return columnFormats;
+    }
+
+    /**
      * Get the headers array
      */
     public String[] getHeaders() {
         return headers;
+    }
+
+    private String getCurrentColumnName() {
+        return currentColumnName;
     }
 
     /**
@@ -215,9 +239,11 @@ public class ConversionRepository {
     }
 
     /**
-     * Infer column types from first data row
+     * Enhanced type inference that properly detects DATE and DATETIME with format discovery
      */
     public void inferTypes(String[] headers, String[] firstDataRow) {
+        LoggingUtil.info("Performing enhanced type inference on " + headers.length + " columns");
+
         for (int i = 0; i < headers.length && i < firstDataRow.length; i++) {
             String value = firstDataRow[i];
             String columnName = headers[i];
@@ -227,33 +253,248 @@ public class ConversionRepository {
                 continue;
             }
 
-            // Check if it's a boolean
-            if (value.equalsIgnoreCase("true") || value.equalsIgnoreCase("false")) {
-                columnTypes.put(columnName, DataType.BOOLEAN);
-                continue;
-            }
+            // Set current column for format detection
+            this.currentColumnName = columnName;
 
-            // Check if it's a number
-            try {
-                if (value.contains(".")) {
-                    Double.parseDouble(value);
-                    columnTypes.put(columnName, DataType.FLOAT);
-                } else {
-                    Integer.parseInt(value);
-                    columnTypes.put(columnName, DataType.INTEGER);
-                }
-            } catch (NumberFormatException e) {
-                // Default to string if parsing fails
-                columnTypes.put(columnName, DataType.STRING);
-            }
+            // Perform comprehensive type inference
+            DataType detectedType = inferTypeFromValue(value);
+            columnTypes.put(columnName, detectedType);
+
+            LoggingUtil.debug("Column '" + columnName + "' inferred as " + detectedType +
+                    (value != null ? " (sample: '" + value + "')" : " (null sample)"));
         }
-        LoggingUtil.info("Inferred types for " + columnTypes.size() + " columns");
+
+        LoggingUtil.info("Type inference complete. Detected types: " + getTypeSummary());
     }
 
     /**
-     * Convert a string value to the appropriate type
+     * Comprehensive type inference with prioritized detection order
+     */
+    private DataType inferTypeFromValue(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            LoggingUtil.debug("Empty value, defaulting to STRING for column: " + getCurrentColumnName());
+            return DataType.STRING;
+        }
+
+        value = value.trim();
+
+        // gm, removed 0, 1 passing as boolean, that should be INTEGER, or need to change order
+        // 1. Check for boolean first (most specific)
+        if (isBooleanValue(value)) {
+            LoggingUtil.debug("Detected BOOLEAN for column '" + getCurrentColumnName() + "': " + value);
+            return DataType.BOOLEAN;
+        }
+
+        // 2. Try DATETIME formats first (more specific than DATE)
+        if (systemConfig != null) {
+            List<String> dateTimeFormats = systemConfig.getDateTimeFormats();
+            for (String format : dateTimeFormats) {
+                if (tryParseDateTime(value, format)) {
+                    columnFormats.put(getCurrentColumnName(), format);
+                    LoggingUtil.info("Detected DATETIME for column '" + getCurrentColumnName() +
+                            "' with format '" + format + "': " + value);
+                    return DataType.DATETIME;
+                }
+            }
+
+            // 3. Try DATE formats
+            List<String> dateFormats = systemConfig.getDateFormats();
+            for (String format : dateFormats) {
+                if (tryParseDate(value, format)) {
+                    columnFormats.put(getCurrentColumnName(), format);
+                    LoggingUtil.info("Detected DATE for column '" + getCurrentColumnName() +
+                            "' with format '" + format + "': " + value);
+                    return DataType.DATE;
+                }
+            }
+        }
+
+        // 4. Check for numeric types
+        // Try INTEGER first (more specific than FLOAT)
+        if (isIntegerValue(value)) {
+            LoggingUtil.debug("Detected INTEGER for column '" + getCurrentColumnName() + "': " + value);
+            return DataType.INTEGER;
+        }
+
+        // Try FLOAT
+        if (isFloatValue(value)) {
+            LoggingUtil.debug("Detected FLOAT for column '" + getCurrentColumnName() + "': " + value);
+            return DataType.FLOAT;
+        }
+
+        // 5. Default to STRING
+        LoggingUtil.debug("Defaulting to STRING for column '" + getCurrentColumnName() + "': " + value);
+        return DataType.STRING;
+    }
+
+    /**
+     * Check if value represents a boolean
+     */
+    private boolean isBooleanValue(String value) {
+        if (value == null) return false;
+        String lowerValue = value.toLowerCase().trim();
+        return lowerValue.equals("true") || lowerValue.equals("false");
+/*
+        return lowerValue.equals("true") || lowerValue.equals("false") ||
+                lowerValue.equals("yes") || lowerValue.equals("no") ||
+                lowerValue.equals("1") || lowerValue.equals("0") ||
+                lowerValue.equals("y") || lowerValue.equals("n");
+ */
+    }
+
+    /**
+     * Check if value represents an integer
+     */
+    private boolean isIntegerValue(String value) {
+        if (value == null || value.trim().isEmpty()) return false;
+        try {
+            // Also handle values with commas (e.g., "1,000")
+            String cleanValue = value.replace(",", "");
+            Long.parseLong(cleanValue);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if value represents a float/double
+     */
+    private boolean isFloatValue(String value) {
+        if (value == null || value.trim().isEmpty()) return false;
+        try {
+            // Also handle values with commas (e.g., "1,000.50")
+            String cleanValue = value.replace(",", "");
+            Double.parseDouble(cleanValue);
+            // Make sure it's actually a decimal number, not just an integer
+            return cleanValue.contains(".") || cleanValue.toLowerCase().contains("e");
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get a summary of detected types for logging
+     */
+    private String getTypeSummary() {
+        Map<DataType, Integer> counts = new HashMap<>();
+        for (DataType type : columnTypes.values()) {
+            counts.put(type, counts.getOrDefault(type, 0) + 1);
+        }
+
+        StringBuilder summary = new StringBuilder();
+        for (Map.Entry<DataType, Integer> entry : counts.entrySet()) {
+            if (summary.length() > 0) summary.append(", ");
+            summary.append(entry.getKey()).append(":").append(entry.getValue());
+        }
+        return summary.toString();
+    }
+
+    /**
+     * Try to parse a value as a DateTime with the given format
+     */
+    private boolean tryParseDateTime(String value, String format) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+            LocalDateTime.parse(value, formatter);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Try to parse a value as a Date with the given format
+     */
+    private boolean tryParseDate(String value, String format) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+            LocalDate.parse(value, formatter);
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Convert a string value to the appropriate type (backward compatibility)
      */
     public Object convertValue(String value, DataType type) {
+        return convertValue(value, type, null);
+    }
+
+    /**
+     * Convert value to Date using configured format for specific column
+     */
+    private Object convertToDate(String value, String columnName) {
+        // First try to get the specific format for this column
+        String format = columnFormats.get(columnName);
+
+        if (format != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                return LocalDate.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse date '" + value + "' with configured format '" + format + "' for column '" + columnName + "'");
+            }
+        }
+
+        // If no specific format or parsing failed, try all configured DATE formats
+        String foundFormat = findFormatForColumn(DataType.DATE, value);
+        if (foundFormat != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(foundFormat);
+                return LocalDate.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse date '" + value + "' with format '" + foundFormat + "'");
+            }
+        }
+
+        // If parsing fails, return as string
+        return value;
+    }
+
+    /**
+     * Convert value to DateTime using configured format for specific column
+     */
+    private Object convertToDateTime(String value, String columnName) {
+        // First try to get the specific format for this column
+        String format = columnFormats.get(columnName);
+
+        if (format != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                return LocalDateTime.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse datetime '" + value + "' with configured format '" + format + "' for column '" + columnName + "'");
+            }
+        }
+
+        // If no specific format or parsing failed, try all configured DATETIME formats
+        String foundFormat = findFormatForColumn(DataType.DATETIME, value);
+        if (foundFormat != null) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(foundFormat);
+                return LocalDateTime.parse(value, formatter);
+            } catch (DateTimeParseException e) {
+                LoggingUtil.warn("Failed to parse datetime '" + value + "' with format '" + foundFormat + "'");
+            }
+        }
+
+        // If parsing fails, return as string
+        return value;
+    }
+
+    /**
+     * Convert a string value to the appropriate type with column context
+     */
+    public Object convertValue(String value, DataType type, String columnName) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+
+        value = value.trim();
+
         switch (type) {
             case INTEGER:
                 try {
@@ -269,6 +510,10 @@ public class ConversionRepository {
                 }
             case BOOLEAN:
                 return Boolean.parseBoolean(value);
+            case DATE:
+                return convertToDate(value, columnName);
+            case DATETIME:
+                return convertToDateTime(value, columnName);
             case STRING:
             default:
                 // Apply text truncation if needed
@@ -277,6 +522,37 @@ public class ConversionRepository {
                 }
                 return value;
         }
+    }
+
+    /**
+     * Find the appropriate format for a column of the given type
+     */
+    private String findFormatForColumn(DataType type, String value) {
+        // First, check if we have a stored format for a specific column
+        // This requires knowing which column we're processing
+        // For now, try all configured formats
+
+        if (systemConfig == null) {
+            return null;
+        }
+
+        List<String> formats = type == DataType.DATE ?
+                systemConfig.getDateFormats() : systemConfig.getDateTimeFormats();
+
+        for (String format : formats) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
+                if (type == DataType.DATE) {
+                    LocalDate.parse(value, formatter);
+                } else {
+                    LocalDateTime.parse(value, formatter);
+                }
+                return format;
+            } catch (DateTimeParseException e) {
+                // Try next format
+            }
+        }
+        return null;
     }
 
     /**
@@ -301,6 +577,7 @@ public class ConversionRepository {
         columnVisibility.clear();
         columnTypes.clear();
         uniqueKeyField = null;
+        derivedTextFields.clear();
 
         // 1. Parameters Extraction
         if (config.has("parameters")) {
@@ -387,6 +664,32 @@ public class ConversionRepository {
                 columnVisibility.put(fieldName, isVisible);
 
                 LoggingUtil.info("Added derived boolean field: " + fieldName +
+                        ", Visible: " + isVisible);
+            }
+        }
+
+        // 3.5 Derived Text Fields
+        if (config.has("derivedTextFields")) {
+            JsonNode derivedTextFieldsNode = config.get("derivedTextFields");
+            Iterator<String> fieldNames = derivedTextFieldsNode.fieldNames();
+
+            LoggingUtil.info("Processing derived text fields");
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                JsonNode fieldConfig = derivedTextFieldsNode.get(fieldName);
+
+                // Store the entire field configuration
+                derivedTextFields.put(fieldName, fieldConfig);
+
+                // Ensure it's registered as a string type
+                columnTypes.put(fieldName, DataType.STRING);
+
+                // Process visibility (default to true)
+                boolean isVisible = fieldConfig.has("visible") ?
+                        fieldConfig.get("visible").asBoolean() : true;
+                columnVisibility.put(fieldName, isVisible);
+
+                LoggingUtil.info("Added derived text field: " + fieldName +
                         ", Visible: " + isVisible);
             }
         }
@@ -511,6 +814,47 @@ public class ConversionRepository {
         }
     }
 
+
+    /**
+     * Process the derived text fields for a row
+     */
+    public void processDerivedTextFields(Map<String, Object> rowValues) {
+        for (Map.Entry<String, JsonNode> entry : derivedTextFields.entrySet()) {
+            String fieldName = entry.getKey();
+            JsonNode config = entry.getValue();
+
+            try {
+                // Process the derived text field configuration
+                String derivedText = processDerivedTextField(config, rowValues);
+                rowValues.put(fieldName, derivedText);
+            } catch (Exception e) {
+                LoggingUtil.error("Error processing derived text field '" + fieldName + "': " + e.getMessage(), e);
+                // Set empty string if processing fails
+                rowValues.put(fieldName, "");
+            }
+        }
+    }
+
+    /**
+     * Process a single derived text field configuration
+     */
+    private String processDerivedTextField(JsonNode config, Map<String, Object> rowValues) {
+        String operation = config.get("operation").asText().toUpperCase();
+        String sourceField = config.get("sourceField").asText();
+
+        // Convert string operation to enum
+        TextFieldDerivation.Operation op;
+        try {
+            op = TextFieldDerivation.Operation.valueOf(operation);
+        } catch (IllegalArgumentException e) {
+            LoggingUtil.warn("Unknown text field derivation operation: " + operation);
+            return "";
+        }
+
+        // Process the operation
+        return TextFieldDerivation.processOperation(op, sourceField, rowValues);
+    }
+
     /**
      * Process the aggregate text fields for a row
      */
@@ -563,6 +907,13 @@ public class ConversionRepository {
             allFields.addAll(columnMap.keySet());
         }
 
+        // Add derived text fields (NEW)
+        for (String field : derivedTextFields.keySet()) {
+            if (!allFields.contains(field)) {
+                allFields.add(field);
+            }
+        }
+
         // Add derived fields
         for (String field : derivedBooleanFields.keySet()) {
             if (!allFields.contains(field)) {
@@ -574,6 +925,18 @@ public class ConversionRepository {
         for (String field : aggregateTextFields.keySet()) {
             if (!allFields.contains(field)) {
                 allFields.add(field);
+            }
+        }
+
+        // Add any fields that exist in the data but not in headers
+        // This handles overlay columns that might have been added
+        if (!dataRows.isEmpty()) {
+            Set<String> dataFields = dataRows.get(0).keySet();
+            for (String field : dataFields) {
+                if (field != null && !allFields.contains(field)) {
+                    allFields.add(field);
+                    LoggingUtil.debug("Found data field not in headers: " + field);
+                }
             }
         }
 

@@ -1,0 +1,55 @@
+{
+  "_comment": "Dexed Electric Piano with Effects Chain",
+  "output_file": "F:\\syscode\\SysMuse\\vstrender\\dexed_epiano_fx.wav",
+  "sample_rate": 48000,
+  "bit_depth": 24,
+  "buffer_size": 2048,
+  "render_length": 45.0,
+  "instrument_channels": 2,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Dexed.vst3",
+      "plugin_name": "Dexed",
+      "is_instrument": true,
+      "midi_file": "F:\\syscode\\SysMuse\\vstrender\\midi\\epiano_ballad.mid",
+      "sysex_file": "F:\\syscode\\SysMuse\\vstrender\\patches\\epiano_bank.syx",
+      "sysex_patch_number": 12,
+      "parameters": {
+        "Volume": 0.85,
+        "Transpose": 0.0,
+        "Tune": 0.0
+      }
+    },
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Pro-Q 3.vst3",
+      "plugin_name": "Pro-Q 3",
+      "is_instrument": false,
+      "parameters": {
+        "High Shelf Freq": 0.75,
+        "High Shelf Gain": 2.0,
+        "Low Cut Freq": 0.1,
+        "Output Gain": 0.0
+      }
+    },
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\Chorus.vst3",
+      "plugin_name": "Chorus",
+      "is_instrument": false,
+      "parameters": {
+        "Rate": 0.4,
+        "Depth": 0.3,
+        "Mix": 0.4
+      }
+    },
+    {
+      "path": "C:\\Program Files\\Common Files\\VST3\\ValhallaRoom.vst3",
+      "plugin_name": "ValhallaRoom",
+      "is_instrument": false,
+      "parameters": {
+        "Size": 0.5,
+        "Decay": 0.6,
+        "Mix": 0.15
+      }
+    }
+  ]
+}

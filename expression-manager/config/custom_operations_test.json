@@ -1,0 +1,33 @@
+[
+  {
+    "name": "sumThenDouble",
+    "returnType": "Double",
+    "args": {
+      "x": "Double",
+      "y": "Double"
+    },
+    "internalState": {},
+    "internalTypes": {},
+    "steps": [
+      { "outputVar": "sum", "expression": "add(x, y)", "mode": "FUNCTIONAL" },
+      { "outputVar": "result", "expression": "mul(sum, 2)", "mode": "FUNCTIONAL" }
+    ]
+  },
+  {
+    "name": "useInternalBaseAndNestedOp",
+    "returnType": "Double",
+    "args": {
+      "x": "Double"
+    },
+    "internalState": {
+      "base": 5
+    },
+    "internalTypes": {
+      "base": "Integer"
+    },
+    "steps": [
+      { "outputVar": "nested", "expression": "sumThenDouble(x, base)", "mode": "FUNCTIONAL" },
+      { "outputVar": "result", "expression": "add(nested, 1)", "mode": "FUNCTIONAL" }
+    ]
+  }
+]

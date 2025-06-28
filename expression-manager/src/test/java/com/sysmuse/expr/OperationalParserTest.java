@@ -7,8 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.sysmuse.util.LoggingUtil;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 public class OperationalParserTest {
@@ -26,8 +24,10 @@ public class OperationalParserTest {
         BooleanOperations.register(manager.getRegistry());
 
         // Basic equality for strings
-        manager.getRegistry().registerBoolean("equals",
-                (args, ctx) -> args.get("a").equals(args.get("b")),
+        manager.getRegistry().registerBoolean(
+                "equals",
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> args.get("a").equals(args.get("b"))),
                 List.of("a", "b"), "==");
     }
 
@@ -54,6 +54,5 @@ public class OperationalParserTest {
         assertEquals(true, result.get("isBig"));
         assertEquals(true, result.get("roleIsUser"));
         assertEquals(true, result.get("hasHighScore"));
-        LoggingUtil.info("testBasicOperationalExpressions passed");
     }
 }

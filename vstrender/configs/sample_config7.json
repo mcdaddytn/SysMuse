@@ -1,0 +1,27 @@
+{
+  "input_file": "F:\\data\\vstrender\\test_input.wav",
+  "output_file": "F:\\data\\vstrender\\test_output_cub_chain.wav",
+  "sample_rate": 0,
+  "bit_depth": 0,
+  "buffer_size": 4096,
+  "plugins": [
+    {
+      "path": "C:\\Program Files\\Steinberg\\Cubase 11\\VST3\\Cubase Plug-in Set.vst3\\Contents\\x86_64-win\\Cubase Plug-in Set.vst3",
+      "preset": "C:\\Users\\gmac\\Documents\\VST3 Presets\\Steinberg Media Technologies\\MultibandCompressor\\GM - SC Rhy Gtr.vstpreset",
+      "plugin_name": "MultibandCompressor",
+      "parameters": {
+        "Output Gain": 0.9,
+        "Bypass": 0.0
+      }
+    },
+    {
+      "path": "C:\\Program Files\\Steinberg\\Cubase 11\\VST3\\Cubase Plug-in Set.vst3\\Contents\\x86_64-win\\Cubase Plug-in Set.vst3",
+      "preset": "C:\\Users\\gmac\\Documents\\VST3 Presets\\Steinberg Media Technologies\\Frequency\\GM EG String 4.vstpreset",
+      "plugin_name": "Frequency",
+      "parameters": {
+        "Output Gain": 0.9,
+        "Bypass": 0.0
+      }
+    }
+  ]
+}

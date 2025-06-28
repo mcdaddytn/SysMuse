@@ -389,7 +389,7 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
     }
 
     /**
-     * Generate a configuration based on the "Applicable Format" structure
+     * Enhanced configuration generation for Applicable Format with comprehensive type inference
      */
     @Override
     public JsonNode generateConfig(String[] headers, String[] firstDataRow, Map<String, Object> columnTypes) {
@@ -408,10 +408,22 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
         config.set("parameters", parameters);
 
-        // Add column configurations
+        // Enhanced type inference with format detection
+        ConversionRepository tempRepository = new ConversionRepository(systemConfig);
+        tempRepository.setHeaders(headers);
+        tempRepository.setFirstDataRow(firstDataRow);
+
+        // Perform comprehensive type inference
+        tempRepository.inferTypes(headers, firstDataRow);
+
+        // Get the inferred types and detected formats
+        Map<String, ConversionRepository.DataType> inferredTypes = tempRepository.getColumnTypes();
+        Map<String, String> detectedFormats = tempRepository.getColumnFormats();
+
+        // Add column configurations with inferred types and formats
         ObjectNode columns = mapper.createObjectNode();
 
-        // First pass: Add all columns to the config
+        // First pass: Add all columns to the config with proper type inference
         boolean uniqueKeySet = false;
         for (String header : headers) {
             if (header == null || header.trim().isEmpty()) {
@@ -420,10 +432,20 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
 
             ObjectNode columnConfig = mapper.createObjectNode();
 
-            // Get the type from the columnTypes map or default to STRING
-            String type = columnTypes.containsKey(header) ?
-                    columnTypes.get(header).toString() : "STRING";
-            columnConfig.put("type", type);
+            // Use the inferred type instead of the passed columnTypes map
+            ConversionRepository.DataType inferredType = inferredTypes.getOrDefault(header,
+                    ConversionRepository.DataType.STRING);
+            columnConfig.put("type", inferredType.toString());
+
+            // Add detected format for DATE and DATETIME types
+            if ((inferredType == ConversionRepository.DataType.DATE ||
+                    inferredType == ConversionRepository.DataType.DATETIME) &&
+                    detectedFormats.containsKey(header)) {
+                String detectedFormat = detectedFormats.get(header);
+                columnConfig.put("format", detectedFormat);
+                LoggingUtil.info("ApplicableFormat: Detected " + inferredType + " format for '" +
+                        header + "': " + detectedFormat);
+            }
 
             // Add visibility property (default to true)
             columnConfig.put("visible", true);
@@ -441,7 +463,51 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         config.set("columns", columns);
 
         // Second pass: Identify field prefixes and group related fields
-        // Map to store field prefixes
+        // This logic remains the same as before...
+        Map<String, List<String>> prefixToFields = groupFieldsByPrefix(headers);
+
+        // Process derived boolean fields and suppressed fields
+        ObjectNode suppressedFields = mapper.createObjectNode();
+
+        // Identify boolean fields and their related text fields
+        for (Map.Entry<String, List<String>> entry : prefixToFields.entrySet()) {
+            String prefix = entry.getKey();
+            List<String> fields = entry.getValue();
+
+            if (fields.size() > 1) {
+                // Check if the prefix itself is a boolean field (using inferred types)
+                ConversionRepository.DataType prefixType = inferredTypes.getOrDefault(prefix,
+                        ConversionRepository.DataType.STRING);
+
+                if (prefixType == ConversionRepository.DataType.BOOLEAN) {
+                    // The prefix field is a boolean - use it to suppress related fields
+                    for (String field : fields) {
+                        if (!field.equals(prefix)) {
+                            suppressedFields.put(field, prefix);
+                        }
+                    }
+
+                    LoggingUtil.debug("Boolean field '" + prefix + "' will suppress " +
+                            (fields.size() - 1) + " related fields");
+                }
+            }
+        }
+
+        config.set("suppressedFields", suppressedFields);
+
+        // Process compound expressions for text aggregation if provided
+        processCompoundExpressions(config, headers);
+
+        // Log comprehensive type inference summary
+        logExtendedTypeInferenceSummary(inferredTypes, detectedFormats, prefixToFields);
+
+        return config;
+    }
+
+    /**
+     * Group fields by their prefixes for applicable format processing
+     */
+    private Map<String, List<String>> groupFieldsByPrefix(String[] headers) {
         Map<String, List<String>> prefixToFields = new LinkedHashMap<>();
 
         // First, identify all base fields (without suffixes)
@@ -489,40 +555,45 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
             }
         }
 
-        // Process derived boolean fields and suppressed fields
-        ObjectNode suppressedFields = mapper.createObjectNode();
+        return prefixToFields;
+    }
 
-        // Identify boolean fields and their related text fields
-        for (Map.Entry<String, List<String>> entry : prefixToFields.entrySet()) {
-            String prefix = entry.getKey();
-            List<String> fields = entry.getValue();
+    /**
+     * Log extended type inference summary including field groupings
+     */
+    private void logExtendedTypeInferenceSummary(Map<String, ConversionRepository.DataType> inferredTypes,
+                                                 Map<String, String> detectedFormats,
+                                                 Map<String, List<String>> prefixToFields) {
+        LoggingUtil.info("=== ApplicableFormat Type Inference Summary ===");
 
-            if (fields.size() > 1) {
-                // Check if the prefix itself is a boolean field
-                if (columnTypes.containsKey(prefix) &&
-                        columnTypes.get(prefix).toString().equals("BOOLEAN")) {
+        // Type counts
+        Map<ConversionRepository.DataType, Integer> typeCounts = new HashMap<>();
+        for (ConversionRepository.DataType type : inferredTypes.values()) {
+            typeCounts.put(type, typeCounts.getOrDefault(type, 0) + 1);
+        }
 
-                    // The prefix field is a boolean - use it to suppress related fields
-                    for (String field : fields) {
-                        if (!field.equals(prefix)) {
-                            suppressedFields.put(field, prefix);
-                        }
-                    }
+        for (Map.Entry<ConversionRepository.DataType, Integer> entry : typeCounts.entrySet()) {
+            LoggingUtil.info(entry.getKey() + ": " + entry.getValue() + " columns");
+        }
 
-                    LoggingUtil.debug("Boolean field '" + prefix + "' will suppress " +
-                            (fields.size() - 1) + " related fields");
-                }
+        // Date/DateTime formats
+        if (!detectedFormats.isEmpty()) {
+            LoggingUtil.info("Date/DateTime formats detected:");
+            for (Map.Entry<String, String> entry : detectedFormats.entrySet()) {
+                LoggingUtil.info("  " + entry.getKey() + ": " + entry.getValue());
             }
         }
 
-        config.set("suppressedFields", suppressedFields);
+        // Field groupings
+        LoggingUtil.info("Field groupings detected:");
+        for (Map.Entry<String, List<String>> entry : prefixToFields.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                LoggingUtil.info("  " + entry.getKey() + ": " + entry.getValue().size() + " related fields");
+            }
+        }
 
-        // Process compound expressions for text aggregation if provided
-        processCompoundExpressions(config, headers);
-
-        return config;
+        LoggingUtil.info("============================================");
     }
-
     /**
      * Check if a field has any of the known suffixes
      */
@@ -615,5 +686,57 @@ public class ApplicableFormatConfigGenerator implements ConfigGenerator {
         }
 
         return fieldNames;
+    }
+
+
+    /**
+     * Find the format that was used for a DATE or DATETIME column during type inference
+     * Move these to a base class
+     */
+    private String findFormatForColumn(String header, String[] firstDataRow, String[] headers, String type) {
+        // Find the value for this header in the first data row
+        for (int i = 0; i < headers.length && i < firstDataRow.length; i++) {
+            if (header.equals(headers[i])) {
+                String value = firstDataRow[i];
+                return findMatchingFormat(value, type);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find the matching format for a value of the given type
+     */
+    private String findMatchingFormat(String value, String type) {
+        if (systemConfig == null) {
+            return null;
+        }
+
+        List<String> formats = "DATE".equals(type) ?
+                systemConfig.getDateFormats() : systemConfig.getDateTimeFormats();
+
+        for (String format : formats) {
+            if (tryParseWithFormat(value, format, type)) {
+                return format;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Try to parse a value with the given format and type
+     */
+    private boolean tryParseWithFormat(String value, String format, String type) {
+        try {
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern(format);
+            if ("DATE".equals(type)) {
+                java.time.LocalDate.parse(value, formatter);
+            } else {
+                java.time.LocalDateTime.parse(value, formatter);
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

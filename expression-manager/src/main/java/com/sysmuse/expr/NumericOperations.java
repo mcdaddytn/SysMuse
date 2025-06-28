@@ -28,51 +28,60 @@ public class NumericOperations {
 =======
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public class NumericOperations {
 
     public static void register(OperationRegistry registry) {
         // Functional numeric operations
         registry.registerNumeric("add",
-                (args, ctx) -> get(args, "a") + get(args, "b"),
+                new NumericBaseOperation(Double.class, List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") + get(args, "b")),
                 List.of("a", "b"), "plus");
 
         registry.registerNumeric("sub",
-                (args, ctx) -> get(args, "a") - get(args, "b"),
+                new NumericBaseOperation(Double.class, List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") - get(args, "b")),
                 List.of("a", "b"), "minus");
 
         registry.registerNumeric("mul",
-                (args, ctx) -> get(args, "a") * get(args, "b"),
+                new NumericBaseOperation(Double.class, List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") * get(args, "b")),
                 List.of("a", "b"), "times");
 
         registry.registerNumeric("div",
-                (args, ctx) -> get(args, "a") / get(args, "b"),
+                new NumericBaseOperation(Double.class, List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") / get(args, "b")),
                 List.of("a", "b"), "divide");
 
         registry.registerNumeric("mod",
-                (args, ctx) -> get(args, "a") % get(args, "b"),
+                new NumericBaseOperation(Double.class, List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") % get(args, "b")),
                 List.of("a", "b"), "modulo");
 
-        // Operational numeric operators (true infix operators)
+        // Operational numeric operators
         registry.registerNumericOperator("+",
-                (args, ctx) -> get(args, "left") + get(args, "right"),
+                new NumericBaseOperation(Double.class, List.of("left", "right"),
+                        (args, ctx) -> get(args, "left") + get(args, "right")),
                 List.of("left", "right"));
 
         registry.registerNumericOperator("-",
-                (args, ctx) -> get(args, "left") - get(args, "right"),
+                new NumericBaseOperation(Double.class, List.of("left", "right"),
+                        (args, ctx) -> get(args, "left") - get(args, "right")),
                 List.of("left", "right"));
 
         registry.registerNumericOperator("*",
-                (args, ctx) -> get(args, "left") * get(args, "right"),
+                new NumericBaseOperation(Double.class, List.of("left", "right"),
+                        (args, ctx) -> get(args, "left") * get(args, "right")),
                 List.of("left", "right"));
 
         registry.registerNumericOperator("/",
-                (args, ctx) -> get(args, "left") / get(args, "right"),
+                new NumericBaseOperation(Double.class, List.of("left", "right"),
+                        (args, ctx) -> get(args, "left") / get(args, "right")),
                 List.of("left", "right"));
 
         registry.registerNumericOperator("%",
-                (args, ctx) -> get(args, "left") % get(args, "right"),
+                new NumericBaseOperation(Double.class, List.of("left", "right"),
+                        (args, ctx) -> get(args, "left") % get(args, "right")),
                 List.of("left", "right"));
 >>>>>>> origin/main
     }

@@ -11,8 +11,11 @@ import java.util.Map;
 import java.util.List;
 import java.util.Map;
 
+<<<<<<< HEAD
 import com.sysmuse.util.LoggingUtil;
 
+>>>>>>> origin/main
+=======
 >>>>>>> origin/main
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -75,9 +78,10 @@ public class ExpressionManagerTest {
         BooleanOperations.register(manager.getRegistry());
 
         // Register basic equality op
-        manager.getRegistry().registerBoolean("equals",
-                (Map<String, Object> args, Map<String, Object> ctx) ->
-                        args.get("a").equals(args.get("b")),
+        manager.getRegistry().registerBoolean(
+                "equals",
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> args.get("a").equals(args.get("b"))),
                 List.of("a", "b"), "==", "eq");
     }
 
@@ -97,7 +101,6 @@ public class ExpressionManagerTest {
         assertEquals(8.0, result.get("sum"));
         assertEquals(16.0, result.get("product"));
         assertEquals(true, result.get("isLarge"));
-        LoggingUtil.info("testArithmeticFlow passed");
     }
 
     @Test
@@ -112,7 +115,6 @@ public class ExpressionManagerTest {
 
         assertEquals("archive.tar", result.get("base"));
         assertEquals("ARCHIVE.TAR", result.get("caps"));
-        LoggingUtil.info("testStringOps passed");
     }
 
     @Test
@@ -130,7 +132,10 @@ public class ExpressionManagerTest {
 
         assertEquals(true, result.get("isPassing"));
         assertEquals("User alice has score 92 - passing: true", result.get("summary"));
+<<<<<<< HEAD
         LoggingUtil.info("testTemplateComposition passed");
+>>>>>>> origin/main
+=======
 >>>>>>> origin/main
     }
 
@@ -159,7 +164,10 @@ public class ExpressionManagerTest {
 
         assertEquals(true, result.get("passed"));
         assertEquals(false, result.get("excellent"));
+<<<<<<< HEAD
         LoggingUtil.info("testOperationalSyntax passed");
+>>>>>>> origin/main
+=======
 >>>>>>> origin/main
     }
 }

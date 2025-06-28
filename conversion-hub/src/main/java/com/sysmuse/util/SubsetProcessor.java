@@ -135,8 +135,8 @@ public class SubsetProcessor {
         String outputSuffix = systemConfig.getOutputSuffix();
 
         // Add output suffix and filter suffix and extension
-        //return basePathWithoutExt + suffix + extension;
-        return basePathWithoutExt + outputSuffix + suffix + extension;
+        return basePathWithoutExt + suffix + extension;
+        //return basePathWithoutExt + outputSuffix + suffix + extension;
     }
 
     /**

@@ -1,0 +1,34 @@
+{
+  "clients": [
+    {
+      "id": "client1",
+      "name": "Acme Corporation",
+      "description": "Large technology company"
+    },
+    {
+      "id": "client2",
+      "name": "Green Energy Solutions",
+      "description": "Renewable energy startup"
+    },
+    {
+      "id": "client3",
+      "name": "Johnson Family Trust",
+      "description": "High net worth individual estate planning"
+    },
+    {
+      "id": "client4",
+      "name": "TechStart Ventures",
+      "description": "Venture capital firm"
+    },
+    {
+      "id": "client5",
+      "name": "Internal",
+      "description": "Internal firm matters"
+    },
+    {
+      "id": "client6",
+      "name": "Pro Bono",
+      "description": "Pro bono matters"
+    }
+  ]
+}

@@ -7,44 +7,49 @@ import java.util.Objects;
 public class BooleanOperations {
 
     public static void register(OperationRegistry registry) {
-        // Logical AND
         registry.registerBoolean("and",
-                (args, ctx) -> asBool(args.get("a")) && asBool(args.get("b")),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> asBool(args.get("a")) && asBool(args.get("b"))),
                 List.of("a", "b"), "&&");
 
-        // Logical OR
         registry.registerBoolean("or",
-                (args, ctx) -> asBool(args.get("a")) || asBool(args.get("b")),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> asBool(args.get("a")) || asBool(args.get("b"))),
                 List.of("a", "b"), "||");
 
-        // Logical NOT (unary)
         registry.registerBoolean("not",
-                (args, ctx) -> !asBool(args.get("value")),
+                new BooleanBaseOperation(List.of("value"),
+                        (args, ctx) -> !asBool(args.get("value"))),
                 List.of("value"), "!");
 
-        // Comparisons (still Boolean, likely also needs separate registration in future)
         registry.registerBoolean("greaterThan",
-                (args, ctx) -> get(args, "a") > get(args, "b"),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") > get(args, "b")),
                 List.of("a", "b"), ">");
 
         registry.registerBoolean("lessThan",
-                (args, ctx) -> get(args, "a") < get(args, "b"),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") < get(args, "b")),
                 List.of("a", "b"), "<");
 
         registry.registerBoolean("greaterThanOrEqual",
-                (args, ctx) -> get(args, "a") >= get(args, "b"),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") >= get(args, "b")),
                 List.of("a", "b"), ">=");
 
         registry.registerBoolean("lessThanOrEqual",
-                (args, ctx) -> get(args, "a") <= get(args, "b"),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> get(args, "a") <= get(args, "b")),
                 List.of("a", "b"), "<=");
 
         registry.registerBoolean("equals",
-                (args, ctx) -> Objects.equals(args.get("a"), args.get("b")),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> Objects.equals(args.get("a"), args.get("b"))),
                 List.of("a", "b"), "==", "eq");
 
         registry.registerBoolean("notEquals",
-                (args, ctx) -> !Objects.equals(args.get("a"), args.get("b")),
+                new BooleanBaseOperation(List.of("a", "b"),
+                        (args, ctx) -> !Objects.equals(args.get("a"), args.get("b"))),
                 List.of("a", "b"), "!=", "neq");
     }
 

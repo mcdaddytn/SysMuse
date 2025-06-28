@@ -48,6 +48,12 @@ public class BooleanExpressionEvaluator {
             case "STRING_IN_SET":
                 return evaluateStringInSet(expression, rowValues);
 
+            case "STRING_REGEX_MATCH":
+                return evaluateStringRegexMatch(expression, rowValues);
+
+            case "STRING_IN_REGEXSET":
+                return evaluateStringInRegexSet(expression, rowValues);
+
             default:
                 throw new IllegalArgumentException("Unknown boolean expression type: " + type);
         }
@@ -334,5 +340,82 @@ public class BooleanExpressionEvaluator {
         } else {
             return allowedValues.contains(fieldValueStr);
         }
+    }
+
+    /**
+     * Evaluate a string regex match operation
+     * Checks if field value matches a regular expression pattern
+     */
+    private static Boolean evaluateStringRegexMatch(JsonNode expression, Map<String, Object> rowValues) {
+        // Get field name and regex pattern
+        String fieldName = expression.get("field").asText();
+        String pattern = expression.get("pattern").asText();
+
+        // Check if field exists in row values
+        if (!rowValues.containsKey(fieldName)) {
+            LoggingUtil.debug("Field '" + fieldName + "' not found for regex comparison");
+            return false;
+        }
+
+        // Get actual field value
+        Object fieldValue = rowValues.get(fieldName);
+        if (fieldValue == null) {
+            return false; // Null doesn't match any pattern
+        }
+
+        // Convert field value to string
+        String fieldValueStr = fieldValue.toString();
+
+        try {
+            // Compile and match regex pattern
+            return fieldValueStr.matches(pattern);
+        } catch (Exception e) {
+            LoggingUtil.warn("Invalid regex pattern '" + pattern + "': " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Evaluate a string in regex set operation
+     * Checks if field value matches any of the regex patterns in a set
+     */
+    private static Boolean evaluateStringInRegexSet(JsonNode expression, Map<String, Object> rowValues) {
+        // Get field name
+        String fieldName = expression.get("field").asText();
+
+        // Check if field exists in row values
+        if (!rowValues.containsKey(fieldName)) {
+            LoggingUtil.debug("Field '" + fieldName + "' not found for regex set comparison");
+            return false;
+        }
+
+        // Get actual field value
+        Object fieldValue = rowValues.get(fieldName);
+        if (fieldValue == null) {
+            return false; // Null value cannot be in set
+        }
+
+        // Convert field value to string
+        String fieldValueStr = fieldValue.toString();
+
+        // Get the set of regex patterns
+        ArrayNode patternsNode = (ArrayNode) expression.get("patterns");
+
+        // Check each pattern
+        for (int i = 0; i < patternsNode.size(); i++) {
+            String pattern = patternsNode.get(i).asText();
+
+            try {
+                if (fieldValueStr.matches(pattern)) {
+                    return true; // Return true on first match
+                }
+            } catch (Exception e) {
+                LoggingUtil.warn("Invalid regex pattern '" + pattern + "': " + e.getMessage());
+                // Continue checking other patterns
+            }
+        }
+
+        // No patterns matched
+        return false;
     }
 }

@@ -18,6 +18,7 @@ public class ConversionHub {
     private String configDirectory;
     private String inputDirectory;
     private ConfigGenerator configGenerator;
+    private List<Path> outputFiles = new ArrayList<>();
 
     /**
      * Main entry point for the application
@@ -403,11 +404,15 @@ public class ConversionHub {
                 repository.setFirstDataRow(firstDataRow);
                 repository.inferTypes(headers, firstDataRow);
 
+                // gm, this needs to be called first
+                // Try to load or generate configuration
+                loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
+
                 // Multi-file processing
                 csvConverter.importMultipleFilesToRepository(csvFilename, inputDirectory, repository);
 
                 // Try to load or generate configuration
-                loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
+                //loadConfiguration(configFilePath, repository.getHeaders(), repository.getFirstDataRow());
             } else {
                 // Single file mode
                 LoggingUtil.info("Parsing headers from file: " + inputFilePath);
@@ -542,6 +547,17 @@ public class ConversionHub {
 
                 // Export subsets
                 jsonConverter.exportSubsetsFromRepository(repository, baseJsonPath);
+
+                // Add subset files to output list for archiving
+                Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
+                for (String suffix : filterToSuffix.values()) {
+                    String subsetPath = subsetProcessor.getOutputPathWithSuffix(baseJsonPath, suffix, ".json");
+                    addOutputFile(subsetPath);
+                }
+
+                // Create archive if configured
+                archiveOutputFiles(baseJsonPath.replaceAll("\\.[^.]+$", ""));
+
                 return; // Skip standard export since we've done subset exports
             }
 
@@ -574,6 +590,10 @@ public class ConversionHub {
 
             jsonConverter.exportFromRepository(repository, outputJsonPath);
             LoggingUtil.info("Exported data to JSON: " + outputJsonPath);
+
+            // Add to output files and create archive
+            addOutputFile(outputJsonPath);
+            archiveOutputFiles(outputJsonPath.replaceAll("\\.[^.]+$", ""));
         } else if ("csv".equals(outputFormat.toLowerCase())) {
             // Create properties that include system config
             Properties exportProps = new Properties();
@@ -607,6 +627,17 @@ public class ConversionHub {
 
                 // Export subsets
                 csvConverter.exportSubsetsFromRepository(repository, baseCsvPath);
+
+                // Add subset files to output list for archiving
+                Map<String, String> filterToSuffix = subsetProcessor.getFilterToSuffix();
+                for (String suffix : filterToSuffix.values()) {
+                    String subsetPath = subsetProcessor.getOutputPathWithSuffix(baseCsvPath, suffix, ".csv");
+                    addOutputFile(subsetPath);
+                }
+
+                // Create archive if configured
+                archiveOutputFiles(baseCsvPath.replaceAll("\\.[^.]+$", ""));
+
                 return; // Skip standard export since we've done subset exports
             }
 
@@ -639,6 +670,24 @@ public class ConversionHub {
 
             csvConverter.exportFromRepository(repository, outputCsvPath);
             LoggingUtil.info("Exported data to CSV: " + outputCsvPath);
+
+            // Add to output files and create archive
+            addOutputFile(outputCsvPath);
+            archiveOutputFiles(outputCsvPath.replaceAll("\\.[^.]+$", ""));
+
+            // Export to SQL database if enabled
+            if (systemConfig.isSqlEnabled()) {
+                try {
+                    LoggingUtil.info("Exporting to SQL database...");
+                    SqlExporter sqlExporter = new SqlExporter(systemConfig, properties);
+                    sqlExporter.exportToDatabase(repository);
+                    LoggingUtil.info("SQL export completed successfully");
+                } catch (Exception e) {
+                    LoggingUtil.error("Failed to export to SQL database: " + e.getMessage(), e);
+                    // Don't fail the entire process if SQL export fails
+                }
+            }
+
         } else {
             throw new IllegalArgumentException("Unsupported output format: " + outputFormat);
         }
@@ -669,6 +718,51 @@ public class ConversionHub {
         }
 
         return result.toString();
+    }
+
+    /**
+     * Helper method to add a file to the list of output files for potential archiving
+     */
+    private void addOutputFile(String filePath) {
+        outputFiles.add(Paths.get(filePath));
+    }
+
+    /**
+     * Method to archive output files based on configuration
+     */
+    private void archiveOutputFiles(String baseOutputPath) {
+        if (!systemConfig.isArchiveEnabled()) {
+            LoggingUtil.debug("Archiving is disabled, skipping archive creation");
+            return;
+        }
+
+        if (systemConfig.getArchiveSuffix() == null || systemConfig.getArchiveSuffix().trim().isEmpty()) {
+            LoggingUtil.info("Archive suffix not specified, skipping archive creation");
+            return;
+        }
+
+        try {
+            LoggingUtil.info("Creating archive for output files...");
+
+            // Create archive path
+            String archivePath = baseOutputPath + systemConfig.getArchiveSuffix() + ".zip";
+            Path zipPath = Paths.get(archivePath);
+
+            // Archive all output files
+            ArchiveUtil.archiveFiles(outputFiles, zipPath, systemConfig.getArchivePassword());
+
+            LoggingUtil.info("Archive created: %s", archivePath);
+
+            // Optionally delete original files
+            if (!systemConfig.isKeepOriginalFiles()) {
+                ArchiveUtil.cleanupArchivedFiles(outputFiles, false);
+                LoggingUtil.info("Original files removed after archiving");
+            }
+
+        } catch (IOException e) {
+            LoggingUtil.error("Failed to create archive: %s", e.getMessage());
+            LoggingUtil.debug("Archive error details", e);
+        }
     }
 
     /**

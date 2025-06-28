@@ -1,0 +1,5 @@
+user_id,username,email,full_name,is_active,registration_date,role,access_level,is_admin,department,transaction_count,total_spend,last_purchase_date,avg_transaction_value,communication_pref,theme_preference,newsletter_subscription,account_verified,is_high_value_customer,requires_verification,communication_eligible,user_details,transaction_insights
+1,johndoe,,John Doe,true,2022-01-15,user,standard,false,marketing,5,350.25,2023-06-15,70.05,email,dark,true,true,false,false,true,,
+3,adminuser,admin@company.com,System Administrator,true,2021-11-01,admin,superuser,true,it,1,1200.0,2023-05-22,1200.0,email,dark,true,true,false,true,true,,
+5,vipuser,vip@premium.com,VIP Customer,true,2021-09-05,vip,premium,false,executive,10,2500.75,2023-06-20,250.08,email,dark,true,true,true,true,true,VIP Customer | vip@premium.com | executive,10 | 2500.75 | 250.08
+6,moderator,mod@company.com,Site Moderator,true,2022-03-15,moderator,advanced,false,support,2,100.5,2023-06-05,50.25,sms,light,true,true,false,true,true,,

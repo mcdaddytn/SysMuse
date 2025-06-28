@@ -98,3 +98,19 @@ conversion-hub/src/test/resources/users/users_base_processed_high_value.csv
 conversion-hub/src/test/resources/users/users_base_processed_marketing.csv
 
 conversion-hub/src/test/resources/users/users_base_processed_processed.csv
+
+data-vis/test-output/test_output.json
+
+data-vis/test-output/test_diagram.svg
+
+data-vis/test-output/test_config.json
+
+data-vis/test-output/test_report.html
+
+data-vis/test-output/test_simulation_results.json
+
+PluginPresetCapture/Source/JUCE
+
+timesheet-app.zip
+
+timesheet-app/backend/package-lock.json

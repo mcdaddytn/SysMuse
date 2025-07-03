@@ -14,6 +14,9 @@ pnpm-debug.log*
 .env.production
 .env.*.local
 
+# Package
+package-lock.json
+
 # Build output
 dist/
 build/

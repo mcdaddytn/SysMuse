@@ -5,7 +5,7 @@
       <q-toolbar>
         <q-toolbar-title>
           <q-icon name="schedule" class="q-mr-sm" />
-          Timesheet Tracker
+          Matter Tracker
         </q-toolbar-title>
 
         <q-btn

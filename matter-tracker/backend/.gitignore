@@ -1,0 +1,70 @@
+# backend/.gitignore
+# Place this file in: matter-tracker/backend/.gitignore
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Prisma
+# Keep migrations but ignore the generated client
+prisma/migrations/dev/
+# Uncomment below if you want to ignore all migrations (not recommended)
+# prisma/migrations/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# IDE - IntelliJ/WebStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Lock files (optional - some teams prefer to commit these)
+# Uncomment if you don't want to commit lock files
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml

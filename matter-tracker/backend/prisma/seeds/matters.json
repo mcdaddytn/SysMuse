@@ -1,0 +1,70 @@
+{
+  "matters": [
+    {
+      "id": "matter1",
+      "name": "Acme Merger",
+      "description": "Acquisition of SmallCo by Acme Corporation",
+      "clientId": "client1"
+    },
+    {
+      "id": "matter2",
+      "name": "Patent Portfolio",
+      "description": "Patent filing and prosecution for Green Energy",
+      "clientId": "client2"
+    },
+    {
+      "id": "matter3",
+      "name": "Estate Planning",
+      "description": "Trust formation and tax planning for Johnson Family",
+      "clientId": "client3"
+    },
+    {
+      "id": "matter4",
+      "name": "Series B Funding",
+      "description": "Investment documentation for TechStart portfolio company",
+      "clientId": "client4"
+    },
+    {
+      "id": "matter5",
+      "name": "Employment Agreement",
+      "description": "Executive employment contract for Acme",
+      "clientId": "client1"
+    },
+    {
+      "id": "matter6",
+      "name": "Wind Farm Project",
+      "description": "Regulatory compliance for new wind farm",
+      "clientId": "client2"
+    },
+    {
+      "id": "matter7",
+      "name": "IP Litigation",
+      "description": "Patent infringement defense for Acme",
+      "clientId": "client1"
+    },
+    {
+      "id": "matter8",
+      "name": "Internal",
+      "description": "Internal meetings, training, and administrative tasks",
+      "clientId": "client5"
+    },
+    {
+      "id": "matter9",
+      "name": "Pro Bono",
+      "description": "Pro bono legal services",
+      "clientId": "client6"
+    },
+    {
+      "id": "matter10",
+      "name": "Marketing/Business Development",
+      "description": "Client development and marketing activities",
+      "clientId": "client5"
+    },
+    {
+      "id": "matter11",
+      "name": "Admin/Recruiting",
+      "description": "Administrative tasks and recruiting",
+      "clientId": "client5"
+    }
+  ]
+}

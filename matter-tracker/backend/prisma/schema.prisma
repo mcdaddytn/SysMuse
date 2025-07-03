@@ -1,0 +1,87 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TeamMember {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  workingHours Int           @default(40)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  timesheets   Timesheet[]
+}
+
+model Client {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  matters     Matter[]
+}
+
+model Matter {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  clientId    String
+  client      Client          @relation(fields: [clientId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  tasks       Task[]
+  entries     TimesheetEntry[]
+}
+
+model Task {
+  id          String          @id @default(cuid())
+  description String
+  matterId    String
+  matter      Matter          @relation(fields: [matterId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  entries     TimesheetEntry[]
+}
+
+model Timesheet {
+  id           String          @id @default(cuid())
+  teamMemberId String
+  teamMember   TeamMember      @relation(fields: [teamMemberId], references: [id])
+  weekStartDate DateTime
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  entries      TimesheetEntry[]
+  
+  @@unique([teamMemberId, weekStartDate])
+}
+
+model TimesheetEntry {
+  id             String    @id @default(cuid())
+  timesheetId    String
+  timesheet      Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  matterId       String
+  matter         Matter    @relation(fields: [matterId], references: [id])
+  taskId         String?
+  task           Task?     @relation(fields: [taskId], references: [id])
+  taskDescription String
+  urgency        Urgency   @default(MEDIUM)
+  projectedHours Int       // stored as percentage (0-100)
+  actualHours    Int       // stored as percentage (0-100)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  @@unique([timesheetId, matterId, taskDescription])
+}
+
+enum Urgency {
+  HOT
+  MEDIUM
+  MILD
+}

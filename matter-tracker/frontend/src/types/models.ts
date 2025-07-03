@@ -1,10 +1,16 @@
 // src/types/models.ts
 
+export type TimeIncrementType = 'PERCENT' | 'HOURS_MINUTES';
+export type DateIncrementType = 'DAY' | 'WEEK';
+export type Urgency = 'HOT' | 'MEDIUM' | 'MILD';
+
 export interface TeamMember {
   id: string;
   name: string;
   email: string;
   workingHours: number;
+  timeIncrementType: TimeIncrementType;
+  timeIncrement: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,9 +50,9 @@ export interface TimesheetEntry {
   taskId?: string;
   task?: Task;
   taskDescription: string;
-  urgency: 'HOT' | 'MEDIUM' | 'MILD';
-  projectedHours: number;
-  actualHours: number;
+  urgency: Urgency;
+  projectedTime: number;
+  actualTime: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,9 +61,11 @@ export interface Timesheet {
   id: string;
   teamMemberId: string;
   teamMember: TeamMember;
-  weekStartDate: string;
+  startDate: string;
+  dateIncrementType: DateIncrementType;
+  timeIncrementType: TimeIncrementType;
+  timeIncrement: number;
   entries: TimesheetEntry[];
   createdAt: string;
   updatedAt: string;
 }
-

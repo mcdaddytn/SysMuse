@@ -1,7 +1,7 @@
 // src/routes/timesheet.routes.ts
 
 import express, { Request, Response, NextFunction } from 'express';
-import { PrismaClient, Urgency } from '@prisma/client';
+import { PrismaClient, Urgency, TimeIncrementType, DateIncrementType } from '@prisma/client';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -10,30 +10,57 @@ interface TimesheetEntryInput {
   matterId: string;
   taskDescription: string;
   urgency: Urgency;
-  projectedHours: number;
-  actualHours: number;
+  projectedTime: number;
+  actualTime: number;
 }
 
-// Get timesheet for a specific team member and week
-router.get('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: string, weekStartDate: string}>, res: Response): Promise<void> => {
+interface TimesheetInput {
+  entries: TimesheetEntryInput[];
+  dateIncrementType: DateIncrementType;
+  timeIncrementType: TimeIncrementType;
+  timeIncrement: number;
+}
+
+// Get timesheet for a specific team member, date, and increment type
+router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
   try {
-    const { teamMemberId, weekStartDate } = req.params;
-    // Parse date ensuring it's treated as local date
-    const startDate = new Date(weekStartDate + 'T00:00:00');
+    const { teamMemberId, startDate, dateIncrementType } = req.params;
     
-    // Ensure the date is a Sunday
-    const day = startDate.getDay();
-    if (day !== 0) {
-      console.log(`Date ${weekStartDate} is not a Sunday (day: ${day})`);
-      res.status(400).json({ error: 'Week start date must be a Sunday' });
+    // Validate dateIncrementType
+    if (!['DAY', 'WEEK'].includes(dateIncrementType)) {
+      res.status(400).json({ error: 'Invalid date increment type. Must be DAY or WEEK.' });
+      return;
+    }
+
+    // Parse date ensuring it's treated as local date
+    const parsedStartDate = new Date(startDate + 'T00:00:00');
+    
+    // For weekly mode, ensure the date is a Sunday
+    if (dateIncrementType === 'WEEK') {
+      const day = parsedStartDate.getDay();
+      if (day !== 0) {
+        console.log(`Date ${startDate} is not a Sunday (day: ${day})`);
+        res.status(400).json({ error: 'Week start date must be a Sunday' });
+        return;
+      }
+    }
+
+    // Get team member to use their settings as defaults
+    const teamMember = await prisma.teamMember.findUnique({
+      where: { id: teamMemberId },
+    });
+
+    if (!teamMember) {
+      res.status(404).json({ error: 'Team member not found' });
       return;
     }
 
     let timesheet = await prisma.timesheet.findUnique({
       where: {
-        teamMemberId_weekStartDate: {
+        teamMemberId_startDate_dateIncrementType: {
           teamMemberId,
-          weekStartDate: startDate,
+          startDate: parsedStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
         },
       },
       include: {
@@ -52,11 +79,14 @@ router.get('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: s
     });
 
     if (!timesheet) {
-      // Create empty timesheet if it doesn't exist
+      // Create empty timesheet if it doesn't exist, using team member's defaults
       timesheet = await prisma.timesheet.create({
         data: {
           teamMemberId,
-          weekStartDate: startDate,
+          startDate: parsedStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
+          timeIncrementType: teamMember.timeIncrementType,
+          timeIncrement: teamMember.timeIncrement,
         },
         include: {
           entries: {
@@ -82,28 +112,38 @@ router.get('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: s
 });
 
 // Save or update timesheet entries
-router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: string, weekStartDate: string}, any, {entries: TimesheetEntryInput[]}>, res: Response): Promise<void> => {
+router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}, any, TimesheetInput>, res: Response): Promise<void> => {
   try {
-    const { teamMemberId, weekStartDate } = req.params;
-    const { entries } = req.body;
-    // Parse date ensuring it's treated as local date
-    const startDate = new Date(weekStartDate + 'T00:00:00');
-
-    // Validate that the date is a Sunday
-    const day = startDate.getDay();
-    if (day !== 0) {
-      console.log(`Date ${weekStartDate} is not a Sunday (day: ${day})`);
-      res.status(400).json({ error: 'Week start date must be a Sunday' });
+    const { teamMemberId, startDate, dateIncrementType } = req.params;
+    const { entries, dateIncrementType: bodyDateIncrementType, timeIncrementType, timeIncrement } = req.body;
+    
+    // Validate dateIncrementType
+    if (!['DAY', 'WEEK'].includes(dateIncrementType)) {
+      res.status(400).json({ error: 'Invalid date increment type. Must be DAY or WEEK.' });
       return;
     }
 
-    // Validate percentages - now just warn, don't block
-    const projectedSum = entries.reduce((sum, entry) => sum + entry.projectedHours, 0);
-    const actualSum = entries.reduce((sum, entry) => sum + entry.actualHours, 0);
+    // Parse date ensuring it's treated as local date
+    const parsedStartDate = new Date(startDate + 'T00:00:00');
 
-    // We'll accept any values but could log a warning
-    if (projectedSum !== 100 || actualSum !== 100) {
-      console.warn(`Warning: Hours don't sum to 100% - Projected: ${projectedSum}%, Actual: ${actualSum}%`);
+    // For weekly mode, validate that the date is a Sunday
+    if (dateIncrementType === 'WEEK') {
+      const day = parsedStartDate.getDay();
+      if (day !== 0) {
+        console.log(`Date ${startDate} is not a Sunday (day: ${day})`);
+        res.status(400).json({ error: 'Week start date must be a Sunday' });
+        return;
+      }
+    }
+
+    // Validate time totals for percentage mode
+    if (timeIncrementType === 'PERCENT') {
+      const projectedSum = entries.reduce((sum, entry) => sum + entry.projectedTime, 0);
+      const actualSum = entries.reduce((sum, entry) => sum + entry.actualTime, 0);
+
+      if (projectedSum !== 100 || actualSum !== 100) {
+        console.warn(`Warning: Percentages don't sum to 100% - Projected: ${projectedSum}%, Actual: ${actualSum}%`);
+      }
     }
 
     // Validate no duplicate entries
@@ -120,9 +160,10 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
     // Create or update timesheet
     let timesheet = await prisma.timesheet.findUnique({
       where: {
-        teamMemberId_weekStartDate: {
+        teamMemberId_startDate_dateIncrementType: {
           teamMemberId,
-          weekStartDate: startDate,
+          startDate: parsedStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
         },
       },
     });
@@ -131,12 +172,24 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
       timesheet = await prisma.timesheet.create({
         data: {
           teamMemberId,
-          weekStartDate: startDate,
+          startDate: parsedStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
+          timeIncrementType,
+          timeIncrement,
+        },
+      });
+    } else {
+      // Update timesheet settings
+      timesheet = await prisma.timesheet.update({
+        where: { id: timesheet.id },
+        data: {
+          timeIncrementType,
+          timeIncrement,
         },
       });
     }
 
-    // Delete existing entries and create new ones (simpler than updating)
+    // Delete existing entries and create new ones
     await prisma.timesheetEntry.deleteMany({
       where: { timesheetId: timesheet.id },
     });
@@ -148,8 +201,8 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
         matterId: entry.matterId,
         taskDescription: entry.taskDescription,
         urgency: entry.urgency,
-        projectedHours: entry.projectedHours,
-        actualHours: entry.actualHours,
+        projectedTime: entry.projectedTime,
+        actualTime: entry.actualTime,
       })),
     });
 
@@ -197,23 +250,35 @@ router.post('/:teamMemberId/:weekStartDate', async (req: Request<{teamMemberId: 
   }
 });
 
-// Copy timesheet from previous week
-router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Request<{teamMemberId: string, weekStartDate: string}>, res: Response): Promise<void> => {
+// Copy timesheet from previous period
+router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
   try {
-    const { teamMemberId, weekStartDate } = req.params;
-    // Parse date ensuring it's treated as local date
-    const currentWeekStart = new Date(weekStartDate + 'T00:00:00');
+    const { teamMemberId, startDate, dateIncrementType } = req.params;
     
-    // Calculate previous week start date
-    const previousWeekStart = new Date(currentWeekStart);
-    previousWeekStart.setDate(previousWeekStart.getDate() - 7);
+    // Validate dateIncrementType
+    if (!['DAY', 'WEEK'].includes(dateIncrementType)) {
+      res.status(400).json({ error: 'Invalid date increment type. Must be DAY or WEEK.' });
+      return;
+    }
 
-    // Get previous week's timesheet
+    // Parse date ensuring it's treated as local date
+    const currentStartDate = new Date(startDate + 'T00:00:00');
+    
+    // Calculate previous period start date
+    const previousStartDate = new Date(currentStartDate);
+    if (dateIncrementType === 'WEEK') {
+      previousStartDate.setDate(previousStartDate.getDate() - 7);
+    } else {
+      previousStartDate.setDate(previousStartDate.getDate() - 1);
+    }
+
+    // Get previous period's timesheet
     const previousTimesheet = await prisma.timesheet.findUnique({
       where: {
-        teamMemberId_weekStartDate: {
+        teamMemberId_startDate_dateIncrementType: {
           teamMemberId,
-          weekStartDate: previousWeekStart,
+          startDate: previousStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
         },
       },
       include: {
@@ -222,16 +287,17 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Requ
     });
 
     if (!previousTimesheet || previousTimesheet.entries.length === 0) {
-      res.status(404).json({ error: 'No previous week data found to copy' });
+      res.status(404).json({ error: 'No previous period data found to copy' });
       return;
     }
 
-    // Create or get current week's timesheet
+    // Create or get current period's timesheet
     let currentTimesheet = await prisma.timesheet.findUnique({
       where: {
-        teamMemberId_weekStartDate: {
+        teamMemberId_startDate_dateIncrementType: {
           teamMemberId,
-          weekStartDate: currentWeekStart,
+          startDate: currentStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
         },
       },
     });
@@ -240,25 +306,28 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Requ
       currentTimesheet = await prisma.timesheet.create({
         data: {
           teamMemberId,
-          weekStartDate: currentWeekStart,
+          startDate: currentStartDate,
+          dateIncrementType: dateIncrementType as DateIncrementType,
+          timeIncrementType: previousTimesheet.timeIncrementType,
+          timeIncrement: previousTimesheet.timeIncrement,
         },
       });
     }
 
-    // Delete existing entries in current week
+    // Delete existing entries in current period
     await prisma.timesheetEntry.deleteMany({
       where: { timesheetId: currentTimesheet.id },
     });
 
-    // Copy entries from previous week
+    // Copy entries from previous period
     await prisma.timesheetEntry.createMany({
       data: previousTimesheet.entries.map(entry => ({
         timesheetId: currentTimesheet!.id,
         matterId: entry.matterId,
         taskDescription: entry.taskDescription,
         urgency: entry.urgency,
-        projectedHours: entry.projectedHours,
-        actualHours: 0, // Reset actual hours for new week
+        projectedTime: entry.projectedTime,
+        actualTime: 0, // Reset actual time for new period
       })),
     });
 
@@ -284,6 +353,51 @@ router.post('/:teamMemberId/:weekStartDate/copy-from-previous', async (req: Requ
   } catch (error) {
     console.error('Error copying timesheet:', error);
     res.status(500).json({ error: 'Failed to copy timesheet' });
+  }
+});
+
+// Create new task for a matter
+router.post('/tasks', async (req: Request<{}, any, {matterId: string, description: string}>, res: Response): Promise<void> => {
+  try {
+    const { matterId, description } = req.body;
+
+    if (!matterId || !description) {
+      res.status(400).json({ error: 'Matter ID and description are required' });
+      return;
+    }
+
+    // Check if task already exists for this matter
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        matterId,
+        description,
+      },
+    });
+
+    if (existingTask) {
+      res.status(400).json({ error: 'Task with this description already exists for this matter' });
+      return;
+    }
+
+    // Create the new task
+    const newTask = await prisma.task.create({
+      data: {
+        matterId,
+        description,
+      },
+      include: {
+        matter: {
+          include: {
+            client: true,
+          },
+        },
+      },
+    });
+
+    res.json(newTask);
+  } catch (error) {
+    console.error('Error creating task:', error);
+    res.status(500).json({ error: 'Failed to create task' });
   }
 });
 

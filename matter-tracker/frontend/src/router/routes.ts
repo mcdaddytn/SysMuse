@@ -8,7 +8,11 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        component: () => import('pages/TimesheetPage.vue'),
+        component: () => import('pages/WeeklyTimesheetPage.vue'),
+      },
+      {
+        path: '/daily',
+        component: () => import('pages/DailyTimesheetPage.vue'),
       },
     ],
   },

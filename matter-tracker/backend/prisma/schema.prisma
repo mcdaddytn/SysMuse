@@ -14,6 +14,8 @@ model TeamMember {
   name         String
   email        String        @unique
   workingHours Int           @default(40)
+  timeIncrementType TimeIncrementType @default(PERCENT)
+  timeIncrement     Int               @default(1)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   timesheets   Timesheet[]
@@ -48,13 +50,18 @@ model Task {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   entries     TimesheetEntry[]
+  
+  @@unique([matterId, description])
 }
 
 model Timesheet {
   id           String          @id @default(cuid())
   teamMemberId String
   teamMember   TeamMember      @relation(fields: [teamMemberId], references: [id])
-  weekStartDate DateTime
+  startDate         DateTime
+  dateIncrementType DateIncrementType @default(WEEK)
+  timeIncrementType TimeIncrementType @default(PERCENT)
+  timeIncrement     Int               @default(1)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   entries      TimesheetEntry[]
@@ -72,12 +79,22 @@ model TimesheetEntry {
   task           Task?     @relation(fields: [taskId], references: [id])
   taskDescription String
   urgency        Urgency   @default(MEDIUM)
-  projectedHours Int       // stored as percentage (0-100)
-  actualHours    Int       // stored as percentage (0-100)
+  projectedTime  Int       // stored as percentage (0-100) or minutes depending on timeIncrementType
+  actualTime     Int       // stored as percentage (0-100) or minutes depending on timeIncrementType
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   
   @@unique([timesheetId, matterId, taskDescription])
+}
+
+enum TimeIncrementType {
+  PERCENT
+  HOURS_MINUTES
+}
+
+enum DateIncrementType {
+  DAY
+  WEEK
 }
 
 enum Urgency {

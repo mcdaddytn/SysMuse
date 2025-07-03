@@ -1,8 +1,8 @@
 {
   "name": "frontend",
   "version": "0.0.1",
-  "description": "Timesheet tracking application",
-  "productName": "Timesheet Tracker",
+  "description": "Matter tracking application",
+  "productName": "Matter Tracker",
   "author": "GM",
   "private": true,
   "scripts": {

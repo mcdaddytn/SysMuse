@@ -4,31 +4,41 @@
       "id": "tm1",
       "name": "Sarah Johnson",
       "email": "sarah.johnson@firm.com",
-      "workingHours": 40
+      "workingHours": 40,
+      "timeIncrementType": "PERCENT",
+      "timeIncrement": 1
     },
     {
       "id": "tm2",
       "name": "Michael Chen",
       "email": "michael.chen@firm.com",
-      "workingHours": 40
+      "workingHours": 40,
+      "timeIncrementType": "HOURS_MINUTES",
+      "timeIncrement": 15
     },
     {
       "id": "tm3",
       "name": "Emily Rodriguez",
       "email": "emily.rodriguez@firm.com",
-      "workingHours": 40
+      "workingHours": 40,
+      "timeIncrementType": "PERCENT",
+      "timeIncrement": 1
     },
     {
       "id": "tm4",
       "name": "David Thompson",
       "email": "david.thompson@firm.com",
-      "workingHours": 45
+      "workingHours": 45,
+      "timeIncrementType": "HOURS_MINUTES",
+      "timeIncrement": 30
     },
     {
       "id": "tm5",
       "name": "Jessica Williams",
       "email": "jessica.williams@firm.com",
-      "workingHours": 40
+      "workingHours": 40,
+      "timeIncrementType": "HOURS_MINUTES",
+      "timeIncrement": 6
     }
   ]
 }

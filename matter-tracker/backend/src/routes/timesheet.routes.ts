@@ -55,13 +55,11 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
       return;
     }
 
-    let timesheet = await prisma.timesheet.findUnique({
+    let timesheet = await prisma.timesheet.findFirst({
       where: {
-        teamMemberId_startDate_dateIncrementType: {
-          teamMemberId,
-          startDate: parsedStartDate,
-          dateIncrementType: dateIncrementType as DateIncrementType,
-        },
+        teamMemberId,
+        startDate: parsedStartDate,
+        dateIncrementType: dateIncrementType as DateIncrementType,
       },
       include: {
         entries: {
@@ -158,13 +156,11 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
     }
 
     // Create or update timesheet
-    let timesheet = await prisma.timesheet.findUnique({
+    let timesheet = await prisma.timesheet.findFirst({
       where: {
-        teamMemberId_startDate_dateIncrementType: {
-          teamMemberId,
-          startDate: parsedStartDate,
-          dateIncrementType: dateIncrementType as DateIncrementType,
-        },
+        teamMemberId,
+        startDate: parsedStartDate,
+        dateIncrementType: dateIncrementType as DateIncrementType,
       },
     });
 
@@ -273,13 +269,11 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', a
     }
 
     // Get previous period's timesheet
-    const previousTimesheet = await prisma.timesheet.findUnique({
+    const previousTimesheet = await prisma.timesheet.findFirst({
       where: {
-        teamMemberId_startDate_dateIncrementType: {
-          teamMemberId,
-          startDate: previousStartDate,
-          dateIncrementType: dateIncrementType as DateIncrementType,
-        },
+        teamMemberId,
+        startDate: previousStartDate,
+        dateIncrementType: dateIncrementType as DateIncrementType,
       },
       include: {
         entries: true,
@@ -292,13 +286,11 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', a
     }
 
     // Create or get current period's timesheet
-    let currentTimesheet = await prisma.timesheet.findUnique({
+    let currentTimesheet = await prisma.timesheet.findFirst({
       where: {
-        teamMemberId_startDate_dateIncrementType: {
-          teamMemberId,
-          startDate: currentStartDate,
-          dateIncrementType: dateIncrementType as DateIncrementType,
-        },
+        teamMemberId,
+        startDate: currentStartDate,
+        dateIncrementType: dateIncrementType as DateIncrementType,
       },
     });
 
@@ -321,7 +313,7 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', a
 
     // Copy entries from previous period
     await prisma.timesheetEntry.createMany({
-      data: previousTimesheet.entries.map(entry => ({
+      data: previousTimesheet.entries.map((entry: any) => ({
         timesheetId: currentTimesheet!.id,
         matterId: entry.matterId,
         taskDescription: entry.taskDescription,

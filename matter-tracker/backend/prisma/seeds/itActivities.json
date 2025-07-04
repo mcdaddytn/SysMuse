@@ -1,0 +1,325 @@
+{
+  "itActivities": [
+    {
+      "id": "it_cal_001",
+      "teamMemberId": "tm1",
+      "activityType": "CALENDAR",
+      "title": "Client Meeting - Acme Corp Strategy Review",
+      "description": "Quarterly strategy review meeting with Acme Corp leadership team",
+      "startDate": "2025-01-15T14:00:00.000Z",
+      "endDate": "2025-01-15T16:00:00.000Z",
+      "metadata": {
+        "meetingType": "meeting",
+        "location": "Conference Room B",
+        "attendees": ["john.client@acmecorp.com", "sarah.paralegal@lawfirm.com"],
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_001",
+      "teamMemberId": "tm1",
+      "activityType": "EMAIL",
+      "title": "Contract Review Comments - Acme Corp Agreement",
+      "description": "Email sent regarding contract review comments and redlines",
+      "startDate": "2025-01-15T10:30:00.000Z",
+      "metadata": {
+        "recipients": ["legal@acmecorp.com"],
+        "ccRecipients": ["contracts@acmecorp.com"],
+        "hasAttachments": true,
+        "priority": "high",
+        "messageId": "msg-acme-contract-001"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_doc_001",
+      "teamMemberId": "tm1",
+      "activityType": "DOCUMENT",
+      "title": "Motion for Summary Judgment - Draft v3.docx",
+      "description": "Document created: Motion for Summary Judgment - Draft v3.docx",
+      "startDate": "2025-01-15T09:15:00.000Z",
+      "metadata": {
+        "fileName": "Motion for Summary Judgment - Draft v3.docx",
+        "fileType": "docx",
+        "fileSize": 245760,
+        "filePath": "Cases/Acme Corp/Motions",
+        "shareStatus": "private",
+        "parentFolder": "Cases/Acme Corp"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_cal_002",
+      "teamMemberId": "tm2",
+      "activityType": "CALENDAR",
+      "title": "Court Hearing - Green Energy vs. Competitor",
+      "description": "Preliminary hearing for patent infringement case",
+      "startDate": "2025-01-16T09:00:00.000Z",
+      "endDate": "2025-01-16T11:30:00.000Z",
+      "metadata": {
+        "meetingType": "court_date",
+        "location": "Courthouse Room 3A",
+        "attendees": ["opposing.counsel@lawfirm.com"],
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_002",
+      "teamMemberId": "tm2",
+      "activityType": "EMAIL",
+      "title": "Discovery Document Request - Case #2025-001",
+      "description": "Email sent requesting additional discovery documents",
+      "startDate": "2025-01-16T15:45:00.000Z",
+      "metadata": {
+        "recipients": ["opposing.counsel@competitorlaw.com"],
+        "hasAttachments": false,
+        "priority": "normal",
+        "messageId": "msg-discovery-001"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_doc_002",
+      "teamMemberId": "tm2",
+      "activityType": "DOCUMENT",
+      "title": "Expert Report Analysis - Technical Review.docx",
+      "description": "Document modified: Expert Report Analysis - Technical Review.docx",
+      "startDate": "2025-01-16T13:20:00.000Z",
+      "metadata": {
+        "fileName": "Expert Report Analysis - Technical Review.docx",
+        "fileType": "docx",
+        "fileSize": 890240,
+        "filePath": "Cases/Green Energy/Expert Reports",
+        "shareStatus": "shared",
+        "parentFolder": "Cases/Green Energy"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_cal_003",
+      "teamMemberId": "tm3",
+      "activityType": "CALENDAR",
+      "title": "Estate Planning Consultation - Johnson Family",
+      "description": "Initial consultation for estate planning and trust setup",
+      "startDate": "2025-01-17T10:00:00.000Z",
+      "endDate": "2025-01-17T11:00:00.000Z",
+      "metadata": {
+        "meetingType": "meeting",
+        "location": "Client Office",
+        "attendees": ["robert.johnson@email.com", "mary.johnson@email.com"],
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_003",
+      "teamMemberId": "tm3",
+      "activityType": "EMAIL",
+      "title": "Trust Document Review - Johnson Family Trust",
+      "description": "Email sent with trust document review and recommendations",
+      "startDate": "2025-01-17T16:30:00.000Z",
+      "metadata": {
+        "recipients": ["robert.johnson@email.com"],
+        "ccRecipients": ["mary.johnson@email.com"],
+        "hasAttachments": true,
+        "priority": "normal",
+        "messageId": "msg-johnson-trust-001"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_doc_003",
+      "teamMemberId": "tm3",
+      "activityType": "DOCUMENT",
+      "title": "Johnson Family Trust - Amendment Draft.docx",
+      "description": "Document created: Johnson Family Trust - Amendment Draft.docx",
+      "startDate": "2025-01-17T14:45:00.000Z",
+      "metadata": {
+        "fileName": "Johnson Family Trust - Amendment Draft.docx",
+        "fileType": "docx",
+        "fileSize": 156800,
+        "filePath": "Clients/Johnson Family/Trust Documents",
+        "shareStatus": "private",
+        "parentFolder": "Clients/Johnson Family"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_cal_004",
+      "teamMemberId": "tm4",
+      "activityType": "CALENDAR",
+      "title": "Due Diligence Call - TechStart Acquisition",
+      "description": "Conference call for acquisition due diligence review",
+      "startDate": "2025-01-18T13:00:00.000Z",
+      "endDate": "2025-01-18T14:30:00.000Z",
+      "metadata": {
+        "meetingType": "call",
+        "location": "Teams/Zoom",
+        "attendees": ["ceo@techstart.com", "cfo@techstart.com"],
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_004",
+      "teamMemberId": "tm4",
+      "activityType": "EMAIL",
+      "title": "Investment Agreement Terms - TechStart Series A",
+      "description": "Email sent regarding Series A investment agreement terms",
+      "startDate": "2025-01-18T11:15:00.000Z",
+      "metadata": {
+        "recipients": ["investments@techstart.com"],
+        "ccRecipients": ["legal@venturecapital.com"],
+        "hasAttachments": true,
+        "priority": "high",
+        "messageId": "msg-techstart-series-a-001"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_doc_004",
+      "teamMemberId": "tm4",
+      "activityType": "DOCUMENT",
+      "title": "Series A Term Sheet - Final.pdf",
+      "description": "Document created: Series A Term Sheet - Final.pdf",
+      "startDate": "2025-01-18T09:30:00.000Z",
+      "metadata": {
+        "fileName": "Series A Term Sheet - Final.pdf",
+        "fileType": "pdf",
+        "fileSize": 578300,
+        "filePath": "Clients/TechStart/Investment Docs",
+        "shareStatus": "shared",
+        "parentFolder": "Clients/TechStart"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_cal_005",
+      "teamMemberId": "tm5",
+      "activityType": "CALENDAR",
+      "title": "Team Meeting - Weekly Status",
+      "description": "Weekly team status meeting and case updates",
+      "startDate": "2025-01-19T09:00:00.000Z",
+      "endDate": "2025-01-19T10:00:00.000Z",
+      "metadata": {
+        "meetingType": "meeting",
+        "location": "Conference Room A",
+        "attendees": ["team@lawfirm.com"],
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_005",
+      "teamMemberId": "tm1",
+      "activityType": "EMAIL",
+      "title": "Client Invoice - January 2025 Billing",
+      "description": "Email sent with monthly client invoice and billing summary",
+      "startDate": "2025-01-19T17:00:00.000Z",
+      "metadata": {
+        "recipients": ["billing@acmecorp.com"],
+        "hasAttachments": true,
+        "priority": "normal",
+        "messageId": "msg-invoice-jan-2025-001"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_doc_005",
+      "teamMemberId": "tm1",
+      "activityType": "DOCUMENT",
+      "title": "Case Timeline - Updated January 2025.xlsx",
+      "description": "Document modified: Case Timeline - Updated January 2025.xlsx",
+      "startDate": "2025-01-19T11:20:00.000Z",
+      "metadata": {
+        "fileName": "Case Timeline - Updated January 2025.xlsx",
+        "fileType": "xlsx",
+        "fileSize": 67200,
+        "filePath": "Cases/Acme Corp/Project Management",
+        "shareStatus": "shared",
+        "parentFolder": "Cases/Acme Corp"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_cal_006",
+      "teamMemberId": "tm2",
+      "activityType": "CALENDAR",
+      "title": "Deposition - Key Witness Interview",
+      "description": "Deposition of key witness in Green Energy patent case",
+      "startDate": "2025-01-20T14:00:00.000Z",
+      "endDate": "2025-01-20T17:00:00.000Z",
+      "metadata": {
+        "meetingType": "meeting",
+        "location": "Law Office Deposition Room",
+        "attendees": ["witness@company.com", "court.reporter@services.com"],
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_006",
+      "teamMemberId": "tm2",
+      "activityType": "EMAIL",
+      "title": "Settlement Proposal - Green Energy Case",
+      "description": "Email sent with settlement proposal and negotiation terms",
+      "startDate": "2025-01-20T10:45:00.000Z",
+      "metadata": {
+        "recipients": ["settlement@competitorlaw.com"],
+        "ccRecipients": ["client@greenenergy.com"],
+        "hasAttachments": true,
+        "priority": "high",
+        "messageId": "msg-settlement-proposal-001"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_doc_006",
+      "teamMemberId": "tm2",
+      "activityType": "DOCUMENT",
+      "title": "Deposition Outline - Key Witness.docx",
+      "description": "Document created: Deposition Outline - Key Witness.docx",
+      "startDate": "2025-01-20T08:30:00.000Z",
+      "metadata": {
+        "fileName": "Deposition Outline - Key Witness.docx",
+        "fileType": "docx",
+        "fileSize": 145920,
+        "filePath": "Cases/Green Energy/Depositions",
+        "shareStatus": "private",
+        "parentFolder": "Cases/Green Energy"
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_cal_007",
+      "teamMemberId": "tm3",
+      "activityType": "CALENDAR",
+      "title": "Filing Deadline - Trust Amendment",
+      "description": "Deadline for filing Johnson Family Trust amendment with court",
+      "startDate": "2025-01-21T17:00:00.000Z",
+      "metadata": {
+        "meetingType": "deadline",
+        "location": "Court Filing Office",
+        "isAllDay": false
+      },
+      "isAssociated": false
+    },
+    {
+      "id": "it_email_007",
+      "teamMemberId": "tm3",
+      "activityType": "EMAIL",
+      "title": "Trust Filing Confirmation - Court Submitted",
+      "description": "Email confirmation of trust amendment filing with court",
+      "startDate": "2025-01-21T16:45:00.000Z",
+      "metadata": {
+        "recipients": ["robert.johnson@email.com"],
+        "hasAttachments": true,
+        "priority": "normal",
+        "messageId": "msg-filing-confirmation-001"
+      },
+      "isAssociated": false
+    }
+  ]
+}

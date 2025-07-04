@@ -19,6 +19,7 @@ model TeamMember {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   timesheets   Timesheet[]
+  itActivities ITActivity[]
 }
 
 model Client {
@@ -40,6 +41,7 @@ model Matter {
   updatedAt   DateTime        @updatedAt
   tasks       Task[]
   entries     TimesheetEntry[]
+  itActivities ITActivity[]
 }
 
 model Task {
@@ -50,6 +52,7 @@ model Task {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   entries     TimesheetEntry[]
+  itActivities ITActivity[]
   
   @@unique([matterId, description])
 }
@@ -84,7 +87,49 @@ model TimesheetEntry {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   
+  // Reference to the IT activity that created this entry (if any)
+  sourceITActivityId String?
+  sourceITActivity   ITActivity? @relation(fields: [sourceITActivityId], references: [id])
+  
   @@unique([timesheetId, matterId, taskDescription])
+}
+
+// New IT Activity table to track Outlook, Email, and OneDrive activities
+model ITActivity {
+  id              String           @id @default(cuid())
+  teamMemberId    String
+  teamMember      TeamMember       @relation(fields: [teamMemberId], references: [id])
+  
+  // Common fields for all activity types
+  activityType    ITActivityType   // CALENDAR, EMAIL, DOCUMENT
+  title           String           // Subject/title/filename
+  description     String?          // Body/content preview
+  startDate       DateTime         // When the activity occurred/was created
+  endDate         DateTime?        // For calendar events only
+  
+  // Activity-specific metadata stored as JSON
+  metadata        Json?            // Store additional type-specific data
+  
+  // Optional association with matter/task (set when user associates manually)
+  matterId        String?
+  matter          Matter?          @relation(fields: [matterId], references: [id])
+  taskId          String?
+  task            Task?            @relation(fields: [taskId], references: [id])
+  
+  // Duration set by user when associating with task (in minutes)
+  durationMinutes Int?
+  
+  // Track if this activity has been converted to a timesheet entry
+  isAssociated    Boolean          @default(false)
+  
+  // One-to-many relation: one IT activity can create multiple timesheet entries
+  timesheetEntries TimesheetEntry[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@index([teamMemberId, startDate])
+  @@index([activityType, startDate])
 }
 
 enum TimeIncrementType {
@@ -101,4 +146,10 @@ enum Urgency {
   HOT
   MEDIUM
   MILD
+}
+
+enum ITActivityType {
+  CALENDAR    // Outlook calendar events
+  EMAIL       // Emails sent
+  DOCUMENT    // OneDrive documents created/modified
 }

@@ -1,10 +1,18 @@
-// prisma/seed.ts
+// prisma/seed.ts - Fixed TypeScript imports and types
 
-import { PrismaClient, Urgency, TimeIncrementType } from '@prisma/client';
-import * as clientsData from './seeds/clients.json';
-import * as mattersData from './seeds/matters.json';
-import * as teamMembersData from './seeds/teamMembers.json';
-import * as tasksData from './seeds/tasks.json';
+import { PrismaClient, Urgency, TimeIncrementType, ITActivityType } from '@prisma/client';
+//import clientsData from './seeds/clients.json';
+//import mattersData from './seeds/matters.json';
+//import teamMembersData from './seeds/teamMembers.json';
+//import tasksData from './seeds/tasks.json';
+//import itActivitiesData from './seeds/itActivities.json';
+
+// Use require() for JSON imports to avoid TypeScript issues
+const clientsData = require('./seeds/clients.json');
+const mattersData = require('./seeds/matters.json');
+const teamMembersData = require('./seeds/teamMembers.json');
+const tasksData = require('./seeds/tasks.json');
+const itActivitiesData = require('./seeds/itActivities.json');
 
 const prisma = new PrismaClient();
 
@@ -42,9 +50,10 @@ function validateTimeIncrement(timeIncrementType: string, timeIncrement: number)
 async function main() {
   console.log('Start seeding...');
 
-  // Clear existing data
+  // Clear existing data (including IT activities)
   await prisma.timesheetEntry.deleteMany();
   await prisma.timesheet.deleteMany();
+  await prisma.iTActivity.deleteMany(); // Clear IT activities
   await prisma.task.deleteMany();
   await prisma.matter.deleteMany();
   await prisma.client.deleteMany();
@@ -52,7 +61,7 @@ async function main() {
 
   // Seed clients
   const clients = await Promise.all(
-    clientsData.clients.map(async (client) => {
+    clientsData.clients.map(async (client: any) => {
       return prisma.client.create({
         data: client,
       });
@@ -62,7 +71,7 @@ async function main() {
 
   // Seed matters
   const matters = await Promise.all(
-    mattersData.matters.map(async (matter) => {
+    mattersData.matters.map(async (matter: any) => {
       return prisma.matter.create({
         data: matter,
       });
@@ -72,7 +81,7 @@ async function main() {
 
   // Seed team members with validation
   const teamMembers = await Promise.all(
-    teamMembersData.teamMembers.map(async (member) => {
+    teamMembersData.teamMembers.map(async (member: any) => {
       const validatedTimeIncrement = validateTimeIncrement(
         member.timeIncrementType,
         member.timeIncrement
@@ -91,13 +100,33 @@ async function main() {
 
   // Seed tasks
   const tasks = await Promise.all(
-    tasksData.tasks.map(async (task) => {
+    tasksData.tasks.map(async (task: any) => {
       return prisma.task.create({
         data: task,
       });
     })
   );
   console.log(`Created ${tasks.length} tasks`);
+
+  // Seed IT activities
+  const itActivities = await Promise.all(
+    itActivitiesData.itActivities.map(async (activity: any) => {
+      return prisma.iTActivity.create({
+        data: {
+          id: activity.id,
+          teamMemberId: activity.teamMemberId,
+          activityType: activity.activityType as ITActivityType,
+          title: activity.title,
+          description: activity.description,
+          startDate: new Date(activity.startDate),
+          endDate: activity.endDate ? new Date(activity.endDate) : null,
+          metadata: activity.metadata,
+          isAssociated: activity.isAssociated,
+        },
+      });
+    })
+  );
+  console.log(`Created ${itActivities.length} IT activities`);
 
   console.log('Seeding finished.');
 }
@@ -110,4 +139,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-  

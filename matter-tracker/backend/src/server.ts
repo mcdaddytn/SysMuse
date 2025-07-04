@@ -1,4 +1,4 @@
-// src/server.ts - Updated version with proper imports
+// src/server.ts - Updated version with IT Activity routes
 
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -8,6 +8,7 @@ import timesheetRoutes from './routes/timesheet.routes';
 import matterRoutes from './routes/matter.routes';
 import teamMemberRoutes from './routes/teamMember.routes';
 import taskRoutes from './routes/task.routes';
+import itActivityRoutes from './routes/itActivity.routes';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use('/api/timesheets', timesheetRoutes);
 app.use('/api/matters', matterRoutes);
 app.use('/api/team-members', teamMemberRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/it-activities', itActivityRoutes);
 
 // Test route
 app.get('/api/health', (req: Request, res: Response) => {
@@ -40,6 +42,12 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Test the API at http://localhost:${PORT}/api/health`);
+  console.log('Available routes:');
+  console.log('  - /api/timesheets');
+  console.log('  - /api/matters');
+  console.log('  - /api/team-members');
+  console.log('  - /api/tasks');
+  console.log('  - /api/it-activities');
 });
 
 // Graceful shutdown
@@ -47,4 +55,3 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
-

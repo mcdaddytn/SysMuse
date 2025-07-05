@@ -604,7 +604,7 @@ export default defineComponent({
       try {
         console.log('Loading team members');
         const response = await api.get('/team-members');
-        console.log('Loading team members, response.data: ', response.data);
+        //console.log('Loading team members, response.data: ', response.data);
         teamMembers.value = response.data;
         console.log('Loaded team members');
         

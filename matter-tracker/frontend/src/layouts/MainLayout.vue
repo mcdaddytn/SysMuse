@@ -1,3 +1,4 @@
+<!-- src/layouts/MainLayout.vue - Updated navigation -->
 <template>
   <q-layout view="lHh Lpr lFf">
     <q-header elevated>
@@ -18,15 +19,9 @@
         <div class="q-gutter-sm">
           <q-btn 
             flat 
-            label="Weekly Timesheet" 
-            :color="$route.name === 'weekly-timesheet' ? 'white' : 'grey-4'"
+            label="Timesheet" 
+            :color="$route.name === 'timesheet' ? 'white' : 'grey-4'"
             @click="$router.push('/')"
-          />
-          <q-btn 
-            flat 
-            label="Daily Timesheet" 
-            :color="$route.name === 'daily-timesheet' ? 'white' : 'grey-4'"
-            @click="$router.push('/daily')"
           />
           <q-btn 
             flat 
@@ -44,43 +39,22 @@
       bordered
     >
       <q-list>
-        <q-item-label
-          header
-        >
-          Navigation
-        </q-item-label>
+        <q-item-label header>Navigation</q-item-label>
 
         <q-item 
           clickable 
           v-ripple 
-          :active="$route.name === 'weekly-timesheet'"
+          :active="$route.name === 'timesheet'"
           @click="$router.push('/')"
         >
           <q-item-section avatar>
-            <q-icon name="calendar_view_week" />
+            <q-icon name="schedule" />
           </q-item-section>
           <q-item-section>
-            <q-item-label>Weekly Timesheet</q-item-label>
-            <q-item-label caption>Traditional weekly time tracking</q-item-label>
+            <q-item-label>Timesheet</q-item-label>
+            <q-item-label caption>Track time in weekly or daily mode</q-item-label>
           </q-item-section>
         </q-item>
-
-        <q-item 
-          clickable 
-          v-ripple 
-          :active="$route.name === 'daily-timesheet'"
-          @click="$router.push('/daily')"
-        >
-          <q-item-section avatar>
-            <q-icon name="today" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Daily Timesheet</q-item-label>
-            <q-item-label caption>Single day time tracking</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-separator />
 
         <q-item 
           clickable 
@@ -97,38 +71,7 @@
           </q-item-section>
         </q-item>
 
-        <q-separator />
-
-        <q-item-label header>
-          Quick Actions
-        </q-item-label>
-
-        <q-item clickable v-ripple>
-          <q-item-section avatar>
-            <q-icon name="add" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Add New Matter</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item clickable v-ripple>
-          <q-item-section avatar>
-            <q-icon name="assessment" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Reports</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item clickable v-ripple>
-          <q-item-section avatar>
-            <q-icon name="settings" />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Settings</q-item-label>
-          </q-item-section>
-        </q-item>
+        <!-- ... rest of navigation items ... -->
       </q-list>
     </q-drawer>
 
@@ -137,22 +80,3 @@
     </q-page-container>
   </q-layout>
 </template>
-
-<script lang="ts">
-import { defineComponent, ref } from 'vue';
-
-export default defineComponent({
-  name: 'MainLayout',
-
-  setup() {
-    const leftDrawerOpen = ref(false);
-
-    return {
-      leftDrawerOpen,
-      toggleLeftDrawer() {
-        leftDrawerOpen.value = !leftDrawerOpen.value;
-      }
-    };
-  }
-});
-</script>

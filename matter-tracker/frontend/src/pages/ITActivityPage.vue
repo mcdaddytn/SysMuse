@@ -359,6 +359,9 @@
 import { defineComponent, ref, computed, onMounted, watch } from 'vue';
 import { date, Notify, Dialog } from 'quasar';
 import { useQuasar } from 'quasar';
+import { useRoute, useRouter } from 'vue-router';
+import { api } from 'src/services/api';
+
 import type { 
   TeamMember, 
   Matter, 
@@ -399,12 +402,21 @@ export default defineComponent({
   name: 'ITActivityPage',
   setup() {
     const $q = useQuasar();
+    const route = useRoute();
+    const router = useRouter();
+    
+    // Parse query parameters from timesheet
+    const returnTo = route.query.returnTo as string | undefined;
+    const returnMode = route.query.returnMode as string | undefined;
+    const initialTeamMemberId = route.query.teamMemberId as string | undefined;
+    const initialStartDate = route.query.startDate as string | undefined;
+    const initialEndDate = route.query.endDate as string | undefined;
     
     // Reactive state
     const selectedTeamMember = ref<TeamMember | null>(null);
-    const startDate = ref(date.formatDate(date.subtractFromDate(new Date(), { days: 7 }), 'YYYY-MM-DD'));
-    const endDate = ref(date.formatDate(new Date(), 'YYYY-MM-DD'));
-    const activityTypeFilter = ref<ITActivityType | null>(null);
+    const startDate = ref(initialStartDate || date.formatDate(date.subtractFromDate(new Date(), { days: 7 }), 'YYYY-MM-DD'));
+    const endDate = ref(initialEndDate || date.formatDate(new Date(), 'YYYY-MM-DD'));
+    const activityTypeFilter = ref<ITActivityType | null>(null); // Default to All
     const associationFilter = ref<boolean | null>(null);
     const tableFilter = ref('');
     const loading = ref(false);
@@ -497,13 +509,26 @@ export default defineComponent({
     ];
 
     const urgencyOptions = ['HOT', 'MEDIUM', 'MILD'];
+    
+    function goBack(): void {
+      if (returnTo === 'timesheet' && selectedTeamMember.value) {
+        router.push({
+          path: '/',
+          query: {
+            mode: returnMode || 'WEEK',
+            teamMemberId: selectedTeamMember.value.id,
+            date: startDate.value,
+          },
+        });
+      } else {
+        router.push('/');
+      }
+    }    
 
     // Computed properties
     const canAssociate = computed(() => {
       return associationForm.value.matter && 
-             associationForm.value.task && 
-             (associationForm.value.hours > 0 || associationForm.value.minutes > 0) &&
-             associationForm.value.timesheetDate;
+             associationForm.value.task; // Removed duration requirement
     });
 
     // Helper functions
@@ -577,26 +602,29 @@ export default defineComponent({
     // Data loading functions (stub implementations)
     async function loadTeamMembers(): Promise<void> {
       try {
-        // Implementation would fetch from API
-        console.log('Loading team members...');
-        // Mock data for now
-        teamMembers.value = [
-          { 
-            id: '1', 
-            name: 'John Smith', 
-            email: 'john@lawfirm.com',
-            workingHours: 40,
-            timeIncrementType: 'PERCENT',
-            timeIncrement: 1,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+        console.log('Loading team members');
+        const response = await api.get('/team-members');
+        console.log('Loading team members, response.data: ', response.data);
+        teamMembers.value = response.data;
+        console.log('Loaded team members');
+        
+        // Set initial team member if provided
+        if (initialTeamMemberId) {
+          console.log('Loading team member initialTeamMemberId: ', initialTeamMemberId);
+          selectedTeamMember.value = teamMembers.value.find(tm => tm.id === initialTeamMemberId) || null;
+          if (selectedTeamMember.value) {
+            await loadActivities();
           }
-        ];
+        }
       } catch (error) {
-        console.error('Error loading team members:', error);
+        Notify.create({
+          type: 'negative',
+          message: 'Failed to load team members',
+          position: 'top'
+        });
       }
     }
-
+    
     async function loadMatters(): Promise<void> {
       try {
         console.log('Loading matters...');
@@ -715,7 +743,7 @@ export default defineComponent({
       loadActivities();
     }
 
-    function showAssociateDialog(activity: ITActivity): void {
+    async function showAssociateDialog(activity: ITActivity): Promise<void> {
       selectedActivity.value = activity;
       
       // Pre-fill duration for calendar events
@@ -734,6 +762,10 @@ export default defineComponent({
       
       // Set timesheet date to activity date
       associationForm.value.timesheetDate = date.formatDate(new Date(activity.startDate), 'YYYY-MM-DD');
+      
+      // Reset matter and task
+      associationForm.value.matter = null;
+      associationForm.value.task = null;
       
       showAssociation.value = true;
     }
@@ -767,11 +799,21 @@ export default defineComponent({
       
       associating.value = true;
       try {
-        const totalMinutes = (associationForm.value.hours * 60) + associationForm.value.minutes;
+        // Use activity duration if available, otherwise use form values
+        let totalMinutes: number;
         
-        console.log('Associating activity:', {
-          activityId: selectedActivity.value.id,
+        if (selectedActivity.value.activityType === 'CALENDAR' && selectedActivity.value.endDate) {
+          const startTime = new Date(selectedActivity.value.startDate);
+          const endTime = new Date(selectedActivity.value.endDate);
+          const diffMs = endTime.getTime() - startTime.getTime();
+          totalMinutes = Math.floor(diffMs / (1000 * 60));
+        } else {
+          totalMinutes = (associationForm.value.hours * 60) + associationForm.value.minutes;
+        }
+        
+        const response = await api.post(`/it-activities/${selectedActivity.value.id}/associate`, {
           matterId: associationForm.value.matter!.id,
+          taskId: typeof associationForm.value.task === 'string' ? null : associationForm.value.task?.id,
           taskDescription: typeof associationForm.value.task === 'string' 
             ? associationForm.value.task 
             : associationForm.value.task!.description,
@@ -779,9 +821,6 @@ export default defineComponent({
           urgency: associationForm.value.urgency,
           timesheetDate: associationForm.value.timesheetDate
         });
-        
-        // In real implementation, this would call the API
-        // await api.post(`/it-activities/${selectedActivity.value.id}/associate`, { ... });
         
         // Update the activity in the local state
         const activityIndex = activities.value.findIndex(a => a.id === selectedActivity.value!.id);
@@ -797,12 +836,12 @@ export default defineComponent({
         
         Notify.create({
           type: 'positive',
-          message: 'Activity associated with timesheet successfully',
+          message: response.data.message || 'Activity associated with timesheet successfully',
           position: 'top'
         });
         
         closeAssociateDialog();
-        await loadStatistics(); // Refresh statistics
+        await loadStatistics();
         
       } catch (error) {
         console.error('Error associating activity:', error);

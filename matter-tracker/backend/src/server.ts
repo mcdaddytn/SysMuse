@@ -9,6 +9,7 @@ import matterRoutes from './routes/matter.routes';
 import teamMemberRoutes from './routes/teamMember.routes';
 import taskRoutes from './routes/task.routes';
 import itActivityRoutes from './routes/itActivity.routes';
+import settingsRoutes from './routes/settings.routes';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/matters', matterRoutes);
 app.use('/api/team-members', teamMemberRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/it-activities', itActivityRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Test route
 app.get('/api/health', (req: Request, res: Response) => {

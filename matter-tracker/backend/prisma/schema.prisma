@@ -9,17 +9,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Settings {
+  id                String            @id @default(cuid())
+  key               String            @unique
+  value             Json
+  description       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+// Update TeamMember model to make settings optional
 model TeamMember {
-  id           String        @id @default(cuid())
-  name         String
-  email        String        @unique
-  workingHours Int           @default(40)
-  timeIncrementType TimeIncrementType @default(PERCENT)
-  timeIncrement     Int               @default(1)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  timesheets   Timesheet[]
-  itActivities ITActivity[]
+  id                String            @id @default(cuid())
+  name              String
+  email             String            @unique
+  workingHours      Int?              // Made optional
+  timeIncrementType TimeIncrementType? // Made optional
+  timeIncrement     Int?              // Made optional
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  timesheets        Timesheet[]
+  itActivities      ITActivity[]
 }
 
 model Client {

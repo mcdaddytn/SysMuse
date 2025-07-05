@@ -158,18 +158,24 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
           teamMemberId: activity.teamMemberId,
           startDate: parsedTimesheetDate,
           dateIncrementType: 'DAY',
-          timeIncrementType: activity.teamMember.timeIncrementType,
-          timeIncrement: activity.teamMember.timeIncrement,
+          timeIncrementType: activity.teamMember.timeIncrementType ?? undefined,
+          timeIncrement: activity.teamMember.timeIncrement ?? undefined,
         },
       });
     }
-
+    
     // Convert duration to appropriate format based on team member's time increment type
     let actualTime: number;
     if (activity.teamMember.timeIncrementType === 'PERCENT') {
-      // Convert minutes to percentage of daily hours (assuming 8-hour workday)
-      const dailyMinutes = (activity.teamMember.workingHours / 5) * 60; // Assume 5-day work week
-      actualTime = Math.round((durationMinutes / dailyMinutes) * 100);
+    
+      const workingHours = activity.teamMember.workingHours ?? 0;
+      const dailyMinutes = (workingHours / 5) * 60; // Assume 5-day work week
+
+      // Avoid division by 0
+      actualTime = dailyMinutes > 0
+        ? Math.round((durationMinutes / dailyMinutes) * 100)
+        : 0;
+
     } else {
       // Keep as minutes
       actualTime = durationMinutes;

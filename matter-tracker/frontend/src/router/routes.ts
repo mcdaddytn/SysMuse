@@ -1,5 +1,4 @@
-// src/router/routes.ts - Updated with IT Activity route
-
+// src/router/routes.ts
 import { RouteRecordRaw } from 'vue-router';
 
 const routes: RouteRecordRaw[] = [
@@ -9,13 +8,8 @@ const routes: RouteRecordRaw[] = [
     children: [
       { 
         path: '', 
-        component: () => import('pages/WeeklyTimesheetPage.vue'),
-        name: 'weekly-timesheet'
-      },
-      { 
-        path: '/daily', 
-        component: () => import('pages/DailyTimesheetPage.vue'),
-        name: 'daily-timesheet'
+        component: () => import('pages/TimesheetPage.vue'),
+        name: 'timesheet'
       },
       { 
         path: '/it-activities', 
@@ -24,9 +18,6 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
-
-  // Always leave this as last one,
-  // but you can also remove it
   {
     path: '/:catchAll(.*)*',
     component: () => import('pages/ErrorNotFound.vue'),

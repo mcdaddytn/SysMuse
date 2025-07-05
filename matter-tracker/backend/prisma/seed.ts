@@ -1,13 +1,7 @@
 // prisma/seed.ts - Fixed TypeScript imports and types
 
 import { PrismaClient, Urgency, TimeIncrementType, ITActivityType } from '@prisma/client';
-//import clientsData from './seeds/clients.json';
-//import mattersData from './seeds/matters.json';
-//import teamMembersData from './seeds/teamMembers.json';
-//import tasksData from './seeds/tasks.json';
-//import itActivitiesData from './seeds/itActivities.json';
-
-// Use require() for JSON imports to avoid TypeScript issues
+const settingsData = require('./seeds/settings.json');
 const clientsData = require('./seeds/clients.json');
 const mattersData = require('./seeds/matters.json');
 const teamMembersData = require('./seeds/teamMembers.json');
@@ -59,6 +53,32 @@ async function main() {
   await prisma.client.deleteMany();
   await prisma.teamMember.deleteMany();
 
+  // Seed settings
+  const settings = await Promise.all(
+    settingsData.settings.map(async (setting: any) => {
+      return prisma.settings.create({
+        data: {
+    key: setting.key,
+    value: setting.value,
+    description: setting.description,
+        },
+      });
+    })
+  );
+  console.log(`Created ${settings.length} settings`);
+
+  const defaultSettings = await prisma.settings.findMany({
+    where: {
+      key: {
+        in: ['default_working_hours', 'default_time_increment_type', 'default_time_increment']
+      }
+    }
+  });
+
+  const defaultWorkingHours = defaultSettings.find(s => s.key === 'default_working_hours')?.value || 40;
+  const defaultTimeIncrementType = defaultSettings.find(s => s.key === 'default_time_increment_type')?.value || 'PERCENT';
+  const defaultTimeIncrement = defaultSettings.find(s => s.key === 'default_time_increment')?.value || 1;
+
   // Seed clients
   const clients = await Promise.all(
     clientsData.clients.map(async (client: any) => {
@@ -82,21 +102,21 @@ async function main() {
   // Seed team members with validation
   const teamMembers = await Promise.all(
     teamMembersData.teamMembers.map(async (member: any) => {
-      const validatedTimeIncrement = validateTimeIncrement(
-        member.timeIncrementType,
-        member.timeIncrement
-      );
+      const timeIncrementType = member.timeIncrementType || defaultTimeIncrementType;
+      const timeIncrement = member.timeIncrement || defaultTimeIncrement;
+      const validatedTimeIncrement = validateTimeIncrement(timeIncrementType, timeIncrement);
       
       return prisma.teamMember.create({
         data: {
           ...member,
-          timeIncrementType: member.timeIncrementType as TimeIncrementType,
+          workingHours: member.workingHours || defaultWorkingHours,
+          timeIncrementType: timeIncrementType as TimeIncrementType,
           timeIncrement: validatedTimeIncrement,
         },
       });
     })
   );
-  console.log(`Created ${teamMembers.length} team members`);
+  console.log(`Created ${teamMembers.length} team members`);  
 
   // Seed tasks
   const tasks = await Promise.all(

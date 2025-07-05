@@ -1,0 +1,19 @@
+{
+  "settings": [
+    {
+      "key": "default_working_hours",
+      "value": 40,
+      "description": "Default working hours per week for team members"
+    },
+    {
+      "key": "default_time_increment_type",
+      "value": "PERCENT",
+      "description": "Default time increment type (PERCENT or HOURS_MINUTES)"
+    },
+    {
+      "key": "default_time_increment",
+      "value": 1,
+      "description": "Default time increment value"
+    }
+  ]
+}

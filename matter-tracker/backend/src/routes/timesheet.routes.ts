@@ -83,8 +83,8 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
           teamMemberId,
           startDate: parsedStartDate,
           dateIncrementType: dateIncrementType as DateIncrementType,
-          timeIncrementType: teamMember.timeIncrementType,
-          timeIncrement: teamMember.timeIncrement,
+          timeIncrementType: teamMember.timeIncrementType ?? undefined,
+          timeIncrement: teamMember.timeIncrement ?? undefined,
         },
         include: {
           entries: {

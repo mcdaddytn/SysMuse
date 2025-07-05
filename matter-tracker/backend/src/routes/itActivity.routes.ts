@@ -8,14 +8,15 @@ const prisma = new PrismaClient();
 
 // Get IT activities with filters
 router.get('/', async (req: Request, res: Response) => {
+  const { 
+    teamMemberId, 
+    startDate, 
+    endDate, 
+    activityType, 
+    isAssociated 
+  } = req.query;
+  console.log(`API: GET /it-activities - Fetching activities for team member: ${teamMemberId}, period: ${startDate} to ${endDate}`);
   try {
-    const { 
-      teamMemberId, 
-      startDate, 
-      endDate, 
-      activityType, 
-      isAssociated 
-    } = req.query;
 
     if (!teamMemberId || !startDate || !endDate) {
       res.status(400).json({ 
@@ -61,6 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
 
+    console.log(`API: GET /it-activities - Successfully fetched ${activities.length} activities`);
     res.json(activities);
   } catch (error) {
     console.error('Error fetching IT activities:', error);
@@ -105,16 +107,17 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // Associate an IT activity with a matter and task, creating a timesheet entry
 router.post('/:id/associate', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { 
+    matterId, 
+    taskId, 
+    taskDescription, 
+    durationMinutes, 
+    urgency = 'MEDIUM',
+    timesheetDate 
+  } = req.body;
+  console.log(`API: POST /it-activities/${id}/associate - Associating activity with matter: ${matterId}, task: ${taskDescription}`);
   try {
-    const { id } = req.params;
-    const { 
-      matterId, 
-      taskId, 
-      taskDescription, 
-      durationMinutes, 
-      urgency = 'MEDIUM',
-      timesheetDate 
-    } = req.body;
 
     if (!matterId || !taskDescription || !durationMinutes || !timesheetDate) {
       res.status(400).json({ 
@@ -249,6 +252,7 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
       },
     });
 
+    console.log(`API: POST /it-activities/${id}/associate - Successfully associated activity with timesheet entry`);
     res.json({
       activity: updatedActivity,
       timesheetEntry,
@@ -317,16 +321,17 @@ router.post('/:id/unassociate', async (req: Request, res: Response) => {
 
 // Create a manual IT activity (for testing or manual entry)
 router.post('/', async (req: Request, res: Response) => {
+  const {
+    teamMemberId,
+    activityType,
+    title,
+    description,
+    startDate,
+    endDate,
+    metadata,
+  } = req.body;
+  console.log(`API: POST /it-activities - Creating manual activity: ${title} for team member: ${teamMemberId}`);
   try {
-    const {
-      teamMemberId,
-      activityType,
-      title,
-      description,
-      startDate,
-      endDate,
-      metadata,
-    } = req.body;
 
     if (!teamMemberId || !activityType || !title || !startDate) {
       res.status(400).json({ 
@@ -351,6 +356,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    console.log(`API: POST /it-activities - Successfully created activity: ${title} (ID: ${activity.id})`);
     res.json(activity);
   } catch (error) {
     console.error('Error creating IT activity:', error);
@@ -360,9 +366,10 @@ router.post('/', async (req: Request, res: Response) => {
 
 // Get activity statistics for a team member
 router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
+  const { teamMemberId } = req.params;
+  const { startDate, endDate } = req.query;
+  console.log(`API: GET /it-activities/stats/${teamMemberId} - Fetching stats for period: ${startDate} to ${endDate}`);
   try {
-    const { teamMemberId } = req.params;
-    const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
       res.status(400).json({ 
@@ -416,6 +423,7 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
       0
     );
 
+    console.log(`API: GET /it-activities/stats/${teamMemberId} - Successfully fetched statistics`);
     res.json({
       period: { startDate, endDate },
       activityCounts: {

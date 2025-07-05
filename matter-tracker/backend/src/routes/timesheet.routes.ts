@@ -23,8 +23,9 @@ interface TimesheetInput {
 
 // Get timesheet for a specific team member, date, and increment type
 router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
+  const { teamMemberId, startDate, dateIncrementType } = req.params;
+  console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Fetching timesheet`);
   try {
-    const { teamMemberId, startDate, dateIncrementType } = req.params;
     
     // Validate dateIncrementType
     if (!['DAY', 'WEEK'].includes(dateIncrementType)) {
@@ -102,6 +103,7 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
       });
     }
 
+    console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Successfully fetched timesheet (ID: ${timesheet.id})`);
     res.json(timesheet);
   } catch (error) {
     console.error('Error fetching timesheet:', error);
@@ -111,9 +113,10 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
 
 // Save or update timesheet entries
 router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}, any, TimesheetInput>, res: Response): Promise<void> => {
+  const { teamMemberId, startDate, dateIncrementType } = req.params;
+  const { entries, dateIncrementType: bodyDateIncrementType, timeIncrementType, timeIncrement } = req.body;
+  console.log(`API: POST /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Saving timesheet with ${entries.length} entries`);
   try {
-    const { teamMemberId, startDate, dateIncrementType } = req.params;
-    const { entries, dateIncrementType: bodyDateIncrementType, timeIncrementType, timeIncrement } = req.body;
     
     // Validate dateIncrementType
     if (!['DAY', 'WEEK'].includes(dateIncrementType)) {
@@ -239,6 +242,7 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
       },
     });
 
+    console.log(`API: POST /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Successfully saved timesheet (ID: ${timesheet.id})`);
     res.json(updatedTimesheet);
   } catch (error) {
     console.error('Error saving timesheet:', error);
@@ -248,8 +252,9 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
 
 // Copy timesheet from previous period
 router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
+  const { teamMemberId, startDate, dateIncrementType } = req.params;
+  console.log(`API: POST /timesheets/${teamMemberId}/${startDate}/${dateIncrementType}/copy-from-previous - Copying from previous period`);
   try {
-    const { teamMemberId, startDate, dateIncrementType } = req.params;
     
     // Validate dateIncrementType
     if (!['DAY', 'WEEK'].includes(dateIncrementType)) {
@@ -341,6 +346,7 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', a
       },
     });
 
+    console.log(`API: POST /timesheets/${teamMemberId}/${startDate}/${dateIncrementType}/copy-from-previous - Successfully copied from previous period`);
     res.json(updatedTimesheet);
   } catch (error) {
     console.error('Error copying timesheet:', error);
@@ -350,8 +356,9 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', a
 
 // Create new task for a matter
 router.post('/tasks', async (req: Request<{}, any, {matterId: string, description: string}>, res: Response): Promise<void> => {
+  const { matterId, description } = req.body;
+  console.log(`API: POST /timesheets/tasks - Creating task: ${description} for matter: ${matterId}`);
   try {
-    const { matterId, description } = req.body;
 
     if (!matterId || !description) {
       res.status(400).json({ error: 'Matter ID and description are required' });
@@ -386,6 +393,7 @@ router.post('/tasks', async (req: Request<{}, any, {matterId: string, descriptio
       },
     });
 
+    console.log(`API: POST /timesheets/tasks - Successfully created task: ${description} (ID: ${newTask.id})`);
     res.json(newTask);
   } catch (error) {
     console.error('Error creating task:', error);

@@ -15,6 +15,9 @@ export const api: AxiosInstance = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
+    // Log the API call
+    console.log(`CLIENT API: ${config.method?.toUpperCase()} ${config.url} - Starting request`);
+    
     // Add auth token if available
     const token = localStorage.getItem('authToken');
     if (token) {
@@ -23,6 +26,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('CLIENT API: Request error', error);
     return Promise.reject(error);
   }
 );
@@ -30,9 +34,18 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
+    // Log successful response
+    console.log(`CLIENT API: ${response.config.method?.toUpperCase()} ${response.config.url} - Request completed successfully (${response.status})`);
     return response;
   },
   (error) => {
+    // Log error response
+    if (error.response) {
+      console.error(`CLIENT API: ${error.config?.method?.toUpperCase()} ${error.config?.url} - Request failed (${error.response.status})`, error.response.data);
+    } else {
+      console.error(`CLIENT API: ${error.config?.method?.toUpperCase()} ${error.config?.url} - Request failed`, error.message);
+    }
+    
     if (error.response?.status === 401) {
       // Handle unauthorized access
       // Redirect to login or refresh token

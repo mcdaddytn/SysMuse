@@ -114,3 +114,5 @@ PluginPresetCapture/Source/JUCE
 timesheet-app.zip
 
 timesheet-app/backend/package-lock.json
+
+.DS_Store

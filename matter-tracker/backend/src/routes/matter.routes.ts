@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 
 // Get all matters
 router.get('/', async (req: Request, res: Response) => {
+  console.log('API: GET /matters - Fetching all matters');
   try {
     const matters = await prisma.matter.findMany({
       include: {
@@ -17,6 +18,7 @@ router.get('/', async (req: Request, res: Response) => {
         name: 'asc',
       },
     });
+    console.log(`API: GET /matters - Successfully fetched ${matters.length} matters`);
     res.json(matters);
   } catch (error) {
     console.error('Error fetching matters:', error);
@@ -26,9 +28,9 @@ router.get('/', async (req: Request, res: Response) => {
 
 // Create new matter
 router.post('/', async (req: Request, res: Response) => {
+  const { name, description, clientName } = req.body;
+  console.log(`API: POST /matters - Creating matter: ${name} for client: ${clientName}`);
   try {
-    const { name, description, clientName } = req.body;
-
     // Find or create client
     let client = await prisma.client.findFirst({
       where: { name: clientName },
@@ -54,6 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    console.log(`API: POST /matters - Successfully created matter: ${name} (ID: ${matter.id})`);
     res.json(matter);
   } catch (error) {
     console.error('Error creating matter:', error);

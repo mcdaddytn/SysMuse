@@ -284,8 +284,22 @@
               fill-input
               new-value-mode="add"
               @new-value="createTaskOption"
+              @update:model-value="handleTaskSelection"
               :rules="[val => !!val || 'Task is required']"
-            />
+            >
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section avatar v-if="scope.opt.isAddNew">
+                    <q-icon name="add" color="primary" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label :class="{ 'text-primary': scope.opt.isAddNew }">
+                      {{ scope.opt.label || scope.opt.description }}
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
 
             <div class="row q-gutter-md">
               <div class="col-6">
@@ -352,6 +366,13 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- New Task Dialog -->
+    <new-task-dialog
+      v-model="showTaskDialog"
+      :matter="selectedMatterForTask"
+      @task-created="onTaskCreated"
+    />
   </q-page>
 </template>
 
@@ -361,6 +382,7 @@ import { date, Notify, Dialog } from 'quasar';
 import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'src/services/api';
+import NewTaskDialog from 'src/components/NewTaskDialog.vue';
 
 import type { 
   TeamMember, 
@@ -400,6 +422,9 @@ interface AssociationForm {
 
 export default defineComponent({
   name: 'ITActivityPage',
+  components: {
+    NewTaskDialog,
+  },
   setup() {
     const $q = useQuasar();
     const route = useRoute();
@@ -438,6 +463,9 @@ export default defineComponent({
       urgency: 'MEDIUM',
       timesheetDate: date.formatDate(new Date(), 'YYYY-MM-DD'),
     });
+    
+    const showTaskDialog = ref(false);
+    const selectedMatterForTask = ref<Matter | null>(null);
 
     // Table configuration
     const pagination = ref({
@@ -628,20 +656,16 @@ export default defineComponent({
     async function loadMatters(): Promise<void> {
       try {
         console.log('Loading matters...');
-        // Mock data for now
-        matters.value = [
-          {
-            id: '1',
-            name: 'ABC Corp Contract Review',
-            description: 'Contract review and negotiation',
-            clientId: '1',
-            client: { id: '1', name: 'ABC Corporation', createdAt: '', updatedAt: '' },
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
+        const response = await api.get('/matters');
+        matters.value = response.data;
+        console.log(`Loaded ${matters.value.length} matters`);
       } catch (error) {
         console.error('Error loading matters:', error);
+        Notify.create({
+          type: 'negative',
+          message: 'Failed to load matters',
+          position: 'top'
+        });
       }
     }
 
@@ -717,18 +741,26 @@ export default defineComponent({
     async function loadTasksForMatter(matterId: string): Promise<void> {
       try {
         console.log('Loading tasks for matter:', matterId);
-        // Mock data
+        const response = await api.get(`/tasks/matter/${matterId}`);
+        const tasks = response.data;
+        console.log(`Loaded ${tasks.length} tasks for matter ${matterId}`);
+        
+        // Always include "Add New Task" option
         availableTasks.value = [
-          {
-            id: '1',
-            description: 'Contract Review',
-            matterId,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
+          ...tasks,
+          { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
+        ] as any;
       } catch (error) {
         console.error('Error loading tasks:', error);
+        Notify.create({
+          type: 'negative',
+          message: 'Failed to load tasks for selected matter',
+          position: 'top'
+        });
+        // Still provide the "Add New Task" option even if loading fails
+        availableTasks.value = [
+          { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
+        ] as any;
       }
     }
 
@@ -792,6 +824,39 @@ export default defineComponent({
 
     function createTaskOption(val: string): void {
       associationForm.value.task = val;
+    }
+
+    function handleTaskSelection(val: any): void {
+      if (val && typeof val === 'object' && val.isAddNew) {
+        // Clear the selection first
+        associationForm.value.task = null;
+        // Show the dialog
+        if (associationForm.value.matter) {
+          showNewTaskDialog(associationForm.value.matter);
+        }
+      } else {
+        // Normal task selection
+        associationForm.value.task = val;
+      }
+    }
+
+    function showNewTaskDialog(matter: Matter): void {
+      selectedMatterForTask.value = matter;
+      showTaskDialog.value = true;
+    }
+
+    function onTaskCreated(task: Task): void {
+      // Refresh the tasks for the matter
+      if (associationForm.value.matter) {
+        loadTasksForMatter(associationForm.value.matter.id);
+      }
+      // Select the new task
+      associationForm.value.task = task;
+      
+      Notify.create({
+        type: 'positive',
+        message: 'Task created successfully',
+      });
     }
 
     async function associateActivity(): Promise<void> {
@@ -959,8 +1024,13 @@ export default defineComponent({
       closeAssociateDialog,
       onMatterChange,
       createTaskOption,
+      handleTaskSelection,
+      showNewTaskDialog,
+      onTaskCreated,
       associateActivity,
       unassociateActivity,
+      showTaskDialog,
+      selectedMatterForTask,
     };
   }
 });

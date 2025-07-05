@@ -150,18 +150,17 @@
                   dense
                   filled
                   @new-value="(val) => createTaskOption(val, index)"
+                  @update:model-value="(val) => handleTaskSelection(val, index)"
                 >
-                  <template v-slot:after-options>
-                    <q-item 
-                      clickable 
-                      v-if="entry.matter"
-                      @click="showNewTaskDialog(entry.matter)"
-                    >
-                      <q-item-section avatar>
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps">
+                      <q-item-section avatar v-if="scope.opt.isAddNew">
                         <q-icon name="add" color="primary" />
                       </q-item-section>
                       <q-item-section>
-                        <q-item-label>Add New Task</q-item-label>
+                        <q-item-label :class="{ 'text-primary': scope.opt.isAddNew }">
+                          {{ scope.opt.label || scope.opt }}
+                        </q-item-label>
                       </q-item-section>
                     </q-item>
                   </template>
@@ -640,13 +639,32 @@ export default defineComponent({
       }
     }
 
-    function getTaskOptions(matter: Matter | null): string[] {
+    function getTaskOptions(matter: Matter | null): Array<string | { label: string; value: string; isAddNew?: boolean }> {
       if (!matter) return [];
-      return taskSuggestions.value[matter.id] || [];
+      const tasks = taskSuggestions.value[matter.id] || [];
+      // Always include "Add New Task" option when matter is selected
+      return [
+        ...tasks,
+        { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
+      ];
     }
 
     function createTaskOption(val: string, index: number): void {
       entries.value[index].taskDescription = val;
+    }
+
+    function handleTaskSelection(val: any, index: number): void {
+      if (val && typeof val === 'object' && val.isAddNew) {
+        // Clear the selection first
+        entries.value[index].taskDescription = '';
+        // Show the dialog
+        if (entries.value[index].matter) {
+          showNewTaskDialog(entries.value[index].matter);
+        }
+      } else {
+        // Normal task selection
+        entries.value[index].taskDescription = val;
+      }
     }
 
     function showNewTaskDialog(matter: Matter): void {
@@ -905,6 +923,7 @@ export default defineComponent({
      onMatterChange,
      getTaskOptions,
      createTaskOption,
+     handleTaskSelection,
      showNewTaskDialog,
      onTaskCreated,
      loadTimesheet,

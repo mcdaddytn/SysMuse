@@ -1,0 +1,5 @@
+Feature 6 
+
+Association Task Fix
+
+The association task feature is currently not working within the IT activities page.  When it was tested, the matter selection contained hard-coded matters, so I would expect we would never get a proper association without matter properly correlating.  With that fixed and with console.log statements distributed throughout the associate methods (since this functionality is a bit more complex with a series of options), it will be easier to debug.  Generally, we want to associate an IT activity that matches a team member within a date range, to a timesheet with the same date range (either daily or weekly), with the user selecting the matter and task that is appropriate.  The user can also select the duration for the IT activity (which should be added to the "actual" time in the TimesheetEntry associated.  The duration can be defaulted based on the IT activity if appropriate (e.g., for a calendar event, the duration of the calendar event can be used as a default).

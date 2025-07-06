@@ -177,7 +177,7 @@
               <td>
                 <q-input
                   v-model="entry.projectedTimeDisplay"
-                  :type="timeInputType"
+                  type="text"
                   dense
                   filled
                   style="width: 120px"
@@ -210,7 +210,7 @@
               <td>
                 <q-input
                   v-model="entry.actualTimeDisplay"
-                  :type="timeInputType"
+                  type="text"
                   dense
                   filled
                   style="width: 120px"
@@ -423,9 +423,6 @@ export default defineComponent({
       return getTimeIncrementStep(timeIncrementType.value, selectedTeamMember.value?.timeIncrement || 1);
     });
 
-    const timeInputType = computed((): string => {
-      return timeIncrementType.value === 'PERCENT' ? 'number' : 'text';
-    });
 
     const projectedTimeLabel = computed((): string => {
       return timeIncrementType.value === 'PERCENT' ? 'Projected (%)' : 'Projected Time';
@@ -901,7 +898,6 @@ export default defineComponent({
      switchButtonLabel,
      timeIncrementType,
      timeIncrement,
-     timeInputType,
      projectedTimeLabel,
      actualTimeLabel,
      

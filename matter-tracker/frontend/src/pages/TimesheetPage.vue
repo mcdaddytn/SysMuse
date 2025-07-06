@@ -194,6 +194,9 @@
                         flat
                         dense
                         @click="adjustTime(index, 'projected', timeIncrement)"
+                        @mousedown="startSpinning(index, 'projected', timeIncrement)"
+                        @mouseup="stopSpinning"
+                        @mouseleave="stopSpinning"
                       />
                       <q-btn
                         icon="keyboard_arrow_down"
@@ -201,6 +204,9 @@
                         flat
                         dense
                         @click="adjustTime(index, 'projected', -timeIncrement)"
+                        @mousedown="startSpinning(index, 'projected', -timeIncrement)"
+                        @mouseup="stopSpinning"
+                        @mouseleave="stopSpinning"
                       />
                     </div>
                   </template>
@@ -227,6 +233,9 @@
                         flat
                         dense
                         @click="adjustTime(index, 'actual', timeIncrement)"
+                        @mousedown="startSpinning(index, 'actual', timeIncrement)"
+                        @mouseup="stopSpinning"
+                        @mouseleave="stopSpinning"
                       />
                       <q-btn
                         icon="keyboard_arrow_down"
@@ -234,6 +243,9 @@
                         flat
                         dense
                         @click="adjustTime(index, 'actual', -timeIncrement)"
+                        @mousedown="startSpinning(index, 'actual', -timeIncrement)"
+                        @mouseup="stopSpinning"
+                        @mouseleave="stopSpinning"
                       />
                     </div>
                   </template>
@@ -314,7 +326,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, watch } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { date, Notify, Dialog } from 'quasar';
 import { useRouter, useRoute } from 'vue-router';
 import { api } from 'src/services/api';
@@ -391,6 +403,11 @@ export default defineComponent({
     const currentTimesheetId = ref<string | null>(null);
     const showTaskDialog = ref(false);
     const selectedMatterForTask = ref<Matter | null>(null);
+
+    // Spin control state
+    const spinInterval = ref<NodeJS.Timeout | null>(null);
+    const spinAcceleration = ref<NodeJS.Timeout | null>(null);
+    const spinRate = ref(200); // Initial rate in milliseconds (5 times per second)
 
     const urgencyOptions = ['HOT', 'MEDIUM', 'MILD'];
 
@@ -575,6 +592,59 @@ export default defineComponent({
       }
       
       updateDisplayTime(entry);
+    }
+
+    function startSpinning(index: number, type: 'projected' | 'actual', increment: number): void {
+      // Stop any existing spinning
+      stopSpinning();
+      
+      // Reset spin rate to initial value
+      spinRate.value = 200;
+      
+      // Set up continuous spinning after a short delay to allow for single clicks
+      spinInterval.value = setTimeout(() => {
+        // First increment after delay
+        adjustTime(index, type, increment);
+        
+        // Then start continuous spinning
+        spinInterval.value = setInterval(() => {
+          adjustTime(index, type, increment);
+        }, spinRate.value);
+        
+        // Set up acceleration after 1 second
+        spinAcceleration.value = setTimeout(() => {
+          accelerateSpinning(index, type, increment);
+        }, 1000);
+      }, 300); // 300ms delay to distinguish from single click
+    }
+
+    function accelerateSpinning(index: number, type: 'projected' | 'actual', increment: number): void {
+      if (spinInterval.value) {
+        clearInterval(spinInterval.value);
+        spinRate.value = Math.max(50, spinRate.value * 0.7); // Accelerate to max 20 per second
+        
+        spinInterval.value = setInterval(() => {
+          adjustTime(index, type, increment);
+        }, spinRate.value);
+        
+        // Continue accelerating every 500ms until we reach minimum rate
+        if (spinRate.value > 50) {
+          spinAcceleration.value = setTimeout(() => {
+            accelerateSpinning(index, type, increment);
+          }, 500);
+        }
+      }
+    }
+
+    function stopSpinning(): void {
+      if (spinInterval.value) {
+        clearInterval(spinInterval.value);
+        spinInterval.value = null;
+      }
+      if (spinAcceleration.value) {
+        clearTimeout(spinAcceleration.value);
+        spinAcceleration.value = null;
+      }
     }
 
     function changeDateRange(direction: number): void {
@@ -936,6 +1006,10 @@ export default defineComponent({
      await Promise.all([loadTeamMembers(), loadMatters()]);
    });
 
+   onUnmounted(() => {
+     stopSpinning();
+   });
+
    return {
      // State
      dateIncrementType,
@@ -974,6 +1048,8 @@ export default defineComponent({
      updateProjectedTime,
      updateActualTime,
      adjustTime,
+     startSpinning,
+     stopSpinning,
      changeDateRange,
      onDateSelected,
      switchMode,

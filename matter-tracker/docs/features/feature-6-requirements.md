@@ -11,3 +11,6 @@ On the popup to Associate Task, let's edit hours/minutes in a single control lik
 Currently when testing, the associate task action is failing and I am not seeing why based on the output on the server side.  I see on the client side that the method has failed, but there are many steps on the server side to associate.  After we add logging statements throughout that method, we can debug further but if there are any apparent flaws in the logic precluding the task from being associated once the user has selected a matter and task, please correct.
 
 
+
+
+

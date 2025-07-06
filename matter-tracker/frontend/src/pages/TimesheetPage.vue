@@ -116,11 +116,13 @@
               <td>
                 <q-select
                   v-model="entry.matter"
-                  :options="matters"
+                  :options="filteredMatters"
                   option-label="name"
                   option-value="id"
                   dense
                   filled
+                  use-input
+                  @filter="filterMatters"
                   @update:model-value="(val) => onMatterChange(index, val)"
                 >
                   <template v-slot:option="scope">
@@ -381,6 +383,7 @@ export default defineComponent({
     const currentStartDate = ref<string>(getInitialDate(initialMode));
     const teamMembers = ref<TeamMember[]>([]);
     const matters = ref<Matter[]>([]);
+    const filteredMatters = ref<Matter[]>([]);
     const entries = ref<EntryRow[]>([]);
     const taskSuggestions = ref<Record<string, string[]>>({});
     const saving = ref(false);
@@ -666,6 +669,20 @@ export default defineComponent({
       entries.value.splice(index, 1);
     }
 
+    function filterMatters(val: string, update: (fn: () => void) => void): void {
+      update(() => {
+        if (val === '') {
+          filteredMatters.value = matters.value;
+        } else {
+          const needle = val.toLowerCase();
+          filteredMatters.value = matters.value.filter(matter => 
+            matter.name.toLowerCase().includes(needle) ||
+            matter.client.name.toLowerCase().includes(needle)
+          );
+        }
+      });
+    }
+
     function onMatterChange(index: number, matter: Matter): void {
       if (matter) {
         loadTasksForMatter(matter.id);
@@ -741,6 +758,7 @@ export default defineComponent({
       try {
         const response = await api.get('/matters');
         matters.value = response.data;
+        filteredMatters.value = response.data; // Initialize filtered matters
       } catch (error) {
         Notify.create({
           type: 'negative',
@@ -925,6 +943,7 @@ export default defineComponent({
      currentStartDate,
      teamMembers,
      matters,
+     filteredMatters,
      entries,
      urgencyOptions,
      saving,
@@ -961,6 +980,7 @@ export default defineComponent({
      openITActivities,
      addEntry,
      removeEntry,
+     filterMatters,
      onMatterChange,
      getTaskOptions,
      createTaskOption,

@@ -255,11 +255,13 @@
           <q-form @submit="associateActivity" class="q-gutter-md">
             <q-select
               v-model="associationForm.matter"
-              :options="matters"
+              :options="filteredMatters"
               option-label="name"
               option-value="id"
               label="Matter"
               filled
+              use-input
+              @filter="filterMatters"
               :rules="[val => !!val || 'Matter is required']"
               @update:model-value="onMatterChange"
             >
@@ -449,6 +451,7 @@ export default defineComponent({
     
     const teamMembers = ref<TeamMember[]>([]);
     const matters = ref<Matter[]>([]);
+    const filteredMatters = ref<Matter[]>([]);
     const activities = ref<ITActivity[]>([]);
     const statistics = ref<ActivityStatistics | null>(null);
     const availableTasks = ref<Task[]>([]);
@@ -627,6 +630,20 @@ export default defineComponent({
       // This is just for display purposes; the actual calculation happens in the form
     }
 
+    function filterMatters(val: string, update: (fn: () => void) => void): void {
+      update(() => {
+        if (val === '') {
+          filteredMatters.value = matters.value;
+        } else {
+          const needle = val.toLowerCase();
+          filteredMatters.value = matters.value.filter(matter => 
+            matter.name.toLowerCase().includes(needle) ||
+            matter.client.name.toLowerCase().includes(needle)
+          );
+        }
+      });
+    }
+
     // Data loading functions (stub implementations)
     async function loadTeamMembers(): Promise<void> {
       try {
@@ -658,6 +675,7 @@ export default defineComponent({
         console.log('Loading matters...');
         const response = await api.get('/matters');
         matters.value = response.data;
+        filteredMatters.value = response.data; // Initialize filtered matters
         console.log(`Loaded ${matters.value.length} matters`);
       } catch (error) {
         console.error('Error loading matters:', error);
@@ -991,6 +1009,7 @@ export default defineComponent({
       associating,
       teamMembers,
       matters,
+      filteredMatters,
       activities,
       statistics,
       availableTasks,
@@ -1017,6 +1036,7 @@ export default defineComponent({
       formatDuration,
       truncateText,
       updateDuration,
+      filterMatters,
       onTeamMemberChange,
       onRequest,
       loadActivities,

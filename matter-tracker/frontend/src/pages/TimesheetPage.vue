@@ -482,18 +482,54 @@ export default defineComponent({
     function isValidTotal(total: number): boolean {
       if (!selectedTeamMember.value) return true;
       
-      if (dateIncrementType.value === 'DAY') {
-        // For daily timesheets, we need to adjust the validation
-        if (timeIncrementType.value === 'PERCENT') {
-          return total <= 100; // Allow partial days
-        } else {
-          // For time mode, allow up to working hours per day
-          const dailyHours = selectedTeamMember.value.workingHours / 5; // Assume 5-day work week
-          return total <= dailyHours * 60;
+      if (timeIncrementType.value === 'PERCENT') {
+        return total <= 100; // Error only when over 100%
+      } else {
+        // For time mode, allow up to working hours
+        const maxHours = dateIncrementType.value === 'DAY' 
+          ? selectedTeamMember.value.workingHours / 5 // Daily hours
+          : selectedTeamMember.value.workingHours; // Weekly hours
+        return total <= maxHours * 60;
+      }
+    }
+
+    function hasValidationWarning(): { hasWarning: boolean; message: string } {
+      if (!selectedTeamMember.value || !entries.value.some(e => e.matter)) {
+        return { hasWarning: false, message: '' };
+      }
+
+      if (timeIncrementType.value === 'PERCENT') {
+        // Error conditions (prevent save)
+        if (projectedTotal.value > 100 || actualTotal.value > 100) {
+          return {
+            hasWarning: true,
+            message: `Percentage totals cannot exceed 100% (Projected: ${projectedTotal.value}%, Actual: ${actualTotal.value}%).`
+          };
+        }
+        
+        // Warning conditions (allow save with confirmation)
+        if (projectedTotal.value < 100 && projectedTotal.value > 0) {
+          return {
+            hasWarning: true,
+            message: `Projected time is ${projectedTotal.value}% (less than 100%). Continue anyway?`
+          };
+        }
+      } else {
+        // Time mode validation
+        const maxHours = dateIncrementType.value === 'DAY' 
+          ? selectedTeamMember.value.workingHours / 5
+          : selectedTeamMember.value.workingHours;
+        const maxMinutes = maxHours * 60;
+        
+        if (projectedTotal.value > maxMinutes || actualTotal.value > maxMinutes) {
+          return {
+            hasWarning: true,
+            message: `Time totals exceed working hours (Projected: ${formatTotalTime(projectedTotal.value)}, Actual: ${formatTotalTime(actualTotal.value)}).`
+          };
         }
       }
-      
-      return isValidTotalTime(total, timeIncrementType.value, selectedTeamMember.value.workingHours);
+
+      return { hasWarning: false, message: '' };
     }
 
     function getTimeTooltip(timeValue: number): string {
@@ -770,18 +806,26 @@ export default defineComponent({
     async function saveTimesheet(): Promise<void> {
      if (!selectedTeamMember.value || !entries.value.some(e => e.matter)) return;
 
-     // Show warning if totals are invalid
-     const projectedValid = isValidTotal(projectedTotal.value);
-     const actualValid = isValidTotal(actualTotal.value);
+     const validation = hasValidationWarning();
      
-     if (!projectedValid || !actualValid) {
-       const message = timeIncrementType.value === 'PERCENT' 
-         ? `Time totals don't equal 100% (Projected: ${projectedTotal.value}%, Actual: ${actualTotal.value}%).`
-         : `Time totals exceed working hours (Projected: ${formatTotalTime(projectedTotal.value)}, Actual: ${formatTotalTime(actualTotal.value)}).`;
+     if (validation.hasWarning) {
+       // Check if it's an error condition (over 100% in percentage mode)
+       const isError = timeIncrementType.value === 'PERCENT' && 
+                      (projectedTotal.value > 100 || actualTotal.value > 100);
        
+       if (isError) {
+         Dialog.create({
+           title: 'Error',
+           message: validation.message,
+           persistent: true
+         });
+         return;
+       }
+       
+       // Show warning with option to continue
        Dialog.create({
          title: 'Warning',
-         message: message + ' Continue anyway?',
+         message: validation.message,
          cancel: true,
          persistent: true
        }).onOk(async () => {
@@ -905,6 +949,7 @@ export default defineComponent({
      dateOptions,
      formatTotalTime,
      isValidTotal,
+     hasValidationWarning,
      getTimeTooltip,
      getTotalTooltip,
      updateProjectedTime,

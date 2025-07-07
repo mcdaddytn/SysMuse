@@ -51,7 +51,6 @@ model Matter {
   updatedAt   DateTime        @updatedAt
   tasks       Task[]
   entries     TimesheetEntry[]
-  itActivities ITActivity[]
 }
 
 model Task {
@@ -62,7 +61,6 @@ model Task {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   entries     TimesheetEntry[]
-  itActivities ITActivity[]
   
   @@unique([matterId, description])
 }
@@ -97,9 +95,8 @@ model TimesheetEntry {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   
-  // Reference to the IT activity that created this entry (if any)
-  sourceITActivityId String?
-  sourceITActivity   ITActivity? @relation(fields: [sourceITActivityId], references: [id])
+  // Many-to-many relation with ITActivity through junction table
+  itActivityAssociations ITActivityAssociation[]
   
   @@unique([timesheetId, matterId, taskDescription])
 }
@@ -120,26 +117,35 @@ model ITActivity {
   // Activity-specific metadata stored as JSON
   metadata        Json?            // Store additional type-specific data
   
-  // Optional association with matter/task (set when user associates manually)
-  matterId        String?
-  matter          Matter?          @relation(fields: [matterId], references: [id])
-  taskId          String?
-  task            Task?            @relation(fields: [taskId], references: [id])
-  
-  // Duration set by user when associating with task (in minutes)
-  durationMinutes Int?
-  
-  // Track if this activity has been converted to a timesheet entry
+  // Track if this activity has been associated with any timesheet entry
   isAssociated    Boolean          @default(false)
   
-  // One-to-many relation: one IT activity can create multiple timesheet entries
-  timesheetEntries TimesheetEntry[]
+  // Many-to-many relation with TimesheetEntry through junction table
+  timesheetAssociations ITActivityAssociation[]
   
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   
   @@index([teamMemberId, startDate])
   @@index([activityType, startDate])
+}
+
+// Junction table for many-to-many relationship between ITActivity and TimesheetEntry
+model ITActivityAssociation {
+  id                String         @id @default(cuid())
+  itActivityId      String
+  itActivity        ITActivity     @relation(fields: [itActivityId], references: [id], onDelete: Cascade)
+  timesheetEntryId  String
+  timesheetEntry    TimesheetEntry @relation(fields: [timesheetEntryId], references: [id], onDelete: Cascade)
+  
+  // Duration set by user when associating with task (in minutes)
+  durationMinutes   Int?
+  
+  // When the association was created
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  @@unique([itActivityId, timesheetEntryId])
 }
 
 enum TimeIncrementType {

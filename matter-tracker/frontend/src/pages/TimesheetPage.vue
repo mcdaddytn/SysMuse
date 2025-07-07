@@ -153,6 +153,8 @@
                   filled
                   @new-value="(val) => createTaskOption(val, index)"
                   @update:model-value="(val) => handleTaskSelection(val, index)"
+                  @mouseenter="showAssociatedActivitiesTooltip = index"
+                  @mouseleave="showAssociatedActivitiesTooltip = null"
                 >
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
@@ -166,6 +168,23 @@
                       </q-item-section>
                     </q-item>
                   </template>
+                  <q-tooltip 
+                    v-if="getAssociatedActivities(entry).length > 0 && showAssociatedActivitiesTooltip === index"
+                    anchor="top middle"
+                    self="bottom middle"
+                    :offset="[10, 10]"
+                    max-width="400px"
+                    class="bg-grey-9 text-white q-pa-md"
+                  >
+                    <div class="text-weight-bold q-mb-sm">Associated IT Activities:</div>
+                    <div v-for="activity in getAssociatedActivities(entry)" :key="activity.id" class="q-mb-xs">
+                      <div class="text-weight-medium">{{ activity.title }}</div>
+                      <div class="text-caption">
+                        {{ activity.activityType }} • {{ formatDateTime(activity.startDate) }}
+                        <span v-if="activity.durationMinutes"> • {{ formatDuration(activity.durationMinutes) }}</span>
+                      </div>
+                    </div>
+                  </q-tooltip>
                 </q-select>
               </td>
               <td>
@@ -349,6 +368,17 @@ interface EntryRow {
   actualTime: number;
   projectedTimeDisplay: string;
   actualTimeDisplay: string;
+  itActivityAssociations?: Array<{
+    id: string;
+    durationMinutes: number;
+    itActivity: {
+      id: string;
+      title: string;
+      activityType: string;
+      startDate: string;
+      teamMember: any;
+    };
+  }>;
 }
 
 export default defineComponent({
@@ -363,7 +393,8 @@ export default defineComponent({
     // Parse query parameters for initialization
     const initialMode = (route.query.mode as DateIncrementType) || 'WEEK';
     const initialTeamMemberId = route.query.teamMemberId as string | undefined;
-    const initialDate = route.query.date as string | undefined;
+    const initialDate = route.query.startDate as string | undefined || route.query.date as string | undefined;
+    const fromITActivity = route.query.fromITActivity === 'true';
 
     // Get initial date based on mode
     const getInitialDate = (mode: DateIncrementType): string => {
@@ -403,6 +434,7 @@ export default defineComponent({
     const currentTimesheetId = ref<string | null>(null);
     const showTaskDialog = ref(false);
     const selectedMatterForTask = ref<Matter | null>(null);
+    const showAssociatedActivitiesTooltip = ref<number | null>(null);
 
     // Spin control state
     const spinInterval = ref<NodeJS.Timeout | null>(null);
@@ -1002,6 +1034,29 @@ export default defineComponent({
      }
    }
 
+   // Function to get associated IT activities for a timesheet entry
+   function getAssociatedActivities(entry: EntryRow): any[] {
+     if (!entry.itActivityAssociations) return [];
+     return entry.itActivityAssociations.map(assoc => ({
+       ...assoc.itActivity,
+       durationMinutes: assoc.durationMinutes
+     }));
+   }
+
+   // Utility functions for formatting
+   function formatDateTime(dateString: string): string {
+     return date.formatDate(new Date(dateString), 'MMM D, YYYY h:mm A');
+   }
+
+   function formatDuration(minutes: number): string {
+     const hours = Math.floor(minutes / 60);
+     const mins = minutes % 60;
+     if (hours > 0) {
+       return `${hours}h ${mins}m`;
+     }
+     return `${mins}m`;
+   }
+
    onMounted(async () => {
      await Promise.all([loadTeamMembers(), loadMatters()]);
    });
@@ -1027,6 +1082,7 @@ export default defineComponent({
      actualTotal,
      showTaskDialog,
      selectedMatterForTask,
+     showAssociatedActivitiesTooltip,
      
      // Computed
      dateRangeLabel,
@@ -1066,6 +1122,9 @@ export default defineComponent({
      loadTimesheet,
      saveTimesheet,
      copyFromPrevious,
+     getAssociatedActivities,
+     formatDateTime,
+     formatDuration,
    };
  },
 });

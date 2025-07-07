@@ -45,15 +45,19 @@ router.get('/', async (req: Request, res: Response) => {
       where: whereClause,
       include: {
         teamMember: true,
-        matter: {
+        timesheetAssociations: {
           include: {
-            client: true,
-          },
-        },
-        task: true,
-        timesheetEntries: {
-          include: {
-            timesheet: true,
+            timesheetEntry: {
+              include: {
+                matter: {
+                  include: {
+                    client: true,
+                  },
+                },
+                task: true,
+                timesheet: true,
+              },
+            },
           },
         },
       },
@@ -79,15 +83,19 @@ router.get('/:id', async (req: Request, res: Response) => {
       where: { id },
       include: {
         teamMember: true,
-        matter: {
+        timesheetAssociations: {
           include: {
-            client: true,
-          },
-        },
-        task: true,
-        timesheetEntries: {
-          include: {
-            timesheet: true,
+            timesheetEntry: {
+              include: {
+                matter: {
+                  include: {
+                    client: true,
+                  },
+                },
+                task: true,
+                timesheet: true,
+              },
+            },
           },
         },
       },
@@ -228,7 +236,7 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
 
     // Check if a timesheet entry already exists for this matter/task combination
     console.log(`🔍 API: Checking for existing timesheet entry - timesheetId: ${timesheet.id}, matterId: ${matterId}, taskDescription: ${taskDescription}`);
-    const existingEntry = await prisma.timesheetEntry.findFirst({
+    let timesheetEntry = await prisma.timesheetEntry.findFirst({
       where: {
         timesheetId: timesheet.id,
         matterId,
@@ -236,18 +244,17 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
       },
     });
 
-    console.log(`🔍 API: Found existing entry:`, existingEntry);
+    console.log(`🔍 API: Found existing entry:`, timesheetEntry);
 
-    let timesheetEntry;
-    if (existingEntry) {
+    if (timesheetEntry) {
       console.log(`📝 API: Updating existing timesheet entry`);
-      console.log(`📝 API: Current actual time: ${existingEntry.actualTime}, adding: ${actualTime}`);
+      console.log(`📝 API: Current actual time: ${timesheetEntry.actualTime}, adding: ${actualTime}`);
       
       // Update existing entry by adding the duration
       timesheetEntry = await prisma.timesheetEntry.update({
-        where: { id: existingEntry.id },
+        where: { id: timesheetEntry.id },
         data: {
-          actualTime: existingEntry.actualTime + actualTime,
+          actualTime: timesheetEntry.actualTime + actualTime,
           updatedAt: new Date(),
         },
         include: {
@@ -267,8 +274,7 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
         taskId,
         taskDescription,
         urgency,
-        actualTime,
-        sourceITActivityId: id
+        actualTime
       });
       
       // Create new timesheet entry
@@ -281,7 +287,6 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
           urgency: urgency as Urgency,
           projectedTime: 0, // Leave projected time as 0
           actualTime,
-          sourceITActivityId: id,
         },
         include: {
           matter: {
@@ -294,37 +299,61 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
       console.log(`✅ API: Created new timesheet entry:`, timesheetEntry);
     }
 
+    // Create the association between IT activity and timesheet entry
+    console.log(`🔄 API: Creating association between IT activity and timesheet entry`);
+    const association = await prisma.iTActivityAssociation.create({
+      data: {
+        itActivityId: id,
+        timesheetEntryId: timesheetEntry.id,
+        durationMinutes: durationMinutes,
+      },
+      include: {
+        itActivity: {
+          include: {
+            teamMember: true,
+          },
+        },
+        timesheetEntry: {
+          include: {
+            matter: {
+              include: { client: true },
+            },
+            task: true,
+            timesheet: true,
+          },
+        },
+      },
+    });
+
     // Update the IT activity to mark it as associated
     console.log(`🔄 API: Updating IT activity to mark as associated`);
-    console.log(`🔄 API: Activity update data:`, {
-      matterId,
-      taskId,
-      durationMinutes,
-      isAssociated: true
-    });
-    
     const updatedActivity = await prisma.iTActivity.update({
       where: { id },
       data: {
-        matterId,
-        taskId,
-        durationMinutes,
         isAssociated: true,
       },
       include: {
         teamMember: true,
-        matter: {
-          include: { client: true },
+        timesheetAssociations: {
+          include: {
+            timesheetEntry: {
+              include: {
+                matter: {
+                  include: { client: true },
+                },
+                task: true,
+                timesheet: true,
+              },
+            },
+          },
         },
-        task: true,
-        timesheetEntries: true,
       },
     });
 
     console.log(`✅ API: Successfully updated IT activity:`, updatedActivity);
     
-    const responseMessage = existingEntry 
-      ? 'Duration added to existing timesheet entry' 
+    const responseMessage = timesheetEntry 
+      ? 'IT activity successfully associated with timesheet entry' 
       : 'New timesheet entry created from IT activity';
       
     console.log(`✅ API: POST /it-activities/${id}/associate - Successfully associated activity with timesheet entry`);
@@ -333,6 +362,7 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
     const responseData = {
       activity: updatedActivity,
       timesheetEntry,
+      association,
       message: responseMessage
     };
     
@@ -352,10 +382,25 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
 router.post('/:id/unassociate', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { timesheetEntryId } = req.body; // Optional: specific association to remove
+
+    console.log(`🔄 API: POST /it-activities/${id}/unassociate - Starting unassociation process`);
 
     const activity = await prisma.iTActivity.findUnique({
       where: { id },
-      include: { timesheetEntries: true },
+      include: { 
+        timesheetAssociations: {
+          include: {
+            timesheetEntry: {
+              include: {
+                matter: { include: { client: true } },
+                task: true,
+                timesheet: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!activity) {
@@ -363,39 +408,104 @@ router.post('/:id/unassociate', async (req: Request, res: Response) => {
       return;
     }
 
-    if (!activity.isAssociated) {
+    if (!activity.isAssociated || activity.timesheetAssociations.length === 0) {
       res.status(400).json({ error: 'Activity is not currently associated' });
       return;
     }
 
-    // If there are associated timesheet entries, we need to handle them carefully
-    // For now, we'll just unmark the activity but leave the timesheet entries
-    // In a production system, you might want to decrease the actual time or delete the entries
-    
+    // If specific timesheetEntryId provided, remove that specific association
+    // Otherwise, remove all associations
+    let associationsToRemove = activity.timesheetAssociations;
+    if (timesheetEntryId) {
+      associationsToRemove = activity.timesheetAssociations.filter(
+        assoc => assoc.timesheetEntryId === timesheetEntryId
+      );
+      if (associationsToRemove.length === 0) {
+        res.status(400).json({ error: 'Association not found' });
+        return;
+      }
+    }
+
+    console.log(`🔄 API: Removing ${associationsToRemove.length} associations`);
+
+    // Remove associations and update timesheet entries
+    for (const association of associationsToRemove) {
+      // Subtract the duration from the timesheet entry
+      const timesheetEntry = association.timesheetEntry;
+      const durationToSubtract = association.durationMinutes || 0;
+      
+      console.log(`🔄 API: Subtracting ${durationToSubtract} minutes from timesheet entry ${timesheetEntry.id}`);
+      
+      let newActualTime = timesheetEntry.actualTime;
+      
+      // Convert duration back to the timesheet's format
+      const timesheet = timesheetEntry.timesheet;
+      if (timesheet.timeIncrementType === 'PERCENT') {
+        // Get team member info from timesheet to calculate percentage
+        const teamMember = await prisma.teamMember.findUnique({
+          where: { id: timesheet.teamMemberId },
+        });
+        const workingHours = teamMember?.workingHours ?? 0;
+        const dailyMinutes = (workingHours / 5) * 60;
+        const percentToSubtract = dailyMinutes > 0 
+          ? Math.round((durationToSubtract / dailyMinutes) * 100)
+          : 0;
+        newActualTime = Math.max(0, timesheetEntry.actualTime - percentToSubtract);
+      } else {
+        newActualTime = Math.max(0, timesheetEntry.actualTime - durationToSubtract);
+      }
+
+      // Update timesheet entry
+      await prisma.timesheetEntry.update({
+        where: { id: timesheetEntry.id },
+        data: { actualTime: newActualTime },
+      });
+
+      // Remove the association
+      await prisma.iTActivityAssociation.delete({
+        where: { id: association.id },
+      });
+    }
+
+    // Check if any associations remain
+    const remainingAssociations = await prisma.iTActivityAssociation.count({
+      where: { itActivityId: id },
+    });
+
+    // Update the IT activity
     const updatedActivity = await prisma.iTActivity.update({
       where: { id },
       data: {
-        matterId: null,
-        taskId: null,
-        durationMinutes: null,
-        isAssociated: false,
+        isAssociated: remainingAssociations > 0,
       },
       include: {
         teamMember: true,
-        matter: {
-          include: { client: true },
+        timesheetAssociations: {
+          include: {
+            timesheetEntry: {
+              include: {
+                matter: { include: { client: true } },
+                task: true,
+                timesheet: true,
+              },
+            },
+          },
         },
-        task: true,
       },
     });
 
+    console.log(`✅ API: Successfully unassociated IT activity`);
+
     res.json({
       activity: updatedActivity,
-      message: 'IT activity unassociated successfully'
+      message: `IT activity unassociated successfully. Removed ${associationsToRemove.length} association(s).`
     });
 
   } catch (error) {
-    console.error('Error unassociating IT activity:', error);
+    console.error('❌ API: Error unassociating IT activity:', error);
+    if (error instanceof Error) {
+      console.error('❌ API: Error stack:', error.stack);
+    }
     res.status(500).json({ error: 'Failed to unassociate IT activity' });
   }
 });
@@ -489,18 +599,16 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
       where: { ...whereClause, isAssociated: false },
     });
 
-    // Get total duration of associated activities
-    const associatedActivities = await prisma.iTActivity.findMany({
-      where: { 
-        ...whereClause, 
-        isAssociated: true,
-        durationMinutes: { not: null },
+    // Get total duration of associated activities from associations
+    const associations = await prisma.iTActivityAssociation.findMany({
+      where: {
+        itActivity: whereClause,
       },
       select: { durationMinutes: true },
     });
 
-    const totalDurationMinutes = associatedActivities.reduce(
-      (sum, activity) => sum + (activity.durationMinutes || 0), 
+    const totalDurationMinutes = associations.reduce(
+      (sum, association) => sum + (association.durationMinutes || 0), 
       0
     );
 

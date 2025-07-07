@@ -71,6 +71,15 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
               },
             },
             task: true,
+            itActivityAssociations: {
+              include: {
+                itActivity: {
+                  include: {
+                    teamMember: true,
+                  },
+                },
+              },
+            },
           },
         },
         teamMember: true,
@@ -96,6 +105,15 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
                 },
               },
               task: true,
+              itActivityAssociations: {
+                include: {
+                  itActivity: {
+                    include: {
+                      teamMember: true,
+                    },
+                  },
+                },
+              },
             },
           },
           teamMember: true,
@@ -103,7 +121,7 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
       });
     }
 
-    console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Successfully fetched timesheet (ID: ${timesheet.id})`);
+    console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Successfully fetched timesheet (ID: ${timesheet?.id})`);
     res.json(timesheet);
   } catch (error) {
     console.error('Error fetching timesheet:', error);
@@ -236,6 +254,15 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
               },
             },
             task: true,
+            itActivityAssociations: {
+              include: {
+                itActivity: {
+                  include: {
+                    teamMember: true,
+                  },
+                },
+              },
+            },
           },
         },
         teamMember: true,
@@ -340,6 +367,15 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType/copy-from-previous', a
               },
             },
             task: true,
+            itActivityAssociations: {
+              include: {
+                itActivity: {
+                  include: {
+                    teamMember: true,
+                  },
+                },
+              },
+            },
           },
         },
         teamMember: true,

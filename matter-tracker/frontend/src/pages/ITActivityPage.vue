@@ -8,7 +8,7 @@
             label="Back to Timesheets"
             color="primary"
             outline
-            @click="$router.push('/')"
+            @click="returnToTimesheet"
           />
         </div>
       </div>
@@ -166,7 +166,23 @@
 
         <template v-slot:body-cell-title="props">
           <q-td :props="props" style="max-width: 300px">
-            <div class="text-weight-medium">{{ props.value }}</div>
+            <div 
+              class="text-weight-medium cursor-pointer"
+              @mouseenter="showGridMetadataTooltip = props.row.id"
+              @mouseleave="showGridMetadataTooltip = null"
+            >
+              {{ props.value }}
+              <q-tooltip 
+                v-if="props.row.metadata && showGridMetadataTooltip === props.row.id"
+                anchor="top middle"
+                self="bottom middle"
+                :offset="[10, 10]"
+                max-width="400px"
+                class="bg-grey-9 text-white q-pa-md"
+              >
+                <div v-html="formatMetadataForTooltip(props.row.metadata)"></div>
+              </q-tooltip>
+            </div>
             <div class="text-caption text-grey-6" v-if="props.row.description">
               {{ truncateText(props.row.description, 80) }}
             </div>
@@ -303,56 +319,91 @@
               </template>
             </q-select>
 
+            <!-- Metadata display with hover popup -->
             <q-input
-              v-model="associationForm.durationDisplay"
-              type="text"
-              label="Duration (hh:mm)"
+              v-if="selectedActivity?.metadata"
+              :model-value="formatMetadataForDisplay(selectedActivity.metadata)"
+              label="Metadata"
               filled
-              style="width: 120px"
-              @blur="updateDurationFromDisplay"
-              @keyup.enter="updateDurationFromDisplay"
-              placeholder="00:00"
+              readonly
+              class="q-mb-sm"
             >
-              <template v-slot:append>
-                <div class="column">
-                  <q-btn
-                    icon="keyboard_arrow_up"
-                    size="xs"
-                    flat
-                    dense
-                    @click="adjustDuration(getTimeIncrement())"
-                    @mousedown="startSpinning(getTimeIncrement())"
-                    @mouseup="stopSpinning"
-                    @mouseleave="stopSpinning"
-                  />
-                  <q-btn
-                    icon="keyboard_arrow_down"
-                    size="xs"
-                    flat
-                    dense
-                    @click="adjustDuration(-getTimeIncrement())"
-                    @mousedown="startSpinning(-getTimeIncrement())"
-                    @mouseup="stopSpinning"
-                    @mouseleave="stopSpinning"
-                  />
-                </div>
+              <q-tooltip 
+                :model-value="showMetadataTooltip"
+                @update:model-value="showMetadataTooltip = $event"
+                anchor="top middle"
+                self="bottom middle"
+                :offset="[10, 10]"
+                max-width="400px"
+                class="bg-grey-9 text-white q-pa-md"
+              >
+                <div v-html="formatMetadataForTooltip(selectedActivity.metadata)"></div>
+              </q-tooltip>
+              <template v-slot:prepend>
+                <q-icon 
+                  name="info" 
+                  @mouseenter="showMetadataTooltip = true"
+                  @mouseleave="showMetadataTooltip = false"
+                  style="cursor: pointer"
+                />
               </template>
             </q-input>
 
-            <q-select
-              v-model="associationForm.urgency"
-              :options="urgencyOptions"
-              label="Urgency"
-              filled
-            />
+            <!-- Horizontal layout for duration, urgency, and timesheet date -->
+            <div class="row q-gutter-md">
+              <q-input
+                v-model="associationForm.durationDisplay"
+                type="text"
+                label="Duration"
+                filled
+                style="width: 140px"
+                @blur="updateDurationFromDisplay"
+                @keyup.enter="updateDurationFromDisplay"
+                placeholder="00:00"
+              >
+                <template v-slot:append>
+                  <div class="column">
+                    <q-btn
+                      icon="keyboard_arrow_up"
+                      size="xs"
+                      flat
+                      dense
+                      @click="adjustDuration(getTimeIncrement())"
+                      @mousedown="startSpinning(getTimeIncrement())"
+                      @mouseup="stopSpinning"
+                      @mouseleave="stopSpinning"
+                    />
+                    <q-btn
+                      icon="keyboard_arrow_down"
+                      size="xs"
+                      flat
+                      dense
+                      @click="adjustDuration(-getTimeIncrement())"
+                      @mousedown="startSpinning(-getTimeIncrement())"
+                      @mouseup="stopSpinning"
+                      @mouseleave="stopSpinning"
+                    />
+                  </div>
+                </template>
+              </q-input>
 
-            <q-input
-              v-model="associationForm.timesheetDate"
-              type="date"
-              label="Timesheet Date"
-              filled
-              :rules="[val => !!val || 'Timesheet date is required']"
-            />
+              <q-select
+                v-model="associationForm.urgency"
+                :options="urgencyOptions"
+                label="Urgency"
+                filled
+                style="width: 120px"
+              />
+
+              <q-input
+                v-model="associationForm.timesheetDate"
+                type="date"
+                label="Timesheet Date"
+                filled
+                style="width: 160px"
+                :rules="[val => !!val || 'Timesheet date is required']"
+              />
+            </div>
 
             <div v-if="selectedActivity && selectedActivity.activityType === 'CALENDAR' && selectedActivity.endDate" 
                  class="q-pa-sm bg-blue-1 rounded-borders">
@@ -488,6 +539,8 @@ export default defineComponent({
     
     const showTaskDialog = ref(false);
     const selectedMatterForTask = ref<Matter | null>(null);
+    const showMetadataTooltip = ref(false);
+    const showGridMetadataTooltip = ref<string | null>(null);
 
     // Table configuration
     const pagination = ref({
@@ -1122,6 +1175,74 @@ export default defineComponent({
       });
     }
 
+    // Metadata formatting functions
+    function formatMetadataForDisplay(metadata: any): string {
+      if (!metadata || typeof metadata !== 'object') return '';
+      
+      const pairs: string[] = [];
+      for (const [key, value] of Object.entries(metadata)) {
+        if (value !== null && value !== undefined && value !== '') {
+          const displayValue = Array.isArray(value) 
+            ? value.join(', ') 
+            : String(value);
+          pairs.push(`${key}: ${displayValue}`);
+        }
+      }
+      return pairs.join(', ');
+    }
+
+    function formatMetadataForTooltip(metadata: any): string {
+      if (!metadata || typeof metadata !== 'object') return '';
+      
+      function formatObject(obj: any, indent: number = 0): string[] {
+        const lines: string[] = [];
+        const spaces = '&nbsp;'.repeat(indent * 2);
+        
+        for (const [key, value] of Object.entries(obj)) {
+          if (value === null || value === undefined || value === '') continue;
+          
+          if (Array.isArray(value)) {
+            lines.push(`${spaces}<strong>${key}:</strong>`);
+            value.forEach((item, index) => {
+              if (typeof item === 'object') {
+                lines.push(`${spaces}&nbsp;&nbsp;${index + 1}:`);
+                lines.push(...formatObject(item, indent + 2));
+              } else {
+                lines.push(`${spaces}&nbsp;&nbsp;• ${item}`);
+              }
+            });
+          } else if (typeof value === 'object') {
+            lines.push(`${spaces}<strong>${key}:</strong>`);
+            lines.push(...formatObject(value, indent + 1));
+          } else {
+            lines.push(`${spaces}<strong>${key}:</strong> ${value}`);
+          }
+        }
+        return lines;
+      }
+      
+      return formatObject(metadata).join('<br/>');
+    }
+
+    // Navigation functions
+    function returnToTimesheet(): void {
+      if (returnTo === 'timesheet') {
+        // Pass back the current context to the timesheet
+        router.push({
+          path: '/',
+          query: {
+            teamMemberId: selectedTeamMember.value?.id,
+            startDate: startDate.value,
+            mode: returnMode,
+            fromITActivity: 'true'
+          }
+        });
+      } else {
+        // Default navigation
+        router.push('/');
+      }
+    }
+
     // Lifecycle
     onMounted(() => {
       loadTeamMembers();
@@ -1160,6 +1281,8 @@ export default defineComponent({
       associationForm,
       pagination,
       columns,
+      showMetadataTooltip,
+      showGridMetadataTooltip,
 
       // Options
       activityTypeOptions,
@@ -1199,6 +1322,9 @@ export default defineComponent({
       unassociateActivity,
       showTaskDialog,
       selectedMatterForTask,
+      formatMetadataForDisplay,
+      formatMetadataForTooltip,
+      returnToTimesheet,
     };
   }
 });

@@ -1,5 +1,6 @@
 // Generate comprehensive IT Activities seed data for June 1, 2025 - July 5, 2025
 const fs = require('fs');
+const path = require('path');
 
 const teamMembers = [
   { id: "tm1", name: "Sarah Johnson", email: "sarah.johnson@firm.com" },
@@ -313,5 +314,16 @@ function generateITActivitiesSeeds() {
 
 // Generate and save the seed data
 const seedData = generateITActivitiesSeeds();
-fs.writeFileSync('./seeds/itActivities.json', JSON.stringify(seedData, null, 2));
-console.log('IT Activities seed data generated and saved to ./seeds/itActivities.json');
+
+// Determine the correct path based on current working directory
+const currentDir = process.cwd();
+const seedsDir = currentDir.includes('prisma') ? './seeds' : './prisma/seeds';
+const outputPath = path.join(seedsDir, 'itActivities.json');
+
+// Ensure the directory exists
+if (!fs.existsSync(seedsDir)) {
+  fs.mkdirSync(seedsDir, { recursive: true });
+}
+
+fs.writeFileSync(outputPath, JSON.stringify(seedData, null, 2));
+console.log(`IT Activities seed data generated and saved to ${outputPath}`);

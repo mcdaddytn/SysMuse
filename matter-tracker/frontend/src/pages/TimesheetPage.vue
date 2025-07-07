@@ -399,11 +399,13 @@ export default defineComponent({
     // Get initial date based on mode
     const getInitialDate = (mode: DateIncrementType): string => {
       if (initialDate) {
-        const parsedDate = new Date(initialDate);
+        // Use Quasar's date utility to properly parse the date
+        const parsedDate = date.extractDate(initialDate, 'YYYY-MM-DD');
         if (mode === 'WEEK') {
-          // Adjust to Sunday if needed
+          // Only adjust to Sunday if it's not already Sunday and we're not coming from IT Activity
+          // (IT Activity already sends the correct Sunday)
           const day = parsedDate.getDay();
-          if (day !== 0) {
+          if (day !== 0 && !fromITActivity) {
             parsedDate.setDate(parsedDate.getDate() - day);
           }
         }

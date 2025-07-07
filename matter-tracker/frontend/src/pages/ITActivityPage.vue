@@ -928,7 +928,7 @@ export default defineComponent({
         
         // Always include "Add New Task" option
         availableTasks.value = [
-          ...tasks,
+          ...tasks.map((task: Task) => ({ id: task.id, description: task.description })),
           { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
         ] as any;
       } catch (error) {
@@ -1032,8 +1032,8 @@ export default defineComponent({
       if (associationForm.value.matter) {
         loadTasksForMatter(associationForm.value.matter.id);
       }
-      // Select the new task
-      associationForm.value.task = task;
+      // Select the new task object
+      associationForm.value.task = { id: task.id, description: task.description };
       
       Notify.create({
         type: 'positive',
@@ -1069,6 +1069,10 @@ export default defineComponent({
           console.log('🕒 associateActivity: Using form duration - durationMinutes =', totalMinutes);
         }
         
+        // Determine timesheet mode based on current date range
+        const isDaily = startDate.value === endDate.value;
+        const timesheetMode = isDaily ? 'DAY' : 'WEEK';
+        
         const requestData = {
           matterId: associationForm.value.matter!.id,
           taskId: typeof associationForm.value.task === 'string' ? null : associationForm.value.task?.id,
@@ -1077,7 +1081,8 @@ export default defineComponent({
             : associationForm.value.task!.description,
           durationMinutes: totalMinutes,
           urgency: associationForm.value.urgency,
-          timesheetDate: associationForm.value.timesheetDate
+          timesheetDate: associationForm.value.timesheetDate,
+          timesheetMode: timesheetMode
         };
         
         console.log('📤 associateActivity: Sending API request with data:', requestData);
@@ -1227,15 +1232,49 @@ export default defineComponent({
     // Navigation functions
     function returnToTimesheet(): void {
       if (returnTo === 'timesheet') {
+        // Determine the timesheet mode based on the date range
+        const isDaily = startDate.value === endDate.value;
+        const mode = isDaily ? 'DAY' : 'WEEK';
+        
+        console.log('🔄 returnToTimesheet: Current dates', {
+          startDate: startDate.value,
+          endDate: endDate.value,
+          isDaily,
+          mode
+        });
+        
+        // For weekly mode, ensure we pass the Sunday (start of week)
+        let timesheetDate = startDate.value;
+        if (!isDaily) {
+          // Verify the start date is a Sunday for weekly mode
+          const startDateObj = date.extractDate(startDate.value, 'YYYY-MM-DD');
+          const dayOfWeek = startDateObj.getDay();
+          console.log('🔄 returnToTimesheet: Weekly mode check', {
+            originalDate: startDate.value,
+            dayOfWeek,
+            isSunday: dayOfWeek === 0
+          });
+          if (dayOfWeek !== 0) {
+            // Adjust to the previous Sunday
+            startDateObj.setDate(startDateObj.getDate() - dayOfWeek);
+            timesheetDate = date.formatDate(startDateObj, 'YYYY-MM-DD');
+            console.log('🔄 returnToTimesheet: Adjusted to Sunday:', timesheetDate);
+          }
+        }
+        
         // Pass back the current context to the timesheet
+        const queryParams = {
+          teamMemberId: selectedTeamMember.value?.id,
+          startDate: timesheetDate,
+          mode: mode,
+          fromITActivity: 'true'
+        };
+        
+        console.log('🔄 returnToTimesheet: Sending query params:', queryParams);
+        
         router.push({
           path: '/',
-          query: {
-            teamMemberId: selectedTeamMember.value?.id,
-            startDate: startDate.value,
-            mode: returnMode,
-            fromITActivity: 'true'
-          }
+          query: queryParams
         });
       } else {
         // Default navigation

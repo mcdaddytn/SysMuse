@@ -1,7 +1,7 @@
 // src/routes/itActivity.routes.ts
 
 import { Router, Request, Response } from 'express';
-import { PrismaClient, ITActivityType, Urgency } from '@prisma/client';
+import { PrismaClient, ITActivityType, Urgency, DateIncrementType } from '@prisma/client';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -25,11 +25,17 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
+    // Make date range inclusive on both dates
+    // Parse dates in local timezone to avoid UTC conversion issues
+    const startDateInclusive = new Date(startDate + 'T00:00:00');
+    
+    const endDateInclusive = new Date(endDate + 'T23:59:59.999');
+    
     const whereClause: any = {
       teamMemberId: teamMemberId as string,
       startDate: {
-        gte: new Date(startDate as string),
-        lte: new Date(endDate as string),
+        gte: startDateInclusive,
+        lte: endDateInclusive,
       },
     };
 
@@ -122,12 +128,13 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
     taskDescription, 
     durationMinutes, 
     urgency = 'MEDIUM',
-    timesheetDate 
+    timesheetDate,
+    timesheetMode = 'DAY'
   } = req.body;
   console.log(`🔄 API: POST /it-activities/${id}/associate - Starting association process`);
   console.log(`📋 API: Request params - id: ${id}`);
   console.log(`📋 API: Request body:`, req.body);
-  console.log(`📋 API: Parsed values - matterId: ${matterId}, taskId: ${taskId}, taskDescription: ${taskDescription}, durationMinutes: ${durationMinutes}, urgency: ${urgency}, timesheetDate: ${timesheetDate}`);
+  console.log(`📋 API: Parsed values - matterId: ${matterId}, taskId: ${taskId}, taskDescription: ${taskDescription}, durationMinutes: ${durationMinutes}, urgency: ${urgency}, timesheetDate: ${timesheetDate}, timesheetMode: ${timesheetMode}`);
   
   try {
 
@@ -167,37 +174,45 @@ router.post('/:id/associate', async (req: Request, res: Response) => {
 
     console.log(`✅ API: Activity can be associated`);
 
-    // Parse the timesheet date
-    console.log(`📅 API: Parsing timesheet date: ${timesheetDate}`);
-    const parsedTimesheetDate = new Date(timesheetDate + 'T00:00:00');
-    console.log(`📅 API: Parsed timesheet date:`, parsedTimesheetDate);
+    // Parse the timesheet date and adjust for weekly mode
+    console.log(`📅 API: Parsing timesheet date: ${timesheetDate} with mode: ${timesheetMode}`);
+    let parsedTimesheetDate = new Date(timesheetDate + 'T00:00:00');
+    
+    // For weekly mode, ensure we're using the Sunday of that week
+    if (timesheetMode === 'WEEK') {
+      const dayOfWeek = parsedTimesheetDate.getDay();
+      if (dayOfWeek !== 0) {
+        parsedTimesheetDate.setDate(parsedTimesheetDate.getDate() - dayOfWeek);
+      }
+    }
+    console.log(`📅 API: Adjusted timesheet date:`, parsedTimesheetDate);
     
     // Find or create the timesheet for the specified date
-    console.log(`🔍 API: Looking for existing timesheet - teamMemberId: ${activity.teamMemberId}, date: ${parsedTimesheetDate.toISOString()}`);
+    console.log(`🔍 API: Looking for existing timesheet - teamMemberId: ${activity.teamMemberId}, date: ${parsedTimesheetDate.toISOString()}, mode: ${timesheetMode}`);
     let timesheet = await prisma.timesheet.findFirst({
       where: {
         teamMemberId: activity.teamMemberId,
         startDate: parsedTimesheetDate,
-        dateIncrementType: 'DAY', // Default to daily for IT activity associations
+        dateIncrementType: timesheetMode as DateIncrementType,
       },
     });
 
     console.log(`🔍 API: Found existing timesheet:`, timesheet);
 
     if (!timesheet) {
-      console.log(`📝 API: Creating new daily timesheet`);
+      console.log(`📝 API: Creating new ${timesheetMode} timesheet`);
       console.log(`📝 API: Team member details:`, {
         teamMemberId: activity.teamMemberId,
         timeIncrementType: activity.teamMember.timeIncrementType,
         timeIncrement: activity.teamMember.timeIncrement
       });
       
-      // Create a new daily timesheet
+      // Create a new timesheet with the specified mode
       timesheet = await prisma.timesheet.create({
         data: {
           teamMemberId: activity.teamMemberId,
           startDate: parsedTimesheetDate,
-          dateIncrementType: 'DAY',
+          dateIncrementType: timesheetMode as DateIncrementType,
           timeIncrementType: activity.teamMember.timeIncrementType ?? undefined,
           timeIncrement: activity.teamMember.timeIncrement ?? undefined,
         },
@@ -569,11 +584,17 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
       return;
     }
 
+    // Make date range inclusive on both dates
+    // Parse dates in local timezone to avoid UTC conversion issues
+    const startDateInclusive = new Date(startDate + 'T00:00:00');
+    
+    const endDateInclusive = new Date(endDate + 'T23:59:59.999');
+    
     const whereClause = {
       teamMemberId,
       startDate: {
-        gte: new Date(startDate as string),
-        lte: new Date(endDate as string),
+        gte: startDateInclusive,
+        lte: endDateInclusive,
       },
     };
 

@@ -303,33 +303,41 @@
               </template>
             </q-select>
 
-            <div class="row q-gutter-md">
-              <div class="col-6">
-                <q-input
-                  v-model="associationForm.hours"
-                  type="number"
-                  label="Hours"
-                  filled
-                  min="0"
-                  max="24"
-                  step="0.25"
-                  :rules="[val => val >= 0 || 'Hours must be positive']"
-                  @update:model-value="updateDuration"
-                />
-              </div>
-              <div class="col-6">
-                <q-input
-                  v-model="associationForm.minutes"
-                  type="number"
-                  label="Minutes"
-                  filled
-                  min="0"
-                  max="59"
-                  :rules="[val => val >= 0 && val <= 59 || 'Minutes must be 0-59']"
-                  @update:model-value="updateDuration"
-                />
-              </div>
-            </div>
+            <q-input
+              v-model="associationForm.durationDisplay"
+              type="text"
+              label="Duration (hh:mm)"
+              filled
+              style="width: 120px"
+              @blur="updateDurationFromDisplay"
+              @keyup.enter="updateDurationFromDisplay"
+              placeholder="00:00"
+            >
+              <template v-slot:append>
+                <div class="column">
+                  <q-btn
+                    icon="keyboard_arrow_up"
+                    size="xs"
+                    flat
+                    dense
+                    @click="adjustDuration(getTimeIncrement())"
+                    @mousedown="startSpinning(getTimeIncrement())"
+                    @mouseup="stopSpinning"
+                    @mouseleave="stopSpinning"
+                  />
+                  <q-btn
+                    icon="keyboard_arrow_down"
+                    size="xs"
+                    flat
+                    dense
+                    @click="adjustDuration(-getTimeIncrement())"
+                    @mousedown="startSpinning(-getTimeIncrement())"
+                    @mouseup="stopSpinning"
+                    @mouseleave="stopSpinning"
+                  />
+                </div>
+              </template>
+            </q-input>
 
             <q-select
               v-model="associationForm.urgency"
@@ -379,11 +387,17 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, watch } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { date, Notify, Dialog } from 'quasar';
 import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'src/services/api';
+import { 
+  formatTime, 
+  parseTimeInput,
+  getTimeIncrementStep,
+  getMaxTimeValue
+} from 'src/utils/timeUtils';
 import NewTaskDialog from 'src/components/NewTaskDialog.vue';
 
 import type { 
@@ -416,8 +430,8 @@ interface ActivityStatistics {
 interface AssociationForm {
   matter: Matter | null;
   task: Task | string | null;
-  hours: number;
-  minutes: number;
+  durationDisplay: string; // hh:mm format
+  durationMinutes: number; // calculated from display
   urgency: Urgency;
   timesheetDate: string;
 }
@@ -461,11 +475,16 @@ export default defineComponent({
     const associationForm = ref<AssociationForm>({
       matter: null,
       task: null,
-      hours: 0,
-      minutes: 0,
+      durationDisplay: '00:00',
+      durationMinutes: 0,
       urgency: 'MEDIUM',
       timesheetDate: date.formatDate(new Date(), 'YYYY-MM-DD'),
     });
+
+    // Spin control state
+    const spinInterval = ref<NodeJS.Timeout | null>(null);
+    const spinAcceleration = ref<NodeJS.Timeout | null>(null);
+    const spinRate = ref(200); // Initial rate in milliseconds
     
     const showTaskDialog = ref(false);
     const selectedMatterForTask = ref<Matter | null>(null);
@@ -529,12 +548,14 @@ export default defineComponent({
 
     // Options for dropdowns
     const activityTypeOptions = [
+      { label: 'All Activity Types', value: null },
       { label: 'Calendar Events', value: 'CALENDAR' },
       { label: 'Emails', value: 'EMAIL' },
       { label: 'Documents', value: 'DOCUMENT' },
     ];
 
     const associationOptions = [
+      { label: 'All', value: null },
       { label: 'Associated', value: true },
       { label: 'Not Associated', value: false },
     ];
@@ -624,10 +645,83 @@ export default defineComponent({
       return text.substring(0, maxLength) + '...';
     }
 
-    function updateDuration(): void {
-      // Auto-calculate duration when hours/minutes change
-      const totalMinutes = (associationForm.value.hours * 60) + associationForm.value.minutes;
-      // This is just for display purposes; the actual calculation happens in the form
+    function getTimeIncrement(): number {
+      // Use 15-minute increments for duration spin controls
+      return 15;
+    }
+
+    function formatMinutesToHHMM(minutes: number): string {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    }
+
+    function parseHHMMToMinutes(timeStr: string): number {
+      const parts = timeStr.split(':');
+      if (parts.length !== 2) return 0;
+      
+      const hours = parseInt(parts[0]) || 0;
+      const minutes = parseInt(parts[1]) || 0;
+      
+      return (hours * 60) + minutes;
+    }
+
+    function updateDurationFromDisplay(): void {
+      const minutes = parseHHMMToMinutes(associationForm.value.durationDisplay);
+      associationForm.value.durationMinutes = minutes;
+      // Update display to ensure proper formatting
+      associationForm.value.durationDisplay = formatMinutesToHHMM(minutes);
+    }
+
+    function adjustDuration(increment: number): void {
+      const newMinutes = Math.max(0, associationForm.value.durationMinutes + increment);
+      associationForm.value.durationMinutes = newMinutes;
+      associationForm.value.durationDisplay = formatMinutesToHHMM(newMinutes);
+    }
+
+    function startSpinning(increment: number): void {
+      stopSpinning();
+      spinRate.value = 200;
+      
+      spinInterval.value = setTimeout(() => {
+        adjustDuration(increment);
+        
+        spinInterval.value = setInterval(() => {
+          adjustDuration(increment);
+        }, spinRate.value);
+        
+        spinAcceleration.value = setTimeout(() => {
+          accelerateSpinning(increment);
+        }, 1000);
+      }, 300);
+    }
+
+    function accelerateSpinning(increment: number): void {
+      if (spinInterval.value) {
+        clearInterval(spinInterval.value);
+        spinRate.value = Math.max(50, spinRate.value * 0.7);
+        
+        spinInterval.value = setInterval(() => {
+          adjustDuration(increment);
+        }, spinRate.value);
+        
+        if (spinRate.value > 50) {
+          spinAcceleration.value = setTimeout(() => {
+            accelerateSpinning(increment);
+          }, 500);
+        }
+      }
+    }
+
+    function stopSpinning(): void {
+      if (spinInterval.value) {
+        clearInterval(spinInterval.value);
+        spinInterval.value = null;
+      }
+      if (spinAcceleration.value) {
+        clearTimeout(spinAcceleration.value);
+        spinAcceleration.value = null;
+      }
     }
 
     function filterMatters(val: string, update: (fn: () => void) => void): void {
@@ -692,37 +786,48 @@ export default defineComponent({
       
       loading.value = true;
       try {
-        console.log('Loading activities...');
-        // Mock data - in real implementation, this would call the API
-        activities.value = [
-          {
-            id: '1',
-            teamMemberId: selectedTeamMember.value.id,
-            teamMember: selectedTeamMember.value,
-            activityType: 'CALENDAR',
-            title: 'Client Meeting - ABC Corp Strategy Review',
-            description: 'Quarterly strategy review meeting with ABC Corp leadership team',
-            startDate: date.formatDate(new Date(), 'YYYY-MM-DDTHH:mm:ss'),
-            endDate: date.formatDate(date.addToDate(new Date(), { hours: 2 }), 'YYYY-MM-DDTHH:mm:ss'),
-            metadata: {
-              meetingType: 'meeting',
-              location: 'Conference Room B',
-              attendees: ['john.client@abccorp.com']
-            },
-            isAssociated: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ];
+        console.log('🔄 Loading activities from API...');
+        console.log('📋 Parameters:', {
+          teamMemberId: selectedTeamMember.value.id,
+          startDate: startDate.value,
+          endDate: endDate.value,
+          activityType: activityTypeFilter.value,
+          isAssociated: associationFilter.value
+        });
+        
+        // Build query parameters
+        const params = new URLSearchParams({
+          teamMemberId: selectedTeamMember.value.id,
+          startDate: startDate.value,
+          endDate: endDate.value
+        });
+        
+        if (activityTypeFilter.value) {
+          params.append('activityType', activityTypeFilter.value);
+        }
+        
+        if (associationFilter.value !== null) {
+          params.append('isAssociated', associationFilter.value.toString());
+        }
+        
+        console.log('🔗 API URL:', `/it-activities?${params.toString()}`);
+        
+        const response = await api.get(`/it-activities?${params.toString()}`);
+        activities.value = response.data;
+        
+        console.log('✅ Loaded activities:', activities.value.length, 'items');
+        console.log('📋 Activities data:', activities.value);
         
         await loadStatistics();
       } catch (error) {
-        console.error('Error loading activities:', error);
+        console.error('❌ Error loading activities:', error);
         Notify.create({
           type: 'negative',
           message: 'Failed to load activities',
           position: 'top'
         });
+        // Clear activities on error
+        activities.value = [];
       } finally {
         loading.value = false;
       }
@@ -732,27 +837,32 @@ export default defineComponent({
       if (!selectedTeamMember.value) return;
       
       try {
-        console.log('Loading statistics...');
-        // Mock data - in real implementation, this would call the API
+        console.log('🔄 Loading statistics from API...');
+        
+        const response = await api.get(`/it-activities/stats/${selectedTeamMember.value.id}?startDate=${startDate.value}&endDate=${endDate.value}`);
+        statistics.value = response.data;
+        
+        console.log('✅ Loaded statistics:', statistics.value);
+      } catch (error) {
+        console.error('❌ Error loading statistics:', error);
+        // Set default empty statistics on error
         statistics.value = {
           activityCounts: {
-            calendar: 15,
-            email: 23,
-            document: 8,
-            total: 46
+            calendar: 0,
+            email: 0,
+            document: 0,
+            total: 0
           },
           associationStatus: {
-            associated: 12,
-            unassociated: 34,
-            associationRate: 26
+            associated: 0,
+            unassociated: 0,
+            associationRate: 0
           },
           totalDuration: {
-            minutes: 540,
-            hours: 9
+            minutes: 0,
+            hours: 0
           }
         };
-      } catch (error) {
-        console.error('Error loading statistics:', error);
       }
     }
 
@@ -803,11 +913,11 @@ export default defineComponent({
         const diffMs = endTime.getTime() - startTime.getTime();
         const totalMinutes = Math.floor(diffMs / (1000 * 60));
         
-        associationForm.value.hours = Math.floor(totalMinutes / 60);
-        associationForm.value.minutes = totalMinutes % 60;
+        associationForm.value.durationMinutes = totalMinutes;
+        associationForm.value.durationDisplay = formatMinutesToHHMM(totalMinutes);
       } else {
-        associationForm.value.hours = 1;
-        associationForm.value.minutes = 0;
+        associationForm.value.durationMinutes = 60; // Default to 1 hour
+        associationForm.value.durationDisplay = '01:00';
       }
       
       // Set timesheet date to activity date
@@ -823,11 +933,12 @@ export default defineComponent({
     function closeAssociateDialog(): void {
       showAssociation.value = false;
       selectedActivity.value = null;
+      stopSpinning(); // Stop any active spinning
       associationForm.value = {
         matter: null,
         task: null,
-        hours: 0,
-        minutes: 0,
+        durationDisplay: '00:00',
+        durationMinutes: 0,
         urgency: 'MEDIUM',
         timesheetDate: date.formatDate(new Date(), 'YYYY-MM-DD'),
       };
@@ -878,23 +989,34 @@ export default defineComponent({
     }
 
     async function associateActivity(): Promise<void> {
-      if (!selectedActivity.value || !canAssociate.value) return;
+      console.log('🔄 associateActivity: Starting association process');
+      console.log('📋 associateActivity: selectedActivity.value =', selectedActivity.value);
+      console.log('📋 associateActivity: canAssociate.value =', canAssociate.value);
+      
+      if (!selectedActivity.value || !canAssociate.value) {
+        console.log('❌ associateActivity: Cannot associate - missing activity or invalid form');
+        return;
+      }
       
       associating.value = true;
       try {
         // Use activity duration if available, otherwise use form values
         let totalMinutes: number;
         
+        console.log('📋 associateActivity: associationForm.value =', associationForm.value);
+        
         if (selectedActivity.value.activityType === 'CALENDAR' && selectedActivity.value.endDate) {
           const startTime = new Date(selectedActivity.value.startDate);
           const endTime = new Date(selectedActivity.value.endDate);
           const diffMs = endTime.getTime() - startTime.getTime();
           totalMinutes = Math.floor(diffMs / (1000 * 60));
+          console.log('🕒 associateActivity: Using calendar duration - totalMinutes =', totalMinutes);
         } else {
-          totalMinutes = (associationForm.value.hours * 60) + associationForm.value.minutes;
+          totalMinutes = associationForm.value.durationMinutes;
+          console.log('🕒 associateActivity: Using form duration - durationMinutes =', totalMinutes);
         }
         
-        const response = await api.post(`/it-activities/${selectedActivity.value.id}/associate`, {
+        const requestData = {
           matterId: associationForm.value.matter!.id,
           taskId: typeof associationForm.value.task === 'string' ? null : associationForm.value.task?.id,
           taskDescription: typeof associationForm.value.task === 'string' 
@@ -903,10 +1025,19 @@ export default defineComponent({
           durationMinutes: totalMinutes,
           urgency: associationForm.value.urgency,
           timesheetDate: associationForm.value.timesheetDate
-        });
+        };
+        
+        console.log('📤 associateActivity: Sending API request with data:', requestData);
+        console.log('🔗 associateActivity: API URL:', `/it-activities/${selectedActivity.value.id}/associate`);
+        
+        const response = await api.post(`/it-activities/${selectedActivity.value.id}/associate`, requestData);
+        
+        console.log('✅ associateActivity: API response received:', response.data);
         
         // Update the activity in the local state
         const activityIndex = activities.value.findIndex(a => a.id === selectedActivity.value!.id);
+        console.log('🔍 associateActivity: Looking for activity in local state, index:', activityIndex);
+        
         if (activityIndex !== -1) {
           activities.value[activityIndex] = {
             ...activities.value[activityIndex],
@@ -915,6 +1046,7 @@ export default defineComponent({
             matter: associationForm.value.matter!,
             durationMinutes: totalMinutes
           };
+          console.log('✅ associateActivity: Updated local activity state');
         }
         
         Notify.create({
@@ -923,18 +1055,24 @@ export default defineComponent({
           position: 'top'
         });
         
+        console.log('🚪 associateActivity: Closing dialog and loading statistics');
         closeAssociateDialog();
         await loadStatistics();
         
+        console.log('✅ associateActivity: Association process completed successfully');
+        
       } catch (error) {
-        console.error('Error associating activity:', error);
+        console.error('❌ associateActivity: Error during association:', error);
+        console.error('❌ associateActivity: Error details:', error.response?.data);
+        
         Notify.create({
           type: 'negative',
-          message: 'Failed to associate activity',
+          message: error.response?.data?.error || 'Failed to associate activity',
           position: 'top'
         });
       } finally {
         associating.value = false;
+        console.log('🏁 associateActivity: Process finished');
       }
     }
 
@@ -990,6 +1128,10 @@ export default defineComponent({
       loadMatters();
     });
 
+    onUnmounted(() => {
+      stopSpinning();
+    });
+
     // Watch for team member changes
     watch(selectedTeamMember, () => {
       if (selectedTeamMember.value) {
@@ -1035,7 +1177,13 @@ export default defineComponent({
       calculateDuration,
       formatDuration,
       truncateText,
-      updateDuration,
+      getTimeIncrement,
+      formatMinutesToHHMM,
+      parseHHMMToMinutes,
+      updateDurationFromDisplay,
+      adjustDuration,
+      startSpinning,
+      stopSpinning,
       filterMatters,
       onTeamMemberChange,
       onRequest,
@@ -1066,5 +1214,11 @@ export default defineComponent({
 
 .q-table__container {
   max-height: 70vh;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 </style>

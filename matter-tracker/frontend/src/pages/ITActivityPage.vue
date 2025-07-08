@@ -51,6 +51,10 @@
           <q-select
             v-model="activityTypeFilter"
             :options="activityTypeOptions"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
             label="Activity Type"
             filled
             clearable
@@ -62,6 +66,10 @@
           <q-select
             v-model="associationFilter"
             :options="associationOptions"
+            option-label="label"
+            option-value="value"
+            emit-value
+            map-options
             label="Association Status"
             filled
             clearable
@@ -261,7 +269,7 @@
     <q-dialog v-model="showAssociation" persistent>
       <q-card style="min-width: 500px">
         <q-card-section>
-          <div class="text-h6">Associate Activity with Matter</div>
+          <div class="text-h6">Associate IT Activity</div>
           <div class="text-subtitle2 text-grey-6" v-if="selectedActivity">
             {{ getActivityTypeLabel(selectedActivity.activityType) }}: {{ selectedActivity.title }}
           </div>
@@ -601,14 +609,12 @@ export default defineComponent({
 
     // Options for dropdowns
     const activityTypeOptions = [
-      { label: 'All Activity Types', value: null },
       { label: 'Calendar Events', value: 'CALENDAR' },
       { label: 'Emails', value: 'EMAIL' },
       { label: 'Documents', value: 'DOCUMENT' },
     ];
 
     const associationOptions = [
-      { label: 'All', value: null },
       { label: 'Associated', value: true },
       { label: 'Not Associated', value: false },
     ];
@@ -868,6 +874,9 @@ export default defineComponent({
         const response = await api.get(`/it-activities?${params.toString()}`);
         activities.value = response.data;
         
+        // Update pagination count
+        pagination.value.rowsNumber = activities.value.length;
+        
         console.log('✅ Loaded activities:', activities.value.length, 'items');
         console.log('📋 Activities data:', activities.value);
         
@@ -881,6 +890,7 @@ export default defineComponent({
         });
         // Clear activities on error
         activities.value = [];
+        pagination.value.rowsNumber = 0;
       } finally {
         loading.value = false;
       }

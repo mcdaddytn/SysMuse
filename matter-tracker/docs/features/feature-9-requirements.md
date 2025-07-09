@@ -14,6 +14,8 @@ We should enhance the settings system to allow data types (these can be configur
 Each setting will have a dataType field which can be one of the following:
 Enum - the name of the enum from which we can select a value.  On the settings screen we should have a dropdown to select among the valid enum values.
 
+If enum cannot be interrogated for values, can do this with a combination of String type in discrete set of values, maybe this is a better way to do it generally, for strings definitely use this, for integers can use discrete set or min, max, and interval.
+
 Integer - an integer value.  we can use a spin control that let's the user either enter via text or use the spin.  This will use minValue and maxValue fields (optional in the json, if not supplied, default to 0 and 100 respectively).  But if supplied, we can just narrow the integer range.  Optionally, the settings file my have a discreteValues collection which would be a json list of valid values.  An example of this would be legitimate increments for minutes on timesheets (valid values would be 1, 2, 3, 5, 6, 10, 15, 20, 30 - basically values that divide into an hour in a convenient way
 
 
@@ -28,3 +30,18 @@ Tasks - override tasks within matters, maybe can edit, combine over time to norm
 
 
 *****
+
+
+***
+For team members, allow entry in admin screen of a new team member.
+
+Also have a settings screen that will allow a subset of global settings to be overridden for each team member (maybe also have this configured in settings.json type metadata, which admin pages can override a global default.
+
+But can have for team member, change of increment
+
+Or can have for client and/or matter - probably client best for this, override increment
+
+
+
+
+***

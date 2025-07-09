@@ -29,6 +29,12 @@
             :color="$route.name === 'it-activities' ? 'white' : 'grey-4'"
             @click="$router.push('/it-activities')"
           />
+          <q-btn 
+            flat 
+            label="Settings" 
+            :color="$route.name === 'settings' ? 'white' : 'grey-4'"
+            @click="$router.push('/settings')"
+          />
         </div>
       </q-toolbar>
     </q-header>
@@ -71,7 +77,20 @@
           </q-item-section>
         </q-item>
 
-        <!-- ... rest of navigation items ... -->
+        <q-item 
+          clickable 
+          v-ripple 
+          :active="$route.name === 'settings'"
+          @click="$router.push('/settings')"
+        >
+          <q-item-section avatar>
+            <q-icon name="settings" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Settings</q-item-label>
+            <q-item-label caption>Configure global application settings</q-item-label>
+          </q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 

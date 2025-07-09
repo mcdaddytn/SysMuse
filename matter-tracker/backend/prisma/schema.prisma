@@ -169,3 +169,16 @@ enum ITActivityType {
   EMAIL       // Emails sent
   DOCUMENT    // OneDrive documents created/modified
 }
+
+enum MatterLookaheadMode {
+  COMBINED_STARTS_WITH    // StartsWith search against combined Matter strings
+  INDIVIDUAL_STARTS_WITH  // StartsWith search against individual matter and client strings
+  COMBINED_CONTAINS       // Contains search against combined Matter strings  
+  INDIVIDUAL_CONTAINS     // Contains search against individual matter and client strings
+}
+
+enum TimesheetMode {
+  WEEKLY                  // Only weekly timesheets
+  DAILY                   // Only daily timesheets
+  BOTH                    // Both weekly and daily (can switch)
+}

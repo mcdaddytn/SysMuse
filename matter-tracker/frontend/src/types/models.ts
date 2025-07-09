@@ -4,6 +4,8 @@ export type TimeIncrementType = 'PERCENT' | 'HOURS_MINUTES';
 export type DateIncrementType = 'DAY' | 'WEEK';
 export type Urgency = 'HOT' | 'MEDIUM' | 'MILD';
 export type ITActivityType = 'CALENDAR' | 'EMAIL' | 'DOCUMENT';
+export type MatterLookaheadMode = 'COMBINED_STARTS_WITH' | 'INDIVIDUAL_STARTS_WITH' | 'COMBINED_CONTAINS' | 'INDIVIDUAL_CONTAINS';
+export type TimesheetMode = 'WEEKLY' | 'DAILY' | 'BOTH';
 
 export interface TeamMember {
   id: string;
@@ -145,4 +147,10 @@ export interface CreateTimesheetEntryFromActivityRequest {
   durationMinutes: number;
   urgency: Urgency;
   timesheetDate: string; // The date to add this entry to
+}
+
+export interface Settings {
+  matterLookaheadMode: MatterLookaheadMode;
+  timesheetMode: TimesheetMode;
+  [key: string]: any;
 }

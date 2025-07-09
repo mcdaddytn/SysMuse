@@ -16,6 +16,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ITActivityPage.vue'),
         name: 'it-activities'
       },
+      { 
+        path: '/settings', 
+        component: () => import('pages/SettingsPage.vue'),
+        name: 'settings'
+      },
     ],
   },
   {

@@ -66,7 +66,7 @@
             />
           </div>
 
-          <div class="col-auto">
+          <div class="col-auto" v-if="showSwitchModeButton">
             <q-btn
               :label="switchButtonLabel"
               color="info"
@@ -122,7 +122,7 @@
                   dense
                   filled
                   use-input
-                  @filter="filterMatters"
+                  @filter="filterMattersForDropdown"
                   @update:model-value="(val) => onMatterChange(index, val)"
                 >
                   <template v-slot:option="scope">
@@ -357,8 +357,10 @@ import {
   getMaxTimeValue,
   isValidTotalTime
 } from 'src/utils/timeUtils';
+import { filterMatters } from 'src/utils/matterSearch';
+import { settingsService } from 'src/services/settings';
 import NewTaskDialog from 'src/components/NewTaskDialog.vue';
-import type { TeamMember, Matter, TimesheetEntry, Timesheet, TimeIncrementType, Task, DateIncrementType } from 'src/types/models';
+import type { TeamMember, Matter, TimesheetEntry, Timesheet, TimeIncrementType, Task, DateIncrementType, MatterLookaheadMode, TimesheetMode } from 'src/types/models';
 
 interface EntryRow {
   matter: Matter | null;
@@ -439,6 +441,10 @@ export default defineComponent({
     const currentEntryIndex = ref<number | null>(null);
     const showAssociatedActivitiesTooltip = ref<number | null>(null);
 
+    // Settings state
+    const matterLookaheadMode = ref<MatterLookaheadMode>('INDIVIDUAL_STARTS_WITH');
+    const timesheetModeConfig = ref<TimesheetMode>('WEEKLY');
+
     // Spin control state
     const spinInterval = ref<NodeJS.Timeout | null>(null);
     const spinAcceleration = ref<NodeJS.Timeout | null>(null);
@@ -468,6 +474,10 @@ export default defineComponent({
 
     const switchButtonLabel = computed(() => {
       return dateIncrementType.value === 'WEEK' ? 'Switch to Daily' : 'Switch to Weekly';
+    });
+
+    const showSwitchModeButton = computed(() => {
+      return timesheetModeConfig.value === 'BOTH';
     });
 
     const timeIncrementType = computed((): TimeIncrementType => {
@@ -774,16 +784,12 @@ export default defineComponent({
       entries.value.splice(index, 1);
     }
 
-    function filterMatters(val: string, update: (fn: () => void) => void): void {
+    function filterMattersForDropdown(val: string, update: (fn: () => void) => void): void {
       update(() => {
         if (val === '') {
           filteredMatters.value = matters.value;
         } else {
-          const needle = val.toLowerCase();
-          filteredMatters.value = matters.value.filter(matter => 
-            matter.name.toLowerCase().includes(needle) ||
-            matter.client.name.toLowerCase().includes(needle)
-          );
+          filteredMatters.value = filterMatters(matters.value, val, matterLookaheadMode.value);
         }
       });
     }
@@ -876,6 +882,28 @@ export default defineComponent({
           type: 'negative',
           message: 'Failed to load matters',
         });
+      }
+    }
+
+    async function loadSettings(): Promise<void> {
+      try {
+        matterLookaheadMode.value = await settingsService.getMatterLookaheadMode();
+        timesheetModeConfig.value = await settingsService.getTimesheetMode();
+        
+        // Adjust dateIncrementType based on settings if not coming from URL
+        if (!initialMode || initialMode === 'WEEK') {
+          if (timesheetModeConfig.value === 'DAILY') {
+            dateIncrementType.value = 'DAY';
+          } else if (timesheetModeConfig.value === 'WEEKLY') {
+            dateIncrementType.value = 'WEEK';
+          }
+          // For 'BOTH', keep the current value or default to WEEK
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        // Use defaults if loading fails
+        matterLookaheadMode.value = 'INDIVIDUAL_STARTS_WITH';
+        timesheetModeConfig.value = 'WEEKLY';
       }
     }
 
@@ -1068,7 +1096,7 @@ export default defineComponent({
    }
 
    onMounted(async () => {
-     await Promise.all([loadTeamMembers(), loadMatters()]);
+     await Promise.all([loadSettings(), loadTeamMembers(), loadMatters()]);
    });
 
    onUnmounted(() => {
@@ -1099,6 +1127,7 @@ export default defineComponent({
      formattedDateRange,
      copyButtonLabel,
      switchButtonLabel,
+     showSwitchModeButton,
      timeIncrementType,
      timeIncrement,
      projectedTimeLabel,
@@ -1122,7 +1151,7 @@ export default defineComponent({
      openITActivities,
      addEntry,
      removeEntry,
-     filterMatters,
+     filterMattersForDropdown,
      onMatterChange,
      getTaskOptions,
      createTaskOption,

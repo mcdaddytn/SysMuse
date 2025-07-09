@@ -285,7 +285,7 @@
               label="Matter"
               filled
               use-input
-              @filter="filterMatters"
+              @filter="filterMattersForDropdown"
               :rules="[val => !!val || 'Matter is required']"
               @update:model-value="onMatterChange"
             >
@@ -455,6 +455,8 @@ import {
   getTimeIncrementStep,
   getMaxTimeValue
 } from 'src/utils/timeUtils';
+import { filterMatters } from 'src/utils/matterSearch';
+import { settingsService } from 'src/services/settings';
 import NewTaskDialog from 'src/components/NewTaskDialog.vue';
 
 import type { 
@@ -463,7 +465,8 @@ import type {
   Task, 
   ITActivity,
   ITActivityType,
-  Urgency
+  Urgency,
+  MatterLookaheadMode
 } from 'src/types/models';
 
 interface ActivityStatistics {
@@ -527,6 +530,7 @@ export default defineComponent({
     const statistics = ref<ActivityStatistics | null>(null);
     const availableTasks = ref<Array<{label: string, value: string, isAddNew: boolean}>>([]);
     const taskCache = ref<Task[]>([]);
+    const matterLookaheadMode = ref<MatterLookaheadMode>('INDIVIDUAL_STARTS_WITH');
     
     const showAssociation = ref(false);
     const selectedActivity = ref<ITActivity | null>(null);
@@ -782,21 +786,26 @@ export default defineComponent({
       }
     }
 
-    function filterMatters(val: string, update: (fn: () => void) => void): void {
+    function filterMattersForDropdown(val: string, update: (fn: () => void) => void): void {
       update(() => {
         if (val === '') {
           filteredMatters.value = matters.value;
         } else {
-          const needle = val.toLowerCase();
-          filteredMatters.value = matters.value.filter(matter => 
-            matter.name.toLowerCase().includes(needle) ||
-            matter.client.name.toLowerCase().includes(needle)
-          );
+          filteredMatters.value = filterMatters(matters.value, val, matterLookaheadMode.value);
         }
       });
     }
 
-    // Data loading functions (stub implementations)
+    // Data loading functions
+    async function loadSettings(): Promise<void> {
+      try {
+        matterLookaheadMode.value = await settingsService.getMatterLookaheadMode();
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        matterLookaheadMode.value = 'INDIVIDUAL_STARTS_WITH';
+      }
+    }
+
     async function loadTeamMembers(): Promise<void> {
       try {
         console.log('Loading team members');
@@ -1322,6 +1331,7 @@ export default defineComponent({
 
     // Lifecycle
     onMounted(() => {
+      loadSettings();
       loadTeamMembers();
       loadMatters();
     });
@@ -1390,7 +1400,7 @@ export default defineComponent({
       adjustDuration,
       startSpinning,
       stopSpinning,
-      filterMatters,
+      filterMattersForDropdown,
       onTeamMemberChange,
       onRequest,
       loadActivities,

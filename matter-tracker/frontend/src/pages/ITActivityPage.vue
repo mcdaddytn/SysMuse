@@ -302,23 +302,23 @@
             <q-select
               v-model="associationForm.task"
               :options="availableTasks"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
               label="Task"
               filled
-              use-input
-              fill-input
-              new-value-mode="add"
-              @new-value="createTaskOption"
               @update:model-value="handleTaskSelection"
               :rules="[val => !!val || 'Task is required']"
             >
               <template v-slot:option="scope">
                 <q-item v-bind="scope.itemProps">
-                  <q-item-section avatar v-if="scope.opt === 'Add New Task'">
+                  <q-item-section avatar v-if="scope.opt.isAddNew">
                     <q-icon name="add" color="primary" />
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label :class="{ 'text-primary': scope.opt === 'Add New Task' }">
-                      {{ scope.opt }}
+                    <q-item-label :class="{ 'text-primary': scope.opt.isAddNew }">
+                      {{ scope.opt.label }}
                     </q-item-label>
                   </q-item-section>
                 </q-item>
@@ -444,7 +444,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { defineComponent, ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { date, Notify, Dialog } from 'quasar';
 import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
@@ -525,7 +525,7 @@ export default defineComponent({
     const filteredMatters = ref<Matter[]>([]);
     const activities = ref<ITActivity[]>([]);
     const statistics = ref<ActivityStatistics | null>(null);
-    const availableTasks = ref<string[]>([]);
+    const availableTasks = ref<Array<{label: string, value: string, isAddNew: boolean}>>([]);
     const taskCache = ref<Task[]>([]);
     
     const showAssociation = ref(false);
@@ -940,8 +940,12 @@ export default defineComponent({
         
         // Always include "Add New Task" option
         availableTasks.value = [
-          ...tasks.map((task: Task) => task.description),
-          'Add New Task'
+          ...tasks.map((task: Task) => ({ 
+            label: task.description, 
+            value: task.description,
+            isAddNew: false 
+          })),
+          { label: 'Add New Task', value: 'Add New Task', isAddNew: true }
         ];
       } catch (error) {
         console.error('Error loading tasks:', error);
@@ -951,7 +955,7 @@ export default defineComponent({
           position: 'top'
         });
         // Still provide the "Add New Task" option even if loading fails
-        availableTasks.value = ['Add New Task'];
+        availableTasks.value = [{ label: 'Add New Task', value: 'Add New Task', isAddNew: true }];
       }
     }
 
@@ -1014,12 +1018,13 @@ export default defineComponent({
       associationForm.value.task = null;
     }
 
-    function createTaskOption(val: string): void {
-      associationForm.value.task = val;
-    }
 
     function handleTaskSelection(val: any): void {
+      console.log('🔍 DIAGNOSTIC: handleTaskSelection called with val:', val, 'type:', typeof val);
+      console.log('🔍 DIAGNOSTIC: Current associationForm.task before:', associationForm.value.task);
+      
       if (val === 'Add New Task') {
+        console.log('🔍 DIAGNOSTIC: Add New Task selected, clearing task and showing dialog');
         // Clear the selection first
         associationForm.value.task = null;
         // Show the dialog
@@ -1027,9 +1032,12 @@ export default defineComponent({
           showNewTaskDialog(associationForm.value.matter);
         }
       } else {
+        console.log('🔍 DIAGNOSTIC: Normal task selection, setting task to:', val);
         // Normal task selection
         associationForm.value.task = val;
       }
+      
+      console.log('🔍 DIAGNOSTIC: Current associationForm.task after:', associationForm.value.task);
     }
 
     function showNewTaskDialog(matter: Matter): void {
@@ -1038,20 +1046,34 @@ export default defineComponent({
     }
 
     function onTaskCreated(task: Task): void {
+      console.log('🔍 DIAGNOSTIC: onTaskCreated called with task:', task);
+      console.log('🔍 DIAGNOSTIC: Current taskCache before:', taskCache.value.map(t => t.description));
+      console.log('🔍 DIAGNOSTIC: Current availableTasks before:', availableTasks.value);
+      console.log('🔍 DIAGNOSTIC: Current associationForm.task before:', associationForm.value.task);
+      
       // Add the new task to the cache
       taskCache.value.push(task);
+      console.log('🔍 DIAGNOSTIC: Added task to cache, new cache:', taskCache.value.map(t => t.description));
       
       // Add the task description to available tasks
-      const insertIndex = availableTasks.value.indexOf('Add New Task');
-      availableTasks.value.splice(insertIndex, 0, task.description);
+      const insertIndex = availableTasks.value.findIndex((opt: any) => opt.isAddNew);
+      console.log('🔍 DIAGNOSTIC: Insert index for Add New Task:', insertIndex);
+      const newTaskOption = { 
+        label: task.description, 
+        value: task.description,
+        isAddNew: false 
+      };
+      availableTasks.value.splice(insertIndex, 0, newTaskOption);
+      console.log('🔍 DIAGNOSTIC: Updated availableTasks after splice:', availableTasks.value);
       
-      // Select the new task by its description
-      associationForm.value.task = task.description;
-      
-      Notify.create({
-        type: 'positive',
-        message: 'Task created successfully',
+      // Use nextTick to ensure the dropdown is updated before setting the value
+      nextTick(() => {
+        console.log('🔍 DIAGNOSTIC: In nextTick, setting task to:', task.description);
+        associationForm.value.task = task.description;
+        console.log('🔍 DIAGNOSTIC: In nextTick, associationForm.task after:', associationForm.value.task);
       });
+      
+      // Note: NewTaskDialog already shows success notification, so we don't need another one here
     }
 
     async function associateActivity(): Promise<void> {
@@ -1315,6 +1337,12 @@ export default defineComponent({
       }
     });
 
+    // Watch for task changes to debug the double text issue
+    watch(() => associationForm.value.task, (newVal, oldVal) => {
+      console.log('🔍 DIAGNOSTIC: associationForm.task changed from:', oldVal, 'to:', newVal);
+      console.log('🔍 DIAGNOSTIC: Stack trace:', new Error().stack);
+    });
+
     return {
       // State
       selectedTeamMember,
@@ -1369,7 +1397,6 @@ export default defineComponent({
       showAssociateDialog,
       closeAssociateDialog,
       onMatterChange,
-      createTaskOption,
       handleTaskSelection,
       showNewTaskDialog,
       onTaskCreated,

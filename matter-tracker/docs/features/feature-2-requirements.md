@@ -7,3 +7,20 @@ When a task is selected (either from timesheet or from it activities page), we s
 To test this properly, the IT Activities must use data from matters and tasks table and to not use hard-coded data.  Let's make that change as well.
 
 
+****
+Corrections
+
+It is mostly working, except the same concatenated text problem when adding new task, here is a detailed description, let's focus on getting this solved, and if more diagnostic steps are required, so be it:
+
+When calling "Add New Task" from associate it activity dialog, after typing in a new task and hitting OK, the task dropdown shows visually in the control a task string that is the entered task string appended to itself.  So for example, if I attempt to add a task "Review Documents", when I press OK and return to the IT Associate Activity popup what will be displayed in the task dropdown (text portion of the combo-dropdown) will be the string "Review Documents Review Documents".  However, it seems to save the correct task of "Review Documents", so if we did not add the text twice in that control, it would be correct.  Once this occurs, and I try to select the option I just added (Review Document), or any other in the list, the text portion of the combo box will show doubled/appended text for any of the items.
+
+
+On the Add New Task functionality within timesheet we have different behavior.  Currently we can add a new task and press OK.  When we return to the timesheet, we will have the new task available in the dropdown and that is what we want, but we also would like it to be selected in the dropdown already so we do not need to take an additional action to select the new task.  This is less of a priority since it is workable the way it is, but ideally when a user adds a new task, they want it also to be selected, so doing it automatically is preferable.
+
+Let's try to fix the Add New Task behavior in both pages.
+
+
+
+
+
+****

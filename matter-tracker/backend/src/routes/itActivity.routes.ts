@@ -611,6 +611,14 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
       where: { ...whereClause, activityType: 'DOCUMENT' },
     });
 
+    const relativityCount = await prisma.iTActivity.count({
+      where: { ...whereClause, activityType: 'RELATIVITY' },
+    });
+
+    const claudeSessionCount = await prisma.iTActivity.count({
+      where: { ...whereClause, activityType: 'CLAUDE_SESSION' },
+    });
+
     // Get associated vs unassociated counts
     const associatedCount = await prisma.iTActivity.count({
       where: { ...whereClause, isAssociated: true },
@@ -640,7 +648,9 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
         calendar: calendarCount,
         email: emailCount,
         document: documentCount,
-        total: calendarCount + emailCount + documentCount,
+        relativity: relativityCount,
+        claudeSession: claudeSessionCount,
+        total: calendarCount + emailCount + documentCount + relativityCount + claudeSessionCount,
       },
       associationStatus: {
         associated: associatedCount,

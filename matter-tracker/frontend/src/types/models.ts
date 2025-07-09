@@ -3,7 +3,7 @@
 export type TimeIncrementType = 'PERCENT' | 'HOURS_MINUTES';
 export type DateIncrementType = 'DAY' | 'WEEK';
 export type Urgency = 'HOT' | 'MEDIUM' | 'MILD';
-export type ITActivityType = 'CALENDAR' | 'EMAIL' | 'DOCUMENT';
+export type ITActivityType = 'CALENDAR' | 'EMAIL' | 'DOCUMENT' | 'RELATIVITY' | 'CLAUDE_SESSION';
 export type MatterLookaheadMode = 'COMBINED_STARTS_WITH' | 'INDIVIDUAL_STARTS_WITH' | 'COMBINED_CONTAINS' | 'INDIVIDUAL_CONTAINS';
 export type TimesheetMode = 'WEEKLY' | 'DAILY' | 'BOTH';
 
@@ -121,6 +121,26 @@ export interface DocumentActivityMetadata {
   lastModifiedBy?: string;
   shareStatus?: 'private' | 'shared' | 'public';
   parentFolder?: string;
+}
+
+export interface RelativityActivityMetadata {
+  loginTime: string;
+  logoutTime: string;
+  durationMinutes: number;
+  queriesExecuted: number;
+  documentsReviewed: number;
+  searchTerms: string[];
+  matterAssociated: string;
+}
+
+export interface ClaudeSessionActivityMetadata {
+  sessionTitle: string;
+  durationMinutes: number;
+  promptCount: number;
+  responseCount: number;
+  clientContext: string;
+  sessionType: 'research' | 'drafting';
+  wordsGenerated: number;
 }
 
 // Request/Response interfaces for API

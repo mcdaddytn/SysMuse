@@ -168,6 +168,8 @@ enum ITActivityType {
   CALENDAR    // Outlook calendar events
   EMAIL       // Emails sent
   DOCUMENT    // OneDrive documents created/modified
+  RELATIVITY  // Relativity e-discovery system sessions
+  CLAUDE_SESSION // Claude LLM chat sessions
 }
 
 enum MatterLookaheadMode {

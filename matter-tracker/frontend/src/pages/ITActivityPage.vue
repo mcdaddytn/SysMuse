@@ -118,6 +118,20 @@
         
         <q-card class="col">
           <q-card-section>
+            <div class="text-h6">Relativity Sessions</div>
+            <div class="text-h4 text-purple">{{ statistics.activityCounts.relativity }}</div>
+          </q-card-section>
+        </q-card>
+        
+        <q-card class="col">
+          <q-card-section>
+            <div class="text-h6">Claude Sessions</div>
+            <div class="text-h4 text-teal">{{ statistics.activityCounts.claudeSession }}</div>
+          </q-card-section>
+        </q-card>
+        
+        <q-card class="col">
+          <q-card-section>
             <div class="text-h6">Associated</div>
             <div class="text-h4 text-positive">{{ statistics.associationStatus.associated }}</div>
             <div class="text-caption">{{ statistics.associationStatus.associationRate }}% rate</div>
@@ -615,6 +629,8 @@ export default defineComponent({
       { label: 'Calendar Events', value: 'CALENDAR' },
       { label: 'Emails', value: 'EMAIL' },
       { label: 'Documents', value: 'DOCUMENT' },
+      { label: 'Relativity Sessions', value: 'RELATIVITY' },
+      { label: 'Claude Sessions', value: 'CLAUDE_SESSION' },
     ];
 
     const associationOptions = [
@@ -651,6 +667,8 @@ export default defineComponent({
         case 'CALENDAR': return 'blue';
         case 'EMAIL': return 'green';
         case 'DOCUMENT': return 'orange';
+        case 'RELATIVITY': return 'purple';
+        case 'CLAUDE_SESSION': return 'teal';
         default: return 'grey';
       }
     }
@@ -660,6 +678,8 @@ export default defineComponent({
         case 'CALENDAR': return 'event';
         case 'EMAIL': return 'email';
         case 'DOCUMENT': return 'description';
+        case 'RELATIVITY': return 'search';
+        case 'CLAUDE_SESSION': return 'psychology';
         default: return 'help';
       }
     }
@@ -669,6 +689,8 @@ export default defineComponent({
         case 'CALENDAR': return 'Calendar';
         case 'EMAIL': return 'Email';
         case 'DOCUMENT': return 'Document';
+        case 'RELATIVITY': return 'Relativity';
+        case 'CLAUDE_SESSION': return 'Claude Session';
         default: return 'Unknown';
       }
     }

@@ -302,8 +302,6 @@
             <q-select
               v-model="associationForm.task"
               :options="availableTasks"
-              option-label="description"
-              option-value="id"
               label="Task"
               filled
               use-input
@@ -315,12 +313,12 @@
             >
               <template v-slot:option="scope">
                 <q-item v-bind="scope.itemProps">
-                  <q-item-section avatar v-if="scope.opt.isAddNew">
+                  <q-item-section avatar v-if="scope.opt === 'Add New Task'">
                     <q-icon name="add" color="primary" />
                   </q-item-section>
                   <q-item-section>
-                    <q-item-label :class="{ 'text-primary': scope.opt.isAddNew }">
-                      {{ scope.opt.label || scope.opt.description }}
+                    <q-item-label :class="{ 'text-primary': scope.opt === 'Add New Task' }">
+                      {{ scope.opt }}
                     </q-item-label>
                   </q-item-section>
                 </q-item>
@@ -488,7 +486,7 @@ interface ActivityStatistics {
 
 interface AssociationForm {
   matter: Matter | null;
-  task: Task | string | null;
+  task: string | null;
   durationDisplay: string; // hh:mm format
   durationMinutes: number; // calculated from display
   urgency: Urgency;
@@ -527,7 +525,8 @@ export default defineComponent({
     const filteredMatters = ref<Matter[]>([]);
     const activities = ref<ITActivity[]>([]);
     const statistics = ref<ActivityStatistics | null>(null);
-    const availableTasks = ref<Task[]>([]);
+    const availableTasks = ref<string[]>([]);
+    const taskCache = ref<Task[]>([]);
     
     const showAssociation = ref(false);
     const selectedActivity = ref<ITActivity | null>(null);
@@ -936,11 +935,14 @@ export default defineComponent({
         const tasks = response.data;
         console.log(`Loaded ${tasks.length} tasks for matter ${matterId}`);
         
+        // Cache the tasks for later lookup
+        taskCache.value = tasks;
+        
         // Always include "Add New Task" option
         availableTasks.value = [
-          ...tasks.map((task: Task) => ({ id: task.id, description: task.description })),
-          { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
-        ] as any;
+          ...tasks.map((task: Task) => task.description),
+          'Add New Task'
+        ];
       } catch (error) {
         console.error('Error loading tasks:', error);
         Notify.create({
@@ -949,9 +951,7 @@ export default defineComponent({
           position: 'top'
         });
         // Still provide the "Add New Task" option even if loading fails
-        availableTasks.value = [
-          { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
-        ] as any;
+        availableTasks.value = ['Add New Task'];
       }
     }
 
@@ -1019,7 +1019,7 @@ export default defineComponent({
     }
 
     function handleTaskSelection(val: any): void {
-      if (val && typeof val === 'object' && val.isAddNew) {
+      if (val === 'Add New Task') {
         // Clear the selection first
         associationForm.value.task = null;
         // Show the dialog
@@ -1038,12 +1038,15 @@ export default defineComponent({
     }
 
     function onTaskCreated(task: Task): void {
-      // Refresh the tasks for the matter
-      if (associationForm.value.matter) {
-        loadTasksForMatter(associationForm.value.matter.id);
-      }
-      // Select the new task object
-      associationForm.value.task = { id: task.id, description: task.description };
+      // Add the new task to the cache
+      taskCache.value.push(task);
+      
+      // Add the task description to available tasks
+      const insertIndex = availableTasks.value.indexOf('Add New Task');
+      availableTasks.value.splice(insertIndex, 0, task.description);
+      
+      // Select the new task by its description
+      associationForm.value.task = task.description;
       
       Notify.create({
         type: 'positive',
@@ -1083,12 +1086,15 @@ export default defineComponent({
         const isDaily = startDate.value === endDate.value;
         const timesheetMode = isDaily ? 'DAY' : 'WEEK';
         
+        // Find the task ID for the selected task description
+        const taskDescription = associationForm.value.task as string;
+        const selectedTask = taskCache.value.find((task: Task) => task.description === taskDescription);
+        const taskId = selectedTask ? selectedTask.id : null;
+        
         const requestData = {
           matterId: associationForm.value.matter!.id,
-          taskId: typeof associationForm.value.task === 'string' ? null : associationForm.value.task?.id,
-          taskDescription: typeof associationForm.value.task === 'string' 
-            ? associationForm.value.task 
-            : associationForm.value.task!.description,
+          taskId: taskId,
+          taskDescription: taskDescription,
           durationMinutes: totalMinutes,
           urgency: associationForm.value.urgency,
           timesheetDate: associationForm.value.timesheetDate,

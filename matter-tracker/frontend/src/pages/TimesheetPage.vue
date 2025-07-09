@@ -436,6 +436,7 @@ export default defineComponent({
     const currentTimesheetId = ref<string | null>(null);
     const showTaskDialog = ref(false);
     const selectedMatterForTask = ref<Matter | null>(null);
+    const currentEntryIndex = ref<number | null>(null);
     const showAssociatedActivitiesTooltip = ref<number | null>(null);
 
     // Spin control state
@@ -813,7 +814,7 @@ export default defineComponent({
         entries.value[index].taskDescription = '';
         // Show the dialog
         if (entries.value[index].matter) {
-          showNewTaskDialog(entries.value[index].matter);
+          showNewTaskDialog(entries.value[index].matter, index);
         }
       } else {
         // Normal task selection
@@ -821,8 +822,9 @@ export default defineComponent({
       }
     }
 
-    function showNewTaskDialog(matter: Matter): void {
+    function showNewTaskDialog(matter: Matter, index: number): void {
       selectedMatterForTask.value = matter;
+      currentEntryIndex.value = index;
       showTaskDialog.value = true;
     }
 
@@ -831,6 +833,12 @@ export default defineComponent({
         taskSuggestions.value[task.matterId] = [];
       }
       taskSuggestions.value[task.matterId].push(task.description);
+      
+      // Auto-select the newly created task in the current entry
+      if (currentEntryIndex.value !== null) {
+        entries.value[currentEntryIndex.value].taskDescription = task.description;
+        currentEntryIndex.value = null; // Reset
+      }
       
       Notify.create({
         type: 'positive',

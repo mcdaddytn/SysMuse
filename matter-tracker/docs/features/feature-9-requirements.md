@@ -1,47 +1,30 @@
 Feature 9 
 
-***
-Needs work
-***
-
 Admin Interface
 
-Settings admin page
-We want to be able to edit the various global parameters (as initialized from seed.json) in an admin page.
+Implement login to establish the default team member and access level.  We can use express-session or something similar.  For admins, all functionality will be available as will the ability to switch team member in the dropdown to view or alter data for each team member.  For users (non-admins, default level), they can only view or edit their own data.  The user should be prompted to login one time, after which they should be allowed access to the system for a period of time before timing out and being required to login again.  Let's set that timeout by default to be 4 hours.  Let's also add a manager level user access that is equivalent to admin for the moment (more on this below).
 
-We should enhance the settings system to allow data types (these can be configured in settings.json).
+Let's add to teamMember entity the attributes to support login and also a text title field for their title within firm (Associate, Partner, Attorney, Counsel, paralegal, tech support, etc.).  
 
-Each setting will have a dataType field which can be one of the following:
-Enum - the name of the enum from which we can select a value.  On the settings screen we should have a dropdown to select among the valid enum values.
+The attributes timeIncrementType, timeIncrement and workingHours are optional and at the global settings level we should have defaults for these attributes:
 
-If enum cannot be interrogated for values, can do this with a combination of String type in discrete set of values, maybe this is a better way to do it generally, for strings definitely use this, for integers can use discrete set or min, max, and interval.
+      "workingHours": 40,
+      "timeIncrementType": "PERCENT",
+      "timeIncrement": 1
 
-Integer - an integer value.  we can use a spin control that let's the user either enter via text or use the spin.  This will use minValue and maxValue fields (optional in the json, if not supplied, default to 0 and 100 respectively).  But if supplied, we can just narrow the integer range.  Optionally, the settings file my have a discreteValues collection which would be a json list of valid values.  An example of this would be legitimate increments for minutes on timesheets (valid values would be 1, 2, 3, 5, 6, 10, 15, 20, 30 - basically values that divide into an hour in a convenient way
+Let's add those to the global settings screen.  Also let's have a global attribute dictating whether users have access to the IT Activities screen, if they do not we can disable the button to navigate to IT Activities from timesheets.
 
+Add admin pages to allow maintenance of team members, adding new team members, setting/resetting passwords etc.  For now, the admin can just set passwords, we do not need any email verification or ability for user to reset password for initial implementation.  The above settings (workingHours, timeIncrementType, timeIncrement) can optionally be overridden for team members but should default to global settings.
 
-*****
-Other possible admin pages
+Let's add team member roles, current choices: paralegal, associate, technical support, partner, senior partner, and for the time being, just assign one per each team member.  There is a separate determination of whether user is admin or regular user - let's also make that an enum value since we will likely have more levels like manager (someone who can view/edit data of other team members).  Note that these are distinct (though loosely related) to title which will be specific title within firm and may be more specific than the levels available for team member roles (we may allow in future release multiple roles per user), so these have different uses and future development paths.
 
-TeamMember (include type, paralegal, associate, partner, senior parnter, managing partner, etc.)
+Also add an admin page to edit and add new matters that will show up in dropdowns selecting matters.
 
-Matter - add and maintain matters
+Also add another type of IT Activity called CoCounsel session.  This will operate like Claude Session, it is just another software used by attorneys where we want to track sessions and integrate to our system.  Add that IT Activity type and generate data for it in our seed data code.
 
-Tasks - override tasks within matters, maybe can edit, combine over time to normalize
-
-
-*****
-
-
-***
-For team members, allow entry in admin screen of a new team member.
-
-Also have a settings screen that will allow a subset of global settings to be overridden for each team member (maybe also have this configured in settings.json type metadata, which admin pages can override a global default.
-
-But can have for team member, change of increment
-
-Or can have for client and/or matter - probably client best for this, override increment
+Let's eliminate the navigation bar on the left as it seems redundant with menu options on top.  Those menu options can change based on user or admin (user really only has access to Timesheet, unless IT Activities are globally allowed to be viewed/edited by regular users in which case that menu item should also be available to users.
 
 
 
 
-***
+

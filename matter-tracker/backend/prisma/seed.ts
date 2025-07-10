@@ -1,6 +1,7 @@
 // prisma/seed.ts - Fixed TypeScript imports and types
 
-import { PrismaClient, Urgency, TimeIncrementType, ITActivityType } from '@prisma/client';
+import { PrismaClient, Urgency, TimeIncrementType, ITActivityType, TeamMemberRole, AccessLevel } from '@prisma/client';
+import bcrypt from 'bcrypt';
 const settingsData = require('./seeds/settings.json');
 const clientsData = require('./seeds/clients.json');
 const mattersData = require('./seeds/matters.json');
@@ -99,19 +100,32 @@ async function main() {
   );
   console.log(`Created ${matters.length} matters`);
 
-  // Seed team members with validation
+  // Seed team members with validation and password hashing
   const teamMembers = await Promise.all(
     teamMembersData.teamMembers.map(async (member: any) => {
       const timeIncrementType = member.timeIncrementType || defaultTimeIncrementType;
       const timeIncrement = member.timeIncrement || defaultTimeIncrement;
       const validatedTimeIncrement = validateTimeIncrement(timeIncrementType, timeIncrement);
       
+      // Hash password if provided
+      let hashedPassword = null;
+      if (member.password) {
+        hashedPassword = await bcrypt.hash(member.password, 10);
+      }
+      
       return prisma.teamMember.create({
         data: {
-          ...member,
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          password: hashedPassword,
+          title: member.title,
+          role: member.role as TeamMemberRole,
+          accessLevel: member.accessLevel as AccessLevel,
           workingHours: member.workingHours || defaultWorkingHours,
           timeIncrementType: timeIncrementType as TimeIncrementType,
           timeIncrement: validatedTimeIncrement,
+          isActive: member.isActive ?? true,
         },
       });
     })

@@ -2,12 +2,13 @@
 
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { requireAuth } from './auth.routes';
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Get all team members
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   console.log('API: GET /team-members - Fetching all team members');
   try {
     const teamMembers = await prisma.teamMember.findMany({

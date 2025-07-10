@@ -132,6 +132,13 @@
         
         <q-card class="col">
           <q-card-section>
+            <div class="text-h6">CoCounsel Sessions</div>
+            <div class="text-h4 text-indigo">{{ statistics.activityCounts.cocounselSession }}</div>
+          </q-card-section>
+        </q-card>
+        
+        <q-card class="col">
+          <q-card-section>
             <div class="text-h6">Associated</div>
             <div class="text-h4 text-positive">{{ statistics.associationStatus.associated }}</div>
             <div class="text-caption">{{ statistics.associationStatus.associationRate }}% rate</div>
@@ -631,6 +638,7 @@ export default defineComponent({
       { label: 'Documents', value: 'DOCUMENT' },
       { label: 'Relativity Sessions', value: 'RELATIVITY' },
       { label: 'Claude Sessions', value: 'CLAUDE_SESSION' },
+      { label: 'CoCounsel Sessions', value: 'COCOUNSEL_SESSION' },
     ];
 
     const associationOptions = [
@@ -669,6 +677,7 @@ export default defineComponent({
         case 'DOCUMENT': return 'orange';
         case 'RELATIVITY': return 'purple';
         case 'CLAUDE_SESSION': return 'teal';
+        case 'COCOUNSEL_SESSION': return 'indigo';
         default: return 'grey';
       }
     }
@@ -680,6 +689,7 @@ export default defineComponent({
         case 'DOCUMENT': return 'description';
         case 'RELATIVITY': return 'search';
         case 'CLAUDE_SESSION': return 'psychology';
+        case 'COCOUNSEL_SESSION': return 'smart_toy';
         default: return 'help';
       }
     }
@@ -691,6 +701,7 @@ export default defineComponent({
         case 'DOCUMENT': return 'Document';
         case 'RELATIVITY': return 'Relativity';
         case 'CLAUDE_SESSION': return 'Claude Session';
+        case 'COCOUNSEL_SESSION': return 'CoCounsel Session';
         default: return 'Unknown';
       }
     }

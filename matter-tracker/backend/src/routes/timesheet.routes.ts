@@ -2,6 +2,7 @@
 
 import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient, Urgency, TimeIncrementType, DateIncrementType } from '@prisma/client';
+import { requireAuth } from './auth.routes';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -22,7 +23,7 @@ interface TimesheetInput {
 }
 
 // Get timesheet for a specific team member, date, and increment type
-router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
+router.get('/:teamMemberId/:startDate/:dateIncrementType', requireAuth, async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
   const { teamMemberId, startDate, dateIncrementType } = req.params;
   console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Fetching timesheet`);
   try {

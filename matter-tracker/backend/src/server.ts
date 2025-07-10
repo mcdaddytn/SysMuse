@@ -3,6 +3,7 @@
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import session from 'express-session';
 import { PrismaClient } from '@prisma/client';
 import timesheetRoutes from './routes/timesheet.routes';
 import matterRoutes from './routes/matter.routes';
@@ -10,6 +11,7 @@ import teamMemberRoutes from './routes/teamMember.routes';
 import taskRoutes from './routes/task.routes';
 import itActivityRoutes from './routes/itActivity.routes';
 import settingsRoutes from './routes/settings.routes';
+import authRoutes from './routes/auth.routes';
 
 dotenv.config();
 
@@ -18,10 +20,26 @@ const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:9002',
+  credentials: true
+}));
 app.use(express.json());
 
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 4 * 60 * 60 * 1000 // 4 hours
+  }
+}));
+
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/timesheets', timesheetRoutes);
 app.use('/api/matters', matterRoutes);
 app.use('/api/team-members', teamMemberRoutes);

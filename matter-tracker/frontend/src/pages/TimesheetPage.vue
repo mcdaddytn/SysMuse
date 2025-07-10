@@ -864,7 +864,11 @@ export default defineComponent({
             await loadTimesheet();
           }
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          // Authentication failed, router guard will handle redirect
+          return;
+        }
         Notify.create({
           type: 'negative',
           message: 'Failed to load team members',
@@ -877,7 +881,11 @@ export default defineComponent({
         const response = await api.get('/matters');
         matters.value = response.data;
         filteredMatters.value = response.data; // Initialize filtered matters
-      } catch (error) {
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          // Authentication failed, router guard will handle redirect
+          return;
+        }
         Notify.create({
           type: 'negative',
           message: 'Failed to load matters',

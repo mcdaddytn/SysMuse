@@ -1,0 +1,8 @@
+// frontend/.eslintignore
+node_modules
+dist
+.quasar
+public
+*.d.ts
+quasar.config.js
+.eslintrc.js

@@ -115,8 +115,11 @@ timesheet-app.zip
 
 timesheet-app/backend/package-lock.json
 
+<<<<<<< HEAD
 esindex/.DS_Store
 
 timesheet-app/.DS_Store
 
+=======
+>>>>>>> origin/main
 .DS_Store

@@ -1,0 +1,207 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Settings {
+  id                String            @id @default(cuid())
+  key               String            @unique
+  value             Json
+  description       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+// Update TeamMember model to make settings optional
+model TeamMember {
+  id                String            @id @default(cuid())
+  name              String
+  email             String            @unique
+  password          String?           // Hashed password for authentication
+  title             String?           // Job title (Associate, Partner, etc.)
+  role              TeamMemberRole    @default(ASSOCIATE)
+  accessLevel       AccessLevel       @default(USER)
+  workingHours      Int?              // Made optional
+  timeIncrementType TimeIncrementType? // Made optional
+  timeIncrement     Int?              // Made optional
+  lastLoginAt       DateTime?         // Track last login
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  timesheets        Timesheet[]
+  itActivities      ITActivity[]
+}
+
+model Client {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  matters     Matter[]
+}
+
+model Matter {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  clientId    String
+  client      Client          @relation(fields: [clientId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  tasks       Task[]
+  entries     TimesheetEntry[]
+}
+
+model Task {
+  id          String          @id @default(cuid())
+  description String
+  matterId    String
+  matter      Matter          @relation(fields: [matterId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  entries     TimesheetEntry[]
+  
+  @@unique([matterId, description])
+}
+
+model Timesheet {
+  id           String          @id @default(cuid())
+  teamMemberId String
+  teamMember   TeamMember      @relation(fields: [teamMemberId], references: [id])
+  startDate         DateTime
+  dateIncrementType DateIncrementType @default(WEEK)
+  timeIncrementType TimeIncrementType @default(PERCENT)
+  timeIncrement     Int               @default(1)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  entries      TimesheetEntry[]
+  
+  @@unique([teamMemberId, startDate, dateIncrementType], name: "teamMemberId_startDate_dateIncrementType")
+}
+
+model TimesheetEntry {
+  id             String    @id @default(cuid())
+  timesheetId    String
+  timesheet      Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  matterId       String
+  matter         Matter    @relation(fields: [matterId], references: [id])
+  taskId         String?
+  task           Task?     @relation(fields: [taskId], references: [id])
+  taskDescription String
+  urgency        Urgency   @default(MEDIUM)
+  projectedTime  Int       // stored as percentage (0-100) or minutes depending on timeIncrementType
+  actualTime     Int       // stored as percentage (0-100) or minutes depending on timeIncrementType
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  // Many-to-many relation with ITActivity through junction table
+  itActivityAssociations ITActivityAssociation[]
+  
+  @@unique([timesheetId, matterId, taskDescription])
+}
+
+// New IT Activity table to track Outlook, Email, and OneDrive activities
+model ITActivity {
+  id              String           @id @default(cuid())
+  teamMemberId    String
+  teamMember      TeamMember       @relation(fields: [teamMemberId], references: [id])
+  
+  // Common fields for all activity types
+  activityType    ITActivityType   // CALENDAR, EMAIL, DOCUMENT
+  title           String           // Subject/title/filename
+  description     String?          // Body/content preview
+  startDate       DateTime         // When the activity occurred/was created
+  endDate         DateTime?        // For calendar events only
+  
+  // Activity-specific metadata stored as JSON
+  metadata        Json?            // Store additional type-specific data
+  
+  // Track if this activity has been associated with any timesheet entry
+  isAssociated    Boolean          @default(false)
+  
+  // Many-to-many relation with TimesheetEntry through junction table
+  timesheetAssociations ITActivityAssociation[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@index([teamMemberId, startDate])
+  @@index([activityType, startDate])
+}
+
+// Junction table for many-to-many relationship between ITActivity and TimesheetEntry
+model ITActivityAssociation {
+  id                String         @id @default(cuid())
+  itActivityId      String
+  itActivity        ITActivity     @relation(fields: [itActivityId], references: [id], onDelete: Cascade)
+  timesheetEntryId  String
+  timesheetEntry    TimesheetEntry @relation(fields: [timesheetEntryId], references: [id], onDelete: Cascade)
+  
+  // Duration set by user when associating with task (in minutes)
+  durationMinutes   Int?
+  
+  // When the association was created
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  @@unique([itActivityId, timesheetEntryId])
+}
+
+enum TimeIncrementType {
+  PERCENT
+  HOURS_MINUTES
+}
+
+enum DateIncrementType {
+  DAY
+  WEEK
+}
+
+enum Urgency {
+  HOT
+  MEDIUM
+  MILD
+}
+
+enum ITActivityType {
+  CALENDAR    // Outlook calendar events
+  EMAIL       // Emails sent
+  DOCUMENT    // OneDrive documents created/modified
+  RELATIVITY  // Relativity e-discovery system sessions
+  CLAUDE_SESSION // Claude LLM chat sessions
+  COCOUNSEL_SESSION // CoCounsel LLM chat sessions
+}
+
+enum MatterLookaheadMode {
+  COMBINED_STARTS_WITH    // StartsWith search against combined Matter strings
+  INDIVIDUAL_STARTS_WITH  // StartsWith search against individual matter and client strings
+  COMBINED_CONTAINS       // Contains search against combined Matter strings  
+  INDIVIDUAL_CONTAINS     // Contains search against individual matter and client strings
+}
+
+enum TimesheetMode {
+  WEEKLY                  // Only weekly timesheets
+  DAILY                   // Only daily timesheets
+  BOTH                    // Both weekly and daily (can switch)
+}
+
+enum TeamMemberRole {
+  PARALEGAL
+  ASSOCIATE
+  TECHNICAL_SUPPORT
+  PARTNER
+  SENIOR_PARTNER
+}
+
+enum AccessLevel {
+  USER                    // Regular user - can only view/edit own data
+  MANAGER                 // Can view/edit other team members' data
+  ADMIN                   // Full access to all functionality
+}

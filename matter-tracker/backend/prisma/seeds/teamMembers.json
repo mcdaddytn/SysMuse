@@ -1,0 +1,69 @@
+{
+  "teamMembers": [
+    {
+      "id": "tm1",
+      "name": "Sarah Johnson",
+      "email": "sarah.johnson@firm.com",
+      "password": "password123",
+      "title": "Senior Partner",
+      "role": "SENIOR_PARTNER",
+      "accessLevel": "ADMIN",
+      "workingHours": 40,
+      "timeIncrementType": "PERCENT",
+      "timeIncrement": 1,
+      "isActive": true
+    },
+    {
+      "id": "tm2",
+      "name": "Michael Chen",
+      "email": "michael.chen@firm.com",
+      "password": "password123",
+      "title": "Partner",
+      "role": "PARTNER",
+      "accessLevel": "MANAGER",
+      "workingHours": 40,
+      "timeIncrementType": "HOURS_MINUTES",
+      "timeIncrement": 15,
+      "isActive": true
+    },
+    {
+      "id": "tm3",
+      "name": "Emily Rodriguez",
+      "email": "emily.rodriguez@firm.com",
+      "password": "password123",
+      "title": "Associate Attorney",
+      "role": "ASSOCIATE",
+      "accessLevel": "USER",
+      "workingHours": 40,
+      "timeIncrementType": "PERCENT",
+      "timeIncrement": 1,
+      "isActive": true
+    },
+    {
+      "id": "tm4",
+      "name": "David Thompson",
+      "email": "david.thompson@firm.com",
+      "password": "password123",
+      "title": "Associate Attorney",
+      "role": "ASSOCIATE",
+      "accessLevel": "USER",
+      "workingHours": 45,
+      "timeIncrementType": "HOURS_MINUTES",
+      "timeIncrement": 30,
+      "isActive": true
+    },
+    {
+      "id": "tm5",
+      "name": "Jessica Williams",
+      "email": "jessica.williams@firm.com",
+      "password": "password123",
+      "title": "Paralegal",
+      "role": "PARALEGAL",
+      "accessLevel": "USER",
+      "workingHours": 40,
+      "timeIncrementType": "HOURS_MINUTES",
+      "timeIncrement": 6,
+      "isActive": true
+    }
+  ]
+}

@@ -1,0 +1,169 @@
+<!-- src/layouts/MainLayout.vue - Role-based navigation without left drawer -->
+<template>
+  <q-layout view="lHh Lpr lFf">
+    <q-header elevated>
+      <q-toolbar>
+        <q-toolbar-title>
+          Matter Tracker
+        </q-toolbar-title>
+
+        <div class="q-gutter-sm">
+          <!-- Timesheet - Available to all users -->
+          <q-btn 
+            flat 
+            label="Timesheet" 
+            :color="$route.name === 'timesheet' ? 'white' : 'grey-4'"
+            @click="$router.push('/')"
+          />
+          
+          <!-- IT Activities - Only if globally enabled or user is admin/manager -->
+          <q-btn 
+            v-if="showITActivities"
+            flat 
+            label="IT Activities" 
+            :color="$route.name === 'it-activities' ? 'white' : 'grey-4'"
+            @click="$router.push('/it-activities')"
+          />
+          
+          <!-- Settings - Available to all users -->
+          <q-btn 
+            flat 
+            label="Settings" 
+            :color="$route.name === 'settings' ? 'white' : 'grey-4'"
+            @click="$router.push('/settings')"
+          />
+          
+          <!-- Admin pages - Only for admins -->
+          <q-btn 
+            v-if="isAdmin"
+            flat 
+            label="Admin" 
+            :color="$route.name?.includes('admin') ? 'white' : 'grey-4'"
+            @click="showAdminMenu = !showAdminMenu"
+            icon="admin_panel_settings"
+          >
+            <q-menu v-model="showAdminMenu">
+              <q-list style="min-width: 150px">
+                <q-item clickable @click="$router.push('/admin/team-members')">
+                  <q-item-section avatar>
+                    <q-icon name="people" />
+                  </q-item-section>
+                  <q-item-section>Team Members</q-item-section>
+                </q-item>
+                <q-item clickable @click="$router.push('/admin/matters')">
+                  <q-item-section avatar>
+                    <q-icon name="business" />
+                  </q-item-section>
+                  <q-item-section>Matters</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+
+          <!-- User menu -->
+          <q-btn 
+            flat 
+            round 
+            icon="account_circle"
+            @click="showUserMenu = !showUserMenu"
+          >
+            <q-menu v-model="showUserMenu">
+              <q-list style="min-width: 200px">
+                <q-item>
+                  <q-item-section>
+                    <q-item-label>{{ currentUser?.name || 'Unknown User' }}</q-item-label>
+                    <q-item-label caption>{{ currentUser?.title || currentUser?.role }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-separator />
+                <q-item clickable @click="logout">
+                  <q-item-section avatar>
+                    <q-icon name="logout" />
+                  </q-item-section>
+                  <q-item-section>Logout</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+        </div>
+      </q-toolbar>
+    </q-header>
+
+    <q-page-container>
+      <router-view />
+    </q-page-container>
+  </q-layout>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
+import { settingsService } from 'src/services/settings';
+import { authService } from 'src/services/auth';
+import type { AuthUser } from 'src/types/models';
+
+const router = useRouter();
+const $q = useQuasar();
+
+const showAdminMenu = ref(false);
+const showUserMenu = ref(false);
+const currentUser = ref<AuthUser | null>(null);
+const allowUserAccessToITActivities = ref(true);
+
+// Computed properties for role-based access
+const isAdmin = computed(() => {
+  return currentUser.value?.accessLevel === 'ADMIN' || currentUser.value?.accessLevel === 'MANAGER';
+});
+
+const showITActivities = computed(() => {
+  return isAdmin.value || allowUserAccessToITActivities.value;
+});
+
+// Load current user info (auth already checked by router guard)
+async function loadCurrentUser() {
+  try {
+    currentUser.value = await authService.getCurrentUser();
+  } catch (error) {
+    console.error('Failed to load user info:', error);
+    // Router guard will handle redirecting to login
+  }
+}
+
+// Load settings to check IT Activities access
+async function loadSettings() {
+  try {
+    const allowAccess = await settingsService.getSetting('allowUserAccessToITActivities');
+    allowUserAccessToITActivities.value = allowAccess;
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+    // Default to true if we can't load the setting
+    allowUserAccessToITActivities.value = true;
+  }
+}
+
+// Logout function
+async function logout() {
+  try {
+    await authService.logout();
+    
+    $q.notify({
+      type: 'positive',
+      message: 'Logged out successfully'
+    });
+    
+    router.push('/login');
+  } catch (error) {
+    console.error('Logout failed:', error);
+    $q.notify({
+      type: 'negative',
+      message: 'Logout failed'
+    });
+  }
+}
+
+onMounted(() => {
+  loadCurrentUser();
+  loadSettings();
+});
+</script>

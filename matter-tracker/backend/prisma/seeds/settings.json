@@ -1,0 +1,49 @@
+{
+  "settings": [
+    {
+      "key": "default_working_hours",
+      "value": 40,
+      "description": "Default working hours per week for team members"
+    },
+    {
+      "key": "default_time_increment_type",
+      "value": "PERCENT",
+      "description": "Default time increment type (PERCENT or HOURS_MINUTES)"
+    },
+    {
+      "key": "default_time_increment",
+      "value": 1,
+      "description": "Default time increment value"
+    },
+    {
+      "key": "workingHours",
+      "value": 40,
+      "description": "Global default working hours per week"
+    },
+    {
+      "key": "timeIncrementType",
+      "value": "PERCENT",
+      "description": "Global default time increment type"
+    },
+    {
+      "key": "timeIncrement",
+      "value": 1,
+      "description": "Global default time increment value"
+    },
+    {
+      "key": "allowUserAccessToITActivities",
+      "value": true,
+      "description": "Whether regular users can access IT Activities page"
+    },
+    {
+      "key": "matterLookaheadMode",
+      "value": "INDIVIDUAL_STARTS_WITH",
+      "description": "Default matter search mode"
+    },
+    {
+      "key": "timesheetMode",
+      "value": "WEEKLY",
+      "description": "Default timesheet mode"
+    }
+  ]
+}

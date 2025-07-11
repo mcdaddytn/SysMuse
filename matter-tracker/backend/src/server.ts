@@ -21,7 +21,19 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:9000',
+  origin: process.env.FRONTEND_URL || [
+    'http://localhost:9000',
+    'http://localhost:9001',
+    'http://localhost:9002',
+    'http://localhost:9003',
+    'http://localhost:9004',
+    'http://localhost:9005',
+    'http://localhost:9006',
+    'http://localhost:9007',
+    'http://localhost:9008',
+    'http://localhost:9009',
+    'http://localhost:9010'
+  ],
   credentials: true
 }));
 app.use(express.json());

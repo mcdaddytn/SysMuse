@@ -30,6 +30,7 @@ model TeamMember {
   workingHours      Int?              // Made optional
   timeIncrementType TimeIncrementType? // Made optional
   timeIncrement     Int?              // Made optional
+  userITActivity    Boolean?          // Override global setting for IT Activities access
   lastLoginAt       DateTime?         // Track last login
   isActive          Boolean           @default(true)
   createdAt         DateTime          @default(now())

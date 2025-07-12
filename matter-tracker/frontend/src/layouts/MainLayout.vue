@@ -25,8 +25,9 @@
             @click="$router.push('/it-activities')"
           />
           
-          <!-- Settings - Available to all users -->
+          <!-- Settings - Only for admins -->
           <q-btn 
+            v-if="isAdmin"
             flat 
             label="Settings" 
             :color="$route.name === 'settings' ? 'white' : 'grey-4'"
@@ -44,17 +45,23 @@
           >
             <q-menu v-model="showAdminMenu">
               <q-list style="min-width: 150px">
+                <q-item clickable @click="$router.push('/admin/clients')">
+                  <q-item-section avatar>
+                    <q-icon name="business" />
+                  </q-item-section>
+                  <q-item-section>Clients</q-item-section>
+                </q-item>
+                <q-item clickable @click="$router.push('/admin/matters')">
+                  <q-item-section avatar>
+                    <q-icon name="folder" />
+                  </q-item-section>
+                  <q-item-section>Matters</q-item-section>
+                </q-item>
                 <q-item clickable @click="$router.push('/admin/team-members')">
                   <q-item-section avatar>
                     <q-icon name="people" />
                   </q-item-section>
                   <q-item-section>Team Members</q-item-section>
-                </q-item>
-                <q-item clickable @click="$router.push('/admin/matters')">
-                  <q-item-section avatar>
-                    <q-icon name="business" />
-                  </q-item-section>
-                  <q-item-section>Matters</q-item-section>
                 </q-item>
               </q-list>
             </q-menu>
@@ -109,15 +116,25 @@ const $q = useQuasar();
 const showAdminMenu = ref(false);
 const showUserMenu = ref(false);
 const currentUser = ref<AuthUser | null>(null);
-const allowUserAccessToITActivities = ref(true);
+const userITActivity = ref(false);
 
 // Computed properties for role-based access
 const isAdmin = computed(() => {
+  return currentUser.value?.accessLevel === 'ADMIN';
+});
+
+const isManagerOrAdmin = computed(() => {
   return currentUser.value?.accessLevel === 'ADMIN' || currentUser.value?.accessLevel === 'MANAGER';
 });
 
 const showITActivities = computed(() => {
-  return isAdmin.value || allowUserAccessToITActivities.value;
+  // Check individual user override first, then global setting, then default for managers/admins
+  const userOverride = currentUser.value?.userITActivity;
+  if (userOverride !== null && userOverride !== undefined) {
+    return userOverride;
+  }
+  
+  return isManagerOrAdmin.value || userITActivity.value;
 });
 
 // Load current user info (auth already checked by router guard)
@@ -133,12 +150,12 @@ async function loadCurrentUser() {
 // Load settings to check IT Activities access
 async function loadSettings() {
   try {
-    const allowAccess = await settingsService.getSetting('allowUserAccessToITActivities');
-    allowUserAccessToITActivities.value = allowAccess;
+    const allowAccess = await settingsService.getSetting('userITActivity');
+    userITActivity.value = allowAccess;
   } catch (error) {
     console.error('Failed to load settings:', error);
-    // Default to true if we can't load the setting
-    allowUserAccessToITActivities.value = true;
+    // Default to false if we can't load the setting
+    userITActivity.value = false;
   }
 }
 

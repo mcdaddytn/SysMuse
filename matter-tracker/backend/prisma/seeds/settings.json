@@ -1,39 +1,34 @@
 {
   "settings": [
     {
-      "key": "default_working_hours",
-      "value": 40,
-      "description": "Default working hours per week for team members"
-    },
-    {
-      "key": "default_time_increment_type",
-      "value": "PERCENT",
-      "description": "Default time increment type (PERCENT or HOURS_MINUTES)"
-    },
-    {
-      "key": "default_time_increment",
-      "value": 1,
-      "description": "Default time increment value"
-    },
-    {
       "key": "workingHours",
       "value": 40,
       "description": "Global default working hours per week"
     },
     {
       "key": "timeIncrementType",
-      "value": "PERCENT",
+      "value": "HOURS_MINUTES",
       "description": "Global default time increment type"
     },
     {
       "key": "timeIncrement",
-      "value": 1,
+      "value": 15,
       "description": "Global default time increment value"
     },
     {
-      "key": "allowUserAccessToITActivities",
-      "value": true,
+      "key": "userITActivity",
+      "value": false,
       "description": "Whether regular users can access IT Activities page"
+    },
+    {
+      "key": "maxHoursPerDay",
+      "value": 12,
+      "description": "Maximum hours per day for timesheet validation"
+    },
+    {
+      "key": "maxHoursPerWeek",
+      "value": 60,
+      "description": "Maximum hours per week for timesheet validation"
     },
     {
       "key": "matterLookaheadMode",

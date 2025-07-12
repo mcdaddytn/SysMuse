@@ -19,6 +19,7 @@ export interface TeamMember {
   workingHours?: number;
   timeIncrementType?: TimeIncrementType;
   timeIncrement?: number;
+  userITActivity?: boolean;
   lastLoginAt?: string;
   isActive: boolean;
   createdAt: string;
@@ -193,7 +194,9 @@ export interface Settings {
   workingHours: number;
   timeIncrementType: TimeIncrementType;
   timeIncrement: number;
-  allowUserAccessToITActivities: boolean;
+  userITActivity: boolean;
+  maxHoursPerDay: number;
+  maxHoursPerWeek: number;
   [key: string]: any;
 }
 
@@ -210,6 +213,7 @@ export interface AuthUser {
   accessLevel: AccessLevel;
   role: TeamMemberRole;
   title?: string;
+  userITActivity?: boolean;
 }
 
 export interface LoginResponse {

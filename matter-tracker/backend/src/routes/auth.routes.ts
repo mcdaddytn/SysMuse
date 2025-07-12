@@ -38,7 +38,8 @@ router.post('/login', async (req: Request, res: Response) => {
         accessLevel: true,
         role: true,
         isActive: true,
-        title: true
+        title: true,
+        userITActivity: true
       }
     });
 
@@ -76,7 +77,8 @@ router.post('/login', async (req: Request, res: Response) => {
         name: user.name,
         accessLevel: user.accessLevel,
         role: user.role,
-        title: user.title
+        title: user.title,
+        userITActivity: user.userITActivity
       }
     });
 
@@ -123,8 +125,16 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 
 // Middleware to check admin access
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId || (req.session.accessLevel !== 'ADMIN' && req.session.accessLevel !== 'MANAGER')) {
+  if (!req.session.userId || req.session.accessLevel !== 'ADMIN') {
     return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// Middleware to check manager or admin access
+export const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId || (req.session.accessLevel !== 'ADMIN' && req.session.accessLevel !== 'MANAGER')) {
+    return res.status(403).json({ error: 'Manager or admin access required' });
   }
   next();
 };

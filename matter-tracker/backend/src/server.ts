@@ -12,6 +12,7 @@ import taskRoutes from './routes/task.routes';
 import itActivityRoutes from './routes/itActivity.routes';
 import settingsRoutes from './routes/settings.routes';
 import authRoutes from './routes/auth.routes';
+import clientRoutes from './routes/client.routes';
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ app.use(session({
 app.use('/api/auth', authRoutes);
 app.use('/api/timesheets', timesheetRoutes);
 app.use('/api/matters', matterRoutes);
+app.use('/api/clients', clientRoutes);
 app.use('/api/team-members', teamMemberRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/it-activities', itActivityRoutes);

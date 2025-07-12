@@ -8,9 +8,6 @@
       "title": "Senior Partner",
       "role": "SENIOR_PARTNER",
       "accessLevel": "ADMIN",
-      "workingHours": 40,
-      "timeIncrementType": "PERCENT",
-      "timeIncrement": 1,
       "isActive": true
     },
     {
@@ -21,9 +18,6 @@
       "title": "Partner",
       "role": "PARTNER",
       "accessLevel": "MANAGER",
-      "workingHours": 40,
-      "timeIncrementType": "HOURS_MINUTES",
-      "timeIncrement": 15,
       "isActive": true
     },
     {
@@ -34,9 +28,6 @@
       "title": "Associate Attorney",
       "role": "ASSOCIATE",
       "accessLevel": "USER",
-      "workingHours": 40,
-      "timeIncrementType": "PERCENT",
-      "timeIncrement": 1,
       "isActive": true
     },
     {
@@ -61,8 +52,8 @@
       "role": "PARALEGAL",
       "accessLevel": "USER",
       "workingHours": 40,
-      "timeIncrementType": "HOURS_MINUTES",
-      "timeIncrement": 6,
+      "timeIncrementType": "PERCENT",
+      "timeIncrement": 1,
       "isActive": true
     }
   ]

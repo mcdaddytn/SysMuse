@@ -36,28 +36,27 @@
           
           <!-- Admin pages - Only for admins -->
           <q-btn 
-            v-if="isAdmin"
+            v-if="currentUser?.accessLevel === 'ADMIN'"
             flat 
             label="Admin" 
             :color="$route.name?.includes('admin') ? 'white' : 'grey-4'"
-            @click="showAdminMenu = !showAdminMenu"
             icon="admin_panel_settings"
           >
-            <q-menu v-model="showAdminMenu">
+            <q-menu>
               <q-list style="min-width: 150px">
-                <q-item clickable @click="$router.push('/admin/clients')">
+                <q-item clickable v-close-popup @click="$router.push('/admin/clients')">
                   <q-item-section avatar>
                     <q-icon name="business" />
                   </q-item-section>
                   <q-item-section>Clients</q-item-section>
                 </q-item>
-                <q-item clickable @click="$router.push('/admin/matters')">
+                <q-item clickable v-close-popup @click="$router.push('/admin/matters')">
                   <q-item-section avatar>
                     <q-icon name="folder" />
                   </q-item-section>
                   <q-item-section>Matters</q-item-section>
                 </q-item>
-                <q-item clickable @click="$router.push('/admin/team-members')">
+                <q-item clickable v-close-popup @click="$router.push('/admin/team-members')">
                   <q-item-section avatar>
                     <q-icon name="people" />
                   </q-item-section>
@@ -72,9 +71,8 @@
             flat 
             round 
             icon="account_circle"
-            @click="showUserMenu = !showUserMenu"
           >
-            <q-menu v-model="showUserMenu">
+            <q-menu>
               <q-list style="min-width: 200px">
                 <q-item>
                   <q-item-section>
@@ -83,7 +81,7 @@
                   </q-item-section>
                 </q-item>
                 <q-separator />
-                <q-item clickable @click="logout">
+                <q-item clickable v-close-popup @click="logout">
                   <q-item-section avatar>
                     <q-icon name="logout" />
                   </q-item-section>
@@ -113,8 +111,6 @@ import type { AuthUser } from 'src/types/models';
 const router = useRouter();
 const $q = useQuasar();
 
-const showAdminMenu = ref(false);
-const showUserMenu = ref(false);
 const currentUser = ref<AuthUser | null>(null);
 const userITActivity = ref(false);
 

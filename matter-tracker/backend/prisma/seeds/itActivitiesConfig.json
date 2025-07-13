@@ -1,0 +1,117 @@
+{
+  "seedConfig": {
+    "startDate": "2025-01-01",
+    "endDate": "2025-12-31",
+    "frequency": {
+      "emailsPerDay": 15,
+      "documentsPerDay": 8,
+      "calendarEventsPerWeek": 12
+    },
+    "collections": {
+      "legalTopics": [
+        "Contract Review",
+        "Litigation Support",
+        "Compliance Analysis",
+        "Due Diligence",
+        "Intellectual Property",
+        "Employment Law",
+        "Corporate Governance",
+        "Regulatory Matters",
+        "Real Estate Transactions",
+        "Tax Advisory"
+      ],
+      "documentTypes": [
+        "Legal Brief",
+        "Contract Draft",
+        "Research Memo",
+        "Client Letter",
+        "Court Filing",
+        "Settlement Agreement",
+        "Due Diligence Report",
+        "Compliance Manual",
+        "Policy Document",
+        "Legal Opinion"
+      ],
+      "emailSubjects": [
+        "Re: Contract terms discussion",
+        "Follow-up on client meeting",
+        "Document review completed",
+        "Urgent: Court filing deadline",
+        "Client consultation scheduled",
+        "Discovery documents attached",
+        "Settlement proposal review",
+        "Compliance update required",
+        "Case status update",
+        "Legal research findings"
+      ],
+      "relativityQueryTypes": [
+        "Document Search",
+        "Privilege Review",
+        "Production Set",
+        "Quality Control",
+        "First Pass Review",
+        "Second Pass Review",
+        "Responsive Documents",
+        "Hot Documents",
+        "Issue Coding",
+        "Metadata Analysis"
+      ],
+      "claudeSessionTitles": [
+        "Contract Analysis Session",
+        "Legal Research Query",
+        "Brief Writing Assistance",
+        "Case Law Review",
+        "Document Drafting Help",
+        "Compliance Question",
+        "Settlement Strategy Discussion",
+        "Due Diligence Analysis",
+        "Regulatory Interpretation",
+        "Client Communication Draft"
+      ],
+      "cocounselSessionTitles": [
+        "Case Strategy Meeting",
+        "Document Review Session",
+        "Client Preparation Call",
+        "Expert Witness Discussion",
+        "Settlement Negotiation Prep",
+        "Trial Preparation Session",
+        "Discovery Planning Meeting",
+        "Deposition Preparation",
+        "Motion Strategy Discussion",
+        "Appeal Planning Session"
+      ]
+    },
+    "meetings": {
+      "weeklyMeetings": [
+        {
+          "title": "Monday Team Standup",
+          "dayOfWeek": 1,
+          "startTime": "09:00",
+          "duration": 60,
+          "participants": ["tm1", "tm2", "tm3", "tm4", "tm5"]
+        },
+        {
+          "title": "Thursday Case Review",
+          "dayOfWeek": 4,
+          "startTime": "14:00",
+          "duration": 90,
+          "participants": ["tm1", "tm2", "tm3", "tm4"]
+        }
+      ],
+      "clientMeetings": [
+        {
+          "title": "Client Consultation",
+          "frequency": "weekly",
+          "duration": 120,
+          "participants": ["tm1", "tm2"]
+        },
+        {
+          "title": "Case Update Meeting",
+          "frequency": "biweekly",
+          "duration": 60,
+          "participants": ["tm2", "tm3", "tm4"]
+        }
+      ]
+    }
+  }
+}

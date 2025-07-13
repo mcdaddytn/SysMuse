@@ -10,7 +10,7 @@
           color="primary" 
           label="Add Team Member" 
           icon="add"
-          @click="showAddDialog = true"
+          @click="openAddDialog"
         />
       </div>
     </div>
@@ -198,15 +198,26 @@
             <q-input
               v-model="teamMemberForm.password"
               :label="editingTeamMember ? 'New Password (leave blank to keep current)' : 'Password *'"
-              type="password"
+              :type="showPassword ? 'text' : 'password'"
               filled
               :rules="editingTeamMember ? [] : [val => !!val || 'Password is required']"
-            />
+            >
+              <template v-slot:append>
+                <q-btn
+                  :icon="showPassword ? 'visibility_off' : 'visibility'"
+                  flat
+                  round
+                  dense
+                  @click="showPassword = !showPassword"
+                  :tabindex="-1"
+                />
+              </template>
+            </q-input>
           </q-form>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" @click="showAddDialog = false" />
+          <q-btn flat label="Cancel" @click="closeAddDialog" />
           <q-btn 
             color="primary" 
             label="Save" 
@@ -264,6 +275,7 @@ const showAddDialog = ref(false);
 const showDeleteDialog = ref(false);
 const editingTeamMember = ref<TeamMember | null>(null);
 const teamMemberToDelete = ref<TeamMember | null>(null);
+const showPassword = ref(false);
 
 // Form data
 const teamMemberForm = ref({
@@ -416,6 +428,30 @@ async function loadSettings() {
   }
 }
 
+function openAddDialog() {
+  editingTeamMember.value = null;
+  teamMemberForm.value = {
+    name: '',
+    email: '',
+    title: '',
+    role: '',
+    accessLevel: '',
+    workingHours: null,
+    timeIncrementType: null,
+    timeIncrement: null,
+    userITActivity: null,
+    isActive: true,
+    password: ''
+  };
+  showPassword.value = false;
+  showAddDialog.value = true;
+}
+
+function closeAddDialog() {
+  showPassword.value = false;
+  showAddDialog.value = false;
+}
+
 function editTeamMember(teamMember: TeamMember) {
   editingTeamMember.value = teamMember;
   teamMemberForm.value = {
@@ -431,6 +467,7 @@ function editTeamMember(teamMember: TeamMember) {
     isActive: teamMember.isActive,
     password: ''
   };
+  showPassword.value = false;
   showAddDialog.value = true;
 }
 
@@ -487,7 +524,7 @@ async function saveTeamMember() {
       });
     }
     
-    showAddDialog.value = false;
+    closeAddDialog();
     await loadTeamMembers();
   } catch (error: any) {
     console.error('Failed to save team member:', error);

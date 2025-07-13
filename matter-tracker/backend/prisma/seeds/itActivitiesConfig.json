@@ -1,11 +1,11 @@
 {
   "seedConfig": {
-    "startDate": "2025-01-01",
-    "endDate": "2025-12-31",
+    "startDate": "2025-06-01",
+    "endDate": "2025-07-12",
     "frequency": {
-      "emailsPerDay": 15,
-      "documentsPerDay": 8,
-      "calendarEventsPerWeek": 12
+      "emailsPerDay": 10,
+      "documentsPerDay": 5,
+      "calendarEventsPerWeek": 8
     },
     "collections": {
       "legalTopics": [

@@ -81,6 +81,12 @@
                   </q-item-section>
                 </q-item>
                 <q-separator />
+                <q-item clickable v-close-popup @click="goToResetPassword">
+                  <q-item-section avatar>
+                    <q-icon name="lock_reset" />
+                  </q-item-section>
+                  <q-item-section>Reset Password</q-item-section>
+                </q-item>
                 <q-item clickable v-close-popup @click="logout">
                   <q-item-section avatar>
                     <q-icon name="logout" />
@@ -173,6 +179,11 @@ async function logout() {
       message: 'Logout failed'
     });
   }
+}
+
+// Navigate to reset password page
+function goToResetPassword() {
+  router.push('/reset-password');
 }
 
 onMounted(() => {

@@ -111,6 +111,32 @@
             />
           </div>
         </div>
+        
+        <div class="row q-gutter-md q-mt-md">
+          <div class="col">
+            <q-select
+              v-model="projectedHoursWarning"
+              :options="projectedHoursWarningOptions"
+              option-label="label"
+              option-value="value"
+              emit-value
+              map-options
+              label="Projected Hours Warning"
+              filled
+              @update:model-value="saveProjectedHoursWarning"
+              :loading="savingProjectedHoursWarning"
+            >
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    <q-item-label caption>{{ scope.opt.description }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
+          </div>
+        </div>
       </q-card-section>
     </q-card>
 
@@ -194,6 +220,7 @@ const timeIncrement = ref(15);
 const userITActivity = ref(false);
 const maxHoursPerDay = ref(12);
 const maxHoursPerWeek = ref(60);
+const projectedHoursWarning = ref('Never');
 const matterLookaheadMode = ref('INDIVIDUAL_STARTS_WITH');
 const timesheetMode = ref('WEEKLY');
 
@@ -204,6 +231,7 @@ const savingTimeIncrement = ref(false);
 const savingUserITActivity = ref(false);
 const savingMaxHoursPerDay = ref(false);
 const savingMaxHoursPerWeek = ref(false);
+const savingProjectedHoursWarning = ref(false);
 const savingMatterMode = ref(false);
 const savingTimesheetMode = ref(false);
 
@@ -218,6 +246,24 @@ const timeIncrementTypeOptions = [
     label: 'Percentage', 
     value: 'PERCENT',
     description: 'Track time as percentage of total working time'
+  }
+];
+
+const projectedHoursWarningOptions = [
+  {
+    label: 'Never',
+    value: 'Never',
+    description: 'Never warn when projected hours are below target'
+  },
+  {
+    label: 'Always',
+    value: 'Always',
+    description: 'Always warn when projected hours are below target'
+  },
+  {
+    label: 'Past',
+    value: 'Past',
+    description: 'Only warn for past timesheet periods when projected hours are below target'
   }
 ];
 
@@ -273,6 +319,7 @@ async function loadSettings() {
     userITActivity.value = settings.userITActivity || false;
     maxHoursPerDay.value = settings.maxHoursPerDay || 12;
     maxHoursPerWeek.value = settings.maxHoursPerWeek || 60;
+    projectedHoursWarning.value = settings.projectedHoursWarning || 'Never';
     matterLookaheadMode.value = settings.matterLookaheadMode || 'INDIVIDUAL_STARTS_WITH';
     timesheetMode.value = settings.timesheetMode || 'WEEKLY';
   } catch (error) {
@@ -396,6 +443,25 @@ async function saveMaxHoursPerWeek() {
     });
   } finally {
     savingMaxHoursPerWeek.value = false;
+  }
+}
+
+async function saveProjectedHoursWarning() {
+  savingProjectedHoursWarning.value = true;
+  try {
+    await settingsService.updateSetting('projectedHoursWarning', projectedHoursWarning.value);
+    $q.notify({
+      type: 'positive',
+      message: 'Projected hours warning setting updated successfully'
+    });
+  } catch (error) {
+    console.error('Failed to save projected hours warning setting:', error);
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to save projected hours warning setting'
+    });
+  } finally {
+    savingProjectedHoursWarning.value = false;
   }
 }
 

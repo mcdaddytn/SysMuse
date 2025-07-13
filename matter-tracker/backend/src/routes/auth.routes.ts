@@ -7,6 +7,30 @@ import { PrismaClient } from '@prisma/client';
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// Middleware to check authentication
+export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  next();
+};
+
+// Middleware to check admin access
+export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId || req.session.accessLevel !== 'ADMIN') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// Middleware to check manager or admin access
+export const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId || (req.session.accessLevel !== 'ADMIN' && req.session.accessLevel !== 'MANAGER')) {
+    return res.status(403).json({ error: 'Manager or admin access required' });
+  }
+  next();
+};
+
 // Extend the session interface to include user information
 declare module 'express-session' {
   interface SessionData {
@@ -115,28 +139,71 @@ router.get('/me', (req: Request, res: Response) => {
   });
 });
 
-// Middleware to check authentication
-export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-};
+// Reset password endpoint (supports both self-reset and admin reset)
+router.post('/reset-password', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { userId, newPassword, currentPassword } = req.body;
 
-// Middleware to check admin access
-export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId || req.session.accessLevel !== 'ADMIN') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
+    if (!userId || !newPassword) {
+      return res.status(400).json({ error: 'User ID and new password are required' });
+    }
 
-// Middleware to check manager or admin access
-export const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId || (req.session.accessLevel !== 'ADMIN' && req.session.accessLevel !== 'MANAGER')) {
-    return res.status(403).json({ error: 'Manager or admin access required' });
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Find user with password for validation
+    const user = await prisma.teamMember.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, password: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user is resetting their own password or if admin is resetting someone else's
+    const isOwnPassword = req.session.userId === userId;
+    const isAdmin = req.session.accessLevel === 'ADMIN';
+
+    if (isOwnPassword) {
+      // Self-reset: validate current password
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Current password is required' });
+      }
+
+      if (!user.password) {
+        return res.status(400).json({ error: 'No password set for this user' });
+      }
+
+      // Verify current password
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({ error: 'Current password is incorrect' });
+      }
+    } else if (!isAdmin) {
+      // Not admin and not own password - not allowed
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    // Admin resetting someone else's password doesn't need current password validation
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.teamMember.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    });
+
+    const resetType = isOwnPassword ? 'self-reset' : 'admin reset';
+    console.log(`Password ${resetType} for user: ${user.name} (${user.email})`);
+    res.json({ message: 'Password updated successfully' });
+
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  next();
-};
+});
 
 export default router;

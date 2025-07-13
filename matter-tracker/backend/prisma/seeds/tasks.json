@@ -79,6 +79,18 @@
       "id": "task16",
       "description": "Client consultation",
       "matterId": "matter9"
+    },
+    {
+      "id": "task17",
+      "description": "Personal Day",
+      "matterId": "matter8",
+      "defaultProjectedHours": 480
+    },
+    {
+      "id": "task18",
+      "description": "Sick Day",
+      "matterId": "matter8",
+      "defaultProjectedHours": 480
     }
   ]
 }

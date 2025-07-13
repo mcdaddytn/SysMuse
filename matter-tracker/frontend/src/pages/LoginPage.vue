@@ -48,6 +48,14 @@
           <strong>User:</strong> david.thompson@firm.com / password123<br>
           <strong>User:</strong> jessica.williams@firm.com / password123
         </div>
+        <div class="q-mt-md">
+          <q-btn
+            flat
+            color="primary"
+            label="Reset Password"
+            @click="$router.push('/reset-password')"
+          />
+        </div>
       </q-card-section>
     </q-card>
       </q-page>

@@ -61,13 +61,14 @@ model Matter {
 }
 
 model Task {
-  id          String          @id @default(cuid())
-  description String
-  matterId    String
-  matter      Matter          @relation(fields: [matterId], references: [id])
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  entries     TimesheetEntry[]
+  id                    String          @id @default(cuid())
+  description           String
+  matterId              String
+  defaultProjectedHours Float?          // Default projected hours for this task (nullable)
+  matter                Matter          @relation(fields: [matterId], references: [id])
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  entries               TimesheetEntry[]
   
   @@unique([matterId, description])
 }

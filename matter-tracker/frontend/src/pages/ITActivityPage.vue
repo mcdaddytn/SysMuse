@@ -78,6 +78,21 @@
           />
         </div>
 
+        <div style="min-width: 200px">
+          <q-input
+            v-model="textSearchFilter"
+            label="Search Title/Description"
+            filled
+            clearable
+            debounce="300"
+            @update:model-value="loadActivities"
+          >
+            <template v-slot:prepend>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+        </div>
+
         <q-btn
           icon="refresh"
           flat
@@ -544,6 +559,7 @@ export default defineComponent({
     const activityTypeFilter = ref<ITActivityType | null>(null); // Default to All
     const associationFilter = ref<boolean | null>(null);
     const tableFilter = ref('');
+    const textSearchFilter = ref('');
     const loading = ref(false);
     const associating = ref(false);
     
@@ -901,7 +917,8 @@ export default defineComponent({
           startDate: startDate.value,
           endDate: endDate.value,
           activityType: activityTypeFilter.value,
-          isAssociated: associationFilter.value
+          isAssociated: associationFilter.value,
+          textSearch: textSearchFilter.value
         });
         
         // Build query parameters
@@ -917,6 +934,10 @@ export default defineComponent({
         
         if (associationFilter.value !== null) {
           params.append('isAssociated', associationFilter.value.toString());
+        }
+        
+        if (textSearchFilter.value) {
+          params.append('textSearch', textSearchFilter.value);
         }
         
         console.log('🔗 API URL:', `/it-activities?${params.toString()}`);
@@ -1428,6 +1449,7 @@ export default defineComponent({
       activityTypeFilter,
       associationFilter,
       tableFilter,
+      textSearchFilter,
       isRegularUser,
       loading,
       associating,

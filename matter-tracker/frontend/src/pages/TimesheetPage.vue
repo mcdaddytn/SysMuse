@@ -146,16 +146,11 @@
                 <q-select
                   v-model="entry.taskDescription"
                   :options="getTaskOptions(entry.matter)"
-                  use-input
-                  hide-selected
-                  fill-input
-                  new-value-mode="add"
                   dense
                   filled
-                  @new-value="(val) => createTaskOption(val, index)"
                   @update:model-value="(val) => handleTaskSelection(val, index)"
-                  @mouseenter="showAssociatedActivitiesTooltip = index"
-                  @mouseleave="showAssociatedActivitiesTooltip = null"
+                  @mouseenter="showAssociatedActivitiesTooltip = index; console.log('Mouse enter task field:', index, entry)"
+                  @mouseleave="showAssociatedActivitiesTooltip = null; console.log('Mouse leave task field')"
                 >
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
@@ -170,20 +165,37 @@
                     </q-item>
                   </template>
                   <q-tooltip 
-                    v-if="getAssociatedActivities(entry).length > 0 && showAssociatedActivitiesTooltip === index"
+                    v-if="showAssociatedActivitiesTooltip === index"
                     anchor="top middle"
                     self="bottom middle"
                     :offset="[10, 10]"
                     max-width="400px"
                     class="bg-grey-9 text-white q-pa-md"
                   >
-                    <div class="text-weight-bold q-mb-sm">Associated IT Activities:</div>
-                    <div v-for="activity in getAssociatedActivities(entry)" :key="activity.id" class="q-mb-xs">
-                      <div class="text-weight-medium">{{ activity.title }}</div>
-                      <div class="text-caption">
-                        {{ activity.activityType }} • {{ formatDateTime(activity.startDate) }}
-                        <span v-if="activity.durationMinutes"> • {{ formatDuration(activity.durationMinutes) }}</span>
+                    <div v-if="getAssociatedActivities(entry).length > 0">
+                      <div class="text-weight-bold q-mb-sm">Associated IT Activities:</div>
+                      <div v-for="activity in getAssociatedActivities(entry)" :key="activity.id" class="q-mb-xs">
+                        <div class="text-weight-medium">{{ activity.title }}</div>
+                        <div class="text-caption">
+                          {{ activity.activityType }} • {{ formatDateTime(activity.startDate) }}
+                          <span v-if="activity.durationMinutes"> • {{ formatDuration(activity.durationMinutes) }}</span>
+                        </div>
                       </div>
+                      <q-separator class="q-my-sm" />
+                      <div class="text-weight-bold">
+                        Associated Duration: {{ formatDuration(getAssociatedDurationMinutes(entry)) }}
+                      </div>
+                      <div class="text-weight-bold">
+                        Actual Hours: {{ formatTime(entry.actualTime, timeIncrementType) }}
+                      </div>
+                      <div v-if="getUnassociatedDuration(entry) !== 0" class="text-weight-bold" :class="getUnassociatedDuration(entry) > 0 ? 'text-orange' : 'text-blue'">
+                        {{ getUnassociatedDuration(entry) > 0 ? 'Unassociated Duration' : 'Over-associated Duration' }}: 
+                        {{ formatDuration(Math.abs(getUnassociatedDuration(entry))) }}
+                      </div>
+                    </div>
+                    <div v-else>
+                      <div class="text-weight-bold">{{ entry.taskDescription || 'No task selected' }}</div>
+                      <div class="text-caption">No associated IT activities</div>
                     </div>
                   </q-tooltip>
                 </q-select>
@@ -434,7 +446,7 @@ export default defineComponent({
     const matters = ref<Matter[]>([]);
     const filteredMatters = ref<Matter[]>([]);
     const entries = ref<EntryRow[]>([]);
-    const taskSuggestions = ref<Record<string, string[]>>({});
+    const taskSuggestions = ref<Record<string, Task[]>>({});
     const saving = ref(false);
     const loading = ref(false);
     const currentTimesheetId = ref<string | null>(null);
@@ -446,6 +458,8 @@ export default defineComponent({
     // Settings state
     const matterLookaheadMode = ref<MatterLookaheadMode>('INDIVIDUAL_STARTS_WITH');
     const timesheetModeConfig = ref<TimesheetMode>('WEEKLY');
+    const maxHoursPerDay = ref(12);
+    const maxHoursPerWeek = ref(60);
     
     // User state
     const currentUser = ref<AuthUser | null>(null);
@@ -489,11 +503,11 @@ export default defineComponent({
     });
 
     const timeIncrementType = computed((): TimeIncrementType => {
-      return selectedTeamMember.value?.timeIncrementType || 'PERCENT';
+      return selectedTeamMember.value?.timeIncrementType || 'HOURS_MINUTES';
     });
 
     const timeIncrement = computed((): number => {
-      return getTimeIncrementStep(timeIncrementType.value, selectedTeamMember.value?.timeIncrement || 1);
+      return getTimeIncrementStep(timeIncrementType.value, selectedTeamMember.value?.timeIncrement || 15);
     });
 
 
@@ -566,38 +580,67 @@ export default defineComponent({
       }
     }
 
+    function isWeekExpired(): boolean {
+      const today = new Date();
+      const timesheetDate = date.extractDate(currentStartDate.value, 'YYYY-MM-DD');
+      
+      if (dateIncrementType.value === 'WEEK') {
+        // For weekly timesheets, check if the week ending date has passed
+        const weekEndDate = date.addToDate(timesheetDate, { days: 6 });
+        return today > weekEndDate;
+      } else {
+        // For daily timesheets, check if the day has passed
+        return today > date.addToDate(timesheetDate, { days: 1 });
+      }
+    }
+
     function hasValidationWarning(): { hasWarning: boolean; message: string } {
       if (!selectedTeamMember.value || !entries.value.some(e => e.matter)) {
         return { hasWarning: false, message: '' };
       }
 
       if (timeIncrementType.value === 'PERCENT') {
-        // Error conditions (prevent save)
+        // Only error conditions (prevent save) - exceeding 100%
         if (projectedTotal.value > 100 || actualTotal.value > 100) {
           return {
             hasWarning: true,
             message: `Percentage totals cannot exceed 100% (Projected: ${projectedTotal.value}%, Actual: ${actualTotal.value}%).`
           };
         }
-        
-        // Warning conditions (allow save with confirmation)
-        if (projectedTotal.value < 100 && projectedTotal.value > 0) {
-          return {
-            hasWarning: true,
-            message: `Projected time is ${projectedTotal.value}% (less than 100%). Continue anyway?`
-          };
-        }
+        // Remove < 100% warning - let backend handle it with ProjectedHoursWarning setting
       } else {
         // Time mode validation
-        const maxHours = dateIncrementType.value === 'DAY' 
+        const targetHours = dateIncrementType.value === 'DAY' 
           ? selectedTeamMember.value.workingHours / 5
           : selectedTeamMember.value.workingHours;
+        const targetMinutes = targetHours * 60;
+        
+        const maxHours = dateIncrementType.value === 'DAY' 
+          ? maxHoursPerDay.value
+          : maxHoursPerWeek.value;
         const maxMinutes = maxHours * 60;
         
+        // Error conditions (prevent save) - exceeding max hours
         if (projectedTotal.value > maxMinutes || actualTotal.value > maxMinutes) {
           return {
             hasWarning: true,
-            message: `Time totals exceed working hours (Projected: ${formatTotalTime(projectedTotal.value)}, Actual: ${formatTotalTime(actualTotal.value)}).`
+            message: `Time totals exceed maximum hours (Target: ${formatTotalTime(targetMinutes)}, Max: ${formatTotalTime(maxMinutes)}, Projected: ${formatTotalTime(projectedTotal.value)}, Actual: ${formatTotalTime(actualTotal.value)}).`
+          };
+        }
+        
+        // Warning conditions for expired timesheets - under target hours
+        if (isWeekExpired() && actualTotal.value > 0 && actualTotal.value < targetMinutes) {
+          return {
+            hasWarning: true,
+            message: `Actual time is below target hours for completed period (Target: ${formatTotalTime(targetMinutes)}, Actual: ${formatTotalTime(actualTotal.value)}). Continue anyway?`
+          };
+        }
+        
+        // Warning conditions for current/future timesheets - over target but under max
+        if (projectedTotal.value > targetMinutes && projectedTotal.value <= maxMinutes) {
+          return {
+            hasWarning: true,
+            message: `Projected time exceeds target hours (Target: ${formatTotalTime(targetMinutes)}, Projected: ${formatTotalTime(projectedTotal.value)}). Continue anyway?`
           };
         }
       }
@@ -761,8 +804,18 @@ export default defineComponent({
       loadTimesheet();
     }
 
-    function openITActivities(): void {
+    async function openITActivities(): Promise<void> {
       if (!selectedTeamMember.value) return;
+      
+      // Auto-save timesheet before navigating if there are unsaved changes
+      if (hasUnsavedChanges.value && canSave.value) {
+        try {
+          await saveTimesheet();
+        } catch (error) {
+          // If save fails, don't navigate
+          return;
+        }
+      }
       
       // Calculate end date based on mode
       const startDate = currentStartDate.value;
@@ -827,12 +880,16 @@ export default defineComponent({
       }
     }
 
-    function getTaskOptions(matter: Matter | null): Array<string | { label: string; value: string; isAddNew?: boolean }> {
+    function getTaskOptions(matter: Matter | null): Array<string | { label: string; value: string; isAddNew?: boolean; task?: Task }> {
       if (!matter) return [];
       const tasks = taskSuggestions.value[matter.id] || [];
-      // Always include "Add New Task" option when matter is selected
+      // Convert task objects to dropdown options and include "Add New Task" option
       return [
-        ...tasks,
+        ...tasks.map((task: Task) => ({
+          label: task.description,
+          value: task.description,
+          task: task
+        })),
         { label: 'Add New Task', value: '__ADD_NEW__', isAddNew: true }
       ];
     }
@@ -849,8 +906,18 @@ export default defineComponent({
         if (entries.value[index].matter) {
           showNewTaskDialog(entries.value[index].matter, index);
         }
+      } else if (val && typeof val === 'object' && val.task) {
+        // Task object selected - set description and apply default projected hours if available
+        const entry = entries.value[index];
+        entry.taskDescription = val.value;
+        
+        // Apply default projected hours if the task has them
+        if (val.task.defaultProjectedHours !== null && val.task.defaultProjectedHours !== undefined) {
+          entry.projectedTime = val.task.defaultProjectedHours;
+          updateDisplayTime(entry);
+        }
       } else {
-        // Normal task selection
+        // String value selected (fallback for backward compatibility)
         entries.value[index].taskDescription = val;
       }
     }
@@ -865,11 +932,19 @@ export default defineComponent({
       if (!taskSuggestions.value[task.matterId]) {
         taskSuggestions.value[task.matterId] = [];
       }
-      taskSuggestions.value[task.matterId].push(task.description);
+      taskSuggestions.value[task.matterId].push(task);
       
       // Auto-select the newly created task in the current entry
       if (currentEntryIndex.value !== null) {
-        entries.value[currentEntryIndex.value].taskDescription = task.description;
+        const entry = entries.value[currentEntryIndex.value];
+        entry.taskDescription = task.description;
+        
+        // Apply default projected hours if the task has them
+        if (task.defaultProjectedHours !== null && task.defaultProjectedHours !== undefined) {
+          entry.projectedTime = task.defaultProjectedHours;
+          updateDisplayTime(entry);
+        }
+        
         currentEntryIndex.value = null; // Reset
       }
       
@@ -928,6 +1003,8 @@ export default defineComponent({
         matterLookaheadMode.value = await settingsService.getMatterLookaheadMode();
         timesheetModeConfig.value = await settingsService.getTimesheetMode();
         userITActivity.value = await settingsService.getSetting('userITActivity');
+        maxHoursPerDay.value = await settingsService.getSetting('maxHoursPerDay');
+        maxHoursPerWeek.value = await settingsService.getSetting('maxHoursPerWeek');
         
         // Adjust dateIncrementType based on settings if not coming from URL
         if (!initialMode || initialMode === 'WEEK') {
@@ -949,7 +1026,7 @@ export default defineComponent({
     async function loadTasksForMatter(matterId: string): Promise<void> {
       try {
         const response = await api.get(`/tasks/matter/${matterId}`);
-        taskSuggestions.value[matterId] = response.data.map((t: any) => t.description);
+        taskSuggestions.value[matterId] = response.data; // Store full task objects
       } catch (error) {
         console.error('Failed to load tasks for matter:', error);
       }
@@ -1015,23 +1092,24 @@ export default defineComponent({
                       (projectedTotal.value > 100 || actualTotal.value > 100);
        
        if (isError) {
-         Dialog.create({
-           title: 'Error',
+         // Show error as top-right notification instead of popup
+         Notify.create({
+           type: 'negative',
            message: validation.message,
-           persistent: true
+           timeout: 5000,
+           multiLine: true
          });
          return;
        }
        
-       // Show warning with option to continue
-       Dialog.create({
-         title: 'Warning',
+       // Show warning as top-right notification and continue with save
+       Notify.create({
+         type: 'warning',
          message: validation.message,
-         cancel: true,
-         persistent: true
-       }).onOk(async () => {
-         await performSave();
+         timeout: 5000,
+         multiLine: true
        });
+       await performSave();
      } else {
        await performSave();
      }
@@ -1050,7 +1128,7 @@ export default defineComponent({
            actualTime: e.actualTime,
          }));
 
-       await api.post(
+       const response = await api.post(
          `/timesheets/${selectedTeamMember.value!.id}/${currentStartDate.value}/${dateIncrementType.value}`,
          { 
            entries: validEntries,
@@ -1062,6 +1140,19 @@ export default defineComponent({
        
        // Reset change tracking after successful save
        resetChangeTracking();
+
+       // Check for warnings in the response
+       if (response.data.warnings && response.data.warnings.length > 0) {
+         // Show warnings as warning notifications
+         response.data.warnings.forEach((warning: string) => {
+           Notify.create({
+             type: 'warning',
+             message: warning,
+             timeout: 5000,
+             multiLine: true
+           });
+         });
+       }
 
        Notify.create({
          type: 'positive',
@@ -1139,6 +1230,19 @@ export default defineComponent({
        return `${hours}h ${mins}m`;
      }
      return `${mins}m`;
+   }
+
+   function getAssociatedDurationMinutes(entry: EntryRow): number {
+     const activities = getAssociatedActivities(entry);
+     return activities.reduce((total, activity) => total + (activity.durationMinutes || 0), 0);
+   }
+
+   function getUnassociatedDuration(entry: EntryRow): number {
+     const actualMinutes = timeIncrementType.value === 'PERCENT' 
+       ? (entry.actualTime / 100) * (selectedTeamMember.value?.workingHours || 40) * 60
+       : entry.actualTime;
+     const associatedMinutes = getAssociatedDurationMinutes(entry);
+     return actualMinutes - associatedMinutes;
    }
 
    async function loadCurrentUser(): Promise<void> {
@@ -1292,6 +1396,8 @@ export default defineComponent({
      saveTimesheet,
      copyFromPrevious,
      getAssociatedActivities,
+     getAssociatedDurationMinutes,
+     getUnassociatedDuration,
      formatDateTime,
      formatDuration,
    };

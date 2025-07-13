@@ -391,7 +391,7 @@ function getITActivityText(teamMember: TeamMember): string {
 async function loadTeamMembers() {
   loading.value = true;
   try {
-    const response = await api.get('/api/team-members');
+    const response = await api.get('/team-members');
     teamMembers.value = response.data;
   } catch (error) {
     console.error('Failed to load team members:', error);
@@ -469,14 +469,14 @@ async function saveTeamMember() {
     
     if (editingTeamMember.value) {
       // Update existing team member
-      await api.put(`/api/team-members/${editingTeamMember.value.id}`, payload);
+      await api.put(`/team-members/${editingTeamMember.value.id}`, payload);
       $q.notify({
         type: 'positive',
         message: 'Team member updated successfully'
       });
     } else {
       // Create new team member
-      await api.post('/api/team-members', payload);
+      await api.post('/team-members', payload);
       $q.notify({
         type: 'positive',
         message: 'Team member created successfully'
@@ -502,7 +502,7 @@ async function confirmDelete() {
   
   deleting.value = true;
   try {
-    await api.delete(`/api/team-members/${teamMemberToDelete.value.id}`);
+    await api.delete(`/team-members/${teamMemberToDelete.value.id}`);
     $q.notify({
       type: 'positive',
       message: 'Team member deleted successfully'

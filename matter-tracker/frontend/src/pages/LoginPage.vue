@@ -44,7 +44,9 @@
         <div class="text-body2 q-mt-sm">
           <strong>Admin:</strong> sarah.johnson@firm.com / password123<br>
           <strong>Manager:</strong> michael.chen@firm.com / password123<br>
-          <strong>User:</strong> emily.rodriguez@firm.com / password123
+          <strong>User:</strong> emily.rodriguez@firm.com / password123<br>
+          <strong>User:</strong> david.thompson@firm.com / password123<br>
+          <strong>User:</strong> jessica.williams@firm.com / password123
         </div>
       </q-card-section>
     </q-card>

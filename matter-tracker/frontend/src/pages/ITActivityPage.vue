@@ -23,6 +23,7 @@
             option-value="id"
             label="Team Member"
             filled
+            :disable="isRegularUser"
             @update:model-value="onTeamMemberChange"
           />
         </div>
@@ -470,6 +471,7 @@ import { date, Notify, Dialog } from 'quasar';
 import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'src/services/api';
+import { authService } from 'src/services/auth';
 import { 
   formatTime, 
   parseTimeInput,
@@ -487,7 +489,8 @@ import type {
   ITActivity,
   ITActivityType,
   Urgency,
-  MatterLookaheadMode
+  MatterLookaheadMode,
+  AuthUser
 } from 'src/types/models';
 
 interface ActivityStatistics {
@@ -573,6 +576,9 @@ export default defineComponent({
     const selectedMatterForTask = ref<Matter | null>(null);
     const showMetadataTooltip = ref(false);
     const showGridMetadataTooltip = ref<string | null>(null);
+    
+    // User state
+    const currentUser = ref<AuthUser | null>(null);
 
     // Table configuration
     const pagination = ref({
@@ -847,13 +853,16 @@ export default defineComponent({
         teamMembers.value = response.data;
         console.log('Loaded team members');
         
-        // Set initial team member if provided
+        // Set initial team member if provided from route
         if (initialTeamMemberId) {
           console.log('Loading team member initialTeamMemberId: ', initialTeamMemberId);
           selectedTeamMember.value = teamMembers.value.find(tm => tm.id === initialTeamMemberId) || null;
           if (selectedTeamMember.value) {
             await loadActivities();
           }
+        } else {
+          // Auto-select current user for non-admin users
+          await autoSelectCurrentUser();
         }
       } catch (error) {
         Notify.create({
@@ -1362,8 +1371,33 @@ export default defineComponent({
       }
     }
 
+    async function loadCurrentUser(): Promise<void> {
+      try {
+        currentUser.value = await authService.getCurrentUser();
+      } catch (error) {
+        console.error('Failed to load current user:', error);
+      }
+    }
+
+    async function autoSelectCurrentUser(): Promise<void> {
+      if (!currentUser.value || currentUser.value.accessLevel === 'ADMIN') {
+        return; // Admins don't get auto-selected
+      }
+
+      const currentTeamMember = teamMembers.value.find(tm => tm.id === currentUser.value?.id);
+      if (currentTeamMember) {
+        selectedTeamMember.value = currentTeamMember;
+        await loadActivities();
+      }
+    }
+
+    const isRegularUser = computed(() => {
+      return currentUser.value?.accessLevel === 'USER';
+    });
+
     // Lifecycle
-    onMounted(() => {
+    onMounted(async () => {
+      await loadCurrentUser();
       loadSettings();
       loadTeamMembers();
       loadMatters();
@@ -1394,6 +1428,7 @@ export default defineComponent({
       activityTypeFilter,
       associationFilter,
       tableFilter,
+      isRegularUser,
       loading,
       associating,
       teamMembers,

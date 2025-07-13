@@ -171,7 +171,7 @@ const columns = [
 async function loadClients() {
   loading.value = true;
   try {
-    const response = await api.get('/api/clients');
+    const response = await api.get('/clients');
     clients.value = response.data;
   } catch (error) {
     console.error('Failed to load clients:', error);
@@ -203,14 +203,14 @@ async function saveClient() {
   try {
     if (editingClient.value) {
       // Update existing client
-      await api.put(`/api/clients/${editingClient.value.id}`, clientForm.value);
+      await api.put(`/clients/${editingClient.value.id}`, clientForm.value);
       $q.notify({
         type: 'positive',
         message: 'Client updated successfully'
       });
     } else {
       // Create new client
-      await api.post('/api/clients', clientForm.value);
+      await api.post('/clients', clientForm.value);
       $q.notify({
         type: 'positive',
         message: 'Client created successfully'
@@ -235,7 +235,7 @@ async function confirmDelete() {
   
   deleting.value = true;
   try {
-    await api.delete(`/api/clients/${clientToDelete.value.id}`);
+    await api.delete(`/clients/${clientToDelete.value.id}`);
     $q.notify({
       type: 'positive',
       message: 'Client deleted successfully'

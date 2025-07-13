@@ -98,10 +98,6 @@ export default defineComponent({
         const newTask: Task = response.data;
         
         emit('task-created', newTask);
-        Notify.create({
-          type: 'positive',
-          message: 'Task added successfully',
-        });
         resetForm();
         dialogVisible.value = false;
       } catch (error: any) {

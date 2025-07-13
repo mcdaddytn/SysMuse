@@ -14,6 +14,7 @@
               label="Team Member"
               filled
               style="min-width: 250px"
+              :disable="isRegularUser"
               @update:model-value="loadTimesheet"
             />
           </div>
@@ -75,7 +76,7 @@
             />
           </div>
 
-          <div class="col-auto">
+          <div class="col-auto" v-if="showITActivities">
             <q-btn
               label="IT Activities"
               color="accent"
@@ -349,6 +350,7 @@ import { defineComponent, ref, computed, onMounted, onUnmounted, watch } from 'v
 import { date, Notify, Dialog } from 'quasar';
 import { useRouter, useRoute } from 'vue-router';
 import { api } from 'src/services/api';
+import { authService } from 'src/services/auth';
 import { 
   formatTime, 
   formatTimeWithTooltip, 
@@ -360,7 +362,7 @@ import {
 import { filterMatters } from 'src/utils/matterSearch';
 import { settingsService } from 'src/services/settings';
 import NewTaskDialog from 'src/components/NewTaskDialog.vue';
-import type { TeamMember, Matter, TimesheetEntry, Timesheet, TimeIncrementType, Task, DateIncrementType, MatterLookaheadMode, TimesheetMode } from 'src/types/models';
+import type { TeamMember, Matter, TimesheetEntry, Timesheet, TimeIncrementType, Task, DateIncrementType, MatterLookaheadMode, TimesheetMode, AuthUser } from 'src/types/models';
 
 interface EntryRow {
   matter: Matter | null;
@@ -444,6 +446,12 @@ export default defineComponent({
     // Settings state
     const matterLookaheadMode = ref<MatterLookaheadMode>('INDIVIDUAL_STARTS_WITH');
     const timesheetModeConfig = ref<TimesheetMode>('WEEKLY');
+    
+    // User state
+    const currentUser = ref<AuthUser | null>(null);
+    const userITActivity = ref(false);
+    const hasUnsavedChanges = ref(false);
+    const originalTimesheetData = ref<string>('');
 
     // Spin control state
     const spinInterval = ref<NodeJS.Timeout | null>(null);
@@ -692,7 +700,13 @@ export default defineComponent({
       }
     }
 
-    function changeDateRange(direction: number): void {
+    async function changeDateRange(direction: number): Promise<void> {
+      // Check for unsaved changes
+      if (hasUnsavedChanges.value && canSave.value) {
+        const shouldContinue = await showUnsavedChangesDialog();
+        if (!shouldContinue) return;
+      }
+      
       const current = date.extractDate(currentStartDate.value, 'YYYY-MM-DD');
       const increment = dateIncrementType.value === 'WEEK' ? 7 : 1;
       const newDate = date.addToDate(current, { days: direction * increment });
@@ -725,7 +739,13 @@ export default defineComponent({
       loadTimesheet();
     }
 
-    function switchMode(): void {
+    async function switchMode(): Promise<void> {
+      // Check for unsaved changes
+      if (hasUnsavedChanges.value && canSave.value) {
+        const shouldContinue = await showUnsavedChangesDialog();
+        if (!shouldContinue) return;
+      }
+      
       dateIncrementType.value = dateIncrementType.value === 'WEEK' ? 'DAY' : 'WEEK';
       
       // Adjust date if switching to weekly mode and not on Sunday
@@ -797,6 +817,13 @@ export default defineComponent({
     function onMatterChange(index: number, matter: Matter): void {
       if (matter) {
         loadTasksForMatter(matter.id);
+        
+        // Clear task and hours when changing matter in existing entry
+        const entry = entries.value[index];
+        entry.taskDescription = '';
+        entry.projectedTime = 0;
+        entry.actualTime = 0;
+        updateDisplayTime(entry);
       }
     }
 
@@ -857,12 +884,15 @@ export default defineComponent({
         const response = await api.get('/team-members');
         teamMembers.value = response.data;
         
-        // Set initial team member if provided
+        // Set initial team member if provided from route
         if (initialTeamMemberId) {
           selectedTeamMember.value = teamMembers.value.find(tm => tm.id === initialTeamMemberId) || null;
           if (selectedTeamMember.value) {
             await loadTimesheet();
           }
+        } else {
+          // Auto-select current user for non-admin users
+          await autoSelectCurrentUser();
         }
       } catch (error: any) {
         if (error.response?.status === 401) {
@@ -897,6 +927,7 @@ export default defineComponent({
       try {
         matterLookaheadMode.value = await settingsService.getMatterLookaheadMode();
         timesheetModeConfig.value = await settingsService.getTimesheetMode();
+        userITActivity.value = await settingsService.getSetting('userITActivity');
         
         // Adjust dateIncrementType based on settings if not coming from URL
         if (!initialMode || initialMode === 'WEEK') {
@@ -961,9 +992,13 @@ export default defineComponent({
         if (entries.value.length === 0) {
           addEntry();
         }
+        
+        // Reset change tracking after loading
+        resetChangeTracking();
       } catch (error) {
         entries.value = [];
         addEntry();
+        resetChangeTracking();
       } finally {
         loading.value = false;
       }
@@ -1024,6 +1059,9 @@ export default defineComponent({
            timeIncrement: timeIncrement.value,
          }
        );
+       
+       // Reset change tracking after successful save
+       resetChangeTracking();
 
        Notify.create({
          type: 'positive',
@@ -1103,13 +1141,95 @@ export default defineComponent({
      return `${mins}m`;
    }
 
+   async function loadCurrentUser(): Promise<void> {
+     try {
+       currentUser.value = await authService.getCurrentUser();
+     } catch (error) {
+       console.error('Failed to load current user:', error);
+     }
+   }
+
+   async function autoSelectCurrentUser(): Promise<void> {
+     if (!currentUser.value || currentUser.value.accessLevel === 'ADMIN') {
+       return; // Admins don't get auto-selected
+     }
+
+     const currentTeamMember = teamMembers.value.find(tm => tm.id === currentUser.value?.id);
+     if (currentTeamMember) {
+       selectedTeamMember.value = currentTeamMember;
+       await loadTimesheet();
+     }
+   }
+   
+   function trackChanges(): void {
+     const currentData = JSON.stringify(entries.value);
+     hasUnsavedChanges.value = currentData !== originalTimesheetData.value;
+   }
+   
+   function resetChangeTracking(): void {
+     originalTimesheetData.value = JSON.stringify(entries.value);
+     hasUnsavedChanges.value = false;
+   }
+   
+   async function showUnsavedChangesDialog(): Promise<boolean> {
+     return new Promise((resolve) => {
+       Dialog.create({
+         title: 'Unsaved Changes',
+         message: 'You have unsaved changes. Do you want to save before continuing?',
+         cancel: {
+           label: 'Cancel',
+           flat: true
+         },
+         options: {
+           type: 'radio',
+           model: 'save',
+           items: [
+             { label: 'Save and continue', value: 'save' },
+             { label: 'Continue without saving', value: 'continue' }
+           ]
+         }
+       }).onOk(async (data) => {
+         if (data === 'save') {
+           await saveTimesheet();
+         }
+         resolve(true);
+       }).onCancel(() => {
+         resolve(false);
+       });
+     });
+   }
+
+   const isRegularUser = computed(() => {
+     return currentUser.value?.accessLevel === 'USER';
+   });
+   
+   const isManagerOrAdmin = computed(() => {
+     return currentUser.value?.accessLevel === 'ADMIN' || currentUser.value?.accessLevel === 'MANAGER';
+   });
+   
+   const showITActivities = computed(() => {
+     // Check individual user override first, then global setting, then default for managers/admins
+     const userOverride = currentUser.value?.userITActivity;
+     if (userOverride !== null && userOverride !== undefined) {
+       return userOverride;
+     }
+     
+     return isManagerOrAdmin.value || userITActivity.value;
+   });
+
    onMounted(async () => {
+     await loadCurrentUser();
      await Promise.all([loadSettings(), loadTeamMembers(), loadMatters()]);
    });
 
    onUnmounted(() => {
      stopSpinning();
    });
+   
+   // Watch for changes to track unsaved state
+   watch(entries, () => {
+     trackChanges();
+   }, { deep: true });
 
    return {
      // State
@@ -1140,6 +1260,8 @@ export default defineComponent({
      timeIncrement,
      projectedTimeLabel,
      actualTimeLabel,
+     isRegularUser,
+     showITActivities,
      
      // Methods
      dateOptions,

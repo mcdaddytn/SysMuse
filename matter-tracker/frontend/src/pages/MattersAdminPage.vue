@@ -201,7 +201,7 @@ const columns = [
 async function loadMatters() {
   loading.value = true;
   try {
-    const response = await api.get('/api/matters');
+    const response = await api.get('/matters');
     matters.value = response.data;
   } catch (error) {
     console.error('Failed to load matters:', error);
@@ -216,7 +216,7 @@ async function loadMatters() {
 
 async function loadClients() {
   try {
-    const response = await api.get('/api/clients');
+    const response = await api.get('/clients');
     clients.value = response.data;
     clientOptions.value = response.data.map((client: Client) => ({
       id: client.id,
@@ -259,14 +259,14 @@ async function saveMatter() {
   try {
     if (editingMatter.value) {
       // Update existing matter
-      await api.put(`/api/matters/${editingMatter.value.id}`, matterForm.value);
+      await api.put(`/matters/${editingMatter.value.id}`, matterForm.value);
       $q.notify({
         type: 'positive',
         message: 'Matter updated successfully'
       });
     } else {
       // Create new matter
-      await api.post('/api/matters', matterForm.value);
+      await api.post('/matters', matterForm.value);
       $q.notify({
         type: 'positive',
         message: 'Matter created successfully'
@@ -291,7 +291,7 @@ async function confirmDelete() {
   
   deleting.value = true;
   try {
-    await api.delete(`/api/matters/${matterToDelete.value.id}`);
+    await api.delete(`/matters/${matterToDelete.value.id}`);
     $q.notify({
       type: 'positive',
       message: 'Matter deleted successfully'

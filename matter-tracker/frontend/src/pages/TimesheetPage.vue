@@ -149,8 +149,6 @@
                   dense
                   filled
                   @update:model-value="(val) => handleTaskSelection(val, index)"
-                  @mouseenter="showAssociatedActivitiesTooltip = index; console.log('Mouse enter task field:', index, entry)"
-                  @mouseleave="showAssociatedActivitiesTooltip = null; console.log('Mouse leave task field')"
                 >
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
@@ -164,40 +162,39 @@
                       </q-item-section>
                     </q-item>
                   </template>
-                  <q-tooltip 
-                    v-if="showAssociatedActivitiesTooltip === index"
-                    anchor="top middle"
-                    self="bottom middle"
-                    :offset="[10, 10]"
-                    max-width="400px"
-                    class="bg-grey-9 text-white q-pa-md"
-                  >
-                    <div v-if="getAssociatedActivities(entry).length > 0">
-                      <div class="text-weight-bold q-mb-sm">Associated IT Activities:</div>
-                      <div v-for="activity in getAssociatedActivities(entry)" :key="activity.id" class="q-mb-xs">
-                        <div class="text-weight-medium">{{ activity.title }}</div>
-                        <div class="text-caption">
-                          {{ activity.activityType }} • {{ formatDateTime(activity.startDate) }}
-                          <span v-if="activity.durationMinutes"> • {{ formatDuration(activity.durationMinutes) }}</span>
+                  <template v-slot:selected-item="scope">
+                    <q-tooltip 
+                      max-width="400px"
+                      class="bg-grey-9 text-white q-pa-md"
+                    >
+                      <div v-if="getAssociatedActivities(entry).length > 0">
+                        <div class="text-weight-bold q-mb-sm">Associated IT Activities:</div>
+                        <div v-for="activity in getAssociatedActivities(entry)" :key="activity.id" class="q-mb-xs">
+                          <div class="text-weight-medium">{{ activity.title }}</div>
+                          <div class="text-caption">
+                            {{ activity.activityType }} • {{ formatDateTime(activity.startDate) }}
+                            <span v-if="activity.durationMinutes"> • {{ formatDuration(activity.durationMinutes) }}</span>
+                          </div>
+                        </div>
+                        <q-separator class="q-my-sm" />
+                        <div class="text-weight-bold">
+                          Associated Duration: {{ formatDuration(getAssociatedDurationMinutes(entry)) }}
+                        </div>
+                        <div class="text-weight-bold">
+                          Actual Hours: {{ formatTime(entry.actualTime, timeIncrementType) }}
+                        </div>
+                        <div v-if="getUnassociatedDuration(entry) !== 0" class="text-weight-bold" :class="getUnassociatedDuration(entry) > 0 ? 'text-orange' : 'text-blue'">
+                          {{ getUnassociatedDuration(entry) > 0 ? 'Unassociated Duration' : 'Over-associated Duration' }}: 
+                          {{ formatDuration(Math.abs(getUnassociatedDuration(entry))) }}
                         </div>
                       </div>
-                      <q-separator class="q-my-sm" />
-                      <div class="text-weight-bold">
-                        Associated Duration: {{ formatDuration(getAssociatedDurationMinutes(entry)) }}
+                      <div v-else>
+                        <div class="text-weight-bold">{{ entry.taskDescription || 'No task selected' }}</div>
+                        <div class="text-caption">No associated IT activities</div>
                       </div>
-                      <div class="text-weight-bold">
-                        Actual Hours: {{ formatTime(entry.actualTime, timeIncrementType) }}
-                      </div>
-                      <div v-if="getUnassociatedDuration(entry) !== 0" class="text-weight-bold" :class="getUnassociatedDuration(entry) > 0 ? 'text-orange' : 'text-blue'">
-                        {{ getUnassociatedDuration(entry) > 0 ? 'Unassociated Duration' : 'Over-associated Duration' }}: 
-                        {{ formatDuration(Math.abs(getUnassociatedDuration(entry))) }}
-                      </div>
-                    </div>
-                    <div v-else>
-                      <div class="text-weight-bold">{{ entry.taskDescription || 'No task selected' }}</div>
-                      <div class="text-caption">No associated IT activities</div>
-                    </div>
-                  </q-tooltip>
+                    </q-tooltip>
+                    {{ scope.opt.label || scope.opt || entry.taskDescription }}
+                  </template>
                 </q-select>
               </td>
               <td>
@@ -453,7 +450,6 @@ export default defineComponent({
     const showTaskDialog = ref(false);
     const selectedMatterForTask = ref<Matter | null>(null);
     const currentEntryIndex = ref<number | null>(null);
-    const showAssociatedActivitiesTooltip = ref<number | null>(null);
 
     // Settings state
     const matterLookaheadMode = ref<MatterLookaheadMode>('INDIVIDUAL_STARTS_WITH');
@@ -628,13 +624,7 @@ export default defineComponent({
           };
         }
         
-        // Warning conditions for expired timesheets - under target hours
-        if (isWeekExpired() && actualTotal.value > 0 && actualTotal.value < targetMinutes) {
-          return {
-            hasWarning: true,
-            message: `Actual time is below target hours for completed period (Target: ${formatTotalTime(targetMinutes)}, Actual: ${formatTotalTime(actualTotal.value)}). Continue anyway?`
-          };
-        }
+        // Remove actual hours warnings - only validate projected hours
         
         // Warning conditions for current/future timesheets - over target but under max
         if (projectedTotal.value > targetMinutes && projectedTotal.value <= maxMinutes) {
@@ -1053,6 +1043,7 @@ export default defineComponent({
             actualTime: entry.actualTime,
             projectedTimeDisplay: formatTime(entry.projectedTime, timesheet.timeIncrementType),
             actualTimeDisplay: formatTime(entry.actualTime, timesheet.timeIncrementType),
+            itActivityAssociations: entry.itActivityAssociations,
           };
           return entryRow;
         });
@@ -1352,7 +1343,6 @@ export default defineComponent({
      actualTotal,
      showTaskDialog,
      selectedMatterForTask,
-     showAssociatedActivitiesTooltip,
      
      // Computed
      dateRangeLabel,
@@ -1400,6 +1390,7 @@ export default defineComponent({
      getUnassociatedDuration,
      formatDateTime,
      formatDuration,
+     formatTime,
    };
  },
 });

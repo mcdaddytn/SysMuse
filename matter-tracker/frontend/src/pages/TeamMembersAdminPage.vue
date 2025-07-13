@@ -183,6 +183,10 @@
                 <q-select
                   v-model="teamMemberForm.userITActivity"
                   :options="itActivityOptions"
+                  option-label="label"
+                  option-value="value"
+                  emit-value
+                  map-options
                   label="IT Activity Access"
                   filled
                   clearable
@@ -406,7 +410,7 @@ async function loadTeamMembers() {
 
 async function loadSettings() {
   try {
-    settings.value = await settingsService.getAllSettings();
+    settings.value = await settingsService.getSettings();
   } catch (error) {
     console.error('Failed to load settings:', error);
   }

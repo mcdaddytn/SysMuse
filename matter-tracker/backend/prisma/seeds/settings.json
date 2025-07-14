@@ -44,6 +44,21 @@
       "key": "projectedHoursWarning",
       "value": "Never",
       "description": "When to warn for low projected hours (Never, Always, Past)"
+    },
+    {
+      "key": "relativitySessionsPerDay",
+      "value": 2,
+      "description": "Number of Relativity sessions to generate per day in seed data"
+    },
+    {
+      "key": "cocounselSessionsPerDay",
+      "value": 2,
+      "description": "Number of Cocounsel sessions to generate per day in seed data"
+    },
+    {
+      "key": "claudeSessionsPerDay",
+      "value": 2,
+      "description": "Number of Claude Chat sessions to generate per day in seed data"
     }
   ]
 }

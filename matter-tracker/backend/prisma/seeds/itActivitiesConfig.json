@@ -5,7 +5,10 @@
     "frequency": {
       "emailsPerDay": 10,
       "documentsPerDay": 5,
-      "calendarEventsPerWeek": 8
+      "calendarEventsPerWeek": 8,
+      "relativitySessionsPerDay": 2,
+      "cocounselSessionsPerDay": 2,
+      "claudeSessionsPerDay": 2
     },
     "collections": {
       "legalTopics": [

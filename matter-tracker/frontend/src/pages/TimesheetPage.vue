@@ -164,6 +164,7 @@
                   </template>
                   <template v-slot:selected-item="scope">
                     <q-tooltip 
+                      v-if="showITActivities"
                       max-width="400px"
                       class="bg-grey-9 text-white q-pa-md"
                     >
@@ -626,13 +627,7 @@ export default defineComponent({
         
         // Remove actual hours warnings - only validate projected hours
         
-        // Warning conditions for current/future timesheets - over target but under max
-        if (projectedTotal.value > targetMinutes && projectedTotal.value <= maxMinutes) {
-          return {
-            hasWarning: true,
-            message: `Projected time exceeds target hours (Target: ${formatTotalTime(targetMinutes)}, Projected: ${formatTotalTime(projectedTotal.value)}). Continue anyway?`
-          };
-        }
+        // Remove warning for hours over target but under max - this is acceptable
       }
 
       return { hasWarning: false, message: '' };

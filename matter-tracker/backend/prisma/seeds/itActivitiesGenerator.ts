@@ -13,6 +13,9 @@ interface SeedConfig {
     emailsPerDay: number;
     documentsPerDay: number;
     calendarEventsPerWeek: number;
+    relativitySessionsPerDay: number;
+    cocounselSessionsPerDay: number;
+    claudeSessionsPerDay: number;
   };
   collections: {
     legalTopics: string[];
@@ -104,6 +107,40 @@ function generateMetadata(activityType: ITActivityType, config: SeedConfig): any
         attendees: Math.floor(Math.random() * 5) + 2,
         hasReminder: Math.random() > 0.3,
         isRecurring: Math.random() > 0.8
+      };
+    
+    case 'RELATIVITY':
+      return {
+        queryType: getRandomElement(config.collections.relativityQueryTypes),
+        documentsReviewed: Math.floor(Math.random() * 500) + 50,
+        responsiveDocuments: Math.floor(Math.random() * 50) + 5,
+        privilegedDocuments: Math.floor(Math.random() * 10),
+        database: getRandomElement(['Production Database', 'Review Database', 'QC Database']),
+        searchTerms: getRandomElement(['contract AND (termination OR breach)', 'email AND confidential', 'patent OR intellectual property']),
+        reviewType: getRandomElement(['First Pass', 'Second Pass', 'Quality Control', 'Hot Document Review']),
+        durationMinutes: Math.floor(Math.random() * 120) + 30 // 30-150 minutes
+      };
+    
+    case 'CLAUDE_SESSION':
+      return {
+        sessionType: getRandomElement(['Legal Research', 'Document Analysis', 'Brief Writing', 'Contract Review']),
+        queryCount: Math.floor(Math.random() * 15) + 1,
+        documentsAnalyzed: Math.floor(Math.random() * 5) + 1,
+        wordCount: Math.floor(Math.random() * 2000) + 500,
+        topic: getRandomElement(config.collections.legalTopics),
+        assistanceType: getRandomElement(['Research', 'Writing', 'Analysis', 'Review', 'Strategy']),
+        durationMinutes: Math.floor(Math.random() * 90) + 15 // 15-105 minutes
+      };
+    
+    case 'COCOUNSEL_SESSION':
+      return {
+        sessionType: getRandomElement(['Case Strategy', 'Document Review', 'Client Preparation', 'Settlement Discussion']),
+        participantCount: Math.floor(Math.random() * 4) + 2,
+        notesGenerated: Math.random() > 0.7,
+        actionItems: Math.floor(Math.random() * 5) + 1,
+        followUpRequired: Math.random() > 0.6,
+        casePhase: getRandomElement(['Discovery', 'Pre-Trial', 'Settlement', 'Appeal', 'Preparation']),
+        durationMinutes: Math.floor(Math.random() * 150) + 30 // 30-180 minutes
       };
     
     default:
@@ -257,6 +294,129 @@ async function generateCalendarActivities(config: SeedConfig, startDate: Date, e
   return activities;
 }
 
+async function generateRelativitySessions(config: SeedConfig, startDate: Date, endDate: Date): Promise<any[]> {
+  const activities = [];
+  const currentDate = new Date(startDate);
+  
+  while (currentDate <= endDate) {
+    // Skip weekends
+    if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+    
+    const sessionsToday = Math.floor(Math.random() * 2) + config.frequency.relativitySessionsPerDay - 1;
+    
+    for (let i = 0; i < sessionsToday; i++) {
+      const time = getRandomTimeInWorkingHours();
+      const activityTime = new Date(currentDate);
+      activityTime.setHours(time.hours, time.minutes);
+      
+      const teamMembers = await prisma.teamMember.findMany();
+      const teamMember = getRandomElement(teamMembers);
+      
+      const queryType = getRandomElement(config.collections.relativityQueryTypes);
+      
+      activities.push({
+        id: `relativity_${currentDate.toISOString().split('T')[0]}_${i}_${teamMember.id}`,
+        teamMemberId: teamMember.id,
+        title: `Relativity ${queryType} Session`,
+        description: `Relativity session: ${queryType} for ${getRandomElement(config.collections.legalTopics)}`,
+        activityType: 'RELATIVITY' as ITActivityType,
+        startDate: activityTime,
+        metadata: generateMetadata('RELATIVITY', config),
+        isAssociated: false,
+      });
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return activities;
+}
+
+async function generateClaudeSessions(config: SeedConfig, startDate: Date, endDate: Date): Promise<any[]> {
+  const activities = [];
+  const currentDate = new Date(startDate);
+  
+  while (currentDate <= endDate) {
+    // Skip weekends
+    if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+    
+    const sessionsToday = Math.floor(Math.random() * 2) + config.frequency.claudeSessionsPerDay - 1;
+    
+    for (let i = 0; i < sessionsToday; i++) {
+      const time = getRandomTimeInWorkingHours();
+      const activityTime = new Date(currentDate);
+      activityTime.setHours(time.hours, time.minutes);
+      
+      const teamMembers = await prisma.teamMember.findMany();
+      const teamMember = getRandomElement(teamMembers);
+      
+      const sessionTitle = getRandomElement(config.collections.claudeSessionTitles);
+      
+      activities.push({
+        id: `claude_${currentDate.toISOString().split('T')[0]}_${i}_${teamMember.id}`,
+        teamMemberId: teamMember.id,
+        title: sessionTitle,
+        description: `Claude AI session: ${sessionTitle} for ${getRandomElement(config.collections.legalTopics)}`,
+        activityType: 'CLAUDE_SESSION' as ITActivityType,
+        startDate: activityTime,
+        metadata: generateMetadata('CLAUDE_SESSION', config),
+        isAssociated: false,
+      });
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return activities;
+}
+
+async function generateCocounselSessions(config: SeedConfig, startDate: Date, endDate: Date): Promise<any[]> {
+  const activities = [];
+  const currentDate = new Date(startDate);
+  
+  while (currentDate <= endDate) {
+    // Skip weekends
+    if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      continue;
+    }
+    
+    const sessionsToday = Math.floor(Math.random() * 2) + config.frequency.cocounselSessionsPerDay - 1;
+    
+    for (let i = 0; i < sessionsToday; i++) {
+      const time = getRandomTimeInWorkingHours();
+      const activityTime = new Date(currentDate);
+      activityTime.setHours(time.hours, time.minutes);
+      
+      const teamMembers = await prisma.teamMember.findMany();
+      const teamMember = getRandomElement(teamMembers);
+      
+      const sessionTitle = getRandomElement(config.collections.cocounselSessionTitles);
+      
+      activities.push({
+        id: `cocounsel_${currentDate.toISOString().split('T')[0]}_${i}_${teamMember.id}`,
+        teamMemberId: teamMember.id,
+        title: sessionTitle,
+        description: `Cocounsel session: ${sessionTitle} for ${getRandomElement(config.collections.legalTopics)}`,
+        activityType: 'COCOUNSEL_SESSION' as ITActivityType,
+        startDate: activityTime,
+        metadata: generateMetadata('COCOUNSEL_SESSION', config),
+        isAssociated: false,
+      });
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return activities;
+}
+
 export async function generateITActivities(): Promise<void> {
   console.log('🚀 Starting IT Activities generation...');
   
@@ -281,13 +441,25 @@ export async function generateITActivities(): Promise<void> {
     console.log('📅 Generating calendar activities...');
     const calendarActivities = await generateCalendarActivities(config, startDate, endDate);
     
+    console.log('🔍 Generating Relativity sessions...');
+    const relativitySessions = await generateRelativitySessions(config, startDate, endDate);
+    
+    console.log('🤖 Generating Claude sessions...');
+    const claudeSessions = await generateClaudeSessions(config, startDate, endDate);
+    
+    console.log('⚖️ Generating Cocounsel sessions...');
+    const cocounselSessions = await generateCocounselSessions(config, startDate, endDate);
+    
     // Combine all activities
-    const allActivities = [...emailActivities, ...documentActivities, ...calendarActivities];
+    const allActivities = [...emailActivities, ...documentActivities, ...calendarActivities, ...relativitySessions, ...claudeSessions, ...cocounselSessions];
     
     console.log(`📊 Total activities to create: ${allActivities.length}`);
     console.log(`  - Emails: ${emailActivities.length}`);
     console.log(`  - Documents: ${documentActivities.length}`);
     console.log(`  - Calendar: ${calendarActivities.length}`);
+    console.log(`  - Relativity Sessions: ${relativitySessions.length}`);
+    console.log(`  - Claude Sessions: ${claudeSessions.length}`);
+    console.log(`  - Cocounsel Sessions: ${cocounselSessions.length}`);
     
     // Batch insert activities
     console.log('💾 Inserting activities into database...');

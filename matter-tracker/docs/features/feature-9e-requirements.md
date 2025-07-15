@@ -18,6 +18,11 @@ Under the admin interface for team members, have the ability to view passwords (
 Needs work
 ***
 
+Change setting, "Allow regular users to access IT Activities" from being a boolean to "Access Level IT Activities" which can be NONE (meaning nobody can see that screen), or one of the user aacess levels, USER, MANAGER, or ADMIN.  If it is set to USER, everyone can see, if set to MANAGER, MANAGER and ADMIN can see page, if set to ADMIN, only ADMIN can see, and if NONE, the button and menu item for IT Activies is always hidden.
+
+
+
+
 Put seed generator enhancements in separate numbered requirement
 
 mouse over task, show associated IT activities and durations

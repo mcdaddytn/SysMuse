@@ -2,7 +2,7 @@
   <q-page class="q-pa-md">
     <div class="q-mb-md">
       <div class="row items-center justify-between q-mb-md">
-        <div class="text-h4">IT Activity Tracker</div>
+        <div class="text-h4">Activities Dashboard</div>
         <div class="row items-center q-gutter-md">
           <q-btn
             label="Back to Timesheets"

@@ -20,7 +20,7 @@
           <q-btn 
             v-if="showITActivities"
             flat 
-            label="IT Activities" 
+            label="Activities Dashboard" 
             :color="$route.name === 'it-activities' ? 'white' : 'grey-4'"
             @click="$router.push('/it-activities')"
           />

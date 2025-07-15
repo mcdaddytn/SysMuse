@@ -34,6 +34,15 @@
             @click="$router.push('/settings')"
           />
           
+          <!-- Reporting - Only for admins -->
+          <q-btn 
+            v-if="isAdmin"
+            flat 
+            label="Reporting" 
+            :color="$route.name === 'reporting' ? 'white' : 'grey-4'"
+            @click="$router.push('/reporting')"
+          />
+          
           <!-- Admin pages - Only for admins -->
           <q-btn 
             v-if="currentUser?.accessLevel === 'ADMIN'"

@@ -78,7 +78,7 @@
 
           <div class="col-auto" v-if="showITActivities">
             <q-btn
-              label="IT Activities"
+              label="Activities Dashboard"
               color="accent"
               @click="openITActivities"
               :disable="!selectedTeamMember"

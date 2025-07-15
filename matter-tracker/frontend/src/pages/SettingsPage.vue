@@ -68,9 +68,13 @@
           Configure user access to various features
         </div>
         
-        <q-toggle
+        <q-select
           v-model="userITActivity"
-          label="Allow regular users to access IT Activities"
+          :options="itActivityAccessOptions"
+          label="Access Level for IT Activities"
+          filled
+          emit-value
+          map-options
           @update:model-value="saveUserITActivity"
           :loading="savingUserITActivity"
         />
@@ -217,7 +221,7 @@ const $q = useQuasar();
 const workingHours = ref(40);
 const timeIncrementType = ref('HOURS_MINUTES');
 const timeIncrement = ref(15);
-const userITActivity = ref(false);
+const userITActivity = ref('MANAGER');
 const maxHoursPerDay = ref(12);
 const maxHoursPerWeek = ref(60);
 const projectedHoursWarning = ref('Never');
@@ -287,6 +291,29 @@ const matterLookaheadModeOptions = [
     label: 'Combined Contains', 
     value: 'COMBINED_CONTAINS',
     description: 'Search combined "Client - Matter" strings with contains matching'
+  }
+];
+
+const itActivityAccessOptions = [
+  { 
+    label: 'None - Hidden from all users', 
+    value: 'NONE',
+    description: 'IT Activities page is hidden from all users'
+  },
+  { 
+    label: 'All Users', 
+    value: 'USER',
+    description: 'All users can access IT Activities page'
+  },
+  { 
+    label: 'Managers and Admins', 
+    value: 'MANAGER',
+    description: 'Only managers and admins can access IT Activities page'
+  },
+  { 
+    label: 'Admins Only', 
+    value: 'ADMIN',
+    description: 'Only admins can access IT Activities page'
   }
 ];
 

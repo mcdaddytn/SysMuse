@@ -1298,13 +1298,28 @@ export default defineComponent({
    });
    
    const showITActivities = computed(() => {
-     // Check individual user override first, then global setting, then default for managers/admins
+     // Check individual user override first
      const userOverride = currentUser.value?.userITActivity;
      if (userOverride !== null && userOverride !== undefined) {
        return userOverride;
      }
      
-     return isManagerOrAdmin.value || userITActivity.value;
+     // Check global access level setting
+     const globalAccessLevel = userITActivity.value;
+     const currentUserLevel = currentUser.value?.accessLevel;
+     
+     if (globalAccessLevel === 'NONE') {
+       return false;
+     } else if (globalAccessLevel === 'USER') {
+       return true; // Everyone can access
+     } else if (globalAccessLevel === 'MANAGER') {
+       return currentUserLevel === 'MANAGER' || currentUserLevel === 'ADMIN';
+     } else if (globalAccessLevel === 'ADMIN') {
+       return currentUserLevel === 'ADMIN';
+     }
+     
+     // Fallback to false if setting is invalid
+     return false;
    });
 
    onMounted(async () => {

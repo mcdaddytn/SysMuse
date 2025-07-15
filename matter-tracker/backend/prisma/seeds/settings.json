@@ -17,8 +17,8 @@
     },
     {
       "key": "userITActivity",
-      "value": false,
-      "description": "Whether regular users can access IT Activities page"
+      "value": "MANAGER",
+      "description": "Access level required for IT Activities page (NONE, USER, MANAGER, ADMIN)"
     },
     {
       "key": "maxHoursPerDay",

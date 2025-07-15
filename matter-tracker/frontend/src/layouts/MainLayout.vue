@@ -118,7 +118,7 @@ const router = useRouter();
 const $q = useQuasar();
 
 const currentUser = ref<AuthUser | null>(null);
-const userITActivity = ref(false);
+const userITActivity = ref('MANAGER');
 
 // Computed properties for role-based access
 const isAdmin = computed(() => {
@@ -130,13 +130,28 @@ const isManagerOrAdmin = computed(() => {
 });
 
 const showITActivities = computed(() => {
-  // Check individual user override first, then global setting, then default for managers/admins
+  // Check individual user override first
   const userOverride = currentUser.value?.userITActivity;
   if (userOverride !== null && userOverride !== undefined) {
     return userOverride;
   }
   
-  return isManagerOrAdmin.value || userITActivity.value;
+  // Check global access level setting
+  const globalAccessLevel = userITActivity.value;
+  const currentUserLevel = currentUser.value?.accessLevel;
+  
+  if (globalAccessLevel === 'NONE') {
+    return false;
+  } else if (globalAccessLevel === 'USER') {
+    return true; // Everyone can access
+  } else if (globalAccessLevel === 'MANAGER') {
+    return currentUserLevel === 'MANAGER' || currentUserLevel === 'ADMIN';
+  } else if (globalAccessLevel === 'ADMIN') {
+    return currentUserLevel === 'ADMIN';
+  }
+  
+  // Fallback to false if setting is invalid
+  return false;
 });
 
 // Load current user info (auth already checked by router guard)
@@ -152,12 +167,12 @@ async function loadCurrentUser() {
 // Load settings to check IT Activities access
 async function loadSettings() {
   try {
-    const allowAccess = await settingsService.getSetting('userITActivity');
-    userITActivity.value = allowAccess;
+    const accessLevel = await settingsService.getSetting('userITActivity');
+    userITActivity.value = accessLevel;
   } catch (error) {
     console.error('Failed to load settings:', error);
-    // Default to false if we can't load the setting
-    userITActivity.value = false;
+    // Default to MANAGER if we can't load the setting
+    userITActivity.value = 'MANAGER';
   }
 }
 

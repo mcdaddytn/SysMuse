@@ -194,7 +194,7 @@ export interface Settings {
   workingHours: number;
   timeIncrementType: TimeIncrementType;
   timeIncrement: number;
-  userITActivity: boolean;
+  userITActivity: string;
   maxHoursPerDay: number;
   maxHoursPerWeek: number;
   [key: string]: any;

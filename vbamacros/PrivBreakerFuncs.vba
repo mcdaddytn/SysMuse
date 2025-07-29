@@ -287,53 +287,6 @@ Sub PropagatePrivBreaksFromParent()
         headerMap(ws.Cells(1, col).Value) = col
     Next col
 
-    If Not headerMap.exists("ParentID") Or Not headerMap.exists("PrivBreak") Or Not headerMap.exists("PrivBreakReason") Or Not headerMap.exists("BegDoc") Then
-        MsgBox "Required columns missing (BegDoc, ParentID, PrivBreak, PrivBreakReason).", vbExclamation
-        Exit Sub
-    End If
-
-    Dim row As Long: row = 2
-    Do While ws.Cells(row, 1).Value <> ""
-        Dim parentID As String: parentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
-        If parentID <> "" Then
-            ' Find parent row by matching BegDoc = ParentID
-            Dim foundRow As Long: foundRow = 0
-            Dim searchRow As Long: searchRow = 2
-            Do While ws.Cells(searchRow, 1).Value <> ""
-                If Trim(ws.Cells(searchRow, headerMap("BegDoc")).Value) = parentID Then
-                    foundRow = searchRow
-                    Exit Do
-                End If
-                searchRow = searchRow + 1
-            Loop
-            
-            If foundRow > 0 Then
-                Dim parentPrivBreak As Variant
-                parentPrivBreak = ws.Cells(foundRow, headerMap("PrivBreak")).Value
-                ws.Cells(row, headerMap("PrivBreak")).Value = parentPrivBreak
-                If parentPrivBreak = True Or parentPrivBreak = "TRUE" Then
-                    ws.Cells(row, headerMap("PrivBreakReason")).Value = "Inherited from parent: " & parentID
-                Else
-                    ws.Cells(row, headerMap("PrivBreakReason")).Value = ""
-                End If
-            Else
-                ws.Cells(row, headerMap("PrivBreakReason")).Value = "ParentID not found: " & parentID
-            End If
-        End If
-        row = row + 1
-    Loop
-    MsgBox "PrivBreak propagation complete for child rows.", vbInformation
-End Sub
-
-Sub PropagatePrivBreaksFromParent_Fast()
-    Dim ws As Worksheet: Set ws = ActiveSheet
-    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
-
-    Dim col As Long
-    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-        headerMap(ws.Cells(1, col).Value) = col
-    Next col
-
     ' Validate required columns
     If Not headerMap.exists("ParentID") Or Not headerMap.exists("PrivBreak") _
         Or Not headerMap.exists("PrivBreakReason") Or Not headerMap.exists("BegDoc") Then

@@ -172,9 +172,211 @@ Private Sub WriteUniqueToSheet(ws As Worksheet, dict As Object, header As String
     i = 2
     Dim key As Variant
     For Each key In dict.Keys
-        ws.Cells(i, 1).Value = key
+        ws.Cells(i, 1).Value = CStr(key)
         i = i + 1
     Next key
 End Sub
 
+Sub DetectPrivBreaks()
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim internalWS As Worksheet: Set internalWS = ThisWorkbook.Worksheets("Internal")
+    
+    ' Delete PrivBreak and PrivBreakReason columns if they exist
+    Dim col As Integer, lastCol As Integer
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    For col = lastCol To 1 Step -1
+        If ws.Cells(1, col).Value = "PrivBreak" Or ws.Cells(1, col).Value = "PrivBreakReason" Then
+            ws.Columns(col).Delete
+        End If
+    Next col
+    
+    ' Recalculate lastCol after deletion
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    ws.Cells(1, lastCol + 1).Value = "PrivBreak"
+    ws.Cells(1, lastCol + 2).Value = "PrivBreakReason"
+    Dim colPrivBreak As Long: colPrivBreak = lastCol + 1
+    Dim colPrivReason As Long: colPrivReason = lastCol + 2
+    
+    ' Load internal domains and emails
+    Dim internalDomains As Object: Set internalDomains = CreateObject("Scripting.Dictionary")
+    Dim internalEmails As Object: Set internalEmails = CreateObject("Scripting.Dictionary")
+    
+    Dim r As Long
+    r = 2
+    Do While internalWS.Cells(r, 1).Value <> ""
+        Dim dom As String: dom = Trim(LCase(internalWS.Cells(r, 1).Value))
+        If dom <> "" Then internalDomains(dom) = 1
+        If internalWS.Cells(r, 2).Value <> "" Then internalEmails(LCase(Trim(internalWS.Cells(r, 2).Value))) = 1
+        r = r + 1
+    Loop
+
+    ' Determine column indexes
+    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
+    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        headerMap(ws.Cells(1, col).Value) = col
+    Next col
+
+    Dim emailFields As Variant: emailFields = Array("Email From", "Email To", "Email CC")
+
+    ' Process each row
+    Dim row As Long: row = 2
+    Do While ws.Cells(row, 1).Value <> ""
+        Dim parentID As String: parentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
+        If parentID = "" Then
+            Dim reason As String: reason = ""
+            Dim anyBreak As Boolean: anyBreak = False
+
+            For Each field In emailFields
+                Dim doCol As String: doCol = field & " DO"
+                If headerMap.exists(doCol) Then
+                    Dim domList As Variant
+                    domList = Split(ws.Cells(row, headerMap(doCol)).Value, ";")
+                    
+                    Dim d As Variant
+                    For Each d In domList
+                        Dim domain As String: domain = Trim(LCase(d))
+                        If domain = "" Then GoTo NextDomain
+
+                        If Not internalDomains.exists(domain) Then
+                            ' Check if ALL addresses with this domain are in internalEmails
+                            Dim fullField As String
+                            fullField = ws.Cells(row, headerMap(field & " AO")).Value
+                            Dim emails As Variant: emails = Split(fullField, ";")
+                            
+                            Dim foundExternal As Boolean: foundExternal = False
+                            Dim e As Variant
+                            For Each e In emails
+                                Dim email As String: email = Trim(LCase(e))
+                                If InStr(email, "@" & domain) > 0 Then
+                                    If Not internalEmails.exists(email) Then
+                                        foundExternal = True
+                                        Exit For
+                                    End If
+                                End If
+                            Next e
+                            
+                            If foundExternal Then
+                                anyBreak = True
+                                reason = reason & field & " domain not internal: " & domain & vbCrLf
+                            End If
+                        End If
+NextDomain:
+                    Next d
+                End If
+            Next field
+
+            If anyBreak Then
+                ws.Cells(row, colPrivBreak).Value = True
+                ws.Cells(row, colPrivReason).Value = reason
+            Else
+                ws.Cells(row, colPrivBreak).Value = False
+                ws.Cells(row, colPrivReason).Value = ""
+            End If
+        End If
+        row = row + 1
+    Loop
+    MsgBox "PrivBreak analysis complete for base rows (ParentID blank).", vbInformation
+End Sub
+
+Sub PropagatePrivBreaksFromParent()
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
+
+    Dim col As Long
+    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        headerMap(ws.Cells(1, col).Value) = col
+    Next col
+
+    If Not headerMap.exists("ParentID") Or Not headerMap.exists("PrivBreak") Or Not headerMap.exists("PrivBreakReason") Or Not headerMap.exists("BegDoc") Then
+        MsgBox "Required columns missing (BegDoc, ParentID, PrivBreak, PrivBreakReason).", vbExclamation
+        Exit Sub
+    End If
+
+    Dim row As Long: row = 2
+    Do While ws.Cells(row, 1).Value <> ""
+        Dim parentID As String: parentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
+        If parentID <> "" Then
+            ' Find parent row by matching BegDoc = ParentID
+            Dim foundRow As Long: foundRow = 0
+            Dim searchRow As Long: searchRow = 2
+            Do While ws.Cells(searchRow, 1).Value <> ""
+                If Trim(ws.Cells(searchRow, headerMap("BegDoc")).Value) = parentID Then
+                    foundRow = searchRow
+                    Exit Do
+                End If
+                searchRow = searchRow + 1
+            Loop
+            
+            If foundRow > 0 Then
+                Dim parentPrivBreak As Variant
+                parentPrivBreak = ws.Cells(foundRow, headerMap("PrivBreak")).Value
+                ws.Cells(row, headerMap("PrivBreak")).Value = parentPrivBreak
+                If parentPrivBreak = True Or parentPrivBreak = "TRUE" Then
+                    ws.Cells(row, headerMap("PrivBreakReason")).Value = "Inherited from parent: " & parentID
+                Else
+                    ws.Cells(row, headerMap("PrivBreakReason")).Value = ""
+                End If
+            Else
+                ws.Cells(row, headerMap("PrivBreakReason")).Value = "ParentID not found: " & parentID
+            End If
+        End If
+        row = row + 1
+    Loop
+    MsgBox "PrivBreak propagation complete for child rows.", vbInformation
+End Sub
+
+Sub PropagatePrivBreaksFromParent_Fast()
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
+
+    Dim col As Long
+    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        headerMap(ws.Cells(1, col).Value) = col
+    Next col
+
+    ' Validate required columns
+    If Not headerMap.exists("ParentID") Or Not headerMap.exists("PrivBreak") _
+        Or Not headerMap.exists("PrivBreakReason") Or Not headerMap.exists("BegDoc") Then
+        MsgBox "Required columns missing: BegDoc, ParentID, PrivBreak, PrivBreakReason.", vbExclamation
+        Exit Sub
+    End If
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).row
+
+    ' Step 1: Build a dictionary: BegDoc -> PrivBreak
+    Dim privMap As Object: Set privMap = CreateObject("Scripting.Dictionary")
+    Dim row As Long
+    For row = 2 To lastRow
+        Dim parentID As String: parentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
+        If parentID = "" Then
+            Dim begDoc As String: begDoc = Trim(ws.Cells(row, headerMap("BegDoc")).Value)
+            Dim pbVal As Variant: pbVal = ws.Cells(row, headerMap("PrivBreak")).Value
+            If begDoc <> "" Then
+                privMap(begDoc) = pbVal
+            End If
+        End If
+    Next row
+
+    ' Step 2: Apply PrivBreak to rows with ParentID
+    For row = 2 To lastRow
+        Dim thisParentID As String: thisParentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
+        If thisParentID <> "" Then
+            If privMap.exists(thisParentID) Then
+                Dim parentPB As Variant: parentPB = privMap(thisParentID)
+                ws.Cells(row, headerMap("PrivBreak")).Value = parentPB
+                If parentPB = True Or parentPB = "TRUE" Then
+                    ws.Cells(row, headerMap("PrivBreakReason")).Value = "Inherited from parent: " & thisParentID
+                Else
+                    ws.Cells(row, headerMap("PrivBreakReason")).Value = ""
+                End If
+            Else
+                ws.Cells(row, headerMap("PrivBreak")).Value = ""
+                ws.Cells(row, headerMap("PrivBreakReason")).Value = "ParentID not found: " & thisParentID
+            End If
+        End If
+    Next row
+
+    MsgBox "Fast PrivBreak propagation complete for child rows.", vbInformation
+End Sub
 

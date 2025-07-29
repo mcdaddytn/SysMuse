@@ -257,7 +257,8 @@ Sub DetectPrivBreaks()
                             
                             If foundExternal Then
                                 anyBreak = True
-                                reason = reason & field & " domain not internal: " & domain & vbCrLf
+                                'reason = reason & field & " domain not internal: " & domain & vbCrLf
+                                reason = reason & field & " domain not internal: " & domain & vbTab
                             End If
                         End If
 NextDomain:

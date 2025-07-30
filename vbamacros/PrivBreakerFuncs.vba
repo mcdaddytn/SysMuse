@@ -181,7 +181,7 @@ Sub DetectPrivBreaks()
     Dim ws As Worksheet: Set ws = ActiveSheet
     Dim internalWS As Worksheet: Set internalWS = ThisWorkbook.Worksheets("Internal")
     
-    ' Delete PrivBreak and PrivBreakReason columns if they exist
+    ' Delete existing PrivBreak and PrivBreakReason columns
     Dim col As Integer, lastCol As Integer
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     For col = lastCol To 1 Step -1
@@ -189,20 +189,19 @@ Sub DetectPrivBreaks()
             ws.Columns(col).Delete
         End If
     Next col
-    
-    ' Recalculate lastCol after deletion
+
+    ' Recalculate headers
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     ws.Cells(1, lastCol + 1).Value = "PrivBreak"
     ws.Cells(1, lastCol + 2).Value = "PrivBreakReason"
     Dim colPrivBreak As Long: colPrivBreak = lastCol + 1
     Dim colPrivReason As Long: colPrivReason = lastCol + 2
-    
+
     ' Load internal domains and emails
     Dim internalDomains As Object: Set internalDomains = CreateObject("Scripting.Dictionary")
     Dim internalEmails As Object: Set internalEmails = CreateObject("Scripting.Dictionary")
     
-    Dim r As Long
-    r = 2
+    Dim r As Long: r = 2
     Do While internalWS.Cells(r, 1).Value <> ""
         Dim dom As String: dom = Trim(LCase(internalWS.Cells(r, 1).Value))
         If dom <> "" Then internalDomains(dom) = 1
@@ -210,19 +209,36 @@ Sub DetectPrivBreaks()
         r = r + 1
     Loop
 
-    ' Determine column indexes
+    ' Build header map
     Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
     For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
         headerMap(ws.Cells(1, col).Value) = col
     Next col
 
-    Dim emailFields As Variant: emailFields = Array("Email From", "Email To", "Email CC")
+    ' Check for optional CalcPriv column
+    Dim hasCalcPriv As Boolean: hasCalcPriv = headerMap.exists("CalcPriv")
 
-    ' Process each row
+    Dim emailFields As Variant: emailFields = Array("Email From", "Email To", "Email CC")
     Dim row As Long: row = 2
+
     Do While ws.Cells(row, 1).Value <> ""
         Dim parentID As String: parentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
-        If parentID = "" Then
+        Dim doCalc As Boolean: doCalc = True
+
+        ' If CalcPriv exists, use its value to determine whether to calculate
+        If hasCalcPriv Then
+            Dim cpVal As Variant
+            cpVal = ws.Cells(row, headerMap("CalcPriv")).Value
+            If VarType(cpVal) = vbBoolean Then
+                doCalc = cpVal
+            ElseIf VarType(cpVal) = vbString Then
+                doCalc = (LCase(cpVal) = "true")
+            Else
+                doCalc = False
+            End If
+        End If
+
+        If parentID = "" And doCalc Then
             Dim reason As String: reason = ""
             Dim anyBreak As Boolean: anyBreak = False
 
@@ -238,7 +254,7 @@ Sub DetectPrivBreaks()
                         If domain = "" Then GoTo NextDomain
 
                         If Not internalDomains.exists(domain) Then
-                            ' Check if ALL addresses with this domain are in internalEmails
+                            ' Check if ALL addresses with this domain are internal
                             Dim fullField As String
                             fullField = ws.Cells(row, headerMap(field & " AO")).Value
                             Dim emails As Variant: emails = Split(fullField, ";")
@@ -276,7 +292,8 @@ NextDomain:
         End If
         row = row + 1
     Loop
-    MsgBox "PrivBreak analysis complete for base rows (ParentID blank).", vbInformation
+
+    MsgBox "PrivBreak analysis complete (with optional CalcPriv logic).", vbInformation
 End Sub
 
 Sub PropagatePrivBreaksFromParent()

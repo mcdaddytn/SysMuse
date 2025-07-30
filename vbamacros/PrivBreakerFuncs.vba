@@ -141,7 +141,7 @@ SkipPart:
     WriteUniqueToSheet wsN, uniqueNames, "Name"
     WriteUniqueToSheet wsD, uniqueDomains, "Domain"
 
-    MsgBox "Email parsing completed.", vbInformation
+    'MsgBox "Email parsing completed.", vbInformation
 End Sub
 
 Function AppendDelimited(base As String, newVal As String) As String
@@ -293,7 +293,7 @@ NextDomain:
         row = row + 1
     Loop
 
-    MsgBox "PrivBreak analysis complete (with optional CalcPriv logic).", vbInformation
+    'MsgBox "PrivBreak analysis complete (with optional CalcPriv logic).", vbInformation
 End Sub
 
 Sub PropagatePrivBreaksFromParent()
@@ -348,6 +348,59 @@ Sub PropagatePrivBreaksFromParent()
         End If
     Next row
 
-    MsgBox "Fast PrivBreak propagation complete for child rows.", vbInformation
+    'MsgBox "Fast PrivBreak propagation complete for child rows.", vbInformation
 End Sub
 
+Sub AddPrivBreakSummary()
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
+    
+    Dim col As Long
+    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        headerMap(ws.Cells(1, col).Value) = col
+    Next col
+    
+    If Not headerMap.exists("PrivBreak") Then
+        MsgBox "PrivBreak column not found.", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, headerMap("PrivBreak")).End(xlUp).Row
+    Dim summaryStartRow As Long: summaryStartRow = lastRow + 2 ' one blank row
+    
+    With ws
+        .Cells(summaryStartRow, headerMap("PrivBreak") - 1).Value = "PrivBreakTrue"
+        .Cells(summaryStartRow, headerMap("PrivBreak")).Formula = _
+            "=COUNTIF(" & .Cells(2, headerMap("PrivBreak")).Address & ":" & _
+            .Cells(lastRow, headerMap("PrivBreak")).Address & ", TRUE)"
+        
+        .Cells(summaryStartRow + 1, headerMap("PrivBreak") - 1).Value = "PrivBreakFalse"
+        .Cells(summaryStartRow + 1, headerMap("PrivBreak")).Formula = _
+            "=COUNTIF(" & .Cells(2, headerMap("PrivBreak")).Address & ":" & _
+            .Cells(lastRow, headerMap("PrivBreak")).Address & ", FALSE)"
+    End With
+
+    MsgBox "PrivBreak completed and summary rows added.", vbInformation
+End Sub
+
+Sub RunAllPrivBreakSteps()
+    Dim dataSheet As Worksheet
+    Set dataSheet = ActiveSheet
+
+    ' Parse email fields
+    dataSheet.Activate
+    ParseEmailFields
+
+    ' Detect PrivBreaks
+    dataSheet.Activate
+    DetectPrivBreaks
+
+    ' Propagate to children
+    dataSheet.Activate
+    PropagatePrivBreaksFromParent
+
+    ' Add summary
+    dataSheet.Activate
+    AddPrivBreakSummary
+End Sub

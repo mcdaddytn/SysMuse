@@ -354,34 +354,73 @@ End Sub
 Sub AddPrivBreakSummary()
     Dim ws As Worksheet: Set ws = ActiveSheet
     Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
-    
+
     Dim col As Long
     For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
         headerMap(ws.Cells(1, col).Value) = col
     Next col
-    
+
     If Not headerMap.exists("PrivBreak") Then
         MsgBox "PrivBreak column not found.", vbExclamation
         Exit Sub
     End If
-    
+
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, headerMap("PrivBreak")).End(xlUp).Row
     Dim summaryStartRow As Long: summaryStartRow = lastRow + 2 ' one blank row
-    
+
     With ws
         .Cells(summaryStartRow, headerMap("PrivBreak") - 1).Value = "PrivBreakTrue"
         .Cells(summaryStartRow, headerMap("PrivBreak")).Formula = _
             "=COUNTIF(" & .Cells(2, headerMap("PrivBreak")).Address & ":" & _
             .Cells(lastRow, headerMap("PrivBreak")).Address & ", TRUE)"
-        
+
         .Cells(summaryStartRow + 1, headerMap("PrivBreak") - 1).Value = "PrivBreakFalse"
         .Cells(summaryStartRow + 1, headerMap("PrivBreak")).Formula = _
             "=COUNTIF(" & .Cells(2, headerMap("PrivBreak")).Address & ":" & _
             .Cells(lastRow, headerMap("PrivBreak")).Address & ", FALSE)"
     End With
 
-    MsgBox "PrivBreak completed and summary rows added.", vbInformation
+    ' === Results Export ===
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    ThisWorkbook.Worksheets("Results").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+    Dim resultsWS As Worksheet
+    Set resultsWS = ThisWorkbook.Worksheets.Add
+    resultsWS.Name = "Results"
+
+    resultsWS.Cells(1, 1).Value = "BegDoc"
+    resultsWS.Cells(1, 2).Value = "PrivBreak"
+    resultsWS.Cells(1, 3).Value = "PrivBreakReason"
+    resultsWS.Cells(1, 4).Value = "PrivDomains"
+
+    Dim outputRow As Long: outputRow = 2
+
+    For row = 2 To lastRow
+        Dim begDoc As String: begDoc = ws.Cells(row, headerMap("BegDoc")).Value
+        Dim pbVal As Variant: pbVal = ws.Cells(row, headerMap("PrivBreak")).Value
+        Dim reason As String: reason = ws.Cells(row, headerMap("PrivBreakReason")).Value
+        Dim domainsField As String
+
+        If headerMap.exists("PrivDomains") Then
+            domainsField = ws.Cells(row, headerMap("PrivDomains")).Value
+        Else
+            domainsField = ""
+        End If
+
+        If Not IsEmpty(pbVal) Then
+            resultsWS.Cells(outputRow, 1).Value = begDoc
+            resultsWS.Cells(outputRow, 2).Value = IIf(pbVal = True, "Yes", "No")
+            resultsWS.Cells(outputRow, 3).Value = reason
+            resultsWS.Cells(outputRow, 4).Value = domainsField
+            outputRow = outputRow + 1
+        End If
+    Next row
+
+    MsgBox "PrivBreak summary and results worksheet created.", vbInformation
 End Sub
 
 Sub RunAllPrivBreakSteps()

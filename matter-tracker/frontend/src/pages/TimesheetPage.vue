@@ -169,7 +169,7 @@
                       class="bg-grey-9 text-white q-pa-md"
                     >
                       <div v-if="getAssociatedActivities(entry).length > 0">
-                        <div class="text-weight-bold q-mb-sm">Associated IT Activities:</div>
+                        <div class="text-weight-bold q-mb-sm">Associated Activities:</div>
                         <div v-for="activity in getAssociatedActivities(entry)" :key="activity.id" class="q-mb-xs">
                           <div class="text-weight-medium">{{ activity.title }}</div>
                           <div class="text-caption">
@@ -191,7 +191,7 @@
                       </div>
                       <div v-else>
                         <div class="text-weight-bold">{{ entry.taskDescription || 'No task selected' }}</div>
-                        <div class="text-caption">No associated IT activities</div>
+                        <div class="text-caption">No associated activities</div>
                       </div>
                     </q-tooltip>
                     {{ scope.opt.label || scope.opt || entry.taskDescription }}

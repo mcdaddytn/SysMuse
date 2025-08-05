@@ -18,3 +18,7 @@ npm install
 ts-node convert-pdfs.ts config.json
 
 npx ts-node convert-pdfs.ts config.json
+
+
+npx ts-node --esm convert-pdfs.ts config.json
+

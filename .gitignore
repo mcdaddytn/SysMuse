@@ -123,3 +123,5 @@ timesheet-app/.DS_Store
 =======
 >>>>>>> origin/main
 .DS_Store
+
+utility/convert-pdfs/package-lock.json

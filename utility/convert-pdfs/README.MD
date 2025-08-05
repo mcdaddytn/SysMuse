@@ -16,3 +16,5 @@ cd \syscode\SysMuse\utility\convert-pdfs
 
 npm install
 ts-node convert-pdfs.ts config.json
+
+npx ts-node convert-pdfs.ts config.json

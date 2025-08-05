@@ -1,8 +1,10 @@
+// convert-pdfs.ts
+
 import fs from 'fs';
 import path from 'path';
 import PDFParser from 'pdf2json';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
 
-// Use CommonJS-style require for untyped libraries
 const pdfParse = require('pdf-parse');
 const pdfExtract = require('pdf-text-extract');
 
@@ -25,6 +27,15 @@ const ensureDir = (dir: string) => {
 };
 
 // ----- Converter Implementations -----
+
+const convertWithPdfTextExtract = async (filePath: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    pdfExtract(filePath, { layout: true }, (err: any, pages: string[]) => {
+      if (err) return reject(err);
+      resolve(pages.join('\n'));
+    });
+  });
+};
 
 const convertWithPdfParse = async (filePath: string): Promise<string> => {
   const dataBuffer = fs.readFileSync(filePath);
@@ -64,13 +75,34 @@ const convertWithPdf2Json = async (filePath: string): Promise<string> => {
   });
 };
 
-const convertWithPdfTextExtract = async (filePath: string): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    pdfExtract(filePath, { layout: true }, (err: any, pages: string[]) => {
-      if (err) return reject(err);
-      resolve(pages.join('\n'));
-    });
-  });
+const convertWithPdfjsDist = async (filePath: string): Promise<string> => {
+  const data = new Uint8Array(fs.readFileSync(filePath));
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  let fullText = '';
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+
+    const lines: Map<number, string[]> = new Map();
+
+    for (const item of content.items) {
+      const text = (item as any).str;
+      const y = Math.round((item as any).transform[5]);
+
+      if (!lines.has(y)) lines.set(y, []);
+      lines.get(y)!.push(text);
+    }
+
+    const pageLines = Array.from(lines.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([, tokens]) => tokens.join(' '))
+      .join('\n');
+
+    fullText += `\n\nPage ${i}\n${pageLines}`;
+  }
+
+  return fullText;
 };
 
 // ----- Dispatcher -----
@@ -80,12 +112,14 @@ const runConverter = async (
   inputFile: string
 ): Promise<string> => {
   switch (converter) {
+    case 'pdf-text-extract':
+      return await convertWithPdfTextExtract(inputFile);
+    case 'pdfjs-dist':
+      return await convertWithPdfjsDist(inputFile);
     case 'pdf-parse':
       return await convertWithPdfParse(inputFile);
     case 'pdf2json':
       return await convertWithPdf2Json(inputFile);
-    case 'pdf-text-extract':
-      return await convertWithPdfTextExtract(inputFile);
     default:
       throw new Error(`Unsupported converter: ${converter}`);
   }
@@ -109,9 +143,9 @@ const run = async (configPath: string) => {
       try {
         const text = await runConverter(converter, inputFile);
         fs.writeFileSync(outputFile, text, 'utf-8');
-        console.log(`${file}`);
+        console.log(`Success ${file}`);
       } catch (err) {
-        console.error(`${file} (Error: ${err})`);
+        console.error(`Error ${file} (Error: ${err})`);
       }
     }
   }

@@ -1,5 +1,6 @@
 {
   "inputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLifevAmazonPDF",
   "outputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix",
-  "converters": ["pdf-parse", "pdf2json", "pdf-text-extract"]
+  "convertersAll": ["pdf-parse", "pdf2json", "pdf-text-extract", "pdfjs-dist"],
+  "converters": ["pdf-text-extract", "pdfjs-dist"]
 }

@@ -3,7 +3,10 @@
 import fs from 'fs';
 import path from 'path';
 import PDFParser from 'pdf2json';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+//import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.js';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+GlobalWorkerOptions.workerSrc = require('pdfjs-dist/build/pdf.worker.js');
+
 
 const pdfParse = require('pdf-parse');
 const pdfExtract = require('pdf-text-extract');
@@ -77,7 +80,7 @@ const convertWithPdf2Json = async (filePath: string): Promise<string> => {
 
 const convertWithPdfjsDist = async (filePath: string): Promise<string> => {
   const data = new Uint8Array(fs.readFileSync(filePath));
-  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const pdf = await getDocument({ data }).promise;
   let fullText = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -95,7 +98,7 @@ const convertWithPdfjsDist = async (filePath: string): Promise<string> => {
     }
 
     const pageLines = Array.from(lines.entries())
-      .sort((a, b) => b[0] - a[0])
+      .sort((a, b) => b[0] - a[0]) // top to bottom
       .map(([, tokens]) => tokens.join(' '))
       .join('\n');
 

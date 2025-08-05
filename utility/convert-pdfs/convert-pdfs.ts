@@ -1,12 +1,11 @@
-// convert-pdfs.ts
 import fs from 'fs';
 import path from 'path';
-import { promisify } from 'util';
-import { execFile } from 'child_process';
+import PDFParser from 'pdf2json';
 
-const execFileAsync = promisify(execFile);
+// Use CommonJS-style require for untyped libraries
+const pdfParse = require('pdf-parse');
+const pdfExtract = require('pdf-text-extract');
 
-// --------- Config Handling ---------
 interface Config {
   inputDir: string;
   outputDir: string;
@@ -18,50 +17,50 @@ const readConfig = (configPath: string): Config => {
   return JSON.parse(json);
 };
 
-// --------- Utility Functions ---------
 const listPDFs = (dir: string): string[] =>
-  fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.pdf'));
+  fs.readdirSync(dir).filter((f: string) => f.toLowerCase().endsWith('.pdf'));
 
 const ensureDir = (dir: string) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 };
 
-// --------- Converter Implementations ---------
+// ----- Converter Implementations -----
+
 const convertWithPdfParse = async (filePath: string): Promise<string> => {
-  const pdfParse = await import('pdf-parse');
   const dataBuffer = fs.readFileSync(filePath);
-  const data = await pdfParse.default(dataBuffer);
+  const data = await pdfParse(dataBuffer);
   return data.text;
 };
 
 const convertWithPdf2Json = async (filePath: string): Promise<string> => {
-  const PDFParser = (await import('pdf2json')).default;
   const parser = new PDFParser();
+
   return new Promise((resolve, reject) => {
-    parser.on('pdfParser_dataError', err => reject(err.parserError));
-    parser.on('pdfParser_dataReady', pdfData => {
-      const text = pdfData.formImage.Pages.map(page =>
-        page.Texts.map(t =>
-          decodeURIComponent(t.R.map(r => r.T).join(' '))
+    parser.on('pdfParser_dataError', (err: any) => reject(err.parserError));
+    parser.on('pdfParser_dataReady', (pdfData: any) => {
+      const text = pdfData.formImage.Pages.map((page: any) =>
+        page.Texts.map((t: any) =>
+          decodeURIComponent(t.R.map((r: any) => r.T).join(' '))
         ).join(' ')
       ).join('\n');
       resolve(text);
     });
+
     parser.loadPDF(filePath);
   });
 };
 
 const convertWithPdfTextExtract = async (filePath: string): Promise<string> => {
-  const pdfExtract = await import('pdf-text-extract');
   return new Promise((resolve, reject) => {
-    pdfExtract.default(filePath, { layout: true }, (err, pages) => {
+    pdfExtract(filePath, { layout: true }, (err: any, pages: string[]) => {
       if (err) return reject(err);
       resolve(pages.join('\n'));
     });
   });
 };
 
-// --------- Dispatcher ---------
+// ----- Dispatcher -----
+
 const runConverter = async (
   converter: string,
   inputFile: string
@@ -78,7 +77,8 @@ const runConverter = async (
   }
 };
 
-// --------- Main Routine ---------
+// ----- Main Routine -----
+
 const run = async (configPath: string) => {
   const config = readConfig(configPath);
   const pdfs = listPDFs(config.inputDir);

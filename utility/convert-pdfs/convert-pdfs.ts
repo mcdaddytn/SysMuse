@@ -38,12 +38,26 @@ const convertWithPdf2Json = async (filePath: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     parser.on('pdfParser_dataError', (err: any) => reject(err.parserError));
     parser.on('pdfParser_dataReady', (pdfData: any) => {
-      const text = pdfData.formImage.Pages.map((page: any) =>
-        page.Texts.map((t: any) =>
-          decodeURIComponent(t.R.map((r: any) => r.T).join(' '))
-        ).join(' ')
-      ).join('\n');
-      resolve(text);
+      if (!pdfData?.formImage?.Pages) {
+        return reject(
+          new Error(`pdf2json failed to parse structure in: ${filePath}`)
+        );
+      }
+
+      try {
+        const text = pdfData.formImage.Pages.map((page: any) =>
+          page.Texts.map((t: any) =>
+            decodeURIComponent(t.R.map((r: any) => r.T).join(' '))
+          ).join(' ')
+        ).join('\n');
+        resolve(text);
+      } catch (err) {
+        reject(
+          new Error(
+            `pdf2json failed to extract text in: ${filePath} — ${err}`
+          )
+        );
+      }
     });
 
     parser.loadPDF(filePath);

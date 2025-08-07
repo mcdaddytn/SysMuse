@@ -1,7 +1,6 @@
 // src/__tests__/parsers/LineParser.test.ts
 // src/tests/LineParser.test.ts
-//import { LineParser } from '../../parsers/phase1/LineParser';
-import { LineParser } from '../../parsers/LineParser';
+import { LineParser } from '../parsers/LineParser';
 
 describe('LineParser', () => {
   let parser: LineParser;

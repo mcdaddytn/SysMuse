@@ -206,3 +206,268 @@ The system is designed to support REST API endpoints for:
 ## Support
 
 For issues or questions, please [contact information here]
+
+## Additional Setup Notes
+
+## Quick Setup Commands
+
+# Install dependencies
+npm install
+
+# Start Docker services
+docker-compose up -d
+
+# Wait for services
+sleep 10
+
+# Generate Prisma client
+npm run prisma:generate
+
+# Create database schema
+npx prisma db push
+
+# Seed the database
+npm run seed
+
+# Test the setup
+npm run parse -- --help
+
+
+Testing the System
+
+Place test transcript files in the transcripts/ directory
+Create a config file for your trial (or use example-trial-config.json)
+Run the parser:
+
+npm run parse -- --config ./config/example-trial-config.json --all
+
+
+Start the API (optional):
+
+npm run api
+# or
+npm start
+
+Access services:
+
+
+API: http://localhost:3000
+Kibana: http://localhost:5601
+Prisma Studio: npm run prisma:studio
+
+
+Common Issues and Solutions
+Issue: Cannot find module errors
+Solution: Check all import paths are updated correctly
+Issue: Prisma client not generated
+Solution: Run npm run prisma:generate
+Issue: Database connection failed
+Solution:
+
+Ensure Docker is running: docker-compose up -d
+Check DATABASE_URL in .env file
+
+Issue: ElasticSearch not connecting
+Solution:
+
+Check if ElasticSearch is running: curl http://localhost:9200
+Wait for it to fully start (can take 30-60 seconds)
+
+Issue: TypeScript compilation errors
+Solution: Run npm run build to see specific errors, fix import paths
+
+## this should be the latest, copy to project-structure.md
+judicial-transcripts/
+¦
++-- .env.example                    # Environment variables template
++-- .env.test                       # Test environment configuration
++-- .eslintrc.json                  # ESLint configuration
++-- .gitignore                      # Git ignore patterns
++-- docker-compose.yml              # Docker services configuration
++-- jest.config.js                  # Jest testing configuration
++-- Makefile                        # Build and run commands
++-- package.json                    # Node.js dependencies and scripts
++-- README.md                       # Project documentation
++-- tsconfig.json                   # TypeScript configuration
++-- project-structure.md            # This file
+¦
++-- config/                         # Configuration files
+¦   +-- default-config.json        # Default parsing configuration
+¦   +-- example-trial-config.json  # Example trial configuration
+¦
++-- prisma/                         # Database schema
+¦   +-- schema.prisma              # Prisma ORM schema definition
+¦
++-- scripts/                        # Utility scripts
+¦   +-- process-trial.ts           # Standalone trial processing script
+¦   +-- setup.sh                   # System setup script
+¦
++-- seed-data/                     # Database seed data
+¦   +-- court-directives.json     # Court directive types
+¦   +-- search-patterns.json      # Search pattern definitions
+¦   +-- system-config.json        # System configuration parameters
+¦
++-- src/                           # Source code
+    +-- api/                       # REST API
+    ¦   +-- server.ts             # Express server and endpoints
+    ¦
+    +-- cli/                       # Command line interface
+    ¦   +-- parse.ts              # CLI commands for parsing
+    ¦
+    +-- config/                    # Configuration modules
+    ¦   +-- patterns.ts           # Parsing patterns and regex
+    ¦
+    +-- parsers/                   # Transcript parsers (all phases)
+    ¦   +-- LineParser.ts         # Parse individual lines
+    ¦   +-- PageHeaderParser.ts   # Parse page headers
+    ¦   +-- Phase2Processor.ts    # Phase 2: Line grouping
+    ¦   +-- Phase3Processor.ts    # Phase 3: Section markers
+    ¦   +-- SummaryPageParser.ts  # Parse summary pages
+    ¦   +-- TranscriptParser.ts   # Phase 1: Main parser
+    ¦
+    +-- seed/                      # Database seeding
+    ¦   +-- seedDatabase.ts       # Seed script
+    ¦
+    +-- services/                  # Business logic services
+    ¦   +-- ElasticSearchService.ts    # ElasticSearch integration
+    ¦   +-- SearchService.ts           # Search functionality
+    ¦   +-- SynopsisGenerator.ts       # AI synopsis generation
+    ¦   +-- TranscriptExportService.ts # Export transcripts
+    ¦
+    +-- tests/                     # All test files (simplified structure)
+    ¦   +-- LineParser.test.ts    # Line parser tests
+    ¦   +-- SearchService.test.ts # Search service tests
+    ¦   +-- TranscriptParser.test.ts # Transcript Parser tests
+    ¦   +-- setup.ts              # Test setup and mocks
+    ¦
+    +-- types/                     # TypeScript type definitions
+    ¦   +-- config.types.ts       # Configuration types
+    ¦   +-- patterns.types.ts     # Pattern types
+    ¦
+    +-- utils/                     # Utility functions
+    ¦   +-- file-helpers.ts       # File operations
+    ¦   +-- logger.ts             # Winston logger
+    ¦   +-- validation.ts         # Input validation
+    ¦
+    +-- index.ts                   # Main entry point
+    
+
+
+## almost, but added transcript parser test above
+judicial-transcripts/
+¦
++-- .env.example                    # Environment variables template
++-- .env.test                       # Test environment configuration
++-- .eslintrc.json                  # ESLint configuration
++-- .gitignore                      # Git ignore patterns
++-- docker-compose.yml              # Docker services configuration
++-- jest.config.js                  # Jest testing configuration
++-- Makefile                        # Build and run commands
++-- package.json                    # Node.js dependencies and scripts
++-- README.md                       # Project documentation
++-- tsconfig.json                   # TypeScript configuration
++-- project-structure.md            # This file
+¦
++-- config/                         # Configuration files
+¦   +-- default-config.json        # Default parsing configuration
+¦   +-- example-trial-config.json  # Example trial configuration
+¦
++-- prisma/                         # Database schema
+¦   +-- schema.prisma              # Prisma ORM schema definition
+¦
++-- scripts/                        # Utility scripts
+¦   +-- process-trial.ts           # Standalone trial processing script
+¦   +-- setup.sh                   # System setup script
+¦
++-- seed-data/                     # Database seed data
+¦   +-- court-directives.json     # Court directive types
+¦   +-- search-patterns.json      # Search pattern definitions
+¦   +-- system-config.json        # System configuration parameters
+¦
++-- src/                           # Source code
+    +-- api/                       # REST API
+    ¦   +-- server.ts             # Express server and endpoints
+    ¦
+    +-- cli/                       # Command line interface
+    ¦   +-- parse.ts              # CLI commands for parsing
+    ¦
+    +-- config/                    # Configuration modules
+    ¦   +-- patterns.ts           # Parsing patterns and regex
+    ¦
+    +-- parsers/                   # Transcript parsers (all phases)
+    ¦   +-- LineParser.ts         # Parse individual lines
+    ¦   +-- PageHeaderParser.ts   # Parse page headers
+    ¦   +-- Phase2Processor.ts    # Phase 2: Line grouping
+    ¦   +-- Phase3Processor.ts    # Phase 3: Section markers
+    ¦   +-- SummaryPageParser.ts  # Parse summary pages
+    ¦   +-- TranscriptParser.ts   # Phase 1: Main parser
+    ¦
+    +-- seed/                      # Database seeding
+    ¦   +-- seedDatabase.ts       # Seed script
+    ¦
+    +-- services/                  # Business logic services
+    ¦   +-- ElasticSearchService.ts    # ElasticSearch integration
+    ¦   +-- SearchService.ts           # Search functionality
+    ¦   +-- SynopsisGenerator.ts       # AI synopsis generation
+    ¦   +-- TranscriptExportService.ts # Export transcripts
+    ¦
+    +-- tests/                     # All test files (simplified structure)
+    ¦   +-- LineParser.test.ts    # Line parser tests
+    ¦   +-- SearchService.test.ts # Search service tests
+    ¦   +-- setup.ts              # Test setup and mocks
+    ¦
+    +-- types/                     # TypeScript type definitions
+    ¦   +-- config.types.ts       # Configuration types
+    ¦   +-- patterns.types.ts     # Pattern types
+    ¦
+    +-- utils/                     # Utility functions
+    ¦   +-- file-helpers.ts       # File operations
+    ¦   +-- logger.ts             # Winston logger
+    ¦   +-- validation.ts         # Input validation
+    ¦
+    +-- index.ts                   # Main entry point
+    
+
+## note this will be altered one more time for tests
+Final Directory Structure Should Be:
+
+judicial-transcripts/
++-- config/
++-- exports/            (created)
++-- logs/              (created)
++-- prisma/
+¦   +-- schema.prisma  (added)
++-- scripts/
++-- seed-data/
++-- src/
+¦   +-- __tests__/     (renamed from tests/)
+¦   ¦   +-- parsers/   (created)
+¦   ¦   +-- services/  (created)
+¦   ¦   +-- setup.ts
+¦   +-- api/
+¦   +-- cli/
+¦   +-- config/
+¦   +-- parsers/       (all parsers here)
+¦   +-- seed/
+¦   +-- services/
+¦   +-- types/
+¦   +-- utils/
+¦   +-- index.ts       (added)
++-- temp/              (created)
++-- transcripts/       (created)
++-- uploads/           (created)
++-- .env
++-- .env.example
++-- .env.test
++-- .eslintrc.json
++-- .gitignore
++-- docker-compose.yml
++-- jest.config.js
++-- Makefile           (renamed)
++-- package.json
++-- README.md
++-- tsconfig.json
+
+
+
+

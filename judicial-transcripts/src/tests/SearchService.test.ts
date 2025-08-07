@@ -1,6 +1,6 @@
 // src/__tests__/services/SearchService.test.ts
 // src/tests/SearchService.test.ts
-import { SearchService } from '../../services/SearchService';
+import { SearchService } from '../services/SearchService';
 import { PrismaClient } from '@prisma/client';
 
 jest.mock('@prisma/client');

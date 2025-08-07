@@ -1,16 +1,19 @@
-// jest.config.js
+// jest.config.js - Updated for simpler test structure
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  testMatch: [
+    '**/tests/**/*.test.ts',
+    '**/tests/**/*.spec.ts'
+  ],
   transform: {
     '^.+\\.ts$': 'ts-jest',
   },
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
-    '!src/**/__tests__/**',
+    '!src/tests/**',
     '!src/index.ts',
   ],
   coverageDirectory: 'coverage',
@@ -18,7 +21,7 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts'],
   globals: {
     'ts-jest': {
       tsconfig: {
@@ -28,4 +31,3 @@ module.exports = {
     },
   },
 };
-

@@ -1,0 +1,458 @@
+// This is the Prisma schema file for the Judicial Transcripts system
+// Using PostgreSQL as the database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== Core Entities ====================
+
+model Trial {
+  id              Int       @id @default(autoincrement())
+  name            String
+  caseNumber      String    @unique // e.g., "2:19-CV-123-JRG"
+  court           String
+  courtDivision   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  sessions        Session[]
+  attorneys       TrialAttorney[]
+  witnesses       Witness[]
+  courtReporter   CourtReporter?
+  judge           Judge?
+  trialEvents     TrialEvent[]
+  markers         Marker[]
+  
+  @@index([caseNumber])
+}
+
+model Judge {
+  id              Int       @id @default(autoincrement())
+  name            String
+  title           String?
+  honorific       String?   // e.g., "HONORABLE"
+  trialId         Int       @unique
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  
+  statements      CourtStatementEvent[]
+  
+  @@index([trialId])
+}
+
+model CourtReporter {
+  id              Int       @id @default(autoincrement())
+  name            String
+  credentials     String?   // e.g., "CSR, TCRR"
+  title           String?
+  stateNumber     String?
+  expirationDate  DateTime?
+  addressId       Int?
+  address         Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  phone           String?
+  trialId         Int       @unique
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  
+  @@index([trialId])
+}
+
+// ==================== Session Management ====================
+
+model Session {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  sessionDate     DateTime
+  sessionType     SessionType
+  documentNumber  Int?
+  fileName        String?
+  totalPages      Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  pages           Page[]
+  trialEvents     TrialEvent[]
+  
+  @@index([trialId, sessionDate])
+  @@unique([trialId, sessionDate, sessionType])
+}
+
+enum SessionType {
+  MORNING
+  AFTERNOON
+  SPECIAL
+  BENCH_TRIAL
+  JURY_VERDICT
+  OTHER
+}
+
+// ==================== Page and Line Management ====================
+
+model Page {
+  id              Int       @id @default(autoincrement())
+  sessionId       Int
+  session         Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  pageNumber      Int       // Page number within session
+  totalSessionPages Int?    // Total pages in session
+  transcriptPageNumber Int? // Page number across entire trial
+  documentNumber  Int?
+  pageId          String?   // e.g., "PageID #: 18741"
+  headerText      String?
+  createdAt       DateTime  @default(now())
+  
+  lines           Line[]
+  
+  @@index([sessionId, pageNumber])
+  @@unique([sessionId, pageNumber])
+}
+
+model Line {
+  id              Int       @id @default(autoincrement())
+  pageId          Int
+  page            Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  lineNumber      Int
+  timestamp       String?   // Store as string to preserve original format
+  text            String?
+  speakerPrefix   String?   // e.g., "Q.", "A.", "THE COURT:", etc.
+  isBlank         Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  
+  @@index([pageId, lineNumber])
+  @@unique([pageId, lineNumber])
+}
+
+// ==================== Attorney and Law Firm Management ====================
+
+model Attorney {
+  id              Int       @id @default(autoincrement())
+  name            String
+  barNumber       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  trialAttorneys  TrialAttorney[]
+  statements      AttorneyStatementEvent[]
+  
+  @@index([name])
+}
+
+model TrialAttorney {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  attorneyId      Int
+  attorney        Attorney  @relation(fields: [attorneyId], references: [id], onDelete: Cascade)
+  role            AttorneyRole
+  lawFirmId       Int?
+  lawFirm         LawFirm?  @relation(fields: [lawFirmId], references: [id], onDelete: SetNull)
+  
+  @@unique([trialId, attorneyId])
+  @@index([trialId, role])
+}
+
+enum AttorneyRole {
+  PLAINTIFF
+  DEFENDANT
+  THIRD_PARTY
+}
+
+model LawFirm {
+  id              Int       @id @default(autoincrement())
+  name            String
+  addressId       Int?
+  address         Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  trialAttorneys  TrialAttorney[]
+  
+  @@index([name])
+}
+
+model Address {
+  id              Int       @id @default(autoincrement())
+  street1         String?
+  street2         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  country         String?   @default("USA")
+  
+  lawFirms        LawFirm[]
+  courtReporters  CourtReporter[]
+}
+
+// ==================== Witness Management ====================
+
+model Witness {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  name            String?
+  witnessType     WitnessType
+  expertField     String?
+  createdAt       DateTime  @default(now())
+  
+  witnessEvents   WitnessCalledEvent[]
+  statements      WitnessStatementEvent[]
+  
+  @@index([trialId, witnessType])
+}
+
+enum WitnessType {
+  PLAINTIFF_WITNESS
+  DEFENDANT_WITNESS
+  EXPERT_WITNESS
+  FACT_WITNESS
+  CHARACTER_WITNESS
+  REBUTTAL_WITNESS
+}
+
+// ==================== Phase II: Trial Events (MTI Pattern) ====================
+
+model TrialEvent {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  sessionId       Int?
+  session         Session?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  startTime       String?
+  endTime         String?
+  duration        Int?      // Duration in seconds
+  startLineNumber Int?
+  endLineNumber   Int?
+  lineCount       Int?
+  eventType       EventType
+  text            String?
+  createdAt       DateTime  @default(now())
+  
+  // Specific event types
+  courtDirective  CourtDirectiveEvent?
+  statement       StatementEvent?
+  witnessCalled   WitnessCalledEvent?
+  
+  @@index([trialId, startTime])
+  @@index([sessionId])
+}
+
+enum EventType {
+  COURT_DIRECTIVE
+  STATEMENT
+  WITNESS_CALLED
+  OBJECTION
+  RULING
+  EXHIBIT
+  OTHER
+}
+
+model CourtDirectiveEvent {
+  id              Int       @id @default(autoincrement())
+  eventId         Int       @unique
+  event           TrialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  directiveTypeId Int
+  directiveType   CourtDirectiveType @relation(fields: [directiveTypeId], references: [id])
+  isStandard      Boolean   @default(true)
+  
+  @@index([directiveTypeId])
+}
+
+model CourtDirectiveType {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique
+  description     String?
+  isPaired        Boolean   @default(false)
+  pairMateId      Int?      // Reference to the paired directive
+  isStart         Boolean?  // true for start, false for end, null for unpaired
+  aliases         String[]  // Alternative text patterns
+  
+  directives      CourtDirectiveEvent[]
+}
+
+model StatementEvent {
+  id              Int       @id @default(autoincrement())
+  eventId         Int       @unique
+  event           TrialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  speakerType     SpeakerType
+  speakerName     String?
+  
+  // Specific statement types
+  witnessStatement WitnessStatementEvent?
+  attorneyStatement AttorneyStatementEvent?
+  courtStatement  CourtStatementEvent?
+}
+
+enum SpeakerType {
+  JUDGE
+  PLAINTIFF_ATTORNEY
+  DEFENDANT_ATTORNEY
+  PLAINTIFF_WITNESS
+  DEFENDANT_WITNESS
+  COURT_OFFICER
+  CLERK
+  OTHER
+}
+
+model WitnessStatementEvent {
+  id              Int       @id @default(autoincrement())
+  statementId     Int       @unique
+  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  witnessId       Int?
+  witness         Witness?  @relation(fields: [witnessId], references: [id], onDelete: SetNull)
+  examinationType ExaminationType?
+  
+  @@index([witnessId])
+}
+
+model AttorneyStatementEvent {
+  id              Int       @id @default(autoincrement())
+  statementId     Int       @unique
+  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  attorneyId      Int?
+  attorney        Attorney? @relation(fields: [attorneyId], references: [id], onDelete: SetNull)
+  
+  @@index([attorneyId])
+}
+
+model CourtStatementEvent {
+  id              Int       @id @default(autoincrement())
+  statementId     Int       @unique
+  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  judgeId         Int?
+  judge           Judge?    @relation(fields: [judgeId], references: [id], onDelete: SetNull)
+  statementType   CourtStatementType?
+  
+  @@index([judgeId])
+}
+
+enum CourtStatementType {
+  INSTRUCTION
+  RULING
+  QUESTION
+  CLARIFICATION
+  ADMONISHMENT
+  SCHEDULING
+  OTHER
+}
+
+model WitnessCalledEvent {
+  id              Int       @id @default(autoincrement())
+  eventId         Int       @unique
+  event           TrialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  witnessId       Int?
+  witness         Witness?  @relation(fields: [witnessId], references: [id], onDelete: SetNull)
+  examinationType ExaminationType
+  previouslySworn Boolean   @default(false)
+  presentedByVideo Boolean  @default(false)
+  
+  @@index([witnessId])
+}
+
+enum ExaminationType {
+  DIRECT_EXAMINATION
+  CROSS_EXAMINATION
+  REDIRECT_EXAMINATION
+  RECROSS_EXAMINATION
+  EXAMINATION_CONTINUED
+  VIDEO_DEPOSITION
+}
+
+// ==================== Phase III: Markers and Sections ====================
+
+model Marker {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  markerType      MarkerType
+  markerCategory  MarkerCategory
+  startEventId    Int?
+  endEventId      Int?
+  startTime       String?
+  endTime         String?
+  name            String?
+  description     String?
+  isResolved      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  
+  markerTexts     MarkerText[]
+  
+  @@index([trialId, markerType])
+  @@index([startEventId, endEventId])
+}
+
+enum MarkerType {
+  TRIAL_START
+  TRIAL_END
+  SESSION_START
+  SESSION_END
+  WITNESS_TESTIMONY
+  OPENING_ARGUMENT
+  CLOSING_ARGUMENT
+  JURY_INSTRUCTION
+  OBJECTION
+  SIDEBAR
+  RECESS
+  SEALED_PORTION
+  VIDEO_PLAYBACK
+  EXHIBIT_PRESENTATION
+  VERDICT
+  OTHER
+}
+
+enum MarkerCategory {
+  PARSED
+  ELASTIC_SEARCH
+  LLM
+  MANUAL
+}
+
+model MarkerText {
+  id              Int       @id @default(autoincrement())
+  markerId        Int
+  marker          Marker    @relation(fields: [markerId], references: [id], onDelete: Cascade)
+  textRenderMode  TextRenderMode @default(ORIGINAL)
+  text            String
+  elasticSearchId String?   // ID for ElasticSearch indexing
+  createdAt       DateTime  @default(now())
+  
+  @@index([markerId, textRenderMode])
+  @@unique([markerId, textRenderMode])
+}
+
+enum TextRenderMode {
+  ORIGINAL
+  PLACEHOLDER
+  SYNOPSIS
+}
+
+// ==================== System Configuration ====================
+
+model SystemConfig {
+  id              Int       @id @default(autoincrement())
+  key             String    @unique
+  value           Json
+  description     String?
+  category        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([category])
+}
+
+model SearchPattern {
+  id              Int       @id @default(autoincrement())
+  patternType     String    // e.g., "objection_start", "objection_end"
+  pattern         String    // The search pattern
+  category        String    // e.g., "objection", "witness_call"
+  priority        Int       @default(0)
+  isActive        Boolean   @default(true)
+  metadata        Json?     // Additional pattern-specific data
+  createdAt       DateTime  @default(now())
+  
+  @@index([patternType, isActive])
+  @@index([category])
+}

@@ -1,0 +1,260 @@
+// src/api/server.ts
+import express, { Express, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { TranscriptParser } from '../parsers/phase1/TranscriptParser';
+import { Phase2Processor } from '../parsers/phase2/Phase2Processor';
+import { Phase3Processor } from '../parsers/phase3/Phase3Processor';
+import { SearchService } from '../services/SearchService';
+import { TranscriptExportService } from '../services/TranscriptExportService';
+import logger from '../utils/logger';
+import multer from 'multer';
+import path from 'path';
+
+const app: Express = express();
+const prisma = new PrismaClient();
+const searchService = new SearchService();
+const exportService = new TranscriptExportService();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// File upload configuration
+const upload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// Health check endpoint
+app.get('/health', (req: Request, res: Response) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Get all trials
+app.get('/api/trials', async (req: Request, res: Response) => {
+  try {
+    const trials = await prisma.trial.findMany({
+      include: {
+        judge: true,
+        _count: {
+          select: {
+            sessions: true,
+            attorneys: true,
+            witnesses: true
+          }
+        }
+      }
+    });
+    res.json(trials);
+  } catch (error) {
+    logger.error('Error fetching trials:', error);
+    res.status(500).json({ error: 'Failed to fetch trials' });
+  }
+});
+
+// Get trial details
+app.get('/api/trials/:id', async (req: Request, res: Response) => {
+  try {
+    const trialId = parseInt(req.params.id);
+    
+    const trial = await prisma.trial.findUnique({
+      where: { id: trialId },
+      include: {
+        judge: true,
+        courtReporter: true,
+        sessions: {
+          orderBy: [
+            { sessionDate: 'asc' },
+            { sessionType: 'asc' }
+          ]
+        },
+        attorneys: {
+          include: {
+            attorney: true,
+            lawFirm: true
+          }
+        },
+        witnesses: true,
+        markers: {
+          where: { isResolved: true },
+          orderBy: { startTime: 'asc' }
+        }
+      }
+    });
+    
+    if (!trial) {
+      return res.status(404).json({ error: 'Trial not found' });
+    }
+    
+    res.json(trial);
+  } catch (error) {
+    logger.error('Error fetching trial:', error);
+    res.status(500).json({ error: 'Failed to fetch trial' });
+  }
+});
+
+// Upload and process transcripts
+app.post('/api/trials/upload', 
+  upload.array('files', 50),
+  async (req: Request, res: Response) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: 'No files uploaded' });
+      }
+      
+      const config = {
+        transcriptPath: path.dirname(files[0].path),
+        format: req.body.format || 'txt',
+        caseName: req.body.caseName,
+        caseNumber: req.body.caseNumber,
+        phases: {
+          phase1: req.body.runPhase1 !== 'false',
+          phase2: req.body.runPhase2 === 'true',
+          phase3: req.body.runPhase3 === 'true'
+        }
+      };
+      
+      // Run Phase 1
+      if (config.phases.phase1) {
+        const parser = new TranscriptParser(config as any);
+        await parser.parseDirectory();
+      }
+      
+      // Get created trial
+      const trial = await prisma.trial.findFirst({
+        where: { caseNumber: config.caseNumber },
+        orderBy: { createdAt: 'desc' }
+      });
+      
+      if (!trial) {
+        return res.status(500).json({ error: 'Failed to create trial' });
+      }
+      
+      // Run Phase 2
+      if (config.phases.phase2) {
+        const processor = new Phase2Processor(config as any);
+        await processor.process();
+      }
+      
+      // Run Phase 3
+      if (config.phases.phase3) {
+        const processor = new Phase3Processor(config as any);
+        await processor.process();
+      }
+      
+      res.json({
+        message: 'Transcripts processed successfully',
+        trialId: trial.id,
+        filesProcessed: files.length
+      });
+      
+    } catch (error) {
+      logger.error('Error processing upload:', error);
+      res.status(500).json({ error: 'Failed to process transcripts' });
+    }
+  }
+);
+
+// Search transcripts
+app.post('/api/search', async (req: Request, res: Response) => {
+  try {
+    const searchQuery = req.body;
+    const results = await searchService.search(searchQuery);
+    
+    res.json({
+      query: searchQuery.query,
+      total: results.length,
+      results: results.slice(0, searchQuery.limit || 50)
+    });
+  } catch (error) {
+    logger.error('Error during search:', error);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// Export transcript
+app.post('/api/export', async (req: Request, res: Response) => {
+  try {
+    const exportConfig = {
+      ...req.body,
+      outputPath: path.join('exports', `trial-${req.body.trialId}-${Date.now()}.${req.body.format || 'txt'}`)
+    };
+    
+    await exportService.exportTranscript(exportConfig);
+    
+    res.json({
+      message: 'Export completed successfully',
+      path: exportConfig.outputPath
+    });
+  } catch (error) {
+    logger.error('Error during export:', error);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Get session events
+app.get('/api/sessions/:id/events', async (req: Request, res: Response) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    
+    const events = await prisma.trialEvent.findMany({
+      where: { sessionId },
+      orderBy: { startTime: 'asc' },
+      include: {
+        courtDirective: true,
+        statement: true,
+        witnessCalled: true
+      }
+    });
+    
+    res.json(events);
+  } catch (error) {
+    logger.error('Error fetching events:', error);
+    res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+// Get markers for a trial
+app.get('/api/trials/:id/markers', async (req: Request, res: Response) => {
+  try {
+    const trialId = parseInt(req.params.id);
+    const { type, resolved } = req.query;
+    
+    const where: any = { trialId };
+    
+    if (type) {
+      where.markerType = type as string;
+    }
+    
+    if (resolved !== undefined) {
+      where.isResolved = resolved === 'true';
+    }
+    
+    const markers = await prisma.marker.findMany({
+      where,
+      orderBy: { startTime: 'asc' },
+      include: {
+        markerTexts: true
+      }
+    });
+    
+    res.json(markers);
+  } catch (error) {
+    logger.error('Error fetching markers:', error);
+    res.status(500).json({ error: 'Failed to fetch markers' });
+  }
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT}`);
+  console.log(`API Server: http://localhost:${PORT}`);
+  console.log(`Health Check: http://localhost:${PORT}/health`);
+}); 

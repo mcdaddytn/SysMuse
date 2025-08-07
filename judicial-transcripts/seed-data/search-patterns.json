@@ -1,0 +1,118 @@
+{
+  "searchPatterns": [
+    {
+      "patternType": "objection_start",
+      "pattern": "\\bObjection\\b",
+      "category": "objection",
+      "priority": 1,
+      "isActive": true
+    },
+    {
+      "patternType": "objection_start",
+      "pattern": "\\bI object\\b",
+      "category": "objection",
+      "priority": 2,
+      "isActive": true
+    },
+    {
+      "patternType": "objection_end",
+      "pattern": "\\bOverruled\\b",
+      "category": "objection",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "result": "overruled"
+      }
+    },
+    {
+      "patternType": "objection_end",
+      "pattern": "\\bSustained\\b",
+      "category": "objection",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "result": "sustained"
+      }
+    },
+    {
+      "patternType": "objection_end",
+      "pattern": "I'll allow it",
+      "category": "objection",
+      "priority": 2,
+      "isActive": true,
+      "metadata": {
+        "result": "allowed"
+      }
+    },
+    {
+      "patternType": "witness_call",
+      "pattern": "PLAINTIFF'S WITNESS",
+      "category": "witness",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "witnessType": "plaintiff"
+      }
+    },
+    {
+      "patternType": "witness_call",
+      "pattern": "DEFENDANT'S WITNESS",
+      "category": "witness",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "witnessType": "defendant"
+      }
+    },
+    {
+      "patternType": "witness_call",
+      "pattern": "PREVIOUSLY SWORN",
+      "category": "witness",
+      "priority": 2,
+      "isActive": true,
+      "metadata": {
+        "previouslySworn": true
+      }
+    },
+    {
+      "patternType": "examination_type",
+      "pattern": "DIRECT EXAMINATION",
+      "category": "examination",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "type": "direct"
+      }
+    },
+    {
+      "patternType": "examination_type",
+      "pattern": "CROSS-EXAMINATION",
+      "category": "examination",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "type": "cross"
+      }
+    },
+    {
+      "patternType": "examination_type",
+      "pattern": "REDIRECT EXAMINATION",
+      "category": "examination",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "type": "redirect"
+      }
+    },
+    {
+      "patternType": "examination_type",
+      "pattern": "RECROSS-EXAMINATION",
+      "category": "examination",
+      "priority": 1,
+      "isActive": true,
+      "metadata": {
+        "type": "recross"
+      }
+    }
+  ]
+}

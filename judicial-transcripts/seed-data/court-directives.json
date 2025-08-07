@@ -1,0 +1,88 @@
+{
+  "courtDirectives": [
+    {
+      "name": "Jury in.",
+      "description": "Jury enters the courtroom",
+      "isPaired": true,
+      "pairMateId": "jury_out",
+      "isStart": true,
+      "aliases": ["Jury in", "Jury enters"]
+    },
+    {
+      "name": "Jury out.",
+      "description": "Jury exits the courtroom",
+      "isPaired": true,
+      "pairMateId": "jury_in",
+      "isStart": false,
+      "aliases": ["Jury out", "Jury exits"]
+    },
+    {
+      "name": "Videoclip played.",
+      "description": "Video evidence playback starts",
+      "isPaired": true,
+      "pairMateId": "video_end",
+      "isStart": true,
+      "aliases": ["Videoclip played", "Videoclip starts", "Video begins"]
+    },
+    {
+      "name": "Videoclip ends.",
+      "description": "Video evidence playback ends",
+      "isPaired": true,
+      "pairMateId": "video_start",
+      "isStart": false,
+      "aliases": ["Videoclip ends", "Videoclip stops", "Video ends"]
+    },
+    {
+      "name": "Courtroom sealed.",
+      "description": "Courtroom sealed for confidential proceedings",
+      "isPaired": true,
+      "pairMateId": "sealed_end",
+      "isStart": true,
+      "aliases": ["Courtroom sealed"]
+    },
+    {
+      "name": "Courtroom unsealed.",
+      "description": "Courtroom unsealed after confidential proceedings",
+      "isPaired": true,
+      "pairMateId": "sealed_start",
+      "isStart": false,
+      "aliases": ["Courtroom unsealed"]
+    },
+    {
+      "name": "Recess.",
+      "description": "Court takes a recess",
+      "isPaired": false,
+      "aliases": ["Recess", "Court in recess"]
+    },
+    {
+      "name": "Witness sworn.",
+      "description": "Witness takes oath",
+      "isPaired": false,
+      "aliases": ["Witness sworn", "Witness takes oath"]
+    },
+    {
+      "name": "The Court on the Bench - Open Court.",
+      "description": "Judge takes the bench",
+      "isPaired": false,
+      "aliases": ["The Court on the Bench - Open Court", "Court in session"]
+    },
+    {
+      "name": "Conference concluded in jury room.",
+      "description": "Conference with jury completed",
+      "isPaired": false,
+      "aliases": ["Conference concluded in jury room"]
+    },
+    {
+      "name": "Venire panel in.",
+      "description": "Jury pool enters",
+      "isPaired": false,
+      "aliases": ["Venire panel in"]
+    },
+    {
+      "name": "Unselected venire panel members out.",
+      "description": "Unselected jurors dismissed",
+      "isPaired": false,
+      "aliases": ["Unselected venire panel members out"]
+    }
+  ]
+}

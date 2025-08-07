@@ -1,11 +1,12 @@
-// src/parsers/SummaryPageParser.ts
+
 import { TrialSummaryInfo, AttorneyInfo, AddressInfo } from '../types/config.types';
 import logger from '../utils/logger';
 
 export class SummaryPageParser {
   parse(pages: string[][]): TrialSummaryInfo | null {
-    if (pages.length < 2) {
-      logger.warn('Not enough pages for summary parsing');
+    // Remove the page count requirement since we'll handle it differently
+    if (pages.length < 1) {
+      logger.warn('No pages provided for summary parsing');
       return null;
     }
     
@@ -13,8 +14,9 @@ export class SummaryPageParser {
     const text = allLines.join('\n');
     
     // Debug logging
-    logger.info('SummaryPageParser: Parsing text with length:', text.length);
-    logger.info('SummaryPageParser: First 500 characters:', text.substring(0, 500));
+    logger.info('SummaryPageParser: Starting parse');
+    logger.info('SummaryPageParser: Text length:', text.length);
+    logger.info('SummaryPageParser: First 200 chars:', text.substring(0, 200));
     
     const info: TrialSummaryInfo = {
       trialName: '',
@@ -30,36 +32,45 @@ export class SummaryPageParser {
       defendantAttorneys: []
     };
     
-    // Extract trial name - Updated pattern for your format
-    const trialNamePattern = /^([A-Z\s,\.&]+?),?\s*\)\(\s*PLAINTIFF,?\s*\)\([^)]*\)\([^)]*\)\(\s*VS\.\s*\)\([^)]*\)\([^)]*\)\(\s*([A-Z\s,\.&]+?),?\s*\)\([^)]*\)\(\s*DEFENDANTS?\./m;
-    const trialNameMatch = text.match(trialNamePattern);
-    if (trialNameMatch) {
-      info.trialName = `${trialNameMatch[1].trim()} VS. ${trialNameMatch[2].trim()}`;
-      logger.info('SummaryPageParser: Extracted trial name:', info.trialName);
-    } else {
-      // Fallback simpler pattern
-      const simpleTrialPattern = /^([A-Z\s,\.&]+),\s*PLAINTIFF.*?VS\.\s*([A-Z\s,\.&]+),\s*DEFENDANTS?\./m;
-      const simpleMatch = text.match(simpleTrialPattern);
-      if (simpleMatch) {
-        info.trialName = `${simpleMatch[1].trim()} VS. ${simpleMatch[2].trim()}`;
-        logger.info('SummaryPageParser: Extracted trial name (fallback):', info.trialName);
-      }
-    }
-    
-    // Extract case number - Updated pattern
+    // Extract case number first - this is most reliable
     const caseNumberPattern = /CIVIL ACTION NO\.\s*\)\(\s*([\d:\-CV\-cv]+)/;
     const caseNumberMatch = text.match(caseNumberPattern);
     if (caseNumberMatch) {
       info.caseNumber = caseNumberMatch[1];
-      logger.info('SummaryPageParser: Extracted case number:', info.caseNumber);
+      logger.info('✓ Extracted case number:', info.caseNumber);
+    } else {
+      // Fallback pattern without the )( formatting
+      const fallbackCasePattern = /(?:CIVIL ACTION NO\.|Case No\.|Cause No\.)\s*([\d:\-CV\-cv]+)/;
+      const fallbackMatch = text.match(fallbackCasePattern);
+      if (fallbackMatch) {
+        info.caseNumber = fallbackMatch[1];
+        logger.info('✓ Extracted case number (fallback):', info.caseNumber);
+      }
     }
     
-    // Extract court - Updated pattern
-    const courtPattern = /IN THE UNITED STATES DISTRICT COURT\s+FOR THE ([A-Z\s]+)/;
+    // Extract trial name - handle the )( format
+    const trialNamePattern = /^([A-Z\s,\.&]+?),?\s*\)\(\s*PLAINTIFF.*?VS\.\s*\)\(.*?\)\(.*?([A-Z\s,\.&]+?),?\s*\)\(.*?DEFENDANTS?\./ms;
+    const trialNameMatch = text.match(trialNamePattern);
+    if (trialNameMatch) {
+      info.trialName = `${trialNameMatch[1].trim()} VS. ${trialNameMatch[2].trim()}`;
+      logger.info('✓ Extracted trial name:', info.trialName);
+    } else {
+      // Simpler fallback that should work with your format
+      const plaintiffMatch = text.match(/^([A-Z\s,\.&]+),\s*\)\(\s*PLAINTIFF/m);
+      const defendantMatch = text.match(/([A-Z\s,\.&]+),?\s*\)\(.*?DEFENDANTS?\./m);
+      
+      if (plaintiffMatch && defendantMatch) {
+        info.trialName = `${plaintiffMatch[1].trim()} VS. ${defendantMatch[1].trim()}`;
+        logger.info('✓ Extracted trial name (fallback):', info.trialName);
+      }
+    }
+    
+    // Extract court
+    const courtPattern = /IN THE UNITED STATES DISTRICT COURT\s*FOR THE\s*([A-Z\s]+)/;
     const courtMatch = text.match(courtPattern);
     if (courtMatch) {
       info.court = `UNITED STATES DISTRICT COURT FOR THE ${courtMatch[1].trim()}`;
-      logger.info('SummaryPageParser: Extracted court:', info.court);
+      logger.info('✓ Extracted court:', info.court);
     }
     
     // Extract court division
@@ -67,10 +78,10 @@ export class SummaryPageParser {
     const divisionMatch = text.match(divisionPattern);
     if (divisionMatch) {
       info.courtDivision = `${divisionMatch[1]} DIVISION`;
-      logger.info('SummaryPageParser: Extracted division:', info.courtDivision);
+      logger.info('✓ Extracted division:', info.courtDivision);
     }
     
-    // Extract judge - Updated pattern
+    // Extract judge
     const judgePattern = /BEFORE THE (HONORABLE\s+)?JUDGE\s+([A-Z\s\.]+)/;
     const judgeMatch = text.match(judgePattern);
     if (judgeMatch) {
@@ -80,22 +91,22 @@ export class SummaryPageParser {
         honorific: judgeMatch[1] ? 'HONORABLE' : undefined
       };
       
-      // Look for judge title on next lines
+      // Look for judge title
       const titlePattern = /UNITED STATES ([A-Z\s]+) JUDGE/;
       const titleMatch = text.match(titlePattern);
       if (titleMatch) {
         info.judge.title = `UNITED STATES ${titleMatch[1].trim()} JUDGE`;
       }
       
-      logger.info('SummaryPageParser: Extracted judge:', info.judge);
+      logger.info('✓ Extracted judge:', info.judge);
     }
     
     // Extract attorneys
     info.plaintiffAttorneys = this.extractAttorneys(text, 'PLAINTIFF');
     info.defendantAttorneys = this.extractAttorneys(text, 'DEFENDANT');
     
-    logger.info('SummaryPageParser: Extracted plaintiff attorneys:', info.plaintiffAttorneys.length);
-    logger.info('SummaryPageParser: Extracted defendant attorneys:', info.defendantAttorneys.length);
+    logger.info(`✓ Extracted ${info.plaintiffAttorneys.length} plaintiff attorneys`);
+    logger.info(`✓ Extracted ${info.defendantAttorneys.length} defendant attorneys`);
     
     // Extract court reporter
     const reporterPattern = /COURT REPORTER:\s*([^\n]+)/;
@@ -104,36 +115,41 @@ export class SummaryPageParser {
       const reporterInfo = this.parseCourtReporter(text, reporterMatch.index!);
       if (reporterInfo) {
         info.courtReporter = reporterInfo;
-        logger.info('SummaryPageParser: Extracted court reporter:', reporterInfo.name);
+        logger.info('✓ Extracted court reporter:', reporterInfo.name);
       }
     }
     
     // Validate that we extracted essential information
-    if (!info.caseNumber || !info.trialName) {
-      logger.error('SummaryPageParser: Failed to extract essential trial information');
-      logger.error('SummaryPageParser: Case number:', info.caseNumber);
-      logger.error('SummaryPageParser: Trial name:', info.trialName);
+    if (!info.caseNumber) {
+      logger.error('✗ Failed to extract case number');
+      logger.error('Available text sample:', text.substring(0, 500));
       return null;
     }
     
-    logger.info('SummaryPageParser: Successfully parsed summary info');
+    if (!info.trialName) {
+      logger.warn('⚠ Failed to extract trial name, using fallback');
+      info.trialName = `Case ${info.caseNumber}`;
+    }
+    
+    logger.info('✓ Summary parsing completed successfully');
     return info;
   }
   
-  // Rest of the methods remain the same...
+  // Updated attorney extraction with better debugging
   private extractAttorneys(text: string, side: 'PLAINTIFF' | 'DEFENDANT'): AttorneyInfo[] {
     const attorneys: AttorneyInfo[] = [];
-    const sectionRegex = new RegExp(`FOR THE ${side}[S]?:([\\s\\S]+?)(?:FOR THE|COURT REPORTER|TRANSCRIPT OF|$)`, 'i');
+    const sectionRegex = new RegExp(`FOR THE ${side}[S]?:([\\s\\S]+?)(?:FOR THE|COURT REPORTER|TRANSCRIPT OF|Case \\d+|$)`, 'i');
     const sectionMatch = text.match(sectionRegex);
     
     if (!sectionMatch) {
-      logger.warn(`SummaryPageParser: No section found for ${side}`);
+      logger.warn(`No section found for ${side}`);
       return attorneys;
     }
     
     const section = sectionMatch[1];
-    const lines = section.split('\n');
+    logger.info(`${side} section found, length:`, section.length);
     
+    const lines = section.split('\n');
     let currentAttorneys: string[] = [];
     let currentFirm: { name: string; address: AddressInfo } | null = null;
     
@@ -144,9 +160,10 @@ export class SummaryPageParser {
       // Check if it's an attorney name (starts with MR./MS./MRS./DR.)
       if (/^(MR\.|MS\.|MRS\.|DR\.)\s+[A-Z]/.test(trimmed)) {
         currentAttorneys.push(trimmed);
+        logger.info(`Found attorney: ${trimmed}`);
       }
-      // Check if it's a law firm name (all caps, ends with LLP/LLC/P.C./etc)
-      else if (/[A-Z\s&,]+(?:LLP|LLC|P\.C\.|PC|P\.A\.|PLLC)/.test(trimmed)) {
+      // Check if it's a law firm name
+      else if (/[A-Z\s&,]+(?:LLP|LLC|P\.C\.|PC|P\.A\.|PLLC|FIRM)/.test(trimmed)) {
         // Save previous attorneys if any
         if (currentAttorneys.length > 0 && currentFirm) {
           for (const attorneyName of currentAttorneys) {
@@ -162,11 +179,12 @@ export class SummaryPageParser {
           name: trimmed,
           address: {}
         };
+        logger.info(`Found law firm: ${trimmed}`);
         currentAttorneys = [];
       }
       // Check if it's an address line
-      else if (currentFirm && /\d/.test(trimmed)) {
-        if (/^\d+\s+[A-Z]/.test(trimmed) || /Suite|Floor|Street|Avenue|Road|Drive|Boulevard/.test(trimmed)) {
+      else if (currentFirm && (/\d/.test(trimmed) || /Suite|Floor|Street|Avenue|Road|Drive|Boulevard/.test(trimmed))) {
+        if (/^\d+\s+/.test(trimmed) || /Suite|Floor/.test(trimmed)) {
           if (!currentFirm.address.street1) {
             currentFirm.address.street1 = trimmed;
           } else if (!currentFirm.address.street2) {
@@ -193,7 +211,7 @@ export class SummaryPageParser {
       }
     }
     
-    logger.info(`SummaryPageParser: Extracted ${attorneys.length} attorneys for ${side}`);
+    logger.info(`Extracted ${attorneys.length} attorneys for ${side}`);
     return attorneys;
   }
   
@@ -207,21 +225,23 @@ export class SummaryPageParser {
       address: undefined
     };
     
-    // First line should have name and credentials
+    // Parse name and credentials from first line after "COURT REPORTER:"
     const firstLine = lines[0].replace('COURT REPORTER:', '').trim();
     const credMatch = firstLine.match(/([^,]+),?\s*([A-Z,\s]+)?/);
     if (credMatch) {
       reporter.name = credMatch[1].trim();
-      reporter.credentials = credMatch[2]?.trim();
+      if (credMatch[2]) {
+        reporter.credentials = credMatch[2].trim();
+      }
     }
     
-    // Look for phone number
+    // Look for phone number in any line
     const phoneMatch = lines.join(' ').match(/\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}/);
     if (phoneMatch) {
       reporter.phone = phoneMatch[0];
     }
     
-    // Parse address
+    // Parse address from subsequent lines
     const address: AddressInfo = {};
     for (const line of lines.slice(1)) {
       const trimmed = line.trim();
@@ -233,7 +253,7 @@ export class SummaryPageParser {
         if (parts[1]) {
           const stateZip = parts[1].trim().split(/\s+/);
           address.state = stateZip[0];
-          address.zipCode = stateZip[1];
+          if (stateZip[1]) address.zipCode = stateZip[1];
         }
       }
     }

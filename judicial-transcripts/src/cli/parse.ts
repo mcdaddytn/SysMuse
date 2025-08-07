@@ -1,4 +1,5 @@
-// src/cli/parse.ts
+// Fix 1: src/cli/parse.ts - Updated CLI structure
+
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,8 +19,8 @@ program
 program
   .command('parse')
   .description('Parse transcript files')
-  //.option('-c, --config <path>', 'Path to configuration JSON file', './config/default-config.json')
-  .option('-c, --config <path>', 'Path to configuration JSON file', './config/example-trial-config.json')
+  .option('-c, --config <path>', 'Path to configuration JSON file', './config/default-config.json')
+  //.option('-c, --config <path>', 'Path to configuration JSON file', './config/example-trial-config.json')
   .option('-d, --directory <path>', 'Directory containing transcript files')
   .option('-f, --format <format>', 'File format (pdf or txt)', 'txt')
   .option('--phase1', 'Run Phase 1 (raw parsing) only')
@@ -28,6 +29,12 @@ program
   .option('--all', 'Run all phases')
   .action(async (options) => {
     try {
+      // DEBUG: Log what we received
+      console.log('=== CLI DEBUG ===');
+      console.log('Received options:', JSON.stringify(options, null, 2));
+      console.log('Config path from options:', options.config);
+      console.log('================');
+      
       // Load configuration
       const config = loadConfig(options.config);
       
@@ -43,9 +50,16 @@ program
       if (options.all) {
         config.phases = { phase1: true, phase2: true, phase3: true };
       } else {
-        if (options.phase1 !== undefined) config.phases.phase1 = true;
-        if (options.phase2 !== undefined) config.phases.phase2 = true;
-        if (options.phase3 !== undefined) config.phases.phase3 = true;
+        // Fix: Reset phases first, then set requested ones
+        config.phases = { phase1: false, phase2: false, phase3: false };
+        if (options.phase1) config.phases.phase1 = true;
+        if (options.phase2) config.phases.phase2 = true;
+        if (options.phase3) config.phases.phase3 = true;
+        
+        // If no phase specified, default to phase1
+        if (!options.phase1 && !options.phase2 && !options.phase3 && !options.all) {
+          config.phases.phase1 = true;
+        }
       }
       
       logger.info('Starting transcript processing with config:', config);
@@ -122,11 +136,25 @@ program
 function loadConfig(configPath: string): TranscriptConfig {
   const fullPath = path.resolve(configPath);
   
+  console.log('=== CONFIG LOADING DEBUG ===');
+  console.log('Attempting to load config from:', fullPath);
+  console.log('File exists:', fs.existsSync(fullPath));
+  
   if (!fs.existsSync(fullPath)) {
+    console.log('Available files in config directory:');
+    const configDir = path.dirname(fullPath);
+    if (fs.existsSync(configDir)) {
+      fs.readdirSync(configDir).forEach(file => {
+        console.log(' -', file);
+      });
+    }
     throw new Error(`Configuration file not found: ${fullPath}`);
   }
   
   const configData = fs.readFileSync(fullPath, 'utf-8');
+  console.log('Config file loaded successfully');
+  console.log('============================');
+  
   return JSON.parse(configData);
 }
 

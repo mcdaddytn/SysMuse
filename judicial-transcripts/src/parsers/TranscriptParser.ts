@@ -132,15 +132,16 @@ export class TranscriptParser {
     
     // Parse the transcript content
     const lines = content.split(/\r?\n/);
+
     const pages = this.groupLinesIntoPages(lines);
-    
+
     // Determine session info
     const sessionInfo = this.extractSessionInfo(filename, pages[0]);
     
     // Process first pages for trial summary if not already created
     if (!this.trialId && pages.length > 0) {
-			// Add debug logging
-		  await this.debugSummaryParsing(pages.slice(0, 3));
+      // Add debug logging
+      await this.debugSummaryParsing(pages.slice(0, 3));
 
       const summaryInfo = await this.parseSummaryPages(pages.slice(0, 3));
       if (summaryInfo) {
@@ -163,28 +164,40 @@ export class TranscriptParser {
     const pages: string[][] = [];
     let currentPage: string[] = [];
     
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
       // Check for page break indicators
       if (this.isPageBreak(line)) {
+        // If we have content in current page, save it
         if (currentPage.length > 0) {
           pages.push(currentPage);
           currentPage = [];
         }
+        // Start new page with the page header
+        currentPage.push(line);
+      } else {
+        currentPage.push(line);
       }
-      currentPage.push(line);
     }
     
+    // Don't forget the last page
     if (currentPage.length > 0) {
       pages.push(currentPage);
     }
+    
+    // DEBUG: Log page splitting results
+    //logger.info(`DEBUG: Split content into ${pages.length} pages`);
+    //pages.forEach((page, i) => {
+    //  logger.info(`Page ${i + 1}: ${page.length} lines, first line: "${page[0]?.substring(0, 80)}..."`);
+    //});
     
     return pages;
   }
 
   private isPageBreak(line: string): boolean {
-    // Check for form feed character or page header pattern
-    return line.includes('\f') || 
-           /Case\s+[\d:cv-]+\s+Document\s+\d+/.test(line);
+    const pageHeaderPattern = /^\s*Case\s+.*Document\s+\d+/;
+    return line.includes('\f') || pageHeaderPattern.test(line);
   }
 
   private extractSessionInfo(filename: string, firstPage: string[]): SessionInfo {
@@ -392,37 +405,36 @@ export class TranscriptParser {
     });
   }
   
-// Add this method to TranscriptParser class
-private async debugSummaryParsing(pages: string[][]): Promise<void> {
-  logger.info('=== DEBUG: Summary Parsing ===');
-  logger.info(`Total pages for summary: ${pages.length}`);
-  
-  if (pages.length > 0) {
-    logger.info('First page lines count:', pages[0].length);
-    logger.info('First page first 10 lines:');
-    pages[0].slice(0, 10).forEach((line, i) => {
-      logger.info(`Line ${i}: "${line}"`);
-    });
-  }
-  
-  if (pages.length > 1) {
-    logger.info('Second page lines count:', pages[1].length);
-    logger.info('Second page first 10 lines:');
-    pages[1].slice(0, 10).forEach((line, i) => {
-      logger.info(`Line ${i}: "${line}"`);
-    });
-  }
-  
-  // Test the parser
-  const parser = new SummaryPageParser();
-  const result = parser.parse(pages);
-  
-  if (result) {
-    logger.info('Summary parsing SUCCESS:', JSON.stringify(result, null, 2));
-  } else {
-    logger.error('Summary parsing FAILED - no result returned');
-  }
-}  
+  private async debugSummaryParsing(pages: string[][]): Promise<void> {
+    logger.info('=== DEBUG: Summary Parsing ===');
+    logger.info(`Total pages for summary: ${pages.length}`);
+    
+    if (pages.length > 0) {
+      logger.info('First page lines count:', pages[0].length);
+      logger.info('First page first 10 lines:');
+      pages[0].slice(0, 10).forEach((line, i) => {
+        logger.info(`Line ${i}: "${line}"`);
+      });
+    }
+    
+    if (pages.length > 1) {
+      logger.info('Second page lines count:', pages[1].length);
+      logger.info('Second page first 10 lines:');
+      pages[1].slice(0, 10).forEach((line, i) => {
+        logger.info(`Line ${i}: "${line}"`);
+      });
+    }
+    
+    // Test the parser
+    const parser = new SummaryPageParser();
+    const result = parser.parse(pages);
+    
+    if (result) {
+      logger.info('Summary parsing SUCCESS:', JSON.stringify(result, null, 2));
+    } else {
+      logger.error('Summary parsing FAILED - no result returned');
+    }
+  }  
 
   private async parsePage(
     pageLines: string[], 
@@ -435,9 +447,22 @@ private async debugSummaryParsing(pages: string[][]): Promise<void> {
     // Parse page header if present
     const headerInfo = parser.parse(pageLines[0]);
     
-    // Create page record
-    const page = await this.prisma.page.create({
-      data: {
+    // Use upsert instead of create to handle duplicates
+    const page = await this.prisma.page.upsert({
+      where: {
+        sessionId_pageNumber: {
+          sessionId,
+          pageNumber
+        }
+      },
+      update: {
+        totalSessionPages: headerInfo?.totalPages,
+        transcriptPageNumber: headerInfo?.transcriptPageNumber,
+        documentNumber: headerInfo?.documentNumber,
+        pageId: headerInfo?.pageId,
+        headerText: headerInfo?.fullText
+      },
+      create: {
         sessionId,
         pageNumber,
         totalSessionPages: headerInfo?.totalPages,
@@ -448,7 +473,13 @@ private async debugSummaryParsing(pages: string[][]): Promise<void> {
       }
     });
     
-    // Parse and store lines
+    // Clear existing lines for this page first
+    await this.prisma.line.deleteMany({
+      where: { pageId: page.id }
+    });
+    
+    // Parse and store lines with sequential numbering
+    let sequentialLineNumber = 1;
     for (let i = 0; i < pageLines.length; i++) {
       const line = pageLines[i];
       
@@ -461,7 +492,7 @@ private async debugSummaryParsing(pages: string[][]): Promise<void> {
         await this.prisma.line.create({
           data: {
             pageId: page.id,
-            lineNumber: parsedLine.lineNumber || i,
+            lineNumber: sequentialLineNumber++,
             timestamp: parsedLine.timestamp,
             text: parsedLine.text,
             speakerPrefix: parsedLine.speakerPrefix,
@@ -470,5 +501,4 @@ private async debugSummaryParsing(pages: string[][]): Promise<void> {
         });
       }
     }
-  }
-}
+  }}

@@ -274,6 +274,12 @@ npm run parse parse --config "./config/example-trial-config.json" --all
 # Override directory in config:
 npm run parse parse --config "./config/example-trial-config.json" --directory "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix\\pdf-text-extract" --phase1
 
+# to reset databae:
+npm run parse reset --confirm
+npx ts-node src/cli/parse.ts reset --confirm
+
+Then 
+npx prisma db push
 
 
 

@@ -3,9 +3,12 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TranscriptConfig } from '../types/config.types';
-import { TranscriptParser } from '../parsers/phase1/TranscriptParser';
-import { Phase2Processor } from '../parsers/phase2/Phase2Processor';
-import { Phase3Processor } from '../parsers/phase3/Phase3Processor';
+//import { TranscriptParser } from '../parsers/phase1/TranscriptParser';
+//import { Phase2Processor } from '../parsers/phase2/Phase2Processor';
+//import { Phase3Processor } from '../parsers/phase3/Phase3Processor';
+import { TranscriptParser } from '../parsers/TranscriptParser';
+import { Phase2Processor } from '../parsers/Phase2Processor';
+import { Phase3Processor } from '../parsers/Phase3Processor';
 import logger from '../utils/logger';
 
 const program = new Command();

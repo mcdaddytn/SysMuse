@@ -1,9 +1,12 @@
 // src/api/server.ts
 import express, { Express, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { TranscriptParser } from '../parsers/phase1/TranscriptParser';
-import { Phase2Processor } from '../parsers/phase2/Phase2Processor';
-import { Phase3Processor } from '../parsers/phase3/Phase3Processor';
+//import { TranscriptParser } from '../parsers/phase1/TranscriptParser';
+//import { Phase2Processor } from '../parsers/phase2/Phase2Processor';
+//import { Phase3Processor } from '../parsers/phase3/Phase3Processor';
+import { TranscriptParser } from '../parsers/TranscriptParser';
+import { Phase2Processor } from '../parsers/Phase2Processor';
+import { Phase3Processor } from '../parsers/Phase3Processor';
 import { SearchService } from '../services/SearchService';
 import { TranscriptExportService } from '../services/TranscriptExportService';
 import logger from '../utils/logger';

@@ -3,15 +3,23 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
-import logger from '../../utils/logger';
+//import logger from '../../utils/logger';
+import logger from '../utils/logger';
+//gm: workaround (or can change tsconfig.json "noUnusedLocals": false)
 import { 
   TranscriptConfig, 
-  ParsedLine, 
-  ParsedPage, 
   SessionInfo,
   TrialSummaryInfo,
   AttorneyInfo
-} from '../../types/config.types';
+} from '../types/config.types';
+//import { 
+//  TranscriptConfig, 
+//  ParsedLine, 
+//  ParsedPage, 
+//  SessionInfo,
+//  TrialSummaryInfo,
+//  AttorneyInfo
+//} from '../../types/config.types';
 import { SummaryPageParser } from './SummaryPageParser';
 import { LineParser } from './LineParser';
 import { PageHeaderParser } from './PageHeaderParser';

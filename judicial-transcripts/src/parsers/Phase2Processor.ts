@@ -1,8 +1,10 @@
 // src/parsers/phase2/Phase2Processor.ts
 // src/parsers/Phase2Processor.ts
 import { PrismaClient } from '@prisma/client';
-import { TranscriptConfig, ParsingContext } from '../../types/config.types';
-import logger from '../../utils/logger';
+//import { TranscriptConfig, ParsingContext } from '../../types/config.types';
+//import logger from '../../utils/logger';
+import { TranscriptConfig, ParsingContext } from '../types/config.types';
+import logger from '../utils/logger';
 
 export class Phase2Processor {
   private prisma: PrismaClient;
@@ -413,3 +415,4 @@ export class Phase2Processor {
     
     return info;
   }
+}  

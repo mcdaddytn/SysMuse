@@ -1,9 +1,12 @@
 // src/parsers/phase3/Phase3Processor.ts
 // src/parsers/Phase3Processor.ts
 import { PrismaClient } from '@prisma/client';
-import { TranscriptConfig } from '../../types/config.types';
-import { ElasticSearchService } from '../../services/ElasticSearchService';
-import logger from '../../utils/logger';
+//import { TranscriptConfig } from '../../types/config.types';
+//import { ElasticSearchService } from '../../services/ElasticSearchService';
+//import logger from '../../utils/logger';
+import { TranscriptConfig } from '../types/config.types';
+import { ElasticSearchService } from '../services/ElasticSearchService';
+import logger from '../utils/logger';
 
 export class Phase3Processor {
   private prisma: PrismaClient;
@@ -165,8 +168,10 @@ export class Phase3Processor {
           // Store open directive
           openDirectives.set(directive.name, event);
         } else {
-          // Find matching start directive
-          const pairKey = this.findPairKey(openDirectives, directive.pairMateId);
+          // Find matching start directive           
+          //const pairKey = this.findPairKey(openDirectives, directive.pairMateId);
+          //gm: workaround
+          const pairKey = directive.pairMateId ? this.findPairKey(openDirectives, directive.pairMateId) : null;
           const startEvent = pairKey ? openDirectives.get(pairKey) : null;
           
           if (startEvent) {

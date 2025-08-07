@@ -1,7 +1,9 @@
 // src/parsers/phase1/SummaryPageParser.ts
 // src/parsers/SummaryPageParser.ts
-import { TrialSummaryInfo, AttorneyInfo, AddressInfo } from '../../types/config.types';
-import logger from '../../utils/logger';
+import { TrialSummaryInfo, AttorneyInfo, AddressInfo } from '../types/config.types';
+//import { TrialSummaryInfo, AttorneyInfo, AddressInfo } from '../../types/config.types';
+import logger from '../utils/logger';
+//import logger from '../../utils/logger';
 
 export class SummaryPageParser {
   parse(pages: string[][]): TrialSummaryInfo | null {

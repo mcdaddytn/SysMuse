@@ -1,7 +1,10 @@
 // src/parsers/phase1/LineParser.ts
 // src/parsers/LineParser.ts
-import { ParsedLine } from '../../types/config.types';
-import logger from '../../utils/logger';
+//import { ParsedLine } from '../../types/config.types';
+//import logger from '../../utils/logger';
+import { ParsedLine } from '../types/config.types';
+//gm: not used
+//import logger from '../utils/logger';
 
 export class LineParser {
   private readonly timestampPattern = /^(\d{2}:\d{2}:\d{2})\s+(\d+)\s+(.*?)$/;

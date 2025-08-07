@@ -5,8 +5,8 @@
   "caseNumber": "2:19-CV-123-JRG",
   "phases": {
     "phase1": true,
-    "phase2": true,
-    "phase3": true
+    "phase2": false,
+    "phase3": false
   },
   "pdfExtractOptions": {
     "layout": "preserve",

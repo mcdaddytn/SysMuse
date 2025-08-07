@@ -18,7 +18,8 @@ program
 program
   .command('parse')
   .description('Parse transcript files')
-  .option('-c, --config <path>', 'Path to configuration JSON file', './config/default-config.json')
+  //.option('-c, --config <path>', 'Path to configuration JSON file', './config/default-config.json')
+  .option('-c, --config <path>', 'Path to configuration JSON file', './config/example-trial-config.json')
   .option('-d, --directory <path>', 'Directory containing transcript files')
   .option('-f, --format <format>', 'File format (pdf or txt)', 'txt')
   .option('--phase1', 'Run Phase 1 (raw parsing) only')

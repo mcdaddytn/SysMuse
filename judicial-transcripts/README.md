@@ -241,6 +241,41 @@ Run the parser:
 
 npm run parse -- --config ./config/example-trial-config.json --all
 
+# gm, above not working, started testing with below options, above you are not supplying a subcommand
+
+
+# gm, variant for windows (not sure needed)
+npm run parse -- --config "config/example-trial-config.json" --all
+
+# these work, need subcommand not sure what extra -- will do above, there are several subcommands
+# need a summary from LLM on how to call client
+npm run parse parse --directory "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix\\pdf-text-extract" --phase1
+
+npm run parse parse -d "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix\\pdf-text-extract" --phase1
+# not picking up my directory with above command
+
+# lets try
+npm run parse parse --config ./config/example-trial-config.json --phase1
+# config is not passed in
+npm run parse parse --config "config/example-trial-config.json" --phase1
+#not picking up my config, works (reads config when I set it as default in parse.ts
+#  .option('-c, --config <path>', 'Path to configuration JSON file', './config/example-trial-config.json')
+
+
+# gm, added after above tests:
+New patterns from updated sessions:
+
+# Correct command structure:
+npm run parse parse --config "./config/example-trial-config.json" --phase1
+
+# Run all phases:
+npm run parse parse --config "./config/example-trial-config.json" --all
+
+# Override directory in config:
+npm run parse parse --config "./config/example-trial-config.json" --directory "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix\\pdf-text-extract" --phase1
+
+
+
 
 Start the API (optional):
 

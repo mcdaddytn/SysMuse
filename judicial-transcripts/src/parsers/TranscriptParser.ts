@@ -139,6 +139,9 @@ export class TranscriptParser {
     
     // Process first pages for trial summary if not already created
     if (!this.trialId && pages.length > 0) {
+			// Add debug logging
+		  await this.debugSummaryParsing(pages.slice(0, 3));
+
       const summaryInfo = await this.parseSummaryPages(pages.slice(0, 3));
       if (summaryInfo) {
         await this.createOrUpdateTrial(summaryInfo);
@@ -388,6 +391,38 @@ export class TranscriptParser {
       }
     });
   }
+  
+// Add this method to TranscriptParser class
+private async debugSummaryParsing(pages: string[][]): Promise<void> {
+  logger.info('=== DEBUG: Summary Parsing ===');
+  logger.info(`Total pages for summary: ${pages.length}`);
+  
+  if (pages.length > 0) {
+    logger.info('First page lines count:', pages[0].length);
+    logger.info('First page first 10 lines:');
+    pages[0].slice(0, 10).forEach((line, i) => {
+      logger.info(`Line ${i}: "${line}"`);
+    });
+  }
+  
+  if (pages.length > 1) {
+    logger.info('Second page lines count:', pages[1].length);
+    logger.info('Second page first 10 lines:');
+    pages[1].slice(0, 10).forEach((line, i) => {
+      logger.info(`Line ${i}: "${line}"`);
+    });
+  }
+  
+  // Test the parser
+  const parser = new SummaryPageParser();
+  const result = parser.parse(pages);
+  
+  if (result) {
+    logger.info('Summary parsing SUCCESS:', JSON.stringify(result, null, 2));
+  } else {
+    logger.error('Summary parsing FAILED - no result returned');
+  }
+}  
 
   private async parsePage(
     pageLines: string[], 

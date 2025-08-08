@@ -1,0 +1,38 @@
+{
+  "transcriptPath": "/Users/gmcaveney/Documents/dev/test/pdf-text-extract",
+  "format": "txt",
+  "caseName": "VocalLife LLC v. Amazon.com, Inc.",
+  "caseNumber": "2:19-CV-123-JRG",
+  "phases": {
+    "phase1": true,
+    "phase2": false,
+    "phase3": false
+  },
+  "pdfExtractOptions": {
+    "layout": "preserve",
+    "encoding": "UTF-8"
+  },
+  "parsingOptions": {
+    "ignoreBlankLines": true,
+    "trimWhitespace": true,
+    "lineDelimiters": ["\n", "\r\n"],
+    "pageDelimiters": ["\\f", "Case \\d+:\\d+"]
+  },
+  "elasticsearchOptions": {
+    "url": "http://localhost:9200",
+    "index": "judicial_transcripts",
+    "batchSize": 100
+  },
+  "exportOptions": {
+    "defaultFormat": "text",
+    "includeMetadata": true,
+    "includeTimestamps": false,
+    "includeLineNumbers": false
+  },
+  "synopsisOptions": {
+    "model": "claude-3-opus-20240229",
+    "maxLength": 500,
+    "temperature": 0.3,
+    "context": "This is a patent infringement case involving voice recognition technology."
+  }
+}

@@ -51,23 +51,23 @@ export class PageHeaderParser {
    * This method should be called with page content to determine the section
    */
   determineDocumentSection(pageLines: string[]): 'SUMMARY' | 'PROCEEDINGS' | 'CERTIFICATION' | 'UNKNOWN' {
-    // Skip empty lines and header
-    const contentLines = pageLines.filter(line => line.trim() !== '').slice(1);
+    // Skip empty lines and header, look at content lines
+    const contentLines = pageLines.filter(line => line.trim() !== '');
     
     for (const line of contentLines) {
       const trimmedLine = line.trim();
       
-      // Check for PROCEEDINGS marker
-      if (trimmedLine === 'P R O C E E D I N G S' || 
-          /^P\s*R\s*O\s*C\s*E\s*E\s*D\s*I\s*N\s*G\s*S$/.test(trimmedLine.replace(/\s+/g, ' '))) {
+      // Check for PROCEEDINGS marker - be more flexible with spacing
+      if (/^P\s*R\s*O\s*C\s*E\s*E\s*D\s*I\s*N\s*G\s*S\s*$/i.test(trimmedLine.replace(/\s+/g, ' ')) ||
+          trimmedLine === 'P R O C E E D I N G S' ||
+          /PROCEEDINGS/i.test(trimmedLine)) {
         return 'PROCEEDINGS';
       }
       
       // Check for CERTIFICATION marker
-      if (trimmedLine.toLowerCase().includes('certification') ||
-          trimmedLine.toLowerCase().includes('certificate') ||
-          /^CERTIFICATION OF TRANSCRIPT$/i.test(trimmedLine) ||
-          /^COURT REPORTER'S CERTIFICATE$/i.test(trimmedLine)) {
+      if (/CERTIFICATION/i.test(trimmedLine) ||
+          /CERTIFICATE/i.test(trimmedLine) ||
+          /COURT REPORTER.S CERTIFICATE/i.test(trimmedLine)) {
         return 'CERTIFICATION';
       }
     }

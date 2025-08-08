@@ -18,6 +18,7 @@ model Trial {
   caseNumber      String    @unique // e.g., "2:19-CV-123-JRG"
   court           String    // e.g., "UNITED STATES DISTRICT COURT"
   courtDivision   String?   // e.g., "EASTERN DISTRICT OF TEXAS"  
+  courtDistrict   String?   // e.g., "MARSHALL DIVISION"
   totalPages      Int?      // Sum of pages from all sessions
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -123,17 +124,21 @@ model Page {
 }
 
 model Line {
-  id              Int       @id @default(autoincrement())
-  pageId          Int
-  page            Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  lineNumber      Int
-  timestamp       String?   // Store as string to preserve original format
-  text            String?
-  speakerPrefix   String?   // e.g., "Q.", "A.", "THE COURT:", etc.
-  isBlank         Boolean   @default(false)
-  createdAt       DateTime  @default(now())
+  id                Int       @id @default(autoincrement())
+  pageId            Int
+  page              Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  lineNumber        Int       // Line number within page
+  trialLineNumber   Int?      // Line number within entire trial
+  sessionLineNumber Int?      // Line number within session
+  timestamp         String?   // Store as string to preserve original format
+  text              String?
+  speakerPrefix     String?   // e.g., "Q.", "A.", "THE COURT:", etc.
+  isBlank           Boolean   @default(false)
+  createdAt         DateTime  @default(now())
   
   @@index([pageId, lineNumber])
+  @@index([trialLineNumber])
+  @@index([sessionLineNumber])
   @@unique([pageId, lineNumber])
 }
 

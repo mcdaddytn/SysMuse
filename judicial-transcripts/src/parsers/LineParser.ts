@@ -1,15 +1,23 @@
-// src/parsers/phase1/LineParser.ts
 // src/parsers/LineParser.ts
-//import { ParsedLine } from '../../types/config.types';
-//import logger from '../../utils/logger';
 import { ParsedLine } from '../types/config.types';
-//gm: not used
-//import logger from '../utils/logger';
 
 export class LineParser {
   private readonly timestampPattern = /^(\d{2}:\d{2}:\d{2})\s+(\d+)\s+(.*?)$/;
-  private readonly speakerPattern = /^\s*(THE COURT|MR\.|MS\.|MRS\.|DR\.)\s+([A-Z][A-Z\s]*?):\s*(.*)$/;
-  private readonly qaPattern = /^\s*(Q\.|A\.)\s+(.*)$/;
+  
+  // More comprehensive speaker patterns
+  private readonly speakerPatterns = [
+    // THE COURT: pattern
+    /^\s*(THE COURT):\s*(.*)$/,
+    // MR./MS./MRS./DR. NAME: pattern  
+    /^\s*((?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+    // Q./A. pattern
+    /^\s*(Q\.|A\.)\s+(.*)$/,
+    // BY MR./MS. pattern
+    /^\s*(BY\s+(?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+    // Other formal speakers (WITNESS, BAILIFF, etc.)
+    /^\s*((?:WITNESS|BAILIFF|COURT REPORTER|INTERPRETER)):\s*(.*)$/i
+  ];
+  
   private readonly directivePattern = /^\s*\((.*?)\)\s*$/;
   
   parse(line: string): ParsedLine | null {
@@ -30,64 +38,63 @@ export class LineParser {
       const remainingText = timestampMatch[3];
       
       // Check for speaker in remaining text
-      let speakerPrefix: string | undefined;
-      let text = remainingText;
-      
-      const speakerMatch = remainingText.match(this.speakerPattern);
-      if (speakerMatch) {
-        speakerPrefix = `${speakerMatch[1]} ${speakerMatch[2]}:`;
-        text = speakerMatch[3];
-      } else {
-        const qaMatch = remainingText.match(this.qaPattern);
-        if (qaMatch) {
-          speakerPrefix = qaMatch[1];
-          text = qaMatch[2];
-        }
-      }
+      const speakerResult = this.extractSpeakerFromText(remainingText);
       
       return {
         lineNumber: parseInt(timestampMatch[2]),
         timestamp: timestampMatch[1],
-        text: text.trim(),
-        speakerPrefix,
+        text: speakerResult.text,
+        speakerPrefix: speakerResult.speakerPrefix,
         isBlank: false
       };
     }
     
-    // Line without timestamp - could be continuation or header
+    // Line without timestamp - could be continuation, header, or standalone speaker line
+    const speakerResult = this.extractSpeakerFromText(line);
+    
     return {
       lineNumber: 0,
       timestamp: undefined,
-      text: line.trim(),
-      speakerPrefix: undefined,
+      text: speakerResult.text,
+      speakerPrefix: speakerResult.speakerPrefix,
       isBlank: false
     };
   }
   
+  private extractSpeakerFromText(text: string): { speakerPrefix?: string; text: string } {
+    // Try each speaker pattern
+    for (const pattern of this.speakerPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        return {
+          speakerPrefix: match[1].trim(),
+          text: match[2].trim()
+        };
+      }
+    }
+    
+    // No speaker pattern found, return original text
+    return {
+      speakerPrefix: undefined,
+      text: text.trim()
+    };
+  }
+  
   isCourtDirective(line: string): boolean {
-    return this.directivePattern.test(line);
+    return this.directivePattern.test(line.trim());
   }
   
   extractDirective(line: string): string | null {
-    const match = line.match(this.directivePattern);
+    const match = line.trim().match(this.directivePattern);
     return match ? match[1] : null;
   }
   
   isSpeakerLine(line: string): boolean {
-    return this.speakerPattern.test(line) || this.qaPattern.test(line);
+    return this.speakerPatterns.some(pattern => pattern.test(line));
   }
   
   extractSpeaker(line: string): string | null {
-    const speakerMatch = line.match(this.speakerPattern);
-    if (speakerMatch) {
-      return `${speakerMatch[1]} ${speakerMatch[2]}`;
-    }
-    
-    const qaMatch = line.match(this.qaPattern);
-    if (qaMatch) {
-      return qaMatch[1];
-    }
-    
-    return null;
+    const result = this.extractSpeakerFromText(line);
+    return result.speakerPrefix || null;
   }
 }

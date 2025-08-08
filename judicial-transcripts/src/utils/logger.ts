@@ -1,4 +1,4 @@
-// FIRST FIX: src/utils/logger.ts - Fix Winston logging format
+// src/utils/logger.ts
 import winston from 'winston';
 
 const logLevel = process.env.LOG_LEVEL || 'info';
@@ -10,24 +10,15 @@ const logger = winston.createLogger({
       format: 'YYYY-MM-DD HH:mm:ss'
     }),
     winston.format.errors({ stack: true }),
-    winston.format.printf(({ timestamp, level, message, ...metadata }) => {
-      // Fix: Use direct string concatenation instead of template literals with objects
-      let msg = `${timestamp} [${level}]: ${message}`;
-      // Only add metadata if it exists and is not just timestamp
-      const cleanMetadata = { ...metadata };
-      delete cleanMetadata.timestamp;
-      if (Object.keys(cleanMetadata).length > 0) {
-        msg += ` ${JSON.stringify(cleanMetadata)}`;
-      }
-      return msg;
+    winston.format.printf(({ timestamp, level, message }) => {
+      return `${timestamp} [${level.toUpperCase()}]: ${message}`;
     })
   ),
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.printf(({ timestamp, level, message, ...metadata }) => {
-          // Clean format for console - no metadata serialization issues
+        winston.format.printf(({ timestamp, level, message }) => {
           return `${timestamp} [${level}]: ${message}`;
         })
       )
@@ -42,5 +33,13 @@ const logger = winston.createLogger({
   ]
 });
 
-export default logger;
+// Ensure logs directory exists
+import fs from 'fs';
+import path from 'path';
 
+const logsDir = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+export default logger;

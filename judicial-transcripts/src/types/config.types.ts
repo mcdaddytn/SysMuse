@@ -87,6 +87,7 @@ export interface TrialSummaryInfo {
   caseNumber: string;
   court: string;           // e.g., "UNITED STATES DISTRICT COURT"
   courtDivision?: string;  // e.g., "EASTERN DISTRICT OF TEXAS"
+  courtDistrict?: string;  // e.g., "MARSHALL DIVISION"
   judge: {
     name: string;
     title?: string;
@@ -180,7 +181,6 @@ export enum ExaminationType {
 }
 
 // Database management types
-// gm: do not think we need these are for fancy scripts 
 export interface DatabaseBackupInfo {
   name: string;
   filePath: string;

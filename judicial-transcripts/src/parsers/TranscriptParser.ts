@@ -30,6 +30,8 @@ export class TranscriptParser {
   private currentDocumentSection: DocumentSection = 'UNKNOWN';
   private proceedingsEncountered = false;
   private certificationEncountered = false;
+  private globalTrialLineNumber = 0;
+  private globalSessionLineNumber = 0;
 
   constructor(config: TranscriptConfig, prisma: PrismaClient) {
     this.config = config;
@@ -51,6 +53,8 @@ export class TranscriptParser {
     this.currentDocumentSection = 'UNKNOWN';
     this.proceedingsEncountered = false;
     this.certificationEncountered = false;
+    this.globalTrialLineNumber = 0;
+    this.globalSessionLineNumber = 0;
 
     const files = fs.readdirSync(directoryPath)
       .filter(file => file.endsWith('.txt'))
@@ -158,6 +162,9 @@ export class TranscriptParser {
     // Create session
     const session = await this.createSession(sessionInfo, filename);
     logger.info(`   📅 Created session: ${sessionInfo.sessionDate.toLocaleDateString()} ${sessionInfo.sessionType}`);
+    
+    // Reset session line counter for new session
+    this.globalSessionLineNumber = 0;
     
     // Track session statistics
     let sessionTotalLines = 0;
@@ -275,9 +282,15 @@ export class TranscriptParser {
           }
         }
         
+        // Increment global counters
+        this.globalTrialLineNumber++;
+        this.globalSessionLineNumber++;
+        
         linesToInsert.push({
           pageId: page.id,
           lineNumber: sequentialLineNumber++,
+          trialLineNumber: this.globalTrialLineNumber,
+          sessionLineNumber: this.globalSessionLineNumber,
           timestamp: parsedLine.timestamp,
           text: parsedLine.text,
           speakerPrefix: parsedLine.speakerPrefix,
@@ -314,18 +327,17 @@ export class TranscriptParser {
       this.certificationEncountered = true;
       logger.info(`   🔄 Document section changed to: CERTIFICATION`);
     } else if (!this.proceedingsEncountered && !this.certificationEncountered) {
-      // Before proceedings encountered, assume we're in SUMMARY (if we have valid header)
-      if (this.currentDocumentSection === 'UNKNOWN') {
-        // Check if this looks like a valid first page
-        const hasValidHeader = pageLines.some(line => 
-          /Case\s+[\d:\-cv]+\s+Document\s+\d+/.test(line)
-        );
-        if (hasValidHeader) {
-          this.currentDocumentSection = 'SUMMARY';
-          logger.info(`   🔄 Document section set to: SUMMARY`);
-        }
+      // Before proceedings encountered, we should be in SUMMARY if we have valid header
+      const hasValidHeader = pageLines.some(line => 
+        /Case\s+[\d:\-cv]+\s+Document\s+\d+/.test(line)
+      );
+      if (hasValidHeader && this.currentDocumentSection === 'UNKNOWN') {
+        this.currentDocumentSection = 'SUMMARY';
+        logger.info(`   🔄 Document section set to: SUMMARY`);
       }
     }
+    // Once in PROCEEDINGS, stay there unless we hit CERTIFICATION
+    // Once in CERTIFICATION, stay there
   }
 
   private groupLinesIntoPages(lines: string[]): string[][] {
@@ -435,13 +447,15 @@ export class TranscriptParser {
       update: {
         name: summaryInfo.trialName,
         court: summaryInfo.court,
-        courtDivision: summaryInfo.courtDivision
+        courtDivision: summaryInfo.courtDivision,
+        courtDistrict: summaryInfo.courtDistrict
       },
       create: {
         name: summaryInfo.trialName,
         caseNumber: summaryInfo.caseNumber,
         court: summaryInfo.court,
-        courtDivision: summaryInfo.courtDivision
+        courtDivision: summaryInfo.courtDivision,
+        courtDistrict: summaryInfo.courtDistrict
       }
     });
     

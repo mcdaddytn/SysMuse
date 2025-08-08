@@ -27,7 +27,7 @@ export class TranscriptParser {
     totalPages: 0,
     errorFiles: []
   };
-  private currentDocumentSection: DocumentSection = 'UNKNOWN';
+  private currentDocumentSection: DocumentSection = 'SUMMARY'; // Start with SUMMARY
   private proceedingsEncountered = false;
   private certificationEncountered = false;
   private globalTrialLineNumber = 0;
@@ -50,7 +50,7 @@ export class TranscriptParser {
       totalPages: 0,
       errorFiles: []
     };
-    this.currentDocumentSection = 'UNKNOWN';
+    this.currentDocumentSection = 'SUMMARY'; // Start with SUMMARY
     this.proceedingsEncountered = false;
     this.certificationEncountered = false;
     this.globalTrialLineNumber = 0;
@@ -140,6 +140,11 @@ export class TranscriptParser {
     const fileStartTime = Date.now();
     
     logger.info(`📄 Processing file: ${filename}`);
+    
+    // Reset document section state for each new file/session
+    this.currentDocumentSection = 'SUMMARY';
+    this.proceedingsEncountered = false;
+    this.certificationEncountered = false;
     
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split(/\r?\n/);
@@ -240,16 +245,16 @@ export class TranscriptParser {
       update: {
         documentSection: this.currentDocumentSection,
         trialPageNumber,
-        pageId: headerInfo?.pageId,
-        headerText: headerInfo?.fullText
+        pageId: headerInfo?.pageId || null,
+        headerText: headerInfo?.fullText || null
       },
       create: {
         sessionId,
         pageNumber,
         documentSection: this.currentDocumentSection,
         trialPageNumber,
-        pageId: headerInfo?.pageId,
-        headerText: headerInfo?.fullText
+        pageId: headerInfo?.pageId || null,
+        headerText: headerInfo?.fullText || null
       }
     });
     
@@ -326,16 +331,8 @@ export class TranscriptParser {
       this.currentDocumentSection = 'CERTIFICATION';
       this.certificationEncountered = true;
       logger.info(`   🔄 Document section changed to: CERTIFICATION`);
-    } else if (!this.proceedingsEncountered && !this.certificationEncountered) {
-      // Before proceedings encountered, we should be in SUMMARY if we have valid header
-      const hasValidHeader = pageLines.some(line => 
-        /Case\s+[\d:\-cv]+\s+Document\s+\d+/.test(line)
-      );
-      if (hasValidHeader && this.currentDocumentSection === 'UNKNOWN') {
-        this.currentDocumentSection = 'SUMMARY';
-        logger.info(`   🔄 Document section set to: SUMMARY`);
-      }
     }
+    // If we haven't detected any section markers, stay in SUMMARY
     // Once in PROCEEDINGS, stay there unless we hit CERTIFICATION
     // Once in CERTIFICATION, stay there
   }

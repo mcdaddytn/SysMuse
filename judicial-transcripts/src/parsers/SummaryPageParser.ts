@@ -60,15 +60,22 @@ export class SummaryPageParser {
       logger.info('✓ Extracted court:', info.court);
     }
     
-    // Pattern: "FOR THE EASTERN DISTRICT OF TEXAS"
-    const divisionMatch = text.match(/FOR THE ([A-Z\s]+DISTRICT[A-Z\s]*)/i);
+    // Pattern: "MARSHALL DIVISION" -> courtDivision (swapped)
+    const divisionMatch = text.match(/([A-Z]+\s+DIVISION)/);
     if (divisionMatch) {
       info.courtDivision = divisionMatch[1];
       logger.info('✓ Extracted court division:', info.courtDivision);
+    } else {
+      // Try to extract from right side of )( format
+      const rightSideMatch = text.match(/\)\(\s*([A-Z]+,?\s*[A-Z]*)/);
+      if (rightSideMatch && rightSideMatch[1].includes('MARSHALL')) {
+        info.courtDivision = rightSideMatch[1].replace(',', '');
+        logger.info('✓ Extracted court division (right side):', info.courtDivision);
+      }
     }
     
-    // Pattern: "MARSHALL DIVISION"
-    const districtMatch = text.match(/([A-Z]+\s+DIVISION)/);
+    // Pattern: "FOR THE EASTERN DISTRICT OF TEXAS" -> courtDistrict (swapped)
+    const districtMatch = text.match(/FOR THE ([A-Z\s]+DISTRICT[A-Z\s]*)/i);
     if (districtMatch) {
       info.courtDistrict = districtMatch[1];
       logger.info('✓ Extracted court district:', info.courtDistrict);
@@ -94,19 +101,48 @@ export class SummaryPageParser {
   }
   
   private extractTrialName(text: string, info: TrialSummaryInfo): void {
-    // Handle the )( format in trial names
-    const trialNamePattern = /^([A-Z\s,\.&]+?),?\s*\)\(\s*PLAINTIFF.*?VS\.\s*\)\(.*?\)\(.*?([A-Z\s,\.&]+?),?\s*\)\(.*?DEFENDANTS?\./ms;
-    const trialNameMatch = text.match(trialNamePattern);
-    if (trialNameMatch) {
-      info.trialName = `${trialNameMatch[1].trim()} VS. ${trialNameMatch[2].trim()}`;
+    // Parse the trial name from the )( format lines
+    // Look for the pattern with plaintiff and defendant information
+    
+    const lines = text.split('\n');
+    const leftSideTexts: string[] = [];
+    
+    for (const line of lines) {
+      // Look for lines with )( format
+      if (line.includes(')(')) {
+        const leftSide = line.split(')(')[0].trim();
+        
+        // Skip empty lines and lines that are just numbers
+        if (leftSide && !/^\d+$/.test(leftSide) && leftSide.length > 2) {
+          // Remove leading line numbers (digits followed by whitespace)
+          const cleanedText = leftSide.replace(/^\d+\s*/, '').trim();
+          
+          if (cleanedText && cleanedText.length > 2) {
+            leftSideTexts.push(cleanedText);
+          }
+        }
+      }
+    }
+    
+    // Join the left side texts and clean up
+    if (leftSideTexts.length > 0) {
+      let trialName = leftSideTexts.join(' ').trim();
+      
+      // Clean up extra whitespace and format properly
+      trialName = trialName.replace(/\s+/g, ' ');
+      
+      // Ensure proper formatting with commas
+      trialName = trialName.replace(/\s*,\s*/g, ', ');
+      
+      info.trialName = trialName;
       logger.info('✓ Extracted trial name:', info.trialName);
     } else {
-      // Fallback patterns
-      const plaintiffMatch = text.match(/^([A-Z\s,\.&]+),\s*\)\(\s*PLAINTIFF/m);
+      // Fallback to simpler pattern matching
+      const plaintiffMatch = text.match(/([A-Z\s,\.&]+),\s*\)\(\s*PLAINTIFF/m);
       const defendantMatch = text.match(/([A-Z\s,\.&]+),?\s*\)\(.*?DEFENDANTS?\./m);
       
       if (plaintiffMatch && defendantMatch) {
-        info.trialName = `${plaintiffMatch[1].trim()} VS. ${defendantMatch[1].trim()}`;
+        info.trialName = `${plaintiffMatch[1].trim()}, PLAINTIFF, VS. ${defendantMatch[1].trim()}, DEFENDANTS.`;
         logger.info('✓ Extracted trial name (fallback):', info.trialName);
       }
     }

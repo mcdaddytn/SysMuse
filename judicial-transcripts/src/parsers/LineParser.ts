@@ -10,12 +10,18 @@ export class LineParser {
     /^\s*(THE COURT):\s*(.*)$/,
     // MR./MS./MRS./DR. NAME: pattern  
     /^\s*((?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+    // JUROR NAME: pattern
+    /^\s*(JUROR\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+    // COURT SECURITY OFFICER: pattern
+    /^\s*(COURT SECURITY OFFICER):\s*(.*)$/,
     // Q./A. pattern
     /^\s*(Q\.|A\.)\s+(.*)$/,
     // BY MR./MS. pattern
     /^\s*(BY\s+(?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
     // Other formal speakers (WITNESS, BAILIFF, etc.)
-    /^\s*((?:WITNESS|BAILIFF|COURT REPORTER|INTERPRETER)):\s*(.*)$/i
+    /^\s*((?:WITNESS|BAILIFF|COURT REPORTER|INTERPRETER)):\s*(.*)$/i,
+    // Generic capitalized speaker pattern (any capitalized word(s) followed by colon)
+    /^\s*([A-Z][A-Z\s]*?):\s*(.*)$/
   ];
   
   private readonly directivePattern = /^\s*\((.*?)\)\s*$/;

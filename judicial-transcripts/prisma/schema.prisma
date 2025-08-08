@@ -17,8 +17,8 @@ model Trial {
   name            String
   caseNumber      String    @unique // e.g., "2:19-CV-123-JRG"
   court           String    // e.g., "UNITED STATES DISTRICT COURT"
-  courtDivision   String?   // e.g., "EASTERN DISTRICT OF TEXAS"  
-  courtDistrict   String?   // e.g., "MARSHALL DIVISION"
+  courtDivision   String?   // e.g., "MARSHALL DIVISION"
+  courtDistrict   String?   // e.g., "EASTERN DISTRICT OF TEXAS"  
   totalPages      Int?      // Sum of pages from all sessions
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

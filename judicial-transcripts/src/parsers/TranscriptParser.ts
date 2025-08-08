@@ -1,153 +1,143 @@
-// src/parsers/phase1/TranscriptParser.ts
 // src/parsers/TranscriptParser.ts
 import { PrismaClient } from '@prisma/client';
-import * as fs from 'fs';
-import * as path from 'path';
-//import logger from '../../utils/logger';
-import logger from '../utils/logger';
-//gm: workaround (or can change tsconfig.json "noUnusedLocals": false)
-import { 
-  TranscriptConfig, 
-  SessionInfo,
-  TrialSummaryInfo,
-  AttorneyInfo
-} from '../types/config.types';
-//import { 
-//  TranscriptConfig, 
-//  ParsedLine, 
-//  ParsedPage, 
-//  SessionInfo,
-//  TrialSummaryInfo,
-//  AttorneyInfo
-//} from '../../types/config.types';
-import { SummaryPageParser } from './SummaryPageParser';
+import { TranscriptConfig, SessionInfo, TrialSummaryInfo, DocumentSection } from '../types/config.types';
+import { PageHeaderParser, PageHeaderInfo } from './PageHeaderParser';
 import { LineParser } from './LineParser';
-import { PageHeaderParser } from './PageHeaderParser';
+import { SummaryPageParser } from './SummaryPageParser';
+import logger from '../utils/logger';
+import fs from 'fs';
+import path from 'path';
+
+interface DirectoryStats {
+  totalFiles: number;
+  totalLines: number;
+  nonBlankLines: number;
+  totalPages: number;
+  errorFiles: string[];
+}
 
 export class TranscriptParser {
   private prisma: PrismaClient;
   private config: TranscriptConfig;
-  private trialId?: number;
-  private directoryStats: { totalLines: number; nonBlankLines: number } = { totalLines: 0, nonBlankLines: 0 }; // ADD THIS LINE
-  
-  constructor(config: TranscriptConfig) {
-    this.prisma = new PrismaClient();
+  private trialId: number | null = null;
+  private directoryStats: DirectoryStats = {
+    totalFiles: 0,
+    totalLines: 0,
+    nonBlankLines: 0,
+    totalPages: 0,
+    errorFiles: []
+  };
+  private currentDocumentSection: DocumentSection = 'UNKNOWN';
+  private proceedingsEncountered = false;
+  private certificationEncountered = false;
+
+  constructor(config: TranscriptConfig, prisma: PrismaClient) {
     this.config = config;
+    this.prisma = prisma;
   }
 
-  async parseDirectory(): Promise<void> {
-    const startTime = Date.now();
-    logger.info(`🚀 Starting Phase 1 parsing of directory: ${this.config.transcriptPath}`);
+  async parseDirectory(directoryPath: string): Promise<void> {
+    const directoryStartTime = Date.now();
+    logger.info(`🚀 Starting Phase 1 parsing of directory: ${directoryPath}`);
     
-    const files = this.getTranscriptFiles();
+    // Reset stats and state
+    this.directoryStats = {
+      totalFiles: 0,
+      totalLines: 0,
+      nonBlankLines: 0,
+      totalPages: 0,
+      errorFiles: []
+    };
+    this.currentDocumentSection = 'UNKNOWN';
+    this.proceedingsEncountered = false;
+    this.certificationEncountered = false;
+
+    const files = fs.readdirSync(directoryPath)
+      .filter(file => file.endsWith('.txt'))
+      .sort(this.sortTranscriptFiles);
+
     logger.info(`📁 Found ${files.length} transcript files to process`);
-    
-    // Reset directory stats
-    this.directoryStats = { totalLines: 0, nonBlankLines: 0 };
-    
-    for (let i = 0; i < files.length; i++) {
-      const filename = files[i];
-      logger.info(`\n📄 File ${i + 1}/${files.length}: ${filename}`);
-      await this.parseTranscriptFile(filename);
+
+    // Process files in order
+    for (const file of files) {
+      const filePath = path.join(directoryPath, file);
+      try {
+        await this.parseFile(filePath);
+        this.directoryStats.totalFiles++;
+      } catch (error) {
+        logger.error(`❌ Error processing file ${file}:`, error);
+        this.directoryStats.errorFiles.push(file);
+      }
     }
-    
-    const totalTime = (Date.now() - startTime) / 1000;
-    const directoryBlankLines = this.directoryStats.totalLines - this.directoryStats.nonBlankLines;
-    const directoryBlankPercentage = this.directoryStats.totalLines > 0 ? 
-      ((directoryBlankLines / this.directoryStats.totalLines) * 100).toFixed(1) : '0';
-    
-    // Get final database statistics
-    const totalLinesInDb = await this.prisma.line.count();
-    const blankLinesInDb = await this.prisma.line.count({
-      where: { isBlank: true }
+
+    // Calculate final trial totals and update trial record
+    if (this.trialId) {
+      await this.updateTrialTotals();
+    }
+
+    const directoryTime = (Date.now() - directoryStartTime) / 1000;
+    this.logDirectoryStats(directoryTime);
+  }
+
+  private async updateTrialTotals(): Promise<void> {
+    if (!this.trialId) return;
+
+    // Calculate total pages across all sessions
+    const sessions = await this.prisma.session.findMany({
+      where: { trialId: this.trialId },
+      select: { totalPages: true }
     });
-    const contentLinesInDb = totalLinesInDb - blankLinesInDb;
-    
-    logger.info(`\n🎉 PHASE 1 PARSING COMPLETED!`);
-    logger.info(`📁 Directory Summary:`);
-    logger.info(`   - Files processed: ${files.length}`);
-    logger.info(`   - Processing time: ${totalTime.toFixed(1)}s`);
-    logger.info(`📊 Line Statistics:`);
-    logger.info(`   - Total lines processed: ${this.directoryStats.totalLines.toLocaleString()}`);
-    logger.info(`   - Content lines: ${this.directoryStats.nonBlankLines.toLocaleString()}`);
-    logger.info(`   - Blank lines: ${directoryBlankLines.toLocaleString()} (${directoryBlankPercentage}%)`);
-    logger.info(`💾 Database Statistics:`);
-    logger.info(`   - Lines stored: ${totalLinesInDb.toLocaleString()}`);
-    logger.info(`   - Content lines stored: ${contentLinesInDb.toLocaleString()}`);
-    logger.info(`   - Blank lines stored: ${blankLinesInDb.toLocaleString()}`);
-    if (this.config.parsingOptions?.ignoreBlankLines) {
-      logger.info(`   ✅ Blank lines were filtered out as configured`);
-    }
+
+    const totalPages = sessions.reduce((sum, session) => sum + (session.totalPages || 0), 0);
+
+    // Update trial with total pages
+    await this.prisma.trial.update({
+      where: { id: this.trialId },
+      data: { totalPages }
+    });
+
+    logger.info(`✅ Updated trial totals: ${totalPages} pages across ${sessions.length} sessions`);
   }
 
-  private getTranscriptFiles(): string[] {
-    const files = fs.readdirSync(this.config.transcriptPath);
-    
-    if (this.config.format === 'pdf') {
-      return files.filter(f => f.endsWith('.pdf'));
-    } else {
-      return files.filter(f => f.endsWith('.txt'));
-    }
-  }
-
-  private sortFilesByDateAndSession(files: string[]): string[] {
-    return files.sort((a, b) => {
-      // Extract date from filename (assuming format includes date)
-      const dateA = this.extractDateFromFilename(a);
-      const dateB = this.extractDateFromFilename(b);
+  private sortTranscriptFiles(a: string, b: string): number {
+    // Extract date patterns and session types for proper ordering
+    const extractInfo = (filename: string) => {
+      const dateMatch = filename.match(/(\d{1,2})[_\-](\d{1,2})[_\-](\d{2,4})/);
+      const morningMatch = /morning|morn/i.test(filename);
+      const afternoonMatch = /afternoon|aft/i.test(filename);
       
-      if (dateA && dateB) {
-        const diff = dateA.getTime() - dateB.getTime();
-        if (diff !== 0) return diff;
+      let date = new Date();
+      if (dateMatch) {
+        const month = parseInt(dateMatch[1]);
+        const day = parseInt(dateMatch[2]);
+        const year = dateMatch[3].length === 2 ? 2000 + parseInt(dateMatch[3]) : parseInt(dateMatch[3]);
+        date = new Date(year, month - 1, day);
       }
       
-      // If same date, morning comes before afternoon
-      const isMorningA = /morning/i.test(a);
-      const isMorningB = /morning/i.test(b);
+      let sessionOrder = 2; // Default for other types
+      if (morningMatch) sessionOrder = 0;
+      else if (afternoonMatch) sessionOrder = 1;
       
-      if (isMorningA && !isMorningB) return -1;
-      if (!isMorningA && isMorningB) return 1;
-      
-      // Default alphabetical sort
-      return a.localeCompare(b);
-    });
-  }
+      return { date: date.getTime(), sessionOrder };
+    };
 
-  private extractDateFromFilename(filename: string): Date | null {
-    // Try to extract date from patterns like "10_1_20" or "10/1/20"
-    const dateMatch = filename.match(/(\d{1,2})[_\/](\d{1,2})[_\/](\d{2,4})/);
+    const aInfo = extractInfo(a);
+    const bInfo = extractInfo(b);
     
-    if (dateMatch) {
-      const month = parseInt(dateMatch[1]);
-      const day = parseInt(dateMatch[2]);
-      let year = parseInt(dateMatch[3]);
-      
-      // Convert 2-digit year to 4-digit
-      if (year < 100) {
-        year += 2000;
-      }
-      
-      return new Date(year, month - 1, day);
+    // Sort by date first, then by session type
+    if (aInfo.date !== bInfo.date) {
+      return aInfo.date - bInfo.date;
     }
-    
-    return null;
+    return aInfo.sessionOrder - bInfo.sessionOrder;
   }
 
-  private async parseTranscriptFile(filename: string): Promise<void> {
+  private async parseFile(filePath: string): Promise<void> {
+    const filename = path.basename(filePath);
     const fileStartTime = Date.now();
+    
     logger.info(`📄 Processing file: ${filename}`);
     
-    const filePath = path.join(this.config.transcriptPath, filename);
-    let content: string;
-    
-    if (this.config.format === 'pdf') {
-      logger.warn('PDF extraction not yet implemented');
-      return;
-    } else {
-      content = fs.readFileSync(filePath, 'utf-8');
-    }
-    
-    // Parse the transcript content
+    const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split(/\r?\n/);
     const pages = this.groupLinesIntoPages(lines);
     
@@ -172,6 +162,7 @@ export class TranscriptParser {
     // Track session statistics
     let sessionTotalLines = 0;
     let sessionNonBlankLines = 0;
+    let transcriptStartPage: number | undefined;
     
     // Parse and store pages with progress tracking
     logger.info(`   🔄 Processing ${pages.length} pages...`);
@@ -180,6 +171,11 @@ export class TranscriptParser {
       sessionTotalLines += pageStats.totalLines;
       sessionNonBlankLines += pageStats.nonBlankLines;
       
+      // Capture transcript start page from first page
+      if (i === 0 && pageStats.trialPageNumber) {
+        transcriptStartPage = pageStats.trialPageNumber;
+      }
+      
       // Show progress for large files
       if (pages.length > 50 && (i + 1) % 25 === 0) {
         const progress = ((i + 1) / pages.length * 100).toFixed(1);
@@ -187,16 +183,149 @@ export class TranscriptParser {
       }
     }
     
+    // Update session with calculated totals
+    await this.prisma.session.update({
+      where: { id: session.id },
+      data: {
+        totalPages: pages.length,
+        transcriptStartPage
+      }
+    });
+    
     const sessionBlankLines = sessionTotalLines - sessionNonBlankLines;
-    const blankPercentage = sessionTotalLines > 0 ? ((sessionBlankLines / sessionTotalLines) * 100).toFixed(1) : '0';
+    const blankPercentage = sessionTotalLines > 0 ? 
+      ((sessionBlankLines / sessionTotalLines) * 100).toFixed(1) : '0';
     const fileTime = (Date.now() - fileStartTime) / 1000;
     
     // Update directory stats
     this.directoryStats.totalLines += sessionTotalLines;
     this.directoryStats.nonBlankLines += sessionNonBlankLines;
+    this.directoryStats.totalPages += pages.length;
     
     logger.info(`   ✅ File completed in ${fileTime.toFixed(1)}s`);
     logger.info(`   📊 File stats: ${sessionTotalLines.toLocaleString()} total, ${sessionNonBlankLines.toLocaleString()} content, ${sessionBlankLines.toLocaleString()} blank (${blankPercentage}%)`);
+  }
+
+  private async parsePage(
+    pageLines: string[], 
+    sessionId: number, 
+    pageNumber: number
+  ): Promise<{ totalLines: number, nonBlankLines: number, trialPageNumber?: number }> {
+    const parser = new PageHeaderParser();
+    const lineParser = new LineParser();
+    
+    // Parse page header if present
+    const headerInfo = parser.parse(pageLines[0]);
+    const trialPageNumber = parser.parseTrialPageNumber(pageLines);
+    
+    // Determine document section
+    const detectedSection = parser.determineDocumentSection(pageLines);
+    this.updateDocumentSectionState(detectedSection, pageLines);
+    
+    // Use upsert for page to handle duplicates
+    const page = await this.prisma.page.upsert({
+      where: {
+        sessionId_pageNumber: {
+          sessionId,
+          pageNumber
+        }
+      },
+      update: {
+        documentSection: this.currentDocumentSection,
+        trialPageNumber,
+        pageId: headerInfo?.pageId,
+        headerText: headerInfo?.fullText
+      },
+      create: {
+        sessionId,
+        pageNumber,
+        documentSection: this.currentDocumentSection,
+        trialPageNumber,
+        pageId: headerInfo?.pageId,
+        headerText: headerInfo?.fullText
+      }
+    });
+    
+    // Clear existing lines for this page
+    await this.prisma.line.deleteMany({
+      where: { pageId: page.id }
+    });
+    
+    // BATCH PROCESSING: Prepare all lines first, filtering blanks
+    const linesToInsert = [];
+    let sequentialLineNumber = 1;
+    let totalLines = 0;
+    let blankLines = 0;
+    
+    for (let i = 0; i < pageLines.length; i++) {
+      const line = pageLines[i];
+      totalLines++;
+      
+      // Skip header lines
+      if (i === 0 && headerInfo) continue;
+      
+      const parsedLine = lineParser.parse(line);
+      
+      if (parsedLine) {
+        // Count blank lines but skip storing them if configured to ignore
+        if (parsedLine.isBlank) {
+          blankLines++;
+          if (this.config.parsingOptions?.ignoreBlankLines) {
+            continue; // Skip storing blank lines
+          }
+        }
+        
+        linesToInsert.push({
+          pageId: page.id,
+          lineNumber: sequentialLineNumber++,
+          timestamp: parsedLine.timestamp,
+          text: parsedLine.text,
+          speakerPrefix: parsedLine.speakerPrefix,
+          isBlank: parsedLine.isBlank
+        });
+      }
+    }
+    
+    // Batch insert all lines at once
+    if (linesToInsert.length > 0) {
+      await this.prisma.line.createMany({
+        data: linesToInsert
+      });
+    }
+    
+    const nonBlankLines = totalLines - blankLines;
+    
+    // Log progress every 10 pages or for first 5 pages
+    if (pageNumber % 10 === 0 || pageNumber <= 5) {
+      logger.info(`   Page ${pageNumber} [${this.currentDocumentSection}]: ${totalLines} total, ${nonBlankLines} content, ${blankLines} blank (stored: ${linesToInsert.length})`);
+    }
+    
+    return { totalLines, nonBlankLines, trialPageNumber: trialPageNumber || undefined };
+  }
+
+  private updateDocumentSectionState(detectedSection: DocumentSection, pageLines: string[]): void {
+    // Check for section transitions based on detected content
+    if (detectedSection === 'PROCEEDINGS' && !this.proceedingsEncountered) {
+      this.currentDocumentSection = 'PROCEEDINGS';
+      this.proceedingsEncountered = true;
+      logger.info(`   🔄 Document section changed to: PROCEEDINGS`);
+    } else if (detectedSection === 'CERTIFICATION' && !this.certificationEncountered) {
+      this.currentDocumentSection = 'CERTIFICATION';
+      this.certificationEncountered = true;
+      logger.info(`   🔄 Document section changed to: CERTIFICATION`);
+    } else if (!this.proceedingsEncountered && !this.certificationEncountered) {
+      // Before proceedings encountered, assume we're in SUMMARY (if we have valid header)
+      if (this.currentDocumentSection === 'UNKNOWN') {
+        // Check if this looks like a valid first page
+        const hasValidHeader = pageLines.some(line => 
+          /Case\s+[\d:\-cv]+\s+Document\s+\d+/.test(line)
+        );
+        if (hasValidHeader) {
+          this.currentDocumentSection = 'SUMMARY';
+          logger.info(`   🔄 Document section set to: SUMMARY`);
+        }
+      }
+    }
   }
 
   private groupLinesIntoPages(lines: string[]): string[][] {
@@ -247,7 +376,7 @@ export class TranscriptParser {
       sessionType = 'JURY_VERDICT';
     }
     
-    // Try to extract document number from first page
+    // Try to extract document number from first page header
     let documentNumber: number | undefined;
     for (const line of firstPage) {
       const match = line.match(/Document\s+(\d+)/);
@@ -263,6 +392,33 @@ export class TranscriptParser {
       fileName: filename,
       documentNumber
     };
+  }
+
+  private extractDateFromFilename(filename: string): Date | null {
+    // Try various date patterns in filename
+    const patterns = [
+      /(\d{1,2})[_\-](\d{1,2})[_\-](\d{2,4})/,  // MM_DD_YY or MM-DD-YYYY
+      /(\d{4})[_\-](\d{1,2})[_\-](\d{1,2})/,    // YYYY_MM_DD
+    ];
+    
+    for (const pattern of patterns) {
+      const match = filename.match(pattern);
+      if (match) {
+        const [, first, second, third] = match;
+        
+        // Determine if it's MM/DD/YY or YYYY/MM/DD format
+        if (first.length === 4) {
+          // YYYY/MM/DD format
+          return new Date(parseInt(first), parseInt(second) - 1, parseInt(third));
+        } else {
+          // MM/DD/YY format
+          const year = third.length === 2 ? 2000 + parseInt(third) : parseInt(third);
+          return new Date(year, parseInt(first) - 1, parseInt(second));
+        }
+      }
+    }
+    
+    return null;
   }
 
   private async parseSummaryPages(pages: string[][]): Promise<TrialSummaryInfo | null> {
@@ -309,51 +465,41 @@ export class TranscriptParser {
       });
     }
     
-    // Create attorneys and law firms
-    await this.createAttorneys(summaryInfo.plaintiffAttorneys, 'PLAINTIFF', trial.id);
-    await this.createAttorneys(summaryInfo.defendantAttorneys, 'DEFENDANT', trial.id);
-    
-    // Create court reporter if present
+    // Create court reporter
     if (summaryInfo.courtReporter) {
-      let addressId: number | null = null;
-      
-      if (summaryInfo.courtReporter.address) {
-        const address = await this.prisma.address.create({
-          data: summaryInfo.courtReporter.address
-        });
-        addressId = address.id;
-      }
-      
       await this.prisma.courtReporter.upsert({
         where: { trialId: trial.id },
         update: {
           name: summaryInfo.courtReporter.name,
           credentials: summaryInfo.courtReporter.credentials,
-          phone: summaryInfo.courtReporter.phone,
-          addressId
+          phone: summaryInfo.courtReporter.phone
         },
         create: {
           trialId: trial.id,
           name: summaryInfo.courtReporter.name,
           credentials: summaryInfo.courtReporter.credentials,
-          phone: summaryInfo.courtReporter.phone,
-          addressId
+          phone: summaryInfo.courtReporter.phone
         }
       });
     }
+    
+    // Create attorneys
+    await this.createAttorneys(trial.id, summaryInfo.plaintiffAttorneys, 'PLAINTIFF');
+    await this.createAttorneys(trial.id, summaryInfo.defendantAttorneys, 'DEFENDANT');
   }
 
   private async createAttorneys(
-    attorneys: AttorneyInfo[], 
-    role: 'PLAINTIFF' | 'DEFENDANT',
-    trialId: number
+    trialId: number, 
+    attorneyInfos: any[], 
+    role: 'PLAINTIFF' | 'DEFENDANT'
   ): Promise<void> {
-    for (const attorneyInfo of attorneys) {
-      // Create or get attorney
+    for (const attorneyInfo of attorneyInfos) {
+      // First try to find existing attorney by name
       let attorney = await this.prisma.attorney.findFirst({
         where: { name: attorneyInfo.name }
       });
       
+      // If not found, create new attorney
       if (!attorney) {
         attorney = await this.prisma.attorney.create({
           data: { name: attorneyInfo.name }
@@ -436,130 +582,29 @@ export class TranscriptParser {
       }
     });
   }
-  
-  private async debugSummaryParsing(pages: string[][]): Promise<void> {
-    logger.info('=== DEBUG: Summary Parsing ===');
-    logger.info(`Total pages for summary: ${pages.length}`);
-    
-    if (pages.length > 0) {
-      logger.info('First page lines count:', pages[0].length);
-      logger.info('First page first 10 lines:');
-      pages[0].slice(0, 10).forEach((line, i) => {
-        logger.info(`Line ${i}: "${line}"`);
-      });
-    }
-    
-    if (pages.length > 1) {
-      logger.info('Second page lines count:', pages[1].length);
-      logger.info('Second page first 10 lines:');
-      pages[1].slice(0, 10).forEach((line, i) => {
-        logger.info(`Line ${i}: "${line}"`);
-      });
-    }
-    
-    // Test the parser
-    const parser = new SummaryPageParser();
-    const result = parser.parse(pages);
-    
-    if (result) {
-      logger.info('Summary parsing SUCCESS:', JSON.stringify(result, null, 2));
-    } else {
-      logger.error('Summary parsing FAILED - no result returned');
-    }
-  }  
 
-  private async parsePage(
-    pageLines: string[], 
-    sessionId: number, 
-    pageNumber: number
-  ): Promise<{ totalLines: number, nonBlankLines: number }> {
-    const parser = new PageHeaderParser();
-    const lineParser = new LineParser();
+  private logDirectoryStats(processingTime: number): void {
+    const { totalFiles, totalLines, nonBlankLines, totalPages, errorFiles } = this.directoryStats;
+    const blankLines = totalLines - nonBlankLines;
+    const blankPercentage = totalLines > 0 ? ((blankLines / totalLines) * 100).toFixed(1) : '0';
     
-    // Parse page header if present
-    const headerInfo = parser.parse(pageLines[0]);
+    logger.info('\n' + '='.repeat(60));
+    logger.info('📊 PHASE 1 PARSING COMPLETED');
+    logger.info('='.repeat(60));
+    logger.info(`⏱️  Total processing time: ${processingTime.toFixed(1)} seconds`);
+    logger.info(`📁 Files processed: ${totalFiles}`);
+    logger.info(`📄 Pages processed: ${totalPages.toLocaleString()}`);
+    logger.info(`📝 Lines processed: ${totalLines.toLocaleString()}`);
+    logger.info(`✅ Content lines: ${nonBlankLines.toLocaleString()}`);
+    logger.info(`⚪ Blank lines: ${blankLines.toLocaleString()} (${blankPercentage}%)`);
     
-    // Use upsert for page to handle duplicates
-    const page = await this.prisma.page.upsert({
-      where: {
-        sessionId_pageNumber: {
-          sessionId,
-          pageNumber
-        }
-      },
-      update: {
-        totalSessionPages: headerInfo?.totalPages,
-        transcriptPageNumber: headerInfo?.transcriptPageNumber,
-        documentNumber: headerInfo?.documentNumber,
-        pageId: headerInfo?.pageId,
-        headerText: headerInfo?.fullText
-      },
-      create: {
-        sessionId,
-        pageNumber,
-        totalSessionPages: headerInfo?.totalPages,
-        transcriptPageNumber: headerInfo?.transcriptPageNumber,
-        documentNumber: headerInfo?.documentNumber,
-        pageId: headerInfo?.pageId,
-        headerText: headerInfo?.fullText
-      }
-    });
-    
-    // Clear existing lines for this page
-    await this.prisma.line.deleteMany({
-      where: { pageId: page.id }
-    });
-    
-    // BATCH PROCESSING: Prepare all lines first, filtering blanks
-    const linesToInsert = [];
-    let sequentialLineNumber = 1;
-    let totalLines = 0;
-    let blankLines = 0;
-    
-    for (let i = 0; i < pageLines.length; i++) {
-      const line = pageLines[i];
-      totalLines++;
-      
-      // Skip header lines
-      if (i === 0 && headerInfo) continue;
-      
-      const parsedLine = lineParser.parse(line);
-      
-      if (parsedLine) {
-        // Count blank lines but skip storing them if configured to ignore
-        if (parsedLine.isBlank) {
-          blankLines++;
-          if (this.config.parsingOptions?.ignoreBlankLines) {
-            continue; // Skip storing blank lines
-          }
-        }
-        
-        linesToInsert.push({
-          pageId: page.id,
-          lineNumber: sequentialLineNumber++,
-          timestamp: parsedLine.timestamp,
-          text: parsedLine.text,
-          speakerPrefix: parsedLine.speakerPrefix,
-          isBlank: parsedLine.isBlank
-        });
-      }
+    if (errorFiles.length > 0) {
+      logger.warn(`⚠️  Files with errors: ${errorFiles.length}`);
+      errorFiles.forEach(file => logger.warn(`   - ${file}`));
     }
     
-    // Batch insert all lines at once
-    if (linesToInsert.length > 0) {
-      await this.prisma.line.createMany({
-        data: linesToInsert
-      });
-    }
-    
-    const nonBlankLines = totalLines - blankLines;
-    
-    // Log progress every 10 pages or for first 5 pages
-    if (pageNumber % 10 === 0 || pageNumber <= 5) {
-      logger.info(`   Page ${pageNumber}: ${totalLines} total, ${nonBlankLines} content, ${blankLines} blank (stored: ${linesToInsert.length})`);
-    }
-    
-    return { totalLines, nonBlankLines };
+    const avgLinesPerSecond = processingTime > 0 ? (totalLines / processingTime).toFixed(0) : '0';
+    logger.info(`🚀 Processing speed: ${avgLinesPerSecond} lines/second`);
+    logger.info('='.repeat(60));
   }
-
 }

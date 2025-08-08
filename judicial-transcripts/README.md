@@ -274,11 +274,21 @@ npm run parse parse --config "./config/example-trial-config.json" --all
 # Override directory in config:
 npm run parse parse --config "./config/example-trial-config.json" --directory "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix\\pdf-text-extract" --phase1
 
+# config is picked up with these npx commands, not sure if phase overrides whats in config
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config.json" --phase1
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config.json" --phase2
+
+# changed to (still does not work config option from npm version, parse subcommand now extract):
+npx ts-node src/cli/parse.ts extract --config "./config/example-trial-config.json" --phase1
+
 # to reset databae:
 npm run parse reset --confirm
 npx ts-node src/cli/parse.ts reset --confirm
 
 Then 
+#if necessary with changes
+npm run prisma:generate
+# always to push schema after deleting db
 npx prisma db push
 
 
@@ -319,7 +329,7 @@ Solution: Run npm run build to see specific errors, fix import paths
 
 ## this should be the latest, copy to project-structure.md
 judicial-transcripts/
-¦
+ï¿½
 +-- .env.example                    # Environment variables template
 +-- .env.test                       # Test environment configuration
 +-- .eslintrc.json                  # ESLint configuration
@@ -331,72 +341,72 @@ judicial-transcripts/
 +-- README.md                       # Project documentation
 +-- tsconfig.json                   # TypeScript configuration
 +-- project-structure.md            # This file
-¦
+ï¿½
 +-- config/                         # Configuration files
-¦   +-- default-config.json        # Default parsing configuration
-¦   +-- example-trial-config.json  # Example trial configuration
-¦
+ï¿½   +-- default-config.json        # Default parsing configuration
+ï¿½   +-- example-trial-config.json  # Example trial configuration
+ï¿½
 +-- prisma/                         # Database schema
-¦   +-- schema.prisma              # Prisma ORM schema definition
-¦
+ï¿½   +-- schema.prisma              # Prisma ORM schema definition
+ï¿½
 +-- scripts/                        # Utility scripts
-¦   +-- process-trial.ts           # Standalone trial processing script
-¦   +-- setup.sh                   # System setup script
-¦
+ï¿½   +-- process-trial.ts           # Standalone trial processing script
+ï¿½   +-- setup.sh                   # System setup script
+ï¿½
 +-- seed-data/                     # Database seed data
-¦   +-- court-directives.json     # Court directive types
-¦   +-- search-patterns.json      # Search pattern definitions
-¦   +-- system-config.json        # System configuration parameters
-¦
+ï¿½   +-- court-directives.json     # Court directive types
+ï¿½   +-- search-patterns.json      # Search pattern definitions
+ï¿½   +-- system-config.json        # System configuration parameters
+ï¿½
 +-- src/                           # Source code
     +-- api/                       # REST API
-    ¦   +-- server.ts             # Express server and endpoints
-    ¦
+    ï¿½   +-- server.ts             # Express server and endpoints
+    ï¿½
     +-- cli/                       # Command line interface
-    ¦   +-- parse.ts              # CLI commands for parsing
-    ¦
+    ï¿½   +-- parse.ts              # CLI commands for parsing
+    ï¿½
     +-- config/                    # Configuration modules
-    ¦   +-- patterns.ts           # Parsing patterns and regex
-    ¦
+    ï¿½   +-- patterns.ts           # Parsing patterns and regex
+    ï¿½
     +-- parsers/                   # Transcript parsers (all phases)
-    ¦   +-- LineParser.ts         # Parse individual lines
-    ¦   +-- PageHeaderParser.ts   # Parse page headers
-    ¦   +-- Phase2Processor.ts    # Phase 2: Line grouping
-    ¦   +-- Phase3Processor.ts    # Phase 3: Section markers
-    ¦   +-- SummaryPageParser.ts  # Parse summary pages
-    ¦   +-- TranscriptParser.ts   # Phase 1: Main parser
-    ¦
+    ï¿½   +-- LineParser.ts         # Parse individual lines
+    ï¿½   +-- PageHeaderParser.ts   # Parse page headers
+    ï¿½   +-- Phase2Processor.ts    # Phase 2: Line grouping
+    ï¿½   +-- Phase3Processor.ts    # Phase 3: Section markers
+    ï¿½   +-- SummaryPageParser.ts  # Parse summary pages
+    ï¿½   +-- TranscriptParser.ts   # Phase 1: Main parser
+    ï¿½
     +-- seed/                      # Database seeding
-    ¦   +-- seedDatabase.ts       # Seed script
-    ¦
+    ï¿½   +-- seedDatabase.ts       # Seed script
+    ï¿½
     +-- services/                  # Business logic services
-    ¦   +-- ElasticSearchService.ts    # ElasticSearch integration
-    ¦   +-- SearchService.ts           # Search functionality
-    ¦   +-- SynopsisGenerator.ts       # AI synopsis generation
-    ¦   +-- TranscriptExportService.ts # Export transcripts
-    ¦
+    ï¿½   +-- ElasticSearchService.ts    # ElasticSearch integration
+    ï¿½   +-- SearchService.ts           # Search functionality
+    ï¿½   +-- SynopsisGenerator.ts       # AI synopsis generation
+    ï¿½   +-- TranscriptExportService.ts # Export transcripts
+    ï¿½
     +-- tests/                     # All test files (simplified structure)
-    ¦   +-- LineParser.test.ts    # Line parser tests
-    ¦   +-- SearchService.test.ts # Search service tests
-    ¦   +-- TranscriptParser.test.ts # Transcript Parser tests
-    ¦   +-- setup.ts              # Test setup and mocks
-    ¦
+    ï¿½   +-- LineParser.test.ts    # Line parser tests
+    ï¿½   +-- SearchService.test.ts # Search service tests
+    ï¿½   +-- TranscriptParser.test.ts # Transcript Parser tests
+    ï¿½   +-- setup.ts              # Test setup and mocks
+    ï¿½
     +-- types/                     # TypeScript type definitions
-    ¦   +-- config.types.ts       # Configuration types
-    ¦   +-- patterns.types.ts     # Pattern types
-    ¦
+    ï¿½   +-- config.types.ts       # Configuration types
+    ï¿½   +-- patterns.types.ts     # Pattern types
+    ï¿½
     +-- utils/                     # Utility functions
-    ¦   +-- file-helpers.ts       # File operations
-    ¦   +-- logger.ts             # Winston logger
-    ¦   +-- validation.ts         # Input validation
-    ¦
+    ï¿½   +-- file-helpers.ts       # File operations
+    ï¿½   +-- logger.ts             # Winston logger
+    ï¿½   +-- validation.ts         # Input validation
+    ï¿½
     +-- index.ts                   # Main entry point
     
 
 
 ## almost, but added transcript parser test above
 judicial-transcripts/
-¦
+ï¿½
 +-- .env.example                    # Environment variables template
 +-- .env.test                       # Test environment configuration
 +-- .eslintrc.json                  # ESLint configuration
@@ -408,64 +418,64 @@ judicial-transcripts/
 +-- README.md                       # Project documentation
 +-- tsconfig.json                   # TypeScript configuration
 +-- project-structure.md            # This file
-¦
+ï¿½
 +-- config/                         # Configuration files
-¦   +-- default-config.json        # Default parsing configuration
-¦   +-- example-trial-config.json  # Example trial configuration
-¦
+ï¿½   +-- default-config.json        # Default parsing configuration
+ï¿½   +-- example-trial-config.json  # Example trial configuration
+ï¿½
 +-- prisma/                         # Database schema
-¦   +-- schema.prisma              # Prisma ORM schema definition
-¦
+ï¿½   +-- schema.prisma              # Prisma ORM schema definition
+ï¿½
 +-- scripts/                        # Utility scripts
-¦   +-- process-trial.ts           # Standalone trial processing script
-¦   +-- setup.sh                   # System setup script
-¦
+ï¿½   +-- process-trial.ts           # Standalone trial processing script
+ï¿½   +-- setup.sh                   # System setup script
+ï¿½
 +-- seed-data/                     # Database seed data
-¦   +-- court-directives.json     # Court directive types
-¦   +-- search-patterns.json      # Search pattern definitions
-¦   +-- system-config.json        # System configuration parameters
-¦
+ï¿½   +-- court-directives.json     # Court directive types
+ï¿½   +-- search-patterns.json      # Search pattern definitions
+ï¿½   +-- system-config.json        # System configuration parameters
+ï¿½
 +-- src/                           # Source code
     +-- api/                       # REST API
-    ¦   +-- server.ts             # Express server and endpoints
-    ¦
+    ï¿½   +-- server.ts             # Express server and endpoints
+    ï¿½
     +-- cli/                       # Command line interface
-    ¦   +-- parse.ts              # CLI commands for parsing
-    ¦
+    ï¿½   +-- parse.ts              # CLI commands for parsing
+    ï¿½
     +-- config/                    # Configuration modules
-    ¦   +-- patterns.ts           # Parsing patterns and regex
-    ¦
+    ï¿½   +-- patterns.ts           # Parsing patterns and regex
+    ï¿½
     +-- parsers/                   # Transcript parsers (all phases)
-    ¦   +-- LineParser.ts         # Parse individual lines
-    ¦   +-- PageHeaderParser.ts   # Parse page headers
-    ¦   +-- Phase2Processor.ts    # Phase 2: Line grouping
-    ¦   +-- Phase3Processor.ts    # Phase 3: Section markers
-    ¦   +-- SummaryPageParser.ts  # Parse summary pages
-    ¦   +-- TranscriptParser.ts   # Phase 1: Main parser
-    ¦
+    ï¿½   +-- LineParser.ts         # Parse individual lines
+    ï¿½   +-- PageHeaderParser.ts   # Parse page headers
+    ï¿½   +-- Phase2Processor.ts    # Phase 2: Line grouping
+    ï¿½   +-- Phase3Processor.ts    # Phase 3: Section markers
+    ï¿½   +-- SummaryPageParser.ts  # Parse summary pages
+    ï¿½   +-- TranscriptParser.ts   # Phase 1: Main parser
+    ï¿½
     +-- seed/                      # Database seeding
-    ¦   +-- seedDatabase.ts       # Seed script
-    ¦
+    ï¿½   +-- seedDatabase.ts       # Seed script
+    ï¿½
     +-- services/                  # Business logic services
-    ¦   +-- ElasticSearchService.ts    # ElasticSearch integration
-    ¦   +-- SearchService.ts           # Search functionality
-    ¦   +-- SynopsisGenerator.ts       # AI synopsis generation
-    ¦   +-- TranscriptExportService.ts # Export transcripts
-    ¦
+    ï¿½   +-- ElasticSearchService.ts    # ElasticSearch integration
+    ï¿½   +-- SearchService.ts           # Search functionality
+    ï¿½   +-- SynopsisGenerator.ts       # AI synopsis generation
+    ï¿½   +-- TranscriptExportService.ts # Export transcripts
+    ï¿½
     +-- tests/                     # All test files (simplified structure)
-    ¦   +-- LineParser.test.ts    # Line parser tests
-    ¦   +-- SearchService.test.ts # Search service tests
-    ¦   +-- setup.ts              # Test setup and mocks
-    ¦
+    ï¿½   +-- LineParser.test.ts    # Line parser tests
+    ï¿½   +-- SearchService.test.ts # Search service tests
+    ï¿½   +-- setup.ts              # Test setup and mocks
+    ï¿½
     +-- types/                     # TypeScript type definitions
-    ¦   +-- config.types.ts       # Configuration types
-    ¦   +-- patterns.types.ts     # Pattern types
-    ¦
+    ï¿½   +-- config.types.ts       # Configuration types
+    ï¿½   +-- patterns.types.ts     # Pattern types
+    ï¿½
     +-- utils/                     # Utility functions
-    ¦   +-- file-helpers.ts       # File operations
-    ¦   +-- logger.ts             # Winston logger
-    ¦   +-- validation.ts         # Input validation
-    ¦
+    ï¿½   +-- file-helpers.ts       # File operations
+    ï¿½   +-- logger.ts             # Winston logger
+    ï¿½   +-- validation.ts         # Input validation
+    ï¿½
     +-- index.ts                   # Main entry point
     
 
@@ -477,23 +487,23 @@ judicial-transcripts/
 +-- exports/            (created)
 +-- logs/              (created)
 +-- prisma/
-¦   +-- schema.prisma  (added)
+ï¿½   +-- schema.prisma  (added)
 +-- scripts/
 +-- seed-data/
 +-- src/
-¦   +-- __tests__/     (renamed from tests/)
-¦   ¦   +-- parsers/   (created)
-¦   ¦   +-- services/  (created)
-¦   ¦   +-- setup.ts
-¦   +-- api/
-¦   +-- cli/
-¦   +-- config/
-¦   +-- parsers/       (all parsers here)
-¦   +-- seed/
-¦   +-- services/
-¦   +-- types/
-¦   +-- utils/
-¦   +-- index.ts       (added)
+ï¿½   +-- __tests__/     (renamed from tests/)
+ï¿½   ï¿½   +-- parsers/   (created)
+ï¿½   ï¿½   +-- services/  (created)
+ï¿½   ï¿½   +-- setup.ts
+ï¿½   +-- api/
+ï¿½   +-- cli/
+ï¿½   +-- config/
+ï¿½   +-- parsers/       (all parsers here)
+ï¿½   +-- seed/
+ï¿½   +-- services/
+ï¿½   +-- types/
+ï¿½   +-- utils/
+ï¿½   +-- index.ts       (added)
 +-- temp/              (created)
 +-- transcripts/       (created)
 +-- uploads/           (created)

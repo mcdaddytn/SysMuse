@@ -1,4 +1,4 @@
-// src/utils/logger.ts
+// FIRST FIX: src/utils/logger.ts - Fix Winston logging format
 import winston from 'winston';
 
 const logLevel = process.env.LOG_LEVEL || 'info';
@@ -10,13 +10,14 @@ const logger = winston.createLogger({
       format: 'YYYY-MM-DD HH:mm:ss'
     }),
     winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json(),
-    winston.format.colorize(),
     winston.format.printf(({ timestamp, level, message, ...metadata }) => {
+      // Fix: Use direct string concatenation instead of template literals with objects
       let msg = `${timestamp} [${level}]: ${message}`;
-      if (Object.keys(metadata).length > 0) {
-        msg += ` ${JSON.stringify(metadata)}`;
+      // Only add metadata if it exists and is not just timestamp
+      const cleanMetadata = { ...metadata };
+      delete cleanMetadata.timestamp;
+      if (Object.keys(cleanMetadata).length > 0) {
+        msg += ` ${JSON.stringify(cleanMetadata)}`;
       }
       return msg;
     })
@@ -25,7 +26,10 @@ const logger = winston.createLogger({
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.simple()
+        winston.format.printf(({ timestamp, level, message, ...metadata }) => {
+          // Clean format for console - no metadata serialization issues
+          return `${timestamp} [${level}]: ${message}`;
+        })
       )
     }),
     new winston.transports.File({ 
@@ -39,3 +43,4 @@ const logger = winston.createLogger({
 });
 
 export default logger;
+

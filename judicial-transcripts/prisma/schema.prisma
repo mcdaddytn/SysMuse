@@ -16,8 +16,9 @@ model Trial {
   id              Int       @id @default(autoincrement())
   name            String
   caseNumber      String    @unique // e.g., "2:19-CV-123-JRG"
-  court           String
-  courtDivision   String?
+  court           String    // e.g., "UNITED STATES DISTRICT COURT"
+  courtDivision   String?   // e.g., "EASTERN DISTRICT OF TEXAS"  
+  totalPages      Int?      // Sum of pages from all sessions
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
@@ -64,16 +65,17 @@ model CourtReporter {
 // ==================== Session Management ====================
 
 model Session {
-  id              Int       @id @default(autoincrement())
-  trialId         Int
-  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  sessionDate     DateTime
-  sessionType     SessionType
-  documentNumber  Int?
-  fileName        String?
-  totalPages      Int?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  Int       @id @default(autoincrement())
+  trialId             Int
+  trial               Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  sessionDate         DateTime
+  sessionType         SessionType
+  documentNumber      Int?      // Moved from Page entity
+  fileName            String?
+  totalPages          Int?      // Total pages in this session
+  transcriptStartPage Int?      // First page number within entire trial
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   
   pages           Page[]
   trialEvents     TrialEvent[]
@@ -91,23 +93,32 @@ enum SessionType {
   OTHER
 }
 
+// ==================== Document Sections ====================
+
+enum DocumentSection {
+  SUMMARY
+  PROCEEDINGS  
+  CERTIFICATION
+  UNKNOWN
+}
+
 // ==================== Page and Line Management ====================
 
 model Page {
-  id              Int       @id @default(autoincrement())
-  sessionId       Int
-  session         Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  pageNumber      Int       // Page number within session
-  totalSessionPages Int?    // Total pages in session
-  transcriptPageNumber Int? // Page number across entire trial
-  documentNumber  Int?
-  pageId          String?   // e.g., "PageID #: 18741"
-  headerText      String?
-  createdAt       DateTime  @default(now())
+  id                Int             @id @default(autoincrement())
+  sessionId         Int
+  session           Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  pageNumber        Int             // Page number within session
+  documentSection   DocumentSection @default(UNKNOWN) // New field
+  trialPageNumber   Int?            // Page number within entire trial (renamed from transcriptPageNumber)
+  pageId            String?         // e.g., "18337" (parsed from PageID #: 18337)
+  headerText        String?         // Full page header text
+  createdAt         DateTime        @default(now())
   
   lines           Line[]
   
   @@index([sessionId, pageNumber])
+  @@index([documentSection]) // New index for section queries
   @@unique([sessionId, pageNumber])
 }
 
@@ -280,20 +291,42 @@ model StatementEvent {
   speakerType     SpeakerType
   speakerName     String?
   
-  // Specific statement types
-  witnessStatement WitnessStatementEvent?
+  // Polymorphic relations
   attorneyStatement AttorneyStatementEvent?
-  courtStatement  CourtStatementEvent?
+  courtStatement    CourtStatementEvent?
+  witnessStatement  WitnessStatementEvent?
+  
+  @@index([speakerType])
 }
 
 enum SpeakerType {
-  JUDGE
-  PLAINTIFF_ATTORNEY
-  DEFENDANT_ATTORNEY
-  PLAINTIFF_WITNESS
-  DEFENDANT_WITNESS
-  COURT_OFFICER
-  CLERK
+  ATTORNEY
+  COURT
+  WITNESS
+  COURT_REPORTER
+  BAILIFF
+  OTHER
+}
+
+model AttorneyStatementEvent {
+  id              Int       @id @default(autoincrement())
+  statementId     Int       @unique
+  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  attorneyId      Int?
+  attorney        Attorney? @relation(fields: [attorneyId], references: [id], onDelete: SetNull)
+  statementType   AttorneyStatementType?
+  
+  @@index([attorneyId])
+}
+
+enum AttorneyStatementType {
+  DIRECT_EXAMINATION
+  CROSS_EXAMINATION
+  REDIRECT_EXAMINATION
+  RECROSS_EXAMINATION
+  OPENING_STATEMENT
+  CLOSING_ARGUMENT
+  OBJECTION
   OTHER
 }
 
@@ -306,16 +339,6 @@ model WitnessStatementEvent {
   examinationType ExaminationType?
   
   @@index([witnessId])
-}
-
-model AttorneyStatementEvent {
-  id              Int       @id @default(autoincrement())
-  statementId     Int       @unique
-  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
-  attorneyId      Int?
-  attorney        Attorney? @relation(fields: [attorneyId], references: [id], onDelete: SetNull)
-  
-  @@index([attorneyId])
 }
 
 model CourtStatementEvent {
@@ -443,15 +466,18 @@ model SystemConfig {
   @@index([category])
 }
 
+// ==================== Search and Pattern Management ====================
+
 model SearchPattern {
   id              Int       @id @default(autoincrement())
-  patternType     String    // e.g., "objection_start", "objection_end"
-  pattern         String    // The search pattern
-  category        String    // e.g., "objection", "witness_call"
+  patternType     String    // e.g., "JURY_INSTRUCTION", "OBJECTION"
+  pattern         String    // Regular expression or search string
+  category        String    // e.g., "COURT_DIRECTIVE", "MARKER"
   priority        Int       @default(0)
   isActive        Boolean   @default(true)
-  metadata        Json?     // Additional pattern-specific data
+  metadata        Json?     // Additional pattern configuration
   createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   
   @@index([patternType, isActive])
   @@index([category])

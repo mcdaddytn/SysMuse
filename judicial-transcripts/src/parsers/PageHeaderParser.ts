@@ -78,10 +78,10 @@ export class PageHeaderParser {
     const nonBlankLines = pageLines.filter(line => line.trim() !== '');
     
     // Debug logging
-    console.log(`DEBUG: Page has ${nonBlankLines.length} non-blank lines`);
-    if (nonBlankLines.length >= 3) {
-      console.log(`DEBUG: Third line is: "${nonBlankLines[2].trim()}"`);
-    }
+    //console.log(`DEBUG: Page has ${nonBlankLines.length} non-blank lines`);
+    //if (nonBlankLines.length >= 3) {
+    //  console.log(`DEBUG: Third line is: "${nonBlankLines[2].trim()}"`);
+    //}
     
     // We need at least 3 non-blank lines (header, page number, content)
     if (nonBlankLines.length < 3) {
@@ -120,7 +120,7 @@ export class PageHeaderParser {
       }
     }
     
-    console.log('DEBUG: No section marker found, returning UNKNOWN');
+    //console.log('DEBUG: No section marker found, returning UNKNOWN');
     return 'UNKNOWN';
   }
 }

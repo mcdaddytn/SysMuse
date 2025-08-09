@@ -1,5 +1,5 @@
 // src/parsers/Phase2Processor.ts
-// Enhanced Phase 2 Processor with strict directive parsing and witness state management
+// Enhanced Phase 2 Processor with better statement parsing and duration calculation
 
 import { PrismaClient } from '@prisma/client';
 import { TranscriptConfig, ParsingContext } from '../types/config.types';
@@ -61,11 +61,16 @@ export class Phase2Processor {
     courtDirectiveStart: /^\s*\(\s*(.+?)(?:\)|$)/,
     courtDirectiveFull: /^\s*\((.+)\)\s*$/,
     
-    // Speaker patterns
-    speakerPrefix: /^([A-Z][A-Z\s\.,']+?):\s*/,
+    // Speaker patterns - CRITICAL for identifying statements
+    // After timestamp and line number, look for capitalized text followed by colon
+    // Examples: "THE COURT:", "MR. LAMBRIANAKOS:", "COURT SECURITY OFFICER:"
+    speakerPrefix: /^\s*([A-Z][A-Z\s\.,'-]+?):\s*/,
+    
+    // Q/A patterns - special case for witness testimony
     qaPrefix: /^\s*(Q\.|A\.)\s+/,
+    
+    // Special patterns
     byAttorneyInline: /^\s*\(By\s+(Mr\.|Ms\.|Mrs\.)\s+([A-Za-z]+)\)\s*/i,
-    theWitness: /^\s*THE\s+WITNESS:/i,
     
     // Examination types (standalone lines)
     examinationStandalone: /^\s*(DIRECT|CROSS|REDIRECT|RECROSS)[\s\-]?EXAMINATION\s*(CONTINUED)?\s*$/i,
@@ -74,16 +79,7 @@ export class Phase2Processor {
     // Witness patterns (name lines)
     witnessName: /^([A-Z][A-Z\s,\.]+?),?\s+(PLAINTIFF'S|PLAINTIFF|DEFENDANTS?'|DEFENDANTS?)\s+WITNESS/i,
     witnessSworn: /\b(PREVIOUSLY\s+)?SWORN\s*$/i,
-    witnessPhD: /\bPH\.?D\.?\b/i,
-    
-    // Known speaker names
-    knownCourtSpeakers: [
-      'THE COURT',
-      'COURT SECURITY OFFICER',
-      'THE CLERK',
-      'COURT REPORTER',
-      'THE BAILIFF'
-    ]
+    witnessPhD: /\bPH\.?D\.?\b/i
   };
   
   constructor(config: TranscriptConfig) {
@@ -231,12 +227,39 @@ export class Phase2Processor {
       currentTrialId: trialId
     };
     
+    let totalLinesProcessed = 0;
+    let linesWithSpeakers = 0;
+    
     for (const page of pages) {
       logger.debug(`Processing page ${page.pageNumber} with ${page.lines?.length || 0} lines`);
       
       for (let i = 0; i < page.lines.length; i++) {
         const line = page.lines[i];
-        if (!line || line.isBlank) continue;
+        if (!line) continue;
+        
+        totalLinesProcessed++;
+        
+        // Log first 20 lines to see what Phase 1 gave us
+        if (totalLinesProcessed <= 20) {
+          logger.info(`=== Line ${line.lineNumber} ===`);
+          logger.info(`  Text: "${line.text}"`);
+          logger.info(`  Speaker Prefix: ${line.speakerPrefix || '[none]'}`);
+          logger.info(`  Timestamp: ${line.timestamp || '[none]'}`);
+          logger.info(`  Is Blank: ${line.isBlank}`);
+        }
+        
+        // Check and log speaker BEFORE processing
+        if (line.speakerPrefix) {
+          linesWithSpeakers++;
+          if (linesWithSpeakers <= 10) {
+            logger.info(`Speaker found at line ${line.lineNumber}: "${line.speakerPrefix}"`);
+          }
+        }
+        
+        // IMPORTANT: Don't skip lines with speakers even if marked as blank
+        if (line.isBlank && !line.text?.trim() && !line.speakerPrefix) {
+          continue;
+        }
         
         const nextLine = i + 1 < page.lines.length ? page.lines[i + 1] : null;
         await this.processLine(trialId, line, state, nextLine);
@@ -247,20 +270,32 @@ export class Phase2Processor {
     if (state.currentEvent && state.eventLines.length > 0) {
       await this.saveEvent(trialId, state.currentEvent, state.eventLines);
     }
+    
+    logger.info(`=== PHASE 2 LINE ANALYSIS ===`);
+    logger.info(`Total lines processed: ${totalLinesProcessed}`);
+    logger.info(`Lines with speaker prefixes from Phase 1: ${linesWithSpeakers}`);
+    logger.info(`================================`);
   }
   
+  // Fixed processLine method for Phase2Processor.ts
   private async processLine(trialId: number, line: any, state: LineGroupingState, nextLine: any): Promise<void> {
-    const lineText = line.text?.trim() || '';
+    const lineText = line.text || '';
+    const trimmedText = lineText.trim();
+    
+    // Log every 50th line for debugging
+    if (line.lineNumber % 50 === 0) {
+      logger.debug(`Processing line ${line.lineNumber}: "${this.truncate(lineText, 60)}"`);
+    }
     
     // Check for multi-line directive continuation
     if (state.pendingDirective) {
-      if (this.isDirectiveContinuation(lineText)) {
+      if (this.isDirectiveContinuation(trimmedText)) {
         // Add to pending directive
-        const cleanText = lineText.replace(/^\s*/, '').replace(/\)\s*$/, '');
+        const cleanText = trimmedText.replace(/\)\s*$/, '');
         state.pendingDirective.text += ' ' + cleanText;
         state.pendingDirective.lines.push(line);
         
-        if (lineText.includes(')')) {
+        if (trimmedText.includes(')')) {
           // Directive complete - save it
           const eventInfo: EventInfo = {
             type: 'COURT_DIRECTIVE',
@@ -281,19 +316,19 @@ export class Phase2Processor {
     }
     
     // Check for complete single-line court directive
-    const fullDirectiveMatch = lineText.match(this.PATTERNS.courtDirectiveFull);
+    const fullDirectiveMatch = trimmedText.match(this.PATTERNS.courtDirectiveFull);
     if (fullDirectiveMatch) {
       await this.handleSingleLineDirective(trialId, line, fullDirectiveMatch[1], state);
       return;
     }
     
     // Check for start of multi-line court directive
-    const directiveStartMatch = lineText.match(this.PATTERNS.courtDirectiveStart);
-    if (directiveStartMatch && !lineText.includes(')')) {
-      // Check if next line could be continuation (no non-whitespace outside parens)
+    const directiveStartMatch = trimmedText.match(this.PATTERNS.courtDirectiveStart);
+    if (directiveStartMatch && !trimmedText.includes(')')) {
+      // Check if next line could be continuation
       if (nextLine && !nextLine.isBlank) {
         const nextText = nextLine.text?.trim() || '';
-        if (!this.extractSpeaker(nextText) && !nextText.match(/^\d+\s+/)) {
+        if (!this.extractSpeaker(nextLine.text) && !nextText.match(/^\d+\s+/)) {
           // Start multi-line directive
           state.pendingDirective = {
             text: directiveStartMatch[1],
@@ -311,62 +346,115 @@ export class Phase2Processor {
       }
     }
     
-    // Check for witness being called (name line)
-    const witnessNameMatch = lineText.match(this.PATTERNS.witnessName);
-    if (witnessNameMatch) {
-      await this.handleWitnessCalled(trialId, line, lineText, state);
-      return;
-    }
-    
-    // Check for standalone examination type (for same witness)
-    const examMatch = lineText.match(this.PATTERNS.examinationStandalone);
-    if (examMatch) {
-      await this.handleExaminationChange(trialId, line, examMatch, state);
-      return;
-    }
-    
-    // Check for video deposition line
-    if (lineText.match(this.PATTERNS.videoDeposition)) {
-      await this.handleVideoDeposition(trialId, line, state);
-      return;
-    }
-    
-    // Check for "BY MR/MS" inline clarification
-    const byMatch = lineText.match(this.PATTERNS.byAttorneyInline);
+    // Check for "BY MR/MS" inline clarification (parenthetical)
+    const byMatch = trimmedText.match(this.PATTERNS.byAttorneyInline);
     if (byMatch) {
       // This is a speaker clarification, update attorney context
       state.lastQAttorney = `${byMatch[1]} ${byMatch[2]}`.toUpperCase();
       logger.debug(`Attorney clarification: ${state.lastQAttorney}`);
-      // Don't create event, just update context
+      // Add to current event if exists
+      if (state.currentEvent) {
+        state.eventLines.push(line);
+      }
       return;
     }
     
-    // Check for speaker prefix
-    const speakerMatch = this.extractSpeaker(lineText);
-    if (speakerMatch) {
-      await this.handleSpeakerStatement(trialId, line, speakerMatch, state);
+    // CRITICAL FIX: Check for speaker from Phase 1 FIRST!
+    // Phase 1 already extracted speakers and put them in line.speakerPrefix
+    let speaker = null;
+    
+    // Priority 1: Use speaker from Phase 1 if available
+    if (line.speakerPrefix) {
+      speaker = line.speakerPrefix;
+      logger.debug(`Using speaker from Phase 1: "${speaker}"`);
+    } 
+    // Priority 2: Try to extract speaker from original line text (fallback)
+    // This should only happen if Phase 1 missed it somehow
+    else {
+      // Need to reconstruct the original line to check for speakers
+      // Phase 1 might have missed complex patterns
+      const fullLine = line.timestamp ? 
+        `${line.timestamp} ${line.lineNumber} ${lineText}` : 
+        lineText;
+      
+      speaker = this.extractSpeaker(fullLine);
+      if (speaker) {
+        logger.debug(`Extracted speaker from text: "${speaker}"`);
+      }
+    }
+    
+    // If we found a speaker, handle the statement
+    if (speaker) {
+      // If we're in a witness event, save it first
+      if (state.currentEvent && state.currentEvent.type === 'WITNESS_CALLED') {
+        logger.debug(`Ending witness event due to speaker: ${speaker}`);
+        await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+        state.currentEvent = null;
+        state.eventLines = [];
+      }
+      
+      await this.handleSpeakerStatement(trialId, line, speaker, state);
       return;
     }
     
-    // Check for Q/A continuation
-    const qaMatch = lineText.match(this.PATTERNS.qaPrefix);
-    if (qaMatch && state.isInQA) {
-      await this.handleQAStatement(trialId, line, qaMatch[1], state);
+    // Check for witness being called (only if not in a statement)
+    if (!state.currentEvent || state.currentEvent.type !== 'STATEMENT') {
+      const witnessNameMatch = trimmedText.match(this.PATTERNS.witnessName);
+      if (witnessNameMatch) {
+        await this.handleWitnessCalled(trialId, line, trimmedText, state);
+        return;
+      }
+    }
+    
+    // Check for standalone examination type
+    const examMatch = trimmedText.match(this.PATTERNS.examinationStandalone);
+    if (examMatch) {
+      // If in witness event, add to it
+      if (state.currentEvent && state.currentEvent.type === 'WITNESS_CALLED') {
+        await this.handleExaminationChange(trialId, line, examMatch, state);
+        return;
+      }
+      // Otherwise, create new examination change event
+      if (state.currentWitness) {
+        await this.handleExaminationChange(trialId, line, examMatch, state);
+        return;
+      }
+    }
+    
+    // Check for video deposition line
+    if (trimmedText.match(this.PATTERNS.videoDeposition) && 
+        state.currentEvent?.type === 'WITNESS_CALLED') {
+      await this.handleVideoDeposition(trialId, line, state);
       return;
     }
     
     // Continuation of current event
     if (state.currentEvent) {
-      state.eventLines.push(line);
+      // For witness events, only continue if it's examination or video deposition
+      if (state.currentEvent.type === 'WITNESS_CALLED') {
+        if (examMatch || trimmedText.match(this.PATTERNS.videoDeposition) || 
+            trimmedText.match(/^\s*BY\s+(MR\.|MS\.|MRS\.)/i)) {
+          state.eventLines.push(line);
+        } else {
+          // End witness event and treat this as orphaned
+          await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+          state.currentEvent = null;
+          state.eventLines = [];
+          this.stats.orphanedLines++;
+        }
+      } else {
+        // Continue statements and other events normally
+        state.eventLines.push(line);
+      }
     } else {
       // Orphaned line
       this.stats.orphanedLines++;
-      if (this.stats.orphanedLines <= 10) {
-        logger.debug(`Orphaned line ${line.lineNumber}: "${this.truncate(lineText, 50)}"`);
+      if (this.stats.orphanedLines <= 20) {
+        logger.debug(`Orphaned line ${line.lineNumber}: "${this.truncate(trimmedText, 50)}"`);
       }
     }
   }
-  
+
   private async handleSingleLineDirective(trialId: number, line: any, directiveText: string, state: LineGroupingState): Promise<void> {
     // Save previous event if exists
     if (state.currentEvent && state.eventLines.length > 0) {
@@ -420,7 +508,7 @@ export class Phase2Processor {
     };
     state.isInQA = true;
     
-    // Store in global context (separate from ParsingContext's currentWitness)
+    // Store in global context
     this.context.currentWitnessInfo = state.currentWitness;
     
     // Create witness called event
@@ -445,9 +533,8 @@ export class Phase2Processor {
       return;
     }
     
-    // Add to current witness event or create examination change event
+    // If part of witness event, add to it
     if (state.currentEvent && state.currentEvent.type === 'WITNESS_CALLED') {
-      // Part of witness called event
       state.currentEvent.examinationType = `${examType}_EXAMINATION`;
       state.currentEvent.continued = continued;
       state.eventLines.push(line);
@@ -473,7 +560,7 @@ export class Phase2Processor {
     state.currentExaminationType = `${examType}_EXAMINATION`;
     state.isInQA = true;
     
-    logger.debug(`Examination change: ${examType} for ${state.currentWitness.name}`);
+    logger.debug(`Examination: ${examType} for ${state.currentWitness.name}`);
   }
   
   private async handleVideoDeposition(trialId: number, line: any, state: LineGroupingState): Promise<void> {
@@ -482,34 +569,42 @@ export class Phase2Processor {
       state.currentEvent.presentedByVideo = true;
       state.currentEvent.examinationType = 'VIDEO_DEPOSITION';
       state.eventLines.push(line);
-    } else if (state.currentWitness) {
-      // Video deposition for current witness
-      if (state.currentEvent && state.eventLines.length > 0) {
-        await this.saveEvent(trialId, state.currentEvent, state.eventLines);
-      }
-      
-      state.currentEvent = {
-        type: 'EXAMINATION_CHANGE',
-        startTime: line.timestamp || '',
-        witnessName: state.currentWitness.name,
-        examinationType: 'VIDEO_DEPOSITION',
-        presentedByVideo: true
-      };
-      state.eventLines = [line];
     }
   }
   
   private async handleSpeakerStatement(trialId: number, line: any, speaker: string, state: LineGroupingState): Promise<void> {
+    // Clean up the speaker name
+    speaker = speaker.trim();
+    
+    logger.info(`=== HANDLE SPEAKER STATEMENT ===`);
+    logger.info(`  Line: ${line.lineNumber}`);
+    logger.info(`  Speaker: "${speaker}"`);
+    logger.info(`  Current Event Type: ${state.currentEvent?.type || 'none'}`);
+    logger.info(`  Current Speaker: ${state.currentSpeaker || 'none'}`);
+    
+    // Handle special Q. and A. speakers
+    if (speaker === 'Q.' || speaker === 'A.') {
+      state.isInQA = true;
+      await this.handleQAStatement(trialId, line, speaker, state);
+      return;
+    }
+    
     // Handle "BY MR/MS" prefix for Q&A context
     if (speaker.match(/^BY\s+(MR\.|MS\.|MRS\.)/i)) {
       const attorneyName = speaker.replace(/^BY\s+/i, '');
       state.lastQAttorney = attorneyName;
       state.isInQA = true;
-      speaker = attorneyName; // Use attorney name as speaker
+      speaker = attorneyName;
     }
     
     // Save previous event if speaker changed
-    if (state.currentEvent && state.currentSpeaker !== speaker) {
+    if (state.currentEvent && state.currentEvent.type === 'STATEMENT' && state.currentSpeaker !== speaker) {
+      logger.info(`  Speaker changed from "${state.currentSpeaker}" to "${speaker}", saving previous statement`);
+      await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
+    } else if (state.currentEvent && state.currentEvent.type !== 'STATEMENT') {
+      logger.info(`  Switching from ${state.currentEvent.type} to STATEMENT`);
       await this.saveEvent(trialId, state.currentEvent, state.eventLines);
       state.currentEvent = null;
       state.eventLines = [];
@@ -517,8 +612,9 @@ export class Phase2Processor {
     
     state.currentSpeaker = speaker;
     
-    // Start new statement event
-    if (!state.currentEvent) {
+    // Start new statement event or continue existing one
+    if (!state.currentEvent || state.currentEvent.type !== 'STATEMENT') {
+      logger.info(`  Starting NEW statement from speaker: ${speaker}`);
       state.currentEvent = {
         type: 'STATEMENT',
         startTime: line.timestamp || '',
@@ -526,8 +622,11 @@ export class Phase2Processor {
       };
       state.eventLines = [line];
     } else {
+      logger.info(`  Continuing statement for speaker: ${speaker}`);
       state.eventLines.push(line);
     }
+    
+    logger.info(`=== END HANDLE SPEAKER STATEMENT ===`);
   }
   
   private async handleQAStatement(trialId: number, line: any, qaType: string, state: LineGroupingState): Promise<void> {
@@ -541,14 +640,14 @@ export class Phase2Processor {
     }
     
     // Save previous event if Q/A type changed
-    if (state.currentEvent && state.currentEvent.speaker !== speaker) {
+    if (state.currentEvent && state.currentEvent.type === 'STATEMENT' && state.currentEvent.speaker !== speaker) {
       await this.saveEvent(trialId, state.currentEvent, state.eventLines);
       state.currentEvent = null;
       state.eventLines = [];
     }
     
     // Start or continue Q/A event
-    if (!state.currentEvent) {
+    if (!state.currentEvent || state.currentEvent.type !== 'STATEMENT') {
       state.currentEvent = {
         type: 'STATEMENT',
         startTime: line.timestamp || '',
@@ -561,22 +660,39 @@ export class Phase2Processor {
   }
   
   private extractSpeaker(text: string): string | null {
-    // Check for standard speaker prefix (but not examination types)
-    const match = text.match(this.PATTERNS.speakerPrefix);
-    if (match) {
-      const speaker = match[1].trim();
-      // Filter out examination types and other non-speakers
-      if (!speaker.includes('EXAMINATION') && 
-          !speaker.match(/^(DIRECT|CROSS|REDIRECT|RECROSS)/i) &&
-          !speaker.match(/SWORN$/i) &&
-          !speaker.match(/WITNESS$/i)) {
-        return speaker;
+    // Check for any speaker pattern (caps followed by colon)
+    const speakerMatch = text.match(this.PATTERNS.speakerPrefix);
+    if (speakerMatch) {
+      const speaker = speakerMatch[1].trim();
+      
+      // Filter out things that look like speakers but aren't
+      if (speaker.includes('EXAMINATION') || 
+          speaker.match(/^(DIRECT|CROSS|REDIRECT|RECROSS)$/) ||
+          speaker === 'SWORN' ||
+          speaker === 'PREVIOUSLY SWORN' ||
+          speaker === 'WITNESS' || // Just "WITNESS" alone
+          speaker === 'PRESENTED' ||
+          speaker === 'CONTINUED') {
+        return null;
       }
+      
+      // Valid speakers include:
+      // THE COURT, COURT SECURITY OFFICER, MR./MS./MRS. names, 
+      // THE WITNESS, JUROR names, etc.
+      logger.debug(`Found speaker: "${speaker}"`);
+      return speaker;
     }
     
-    // Check for THE WITNESS
-    if (text.match(this.PATTERNS.theWitness)) {
-      return 'THE WITNESS';
+    // Check for Q. or A. patterns specifically
+    const qaMatch = text.match(this.PATTERNS.qaPrefix);
+    if (qaMatch) {
+      return qaMatch[1]; // Return "Q." or "A."
+    }
+    
+    // Check for BY MR/MS pattern (used after Q. to clarify attorney)
+    const byMatch = text.match(/^\s*BY\s+(MR\.|MS\.|MRS\.)\s+([A-Z]+):/i);
+    if (byMatch) {
+      return `${byMatch[1]} ${byMatch[2]}`;
     }
     
     return null;
@@ -594,8 +710,45 @@ export class Phase2Processor {
            !text.match(this.PATTERNS.examinationStandalone); // Not examination type
   }
   
+  private calculateDuration(startTime: string | null, endTime: string | null): number | null {
+    if (!startTime || !endTime) return null;
+    
+    // Parse timestamps in format HH:MM:SS
+    const parseTime = (time: string): number => {
+      const parts = time.split(':').map(p => parseInt(p, 10));
+      if (parts.length !== 3) return 0;
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    };
+    
+    try {
+      const startSeconds = parseTime(startTime);
+      const endSeconds = parseTime(endTime);
+      const duration = endSeconds - startSeconds;
+      
+      // Return null for negative or unreasonable durations
+      if (duration < 0 || duration > 3600) { // More than 1 hour is probably an error
+        return null;
+      }
+      
+      return duration;
+    } catch (error) {
+      logger.debug(`Could not calculate duration for ${startTime} to ${endTime}`);
+      return null;
+    }
+  }
+  
   private async saveEvent(trialId: number, eventInfo: EventInfo, lines: any[]): Promise<void> {
-    if (!eventInfo || !lines || lines.length === 0) return;
+    if (!eventInfo || !lines || lines.length === 0) {
+      logger.warn('saveEvent called with invalid data');
+      return;
+    }
+    
+    logger.info(`=== SAVING EVENT ===`);
+    logger.info(`  Type: ${eventInfo.type}`);
+    logger.info(`  Lines: ${lines.length}`);
+    if (eventInfo.type === 'STATEMENT') {
+      logger.info(`  Speaker: ${eventInfo.speaker}`);
+    }
     
     try {
       const startLine = lines[0];
@@ -607,12 +760,18 @@ export class Phase2Processor {
         .replace(/\s+/g, ' ')
         .trim();
       
+      logger.info(`  Text preview: "${this.truncate(fullText, 100)}"`);
+      
+      // Calculate duration
+      const duration = this.calculateDuration(startLine.timestamp, endLine.timestamp);
+      
       const event = await this.prisma.trialEvent.create({
         data: {
           trialId,
           sessionId: this.context.currentSession?.id,
           startTime: eventInfo.startTime,
           endTime: endLine.timestamp || eventInfo.startTime,
+          duration: duration,
           startLineNumber: startLine.lineNumber,
           endLineNumber: endLine.lineNumber,
           lineCount: lines.length,
@@ -620,6 +779,8 @@ export class Phase2Processor {
           text: fullText
         }
       });
+      
+      logger.info(`  Created TrialEvent with ID: ${event.id}`);
       
       // Create specific event type records
       switch (eventInfo.type) {
@@ -629,8 +790,10 @@ export class Phase2Processor {
           break;
           
         case 'STATEMENT':
+          logger.info(`  Creating StatementEvent for speaker: ${eventInfo.speaker}`);
           await this.createStatementEvent(event.id, eventInfo.speaker || 'UNKNOWN', fullText);
           this.stats.statementEvents++;
+          logger.info(`  StatementEvent created successfully`);
           break;
           
         case 'WITNESS_CALLED':
@@ -652,8 +815,15 @@ export class Phase2Processor {
       
     } catch (error) {
       logger.error(`Error saving event: ${(error as Error).message}`);
+      logger.error(`Event type: ${eventInfo.type}`);
+      if (eventInfo.type === 'STATEMENT') {
+        logger.error(`Speaker: ${eventInfo.speaker}`);
+      }
       this.stats.errors++;
+      throw error; // Re-throw to see the full error
     }
+    
+    logger.info(`=== EVENT SAVED ===`);
   }
   
   private async createCourtDirectiveEvent(eventId: number, directiveText: string): Promise<void> {

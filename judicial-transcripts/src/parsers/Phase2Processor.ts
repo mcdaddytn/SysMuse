@@ -1,12 +1,90 @@
-// SECOND FIX: Updated Phase2Processor with orphaned line logic and clean logging
+// src/parsers/Phase2Processor.ts
+// Enhanced Phase 2 Processor with strict directive parsing and witness state management
+
 import { PrismaClient } from '@prisma/client';
 import { TranscriptConfig, ParsingContext } from '../types/config.types';
 import logger from '../utils/logger';
 
+interface EventInfo {
+  type: 'COURT_DIRECTIVE' | 'STATEMENT' | 'WITNESS_CALLED' | 'EXAMINATION_CHANGE' | 'OTHER';
+  startTime: string;
+  speaker?: string;
+  directiveText?: string;
+  witnessName?: string;
+  examinationType?: string;
+  previouslySworn?: boolean;
+  presentedByVideo?: boolean;
+  continued?: boolean;
+}
+
+interface WitnessInfo {
+  id?: number;
+  name: string;
+  type: 'PLAINTIFF_WITNESS' | 'DEFENDANT_WITNESS' | 'EXPERT_WITNESS';
+  lastExaminationType?: string;
+}
+
+interface LineGroupingState {
+  currentEvent: EventInfo | null;
+  eventLines: any[];
+  pendingDirective: { text: string; lines: any[] } | null;
+  currentSpeaker: string | null;
+  currentWitness: WitnessInfo | null;
+  currentExaminationType: string | null;
+  isInQA: boolean;
+  lastQAttorney: string | null;
+  currentTrialId?: number;
+}
+
 export class Phase2Processor {
   private prisma: PrismaClient;
   private config: TranscriptConfig;
-  private context: ParsingContext;
+  private context: ParsingContext & { 
+    currentTrialId?: number;
+    currentWitnessInfo?: WitnessInfo;
+  };
+  private stats: {
+    totalEvents: number;
+    directiveEvents: number;
+    statementEvents: number;
+    witnessEvents: number;
+    examinationChanges: number;
+    multiLineDirectives: number;
+    orphanedLines: number;
+    errors: number;
+    unknownDirectives: string[];
+  };
+  
+  // Patterns for identifying different event types
+  private readonly PATTERNS = {
+    // Court directives - must be entire line(s) within parentheses
+    courtDirectiveStart: /^\s*\(\s*(.+?)(?:\)|$)/,
+    courtDirectiveFull: /^\s*\((.+)\)\s*$/,
+    
+    // Speaker patterns
+    speakerPrefix: /^([A-Z][A-Z\s\.,']+?):\s*/,
+    qaPrefix: /^\s*(Q\.|A\.)\s+/,
+    byAttorneyInline: /^\s*\(By\s+(Mr\.|Ms\.|Mrs\.)\s+([A-Za-z]+)\)\s*/i,
+    theWitness: /^\s*THE\s+WITNESS:/i,
+    
+    // Examination types (standalone lines)
+    examinationStandalone: /^\s*(DIRECT|CROSS|REDIRECT|RECROSS)[\s\-]?EXAMINATION\s*(CONTINUED)?\s*$/i,
+    videoDeposition: /^\s*PRESENTED BY VIDEO DEPOSITION\s*$/i,
+    
+    // Witness patterns (name lines)
+    witnessName: /^([A-Z][A-Z\s,\.]+?),?\s+(PLAINTIFF'S|PLAINTIFF|DEFENDANTS?'|DEFENDANTS?)\s+WITNESS/i,
+    witnessSworn: /\b(PREVIOUSLY\s+)?SWORN\s*$/i,
+    witnessPhD: /\bPH\.?D\.?\b/i,
+    
+    // Known speaker names
+    knownCourtSpeakers: [
+      'THE COURT',
+      'COURT SECURITY OFFICER',
+      'THE CLERK',
+      'COURT REPORTER',
+      'THE BAILIFF'
+    ]
+  };
   
   constructor(config: TranscriptConfig) {
     this.prisma = new PrismaClient();
@@ -20,9 +98,21 @@ export class Phase2Processor {
       currentWitness: undefined,
       currentExaminationType: undefined
     };
+    this.stats = {
+      totalEvents: 0,
+      directiveEvents: 0,
+      statementEvents: 0,
+      witnessEvents: 0,
+      examinationChanges: 0,
+      multiLineDirectives: 0,
+      orphanedLines: 0,
+      errors: 0,
+      unknownDirectives: []
+    };
   }
   
   async process(): Promise<void> {
+    logger.info('=== PHASE 2 PROCESSING START ===');
     logger.info('Starting Phase 2: Processing line groups into trial events');
     
     try {
@@ -38,13 +128,15 @@ export class Phase2Processor {
       });
       
       for (const trial of trials) {
-        logger.info(`Processing trial: ${trial.caseNumber}`);
+        logger.info(`\n=== Processing trial: ${trial.caseNumber} ===`);
         await this.processTrial(trial);
       }
       
-      logger.info('Phase 2 processing completed');
+      this.printStatistics();
+      logger.info('=== PHASE 2 PROCESSING COMPLETED ===');
     } catch (error) {
       logger.error('Error during Phase 2 processing: ' + (error as Error).message);
+      this.stats.errors++;
       throw error;
     } finally {
       await this.prisma.$disconnect();
@@ -54,34 +146,50 @@ export class Phase2Processor {
   private async processTrial(trial: any): Promise<void> {
     await this.loadTrialContext(trial.id);
     
+    // Store trial ID in context for later use
+    this.context.currentTrialId = trial.id;
+    
     for (const session of trial.sessions) {
       await this.processSession(trial.id, session);
     }
   }
   
   private async loadTrialContext(trialId: number): Promise<void> {
+    // Load attorneys
     const trialAttorneys = await this.prisma.trialAttorney.findMany({
       where: { trialId },
       include: { attorney: true }
     });
     
     for (const ta of trialAttorneys) {
-      this.context.attorneys.set(ta.attorney.name, ta.attorney.id);
+      if (ta.attorney.name) {
+        this.context.attorneys.set(ta.attorney.name.toUpperCase(), ta.attorney.id);
+        // Also store with common prefixes
+        const lastName = ta.attorney.name.split(' ').pop()?.toUpperCase();
+        if (lastName) {
+          this.context.attorneys.set(`MR. ${lastName}`, ta.attorney.id);
+          this.context.attorneys.set(`MS. ${lastName}`, ta.attorney.id);
+          this.context.attorneys.set(`MRS. ${lastName}`, ta.attorney.id);
+        }
+      }
     }
     
+    // Load witnesses
     const witnesses = await this.prisma.witness.findMany({
       where: { trialId }
     });
     
     for (const witness of witnesses) {
       if (witness.name) {
-        this.context.witnesses.set(witness.name, witness.id);
+        this.context.witnesses.set(witness.name.toUpperCase(), witness.id);
       }
     }
+    
+    logger.info(`Loaded context: ${this.context.attorneys.size} attorneys, ${this.context.witnesses.size} witnesses`);
   }
   
   private async processSession(trialId: number, session: any): Promise<void> {
-    logger.info(`Processing session: ${session.sessionDate} ${session.sessionType}`);
+    logger.info(`\n--- Processing session: ${session.sessionDate.toISOString().split('T')[0]} ${session.sessionType} ---`);
     
     this.context.currentSession = {
       id: session.id,
@@ -90,7 +198,10 @@ export class Phase2Processor {
     };
     
     const pages = await this.prisma.page.findMany({
-      where: { sessionId: session.id },
+      where: { 
+        sessionId: session.id,
+        documentSection: 'PROCEEDINGS' // Focus on proceedings pages
+      },
       orderBy: { pageNumber: 'asc' },
       include: {
         lines: {
@@ -99,276 +210,403 @@ export class Phase2Processor {
       }
     });
     
+    if (pages.length === 0) {
+      logger.warn(`No PROCEEDINGS pages found for session ${session.id}`);
+      return;
+    }
+    
     await this.groupLinesIntoEvents(trialId, pages);
   }
   
   private async groupLinesIntoEvents(trialId: number, pages: any[]): Promise<void> {
-    logger.info('=== GROUP LINES INTO EVENTS START ===');
-    logger.info('Trial ID: ' + trialId);
-    logger.info('Pages count: ' + (pages?.length || 0));
-    
-    if (!pages || pages.length === 0) {
-      logger.warn('No pages provided to groupLinesIntoEvents');
-      return;
-    }
-    
-    let currentEvent: any = null;
-    let eventLines: any[] = [];
-    let totalLinesProcessed = 0;
-    let orphanedLinesCount = 0;
-    let summaryPageDetected = false;
-    
-    for (const page of pages) {
-      logger.info(`Processing page ${page.pageNumber} with ${page.lines?.length || 0} lines`);
-      
-      // Check if this looks like a summary/header page
-      const isSummaryPage = this.isSummaryPage(page);
-      if (isSummaryPage) {
-        summaryPageDetected = true;
-        logger.info(`Page ${page.pageNumber} detected as summary/header page - skipping event processing`);
-        continue;
-      }
-      
-      if (!page.lines || page.lines.length === 0) {
-        logger.warn(`Page ${page.pageNumber} has no lines, skipping`);
-        continue;
-      }
-      
-      for (const line of page.lines) {
-        totalLinesProcessed++;
-        
-        if (totalLinesProcessed % 100 === 0) {
-          logger.info(`Processed ${totalLinesProcessed} lines so far...`);
-        }
-        
-        if (!line) {
-          logger.warn('Encountered null/undefined line, skipping');
-          continue;
-        }
-        
-        if (line.isBlank) continue;
-        
-        // Check if this starts a new event
-        if (this.isEventStart(line)) {
-          // Save previous event if exists
-          if (currentEvent && eventLines.length > 0) {
-            logger.info(`Saving previous event with ${eventLines.length} lines`);
-            try {
-              await this.saveEvent(trialId, currentEvent, eventLines);
-            } catch (error) {
-              logger.error('Error saving previous event: ' + (error as Error).message);
-              logger.error('Event info: ' + JSON.stringify(currentEvent));
-              throw error;
-            }
-          }
-          
-          // Start new event
-          logger.info(`Starting new event from line ${line.lineNumber}: "${this.truncateText(line.text, 50)}"`);
-          currentEvent = this.createEventFromLine(line);
-          
-          if (!currentEvent) {
-            logger.error(`ERROR: createEventFromLine returned null for line ${line.lineNumber}`);
-            continue;
-          }
-          
-          eventLines = [line];
-        } else if (currentEvent) {
-          // Continue current event
-          eventLines.push(line);
-        } else {
-          // Orphaned line - check if it's expected
-          if (!summaryPageDetected && this.isExpectedOrphanedLine(line)) {
-            // Don't warn about expected header/summary content
-            logger.debug(`Expected header/summary line ${line.lineNumber}: "${this.truncateText(line.text, 30)}"`);
-          } else {
-            orphanedLinesCount++;
-            if (orphanedLinesCount <= 5) { // Limit warnings to avoid spam
-              logger.warn(`Orphaned line ${line.lineNumber}: "${this.truncateText(line.text, 50)}"`);
-            } else if (orphanedLinesCount === 6) {
-              logger.warn('Additional orphaned lines detected (suppressing further warnings)...');
-            }
-          }
-        }
-      }
-    }
-    
-    // Save last event
-    if (currentEvent && eventLines.length > 0) {
-      logger.info(`Saving final event with ${eventLines.length} lines`);
-      try {
-        await this.saveEvent(trialId, currentEvent, eventLines);
-      } catch (error) {
-        logger.error('Error saving final event: ' + (error as Error).message);
-        throw error;
-      }
-    }
-    
-    logger.info(`=== GROUP LINES INTO EVENTS END ===`);
-    logger.info(`Processed ${totalLinesProcessed} total lines`);
-    if (orphanedLinesCount > 0) {
-      logger.info(`Found ${orphanedLinesCount} orphaned lines (likely summary/header content)`);
-    }
-  }
-
-  private isSummaryPage(page: any): boolean {
-    if (!page.lines || page.lines.length === 0) return false;
-    
-    // Check for summary page indicators
-    const pageText = page.lines.map((l: any) => l.text || '').join(' ').toLowerCase();
-    
-    const summaryIndicators = [
-      'civil action no',
-      'plaintiff',
-      'defendants',
-      'transcript of jury trial',
-      'morning session',
-      'afternoon session',
-      'before the honorable',
-      'united states district court',
-      'for the plaintiff:',
-      'for the defendant:'
-    ];
-    
-    const indicatorCount = summaryIndicators.filter(indicator => 
-      pageText.includes(indicator)
-    ).length;
-    
-    // If 3 or more indicators are present, likely a summary page
-    return indicatorCount >= 3;
-  }
-
-  private isExpectedOrphanedLine(line: any): boolean {
-    if (!line.text) return false;
-    
-    const text = line.text.toLowerCase();
-    
-    // These are expected to be orphaned on summary/header pages
-    const expectedOrphanedPatterns = [
-      /case \d+:/,
-      /document \d+/,
-      /filed \d+/,
-      /^[a-z\s]*plaintiff[a-z\s]*$/,
-      /^[a-z\s]*defendants?[a-z\s]*$/,
-      /civil action no/,
-      /transcript of/,
-      /morning session/,
-      /afternoon session/,
-      /before the honorable/,
-      /united states/,
-      /for the plaintiff/,
-      /for the defendant/,
-      /mr\./,
-      /ms\./,
-      /mrs\./,
-      /^\d+$/, // Just page numbers
-      /^\s*$/, // Whitespace only
-      /marshall division/,
-      /eastern district/
-    ];
-    
-    return expectedOrphanedPatterns.some(pattern => pattern.test(text));
-  }
-
-  private truncateText(text: string | null | undefined, maxLength: number): string {
-    if (!text) return 'NO TEXT';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-  }
-
-  private isEventStart(line: any): boolean {
-    if (!line) {
-      logger.warn('isEventStart: Line is null or undefined');
-      return false;
-    }
-    
-    const isStart = !!(line.timestamp || line.speakerPrefix || 
-              (line.text && line.text.match(/^\([^)]+\)$/)) ||
-              (line.text && line.text.match(/EXAMINATION/i)));
-    
-    if (isStart) {
-      logger.info(`Event start detected - Line ${line.lineNumber}: "${this.truncateText(line.text, 50)}"`);
-    }
-    
-    return isStart;
-  }
-  
-  private createEventFromLine(line: any): any {
-    logger.info('=== CREATE EVENT FROM LINE START ===');
-    logger.info(`Line ${line.lineNumber}: "${this.truncateText(line.text, 100)}"`);
-    logger.info(`Speaker prefix: "${line.speakerPrefix || 'NONE'}"`);
-    logger.info(`Has timestamp: ${!!line.timestamp}`);
-    
-    if (!line) {
-      logger.error('ERROR: Line is null or undefined');
-      return null;
-    }
-    
-    const event: any = {
-      startTime: line.timestamp,
-      startLineNumber: line.lineNumber,
-      type: 'STATEMENT' // default
+    const state: LineGroupingState = {
+      currentEvent: null,
+      eventLines: [],
+      pendingDirective: null,
+      currentSpeaker: null,
+      currentWitness: null,
+      currentExaminationType: null,
+      isInQA: false,
+      lastQAttorney: null,
+      currentTrialId: trialId
     };
     
-    // Determine event type with enhanced null checks
-    if (line.text && typeof line.text === 'string' && line.text.match(/^\([^)]+\)$/)) {
-      event.type = 'COURT_DIRECTIVE';
-      event.directiveText = line.text.replace(/[()]/g, '').trim();
-      logger.info(`Event identified as COURT_DIRECTIVE: "${event.directiveText}"`);
-    } else if (line.speakerPrefix && typeof line.speakerPrefix === 'string') {
-      event.type = 'STATEMENT';
-      event.speaker = line.speakerPrefix;
-      logger.info(`Event identified as STATEMENT with speaker: "${event.speaker}"`);
-    } else if (line.text && typeof line.text === 'string' && line.text.match(/EXAMINATION/i)) {
-      event.type = 'WITNESS_CALLED';
-      logger.info('Event identified as WITNESS_CALLED');
-    } else {
-      logger.warn('Could not determine event type, defaulting to STATEMENT with UNKNOWN_SPEAKER');
-      logger.warn(`Line text: "${this.truncateText(line.text, 50)}"`);
-      logger.warn(`Speaker prefix: "${line.speakerPrefix || 'NONE'}"`);
-      event.speaker = 'UNKNOWN_SPEAKER';
+    for (const page of pages) {
+      logger.debug(`Processing page ${page.pageNumber} with ${page.lines?.length || 0} lines`);
+      
+      for (let i = 0; i < page.lines.length; i++) {
+        const line = page.lines[i];
+        if (!line || line.isBlank) continue;
+        
+        const nextLine = i + 1 < page.lines.length ? page.lines[i + 1] : null;
+        await this.processLine(trialId, line, state, nextLine);
+      }
     }
     
-    logger.info(`Created event - Type: ${event.type}, Speaker: "${event.speaker || 'NONE'}"`);
-    logger.info('=== CREATE EVENT FROM LINE END ===');
-    
-    return event;
+    // Save any remaining event
+    if (state.currentEvent && state.eventLines.length > 0) {
+      await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+    }
   }
-
-  private async saveEvent(trialId: number, eventInfo: any, lines: any[]): Promise<void> {
-    logger.info('=== SAVE EVENT START ===');
-    logger.info(`Event type: ${eventInfo.type}`);
-    logger.info(`Event speaker: "${eventInfo.speaker || 'NONE'}"`);
-    logger.info(`Lines count: ${lines?.length || 0}`);
+  
+  private async processLine(trialId: number, line: any, state: LineGroupingState, nextLine: any): Promise<void> {
+    const lineText = line.text?.trim() || '';
     
-    if (!eventInfo) {
-      logger.error('ERROR: eventInfo is null/undefined');
+    // Check for multi-line directive continuation
+    if (state.pendingDirective) {
+      if (this.isDirectiveContinuation(lineText)) {
+        // Add to pending directive
+        const cleanText = lineText.replace(/^\s*/, '').replace(/\)\s*$/, '');
+        state.pendingDirective.text += ' ' + cleanText;
+        state.pendingDirective.lines.push(line);
+        
+        if (lineText.includes(')')) {
+          // Directive complete - save it
+          const eventInfo: EventInfo = {
+            type: 'COURT_DIRECTIVE',
+            startTime: state.pendingDirective.lines[0].timestamp || '',
+            directiveText: state.pendingDirective.text.trim()
+          };
+          
+          await this.saveEvent(trialId, eventInfo, state.pendingDirective.lines);
+          this.stats.multiLineDirectives++;
+          state.pendingDirective = null;
+        }
+        return;
+      } else {
+        // Not a valid directive continuation - treat as orphaned
+        logger.warn(`Invalid multi-line directive: "${state.pendingDirective.text}"`);
+        state.pendingDirective = null;
+      }
+    }
+    
+    // Check for complete single-line court directive
+    const fullDirectiveMatch = lineText.match(this.PATTERNS.courtDirectiveFull);
+    if (fullDirectiveMatch) {
+      await this.handleSingleLineDirective(trialId, line, fullDirectiveMatch[1], state);
       return;
     }
     
-    if (!lines || lines.length === 0) {
-      logger.error('ERROR: No lines provided to saveEvent');
+    // Check for start of multi-line court directive
+    const directiveStartMatch = lineText.match(this.PATTERNS.courtDirectiveStart);
+    if (directiveStartMatch && !lineText.includes(')')) {
+      // Check if next line could be continuation (no non-whitespace outside parens)
+      if (nextLine && !nextLine.isBlank) {
+        const nextText = nextLine.text?.trim() || '';
+        if (!this.extractSpeaker(nextText) && !nextText.match(/^\d+\s+/)) {
+          // Start multi-line directive
+          state.pendingDirective = {
+            text: directiveStartMatch[1],
+            lines: [line]
+          };
+          
+          // Save current event if exists
+          if (state.currentEvent && state.eventLines.length > 0) {
+            await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+            state.currentEvent = null;
+            state.eventLines = [];
+          }
+          return;
+        }
+      }
+    }
+    
+    // Check for witness being called (name line)
+    const witnessNameMatch = lineText.match(this.PATTERNS.witnessName);
+    if (witnessNameMatch) {
+      await this.handleWitnessCalled(trialId, line, lineText, state);
       return;
     }
     
-    const startLine = lines[0];
-    const endLine = lines[lines.length - 1];
-    
-    if (!startLine || !endLine) {
-      logger.error('ERROR: Invalid startLine or endLine');
+    // Check for standalone examination type (for same witness)
+    const examMatch = lineText.match(this.PATTERNS.examinationStandalone);
+    if (examMatch) {
+      await this.handleExaminationChange(trialId, line, examMatch, state);
       return;
     }
     
-    const fullText = lines
-      .map(l => l?.text || '')
-      .filter(t => t)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    // Check for video deposition line
+    if (lineText.match(this.PATTERNS.videoDeposition)) {
+      await this.handleVideoDeposition(trialId, line, state);
+      return;
+    }
     
-    logger.info(`Combined text length: ${fullText.length}`);
-    logger.info(`Combined text preview: "${this.truncateText(fullText, 100)}"`);
+    // Check for "BY MR/MS" inline clarification
+    const byMatch = lineText.match(this.PATTERNS.byAttorneyInline);
+    if (byMatch) {
+      // This is a speaker clarification, update attorney context
+      state.lastQAttorney = `${byMatch[1]} ${byMatch[2]}`.toUpperCase();
+      logger.debug(`Attorney clarification: ${state.lastQAttorney}`);
+      // Don't create event, just update context
+      return;
+    }
+    
+    // Check for speaker prefix
+    const speakerMatch = this.extractSpeaker(lineText);
+    if (speakerMatch) {
+      await this.handleSpeakerStatement(trialId, line, speakerMatch, state);
+      return;
+    }
+    
+    // Check for Q/A continuation
+    const qaMatch = lineText.match(this.PATTERNS.qaPrefix);
+    if (qaMatch && state.isInQA) {
+      await this.handleQAStatement(trialId, line, qaMatch[1], state);
+      return;
+    }
+    
+    // Continuation of current event
+    if (state.currentEvent) {
+      state.eventLines.push(line);
+    } else {
+      // Orphaned line
+      this.stats.orphanedLines++;
+      if (this.stats.orphanedLines <= 10) {
+        logger.debug(`Orphaned line ${line.lineNumber}: "${this.truncate(lineText, 50)}"`);
+      }
+    }
+  }
+  
+  private async handleSingleLineDirective(trialId: number, line: any, directiveText: string, state: LineGroupingState): Promise<void> {
+    // Save previous event if exists
+    if (state.currentEvent && state.eventLines.length > 0) {
+      await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
+    }
+    
+    // Create and save directive event immediately
+    const eventInfo: EventInfo = {
+      type: 'COURT_DIRECTIVE',
+      startTime: line.timestamp || '',
+      directiveText: directiveText.trim()
+    };
+    
+    await this.saveEvent(trialId, eventInfo, [line]);
+  }
+  
+  private async handleWitnessCalled(trialId: number, line: any, lineText: string, state: LineGroupingState): Promise<void> {
+    // Save previous event
+    if (state.currentEvent && state.eventLines.length > 0) {
+      await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+    }
+    
+    // Parse witness information
+    const nameMatch = lineText.match(this.PATTERNS.witnessName);
+    const swornMatch = lineText.match(this.PATTERNS.witnessSworn);
+    
+    let witnessType: 'PLAINTIFF_WITNESS' | 'DEFENDANT_WITNESS' | 'EXPERT_WITNESS' = 'FACT_WITNESS' as any;
+    if (nameMatch) {
+      const party = nameMatch[2].toUpperCase();
+      if (party.includes('PLAINTIFF')) {
+        witnessType = 'PLAINTIFF_WITNESS';
+      } else if (party.includes('DEFENDANT')) {
+        witnessType = 'DEFENDANT_WITNESS';
+      }
+    }
+    
+    // Check if expert (has Ph.D. or similar)
+    if (lineText.match(this.PATTERNS.witnessPhD)) {
+      witnessType = 'EXPERT_WITNESS';
+    }
+    
+    const witnessName = nameMatch ? nameMatch[1].trim() : lineText.split(',')[0].trim();
+    const previouslySworn = swornMatch ? !!swornMatch[1] : false;
+    
+    // Update witness context
+    state.currentWitness = {
+      name: witnessName,
+      type: witnessType
+    };
+    state.isInQA = true;
+    
+    // Store in global context (separate from ParsingContext's currentWitness)
+    this.context.currentWitnessInfo = state.currentWitness;
+    
+    // Create witness called event
+    state.currentEvent = {
+      type: 'WITNESS_CALLED',
+      startTime: line.timestamp || '',
+      witnessName: witnessName,
+      previouslySworn: previouslySworn
+    };
+    state.eventLines = [line];
+    
+    logger.info(`Witness called: ${witnessName} (${witnessType})`);
+  }
+  
+  private async handleExaminationChange(trialId: number, line: any, match: RegExpMatchArray, state: LineGroupingState): Promise<void> {
+    const examType = match[1].toUpperCase();
+    const continued = !!match[2];
+    
+    // This is examination for current witness
+    if (!state.currentWitness) {
+      logger.warn(`Examination type found but no current witness: ${line.text}`);
+      return;
+    }
+    
+    // Add to current witness event or create examination change event
+    if (state.currentEvent && state.currentEvent.type === 'WITNESS_CALLED') {
+      // Part of witness called event
+      state.currentEvent.examinationType = `${examType}_EXAMINATION`;
+      state.currentEvent.continued = continued;
+      state.eventLines.push(line);
+    } else {
+      // Save previous event
+      if (state.currentEvent && state.eventLines.length > 0) {
+        await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+      }
+      
+      // Create examination change event
+      state.currentEvent = {
+        type: 'EXAMINATION_CHANGE',
+        startTime: line.timestamp || '',
+        witnessName: state.currentWitness.name,
+        examinationType: `${examType}_EXAMINATION`,
+        continued: continued
+      };
+      state.eventLines = [line];
+      this.stats.examinationChanges++;
+    }
+    
+    // Update context
+    state.currentExaminationType = `${examType}_EXAMINATION`;
+    state.isInQA = true;
+    
+    logger.debug(`Examination change: ${examType} for ${state.currentWitness.name}`);
+  }
+  
+  private async handleVideoDeposition(trialId: number, line: any, state: LineGroupingState): Promise<void> {
+    if (state.currentEvent && state.currentEvent.type === 'WITNESS_CALLED') {
+      // Part of witness called event
+      state.currentEvent.presentedByVideo = true;
+      state.currentEvent.examinationType = 'VIDEO_DEPOSITION';
+      state.eventLines.push(line);
+    } else if (state.currentWitness) {
+      // Video deposition for current witness
+      if (state.currentEvent && state.eventLines.length > 0) {
+        await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+      }
+      
+      state.currentEvent = {
+        type: 'EXAMINATION_CHANGE',
+        startTime: line.timestamp || '',
+        witnessName: state.currentWitness.name,
+        examinationType: 'VIDEO_DEPOSITION',
+        presentedByVideo: true
+      };
+      state.eventLines = [line];
+    }
+  }
+  
+  private async handleSpeakerStatement(trialId: number, line: any, speaker: string, state: LineGroupingState): Promise<void> {
+    // Handle "BY MR/MS" prefix for Q&A context
+    if (speaker.match(/^BY\s+(MR\.|MS\.|MRS\.)/i)) {
+      const attorneyName = speaker.replace(/^BY\s+/i, '');
+      state.lastQAttorney = attorneyName;
+      state.isInQA = true;
+      speaker = attorneyName; // Use attorney name as speaker
+    }
+    
+    // Save previous event if speaker changed
+    if (state.currentEvent && state.currentSpeaker !== speaker) {
+      await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
+    }
+    
+    state.currentSpeaker = speaker;
+    
+    // Start new statement event
+    if (!state.currentEvent) {
+      state.currentEvent = {
+        type: 'STATEMENT',
+        startTime: line.timestamp || '',
+        speaker: speaker
+      };
+      state.eventLines = [line];
+    } else {
+      state.eventLines.push(line);
+    }
+  }
+  
+  private async handleQAStatement(trialId: number, line: any, qaType: string, state: LineGroupingState): Promise<void> {
+    const isQuestion = qaType === 'Q.';
+    let speaker: string;
+    
+    if (isQuestion) {
+      speaker = state.lastQAttorney || 'ATTORNEY';
+    } else {
+      speaker = state.currentWitness?.name || 'WITNESS';
+    }
+    
+    // Save previous event if Q/A type changed
+    if (state.currentEvent && state.currentEvent.speaker !== speaker) {
+      await this.saveEvent(trialId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
+    }
+    
+    // Start or continue Q/A event
+    if (!state.currentEvent) {
+      state.currentEvent = {
+        type: 'STATEMENT',
+        startTime: line.timestamp || '',
+        speaker: speaker
+      };
+      state.eventLines = [line];
+    } else {
+      state.eventLines.push(line);
+    }
+  }
+  
+  private extractSpeaker(text: string): string | null {
+    // Check for standard speaker prefix (but not examination types)
+    const match = text.match(this.PATTERNS.speakerPrefix);
+    if (match) {
+      const speaker = match[1].trim();
+      // Filter out examination types and other non-speakers
+      if (!speaker.includes('EXAMINATION') && 
+          !speaker.match(/^(DIRECT|CROSS|REDIRECT|RECROSS)/i) &&
+          !speaker.match(/SWORN$/i) &&
+          !speaker.match(/WITNESS$/i)) {
+        return speaker;
+      }
+    }
+    
+    // Check for THE WITNESS
+    if (text.match(this.PATTERNS.theWitness)) {
+      return 'THE WITNESS';
+    }
+    
+    return null;
+  }
+  
+  private isDirectiveContinuation(text: string): boolean {
+    // Check if line could be directive continuation
+    // Must not have any non-whitespace outside of content that will be in parens
+    // No speaker prefix, no line numbers at start
+    return !this.extractSpeaker(text) && 
+           !text.match(/^\d+\s+/) &&
+           !text.match(/^\s*\(/) &&
+           text.trim().length > 0 &&
+           !text.match(/^[A-Z].*:/) && // No speaker pattern
+           !text.match(this.PATTERNS.examinationStandalone); // Not examination type
+  }
+  
+  private async saveEvent(trialId: number, eventInfo: EventInfo, lines: any[]): Promise<void> {
+    if (!eventInfo || !lines || lines.length === 0) return;
     
     try {
+      const startLine = lines[0];
+      const endLine = lines[lines.length - 1];
+      
+      const fullText = lines
+        .map(l => l.text || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
       const event = await this.prisma.trialEvent.create({
         data: {
           trialId,
@@ -378,313 +616,318 @@ export class Phase2Processor {
           startLineNumber: startLine.lineNumber,
           endLineNumber: endLine.lineNumber,
           lineCount: lines.length,
-          eventType: eventInfo.type,
+          eventType: eventInfo.type === 'EXAMINATION_CHANGE' ? 'WITNESS_CALLED' : eventInfo.type,
           text: fullText
         }
       });
       
-      logger.info(`Created base trial event with ID: ${event.id}`);
+      // Create specific event type records
+      switch (eventInfo.type) {
+        case 'COURT_DIRECTIVE':
+          await this.createCourtDirectiveEvent(event.id, eventInfo.directiveText || fullText);
+          this.stats.directiveEvents++;
+          break;
+          
+        case 'STATEMENT':
+          await this.createStatementEvent(event.id, eventInfo.speaker || 'UNKNOWN', fullText);
+          this.stats.statementEvents++;
+          break;
+          
+        case 'WITNESS_CALLED':
+          await this.createWitnessCalledEvent(event.id, eventInfo);
+          this.stats.witnessEvents++;
+          break;
+          
+        case 'EXAMINATION_CHANGE':
+          await this.createExaminationChangeEvent(event.id, eventInfo);
+          this.stats.witnessEvents++;
+          break;
+      }
       
-      if (eventInfo.type === 'COURT_DIRECTIVE') {
-        logger.info(`Processing COURT_DIRECTIVE: "${eventInfo.directiveText}"`);
-        await this.createCourtDirectiveEvent(event.id, eventInfo.directiveText);
-      } else if (eventInfo.type === 'STATEMENT') {
-        logger.info(`Processing STATEMENT with speaker: "${eventInfo.speaker || 'UNDEFINED'}"`);
-        await this.createStatementEvent(event.id, eventInfo.speaker, fullText);
-      } else if (eventInfo.type === 'WITNESS_CALLED') {
-        logger.info('Processing WITNESS_CALLED');
-        await this.createWitnessCalledEvent(event.id, fullText);
-      } else {
-        logger.warn(`Unknown event type: ${eventInfo.type}`);
+      this.stats.totalEvents++;
+      
+      if (this.stats.totalEvents % 100 === 0) {
+        logger.info(`Processed ${this.stats.totalEvents} events...`);
       }
       
     } catch (error) {
-      logger.error('ERROR in saveEvent: ' + (error as Error).message);
-      logger.error(`Event speaker causing error: "${eventInfo.speaker || 'UNDEFINED'}"`);
-      throw error;
+      logger.error(`Error saving event: ${(error as Error).message}`);
+      this.stats.errors++;
     }
-    
-    logger.info('=== SAVE EVENT END ===');
   }
-
-  private async createStatementEvent(eventId: number, speaker: string, text: string): Promise<void> {
-    logger.info('=== CREATE STATEMENT EVENT START ===');
-    logger.info(`Event ID: ${eventId}`);
-    logger.info(`Speaker received: "${speaker}" (type: ${typeof speaker})`);
-    logger.info(`Text length: ${text?.length || 0}`);
-    
-    // Comprehensive null checks for speaker
-    if (speaker === null || speaker === undefined) {
-      logger.error('ERROR: Speaker is null or undefined, setting to UNKNOWN_SPEAKER');
-      speaker = 'UNKNOWN_SPEAKER';
-    }
-    
-    if (typeof speaker !== 'string') {
-      logger.error(`ERROR: Speaker is not a string, type: ${typeof speaker}, converting to string`);
-      speaker = String(speaker || 'UNKNOWN_SPEAKER');
-    }
-    
-    speaker = speaker.trim();
-    
-    if (speaker === '') {
-      logger.error('ERROR: Speaker is empty string after trim, setting to UNKNOWN_SPEAKER');
-      speaker = 'UNKNOWN_SPEAKER';
-    }
-    
-    logger.info(`Speaker after validation: "${speaker}"`);
-    
-    // Determine speaker type
-    let speakerType: any = 'OTHER';
-    let speakerName = speaker;
-    
-    try {
-      if (speaker.includes('THE COURT')) {
-        logger.info('Speaker identified as THE COURT');
-        speakerType = 'JUDGE';
-      } else if (speaker === 'Q.') {
-        logger.info(`Speaker is Q. Current examination type: "${this.context.currentExaminationType || 'NONE'}"`);
-        
-        const isCross = this.context.currentExaminationType && 
-                       typeof this.context.currentExaminationType === 'string' &&
-                       this.context.currentExaminationType.includes('CROSS');
-        speakerType = isCross ? 'DEFENDANT_ATTORNEY' : 'PLAINTIFF_ATTORNEY';
-        logger.info(`Q. speaker type determined as: ${speakerType} (isCross: ${isCross})`);
-      } else if (speaker === 'A.') {
-        logger.info(`Speaker is A. Current witness type: "${this.context.currentWitness?.type || 'NONE'}"`);
-        
-        speakerType = this.context.currentWitness?.type === 'PLAINTIFF_WITNESS' ?
-          'PLAINTIFF_WITNESS' : 'DEFENDANT_WITNESS';
-        logger.info(`A. speaker type determined as: ${speakerType}`);
-      } else if (speaker.match(/^(MR\.|MS\.|MRS\.)/)) {
-        logger.info(`Speaker appears to be an attorney: "${speaker}"`);
-        const attorneyId = this.context.attorneys.get(speaker);
-        logger.info(`Attorney ID from context: ${attorneyId}`);
-        
-        if (attorneyId && this.context.currentSession?.id) {
-          try {
-            const trialAttorney = await this.prisma.trialAttorney.findFirst({
-              where: { 
-                attorneyId,
-                trialId: this.context.currentSession.id 
-              }
-            });
-            
-            speakerType = trialAttorney?.role === 'PLAINTIFF' ? 
-              'PLAINTIFF_ATTORNEY' : 'DEFENDANT_ATTORNEY';
-            logger.info(`Attorney speaker type determined as: ${speakerType}`);
-          } catch (dbError) {
-            logger.error('Database error looking up trial attorney: ' + (dbError as Error).message);
-            speakerType = 'OTHER';
-          }
-        } else {
-          logger.warn(`Attorney not found in context for speaker: "${speaker}"`);
-          speakerType = 'OTHER';
-        }
-      } else {
-        logger.info(`Speaker does not match known patterns, defaulting to OTHER: "${speaker}"`);
-      }
-    } catch (error) {
-      logger.error('Error determining speaker type: ' + (error as Error).message);
-      logger.error(`Speaker value that caused error: "${speaker}"`);
-      speakerType = 'OTHER';
-      speakerName = speaker || 'UNKNOWN_SPEAKER';
-    }
-    
-    logger.info(`Final speaker type: ${speakerType}`);
-    logger.info(`Final speaker name: "${speakerName}"`);
-    
-    if (!text) {
-      logger.warn('Text is null/undefined, setting to empty string');
-      text = '';
-    }
-    
-    try {
-      const statement = await this.prisma.statementEvent.create({
-        data: {
-          eventId,
-          speakerType,
-          speakerName
-        }
-      });
-      
-      logger.info(`Created statement event with ID: ${statement.id}`);
-      
-      // Create specific statement type with enhanced null checks
-      if (speakerType === 'JUDGE') {
-        logger.info('Creating court statement event');
-        await this.prisma.courtStatementEvent.create({
-          data: {
-            statementId: statement.id,
-            statementType: this.determineCourtStatementType(text)
-          }
-        });
-      } else if (speakerType && typeof speakerType === 'string' && speakerType.includes('ATTORNEY')) {
-        logger.info('Creating attorney statement event');
-        const attorneyId = this.context.attorneys.get(speakerName);
-        
-        await this.prisma.attorneyStatementEvent.create({
-          data: {
-            statementId: statement.id,
-            attorneyId: attorneyId || null
-          }
-        });
-      } else if (speakerType && typeof speakerType === 'string' && speakerType.includes('WITNESS')) {
-        logger.info('Creating witness statement event');
-        
-        await this.prisma.witnessStatementEvent.create({
-          data: {
-            statementId: statement.id,
-            witnessId: this.context.currentWitness?.id || null,
-            examinationType: (this.context.currentExaminationType as any) || 'DIRECT_EXAMINATION'
-          }
-        });
-      } else {
-        logger.info(`No specific statement type created for speaker type: ${speakerType}`);
-      }
-      
-    } catch (error) {
-      logger.error('Error creating statement event: ' + (error as Error).message);
-      logger.error(`Event ID: ${eventId}`);
-      logger.error(`Speaker Type: ${speakerType}`);
-      logger.error(`Speaker Name: "${speakerName}"`);
-      throw error;
-    }
-    
-    logger.info('=== CREATE STATEMENT EVENT END ===');
-  }
-
-  // Keep existing methods for createCourtDirectiveEvent, determineCourtStatementType, 
-  // createWitnessCalledEvent, and parseWitnessCall unchanged...
   
   private async createCourtDirectiveEvent(eventId: number, directiveText: string): Promise<void> {
-    // Implementation unchanged
-    const directiveType = await this.prisma.courtDirectiveType.findFirst({
+    // Normalize directive text
+    const normalized = directiveText.trim();
+    
+    // Find or create directive type
+    let directiveType = await this.prisma.courtDirectiveType.findFirst({
       where: {
         OR: [
-          { name: directiveText },
-          { aliases: { has: directiveText } }
+          { name: normalized },
+          { aliases: { has: normalized } }
         ]
       }
     });
     
-    if (directiveType) {
-      await this.prisma.courtDirectiveEvent.create({
+    if (!directiveType) {
+      // Track unknown directive
+      if (!this.stats.unknownDirectives.includes(normalized)) {
+        this.stats.unknownDirectives.push(normalized);
+        logger.info(`New directive found: "${normalized}"`);
+      }
+      
+      // Create new directive type
+      directiveType = await this.prisma.courtDirectiveType.create({
         data: {
-          eventId,
-          directiveTypeId: directiveType.id,
-          isStandard: true
-        }
-      });
-    } else {
-      const newType = await this.prisma.courtDirectiveType.create({
-        data: {
-          name: directiveText,
-          isPaired: false,
+          name: normalized,
+          description: `Auto-detected directive: ${normalized}`,
+          isPaired: this.isPairedDirective(normalized),
+          isStart: this.isStartDirective(normalized),
           aliases: []
         }
       });
-      
-      await this.prisma.courtDirectiveEvent.create({
-        data: {
-          eventId,
-          directiveTypeId: newType.id,
-          isStandard: false
-        }
-      });
     }
-  }
-
-  private determineCourtStatementType(text: string): any {
-    if (text.match(/objection.*sustained|sustained/i)) return 'RULING';
-    if (text.match(/objection.*overruled|overruled/i)) return 'RULING';
-    if (text.match(/\?$/)) return 'QUESTION';
-    if (text.match(/ladies and gentlemen/i)) return 'INSTRUCTION';
-    if (text.match(/recess|adjourn|reconvene/i)) return 'SCHEDULING';
-    return 'OTHER';
-  }
-
-  private async createWitnessCalledEvent(eventId: number, text: string): Promise<void> {
-    const witnessInfo = this.parseWitnessCall(text);
     
-    if (!witnessInfo) return;
+    await this.prisma.courtDirectiveEvent.create({
+      data: {
+        eventId,
+        directiveTypeId: directiveType.id,
+        isStandard: false // Mark as non-standard since it was auto-detected
+      }
+    });
+  }
+  
+  private async createStatementEvent(eventId: number, speaker: string, text: string): Promise<void> {
+    const speakerType = this.determineSpeakerType(speaker);
     
-    let witness = await this.prisma.witness.findFirst({
-      where: {
-        trialId: this.context.currentSession?.id || 0,
-        name: witnessInfo.name
+    const statementEvent = await this.prisma.statementEvent.create({
+      data: {
+        eventId,
+        speakerType,
+        speakerName: speaker
       }
     });
     
-    if (!witness && witnessInfo.name) {
+    // Create specific statement subtype
+    switch (speakerType) {
+      case 'COURT':
+        await this.prisma.courtStatementEvent.create({
+          data: {
+            statementId: statementEvent.id,
+            statementType: this.determineCourtStatementType(text)
+          }
+        });
+        break;
+        
+      case 'ATTORNEY':
+        const attorneyId = this.context.attorneys.get(speaker.toUpperCase());
+        await this.prisma.attorneyStatementEvent.create({
+          data: {
+            statementId: statementEvent.id,
+            attorneyId,
+            statementType: this.determineAttorneyStatementType(text)
+          }
+        });
+        break;
+        
+      case 'WITNESS':
+        const witnessId = this.context.witnesses.get(speaker.toUpperCase()) || 
+                         this.context.currentWitnessInfo?.id;
+        await this.prisma.witnessStatementEvent.create({
+          data: {
+            statementId: statementEvent.id,
+            witnessId,
+            examinationType: this.context.currentExaminationType as any
+          }
+        });
+        break;
+    }
+  }
+  
+  private async createWitnessCalledEvent(eventId: number, eventInfo: EventInfo): Promise<void> {
+    const trialId = await this.getTrialId();
+    
+    // Determine witness type
+    let witnessType: 'PLAINTIFF_WITNESS' | 'DEFENDANT_WITNESS' | 'EXPERT_WITNESS' = 
+      this.context.currentWitnessInfo?.type || 'FACT_WITNESS' as any;
+    
+    // Find or create witness
+    let witness = await this.prisma.witness.findFirst({
+      where: {
+        name: eventInfo.witnessName,
+        trialId: trialId
+      }
+    });
+    
+    if (!witness) {
       witness = await this.prisma.witness.create({
         data: {
-          trialId: this.context.currentSession?.id || 0,
-          name: witnessInfo.name,
-          witnessType: witnessInfo.type as any
+          name: eventInfo.witnessName || 'UNKNOWN',
+          trialId: trialId,
+          witnessType: witnessType
         }
       });
       
-      this.context.witnesses.set(witnessInfo.name, witness.id);
+      // Update context
+      if (this.context.currentWitnessInfo) {
+        this.context.currentWitnessInfo.id = witness.id;
+      }
     }
     
-    if (witness) {
-      this.context.currentWitness = {
-        id: witness.id,
-        name: witness.name || '',
-        type: witness.witnessType
-      };
+    // Map examination type string to enum
+    let examType: any = 'DIRECT_EXAMINATION';
+    if (eventInfo.examinationType) {
+      if (eventInfo.examinationType === 'VIDEO_DEPOSITION') {
+        examType = 'VIDEO_DEPOSITION';
+      } else if (eventInfo.examinationType.includes('CROSS')) {
+        examType = 'CROSS_EXAMINATION';
+      } else if (eventInfo.examinationType.includes('REDIRECT')) {
+        examType = 'REDIRECT_EXAMINATION';
+      } else if (eventInfo.examinationType.includes('RECROSS')) {
+        examType = 'RECROSS_EXAMINATION';
+      }
     }
-    
-    this.context.currentExaminationType = witnessInfo.examinationType;
     
     await this.prisma.witnessCalledEvent.create({
       data: {
         eventId,
-        witnessId: witness?.id,
-        examinationType: witnessInfo.examinationType as any,
-        previouslySworn: witnessInfo.previouslySworn || false,
-        presentedByVideo: witnessInfo.presentedByVideo || false
+        witnessId: witness.id,
+        examinationType: examType,
+        previouslySworn: eventInfo.previouslySworn || false,
+        presentedByVideo: eventInfo.presentedByVideo || false
       }
     });
   }
-
-  private parseWitnessCall(text: string): any {
-    const info: any = {
-      name: null,
-      type: 'FACT_WITNESS',
-      examinationType: 'DIRECT_EXAMINATION',
-      previouslySworn: false,
-      presentedByVideo: false
-    };
-    
-    const nameMatch = text.match(/^([A-Z\s,\.]+?)(?:,|\s+(?:PLAINTIFF|DEFENDANT))/);
-    if (nameMatch) {
-      info.name = nameMatch[1].trim();
+  
+  private async createExaminationChangeEvent(eventId: number, eventInfo: EventInfo): Promise<void> {
+    // This is similar to witness called but for examination changes
+    await this.createWitnessCalledEvent(eventId, eventInfo);
+  }
+  
+  private async getTrialId(): Promise<number> {
+    if (this.context.currentTrialId) {
+      return this.context.currentTrialId;
     }
     
-    if (text.includes("PLAINTIFF'S WITNESS")) {
-      info.type = 'PLAINTIFF_WITNESS';
-    } else if (text.includes("DEFENDANT'S WITNESS")) {
-      info.type = 'DEFENDANT_WITNESS';
+    if (this.context.currentSession?.id) {
+      const session = await this.prisma.session.findUnique({
+        where: { id: this.context.currentSession.id },
+        select: { trialId: true }
+      });
+      if (session) {
+        this.context.currentTrialId = session.trialId;
+        return session.trialId;
+      }
     }
     
-    if (text.includes('PREVIOUSLY SWORN')) {
-      info.previouslySworn = true;
+    const trial = await this.prisma.trial.findFirst();
+    if (trial) {
+      this.context.currentTrialId = trial.id;
+      return trial.id;
     }
     
-    if (text.match(/DIRECT EXAMINATION/i)) {
-      info.examinationType = 'DIRECT_EXAMINATION';
-    } else if (text.match(/CROSS-EXAMINATION/i)) {
-      info.examinationType = 'CROSS_EXAMINATION';
-    } else if (text.match(/REDIRECT EXAMINATION/i)) {
-      info.examinationType = 'REDIRECT_EXAMINATION';
-    } else if (text.match(/RECROSS-EXAMINATION/i)) {
-      info.examinationType = 'RECROSS_EXAMINATION';
-    } else if (text.match(/VIDEO DEPOSITION/i)) {
-      info.examinationType = 'VIDEO_DEPOSITION';
-      info.presentedByVideo = true;
+    throw new Error('No trial found in database');
+  }
+  
+  private isPairedDirective(text: string): boolean {
+    const pairedPatterns = [
+      /jury\s+(in|out)/i,
+      /courtroom\s+(sealed|unsealed)/i,
+      /videoclip\s+(played|plays|starts|ends|stops)/i,
+      /witness\s+(sworn|excused)/i,
+      /bench\s+conference\s+(begins|ends)/i
+    ];
+    
+    return pairedPatterns.some(p => p.test(text));
+  }
+  
+  private isStartDirective(text: string): boolean {
+    const startPatterns = [
+      /jury\s+out/i,
+      /courtroom\s+sealed/i,
+      /videoclip\s+(played|plays|starts)/i,
+      /witness\s+sworn/i,
+      /bench\s+conference\s+begins/i
+    ];
+    
+    return startPatterns.some(p => p.test(text));
+  }
+  
+  private determineSpeakerType(speaker: string): 'ATTORNEY' | 'COURT' | 'WITNESS' | 'COURT_REPORTER' | 'BAILIFF' | 'OTHER' {
+    const upperSpeaker = speaker.toUpperCase();
+    
+    if (upperSpeaker.includes('THE COURT')) {
+      return 'COURT';
+    }
+    if (upperSpeaker === 'THE WITNESS' || upperSpeaker === 'WITNESS' || 
+        this.context.currentWitnessInfo?.name === speaker) {
+      return 'WITNESS';
+    }
+    if (upperSpeaker.includes('REPORTER')) {
+      return 'COURT_REPORTER';
+    }
+    if (upperSpeaker.includes('BAILIFF') || upperSpeaker.includes('SECURITY')) {
+      return 'BAILIFF';
+    }
+    if (upperSpeaker.match(/^(MR\.|MS\.|MRS\.)/) || 
+        this.context.attorneys.has(upperSpeaker)) {
+      return 'ATTORNEY';
     }
     
-    return info;
+    return 'OTHER';
+  }
+  
+  private determineCourtStatementType(text: string): 'INSTRUCTION' | 'RULING' | 'QUESTION' | 'CLARIFICATION' | 'ADMONISHMENT' | 'SCHEDULING' | 'OTHER' {
+    const lowerText = text.toLowerCase();
+    
+    if (lowerText.includes('sustain') || lowerText.includes('overrul')) return 'RULING';
+    if (lowerText.includes('instruct') || lowerText.includes('jury')) return 'INSTRUCTION';
+    if (lowerText.includes('?')) return 'QUESTION';
+    if (lowerText.includes('clarif') || lowerText.includes('explain')) return 'CLARIFICATION';
+    if (lowerText.includes('admonish') || lowerText.includes('warn')) return 'ADMONISHMENT';
+    if (lowerText.includes('recess') || lowerText.includes('resume') || lowerText.includes('tomorrow')) return 'SCHEDULING';
+    
+    return 'OTHER';
+  }
+  
+  private determineAttorneyStatementType(text: string): 'DIRECT_EXAMINATION' | 'CROSS_EXAMINATION' | 'REDIRECT_EXAMINATION' | 'RECROSS_EXAMINATION' | 'OPENING_STATEMENT' | 'CLOSING_ARGUMENT' | 'OBJECTION' | 'OTHER' {
+    const lowerText = text.toLowerCase();
+    
+    if (lowerText.includes('object')) return 'OBJECTION';
+    if (this.context.currentExaminationType) {
+      if (this.context.currentExaminationType.includes('DIRECT')) return 'DIRECT_EXAMINATION';
+      if (this.context.currentExaminationType.includes('CROSS')) return 'CROSS_EXAMINATION';
+      if (this.context.currentExaminationType.includes('REDIRECT')) return 'REDIRECT_EXAMINATION';
+      if (this.context.currentExaminationType.includes('RECROSS')) return 'RECROSS_EXAMINATION';
+    }
+    
+    return 'OTHER';
+  }
+  
+  private truncate(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  }
+  
+  private printStatistics(): void {
+    logger.info('\n=== PHASE 2 STATISTICS ===');
+    logger.info(`Total Events Created: ${this.stats.totalEvents}`);
+    logger.info(`  - Court Directives: ${this.stats.directiveEvents}`);
+    logger.info(`  - Statements: ${this.stats.statementEvents}`);
+    logger.info(`  - Witness Events: ${this.stats.witnessEvents}`);
+    logger.info(`  - Examination Changes: ${this.stats.examinationChanges}`);
+    logger.info(`Multi-line Directives: ${this.stats.multiLineDirectives}`);
+    logger.info(`Orphaned Lines: ${this.stats.orphanedLines}`);
+    logger.info(`Errors: ${this.stats.errors}`);
+    
+    if (this.stats.unknownDirectives.length > 0) {
+      logger.info('\n📝 New Directives Found (add to seed data):');
+      this.stats.unknownDirectives.forEach(d => {
+        logger.info(`  - "${d}"`);
+      });
+    }
+    
+    logger.info('========================\n');
   }
 }

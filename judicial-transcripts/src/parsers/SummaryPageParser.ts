@@ -149,25 +149,33 @@ export class SummaryPageParser {
   }
   
   private extractJudgeInfo(text: string, info: TrialSummaryInfo): void {
-    // Pattern for judge: "HONORABLE RODNEY GILSTRAP"
-    const judgeMatch = text.match(/(HONORABLE)\s+([A-Z\s]+?)(?:\s*\)\(|$)/m);
+    // Pattern for judge: "BEFORE THE HONORABLE JUDGE RODNEY GILSTRAP"
+    const judgeMatch = text.match(/BEFORE THE (HONORABLE)\s+(?:JUDGE\s+)?([A-Z\s]+?)(?:\n|\s+UNITED)/m);
     if (judgeMatch) {
       info.judge.honorific = judgeMatch[1];
       info.judge.name = judgeMatch[2].trim();
-      info.judge.title = 'UNITED STATES DISTRICT JUDGE'; // Common default
-      logger.info('✓ Extracted judge:', `${info.judge.honorific} ${info.judge.name}`);
+      
+      // Look for title on next line
+      const titleMatch = text.match(/HONORABLE[^\\n]+\n\s*([A-Z\s]+(?:JUDGE|MAGISTRATE)[A-Z\s]*)/m);
+      if (titleMatch) {
+        info.judge.title = titleMatch[1].trim();
+      } else {
+        info.judge.title = 'UNITED STATES DISTRICT JUDGE'; // Common default
+      }
+      
+      logger.info('✓ Extracted judge:', `${info.judge.honorific} ${info.judge.name}, ${info.judge.title}`);
     }
   }
   
   private extractAttorneys(text: string, info: TrialSummaryInfo): void {
     // Extract plaintiff attorneys
-    const plaintiffSection = this.extractSection(text, 'PLAINTIFF', 'DEFENDANT');
+    const plaintiffSection = this.extractSection(text, 'FOR THE PLAINTIFF:', 'FOR THE DEFENDANT');
     if (plaintiffSection) {
       info.plaintiffAttorneys = this.parseAttorneys(plaintiffSection, 'PLAINTIFF');
     }
     
     // Extract defendant attorneys
-    const defendantSection = this.extractSection(text, 'DEFENDANT', 'HONORABLE');
+    const defendantSection = this.extractSection(text, 'FOR THE DEFENDANT', 'COURT REPORTER:');
     if (defendantSection) {
       info.defendantAttorneys = this.parseAttorneys(defendantSection, 'DEFENDANT');
     }
@@ -185,30 +193,54 @@ export class SummaryPageParser {
   
   private parseAttorneys(text: string, side: string): AttorneyInfo[] {
     const attorneys: AttorneyInfo[] = [];
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const lines = text.split('\n').map(line => {
+      // Remove line numbers (digits at start of line)
+      return line.replace(/^\s*\d+\s*/, '').trim();
+    }).filter(line => line.length > 0);
     
     let currentAttorneys: string[] = [];
     let currentFirm: { name: string; address: AddressInfo } | null = null;
+    let collectingAddress = false;
+    let addressLines: string[] = [];
     
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
       
       // Skip section headers
-      if (trimmed.includes(side) || trimmed.includes('ATTORNEYS FOR')) continue;
+      if (line.includes('FOR THE') || line === side + ':') continue;
       
-      // Check if this is an attorney name (all caps, likely person name)
-      if (/^[A-Z\s\.]+$/.test(trimmed) && trimmed.length < 50 && 
-          !trimmed.includes('STREET') && !trimmed.includes('AVENUE') && 
-          !trimmed.includes('DRIVE') && !/\d/.test(trimmed)) {
-        currentAttorneys.push(trimmed);
+      // Check if this is an attorney name (starts with MR./MS./MRS./DR.)
+      if (/^(MR\.|MS\.|MRS\.|DR\.)\s+[A-Z]/.test(line)) {
+        // If we're collecting address, save the previous firm first
+        if (collectingAddress && currentFirm && addressLines.length > 0) {
+          this.parseAddress(addressLines, currentFirm.address);
+          addressLines = [];
+          collectingAddress = false;
+        }
+        
+        currentAttorneys.push(line);
       }
       // Check if this is a law firm name
-      else if (trimmed.includes('LAW') || trimmed.includes('ATTORNEYS') || 
-               trimmed.includes('LLP') || trimmed.includes('PLLC') ||
-               trimmed.includes('PC') || trimmed.includes('P.C.')) {
+      else if (this.isLawFirmName(line)) {
         // Save previous attorneys with their firm
         if (currentAttorneys.length > 0 && currentFirm) {
+          for (const attorneyName of currentAttorneys) {
+            attorneys.push({
+              name: attorneyName,
+              lawFirm: currentFirm
+            });
+          }
+        }
+        
+        // Start new firm
+        currentFirm = {
+          name: line,
+          address: {}
+        };
+        
+        // Add current attorneys to new firm
+        if (currentAttorneys.length > 0) {
           for (const attorneyName of currentAttorneys) {
             attorneys.push({
               name: attorneyName,
@@ -218,27 +250,23 @@ export class SummaryPageParser {
           currentAttorneys = [];
         }
         
-        currentFirm = {
-          name: trimmed,
-          address: {}
-        };
+        collectingAddress = true;
+        addressLines = [];
       }
-      // Check if this is address information
-      else if (currentFirm) {
-        if (/^\d+\s+/.test(trimmed)) {
-          currentFirm.address.street1 = trimmed;
-        } else if (/^[A-Z][a-z]+.*,\s*[A-Z]{2}\s+\d{5}/.test(trimmed)) {
-          const cityStateZip = trimmed.match(/^([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
-          if (cityStateZip) {
-            currentFirm.address.city = cityStateZip[1];
-            currentFirm.address.state = cityStateZip[2];
-            currentFirm.address.zipCode = cityStateZip[3];
-          }
+      // Collect address lines
+      else if (collectingAddress && currentFirm) {
+        addressLines.push(line);
+        
+        // Check if this looks like the last line of an address (contains state and zip)
+        if (/[A-Z]{2}\s+\d{5}/.test(line)) {
+          this.parseAddress(addressLines, currentFirm.address);
+          addressLines = [];
+          collectingAddress = false;
         }
       }
     }
     
-    // Save last set of attorneys
+    // Save any remaining attorneys
     if (currentAttorneys.length > 0) {
       for (const attorneyName of currentAttorneys) {
         attorneys.push({
@@ -248,8 +276,70 @@ export class SummaryPageParser {
       }
     }
     
+    // Parse any remaining address
+    if (collectingAddress && currentFirm && addressLines.length > 0) {
+      this.parseAddress(addressLines, currentFirm.address);
+    }
+    
     logger.info(`✓ Extracted ${attorneys.length} attorneys for ${side}`);
+    attorneys.forEach(att => {
+      logger.info(`   - ${att.name}${att.lawFirm ? ' (' + att.lawFirm.name + ')' : ''}`);
+    });
+    
     return attorneys;
+  }
+  
+  private isLawFirmName(line: string): boolean {
+    const firmIndicators = [
+      'LLP', 'L.L.P.',
+      'PLLC', 'P.L.L.C.',
+      'PC', 'P.C.',
+      'PA', 'P.A.',
+      'LLC', 'L.L.C.',
+      'LAW',
+      'ATTORNEYS',
+      'ASSOCIATES',
+      'PARTNERS',
+      '& '  // Often in firm names like "Smith & Jones"
+    ];
+    
+    return firmIndicators.some(indicator => line.includes(indicator));
+  }
+  
+  private parseAddress(lines: string[], address: AddressInfo): void {
+    if (!lines || lines.length === 0) return;
+    
+    // First line is usually street address
+    if (lines.length > 0) {
+      address.street1 = lines[0];
+    }
+    
+    // Look for city, state, zip (usually last line or second to last)
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      const cityStateZip = line.match(/^([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/);
+      
+      if (cityStateZip) {
+        address.city = cityStateZip[1];
+        address.state = cityStateZip[2];
+        address.zipCode = cityStateZip[3];
+        
+        // If there are lines between street1 and city/state/zip, it might be street2
+        if (i > 0 && i < lines.length - 1) {
+          address.street2 = lines.slice(1, i).join(', ');
+        }
+        
+        break;
+      }
+    }
+    
+    // Default country
+    //gm: needs to be added to data structure
+    /*
+    if (!address.country) {
+      address.country = 'USA';
+    }
+    */
   }
   
   private extractCourtReporter(text: string, info: TrialSummaryInfo): void {
@@ -276,15 +366,42 @@ export class SummaryPageParser {
       }
     }
     
-    // Look for phone number
-    const phoneMatch = reporterSection.match(/\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{4}/);
+    // Look for phone number in the section
+    const phoneMatch = reporterSection.match(/\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
     if (phoneMatch) {
       reporter.phone = phoneMatch[0];
     }
     
-    if (reporter.name) {
-      info.courtReporter = reporter;
-      logger.info('✓ Extracted court reporter:', reporter.name);
+    // Parse address (similar to attorney address parsing)
+    const addressLines: string[] = [];
+    let startCollecting = false;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // Start collecting after we see a street pattern
+      if (/^\d+\s+[A-Z]/.test(trimmed)) {
+        startCollecting = true;
+      }
+      
+      if (startCollecting && trimmed) {
+        addressLines.push(trimmed);
+        
+        // Stop after city/state/zip
+        if (/[A-Z]{2}\s+\d{5}/.test(trimmed)) {
+          break;
+        }
+      }
     }
+    
+    if (addressLines.length > 0) {
+      reporter.address = {};
+      this.parseAddress(addressLines, reporter.address);
+    }
+    
+    // Add to info object
+    info.courtReporter = reporter;
+    
+    logger.info(`✓ Extracted court reporter: ${reporter.name}${reporter.credentials ? ', ' + reporter.credentials : ''}`);
   }
 }

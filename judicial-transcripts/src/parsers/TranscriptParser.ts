@@ -218,6 +218,9 @@ export class TranscriptParser {
     logger.info(`   📊 File stats: ${sessionTotalLines.toLocaleString()} total, ${sessionNonBlankLines.toLocaleString()} content, ${sessionBlankLines.toLocaleString()} blank (${blankPercentage}%)`);
   }
 
+  // src/parsers/TranscriptParser.ts (relevant section)
+  // This is the updated parsePage method that properly skips the trial page number line
+
   private async parsePage(
     pageLines: string[], 
     sessionId: number, 
@@ -269,12 +272,23 @@ export class TranscriptParser {
     let totalLines = 0;
     let blankLines = 0;
     
+    // Only persist lines from PROCEEDINGS section, not SUMMARY
+    const shouldPersistLines = this.currentDocumentSection === 'PROCEEDINGS';
+    
     for (let i = 0; i < pageLines.length; i++) {
       const line = pageLines[i];
       totalLines++;
       
-      // Skip header lines
+      // Skip header line (first line if it contains Case info)
       if (i === 0 && headerInfo) continue;
+      
+      // Skip trial page number line (second line if it's just a number)
+      // gm: this test did not work, just do not need to persist first two lines always header 
+      // if (i === 1 && trialPageNumber && line.trim() === trialPageNumber.toString()) {
+      if (i === 1 && trialPageNumber) {
+        logger.debug(`   Skipping trial page number line: ${trialPageNumber}`);
+        continue;
+      }
       
       const parsedLine = lineParser.parse(line);
       
@@ -287,28 +301,36 @@ export class TranscriptParser {
           }
         }
         
-        // Increment global counters
-        this.globalTrialLineNumber++;
-        this.globalSessionLineNumber++;
-        
-        linesToInsert.push({
-          pageId: page.id,
-          lineNumber: sequentialLineNumber++,
-          trialLineNumber: this.globalTrialLineNumber,
-          sessionLineNumber: this.globalSessionLineNumber,
-          timestamp: parsedLine.timestamp,
-          text: parsedLine.text,
-          speakerPrefix: parsedLine.speakerPrefix,
-          isBlank: parsedLine.isBlank
-        });
+        // Only persist lines if we're in PROCEEDINGS section
+        if (shouldPersistLines) {
+          // Increment global counters
+          this.globalTrialLineNumber++;
+          this.globalSessionLineNumber++;
+          
+          linesToInsert.push({
+            pageId: page.id,
+            lineNumber: sequentialLineNumber++,
+            trialLineNumber: this.globalTrialLineNumber,
+            sessionLineNumber: this.globalSessionLineNumber,
+            timestamp: parsedLine.timestamp,
+            text: parsedLine.text,
+            speakerPrefix: parsedLine.speakerPrefix,
+            isBlank: parsedLine.isBlank
+          });
+        }
       }
     }
     
-    // Batch insert all lines at once
+    // Batch insert all lines at once (only if we have lines to insert)
     if (linesToInsert.length > 0) {
       await this.prisma.line.createMany({
         data: linesToInsert
       });
+      logger.debug(`   Persisted ${linesToInsert.length} lines to database`);
+    } else if (shouldPersistLines) {
+      logger.debug(`   No lines to persist for page ${pageNumber}`);
+    } else {
+      logger.debug(`   Skipping line persistence for ${this.currentDocumentSection} section`);
     }
     
     const nonBlankLines = totalLines - blankLines;

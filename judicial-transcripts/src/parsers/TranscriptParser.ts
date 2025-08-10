@@ -463,9 +463,21 @@ export class TranscriptParser {
       // Remove line numbers from the beginning if present
       const cleanLine = trimmedLine.replace(/^\d+\s+/, '');
       
-      // Parse attorney name (MR./MS./MRS./DR. pattern)
-      // Look for patterns with multiple spaces or at line start
-      const nameMatch = cleanLine.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z][A-Z\s\.,]+?)(?:\s{2,}|$)/i);
+      // Parse attorney name - look for MR./MS./MRS./DR. at the start of the line
+      // Match patterns like "MR. JOSEPH R. RE" or "ALAN G. LAQUER" (sometimes without title)
+      let nameMatch = cleanLine.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z][A-Z\s\.,]+?)(?:\s{2,}|$)/i);
+      
+      // If no title found, check if it's just a name in caps (like "ALAN G. LAQUER")
+      if (!nameMatch && currentSection && cleanLine.match(/^[A-Z][A-Z\s\.]+$/)) {
+        // This might be an attorney name without title
+        const nameParts = cleanLine.trim().split(/\s+/);
+        if (nameParts.length >= 2 && nameParts.length <= 4) {
+          // Likely an attorney name - add MR. as default
+          nameMatch = ['', 'MR.', cleanLine];
+          logger.debug(`Found attorney without title: ${cleanLine}, adding MR. prefix`);
+        }
+      }
+      
       if (nameMatch) {
         // Save previous attorney if exists
         if (currentAttorney) {
@@ -477,16 +489,16 @@ export class TranscriptParser {
         }
         
         // Extract full name and last name
-        const title = nameMatch[1].toUpperCase();
+        const title = nameMatch[1].toUpperCase() || 'MR.';
         const fullNamePart = nameMatch[2].trim();
         
-        // Handle multi-part names (e.g., "JENNIFER L. TRUELOVE")
+        // Handle multi-part names
         const nameParts = fullNamePart.split(/\s+/);
         const lastName = nameParts[nameParts.length - 1].toUpperCase();
         
         // Create new attorney
         currentAttorney = {
-          name: `${title} ${fullNamePart}`,
+          name: `${title} ${fullNamePart}`.trim(),
           title: title,
           lastName: lastName,
           speakerPrefix: `${title} ${lastName}`
@@ -506,7 +518,8 @@ export class TranscriptParser {
       // Check if this is a law firm name (contains legal entity markers)
       if (cleanLine.length > 0 && 
           (cleanLine.includes('LLP') || cleanLine.includes('LLC') || cleanLine.includes('P.C.') || 
-           cleanLine.includes('LAW') || cleanLine.includes('FIRM') || cleanLine.includes('SMITH'))) {
+           cleanLine.includes('LAW') || cleanLine.includes('FIRM') || cleanLine.includes('SMITH') ||
+           cleanLine.includes('KNOBBE') || cleanLine.includes('FENWICK'))) {
         
         // Process any pending address for previous firm
         if (addressLines.length > 0 && currentFirm) {

@@ -89,6 +89,10 @@ npm run parse -- reset --confirm
 npm run parse -- seed
 ```
 
+# new command
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-win.json"
+
+
 ### Configuration
 
 Create a configuration JSON file for your trial:

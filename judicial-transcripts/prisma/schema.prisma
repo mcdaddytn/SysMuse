@@ -266,8 +266,10 @@ model Witness {
   trialId         Int
   trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
   name            String?
-  speakerId       Int       @unique
-  speaker         Speaker   @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  //gm: changed:
+  //speakerId       Int?      // Made optional since multiple witnesses might not have speakers initially
+  speakerId       Int?      @unique
+  speaker         Speaker?  @relation(fields: [speakerId], references: [id], onDelete: SetNull)
   witnessType     WitnessType?
   witnessCaller   WitnessCaller?
   expertField     String?
@@ -276,6 +278,7 @@ model Witness {
   witnessEvents   WitnessCalledEvent[]
   
   @@index([trialId, witnessType])
+  @@index([speakerId])  // Index instead of unique constraint
 }
 
 enum WitnessType {

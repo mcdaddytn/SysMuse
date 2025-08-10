@@ -190,7 +190,8 @@ export class Phase2Processor {
         name: firstWitness.name || undefined,
         witnessType: firstWitness.witnessType || undefined,
         witnessCaller: firstWitness.witnessCaller || undefined,
-        speakerId: firstWitness.speakerId
+        //speakerId: firstWitness.speakerId
+        speakerId: firstWitness.speakerId || undefined
       });
       logger.debug(`Set initial witness context to: ${firstWitness.name}`);
     }
@@ -407,21 +408,21 @@ export class Phase2Processor {
     });
     
     if (!witness) {
-      // Check if speaker already exists for witness
+      // Create a unique speaker for this witness
+      const speakerPrefix = `WITNESS_${witnessName.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+      
       let speaker = await this.prisma.speaker.findFirst({
         where: {
           trialId: this.context.trialId,
-          speakerPrefix: 'A.',
-          speakerType: 'WITNESS'
+          speakerPrefix: speakerPrefix
         }
       });
       
       if (!speaker) {
-        // Create speaker for witness
         speaker = await this.prisma.speaker.create({
           data: {
             trialId: this.context.trialId,
-            speakerPrefix: 'A.',
+            speakerPrefix: speakerPrefix,
             speakerType: 'WITNESS'
           }
         });
@@ -439,7 +440,7 @@ export class Phase2Processor {
         }
       });
       
-      logger.info(`Created witness: ${witnessName}`);
+      logger.info(`Created witness: ${witnessName} with speaker: ${speakerPrefix}`);
     }
     
     // Update state with current witness
@@ -448,7 +449,7 @@ export class Phase2Processor {
       name: witness.name || undefined,
       witnessType: witness.witnessType || undefined,
       witnessCaller: witness.witnessCaller || undefined,
-      speakerId: witness.speakerId
+      speakerId: witness.speaker?.id
     };
     
     // Also update the service's witness context
@@ -959,7 +960,8 @@ export class Phase2Processor {
         name: witness.name || undefined,
         witnessType: witness.witnessType || undefined,
         witnessCaller: witness.witnessCaller || undefined,
-        speakerId: witness.speakerId
+        //speakerId: witness.speakerId
+        speakerId: witness.speakerId || undefined
       });
     }
     

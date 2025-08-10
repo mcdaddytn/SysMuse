@@ -5,6 +5,8 @@
 
 Enhance the phase 1 parsing of the judicial transcripts to include bulk loading for faster performance.  We had implemented this previously, where we inserted lines from an entire page (~25) at a time.  We can do this or choose a bulk quantity that can be configured, but the main need is for the performance of phase 1 parsing to be substanitally increased.
 
+Check first to see that Line records are no longer inserted in bulk, it used to be that way.  There is a parameter in the input configuration (see example-trial-config-mac.json) called batchSize that could be used for this purpose, but it does not appear to be used.  We just want a bulk sql insert for now. Later we will be bulk inserting to both postgres and elastic search, just to keep in mind when creating parameters to control the process.            
+
 ## Input Sources
 - Plain text files (.txt) from Lexis Nexis, converted with the pdf-text-extract library
 - PDF files from court systems

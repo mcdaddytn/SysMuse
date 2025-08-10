@@ -28,8 +28,14 @@ export class TranscriptParser {
     totalLines: 0,
     nonBlankLines: 0,
     totalPages: 0,
-    errorFiles: [] as string[]
+    errorFiles: [] as string[],
+    batchInserts: 0,
+    totalBatchTime: 0
   };
+  
+  // Batch processing
+  private lineBatch: any[] = [];
+  private batchStartTime: number = 0;
 
   constructor(config: TranscriptConfig) {
     this.config = config;
@@ -37,6 +43,32 @@ export class TranscriptParser {
     this.lineParser = new LineParser();
     this.phase2Processor = new Phase2Processor(config);
     this.attorneyService = new AttorneyService(this.prisma);
+  }
+
+  /**
+   * Flush pending line batch to database
+   */
+  private async flushLineBatch(): Promise<void> {
+    if (this.lineBatch.length === 0) return;
+    
+    const batchStartTime = Date.now();
+    
+    try {
+      await this.prisma.line.createMany({
+        data: this.lineBatch
+      });
+      
+      const batchTime = Date.now() - batchStartTime;
+      this.directoryStats.batchInserts++;
+      this.directoryStats.totalBatchTime += batchTime;
+      
+      logger.debug(`Inserted batch of ${this.lineBatch.length} lines in ${batchTime}ms`);
+      
+      this.lineBatch = [];
+    } catch (error) {
+      logger.error(`Failed to insert batch of ${this.lineBatch.length} lines: ${error}`);
+      throw error;
+    }
   }
 
   /**
@@ -56,6 +88,7 @@ export class TranscriptParser {
       }
       
       logger.info(`Found ${textFiles.length} text files to process`);
+      logger.info(`Using batch size of ${this.config.batchSize} lines for bulk inserts`);
       
       // Process each file
       for (const file of textFiles) {
@@ -186,6 +219,9 @@ export class TranscriptParser {
         
         // Check for page break
         if (this.isPageBreak(line)) {
+          // Flush batch before page transition
+          await this.flushLineBatch();
+          
           // Save current page and create new one
           if (currentPage) {
             logger.debug(`Page ${pageNumber} completed with ${sessionLineNumber} lines`);
@@ -220,21 +256,25 @@ export class TranscriptParser {
             sessionLineNumber++;
             trialLineNumber++;
             
-            await this.prisma.line.create({
-              data: {
-                pageId: currentPage.id,
-                lineNumber: parsedLine.lineNumber || sessionLineNumber,
-                trialLineNumber,
-                sessionLineNumber,
-                timestamp: parsedLine.timestamp || null,
-                text: parsedLine.text || null,
-                speakerPrefix: parsedLine.speakerPrefix || null,
-                isBlank: false  // Always false since we're skipping blanks
-              }
+            // Add to batch instead of immediate insert
+            this.lineBatch.push({
+              pageId: currentPage.id,
+              lineNumber: parsedLine.lineNumber || sessionLineNumber,
+              trialLineNumber,
+              sessionLineNumber,
+              timestamp: parsedLine.timestamp || null,
+              text: parsedLine.text || null,
+              speakerPrefix: parsedLine.speakerPrefix || null,
+              isBlank: false  // Always false since we're skipping blanks
             });
             
             this.directoryStats.totalLines++;
             this.directoryStats.nonBlankLines++;
+            
+            // Flush batch when it reaches the configured size
+            if (this.lineBatch.length >= this.config.batchSize) {
+              await this.flushLineBatch();
+            }
             
             // Log progress every 100 lines
             if (sessionLineNumber % 100 === 0) {
@@ -247,6 +287,9 @@ export class TranscriptParser {
         }
       }
     }
+    
+    // Flush any remaining lines in the batch
+    await this.flushLineBatch();
     
     logger.info(`File processing completed: ${fileName}`);
     logger.info(`  Total lines processed: ${sessionLineNumber}`);
@@ -921,7 +964,7 @@ export class TranscriptParser {
    * Log directory statistics
    */
   private logDirectoryStats(processingTime: number): void {
-    const { totalFiles, totalLines, nonBlankLines, totalPages, errorFiles } = this.directoryStats;
+    const { totalFiles, totalLines, nonBlankLines, totalPages, errorFiles, batchInserts, totalBatchTime } = this.directoryStats;
     const blankLines = totalLines - nonBlankLines;
     const blankPercentage = totalLines > 0 ? ((blankLines / totalLines) * 100).toFixed(1) : '0';
     
@@ -935,13 +978,26 @@ export class TranscriptParser {
     logger.info(`✅ Content lines: ${nonBlankLines.toLocaleString()}`);
     logger.info(`⚪ Blank lines: ${blankLines.toLocaleString()} (${blankPercentage}%)`);
     
+    // Batch processing statistics
+    logger.info('\n📦 BATCH PROCESSING STATS:');
+    logger.info(`🔢 Total batch inserts: ${batchInserts}`);
+    logger.info(`⚡ Batch size: ${this.config.batchSize} lines`);
+    if (batchInserts > 0) {
+      const avgBatchTime = (totalBatchTime / batchInserts).toFixed(1);
+      const avgLinesPerBatch = (nonBlankLines / batchInserts).toFixed(1);
+      logger.info(`⏱️  Average batch insert time: ${avgBatchTime}ms`);
+      logger.info(`📈 Average lines per batch: ${avgLinesPerBatch}`);
+      const insertRate = totalBatchTime > 0 ? ((nonBlankLines / totalBatchTime) * 1000).toFixed(0) : '0';
+      logger.info(`💾 Database insert rate: ${insertRate} lines/second`);
+    }
+    
     if (errorFiles.length > 0) {
-      logger.warn(`⚠️  Files with errors: ${errorFiles.length}`);
+      logger.warn(`\n⚠️  Files with errors: ${errorFiles.length}`);
       errorFiles.forEach(file => logger.warn(`   - ${file}`));
     }
     
     const avgLinesPerSecond = processingTime > 0 ? (totalLines / processingTime).toFixed(0) : '0';
-    logger.info(`🚀 Processing speed: ${avgLinesPerSecond} lines/second`);
+    logger.info(`\n🚀 Overall processing speed: ${avgLinesPerSecond} lines/second`);
     logger.info('='.repeat(60));
   }
 }

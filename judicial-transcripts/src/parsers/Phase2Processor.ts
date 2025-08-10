@@ -372,7 +372,51 @@ export class Phase2Processor {
     };
     state.eventLines = [line];
     
-    logger.info(`Witness called detected: ${nameMatch[1]}`);
+    // Update witness context immediately
+    const witnessName = nameMatch[1].trim();
+    logger.info(`Witness called detected: ${witnessName}`);
+    
+    // Create or find witness and update context
+    let witness = await this.prisma.witness.findFirst({
+      where: {
+        trialId: this.context.trialId,
+        name: witnessName
+      }
+    });
+    
+    if (!witness) {
+      // Create speaker for witness
+      const speaker = await this.prisma.speaker.create({
+        data: {
+          trialId: this.context.trialId,
+          speakerPrefix: 'A.',
+          speakerType: 'WITNESS'
+        }
+      });
+      
+      witness = await this.prisma.witness.create({
+        data: {
+          trialId: this.context.trialId,
+          name: witnessName,
+          witnessCaller: state.currentEvent.metadata.witnessCaller,
+          speakerId: speaker.id
+        }
+      });
+      
+      logger.info(`Created witness: ${witnessName}`);
+    }
+    
+    // Update state with current witness
+    state.currentWitness = {
+      id: witness.id,
+      name: witness.name || undefined,
+      witnessType: witness.witnessType || undefined,
+      witnessCaller: witness.witnessCaller || undefined,
+      speakerId: witness.speakerId
+    };
+    
+    logger.info(`Set current witness context: ${witnessName}`);
+    
     return true;
   }
 

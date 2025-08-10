@@ -107,61 +107,113 @@ export class TranscriptParser {
     let pageNumber = 0;
     let sessionLineNumber = 0;
     let trialLineNumber = 0;
+    let session: any = null;
+    let summaryProcessed = false;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      const trimmedLine = line.trim();
       
-      // Detect section changes
-      if (line.includes('PROCEEDINGS')) {
-        currentSection = 'PROCEEDINGS';
-        continue;
-      } else if (line.includes('REPORTER\'S CERTIFICATE')) {
-        currentSection = 'CERTIFICATION';
+      // Skip empty lines at the document level
+      if (!trimmedLine && currentSection === 'UNKNOWN') {
         continue;
       }
       
-      // Parse based on current section
-      if (currentSection === 'UNKNOWN' && !summaryInfo) {
-        // First section is usually summary
-        currentSection = 'SUMMARY';
-        summaryInfo = await this.parseSummarySection(lines, i);
+      // Detect section changes - be more flexible with detection
+      if (trimmedLine.includes('P R O C E E D I N G S') || 
+          trimmedLine.includes('PROCEEDINGS') ||
+          (trimmedLine.match(/^\d{2}:\d{2}:\d{2}/) && !summaryProcessed)) {
+        // If we see a timestamp pattern, we're definitely in proceedings
+        currentSection = 'PROCEEDINGS';
+        //gm: too much logging
+        //logger.info(`Detected PROCEEDINGS section at line ${i}`);
         
-        // Create or update trial
-        if (summaryInfo) {
-          await this.createOrUpdateTrial(summaryInfo);
+        // Create session if not already created
+        if (!session && this.trialId) {
+          if (!sessionInfo) {
+            sessionInfo = this.extractSessionInfo(lines, fileName);
+          }
+          session = await this.createSession(sessionInfo, fileName);
+          logger.info(`Created session: ${session.id}`);
         }
         
-        // Extract session info
-        sessionInfo = this.extractSessionInfo(lines, fileName);
-        
-        // Skip to end of summary
-        i += 100; // Approximate, will be refined
+        // Create first page if needed
+        if (!currentPage && session) {
+          pageNumber++;
+          currentPage = await this.createPage(session.id, pageNumber, currentSection);
+          logger.info(`Created first page of PROCEEDINGS: ${currentPage.id}`);
+        }
+      } else if (trimmedLine.includes('REPORTER\'S CERTIFICATE') || 
+                 trimmedLine.includes('CERTIFICATION')) {
+        currentSection = 'CERTIFICATION';
+        logger.info(`Detected CERTIFICATION section at line ${i}`);
         continue;
       }
       
-      if (currentSection === 'PROCEEDINGS' && sessionInfo && this.trialId) {
-        // Create session if needed
-        if (!currentPage) {
-          const session = await this.createSession(sessionInfo, fileName);
-          currentPage = await this.createPage(session.id, ++pageNumber, currentSection);
+      // Process summary section (first part of document)
+      if (currentSection === 'UNKNOWN' && !summaryProcessed) {
+        // Collect lines for summary parsing (first ~100 lines)
+        if (i < 100) {
+          continue; // Collect more lines
+        } else {
+          // Parse summary once we have enough lines
+          currentSection = 'SUMMARY';
+          summaryInfo = await this.parseSummarySection(lines, 0);
+          
+          if (summaryInfo) {
+            await this.createOrUpdateTrial(summaryInfo);
+          }
+          
+          sessionInfo = this.extractSessionInfo(lines, fileName);
+          summaryProcessed = true;
+          logger.info('Summary section processed');
+          
+          // Reset index to process from where we detected proceedings
+          i = 100; // Skip past summary
+          continue;
+        }
+      }
+      
+      // Process PROCEEDINGS section
+      if (currentSection === 'PROCEEDINGS' && this.trialId) {
+        // Ensure we have a session
+        if (!session) {
+          if (!sessionInfo) {
+            sessionInfo = this.extractSessionInfo(lines, fileName);
+          }
+          session = await this.createSession(sessionInfo, fileName);
+          logger.info(`Created session: ${session.id}`);
         }
         
         // Check for page break
         if (this.isPageBreak(line)) {
-          const pageInfo = this.extractPageInfo(lines, i);
-          if (pageInfo) {
-            currentPage = await this.createPage(
-              currentPage.sessionId,
-              ++pageNumber,
-              currentSection,
-              pageInfo
-            );
+          // Save current page and create new one
+          if (currentPage) {
+            logger.debug(`Page ${pageNumber} completed with ${sessionLineNumber} lines`);
           }
-          i += 5; // Skip page header lines
+          
+          pageNumber++;
+          const pageInfo = this.extractPageInfo(lines, i);
+          currentPage = await this.createPage(
+            session.id,
+            pageNumber,
+            currentSection,
+            pageInfo
+          );
+          
+          // Skip page header lines
+          i += this.getPageHeaderLineCount(lines, i);
           continue;
         }
         
-        // Parse line
+        // Ensure we have a page
+        if (!currentPage) {
+          pageNumber++;
+          currentPage = await this.createPage(session.id, pageNumber, currentSection);
+          logger.info(`Created page ${pageNumber}`);
+        }
+        
+        // Parse and store line
         const parsedLine = this.lineParser.parse(line);
         if (parsedLine) {
           sessionLineNumber++;
@@ -184,9 +236,18 @@ export class TranscriptParser {
           if (!parsedLine.isBlank) {
             this.directoryStats.nonBlankLines++;
           }
+          
+          // Log progress every 100 lines
+          if (sessionLineNumber % 100 === 0) {
+            logger.debug(`Processed ${sessionLineNumber} lines in session`);
+          }
         }
       }
     }
+    
+    logger.info(`File processing completed: ${fileName}`);
+    logger.info(`  Total lines processed: ${sessionLineNumber}`);
+    logger.info(`  Pages created: ${pageNumber}`);
   }
 
   /**
@@ -620,6 +681,42 @@ export class TranscriptParser {
            !!line.match(/^\s*\d+\s*$/) || 
            line.includes('Page ') ||
            line.includes('- - -');
+  }
+  
+  /**
+   * Get number of lines in page header to skip
+   */
+  private getPageHeaderLineCount(lines: string[], index: number): number {
+    let headerLines = 0;
+    
+    // Check next few lines for header pattern
+    for (let i = index; i < Math.min(index + 10, lines.length); i++) {
+      const line = lines[i].trim();
+      
+      // Page headers usually contain:
+      // - Case number line
+      // - PageID line
+      // - Page number line
+      // - Blank lines
+      // - Sometimes date/time info
+      
+      if (line.includes('Case') || 
+          line.includes('PageID') || 
+          line.match(/^\d+$/) ||
+          line.includes('Document') ||
+          line === '' ||
+          line.includes('Page ')) {
+        headerLines++;
+      } else if (line.match(/^\d{2}:\d{2}:\d{2}/)) {
+        // Found first content line with timestamp
+        break;
+      } else if (headerLines > 0) {
+        // We've seen header lines and now hit content
+        break;
+      }
+    }
+    
+    return Math.max(headerLines, 3); // Skip at least 3 lines for safety
   }
 
   /**

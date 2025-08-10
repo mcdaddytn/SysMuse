@@ -1,113 +1,83 @@
 // src/types/config.types.ts
+import { 
+  WitnessType as PrismaWitnessType,
+  WitnessCaller as PrismaWitnessCaller,
+  ExaminationType as PrismaExaminationType,
+  SwornStatus as PrismaSwornStatus,
+  SpeakerType as PrismaSpeakerType,
+  EventType as PrismaEventType
+} from '@prisma/client';
 
 export interface TranscriptConfig {
-  transcriptPath: string;
-  format: 'pdf' | 'txt';
-  caseName?: string;
-  caseNumber?: string;
-  phases: {
-    phase1: boolean;
-    phase2: boolean;
-    phase3: boolean;
-  };
-  pdfExtractOptions?: {
-    layout?: string;
-    encoding?: string;
-    password?: string;
-    max?: number;
-    version?: string;
-  };
-  parsingOptions?: {
-    ignoreBlankLines: boolean;
-    trimWhitespace: boolean;
-    lineDelimiters?: string[];
-    pageDelimiters?: string[];
-  };
-  elasticsearchOptions?: {
-    url: string;
-    index: string;
-    apiKey?: string;
-  };
-}
-
-export interface ParsingContext {
-  currentSession?: {
-    id: number;
-    date: Date;
-    type: string;
-  };
-  currentPage?: {
-    id: number;
-    number: number;
-    documentSection: DocumentSection;
-  };
-  currentSpeaker?: {
-    type: string;
+  inputDir: string;
+  outputDir: string;
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  batchSize: number;
+  enableElasticSearch: boolean;
+  elasticSearchUrl?: string;
+  // Trial info is optional - will be parsed from transcripts
+  trial?: {
     name?: string;
-    attorneyId?: number;
-    witnessId?: number;
+    caseNumber?: string;
+    court?: string;
+    courtDivision?: string;
+    courtDistrict?: string;
   };
-  currentWitness?: {
-    id: number;
-    name: string;
-    type: string;
-  };
-  currentExaminationType?: string;
-  attorneys: Map<string, number>; // name -> id
-  witnesses: Map<string, number>; // name -> id
-}
-
-export interface ParsedLine {
-  lineNumber: number;
-  timestamp?: string;
-  text: string;
-  speakerPrefix?: string;
-  isBlank: boolean;
-}
-
-export interface ParsedPage {
-  pageNumber: number;
-  totalPages?: number;
-  documentSection: DocumentSection;
-  trialPageNumber?: number; // Renamed from transcriptPageNumber
-  pageId?: string;
-  headerText?: string;
-  lines: ParsedLine[];
 }
 
 export interface SessionInfo {
   sessionDate: Date;
   sessionType: 'MORNING' | 'AFTERNOON' | 'SPECIAL' | 'BENCH_TRIAL' | 'JURY_VERDICT' | 'OTHER';
-  fileName: string;
-  documentNumber?: number; // Moved from Page to Session
+  fileName?: string;
+  documentNumber?: number;
 }
 
-export interface TrialSummaryInfo {
-  trialName: string;
-  caseNumber: string;
-  court: string;           // e.g., "UNITED STATES DISTRICT COURT"
-  courtDivision?: string;  // e.g., "EASTERN DISTRICT OF TEXAS"
-  courtDistrict?: string;  // e.g., "MARSHALL DIVISION"
-  judge: {
+export interface ParsedLine {
+  lineNumber: number;
+  timestamp?: string;
+  text?: string;
+  speakerPrefix?: string;
+  isBlank: boolean;
+}
+
+export interface SummaryInfo {
+  caseInfo: {
+    name: string;
+    caseNumber: string;
+    court: string;
+    courtDivision?: string;
+    courtDistrict?: string;
+  };
+  judge?: {
     name: string;
     title?: string;
     honorific?: string;
   };
-  plaintiffAttorneys: AttorneyInfo[];
-  defendantAttorneys: AttorneyInfo[];
   courtReporter?: {
     name: string;
     credentials?: string;
+    title?: string;
+    stateNumber?: string;
+    expirationDate?: Date;
     phone?: string;
     address?: AddressInfo;
   };
+  plaintiffAttorneys: AttorneyInfo[];
+  defendantAttorneys: AttorneyInfo[];
 }
 
 export interface AttorneyInfo {
   name: string;
+  title?: string;
+  lastName?: string;
+  speakerPrefix?: string;
+  barNumber?: string;
   lawFirm?: {
     name: string;
-    address?: AddressInfo;
+    office?: {
+      name: string;
+      address?: AddressInfo;
+    };
   };
 }
 
@@ -117,68 +87,115 @@ export interface AddressInfo {
   city?: string;
   state?: string;
   zipCode?: string;
+  country?: string;
 }
 
-// Document Section Types
-export type DocumentSection = 'SUMMARY' | 'PROCEEDINGS' | 'CERTIFICATION' | 'UNKNOWN';
-
-// Phase 2 Processing Types
-export interface Phase2Context {
-  currentSpeaker?: string;
-  speakerType?: SpeakerType;
-  currentExamination?: {
-    witnessName: string;
-    examinationType: ExaminationType;
-    startTime?: string;
-  };
-  lineBuffer: ParsedLine[];
-  eventBuffer: TrialEventData[];
+// Speaker-related types
+export interface SpeakerInfo {
+  id?: number;
+  speakerPrefix: string;
+  speakerType: SpeakerType;
+  name?: string;
+  attorneyId?: number;
+  witnessId?: number;
+  jurorId?: number;
+  judgeId?: number;
 }
 
+// Re-export Prisma enums for use throughout the application
+export type SpeakerType = PrismaSpeakerType;
+export const SpeakerType = {
+  ATTORNEY: 'ATTORNEY' as SpeakerType,
+  JUDGE: 'JUDGE' as SpeakerType,
+  WITNESS: 'WITNESS' as SpeakerType,
+  JUROR: 'JUROR' as SpeakerType,
+  ANONYMOUS: 'ANONYMOUS' as SpeakerType
+};
+
+// Witness-related types
+export interface WitnessInfo {
+  id?: number;
+  name?: string;
+  witnessType?: WitnessType;
+  witnessCaller?: WitnessCaller;
+  expertField?: string;
+  speakerId?: number;
+}
+
+export type WitnessType = PrismaWitnessType;
+export type WitnessCaller = PrismaWitnessCaller;
+
+// Juror-related types
+export interface JurorInfo {
+  id?: number;
+  name?: string;
+  lastName?: string;
+  jurorNumber?: number;
+  speakerPrefix: string;
+  alias?: string;
+}
+
+// Event types
 export interface TrialEventData {
   startTime?: string;
   endTime?: string;
+  duration?: number;
+  startLineNumber?: number;
+  endLineNumber?: number;
+  lineCount?: number;
   eventType: EventType;
-  text: string;
-  speakerInfo?: {
-    type: SpeakerType;
-    name?: string;
-    attorneyId?: number;
-    witnessId?: number;
-  };
+  speakerId?: number;
+  text?: string;
   metadata?: {
     [key: string]: any;
   };
 }
 
-// Enums matching Prisma schema
-export enum EventType {
-  COURT_DIRECTIVE = 'COURT_DIRECTIVE',
-  STATEMENT = 'STATEMENT',
-  WITNESS_CALLED = 'WITNESS_CALLED',
-  OBJECTION = 'OBJECTION',
-  RULING = 'RULING',
-  EXHIBIT = 'EXHIBIT',
-  OTHER = 'OTHER'
+export type EventType = PrismaEventType;
+export const EventType = {
+  COURT_DIRECTIVE: 'COURT_DIRECTIVE' as EventType,
+  STATEMENT: 'STATEMENT' as EventType,
+  WITNESS_CALLED: 'WITNESS_CALLED' as EventType,
+  OBJECTION: 'OBJECTION' as EventType,
+  RULING: 'RULING' as EventType,
+  EXHIBIT: 'EXHIBIT' as EventType,
+  OTHER: 'OTHER' as EventType
+};
+
+// Witness event specific types
+export interface WitnessCalledEventData extends TrialEventData {
+  witnessId?: number;
+  witnessName?: string;
+  examinationType: ExaminationType;
+  swornStatus: SwornStatus;
+  continued: boolean;
+  presentedByVideo: boolean;
+  rawText: string;
 }
 
-export enum SpeakerType {
-  ATTORNEY = 'ATTORNEY',
-  COURT = 'COURT',
-  WITNESS = 'WITNESS',
-  COURT_REPORTER = 'COURT_REPORTER',
-  BAILIFF = 'BAILIFF',
-  OTHER = 'OTHER'
+export type ExaminationType = PrismaExaminationType;
+export type SwornStatus = PrismaSwornStatus;
+
+// Phase 2 Processing Context
+export interface Phase2Context {
+  trialId: number;
+  currentSpeaker?: SpeakerInfo;
+  currentWitness?: WitnessInfo;
+  currentExamination?: {
+    witnessId: number;
+    examinationType: ExaminationType;
+    startTime?: string;
+  };
+  speakers: Map<string, SpeakerInfo>;
+  attorneys: Map<string, number>;
+  witnesses: Map<string, number>;
+  jurors: Map<string, JurorInfo>;
+  lineBuffer: ParsedLine[];
+  eventBuffer: TrialEventData[];
 }
 
-export enum ExaminationType {
-  DIRECT_EXAMINATION = 'DIRECT_EXAMINATION',
-  CROSS_EXAMINATION = 'CROSS_EXAMINATION',
-  REDIRECT_EXAMINATION = 'REDIRECT_EXAMINATION',
-  RECROSS_EXAMINATION = 'RECROSS_EXAMINATION',
-  EXAMINATION_CONTINUED = 'EXAMINATION_CONTINUED',
-  VIDEO_DEPOSITION = 'VIDEO_DEPOSITION'
-}
+// Document Section Types
+export type DocumentSection = 'SUMMARY' | 'PROCEEDINGS' | 'CERTIFICATION' | 'UNKNOWN';
 
 // Database management types
 export interface DatabaseBackupInfo {
@@ -196,5 +213,6 @@ export interface DatabaseStats {
   totalLines: number;
   totalEvents: number;
   totalMarkers: number;
+  totalSpeakers: number;
   databaseSize: string;
 }

@@ -1,5 +1,5 @@
 // This is the Prisma schema file for the Judicial Transcripts system
-// Using PostgreSQL as the database
+// Using PostgreSQL as the database with MTI pattern for Speakers
 
 generator client {
   provider = "prisma-client-js"
@@ -26,6 +26,8 @@ model Trial {
   sessions        Session[]
   attorneys       TrialAttorney[]
   witnesses       Witness[]
+  jurors          Juror[]
+  anonymousSpeakers AnonymousSpeaker[]
   courtReporter   CourtReporter?
   judge           Judge?
   trialEvents     TrialEvent[]
@@ -39,10 +41,10 @@ model Judge {
   name            String
   title           String?
   honorific       String?   // e.g., "HONORABLE"
+  speakerId       Int       @unique
+  speaker         Speaker   @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   trialId         Int       @unique
   trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  
-  statements      CourtStatementEvent[]
   
   @@index([trialId])
 }
@@ -71,7 +73,7 @@ model Session {
   trial               Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
   sessionDate         DateTime
   sessionType         SessionType
-  documentNumber      Int?      // Moved from Page entity
+  documentNumber      Int?
   fileName            String?
   totalPages          Int?      // Total pages in this session
   transcriptStartPage Int?      // First page number within entire trial
@@ -110,8 +112,8 @@ model Page {
   sessionId         Int
   session           Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   pageNumber        Int             // Page number within session
-  documentSection   DocumentSection @default(UNKNOWN) // New field
-  trialPageNumber   Int?            // Page number within entire trial (renamed from transcriptPageNumber)
+  documentSection   DocumentSection @default(UNKNOWN)
+  trialPageNumber   Int?            // Page number within entire trial
   pageId            String?         // e.g., "18337" (parsed from PageID #: 18337)
   headerText        String?         // Full page header text
   createdAt         DateTime        @default(now())
@@ -119,7 +121,7 @@ model Page {
   lines           Line[]
   
   @@index([sessionId, pageNumber])
-  @@index([documentSection]) // New index for section queries
+  @@index([documentSection])
   @@unique([sessionId, pageNumber])
 }
 
@@ -147,14 +149,20 @@ model Line {
 model Attorney {
   id              Int       @id @default(autoincrement())
   name            String
+  title           String?   // MR., MS., MRS., DR., etc.
+  lastName        String?   // Parsed last name for matching
+  speakerPrefix   String?   // Calculated field: title + lastName (e.g., "MR. SMITH")
   barNumber       String?
+  speakerId       Int       @unique
+  speaker         Speaker   @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
   trialAttorneys  TrialAttorney[]
-  statements      AttorneyStatementEvent[]
   
   @@index([name])
+  @@index([speakerPrefix])
+  @@index([lastName])
 }
 
 model TrialAttorney {
@@ -166,6 +174,8 @@ model TrialAttorney {
   role            AttorneyRole
   lawFirmId       Int?
   lawFirm         LawFirm?  @relation(fields: [lawFirmId], references: [id], onDelete: SetNull)
+  lawFirmOfficeId Int?
+  lawFirmOffice   LawFirmOffice? @relation(fields: [lawFirmOfficeId], references: [id], onDelete: SetNull)
   
   @@unique([trialId, attorneyId])
   @@index([trialId, role])
@@ -180,14 +190,29 @@ enum AttorneyRole {
 model LawFirm {
   id              Int       @id @default(autoincrement())
   name            String
-  addressId       Int?
-  address         Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  offices         LawFirmOffice[]
+  trialAttorneys  TrialAttorney[]
+  
+  @@index([name])
+}
+
+model LawFirmOffice {
+  id              Int       @id @default(autoincrement())
+  lawFirmId       Int
+  lawFirm         LawFirm   @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  name            String    // Office name (typically city name)
+  addressId       Int       @unique
+  address         Address   @relation(fields: [addressId], references: [id], onDelete: Cascade)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
   trialAttorneys  TrialAttorney[]
   
-  @@index([name])
+  @@index([lawFirmId])
+  @@unique([lawFirmId, name])
 }
 
 model Address {
@@ -199,8 +224,39 @@ model Address {
   zipCode         String?
   country         String?   @default("USA")
   
-  lawFirms        LawFirm[]
+  lawFirmOffice   LawFirmOffice?
   courtReporters  CourtReporter[]
+}
+
+// ==================== Speaker MTI Base Entity ====================
+
+model Speaker {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  speakerPrefix   String    // The text that will be matched in transcript (e.g., "MR. SMITH", "Q.", "THE COURT")
+  speakerType     SpeakerType
+  createdAt       DateTime  @default(now())
+  
+  // Relations to specific speaker types
+  attorney        Attorney?
+  judge           Judge?
+  witness         Witness?
+  juror           Juror?
+  anonymousSpeaker AnonymousSpeaker?
+  
+  // Relations to statements
+  statements      StatementEvent[]
+  
+  @@index([trialId, speakerPrefix])
+  @@unique([trialId, speakerPrefix])
+}
+
+enum SpeakerType {
+  ATTORNEY
+  JUDGE
+  WITNESS
+  JUROR
+  ANONYMOUS
 }
 
 // ==================== Witness Management ====================
@@ -210,23 +266,61 @@ model Witness {
   trialId         Int
   trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
   name            String?
-  witnessType     WitnessType
+  speakerId       Int       @unique
+  speaker         Speaker   @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  witnessType     WitnessType?
+  witnessCaller   WitnessCaller?
   expertField     String?
   createdAt       DateTime  @default(now())
   
   witnessEvents   WitnessCalledEvent[]
-  statements      WitnessStatementEvent[]
   
   @@index([trialId, witnessType])
 }
 
 enum WitnessType {
-  PLAINTIFF_WITNESS
-  DEFENDANT_WITNESS
   EXPERT_WITNESS
   FACT_WITNESS
   CHARACTER_WITNESS
   REBUTTAL_WITNESS
+}
+
+enum WitnessCaller {
+  PLAINTIFF
+  DEFENDANT
+}
+
+// ==================== Juror Entity ====================
+
+model Juror {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  speakerId       Int       @unique
+  speaker         Speaker   @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  name            String?   // Full name if parseable
+  lastName        String?   // Last name for alias matching
+  jurorNumber     Int?      // Juror number if parseable
+  alias           String?   // Alternative reference (e.g., "MR. RAGSDALE" for "JUROR RAGSDALE")
+  createdAt       DateTime  @default(now())
+  
+  @@index([trialId])
+  @@index([lastName])
+}
+
+// ==================== Anonymous Speaker Entity ====================
+
+model AnonymousSpeaker {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  speakerId       Int       @unique
+  speaker         Speaker   @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  role            String?   // e.g., "COURT SECURITY OFFICER", "TECHNICIAN", "COURT REPORTER"
+  description     String?   // Any additional context
+  createdAt       DateTime  @default(now())
+  
+  @@index([trialId])
 }
 
 // ==================== Phase II: Trial Events (MTI Pattern) ====================
@@ -244,7 +338,6 @@ model TrialEvent {
   endLineNumber   Int?
   lineCount       Int?
   eventType       EventType
-  text            String?
   createdAt       DateTime  @default(now())
   
   // Specific event types
@@ -272,6 +365,7 @@ model CourtDirectiveEvent {
   event           TrialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   directiveTypeId Int
   directiveType   CourtDirectiveType @relation(fields: [directiveTypeId], references: [id])
+  rawText         String    @db.VarChar(255) // Store raw directive text (max 255 chars)
   isStandard      Boolean   @default(true)
   
   @@index([directiveTypeId])
@@ -293,78 +387,13 @@ model StatementEvent {
   id              Int       @id @default(autoincrement())
   eventId         Int       @unique
   event           TrialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  speakerType     SpeakerType
-  speakerName     String?
+  speakerId       Int?
+  speaker         Speaker?  @relation(fields: [speakerId], references: [id], onDelete: SetNull)
+  text            String    @db.Text // Long text field for statement content
+  elasticSearchId String?   // ID for ElasticSearch indexing
   
-  // Polymorphic relations
-  attorneyStatement AttorneyStatementEvent?
-  courtStatement    CourtStatementEvent?
-  witnessStatement  WitnessStatementEvent?
-  
-  @@index([speakerType])
-}
-
-enum SpeakerType {
-  ATTORNEY
-  COURT
-  WITNESS
-  COURT_REPORTER
-  BAILIFF
-  OTHER
-}
-
-model AttorneyStatementEvent {
-  id              Int       @id @default(autoincrement())
-  statementId     Int       @unique
-  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
-  attorneyId      Int?
-  attorney        Attorney? @relation(fields: [attorneyId], references: [id], onDelete: SetNull)
-  statementType   AttorneyStatementType?
-  
-  @@index([attorneyId])
-}
-
-enum AttorneyStatementType {
-  DIRECT_EXAMINATION
-  CROSS_EXAMINATION
-  REDIRECT_EXAMINATION
-  RECROSS_EXAMINATION
-  OPENING_STATEMENT
-  CLOSING_ARGUMENT
-  OBJECTION
-  OTHER
-}
-
-model WitnessStatementEvent {
-  id              Int       @id @default(autoincrement())
-  statementId     Int       @unique
-  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
-  witnessId       Int?
-  witness         Witness?  @relation(fields: [witnessId], references: [id], onDelete: SetNull)
-  examinationType ExaminationType?
-  
-  @@index([witnessId])
-}
-
-model CourtStatementEvent {
-  id              Int       @id @default(autoincrement())
-  statementId     Int       @unique
-  statement       StatementEvent @relation(fields: [statementId], references: [id], onDelete: Cascade)
-  judgeId         Int?
-  judge           Judge?    @relation(fields: [judgeId], references: [id], onDelete: SetNull)
-  statementType   CourtStatementType?
-  
-  @@index([judgeId])
-}
-
-enum CourtStatementType {
-  INSTRUCTION
-  RULING
-  QUESTION
-  CLARIFICATION
-  ADMONISHMENT
-  SCHEDULING
-  OTHER
+  @@index([speakerId])
+  @@index([elasticSearchId])
 }
 
 model WitnessCalledEvent {
@@ -374,8 +403,10 @@ model WitnessCalledEvent {
   witnessId       Int?
   witness         Witness?  @relation(fields: [witnessId], references: [id], onDelete: SetNull)
   examinationType ExaminationType
-  previouslySworn Boolean   @default(false)
+  swornStatus     SwornStatus @default(NOT_SWORN)
+  continued       Boolean   @default(false)
   presentedByVideo Boolean  @default(false)
+  rawText         String    @db.VarChar(255) // Store raw witness calling text (max 255 chars)
   
   @@index([witnessId])
 }
@@ -385,8 +416,13 @@ enum ExaminationType {
   CROSS_EXAMINATION
   REDIRECT_EXAMINATION
   RECROSS_EXAMINATION
-  EXAMINATION_CONTINUED
   VIDEO_DEPOSITION
+}
+
+enum SwornStatus {
+  SWORN
+  PREVIOUSLY_SWORN
+  NOT_SWORN
 }
 
 // ==================== Phase III: Markers and Sections ====================
@@ -403,87 +439,50 @@ model Marker {
   endTime         String?
   name            String?
   description     String?
-  isResolved      Boolean   @default(false)
+  metadata        Json?     // Store additional marker metadata
   createdAt       DateTime  @default(now())
   
-  markerTexts     MarkerText[]
-  
   @@index([trialId, markerType])
-  @@index([startEventId, endEventId])
 }
 
 enum MarkerType {
-  TRIAL_START
-  TRIAL_END
-  SESSION_START
-  SESSION_END
-  WITNESS_TESTIMONY
-  OPENING_ARGUMENT
+  OPENING_STATEMENT
   CLOSING_ARGUMENT
+  WITNESS_TESTIMONY
   JURY_INSTRUCTION
-  OBJECTION
+  OBJECTION_SUSTAINED
+  OBJECTION_OVERRULED
+  EXHIBIT_ADMITTED
+  EXHIBIT_REJECTED
   SIDEBAR
   RECESS
   SEALED_PORTION
-  VIDEO_PLAYBACK
-  EXHIBIT_PRESENTATION
-  VERDICT
+  VIDEO_DEPOSITION
+  EXAMINATION_SEGMENT
   OTHER
 }
 
 enum MarkerCategory {
-  PARSED
-  ELASTIC_SEARCH
-  LLM
-  MANUAL
+  PROCEDURAL
+  EVIDENTIARY
+  TESTIMONIAL
+  ARGUMENTATIVE
+  ADMINISTRATIVE
 }
 
-model MarkerText {
+// ==================== Search and Analytics ====================
+
+model SearchIndex {
   id              Int       @id @default(autoincrement())
-  markerId        Int
-  marker          Marker    @relation(fields: [markerId], references: [id], onDelete: Cascade)
-  textRenderMode  TextRenderMode @default(ORIGINAL)
-  text            String
-  elasticSearchId String?   // ID for ElasticSearch indexing
-  createdAt       DateTime  @default(now())
-  
-  @@index([markerId, textRenderMode])
-  @@unique([markerId, textRenderMode])
-}
-
-enum TextRenderMode {
-  ORIGINAL
-  PLACEHOLDER
-  SYNOPSIS
-}
-
-// ==================== System Configuration ====================
-
-model SystemConfig {
-  id              Int       @id @default(autoincrement())
-  key             String    @unique
-  value           Json
-  description     String?
-  category        String?
+  entityType      String    // "statement", "directive", "witness_event"
+  entityId        Int
+  searchableText  String    @db.Text
+  metadata        Json?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  @@index([category])
-}
-
-// ==================== Search and Pattern Management ====================
-
-model SearchPattern {
-  id              Int       @id @default(autoincrement())
-  patternType     String    // e.g., "JURY_INSTRUCTION", "OBJECTION"
-  pattern         String    // Regular expression or search string
-  category        String    // e.g., "COURT_DIRECTIVE", "MARKER"
-  priority        Int       @default(0)
-  isActive        Boolean   @default(true)
-  metadata        Json?     // Additional pattern configuration
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  @@index([patternType, isActive])
-  @@index([category])
+  @@index([entityType, entityId])
+  // Note: For full-text search, consider using ElasticSearch or creating GIN index manually:
+  // CREATE EXTENSION IF NOT EXISTS pg_trgm;
+  // CREATE INDEX search_index_text_gin ON "SearchIndex" USING gin(searchable_text gin_trgm_ops);
 }

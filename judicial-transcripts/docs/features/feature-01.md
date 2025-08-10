@@ -1,40 +1,23 @@
-# Feature 1: Basic Transcript Parser
+# Feature 1: Phase 1 Transcript Parser Bulk Load
 
 ## Overview
 *** This is a contrived feature to layout template ***
 
-Parse judicial transcripts from text and PDF files into structured JSON format, extracting key metadata and content sections.
+Enhance the phase 1 parsing of the judicial transcripts to include bulk loading for faster performance.  We had implemented this previously, where we inserted lines from an entire page (~25) at a time.  We can do this or choose a bulk quantity that can be configured, but the main need is for the performance of phase 1 parsing to be substanitally increased.
 
 ## Input Sources
-- Plain text files (.txt) from Lexis Nexis
+- Plain text files (.txt) from Lexis Nexis, converted with the pdf-text-extract library
 - PDF files from court systems
 - See `samples/transcripts/` for examples
+- Samples beginning with "ExcerptN" where N is integer 1 to 73 are ordered excerpts of a full case
+- Sample TRANSCRIPT 219-CV-123-JRG 10_1_20 AM.txt is the first full morning session of the same case
+- Sample TRANSCRIPT 216-cv-00230-JRG 10_10_17 AM.txt is a full morning session of another case with slightly different conventions (e.g., no timestamps on individual lines in proceedings, different spacing, etc.)
+
 
 ## Requirements
-1. Parse header metadata (case name, date, court, participants)
-2. Extract speaker identification and dialogue
-3. Preserve line numbers and timestamps where present
-4. Handle common formatting variations
-5. Output structured JSON with consistent schema
+1. Enhance inserts into database of Line records to do bulk inserts either a page at a time or a configured batchSize (there is a parameter in the input configuration json called batchSize)
+2. Log each batch inserted, and show stats at end of phase 1 of rate of inserts and totals
+
 
 ## Expected Output Format
-```json
-{
-  "metadata": {
-    "case_name": "State v. Smith",
-    "court": "Superior Court of California",
-    "date": "2024-03-15",
-    "participants": [
-      {"name": "Judge Johnson", "role": "judge"},
-      {"name": "Attorney Davis", "role": "prosecutor"}
-    ]
-  },
-  "content": [
-    {
-      "line_number": 1,
-      "timestamp": "09:00:00",
-      "speaker": "Judge Johnson",
-      "text": "Court is now in session."
-    }
-  ]
-}
+Same output as before, just faster

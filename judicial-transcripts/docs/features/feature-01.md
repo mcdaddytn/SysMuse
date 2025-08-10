@@ -1,7 +1,6 @@
 # Feature 1: Phase 1 Transcript Parser Bulk Load
 
 ## Overview
-*** This is a contrived feature to layout template ***
 
 Enhance the phase 1 parsing of the judicial transcripts to include bulk loading for faster performance.  We had implemented this previously, where we inserted lines from an entire page (~25) at a time.  We can do this or choose a bulk quantity that can be configured, but the main need is for the performance of phase 1 parsing to be substanitally increased.
 

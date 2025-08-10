@@ -260,11 +260,16 @@ export class Phase2Processor {
     state: ProcessingState
   ): Promise<void> {
     // Skip blank lines
-    if (line.isBlank || !line.text?.trim()) {
+    if (line.isBlank || (!line.text?.trim() && !line.speakerPrefix)) {
       return;
     }
     
-    const lineText = line.text.trim();
+    const lineText = line.text?.trim() || '';
+    
+    // Debug log for lines with speakers
+    if (line.speakerPrefix) {
+      logger.debug(`Line ${line.lineNumber} has speaker: ${line.speakerPrefix}, text: ${lineText.substring(0, 50)}`);
+    }
     
     // Check for court directive
     if (await this.checkCourtDirective(sessionId, line, lineText, state)) {
@@ -502,17 +507,25 @@ export class Phase2Processor {
   ): Promise<SpeakerInfo | null> {
     const upperPrefix = speakerPrefix.toUpperCase();
     
-    // Check contextual speakers first (Q., A., THE WITNESS)
+    // Handle contextual speakers Q., A., THE WITNESS
     if (upperPrefix === 'Q.') {
-      return state.lastQSpeaker || state.contextualSpeakers.get('Q.') || null;
+      // Q. is the current examining attorney
+      if (state.lastQSpeaker) {
+        logger.debug(`Q. resolved to: ${state.lastQSpeaker.name || state.lastQSpeaker.speakerPrefix}`);
+        return state.lastQSpeaker;
+      }
+      logger.warn(`Q. speaker found but no examining attorney in context`);
+      return null;
     }
     
     if (upperPrefix === 'A.' || upperPrefix === 'THE WITNESS') {
+      // A. or THE WITNESS is the current witness
       if (state.currentWitness?.speakerId) {
         const speaker = await this.prisma.speaker.findUnique({
           where: { id: state.currentWitness.speakerId }
         });
         if (speaker) {
+          logger.debug(`${upperPrefix} resolved to witness: ${state.currentWitness.name}`);
           return {
             id: speaker.id,
             speakerPrefix: speaker.speakerPrefix,
@@ -521,6 +534,7 @@ export class Phase2Processor {
           };
         }
       }
+      logger.warn(`${upperPrefix} found but no current witness in context`);
       return null;
     }
     
@@ -529,8 +543,8 @@ export class Phase2Processor {
       return this.context.speakers.get('THE COURT') || null;
     }
     
-    // Check for BY MR./MS. pattern
-    const byMatch = upperPrefix.match(this.PATTERNS.byAttorney);
+    // Check for BY MR./MS. pattern (attorney taking over questioning)
+    const byMatch = upperPrefix.match(/BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)/);
     if (byMatch) {
       const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
       const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
@@ -543,30 +557,48 @@ export class Phase2Processor {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,
           speakerType: SpeakerType.ATTORNEY,
-          attorneyId: attorney.id
+          attorneyId: attorney.id,
+          name: attorney.name
         };
-        state.lastQSpeaker = speaker; // This attorney is now asking questions
+        // Update the Q. context - this attorney is now asking questions
+        state.lastQSpeaker = speaker;
+        logger.info(`Updated Q. context to: ${attorney.name}`);
         return speaker;
       }
     }
     
-    // Check for attorney by full prefix
-    const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
-      this.context.trialId,
-      upperPrefix
-    );
-    
-    if (attorney) {
-      return {
-        id: attorney.speaker.id,
-        speakerPrefix: attorney.speaker.speakerPrefix,
-        speakerType: SpeakerType.ATTORNEY,
-        attorneyId: attorney.id
-      };
+    // Check for attorney by full prefix (MR. LASTNAME)
+    const attorneyMatch = upperPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)/);
+    if (attorneyMatch) {
+      const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
+        this.context.trialId,
+        upperPrefix
+      );
+      
+      if (attorney) {
+        const speaker: SpeakerInfo = {
+          id: attorney.speaker.id,
+          speakerPrefix: attorney.speaker.speakerPrefix,
+          speakerType: SpeakerType.ATTORNEY,
+          attorneyId: attorney.id,
+          name: attorney.name
+        };
+        
+        // If this attorney is speaking in a witness context, they might be the Q. speaker
+        if (state.currentWitness) {
+          state.lastQSpeaker = speaker;
+          logger.debug(`Set Q. context to: ${attorney.name} (during witness examination)`);
+        }
+        
+        return speaker;
+      }
+      
+      // If not found as attorney, could be a juror (handled below)
+      logger.warn(`Could not find attorney with prefix: ${upperPrefix}`);
     }
     
     // Check for juror
-    if (upperPrefix.match(this.PATTERNS.jurorSpeaker)) {
+    if (upperPrefix.match(/^JUROR\s+/)) {
       const juror = await this.witnessJurorService.createOrFindJuror(
         this.context.trialId,
         upperPrefix,
@@ -583,23 +615,26 @@ export class Phase2Processor {
       };
     }
     
-    // Try juror alias match (MR./MS. LASTNAME pattern)
-    const jurorAlias = await this.witnessJurorService.matchJurorByAlias(
-      this.context.trialId,
-      upperPrefix
-    );
-    
-    if (jurorAlias) {
-      this.stats.jurorStatements++;
-      return {
-        id: jurorAlias.id,
-        speakerPrefix: upperPrefix,
-        speakerType: SpeakerType.JUROR,
-        jurorId: jurorAlias.id
-      };
+    // Try juror alias match (MR./MS. LASTNAME pattern when not an attorney)
+    if (attorneyMatch) {
+      const jurorAlias = await this.witnessJurorService.matchJurorByAlias(
+        this.context.trialId,
+        upperPrefix
+      );
+      
+      if (jurorAlias) {
+        this.stats.jurorStatements++;
+        return {
+          id: jurorAlias.id,
+          speakerPrefix: upperPrefix,
+          speakerType: SpeakerType.JUROR,
+          jurorId: jurorAlias.id
+        };
+      }
     }
     
     // Create anonymous speaker as last resort
+    logger.info(`Creating anonymous speaker for: ${upperPrefix}`);
     const speakerId = await this.witnessJurorService.createAnonymousSpeaker(
       this.context.trialId,
       upperPrefix

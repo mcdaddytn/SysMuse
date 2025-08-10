@@ -1,0 +1,193 @@
+11:30:51    8   A.   Yes, that's correct.
+
+11:30:58    9            MR. HADDEN:    Pass the witness.
+
+11:30:59   10            THE COURT:    Further cross-examination?
+
+11:31:00   11            MR. FABRICANT:     Yes, Your Honor.
+
+11:31:02   12            THE COURT:    Proceed.
+
+11:31:02   13                          RECROSS-EXAMINATION
+
+11:31:02   14   BY MR. FABRICANT:
+
+11:31:02   15   Q.   Mr. Hilmes, Mr. Hadden just asked you a question
+
+11:31:07   16   referring to a paragraph in the article.
+
+11:31:10   17            MR. FABRICANT:     So if we could bring back up
+
+11:31:14   18   Plaintiff's 78.     Well, we can use this version.        This is --
+
+11:31:18   19   this is -- what's the defense number, please?          This is
+
+11:31:24   20   Plaintiff's 301.
+
+11:31:26   21            If we can go to Page 5575, Bates number, on the
+
+11:31:32   22   bottom, lower paragraph.
+
+11:31:34   23   Q.   (By Mr. Fabricant)     I believe you were just asked
+
+11:31:36   24   questions about this.     And with respect to for ABF,
+
+11:31:44   25   adaptive beamforming, the filters w m 's are organ --
+
+   Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 122 of 141 PageID #: 19337
+                                                                                    952
+
+
+
+11:31:47    1   optimized in real-time depending on the signal conditions.
+
+11:31:50    2            Do you recall just being asked about that a moment
+
+11:31:53    3   ago?
+
+11:31:54    4   A.   Yes, sir.
+
+11:31:54    5   Q.   And you were asked whether Echo did that, right?
+
+11:31:57    6   A.   That's correct.
+
+11:31:57    7   Q.   And you said, no, I believe, right?
+
+11:31:59    8   A.   That's correct.
+
+11:31:59    9   Q.   That's what the patent does, though?        Isn't that what
+
+11:32:02   10   the patent teaches and discloses?        Isn't that what the
+
+11:32:05   11   patent claims, sir?
+
+11:32:06   12   A.   The patent claims to be steering a beam, yes.
+
+11:32:10   13   Q.   So you agree that this is what you read in Claim 1 of
+
+11:32:14   14   the patent, this kind of adaptive beamforming, true?
+
+11:32:16   15   A.   That's part of the patent, yes.
+
+11:32:20   16            MR. FABRICANT:     Thank you, Your Honor.
+
+11:32:20   17            THE COURT:     Further direct, Mr. Hadden?
+
+11:32:23   18            MR. HADDEN:     No, Your Honor.
+
+11:32:24   19            THE COURT:     You may step -- step down, Mr. Hilmes.
+
+11:32:27   20            THE WITNESS:     Thank you, sir.
+
+11:32:28   21            THE COURT:     Defendants, call your next witness.
+
+11:32:39   22            MR. HADDEN:     Your Honor, we're going to call
+
+11:32:41   23   Matthew Holland by video trial deposition, Your Honor.
+
+11:32:45   24            THE COURT:     All right.    Proceed with your witness
+
+11:32:48   25   by deposition.
+
+   Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 123 of 141 PageID #: 19338
+                                                                                    953
+
+
+
+11:32:50    1               MS. DOAN:    Your Honor, Jennifer Doan for Amazon.
+
+11:32:55    2               We're now calling Matthew Holland by video trial
+
+11:32:59    3   deposition.     Mr. Holland is an electrical engineer formerly
+
+11:32:59    4   employed by Amazon, currently employed by Postmates.
+
+11:33:08    5               The total time is 24 minutes and 29 seconds.
+
+11:33:09    6   Allocated for the Plaintiff, 5 minutes and 57 seconds; the
+
+11:33:13    7   Defendant, 18 minutes and 32 seconds.
+
+11:33:15    8               THE COURT:    All right.   Proceed with this witness
+
+11:33:16    9   by deposition.
+
+11:33:16   10                  MATTHEW HOLLAND, DEFENDANTS' WITNESS
+
+11:33:21   11                     PRESENTED BY VIDEO DEPOSITION
+
+11:33:21   12               (Videoclip played.)
+
+11:33:22   13   Q.   Mr. Holland, would you please introduce yourself to the
+
+11:33:35   14   jury?
+
+
+11:58:21    6   Q.   One engineer couldn't just decide I want to look at
+
+11:58:29    7   some project and walk in and attend the meeting of another
+
+11:58:31    8   project?
+
+11:58:32    9   A.   That's correct.
+
+11:58:33   10               (Videoclip ends.)
+
+11:58:33   11               THE COURT:    Does that complete this witness by
+
+11:58:35   12   deposition?
+
+11:58:35   13               MR. HADDEN:    Yes, Your Honor.
+
+11:58:36   14               THE COURT:    All right.   Ladies and gentlemen, we
+
+11:58:42   15   are at the noon hour.       We're going to break at this point
+
+11:58:46   16   for lunch.     If you will, take your notebooks with you to
+
+11:58:49   17   the jury room.     Lunch should be there waiting for you.
+
+11:58:52   18               We're going to try to reconvene as close to 12:45
+
+11:58:58   19   as we can.
+
+11:58:59   20               Please follow all my instructions about your
+
+11:59:01   21   conduct during the trial, including not to discuss the case
+
+11:59:03   22   among yourselves, and we'll have you back at about that
+
+11:59:06   23   time to continue with the next Defendants' witness.
+
+11:59:09   24               With that, the jury is excused for lunch.
+
+11:59:13   25               COURT SECURITY OFFICER:     All rise.
+
+   Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 141 of 141 PageID #: 19356
+                                                                                    971
+
+
+
+11:59:14    1              (Jury out.)
+
+11:59:14    2              THE COURT:    Counsel, let me remind you that I will
+
+11:59:39    3   be looking for your newly revised and resubmitted joint
+
+11:59:43    4   proposed final jury instructions and verdict form by 3:00
+
+11:59:48    5   o'clock this afternoon.
+
+11:59:49    6              With that, we stand in recess for lunch.
+
+11:59:51    7              COURT SECURITY OFFICER:     All rise.
+
+11:59:52    8              (Recess.)
+
+            9
+
+           10                              CERTIFICATION
+
+
+           21
+

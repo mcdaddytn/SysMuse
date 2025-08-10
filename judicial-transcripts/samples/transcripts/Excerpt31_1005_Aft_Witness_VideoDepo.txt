@@ -1,0 +1,78 @@
+02:15:02    8   Q.   So is this the type of document that you were talking
+
+02:15:05    9   about that would generate coefficients?
+
+02:15:12   10   A.   Yeah.   I -- I think -- I think this -- yeah, this one
+
+02:15:22   11   is generating in subband domain.        Let me see.     Let me have
+
+02:15:30   12   a look at it.
+
+02:15:31   13            Well, this is -- I -- I don't think this is taking
+
+02:15:35   14   the -- the model-based approach.        This is still free feel
+
+02:15:43   15   sort of thing.     But, yeah, this is -- let's see.         Yeah.
+
+02:15:50   16   Yeah, this is -- this is -- this is used in some form, some
+
+02:15:53   17   product, yeah.
+
+02:15:54   18            (Videoclip ends.)
+
+02:15:55   19            THE COURT:    Does that complete this witness by
+
+02:16:02   20   deposition?
+
+02:16:02   21            MR. FABRICANT:     Yes, Your Honor.       We are calling
+
+02:16:04   22   another witness by deposition, and Ms. Park will announce
+
+02:16:06   23   the witness, Your Honor.
+
+02:16:08   24            THE COURT:    You may proceed with your next witness
+
+02:16:10   25   by deposition.
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 55 of 120 PageID #: 19101
+                                                                                     765
+
+
+
+02:16:11    1               MS. PARK:    Plaintiff calls by deposition Philip
+
+02:16:19    2   Hilmes, director of audio technology at Amazon's Lab126.
+
+02:16:22    3   Play time for Plaintiff is 17 minutes, 41 seconds.
+
+02:16:25    4               THE COURT:    No time for Defendant?
+
+02:16:27    5               MS. PARK:    No time.
+
+02:16:28    6               THE COURT:    Proceed with this witness by
+
+02:16:29    7   deposition.
+
+02:16:29    8                   PHILIP HILMES, PLAINTIFF'S WITNESS
+
+02:16:29    9                     PRESENTED BY VIDEO DEPOSITION
+
+02:16:29   10               (Videoclip played.)
+
+02:16:31   11   Q.   Can you please state your full name for the record?
+
+02:16:33   12   A.   Yes.    My full name is Philip Ryan Hilmes.        That's Ryan.
+
+02:16:39   13   Q.   Mr. Hilmes, for whom do you currently work?
+
+02:16:42   14   A.   I work for Amazon Lab126.      A2Z Development Corporation.
+
+02:16:50   15   Q.   How long you have worked there?
+
+02:16:51   16   A.   Since December 2012, so a little over seven years now.
+
+02:16:57   17   Q.   But there were numerous people working on the Fire
+
+02:17:04   18   Phone at some point in time at Amazon, right?
+
+02:17:06   19   A.   Yes.

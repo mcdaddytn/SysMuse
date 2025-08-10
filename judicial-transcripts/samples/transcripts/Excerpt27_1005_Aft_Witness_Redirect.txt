@@ -1,0 +1,129 @@
+01:11:27   14   Q.   And if you look at the second to last page, it says:
+
+01:11:30   15   What will you create?
+
+01:11:32   16               So this is talking to potential developers of
+
+01:11:34   17   other products about products that they can build, not
+
+01:11:38   18   about the Echo product that Amazon built.          Isn't that
+
+01:11:44   19   right, Mr. McAlexander?
+
+01:11:44   20   A.   Yes, that's correct.
+
+01:11:46   21   Q.   Okay.
+
+01:11:47   22               MR. HADDEN:    No further questions.
+
+01:11:48   23               THE COURT:    You pass the witness, counsel?
+
+01:11:49   24               Mr. Hadden, you pass the witness?
+
+01:11:51   25               MR. HADDEN:    I pass the witness.     Sorry,
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 16 of 120 PageID #: 19062
+                                                                                     726
+
+
+
+01:11:54    1   Your Honor.
+
+01:11:54    2              THE COURT:    Mr. Rubino, are you going to use this
+
+01:11:57    3   chart during your redirect?
+
+01:11:59    4              MR. RUBINO:    Yes, Your Honor, briefly.
+
+01:12:01    5              THE COURT:    All right.   We'll leave it up then.
+
+01:12:05    6              You may proceed with redirect.
+
+01:12:05    7                            REDIRECT EXAMINATION
+
+01:12:15    8   BY MR. RUBINO:
+
+01:12:15    9   Q.   Good afternoon, Mr. McAlexander.
+
+01:12:17   10   A.   Good afternoon.
+
+01:12:17   11   Q.   This board that is in front of us here, is this the --
+
+01:12:20   12   is this the full delay limitation?
+
+01:12:23   13   A.   No.   I mean, this is just a -- a recitation of a part
+
+01:12:32   14   of the claim.
+
+01:12:33   15   Q.   So it's not even the full delay limitation?
+
+01:12:36   16   A.   No.
+
+01:12:37   17              MR. RUBINO:    We can take it down now.
+
+01:12:48   18              If we could please call up Plaintiff's 1.          If we
+
+01:12:53   19   can go to Figure 1, second page, please.          There we go.
+
+01:13:00   20   Q.   (By Mr. Rubino)      Mr. McAlexander, do you recall being
+
+01:13:03   21   asked about this figure?
+
+01:13:04   22   A.   Yes, I do.
+
+01:13:06   23   Q.   And you were asked about certain steps and when they
+
+01:13:10   24   occur in this figure; do you recall that?
+
+01:13:12   25   A.   Yes, I do.
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 17 of 120 PageID #: 19063
+                                                                                     727
+
+
+
+01:13:14    1   Q.   What is this figure, sir?
+
+01:13:16    2   A.   Figure 1 is stated in the specification -- excuse me,
+
+01:13:24    3   stated in the specification as being:         Illustrates a method
+
+01:13:35    4   for enhancing a target sound signal from multiple sound
+
+01:13:40    5   signals.
+
+01:13:41    6              So it is an illustration of a way in which it can
+
+01:13:44    7   be done.    It's not the only way.      It's an illustration.
+
+01:13:46    8   Q.   Is this the claim, sir?
+
+01:13:47    9   A.   No, it's not.
+
+01:13:48   10   Q.   And, earlier, in the context of that delay limitation,
+
+01:13:58   11   do you recall being asked about certain outputs of -- of
+
+01:14:04   12   calculations -- the word "output"; do you recall that word?
+
+01:14:12   13   A.   I recall that word, yes.
+
+01:14:14   14   Q.   Now, does -- does the claim require an output?
+
+01:14:16   15   A.   No, it doesn't require an output.
+
+01:14:19   16   Q.   What does the determination limitation require?
+
+01:14:22   17              MR. RUBINO:    And if we could put up Plaintiff's 1
+
+01:14:26   18   at Claim 1, please, Mr. Thompson.
+
+01:14:48   19              THE WITNESS:    Can we enlarge the determining step
+
+01:14:52   20   section?    I think it will be easier for the jury to see.
+
+01:14:57   21   A.   All right.   Repeat your question, please.
+
+01:15:01   22   Q.   (By Mr. Rubino)      So what does this limitation require
+
+01:15:03   23   if not output?

@@ -1,0 +1,206 @@
+03:17:20   16   Q.   And in these microphone array systems, you agree that
+
+03:17:24   17   it was well-known to include noise reduction algorithms,
+
+03:17:28   18   echo cancellation, right?
+
+03:17:29   19   A.   Those were commonly done.
+
+03:17:30   20               MR. RUBINO:    Objection.   Objection.
+
+03:17:31   21               THE COURT:    State your objection.
+
+03:17:33   22               MR. RUBINO:    Leading, Your Honor.
+
+03:17:34   23               THE COURT:    Sustained.
+
+03:17:35   24   Q.   (By Mr. Re)    Would you kindly go through this board and
+
+03:17:38   25   express your opinion as to the accuracy of this board that
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 95 of 187 PageID #: 19451
+                                                                                    1066
+
+
+
+03:17:43    1   I constructed with Dr. Li?
+
+03:17:46    2            THE COURT:    And, Mr. Re, if you'd make sure that
+
+03:17:50    3   the witness has finished the answer before you start the
+
+03:17:52    4   next question.
+
+03:17:53    5            MR. RE:    I shall.
+
+03:17:54    6            THE COURT:    Just a little -- just a little break
+
+03:17:56    7   between the questions and the answers would be helpful.
+
+03:17:58    8            MR. RE:    I'm sorry, Your Honor.
+
+03:17:59    9            THE COURT:    All right.     Please proceed, Dr. Stern.
+
+03:18:00   10   A.   Looking at the core technologies listed on the board, I
+
+03:18:06   11   see microphone arrays in multiple configurations, noise
+
+03:18:11   12   reduction, echo cancellation, sound source localization,
+
+03:18:16   13   adaptive beamforming, and digital signal processing, all of
+
+03:18:21   14   these were disclosed in the public art, published widely,
+
+03:18:27   15   discussed.    They existed at the time of the invention.           I
+
+03:18:29   16   agree with Dr. Li in that respect.
+
+03:18:42   17   Q.   (By Mr. Re)   Let's talk a minute about digital signal
+
+03:18:48   18   processors.    How do you know for sure that digital signal
+
+03:18:50   19   processors were well-known in the art well before 2010?
+
+03:18:52   20   A.   Well, there were many publications of them --
+
+03:18:57   21   presentations by Texas Instruments, Motorola, trade
+
+03:19:01   22   magazine -- trade -- at trade meetings and so forth.
+
+03:19:06   23            As an example, what you see on the screen is an
+
+03:19:09   24   article from Computerworld from March 2001.           The title --
+
+03:19:15   25   Computerworld is a major trade magazine in the computer
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 96 of 187 PageID #: 19452
+                                                                                    1067
+
+
+
+03:19:19    1   industry.     And this is an article about Digital Signal
+
+03:19:25    2   Processors, and you can see the text states -- that's the
+
+03:19:27    3   part that's circled in red -- DSPs are widely used for
+
+03:19:30    4   processing audio, and a bunch of other stuff.
+
+03:19:31    5   Q.   Now, let's go back to the circular array.          And were
+
+03:19:37    6   circular arrays well-known well before 2010?
+
+03:19:39    7   A.   Yes, they were.
+
+03:19:40    8   Q.   And you -- and you prepared a slide.         I wonder if you
+
+03:19:47    9   can just briefly describe what is shown on this Slide 6.5?
+
+03:19:52   10   A.   This is a slide depicting a circular microphone array.
+
+03:19:57   11   It is a figure in a paper by an author I'll refer to as
+
+03:20:03   12   Dmochowski.     It was published in the IEEE Transactions on
+
+03:20:05   13   Audio in spring of 2007.
+
+03:20:08   14            And we'll be talking about it a little bit later,
+
+03:20:11   15   but you can see that the microphones are configured in a
+
+03:20:14   16   circular array in 2007.
+
+03:20:15   17   Q.   Okay.   Now, let's move on.
+
+03:20:18   18            What claims are at issue in this case?
+
+03:20:20   19   A.   Claim 1 and Claim 8.
+
+03:20:23   20   Q.   And have you formed an opinion about the validity or
+
+03:20:26   21   invalidity of Claims 1 and 8?
+
+03:20:29   22   A.   Yes, I have.
+
+03:20:30   23   Q.   And what is your opinion?
+
+03:20:34   24   A.   My opinion is that the claims -- Claims 1 and Claim 8
+
+03:20:38   25   are invalid.
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 97 of 187 PageID #: 19453
+                                                                                    1068
+
+
+
+03:20:40    1   Q.   Why do you believe that Claims 1 and 8 are invalid?
+
+03:20:44    2   A.   Well, this part of the case is very simple.          The law
+
+03:20:49    3   dictates that a claim in a patent is invalid if a person of
+
+03:20:54    4   ordinary skill in the art would have found the text, the
+
+03:20:59    5   teachings, the description of the claim obvious based on
+
+03:21:03    6   the prior art that was available at the time of invention.
+
+03:21:09    7   Q.   Okay.
+
+03:21:11    8               MR. RE:   Your Honor, if I may approach to hand the
+
+03:21:14    9   witness a physical item?
+
+03:21:16   10               THE COURT:     You may approach the witness.
+
+03:21:18   11   Q.   (By Mr. Re)      I'm going to hand you what's been marked
+
+03:21:20   12   Defendants' Exhibit 49P.
+
+03:21:26   13               THE WITNESS:     Thank you.
+
+03:21:28   14               MR. RE:   Mr. Berk, if you can call up Exhibit 49.
+
+03:21:33   15   Q.   (By Mr. Re)      Could you identify for the record what I
+
+03:21:38   16   just handed to you as Defendants' Exhibit 49P?
+
+03:21:43   17   A.   Yes.     This is my copy -- my personal copy of the
+
+03:21:47   18   Brandstein reference.
+
+03:21:49   19   Q.   And we know it's your personal copy --
+
+03:21:52   20   A.   Well, I checked and my name is inside.
+
+03:21:55   21   Q.   And that, in fact, if you look on your screen, is the
+
+03:21:57   22   book.   Is that your handwriting?
+
+03:22:00   23   A.   It is.
+
+03:22:01   24   Q.   When did you first obtain a copy of Dr. Brandstein's
+
+03:22:07   25   book on Microphone Arrays?
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 98 of 187 PageID #: 19454
+                                                                                    1069
+
+
+
+03:22:09    1   A.   I purchased that copy of the book some time between
+
+03:22:14    2   2001 and 2003, and I've had it in my possession continually
+
+03:22:18    3   ever since.
+
+03:22:18    4   Q.   And is the Brandstein textbook well-known in the
+
+03:22:25    5   industry?
+
+03:22:25    6   A.   Yes.    Even 20 years later, it remains perhaps the best
+
+03:22:32    7   known book on microphone arrays in the industry.
+
+03:22:33    8   Q.   And can you explain briefly how that book is organized?
+

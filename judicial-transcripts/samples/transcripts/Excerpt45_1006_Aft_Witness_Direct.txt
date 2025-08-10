@@ -1,0 +1,180 @@
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 1 of 187 PageID #: 19357
+                                                                                       972
+
+
+
+12:43:35    1                IN THE UNITED STATES DISTRICT COURT
+
+            2                   FOR THE EASTERN DISTRICT OF TEXAS
+
+           24   104 East Houston Street, Suite 300
+                Marshall, TX 75670
+           25
+
+Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 2 of 187 PageID #: 19358
+                                                                                   973
+
+     22                          Marshall, Texas 75670
+                                 (903) 923-7464
+     23
+
+     24   (Proceedings recorded by mechanical stenography, transcript
+          produced on a CAT system.)
+     25
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 3 of 187 PageID #: 19359
+                                                                                       974
+
+
+
+12:47:30    1                        P R O C E E D I N G S
+
+12:47:30    2           (Jury out.)
+
+12:47:31    3           COURT SECURITY OFFICER:        All rise.
+
+12:47:33    4           THE COURT:     Be seated, please.
+
+12:47:34    5           Counsel, are there any matters we need to take up
+
+12:47:43    6   before I bring back in the jury?
+
+12:47:45    7           MS. TRUELOVE:      Nothing from the Plaintiff,
+
+12:47:47    8   Your Honor.
+
+12:47:47    9           MR. DACUS:     We have one matter, Your Honor, we
+
+12:47:49   10   need to address with the Court, and it relates to Amazon's
+
+12:47:53   11   Motion in Limine No. 9.
+
+12:47:54   12           THE COURT:     Go to the podium, please, Mr. Dacus.
+
+12:47:56   13           MR. DACUS:     Thank you, Your Honor.        I apologize
+
+12:47:57   14   for that.
+
+12:47:58   15           Amazon's Motion in Limine No. 9, Your Honor,
+
+12:48:01   16   relates to precluding Plaintiff from any reference to the
+
+12:48:07   17   unavailability of any witnesses who does not testify.
+
+
+12:49:01    9           THE COURT:     Tell me this -- tell me this,
+
+12:49:03   10   Mr. Dacus -- and I did give Mr. Fabricant specific leave
+
+
+12:49:41   21   stand, everybody's had lunch, and you've had time to come
+
+12:49:44   22   up with this?     Why is this timely?
+
+12:49:47   23           MR. DACUS:     I'd be happy to respond to it,
+
+12:49:49   24   Your Honor.     All I can respond is, for me personally, I
+
+
+12:50:10    7   the Court's criticism in that regard, and that's --
+
+12:50:13    8           THE COURT:     Well, the MIL order is one sentence.
+
+12:50:16    9   I have a copy at my fingertips.        I assume both sides have
+
+
+12:50:47   19   arguments are presented.
+
+12:50:49   20           MR. DACUS:     Perfect.     Thank you very much,
+
+12:50:51   21   Your Honor.
+
+12:50:51   22           THE COURT:     All right.     Defendants, are you
+
+12:50:55   23   prepared to call your next witness?
+
+12:50:57   24           MR. HADDEN:     We are, Your Honor.
+
+12:51:00   25           THE COURT:     And is this another deposition witness
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 6 of 187 PageID #: 19362
+                                                                                       977
+
+
+
+12:51:02    1   or a live witness?
+
+12:51:03    2             MR. HADDEN:     No, this is a live witness,
+
+12:51:05    3   Professor Kiaei, our technical expert.
+
+12:51:10    4             THE COURT:     All right.   Let's bring in the jury,
+
+12:51:12    5   please.
+
+12:51:12    6             COURT SECURITY OFFICER:      All rise.
+
+12:51:13    7             (Jury in.)
+
+12:51:39    8             THE COURT:     Welcome back, ladies and gentlemen.
+
+12:51:40    9   Please have a seat.
+
+12:51:41   10             Defendants, call your next witness.
+
+12:51:47   11             MR. HADDEN:     Amazon calls Professor Kiaei.
+
+12:51:51   12             THE COURT:     All right.   If you'll come forward,
+
+12:51:53   13   sir, and be sworn.
+
+12:51:57   14             (Witness sworn.)
+
+12:52:07   15             THE COURT:     Please come around, sir, have a seat
+
+12:52:22   16   on the witness stand.
+
+12:52:23   17             MS. DOAN:     May I approach, Your Honor?
+
+12:52:24   18             THE COURT:     You may distribute binders.
+
+12:52:42   19             All right.     Counsel, you may proceed with your
+
+12:52:51   20   direct examination of the witness.
+
+12:52:51   21          SAYFE KIAEI, PH.D., DEFENDANTS' WITNESS, SWORN
+
+12:52:51   22                            DIRECT EXAMINATION
+
+12:52:53   23   BY MR. LAQUER:
+
+12:52:53   24   Q.   Could you please tell us your name, sir?
+
+12:52:55   25   A.   Good afternoon.     My name is Sayfe Kiaei.       Sayfe is like
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 7 of 187 PageID #: 19363
+                                                                                       978
+
+
+
+12:53:06    1   safety without the T, and Kiaei rhymes with Hawaii.
+
+12:53:07    2   Q.   And where do you work?
+
+12:53:08    3   A.   I am a professor at Arizona State University in the
+
+12:53:14    4   Department of Electrical and Computer Engineering.
+
+12:53:16    5   Q.   And could you tell the jury why you are here today?
+
+12:53:20    6   A.   Yes.    I am here to give my opinion about the Amazon
+
+12:53:30    7   Echo devices that they do not infringe on the '049 patent.
+
+12:53:33    8   Q.   And have you prepared slides to help us here in court?
+
+12:53:38    9   A.   Yes, sir.    I have prepared a few slides to go through
+
+12:53:42   10   my presentation.     So, if you don't mind, let's go to the
+
+12:53:47   11   next one.

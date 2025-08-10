@@ -1,0 +1,96 @@
+02:28:50   11   Q.   Yes, sir, no, sir, you said that in order to perform
+
+02:28:54   12   adaptive beamforming, the filter coefficients have to
+
+02:28:56   13   change?
+
+02:28:56   14   A.   Yes.
+
+02:29:00   15   Q.   Now, the Alexa system --
+
+02:29:02   16               MR. LAMBRIANAKOS:   You can take that down.
+
+02:29:04   17   Q.   (By Mr. Lambrianakos)      The Alexa system is not accused
+
+02:29:06   18   of infringement in this case, right?
+
+02:29:07   19   A.   No, sir.
+
+02:29:10   20   Q.   The AI of Alexa is not part of an Echo device, is it?
+
+02:29:15   21   A.   No, sir.
+
+02:29:15   22   Q.   Speech recognition is not part of the Echo device,
+
+02:29:20   23   right?
+
+02:29:20   24   A.   No, sir.
+
+02:29:21   25               MR. LAMBRIANAKOS:   Pass the witness.
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 76 of 187 PageID #: 19432
+                                                                                    1047
+
+
+
+02:29:22    1               THE COURT:     Cross -- redirect, I'm sorry.
+
+02:29:25    2               THE WITNESS:     Thank you, sir.
+
+02:29:27    3               MR. LAQUER:     Yes, Your Honor.
+
+02:29:45    4               THE COURT:     Proceed when you're ready, Mr. Laquer.
+
+02:29:45    5                             REDIRECT EXAMINATION
+
+02:29:48    6   BY MR. LAQUER:
+
+02:29:48    7   Q.   Dr. Kiaei, counsel for Plaintiffs asked you questions
+
+02:29:52    8   about your work as an expert witness.          Do you recall that?
+
+02:29:54    9   A.   Yes, sir.
+
+02:29:55   10   Q.   Have you ever testified in front of a jury before?
+
+02:29:57   11   A.   No, this is my first time.
+
+02:29:59   12   Q.   Do you recall Vocalife's expert, Mr. McAlexander,
+
+02:30:02   13   identifying the number of times that he has testified as a
+
+02:30:06   14   professional expert?
+
+02:30:06   15   A.   I don't remember the exact number, but it was -- he's
+
+02:30:09   16   been in the court, I believe, several times.
+
+02:30:12   17   Q.   And you teach university classes on audio signal
+
+02:30:18   18   processing, correct?
+
+02:30:19   19   A.   Yes, I've taught class on audio signal processing.
+
+02:30:22   20   Q.   Does any Echo device determine any delay between any
+
+02:30:24   21   sound sensor and an origin?
+
+02:30:24   22   A.   No, it does not.
+
+02:30:25   23   Q.   And were all of your opinions where you referred to
+
+02:30:29   24   calculating, equally applicable to determining?
+
+02:30:33   25   A.   Yes.
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 77 of 187 PageID #: 19433
+                                                                                    1048
+
+
+
+02:30:35    1   Q.   Counsel asked you questions about whether or not
+
+02:30:38    2   something is in real-time.       Do you recall that?
+
+02:30:40    3   A.   Yes, I do.
+

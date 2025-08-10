@@ -1,0 +1,176 @@
+Case 2:19-cv-00123-JRG Document 330 Filed 10/09/20 Page 1 of 121 PageID #: 18618
+                                                                                   282
+
+
+
+      1                  IN THE UNITED STATES DISTRICT COURT
+
+          Marshall, TX 75670
+     25
+
+Case 2:19-cv-00123-JRG Document 330 Filed 10/09/20 Page 2 of 121 PageID #: 18619
+                                                                                   283
+
+
+
+      1   FOR THE DEFENDANTS:
+
+      2   MR. JOSEPH R. RE
+
+     23
+
+     24   (Proceedings recorded by mechanical stenography, transcript
+          produced on a CAT system.)
+     25
+
+    Case 2:19-cv-00123-JRG Document 330 Filed 10/09/20 Page 3 of 121 PageID #: 18620
+                                                                                       284
+
+
+
+08:25:23    1                         P R O C E E D I N G S
+
+08:25:23    2           (Jury out.)
+
+08:25:23    3           COURT SECURITY OFFICER:        All rise.
+
+08:25:26    4           THE COURT:     Be seated, please.
+
+08:25:33    5           Are the parties prepared to read into the record
+
+08:25:41    6   those items from the list of pre-admitted exhibits used
+
+08:25:45    7   during yesterday's portion of the trial?
+
+08:25:49    8           MR. LAMBRIANAKOS:       Yes, Your Honor.
+
+08:25:49    9           THE COURT:     All right.     Please proceed to do so.
+
+08:25:52   10           MR. LAMBRIANAKOS:       Good morning, Your Honor.
+
+08:25:59   11   Peter Lambrianakos for Vocalife.
+
+08:26:01   12           THE COURT:     Good morning.      Please proceed.
+
+08:26:03   13           MR. LAMBRIANAKOS:       Thank you.
+
+08:26:03   14           The following exhibits were used yesterday and are
+
+08:26:07   15   being moved.     Plaintiff's:   PTX-644, 564, 205, 1, 273, 50,
+
+08:26:19   16   8, 2, 101, 46, 258, 36, 40, 144, 274, 1449, 276, 45, 44,
+
+08:26:43   17   131, and 1468.
+
+08:26:45   18           THE COURT:     These are all Plaintiff's exhibits?
+
+08:26:50   19           MR. LAMBRIANAKOS:       Yes, Your Honor.
+
+08:26:50   20           THE COURT:     Does Defendant have any objection to
+
+08:26:52   21   that rendition?
+
+08:26:53   22           MR. AKIN:     Kyle Akin on behalf of Amazon.
+
+08:26:57   23           We have no objection.
+
+08:26:58   24           THE COURT:     Does Defendant have a similar
+
+08:27:00   25   rendition from the list of pre-admitted exhibits to offer
+
+    Case 2:19-cv-00123-JRG Document 330 Filed 10/09/20 Page 4 of 121 PageID #: 18621
+                                                                                       285
+
+
+
+08:27:03    1   into the record?
+
+08:27:05    2           MR. AKIN:     Yes, Your Honor.
+
+08:27:06    3           The exhibits that Amazon moves into evidence from
+
+08:27:09    4   yesterday are DTX-49, DTX-51, DTX-71P, DTX-954, DTX-955,
+
+08:27:28    5   DTX-956, DTX-957, and DTX-959.
+
+08:27:36    6           THE COURT:     All right.     Does the Plaintiff have
+
+08:27:41    7   any objection to that rendition from the Defendant?
+
+08:27:44    8           MR. LAMBRIANAKOS:       No, Your Honor.
+
+08:27:45    9           THE COURT:     All right.     Thank you, counsel.
+
+08:27:48   10           Mr. Johnston, will you confirm that we have all
+
+08:27:52   11   eight jurors assembled and ready, please?
+
+08:28:14   12           I'm told we have one juror who hasn't arrived yet.
+
+08:28:17   13   In the meantime -- hopefully, they'll be here any moment.
+
+08:28:21   14           In the meantime, Dr. Li, if you'd like to return
+
+08:28:24   15   to the witness stand.     Come around and have a seat on the
+
+08:28:37   16   witness stand, sir.     And I remind you, you remain under
+
+08:28:41   17   oath.
+
+08:28:42   18           And, Mr. Re, if you'd like to go to the podium and
+
+08:28:46   19   prepare to continue your cross-examination.
+
+08:28:48   20           MR. RE:     Thank you, Your Honor.
+
+08:28:51   21           THE COURT:     Have a seat.
+
+08:28:52   22           (Pause in proceedings.)
+
+08:28:52   23           THE COURT:     All right.     The jury is present and
+
+08:31:16   24   ready to go.
+
+08:31:17   25           Mr. Johnston, would you bring in the jury, please?
+
+    Case 2:19-cv-00123-JRG Document 330 Filed 10/09/20 Page 5 of 121 PageID #: 18622
+                                                                                       286
+
+
+
+08:31:21    1               COURT SECURITY OFFICER:    All rise.
+
+08:31:22    2               (Jury in.)
+
+08:31:25    3               THE COURT:    Welcome back, ladies and gentlemen of
+
+08:31:44    4   the jury.     Please have a seat.
+
+08:31:46    5               We will continue this morning with the Defendants'
+
+08:31:53    6   cross-examination of Dr. Peter Li.
+
+08:31:57    7               Mr. Re, you may proceed.
+
+08:32:04    8               MR. RE:    Thank you, Your Honor.
+
+08:32:04    9        QI "PETER" LI, PLAINTIFF'S WITNESS, PREVIOUSLY SWORN
+
+08:32:04   10                         CROSS-EXAMINATION CONTINUED
+
+08:32:05   11   BY MR. RE:
+
+08:32:05   12   Q.   Good morning, Dr. Li.      How are you?
+
+08:32:09   13   A.   Good morning.
+
+08:32:10   14               MR. RE:    I'd like to call up Defendants' Exhibit
+
+08:32:14   15   955.
+
+08:32:14   16   Q.   (By Mr. Re)      Yesterday, we were discussing this
+
+08:32:16   17   publication from 2006.       Do you recall?
+
+08:32:19   18   A.   Yes.
+

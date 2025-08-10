@@ -1,0 +1,181 @@
+02:36:27   15   Q.   And did anything that Mr. Lambrianakos asked you in any
+
+02:36:30   16   way affect your opinion that Amazon's Echo devices, when
+
+02:36:36   17   used, do not infringe any claim asserted here from the '049
+
+02:36:42   18   patent?
+
+02:36:42   19   A.   No.
+
+02:36:43   20              MR. LAQUER:     I pass the witness.
+
+02:36:44   21              THE COURT:     Further cross-examination?
+
+02:36:46   22              MR. LAMBRIANAKOS:     No further cross, Your Honor.
+
+02:36:47   23              THE COURT:     All right.   You may step down,
+
+02:36:49   24   Dr. Kiaei.
+
+02:36:50   25              THE WITNESS:     Thank you, sir.    Thank you,
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 82 of 187 PageID #: 19438
+                                                                                    1053
+
+
+
+02:36:52    1   Your Honor.
+
+02:36:52    2              THE COURT:     Is there a desire that this witness be
+
+02:36:59    3   excused?
+
+02:37:00    4              MR. DACUS:     Yes, Your Honor, may he be excused?
+
+02:37:02    5   Thank you for asking.
+
+02:37:04    6              THE COURT:     Is there any objection?
+
+02:37:05    7              MR. LAMBRIANAKOS:     No, Your Honor, no objection.
+
+02:37:06    8              THE COURT:     All right.   Doctor, you're excused.
+
+02:37:09    9   That means you're free to stay with us.          You're also free
+
+02:37:13   10   to leave.     It's your choice.
+
+02:37:14   11              THE WITNESS:     Thank you, Your Honor.
+
+02:37:15   12              THE COURT:     All right.   Ladies and gentlemen,
+
+02:37:16   13   before Defendant calls their next witness, we're going to
+
+02:37:19   14   take a short recess.
+
+02:37:21   15              If you'll leave your notebooks in your chairs,
+
+02:37:23   16   follow all my instructions, and we'll be back in here
+
+02:37:26   17   shortly to continue.
+
+02:37:30   18              The jury is excused for recess at this time.
+
+02:37:34   19              COURT SECURITY OFFICER:      All rise.
+
+02:37:34   20              (Jury out.)
+
+02:37:35   21              THE COURT:     The Court stands in recess.
+
+02:59:31   22              (Recess.)
+
+02:59:39   23              (Jury out.)
+
+02:59:39   24              COURT SECURITY OFFICER:      All rise.
+
+02:59:40   25              THE COURT:     Be seated, please.
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 83 of 187 PageID #: 19439
+                                                                                    1054
+
+
+
+03:02:19    1              Defendants, are you prepared to call your next
+
+03:02:28    2   witness?
+
+03:02:28    3              MR. RE:   We are, Your Honor.
+
+03:02:29    4              THE COURT:   And who do you intend to call, Mr. Re?
+
+03:02:32    5              MR. RE:   Dr. Richard Stern.
+
+03:02:34    6              THE COURT:   All right.    Let's bring in the jury,
+
+03:02:35    7   please.
+
+03:02:35    8              COURT SECURITY OFFICER:      All rise.
+
+03:02:36    9              THE COURT:   If there are binders to distribute,
+
+03:02:38   10   let's do that now.
+
+03:03:04   11              (Jury in.)
+
+03:03:06   12              THE COURT:   Please be seated, ladies and
+
+03:03:09   13   gentlemen.
+
+03:03:09   14              Defendants, call your next witness, please.
+
+03:03:15   15              MR. RE:   Thank you, Your Honor.
+
+03:03:15   16              The Defendants call as our next -- next witness,
+
+03:03:19   17   Dr. Richard Stern.
+
+03:03:20   18              THE COURT:   Dr. Stern, if you'll come forward and
+
+03:03:22   19   be sworn, please.
+
+03:03:25   20              (Witness sworn.)
+
+03:03:26   21              THE COURT:   Please come around, sir, have a seat
+
+03:03:41   22   at the witness stand.
+
+03:03:41   23    RICHARD M. STERN, JR., Ph.D., DEFENDANTS' WITNESS, SWORN
+
+03:03:41   24                           DIRECT EXAMINATION
+
+03:04:13   25   BY MR. RE:
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 84 of 187 PageID #: 19440
+                                                                                    1055
+
+
+
+03:04:13    1   Q.   Doctor, could you state your full name for the record,
+
+03:04:19    2   please.
+
+03:04:19    3               THE COURT:     Just a minute, Mr. Re.
+
+03:04:22    4               Is the witness going to pour some water?
+
+03:04:26    5               THE WITNESS:     I am.
+
+03:04:27    6               THE COURT:     Let's do that, get that done.      If
+
+03:04:27    7   you're going to spill it, I'd rather know about it at the
+
+03:04:30    8   beginning of the examination.
+
+03:04:33    9               THE WITNESS:     I'll do my best.   Thank you.
+
+03:04:36   10               THE COURT:     All right.   Now let's proceed.
+
+03:04:37   11               MR. RE:   Thank you, Your Honor.
+
+03:04:38   12   Q.   (By Mr. Re)      Dr. Stern, please state your full name for
+
+03:04:41   13   the record, please.
+
+03:04:42   14   A.   Richard Stern.
+
+03:04:43   15   Q.   And what is your profession, Dr. Stern?
+
+03:04:46   16   A.   I am a professor of electrical engineering at
+
+03:04:52   17   Carnegie-Mellon University.
+
+03:04:52   18   Q.   And where is Carnegie-Mellon?
+
+03:04:54   19   A.   In Pittsburgh, Pennsylvania.
+
+03:04:56   20   Q.   And how did you become involved in this case?
+
+03:04:58   21   A.   I was asked by Amazon to review the '049 patent and
+
+03:05:03   22   related material and comment on the validity of the patent.
+

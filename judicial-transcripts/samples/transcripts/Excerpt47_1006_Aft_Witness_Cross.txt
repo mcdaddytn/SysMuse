@@ -1,0 +1,190 @@
+01:54:21   18   Q.   Looking back at the slide, do any of the Echo devices
+
+01:54:29   19   in this case infringe either Claim 1 or Claim 8 of the '049
+
+01:54:35   20   patent?
+
+01:54:35   21   A.   No, they do not.
+
+01:54:38   22             MR. LAQUER:    I pass the witness.
+
+01:54:39   23             THE COURT:    Cross-examination by the Plaintiff.
+
+01:54:53   24             Are there binders to distribute, counsel?
+
+01:54:56   25             MR. LAMBRIANAKOS:     Yes, Your Honor.
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 50 of 187 PageID #: 19406
+                                                                                    1021
+
+
+
+01:54:58    1              THE COURT:     Let's do that now.
+
+01:55:04    2              THE WITNESS:     Your Honor, while they're getting
+
+01:55:06    3   the binders, can I also get another water bottle?
+
+01:55:10    4              THE COURT:     Somebody from the Defendants' table
+
+01:55:12    5   will --
+
+01:55:13    6              THE WITNESS:     Thank you.
+
+01:55:13    7              THE COURT:     -- bring you another water.
+
+01:55:16    8              THE WITNESS:     Thank you, Your Honor.
+
+01:55:21    9              Thank you, sir.     Thank you.
+
+01:55:23   10              COURT SECURITY OFFICER:       Uh-huh.
+
+01:55:26   11              THE COURT:     Whatever that noise was, let's don't
+
+01:55:28   12   do it again.
+
+01:55:30   13              All right.     Let's proceed.
+
+01:55:31   14              THE WITNESS:     I apologize, Your Honor.
+
+01:55:31   15                             CROSS-EXAMINATION
+
+01:55:34   16   BY MR. LAMBRIANAKOS:
+
+01:55:34   17   Q.   Good afternoon, Dr. Kiaei.
+
+01:55:36   18   A.   Good afternoon, sir.
+
+01:55:37   19   Q.   Are you one of the world's leading acoustic processing
+
+01:55:41   20   experts?
+
+01:55:41   21   A.   I -- I have worked on acoustic and audio processing for
+
+01:55:51   22   many years.
+
+01:55:51   23   Q.   Do you agree with counsel's statement in openings that
+
+01:55:54   24   you're one of the world's leading acoustic processing
+
+01:56:02   25   experts?
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 51 of 187 PageID #: 19407
+                                                                                    1022
+
+
+
+01:56:03    1   A.   Counsel was generous.     I would say that I am an expert
+
+01:56:05    2   in this area.
+
+01:56:05    3   Q.   But are you one of the world's leading experts in this
+
+01:56:09    4   area of acoustic processing?
+
+01:56:10    5   A.   I am well-known in my research work, and I'm also --
+
+01:56:13    6   yes, I am.
+
+01:56:14    7   Q.   You have a website, don't you, Dr. Kiaei, where you
+
+01:56:17    8   market yourself as an expert?
+
+01:56:18    9   A.   Yes, I do.
+
+01:56:19   10   Q.   Is that hitechexpertwitness.com?
+
+01:56:22   11   A.   Yes, it is.
+
+01:56:23   12   Q.   On that website, you identify your areas of technical
+
+01:56:30   13   expertise?
+
+01:56:30   14   A.   Yes.    And before I go further in that, I want to
+
+01:56:33   15   emphasize that that website, I developed myself, and I
+
+01:56:37   16   haven't worked on it much.       So that website is still
+
+01:56:42   17   underdeveloped.     There's many things missing in that
+
+01:56:43   18   website.     It is my own creation.
+
+01:56:44   19               THE COURT:   Just a minute.
+
+01:56:45   20               Dr. Kiaei, you're here to answer the counsel's
+
+01:56:47   21   questions.     You're not here to offer explanations that are
+
+01:56:50   22   not called for by the questions.
+
+01:56:52   23               If he wants to know about the status of your
+
+01:56:55   24   website and is it complete and is it still being worked on,
+
+01:56:58   25   he will ask that, but limit your answers to the questions
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 52 of 187 PageID #: 19408
+                                                                                    1023
+
+
+
+01:57:01    1   that are asked, please, sir.
+
+01:57:03    2            THE WITNESS:     Yes, Your Honor.      Thank you.     I
+
+01:57:04    3   will.
+
+01:57:04    4            THE COURT:     Let's proceed, counsel.
+
+01:57:06    5            MR. LAMBRIANAKOS:      Your Honor, can we strike the
+
+01:57:08    6   portion of his answer following his initial response?
+
+01:57:10    7            THE COURT:     I'll retain the answer, yes.         The rest
+
+01:57:14    8   of it and before I go further, et cetera, I will strike as
+
+01:57:17    9   non-responsive.
+
+01:57:18   10            Let's proceed.
+
+01:57:20   11   Q.   (By Mr. Lambrianakos)     And you have this website to
+
+01:57:22   12   help you get hired as an expert witness, right?
+
+01:57:25   13   A.   Yes, I do.
+
+01:57:26   14   Q.   Because you enjoy this kind of work, right?
+
+01:57:28   15   A.   Yes, I do.
+
+01:57:29   16   Q.   And it's lucrative; you bill $400.00 an hour for your
+
+01:57:32   17   opinions, right?
+
+01:57:32   18   A.   Yes, I do.
+
+01:57:34   19   Q.   Now, on that website, you list areas of technical
+
+01:57:41   20   expertise that you believe you bring to a potential client,
+
+01:57:45   21   right?
+
+01:57:45   22   A.   Yes, I do.
+
+01:57:46   23   Q.   And you say on that website that you're an expert
+
+01:57:50   24   witness in wireless and wireline communications, right?
+
+01:57:53   25   A.   Yes, sir.
+
+    Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 53 of 187 PageID #: 19409
+                                                                                    1024
+
+
+
+01:57:54    1   Q.   Integrated circuits?
+
+01:57:56    2   A.   Yes, sir.
+

@@ -1,0 +1,186 @@
+Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 1 of 141 PageID #: 19216
+                                                                                   831
+
+
+
+      1                  IN THE UNITED STATES DISTRICT COURT
+
+      2                   FOR THE EASTERN DISTRICT OF TEXAS
+
+      3                             MARSHALL DIVISION
+
+      4   VOCALIFE LLC,                       )(
+
+          MCKOOL SMITH, P.C.
+     24   104 East Houston Street, Suite 300
+          Marshall, TX 75670
+     25
+
+Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 2 of 141 PageID #: 19217
+                                                                                   832
+
+
+
+      1   FOR THE DEFENDANTS:
+
+     24   (Proceedings recorded by mechanical stenography, transcript
+          produced on a CAT system.)
+     25
+
+    Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 3 of 141 PageID #: 19218
+                                                                                       833
+
+
+
+08:22:33    1                         P R O C E E D I N G S
+
+08:22:33    2           (Jury out.)
+
+08:22:34    3           COURT SECURITY OFFICER:        All rise.
+
+08:22:35    4           THE COURT:     Be seated, please.
+
+08:27:52    5           Are the parties prepared to read into the record
+
+08:28:02    6   those items from the list of pre-admitted exhibits used
+
+08:28:05    7   during yesterday's portion of the trial?
+
+08:28:08    8           MR. FABRICANT:      Yes, Your Honor.
+
+08:28:09    9           THE COURT:     Please proceed.
+
+08:28:15   10           MS. FABRICANT:      Good morning, Your Honor.
+
+08:28:24   11   Samantha Fabricant for the Plaintiff Vocalife.
+
+08:28:27   12           The following exhibits were used on Monday,
+
+08:28:31   13   October 5th, 2020.     PTX-12, PTX-78, PTX-79, PTX-113,
+
+08:28:43   14   PTX-115, PTX-120, PTX-124, PTX-125, PTX-126, PTX-128,
+
+08:28:57   15   PTX-129, PTX-301, PTX-321, PTX-358, PTX-359, PTX-386,
+
+08:29:10   16   PTX-399, PTX-441, PTX-545, PTX-647, PTX-654, PTX-1071,
+
+08:29:23   17   PTX-1372, PTX-1377, PTX-1378, and PTX-1469 and are being
+
+08:29:34   18   moved into evidence.
+
+08:29:35   19           THE COURT:     All right.     Thank you, Ms. Fabricant.
+
+08:29:37   20           Any objection from Defendant?
+
+08:29:39   21           MR. AKIN:     No objection.
+
+08:29:40   22           THE COURT:     Does Defendant have a similar
+
+08:29:42   23   rendition to offer?
+
+08:29:43   24           MR. AKIN:     Yes, Your Honor.
+
+08:29:43   25           THE COURT:     Please proceed.
+
+    Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 4 of 141 PageID #: 19219
+                                                                                       834
+
+
+
+08:29:45    1             MR. AKIN:     Kyle Akin on behalf of Amazon.
+
+08:29:48    2             Amazon moves in the following exhibits used
+
+08:29:50    3   yesterday, Monday, October 5th:        DTX-81, DTX-319, DTX-418,
+
+08:30:00    4   and PTX-1311.
+
+08:30:02    5             THE COURT:     All right.   Any objection to that
+
+08:30:04    6   rendition by the Plaintiff?
+
+08:30:06    7             MS. FABRICANT:     No objection, Your Honor.
+
+08:30:08    8             THE COURT:     All right.   Counsel, thank you.
+
+08:30:13    9             Mr. Hadden, is the Defendant prepared to go
+
+08:30:15   10   forward with its case-in-chief?
+
+08:30:17   11             MR. HADDEN:     Yes, Your Honor.
+
+08:30:17   12             THE COURT:     All right.   Let's bring in the jury,
+
+08:30:20   13   please.
+
+08:30:20   14             COURT SECURITY OFFICER:      All rise.
+
+08:30:20   15             (Jury in.)
+
+08:30:21   16             THE COURT:     Welcome back, ladies and gentlemen.
+
+08:30:52   17   Please be seated.
+
+08:30:52   18             As you'll recall, the Plaintiff rested its
+
+08:30:57   19   case-in-chief at the end of the day yesterday.           We'll now
+
+08:31:01   20   proceed with the Defendants' case-in-chief.
+
+08:31:03   21             Mr. Hadden, call the Defendants' first witness,
+
+08:31:06   22   please.
+
+08:31:06   23             MR. HADDEN:     Yes, Your Honor.
+
+08:31:07   24             Amazon calls Rohit Prasad.
+
+08:31:09   25             THE COURT:     All right.   Mr. Prasad, if you'll come
+
+    Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 5 of 141 PageID #: 19220
+                                                                                       835
+
+
+
+08:31:13    1   forward and be sworn.
+
+08:31:20    2            Are there binders to distribute, counsel?
+
+08:31:24    3            MR. HADDEN:    Yes, Your Honor.
+
+08:31:25    4            THE COURT:    Let's do that now, then.
+
+08:31:29    5            MR. HADDEN:    Thank you.
+
+08:31:30    6            (Witness sworn.)
+
+08:31:31    7            THE COURT:    Please come around, sir.        Have a seat
+
+08:31:37    8   on the witness stand.
+
+08:31:38    9            All right.    Counsel, you may proceed with your
+
+08:32:04   10   direct examination.
+
+08:32:04   11            MR. HADDEN:    Thank you, Your Honor.
+
+08:32:04   12             ROHIT PRASAD, DEFENDANTS' WITNESS, SWORN
+
+08:32:04   13                          DIRECT EXAMINATION
+
+08:32:05   14   BY MR. HADDEN:
+
+08:32:05   15   Q.   Good morning, Mr. Prasad.
+
+08:32:07   16   A.   Good morning.
+
+08:32:07   17   Q.   Could you introduce yourself to the jury?
+
+08:32:10   18   A.   My name is Rohit Prasad.
+
+08:32:12   19   Q.   And what's your job at Amazon?
+
+08:32:15   20   A.   I'm a vice president and the head scientist for
+
+08:32:19   21   Amazon's Alexa's artificial intelligence team.
+

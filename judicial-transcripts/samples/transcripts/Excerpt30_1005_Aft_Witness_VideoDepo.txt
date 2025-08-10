@@ -1,0 +1,127 @@
+01:48:48   10   Q.   So the beam selector is determining once every 100
+
+01:48:52   11   milliseconds which of the ABF output signals to select,
+
+01:48:57   12   right?
+
+01:48:57   13   A.   Yes.
+
+01:48:57   14   Q.   So then, in your experiment, if a person moved from the
+
+01:49:03   15   left side of the device to the right side of the device and
+
+01:49:08   16   was speaking for a period longer than 100 milliseconds, you
+
+01:49:13   17   would expect with 80 percent accuracy that the beam would
+
+01:49:16   18   change from the beam on the left side of the device to the
+
+01:49:19   19   beam on the right side of the device.         Correct?
+
+01:49:21   20   A.   I say yes.
+
+01:49:24   21   Q.   So when you say -- when you're saying CMD, it wasn't
+
+01:49:29   22   CMD, it was SIMD, S-I-M-D, right?
+
+01:49:35   23   A.   Yes.     Yes.
+
+01:49:36   24   Q.   And that's the advanced SIMD extension also known as
+
+01:49:41   25   Neon for the ARM processor, right?
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 40 of 120 PageID #: 19086
+                                                                                     750
+
+
+
+01:49:43    1   A.   Yes.
+
+01:49:44    2               (Videoclip ends.)
+
+01:49:45    3               THE COURT:    Does that complete this witness by
+
+01:49:47    4   deposition?
+
+01:49:47    5               MR. FABRICANT:    Yes, Your Honor.
+
+01:49:50    6               THE COURT:    Call your next witness, Plaintiff.
+
+01:49:51    7               MR. FABRICANT:    Your Honor, the next witness is
+
+01:49:54    8   also a witness by video deposition.         Ms. Park will announce
+
+01:49:58    9   the witness.
+
+01:50:04   10               MS. PARK:    Plaintiff calls by deposition Amit
+
+01:50:07   11   Chhetri, principal research scientist at Amazon's Lab126.
+
+01:50:12   12               Playing time for Plaintiff is 24 minutes, 23
+
+01:50:14   13   seconds; and Defendants' is 38.
+
+01:50:16   14               THE COURT:    Proceed with this witness by
+
+01:50:18   15   deposition.
+
+01:50:18   16                   AMIT CHHETRI, PLAINTIFF'S WITNESS
+
+01:50:18   17                     PRESENTED BY VIDEO DEPOSITION
+
+01:50:18   18               (Videoclip played.)
+
+01:50:32   19   Q.   Good morning, sir.      Can you please state your name for
+
+01:50:36   20   the record?
+
+01:50:36   21   A.   Amit Chhetri.
+
+01:50:39   22   Q.   Sir, for whom do you currently work?
+
+01:50:45   23   A.   I work for Amazon Lab126.
+
+01:50:47   24   Q.   How long you have worked there?
+
+01:50:54   25   A.   I have worked at Amazon Lab126 for a little over nine
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 41 of 120 PageID #: 19087
+                                                                                     751
+
+
+
+01:51:03    1   years.
+
+01:51:03    2   Q.   What's your understanding of what the company Amazon
+
+01:51:15    3   Lab126 does?      What business is it in?
+
+01:51:19    4   A.   Amazon Lab126 is a hardware research and development
+
+01:51:27    5   center.     We build products like Echo products which are
+
+01:51:36    6   sold under the brand of Amazon.
+
+01:51:38    7   Q.   When you say you worked on the original Echo product,
+
+01:51:43    8   did you call it the Echo, or did it have an internal code
+
+01:51:46    9   name?
+
+01:51:46   10   A.   It did have an internal code name.        There were at least
+
+01:51:50   11   two code names, and the -- the name Echo was announced.
+
+01:51:55   12   Q.   What were those code names?
+
+01:51:56   13   A.   The first code name was Project D, D for Denver, and
+
+01:52:09   14   subsequently, it was called Doppler.
+
+01:52:12   15   Q.   So when the project was released as the Echo, did you
+
+01:52:17   16   maintain that internal code name for the released product,
+
+01:52:20   17   as well?
+
+01:52:20   18   A.   Yes.

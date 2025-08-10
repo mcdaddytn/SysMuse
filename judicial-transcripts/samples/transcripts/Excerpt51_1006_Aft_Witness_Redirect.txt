@@ -1,0 +1,137 @@
+04:36:42    4   Q.   And so you know that at the time of this book, no one
+
+04:36:45    5   had put all these elements together, right?
+
+04:36:48    6   A.   That's correct.
+
+04:36:48    7   Q.   And that you can't point to anyone prior to 2010 who,
+
+04:36:54    8   if ever, put any of these elements all together into the
+
+04:36:57    9   claim of the patent, right, sir?
+
+04:36:59   10   A.   That's not correct.
+
+04:37:00   11   Q.   You can't point to any single reference that you've
+
+04:37:04   12   identified today where someone has put together all the
+
+04:37:08   13   elements into Claim 1 of the patent, right, sir?
+
+04:37:11   14   A.   That's correct.   But outside of the context of the
+
+04:37:17   15   report --
+
+04:37:18   16            MR. RUBINO:    Move to strike the remainder,
+
+04:37:20   17   Your Honor.
+
+04:37:20   18            THE COURT:    I'll sustain the objection that the
+
+04:37:23   19   answer is non-responsive after "that's correct."           And I'll
+
+04:37:26   20   strike that portion of the answer after "that's correct."
+
+04:37:29   21            MR. RUBINO:    Pass the witness.
+
+04:37:30   22            THE COURT:    All right.     Redirect, Mr. Re?
+
+04:37:39   23            I'll take it as a yes since you've gone back to
+
+04:37:42   24   the podium.
+
+04:37:43   25            MR. RE:   Yes, Your Honor, I'm sorry.
+
+   Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 144 of 187 PageID #: 19500
+                                                                                   1115
+
+
+04:37:44    1               THE COURT:   That's all right.
+
+04:37:44    2               MR. RE:   I'm still concentrating.
+
+04:37:46    3               THE COURT:   Please continue.    Don't quit
+
+04:37:49    4   concentrating.
+
+04:37:51    5               MR. RE:   Okay.   If I may use the ELMO.
+
+04:37:51    6                            REDIRECT EXAMINATION
+
+04:37:54    7   BY MR. RE:
+
+04:37:54    8   Q.   You were -- your cross-examination began with this
+
+04:38:10    9   discussion, and counsel showed you only the words at the
+
+04:38:13   10   top of Paragraph 89.       Do you remember that?
+
+04:38:15   11   A.   Yes.
+
+04:38:15   12   Q.   And what were you discussing in Paragraph 89 where
+
+04:38:19   13   counsel didn't show you what's below it?
+
+04:38:22   14   A.   Well, counsel was asking about super directive
+
+04:38:30   15   beamforming, and I had stated -- may I go on?
+
+04:38:33   16   Q.   Yes, if you're going to explain.
+
+04:38:35   17   A.   Yes.    The question was, is the super directive
+
+
+04:39:47   15   A.   That is correct.
+
+04:39:48   16   Q.   The Li paper --
+
+04:39:49   17            THE COURT:     Just a minute, counsel.
+
+04:39:51   18            Do you have an objection?
+
+04:39:52   19            MR. RUBINO:     Objection, leading, Your Honor.
+
+04:39:54   20            THE COURT:     Sustained as to leading.
+
+04:39:57   21            Restate your question in a non-leading form.
+
+04:40:01   22   Q.   (By Mr. Re)   Can you just give me your conclusions and
+
+04:40:04   23   explain whether any of your conclusions rely in any way on
+
+04:40:07   24   the Saric reference?
+
+04:40:08   25   A.   My conclusion was that Claims 1 -- Claims 1 and 8 of
+
+   Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 146 of 187 PageID #: 19502
+                                                                                   1117
+
+
+
+04:40:13    1   the '049 patent were invalid based on the prior art.            Those
+
+
+04:42:16   24   Q.   And did you find any -- any real-world facts that have
+
+04:42:22   25   any connection with respect to the invention that could in
+
+   Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 148 of 187 PageID #: 19504
+                                                                                   1119
+
+
+
+04:42:26    1   any way be termed success?
+
+04:42:29    2             MR. RUBINO:    Objection, Your Honor.
+
+04:42:30    3             THE COURT:    State your objection.
+
+04:42:31    4             MR. RUBINO:    Both leading and beyond the scope of
+
+04:42:33    5   cross.
+
+04:42:33    6             THE COURT:    I'll sustain as to leading.
+
+04:42:37    7   Q.   (By Mr. Re)     Did you understand at all what counsel was
+
+04:42:39    8   referring to by there was no success yet?

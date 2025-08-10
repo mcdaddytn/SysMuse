@@ -384,7 +384,7 @@ export class WitnessJurorService {
     speakerPrefix: string,
     role?: string
   ): Promise<number> {
-    // Create speaker
+    // First check if speaker already exists
     let speaker = await this.prisma.speaker.findFirst({
       where: {
         trialId,
@@ -392,17 +392,22 @@ export class WitnessJurorService {
       }
     });
     
-    if (!speaker) {
-      speaker = await this.prisma.speaker.create({
-        data: {
-          trialId,
-          speakerPrefix: speakerPrefix.toUpperCase(),
-          speakerType: 'ANONYMOUS'
-        }
-      });
+    if (speaker) {
+      // Speaker already exists, return its ID
+      logger.debug(`Anonymous speaker already exists: ${speakerPrefix}`);
+      return speaker.id;
     }
     
-    // Create anonymous speaker
+    // Create new speaker
+    speaker = await this.prisma.speaker.create({
+      data: {
+        trialId,
+        speakerPrefix: speakerPrefix.toUpperCase(),
+        speakerType: 'ANONYMOUS'
+      }
+    });
+    
+    // Check if anonymous speaker record exists
     let anonymous = await this.prisma.anonymousSpeaker.findFirst({
       where: {
         trialId,

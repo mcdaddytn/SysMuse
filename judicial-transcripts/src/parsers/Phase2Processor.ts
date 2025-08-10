@@ -182,6 +182,19 @@ export class Phase2Processor {
     }
     logger.info(`Loaded ${witnesses.length} witnesses`);
     
+    // If we have witnesses, set the first one as current (will be overridden when specific witness is called)
+    if (witnesses.length > 0) {
+      const firstWitness = witnesses[0];
+      this.witnessJurorService.setCurrentWitness({
+        id: firstWitness.id,
+        name: firstWitness.name || undefined,
+        witnessType: firstWitness.witnessType || undefined,
+        witnessCaller: firstWitness.witnessCaller || undefined,
+        speakerId: firstWitness.speakerId
+      });
+      logger.debug(`Set initial witness context to: ${firstWitness.name}`);
+    }
+    
     // Load existing jurors
     const jurors = await this.prisma.juror.findMany({
       where: { trialId },
@@ -228,6 +241,7 @@ export class Phase2Processor {
       }
     });
     
+    // Initialize state with current witness context
     const state: ProcessingState = {
       currentEvent: null,
       eventLines: [],
@@ -237,6 +251,11 @@ export class Phase2Processor {
       lastQSpeaker: null,
       contextualSpeakers: new Map()
     };
+    
+    // Log initial witness context
+    if (state.currentWitness) {
+      logger.debug(`Starting session with witness context: ${state.currentWitness.name}`);
+    }
     
     // Process lines sequentially
     for (const page of pages) {

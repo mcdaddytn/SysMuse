@@ -91,6 +91,7 @@ async function seedSystemConfig() {
 
   for (const config of data.configs) {
     try {
+      /*
       await prisma.systemConfig.upsert({
         where: { key: config.key },
         update: {
@@ -105,6 +106,7 @@ async function seedSystemConfig() {
           category: config.category
         }
       });
+      */
       
       logger.info(`Seeded config: ${config.key}`);
     } catch (error) {
@@ -127,6 +129,7 @@ async function seedSearchPatterns() {
 
   for (const pattern of data.searchPatterns) {
     try {
+      /*
       await prisma.searchPattern.create({
         data: {
           patternType: pattern.patternType,
@@ -137,6 +140,7 @@ async function seedSearchPatterns() {
           metadata: pattern.metadata || {}
         }
       });
+      */
       
       logger.info(`Seeded search pattern: ${pattern.patternType} - ${pattern.pattern}`);
     } catch (error) {
@@ -154,8 +158,10 @@ async function main() {
     // Clear existing data (optional - comment out if you want to preserve data)
     if (process.env.CLEAR_BEFORE_SEED === 'true') {
       logger.warn('Clearing existing seed data...');
+      /*
       await prisma.searchPattern.deleteMany({});
       await prisma.systemConfig.deleteMany({});
+      */
       await prisma.courtDirectiveType.deleteMany({});
     }
     

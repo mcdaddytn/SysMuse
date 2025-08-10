@@ -1,50 +1,43 @@
 // src/services/WitnessJurorService.ts
 import { PrismaClient } from '@prisma/client';
-import { 
-  WitnessInfo, 
-  JurorInfo, 
-  WitnessType, 
-  WitnessCaller,
-  ExaminationType,
-  SwornStatus,
-  WitnessCalledEventData 
-} from '../types/config.types';
+import { WitnessInfo, JurorInfo } from '../types/config.types';
 import logger from '../utils/logger';
 
 export class WitnessJurorService {
   private prisma: PrismaClient;
   private currentWitness: WitnessInfo | null = null;
-  private jurorAliasMap: Map<string, number> = new Map(); // Maps "MR. LASTNAME" to juror ID
+  private jurorAliasMap: Map<string, number> = new Map();
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
   }
 
   /**
-   * Parse witness called text to extract witness information
+   * Parse witness called text to extract details
    */
-  parseWitnessCalledText(text: string): {
+  parseWitnessCalledText(rawText: string): {
     name?: string;
-    witnessCaller?: WitnessCaller;
-    witnessType?: WitnessType;
-    swornStatus: SwornStatus;
+    witnessCaller?: 'PLAINTIFF' | 'DEFENDANT';
+    witnessType?: any;
+    swornStatus: any;
     continued: boolean;
     presentedByVideo: boolean;
-    examinationType?: ExaminationType;
+    examinationType?: any;
   } {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
     let name: string | undefined;
-    let witnessCaller: WitnessCaller | undefined;
-    let witnessType: WitnessType | undefined;
-    let swornStatus: SwornStatus = 'NOT_SWORN';
+    let witnessCaller: 'PLAINTIFF' | 'DEFENDANT' | undefined;
+    let witnessType: any = null;
+    let swornStatus: any = 'NOT_SWORN';
     let continued = false;
     let presentedByVideo = false;
-    let examinationType: ExaminationType | undefined;
+    let examinationType: any = null;
+    
+    // Split into lines for processing
+    const lines = rawText.split('\n').map(l => l.trim()).filter(l => l);
     
     for (const line of lines) {
       // Parse witness name and caller
-      const nameMatch = line.match(/^([A-Z][A-Z\s,\.]+?),?\s+(PLAINTIFF'S?|DEFENDANTS?')\s+WITNESS/i);
+      const nameMatch = line.match(/^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i);
       if (nameMatch) {
         name = nameMatch[1].trim();
         witnessCaller = nameMatch[2].toUpperCase().includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
@@ -118,13 +111,14 @@ export class WitnessJurorService {
         });
         logger.info(`Continuing examination for witness: ${this.currentWitness.name}`);
       } else if (parsed.name) {
-        // Create speaker for witness
+        // Create speaker for witness with handle
         const speakerPrefix = 'A.'; // Witnesses typically respond with "A."
+        const speakerHandle = `WITNESS_${parsed.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+        
         let speaker = await this.prisma.speaker.findFirst({
           where: {
             trialId,
-            speakerPrefix,
-            speakerType: 'WITNESS'
+            speakerHandle  // Use handle for uniqueness
           }
         });
         
@@ -133,6 +127,7 @@ export class WitnessJurorService {
             data: {
               trialId,
               speakerPrefix,
+              speakerHandle,  // Add the required speakerHandle
               speakerType: 'WITNESS'
             }
           });
@@ -233,11 +228,13 @@ export class WitnessJurorService {
         }
       }
       
-      // Create speaker for juror
+      // Create speaker for juror with handle
+      const speakerHandle = `JUROR_${(lastName || jurorNumber || 'UNKNOWN').toString().replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+      
       let speaker = await this.prisma.speaker.findFirst({
         where: {
           trialId,
-          speakerPrefix: speakerPrefix.toUpperCase()
+          speakerHandle  // Use handle for uniqueness
         }
       });
       
@@ -246,6 +243,7 @@ export class WitnessJurorService {
           data: {
             trialId,
             speakerPrefix: speakerPrefix.toUpperCase(),
+            speakerHandle,  // Add the required speakerHandle
             speakerType: 'JUROR'
           }
         });
@@ -291,6 +289,7 @@ export class WitnessJurorService {
         lastName: juror.lastName || undefined,
         jurorNumber: juror.jurorNumber || undefined,
         speakerPrefix: speakerPrefix.toUpperCase(),
+        speakerId: speaker.id,  // Include speakerId
         alias: juror.alias || undefined
       };
       
@@ -312,7 +311,8 @@ export class WitnessJurorService {
     
     if (jurorId) {
       const juror = await this.prisma.juror.findUnique({
-        where: { id: jurorId }
+        where: { id: jurorId },
+        include: { speaker: true }
       });
       
       if (juror) {
@@ -323,6 +323,7 @@ export class WitnessJurorService {
           lastName: juror.lastName || undefined,
           jurorNumber: juror.jurorNumber || undefined,
           speakerPrefix: speakerPrefix.toUpperCase(),
+          speakerId: juror.speaker?.id,
           alias: juror.alias || undefined
         };
       }
@@ -337,7 +338,8 @@ export class WitnessJurorService {
         where: {
           trialId,
           lastName
-        }
+        },
+        include: { speaker: true }
       });
       
       if (juror) {
@@ -351,6 +353,7 @@ export class WitnessJurorService {
           lastName: juror.lastName || undefined,
           jurorNumber: juror.jurorNumber || undefined,
           speakerPrefix: speakerPrefix.toUpperCase(),
+          speakerId: juror.speaker?.id,
           alias: juror.alias || undefined
         };
       }
@@ -384,11 +387,14 @@ export class WitnessJurorService {
     speakerPrefix: string,
     role?: string
   ): Promise<number> {
-    // First check if speaker already exists
+    // Create handle for anonymous speaker
+    const speakerHandle = `ANONYMOUS_${speakerPrefix.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+    
+    // First check if speaker already exists using handle
     let speaker = await this.prisma.speaker.findFirst({
       where: {
         trialId,
-        speakerPrefix: speakerPrefix.toUpperCase()
+        speakerHandle  // Use handle for lookup
       }
     });
     
@@ -398,11 +404,12 @@ export class WitnessJurorService {
       return speaker.id;
     }
     
-    // Create new speaker
+    // Create new speaker with handle
     speaker = await this.prisma.speaker.create({
       data: {
         trialId,
         speakerPrefix: speakerPrefix.toUpperCase(),
+        speakerHandle,  // Add the required speakerHandle
         speakerType: 'ANONYMOUS'
       }
     });

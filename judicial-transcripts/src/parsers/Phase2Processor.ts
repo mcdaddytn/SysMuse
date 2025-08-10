@@ -21,8 +21,8 @@ interface ProcessingState {
   currentSpeaker: SpeakerInfo | null;
   currentWitness: WitnessInfo | null;
   currentExaminationType: ExaminationType | null;
-  lastQSpeaker: SpeakerInfo | null; // Track who asked the last question
-  contextualSpeakers: Map<string, SpeakerInfo>; // Map contextual prefixes like Q., A., THE WITNESS
+  lastQSpeaker: SpeakerInfo | null;
+  contextualSpeakers: Map<string, SpeakerInfo>;
 }
 
 interface EventInfo {
@@ -66,18 +66,18 @@ export class Phase2Processor {
     byAttorney: /^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)/i,
     jurorSpeaker: /^(JUROR\s+[A-Z0-9]+)/i,
     
-    // Witness calling patterns
-    witnessName: /^([A-Z][A-Z\s,\.]+?),?\s+(PLAINTIFF'S?|DEFENDANTS?')\s+WITNESS/i,
-    witnessSworn: /\b(PREVIOUSLY\s+)?SWORN\b/i,
+    // Enhanced witness name patterns to handle quotes and nicknames
+    witnessName: /^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i,
+    witnessNameAlternate: /^([A-Z\s,'"\.\-]+?)\s*,\s*(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i,
+    witnessWithNickname: /^([A-Z]+)\s+["']([A-Z]+)["']\s+([A-Z]+)/i,
     
-    // Examination types
+    // Examination patterns
     examinationType: /(DIRECT|CROSS|REDIRECT|RECROSS)[\s\-]?EXAMINATION/i,
-    examinationContinued: /\bCONTINUED\b/i,
-    videoDeposition: /PRESENTED\s+BY\s+VIDEO\s+DEPOSITION/i,
+    examinationContinued: /EXAMINATION\s+CONTINUED/i,
     
-    // Special patterns
-    blankLine: /^\s*$/,
-    timestamp: /^\d{2}:\d{2}:\d{2}/
+    // Sworn status patterns
+    swornStatus: /(PREVIOUSLY\s+)?SWORN/i,
+    videoDeposition: /PRESENTED\s+BY\s+VIDEO|VIDEO\s+DEPOSITION/i
   };
 
   constructor(config: TranscriptConfig) {
@@ -90,10 +90,12 @@ export class Phase2Processor {
       trialId: 0,
       speakers: new Map(),
       attorneys: new Map(),
-      witnesses: new Map(),
+      witnesses: new Map(),  // Will store WitnessInfo objects
       jurors: new Map(),
-      lineBuffer: [],
-      eventBuffer: []
+      judge: null,  // Initialize as null
+      currentSession: null,  // Initialize as null
+      currentExaminationType: null,
+      currentWitness: null  // Allow null
     };
     
     this.stats = {
@@ -108,28 +110,36 @@ export class Phase2Processor {
     };
   }
 
-  /**
-   * Process Phase 2 for a trial
+/**
+   * Main processing method
    */
+  // async process(trialId: number): Promise<void> {
   async processTrial(trialId: number): Promise<void> {
-    logger.info('='.repeat(60));
+    logger.info('============================================================');
     logger.info('STARTING PHASE 2 PROCESSING');
     logger.info(`Trial ID: ${trialId}`);
-    logger.info('='.repeat(60));
-    
-    this.context.trialId = trialId;
+    logger.info('============================================================');
     
     try {
-      // Load trial context (attorneys, judge, etc.)
-      await this.loadTrialContext(trialId);
+      this.context.trialId = trialId;
       
-      // Process sessions in order
+      // Load existing entities
+      await this.loadExistingEntities(trialId);
+      
+      // Get all sessions for this trial
       const sessions = await this.prisma.session.findMany({
         where: { trialId },
-        orderBy: { sessionDate: 'asc' }
+        orderBy: [
+          { sessionDate: 'asc' },
+          { sessionType: 'asc' }
+        ]
       });
       
+      logger.info(`Found ${sessions.length} sessions to process`);
+      
+      // Process each session
       for (const session of sessions) {
+        this.context.currentSession = session;
         await this.processSession(session);
       }
       
@@ -139,62 +149,94 @@ export class Phase2Processor {
     } catch (error) {
       logger.error(`Phase 2 processing failed: ${error}`);
       throw error;
+    } finally {
+      await this.prisma.$disconnect();
     }
   }
 
   /**
-   * Load trial context including speakers
+   * Load existing entities into context
    */
-  private async loadTrialContext(trialId: number): Promise<void> {
-    // Load attorneys and their speakers
-    this.context.attorneys = await this.attorneyService.getTrialAttorneys(trialId);
-    logger.info(`Loaded ${this.context.attorneys.size} attorneys`);
+  private async loadExistingEntities(trialId: number): Promise<void> {
+    // Load attorneys
+    const attorneys = await this.attorneyService.getAttorneysForTrial(trialId);
+    for (const attorney of attorneys) {
+      this.context.attorneys.set(attorney.speakerPrefix || '', attorney.id);
+      
+      if (attorney.speaker) {
+        const speakerInfo: SpeakerInfo = {
+          id: attorney.speaker.id,
+          speakerPrefix: attorney.speaker.speakerPrefix,
+          speakerHandle: attorney.speaker.speakerHandle,
+          speakerType: SpeakerType.ATTORNEY,
+          attorneyId: attorney.id,
+          name: attorney.name
+        };
+        this.context.speakers.set(attorney.speaker.speakerPrefix, speakerInfo);
+      }
+    }
+    logger.info(`Loaded ${attorneys.length} attorneys`);
     
-    // Load judge speaker
+    // Load judge
     const judge = await this.prisma.judge.findFirst({
       where: { trialId },
       include: { speaker: true }
     });
     
-    if (judge && judge.speaker) {
-      const judgeInfo: SpeakerInfo = {
-        id: judge.speaker.id,
-        speakerPrefix: judge.speaker.speakerPrefix,
-        speakerType: SpeakerType.JUDGE,
-        name: judge.name,
-        judgeId: judge.id
-      };
-      this.context.speakers.set('THE COURT', judgeInfo);
-      this.context.speakers.set('COURT', judgeInfo);
+    if (judge) {
+      this.context.judge = judge;  // Store judge in context
+      
+      if (judge.speaker) {
+        const speakerInfo: SpeakerInfo = {
+          id: judge.speaker.id,
+          speakerPrefix: judge.speaker.speakerPrefix,
+          speakerHandle: judge.speaker.speakerHandle,
+          speakerType: SpeakerType.JUDGE,
+          name: judge.name
+        };
+        this.context.speakers.set('THE COURT', speakerInfo);
+        this.context.speakers.set('COURT', speakerInfo);
+      }
       logger.info(`Loaded judge: ${judge.name}`);
     }
     
-    // Load existing witnesses
+    // Load existing witnesses - FIXED to store WitnessInfo objects
     const witnesses = await this.prisma.witness.findMany({
       where: { trialId },
       include: { speaker: true }
     });
     
     for (const witness of witnesses) {
+      const witnessInfo: WitnessInfo = {
+        id: witness.id,
+        name: witness.name || undefined,
+        displayName: witness.displayName || undefined,
+        witnessType: witness.witnessType || undefined,
+        witnessCaller: witness.witnessCaller || undefined,
+        speakerId: witness.speakerId || undefined,
+        swornStatus: witness.swornStatus || 'NOT_SWORN'
+      };
+      
       if (witness.name) {
-        this.context.witnesses.set(witness.name.toUpperCase(), witness.id);
+        this.context.witnesses.set(witness.name, witnessInfo);  // Store WitnessInfo object
       }
     }
-    logger.info(`Loaded ${witnesses.length} witnesses`);
     
-    // If we have witnesses, set the first one as current (will be overridden when specific witness is called)
+    // Set initial witness context if exists
     if (witnesses.length > 0) {
       const firstWitness = witnesses[0];
       this.witnessJurorService.setCurrentWitness({
         id: firstWitness.id,
         name: firstWitness.name || undefined,
+        displayName: firstWitness.displayName || undefined,
         witnessType: firstWitness.witnessType || undefined,
         witnessCaller: firstWitness.witnessCaller || undefined,
-        //speakerId: firstWitness.speakerId
-        speakerId: firstWitness.speakerId || undefined
+        speakerId: firstWitness.speakerId || undefined,
+        swornStatus: firstWitness.swornStatus || 'NOT_SWORN'
       });
       logger.debug(`Set initial witness context to: ${firstWitness.name}`);
     }
+    logger.info(`Loaded ${witnesses.length} witnesses`);
     
     // Load existing jurors
     const jurors = await this.prisma.juror.findMany({
@@ -209,6 +251,7 @@ export class Phase2Processor {
         lastName: juror.lastName || undefined,
         jurorNumber: juror.jurorNumber || undefined,
         speakerPrefix: juror.speaker?.speakerPrefix || '',
+        speakerId: juror.speaker?.id,  // Add speakerId
         alias: juror.alias || undefined
       };
       
@@ -227,6 +270,9 @@ export class Phase2Processor {
    */
   private async processSession(session: any): Promise<void> {
     logger.info(`Processing session: ${session.sessionDate} - ${session.sessionType}`);
+    
+    // Set current session in context
+    this.context.currentSession = session;
     
     // Get all lines for this session in order
     const pages = await this.prisma.page.findMany({
@@ -320,6 +366,11 @@ export class Phase2Processor {
         state.currentEvent.endTime = line.timestamp;
       }
       state.currentEvent.endLineNumber = line.lineNumber;
+      
+      // Append text
+      if (lineText) {
+        state.currentEvent.text = (state.currentEvent.text || '') + '\n' + lineText;
+      }
     }
   }
 
@@ -332,12 +383,14 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    const match = lineText.match(this.PATTERNS.courtDirective);
-    if (!match) return false;
+    const directiveMatch = lineText.match(this.PATTERNS.courtDirective);
+    if (!directiveMatch) return false;
     
-    // Save current event if exists
-    if (state.currentEvent) {
+    // Save current event if different type
+    if (state.currentEvent && state.currentEvent.type !== EventType.COURT_DIRECTIVE) {
       await this.saveEvent(this.context.trialId, sessionId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
     }
     
     // Create court directive event
@@ -346,14 +399,14 @@ export class Phase2Processor {
       startTime: line.timestamp,
       startLineNumber: line.lineNumber,
       endLineNumber: line.lineNumber,
-      rawText: match[1],
       metadata: {
-        directiveText: match[1]
-      }
+        directiveText: directiveMatch[1]
+      },
+      rawText: lineText
     };
     state.eventLines = [line];
     
-    // Save immediately (court directives are usually single line)
+    // Save immediately (directives are usually single line)
     await this.saveEvent(this.context.trialId, sessionId, state.currentEvent, state.eventLines);
     state.currentEvent = null;
     state.eventLines = [];
@@ -362,7 +415,7 @@ export class Phase2Processor {
   }
 
   /**
-   * Check for witness being called
+   * Check for witness being called - FIXED VERSION
    */
   private async checkWitnessCalled(
     sessionId: number,
@@ -370,33 +423,65 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    const nameMatch = lineText.match(this.PATTERNS.witnessName);
+    // Check multiple patterns for witness
+    let nameMatch = lineText.match(this.PATTERNS.witnessName);
+    if (!nameMatch) {
+      nameMatch = lineText.match(this.PATTERNS.witnessNameAlternate);
+    }
+    
+    // Special handling for nicknames like QI "PETER" LI
+    if (!nameMatch) {
+      const nicknameMatch = lineText.match(this.PATTERNS.witnessWithNickname);
+      if (nicknameMatch) {
+        const fullName = `${nicknameMatch[1]} "${nicknameMatch[2]}" ${nicknameMatch[3]}`;
+        const witnessLineMatch = lineText.match(/(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i);
+        if (witnessLineMatch) {
+          nameMatch = [lineText, fullName, witnessLineMatch[1]];
+        }
+      }
+    }
+    
     if (!nameMatch) return false;
     
     // Save current event if exists
     if (state.currentEvent) {
       await this.saveEvent(this.context.trialId, sessionId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
     }
     
-    // Start witness called event
-    state.currentEvent = {
-      type: EventType.WITNESS_CALLED,
-      startTime: line.timestamp,
-      startLineNumber: line.lineNumber,
-      endLineNumber: line.lineNumber,
-      rawText: lineText,
-      metadata: {
-        witnessName: nameMatch[1],
-        witnessCaller: nameMatch[2].toUpperCase().includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT'
+    // Extract and normalize witness name
+    let witnessName = nameMatch[1].trim();
+    const displayName = witnessName; // Keep original for display
+    witnessName = witnessName.replace(/['"]/g, ''); // Remove quotes for storage
+    
+    const witnessCaller = nameMatch[2].toUpperCase().includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
+    
+    logger.info(`Witness called detected: ${displayName} (${witnessCaller})`);
+    
+    // Create unique speaker handle for this witness
+    const speakerHandle = `WITNESS_${witnessName.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+    
+    // Find or create speaker
+    let speaker = await this.prisma.speaker.findFirst({
+      where: {
+        trialId: this.context.trialId,
+        speakerHandle: speakerHandle
       }
-    };
-    state.eventLines = [line];
+    });
     
-    // Update witness context immediately
-    const witnessName = nameMatch[1].trim();
-    logger.info(`Witness called detected: ${witnessName}`);
+    if (!speaker) {
+      speaker = await this.prisma.speaker.create({
+        data: {
+          trialId: this.context.trialId,
+          speakerPrefix: 'A.',  // Display prefix for witnesses
+          speakerHandle: speakerHandle,  // Unique handle
+          speakerType: 'WITNESS'
+        }
+      });
+    }
     
-    // Create or find witness and update context
+    // Find or create witness
     let witness = await this.prisma.witness.findFirst({
       where: {
         trialId: this.context.trialId,
@@ -408,60 +493,75 @@ export class Phase2Processor {
     });
     
     if (!witness) {
-      // Create a unique speaker for this witness
-      const speakerPrefix = `WITNESS_${witnessName.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
-      
-      let speaker = await this.prisma.speaker.findFirst({
-        where: {
-          trialId: this.context.trialId,
-          speakerPrefix: speakerPrefix
-        }
-      });
-      
-      if (!speaker) {
-        speaker = await this.prisma.speaker.create({
-          data: {
-            trialId: this.context.trialId,
-            speakerPrefix: speakerPrefix,
-            speakerType: 'WITNESS'
-          }
-        });
-      }
-      
       witness = await this.prisma.witness.create({
         data: {
           trialId: this.context.trialId,
           name: witnessName,
-          witnessCaller: state.currentEvent.metadata.witnessCaller,
-          speakerId: speaker.id
+          displayName: displayName,
+          witnessCaller: witnessCaller,
+          speakerId: speaker.id,
+          swornStatus: 'NOT_SWORN'
         },
         include: {
           speaker: true
         }
       });
       
-      logger.info(`Created witness: ${witnessName} with speaker: ${speakerPrefix}`);
+      logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}`);
     }
     
-    // Update state with current witness
+    // Update state with current witness IMMEDIATELY
     state.currentWitness = {
       id: witness.id,
       name: witness.name || undefined,
+      displayName: witness.displayName || undefined,
       witnessType: witness.witnessType || undefined,
       witnessCaller: witness.witnessCaller || undefined,
-      speakerId: witness.speaker?.id
+      speakerId: witness.speaker?.id,
+      swornStatus: witness.swornStatus || 'NOT_SWORN'
     };
     
-    // Also update the service's witness context
+    // Create speaker info for contextual mapping
+    const witnessSpeakerInfo: SpeakerInfo = {
+      id: speaker.id,
+      speakerPrefix: speaker.speakerPrefix,
+      speakerHandle: speaker.speakerHandle,
+      speakerType: SpeakerType.WITNESS,
+      witnessId: witness.id,
+      name: displayName
+    };
+    
+    // Update contextual speakers for A. and THE WITNESS
+    state.contextualSpeakers.set('A.', witnessSpeakerInfo);
+    state.contextualSpeakers.set('THE WITNESS', witnessSpeakerInfo);
+    state.contextualSpeakers.set('WITNESS', witnessSpeakerInfo);
+    
+    // Update service context
     this.witnessJurorService.setCurrentWitness(state.currentWitness);
     
-    logger.info(`Set current witness context: ${witnessName}`);
+    logger.info(`Set current witness context: ${displayName}, A. will now resolve to this witness`);
+    
+    // Start witness called event
+    state.currentEvent = {
+      type: EventType.WITNESS_CALLED,
+      startTime: line.timestamp,
+      startLineNumber: line.lineNumber,
+      endLineNumber: line.lineNumber,
+      metadata: {
+        witnessId: witness.id,
+        witnessName: witnessName,
+        displayName: displayName,
+        witnessCaller: witnessCaller,
+        swornStatus: 'NOT_SWORN'
+      }
+    };
+    state.eventLines = [line];
     
     return true;
   }
 
   /**
-   * Check for examination type change
+   * Check for examination type change - FIXED VERSION
    */
   private async checkExaminationChange(
     sessionId: number,
@@ -472,6 +572,31 @@ export class Phase2Processor {
     const examMatch = lineText.match(this.PATTERNS.examinationType);
     if (!examMatch) return false;
     
+    // Check if we're changing examination for current witness
+    if (state.currentWitness) {
+      const examType = examMatch[1].toUpperCase();
+      const continued = lineText.includes('CONTINUED');
+      
+      // Check for sworn status in this line
+      let swornStatus = state.currentWitness.swornStatus || SwornStatus.NOT_SWORN;
+      if (lineText.match(/\bPREVIOUSLY\s+SWORN\b/i)) {
+        swornStatus = SwornStatus.PREVIOUSLY_SWORN;
+      } else if (lineText.match(/\bSWORN\b/i) && !lineText.match(/\bPREVIOUSLY/i)) {
+        swornStatus = SwornStatus.SWORN;
+      }
+      
+      // Update witness sworn status in database if changed
+      if (swornStatus !== state.currentWitness.swornStatus && state.currentWitness.id) {
+        await this.prisma.witness.update({
+          where: { id: state.currentWitness.id },
+          data: { swornStatus }
+        });
+        
+        state.currentWitness.swornStatus = swornStatus;
+        logger.info(`Updated witness sworn status to: ${swornStatus}`);
+      }
+    }
+    
     // If we're in a witness event, add to it
     if (state.currentEvent?.type === EventType.WITNESS_CALLED) {
       state.eventLines.push(line);
@@ -479,54 +604,91 @@ export class Phase2Processor {
       
       // Extract examination type
       const examType = examMatch[1].toUpperCase();
-      const continued = !!lineText.match(this.PATTERNS.examinationContinued);
+      const continued = !lineText.match(this.PATTERNS.examinationContinued);
       
+      // Map to enum value - USE THE CONST VALUES
+      let examinationType: ExaminationType;
+      switch (examType) {
+        case 'DIRECT':
+          examinationType = ExaminationType.DIRECT_EXAMINATION;
+          break;
+        case 'CROSS':
+          examinationType = ExaminationType.CROSS_EXAMINATION;
+          break;
+        case 'REDIRECT':
+          examinationType = ExaminationType.REDIRECT_EXAMINATION;
+          break;
+        case 'RECROSS':
+          examinationType = ExaminationType.RECROSS_EXAMINATION;
+          break;
+        default:
+          examinationType = ExaminationType.DIRECT_EXAMINATION;
+      }
+      
+      // Update metadata
       state.currentEvent.metadata = {
         ...state.currentEvent.metadata,
-        examinationType: `${examType}_EXAMINATION`,
+        examinationType,
         continued
       };
       
-      // Check for sworn status
-      if (state.eventLines.some(l => l.text?.match(this.PATTERNS.witnessSworn))) {
-        const previouslySworn = state.eventLines.some(l => l.text?.match(/PREVIOUSLY\s+SWORN/i));
-        state.currentEvent.metadata.swornStatus = previouslySworn ? 'PREVIOUSLY_SWORN' : 'SWORN';
-      }
+      // Update current examination type
+      state.currentExaminationType = examinationType;
       
       return true;
     }
     
-    // If current witness exists, create examination change event
-    if (state.currentWitness) {
-      // Save current event
-      if (state.currentEvent) {
-        await this.saveEvent(this.context.trialId, sessionId, state.currentEvent, state.eventLines);
+    // Check if this is a standalone examination change (witness already on stand)
+    if (state.currentWitness && !state.currentEvent) {
+      const examType = examMatch[1].toUpperCase();
+      
+      // Map to enum - USE THE CONST VALUES
+      let examinationType: ExaminationType;
+      switch (examType) {
+        case 'DIRECT':
+          examinationType = ExaminationType.DIRECT_EXAMINATION;
+          break;
+        case 'CROSS':
+          examinationType = ExaminationType.CROSS_EXAMINATION;
+          break;
+        case 'REDIRECT':
+          examinationType = ExaminationType.REDIRECT_EXAMINATION;
+          break;
+        case 'RECROSS':
+          examinationType = ExaminationType.RECROSS_EXAMINATION;
+          break;
+        default:
+          examinationType = ExaminationType.DIRECT_EXAMINATION;
       }
       
-      // Create new witness event for examination change
+      state.currentExaminationType = examinationType;
+      
+      // Create witness called event for examination change
       state.currentEvent = {
         type: EventType.WITNESS_CALLED,
         startTime: line.timestamp,
         startLineNumber: line.lineNumber,
         endLineNumber: line.lineNumber,
-        rawText: lineText,
         metadata: {
           witnessId: state.currentWitness.id,
-          examinationType: `${examMatch[1].toUpperCase()}_EXAMINATION`,
-          continued: !!lineText.match(this.PATTERNS.examinationContinued)
+          witnessName: state.currentWitness.name,
+          displayName: state.currentWitness.displayName,
+          examinationType,
+          swornStatus: state.currentWitness.swornStatus || SwornStatus.PREVIOUSLY_SWORN,
+          continued: lineText.includes('CONTINUED'),
+          witnessCaller: state.currentWitness.witnessCaller
         }
       };
       state.eventLines = [line];
       
-      // Update current examination type
-      state.currentExaminationType = state.currentEvent.metadata.examinationType;
+      return true;
     }
     
     return false;
   }
 
   /**
-   * Check for speaker statement
+   * Check for speaker statement - FIXED VERSION
    */
   private async checkSpeakerStatement(
     sessionId: number,
@@ -582,7 +744,7 @@ export class Phase2Processor {
   }
 
   /**
-   * Find or create speaker based on prefix
+   * Find or create speaker based on prefix - FIXED VERSION
    */
   private async findOrCreateSpeaker(
     speakerPrefix: string,
@@ -591,34 +753,43 @@ export class Phase2Processor {
   ): Promise<SpeakerInfo | null> {
     const upperPrefix = speakerPrefix.toUpperCase();
     
-    // Handle contextual speakers Q., A., THE WITNESS, ATTORNEY, WITNESS
+    // Check contextual speakers first (most common case)
+    const contextual = state.contextualSpeakers.get(upperPrefix);
+    if (contextual) {
+      logger.debug(`Found ${upperPrefix} in contextual speakers: ${contextual.name}`);
+      return contextual;
+    }
+    
+    // Handle Q. - should be the examining attorney
     if (upperPrefix === 'Q.' || upperPrefix === 'ATTORNEY') {
-      // Q. or ATTORNEY is the current examining attorney
       if (state.lastQSpeaker) {
         logger.debug(`${upperPrefix} resolved to: ${state.lastQSpeaker.name || state.lastQSpeaker.speakerPrefix}`);
         return state.lastQSpeaker;
       }
-      logger.warn(`${upperPrefix} speaker found but no examining attorney in context`);
+      logger.warn(`${upperPrefix} found but no examining attorney in context, line: ${lineText.substring(0, 50)}`);
       return null;
     }
     
+    // Handle A., THE WITNESS - should be current witness
     if (upperPrefix === 'A.' || upperPrefix === 'THE WITNESS' || upperPrefix === 'WITNESS') {
-      // A., THE WITNESS, or WITNESS is the current witness
       if (state.currentWitness?.speakerId) {
         const speaker = await this.prisma.speaker.findUnique({
           where: { id: state.currentWitness.speakerId }
         });
         if (speaker) {
-          logger.debug(`${upperPrefix} resolved to witness: ${state.currentWitness.name}`);
-          return {
+          const speakerInfo: SpeakerInfo = {
             id: speaker.id,
             speakerPrefix: speaker.speakerPrefix,
+            speakerHandle: speaker.speakerHandle,
             speakerType: SpeakerType.WITNESS,
-            witnessId: state.currentWitness.id
+            witnessId: state.currentWitness.id,
+            name: state.currentWitness.displayName || state.currentWitness.name
           };
+          logger.debug(`${upperPrefix} resolved to witness: ${speakerInfo.name}`);
+          return speakerInfo;
         }
       }
-      logger.warn(`${upperPrefix} found but no current witness in context`);
+      logger.warn(`${upperPrefix} found but no current witness in context, lineText: ${lineText.substring(0, 50)}`);
       return null;
     }
     
@@ -640,12 +811,14 @@ export class Phase2Processor {
         const speaker: SpeakerInfo = {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,
+          speakerHandle: attorney.speaker.speakerHandle,
           speakerType: SpeakerType.ATTORNEY,
           attorneyId: attorney.id,
           name: attorney.name
         };
         // Update the Q. context - this attorney is now asking questions
         state.lastQSpeaker = speaker;
+        state.contextualSpeakers.set('Q.', speaker);
         logger.info(`Updated Q. context to: ${attorney.name}`);
         return speaker;
       }
@@ -663,6 +836,7 @@ export class Phase2Processor {
         const speaker: SpeakerInfo = {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,
+          speakerHandle: attorney.speaker.speakerHandle,
           speakerType: SpeakerType.ATTORNEY,
           attorneyId: attorney.id,
           name: attorney.name
@@ -671,6 +845,7 @@ export class Phase2Processor {
         // If this attorney is speaking in a witness context, they might be the Q. speaker
         if (state.currentWitness) {
           state.lastQSpeaker = speaker;
+          state.contextualSpeakers.set('Q.', speaker);
           logger.debug(`Set Q. context to: ${attorney.name} (during witness examination)`);
         }
         
@@ -691,6 +866,7 @@ export class Phase2Processor {
         return {
           id: jurorAlias.id,
           speakerPrefix: upperPrefix,
+          speakerHandle: `JUROR_${jurorAlias.id}`,
           speakerType: SpeakerType.JUROR,
           jurorId: jurorAlias.id
         };
@@ -708,17 +884,17 @@ export class Phase2Processor {
       this.stats.jurorStatements++;
       
       return {
-        id: juror.id,
+        id: juror.speakerId || juror.id,  // Use speakerId if available, otherwise id
         speakerPrefix: upperPrefix,
+        speakerHandle: `JUROR_${juror.id}`,
         speakerType: SpeakerType.JUROR,
         jurorId: juror.id
       };
     }
     
-    // Check for known anonymous speakers that shouldn't be created multiple times
+    // Check for known anonymous speakers
     const knownAnonymousSpeakers = ['COURT SECURITY OFFICER', 'BAILIFF', 'COURT REPORTER', 'INTERPRETER'];
     if (knownAnonymousSpeakers.includes(upperPrefix)) {
-      // Use the service method which checks for existing speaker
       const speakerId = await this.witnessJurorService.createAnonymousSpeaker(
         this.context.trialId,
         upperPrefix
@@ -729,6 +905,7 @@ export class Phase2Processor {
       return {
         id: speakerId,
         speakerPrefix: upperPrefix,
+        speakerHandle: `ANONYMOUS_${upperPrefix.replace(/\s+/g, '_')}`,
         speakerType: SpeakerType.ANONYMOUS
       };
     }
@@ -745,6 +922,7 @@ export class Phase2Processor {
     return {
       id: speakerId,
       speakerPrefix: upperPrefix,
+      speakerHandle: `ANONYMOUS_${upperPrefix.replace(/\s+/g, '_')}`,
       speakerType: SpeakerType.ANONYMOUS
     };
   }
@@ -764,12 +942,16 @@ export class Phase2Processor {
         !['Q.', 'A.', 'THE WITNESS'].includes(upperPrefix)) {
       state.lastQSpeaker = speaker;
       state.contextualSpeakers.set('Q.', speaker);
+      logger.debug(`Updated Q. context to ${speaker.name} based on attorney speaking`);
     }
     
     // If witness speaks, update A. mapping
-    if (speaker.speakerType === SpeakerType.WITNESS) {
+    if (speaker.speakerType === SpeakerType.WITNESS && 
+        !['Q.', 'ATTORNEY'].includes(upperPrefix)) {
       state.contextualSpeakers.set('A.', speaker);
       state.contextualSpeakers.set('THE WITNESS', speaker);
+      state.contextualSpeakers.set('WITNESS', speaker);
+      logger.debug(`Updated A./THE WITNESS context to ${speaker.name}`);
     }
   }
 
@@ -891,7 +1073,7 @@ export class Phase2Processor {
   }
 
   /**
-   * Create witness called event
+   * Create witness called event - FIXED VERSION
    */
   private async createWitnessCalled(eventId: number, eventInfo: EventInfo, lines: any[]): Promise<void> {
     // Combine all lines for parsing
@@ -900,84 +1082,29 @@ export class Phase2Processor {
       .join('\n')
       .trim();
     
-    // Parse witness information
-    const parsed = this.witnessJurorService.parseWitnessCalledText(fullText);
+    // Use metadata if available, otherwise parse
+    const witnessId = eventInfo.metadata?.witnessId;
+    const examinationType = eventInfo.metadata?.examinationType;
+    const swornStatus = eventInfo.metadata?.swornStatus || 'NOT_SWORN';
+    const continued = eventInfo.metadata?.continued || false;
+    const presentedByVideo = fullText.includes('VIDEO') || false;
     
-    // Create or find witness
-    let witnessId: number | undefined;
-    
-    if (eventInfo.metadata?.witnessId) {
-      witnessId = eventInfo.metadata.witnessId;
-    } else if (parsed.name || eventInfo.metadata?.witnessName) {
-      const witnessName = parsed.name || eventInfo.metadata?.witnessName;
-      
-      // Create speaker for witness
-      let speaker = await this.prisma.speaker.findFirst({
-        where: {
-          trialId: this.context.trialId,
-          speakerPrefix: 'A.',
-          speakerType: 'WITNESS'
-        }
-      });
-      
-      if (!speaker) {
-        speaker = await this.prisma.speaker.create({
-          data: {
-            trialId: this.context.trialId,
-            speakerPrefix: 'A.',
-            speakerType: 'WITNESS'
-          }
-        });
-      }
-      
-      // Find or create witness
-      let witness = await this.prisma.witness.findFirst({
-        where: {
-          trialId: this.context.trialId,
-          name: witnessName
-        }
-      });
-      
-      if (!witness) {
-        witness = await this.prisma.witness.create({
-          data: {
-            trialId: this.context.trialId,
-            name: witnessName,
-            witnessType: parsed.witnessType,
-            witnessCaller: parsed.witnessCaller || eventInfo.metadata?.witnessCaller,
-            speakerId: speaker.id
-          }
-        });
-        
-        logger.info(`Created witness: ${witnessName}`);
-      }
-      
-      witnessId = witness.id;
-      
-      // Update current witness context
-      this.witnessJurorService.setCurrentWitness({
-        id: witness.id,
-        name: witness.name || undefined,
-        witnessType: witness.witnessType || undefined,
-        witnessCaller: witness.witnessCaller || undefined,
-        //speakerId: witness.speakerId
-        speakerId: witness.speakerId || undefined
-      });
-    }
-    
-    // Create witness called event
-    if (witnessId && (parsed.examinationType || eventInfo.metadata?.examinationType)) {
+    if (witnessId && examinationType) {
       await this.prisma.witnessCalledEvent.create({
         data: {
           eventId,
           witnessId,
-          examinationType: parsed.examinationType || eventInfo.metadata?.examinationType,
-          swornStatus: parsed.swornStatus || eventInfo.metadata?.swornStatus || 'NOT_SWORN',
-          continued: parsed.continued || eventInfo.metadata?.continued || false,
-          presentedByVideo: parsed.presentedByVideo || false,
+          examinationType,
+          swornStatus,
+          continued,
+          presentedByVideo,
           rawText: fullText.substring(0, 255)
         }
       });
+      
+      logger.info(`Created witness called event for witness ${witnessId}, exam type: ${examinationType}`);
+    } else {
+      logger.warn(`Missing witness or examination type for witness called event`);
     }
   }
 
@@ -998,29 +1125,24 @@ export class Phase2Processor {
    * Log processing statistics
    */
   private logStatistics(): void {
-    logger.info('\n' + '='.repeat(60));
-    logger.info('📊 PHASE 2 PROCESSING COMPLETED');
-    logger.info('='.repeat(60));
-    logger.info(`✅ Total events created: ${this.stats.totalEvents}`);
-    logger.info(`💬 Statement events: ${this.stats.statementEvents}`);
-    logger.info(`👤 Witness events: ${this.stats.witnessEvents}`);
-    logger.info(`📋 Directive events: ${this.stats.directiveEvents}`);
-    logger.info(`👥 Juror statements: ${this.stats.jurorStatements}`);
-    logger.info(`❓ Anonymous speakers: ${this.stats.anonymousSpeakers}`);
+    logger.info('============================================================');
+    logger.info('PHASE 2 PROCESSING COMPLETE');
+    logger.info('============================================================');
+    logger.info(`Total Events: ${this.stats.totalEvents}`);
+    logger.info(`Statement Events: ${this.stats.statementEvents}`);
+    logger.info(`Witness Events: ${this.stats.witnessEvents}`);
+    logger.info(`Directive Events: ${this.stats.directiveEvents}`);
+    logger.info(`Juror Statements: ${this.stats.jurorStatements}`);
+    logger.info(`Anonymous Speakers: ${this.stats.anonymousSpeakers}`);
     
     if (this.stats.unmatchedSpeakers.length > 0) {
-      logger.warn(`⚠️  Unmatched speakers: ${this.stats.unmatchedSpeakers.length}`);
-      const unique = [...new Set(this.stats.unmatchedSpeakers)];
-      unique.slice(0, 10).forEach(s => logger.warn(`   - ${s}`));
-      if (unique.length > 10) {
-        logger.warn(`   ... and ${unique.length - 10} more`);
-      }
+      logger.warn(`Unmatched Speakers: ${[...new Set(this.stats.unmatchedSpeakers)].join(', ')}`);
     }
     
     if (this.stats.errors > 0) {
-      logger.error(`❌ Errors encountered: ${this.stats.errors}`);
+      logger.error(`Errors: ${this.stats.errors}`);
     }
     
-    logger.info('='.repeat(60));
+    logger.info('============================================================');
   }
 }

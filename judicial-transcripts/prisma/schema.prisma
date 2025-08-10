@@ -228,29 +228,6 @@ model Address {
   courtReporters  CourtReporter[]
 }
 
-// ==================== Speaker MTI Base Entity ====================
-
-model Speaker {
-  id              Int       @id @default(autoincrement())
-  trialId         Int
-  speakerPrefix   String    // The text that will be matched in transcript (e.g., "MR. SMITH", "Q.", "THE COURT")
-  speakerType     SpeakerType
-  createdAt       DateTime  @default(now())
-  
-  // Relations to specific speaker types
-  attorney        Attorney?
-  judge           Judge?
-  witness         Witness?
-  juror           Juror?
-  anonymousSpeaker AnonymousSpeaker?
-  
-  // Relations to statements
-  statements      StatementEvent[]
-  
-  @@index([trialId, speakerPrefix])
-  @@unique([trialId, speakerPrefix])
-}
-
 enum SpeakerType {
   ATTORNEY
   JUDGE
@@ -259,26 +236,47 @@ enum SpeakerType {
   ANONYMOUS
 }
 
-// ==================== Witness Management ====================
+// ==================== Speaker MTI Base Entity ====================
+
+model Speaker {
+  id              Int       @id @default(autoincrement())
+  trialId         Int
+  speakerPrefix   String    // Display prefix (e.g., "A.", "Q.", "MR. SMITH")
+  speakerHandle   String    // Unique handle (e.g., "WITNESS_QI_PETER_LI")
+  speakerType     SpeakerType
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  attorney        Attorney?
+  judge           Judge?
+  witness         Witness?
+  juror           Juror?
+  anonymousSpeaker AnonymousSpeaker?
+  statements      StatementEvent[]
+  
+  @@index([trialId, speakerPrefix])
+  @@index([trialId, speakerHandle])
+  @@unique([trialId, speakerHandle])  // Handle must be unique
+}
 
 model Witness {
   id              Int       @id @default(autoincrement())
   trialId         Int
   trial           Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  name            String?
-  //gm: changed:
-  //speakerId       Int?      // Made optional since multiple witnesses might not have speakers initially
+  name            String?   // Normalized name for storage
+  displayName     String?   // Display name with quotes/formatting
   speakerId       Int?      @unique
   speaker         Speaker?  @relation(fields: [speakerId], references: [id], onDelete: SetNull)
   witnessType     WitnessType?
   witnessCaller   WitnessCaller?
   expertField     String?
+  swornStatus     SwornStatus @default(NOT_SWORN)  // Track sworn status
   createdAt       DateTime  @default(now())
   
   witnessEvents   WitnessCalledEvent[]
   
   @@index([trialId, witnessType])
-  @@index([speakerId])  // Index instead of unique constraint
+  @@index([speakerId])
 }
 
 enum WitnessType {

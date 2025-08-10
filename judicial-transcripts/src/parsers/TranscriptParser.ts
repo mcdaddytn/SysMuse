@@ -705,21 +705,29 @@ export class TranscriptParser {
     
     // Create judge with speaker
     if (summaryInfo.judge) {
-      // Create speaker for judge
-      const judgeSpeaker = await this.prisma.speaker.upsert({
+      // Create speaker for judge with handle
+      const speakerHandle = `JUDGE_${trial.id}`;
+      
+      const judgeSpeaker = await this.prisma.speaker.findFirst({
         where: {
-          trialId_speakerPrefix: {
-            trialId: trial.id,
-            speakerPrefix: 'THE COURT'
-          }
-        },
-        update: {},
-        create: {
           trialId: trial.id,
-          speakerPrefix: 'THE COURT',
-          speakerType: 'JUDGE'
+          speakerHandle: speakerHandle
         }
       });
+      
+      let speaker;
+      if (!judgeSpeaker) {
+        speaker = await this.prisma.speaker.create({
+          data: {
+            trialId: trial.id,
+            speakerPrefix: 'THE COURT',
+            speakerHandle: speakerHandle,
+            speakerType: 'JUDGE'
+          }
+        });
+      } else {
+        speaker = judgeSpeaker;
+      }
       
       await this.prisma.judge.upsert({
         where: { trialId: trial.id },
@@ -727,14 +735,14 @@ export class TranscriptParser {
           name: summaryInfo.judge.name,
           title: summaryInfo.judge.title,
           honorific: summaryInfo.judge.honorific,
-          speakerId: judgeSpeaker.id
+          speakerId: speaker.id
         },
         create: {
           trialId: trial.id,
           name: summaryInfo.judge.name,
           title: summaryInfo.judge.title,
           honorific: summaryInfo.judge.honorific,
-          speakerId: judgeSpeaker.id
+          speakerId: speaker.id
         }
       });
       

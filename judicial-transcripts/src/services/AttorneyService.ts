@@ -11,33 +11,65 @@ export class AttorneyService {
   }
 
   /**
-   * Parse attorney name to extract title and last name
+   * Parse attorney name to extract title, last name, and handle suffixes
    */
-  private parseAttorneyName(fullName: string): { title?: string; lastName?: string; speakerPrefix?: string } {
-    const titleMatch = fullName.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/i);
+  private parseAttorneyName(fullName: string): { 
+    title?: string; 
+    firstName?: string;
+    lastName?: string; 
+    suffix?: string;
+    speakerPrefix?: string;
+    speakerHandle?: string;
+  } {
+    // Handle suffixes like Jr., Sr., III, IV, etc.
+    const suffixPattern = /\s+(JR\.?|SR\.?|III|IV|II|ESQ\.?)$/i;
+    const suffixMatch = fullName.match(suffixPattern);
+    let suffix: string | undefined;
+    let nameWithoutSuffix = fullName;
+    
+    if (suffixMatch) {
+      suffix = suffixMatch[1];
+      nameWithoutSuffix = fullName.replace(suffixPattern, '').trim();
+    }
+    
+    // Parse title and name
+    const titleMatch = nameWithoutSuffix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/i);
     
     if (titleMatch) {
       const title = titleMatch[1].toUpperCase();
       const namePart = titleMatch[2];
       
-      // Extract last name (assume last word is last name for now)
+      // Extract last name (last word that's not a suffix)
       const nameParts = namePart.trim().split(/\s+/);
       const lastName = nameParts[nameParts.length - 1].toUpperCase();
+      const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : undefined;
+      
+      // Speaker prefix is title + last name (not suffix)
+      const speakerPrefix = `${title} ${lastName}`;
+      const speakerHandle = `ATTORNEY_${lastName.replace(/[^A-Z0-9]/gi, '_')}_${title.replace(/\./g, '')}`;
       
       return {
         title,
+        firstName,
         lastName,
-        speakerPrefix: `${title} ${lastName}`
+        suffix,
+        speakerPrefix,
+        speakerHandle
       };
     }
     
     // If no title found, try to extract last name anyway
-    const nameParts = fullName.trim().split(/\s+/);
+    const nameParts = nameWithoutSuffix.trim().split(/\s+/);
     const lastName = nameParts[nameParts.length - 1].toUpperCase();
+    const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : undefined;
+    const speakerHandle = `ATTORNEY_${lastName.replace(/[^A-Z0-9]/gi, '_')}`;
     
     return {
+      firstName,
       lastName,
-      speakerPrefix: lastName
+      suffix,
+      speakerPrefix: lastName,
+      speakerHandle
     };
   }
 
@@ -50,14 +82,19 @@ export class AttorneyService {
     role: 'PLAINTIFF' | 'DEFENDANT' | 'THIRD_PARTY'
   ): Promise<number> {
     try {
-      // Parse attorney name for title and last name
-      const { title, lastName, speakerPrefix } = this.parseAttorneyName(attorneyInfo.name);
+      // Parse attorney name for components
+      const parsed = this.parseAttorneyName(attorneyInfo.name);
+      const { title, firstName, lastName, suffix, speakerPrefix, speakerHandle } = parsed;
       
-      // First, find or create the speaker record
+      // Use provided speakerPrefix if available, otherwise use parsed
+      const finalSpeakerPrefix = attorneyInfo.speakerPrefix || speakerPrefix || attorneyInfo.name.toUpperCase();
+      const finalSpeakerHandle = speakerHandle || `ATTORNEY_${attorneyInfo.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+      
+      // First, find or create the speaker record using handle
       let speaker = await this.prisma.speaker.findFirst({
         where: {
           trialId,
-          speakerPrefix: speakerPrefix || attorneyInfo.name.toUpperCase()
+          speakerHandle: finalSpeakerHandle
         }
       });
 
@@ -65,11 +102,12 @@ export class AttorneyService {
         speaker = await this.prisma.speaker.create({
           data: {
             trialId,
-            speakerPrefix: speakerPrefix || attorneyInfo.name.toUpperCase(),
+            speakerPrefix: finalSpeakerPrefix,
+            speakerHandle: finalSpeakerHandle,
             speakerType: 'ATTORNEY'
           }
         });
-        logger.info(`Created speaker for attorney: ${speakerPrefix}`);
+        logger.info(`Created speaker for attorney: ${finalSpeakerPrefix} with handle: ${finalSpeakerHandle}`);
       }
 
       // Find or create attorney
@@ -84,14 +122,14 @@ export class AttorneyService {
         attorney = await this.prisma.attorney.create({
           data: { 
             name: attorneyInfo.name,
-            title,
-            lastName,
-            speakerPrefix,
+            title: title || attorneyInfo.title,
+            lastName: lastName || attorneyInfo.lastName,
+            speakerPrefix: finalSpeakerPrefix,
             barNumber: attorneyInfo.barNumber,
             speakerId: speaker.id
           }
         });
-        logger.info(`Created attorney: ${attorneyInfo.name} with speaker prefix: ${speakerPrefix}`);
+        logger.info(`Created attorney: ${attorneyInfo.name} with speaker prefix: ${finalSpeakerPrefix}`);
       } else {
         // Update attorney if we have new information
         attorney = await this.prisma.attorney.update({
@@ -99,7 +137,7 @@ export class AttorneyService {
           data: {
             title: title || attorney.title,
             lastName: lastName || attorney.lastName,
-            speakerPrefix: speakerPrefix || attorney.speakerPrefix,
+            speakerPrefix: finalSpeakerPrefix,
             barNumber: attorneyInfo.barNumber || attorney.barNumber
           }
         });
@@ -156,161 +194,127 @@ export class AttorneyService {
     firmName: string,
     officeInfo?: { name: string; address?: AddressInfo }
   ): Promise<{ lawFirm: any; office?: any }> {
-    // Find or create law firm
-    let lawFirm = await this.prisma.lawFirm.findFirst({
-      where: { name: firmName }
-    });
-    
-    if (!lawFirm) {
-      lawFirm = await this.prisma.lawFirm.create({
-        data: { name: firmName }
-      });
-      logger.info(`Created law firm: ${firmName}`);
-    }
-    
-    // Handle office if we have address information
-    let office = null;
-    
-    // If we have address info, use city as office name, otherwise use "Main Office"
-    const officeName = officeInfo?.name || 
-                      officeInfo?.address?.city || 
-                      'Main Office';
-    
-    if (officeInfo?.address || officeName !== 'Main Office') {
-      // First check if office already exists
-      office = await this.prisma.lawFirmOffice.findFirst({
-        where: {
-          lawFirmId: lawFirm.id,
-          name: officeName
-        }
+    try {
+      // Find or create law firm
+      let lawFirm = await this.prisma.lawFirm.findFirst({
+        where: { name: firmName }
       });
       
-      if (!office) {
-        // Create address only if office doesn't exist
-        let addressId: number;
-        
-        if (officeInfo?.address) {
-          // Check if similar address already exists
-          const existingAddress = await this.prisma.address.findFirst({
-            where: {
-              street1: officeInfo.address.street1,
-              city: officeInfo.address.city,
-              state: officeInfo.address.state,
-              zipCode: officeInfo.address.zipCode
-            }
-          });
-          
-          if (existingAddress) {
-            addressId = existingAddress.id;
-          } else {
-            const address = await this.prisma.address.create({
-              data: {
-                street1: officeInfo.address.street1,
-                street2: officeInfo.address.street2,
-                city: officeInfo.address.city,
-                state: officeInfo.address.state,
-                zipCode: officeInfo.address.zipCode,
-                country: officeInfo.address.country || 'USA'
-              }
-            });
-            addressId = address.id;
-            logger.info(`Created address for ${firmName} ${officeName} office`);
-          }
-        } else {
-          // Create minimal address with just country
+      if (!lawFirm) {
+        lawFirm = await this.prisma.lawFirm.create({
+          data: { name: firmName }
+        });
+        logger.info(`Created law firm: ${firmName}`);
+      }
+      
+      // Handle office if provided
+      let office = null;
+      if (officeInfo) {
+        // Create address if provided
+        let addressId: number | null = null;
+        if (officeInfo.address) {
           const address = await this.prisma.address.create({
             data: {
-              country: 'USA'
+              ...officeInfo.address,
+              country: officeInfo.address.country || 'USA'
             }
           });
           addressId = address.id;
         }
         
-        // Create office
-        office = await this.prisma.lawFirmOffice.create({
-          data: {
+        // Find or create office
+        office = await this.prisma.lawFirmOffice.findFirst({
+          where: {
             lawFirmId: lawFirm.id,
-            name: officeName,
-            addressId
+            name: officeInfo.name
           }
         });
-        logger.info(`Created office: ${officeName} for ${firmName}`);
-      }
-    }
-    
-    return { lawFirm, office };
-  }
-
-  /**
-   * Find attorney by speaker prefix (for matching during transcript parsing)
-   */
-  async findAttorneyBySpeakerPrefix(trialId: number, speakerPrefix: string): Promise<any> {
-    // First try exact match
-    let attorney = await this.prisma.attorney.findFirst({
-      where: {
-        speakerPrefix: speakerPrefix.toUpperCase(),
-        trialAttorneys: {
-          some: { trialId }
+        
+        if (!office) {
+          office = await this.prisma.lawFirmOffice.create({
+            data: {
+              lawFirmId: lawFirm.id,
+              name: officeInfo.name,
+              addressId: addressId!
+            }
+          });
+          logger.info(`Created law firm office: ${officeInfo.name}`);
         }
-      },
-      include: {
-        speaker: true
       }
-    });
-    
-    if (attorney) return attorney;
-    
-    // Try matching by last name only (for cases like "MR. SMITH" vs "SMITH")
-    const lastNameMatch = speakerPrefix.match(/(?:MR\.|MS\.|MRS\.|DR\.)?\s*([A-Z]+)$/i);
-    if (lastNameMatch) {
-      const lastName = lastNameMatch[1].toUpperCase();
-      attorney = await this.prisma.attorney.findFirst({
-        where: {
-          lastName,
-          trialAttorneys: {
-            some: { trialId }
-          }
-        },
-        include: {
-          speaker: true
-        }
-      });
+      
+      return { lawFirm, office };
+      
+    } catch (error) {
+      logger.error(`Error creating/updating law firm: ${error}`);
+      throw error;
     }
-    
-    return attorney;
   }
 
   /**
    * Get all attorneys for a trial
    */
-  async getTrialAttorneys(trialId: number): Promise<Map<string, number>> {
-    const attorneys = await this.prisma.trialAttorney.findMany({
-      where: { trialId },
+  async getAttorneysForTrial(trialId: number): Promise<any[]> {
+    return await this.prisma.attorney.findMany({
+      where: {
+        trialAttorneys: {
+          some: {
+            trialId
+          }
+        }
+      },
+      include: {
+        speaker: true,
+        trialAttorneys: {
+          where: { trialId },
+          include: {
+            lawFirm: true,
+            lawFirmOffice: true
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Find attorney by speaker prefix
+   */
+  async findAttorneyBySpeakerPrefix(trialId: number, speakerPrefix: string): Promise<any> {
+    // First try exact match on speakerPrefix
+    let attorney = await this.prisma.attorney.findFirst({
+      where: {
+        speakerPrefix: speakerPrefix,
+        trialAttorneys: {
+          some: { trialId }
+        }
+      },
+      include: { 
+        speaker: true,
+        trialAttorneys: {
+          where: { trialId }
+        }
+      }
+    });
+    
+    if (attorney) return attorney;
+    
+    // Try finding by speaker handle
+    const speaker = await this.prisma.speaker.findFirst({
+      where: {
+        trialId,
+        speakerPrefix: speakerPrefix,
+        speakerType: 'ATTORNEY'
+      },
       include: {
         attorney: {
           include: {
-            speaker: true
+            trialAttorneys: {
+              where: { trialId }
+            }
           }
         }
       }
     });
     
-    const attorneyMap = new Map<string, number>();
-    
-    for (const ta of attorneys) {
-      if (ta.attorney.speakerPrefix) {
-        attorneyMap.set(ta.attorney.speakerPrefix, ta.attorney.id);
-      }
-      // Also add mapping for last name only
-      if (ta.attorney.lastName) {
-        attorneyMap.set(ta.attorney.lastName, ta.attorney.id);
-      }
-      // Add mapping for speaker ID
-      if (ta.attorney.speaker) {
-        attorneyMap.set(`SPEAKER_${ta.attorney.speaker.id}`, ta.attorney.id);
-      }
-    }
-    
-    return attorneyMap;
+    return speaker?.attorney || null;
   }
 }

@@ -168,44 +168,73 @@ export class AttorneyService {
       logger.info(`Created law firm: ${firmName}`);
     }
     
-    // Handle office if provided
+    // Handle office if we have address information
     let office = null;
-    if (officeInfo) {
-      // Create address for office
-      let addressId: number | null = null;
-      
-      if (officeInfo.address) {
-        const address = await this.prisma.address.create({
-          data: {
-            street1: officeInfo.address.street1,
-            street2: officeInfo.address.street2,
-            city: officeInfo.address.city,
-            state: officeInfo.address.state,
-            zipCode: officeInfo.address.zipCode,
-            country: officeInfo.address.country || 'USA'
-          }
-        });
-        addressId = address.id;
-        logger.info(`Created address for ${firmName} ${officeInfo.name} office`);
-      }
-      
-      // Find or create office
+    
+    // If we have address info, use city as office name, otherwise use "Main Office"
+    const officeName = officeInfo?.name || 
+                      officeInfo?.address?.city || 
+                      'Main Office';
+    
+    if (officeInfo?.address || officeName !== 'Main Office') {
+      // First check if office already exists
       office = await this.prisma.lawFirmOffice.findFirst({
         where: {
           lawFirmId: lawFirm.id,
-          name: officeInfo.name
+          name: officeName
         }
       });
       
-      if (!office && addressId) {
+      if (!office) {
+        // Create address only if office doesn't exist
+        let addressId: number;
+        
+        if (officeInfo?.address) {
+          // Check if similar address already exists
+          const existingAddress = await this.prisma.address.findFirst({
+            where: {
+              street1: officeInfo.address.street1,
+              city: officeInfo.address.city,
+              state: officeInfo.address.state,
+              zipCode: officeInfo.address.zipCode
+            }
+          });
+          
+          if (existingAddress) {
+            addressId = existingAddress.id;
+          } else {
+            const address = await this.prisma.address.create({
+              data: {
+                street1: officeInfo.address.street1,
+                street2: officeInfo.address.street2,
+                city: officeInfo.address.city,
+                state: officeInfo.address.state,
+                zipCode: officeInfo.address.zipCode,
+                country: officeInfo.address.country || 'USA'
+              }
+            });
+            addressId = address.id;
+            logger.info(`Created address for ${firmName} ${officeName} office`);
+          }
+        } else {
+          // Create minimal address with just country
+          const address = await this.prisma.address.create({
+            data: {
+              country: 'USA'
+            }
+          });
+          addressId = address.id;
+        }
+        
+        // Create office
         office = await this.prisma.lawFirmOffice.create({
           data: {
             lawFirmId: lawFirm.id,
-            name: officeInfo.name,
+            name: officeName,
             addressId
           }
         });
-        logger.info(`Created office: ${officeInfo.name} for ${firmName}`);
+        logger.info(`Created office: ${officeName} for ${firmName}`);
       }
     }
     

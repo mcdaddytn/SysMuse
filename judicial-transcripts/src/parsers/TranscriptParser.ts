@@ -125,7 +125,7 @@ export class TranscriptParser {
           (trimmedLine.match(/^\d{2}:\d{2}:\d{2}/) && !summaryProcessed)) {
         // If we see a timestamp pattern, we're definitely in proceedings
         currentSection = 'PROCEEDINGS';
-        //gm: too much logging
+        //gm: way too much output
         //logger.info(`Detected PROCEEDINGS section at line ${i}`);
         
         // Create session if not already created
@@ -213,34 +213,38 @@ export class TranscriptParser {
           logger.info(`Created page ${pageNumber}`);
         }
         
-        // Parse and store line
+        // Parse and store line (skip blank lines)
         const parsedLine = this.lineParser.parse(line);
-        if (parsedLine) {
-          sessionLineNumber++;
-          trialLineNumber++;
-          
-          await this.prisma.line.create({
-            data: {
-              pageId: currentPage.id,
-              lineNumber: parsedLine.lineNumber || sessionLineNumber,
-              trialLineNumber,
-              sessionLineNumber,
-              timestamp: parsedLine.timestamp,
-              text: parsedLine.text,
-              speakerPrefix: parsedLine.speakerPrefix,
-              isBlank: parsedLine.isBlank
-            }
-          });
-          
-          this.directoryStats.totalLines++;
-          if (!parsedLine.isBlank) {
+        if (parsedLine && !parsedLine.isBlank) {  // Only store non-blank lines
+          // Only increment line numbers for non-blank lines with content
+          if (parsedLine.text || parsedLine.timestamp) {
+            sessionLineNumber++;
+            trialLineNumber++;
+            
+            await this.prisma.line.create({
+              data: {
+                pageId: currentPage.id,
+                lineNumber: parsedLine.lineNumber || sessionLineNumber,
+                trialLineNumber,
+                sessionLineNumber,
+                timestamp: parsedLine.timestamp || null,
+                text: parsedLine.text || null,
+                speakerPrefix: parsedLine.speakerPrefix || null,
+                isBlank: false  // Always false since we're skipping blanks
+              }
+            });
+            
+            this.directoryStats.totalLines++;
             this.directoryStats.nonBlankLines++;
+            
+            // Log progress every 100 lines
+            if (sessionLineNumber % 100 === 0) {
+              logger.debug(`Processed ${sessionLineNumber} lines in session`);
+            }
           }
-          
-          // Log progress every 100 lines
-          if (sessionLineNumber % 100 === 0) {
-            logger.debug(`Processed ${sessionLineNumber} lines in session`);
-          }
+        } else if (parsedLine && parsedLine.isBlank) {
+          // Count blank lines but don't store them
+          this.directoryStats.totalLines++;
         }
       }
     }
@@ -341,13 +345,25 @@ export class TranscriptParser {
   private extractJudge(lines: string[]): any {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      if (line.includes('HONORABLE') || line.includes('JUDGE')) {
-        const judgeName = line.replace(/HONORABLE|JUDGE|HON\./gi, '').trim();
-        return {
-          name: judgeName,
-          title: 'JUDGE',
-          honorific: 'HONORABLE'
-        };
+      
+      // Look for "BEFORE THE HONORABLE" pattern
+      if (line.includes('BEFORE THE HONORABLE')) {
+        // Judge name is typically after "JUDGE" on the same or next line
+        const currentAndNext = line + ' ' + (lines[i + 1] || '');
+        
+        // Pattern: "BEFORE THE HONORABLE JUDGE RODNEY GILSTRAP"
+        const match = currentAndNext.match(/BEFORE THE HONORABLE(?:\s+JUDGE)?\s+([A-Z][A-Z\s]+?)(?:\s+UNITED|\s*$)/i);
+        if (match) {
+          const judgeName = match[1].trim()
+            .replace(/\s+/g, ' ')  // Normalize spaces
+            .replace(/JUDGE\s*/i, ''); // Remove JUDGE if it's part of the captured name
+          
+          return {
+            name: judgeName,
+            title: 'JUDGE',
+            honorific: 'HONORABLE'
+          };
+        }
       }
     }
     return null;
@@ -381,16 +397,36 @@ export class TranscriptParser {
     const defendantAttorneys: AttorneyInfo[] = [];
     
     let currentSection: 'plaintiff' | 'defendant' | null = null;
+    let currentAttorney: AttorneyInfo | null = null;
     let currentFirm: { name: string; office?: { name: string; address?: AddressInfo } } | null = null;
+    let addressLines: string[] = [];
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
       // Detect section
-      if (line.match(/FOR.*PLAINTIFF/i) || line.includes('Attorneys for Plaintiff')) {
+      if (line.match(/FOR THE PLAINTIFF/i)) {
+        // Save any pending attorney before switching sections
+        if (currentAttorney && currentSection) {
+          if (currentSection === 'plaintiff') {
+            plaintiffAttorneys.push(currentAttorney);
+          } else {
+            defendantAttorneys.push(currentAttorney);
+          }
+          currentAttorney = null;
+        }
         currentSection = 'plaintiff';
         continue;
-      } else if (line.match(/FOR.*DEFENDANT/i) || line.includes('Attorneys for Defendant')) {
+      } else if (line.match(/FOR THE DEFENDANT/i)) {
+        // Save any pending attorney before switching sections
+        if (currentAttorney && currentSection) {
+          if (currentSection === 'plaintiff') {
+            plaintiffAttorneys.push(currentAttorney);
+          } else {
+            defendantAttorneys.push(currentAttorney);
+          }
+          currentAttorney = null;
+        }
         currentSection = 'defendant';
         continue;
       }
@@ -400,7 +436,17 @@ export class TranscriptParser {
       // Parse attorney name (MR./MS./MRS./DR. pattern)
       const nameMatch = line.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/i);
       if (nameMatch) {
-        const attorney: AttorneyInfo = {
+        // Save previous attorney if exists
+        if (currentAttorney) {
+          if (currentSection === 'plaintiff') {
+            plaintiffAttorneys.push(currentAttorney);
+          } else {
+            defendantAttorneys.push(currentAttorney);
+          }
+        }
+        
+        // Create new attorney
+        currentAttorney = {
           name: line,
           title: nameMatch[1].toUpperCase(),
           lastName: this.extractLastName(nameMatch[2]),
@@ -408,38 +454,100 @@ export class TranscriptParser {
         };
         
         if (currentFirm) {
-          attorney.lawFirm = currentFirm;
+          currentAttorney.lawFirm = { ...currentFirm };
         }
         
-        if (currentSection === 'plaintiff') {
-          plaintiffAttorneys.push(attorney);
-        } else {
-          defendantAttorneys.push(attorney);
-        }
+        // Reset for next attorney
+        addressLines = [];
         continue;
       }
       
-      // Parse law firm
-      if (line.length > 0 && !line.match(/^\d/) && !line.includes('@')) {
-        // Check if this might be a law firm name
-        if (line.includes('LLP') || line.includes('LLC') || line.includes('P.C.') || 
-            line.includes('Law') || line.includes('Attorney')) {
-          currentFirm = { name: line };
-        } else if (currentFirm && !currentFirm.office) {
-          // This might be address information
-          const address = this.parseAddress(lines, i);
+      // Check if this is a law firm name (contains legal entity markers)
+      if (line.length > 0 && 
+          (line.includes('LLP') || line.includes('LLC') || line.includes('P.C.') || 
+           line.includes('LAW') || line.includes('FIRM') || line.includes('SMITH'))) {
+        
+        // Process any pending address for previous firm
+        if (addressLines.length > 0 && currentFirm) {
+          const address = this.parseAddressLines(addressLines);
           if (address) {
             currentFirm.office = {
               name: address.city || 'Main Office',
               address
             };
-            i += 3; // Skip address lines
+            // Update current attorney if they exist
+            if (currentAttorney && !currentAttorney.lawFirm) {
+              currentAttorney.lawFirm = { ...currentFirm };
+            }
+          }
+        }
+        
+        // Start new firm
+        currentFirm = { name: line };
+        addressLines = [];
+        continue;
+      }
+      
+      // Collect potential address lines
+      if (line.length > 0 && !line.match(/^\d+$/) && !line.includes('COURT REPORTER')) {
+        addressLines.push(line);
+        
+        // Check if we have a complete address (typically 2-3 lines)
+        if (addressLines.length >= 2) {
+          // Check if last line looks like city, state zip
+          const lastLine = addressLines[addressLines.length - 1];
+          if (lastLine.match(/,\s*[A-Z]{2}\s+\d{5}/)) {
+            const address = this.parseAddressLines(addressLines);
+            if (address && currentFirm) {
+              currentFirm.office = {
+                name: address.city || 'Main Office',
+                address
+              };
+              // Update current attorney
+              if (currentAttorney) {
+                currentAttorney.lawFirm = { ...currentFirm };
+              }
+            }
+            addressLines = [];
           }
         }
       }
     }
     
+    // Save last attorney
+    if (currentAttorney) {
+      if (currentSection === 'plaintiff') {
+        plaintiffAttorneys.push(currentAttorney);
+      } else if (currentSection === 'defendant') {
+        defendantAttorneys.push(currentAttorney);
+      }
+    }
+    
     return { plaintiffAttorneys, defendantAttorneys };
+  }
+  
+  /**
+   * Parse address from collected lines
+   */
+  private parseAddressLines(lines: string[]): AddressInfo | null {
+    if (lines.length < 2) return null;
+    
+    // Last line should be city, state zip
+    const lastLine = lines[lines.length - 1];
+    const cityStateZip = lastLine.match(/^(.+?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+    
+    if (cityStateZip) {
+      return {
+        street1: lines[0],
+        street2: lines.length > 2 ? lines[1] : undefined,
+        city: cityStateZip[1],
+        state: cityStateZip[2],
+        zipCode: cityStateZip[3],
+        country: 'USA'
+      };
+    }
+    
+    return null;
   }
 
   /**

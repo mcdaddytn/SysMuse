@@ -22,14 +22,23 @@ export class AttorneyService {
     speakerHandle?: string;
   } {
     // Handle suffixes like Jr., Sr., III, IV, etc.
-    const suffixPattern = /\s+(JR\.?|SR\.?|III|IV|II|ESQ\.?)$/i;
-    const suffixMatch = fullName.match(suffixPattern);
+    // First check for comma-separated suffix (e.g., "RUBINO, III")
     let suffix: string | undefined;
     let nameWithoutSuffix = fullName;
     
-    if (suffixMatch) {
-      suffix = suffixMatch[1];
-      nameWithoutSuffix = fullName.replace(suffixPattern, '').trim();
+    // Check for comma-separated suffix first
+    const commaMatch = fullName.match(/^(.+?),\s*([IVX]+|Jr\.?|Sr\.?|ESQ\.?|Ph\.?D\.?|M\.?D\.?)$/i);
+    if (commaMatch) {
+      nameWithoutSuffix = commaMatch[1].trim();
+      suffix = commaMatch[2].trim();
+    } else {
+      // If no comma, check for space-separated suffix
+      const suffixPattern = /\s+(JR\.?|SR\.?|III|IV|II|ESQ\.?)$/i;
+      const suffixMatch = fullName.match(suffixPattern);
+      if (suffixMatch) {
+        suffix = suffixMatch[1];
+        nameWithoutSuffix = fullName.replace(suffixPattern, '').trim();
+      }
     }
     
     // Parse title and name
@@ -123,7 +132,10 @@ export class AttorneyService {
           data: { 
             name: attorneyInfo.name,
             title: title || attorneyInfo.title,
+            firstName: firstName || attorneyInfo.firstName,
+            middleInitial: attorneyInfo.middleInitial,
             lastName: lastName || attorneyInfo.lastName,
+            suffix: suffix || attorneyInfo.suffix,
             speakerPrefix: finalSpeakerPrefix,
             barNumber: attorneyInfo.barNumber,
             speakerId: speaker.id
@@ -136,7 +148,10 @@ export class AttorneyService {
           where: { id: attorney.id },
           data: {
             title: title || attorney.title,
+            firstName: firstName || attorney.firstName,
+            middleInitial: attorneyInfo.middleInitial || attorney.middleInitial,
             lastName: lastName || attorney.lastName,
+            suffix: suffix || attorney.suffix,
             speakerPrefix: finalSpeakerPrefix,
             barNumber: attorneyInfo.barNumber || attorney.barNumber
           }
@@ -315,6 +330,69 @@ export class AttorneyService {
       }
     });
     
-    return speaker?.attorney || null;
+    if (speaker?.attorney) return speaker.attorney;
+    
+    // NEW: Try to match by lastName for attorneys without titles
+    // Parse the speakerPrefix to extract title and lastName
+    const prefixMatch = speakerPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)$/);
+    if (prefixMatch) {
+      const title = prefixMatch[1];
+      const lastName = prefixMatch[2];
+      
+      // Look for attorney with matching lastName but no title or placeholder title
+      attorney = await this.prisma.attorney.findFirst({
+        where: {
+          lastName: lastName,
+          OR: [
+            { title: null },
+            { title: '' },
+            { speakerPrefix: `??? ${lastName}` }
+          ],
+          trialAttorneys: {
+            some: { trialId }
+          }
+        },
+        include: { 
+          speaker: true,
+          trialAttorneys: {
+            where: { trialId }
+          }
+        }
+      });
+      
+      if (attorney) {
+        // Update the attorney with the discovered title
+        logger.info(`Discovered title for attorney ${attorney.name}: ${title}`);
+        
+        // Update attorney record with the title
+        const updatedAttorney = await this.prisma.attorney.update({
+          where: { id: attorney.id },
+          data: {
+            title: title,
+            speakerPrefix: speakerPrefix,
+            name: attorney.name.startsWith(title) ? attorney.name : `${title} ${attorney.name}`
+          },
+          include: { 
+            speaker: true,
+            trialAttorneys: {
+              where: { trialId }
+            }
+          }
+        });
+        
+        // Update the speaker record as well
+        await this.prisma.speaker.update({
+          where: { id: attorney.speakerId },
+          data: {
+            speakerPrefix: speakerPrefix
+          }
+        });
+        
+        logger.info(`Updated attorney ${updatedAttorney.name} with speaker prefix: ${speakerPrefix}`);
+        return updatedAttorney;
+      }
+    }
+    
+    return null;
   }
 }

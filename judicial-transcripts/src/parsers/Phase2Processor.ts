@@ -510,6 +510,14 @@ export class Phase2Processor {
       logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}`);
     }
     
+    // Detect sworn status from the text
+    let witnessSwornStatus: any = SwornStatus.NOT_SWORN;
+    if (lineText.match(/\bPREVIOUSLY\s+SWORN\b/i)) {
+      witnessSwornStatus = SwornStatus.PREVIOUSLY_SWORN;
+    } else if (lineText.match(/\bSWORN\b/i)) {
+      witnessSwornStatus = SwornStatus.SWORN;
+    }
+    
     // Update state with current witness IMMEDIATELY
     state.currentWitness = {
       id: witness.id,
@@ -518,7 +526,7 @@ export class Phase2Processor {
       witnessType: witness.witnessType || undefined,
       witnessCaller: witness.witnessCaller || undefined,
       speakerId: witness.speaker?.id,
-      swornStatus: witness.swornStatus || 'NOT_SWORN'
+      swornStatus: witnessSwornStatus
     };
     
     // Create speaker info for contextual mapping
@@ -541,7 +549,7 @@ export class Phase2Processor {
     
     logger.info(`Set current witness context: ${displayName}, A. will now resolve to this witness`);
     
-    // Start witness called event
+    // Start witness called event (use swornStatus from currentWitness)
     state.currentEvent = {
       type: EventType.WITNESS_CALLED,
       startTime: line.timestamp,
@@ -552,7 +560,7 @@ export class Phase2Processor {
         witnessName: witnessName,
         displayName: displayName,
         witnessCaller: witnessCaller,
-        swornStatus: 'NOT_SWORN'
+        swornStatus: witnessSwornStatus
       }
     };
     state.eventLines = [line];
@@ -570,11 +578,13 @@ export class Phase2Processor {
     state: ProcessingState
   ): Promise<boolean> {
     const examMatch = lineText.match(this.PATTERNS.examinationType);
-    if (!examMatch) return false;
+    const videoMatch = lineText.match(this.PATTERNS.videoDeposition);
+    
+    if (!examMatch && !videoMatch) return false;
     
     // Check if we're changing examination for current witness
     if (state.currentWitness) {
-      const examType = examMatch[1].toUpperCase();
+      const examType = examMatch ? examMatch[1].toUpperCase() : 'VIDEO';
       const continued = lineText.includes('CONTINUED');
       
       // Check for sworn status in this line
@@ -603,7 +613,7 @@ export class Phase2Processor {
       state.currentEvent.endLineNumber = line.lineNumber;
       
       // Extract examination type
-      const examType = examMatch[1].toUpperCase();
+      const examType = examMatch ? examMatch[1].toUpperCase() : 'VIDEO';
       const continued = !lineText.match(this.PATTERNS.examinationContinued);
       
       // Map to enum value - USE THE CONST VALUES
@@ -620,6 +630,9 @@ export class Phase2Processor {
           break;
         case 'RECROSS':
           examinationType = ExaminationType.RECROSS_EXAMINATION;
+          break;
+        case 'VIDEO':
+          examinationType = ExaminationType.VIDEO_DEPOSITION;
           break;
         default:
           examinationType = ExaminationType.DIRECT_EXAMINATION;
@@ -640,7 +653,7 @@ export class Phase2Processor {
     
     // Check if this is a standalone examination change (witness already on stand)
     if (state.currentWitness && !state.currentEvent) {
-      const examType = examMatch[1].toUpperCase();
+      const examType = examMatch ? examMatch[1].toUpperCase() : 'VIDEO';
       
       // Map to enum - USE THE CONST VALUES
       let examinationType: ExaminationType;
@@ -656,6 +669,9 @@ export class Phase2Processor {
           break;
         case 'RECROSS':
           examinationType = ExaminationType.RECROSS_EXAMINATION;
+          break;
+        case 'VIDEO':
+          examinationType = ExaminationType.VIDEO_DEPOSITION;
           break;
         default:
           examinationType = ExaminationType.DIRECT_EXAMINATION;
@@ -911,7 +927,6 @@ export class Phase2Processor {
     }
     
     // Create anonymous speaker as last resort
-    logger.info(`Creating anonymous speaker for: ${upperPrefix}`);
     const speakerId = await this.witnessJurorService.createAnonymousSpeaker(
       this.context.trialId,
       upperPrefix

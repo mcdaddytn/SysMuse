@@ -68,7 +68,10 @@ export interface SummaryInfo {
 export interface AttorneyInfo {
   name: string;
   title?: string;
+  firstName?: string;
+  middleInitial?: string;
   lastName?: string;
+  suffix?: string;
   speakerPrefix?: string;
   barNumber?: string;
   lawFirm?: {
@@ -116,6 +119,10 @@ export const SpeakerType = {
 export interface WitnessInfo {
   id: number;
   name?: string;
+  firstName?: string;
+  middleInitial?: string;
+  lastName?: string;
+  suffix?: string;
   displayName?: string;
   witnessType?: WitnessType;
   witnessCaller?: WitnessCaller;

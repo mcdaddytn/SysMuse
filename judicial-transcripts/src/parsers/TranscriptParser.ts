@@ -515,9 +515,9 @@ export class TranscriptParser {
         // This might be an attorney name without title
         const nameParts = cleanLine.trim().split(/\s+/);
         if (nameParts.length >= 2 && nameParts.length <= 4) {
-          // Likely an attorney name - add MR. as default
-          nameMatch = ['', 'MR.', cleanLine];
-          logger.debug(`Found attorney without title: ${cleanLine}, adding MR. prefix`);
+          // Likely an attorney name - use empty title placeholder
+          nameMatch = ['', '', cleanLine];
+          logger.debug(`Found attorney without title: ${cleanLine}`);
         }
       }
       
@@ -531,20 +531,23 @@ export class TranscriptParser {
           }
         }
         
-        // Extract full name and last name
-        const title = nameMatch[1].toUpperCase() || 'MR.';
+        // Extract full name and parse components
+        const title = nameMatch[1] ? nameMatch[1].toUpperCase() : '';
         const fullNamePart = nameMatch[2].trim();
         
-        // Handle multi-part names
-        const nameParts = fullNamePart.split(/\s+/);
-        const lastName = nameParts[nameParts.length - 1].toUpperCase();
+        // Parse name components
+        const parsedName = this.parseFullName(fullNamePart);
+        const lastName = parsedName.lastName.toUpperCase();
         
         // Create new attorney
         currentAttorney = {
-          name: `${title} ${fullNamePart}`.trim(),
-          title: title,
+          name: title ? `${title} ${fullNamePart}`.trim() : fullNamePart.trim(),
+          title: title || undefined,
           lastName: lastName,
-          speakerPrefix: `${title} ${lastName}`
+          speakerPrefix: title ? `${title} ${lastName}` : `??? ${lastName}`,
+          firstName: parsedName.firstName,
+          middleInitial: parsedName.middleInitial,
+          suffix: parsedName.suffix
         };
         
         if (currentFirm) {
@@ -653,11 +656,65 @@ export class TranscriptParser {
   }
 
   /**
-   * Extract last name from full name
+   * Parse name into components (firstName, middleInitial, lastName, suffix)
+   */
+  private parseFullName(fullName: string): {
+    firstName?: string;
+    middleInitial?: string;
+    lastName: string;
+    suffix?: string;
+  } {
+    // First check for comma-separated suffix (e.g., "RUBINO, III")
+    let mainName = fullName.trim();
+    let suffix: string | undefined;
+    
+    const commaMatch = fullName.match(/^(.+?),\s*([IVX]+|Jr\.?|Sr\.?|ESQ\.?|Ph\.?D\.?|M\.?D\.?)$/i);
+    if (commaMatch) {
+      mainName = commaMatch[1].trim();
+      suffix = commaMatch[2].trim();
+    }
+    
+    // Clean up and split the main name
+    const cleanName = mainName.replace(/\s+/g, ' ');
+    const parts = cleanName.split(/\s+/);
+    
+    // Check for suffixes at the end of the name (if not already found via comma)
+    if (!suffix) {
+      const suffixes = ['III', 'II', 'IV', 'JR', 'JR.', 'SR', 'SR.', 'ESQ', 'ESQ.', 'PHD', 'PH.D.', 'MD', 'M.D.'];
+      const lastPart = parts[parts.length - 1].toUpperCase().replace(/\./g, '');
+      if (suffixes.includes(lastPart)) {
+        suffix = parts[parts.length - 1];
+        parts.pop(); // Remove suffix from parts
+      }
+    }
+    
+    let nameParts = [...parts];
+    
+    // Now parse the remaining name parts
+    if (nameParts.length === 0) {
+      return { lastName: fullName }; // Fallback
+    } else if (nameParts.length === 1) {
+      return { lastName: nameParts[0], suffix };
+    } else if (nameParts.length === 2) {
+      return { 
+        firstName: nameParts[0], 
+        lastName: nameParts[1], 
+        suffix 
+      };
+    } else {
+      // 3 or more parts - assume middle initial(s)
+      const firstName = nameParts[0];
+      const lastName = nameParts[nameParts.length - 1];
+      const middleInitial = nameParts.slice(1, -1).join(' ');
+      return { firstName, middleInitial, lastName, suffix };
+    }
+  }
+  
+  /**
+   * Extract last name from full name (using new parser)
    */
   private extractLastName(fullName: string): string {
-    const parts = fullName.trim().split(/\s+/);
-    return parts[parts.length - 1];
+    return this.parseFullName(fullName).lastName;
   }
 
   /**

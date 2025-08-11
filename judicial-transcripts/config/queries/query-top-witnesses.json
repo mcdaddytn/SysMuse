@@ -1,0 +1,33 @@
+{
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+  "speakerType": "WITNESS",
+  "elasticSearchQueries": [
+    {
+      "name": "yes_response",
+      "query": "yes",
+      "type": "term"
+    },
+    {
+      "name": "no_response",
+      "query": "no",
+      "type": "term"
+    },
+    {
+      "name": "i_dont_know",
+      "query": "I don't know",
+      "type": "match_phrase"
+    },
+    {
+      "name": "to_the_best",
+      "query": "to the best of my",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "as_far_as",
+      "query": "as far as I know",
+      "type": "match_phrase",
+      "proximity": 3
+    }
+  ]
+}

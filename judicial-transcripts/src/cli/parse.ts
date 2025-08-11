@@ -204,6 +204,18 @@ program
   });
 
 program
+  .command('enhanced-search <subcommand>')
+  .description('Enhanced search with templates and hierarchical output')
+  .allowUnknownOption()
+  .action((subcommand, command) => {
+    const { execSync } = require('child_process');
+    const args = process.argv.slice(process.argv.indexOf(subcommand) + 1);
+    let enhancedCmd = `ts-node src/cli/enhanced-search.ts ${subcommand} ${args.join(' ')}`;
+    
+    execSync(enhancedCmd, { stdio: 'inherit' });
+  });
+
+program
   .command('reset')
   .description('Reset the database')
   .option('--confirm', 'Skip confirmation prompt')

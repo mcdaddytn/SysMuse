@@ -1,0 +1,8 @@
+WITNESS: {Speaker.speakerPrefix}
+DATE: {Session.sessionDate}
+TIME: {TrialEvent.startTime}
+
+TESTIMONY:
+{StatementEvent.text}
+
+---

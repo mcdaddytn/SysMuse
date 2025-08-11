@@ -1,0 +1,27 @@
+{
+  "caseNumber": "2:19-CV-00123-JRG",
+  "speakerType": "JUDGE",
+  "maxResults": 15,
+  "surroundingStatements": 3,
+  "outputFileNameTemplate": "court-directives-{Session.sessionType}.txt",
+  "outputFileTemplate": "judge-statements.txt",
+  "resultSeparator": "\n\n###\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "approach",
+      "query": "approach the bench",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "jury",
+      "query": "members of the jury",
+      "type": "match_phrase"
+    },
+    {
+      "name": "record",
+      "query": "for the record",
+      "type": "match_phrase"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "caseNumber": "2:19-CV-00123-JRG",
+  "speakerPrefix": "THE COURT",
+  "maxResults": 5,
+  "surroundingStatements": 3,
+  "outputFileNameTemplate": "test-surrounding-{caseHandle}.txt",
+  "outputFileTemplate": "default.txt",
+  "resultSeparator": "\n=== STATEMENT ===\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    }
+  ]
+}

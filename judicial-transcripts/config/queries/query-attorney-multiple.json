@@ -1,14 +1,26 @@
 {
-  "speakerPrefix": ["MR. JONES", "MS. SMITH", "MR. DAVIS"],
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+  "speakerPrefix": ["MR. HADDEN", "MR. LAMBRIANAKOS", "MR. RE", "MR. FABRICANT"],
   "elasticSearchQueries": [
     {
-      "name": "cross_examination",
-      "query": "isn't it true",
+      "name": "no_objection",
+      "query": "no objection",
       "type": "match_phrase"
     },
     {
-      "name": "leading_questions",
-      "query": "didn't you",
+      "name": "state_your_objection",
+      "query": "state your objection",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "motion_to_strike",
+      "query": "motion to strike",
+      "type": "match_phrase"
+    },
+    {
+      "name": "can_we_strike",
+      "query": "can we strike",
       "type": "match_phrase"
     }
   ]

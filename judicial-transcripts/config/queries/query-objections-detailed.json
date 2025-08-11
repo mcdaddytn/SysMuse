@@ -1,6 +1,6 @@
 {
   "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerPrefix": "MR. HADDEN",
+  "speakerType": "ATTORNEY",
   "elasticSearchQueries": [
     {
       "name": "objection_form",
@@ -9,20 +9,25 @@
       "proximity": 2
     },
     {
+      "name": "objection_to_form",
+      "query": "objection to form",
+      "type": "match_phrase"
+    },
+    {
       "name": "objection_your_honor",
       "query": "objection your honor",
       "type": "match_phrase",
       "proximity": 3
     },
     {
-      "name": "move_to_strike",
-      "query": "move to strike",
+      "name": "any_objections",
+      "query": "any objections",
       "type": "match_phrase"
     },
     {
-      "name": "non_responsive",
-      "query": "non-responsive",
-      "type": "match"
+      "name": "no_objection_from",
+      "query": "no objection from",
+      "type": "match_phrase"
     }
   ]
 }

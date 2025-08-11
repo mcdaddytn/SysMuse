@@ -15,6 +15,9 @@ help:
 	@echo "  make search-batch   - Execute all queries in config/queries/"
 	@echo "  make test-search    - Run all test queries"
 	@echo "  make search-examples - Generate example query files"
+	@echo "  make enhanced-search FILE=<path> - Execute enhanced search with templates"
+	@echo "  make enhanced-batch - Execute enhanced batch queries"
+	@echo "  make enhanced-examples - Generate enhanced query examples"
 
 install:
 	npm install
@@ -70,3 +73,12 @@ test-search:
 
 search-examples:
 	npm run search example -o config/queries
+
+enhanced-search:
+	npm run parse enhanced-search query -f $(FILE)
+
+enhanced-batch:
+	npm run parse enhanced-search batch -d config/queries -o output
+
+enhanced-examples:
+	npm run parse enhanced-search example -o config/queries

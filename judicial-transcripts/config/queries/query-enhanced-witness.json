@@ -1,0 +1,20 @@
+{
+  "caseNumber": "2:19-CV-00123-JRG",
+  "speakerType": "WITNESS",
+  "speakerPrefix": [
+    "ALAN RATLIFF",
+    "JOSEPH C. MCALEXANDER, III"
+  ],
+  "maxResults": 50,
+  "surroundingStatements": 1,
+  "outputFileNameTemplate": "witness-{Speaker.speakerPrefix}-testimony.txt",
+  "outputFileTemplate": "witness-testimony.txt",
+  "resultSeparator": "\n\n=========\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "yes_no",
+      "query": "yes no",
+      "type": "match"
+    }
+  ]
+}

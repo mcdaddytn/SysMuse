@@ -200,65 +200,124 @@ GET /api/trials/1/markers?type=OBJECTION&resolved=true
 
 ### Search
 
-#### `POST /api/search`
-Search across all transcripts.
+#### `POST /api/search` (Legacy)
+Basic search across all transcripts.
 
 **Request Body:**
 ```json
 {
   "query": "patent infringement",
-  "filters": {
-    "trialId": 1,
-    "sessionId": 1,
-    "speakerType": "ATTORNEY",
-    "dateRange": {
-      "start": "2020-10-01",
-      "end": "2020-10-05"
-    }
-  },
-  "options": {
-    "includeContext": true,
-    "contextLines": 5,
-    "limit": 20,
-    "offset": 0
-  }
+  "trialId": 1,
+  "sessionIds": [1, 2],
+  "limit": 50
 }
 ```
 
 **Response:**
 ```json
 {
+  "query": "patent infringement",
+  "total": 42,
   "results": [
     {
+      "id": "result-1",
       "trialId": 1,
-      "sessionId": 1,
-      "eventId": 123,
-      "score": 0.95,
-      "highlight": "The <em>patent infringement</em> claim is based on...",
-      "context": {
-        "before": ["Previous line 1", "Previous line 2"],
-        "match": "The patent infringement claim is based on...",
-        "after": ["Next line 1", "Next line 2"]
-      },
-      "metadata": {
-        "speaker": "MR. HADDEN",
-        "timestamp": "10:30:15",
-        "lineNumber": 456
-      }
+      "trialName": "VocalLife vs Amazon",
+      "text": "The patent infringement claim...",
+      "highlight": "The <em>patent infringement</em> claim...",
+      "score": 0.95
+    }
+  ]
+}
+```
+
+#### `POST /api/search/advanced`
+Advanced search combining SQL filters with Elasticsearch queries.
+
+**Request Body:**
+```json
+{
+  "trialName": "State v. Smith",
+  "sessionDate": ["2024-01-15", "2024-01-16"],
+  "sessionType": ["MORNING", "AFTERNOON"],
+  "speakerType": "JUDGE",
+  "speakerPrefix": ["THE COURT", "JUDGE SMITH"],
+  "elasticSearchQueries": [
+    {
+      "name": "sustained_objection",
+      "query": "objection sustained",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "overruled_objection",
+      "query": "objection overruled",
+      "type": "match_phrase",
+      "proximity": 3
     }
   ],
-  "total": 42,
-  "facets": {
-    "speakers": {
-      "THE COURT": 10,
-      "MR. HADDEN": 15,
-      "MS. TRUELOVE": 17
+  "limit": 100,
+  "includeFullResults": false
+}
+```
+
+**Parameters:**
+- `trialName` (string | string[]): Filter by trial name(s)
+- `sessionDate` (string | string[]): Filter by session date(s) in ISO format
+- `sessionType` (string | string[]): Filter by session type (MORNING, AFTERNOON, etc.)
+- `speakerType` (string | string[]): Filter by speaker type (JUDGE, ATTORNEY, WITNESS, etc.)
+- `speakerPrefix` (string | string[]): Filter by speaker prefix (exact match)
+- `elasticSearchQueries` (array): Array of Elasticsearch queries to execute
+  - `name` (string): Unique name for the query
+  - `query` (string): Search text
+  - `type` (string): Query type (match, match_phrase, term, wildcard, regexp, fuzzy)
+  - `proximity` (number, optional): For match_phrase, maximum distance between terms
+  - `field` (string, optional): Field to search (default: "text")
+  - `boost` (number, optional): Query boost factor
+- `limit` (number, optional): Maximum results to return (default: 100)
+- `includeFullResults` (boolean, optional): Include all results without limit
+
+**Response:**
+```json
+{
+  "success": true,
+  "totalStatements": 1606,
+  "matchedStatements": 45,
+  "elasticSearchSummary": {
+    "sustained_objection": {
+      "matched": 25,
+      "percentage": 56
     },
-    "sessions": {
-      "2020-10-01 MORNING": 25,
-      "2020-10-01 AFTERNOON": 17
+    "overruled_objection": {
+      "matched": 20,
+      "percentage": 44
     }
-  }
+  },
+  "results": [
+    {
+      "statementEventId": 123,
+      "elasticSearchId": "statement_123",
+      "text": "Objection, Your Honor. Hearsay.",
+      "trialId": 1,
+      "trialName": "State v. Smith",
+      "sessionId": 2,
+      "sessionDate": "2024-01-15T00:00:00.000Z",
+      "sessionType": "MORNING",
+      "speakerId": 5,
+      "speakerType": "ATTORNEY",
+      "speakerPrefix": "MR. JONES",
+      "speakerHandle": "ATTORNEY_5",
+      "startTime": "10:45:12",
+      "endTime": "10:45:15",
+      "startLineNumber": 1234,
+      "endLineNumber": 1234,
+      "elasticSearchMatches": {
+        "sustained_objection": false,
+        "overruled_objection": false
+      },
+      "elasticSearchHighlights": []
+    }
+  ]
 }
 ```
 

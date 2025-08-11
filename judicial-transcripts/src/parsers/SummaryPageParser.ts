@@ -1,9 +1,9 @@
 // src/parsers/SummaryPageParser.ts
-import { TrialSummaryInfo, AttorneyInfo, AddressInfo } from '../types/config.types';
+import { SummaryInfo, AttorneyInfo, AddressInfo } from '../types/config.types';
 import logger from '../utils/logger';
 
 export class SummaryPageParser {
-  parse(pages: string[][]): TrialSummaryInfo | null {
+  parse(pages: string[][]): SummaryInfo | null {
     if (pages.length < 1) {
       logger.warn('No pages provided for summary parsing');
       return null;
@@ -15,12 +15,14 @@ export class SummaryPageParser {
     logger.info('SummaryPageParser: Starting parse');
     logger.info('SummaryPageParser: Text length:', text.length);
     
-    const info: TrialSummaryInfo = {
-      trialName: '',
-      caseNumber: '',
-      court: '',
-      courtDivision: undefined,
-      courtDistrict: undefined,
+    const info: SummaryInfo = {
+      caseInfo: {
+        name: '',
+        caseNumber: '',
+        court: '',
+        courtDivision: undefined,
+        courtDistrict: undefined
+      },
       judge: {
         name: '',
         title: undefined,
@@ -51,38 +53,38 @@ export class SummaryPageParser {
     return info;
   }
   
-  private extractCourtInfo(text: string, info: TrialSummaryInfo): void {
+  private extractCourtInfo(text: string, info: SummaryInfo): void {
     // Look for court information in the first few lines
     // Pattern: "IN THE UNITED STATES DISTRICT COURT"
     const courtMatch = text.match(/IN THE ([A-Z\s]+COURT)/i);
     if (courtMatch) {
-      info.court = courtMatch[1];
-      logger.info('✓ Extracted court:', info.court);
+      info.caseInfo.court = courtMatch[1];
+      logger.info('✓ Extracted court:', info.caseInfo.court);
     }
     
     // Pattern: "MARSHALL DIVISION" -> courtDivision (swapped)
     const divisionMatch = text.match(/([A-Z]+\s+DIVISION)/);
     if (divisionMatch) {
-      info.courtDivision = divisionMatch[1];
-      logger.info('✓ Extracted court division:', info.courtDivision);
+      info.caseInfo.courtDivision = divisionMatch[1];
+      logger.info('✓ Extracted court division:', info.caseInfo.courtDivision);
     } else {
       // Try to extract from right side of )( format
       const rightSideMatch = text.match(/\)\(\s*([A-Z]+,?\s*[A-Z]*)/);
       if (rightSideMatch && rightSideMatch[1].includes('MARSHALL')) {
-        info.courtDivision = rightSideMatch[1].replace(',', '');
-        logger.info('✓ Extracted court division (right side):', info.courtDivision);
+        info.caseInfo.courtDivision = rightSideMatch[1].replace(',', '');
+        logger.info('✓ Extracted court division (right side):', info.caseInfo.courtDivision);
       }
     }
     
     // Pattern: "FOR THE EASTERN DISTRICT OF TEXAS" -> courtDistrict (swapped)
     const districtMatch = text.match(/FOR THE ([A-Z\s]+DISTRICT[A-Z\s]*)/i);
     if (districtMatch) {
-      info.courtDistrict = districtMatch[1];
-      logger.info('✓ Extracted court district:', info.courtDistrict);
+      info.caseInfo.courtDistrict = districtMatch[1];
+      logger.info('✓ Extracted court district:', info.caseInfo.courtDistrict);
     }
   }
   
-  private extractCaseNumber(text: string, info: TrialSummaryInfo): void {
+  private extractCaseNumber(text: string, info: SummaryInfo): void {
     // Multiple patterns for case numbers
     const patterns = [
       /CIVIL ACTION NO\.\s*\)\(\s*([\d:\-CV\-cv]+)/,
@@ -93,14 +95,14 @@ export class SummaryPageParser {
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match) {
-        info.caseNumber = match[1];
-        logger.info('✓ Extracted case number:', info.caseNumber);
+        info.caseInfo.caseNumber = match[1];
+        logger.info('✓ Extracted case number:', info.caseInfo.caseNumber);
         break;
       }
     }
   }
   
-  private extractTrialName(text: string, info: TrialSummaryInfo): void {
+  private extractTrialName(text: string, info: SummaryInfo): void {
     // Parse the trial name from the )( format lines
     // Look for the pattern with plaintiff and defendant information
     
@@ -134,21 +136,21 @@ export class SummaryPageParser {
       // Ensure proper formatting with commas
       trialName = trialName.replace(/\s*,\s*/g, ', ');
       
-      info.trialName = trialName;
-      logger.info('✓ Extracted trial name:', info.trialName);
+      info.caseInfo.name = trialName;
+      logger.info('✓ Extracted trial name:', info.caseInfo.name);
     } else {
       // Fallback to simpler pattern matching
       const plaintiffMatch = text.match(/([A-Z\s,\.&]+),\s*\)\(\s*PLAINTIFF/m);
       const defendantMatch = text.match(/([A-Z\s,\.&]+),?\s*\)\(.*?DEFENDANTS?\./m);
       
       if (plaintiffMatch && defendantMatch) {
-        info.trialName = `${plaintiffMatch[1].trim()}, PLAINTIFF, VS. ${defendantMatch[1].trim()}, DEFENDANTS.`;
-        logger.info('✓ Extracted trial name (fallback):', info.trialName);
+        info.caseInfo.name = `${plaintiffMatch[1].trim()}, PLAINTIFF, VS. ${defendantMatch[1].trim()}, DEFENDANTS.`;
+        logger.info('✓ Extracted trial name (fallback):', info.caseInfo.name);
       }
     }
   }
   
-  private extractJudgeInfo(text: string, info: TrialSummaryInfo): void {
+  private extractJudgeInfo(text: string, info: SummaryInfo): void {
     // Pattern for judge: "BEFORE THE HONORABLE JUDGE RODNEY GILSTRAP"
     const judgeMatch = text.match(/BEFORE THE (HONORABLE)\s+(?:JUDGE\s+)?([A-Z\s]+?)(?:\n|\s+UNITED)/m);
     if (judgeMatch) {
@@ -167,7 +169,7 @@ export class SummaryPageParser {
     }
   }
   
-  private extractAttorneys(text: string, info: TrialSummaryInfo): void {
+  private extractAttorneys(text: string, info: SummaryInfo): void {
     // Extract plaintiff attorneys
     const plaintiffSection = this.extractSection(text, 'FOR THE PLAINTIFF:', 'FOR THE DEFENDANT');
     if (plaintiffSection) {
@@ -342,7 +344,7 @@ export class SummaryPageParser {
     */
   }
   
-  private extractCourtReporter(text: string, info: TrialSummaryInfo): void {
+  private extractCourtReporter(text: string, info: SummaryInfo): void {
     const reporterIndex = text.indexOf('COURT REPORTER:');
     if (reporterIndex === -1) return;
     

@@ -9,8 +9,9 @@ import { Phase2Processor } from '../parsers/Phase2Processor';
 import { Phase3Processor } from '../parsers/Phase3Processor';
 import { SearchService } from '../services/SearchService';
 import { TranscriptExportService } from '../services/TranscriptExportService';
+import { CombinedSearchService } from '../services/CombinedSearchService';
 import logger from '../utils/logger';
-import multer from 'multer';
+import * as multer from 'multer';
 import path from 'path';
 
 const app: Express = express();
@@ -163,7 +164,7 @@ app.post('/api/trials/upload',
   }
 );
 
-// Search transcripts
+// Search transcripts (legacy)
 app.post('/api/search', async (req: Request, res: Response) => {
   try {
     const searchQuery = req.body;
@@ -177,6 +178,29 @@ app.post('/api/search', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error during search:', error);
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// Advanced search with SQL and Elasticsearch
+app.post('/api/search/advanced', async (req: Request, res: Response) => {
+  try {
+    const searchInput = req.body;
+    const combinedSearchService = new CombinedSearchService();
+    
+    const results = await combinedSearchService.executeSearch(searchInput);
+    
+    res.json({
+      success: true,
+      totalStatements: results.totalStatements,
+      matchedStatements: results.matchedStatements,
+      elasticSearchSummary: results.elasticSearchSummary,
+      results: searchInput.includeFullResults ? results.results : results.results.slice(0, searchInput.limit || 100)
+    });
+    
+    await combinedSearchService.disconnect();
+  } catch (error) {
+    logger.error('Error during advanced search:', error);
+    res.status(500).json({ error: 'Advanced search failed', details: String(error) });
   }
 });
 

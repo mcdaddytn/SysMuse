@@ -174,6 +174,36 @@ program
   });
 
 program
+  .command('search')
+  .description('Search transcripts with SQL and Elasticsearch')
+  .option('-f, --file <path>', 'Path to JSON query file')
+  .option('-o, --output <path>', 'Output directory for results', './output')
+  .action(async (options) => {
+    const { execSync } = require('child_process');
+    const searchCmd = `ts-node src/cli/search.ts query -f ${options.file || './config/query.json'} -o ${options.output}`;
+    execSync(searchCmd, { stdio: 'inherit' });
+  });
+
+program
+  .command('search-batch')
+  .description('Execute multiple search queries')
+  .option('-d, --directory <path>', 'Directory containing query files', './config')
+  .option('-o, --output <path>', 'Output directory for results', './output')
+  .action(async (options) => {
+    const { execSync } = require('child_process');
+    const searchCmd = `ts-node src/cli/search.ts batch -d ${options.directory} -o ${options.output}`;
+    execSync(searchCmd, { stdio: 'inherit' });
+  });
+
+program
+  .command('sync-elasticsearch')
+  .description('Sync all statement events to Elasticsearch')
+  .action(async () => {
+    const { execSync } = require('child_process');
+    execSync('ts-node src/cli/search.ts sync', { stdio: 'inherit' });
+  });
+
+program
   .command('reset')
   .description('Reset the database')
   .option('--confirm', 'Skip confirmation prompt')

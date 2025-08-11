@@ -180,14 +180,14 @@ program
   .option('-o, --output <path>', 'Output directory for results', './output')
   .action(async (options) => {
     const { execSync } = require('child_process');
-    const searchCmd = `ts-node src/cli/search.ts query -f ${options.file || './config/query.json'} -o ${options.output}`;
+    const searchCmd = `ts-node src/cli/search.ts query -f ${options.file || './config/queries/query.json'} -o ${options.output}`;
     execSync(searchCmd, { stdio: 'inherit' });
   });
 
 program
   .command('search-batch')
   .description('Execute multiple search queries')
-  .option('-d, --directory <path>', 'Directory containing query files', './config')
+  .option('-d, --directory <path>', 'Directory containing query files', './config/queries')
   .option('-o, --output <path>', 'Output directory for results', './output')
   .action(async (options) => {
     const { execSync } = require('child_process');

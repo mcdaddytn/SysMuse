@@ -12,7 +12,7 @@ help:
 	@echo "  make docker-down    - Stop Docker services"
 	@echo "  make sync-es        - Sync statements to Elasticsearch"
 	@echo "  make search FILE=<path> - Execute single search query"
-	@echo "  make search-batch   - Execute all queries in config/"
+	@echo "  make search-batch   - Execute all queries in config/queries/"
 	@echo "  make test-search    - Run all test queries"
 	@echo "  make search-examples - Generate example query files"
 
@@ -63,10 +63,10 @@ search:
 	npm run search query -f $(FILE)
 
 search-batch:
-	npm run search batch -d config -o output
+	npm run search batch -d config/queries -o output
 
 test-search:
 	ts-node src/scripts/executeTestQueries.ts
 
 search-examples:
-	npm run search example -o config
+	npm run search example -o config/queries

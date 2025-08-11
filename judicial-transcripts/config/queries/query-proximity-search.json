@@ -1,0 +1,28 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "sustained_objections",
+      "query": "objection sustained",
+      "type": "match_phrase",
+      "proximity": 5
+    },
+    {
+      "name": "overruled_objections",
+      "query": "objection overruled",
+      "type": "match_phrase",
+      "proximity": 5
+    },
+    {
+      "name": "strike_testimony",
+      "query": "strike testimony",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "approach_bench",
+      "query": "approach bench",
+      "type": "match_phrase",
+      "proximity": 2
+    }
+  ]
+}

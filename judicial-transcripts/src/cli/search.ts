@@ -29,7 +29,7 @@ program
 program
   .command('query')
   .description('Execute a search query from JSON file')
-  .option('-f, --file <path>', 'Path to JSON query file', './config/query.json')
+  .option('-f, --file <path>', 'Path to JSON query file', './config/queries/query.json')
   .option('-o, --output <path>', 'Output directory for results', './output')
   .option('--format <type>', 'Output format (json, csv)', 'json')
   .action(async (options) => {
@@ -86,7 +86,7 @@ program
 program
   .command('batch')
   .description('Execute multiple search queries from a directory')
-  .option('-d, --directory <path>', 'Directory containing query JSON files', './config')
+  .option('-d, --directory <path>', 'Directory containing query JSON files', './config/queries')
   .option('-o, --output <path>', 'Output directory for results', './output')
   .action(async (options) => {
     try {
@@ -166,7 +166,7 @@ program
 program
   .command('example')
   .description('Generate example query JSON files')
-  .option('-o, --output <path>', 'Output directory for example files', './config')
+  .option('-o, --output <path>', 'Output directory for example files', './config/queries')
   .action((options) => {
     try {
       const outputDir = path.resolve(options.output);

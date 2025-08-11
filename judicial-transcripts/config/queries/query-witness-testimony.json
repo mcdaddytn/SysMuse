@@ -1,0 +1,15 @@
+{
+  "speakerType": "WITNESS",
+  "elasticSearchQueries": [
+    {
+      "name": "uncertainty",
+      "query": "I don't remember OR I don't recall",
+      "type": "match"
+    },
+    {
+      "name": "affirmative",
+      "query": "yes OR correct OR that's right",
+      "type": "match"
+    }
+  ]
+}

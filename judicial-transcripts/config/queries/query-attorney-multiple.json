@@ -1,0 +1,15 @@
+{
+  "speakerPrefix": ["MR. JONES", "MS. SMITH", "MR. DAVIS"],
+  "elasticSearchQueries": [
+    {
+      "name": "cross_examination",
+      "query": "isn't it true",
+      "type": "match_phrase"
+    },
+    {
+      "name": "leading_questions",
+      "query": "didn't you",
+      "type": "match_phrase"
+    }
+  ]
+}

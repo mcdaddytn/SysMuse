@@ -1,0 +1,11 @@
+{
+  "trialName": "Example Trial Name",
+  "speakerType": "JUDGE",
+  "elasticSearchQueries": [
+    {
+      "name": "objection_search",
+      "query": "objection",
+      "type": "match"
+    }
+  ]
+}

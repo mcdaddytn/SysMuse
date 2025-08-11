@@ -1,0 +1,22 @@
+{
+  "trialName": "Example Trial Name",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained_objection",
+      "query": "objection sustained",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "overruled_objection",
+      "query": "objection overruled",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "hearsay",
+      "query": "hearsay",
+      "type": "match"
+    }
+  ]
+}

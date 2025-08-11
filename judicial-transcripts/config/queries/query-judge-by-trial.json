@@ -1,0 +1,11 @@
+{
+  "trialName": "State v. Smith",
+  "speakerType": "JUDGE",
+  "elasticSearchQueries": [
+    {
+      "name": "evidentiary_rulings",
+      "query": "admitted OR excluded OR strike",
+      "type": "match"
+    }
+  ]
+}

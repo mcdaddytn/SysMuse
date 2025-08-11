@@ -1,0 +1,15 @@
+{
+  "speakerPrefix": "MR. JONES",
+  "elasticSearchQueries": [
+    {
+      "name": "objections",
+      "query": "objection",
+      "type": "match"
+    },
+    {
+      "name": "exhibit_references",
+      "query": "exhibit",
+      "type": "match"
+    }
+  ]
+}

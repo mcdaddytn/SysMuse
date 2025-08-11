@@ -5,7 +5,7 @@ import { CombinedSearchService } from '../services/CombinedSearchService';
 import logger from '../utils/logger';
 
 async function executeTestQueries() {
-  const configDir = path.resolve('./config');
+  const configDir = path.resolve('./config/queries');
   const outputDir = path.resolve('./output');
   
   if (!fs.existsSync(outputDir)) {

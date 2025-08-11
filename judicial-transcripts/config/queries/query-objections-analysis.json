@@ -1,0 +1,29 @@
+{
+  "speakerType": "ATTORNEY",
+  "elasticSearchQueries": [
+    {
+      "name": "hearsay_objection",
+      "query": "objection hearsay",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "relevance_objection",
+      "query": "objection relevance",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "speculation_objection",
+      "query": "objection speculation",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "foundation_objection",
+      "query": "objection foundation",
+      "type": "match_phrase",
+      "proximity": 2
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "speakerType": "JUDGE",
+  "elasticSearchQueries": [
+    {
+      "name": "objection_ruling",
+      "query": "sustained overruled",
+      "type": "match"
+    },
+    {
+      "name": "jury_instructions",
+      "query": "members of the jury",
+      "type": "match_phrase"
+    }
+  ]
+}

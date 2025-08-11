@@ -1,0 +1,10 @@
+{
+  "speakerType": "JUDGE",
+  "elasticSearchQueries": [
+    {
+      "name": "court_mentions",
+      "query": "court",
+      "type": "match"
+    }
+  ]
+}

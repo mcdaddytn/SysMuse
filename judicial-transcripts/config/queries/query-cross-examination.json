@@ -1,0 +1,25 @@
+{
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+  "speakerType": "ATTORNEY",
+  "maxResults": 30,
+  "surroundingStatements": 2,
+  "outputFileNameTemplate": "cross-examination-{Speaker.speakerPrefix}.txt",
+  "outputFileTemplate": "speaker-focused.txt",
+  "elasticSearchQueries": [
+    {
+      "name": "cross_examination",
+      "query": "cross examination",
+      "type": "match_phrase"
+    },
+    {
+      "name": "cross_examine",
+      "query": "cross-examine",
+      "type": "match"
+    },
+    {
+      "name": "recross",
+      "query": "recross",
+      "type": "match"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+  "maxResults": 25,
+  "surroundingStatements": 3,
+  "outputFileNameTemplate": "exhibit-handling.txt",
+  "outputFileTemplate": "minimal-metadata.txt",
+  "elasticSearchQueries": [
+    {
+      "name": "mark_exhibit",
+      "query": "mark exhibit",
+      "type": "match_phrase"
+    },
+    {
+      "name": "offer_exhibit",
+      "query": "offer exhibit",
+      "type": "match_phrase"
+    },
+    {
+      "name": "admit_exhibit",
+      "query": "admit exhibit",
+      "type": "match_phrase"
+    },
+    {
+      "name": "exhibit_number",
+      "query": "exhibit number",
+      "type": "match_phrase"
+    }
+  ]
+}

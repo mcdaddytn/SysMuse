@@ -1,0 +1,24 @@
+{
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+  "maxResults": 25,
+  "surroundingStatements": 7,
+  "outputFileNameTemplate": "approach-bench-dialogues.txt",
+  "outputFileTemplate": "interchange-context.txt",
+  "elasticSearchQueries": [
+    {
+      "name": "approach_bench",
+      "query": "approach bench",
+      "type": "match_phrase"
+    },
+    {
+      "name": "approach_the_bench",
+      "query": "approach the bench",
+      "type": "match_phrase"
+    },
+    {
+      "name": "sidebar",
+      "query": "sidebar",
+      "type": "match"
+    }
+  ]
+}

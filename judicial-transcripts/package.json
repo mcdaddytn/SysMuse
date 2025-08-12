@@ -9,6 +9,8 @@
     "build": "tsc",
     "parse": "ts-node src/cli/parse.ts",
     "search": "ts-node src/cli/search.ts",
+    "enhanced-search": "ts-node src/cli/enhanced-search.ts",
+    "run-all-queries": "ts-node scripts/run-all-queries.ts",
     "api": "ts-node src/api/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

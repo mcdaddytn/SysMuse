@@ -1,15 +1,15 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
   "speakerType": "JUDGE",
   "maxResults": 20,
   "surroundingStatements": 5,
-  "outputFileNameTemplate": "sustained-rulings-context.txt",
+  "outputFileNameTemplate": "overruled-rulings-context.txt",
   "outputFileTemplate": "interchange-context.txt",
   "resultSeparator": "\n\n========== RULING SEQUENCE ==========\n\n",
   "elasticSearchQueries": [
     {
-      "name": "sustained",
-      "query": "sustained",
+      "name": "overruled",
+      "query": "overruled",
       "type": "match"
     }
   ]

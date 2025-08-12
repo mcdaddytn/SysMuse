@@ -1,0 +1,24 @@
+{
+  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+  "maxResults": 30,
+  "surroundingStatements": 3,
+  "outputFileNameTemplate": "strike-motions.txt",
+  "outputFileTemplate": "minimal-metadata.txt",
+  "elasticSearchQueries": [
+    {
+      "name": "move_to_strike",
+      "query": "move to strike",
+      "type": "match_phrase"
+    },
+    {
+      "name": "motion_to_strike",
+      "query": "motion to strike",
+      "type": "match_phrase"
+    },
+    {
+      "name": "strike_testimony",
+      "query": "strike testimony",
+      "type": "match_phrase"
+    }
+  ]
+}

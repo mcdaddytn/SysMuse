@@ -1,7 +1,16 @@
 {
   "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
   "speakerType": "ATTORNEY",
+  "maxResults": 50,
+  "surroundingStatements": 5,
+  "outputFileNameTemplate": "objections-detailed-{Speaker.speakerPrefix}.txt",
+  "outputFileTemplate": "interchange-context.txt",
   "elasticSearchQueries": [
+    {
+      "name": "objection_simple",
+      "query": "objection",
+      "type": "match"
+    },
     {
       "name": "objection_form",
       "query": "objection form",
@@ -9,25 +18,10 @@
       "proximity": 2
     },
     {
-      "name": "objection_to_form",
-      "query": "objection to form",
-      "type": "match_phrase"
-    },
-    {
       "name": "objection_your_honor",
       "query": "objection your honor",
       "type": "match_phrase",
       "proximity": 3
-    },
-    {
-      "name": "any_objections",
-      "query": "any objections",
-      "type": "match_phrase"
-    },
-    {
-      "name": "no_objection_from",
-      "query": "no objection from",
-      "type": "match_phrase"
     }
   ]
 }

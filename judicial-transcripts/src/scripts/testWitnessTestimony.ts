@@ -1,0 +1,77 @@
+import { ElasticSearchService } from '../services/ElasticsearchService';
+import { EnhancedSearchService } from '../services/EnhancedSearchService';
+import logger from '../utils/logger';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+async function testWitnessTestimony() {
+  try {
+    const elasticsearchService = new ElasticSearchService();
+    const enhancedSearchService = new EnhancedSearchService();
+    
+    logger.info('Testing witness testimony search with corrected line numbers...\n');
+    
+    // Test 1: Dr. Zhu's testimony
+    const zhuResult = await enhancedSearchService.executeSearch({
+      searchQuery: 'witness Dr. Zhu microphone array spatial location',
+      maxResults: 15,
+      surroundingStatements: 3,
+      templateName: 'witness-testimony.txt',
+      filters: {
+        speakers: ['DR. ZHU', 'A.']
+      }
+    });
+    
+    logger.info('Dr. Zhu testimony results:');
+    logger.info(`  Found ${zhuResult.totalMatches} total matches`);
+    logger.info(`  Output files: ${zhuResult.outputFiles.text}, ${zhuResult.outputFiles.json}`);
+    
+    // Test 2: Witness responses to objections
+    const witnessObjectionResult = await enhancedSearchService.executeSearch({
+      searchQuery: 'objection sustained',
+      maxResults: 20,
+      surroundingStatements: 5,
+      templateName: 'courtroom-dialogue.txt',
+      filters: {
+        speakerTypes: ['WITNESS']
+      }
+    });
+    
+    logger.info('\nWitness responses to objections:');
+    logger.info(`  Found ${witnessObjectionResult.totalMatches} total matches`);
+    logger.info(`  Output files: ${witnessObjectionResult.outputFiles.text}, ${witnessObjectionResult.outputFiles.json}`);
+    
+    // Test 3: Expert witness testimony about patents
+    const expertResult = await enhancedSearchService.executeSearch({
+      searchQuery: 'patent claim invention prior art',
+      maxResults: 15,
+      surroundingStatements: 4,
+      templateName: 'witness-testimony.txt',
+      filters: {
+        speakerTypes: ['WITNESS']
+      }
+    });
+    
+    logger.info('\nExpert witness patent testimony:');
+    logger.info(`  Found ${expertResult.totalMatches} total matches`);
+    logger.info(`  Output files: ${expertResult.outputFiles.text}, ${expertResult.outputFiles.json}`);
+    
+    // Read and display a sample from the first result
+    const textPath = zhuResult.outputFiles.text;
+    const textContent = await fs.readFile(textPath, 'utf-8');
+    const lines = textContent.split('\n').slice(0, 30);
+    
+    logger.info('\nSample from witness testimony output (first 30 lines):');
+    logger.info('=' .repeat(70));
+    logger.info(lines.join('\n'));
+    logger.info('=' .repeat(70));
+    
+    logger.info('\n✓ Witness testimony tests completed successfully!');
+    
+  } catch (error) {
+    logger.error('Error testing witness testimony:', error);
+    throw error;
+  }
+}
+
+testWitnessTestimony().catch(console.error);

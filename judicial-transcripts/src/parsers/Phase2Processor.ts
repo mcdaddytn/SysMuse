@@ -13,6 +13,7 @@ import {
 } from '../types/config.types';
 import { AttorneyService } from '../services/AttorneyService';
 import { WitnessJurorService } from '../services/WitnessJurorService';
+import { syncStatementEvents } from '../scripts/syncElasticsearch';
 import logger from '../utils/logger';
 
 interface ProcessingState {
@@ -145,6 +146,22 @@ export class Phase2Processor {
       
       // Log statistics
       this.logStatistics();
+      
+      // Sync statement events to Elasticsearch if enabled
+      if (this.config.enableElasticSearch !== false) {
+        logger.info('============================================================');
+        logger.info('SYNCING STATEMENT EVENTS TO ELASTICSEARCH');
+        logger.info('============================================================');
+        try {
+          await syncStatementEvents();
+          logger.info('Elasticsearch sync completed successfully');
+        } catch (syncError) {
+          logger.error('Elasticsearch sync failed:', syncError);
+          logger.warn('Continuing without Elasticsearch - search functionality may be limited');
+        }
+      } else {
+        logger.info('Elasticsearch sync skipped (disabled in config)');
+      }
       
     } catch (error) {
       logger.error(`Phase 2 processing failed: ${error}`);

@@ -62,6 +62,11 @@ program
         config.logLevel = options.logLevel as 'debug' | 'info' | 'warn' | 'error';
       }
       
+      // Set runPhase2 flag based on command line options
+      if (options.phase1 && !options.phase2) {
+        config.runPhase2 = false;
+      }
+      
       // Validate input directory
       if (!fs.existsSync(config.inputDir)) {
         logger.error(`Input directory not found: ${config.inputDir}`);

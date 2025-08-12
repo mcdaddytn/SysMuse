@@ -1,0 +1,15 @@
+{
+  "caseNumber": "2:19-CV-00123-JRG",
+  "maxResults": 3,
+  "surroundingStatements": 5,
+  "outputFileNameTemplate": "sustained-dialogue-context.txt",
+  "outputFileTemplate": "courtroom-dialogue.txt",
+  "resultSeparator": "\n\n========== DIALOGUE SEQUENCE ==========\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained_only",
+      "query": "sustained",
+      "type": "match"
+    }
+  ]
+}

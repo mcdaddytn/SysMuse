@@ -3,5 +3,5 @@
   "outputDir": "./output",
   "logLevel": "info",
   "batchSize": 100,
-  "enableElasticSearch": false
+  "enableElasticSearch": true
 }

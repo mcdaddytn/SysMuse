@@ -127,3 +127,5 @@ timesheet-app/.DS_Store
 utility/convert-pdfs/package-lock.json
 
 judicial-transcripts/output/
+
+judicial-transcripts/.env.backup

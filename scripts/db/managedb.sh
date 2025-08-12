@@ -1,57 +1,55 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Debug logging: set DEBUG=1 to enable
+DEBUG="${DEBUG:-0}"
+log(){ [ "$DEBUG" = "1" ] && echo "[DBG] $*"; }
+
 usage(){ echo "Usage: $0 <backup|restore> [suffix=current] [backup_dir=./backups]"; exit 2; }
 
 op="${1:-}"; shift || true
-[[ -z "${op:-}" || ( "$op" != "backup" && "$op" != "restore" ) ]] && usage
+[ -z "${op:-}" ] && usage
+[ "$op" != "backup" ] && [ "$op" != "restore" ] && usage
 
 SUFFIX="${1:-current}"
 BACKUP_DIR="${2:-./backups}"
 
-# --- Load .env (simple KEY=VALUE, supports quoted values) ---
-if [[ -f ".env" ]]; then
+# --- Load .env ---
+if [ -f ".env" ]; then
+  log "Loading .env"
+  set -a
   # shellcheck disable=SC1091
-  set -a; . ./.env; set +a
+  . ./.env
+  set +a
+else
+  log ".env not found; relying on environment/DATABASE_URL"
 fi
 
-# --- Minimal URL decode (for %xx in user/pass) ---
-urldecode() { python3 - <<'PY' "$1"; 
-import sys, urllib.parse as u; print(u.unquote(sys.argv[1])) 
-PY
-}
+# --- Minimal URL decode using Python (for credentials with %xx) ---
+urldecode() { python3 - <<'PY' "$1"; import sys,urllib.parse as u; print(u.unquote(sys.argv[1])) ; PY; }
 
-# --- Parse DATABASE_URL if present and any PG* are missing ---
-if [[ -n "${DATABASE_URL:-}" ]]; then
-  dbu="$DATABASE_URL"
-  # strip quotes if .env had them
-  dbu="${dbu%\"}"; dbu="${dbu#\"}"
-
-  proto="${dbu%%://*}"
-  rest="${dbu#*://}"
-  # split query
-  base="${rest%%\?*}"
-  # userinfo@host:port/db
+# --- Parse DATABASE_URL if present and fill missing PG* ---
+if [ -n "${DATABASE_URL:-}" ]; then
+  log "Parsing DATABASE_URL"
+  dbu="${DATABASE_URL%\"}"; dbu="${dbu#\"}"
+  rest="${dbu#*://}"              # user:pass@host:port/db?...
+  base="${rest%%\?*}"             # strip query
   userinfo="${base%%@*}"
   hostpath="${base#*@}"
-  # If no '@' present, userinfo==base (detect)
-  if [[ "$userinfo" == "$base" ]]; then
-    userinfo=""
-    hostpath="$base"
-  fi
+  if [ "$userinfo" = "$base" ]; then userinfo=""; hostpath="$base"; fi
   hostport="${hostpath%%/*}"
   dbname="${hostpath#*/}"
 
-  if [[ -z "${PGUSER:-}" && -n "$userinfo" ]]; then
+  if [ -z "${PGUSER:-}" ] && [ -n "$userinfo" ]; then
     PGUSER="$(urldecode "${userinfo%%:*}")"
     PGPASSWORD="$(urldecode "${userinfo#*:}")"
   fi
-  if [[ -z "${PGHOST:-}" ]]; then PGHOST="${hostport%%:*}"; fi
-  if [[ -z "${PGPORT:-}" ]]; then PGPORT="${hostport#*:}"; fi
-  if [[ -z "${PGDATABASE:-}" ]]; then PGDATABASE="${dbname}"; fi
+  [ -z "${PGHOST:-}" ]     && PGHOST="${hostport%%:*}"
+  [ -z "${PGPORT:-}" ]     && PGPORT="${hostport#*:}"
+  [ -z "${PGDATABASE:-}" ] && PGDATABASE="${dbname}"
 
   # defaults if port missing
-  [[ -z "${PGPORT:-}" || "$PGPORT" == "$PGHOST" ]] && PGPORT="5432"
+  if [ -z "${PGPORT:-}" ] || [ "$PGPORT" = "$PGHOST" ]; then PGPORT="5432"; fi
 fi
 
 : "${PGHOST:?Missing PGHOST (or DATABASE_URL) in .env}"
@@ -62,53 +60,67 @@ fi
 
 mkdir -p "$BACKUP_DIR"
 OUTFILE="${BACKUP_DIR%/}/${PGDATABASE}_${SUFFIX}.sql"
+log "Outfile: $OUTFILE"
 
-# --- Docker autodetect (prefer container publishing expected port) ---
+# --- Docker detection (robust, no 'docker info' needed) ---
 docker_exec=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  # Gather postgres-like containers
-  mapfile -t rows < <(docker ps --format '{{.ID}} {{.Image}} {{.Names}} {{.Ports}}' | grep -Ei ' postgres|timescale|bitnami/postgres' || true)
-  if ((${#rows[@]})); then
-    chosen=""
-    for r in "${rows[@]}"; do
-      id="${r%% *}"; rest="${r#* }"
-      ports="${r##* }"  # crude but fine for matching
-      # Prefer a container that publishes our host port to 5432/tcp
-      if echo "$ports" | grep -Eq "(0\.0\.0\.0|::|\*)?:${PGPORT}->(5432|$PGPORT)/tcp"; then
-        chosen="$id"; break
-      fi
-    done
-    # fallback: first postgres-ish container
-    [[ -z "$chosen" ]] && chosen="${rows[0]%% *}"
-    if [[ -n "$chosen" ]]; then
-      docker_exec="docker exec -i $chosen"
-    fi
+cid=""
+
+# 1) If POSTGRES_CONTAINER is set, prefer it
+if [ -n "${POSTGRES_CONTAINER:-}" ] && command -v docker >/dev/null 2>&1; then
+  if [ "$(docker inspect -f '{{.State.Running}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" = "true" ]; then
+    cid="$POSTGRES_CONTAINER"
+    docker_exec="docker exec -i \"$cid\""
+    log "Using specified container: $cid"
+  else
+    log "Specified POSTGRES_CONTAINER=$POSTGRES_CONTAINER not running; will try auto-detect"
   fi
 fi
 
-run_in_docker() {
-  local cmd="$1"
-  [[ -n "$docker_exec" ]] || return 1
-  # shellcheck disable=SC2086
-  $docker_exec env PGPASSWORD="$PGPASSWORD" sh -lc "$cmd"
-}
+# 2) Auto-detect a postgres-like container, prefer matching published port
+if [ -z "$docker_exec" ] && command -v docker >/dev/null 2>&1; then
+  while IFS=$' ' read -r id image ports; do
+    [ -z "$id" ] && continue
+    case "$image" in
+      *postgres*|*timescale*|*bitnami/postgres*) ;;
+      *) continue ;;
+    esac
+    if echo "$ports" | grep -E "(:${PGPORT}->(5432|${PGPORT})/tcp)" >/dev/null 2>&1; then
+      cid="$id"; docker_exec="docker exec -i \"$cid\""; log "Selected by port match: $cid"; break
+    fi
+    # fallback to first match if none publish the expected port
+    if [ -z "$cid" ]; then cid="$id"; docker_exec="docker exec -i \"$cid\""; fi
+  done < <(docker ps --format '{{.ID}} {{.Image}} {{.Ports}}')
+  [ -n "$cid" ] && log "Auto-selected container: $cid"
+fi
 
-if [[ "$op" == "backup" ]]; then
-  echo "Backing up ${PGDATABASE} ? ${OUTFILE}"
-  if [[ -n "$docker_exec" ]]; then
-    run_in_docker "pg_dump -h \"$PGHOST\" -p \"$PGPORT\" -U \"$PGUSER\" -d \"$PGDATABASE\" --clean --if-exists --no-owner --no-privileges" >"$OUTFILE"
+# 3) If no docker and no local pg_dump, fail with guidance
+if [ -z "$docker_exec" ] && ! command -v pg_dump >/dev/null 2>&1; then
+  echo "pg_dump not found on PATH and no running postgres container detected." >&2
+  echo "Install Postgres client tools (e.g. apt install postgresql-client) or set POSTGRES_CONTAINER to a running container name." >&2
+  exit 1
+fi
+
+# --- Run ops ---
+if [ "$op" = "backup" ]; then
+  echo "Backing up ${PGDATABASE} -> ${OUTFILE}"
+  if [ -n "$docker_exec" ]; then
+    # shellcheck disable=SC2086
+    eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' pg_dump -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' --clean --if-exists --no-owner --no-privileges" > "$OUTFILE"
   else
-    PGPASSWORD="$PGPASSWORD" pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" --clean --if-exists --no-owner --no-privileges >"$OUTFILE"
+    PGPASSWORD="$PGPASSWORD" pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+      --clean --if-exists --no-owner --no-privileges > "$OUTFILE"
   fi
   echo "Done."
   exit 0
 fi
 
 # restore
-[[ -f "$OUTFILE" ]] || { echo "Restore file not found: $OUTFILE" >&2; exit 1; }
-echo "Restoring ${PGDATABASE} ? ${OUTFILE}"
-if [[ -n "$docker_exec" ]]; then
-  cat "$OUTFILE" | run_in_docker "psql -h \"$PGHOST\" -p \"$PGPORT\" -U \"$PGUSER\" -d \"$PGDATABASE\" -v ON_ERROR_STOP=1"
+[ -f "$OUTFILE" ] || { echo "Restore file not found: $OUTFILE" >&2; exit 1; }
+echo "Restoring ${PGDATABASE} <- ${OUTFILE}"
+if [ -n "$docker_exec" ]; then
+  # shellcheck disable=SC2086
+  cat "$OUTFILE" | eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' psql -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -v ON_ERROR_STOP=1"
 else
   PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$OUTFILE"
 fi

@@ -101,8 +101,8 @@ export class TranscriptParser {
         }
       }
       
-      // Run Phase 2 processing if trial was created
-      if (this.trialId) {
+      // Run Phase 2 processing if trial was created (unless disabled by config)
+      if (this.trialId && this.config.runPhase2 !== false) {
         logger.info('\n' + '='.repeat(60));
         logger.info('Starting Phase 2 Processing');
         logger.info('='.repeat(60));
@@ -152,33 +152,49 @@ export class TranscriptParser {
         continue;
       }
       
-      // Detect section changes - be more flexible with detection
-      if (trimmedLine.includes('P R O C E E D I N G S') || 
-          trimmedLine.includes('PROCEEDINGS') ||
-          (trimmedLine.match(/^\d{2}:\d{2}:\d{2}/) && !summaryProcessed)) {
-        // If we see a timestamp pattern, we're definitely in proceedings
-        currentSection = 'PROCEEDINGS';
-        //logger.info(`Detected PROCEEDINGS section at line ${i}`);
-        
-        // Create session if not already created
-        if (!session && this.trialId) {
-          if (!sessionInfo) {
-            sessionInfo = this.extractSessionInfo(lines, fileName);
+      // Parse the line first to extract text content
+      let parsedLine = this.lineParser.parse(line);
+      
+      // Check for exact "P R O C E E D I N G S" in the parsed text
+      if (currentSection !== 'PROCEEDINGS' && parsedLine && parsedLine.text) {
+        const textContent = parsedLine.text.trim();
+        if (textContent === 'P R O C E E D I N G S') {
+          currentSection = 'PROCEEDINGS';
+          logger.info(`Detected PROCEEDINGS section at line ${i} with text: "${textContent}"`);
+          
+          // Session should already be created in summary processing
+          if (!session) {
+            logger.warn('No session found when entering PROCEEDINGS - this should not happen');
           }
-          session = await this.createSession(sessionInfo, fileName);
-          logger.info(`Created session: ${session.id}`);
+          
+          // Create first PROCEEDINGS page if needed
+          // Look for the page that starts proceedings (usually page 3)
+          if (!currentPage && session) {
+            // Find the actual page break for this PROCEEDINGS page
+            let pageStartIndex = i;
+            // Look backwards for the page header
+            for (let j = i; j >= Math.max(0, i - 10); j--) {
+              if (this.isPageBreak(lines[j])) {
+                pageStartIndex = j;
+                break;
+              }
+            }
+            
+            pageNumber = 1; // Start PROCEEDINGS page numbering at 1
+            const pageInfo = this.extractPageInfo(lines, pageStartIndex);
+            currentPage = await this.createPage(session.id, pageNumber, currentSection, pageInfo);
+            logger.info(`Created first PROCEEDINGS page: ${currentPage.id} (trial page ${pageInfo.trialPageNumber}, pageId ${pageInfo.pageId})`);
+          }
         }
-        
-        // Create first page if needed
-        if (!currentPage && session) {
-          pageNumber++;
-          currentPage = await this.createPage(session.id, pageNumber, currentSection);
-          logger.info(`Created first page of PROCEEDINGS: ${currentPage.id}`);
-        }
-      } else if (trimmedLine.includes('REPORTER\'S CERTIFICATE') || 
-                 trimmedLine.includes('CERTIFICATION')) {
+      }
+      
+      // Check for CERTIFICATION section
+      if (trimmedLine.includes('REPORTER\'S CERTIFICATE') || 
+          trimmedLine === 'CERTIFICATION') {
         currentSection = 'CERTIFICATION';
         logger.info(`Detected CERTIFICATION section at line ${i}`);
+        // Don't create pages for CERTIFICATION section
+        currentPage = null;
         continue;
       }
       
@@ -200,6 +216,12 @@ export class TranscriptParser {
           summaryProcessed = true;
           logger.info('Summary section processed');
           
+          // Create session for this file NOW, don't wait for PROCEEDINGS
+          if (!session && this.trialId) {
+            session = await this.createSession(sessionInfo, fileName);
+            logger.info(`Created session: ${session.id} for file: ${fileName}`);
+          }
+          
           // Reset index to process from where we detected proceedings
           i = 100; // Skip past summary
           continue;
@@ -219,10 +241,32 @@ export class TranscriptParser {
         
         // Check for page break
         if (this.isPageBreak(line)) {
+          // Check if next page is CERTIFICATION
+          let isNextPageCertification = false;
+          for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+            const checkLine = lines[j].trim();
+            if (checkLine.includes('CERTIFICATION') || checkLine.includes('REPORTER\'S CERTIFICATE')) {
+              isNextPageCertification = true;
+              break;
+            }
+            // If we hit proceedings content, it's not certification
+            if (checkLine.match(/^\d{2}:\d{2}:\d{2}/)) {
+              break;
+            }
+          }
+          
+          // If next page is CERTIFICATION, stop creating pages
+          if (isNextPageCertification) {
+            currentSection = 'CERTIFICATION';
+            currentPage = null;
+            logger.info('Reached CERTIFICATION section, stopping page creation');
+            continue;
+          }
+          
           // Flush batch before page transition
           await this.flushLineBatch();
           
-          // Save current page and create new one
+          // Save current page and create new PROCEEDINGS page
           if (currentPage) {
             logger.debug(`Page ${pageNumber} completed with ${sessionLineNumber} lines`);
           }
@@ -232,7 +276,7 @@ export class TranscriptParser {
           currentPage = await this.createPage(
             session.id,
             pageNumber,
-            currentSection,
+            'PROCEEDINGS',
             pageInfo
           );
           
@@ -241,15 +285,26 @@ export class TranscriptParser {
           continue;
         }
         
-        // Ensure we have a page
-        if (!currentPage) {
+        // Ensure we have a page (but don't create if in CERTIFICATION)
+        if (!currentPage && currentSection === 'PROCEEDINGS') {
           pageNumber++;
-          currentPage = await this.createPage(session.id, pageNumber, currentSection);
-          logger.info(`Created page ${pageNumber}`);
+          // Look backwards to find the most recent page header
+          let pageStartIndex = i;
+          for (let j = i; j >= Math.max(0, i - 20); j--) {
+            if (this.isPageBreak(lines[j])) {
+              pageStartIndex = j;
+              break;
+            }
+          }
+          const pageInfo = this.extractPageInfo(lines, pageStartIndex);
+          currentPage = await this.createPage(session.id, pageNumber, 'PROCEEDINGS', pageInfo);
+          logger.info(`Created page ${pageNumber} (trial page ${pageInfo.trialPageNumber})`);
         }
         
-        // Parse and store line (skip blank lines)
-        const parsedLine = this.lineParser.parse(line);
+        // Use the already parsed line if available, otherwise parse it
+        if (!parsedLine) {
+          parsedLine = this.lineParser.parse(line);
+        }
         if (parsedLine && !parsedLine.isBlank) {  // Only store non-blank lines
           // Only increment line numbers for non-blank lines with content
           if (parsedLine.text || parsedLine.timestamp) {
@@ -337,34 +392,100 @@ export class TranscriptParser {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       
-      // Look for case number pattern - be more flexible
-      const caseMatch = line.match(/(?:Case|CIVIL ACTION NO\.?)\s*([\d:\-CVcv]+)/i);
-      if (caseMatch && !caseNumber) {
-        caseNumber = caseMatch[1].toUpperCase();
+      // Parse case number using direct string parsing
+      // Method 1: From page header "Case 2:19-cv-00123-JRG Document 328..."
+      if (!caseNumber && line.includes('Case ') && line.includes(' Document')) {
+        const caseStart = line.indexOf('Case ') + 5;
+        const docStart = line.indexOf(' Document');
+        if (caseStart > 4 && docStart > caseStart) {
+          const extracted = line.substring(caseStart, docStart).trim();
+          if (extracted.length > 0) {
+            caseNumber = extracted.toUpperCase();
+            logger.info(`Extracted case number from header: ${caseNumber}`);
+          }
+        }
       }
       
-      // Look for vs. pattern for case name
-      if ((line.includes(' vs. ') || line.includes(' v. ') || line.includes(' VS. ')) && !caseName) {
-        caseName = line.trim()
-          .replace(/[)(]/g, '') // Remove parentheses
-          .replace(/\s+/g, ' ') // Normalize spaces
-          .trim();
+      // Method 2: Look for standalone case number after "CIVIL ACTION NO."
+      // This appears as "2:19-CV-123-JRG" on its own line
+      if (!caseNumber) {
+        const trimmed = line.trim();
+        // Remove any )( characters and spaces
+        const cleaned = trimmed.replace(/[)(]/g, '').trim();
+        // Check if this looks like a case number (format: X:XX-CV-XXX-XXX)
+        if (cleaned.includes(':') && cleaned.includes('-CV-') && cleaned.length < 30) {
+          // Check if previous line had "CIVIL ACTION"
+          if (i > 0 && lines[i-1].includes('CIVIL ACTION')) {
+            caseNumber = cleaned.toUpperCase();
+            logger.info(`Extracted case number after CIVIL ACTION: ${caseNumber}`);
+          }
+        }
       }
       
-      // Look for plaintiff/defendant pattern for case name
-      if (!caseName && line.includes('PLAINTIFF') && i < lines.length - 5) {
-        // Look for pattern like "VOCALIFE LLC," as plaintiff
-        const plaintiffMatch = line.match(/^([A-Z][A-Z\s,\.&]+?),?\s*\)?\(?\s*$/);
-        if (plaintiffMatch) {
-          const plaintiff = plaintiffMatch[1].trim();
-          // Look for defendant in next few lines
-          for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
-            if (lines[j].includes('DEFENDANT')) {
-              const defendantMatch = lines[j - 1].match(/^([A-Z][A-Z\s,\.&]+?),?\s*\)?\(?\s*$/);
-              if (defendantMatch) {
-                const defendant = defendantMatch[1].trim();
-                caseName = `${plaintiff} v. ${defendant}`;
-                break;
+      // Look for trial name using )( format from the header
+      // Pattern: VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.
+      if (!caseName && line.includes(')(')) {
+        // Check if this is the start of the party block (contains company name)
+        const leftPart = line.split(')(')[0].trim().replace(/^\d+\s*/, '').trim();
+        
+        // Look for lines that contain party names (uppercase letters)
+        // Could be company name, PLAINTIFF, VS., or DEFENDANTS
+        if (leftPart && (/[A-Z]/.test(leftPart) || leftPart === '')) {
+          // Collect all consecutive )( lines that contain party info
+          const partyLines: string[] = [];
+          
+          // Start from current line and collect all )( lines in the block
+          // Don't stop at blank lines - they're part of the format
+          let inPartyBlock = true;
+          for (let j = i; j < Math.min(i + 30, lines.length) && inPartyBlock; j++) {
+            const currentLine = lines[j];
+            
+            // If line contains )(, extract the left part
+            if (currentLine.includes(')(')) {
+              const part = currentLine.split(')(')[0].trim().replace(/^\d+\s*/, '').trim();
+              
+              // Include non-empty content only
+              if (part && part.length > 0) {
+                partyLines.push(part);
+              }
+            } 
+            // Continue through blank lines if we're still seeing )( lines nearby
+            else if (currentLine.trim() === '') {
+              // Check if there are more )( lines ahead
+              let hasMorePartyLines = false;
+              for (let k = j + 1; k < Math.min(j + 3, lines.length); k++) {
+                if (lines[k].includes(')(')) {
+                  hasMorePartyLines = true;
+                  break;
+                }
+              }
+              if (!hasMorePartyLines) {
+                inPartyBlock = false;
+              }
+            } else {
+              // Non-blank line without )( - stop collecting
+              inPartyBlock = false;
+            }
+          }
+          
+          // Process the collected lines to form case name
+          if (partyLines.length >= 4) {  // Need at least name, plaintiff, vs, defendant
+            // Join and clean up the party lines
+            const fullText = partyLines.join(' ')
+              .replace(/\s+/g, ' ')  // Normalize spaces
+              .trim();
+            
+            // Check if this contains the key elements of a case name
+            if (fullText.includes('PLAINTIFF') && fullText.includes('DEFENDANT') && 
+                (fullText.includes('VS.') || fullText.includes('V.'))) {
+              caseName = fullText
+                .replace(/\s*,\s*/g, ', ')  // Fix comma spacing
+                .replace(/\s+(PLAINTIFF|DEFENDANTS?|VS\.)/g, ' $1')  // Fix spacing around keywords
+                .trim();
+              
+              // Ensure proper ending
+              if (!caseName.endsWith('.')) {
+                caseName += '.';
               }
             }
           }
@@ -376,10 +497,14 @@ export class TranscriptParser {
         court = 'UNITED STATES DISTRICT COURT';
       }
       if (line.includes('DIVISION')) {
-        courtDivision = line.trim();
+        // Remove line numbers and extra spaces from the beginning
+        courtDivision = line.replace(/^\s*\d+\s*/, '').trim();
       }
       if (line.includes('DISTRICT OF')) {
-        courtDistrict = line.trim();
+        // Remove line numbers and extra spaces, also clean up "FOR THE" prefix
+        courtDistrict = line.replace(/^\s*\d+\s*/, '')
+                           .replace(/^FOR THE\s+/i, '')
+                           .trim();
       }
     }
     
@@ -750,8 +875,18 @@ export class TranscriptParser {
     // Try to extract date from content
     let sessionDate = new Date();
     let sessionType: SessionInfo['sessionType'] = 'OTHER';
+    let documentNumber: number | undefined;
+    let totalPages: number | undefined;
     
     for (const line of lines.slice(0, 50)) {
+      // Look for document number and page count in header
+      // Pattern: "Case 2:19-cv-00123-JRG Document 328 Filed 10/09/20 Page 1 of 125 PageID #: 18337"
+      const headerMatch = line.match(/Document\s+(\d+)\s+Filed\s+[\d\/]+\s+Page\s+\d+\s+of\s+(\d+)/);
+      if (headerMatch) {
+        documentNumber = parseInt(headerMatch[1]);
+        totalPages = parseInt(headerMatch[2]);
+      }
+      
       // Look for date patterns
       const dateMatch = line.match(/(\w+\s+\d{1,2},\s+\d{4})/);
       if (dateMatch) {
@@ -774,7 +909,9 @@ export class TranscriptParser {
     return {
       sessionDate,
       sessionType,
-      fileName
+      fileName,
+      documentNumber,
+      totalPages
     };
   }
 
@@ -903,6 +1040,23 @@ export class TranscriptParser {
       throw new Error('Trial ID not set');
     }
     
+    // Calculate transcriptStartPage based on previous sessions
+    const previousSessions = await this.prisma.session.findMany({
+      where: { trialId: this.trialId },
+      orderBy: [
+        { sessionDate: 'asc' },
+        { sessionType: 'asc' }
+      ]
+    });
+    
+    let transcriptStartPage = 1;
+    for (const prevSession of previousSessions) {
+      if (prevSession.totalPages) {
+        transcriptStartPage += prevSession.totalPages;
+      }
+    }
+    
+    
     return await this.prisma.session.upsert({
       where: {
         trialId_sessionDate_sessionType: {
@@ -913,14 +1067,18 @@ export class TranscriptParser {
       },
       update: {
         fileName,
-        documentNumber: sessionInfo.documentNumber
+        documentNumber: sessionInfo.documentNumber,
+        totalPages: sessionInfo.totalPages,
+        transcriptStartPage
       },
       create: {
         trialId: this.trialId,
         sessionDate: sessionInfo.sessionDate,
         sessionType: sessionInfo.sessionType,
         fileName,
-        documentNumber: sessionInfo.documentNumber
+        documentNumber: sessionInfo.documentNumber,
+        totalPages: sessionInfo.totalPages,
+        transcriptStartPage
       }
     });
   }
@@ -952,10 +1110,11 @@ export class TranscriptParser {
    * Check if line is a page break
    */
   private isPageBreak(line: string): boolean {
-    return line.includes('PageID #:') || 
-           !!line.match(/^\s*\d+\s*$/) || 
-           line.includes('Page ') ||
-           line.includes('- - -');
+    // Look for the specific page header format: "Case X:XX-cv-XXXXX-XXX Document XXX..."
+    if (line.includes('Case ') && line.includes(' Document ') && line.includes(' PageID #:')) {
+      return true;
+    }
+    return false;
   }
   
   /**
@@ -1000,15 +1159,34 @@ export class TranscriptParser {
   private extractPageInfo(lines: string[], index: number): any {
     const pageInfo: any = {};
     
-    // Look for PageID
+    // Look for PageID and page number in header
+    // Pattern: "Case 2:19-cv-00123-JRG Document 328 Filed 10/09/20 Page X of 125 PageID #: 18337"
     for (let i = index; i < Math.min(index + 5, lines.length); i++) {
       const line = lines[i];
+      
+      // Store the header text (first line of the page)
+      if (i === index && line.includes('Case')) {
+        pageInfo.headerText = line;
+      }
+      
+      // Extract both page number and PageID from the same line if possible
+      const fullHeaderMatch = line.match(/Page\s+(\d+)\s+of\s+\d+\s+PageID\s*#:\s*(\d+)/);
+      if (fullHeaderMatch) {
+        pageInfo.trialPageNumber = parseInt(fullHeaderMatch[1]);
+        pageInfo.pageId = fullHeaderMatch[2];
+        if (!pageInfo.headerText) {
+          pageInfo.headerText = line;
+        }
+        break;
+      }
+      
+      // Fallback to individual patterns
       const pageIdMatch = line.match(/PageID\s*#:\s*(\d+)/);
       if (pageIdMatch) {
         pageInfo.pageId = pageIdMatch[1];
       }
       
-      const pageNumMatch = line.match(/Page\s+(\d+)/);
+      const pageNumMatch = line.match(/Page\s+(\d+)\s+of/);
       if (pageNumMatch) {
         pageInfo.trialPageNumber = parseInt(pageNumMatch[1]);
       }

@@ -203,28 +203,11 @@ export class EnhancedSearchService {
       
       if (!stmt) continue;
       
+      // For odd numbers, favor before (e.g., 5 = 3 before, 2 after)
       const beforeCount = Math.ceil(surroundingCount / 2);
       const afterCount = Math.floor(surroundingCount / 2);
       
-      if (surroundingCount % 2 !== 0 && surroundingCount > 1) {
-        const tempBefore = beforeCount + 1;
-        if (stmt.event.startLineNumber !== null) {
-          const beforeStatements = await this.prisma.statementEvent.findMany({
-            where: {
-              event: {
-                trialId: stmt.event.trialId,
-                sessionId: stmt.event.sessionId,
-                startLineNumber: { lt: stmt.event.startLineNumber }
-              }
-            },
-            orderBy: { event: { startLineNumber: 'desc' } },
-            take: tempBefore,
-            include: { event: true }
-          });
-          
-          beforeStatements.forEach(s => expandedIds.add(s.id));
-        }
-      } else if (beforeCount > 0 && stmt.event.startLineNumber !== null) {
+      if (beforeCount > 0 && stmt.event.startLineNumber !== null) {
         const beforeStatements = await this.prisma.statementEvent.findMany({
           where: {
             event: {
@@ -599,13 +582,13 @@ export class EnhancedSearchService {
   
   private flattenStatements(results: EnhancedSearchResults): any[] {
     const statements: any[] = [];
+    const allStmts: any[] = [];
     
+    // First collect all statements with their metadata
     for (const trial of Object.values(results.statementResults)) {
       for (const session of Object.values(trial.sessions)) {
         for (const stmt of session.statements) {
-          if (stmt.isContextStatement) continue;
-          
-          statements.push({
+          allStmts.push({
             Trial: trial,
             Session: session,
             StatementEvent: stmt,
@@ -615,8 +598,67 @@ export class EnhancedSearchService {
               endTime: stmt.endTime,
               startLineNumber: stmt.startLineNumber,
               endLineNumber: stmt.endLineNumber
-            }
+            },
+            IsContext: stmt.isContextStatement || false,
+            sessionId: session.sessionId,
+            lineNumber: stmt.startLineNumber
           });
+        }
+      }
+    }
+    
+    // Sort by session and line number
+    allStmts.sort((a, b) => {
+      if (a.sessionId !== b.sessionId) {
+        return (a.sessionId || 0) - (b.sessionId || 0);
+      }
+      return (a.lineNumber || 0) - (b.lineNumber || 0);
+    });
+    
+    // Deduplicate statements based on line number and text content
+    // Keep track of unique statements by line number + text hash
+    const uniqueStmts: any[] = [];
+    const seenContent = new Set<string>();
+    
+    for (const stmt of allStmts) {
+      // Create a unique key based on line number and text content
+      const contentKey = `${stmt.lineNumber}:${stmt.StatementEvent.text?.substring(0, 100)}`;
+      
+      // Skip if we've already seen this exact content at this line number
+      if (!seenContent.has(contentKey)) {
+        uniqueStmts.push(stmt);
+        seenContent.add(contentKey);
+      }
+    }
+    
+    // For each matched statement, include it and its surrounding context
+    const includedIds = new Set<number>();
+    const includedLineNumbers = new Set<number>();
+    
+    for (let i = 0; i < uniqueStmts.length; i++) {
+      const stmt = uniqueStmts[i];
+      if (!stmt.IsContext) {  // This is a matched statement
+        // Add the matched statement and its context window
+        const sessionStmts = uniqueStmts.filter(s => s.sessionId === stmt.sessionId);
+        const stmtIndex = sessionStmts.findIndex(s => s.StatementEvent.statementEventId === stmt.StatementEvent.statementEventId);
+        
+        // Include surrounding statements within the same session
+        // Use a reasonable context window (5 before, 5 after for dialogue context)
+        const contextWindow = 5;
+        const startIdx = Math.max(0, stmtIndex - contextWindow);
+        const endIdx = Math.min(sessionStmts.length - 1, stmtIndex + contextWindow);
+        
+        for (let j = startIdx; j <= endIdx; j++) {
+          const contextStmt = sessionStmts[j];
+          // Use both ID and line number to avoid duplicates
+          if (!includedIds.has(contextStmt.StatementEvent.statementEventId) && 
+              !includedLineNumbers.has(contextStmt.lineNumber)) {
+            statements.push(contextStmt);
+            includedIds.add(contextStmt.StatementEvent.statementEventId);
+            if (contextStmt.lineNumber) {
+              includedLineNumbers.add(contextStmt.lineNumber);
+            }
+          }
         }
       }
     }

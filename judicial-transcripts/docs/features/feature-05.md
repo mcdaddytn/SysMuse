@@ -50,5 +50,34 @@ Speaker: {Speaker.speakerPrefix}		Date:	{Session.sessionDate}	Time:	{TrialEvent.
 ## Expected Output Format
 Text output from the templates above into the configured directory above
 
+## Implementation Notes
+
+### Deduplication
+The system includes automatic deduplication logic to handle cases where the source data may contain duplicate records (e.g., from parsing errors or data import issues). The deduplication works as follows:
+
+1. **Database Level**: Duplicate records with identical content at the same line number are filtered out during the query phase
+2. **Content Deduplication**: The `flattenStatements` method in `EnhancedSearchService` deduplicates statements based on:
+   - Line number + text content hash
+   - Prevents the same statement from appearing multiple times in output
+3. **Context Window Deduplication**: When including surrounding statements for context:
+   - Each unique statement is included only once
+   - Tracked by both statement ID and line number
+   - Ensures clean, readable output without repetition
+
+### Line Number Handling
+- Line numbers must be unique across the entire trial transcript
+- Line numbers are parsed from the page headers during import (Phase 1)
+- Sequential line numbers ensure proper chronological ordering and context windows
+
+### Template System
+- Templates are stored in `config/templates/` directory
+- Default templates provided:
+  - `default.txt`: Basic statement format
+  - `courtroom-dialogue.txt`: Shows line numbers and speaker context
+  - `judge-statements.txt`: Formatted for judicial rulings
+  - `witness-testimony.txt`: Optimized for witness Q&A
+- Template variables use dot notation: `{Entity.field}`
+- Custom parameters can be added via `customParameters` in the search input
+
 
 

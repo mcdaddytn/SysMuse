@@ -1,0 +1,16 @@
+{
+  "caseNumber": "2:19-CV-00123-JRG",
+  "speakerType": "JUDGE",
+  "maxResults": 3,
+  "surroundingStatements": 5,
+  "outputFileNameTemplate": "dialogue-context-test.txt",
+  "outputFileTemplate": "dialogue-context.txt",
+  "resultSeparator": "\n================\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    }
+  ]
+}

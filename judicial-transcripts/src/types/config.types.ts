@@ -15,6 +15,7 @@ export interface TranscriptConfig {
   batchSize: number;
   enableElasticSearch: boolean;
   elasticSearchUrl?: string;
+  runPhase2?: boolean;
   trial?: {
     name?: string;
     caseNumber?: string;
@@ -29,6 +30,7 @@ export interface SessionInfo {
   sessionType: 'MORNING' | 'AFTERNOON' | 'SPECIAL' | 'BENCH_TRIAL' | 'JURY_VERDICT' | 'OTHER';
   fileName?: string;
   documentNumber?: number;
+  totalPages?: number;
 }
 
 export interface ParsedLine {

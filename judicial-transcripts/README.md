@@ -171,6 +171,8 @@ npm run prisma:studio
 
 # Reset database
 npm run prisma:reset
+# another variant to clear data
+npx prisma db push --force-reset
 
 # Generate Prisma client
 npm run prisma:generate
@@ -297,6 +299,18 @@ npx prisma db push
 
 # latest command that works on windows (some of above out of date, need to clean up)
 npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-win.json"
+
+# mac version
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json"
+
+#test for phase 1
+#first reset database
+npx prisma db push --force-reset
+#next seed database
+npm run seed
+#now run phase1 only on our test set
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json" --phase1
+
 
 
 

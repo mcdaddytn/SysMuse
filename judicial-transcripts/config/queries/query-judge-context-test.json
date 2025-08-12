@@ -1,11 +1,11 @@
 {
   "caseNumber": "2:19-CV-00123-JRG",
   "speakerType": "JUDGE",
-  "maxResults": 50,
+  "maxResults": 10,
   "surroundingStatements": 5,
-  "outputFileNameTemplate": "judge-statements-{caseHandle}.txt",
-  "outputFileTemplate": "judge-statements.txt",
-  "resultSeparator": "\n\n---\n\n",
+  "outputFileNameTemplate": "judge-with-context-{caseHandle}.txt",
+  "outputFileTemplate": "judge-with-context.txt",
+  "resultSeparator": "\n====== EXCHANGE ======\n",
   "elasticSearchQueries": [
     {
       "name": "sustained",

@@ -1,0 +1,21 @@
+{
+  "trialName": "United States v. John Carter",
+  "speakerType": "JUDGE",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    },
+    {
+      "name": "overruled",
+      "query": "overruled",
+      "type": "match"
+    }
+  ],
+  "maxResults": 10,
+  "surroundingStatements": 2,
+  "outputFormat": "MATCHED",
+  "outputFileNameTemplate": "test-output-format.txt",
+  "outputFileTemplate": "Query: {{queryUsed}}\nTotal Statements: {{totalStatements}}\nMatched Statements: {{matchedStatements}}\n\n{{#each trials}}\nTrial: {{trialName}}\n{{#each sessions}}\nSession: {{sessionType}} ({{sessionDate}})\n{{#each statements}}\n[{{speaker.speakerType}}]: {{text}}\n{{/each}}\n{{/each}}\n{{/each}}"
+}

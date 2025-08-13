@@ -26,6 +26,7 @@ export interface EnhancedSearchInput {
   outputFileNameTemplate?: string;
   outputFileTemplate?: string;
   resultSeparator?: string;
+  outputFormat?: 'RAW' | 'MATCHED' | 'BOTH' | 'NEITHER';
 }
 
 export interface HierarchicalStatement {
@@ -78,6 +79,8 @@ export interface EnhancedSearchResults {
     caseHandle?: string;
     runTimeStamp?: string;
   };
+  queryUsed?: EnhancedSearchInput;
+  inputQuery?: string;
 }
 
 export class EnhancedSearchService {
@@ -181,7 +184,8 @@ export class EnhancedSearchService {
         matchedStatements: matchedStatementIds.size,
         statementResults: hierarchicalResults,
         elasticSearchSummary: Object.keys(elasticSearchSummary).length > 0 ? elasticSearchSummary : undefined,
-        customParameters
+        customParameters,
+        queryUsed: input
       };
     } catch (error) {
       logger.error('Error in enhanced search:', error);
@@ -507,15 +511,14 @@ export class EnhancedSearchService {
   async exportResults(
     results: EnhancedSearchResults,
     input: EnhancedSearchInput,
-    outputDir: string
+    outputDir: string,
+    queryFileName?: string
   ): Promise<string[]> {
     const outputFiles: string[] = [];
     
     if (!input.outputFileNameTemplate && !input.outputFileTemplate) {
-      const timestamp = results.customParameters?.runTimeStamp || new Date().toISOString().replace(/[:.]/g, '-');
-      const outputPath = path.join(outputDir, `search-results-${timestamp}.json`);
-      fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
-      outputFiles.push(outputPath);
+      // Don't create the raw search-results file anymore - it's too large
+      // Users should use outputFormat: 'RAW' if they really need it
       return outputFiles;
     }
     

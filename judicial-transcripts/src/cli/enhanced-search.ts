@@ -1,10 +1,51 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EnhancedSearchService, EnhancedSearchInput } from '../services/EnhancedSearchService';
+import { EnhancedSearchService, EnhancedSearchInput, EnhancedSearchResults } from '../services/EnhancedSearchService';
 import logger from '../utils/logger';
 
 const program = new Command();
+
+function createMatchedOnlyResults(results: EnhancedSearchResults): EnhancedSearchResults {
+  const matchedResults: EnhancedSearchResults = {
+    totalStatements: results.totalStatements,
+    matchedStatements: results.matchedStatements,
+    statementResults: {},
+    elasticSearchSummary: results.elasticSearchSummary,
+    customParameters: results.customParameters,
+    queryUsed: results.queryUsed,
+    inputQuery: results.inputQuery
+  };
+  
+  // Filter to include ONLY matched statements (not context statements)
+  for (const [trialKey, trial] of Object.entries(results.statementResults)) {
+    const matchedTrial = {
+      ...trial,
+      sessions: {} as typeof trial.sessions
+    };
+    
+    for (const [sessionKey, session] of Object.entries(trial.sessions)) {
+      // Only keep statements that are NOT context statements
+      const matchedStatements = session.statements.filter(stmt => 
+        !stmt.isContextStatement && 
+        (stmt.elasticSearchMatches && Object.values(stmt.elasticSearchMatches).some(v => v))
+      );
+      
+      if (matchedStatements.length > 0) {
+        matchedTrial.sessions[sessionKey] = {
+          ...session,
+          statements: matchedStatements
+        };
+      }
+    }
+    
+    if (Object.keys(matchedTrial.sessions).length > 0) {
+      matchedResults.statementResults[trialKey] = matchedTrial;
+    }
+  }
+  
+  return matchedResults;
+}
 
 program
   .name('enhanced-search')
@@ -44,6 +85,9 @@ program
       logger.info('Executing enhanced search...');
       const results = await searchService.executeSearch(queryInput);
       
+      // Add input query filename to results
+      results.inputQuery = path.basename(queryPath);
+      
       logger.info(`Search completed:`);
       logger.info(`  Total statements found: ${results.totalStatements}`);
       logger.info(`  Matched statements: ${results.matchedStatements}`);
@@ -63,17 +107,28 @@ program
         fs.mkdirSync(outputDir, { recursive: true });
       }
       
-      const outputFiles = await searchService.exportResults(results, queryInput, outputDir);
+      const queryName = path.basename(queryPath, '.json');
+      const outputFiles = await searchService.exportResults(results, queryInput, outputDir, queryName);
       
       logger.info(`Output files created:`);
       outputFiles.forEach(file => {
         logger.info(`  ${file}`);
       });
       
-      if (options.json) {
+      // Handle JSON output based on outputFormat setting (default to MATCHED)
+      const outputFormat = queryInput.outputFormat || 'MATCHED';
+      
+      if (outputFormat === 'RAW' || outputFormat === 'BOTH') {
         const jsonPath = path.join(outputDir, 'raw-results.json');
         fs.writeFileSync(jsonPath, JSON.stringify(results, null, 2));
-        logger.info(`  ${jsonPath} (JSON)`);
+        logger.info(`  ${jsonPath} (Raw JSON)`);
+      }
+      
+      if (outputFormat === 'MATCHED' || outputFormat === 'BOTH') {
+        const matchedResults = createMatchedOnlyResults(results);
+        const matchedPath = path.join(outputDir, 'matched-results.json');
+        fs.writeFileSync(matchedPath, JSON.stringify(matchedResults, null, 2));
+        logger.info(`  ${matchedPath} (Matched JSON)`);
       }
       
       await searchService.disconnect();
@@ -127,6 +182,9 @@ program
           
           const searchResults = await searchService.executeSearch(queryInput);
           
+          // Add input query filename to results
+          searchResults.inputQuery = queryFile;
+          
           const queryOutputDir = path.join(batchOutputDir, queryName);
           if (!fs.existsSync(queryOutputDir)) {
             fs.mkdirSync(queryOutputDir, { recursive: true });
@@ -135,16 +193,35 @@ program
           const outputFiles = await searchService.exportResults(
             searchResults,
             queryInput,
-            queryOutputDir
+            queryOutputDir,
+            queryName
           );
+          
+          // Handle JSON output based on outputFormat setting (default to MATCHED)
+          const outputFormat = queryInput.outputFormat || 'MATCHED';
+          let createdFiles: string[] = [...outputFiles];
+          
+          if (outputFormat === 'RAW' || outputFormat === 'BOTH') {
+            const jsonPath = path.join(queryOutputDir, 'raw-results.json');
+            fs.writeFileSync(jsonPath, JSON.stringify(searchResults, null, 2));
+            createdFiles.push(jsonPath);
+          }
+          
+          if (outputFormat === 'MATCHED' || outputFormat === 'BOTH') {
+            const matchedResults = createMatchedOnlyResults(searchResults);
+            const matchedPath = path.join(queryOutputDir, 'matched-results.json');
+            fs.writeFileSync(matchedPath, JSON.stringify(matchedResults, null, 2));
+            createdFiles.push(matchedPath);
+          }
           
           results.push({
             queryFile: queryFile,
             status: 'success',
             totalStatements: searchResults.totalStatements,
             matchedStatements: searchResults.matchedStatements,
-            outputFiles: outputFiles,
-            elasticSearchSummary: searchResults.elasticSearchSummary
+            outputFiles: createdFiles,
+            elasticSearchSummary: searchResults.elasticSearchSummary,
+            queryUsed: queryInput
           });
           
           logger.info(`  Success: ${searchResults.matchedStatements}/${searchResults.totalStatements} matches`);

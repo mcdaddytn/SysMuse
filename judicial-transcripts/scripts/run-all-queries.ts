@@ -108,7 +108,8 @@ async function main() {
         console.log(`  - Matched: ${result.stats.matchedStatements}/${result.stats.totalStatements} statements`);
         if (result.stats.elasticSearchSummary) {
           for (const [query, summary] of Object.entries(result.stats.elasticSearchSummary as any)) {
-            console.log(`  - ${query}: ${summary.matched} matches (${summary.percentage}%)`);
+            const typedSummary = summary as { matched: number; percentage: number };
+            console.log(`  - ${query}: ${typedSummary.matched} matches (${typedSummary.percentage}%)`);
           }
         }
       }
@@ -149,7 +150,8 @@ async function main() {
       if (result.stats.elasticSearchSummary) {
         reportContent += `- **Search Terms:**\n`;
         for (const [query, summary] of Object.entries(result.stats.elasticSearchSummary as any)) {
-          reportContent += `  - ${query}: ${summary.matched} matches (${summary.percentage}%)\n`;
+          const typedSummary = summary as { matched: number; percentage: number };
+          reportContent += `  - ${query}: ${typedSummary.matched} matches (${typedSummary.percentage}%)\n`;
         }
       }
     }

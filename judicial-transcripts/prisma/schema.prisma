@@ -185,8 +185,11 @@ model Address {
   state          String?
   zipCode        String?
   country        String?         @default("USA")
+  fullAddress    String?
   courtReporters CourtReporter[]
   lawFirmOffice  LawFirmOffice?
+
+  @@index([fullAddress])
 }
 
 model Speaker {
@@ -309,6 +312,7 @@ model StatementEvent {
   id              Int        @id @default(autoincrement())
   eventId         Int        @unique
   speakerId       Int?
+  speakerAlias    String?
   text            String
   elasticSearchId String?
   event           TrialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)

@@ -225,7 +225,7 @@ export class SummaryPageParser {
       }
       // Check if this is a law firm name
       else if (this.isLawFirmName(line)) {
-        // Save previous attorneys with their firm
+        // Save previous attorneys with their previous firm if any
         if (currentAttorneys.length > 0 && currentFirm) {
           for (const attorneyName of currentAttorneys) {
             attorneys.push({
@@ -254,6 +254,9 @@ export class SummaryPageParser {
         
         collectingAddress = true;
         addressLines = [];
+        
+        // Important: Do NOT add the law firm itself as an attorney
+        // Law firms are only associated with attorneys, not attorneys themselves
       }
       // Collect address lines
       else if (collectingAddress && currentFirm) {

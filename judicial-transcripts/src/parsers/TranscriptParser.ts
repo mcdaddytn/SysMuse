@@ -5,6 +5,7 @@ import * as path from 'path';
 import { LineParser } from './LineParser';
 import { Phase2Processor } from './Phase2Processor';
 import { AttorneyService } from '../services/AttorneyService';
+import { AddressService } from '../services/AddressService';
 import { 
   TranscriptConfig, 
   SessionInfo, 
@@ -20,6 +21,7 @@ export class TranscriptParser {
   private lineParser: LineParser;
   private phase2Processor: Phase2Processor;
   private attorneyService: AttorneyService;
+  private addressService: AddressService;
   private trialId?: number;
   
   // Statistics tracking
@@ -43,6 +45,7 @@ export class TranscriptParser {
     this.lineParser = new LineParser();
     this.phase2Processor = new Phase2Processor(config);
     this.attorneyService = new AttorneyService(this.prisma);
+    this.addressService = new AddressService(this.prisma);
   }
 
   /**
@@ -991,13 +994,7 @@ export class TranscriptParser {
       let addressId: number | null = null;
       
       if (summaryInfo.courtReporter.address) {
-        const address = await this.prisma.address.create({
-          data: {
-            ...summaryInfo.courtReporter.address,
-            country: summaryInfo.courtReporter.address.country || 'USA'
-          }
-        });
-        addressId = address.id;
+        addressId = await this.addressService.createOrFindAddress(summaryInfo.courtReporter.address);
       }
       
       await this.prisma.courtReporter.upsert({

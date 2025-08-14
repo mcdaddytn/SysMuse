@@ -308,6 +308,8 @@ npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.j
 
 # new script to reset Elastic Search without sync
 npm run es:reset
+npm run es:reset --force
+
 
 #test for phase 1
 #first reset database

@@ -68,8 +68,9 @@ export class Phase2Processor {
     jurorSpeaker: /^(JUROR\s+[A-Z0-9]+)/i,
     
     // Enhanced witness name patterns to handle quotes and nicknames
-    witnessName: /^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i,
-    witnessNameAlternate: /^([A-Z\s,'"\.\-]+?)\s*,\s*(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i,
+    // Must start with capital letter and be at beginning of line (after timestamp/line number)
+    witnessName: /^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS(?:\s|,|$)/i,
+    witnessNameAlternate: /^([A-Z][A-Z\s,'"\.\-]+?)\s*,\s*(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS(?:\s|,|$)/i,
     witnessWithNickname: /^([A-Z]+)\s+["']([A-Z]+)["']\s+([A-Z]+)/i,
     
     // Examination patterns
@@ -440,6 +441,17 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
+    // Skip if this line appears to be in the middle of a sentence
+    // (e.g., "we'll be back to continue with the next Plaintiff's witness")
+    const lowerText = lineText.toLowerCase();
+    if (lowerText.includes("next plaintiff's witness") || 
+        lowerText.includes("next defendant's witness") ||
+        lowerText.includes("continue with") ||
+        lowerText.includes("we'll be back") ||
+        lowerText.includes("will be back")) {
+      return false;
+    }
+    
     // Check multiple patterns for witness
     let nameMatch = lineText.match(this.PATTERNS.witnessName);
     if (!nameMatch) {
@@ -477,7 +489,12 @@ export class Phase2Processor {
     logger.info(`Witness called detected: ${displayName} (${witnessCaller})`);
     
     // Create unique speaker handle for this witness
-    const speakerHandle = `WITNESS_${witnessName.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+    // Replace non-alphanumeric with underscore, then collapse multiple underscores
+    const cleanedName = witnessName.replace(/[^A-Z0-9]/gi, '_').replace(/_+/g, '_').toUpperCase();
+    const speakerHandle = `WITNESS_${cleanedName}`;
+    
+    // Create proper speaker prefix for witness (not "A.")
+    const witnessSpeakerPrefix = `WITNESS ${witnessName.toUpperCase()}`;
     
     // Find or create speaker
     let speaker = await this.prisma.speaker.findFirst({
@@ -491,7 +508,7 @@ export class Phase2Processor {
       speaker = await this.prisma.speaker.create({
         data: {
           trialId: this.context.trialId,
-          speakerPrefix: 'A.',  // Display prefix for witnesses
+          speakerPrefix: witnessSpeakerPrefix,  // Use witness name, not "A."
           speakerHandle: speakerHandle,  // Unique handle
           speakerType: 'WITNESS'
         }
@@ -566,6 +583,29 @@ export class Phase2Processor {
     
     logger.info(`Set current witness context: ${displayName}, A. will now resolve to this witness`);
     
+    // Determine initial examination type based on context or default to DIRECT
+    let initialExaminationType: ExaminationType = ExaminationType.DIRECT_EXAMINATION;
+    
+    // Check if the line contains examination type
+    const examMatch = lineText.match(this.PATTERNS.examinationType);
+    if (examMatch) {
+      const examType = examMatch[1].toUpperCase();
+      switch (examType) {
+        case 'DIRECT':
+          initialExaminationType = ExaminationType.DIRECT_EXAMINATION;
+          break;
+        case 'CROSS':
+          initialExaminationType = ExaminationType.CROSS_EXAMINATION;
+          break;
+        case 'REDIRECT':
+          initialExaminationType = ExaminationType.REDIRECT_EXAMINATION;
+          break;
+        case 'RECROSS':
+          initialExaminationType = ExaminationType.RECROSS_EXAMINATION;
+          break;
+      }
+    }
+    
     // Start witness called event (use swornStatus from currentWitness)
     state.currentEvent = {
       type: EventType.WITNESS_CALLED,
@@ -577,7 +617,8 @@ export class Phase2Processor {
         witnessName: witnessName,
         displayName: displayName,
         witnessCaller: witnessCaller,
-        swornStatus: witnessSwornStatus
+        swornStatus: witnessSwornStatus,
+        examinationType: initialExaminationType  // Always include examination type
       }
     };
     state.eventLines = [line];
@@ -758,7 +799,10 @@ export class Phase2Processor {
         startLineNumber: line.lineNumber,
         endLineNumber: line.lineNumber,
         speakerId: speaker.id,
-        text: lineText
+        text: lineText,
+        metadata: {
+          speakerAlias: line.speakerPrefix  // Save original speaker prefix
+        }
       };
       state.eventLines = [line];
       state.currentSpeaker = speaker;
@@ -1095,10 +1139,16 @@ export class Phase2Processor {
       .join('\n')
       .trim();
     
+    // Get the speakerAlias from metadata or use the first line's speakerPrefix
+    const speakerAlias = eventInfo.metadata?.speakerAlias || 
+                        (lines.length > 0 && lines[0].speakerPrefix) || 
+                        undefined;
+    
     await this.prisma.statementEvent.create({
       data: {
         eventId,
         speakerId: eventInfo.speakerId,
+        speakerAlias,  // Save the original speaker prefix
         text: fullText
       }
     });

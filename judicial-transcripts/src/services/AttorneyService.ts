@@ -1,13 +1,16 @@
 // src/services/AttorneyService.ts
 import { PrismaClient } from '@prisma/client';
 import { AttorneyInfo, AddressInfo } from '../types/config.types';
+import { AddressService } from './AddressService';
 import logger from '../utils/logger';
 
 export class AttorneyService {
   private prisma: PrismaClient;
+  private addressService: AddressService;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    this.addressService = new AddressService(prisma);
   }
 
   /**
@@ -225,16 +228,10 @@ export class AttorneyService {
       // Handle office if provided
       let office = null;
       if (officeInfo) {
-        // Create address if provided
+        // Create address if provided using AddressService
         let addressId: number | null = null;
         if (officeInfo.address) {
-          const address = await this.prisma.address.create({
-            data: {
-              ...officeInfo.address,
-              country: officeInfo.address.country || 'USA'
-            }
-          });
-          addressId = address.id;
+          addressId = await this.addressService.createOrFindAddress(officeInfo.address);
         }
         
         // Find or create office

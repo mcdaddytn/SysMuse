@@ -26,7 +26,14 @@ else
 fi
 
 # --- Minimal URL decode using Python (for credentials with %xx) ---
-urldecode() { python3 - <<'PY' "$1"; import sys,urllib.parse as u; print(u.unquote(sys.argv[1])) ; PY; }
+#urldecode() { python3 - <<'PY' "$1"; import sys,urllib.parse as u; print(u.unquote(sys.argv[1])) ; PY; }
+
+# Replace the old urldecode() with this bash-only version
+urldecode() {
+  # decode %xx and turn + into space (good enough for DATABASE_URL creds)
+  local s="${1//+/ }"
+  printf '%b' "${s//%/\\x}"
+}
 
 # --- Parse DATABASE_URL if present and fill missing PG* ---
 if [ -n "${DATABASE_URL:-}" ]; then

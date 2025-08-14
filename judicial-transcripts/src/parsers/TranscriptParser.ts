@@ -640,12 +640,21 @@ export class TranscriptParser {
       
       // If no title found, check if it's just a name in caps (like "ALAN G. LAQUER")
       if (!nameMatch && currentSection && cleanLine.match(/^[A-Z][A-Z\s\.]+$/)) {
-        // This might be an attorney name without title
-        const nameParts = cleanLine.trim().split(/\s+/);
-        if (nameParts.length >= 2 && nameParts.length <= 4) {
-          // Likely an attorney name - use empty title placeholder
-          nameMatch = ['', '', cleanLine];
-          logger.debug(`Found attorney without title: ${cleanLine}`);
+        // Check if this is a law firm name first
+        const isLawFirm = cleanLine.includes('LLP') || cleanLine.includes('LLC') || 
+                          cleanLine.includes('P.C.') || cleanLine.includes('P.A.') ||
+                          cleanLine.includes('PLLC') || cleanLine.includes('LAW') || 
+                          cleanLine.includes('FIRM') || cleanLine.includes('ASSOCIATES') ||
+                          cleanLine.includes('PARTNERS') || cleanLine.includes('COUNSEL');
+        
+        if (!isLawFirm) {
+          // This might be an attorney name without title
+          const nameParts = cleanLine.trim().split(/\s+/);
+          if (nameParts.length >= 2 && nameParts.length <= 4) {
+            // Likely an attorney name - use empty title placeholder
+            nameMatch = ['', '', cleanLine];
+            logger.debug(`Found attorney without title: ${cleanLine}`);
+          }
         }
       }
       
@@ -689,11 +698,14 @@ export class TranscriptParser {
         continue;
       }
       
-      // Check if this is a law firm name (contains legal entity markers)
+      // Check if this is a law firm name (contains legal entity markers or common patterns)
       if (cleanLine.length > 0 && 
           (cleanLine.includes('LLP') || cleanLine.includes('LLC') || cleanLine.includes('P.C.') || 
-           cleanLine.includes('LAW') || cleanLine.includes('FIRM') || cleanLine.includes('SMITH') ||
-           cleanLine.includes('KNOBBE') || cleanLine.includes('FENWICK'))) {
+           cleanLine.includes('P.A.') || cleanLine.includes('PLLC') ||
+           cleanLine.includes('LAW') || cleanLine.includes('FIRM') || 
+           cleanLine.includes('ASSOCIATES') || cleanLine.includes('PARTNERS') ||
+           cleanLine.includes(' & ') || // Common pattern for law firms like "Smith & Jones"
+           cleanLine.includes('SMITH') || cleanLine.includes('KNOBBE') || cleanLine.includes('FENWICK'))) {
         
         // Process any pending address for previous firm
         if (addressLines.length > 0 && currentFirm) {

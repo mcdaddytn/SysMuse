@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Debug: set DEBUG=1 to see logs
+# Debug logs (enable with: DEBUG=1)
 DEBUG="${DEBUG:-0}"
 log(){ [ "$DEBUG" = "1" ] && echo "[DBG] $*"; }
 usage(){ echo "Usage: $0 <backup|restore> [suffix=current] [backup_dir=./backups]"; exit 2; }
@@ -13,7 +13,7 @@ op="${1:-}"; shift || true
 SUFFIX="${1:-current}"
 BACKUP_DIR="${2:-./backups}"
 
-# --- Load .env from current directory ---
+# --- Load .env from CWD ---
 if [ -f ".env" ]; then
   log "Loading .env"
   set -a
@@ -24,10 +24,10 @@ else
   log ".env not found; relying on env/DATABASE_URL"
 fi
 
-# --- URL decode (no python needed) ---
+# --- URL decode (no python) ---
 urldecode(){ local s="${1//+/ }"; printf '%b' "${s//%/\\x}"; }
 
-# --- Parse DATABASE_URL if present (fill missing PG* vars) ---
+# --- Parse DATABASE_URL to PG* if present ---
 if [ -n "${DATABASE_URL:-}" ]; then
   log "Parsing DATABASE_URL"
   dbu="${DATABASE_URL%\"}"; dbu="${dbu#\"}"
@@ -38,6 +38,7 @@ if [ -n "${DATABASE_URL:-}" ]; then
   if [ "$userinfo" = "$base" ]; then userinfo=""; hostpath="$base"; fi
   hostport="${hostpath%%/*}"
   dbname="${hostpath#*/}"
+
   if [ -z "${PGUSER:-}" ] && [ -n "$userinfo" ]; then
     PGUSER="$(urldecode "${userinfo%%:*}")"
     PGPASSWORD="$(urldecode "${userinfo#*:}")"
@@ -54,7 +55,7 @@ fi
 : "${PGPASSWORD:?Missing PGPASSWORD (or DATABASE_URL)}"
 : "${PGDATABASE:?Missing PGDATABASE (or DATABASE_URL)}"
 
-# --- Absolute output path (clear logs) ---
+# --- Absolute output path (clear in logs) ---
 mkdir -p "$BACKUP_DIR"
 BACKUP_DIR_ABS="$(cd "$BACKUP_DIR" && pwd -P)"
 OUTFILE="${BACKUP_DIR_ABS}/${PGDATABASE}_${SUFFIX}.sql"
@@ -65,10 +66,13 @@ MODE="local"      # local | exec | run_net | run_host
 CID=""
 DOCKER_CLIENT_HOST=""
 
-if command -v docker >/dev/null 2>&1; then
+have_docker=0
+if command -v docker >/dev/null 2>&1; then have_docker=1; fi
+
+if [ $have_docker -eq 1 ]; then
   # Prefer explicit container name if provided
   if [ -n "${POSTGRES_CONTAINER:-}" ]; then
-    if [ "$(docker inspect -f '{{.State.Running}}' "$POSTGRES_CONTAINER" 2>/dev/null || echo false)" = "true" ]; then
+    if docker inspect -f '{{.State.Running}}' "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
       CID="$POSTGRES_CONTAINER"
       log "Using specified container: $CID"
     else
@@ -78,18 +82,26 @@ if command -v docker >/dev/null 2>&1; then
 
   # Auto-detect postgres-like container (match by image OR name), prefer one publishing :PGPORT->
   if [ -z "$CID" ]; then
-    while IFS=';' read -r id name image ports; do
-      [ -z "$id" ] && continue
-      case "$image $name" in
-        *postgres*|*timescale*|*bitnami/postgres*|*pgvector* ) ;;
-        *) continue ;;
-      esac
-      if printf '%s' "$ports" | grep -E "(^|,).*:${PGPORT}->[0-9]+/tcp" >/dev/null 2>&1; then
-        CID="$id"; SEL_REASON="port"; break
-      fi
-      if [ -z "$CID" ]; then CID="$id"; SEL_REASON="first"; fi
-    done < <(docker ps --format '{{.ID}};{{.Names}};{{.Image}};{{.Ports}}')
-    [ -n "$CID" ] && log "Auto-selected container (${SEL_REASON:-first} match): $CID"
+    rows="$(docker ps --format '{{.ID}};{{.Names}};{{.Image}};{{.Ports}}' 2>/dev/null || true)"
+    SEL_REASON=""
+    if [ -n "$rows" ]; then
+      while IFS=';' read -r id name image ports; do
+        [ -z "${id:-}" ] && continue
+        case "$image $name" in
+          *postgres*|*timescale*|*bitnami/postgres*|*pgvector* ) ;;
+          *) continue ;;
+        esac
+        if printf '%s' "$ports" | grep -E "(^|,).*:${PGPORT}->[0-9]+/tcp" >/dev/null 2>&1; then
+          CID="$id"; SEL_REASON="port"; break
+        fi
+        if [ -z "$CID" ]; then CID="$id"; SEL_REASON="first"; fi
+      done <<EOF
+$rows
+EOF
+      [ -n "$CID" ] && log "Auto-selected container (${SEL_REASON:-first} match): $CID"
+    else
+      log "docker ps returned no containers"
+    fi
   fi
 
   # If chosen container has client tools, use docker exec; else ephemeral client on its network
@@ -105,7 +117,7 @@ if command -v docker >/dev/null 2>&1; then
     fi
   fi
 
-  # If no container picked and no local pg_dump, run ephemeral client against host
+  # If no container chosen and no local pg_dump, ephemeral client to host
   if [ "$MODE" = "local" ] && ! command -v pg_dump >/dev/null 2>&1; then
     MODE="run_host"
     DOCKER_CLIENT_HOST="$PGHOST"
@@ -229,7 +241,7 @@ restore_run() {
   rm -f "$tmp_err"; return 0
 }
 
-# --- Run operation ---
+# --- Run operation (always prints progress) ---
 if [ "$op" = "backup" ]; then
   echo "Backing up ${PGDATABASE} -> ${OUTFILE}"
   backup_run || exit 1

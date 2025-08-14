@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Debug logging (enable with DEBUG=1)
 DEBUG="${DEBUG:-0}"
 log(){ [ "$DEBUG" = "1" ] && echo "[DBG] $*"; }
+
 usage(){ echo "Usage: $0 <backup|restore> [suffix=current] [backup_dir=./backups]"; exit 2; }
 
 op="${1:-}"; shift || true
@@ -23,17 +25,21 @@ else
   log ".env not found; relying on env/DATABASE_URL"
 fi
 
-# --- URL decode without python (Bash 3.2 friendly) ---
-urldecode() { local s="${1//+/ }"; printf '%b' "${s//%/\\x}"; }
+# --- URL decode (Bash-only; fine for DATABASE_URL creds) ---
+urldecode() {
+  # convert + to space, then %xx to bytes
+  local s="${1//+/ }"
+  printf '%b' "${s//%/\\x}"
+}
 
 # --- Parse DATABASE_URL if present and fill missing PG* ---
 if [ -n "${DATABASE_URL:-}" ]; then
   log "Parsing DATABASE_URL"
   dbu="${DATABASE_URL%\"}"; dbu="${dbu#\"}"
   rest="${dbu#*://}"
-  base="${rest%%\?*}"
-  userinfo="${base%%@*}"
-  hostpath="${base#*@}"
+  base="${rest%%\?*}"           # strip query params
+  userinfo="${base%%@*}"        # user:pass
+  hostpath="${base#*@}"         # host:port/db
   if [ "$userinfo" = "$base" ]; then userinfo=""; hostpath="$base"; fi
   hostport="${hostpath%%/*}"
   dbname="${hostpath#*/}"
@@ -54,15 +60,16 @@ fi
 : "${PGPASSWORD:?Missing PGPASSWORD (or DATABASE_URL)}"
 : "${PGDATABASE:?Missing PGDATABASE (or DATABASE_URL)}"
 
-# --- Absolute outfile path (clear logs) ---
+# --- Absolute outfile path (clearer logs) ---
 mkdir -p "$BACKUP_DIR"
 BACKUP_DIR_ABS="$(cd "$BACKUP_DIR" && pwd -P)"
 OUTFILE="${BACKUP_DIR_ABS}/${PGDATABASE}_${SUFFIX}.sql"
 log "Absolute outfile: $OUTFILE"
 
-# --- Docker detection (robust, no `docker info`) ---
-docker_exec=""
-docker_client=""
+# --- Choose how we'll run pg_dump/psql ---
+docker_exec=""     # e.g., docker exec -i "<cid>"
+docker_client=""   # e.g., docker run --rm -i ... postgres:16
+DOCKER_CLIENT_HOST=""
 cid=""
 
 if command -v docker >/dev/null 2>&1; then
@@ -73,12 +80,13 @@ if command -v docker >/dev/null 2>&1; then
       docker_exec="docker exec -i \"$cid\""
       log "Using specified container: $cid"
     else
-      log "Specified POSTGRES_CONTAINER=$POSTGRES_CONTAINER not running; try auto-detect"
+      log "Specified POSTGRES_CONTAINER=$POSTGRES_CONTAINER not running; trying auto-detect"
     fi
   fi
 
-  # 2) Auto-detect postgres-like container; prefer published :PGPORT->
+  # 2) Auto-detect a postgres-like container, preferring a port publish match
   if [ -z "$docker_exec" ]; then
+    # Use process substitution to keep variables set in the current shell (avoid subshell)
     while IFS=$'\t' read -r id image ports; do
       [ -z "$id" ] && continue
       case "$image" in
@@ -92,39 +100,50 @@ if command -v docker >/dev/null 2>&1; then
     done < <(docker ps --format '{{.ID}}	{{.Image}}	{{.Ports}}')
     [ -n "$cid" ] && log "Auto-selected container: $cid"
   fi
+
+  # 3) If we chose a container but it lacks client tools, switch to ephemeral client on its network
+  if [ -n "$docker_exec" ]; then
+    if ! eval $docker_exec sh -lc 'command -v pg_dump >/dev/null 2>&1 && command -v psql >/dev/null 2>&1'; then
+      log "Container $cid lacks pg_dump/psql; switching to ephemeral client on its network"
+      docker_client="docker run --rm -i --network container:${cid} -e PGPASSWORD=\"$PGPASSWORD\" postgres:16"
+      DOCKER_CLIENT_HOST="127.0.0.1"
+      docker_exec=""
+    fi
+  fi
+
+  # 4) If we did not select a container and no local pg_dump, use ephemeral client against host
+  if [ -z "$docker_exec" ] && [ -z "$docker_client" ] && ! command -v pg_dump >/dev/null 2>&1; then
+    DOCKER_CLIENT_HOST="$PGHOST"
+    case "$DOCKER_CLIENT_HOST" in
+      localhost|127.0.0.1) DOCKER_CLIENT_HOST="host.docker.internal" ;;
+    esac
+    docker_client="docker run --rm -i -e PGPASSWORD=\"$PGPASSWORD\" postgres:16"
+    log "Using ephemeral docker client to reach ${DOCKER_CLIENT_HOST}:${PGPORT}"
+  fi
 fi
 
-# 3) Ephemeral docker client if no local pg_dump and no docker_exec
-if [ -z "$docker_exec" ] && ! command -v pg_dump >/dev/null 2>&1 && command -v docker >/dev/null 2>&1; then
-  DOCKER_CLIENT_HOST="$PGHOST"
-  case "$DOCKER_CLIENT_HOST" in
-    localhost|127.0.0.1) DOCKER_CLIENT_HOST="host.docker.internal" ;;
-  esac
-  docker_client="docker run --rm -i -e PGPASSWORD=\"$PGPASSWORD\" postgres:16"
-  log "Using ephemeral docker client to reach ${DOCKER_CLIENT_HOST}:${PGPORT}"
-fi
-
-# 4) If we still have no way to run pg_dump, fail with guidance
+# 5) Final guard: if we still have no way to run pg_dump, error with guidance
 if [ -z "$docker_exec" ] && [ -z "$docker_client" ] && ! command -v pg_dump >/dev/null 2>&1; then
   echo "pg_dump not found and no Docker client available." >&2
-  echo "Install Postgres client tools (e.g. brew install libpq && add bin to PATH) or set POSTGRES_CONTAINER." >&2
+  echo "Install Postgres client tools (e.g., brew install libpq; add bin to PATH) or set POSTGRES_CONTAINER." >&2
   exit 1
 fi
 
-# --- Preflight diagnostics (versions + conninfo) ---
+# --- Preflight diagnostics (only logs; no hard fail) ---
 if [ "$DEBUG" = "1" ]; then
   if [ -n "$docker_exec" ]; then
     log "Preflight: docker exec path selected: $docker_exec"
-    # shellcheck disable=SC2086
-    eval $docker_exec sh -lc "pg_dump --version || true; psql --version || true; PGPASSWORD='$PGPASSWORD' psql -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -Atqc '\conninfo' || true"
+    eval $docker_exec sh -lc 'command -v pg_dump && pg_dump --version || true'
+    eval $docker_exec sh -lc 'command -v psql && psql --version || true'
+    eval $docker_exec sh -lc "command -v psql >/dev/null && PGPASSWORD='$PGPASSWORD' psql -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -Atqc '\conninfo' || true"
   elif [ -n "$docker_client" ]; then
     log "Preflight: ephemeral docker client"
-    # shellcheck disable=SC2086
-    eval $docker_client sh -lc "pg_dump --version || true; psql --version || true; PGPASSWORD='\$PGPASSWORD' psql -h '$DOCKER_CLIENT_HOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -Atqc '\conninfo' || true"
+    eval $docker_client sh -lc 'pg_dump --version || true; psql --version || true'
+    eval $docker_client sh -lc "PGPASSWORD='\$PGPASSWORD' psql -h '$DOCKER_CLIENT_HOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -Atqc '\conninfo' || true"
   else
     log "Preflight: local binaries"
-    (pg_dump --version || true)
-    (psql --version || true)
+    (command -v pg_dump && pg_dump --version) || true
+    (command -v psql && psql --version) || true
     PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Atqc '\conninfo' || true
   fi
 fi

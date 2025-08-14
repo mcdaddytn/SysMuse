@@ -65,70 +65,76 @@ fi
 : "${PGPASSWORD:?Missing PGPASSWORD (or DATABASE_URL) in .env}"
 : "${PGDATABASE:?Missing PGDATABASE (or DATABASE_URL) in .env}"
 
+# --- Outfile: use absolute path for clarity ---
 mkdir -p "$BACKUP_DIR"
-OUTFILE="${BACKUP_DIR%/}/${PGDATABASE}_${SUFFIX}.sql"
-log "Outfile: $OUTFILE"
+BACKUP_DIR_ABS="$(cd "$BACKUP_DIR" && pwd -P)"
+OUTFILE="${BACKUP_DIR_ABS}/${PGDATABASE}_${SUFFIX}.sql"
+log "Absolute outfile: $OUTFILE"
 
-# --- Docker detection (robust, no 'docker info' needed) ---
-docker_exec=""
-cid=""
-
-# 1) If POSTGRES_CONTAINER is set, prefer it
-if [ -n "${POSTGRES_CONTAINER:-}" ] && command -v docker >/dev/null 2>&1; then
-  if [ "$(docker inspect -f '{{.State.Running}}' "$POSTGRES_CONTAINER" 2>/dev/null || true)" = "true" ]; then
-    cid="$POSTGRES_CONTAINER"
-    docker_exec="docker exec -i \"$cid\""
-    log "Using specified container: $cid"
+# --- Optional preflight when DEBUG=1 ---
+if [ "${DEBUG:-0}" = "1" ]; then
+  if [ -n "${docker_exec:-}" ]; then
+    log "Preflight: docker exec path selected: $docker_exec"
+    eval $docker_exec sh -lc "pg_dump --version || true"
+    eval $docker_exec sh -lc "psql --version || true"
+    eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' psql -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -Atqc '\conninfo' || true"
   else
-    log "Specified POSTGRES_CONTAINER=$POSTGRES_CONTAINER not running; will try auto-detect"
+    log "Preflight: local binaries"
+    (pg_dump --version || true)
+    (psql --version || true)
+    PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Atqc '\conninfo' || true
   fi
 fi
 
-# 2) Auto-detect a postgres-like container, prefer matching published port
-if [ -z "$docker_exec" ] && command -v docker >/dev/null 2>&1; then
-  while IFS=$' ' read -r id image ports; do
-    [ -z "$id" ] && continue
-    case "$image" in
-      *postgres*|*timescale*|*bitnami/postgres*) ;;
-      *) continue ;;
-    esac
-    if echo "$ports" | grep -E "(:${PGPORT}->(5432|${PGPORT})/tcp)" >/dev/null 2>&1; then
-      cid="$id"; docker_exec="docker exec -i \"$cid\""; log "Selected by port match: $cid"; break
+# --- Helper to run a command and surface stderr if empty output ---
+backup_run() {
+  local tmp_err; tmp_err="$(mktemp)"
+  if [ -n "${docker_exec:-}" ]; then
+    # shellcheck disable=SC2086
+    if ! eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' pg_dump -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' --clean --if-exists --no-owner --no-privileges" \
+        > "$OUTFILE" 2>"$tmp_err"; then
+      echo "pg_dump failed. Error:" >&2; sed -n '1,200p' "$tmp_err" >&2; rm -f "$tmp_err"; return 1
     fi
-    # fallback to first match if none publish the expected port
-    if [ -z "$cid" ]; then cid="$id"; docker_exec="docker exec -i \"$cid\""; fi
-  done < <(docker ps --format '{{.ID}} {{.Image}} {{.Ports}}')
-  [ -n "$cid" ] && log "Auto-selected container: $cid"
-fi
+  else
+    if ! PGPASSWORD="$PGPASSWORD" pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+        --clean --if-exists --no-owner --no-privileges > "$OUTFILE" 2>"$tmp_err"; then
+      echo "pg_dump failed. Error:" >&2; sed -n '1,200p' "$tmp_err" >&2; rm -f "$tmp_err"; return 1
+    fi
+  fi
+  if [ ! -s "$OUTFILE" ]; then
+    echo "Backup produced an empty file: $OUTFILE" >&2
+    if [ -s "$tmp_err" ]; then echo "pg_dump stderr:" >&2; sed -n '1,200p' "$tmp_err" >&2; fi
+    rm -f "$tmp_err"; return 1
+  fi
+  rm -f "$tmp_err"; return 0
+}
 
-# 3) If no docker and no local pg_dump, fail with guidance
-if [ -z "$docker_exec" ] && ! command -v pg_dump >/dev/null 2>&1; then
-  echo "pg_dump not found on PATH and no running postgres container detected." >&2
-  echo "Install Postgres client tools (e.g. apt install postgresql-client) or set POSTGRES_CONTAINER to a running container name." >&2
-  exit 1
-fi
+restore_run() {
+  local tmp_err; tmp_err="$(mktemp)"
+  if [ -n "${docker_exec:-}" ]; then
+    # shellcheck disable=SC2086
+    if ! cat "$OUTFILE" | eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' psql -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -v ON_ERROR_STOP=1" \
+        2>"$tmp_err"; then
+      echo "psql restore failed. Error:" >&2; sed -n '1,200p' "$tmp_err" >&2; rm -f "$tmp_err"; return 1
+    fi
+  else
+    if ! PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$OUTFILE" \
+        2>"$tmp_err"; then
+      echo "psql restore failed. Error:" >&2; sed -n '1,200p' "$tmp_err" >&2; rm -f "$tmp_err"; return 1
+    fi
+  fi
+  rm -f "$tmp_err"; return 0
+}
 
-# --- Run ops ---
+# --- Run operation ---
 if [ "$op" = "backup" ]; then
   echo "Backing up ${PGDATABASE} -> ${OUTFILE}"
-  if [ -n "$docker_exec" ]; then
-    # shellcheck disable=SC2086
-    eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' pg_dump -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' --clean --if-exists --no-owner --no-privileges" > "$OUTFILE"
-  else
-    PGPASSWORD="$PGPASSWORD" pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
-      --clean --if-exists --no-owner --no-privileges > "$OUTFILE"
-  fi
-  echo "Done."
+  backup_run || exit 1
+  echo "Done. Wrote: $OUTFILE"
   exit 0
 fi
 
-# restore
 [ -f "$OUTFILE" ] || { echo "Restore file not found: $OUTFILE" >&2; exit 1; }
 echo "Restoring ${PGDATABASE} <- ${OUTFILE}"
-if [ -n "$docker_exec" ]; then
-  # shellcheck disable=SC2086
-  cat "$OUTFILE" | eval $docker_exec sh -lc "PGPASSWORD='$PGPASSWORD' psql -h '$PGHOST' -p '$PGPORT' -U '$PGUSER' -d '$PGDATABASE' -v ON_ERROR_STOP=1"
-else
-  PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$OUTFILE"
-fi
+restore_run || exit 1
 echo "Done."

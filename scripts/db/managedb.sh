@@ -54,7 +54,7 @@ fi
 : "${PGPASSWORD:?Missing PGPASSWORD (or DATABASE_URL)}"
 : "${PGDATABASE:?Missing PGDATABASE (or DATABASE_URL)}"
 
-# --- Absolute out path (clear logs) ---
+# --- Absolute output path (clear logs) ---
 mkdir -p "$BACKUP_DIR"
 BACKUP_DIR_ABS="$(cd "$BACKUP_DIR" && pwd -P)"
 OUTFILE="${BACKUP_DIR_ABS}/${PGDATABASE}_${SUFFIX}.sql"
@@ -66,7 +66,7 @@ CID=""
 DOCKER_CLIENT_HOST=""
 
 if command -v docker >/dev/null 2>&1; then
-  # Prefer explicit container name
+  # Prefer explicit container name if provided
   if [ -n "${POSTGRES_CONTAINER:-}" ]; then
     if [ "$(docker inspect -f '{{.State.Running}}' "$POSTGRES_CONTAINER" 2>/dev/null || echo false)" = "true" ]; then
       CID="$POSTGRES_CONTAINER"
@@ -76,25 +76,26 @@ if command -v docker >/dev/null 2>&1; then
     fi
   fi
 
-  # Auto-detect postgres-like container (prefer one publishing our port)
+  # Auto-detect postgres-like container (match by image OR name), prefer one publishing :PGPORT->
   if [ -z "$CID" ]; then
-    while IFS=$'\t' read -r id image ports; do
+    while IFS=';' read -r id name image ports; do
       [ -z "$id" ] && continue
-      case "$image" in
-        *postgres*|*timescale*|*bitnami/postgres*) ;;
+      case "$image $name" in
+        *postgres*|*timescale*|*bitnami/postgres*|*pgvector* ) ;;
         *) continue ;;
       esac
-      if echo "$ports" | grep -E "(:${PGPORT}->(5432|${PGPORT})/tcp)" >/dev/null 2>&1; then
-        CID="$id"; log "Auto-selected container by port match: $CID"; break
+      if printf '%s' "$ports" | grep -E "(^|,).*:${PGPORT}->[0-9]+/tcp" >/dev/null 2>&1; then
+        CID="$id"; SEL_REASON="port"; break
       fi
-      if [ -z "$CID" ]; then CID="$id"; fi
-    done < <(docker ps --format '{{.ID}}	{{.Image}}	{{.Ports}}')
-    [ -n "$CID" ] && log "Auto-selected container: $CID"
+      if [ -z "$CID" ]; then CID="$id"; SEL_REASON="first"; fi
+    done < <(docker ps --format '{{.ID}};{{.Names}};{{.Image}};{{.Ports}}')
+    [ -n "$CID" ] && log "Auto-selected container (${SEL_REASON:-first} match): $CID"
   fi
 
+  # If chosen container has client tools, use docker exec; else ephemeral client on its network
   if [ -n "$CID" ]; then
-    # If container has client tools, use docker exec; else use ephemeral on its network
-    if docker exec -i "$CID" pg_dump --version >/dev/null 2>&1 && docker exec -i "$CID" psql --version >/dev/null 2>&1; then
+    if docker exec -i "$CID" pg_dump --version >/dev/null 2>&1 \
+       && docker exec -i "$CID" psql --version >/dev/null 2>&1; then
       MODE="exec"
       log "Container has client tools; will use docker exec"
     else
@@ -104,25 +105,25 @@ if command -v docker >/dev/null 2>&1; then
     fi
   fi
 
-  # If no container selected and no local pg_dump, run ephemeral client against host
+  # If no container picked and no local pg_dump, run ephemeral client against host
   if [ "$MODE" = "local" ] && ! command -v pg_dump >/dev/null 2>&1; then
     MODE="run_host"
     DOCKER_CLIENT_HOST="$PGHOST"
     case "$DOCKER_CLIENT_HOST" in
       localhost|127.0.0.1) DOCKER_CLIENT_HOST="host.docker.internal" ;;
     esac
-    log "No local pg_dump; will use ephemeral client to host ${DOCKER_CLIENT_HOST}:${PGPORT}"
+    log "No local pg_dump; using ephemeral client to host ${DOCKER_CLIENT_HOST}:${PGPORT}"
   fi
 fi
 
 # Final guard
 if [ "$MODE" = "local" ] && ! command -v pg_dump >/dev/null 2>&1; then
   echo "pg_dump not found and Docker not available/usable." >&2
-  echo "Install client tools (e.g. 'brew install libpq' and add bin to PATH) or run Docker." >&2
+  echo "Install client tools (e.g., brew install libpq; add bin to PATH) or run Docker." >&2
   exit 1
 fi
 
-# --- Preflight (informational) ---
+# --- Preflight (informational only) ---
 if [ "$DEBUG" = "1" ]; then
   case "$MODE" in
     exec)

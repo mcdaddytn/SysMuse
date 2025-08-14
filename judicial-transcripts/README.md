@@ -311,7 +311,11 @@ npm run seed
 #now run phase1 only on our test set
 npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json" --phase1
 
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json" --phase2
 
+
+# new script to reset Elastic Search
+npm run es:reset:sync
 
 
 Start the API (optional):

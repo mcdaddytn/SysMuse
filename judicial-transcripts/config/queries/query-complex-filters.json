@@ -1,5 +1,5 @@
 {
-  "trialName": "State v. Smith",
+  "caseNumber": "2:19-CV-00123-JRG",
   "sessionType": ["MORNING", "AFTERNOON"],
   "speakerType": ["ATTORNEY", "WITNESS"],
   "elasticSearchQueries": [

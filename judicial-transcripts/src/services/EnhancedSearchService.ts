@@ -363,7 +363,7 @@ export class EnhancedSearchService {
     const whereClause = this.buildWhereClause(filters);
     
     logger.info('SQL Filters used:\n' + JSON.stringify(filters, null, 2));
-    logger.info('Prisma WHERE clause:\n' + JSON.stringify(whereClause, null, 2));
+    logger.debug('Prisma WHERE clause:\n' + JSON.stringify(whereClause, null, 2));
     
     const statements = await this.prisma.statementEvent.findMany({
       where: whereClause,

@@ -118,7 +118,7 @@ export class ElasticSearchService {
             _name: namedQuery.name
           }
         };
-        logger.info(`Building query for ${namedQuery.name}:\n${JSON.stringify(namedQueryWrapper, null, 2)}`);
+        logger.debug(`Building query for ${namedQuery.name}:\n${JSON.stringify(namedQueryWrapper, null, 2)}`);
         should.push(namedQueryWrapper);
       }
       
@@ -141,7 +141,7 @@ export class ElasticSearchService {
         size
       };
       
-      logger.info('Elasticsearch query body:\n' + JSON.stringify(searchBody, null, 2));
+      logger.debug('Elasticsearch query body:\n' + JSON.stringify(searchBody, null, 2));
       
       const result = await this.client.search({
         index: this.indexName,

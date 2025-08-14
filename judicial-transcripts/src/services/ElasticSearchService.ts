@@ -118,7 +118,7 @@ export class ElasticSearchService {
             _name: namedQuery.name
           }
         };
-        logger.info(`Building query for ${namedQuery.name}:`, JSON.stringify(namedQueryWrapper));
+        logger.info(`Building query for ${namedQuery.name}:\n${JSON.stringify(namedQueryWrapper, null, 2)}`);
         should.push(namedQueryWrapper);
       }
       
@@ -141,12 +141,15 @@ export class ElasticSearchService {
         size
       };
       
-      logger.info('Elasticsearch query body:', JSON.stringify(searchBody, null, 2));
+      logger.info('Elasticsearch query body:\n' + JSON.stringify(searchBody, null, 2));
       
       const result = await this.client.search({
         index: this.indexName,
         body: searchBody
       });
+      
+      const totalHits = typeof result.hits.total === 'object' ? result.hits.total.value : result.hits.total;
+      logger.info(`Elasticsearch query returned ${totalHits} total hits`);
       
       const resultMap = new Map<string, ElasticSearchResult[]>();
       
@@ -166,6 +169,10 @@ export class ElasticSearchService {
           }
           resultMap.get(queryName)!.push(elasticResult);
         }
+      }
+      
+      for (const [queryName, results] of resultMap.entries()) {
+        logger.info(`Query '${queryName}' matched ${results.length} documents`);
       }
       
       return resultMap;

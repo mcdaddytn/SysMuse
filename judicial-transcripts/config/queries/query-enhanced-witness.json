@@ -1,9 +1,9 @@
 {
   "caseNumber": "2:19-CV-00123-JRG",
   "speakerType": "WITNESS",
-  "speakerPrefix": [
-    "ALAN RATLIFF",
-    "JOSEPH C. MCALEXANDER, III"
+  "speakerHandle": [
+    "WITNESS_JOSEPH_C__MCALEXANDER__III",
+    "WITNESS_QI_PETER_LI"
   ],
   "maxResults": 50,
   "surroundingStatements": 1,

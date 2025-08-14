@@ -1,19 +1,16 @@
 {
   "caseNumber": "2:19-CV-00123-JRG",
-  "sessionDate": [
-    "2020-10-01",
-    "2020-10-07"
-  ],
-  "sessionType": [
-    "MORNING",
-    "AFTERNOON"
-  ],
-  "speakerType": [
-    "ATTORNEY",
-    "WITNESS"
-  ],
+  "speakerType": "ATTORNEY",
   "speakerPrefix": [
     "MR. FABRICANT",
     "MR. LAMBRIANAKOS"
-  ]
+  ],
+  "elasticSearchQueries": [
+    {
+      "name": "objection",
+      "query": "objection",
+      "type": "match"
+    }
+  ],
+  "maxResults": 20
 }

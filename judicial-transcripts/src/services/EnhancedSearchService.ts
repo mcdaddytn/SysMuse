@@ -11,6 +11,7 @@ export interface EnhancedSqlFilters {
   sessionType?: string | string[];
   speakerType?: string | string[];
   speakerPrefix?: string | string[];
+  speakerHandle?: string | string[];
 }
 
 export interface EnhancedSearchInput {
@@ -20,6 +21,7 @@ export interface EnhancedSearchInput {
   sessionType?: string | string[];
   speakerType?: string | string[];
   speakerPrefix?: string | string[];
+  speakerHandle?: string | string[];
   elasticSearchQueries?: ElasticSearchQuery[];
   maxResults?: number;
   surroundingStatements?: number;
@@ -350,11 +352,18 @@ export class EnhancedSearchService {
       filters.speakerPrefix = input.speakerPrefix;
     }
     
+    if (input.speakerHandle) {
+      filters.speakerHandle = input.speakerHandle;
+    }
+    
     return filters;
   }
   
   private async queryStatements(filters: EnhancedSqlFilters): Promise<any[]> {
     const whereClause = this.buildWhereClause(filters);
+    
+    logger.info('SQL Filters used:\n' + JSON.stringify(filters, null, 2));
+    logger.info('Prisma WHERE clause:\n' + JSON.stringify(whereClause, null, 2));
     
     const statements = await this.prisma.statementEvent.findMany({
       where: whereClause,
@@ -368,6 +377,8 @@ export class EnhancedSearchService {
         speaker: true
       }
     });
+    
+    logger.info(`SQL query returned ${statements.length} statement records from database`);
     
     return statements.map(statement => ({
       statementEventId: statement.id,
@@ -485,7 +496,7 @@ export class EnhancedSearchService {
       }
     }
     
-    if (filters.speakerType || filters.speakerPrefix) {
+    if (filters.speakerType || filters.speakerPrefix || filters.speakerHandle) {
       where.speaker = {};
       
       if (filters.speakerType) {
@@ -501,6 +512,14 @@ export class EnhancedSearchService {
           where.speaker.speakerPrefix = { in: filters.speakerPrefix };
         } else {
           where.speaker.speakerPrefix = filters.speakerPrefix;
+        }
+      }
+      
+      if (filters.speakerHandle) {
+        if (Array.isArray(filters.speakerHandle)) {
+          where.speaker.speakerHandle = { in: filters.speakerHandle };
+        } else {
+          where.speaker.speakerHandle = filters.speakerHandle;
         }
       }
     }

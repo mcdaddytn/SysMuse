@@ -1,6 +1,18 @@
 {
   "caseNumber": "2:19-CV-00123-JRG",
-  "sessionDate": ["2024-01-15", "2024-01-16"],
   "sessionType": "MORNING",
-  "speakerType": "JUDGE"
+  "speakerType": "JUDGE",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    },
+    {
+      "name": "overruled",
+      "query": "overruled",
+      "type": "match"
+    }
+  ],
+  "maxResults": 20
 }

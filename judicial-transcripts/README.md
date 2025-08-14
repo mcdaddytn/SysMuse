@@ -303,6 +303,12 @@ npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-win.j
 # mac version
 npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json"
 
+# new script to reset Elastic Search with sync
+#npm run es:reset:sync
+
+# new script to reset Elastic Search without sync
+npm run es:reset
+
 #test for phase 1
 #first reset database
 npx prisma db push --force-reset
@@ -310,12 +316,23 @@ npx prisma db push --force-reset
 npm run seed
 #now run phase1 only on our test set
 npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json" --phase1
-
 npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-mac.json" --phase2
 
+** OR **
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-win.json" --phase1
+npx ts-node src/cli/parse.ts parse --config "./config/example-trial-config-win.json" --phase2
 
-# new script to reset Elastic Search
-npm run es:reset:sync
+
+npm run run-all-queries
+
+
+# backup commands (mac)
+../scripts/db/backupdb.sh phase2
+../scripts/db/restoredb.sh phase2
+
+# backup commands (win)
+..\scripts\db\backupdb.bat phase2
+..\scripts\db\restoredb.bat phase3
 
 
 Start the API (optional):

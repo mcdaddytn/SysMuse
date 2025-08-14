@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Robust managedb.sh (macOS/Linux, Bash 3.2+)
 
-# Debug: set DEBUG=1 to see extra logs
+set -u
+set -o pipefail
+
 DEBUG="${DEBUG:-0}"
 log(){ [ "$DEBUG" = "1" ] && echo "[DBG] $*"; }
 usage(){ echo "Usage: $0 <backup|restore> [suffix=current] [backup_dir=./backups]"; exit 2; }
@@ -13,18 +15,18 @@ op="${1:-}"; shift || true
 SUFFIX="${1:-current}"
 BACKUP_DIR="${2:-./backups}"
 
-# --- Load .env from current dir ---
+# --- Load .env from CWD ---
 if [ -f ".env" ]; then
   log "Loading .env"
-  set -a
+  set +u; set -a
   # shellcheck disable=SC1091
   . ./.env
-  set +a
+  set +a; set -u
 else
   log ".env not found; relying on env/DATABASE_URL"
 fi
 
-# --- URL decode (Bash-only) ---
+# --- URL decode (bash-only) ---
 urldecode(){ local s="${1//+/ }"; printf '%b' "${s//%/\\x}"; }
 
 # --- Parse DATABASE_URL (fill PG* if missing) ---
@@ -35,6 +37,7 @@ if [ -n "${DATABASE_URL:-}" ]; then
   userinfo="${base%%@*}"; hostpath="${base#*@}"
   if [ "$userinfo" = "$base" ]; then userinfo=""; hostpath="$base"; fi
   hostport="${hostpath%%/*}"; dbname="${hostpath#*/}"
+
   if [ -z "${PGUSER:-}" ] && [ -n "$userinfo" ]; then
     PGUSER="$(urldecode "${userinfo%%:*}")"
     PGPASSWORD="$(urldecode "${userinfo#*:}")"
@@ -51,24 +54,21 @@ fi
 : "${PGPASSWORD:?Missing PGPASSWORD (or DATABASE_URL)}"
 : "${PGDATABASE:?Missing PGDATABASE (or DATABASE_URL)}"
 
-# --- Absolute output path (for clarity) ---
+# --- Absolute output path ---
 mkdir -p "$BACKUP_DIR"
 BACKUP_DIR_ABS="$(cd "$BACKUP_DIR" && pwd -P)"
 OUTFILE="${BACKUP_DIR_ABS}/${PGDATABASE}_${SUFFIX}.sql"
 log "Absolute outfile: $OUTFILE"
 
 # --- Decide how to run pg_dump/psql ---
-MODE="local"           # one of: local | exec | run_net | run_host
+MODE="local"      # local | exec | run_net | run_host
 CID=""
 DOCKER_CLIENT_HOST=""
 have_docker=0
 if command -v docker >/dev/null 2>&1; then have_docker=1; fi
 
-# Run discovery non-fatally to avoid silent exits
-set +e
-
 if [ $have_docker -eq 1 ]; then
-  # 1) Prefer explicit container name if provided and running
+  # Prefer explicit container name
   if [ -n "${POSTGRES_CONTAINER:-}" ]; then
     if docker inspect -f '{{.State.Running}}' "$POSTGRES_CONTAINER" >/dev/null 2>&1; then
       CID="$POSTGRES_CONTAINER"
@@ -78,9 +78,9 @@ if [ $have_docker -eq 1 ]; then
     fi
   fi
 
-  # 2) Auto-detect a postgres-like container (match by name/image); prefer one publishing :PGPORT->
+  # Auto-detect postgres-like container; prefer one publishing :PGPORT->
   if [ -z "$CID" ]; then
-    rows="$(docker ps --format '{{.ID}};{{.Names}};{{.Image}};{{.Ports}}' 2>/dev/null)"
+    rows="$(docker ps --format '{{.ID}};{{.Names}};{{.Image}};{{.Ports}}' 2>/dev/null || true)"
     SEL_REASON=""
     if [ -n "$rows" ]; then
       while IFS=';' read -r id name image ports; do
@@ -89,25 +89,21 @@ if [ $have_docker -eq 1 ]; then
           *postgres*|*timescale*|*bitnami/postgres*|*pgvector* ) ;;
           *) continue ;;
         esac
-        # prefer container that publishes our PGPORT
         if printf '%s' "$ports" | grep -E "(^|,).*:${PGPORT}->[0-9]+/tcp" >/dev/null 2>&1; then
           CID="$id"; SEL_REASON="port"; break
         fi
-        # fallback: first postgres-like
         if [ -z "$CID" ]; then CID="$id"; SEL_REASON="first"; fi
       done <<EOF
 $rows
 EOF
       [ -n "$CID" ] && log "Auto-selected container (${SEL_REASON:-first} match): $CID"
-    else
-      log "No running containers found"
     fi
   fi
 
-  # 3) If a container is chosen: try exec if tools exist; else ephemeral client on its network
+  # Choose exec vs ephemeral client
   if [ -n "$CID" ]; then
     if docker exec -i "$CID" pg_dump --version >/dev/null 2>&1 && \
-       docker exec -i "$CID" psql --version  >/dev/null 2>&1; then
+       docker exec -i "$CID" psql   --version >/dev/null 2>&1; then
       MODE="exec"
       log "Container has client tools; will use docker exec"
     else
@@ -115,10 +111,7 @@ EOF
       DOCKER_CLIENT_HOST="127.0.0.1"
       log "Container lacks client tools; will use ephemeral client on container network"
     fi
-  fi
-
-  # 4) If no container chosen and no local pg_dump, use ephemeral client to host
-  if [ "$MODE" = "local" ] && ! command -v pg_dump >/dev/null 2>&1; then
+  elif ! command -v pg_dump >/dev/null 2>&1; then
     MODE="run_host"
     DOCKER_CLIENT_HOST="$PGHOST"
     case "$DOCKER_CLIENT_HOST" in
@@ -128,50 +121,22 @@ EOF
   fi
 fi
 
-set -e  # re-enable strict mode for the actual work
-
-# Final guard if still no way to run pg_dump
+# Final guard if truly nothing available
 if [ "$MODE" = "local" ] && ! command -v pg_dump >/dev/null 2>&1; then
   echo "pg_dump not found and Docker not available/usable." >&2
   echo "Install client tools (e.g., brew install libpq; add its bin to PATH) or run Docker." >&2
   exit 1
 fi
 
-# --- Preflight (only when DEBUG=1) ---
-if [ "$DEBUG" = "1" ]; then
-  case "$MODE" in
-    exec)
-      log "Preflight (exec):"
-      docker exec -i "$CID" pg_dump --version || true
-      docker exec -i "$CID" psql --version || true
-      docker exec -i "$CID" env PGPASSWORD="$PGPASSWORD" \
-        psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Atqc '\conninfo' || true
-      ;;
-    run_net)
-      log "Preflight (ephemeral on container network):"
-      docker run --rm -i --network "container:${CID}" postgres:16 pg_dump --version || true
-      docker run --rm -i --network "container:${CID}" postgres:16 psql --version || true
-      docker run --rm -i --network "container:${CID}" -e PGPASSWORD="$PGPASSWORD" postgres:16 \
-        psql -h "$DOCKER_CLIENT_HOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Atqc '\conninfo' || true
-      ;;
-    run_host)
-      log "Preflight (ephemeral to host):"
-      docker run --rm -i postgres:16 pg_dump --version || true
-      docker run --rm -i postgres:16 psql --version || true
-      docker run --rm -i -e PGPASSWORD="$PGPASSWORD" postgres:16 \
-        psql -h "$DOCKER_CLIENT_HOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Atqc '\conninfo' || true
-      ;;
-    local)
-      log "Preflight (local):"
-      (pg_dump --version || true)
-      (psql --version || true)
-      PGPASSWORD="$PGPASSWORD" \
-        psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -Atqc '\conninfo' || true
-      ;;
-  esac
-fi
+# --- Print a one-line plan (always visible) ---
+case "$MODE" in
+  exec)     echo "Plan: docker exec into container ${CID}" ;;
+  run_net)  echo "Plan: ephemeral postgres:16 client on network of ${CID}" ;;
+  run_host) echo "Plan: ephemeral postgres:16 client to ${DOCKER_CLIENT_HOST}:${PGPORT}" ;;
+  local)    echo "Plan: local pg_dump/psql" ;;
+esac
 
-# --- Helpers: capture stderr and fail on empty file ---
+# --- Helpers that capture stderr and fail on empty file ---
 backup_run() {
   local tmp_err; tmp_err="$(mktemp)"
   case "$MODE" in
@@ -226,22 +191,23 @@ restore_run() {
         echo "psql restore failed. Error:" >&2; sed -n '1,200p' "$tmp_err" >&2; rm -f "$tmp_err"; return 1; fi
       ;;
     local)
-      if ! PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 -f "$OUTFILE" 2>"$tmp_err"; then
+      if ! PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+           -v ON_ERROR_STOP=1 -f "$OUTFILE" 2>"$tmp_err"; then
         echo "psql restore failed. Error:" >&2; sed -n '1,200p' "$tmp_err" >&2; rm -f "$tmp_err"; return 1; fi
       ;;
   esac
   rm -f "$tmp_err"; return 0
 }
 
-# --- Always print user-visible progress (independent of DEBUG) ---
+# --- Run operation (always prints progress) ---
 if [ "$op" = "backup" ]; then
   echo "Backing up ${PGDATABASE} -> ${OUTFILE}"
-  backup_run || exit 1
+  if ! backup_run; then exit 1; fi
   echo "Done. Wrote: $OUTFILE"
   exit 0
 fi
 
 [ -f "$OUTFILE" ] || { echo "Restore file not found: $OUTFILE" >&2; exit 1; }
 echo "Restoring ${PGDATABASE} <- ${OUTFILE}"
-restore_run || exit 1
+if ! restore_run; then exit 1; fi
 echo "Done."

@@ -478,11 +478,6 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    // Skip witness/examination detection for non-testimony sessions
-    const nonTestimonyTypes = ['JURY_VERDICT', 'JURY_INSTRUCTIONS', 'OPENING_STATEMENTS', 'CLOSING_ARGUMENTS'];
-    if (this.context.currentSession && nonTestimonyTypes.includes(this.context.currentSession.sessionType)) {
-      return false;
-    }
     // Skip if this line contains EXAMINATION or DEPOSITION
     // These are handled by checkExaminationChange
     if (lineText.includes('EXAMINATION') || lineText.includes('DEPOSITION')) {
@@ -675,12 +670,6 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    // Skip witness/examination detection for non-testimony sessions
-    const nonTestimonyTypes = ['JURY_VERDICT', 'JURY_INSTRUCTIONS', 'OPENING_STATEMENTS', 'CLOSING_ARGUMENTS'];
-    if (this.context.currentSession && nonTestimonyTypes.includes(this.context.currentSession.sessionType)) {
-      return false;
-    }
-    
     // Simple string matching for examination types
     const trimmed = lineText.trim();
     

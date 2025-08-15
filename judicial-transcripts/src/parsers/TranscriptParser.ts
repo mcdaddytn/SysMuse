@@ -83,7 +83,54 @@ export class TranscriptParser {
     try {
       // Get all text files in directory
       const files = await fs.readdir(this.config.inputDir);
-      const textFiles = files.filter(f => f.endsWith('.txt')).sort();
+      const textFiles = files.filter(f => f.endsWith('.txt'));
+      
+      // Custom sort to ensure Morning comes before Afternoon for each date
+      textFiles.sort((a, b) => {
+        // Extract date and session type from filename
+        // Files have format: "... held on 10_1_20 (Trial Transcript - Morning ..."
+        const getDateAndType = (filename: string) => {
+          // Extract date from "held on MM_DD_YY" pattern
+          const dateMatch = filename.match(/held on (\d+)_(\d+)_(\d+)/);
+          let date = '';
+          if (dateMatch) {
+            const month = dateMatch[1].padStart(2, '0');
+            const day = dateMatch[2].padStart(2, '0');
+            const year = '20' + dateMatch[3]; // Assuming 20xx
+            date = `${year}-${month}-${day}`;
+          }
+          
+          // Extract session type (Morning, Afternoon, Bench Trial, etc.)
+          let sessionType = '';
+          const lowerFile = filename.toLowerCase();
+          if (lowerFile.includes('morning')) {
+            sessionType = '1_morning';  // 1 prefix ensures it sorts first
+          } else if (lowerFile.includes('afternoon')) {
+            sessionType = '2_afternoon'; // 2 prefix ensures it sorts second
+          } else if (lowerFile.includes('bench')) {
+            sessionType = '3_bench';     // 3 prefix ensures bench trials come last
+          } else if (lowerFile.includes('verdict')) {
+            sessionType = '4_verdict';   // 4 prefix for verdict
+          } else {
+            sessionType = '5_other';     // 5 prefix for any other type
+          }
+          
+          return { date, sessionType, filename };
+        };
+        
+        const aInfo = getDateAndType(a);
+        const bInfo = getDateAndType(b);
+        
+        // First sort by date
+        if (aInfo.date !== bInfo.date) {
+          return aInfo.date.localeCompare(bInfo.date);
+        }
+        
+        // Then by session type (morning before afternoon before bench)
+        return aInfo.sessionType.localeCompare(bInfo.sessionType);
+      });
+      
+      logger.info(`Files will be processed in order: ${textFiles.join(', ')}`);
       
       if (textFiles.length === 0) {
         logger.warn('No text files found in directory');
@@ -352,6 +399,37 @@ export class TranscriptParser {
     logger.info(`File processing completed: ${fileName}`);
     logger.info(`  Total lines processed: ${sessionLineNumber}`);
     logger.info(`  Pages created: ${pageNumber}`);
+    
+    // Count EXAMINATION and DEPOSITION strings for debugging
+    if (session) {
+      const examLines = await this.prisma.line.count({
+        where: {
+          pageId: {
+            in: await this.prisma.page.findMany({
+              where: { sessionId: session.id },
+              select: { id: true }
+            }).then(pages => pages.map(p => p.id))
+          },
+          text: { contains: 'EXAMINATION' }
+        }
+      });
+      
+      const depLines = await this.prisma.line.count({
+        where: {
+          pageId: {
+            in: await this.prisma.page.findMany({
+              where: { sessionId: session.id },
+              select: { id: true }
+            }).then(pages => pages.map(p => p.id))
+          },
+          text: { contains: 'DEPOSITION' }
+        }
+      });
+      
+      logger.info(`  EXAMINATION occurrences in this session: ${examLines}`);
+      logger.info(`  DEPOSITION occurrences in this session: ${depLines}`);
+      logger.info(`  Total EXAMINATION/DEPOSITION lines: ${examLines + depLines}`);
+    }
   }
 
   /**

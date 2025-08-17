@@ -1,6 +1,4 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerPrefix": "THE COURT",
   "elasticSearchQueries": [
     {
       "name": "rephrase_question",
@@ -46,5 +44,9 @@
       "query": "overruled",
       "type": "term"
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerPrefix": "THE COURT"
+  }
 }

@@ -1,5 +1,4 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
   "elasticSearchQueries": [
     {
       "name": "sustained_objection",
@@ -18,5 +17,8 @@
       "query": "hearsay",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  }
 }

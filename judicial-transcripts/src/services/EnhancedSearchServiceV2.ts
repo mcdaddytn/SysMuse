@@ -200,18 +200,19 @@ export class EnhancedSearchServiceV2 {
       statements.forEach(stmt => matchedStatementIds.add(stmt.statementEventId));
     }
     
-    let finalStatements = statements;
-    
+    // First apply maxResults to limit matched statements
     if (input.maxResults && matchedStatementIds.size > input.maxResults) {
       const limitedIds = Array.from(matchedStatementIds).slice(0, input.maxResults);
       matchedStatementIds = new Set(limitedIds);
-      finalStatements = statements.filter(stmt => matchedStatementIds.has(stmt.statementEventId));
     }
     
-    // Apply surrounding events
+    // Filter statements to only matched ones
+    let finalStatements = statements.filter(stmt => matchedStatementIds.has(stmt.statementEventId));
+    
+    // Apply surrounding events - this may add more statements
     if (input.surroundingEvents || input.precedingEvents || input.followingEvents) {
       finalStatements = await this.addSurroundingStatements(
-        finalStatements,
+        statements, // Pass all statements for context lookup
         matchedStatementIds,
         input
       );
@@ -369,7 +370,7 @@ export class EnhancedSearchServiceV2 {
   }
   
   private async addSurroundingStatements(
-    statements: any[],
+    allStatements: any[],
     matchedIds: Set<number>,
     input: EnhancedSearchInput
   ): Promise<any[]> {
@@ -377,7 +378,7 @@ export class EnhancedSearchServiceV2 {
     const sessionGroups = new Map<number, number[]>();
     
     // Group statements by session
-    for (const stmt of statements) {
+    for (const stmt of allStatements) {
       if (stmt.sessionId) {
         if (!sessionGroups.has(stmt.sessionId)) {
           sessionGroups.set(stmt.sessionId, []);
@@ -428,12 +429,19 @@ export class EnhancedSearchServiceV2 {
       }
     }
     
-    // Get all required statements
-    if (allStatementIds.size > statements.length) {
-      return await this.getStatementsByIds(Array.from(allStatementIds));
+    // Get all required statements (matched + surrounding)
+    if (allStatementIds.size > 0) {
+      const expandedStatements = await this.getStatementsByIds(Array.from(allStatementIds));
+      // Sort by session and line number to maintain order
+      return expandedStatements.sort((a, b) => {
+        if (a.sessionId !== b.sessionId) {
+          return (a.sessionId || 0) - (b.sessionId || 0);
+        }
+        return (a.startLineNumber || 0) - (b.startLineNumber || 0);
+      });
     }
     
-    return statements;
+    return [];
   }
   
   private async getSessionStatements(sessionId: number): Promise<any[]> {

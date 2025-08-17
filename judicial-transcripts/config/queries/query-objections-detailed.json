@@ -1,10 +1,5 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerType": "ATTORNEY",
   "maxResults": 50,
-  "surroundingStatements": 5,
-  "outputFileNameTemplate": "objections-detailed-{Speaker.speakerPrefix}.txt",
-  "outputFileTemplate": "interchange-context.txt",
   "elasticSearchQueries": [
     {
       "name": "objection_simple",
@@ -23,5 +18,12 @@
       "type": "match_phrase",
       "proximity": 3
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "ATTORNEY"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "objections-detailed-{Speaker.speakerPrefix}.txt",
+  "fileTemplate": "interchange-context.txt"
 }

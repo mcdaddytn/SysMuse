@@ -1,10 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "maxResults": 15,
-  "surroundingStatements": 3,
-  "outputFileNameTemplate": "court-directives-{Session.sessionType}.txt",
-  "outputFileTemplate": "judge-statements.txt",
   "resultSeparator": "\n\n###\n\n",
   "elasticSearchQueries": [
     {
@@ -23,5 +18,12 @@
       "query": "for the record",
       "type": "match_phrase"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 3,
+  "fileNameTemplate": "court-directives-{Session.sessionType}.txt",
+  "fileTemplate": "judge-statements.txt"
 }

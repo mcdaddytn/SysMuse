@@ -1,9 +1,5 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
   "maxResults": 30,
-  "surroundingStatements": 3,
-  "outputFileNameTemplate": "strike-motions.txt",
-  "outputFileTemplate": "minimal-metadata.txt",
   "elasticSearchQueries": [
     {
       "name": "move_to_strike",
@@ -20,5 +16,11 @@
       "query": "strike testimony",
       "type": "match_phrase"
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS."
+  },
+  "surroundingEvents": 3,
+  "fileNameTemplate": "strike-motions.txt",
+  "fileTemplate": "minimal-metadata.txt"
 }

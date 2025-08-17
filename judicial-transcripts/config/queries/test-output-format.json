@@ -1,6 +1,4 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "elasticSearchQueries": [
     {
       "name": "sustained",
@@ -14,8 +12,12 @@
     }
   ],
   "maxResults": 10,
-  "surroundingStatements": 2,
   "outputFormat": "MATCHED",
-  "outputFileNameTemplate": "test-output-format.txt",
-  "outputFileTemplate": "Query: {{queryUsed}}\nTotal Statements: {{totalStatements}}\nMatched Statements: {{matchedStatements}}\n\n{{#each trials}}\nTrial: {{trialName}}\n{{#each sessions}}\nSession: {{sessionType}} ({{sessionDate}})\n{{#each statements}}\n[{{speaker.speakerType}}]: {{text}}\n{{/each}}\n{{/each}}\n{{/each}}"
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 2,
+  "fileNameTemplate": "test-output-format.txt",
+  "fileTemplate": "Query: {{queryUsed}}\nTotal Statements: {{totalStatements}}\nMatched Statements: {{matchedStatements}}\n\n{{#each trials}}\nTrial: {{trialName}}\n{{#each sessions}}\nSession: {{sessionType}} ({{sessionDate}})\n{{#each statements}}\n[{{speaker.speakerType}}]: {{text}}\n{{/each}}\n{{/each}}\n{{/each}}"
 }

@@ -1,6 +1,4 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerType": "WITNESS",
   "elasticSearchQueries": [
     {
       "name": "yes_response",
@@ -29,5 +27,9 @@
       "type": "match_phrase",
       "proximity": 3
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "WITNESS"
+  }
 }

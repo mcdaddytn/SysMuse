@@ -1,5 +1,4 @@
 {
-  "speakerType": "JUDGE",
   "elasticSearchQueries": [
     {
       "name": "sustained",
@@ -8,7 +7,10 @@
     }
   ],
   "maxResults": 5,
-  "surroundingStatements": 1,
   "outputFormat": "MATCHED",
-  "outputFileNameTemplate": "test-matched-only.txt"
+  "queryParams": {
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 1,
+  "fileNameTemplate": "test-matched-only.txt"
 }

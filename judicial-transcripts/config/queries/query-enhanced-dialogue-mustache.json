@@ -1,6 +1,4 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "maxResults": 10,
   "surroundingEvents": 5,
   "fileNameTemplate": "courtroom-dialogue-{{caseHandle}}.txt",
@@ -18,5 +16,9 @@
       "query": "overruled",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  }
 }

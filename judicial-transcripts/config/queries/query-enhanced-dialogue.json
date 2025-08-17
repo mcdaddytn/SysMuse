@@ -1,10 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "maxResults": 10,
-  "surroundingStatements": 5,
-  "outputFileNameTemplate": "courtroom-dialogue-{caseHandle}.txt",
-  "outputFileTemplate": "courtroom-dialogue.txt",
   "resultSeparator": "\n\n================ NEXT RULING ================\n\n",
   "elasticSearchQueries": [
     {
@@ -17,5 +12,12 @@
       "query": "overruled",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "courtroom-dialogue-{caseHandle}.txt",
+  "fileTemplate": "courtroom-dialogue.txt"
 }

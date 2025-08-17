@@ -1,9 +1,5 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
   "maxResults": 25,
-  "surroundingStatements": 7,
-  "outputFileNameTemplate": "approach-bench-dialogues.txt",
-  "outputFileTemplate": "interchange-context.txt",
   "elasticSearchQueries": [
     {
       "name": "approach_bench",
@@ -20,5 +16,11 @@
       "query": "sidebar",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS."
+  },
+  "surroundingEvents": 7,
+  "fileNameTemplate": "approach-bench-dialogues.txt",
+  "fileTemplate": "interchange-context.txt"
 }

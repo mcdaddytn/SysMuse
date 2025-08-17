@@ -1,6 +1,4 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerType": "JUDGE",
   "elasticSearchQueries": [
     {
       "name": "objection_sustained",
@@ -30,5 +28,9 @@
       "query": "the record",
       "type": "match_phrase"
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "JUDGE"
+  }
 }

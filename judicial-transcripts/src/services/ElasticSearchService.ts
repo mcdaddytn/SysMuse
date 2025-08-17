@@ -195,7 +195,9 @@ export class ElasticSearchService {
         }
       ];
       
-      const results = await this.searchWithNamedQueries(namedQueries, filters, statementIds.length);
+      // Limit to 10000 to avoid Elasticsearch window limit
+      const maxSize = Math.min(statementIds.length, 10000);
+      const results = await this.searchWithNamedQueries(namedQueries, filters, maxSize);
       
       const matchMap = new Map<string, Set<string>>();
       

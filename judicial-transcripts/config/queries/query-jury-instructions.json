@@ -1,10 +1,5 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerType": "JUDGE",
   "maxResults": 20,
-  "surroundingStatements": 2,
-  "outputFileNameTemplate": "jury-instructions.txt",
-  "outputFileTemplate": "judge-with-context.txt",
   "elasticSearchQueries": [
     {
       "name": "jury_instructions",
@@ -26,5 +21,12 @@
       "query": "ladies and gentlemen of the jury",
       "type": "match_phrase"
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 2,
+  "fileNameTemplate": "jury-instructions.txt",
+  "fileTemplate": "judge-with-context.txt"
 }

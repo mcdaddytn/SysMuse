@@ -1,7 +1,4 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "sessionType": "MORNING",
-  "speakerType": "JUDGE",
   "elasticSearchQueries": [
     {
       "name": "sustained",
@@ -14,5 +11,10 @@
       "type": "match"
     }
   ],
-  "maxResults": 20
+  "maxResults": 20,
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "sessionType": "MORNING",
+    "speakerType": "JUDGE"
+  }
 }

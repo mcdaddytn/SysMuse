@@ -1,5 +1,4 @@
 {
-  "speakerType": "WITNESS",
   "elasticSearchQueries": [
     {
       "name": "expert_opinion",
@@ -17,5 +16,8 @@
       "query": "methodology OR method OR procedure",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "speakerType": "WITNESS"
+  }
 }

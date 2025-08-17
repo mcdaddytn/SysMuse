@@ -1,7 +1,4 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "sessionType": ["MORNING", "AFTERNOON"],
-  "speakerType": ["ATTORNEY", "WITNESS"],
   "elasticSearchQueries": [
     {
       "name": "exhibit_discussion",
@@ -18,5 +15,16 @@
       "query": "street OR avenue OR road OR highway",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "sessionType": [
+      "MORNING",
+      "AFTERNOON"
+    ],
+    "speakerType": [
+      "ATTORNEY",
+      "WITNESS"
+    ]
+  }
 }

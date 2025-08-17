@@ -1,9 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
   "maxResults": 10,
-  "surroundingStatements": 5,
-  "outputFileNameTemplate": "judge-rulings-with-context-{caseHandle}.txt",
-  "outputFileTemplate": "judge-with-context.txt",
   "resultSeparator": "\n\n========== RULING EXCHANGE ==========\n\n",
   "elasticSearchQueries": [
     {
@@ -18,5 +14,11 @@
       "type": "match",
       "field": "text"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "judge-rulings-with-context-{caseHandle}.txt",
+  "fileTemplate": "judge-with-context.txt"
 }

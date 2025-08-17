@@ -1,10 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "maxResults": 10,
-  "surroundingStatements": 5,
-  "outputFileNameTemplate": "judge-with-context-{caseHandle}.txt",
-  "outputFileTemplate": "judge-with-context.txt",
   "resultSeparator": "\n====== EXCHANGE ======\n",
   "elasticSearchQueries": [
     {
@@ -17,5 +12,12 @@
       "query": "overruled",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "judge-with-context-{caseHandle}.txt",
+  "fileTemplate": "judge-with-context.txt"
 }

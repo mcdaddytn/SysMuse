@@ -1,14 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "WITNESS",
-  "speakerHandle": [
-    "WITNESS_JOSEPH_C__MCALEXANDER__III",
-    "WITNESS_QI_PETER_LI"
-  ],
   "maxResults": 50,
-  "surroundingStatements": 1,
-  "outputFileNameTemplate": "witness-{Speaker.speakerPrefix}-testimony.txt",
-  "outputFileTemplate": "witness-testimony.txt",
   "resultSeparator": "\n\n=========\n\n",
   "elasticSearchQueries": [
     {
@@ -16,5 +7,16 @@
       "query": "yes no",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "WITNESS",
+    "speakerHandle": [
+      "WITNESS_JOSEPH_C__MCALEXANDER__III",
+      "WITNESS_QI_PETER_LI"
+    ]
+  },
+  "surroundingEvents": 1,
+  "fileNameTemplate": "witness-{Speaker.speakerPrefix}-testimony.txt",
+  "fileTemplate": "witness-testimony.txt"
 }

@@ -1,5 +1,4 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
   "elasticSearchQueries": [
     {
       "name": "move_to_strike",
@@ -32,5 +31,8 @@
       "type": "match_phrase",
       "proximity": 3
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS."
+  }
 }

@@ -1,10 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "maxResults": 20,
-  "surroundingStatements": 5,
-  "outputFileNameTemplate": "sustained-rulings-context.txt",
-  "outputFileTemplate": "interchange-context.txt",
   "resultSeparator": "\n\n========== RULING SEQUENCE ==========\n\n",
   "elasticSearchQueries": [
     {
@@ -12,5 +7,12 @@
       "query": "sustained",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "sustained-rulings-context.txt",
+  "fileTemplate": "interchange-context.txt"
 }

@@ -1,9 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
   "maxResults": 30,
-  "surroundingStatements": 2,
-  "outputFileNameTemplate": "all-objections-{caseHandle}-{runTimeStamp}.txt",
-  "outputFileTemplate": "objection-context.txt",
   "resultSeparator": "\n\n========================================\n\n",
   "elasticSearchQueries": [
     {
@@ -26,5 +22,11 @@
       "query": "strike",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  },
+  "surroundingEvents": 2,
+  "fileNameTemplate": "all-objections-{caseHandle}-{runTimeStamp}.txt",
+  "fileTemplate": "objection-context.txt"
 }

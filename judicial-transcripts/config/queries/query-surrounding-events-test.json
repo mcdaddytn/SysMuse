@@ -1,6 +1,4 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerType": "JUDGE",
   "precedingEvents": 3,
   "followingEvents": 2,
   "surroundingEventUnit": "EventCount",
@@ -15,5 +13,9 @@
       "type": "match"
     }
   ],
-  "maxResults": 5
+  "maxResults": 5,
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  }
 }

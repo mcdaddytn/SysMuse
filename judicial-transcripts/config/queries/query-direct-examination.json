@@ -1,10 +1,5 @@
 {
-  "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
-  "speakerType": "ATTORNEY",
   "maxResults": 30,
-  "surroundingStatements": 2,
-  "outputFileNameTemplate": "direct-examination-{Speaker.speakerPrefix}.txt",
-  "outputFileTemplate": "speaker-focused.txt",
   "elasticSearchQueries": [
     {
       "name": "direct_examination",
@@ -16,5 +11,12 @@
       "query": "redirect",
       "type": "match"
     }
-  ]
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "ATTORNEY"
+  },
+  "surroundingEvents": 2,
+  "fileNameTemplate": "direct-examination-{Speaker.speakerPrefix}.txt",
+  "fileTemplate": "speaker-focused.txt"
 }

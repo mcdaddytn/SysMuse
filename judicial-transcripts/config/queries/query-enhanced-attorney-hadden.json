@@ -1,10 +1,5 @@
 {
-  "caseNumber": "2:19-CV-00123-JRG",
-  "speakerPrefix": "MR. HADDEN",
   "maxResults": 20,
-  "surroundingStatements": 1,
-  "outputFileNameTemplate": "attorney-hadden-{Session.sessionDate}.txt",
-  "outputFileTemplate": "default.txt",
   "resultSeparator": "\n---\n",
   "elasticSearchQueries": [
     {
@@ -17,5 +12,12 @@
       "query": "your honor",
       "type": "match_phrase"
     }
-  ]
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerPrefix": "MR. HADDEN"
+  },
+  "surroundingEvents": 1,
+  "fileNameTemplate": "attorney-hadden-{Session.sessionDate}.txt",
+  "fileTemplate": "default.txt"
 }

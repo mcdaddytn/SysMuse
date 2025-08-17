@@ -12,19 +12,19 @@ SESSION: {{sessionType}} - {{sessionDate}}
 
 {{#events}}
 {{#statement}}
-{{#speaker}}{{speakerPrefix}}{{/speaker}}{{^speaker}}UNKNOWN{{/speaker}}: {{rawText}}
+[{{startTime}}] {{#speaker}}{{speakerPrefix}}{{/speaker}}{{^speaker}}UNKNOWN{{/speaker}}: {{rawText}}
 
 {{/statement}}
 {{#witnessCalled}}
-[WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}} - {{examinationType}}]
+[{{startTime}}] WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}} - {{examinationType}}
 
 {{/witnessCalled}}
 {{#courtDirective}}
-[{{#directiveType}}{{name}}{{/directiveType}}{{^directiveType}}COURT DIRECTIVE{{/directiveType}}]: {{rawText}}
+[{{startTime}}] {{#directiveType}}{{name}}{{/directiveType}}{{^directiveType}}COURT DIRECTIVE{{/directiveType}}: {{rawText}}
 
 {{/courtDirective}}
 {{^statement}}{{^witnessCalled}}{{^courtDirective}}
-{{eventType}}: {{rawText}}
+[{{startTime}}] {{eventType}}: {{rawText}}
 
 {{/courtDirective}}{{/witnessCalled}}{{/statement}}
 {{/events}}

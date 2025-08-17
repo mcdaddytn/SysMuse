@@ -91,8 +91,8 @@ program
       results.inputQuery = path.basename(queryPath);
       
       logger.info(`Search completed:`);
-      logger.info(`  Total statements found: ${results.totalStatements}`);
-      logger.info(`  Matched statements: ${results.matchedStatements}`);
+      logger.info(`  Total records found: ${results.totalStatements}`);
+      logger.info(`  Matched records: ${results.matchedStatements}`);
       
       if (results.elasticSearchSummary) {
         logger.info('Elasticsearch query results:');

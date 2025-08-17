@@ -73,8 +73,8 @@ async function runQuery(queryFile: string): Promise<QueryResult> {
     });
     
     // Parse output to extract statistics
-    const totalMatch = output.match(/Total statements found: (\d+)/);
-    const matchedMatch = output.match(/Matched statements: (\d+)/);
+    const totalMatch = output.match(/Total records found: (\d+)/);
+    const matchedMatch = output.match(/Matched records: (\d+)/);
     
     const stats: any = {};
     if (totalMatch) stats.totalStatements = parseInt(totalMatch[1]);
@@ -166,7 +166,7 @@ async function main() {
       successCount++;
       console.log(`✓ ${queryFile}`);
       if (result.stats) {
-        console.log(`  - Matched: ${result.stats.matchedStatements}/${result.stats.totalStatements} statements`);
+        console.log(`  - Matched: ${result.stats.matchedStatements}/${result.stats.totalStatements} records`);
         if (result.stats.elasticSearchSummary) {
           for (const [query, summary] of Object.entries(result.stats.elasticSearchSummary as any)) {
             const typedSummary = summary as { matched: number; percentage: number };

@@ -11,7 +11,7 @@ import { SearchService } from '../services/SearchService';
 import { TranscriptExportService } from '../services/TranscriptExportService';
 import { CombinedSearchService } from '../services/CombinedSearchService';
 import logger from '../utils/logger';
-import * as multer from 'multer';
+import multer from 'multer';
 import path from 'path';
 
 const app: Express = express();
@@ -83,14 +83,14 @@ app.get('/api/trials/:id', async (req: Request, res: Response) => {
         },
         witnesses: true,
         markers: {
-          where: { isResolved: true },
           orderBy: { startTime: 'asc' }
         }
       }
     });
     
     if (!trial) {
-      return res.status(404).json({ error: 'Trial not found' });
+      res.status(404).json({ error: 'Trial not found' });
+      return;
     }
     
     res.json(trial);
@@ -108,7 +108,8 @@ app.post('/api/trials/upload',
       const files = req.files as Express.Multer.File[];
       
       if (!files || files.length === 0) {
-        return res.status(400).json({ error: 'No files uploaded' });
+        res.status(400).json({ error: 'No files uploaded' });
+        return;
       }
       
       const config = {
@@ -136,13 +137,14 @@ app.post('/api/trials/upload',
       });
       
       if (!trial) {
-        return res.status(500).json({ error: 'Failed to create trial' });
+        res.status(500).json({ error: 'Failed to create trial' });
+        return;
       }
       
       // Run Phase 2
       if (config.phases.phase2) {
         const processor = new Phase2Processor(config as any);
-        await processor.processTrial(trialId);
+        await processor.processTrial(trial.id);
       }
       
       // Run Phase 3
@@ -265,9 +267,7 @@ app.get('/api/trials/:id/markers', async (req: Request, res: Response) => {
     const markers = await prisma.marker.findMany({
       where,
       orderBy: { startTime: 'asc' },
-      include: {
-        markerTexts: true
-      }
+      include: {}
     });
     
     res.json(markers);

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EnhancedSearchService, EnhancedSearchInput, EnhancedSearchResults } from '../services/EnhancedSearchService';
+import { EnhancedSearchServiceV2 as EnhancedSearchService, EnhancedSearchInput, EnhancedSearchResults } from '../services/EnhancedSearchServiceV2';
 import logger from '../utils/logger';
 
 const program = new Command();
@@ -75,9 +75,11 @@ program
       logger.info('Query parameters:', {
         trial: queryInput.trialName || queryInput.caseNumber,
         maxResults: queryInput.maxResults,
-        surroundingStatements: queryInput.surroundingStatements,
-        outputTemplate: queryInput.outputFileTemplate,
-        outputFileNameTemplate: queryInput.outputFileNameTemplate
+        surroundingEvents: queryInput.surroundingEvents,
+        templateQuery: queryInput.templateQuery,
+        templateType: queryInput.templateType,
+        fileTemplate: queryInput.fileTemplate,
+        fileNameTemplate: queryInput.fileNameTemplate
       });
       
       const searchService = new EnhancedSearchService();
@@ -274,9 +276,9 @@ program
             caseNumber: '2:19-CV-00123-JRG',
             speakerType: 'JUDGE',
             maxResults: 50,
-            surroundingStatements: 2,
-            outputFileNameTemplate: 'judge-statements-{caseHandle}.txt',
-            outputFileTemplate: 'judge-statements.txt',
+            surroundingEvents: 2,
+            fileNameTemplate: 'judge-statements-{caseHandle}.txt',
+            fileTemplate: 'judge-statements.txt',
             resultSeparator: '\n\n---\n\n',
             elasticSearchQueries: [
               {
@@ -298,9 +300,9 @@ program
             trialName: 'VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.',
             speakerType: 'ATTORNEY',
             maxResults: 100,
-            surroundingStatements: 3,
-            outputFileNameTemplate: 'objections-{Speaker.speakerPrefix}.txt',
-            outputFileTemplate: 'objection-context.txt',
+            surroundingEvents: 3,
+            fileNameTemplate: 'objections-{Speaker.speakerPrefix}.txt',
+            fileTemplate: 'objection-context.txt',
             elasticSearchQueries: [
               {
                 name: 'objection',
@@ -317,9 +319,9 @@ program
             speakerType: 'WITNESS',
             speakerPrefix: ['ALAN RATLIFF', 'JOSEPH C. MCALEXANDER, III'],
             maxResults: 50,
-            surroundingStatements: 1,
-            outputFileNameTemplate: 'witness-{Speaker.speakerPrefix}-testimony.txt',
-            outputFileTemplate: 'witness-testimony.txt',
+            surroundingEvents: 1,
+            fileNameTemplate: 'witness-{Speaker.speakerPrefix}-testimony.txt',
+            fileTemplate: 'witness-testimony.txt',
             resultSeparator: '\n\n=========\n\n',
             elasticSearchQueries: [
               {
@@ -342,7 +344,7 @@ program
       logger.info('These examples demonstrate:');
       logger.info('  - Using caseNumber instead of trialName');
       logger.info('  - maxResults to limit output');
-      logger.info('  - surroundingStatements for context');
+      logger.info('  - surroundingEvents for context');
       logger.info('  - Dynamic file naming with templates');
       logger.info('  - Custom output templates');
       logger.info('  - Custom result separators');

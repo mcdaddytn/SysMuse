@@ -165,7 +165,7 @@ export class SummaryPageParserV2 {
   
   private extractJudgeInfo(text: string, info: SummaryInfo): void {
     const judgeParser = this.parserManager.getParser('judge');
-    if (judgeParser) {
+    if (judgeParser && info.judge) {
       const result = judgeParser.parse(text);
       if (result.matched && result.captures) {
         info.judge.honorific = result.captures.honorific;
@@ -386,7 +386,7 @@ export class SummaryPageParserV2 {
         
         const expMatch = cleanLine.match(/Expires?\s*(?:on\s*)?(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/i);
         if (expMatch) {
-          expirationDate = expMatch[1];
+          expirationDate = new Date(expMatch[1]);
         }
       }
     }

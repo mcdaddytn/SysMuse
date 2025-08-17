@@ -52,13 +52,7 @@ export class TranscriptExportService {
             ]
           },
           markers: {
-            where: { isResolved: true },
-            orderBy: { startTime: 'asc' },
-            include: {
-              markerTexts: {
-                where: { textRenderMode: config.renderMode.toUpperCase() as any }
-              }
-            }
+            orderBy: { startTime: 'asc' }
           }
         }
       });

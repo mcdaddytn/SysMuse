@@ -24,11 +24,21 @@ export interface EnhancedSearchInput {
   speakerHandle?: string | string[];
   elasticSearchQueries?: ElasticSearchQuery[];
   maxResults?: number;
-  surroundingStatements?: number;
-  outputFileNameTemplate?: string;
-  outputFileTemplate?: string;
+  surroundingEvents?: number; // Renamed from surroundingStatements
+  surroundingEventUnit?: 'EventCount' | 'WordCount' | 'CharCount'; // New parameter
+  precedingEvents?: number; // New parameter
+  followingEvents?: number; // New parameter
+  fileNameTemplate?: string; // Renamed from outputFileNameTemplate
+  fileTemplate?: string; // Renamed from outputFileTemplate
+  templateBody?: string; // New parameter for inline templates
   resultSeparator?: string;
   outputFormat?: 'RAW' | 'MATCHED' | 'BOTH' | 'NEITHER';
+  templateType?: 'Native' | 'Mustache'; // New parameter
+  nativeStartDelimiter?: string; // New parameter
+  nativeEndDelimiter?: string; // New parameter
+  templateQuery?: string; // New parameter for selecting query type
+  queryParams?: { [key: string]: any }; // New sub-node for query parameters
+  templateParams?: { [key: string]: any }; // New sub-node for template parameters
 }
 
 export interface HierarchicalStatement {
@@ -150,10 +160,10 @@ export class EnhancedSearchService {
         matchedStatementIds = new Set(limitedIds);
       }
       
-      if (input.surroundingStatements && input.surroundingStatements > 0) {
+      if (input.surroundingEvents && input.surroundingEvents > 0) {
         const expandedIds = await this.addSurroundingStatements(
           Array.from(matchedStatementIds),
-          input.surroundingStatements
+          input.surroundingEvents
         );
         
         const additionalStatements = await this.getStatementsByIds(
@@ -535,18 +545,18 @@ export class EnhancedSearchService {
   ): Promise<string[]> {
     const outputFiles: string[] = [];
     
-    if (!input.outputFileNameTemplate && !input.outputFileTemplate) {
+    if (!input.fileNameTemplate && !input.fileTemplate) {
       // Don't create the raw search-results file anymore - it's too large
       // Users should use outputFormat: 'RAW' if they really need it
       return outputFiles;
     }
     
-    const templateContent = input.outputFileTemplate 
-      ? this.loadTemplate(input.outputFileTemplate)
+    const templateContent = input.fileTemplate 
+      ? this.loadTemplate(input.fileTemplate)
       : 'Speaker: {Speaker.speakerPrefix}\t\tDate: {Session.sessionDate}\t\tTime: {TrialEvent.startTime}\n{StatementEvent.text}';
     
     const separator = input.resultSeparator || '\n\n';
-    const fileGroups = this.groupStatementsForOutput(results, input.outputFileNameTemplate);
+    const fileGroups = this.groupStatementsForOutput(results, input.fileNameTemplate);
     
     for (const [fileName, statements] of Object.entries(fileGroups)) {
       const renderedStatements = statements.map(stmt => 

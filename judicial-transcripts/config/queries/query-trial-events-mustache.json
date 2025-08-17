@@ -1,0 +1,12 @@
+{
+  "templateQuery": "TrialEvent",
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "eventType": ["STATEMENT", "WITNESS_CALLED", "COURT_DIRECTIVE"]
+  },
+  "templateType": "Mustache",
+  "fileNameTemplate": "trial-events-{{Trial.caseNumber}}.txt",
+  "templateBody": "{{#TrialEvent}}\nEvent Type: {{eventType}}\nTime: {{startTime}} - {{endTime}}\nLines: {{startLineNumber}} - {{endLineNumber}}\n{{/TrialEvent}}\n\n{{#StatementEvent}}\nSpeaker: {{#Speaker}}{{speakerPrefix}} ({{speakerType}}){{/Speaker}}\nStatement: {{text}}\n{{/StatementEvent}}\n\n{{#WitnessCalledEvent}}\nWitness Called: {{#Witness}}{{displayName}}{{/Witness}}\nExamination Type: {{examinationType}}\nSworn Status: {{swornStatus}}\n{{/WitnessCalledEvent}}\n\n{{#CourtDirectiveEvent}}\nCourt Directive: {{rawText}}\n{{#DirectiveType}}Type: {{name}}{{/DirectiveType}}\n{{/CourtDirectiveEvent}}",
+  "resultSeparator": "\n\n========================================\n\n",
+  "maxResults": 20
+}

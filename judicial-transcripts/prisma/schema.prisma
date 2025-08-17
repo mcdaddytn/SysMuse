@@ -273,6 +273,8 @@ model TrialEvent {
   startLineNumber Int?
   endLineNumber   Int?
   lineCount       Int?
+  wordCount       Int?
+  characterCount  Int?
   eventType       EventType
   createdAt       DateTime             @default(now())
   courtDirective  CourtDirectiveEvent?

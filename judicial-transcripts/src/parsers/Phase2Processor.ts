@@ -1238,6 +1238,31 @@ export class Phase2Processor {
   }
 
   /**
+   * Calculate word and character counts for event text
+   */
+  private calculateTextMetrics(eventInfo: EventInfo, lines: any[]): { wordCount: number; characterCount: number } {
+    let text = '';
+    
+    // Get text based on event type
+    if (eventInfo.text) {
+      text = eventInfo.text;
+    } else if (eventInfo.rawText) {
+      text = eventInfo.rawText;
+    } else if (lines.length > 0) {
+      // Combine text from all lines
+      text = lines.map(line => line.text || '').join(' ');
+    }
+    
+    // Calculate word count (split by whitespace and filter empty strings)
+    const wordCount = text.split(/\s+/).filter(word => word.length > 0).length;
+    
+    // Calculate character count (including spaces)
+    const characterCount = text.length;
+    
+    return { wordCount, characterCount };
+  }
+  
+  /**
    * Save event to database
    */
   private async saveEvent(
@@ -1253,6 +1278,9 @@ export class Phase2Processor {
         duration = this.calculateDuration(eventInfo.startTime, eventInfo.endTime);
       }
       
+      // Calculate word and character counts
+      const { wordCount, characterCount } = this.calculateTextMetrics(eventInfo, lines);
+      
       // Create trial event
       const event = await this.prisma.trialEvent.create({
         data: {
@@ -1264,6 +1292,8 @@ export class Phase2Processor {
           startLineNumber: eventInfo.startLineNumber,
           endLineNumber: eventInfo.endLineNumber,
           lineCount: lines.length,
+          wordCount,
+          characterCount,
           eventType: eventInfo.type
         }
       });

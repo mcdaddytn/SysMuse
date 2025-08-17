@@ -16,7 +16,10 @@ export class Phase3Processor {
   constructor(config: TranscriptConfig) {
     this.prisma = new PrismaClient();
     this.config = config;
-    this.elasticSearch = new ElasticSearchService(config.elasticsearchOptions);
+    this.elasticSearch = new ElasticSearchService({
+      url: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
+      index: 'judicial_statements'
+    });
   }
   
   async process(): Promise<void> {
@@ -75,24 +78,22 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'TRIAL_START',
-          markerCategory: 'PARSED',
+          markerType: 'OPENING_STATEMENT',
+          markerCategory: 'PROCEDURAL',
           startEventId: firstEvent.id,
           startTime: firstEvent.startTime,
-          name: 'Trial Start',
-          isResolved: true
+          name: 'Trial Start'
         }
       });
       
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'TRIAL_END',
-          markerCategory: 'PARSED',
+          markerType: 'CLOSING_ARGUMENT',
+          markerCategory: 'PROCEDURAL',
           endEventId: lastEvent.id,
           endTime: lastEvent.endTime,
-          name: 'Trial End',
-          isResolved: true
+          name: 'Trial End'
         }
       });
     }
@@ -115,12 +116,11 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'SESSION_START',
-          markerCategory: 'PARSED',
+          markerType: 'OPENING_STATEMENT',
+          markerCategory: 'PROCEDURAL',
           startEventId: firstEvent.id,
           startTime: firstEvent.startTime,
-          name: `${session.sessionType} Session Start - ${session.sessionDate}`,
-          isResolved: true
+          name: `${session.sessionType} Session Start - ${session.sessionDate}`
         }
       });
       
@@ -128,12 +128,11 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'SESSION_END',
-          markerCategory: 'PARSED',
+          markerType: 'CLOSING_ARGUMENT',
+          markerCategory: 'PROCEDURAL',
           endEventId: lastEvent.id,
           endTime: lastEvent.endTime,
-          name: `${session.sessionType} Session End - ${session.sessionDate}`,
-          isResolved: true
+          name: `${session.sessionType} Session End - ${session.sessionDate}`
         }
       });
     }
@@ -221,13 +220,12 @@ export class Phase3Processor {
       data: {
         trialId,
         markerType,
-        markerCategory: 'PARSED',
+        markerCategory: 'PROCEDURAL',
         startEventId: startEvent.id,
         endEventId: endEvent.id,
         startTime: startEvent.startTime,
         endTime: endEvent.endTime,
-        name,
-        isResolved: true
+        name
       }
     });
   }
@@ -243,11 +241,10 @@ export class Phase3Processor {
       data: {
         trialId,
         markerType,
-        markerCategory: 'PARSED',
+        markerCategory: 'PROCEDURAL',
         startEventId: event.id,
         startTime: event.startTime,
-        name,
-        isResolved: true
+        name
       }
     });
   }
@@ -289,13 +286,12 @@ export class Phase3Processor {
           data: {
             trialId: trial.id,
             markerType: 'WITNESS_TESTIMONY',
-            markerCategory: 'PARSED',
+            markerCategory: 'PROCEDURAL',
             startEventId: startEvent.id,
             endEventId: endEvent?.id,
             startTime: startEvent.startTime,
             endTime: endEvent?.startTime,
-            name: `${witness.name} - ${examType}`,
-            isResolved: !!endEvent
+            name: `${witness.name} - ${examType}`
           }
         });
       }
@@ -303,6 +299,9 @@ export class Phase3Processor {
   }
   
   private async createElasticSearchMarkers(trial: any): Promise<void> {
+    // DISABLED: searchPattern table doesn't exist in current schema
+    return;
+    /*
     // Get search patterns for objections
     const objectionPatterns = await this.prisma.searchPattern.findMany({
       where: {
@@ -353,15 +352,14 @@ export class Phase3Processor {
         await this.prisma.marker.create({
           data: {
             trialId: trial.id,
-            markerType: 'OBJECTION',
-            markerCategory: 'ELASTIC_SEARCH',
+            markerType: 'OBJECTION_SUSTAINED',
+            markerCategory: 'EVIDENTIARY',
             startEventId: start.id,
             endEventId: end.event.id,
             startTime: start.startTime,
             endTime: end.event.startTime,
             name: `Objection - ${end.result || 'Resolved'}`,
-            description: end.result,
-            isResolved: true
+            description: end.result
           }
         });
         
@@ -373,24 +371,26 @@ export class Phase3Processor {
         await this.prisma.marker.create({
           data: {
             trialId: trial.id,
-            markerType: 'OBJECTION',
-            markerCategory: 'ELASTIC_SEARCH',
+            markerType: 'OBJECTION_SUSTAINED',
+            markerCategory: 'EVIDENTIARY',
             startEventId: start.id,
             startTime: start.startTime,
-            name: 'Objection - Unresolved',
-            isResolved: false
+            name: 'Objection - Unresolved'
           }
         });
       }
     }
+    */
   }
   
   private async generateMarkerText(trial: any): Promise<void> {
+    // DISABLED: markerText table doesn't exist in current schema
+    return;
+    /*
     // Get all resolved markers with both start and end
     const markers = await this.prisma.marker.findMany({
       where: {
         trialId: trial.id,
-        isResolved: true,
         startEventId: { not: null },
         endEventId: { not: null }
       }
@@ -444,5 +444,6 @@ export class Phase3Processor {
         });
       }
     }
+    */
   }
 }

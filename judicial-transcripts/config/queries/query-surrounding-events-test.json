@@ -1,0 +1,19 @@
+{
+  "caseNumber": "2:19-CV-00123-JRG",
+  "speakerType": "JUDGE",
+  "precedingEvents": 3,
+  "followingEvents": 2,
+  "surroundingEventUnit": "EventCount",
+  "fileNameTemplate": "judge-rulings-context-{caseHandle}.txt",
+  "templateType": "Native",
+  "fileTemplate": "witness-testimony.txt",
+  "resultSeparator": "\n\n--- Next Statement ---\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "objection",
+      "query": "objection",
+      "type": "match"
+    }
+  ],
+  "maxResults": 5
+}

@@ -153,7 +153,7 @@ export class SummaryPageParser {
   private extractJudgeInfo(text: string, info: SummaryInfo): void {
     // Pattern for judge: "BEFORE THE HONORABLE JUDGE RODNEY GILSTRAP"
     const judgeMatch = text.match(/BEFORE THE (HONORABLE)\s+(?:JUDGE\s+)?([A-Z\s]+?)(?:\n|\s+UNITED)/m);
-    if (judgeMatch) {
+    if (judgeMatch && info.judge) {
       info.judge.honorific = judgeMatch[1];
       info.judge.name = judgeMatch[2].trim();
       

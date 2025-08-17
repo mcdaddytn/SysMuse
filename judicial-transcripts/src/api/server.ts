@@ -142,7 +142,7 @@ app.post('/api/trials/upload',
       // Run Phase 2
       if (config.phases.phase2) {
         const processor = new Phase2Processor(config as any);
-        await processor.process();
+        await processor.processTrial(trialId);
       }
       
       // Run Phase 3

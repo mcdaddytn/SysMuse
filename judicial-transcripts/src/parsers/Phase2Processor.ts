@@ -24,6 +24,9 @@ interface ProcessingState {
   currentExaminationType: ExaminationType | null;
   lastQSpeaker: SpeakerInfo | null;
   contextualSpeakers: Map<string, SpeakerInfo>;
+  previousLine: any | null;  // Store previous line for lookback
+  allLines: any[];  // Store all lines for access
+  currentLineIndex: number;  // Current line index
 }
 
 interface EventInfo {
@@ -135,6 +138,24 @@ export class Phase2Processor {
           { sessionDate: 'asc' },
           { sessionType: 'asc' }
         ]
+      });
+      
+      // Custom sort sessions to ensure Morning before Afternoon before other types
+      sessions.sort((a, b) => {
+        // First sort by date
+        const dateCompare = a.sessionDate.getTime() - b.sessionDate.getTime();
+        if (dateCompare !== 0) return dateCompare;
+        
+        // Then by session type priority
+        const getTypePriority = (type: string) => {
+          const lower = type.toLowerCase();
+          if (lower.includes('morning')) return 1;
+          if (lower.includes('afternoon')) return 2;
+          if (lower.includes('bench')) return 3;
+          return 4;
+        };
+        
+        return getTypePriority(a.sessionType) - getTypePriority(b.sessionType);
       });
       
       logger.info(`Found ${sessions.length} sessions to process`);
@@ -306,6 +327,12 @@ export class Phase2Processor {
       }
     });
     
+    // Flatten all lines from all pages
+    const allLines: any[] = [];
+    for (const page of pages) {
+      allLines.push(...page.lines);
+    }
+    
     // Initialize state with current witness context
     const state: ProcessingState = {
       currentEvent: null,
@@ -314,7 +341,10 @@ export class Phase2Processor {
       currentWitness: this.witnessJurorService.getCurrentWitness(),
       currentExaminationType: null,
       lastQSpeaker: null,
-      contextualSpeakers: new Map()
+      contextualSpeakers: new Map(),
+      previousLine: null,
+      allLines: allLines,
+      currentLineIndex: 0
     };
     
     // Log initial witness context
@@ -323,15 +353,21 @@ export class Phase2Processor {
     }
     
     // Process lines sequentially
-    for (const page of pages) {
-      for (const line of page.lines) {
-        await this.processLine(session.id, line, state);
-      }
+    for (let i = 0; i < allLines.length; i++) {
+      state.currentLineIndex = i;
+      state.previousLine = i > 0 ? allLines[i - 1] : null;
+      await this.processLine(session.id, allLines[i], state);
     }
     
     // Save any remaining event
     if (state.currentEvent) {
       await this.saveEvent(this.context.trialId, session.id, state.currentEvent, state.eventLines);
+    }
+    
+    // Persist witness state for next session
+    if (state.currentWitness) {
+      this.witnessJurorService.setCurrentWitness(state.currentWitness);
+      logger.debug(`Persisting witness context for next session: ${state.currentWitness.name}`);
     }
   }
 
@@ -360,13 +396,14 @@ export class Phase2Processor {
       return;
     }
     
-    // Check for witness being called
-    if (await this.checkWitnessCalled(sessionId, line, lineText, state)) {
+    // Check for examination type change BEFORE witness check
+    // This is important because examination lines should be processed as witness events
+    if (await this.checkExaminationChange(sessionId, line, lineText, state)) {
       return;
     }
     
-    // Check for examination type change
-    if (await this.checkExaminationChange(sessionId, line, lineText, state)) {
+    // Check for witness being called
+    if (await this.checkWitnessCalled(sessionId, line, lineText, state)) {
       return;
     }
     
@@ -441,6 +478,12 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
+    // Skip if this line contains EXAMINATION or DEPOSITION
+    // These are handled by checkExaminationChange
+    if (lineText.includes('EXAMINATION') || lineText.includes('DEPOSITION')) {
+      return false;
+    }
+    
     // Skip if this line appears to be in the middle of a sentence
     // (e.g., "we'll be back to continue with the next Plaintiff's witness")
     const lowerText = lineText.toLowerCase();
@@ -606,28 +649,20 @@ export class Phase2Processor {
       }
     }
     
-    // Start witness called event (use swornStatus from currentWitness)
-    state.currentEvent = {
-      type: EventType.WITNESS_CALLED,
-      startTime: line.timestamp,
-      startLineNumber: line.lineNumber,
-      endLineNumber: line.lineNumber,
-      metadata: {
-        witnessId: witness.id,
-        witnessName: witnessName,
-        displayName: displayName,
-        witnessCaller: witnessCaller,
-        swornStatus: witnessSwornStatus,
-        examinationType: initialExaminationType  // Always include examination type
-      }
-    };
+    // Don't create the event yet - just buffer the witness line
+    // The next line should be the examination type or VIDEO DEPOSITION
+    // We'll create the complete event when we see that line in checkExaminationChange
+    
+    // Store the witness line for when we create the event
     state.eventLines = [line];
     
+    // Return true to indicate we handled this line
+    // The witness context is already set up above
     return true;
   }
 
   /**
-   * Check for examination type change - FIXED VERSION
+   * Check for examination type change - SIMPLIFIED VERSION for Feature 02D
    */
   private async checkExaminationChange(
     sessionId: number,
@@ -635,130 +670,301 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    const examMatch = lineText.match(this.PATTERNS.examinationType);
-    const videoMatch = lineText.match(this.PATTERNS.videoDeposition);
+    // Simple string matching for examination types
+    const trimmed = lineText.trim();
     
-    if (!examMatch && !videoMatch) return false;
+    // Check for exact examination types as specified in feature-02D.md
+    let isExamination = false;
+    let isVideo = false;
+    let examType = '';
+    let continued = false;
     
-    // Check if we're changing examination for current witness
-    if (state.currentWitness) {
-      const examType = examMatch ? examMatch[1].toUpperCase() : 'VIDEO';
-      const continued = lineText.includes('CONTINUED');
+    // Check for video deposition FIRST (most specific)
+    if (trimmed === 'PRESENTED BY VIDEO DEPOSITION' || trimmed === 'VIDEO DEPOSITION') {
+      isVideo = true;
+      examType = 'VIDEO';
+    }
+    // Check for examination types
+    else if (trimmed === 'DIRECT EXAMINATION' || trimmed === 'DIRECT EXAMINATION CONTINUED') {
+      isExamination = true;
+      examType = 'DIRECT';
+      continued = trimmed.includes('CONTINUED');
+    }
+    else if (trimmed === 'CROSS-EXAMINATION' || trimmed === 'CROSS-EXAMINATION CONTINUED') {
+      isExamination = true;
+      examType = 'CROSS';
+      continued = trimmed.includes('CONTINUED');
+    }
+    else if (trimmed === 'REDIRECT EXAMINATION' || trimmed === 'REDIRECT EXAMINATION CONTINUED') {
+      isExamination = true;
+      examType = 'REDIRECT';
+      continued = trimmed.includes('CONTINUED');
+    }
+    else if (trimmed === 'RECROSS-EXAMINATION' || trimmed === 'RECROSS-EXAMINATION CONTINUED') {
+      isExamination = true;
+      examType = 'RECROSS';
+      continued = trimmed.includes('CONTINUED');
+    }
+    
+    if (!isExamination && !isVideo) return false;
+    
+    logger.info(`Examination line detected: ${lineText} (type: ${examType}, continued: ${continued})`);
+    
+    // Save current event if exists
+    if (state.currentEvent) {
+      await this.saveEvent(this.context.trialId, sessionId, state.currentEvent, state.eventLines);
+      state.currentEvent = null;
+      state.eventLines = [];
+    }
+    
+    // For CONTINUED or DIRECT EXAMINATION or VIDEO DEPOSITION, look at previous line for witness info
+    let needsWitnessLookup = continued || examType === 'DIRECT' || examType === 'VIDEO';
+    let witnessInfo = null;
+    let swornStatus: SwornStatus = SwornStatus.NOT_SWORN;
+    
+    if (needsWitnessLookup && state.previousLine) {
+      const prevText = state.previousLine.text?.trim() || '';
+      logger.debug(`Looking at previous line for witness info: ${prevText}`);
       
-      // Check for sworn status in this line
-      let swornStatus = state.currentWitness.swornStatus || SwornStatus.NOT_SWORN;
-      if (lineText.match(/\bPREVIOUSLY\s+SWORN\b/i)) {
-        swornStatus = SwornStatus.PREVIOUSLY_SWORN;
-      } else if (lineText.match(/\bSWORN\b/i) && !lineText.match(/\bPREVIOUSLY/i)) {
-        swornStatus = SwornStatus.SWORN;
-      }
-      
-      // Update witness sworn status in database if changed
-      if (swornStatus !== state.currentWitness.swornStatus && state.currentWitness.id) {
-        await this.prisma.witness.update({
-          where: { id: state.currentWitness.id },
-          data: { swornStatus }
+      // Check if previous line contains witness information
+      const witnessMatch = prevText.match(/^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i);
+      if (witnessMatch) {
+        let witnessName = witnessMatch[1].trim();
+        const displayName = witnessName;
+        witnessName = witnessName.replace(/['"]/g, '');
+        const witnessCaller = witnessMatch[2].toUpperCase().includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
+        
+        // Check for sworn status in previous line
+        if (prevText.match(/\bPREVIOUSLY\s+SWORN\b/i)) {
+          swornStatus = SwornStatus.PREVIOUSLY_SWORN as SwornStatus;
+        } else if (prevText.match(/\bSWORN\b/i)) {
+          swornStatus = SwornStatus.SWORN as SwornStatus;
+        }
+        
+        logger.info(`Found witness in previous line: ${displayName} (${witnessCaller}), sworn: ${swornStatus}`);
+        
+        // Find or create witness
+        const cleanedName = witnessName.replace(/[^A-Z0-9]/gi, '_').replace(/_+/g, '_').toUpperCase();
+        const speakerHandle = `WITNESS_${cleanedName}`;
+        
+        let witness = await this.prisma.witness.findFirst({
+          where: {
+            trialId: this.context.trialId,
+            name: witnessName
+          },
+          include: {
+            speaker: true
+          }
         });
         
-        state.currentWitness.swornStatus = swornStatus;
-        logger.info(`Updated witness sworn status to: ${swornStatus}`);
+        if (!witness) {
+          // Create speaker first
+          let speaker = await this.prisma.speaker.findFirst({
+            where: {
+              trialId: this.context.trialId,
+              speakerHandle: speakerHandle
+            }
+          });
+          
+          if (!speaker) {
+            speaker = await this.prisma.speaker.create({
+              data: {
+                trialId: this.context.trialId,
+                speakerPrefix: `WITNESS ${witnessName.toUpperCase()}`,
+                speakerHandle: speakerHandle,
+                speakerType: 'WITNESS'
+              }
+            });
+          }
+          
+          witness = await this.prisma.witness.create({
+            data: {
+              trialId: this.context.trialId,
+              name: witnessName,
+              displayName: displayName,
+              witnessCaller: witnessCaller,
+              speakerId: speaker.id,
+              swornStatus: swornStatus
+            },
+            include: {
+              speaker: true
+            }
+          });
+          
+          logger.info(`Created witness: ${displayName}`);
+        } else if (witness.swornStatus !== swornStatus) {
+          // Update sworn status if changed
+          witness = await this.prisma.witness.update({
+            where: { id: witness.id },
+            data: { swornStatus },
+            include: { speaker: true }
+          });
+          logger.info(`Updated witness sworn status to: ${swornStatus}`);
+        }
+        
+        // Update state with witness info
+        witnessInfo = {
+          id: witness.id,
+          name: witness.name || undefined,
+          displayName: witness.displayName || undefined,
+          witnessType: witness.witnessType || undefined,
+          witnessCaller: witness.witnessCaller || undefined,
+          speakerId: witness.speaker?.id,
+          swornStatus: swornStatus
+        };
+        
+        // Update current witness in state
+        state.currentWitness = witnessInfo;
+        
+        // Update contextual speakers
+        if (witness.speaker) {
+          const witnessSpeakerInfo: SpeakerInfo = {
+            id: witness.speaker.id,
+            speakerPrefix: witness.speaker.speakerPrefix,
+            speakerHandle: witness.speaker.speakerHandle,
+            speakerType: SpeakerType.WITNESS,
+            witnessId: witness.id,
+            name: displayName
+          };
+          
+          state.contextualSpeakers.set('A.', witnessSpeakerInfo);
+          state.contextualSpeakers.set('THE WITNESS', witnessSpeakerInfo);
+          state.contextualSpeakers.set('WITNESS', witnessSpeakerInfo);
+        }
+        
+        // Update service context
+        this.witnessJurorService.setCurrentWitness(state.currentWitness);
       }
     }
     
-    // If we're in a witness event, add to it
-    if (state.currentEvent?.type === EventType.WITNESS_CALLED) {
-      state.eventLines.push(line);
-      state.currentEvent.endLineNumber = line.lineNumber;
-      
-      // Extract examination type
-      const examType = examMatch ? examMatch[1].toUpperCase() : 'VIDEO';
-      const continued = !lineText.match(this.PATTERNS.examinationContinued);
-      
-      // Map to enum value - USE THE CONST VALUES
-      let examinationType: ExaminationType;
-      switch (examType) {
-        case 'DIRECT':
-          examinationType = ExaminationType.DIRECT_EXAMINATION;
-          break;
-        case 'CROSS':
-          examinationType = ExaminationType.CROSS_EXAMINATION;
-          break;
-        case 'REDIRECT':
-          examinationType = ExaminationType.REDIRECT_EXAMINATION;
-          break;
-        case 'RECROSS':
-          examinationType = ExaminationType.RECROSS_EXAMINATION;
-          break;
-        case 'VIDEO':
-          examinationType = ExaminationType.VIDEO_DEPOSITION;
-          break;
-        default:
-          examinationType = ExaminationType.DIRECT_EXAMINATION;
+    // If we didn't find witness info and need it, use current witness if available
+    if (!witnessInfo && state.currentWitness) {
+      witnessInfo = state.currentWitness;
+      // Keep the sworn status from the current witness state
+      // The sworn status should carry through examination stages (CROSS, REDIRECT, RECROSS)
+      // It only changes to PREVIOUSLY_SWORN when explicitly stated in the transcript
+    }
+    
+    if (!witnessInfo) {
+      logger.warn(`No witness context for examination type: ${examType}`);
+      return false;
+    }
+    
+    // Map examination type to enum
+    let examinationType: ExaminationType;
+    switch (examType) {
+      case 'DIRECT':
+        examinationType = ExaminationType.DIRECT_EXAMINATION;
+        break;
+      case 'CROSS':
+        examinationType = ExaminationType.CROSS_EXAMINATION;
+        break;
+      case 'REDIRECT':
+        examinationType = ExaminationType.REDIRECT_EXAMINATION;
+        break;
+      case 'RECROSS':
+        examinationType = ExaminationType.RECROSS_EXAMINATION;
+        break;
+      case 'VIDEO':
+        examinationType = ExaminationType.VIDEO_DEPOSITION;
+        break;
+      default:
+        examinationType = ExaminationType.DIRECT_EXAMINATION;
+    }
+    
+    // Update current examination type
+    state.currentExaminationType = examinationType;
+    
+    // Determine the correct sworn status
+    let eventSwornStatus: SwornStatus;
+    
+    // For video depositions, always use NOT_SWORN (witness sworn on video, not in court)
+    if (isVideo) {
+      eventSwornStatus = SwornStatus.NOT_SWORN;
+    } else {
+      // For in-court examinations:
+      // - If witness has NOT_SWORN status (from a video deposition), they still need to be SWORN in court
+      // - If witness has SWORN status, use it
+      // - If witness has PREVIOUSLY_SWORN status, use it
+      // - Default to SWORN for new in-court witnesses
+      if (witnessInfo.swornStatus === SwornStatus.NOT_SWORN) {
+        // This witness was previously shown by video, but now appearing in court
+        // They need to be sworn for in-court testimony
+        eventSwornStatus = SwornStatus.SWORN;
+      } else if (witnessInfo.swornStatus) {
+        // Use the witness's existing sworn status (SWORN or PREVIOUSLY_SWORN)
+        eventSwornStatus = witnessInfo.swornStatus;
+      } else {
+        // Default for new witnesses appearing in court
+        eventSwornStatus = SwornStatus.SWORN;
       }
-      
-      // Update metadata
-      state.currentEvent.metadata = {
-        ...state.currentEvent.metadata,
-        examinationType,
-        continued
+    }
+    
+    // Check if we already have witness lines buffered (from checkWitnessCalled)
+    // If so, we're completing a multi-line witness introduction
+    const hasBufferedWitnessLine = state.eventLines.length > 0 && 
+                                    !state.currentEvent;
+    
+    // Create witness called event
+    if (hasBufferedWitnessLine) {
+      // Use the buffered witness line as the start
+      const witnessLine = state.eventLines[0];
+      state.currentEvent = {
+        type: EventType.WITNESS_CALLED,
+        startTime: witnessLine.timestamp,
+        startLineNumber: witnessLine.lineNumber,
+        endLineNumber: line.lineNumber,
+        metadata: {
+          witnessId: witnessInfo.id,
+          witnessName: witnessInfo.name,
+          displayName: witnessInfo.displayName,
+          examinationType,
+          swornStatus: eventSwornStatus,
+          continued: continued,
+          presentedByVideo: isVideo,
+          witnessCaller: witnessInfo.witnessCaller
+        }
       };
-      
-      // Update current examination type
-      state.currentExaminationType = examinationType;
-      
-      return true;
-    }
-    
-    // Check if this is a standalone examination change (witness already on stand)
-    if (state.currentWitness && !state.currentEvent) {
-      const examType = examMatch ? examMatch[1].toUpperCase() : 'VIDEO';
-      
-      // Map to enum - USE THE CONST VALUES
-      let examinationType: ExaminationType;
-      switch (examType) {
-        case 'DIRECT':
-          examinationType = ExaminationType.DIRECT_EXAMINATION;
-          break;
-        case 'CROSS':
-          examinationType = ExaminationType.CROSS_EXAMINATION;
-          break;
-        case 'REDIRECT':
-          examinationType = ExaminationType.REDIRECT_EXAMINATION;
-          break;
-        case 'RECROSS':
-          examinationType = ExaminationType.RECROSS_EXAMINATION;
-          break;
-        case 'VIDEO':
-          examinationType = ExaminationType.VIDEO_DEPOSITION;
-          break;
-        default:
-          examinationType = ExaminationType.DIRECT_EXAMINATION;
-      }
-      
-      state.currentExaminationType = examinationType;
-      
-      // Create witness called event for examination change
+      // Add the examination line to the buffered lines
+      state.eventLines.push(line);
+    } else {
+      // Standalone examination line (no witness line before it)
       state.currentEvent = {
         type: EventType.WITNESS_CALLED,
         startTime: line.timestamp,
         startLineNumber: line.lineNumber,
         endLineNumber: line.lineNumber,
         metadata: {
-          witnessId: state.currentWitness.id,
-          witnessName: state.currentWitness.name,
-          displayName: state.currentWitness.displayName,
+          witnessId: witnessInfo.id,
+          witnessName: witnessInfo.name,
+          displayName: witnessInfo.displayName,
           examinationType,
-          swornStatus: state.currentWitness.swornStatus || SwornStatus.PREVIOUSLY_SWORN,
-          continued: lineText.includes('CONTINUED'),
-          witnessCaller: state.currentWitness.witnessCaller
+          swornStatus: eventSwornStatus,
+          continued: continued,
+          presentedByVideo: isVideo,
+          witnessCaller: witnessInfo.witnessCaller
         }
       };
       state.eventLines = [line];
-      
-      return true;
     }
     
-    return false;
+    // Include previous line if it has witness info
+    // BUT only if we don't already have buffered witness lines
+    if (needsWitnessLookup && state.previousLine && !hasBufferedWitnessLine) {
+      const prevText = state.previousLine.text?.trim() || '';
+      if (prevText.match(/WITNESS/i)) {
+        state.eventLines.unshift(state.previousLine);
+        state.currentEvent.startLineNumber = state.previousLine.lineNumber;
+        if (state.previousLine.timestamp) {
+          state.currentEvent.startTime = state.previousLine.timestamp;
+        }
+      }
+    }
+    
+    // Don't save immediately - let the normal state management handle it
+    // This prevents duplicates when multiple lines match
+    
+    return true;
   }
 
   /**

@@ -14,6 +14,24 @@
 - All rawText fields properly truncated to 255 chars
 - Preserves quotes and special characters without HTML escaping
 
+## Current Limitations
+
+### 1. Text Search in Hierarchical Queries
+**Problem**: The TrialEventHierarchy query doesn't support text search or ElasticSearch integration
+- Cannot filter for specific text patterns (e.g., "objection", "sustained", "overruled")
+- The objections-rulings-hierarchy query returns ALL 11,980 events instead of just relevant ones
+- No way to combine hierarchical structure with text search capabilities
+
+**Workaround**: Currently must return all events and filter client-side, or use flat queries
+
+### 2. ElasticSearch Integration
+**Current State**: 
+- ElasticSearch ONLY works with StatementEvent queries (flat structure)
+- When using `templateQuery: "StatementEvent"`, ElasticSearch filtering via `elasticSearchQueries` parameter works
+- When using `templateQuery: "TrialEventHierarchy"`, ElasticSearch is bypassed entirely
+
+**Impact**: Cannot get hierarchical output (sessions→events) with ElasticSearch filtering
+
 ## Future Improvements Needed
 
 ### 1. DateTime Handling
@@ -28,7 +46,20 @@
 - Support queries like "events between Oct 1 2:30pm and Oct 7 6:00pm"
 - Better chronological ordering across sessions
 
-### 2. Surrounding Events Overlap Detection
+### 2. ElasticSearch Integration with Hierarchical Queries
+**Design Needed**:
+1. First run ElasticSearch to get matching statement IDs
+2. Use those IDs to filter TrialEvents (via statement relation)
+3. Apply surrounding events logic
+4. Build hierarchical structure
+5. Return as nested trial→sessions→events
+
+**Alternative Approach**:
+- Add a `textSearch` parameter to TrialEventHierarchy query
+- Use SQL LIKE or full-text search on rawText field
+- Less powerful than ElasticSearch but simpler to implement
+
+### 3. Surrounding Events Overlap Detection
 **Problem**: When multiple judge statements are close together, their surrounding contexts overlap, causing duplicate events in output
 **Solution**: 
 - Track which events have already been included

@@ -9,20 +9,19 @@ SESSION: {{sessionType}} - {{sessionDate}}
 
 {{#events}}
 {{#statement}}
-{{#speaker}}
-{{#rawText}}
-[Line {{../startLineNumber}}] {{speakerPrefix}} ({{speakerType}}):
-  {{../rawText}}
-{{/rawText}}
-{{/speaker}}
-{{/statement}}
-
-{{#courtDirective}}
-{{#rawText}}
-[Line {{startLineNumber}}] COURT RULING:
+[Line {{startLineNumber}}] {{#speaker}}{{speakerPrefix}} ({{speakerType}}){{/speaker}}{{^speaker}}UNKNOWN{{/speaker}}:
   {{rawText}}
-{{/rawText}}
+
+{{/statement}}
+{{#courtDirective}}
+[Line {{startLineNumber}}] COURT DIRECTIVE:
+  {{rawText}}
+
 {{/courtDirective}}
+{{#witnessCalled}}
+[Line {{startLineNumber}}] WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}} - {{examinationType}}
+
+{{/witnessCalled}}
 {{/events}}
 
 Session Summary:

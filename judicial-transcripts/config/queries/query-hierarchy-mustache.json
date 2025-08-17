@@ -5,7 +5,7 @@
   },
   "templateType": "Mustache",
   "fileNameTemplate": "trial-hierarchy-{{caseNumber}}.txt",
-  "templateBody": "TRIAL: {{trialName}}\nCase Number: {{caseNumber}}\nCourt: {{court}}\n{{#courtDivision}}Division: {{courtDivision}}{{/courtDivision}}\n\n{{#sessions}}\n========================================\nSESSION: {{sessionType}} - {{sessionDate}}\n========================================\n\n{{#events}}\n{{#statement}}\n[{{startLineNumber}}-{{endLineNumber}}] {{#speaker}}{{speakerPrefix}}{{/speaker}}: {{text}}\n{{/statement}}\n\n{{#witnessCalled}}\n[{{startLineNumber}}] WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}} ({{examinationType}})\n{{/witnessCalled}}\n\n{{#courtDirective}}\n[{{startLineNumber}}] COURT: {{rawText}}\n{{/courtDirective}}\n{{/events}}\n{{/sessions}}",
+  "templateFile": "trial-hierarchy.mustache",
   "resultSeparator": "\n\n",
   "templateParams": {
     "reportTitle": "Full Trial Transcript",

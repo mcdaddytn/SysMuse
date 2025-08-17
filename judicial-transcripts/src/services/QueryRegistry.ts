@@ -177,6 +177,7 @@ export class TrialEventQuery implements QueryExecutor {
           endLineNumber: event.endLineNumber,
           lineCount: event.lineCount,
           eventType: event.eventType,
+          rawText: event.rawText,
           wordCount: (event as any).wordCount,
           characterCount: (event as any).characterCount
         },
@@ -203,6 +204,8 @@ export class TrialEventQuery implements QueryExecutor {
           elasticSearchId: event.statement.elasticSearchId,
           speakerAlias: event.statement.speakerAlias
         };
+        // Also add text property at root level for convenience
+        baseResult.text = event.statement.text;
         
         if (event.statement.speaker) {
           baseResult.Speaker = {
@@ -220,8 +223,7 @@ export class TrialEventQuery implements QueryExecutor {
           examinationType: event.witnessCalled.examinationType,
           swornStatus: event.witnessCalled.swornStatus,
           continued: event.witnessCalled.continued,
-          presentedByVideo: event.witnessCalled.presentedByVideo,
-          rawText: event.witnessCalled.rawText
+          presentedByVideo: event.witnessCalled.presentedByVideo
         };
         
         if (event.witnessCalled.witness) {
@@ -239,7 +241,6 @@ export class TrialEventQuery implements QueryExecutor {
       if (event.courtDirective) {
         baseResult.CourtDirectiveEvent = {
           id: event.courtDirective.id,
-          rawText: event.courtDirective.rawText,
           isStandard: event.courtDirective.isStandard
         };
         
@@ -317,6 +318,7 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
 
   async execute(prisma: PrismaClient, params?: any): Promise<QueryResult[]> {
     const trialWhere = this.buildTrialWhereClause(params);
+    const eventWhere = this.buildEventWhereClause(params);
     
     const trials = await prisma.trial.findMany({
       where: trialWhere,
@@ -325,6 +327,7 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
           orderBy: { sessionDate: 'asc' },
           include: {
             trialEvents: {
+              where: eventWhere,
               orderBy: { startLineNumber: 'asc' },
               include: {
                 statement: {
@@ -374,6 +377,7 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
               endLineNumber: event.endLineNumber,
               lineCount: event.lineCount,
               eventType: event.eventType,
+              rawText: event.rawText,
               wordCount: (event as any).wordCount,
               characterCount: (event as any).characterCount
             };
@@ -392,6 +396,8 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
                   speakerHandle: event.statement.speaker.speakerHandle
                 } : null
               };
+              // Also add text property at root level for convenience
+              eventData.text = event.statement.text;
             }
             
             if (event.witnessCalled) {
@@ -401,7 +407,6 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
                 swornStatus: event.witnessCalled.swornStatus,
                 continued: event.witnessCalled.continued,
                 presentedByVideo: event.witnessCalled.presentedByVideo,
-                rawText: event.witnessCalled.rawText,
                 witness: event.witnessCalled.witness ? {
                   id: event.witnessCalled.witness.id,
                   name: event.witnessCalled.witness.name,
@@ -415,7 +420,6 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
             if (event.courtDirective) {
               eventData.courtDirective = {
                 id: event.courtDirective.id,
-                rawText: event.courtDirective.rawText,
                 isStandard: event.courtDirective.isStandard,
                 directiveType: event.courtDirective.directiveType ? {
                   name: event.courtDirective.directiveType.name,
@@ -432,7 +436,73 @@ export class TrialEventHierarchyQuery implements QueryExecutor {
       results.push(trialData);
     }
 
+    // Apply surrounding events logic if requested
+    if (params?.speakerHandle && params?.surroundingEvents) {
+      return this.applySurroundingEventsFilter(results, params);
+    }
+    
     return results;
+  }
+
+  private applySurroundingEventsFilter(results: QueryResult[], params: any): QueryResult[] {
+    const speakerHandle = params.speakerHandle;
+    const surroundingCount = params.surroundingEvents || 0;
+    
+    return results.map((trial: any) => {
+      const filteredTrial = { ...trial };
+      filteredTrial.sessions = trial.sessions.map((session: any) => {
+        const allEvents = session.events;
+        const judgeEventIndices: number[] = [];
+        
+        // Find all events where the judge speaks
+        allEvents.forEach((event: any, index: number) => {
+          if (event.statement?.speaker?.speakerHandle === speakerHandle) {
+            judgeEventIndices.push(index);
+          }
+        });
+        
+        // Collect events with surrounding context
+        const includedIndices = new Set<number>();
+        judgeEventIndices.forEach(index => {
+          for (let i = Math.max(0, index - surroundingCount); 
+               i <= Math.min(allEvents.length - 1, index + surroundingCount); 
+               i++) {
+            includedIndices.add(i);
+          }
+        });
+        
+        // Filter events to only include those in context
+        const filteredEvents = allEvents.filter((_: any, index: number) => 
+          includedIndices.has(index)
+        );
+        
+        return {
+          ...session,
+          events: filteredEvents
+        };
+      }).filter((session: any) => session.events.length > 0); // Only keep sessions with events
+      
+      return filteredTrial;
+    });
+  }
+
+  private buildEventWhereClause(params?: any): Prisma.TrialEventWhereInput {
+    const where: Prisma.TrialEventWhereInput = {};
+    
+    if (!params) return where;
+    
+    // Add date range filtering
+    if (params.startTime || params.endTime) {
+      where.startTime = {};
+      if (params.startTime) {
+        where.startTime.gte = params.startTime;
+      }
+      if (params.endTime) {
+        where.startTime.lte = params.endTime;
+      }
+    }
+    
+    return where;
   }
 
   private buildTrialWhereClause(params?: any): Prisma.TrialWhereInput {

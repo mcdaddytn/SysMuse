@@ -1,7 +1,7 @@
 import { PrismaClient, Prisma, SessionType, SpeakerType } from '@prisma/client';
 import { ElasticSearchService, ElasticSearchQuery } from './ElasticSearchService';
 import { QueryRegistry } from './QueryRegistry';
-import { TemplateEngineFactory, TemplateEngine } from './TemplateEngine';
+import { TemplateEngineFactory, TemplateEngine, MustacheTemplateEngine, NativeTemplateEngine } from './TemplateEngine';
 import logger from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -686,8 +686,10 @@ export class EnhancedSearchServiceV2 {
     let templateContent: string;
     if (input.templateBody) {
       templateContent = input.templateBody;
-    } else if (input.fileTemplate) {
-      templateContent = this.loadTemplate(input.fileTemplate);
+    } else if (input.fileTemplate || (input as any).templateFile) {
+      // Support both fileTemplate and templateFile for backwards compatibility
+      const templateFileName = input.fileTemplate || (input as any).templateFile;
+      templateContent = this.loadTemplate(templateFileName);
     } else {
       templateContent = 'Speaker: {Speaker.speakerPrefix}\t\tDate: {Session.sessionDate}\t\tTime: {TrialEvent.startTime}\n{StatementEvent.text}';
     }
@@ -697,19 +699,37 @@ export class EnhancedSearchServiceV2 {
     // Handle different query types
     if (results.queryResults) {
       // Using query registry results
-      const fileGroups = this.groupQueryResultsForOutput(results.queryResults, input.fileNameTemplate, results.customParameters, input.templateParams, input.templateType);
       
-      for (const [fileName, items] of Object.entries(fileGroups)) {
-        const renderedItems = items.map(item => {
-          const mergedData = { ...item, ...input.templateParams, ...results.customParameters };
-          return this.templateEngine.render(templateContent, mergedData);
-        });
+      // Check if this is a hierarchical query (like TrialEventHierarchy)
+      if (input.templateQuery === 'TrialEventHierarchy') {
+        // For hierarchical queries, render the entire structure as one
+        for (const trial of results.queryResults) {
+          const mergedData = { ...trial, ...input.templateParams, ...results.customParameters };
+          const rendered = this.templateEngine.render(templateContent, mergedData);
+          
+          // Generate filename using the trial data
+          const fileName = this.generateFileName(input.fileNameTemplate || 'output.txt', mergedData, input.templateType);
+          const outputPath = path.join(outputDir, fileName);
+          
+          fs.writeFileSync(outputPath, rendered);
+          outputFiles.push(outputPath);
+        }
+      } else {
+        // For flat queries, use the existing logic
+        const fileGroups = this.groupQueryResultsForOutput(results.queryResults, input.fileNameTemplate, results.customParameters, input.templateParams, input.templateType);
         
-        const outputContent = renderedItems.join(separator);
-        const outputPath = path.join(outputDir, fileName);
-        
-        fs.writeFileSync(outputPath, outputContent);
-        outputFiles.push(outputPath);
+        for (const [fileName, items] of Object.entries(fileGroups)) {
+          const renderedItems = items.map(item => {
+            const mergedData = { ...item, ...input.templateParams, ...results.customParameters };
+            return this.templateEngine.render(templateContent, mergedData);
+          });
+          
+          const outputContent = renderedItems.join(separator);
+          const outputPath = path.join(outputDir, fileName);
+          
+          fs.writeFileSync(outputPath, outputContent);
+          outputFiles.push(outputPath);
+        }
       }
     } else {
       // Using traditional statement results
@@ -832,6 +852,18 @@ export class EnhancedSearchServiceV2 {
   
   private sanitizeForFileName(str: string): string {
     return str.replace(/[<>:"|?*\/\\]/g, '-').replace(/\s+/g, '_');
+  }
+  
+  private generateFileName(template: string, data: any, templateType?: string): string {
+    if (templateType === 'Mustache') {
+      // Use Mustache to render the filename
+      const engine = new MustacheTemplateEngine();
+      return engine.render(template, data);
+    } else {
+      // Use native template engine
+      const engine = new NativeTemplateEngine();
+      return engine.render(template, data);
+    }
   }
   
   async disconnect(): Promise<void> {

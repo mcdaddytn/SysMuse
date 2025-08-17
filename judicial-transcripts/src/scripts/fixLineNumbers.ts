@@ -88,7 +88,7 @@ async function fixLineNumbers() {
     
     const events = await prisma.trialEvent.findMany({
       include: {
-        statements: {
+        statement: {
           include: {
             event: {
               include: {

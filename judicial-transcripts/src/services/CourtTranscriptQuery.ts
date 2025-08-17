@@ -62,10 +62,10 @@ export class CourtTranscriptQuery implements QueryExecutor {
         result.witnessName = event.witnessCalled.witness?.displayName || 'Unknown Witness';
         result.examinationType = this.formatExaminationType(event.witnessCalled.examinationType);
         result.swornStatus = event.witnessCalled.swornStatus;
-        result.rawText = event.witnessCalled.rawText;
+        result.rawText = event.rawText;
       } else if (event.courtDirective) {
         result.isCourtDirective = true;
-        result.directiveText = event.courtDirective.rawText;
+        result.directiveText = event.rawText;
         result.directiveType = event.courtDirective.directiveType?.name;
       }
 

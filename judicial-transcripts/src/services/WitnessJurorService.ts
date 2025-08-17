@@ -173,8 +173,7 @@ export class WitnessJurorService {
             examinationType: parsed.examinationType,
             swornStatus: parsed.swornStatus,
             continued: parsed.continued,
-            presentedByVideo: parsed.presentedByVideo,
-            rawText: rawText.substring(0, 255) // Ensure max 255 chars
+            presentedByVideo: parsed.presentedByVideo
           }
         });
         

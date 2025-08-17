@@ -1281,6 +1281,17 @@ export class Phase2Processor {
       // Calculate word and character counts
       const { wordCount, characterCount } = this.calculateTextMetrics(eventInfo, lines);
       
+      // Get raw text for the event (truncated to 255 chars)
+      let rawText: string | undefined;
+      if (eventInfo.rawText) {
+        rawText = eventInfo.rawText.substring(0, 255);
+      } else if (eventInfo.text) {
+        rawText = eventInfo.text.substring(0, 255);
+      } else if (lines.length > 0) {
+        const combinedText = lines.map(line => line.text || '').join(' ');
+        rawText = combinedText.substring(0, 255);
+      }
+      
       // Create trial event
       const event = await this.prisma.trialEvent.create({
         data: {
@@ -1294,7 +1305,8 @@ export class Phase2Processor {
           lineCount: lines.length,
           wordCount,
           characterCount,
-          eventType: eventInfo.type
+          eventType: eventInfo.type,
+          rawText
         }
       });
       
@@ -1359,7 +1371,6 @@ export class Phase2Processor {
       data: {
         eventId,
         directiveTypeId: directiveType.id,
-        rawText: directiveText.substring(0, 255),
         isStandard: false
       }
     });
@@ -1415,8 +1426,7 @@ export class Phase2Processor {
           examinationType,
           swornStatus,
           continued,
-          presentedByVideo,
-          rawText: fullText.substring(0, 255)
+          presentedByVideo
         }
       });
       

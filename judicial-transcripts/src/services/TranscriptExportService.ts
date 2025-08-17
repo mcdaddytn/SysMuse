@@ -295,11 +295,14 @@ export class TranscriptExportService {
           { startTime: { lte: marker.endTime || '' } }
         ]
       },
+      include: {
+        statement: true
+      },
       orderBy: { startTime: 'asc' }
     });
     
     return events
-      .map(e => e.text)
+      .map(e => e.statement?.text || e.rawText || '')
       .filter(t => t)
       .join(' ')
       .replace(/\s+/g, ' ')

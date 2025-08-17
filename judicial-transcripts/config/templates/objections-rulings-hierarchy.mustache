@@ -1,0 +1,32 @@
+TRIAL: {{trialName}}
+Case Number: {{caseNumber}}
+Report: Objections and Rulings Analysis
+========================================
+
+{{#sessions}}
+SESSION: {{sessionType}} - {{sessionDate}}
+========================================
+
+{{#events}}
+{{#statement}}
+{{#speaker}}
+{{#rawText}}
+[Line {{../startLineNumber}}] {{speakerPrefix}} ({{speakerType}}):
+  {{../rawText}}
+{{/rawText}}
+{{/speaker}}
+{{/statement}}
+
+{{#courtDirective}}
+{{#rawText}}
+[Line {{startLineNumber}}] COURT RULING:
+  {{rawText}}
+{{/rawText}}
+{{/courtDirective}}
+{{/events}}
+
+Session Summary:
+----------------
+Total Events: {{events.length}}
+
+{{/sessions}}

@@ -1,0 +1,16 @@
+{
+  "templateQuery": "TrialEventHierarchy",
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerHandle": "JUDGE_1",
+    "surroundingEvents": 3
+  },
+  "templateType": "Mustache",
+  "fileNameTemplate": "judge-statements-{{caseNumber}}.txt",
+  "templateFile": "judge-statements-hierarchy.mustache",
+  "resultSeparator": "\n\n",
+  "templateParams": {
+    "reportTitle": "Judge Statements with Surrounding Context",
+    "generatedDate": "2024"
+  }
+}

@@ -276,6 +276,7 @@ model TrialEvent {
   wordCount       Int?
   characterCount  Int?
   eventType       EventType
+  rawText         String?              @db.VarChar(255)
   createdAt       DateTime             @default(now())
   courtDirective  CourtDirectiveEvent?
   statement       StatementEvent?
@@ -291,7 +292,6 @@ model CourtDirectiveEvent {
   id              Int                @id @default(autoincrement())
   eventId         Int                @unique
   directiveTypeId Int
-  rawText         String             @db.VarChar(255)
   isStandard      Boolean            @default(true)
   directiveType   CourtDirectiveType @relation(fields: [directiveTypeId], references: [id])
   event           TrialEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -332,7 +332,6 @@ model WitnessCalledEvent {
   swornStatus      SwornStatus     @default(NOT_SWORN)
   continued        Boolean         @default(false)
   presentedByVideo Boolean         @default(false)
-  rawText          String          @db.VarChar(255)
   event            TrialEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   witness          Witness?        @relation(fields: [witnessId], references: [id])
 

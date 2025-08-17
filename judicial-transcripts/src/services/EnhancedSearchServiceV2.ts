@@ -697,7 +697,7 @@ export class EnhancedSearchServiceV2 {
     // Handle different query types
     if (results.queryResults) {
       // Using query registry results
-      const fileGroups = this.groupQueryResultsForOutput(results.queryResults, input.fileNameTemplate, results.customParameters, input.templateParams);
+      const fileGroups = this.groupQueryResultsForOutput(results.queryResults, input.fileNameTemplate, results.customParameters, input.templateParams, input.templateType);
       
       for (const [fileName, items] of Object.entries(fileGroups)) {
         const renderedItems = items.map(item => {
@@ -713,7 +713,7 @@ export class EnhancedSearchServiceV2 {
       }
     } else {
       // Using traditional statement results
-      const fileGroups = this.groupStatementsForOutput(results, input.fileNameTemplate);
+      const fileGroups = this.groupStatementsForOutput(results, input.fileNameTemplate, input.templateType);
       
       for (const [fileName, statements] of Object.entries(fileGroups)) {
         const renderedStatements = statements.map(stmt => {
@@ -747,7 +747,8 @@ export class EnhancedSearchServiceV2 {
     results: any[],
     fileNameTemplate?: string,
     customParams?: any,
-    templateParams?: any
+    templateParams?: any,
+    templateType?: 'Native' | 'Mustache'
   ): { [fileName: string]: any[] } {
     const groups: { [fileName: string]: any[] } = {};
     const defaultFileName = `results-${customParams?.runTimeStamp || 'output'}.txt`;
@@ -757,7 +758,7 @@ export class EnhancedSearchServiceV2 {
       return groups;
     }
     
-    const engine = TemplateEngineFactory.create();
+    const engine = TemplateEngineFactory.create({ templateType });
     
     for (const item of results) {
       const mergedData = { ...item, ...templateParams, ...customParams };
@@ -775,7 +776,8 @@ export class EnhancedSearchServiceV2 {
   
   private groupStatementsForOutput(
     results: EnhancedSearchResults,
-    fileNameTemplate?: string
+    fileNameTemplate?: string,
+    templateType?: 'Native' | 'Mustache'
   ): { [fileName: string]: any[] } {
     const groups: { [fileName: string]: any[] } = {};
     const defaultFileName = `results-${results.customParameters?.runTimeStamp || 'output'}.txt`;
@@ -787,7 +789,7 @@ export class EnhancedSearchServiceV2 {
     }
     
     const allStatements = this.flattenStatements(results);
-    const engine = TemplateEngineFactory.create();
+    const engine = TemplateEngineFactory.create({ templateType });
     
     for (const stmt of allStatements) {
       const fileName = engine.render(fileNameTemplate, { ...stmt, ...results.customParameters });

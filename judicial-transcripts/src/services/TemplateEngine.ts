@@ -58,7 +58,22 @@ export class NativeTemplateEngine implements TemplateEngine {
 
 export class MustacheTemplateEngine implements TemplateEngine {
   render(template: string, data: any): string {
-    return Mustache.render(template, data);
+    // Convert all {{variable}} to {{{variable}}} to disable HTML escaping
+    // But be careful not to convert already triple-braced variables
+    let unescapedTemplate = template;
+    
+    // First, temporarily replace existing triple braces to protect them
+    unescapedTemplate = unescapedTemplate.replace(/\{\{\{/g, '<<<TRIPLE_OPEN>>>');
+    unescapedTemplate = unescapedTemplate.replace(/\}\}\}/g, '<<<TRIPLE_CLOSE>>>');
+    
+    // Now convert double braces to triple braces
+    unescapedTemplate = unescapedTemplate.replace(/\{\{([^}]+)\}\}/g, '{{{$1}}}');
+    
+    // Restore any original triple braces
+    unescapedTemplate = unescapedTemplate.replace(/<<<TRIPLE_OPEN>>>/g, '{{{');
+    unescapedTemplate = unescapedTemplate.replace(/<<<TRIPLE_CLOSE>>>/g, '}}}');
+    
+    return Mustache.render(unescapedTemplate, data);
   }
 }
 

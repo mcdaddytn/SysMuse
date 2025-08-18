@@ -6,6 +6,7 @@ System to parse judicial transcripts from Lexis Nexis and other sources into a d
 ## Key Documentation
 - **Tech Stack & Conventions**: `docs/coding-conventions.md`
 - **Source Material Format**: `docs/transcript-conventions.md`
+- **Database & Testing**: `docs/database-testing-guide.md` ⚠️ MUST READ
 - **API Design**: `api-documentation.md`
 - **Architecture**: `project-structure.md`
 - **Sample Data**: `samples/transcripts/`

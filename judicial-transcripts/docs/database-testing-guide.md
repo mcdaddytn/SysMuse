@@ -4,10 +4,12 @@
 This guide documents the correct procedures for database management, data loading, and testing in the Judicial Transcripts system. The production data files are too large to check into source control, but are referenced via configuration files that ARE in source control.
 
 ## Important Notes
-- **NEVER** attempt to check in large transcript data files
+- **NEVER** attempt to check in large transcript data files or backup files
 - **ALWAYS** use the documented procedures below for database operations
-- Database backups (.sql files) are NOT in source control due to size
+- Database backups (.sql files) are stored in `backups/` directory (NOT in source control)
 - Configuration files pointing to data locations ARE in source control
+- All scripts run within Docker containers (including psql)
+- We DO NOT use Prisma migrations for development - we rebuild from scratch
 
 ## Database Reset and Initialization
 
@@ -15,23 +17,45 @@ This guide documents the correct procedures for database management, data loadin
 The correct order for a full database reset and data load:
 
 ```bash
-# 1. Clear the existing database
-npx prisma migrate reset --force
+# 1. Clear the existing database and rebuild schema
+npx prisma db push --force-reset
 
 # 2. Regenerate Prisma client code stubs
 npx prisma generate
 
-# 3. Apply schema migrations
-npx prisma migrate deploy
-
-# 4. Load basic seed data from JSON files
+# 3. Load basic seed data from JSON files
 npm run seed
+
+# 4. Create backup after seeding
+./scripts/backupdb.sh seed
 
 # 5. Run Phase 1 to parse and load transcript data
 npm run phase1
 
-# 6. Run Phase 2 to process and enhance the data
+# 6. Create backup after Phase 1
+./scripts/backupdb.sh phase1
+
+# 7. Run Phase 2 to process and enhance the data
 npm run phase2
+
+# 8. Create backup after Phase 2
+./scripts/backupdb.sh phase2
+```
+
+### Using Existing Backups
+Before running phases, check if backups already exist:
+
+```bash
+# Check for existing backups
+ls backups/judicial_transcripts_*.sql
+
+# If backups exist and code hasn't changed:
+# - judicial_transcripts_seed.sql
+# - judicial_transcripts_phase1.sql  
+# - judicial_transcripts_phase2.sql
+
+# Restore directly to desired state
+./scripts/restoredb.sh phase2  # Restores judicial_transcripts_phase2.sql
 ```
 
 ### Quick Reset Using Scripts
@@ -73,29 +97,42 @@ npm run phase2
 
 ## Database Backup and Restore
 
+### Backup Naming Convention
+The backup scripts use a standard naming convention:
+- **Pattern**: `judicial_transcripts_[stage].sql`
+- **Stages**: 
+  - `seed` - After initial seed data load
+  - `phase1` - After Phase 1 completion
+  - `phase2` - After Phase 2 completion
+  - Custom names for specific test states
+
 ### Creating Backups
-After successfully loading data through phases, create a checkpoint:
 ```bash
-# Create a backup after Phase 1
-./scripts/backupdb.sh phase1_complete
+# Standard backups (following naming convention)
+./scripts/backupdb.sh seed    # Creates: backups/judicial_transcripts_seed.sql
+./scripts/backupdb.sh phase1  # Creates: backups/judicial_transcripts_phase1.sql
+./scripts/backupdb.sh phase2  # Creates: backups/judicial_transcripts_phase2.sql
 
-# Create a backup after Phase 2
-./scripts/backupdb.sh phase2_complete
-
-# Create a backup with custom name
-./scripts/backupdb.sh my_test_state
+# Custom backup for testing
+./scripts/backupdb.sh my_test_state  # Creates: backups/judicial_transcripts_my_test_state.sql
 ```
 
-Backups are stored in `backups/` directory (not in source control).
-
 ### Restoring from Backups
-To quickly restore to a known good state:
 ```bash
-# Restore from a specific backup
-./scripts/restoredb.sh phase2_complete
+# Restore standard backups
+./scripts/restoredb.sh seed    # Restores from judicial_transcripts_seed.sql
+./scripts/restoredb.sh phase1  # Restores from judicial_transcripts_phase1.sql
+./scripts/restoredb.sh phase2  # Restores from judicial_transcripts_phase2.sql
 
 # List available backups
-ls backups/*.sql
+ls -la backups/judicial_transcripts_*.sql
+```
+
+### Windows Users
+Use the `.bat` versions of scripts:
+```bash
+scripts\backupdb.bat phase1
+scripts\restoredb.bat phase2
 ```
 
 ## Testing Workflows
@@ -107,20 +144,33 @@ ls backups/*.sql
 
 ### For Feature Development
 ```bash
-# Quick restore to Phase 2 complete state
-./scripts/restoredb.sh phase2_complete
+# Check if backup exists
+if [ -f "backups/judicial_transcripts_phase2.sql" ]; then
+    # Quick restore to Phase 2 complete state
+    ./scripts/restoredb.sh phase2
+else
+    # Need to build from scratch
+    npx prisma db push --force-reset
+    npx prisma generate
+    npm run seed
+    ./scripts/backupdb.sh seed
+    npm run phase1
+    ./scripts/backupdb.sh phase1
+    npm run phase2
+    ./scripts/backupdb.sh phase2
+fi
 
 # Run your feature
 npm run feature:03  # or whatever feature
 
 # Test queries
-npm run test:queries
+npm run run-all-queries
 ```
 
 ### For Debugging Phases
 ```bash
 # Full reset and step-through
-npx prisma migrate reset --force
+npx prisma db push --force-reset
 npx prisma generate
 npm run seed
 npm run phase1 -- --verbose  # with debug output
@@ -134,7 +184,7 @@ npm run phase2 -- --verbose
 ### Testing Search Functionality
 ```bash
 # Ensure database is at Phase 2 complete
-./scripts/restoredb.sh phase2_complete
+./scripts/restoredb.sh phase2
 
 # Reset Elasticsearch
 ./scripts/reset-elasticsearch.sh
@@ -149,7 +199,7 @@ npm run test:search
 ### Testing Report Generation
 ```bash
 # Restore to known state with full data
-./scripts/restoredb.sh phase2_complete
+./scripts/restoredb.sh phase2
 
 # Run report generation
 npm run reports:generate
@@ -158,7 +208,7 @@ npm run reports:generate
 ### Testing Specific Queries
 ```bash
 # Restore database
-./scripts/restoredb.sh phase2_complete
+./scripts/restoredb.sh phase2
 
 # Run query tests
 npm run run-all-queries
@@ -186,13 +236,30 @@ npm run run-all-queries
 ## Best Practices for Claude Sessions
 
 ### Starting a New Session
-1. Ask about current database state
-2. Check if backups are available
-3. Restore from appropriate checkpoint
+1. Check for existing backups: `ls backups/judicial_transcripts_*.sql`
+2. If standard backups exist (seed, phase1, phase2), use them
+3. If not, build from scratch following the initialization sequence
+4. Always verify current database state before making changes
+
+### Efficient Testing Workflow
+```bash
+# First, check what backups are available
+ls -la backups/judicial_transcripts_*.sql
+
+# If phase2 backup exists, use it
+./scripts/restoredb.sh phase2
+
+# If not, check for phase1 and build from there
+./scripts/restoredb.sh phase1
+npm run phase2
+./scripts/backupdb.sh phase2
+
+# Always create backups after successful operations
+```
 
 ### Before Major Changes
 1. Create a backup of current state
-2. Document the backup name and purpose
+2. Use descriptive names for custom backups
 3. Test changes incrementally
 
 ### For Debugging
@@ -204,35 +271,41 @@ npm run run-all-queries
 - ❌ Try to load transcript files directly without using phases
 - ❌ Skip Phase 1 and go directly to Phase 2
 - ❌ Attempt to check in backup files or large data files
-- ❌ Run `prisma migrate dev` in production mode
+- ❌ Use `prisma migrate` commands (we use `prisma db push` instead)
 - ❌ Delete backups without confirming they're not needed
+- ❌ Recreate backups if they already exist and code hasn't changed
 
 ## Quick Reference Commands
 
 ```bash
-# Full reset and load
-npm run reset:full
+# Database Schema Management
+npx prisma db push --force-reset  # Reset database and apply schema
+npx prisma generate               # Generate Prisma client
 
-# Just reset database (no data load)  
-npx prisma migrate reset --force
+# Data Loading Sequence
+npm run seed                      # Load seed data
+npm run phase1                    # Parse and load transcripts
+npm run phase2                    # Process and enhance data
 
-# Load through Phase 1
-npm run phase1
+# Backup Management (creates backups/judicial_transcripts_[name].sql)
+./scripts/backupdb.sh seed       # Backup after seeding
+./scripts/backupdb.sh phase1     # Backup after Phase 1
+./scripts/backupdb.sh phase2     # Backup after Phase 2
 
-# Load through Phase 2
-npm run phase2
+# Restore from Backups
+./scripts/restoredb.sh seed      # Restore to seed state
+./scripts/restoredb.sh phase1    # Restore to Phase 1 complete
+./scripts/restoredb.sh phase2    # Restore to Phase 2 complete
 
-# Backup current state
-./scripts/backupdb.sh [backup_name]
+# Testing
+npm run run-all-queries          # Run all query tests
 
-# Restore from backup
-./scripts/restoredb.sh [backup_name]
+# Elasticsearch
+./scripts/reset-elasticsearch.sh # Reset Elasticsearch
+npm run sync:elasticsearch       # Sync data to Elasticsearch
 
-# Run all tests
-npm run test:all
-
-# Run specific query tests
-npm run run-all-queries
+# Check Available Backups
+ls -la backups/judicial_transcripts_*.sql
 ```
 
 ## Configuration File Locations

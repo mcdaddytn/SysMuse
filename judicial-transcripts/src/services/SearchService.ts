@@ -62,6 +62,8 @@ export class SearchService {
     }
   }
   
+  // Phase 3 feature - commented out until schema is ready
+  /*
   async searchByPattern(
     pattern: string,
     trialId?: number
@@ -94,7 +96,10 @@ export class SearchService {
       throw error;
     }
   }
+  */
   
+  // Phase 3 feature - commented out until schema is ready
+  /*
   async searchWithinMarkers(
     query: string,
     markerIds: number[]
@@ -148,6 +153,7 @@ export class SearchService {
       throw error;
     }
   }
+  */
   
   private buildFilters(searchQuery: SearchQuery): any[] {
     const filters: any[] = [];

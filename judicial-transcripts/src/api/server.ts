@@ -11,7 +11,7 @@ import { SearchService } from '../services/SearchService';
 import { TranscriptExportService } from '../services/TranscriptExportService';
 import { CombinedSearchService } from '../services/CombinedSearchService';
 import logger from '../utils/logger';
-import multer from 'multer';
+const multer = require('multer');
 import path from 'path';
 
 const app: Express = express();
@@ -103,9 +103,9 @@ app.get('/api/trials/:id', async (req: Request, res: Response) => {
 // Upload and process transcripts
 app.post('/api/trials/upload', 
   upload.array('files', 50),
-  async (req: Request, res: Response) => {
+  async (req: any, res: Response) => {
     try {
-      const files = req.files as Express.Multer.File[];
+      const files = req.files as any[];
       
       if (!files || files.length === 0) {
         res.status(400).json({ error: 'No files uploaded' });

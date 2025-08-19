@@ -27,19 +27,19 @@ npx prisma generate
 npm run seed
 
 # 4. Create backup after seeding
-./scripts/backupdb.sh seed
+../scripts/db/backupdb.sh seed
 
 # 5. Run Phase 1 to parse and load transcript data
 npm run phase1
 
 # 6. Create backup after Phase 1
-./scripts/backupdb.sh phase1
+../scripts/db/backupdb.sh phase1
 
 # 7. Run Phase 2 to process and enhance the data
 npm run phase2
 
 # 8. Create backup after Phase 2
-./scripts/backupdb.sh phase2
+../scripts/db/backupdb.sh phase2
 ```
 
 ### Using Existing Backups
@@ -55,16 +55,16 @@ ls backups/judicial_transcripts_*.sql
 # - judicial_transcripts_phase2.sql
 
 # Restore directly to desired state
-./scripts/restoredb.sh phase2  # Restores judicial_transcripts_phase2.sql
+../scripts/db/restoredb.sh phase2  # Restores judicial_transcripts_phase2.sql
 ```
 
 ### Quick Reset Using Scripts
 ```bash
 # For complete reset including Elasticsearch
-./scripts/reset-all.sh
+../scripts/db/reset-all.sh
 
 # For Elasticsearch reset only
-./scripts/reset-elasticsearch.sh
+../scripts/db/reset-elasticsearch.sh
 ```
 
 ## Data Loading Process
@@ -109,20 +109,20 @@ The backup scripts use a standard naming convention:
 ### Creating Backups
 ```bash
 # Standard backups (following naming convention)
-./scripts/backupdb.sh seed    # Creates: backups/judicial_transcripts_seed.sql
-./scripts/backupdb.sh phase1  # Creates: backups/judicial_transcripts_phase1.sql
-./scripts/backupdb.sh phase2  # Creates: backups/judicial_transcripts_phase2.sql
+../scripts/db/backupdb.sh seed    # Creates: backups/judicial_transcripts_seed.sql
+../scripts/db/backupdb.sh phase1  # Creates: backups/judicial_transcripts_phase1.sql
+../scripts/db/backupdb.sh phase2  # Creates: backups/judicial_transcripts_phase2.sql
 
 # Custom backup for testing
-./scripts/backupdb.sh my_test_state  # Creates: backups/judicial_transcripts_my_test_state.sql
+../scripts/db/backupdb.sh my_test_state  # Creates: backups/judicial_transcripts_my_test_state.sql
 ```
 
 ### Restoring from Backups
 ```bash
 # Restore standard backups
-./scripts/restoredb.sh seed    # Restores from judicial_transcripts_seed.sql
-./scripts/restoredb.sh phase1  # Restores from judicial_transcripts_phase1.sql
-./scripts/restoredb.sh phase2  # Restores from judicial_transcripts_phase2.sql
+../scripts/db/restoredb.sh seed    # Restores from judicial_transcripts_seed.sql
+../scripts/db/restoredb.sh phase1  # Restores from judicial_transcripts_phase1.sql
+../scripts/db/restoredb.sh phase2  # Restores from judicial_transcripts_phase2.sql
 
 # List available backups
 ls -la backups/judicial_transcripts_*.sql
@@ -147,17 +147,17 @@ scripts\restoredb.bat phase2
 # Check if backup exists
 if [ -f "backups/judicial_transcripts_phase2.sql" ]; then
     # Quick restore to Phase 2 complete state
-    ./scripts/restoredb.sh phase2
+    ../scripts/db/restoredb.sh phase2
 else
     # Need to build from scratch
     npx prisma db push --force-reset
     npx prisma generate
     npm run seed
-    ./scripts/backupdb.sh seed
+    ../scripts/db/backupdb.sh seed
     npm run phase1
-    ./scripts/backupdb.sh phase1
+    ../scripts/db/backupdb.sh phase1
     npm run phase2
-    ./scripts/backupdb.sh phase2
+    ../scripts/db/backupdb.sh phase2
 fi
 
 # Run your feature
@@ -184,10 +184,10 @@ npm run phase2 -- --verbose
 ### Testing Search Functionality
 ```bash
 # Ensure database is at Phase 2 complete
-./scripts/restoredb.sh phase2
+../scripts/db/restoredb.sh phase2
 
 # Reset Elasticsearch
-./scripts/reset-elasticsearch.sh
+../scripts/db/reset-elasticsearch.sh
 
 # Sync data to Elasticsearch
 npm run sync:elasticsearch
@@ -199,7 +199,7 @@ npm run test:search
 ### Testing Report Generation
 ```bash
 # Restore to known state with full data
-./scripts/restoredb.sh phase2
+../scripts/db/restoredb.sh phase2
 
 # Run report generation
 npm run reports:generate
@@ -208,7 +208,7 @@ npm run reports:generate
 ### Testing Specific Queries
 ```bash
 # Restore database
-./scripts/restoredb.sh phase2
+../scripts/db/restoredb.sh phase2
 
 # Run query tests
 npm run run-all-queries
@@ -247,12 +247,12 @@ npm run run-all-queries
 ls -la backups/judicial_transcripts_*.sql
 
 # If phase2 backup exists, use it
-./scripts/restoredb.sh phase2
+../scripts/db/restoredb.sh phase2
 
 # If not, check for phase1 and build from there
-./scripts/restoredb.sh phase1
+../scripts/db/restoredb.sh phase1
 npm run phase2
-./scripts/backupdb.sh phase2
+../scripts/db/backupdb.sh phase2
 
 # Always create backups after successful operations
 ```
@@ -288,20 +288,20 @@ npm run phase1                    # Parse and load transcripts
 npm run phase2                    # Process and enhance data
 
 # Backup Management (creates backups/judicial_transcripts_[name].sql)
-./scripts/backupdb.sh seed       # Backup after seeding
-./scripts/backupdb.sh phase1     # Backup after Phase 1
-./scripts/backupdb.sh phase2     # Backup after Phase 2
+../scripts/db/backupdb.sh seed       # Backup after seeding
+../scripts/db/backupdb.sh phase1     # Backup after Phase 1
+../scripts/db/backupdb.sh phase2     # Backup after Phase 2
 
 # Restore from Backups
-./scripts/restoredb.sh seed      # Restore to seed state
-./scripts/restoredb.sh phase1    # Restore to Phase 1 complete
-./scripts/restoredb.sh phase2    # Restore to Phase 2 complete
+../scripts/db/restoredb.sh seed      # Restore to seed state
+../scripts/db/restoredb.sh phase1    # Restore to Phase 1 complete
+../scripts/db/restoredb.sh phase2    # Restore to Phase 2 complete
 
 # Testing
 npm run run-all-queries          # Run all query tests
 
 # Elasticsearch
-./scripts/reset-elasticsearch.sh # Reset Elasticsearch
+../scripts/db/reset-elasticsearch.sh # Reset Elasticsearch
 npm run sync:elasticsearch       # Sync data to Elasticsearch
 
 # Check Available Backups

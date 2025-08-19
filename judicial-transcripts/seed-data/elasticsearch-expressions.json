@@ -1,0 +1,1594 @@
+[
+  {
+    "name": "opening_salutations_all_rise",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "all rise",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "all rise"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_you_may_be_seated",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "you may be seated",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "you may be seated"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_please_be_seated",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "please be seated",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "please be seated"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_may_it_please_the_court",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "may it please the court",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "may it please the court"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_ladies_and_gentlemen_of_the_jury",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "ladies and gentlemen of the jury",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "ladies and gentlemen of the jury"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_jury_may_rise",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "jury may rise",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "jury may rise"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_jury_may_be_seated",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "jury may be seated",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "jury may be seated"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_jurors_may_step_out",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "jurors may step out",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "jurors may step out"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_outside_the_presence_of_the_jury",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "outside the presence of the jury",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "outside the presence of the jury"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_bring_the_jury_in",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "bring the jury in",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "bring the jury in"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_call_wildcard__next_witness",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "call* next witness",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "call* next witness"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_you_may_step_down",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "you may step down",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "you may step down"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_witness_is_excused",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "witness is excused",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "witness is excused"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_youre_excused",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "you're excused",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "you're excused"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_pass_the_witness",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "pass the witness",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "pass the witness"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_crossexamination",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "cross-examination",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "cross-examination"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_redirect",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "redirect",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "redirect"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_rebuttal_witness",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "rebuttal witness",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "rebuttal witness"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_do_you_have_anything_else_for_this_witness",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "do you have anything else for this witness",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "do you have anything else for this witness"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_objection",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "objection",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "objection"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_we_object",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "we object",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "we object"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_objection__wildcard__hearsay",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "objection * hearsay",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "objection * hearsay"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_objection__wildcard__form",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "objection * form",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "objection * form"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_sustained",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "sustained",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "sustained"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_overruled",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "overruled",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "overruled"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_rephrase_the_question",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "rephrase the question",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "rephrase the question"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_how_about_rephrasing",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "how about rephrasing",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "how about rephrasing"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_ill_allow_it",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "I'll allow it",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "I'll allow it"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_approach_approach_the_bench",
+    "expressionType": "Sidebar / Approach",
+    "phrasePattern": "approach the bench",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "approach the bench"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_approach_sidebar",
+    "expressionType": "Sidebar / Approach",
+    "phrasePattern": "sidebar",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "sidebar"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_approach_lets_approach",
+    "expressionType": "Sidebar / Approach",
+    "phrasePattern": "let's approach",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "let's approach"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_approach_counsel_approach",
+    "expressionType": "Sidebar / Approach",
+    "phrasePattern": "counsel approach",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "counsel approach"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_take_a_short_recess",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "take a short recess",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "take a short recess"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_off_the_record",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "off the record",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "off the record"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_back_on_the_record",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "back on the record",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "back on the record"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_well_be_dismissed",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "we'll be dismissed",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "we'll be dismissed"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_you_are_excused",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "you are excused",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "you are excused"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_you_have__wildcard__minutes_remaining",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "you have * minutes remaining",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "you have * minutes remaining"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_want_a__wildcard__minute_warning",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "want a * minute warning",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "want a * minute warning"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_the_defense_rests",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "the defense rests",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "the defense rests"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_defendants_have_now_rested_wildcard_",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "defendants have now rested*",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "defendants have now rested*"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_plaintiff_rests_its_case",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "plaintiff rests its case",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "plaintiff rests its case"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_do_you_have_a_rebuttal",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "do you have a rebuttal",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "do you have a rebuttal"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_do_you_rest_your_rebuttal",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "do you rest your rebuttal",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "do you rest your rebuttal"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_closing_arguments",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "closing arguments",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "closing arguments"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_opening_statements",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "opening statements",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "opening statements"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_begin_opening",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "begin opening",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "begin opening"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_proceed_with_opening",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "proceed with opening",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "proceed with opening"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_is_your_verdict_unanimous",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "is your verdict unanimous",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "is your verdict unanimous"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_anything_further",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "anything further",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "anything further"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_anything_further_from__wildcard_",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "anything further from *",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "anything further from *"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_ill_hear_from_counsel",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "I'll hear from counsel",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "I'll hear from counsel"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_lets_hear_from_the_defendant",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "let's hear from the defendant",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "let's hear from the defendant"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_check_with_the_court_reporter",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "check with the court reporter",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "check with the court reporter"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_clarify_for_the_jury",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "clarify for the jury",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "clarify for the jury"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_what_evidence_can_we_expect",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "what evidence can we expect",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "what evidence can we expect"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_do_you_have_anything_else",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "do you have anything else",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "do you have anything else"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_are_you_getting_close",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "are you getting close",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "are you getting close"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_ive_made_the_decision",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "I've made the decision",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "I've made the decision"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_jury_selection_do_you_have_any_for_cause",
+    "expressionType": "Voir Dire / Jury Selection",
+    "phrasePattern": "do you have any for cause",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "do you have any for cause"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_jury_selection_i_would_challenge",
+    "expressionType": "Voir Dire / Jury Selection",
+    "phrasePattern": "I would challenge",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "I would challenge"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_jury_selection_challenge_for_cause",
+    "expressionType": "Voir Dire / Jury Selection",
+    "phrasePattern": "challenge for cause",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "challenge for cause"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_jury_selection_peremptory_challenge",
+    "expressionType": "Voir Dire / Jury Selection",
+    "phrasePattern": "peremptory challenge",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "peremptory challenge"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "negations_cautions_not_sustained",
+    "expressionType": "Negations / Cautions",
+    "phrasePattern": "not sustained",
+    "searchStrategy": "bool_must_not",
+    "esQuery": {
+      "bool": {
+        "must": [
+          {
+            "match_phrase": {
+              "text": "sustained"
+            }
+          }
+        ],
+        "must_not": [
+          {
+            "match_phrase": {
+              "text": "not sustained"
+            }
+          }
+        ]
+      }
+    },
+    "description": "look for 'sustained' if 'not sustained' is not found",
+    "isActive": true
+  },
+  {
+    "name": "negations_cautions_not_overruled",
+    "expressionType": "Negations / Cautions",
+    "phrasePattern": "not overruled",
+    "searchStrategy": "bool_must_not",
+    "esQuery": {
+      "bool": {
+        "must": [
+          {
+            "match_phrase": {
+              "text": "overruled"
+            }
+          }
+        ],
+        "must_not": [
+          {
+            "match_phrase": {
+              "text": "not overruled"
+            }
+          }
+        ]
+      }
+    },
+    "description": "look for 'overruled' if 'not overruled' is not found",
+    "isActive": true
+  },
+  {
+    "name": "negations_cautions_not_allowed",
+    "expressionType": "Negations / Cautions",
+    "phrasePattern": "not allowed",
+    "searchStrategy": "bool_must_not",
+    "esQuery": {
+      "bool": {
+        "must": [
+          {
+            "match_phrase": {
+              "text": "allowed"
+            }
+          }
+        ],
+        "must_not": [
+          {
+            "match_phrase": {
+              "text": "not allowed"
+            }
+          }
+        ]
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "negations_cautions_outside_your_presence",
+    "expressionType": "Negations / Cautions",
+    "phrasePattern": "outside your presence",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "outside your presence"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "negations_cautions_inadmissible",
+    "expressionType": "Negations / Cautions",
+    "phrasePattern": "inadmissible",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "inadmissible"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_evidentiary_matter",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "evidentiary matter",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "evidentiary matter"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_into_evidence",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "into evidence",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "into evidence"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_marked_as_exhibit",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "marked as exhibit",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "marked as exhibit"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_let_the_record_reflect",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "let the record reflect",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "let the record reflect"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_strike_that_from_the_record",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "strike that from the record",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "strike that from the record"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_court_will_take_this_under_advisement",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "court will take this under advisement",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "court will take this under advisement"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_proceedings_in_chambers",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "proceedings in chambers",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "proceedings in chambers"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_court_is_now_in_session",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "court is now in session",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "court is now in session"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_good_morning",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "\"good morning",
+    "searchStrategy": "counsel\"",
+    "esQuery": {
+      "match_phrase": {
+        "text": "\"good morning"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "opening_salutations_good_afternoon",
+    "expressionType": "Opening / Salutations",
+    "phrasePattern": "\"good afternoon",
+    "searchStrategy": "everyone\"",
+    "esQuery": {
+      "match_phrase": {
+        "text": "\"good afternoon"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_jurors__wildcard__step_out",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "jurors * step out",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "jurors * step out"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_jury__wildcard__come_back_in",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "jury * come back in",
+    "searchStrategy": "wildcard",
+    "esQuery": {
+      "wildcard": {
+        "text.keyword": "jury * come back in"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_movement_remove_the_jury",
+    "expressionType": "Jury Movement",
+    "phrasePattern": "remove the jury",
+    "searchStrategy": "match_phrase",
+    "esQuery": {
+      "match_phrase": {
+        "text": "remove the jury"
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_step_near2_down",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "step NEAR/2 down",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "step"
+            }
+          },
+          {
+            "span_term": {
+              "text": "down"
+            }
+          }
+        ],
+        "slop": 2,
+        "in_order": true
+      }
+    },
+    "description": "Judge excusing witness",
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_witness_near3_excused",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "witness NEAR/3 excused",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "witness"
+            }
+          },
+          {
+            "span_term": {
+              "text": "excused"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "description": "Witness being dismissed",
+    "isActive": true
+  },
+  {
+    "name": "witness_handling_call_near2_witness",
+    "expressionType": "Witness Handling",
+    "phrasePattern": "call NEAR/2 witness",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "call"
+            }
+          },
+          {
+            "span_term": {
+              "text": "witness"
+            }
+          }
+        ],
+        "slop": 2,
+        "in_order": true
+      }
+    },
+    "description": "Calling next witness",
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_object_near5_hearsay",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "object NEAR/5 hearsay",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "object"
+            }
+          },
+          {
+            "span_term": {
+              "text": "hearsay"
+            }
+          }
+        ],
+        "slop": 5,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_object_near5_foundation",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "object NEAR/5 foundation",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "object"
+            }
+          },
+          {
+            "span_term": {
+              "text": "foundation"
+            }
+          }
+        ],
+        "slop": 5,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_overrule_near1_objection",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "overrule NEAR/1 objection",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "overrule"
+            }
+          },
+          {
+            "span_term": {
+              "text": "objection"
+            }
+          }
+        ],
+        "slop": 1,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_handling_sustain_near1_objection",
+    "expressionType": "Objection Handling",
+    "phrasePattern": "sustain NEAR/1 objection",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "sustain"
+            }
+          },
+          {
+            "span_term": {
+              "text": "objection"
+            }
+          }
+        ],
+        "slop": 1,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_approach_approach_near2_bench",
+    "expressionType": "Sidebar / Approach",
+    "phrasePattern": "approach NEAR/2 bench",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "approach"
+            }
+          },
+          {
+            "span_term": {
+              "text": "bench"
+            }
+          }
+        ],
+        "slop": 2,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_approach_request_near3_sidebar",
+    "expressionType": "Sidebar / Approach",
+    "phrasePattern": "request NEAR/3 sidebar",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "request"
+            }
+          },
+          {
+            "span_term": {
+              "text": "sidebar"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_take_near2_recess",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "take NEAR/2 recess",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "take"
+            }
+          },
+          {
+            "span_term": {
+              "text": "recess"
+            }
+          }
+        ],
+        "slop": 2,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_brief_near3_break",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "brief NEAR/3 break",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "brief"
+            }
+          },
+          {
+            "span_term": {
+              "text": "break"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_timing_go_near3_off_record",
+    "expressionType": "Recess / Timing",
+    "phrasePattern": "go NEAR/3 off record",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "go"
+            }
+          },
+          {
+            "span_term": {
+              "text": "off record"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_rest_near3_rebuttal",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "rest NEAR/3 rebuttal",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "rest"
+            }
+          },
+          {
+            "span_term": {
+              "text": "rebuttal"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "description": "Checking if rebuttal phase has ended",
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_rest_near3_case",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "rest NEAR/3 case",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "rest"
+            }
+          },
+          {
+            "span_term": {
+              "text": "case"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_closing_near3_statement",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "closing NEAR/3 statement",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "closing"
+            }
+          },
+          {
+            "span_term": {
+              "text": "statement"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "phase_transitions_opening_near3_argument",
+    "expressionType": "Phase Transitions",
+    "phrasePattern": "opening NEAR/3 argument",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "opening"
+            }
+          },
+          {
+            "span_term": {
+              "text": "argument"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_will_near3_allow",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "will NEAR/3 allow",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "will"
+            }
+          },
+          {
+            "span_term": {
+              "text": "allow"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "judicial_direction_hear_near2_counsel",
+    "expressionType": "Judicial Direction",
+    "phrasePattern": "hear NEAR/2 counsel",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "hear"
+            }
+          },
+          {
+            "span_term": {
+              "text": "counsel"
+            }
+          }
+        ],
+        "slop": 2,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_jury_selection_excuse_near3_juror",
+    "expressionType": "Voir Dire / Jury Selection",
+    "phrasePattern": "excuse NEAR/3 juror",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "excuse"
+            }
+          },
+          {
+            "span_term": {
+              "text": "juror"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_jury_selection_challenge_near3_cause",
+    "expressionType": "Voir Dire / Jury Selection",
+    "phrasePattern": "challenge NEAR/3 cause",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "challenge"
+            }
+          },
+          {
+            "span_term": {
+              "text": "cause"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_let_near2_record_reflect",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "let NEAR/2 record reflect",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "let"
+            }
+          },
+          {
+            "span_term": {
+              "text": "record reflect"
+            }
+          }
+        ],
+        "slop": 2,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_mark_near3_exhibit",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "mark NEAR/3 exhibit",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "mark"
+            }
+          },
+          {
+            "span_term": {
+              "text": "exhibit"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "miscellaneous_enter_near3_evidence",
+    "expressionType": "Miscellaneous",
+    "phrasePattern": "enter NEAR/3 evidence",
+    "searchStrategy": "span_near",
+    "esQuery": {
+      "span_near": {
+        "clauses": [
+          {
+            "span_term": {
+              "text": "enter"
+            }
+          },
+          {
+            "span_term": {
+              "text": "evidence"
+            }
+          }
+        ],
+        "slop": 3,
+        "in_order": true
+      }
+    },
+    "isActive": true
+  }
+]

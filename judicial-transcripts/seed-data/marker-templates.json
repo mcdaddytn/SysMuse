@@ -1,0 +1,44 @@
+[
+  {
+    "markerType": "WITNESS_TESTIMONY_START",
+    "sectionType": "WITNESS_TESTIMONY",
+    "namePattern": "WitnessTestimony_{witness.speakerHandle}_Start",
+    "descPattern": "Start of testimony for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "WITNESS_TESTIMONY_END",
+    "sectionType": "WITNESS_TESTIMONY",
+    "namePattern": "WitnessTestimony_{witness.speakerHandle}_End",
+    "descPattern": "End of testimony for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "WITNESS_EXAMINATION_START",
+    "sectionType": "WITNESS_EXAMINATION",
+    "namePattern": "WitnessExamination_{examinationType}_{witness.speakerHandle}_Start",
+    "descPattern": "Start of {examinationType} for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "WITNESS_EXAMINATION_END",
+    "sectionType": "WITNESS_EXAMINATION",
+    "namePattern": "WitnessExamination_{examinationType}_{witness.speakerHandle}_End",
+    "descPattern": "End of {examinationType} for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "ACTIVITY_START",
+    "sectionType": "ACTIVITY",
+    "namePattern": "Activity_{activityType}_{eventId}_Start",
+    "descPattern": "Start of {activityType} activity",
+    "isActive": true
+  },
+  {
+    "markerType": "ACTIVITY_END",
+    "sectionType": "ACTIVITY",
+    "namePattern": "Activity_{activityType}_{eventId}_End",
+    "descPattern": "End of {activityType} activity",
+    "isActive": true
+  }
+]

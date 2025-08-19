@@ -10,6 +10,9 @@ interface SeedData {
   courtDirectives?: any[];
   configs?: any[];
   searchPatterns?: any[];
+  elasticsearchExpressions?: any[];
+  markerTemplates?: any[];
+  accumulatorExpressions?: any[];
 }
 
 async function loadSeedData(fileName: string): Promise<SeedData> {
@@ -151,6 +154,113 @@ async function seedSearchPatterns() {
   logger.info('Search patterns seeding completed');
 }
 
+async function seedElasticSearchExpressions() {
+  logger.info('Seeding ElasticSearch expressions...');
+  
+  try {
+    const data = await loadSeedData('elasticsearch-expressions.json');
+    
+    if (!Array.isArray(data)) {
+      logger.warn('No ElasticSearch expressions found in seed data');
+      return;
+    }
+
+    for (const expr of data) {
+      try {
+        await prisma.elasticSearchExpression.upsert({
+          where: { name: expr.name },
+          update: {
+            expressionType: expr.expressionType,
+            phrasePattern: expr.phrasePattern,
+            searchStrategy: expr.searchStrategy,
+            esQuery: expr.esQuery,
+            description: expr.description,
+            isActive: expr.isActive
+          },
+          create: expr
+        });
+        
+        logger.info(`Seeded ES expression: ${expr.name}`);
+      } catch (error) {
+        logger.error(`Error seeding ES expression ${expr.name}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.warn('elasticsearch-expressions.json not found or invalid');
+  }
+  
+  logger.info('ElasticSearch expressions seeding completed');
+}
+
+async function seedMarkerTemplates() {
+  logger.info('Seeding marker templates...');
+  
+  try {
+    const data = await loadSeedData('marker-templates.json');
+    
+    if (!Array.isArray(data)) {
+      logger.warn('No marker templates found in seed data');
+      return;
+    }
+
+    for (const template of data) {
+      try {
+        await prisma.markerTemplate.create({
+          data: template
+        });
+        
+        logger.info(`Seeded marker template: ${template.namePattern}`);
+      } catch (error) {
+        logger.error(`Error seeding marker template:`, error);
+      }
+    }
+  } catch (error) {
+    logger.warn('marker-templates.json not found or invalid');
+  }
+  
+  logger.info('Marker templates seeding completed');
+}
+
+async function seedAccumulatorExpressions() {
+  logger.info('Seeding accumulator expressions...');
+  
+  try {
+    const data = await loadSeedData('accumulator-expressions.json');
+    
+    if (!Array.isArray(data)) {
+      logger.warn('No accumulator expressions found in seed data');
+      return;
+    }
+
+    for (const expr of data) {
+      try {
+        await prisma.accumulatorExpression.upsert({
+          where: { name: expr.name },
+          update: {
+            description: expr.description,
+            expressionType: expr.expressionType,
+            windowSize: expr.windowSize,
+            thresholdValue: expr.thresholdValue,
+            minConfidenceLevel: expr.minConfidenceLevel,
+            combinationType: expr.combinationType,
+            metadata: expr.metadata,
+            isActive: expr.isActive
+          },
+          create: expr
+        });
+        
+        logger.info(`Seeded accumulator expression: ${expr.name}`);
+      } catch (error) {
+        logger.error(`Error seeding accumulator expression ${expr.name}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.warn('accumulator-expressions.json not found or invalid');
+  }
+  
+  logger.info('Accumulator expressions seeding completed');
+}
+
 async function main() {
   try {
     logger.info('Starting database seeding...');
@@ -163,12 +273,18 @@ async function main() {
       await prisma.systemConfig.deleteMany({});
       */
       await prisma.courtDirectiveType.deleteMany({});
+      await prisma.markerTemplate.deleteMany({});
+      await prisma.accumulatorExpression.deleteMany({});
+      await prisma.elasticSearchExpression.deleteMany({});
     }
     
     // Seed data in order
     await seedCourtDirectives();
     await seedSystemConfig();
     await seedSearchPatterns();
+    await seedElasticSearchExpressions();
+    await seedMarkerTemplates();
+    await seedAccumulatorExpressions();
     
     logger.info('Database seeding completed successfully');
   } catch (error) {

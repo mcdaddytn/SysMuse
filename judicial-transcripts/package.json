@@ -17,6 +17,7 @@
     "prisma:studio": "prisma studio",
     "prisma:reset": "prisma migrate reset --force",
     "seed": "ts-node src/seed/seedDatabase.ts",
+    "phase3": "ts-node src/cli/phase3.ts",
     "es:reset": "ts-node src/scripts/resetElasticsearch.ts",
     "es:reset:sync": "ts-node src/scripts/resetElasticsearch.ts --force --resync",
     "test": "jest",

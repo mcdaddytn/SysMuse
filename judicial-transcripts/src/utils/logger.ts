@@ -49,3 +49,32 @@ try {
 }
 
 export default logger;
+
+// Wrapper class for consistent logging interface
+export class Logger {
+  private context: string;
+
+  constructor(context: string) {
+    this.context = context;
+  }
+
+  info(message: string): void {
+    logger.info(`[${this.context}] ${message}`);
+  }
+
+  warn(message: string): void {
+    logger.warn(`[${this.context}] ${message}`);
+  }
+
+  error(message: string, error?: any): void {
+    if (error) {
+      logger.error(`[${this.context}] ${message}: ${error}`);
+    } else {
+      logger.error(`[${this.context}] ${message}`);
+    }
+  }
+
+  debug(message: string): void {
+    logger.debug(`[${this.context}] ${message}`);
+  }
+}

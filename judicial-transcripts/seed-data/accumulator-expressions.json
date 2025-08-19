@@ -12,7 +12,7 @@
       "minAttorneys": 2,
       "minDistinctSpeakers": 3
     },
-    "isActive": true
+    "isActive": false
   },
   {
     "name": "opposing_counsel_interaction",
@@ -28,7 +28,7 @@
       "requireDefenseAttorney": true,
       "minDistinctSpeakers": 3
     },
-    "isActive": true
+    "isActive": false
   },
   {
     "name": "objection_sustained",

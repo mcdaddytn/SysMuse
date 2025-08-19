@@ -63,10 +63,17 @@ export class WitnessMarkerDiscovery {
 
     // Process each witness examination
     const examinationBoundaries: WitnessExaminationBoundary[] = [];
+    let lastProcessedTime: string | null = null;
     
     for (let i = 0; i < witnessEvents.length; i++) {
       const witnessEvent = witnessEvents[i];
       const nextWitnessEvent = i < witnessEvents.length - 1 ? witnessEvents[i + 1] : null;
+      
+      // Validate we're moving forward in time (allow same timestamp)
+      if (lastProcessedTime && witnessEvent.event.startTime && witnessEvent.event.startTime < lastProcessedTime) {
+        this.logger.error(`Witness events not in chronological order! Event ${witnessEvent.event.id} at ${witnessEvent.event.startTime} comes after ${lastProcessedTime}`);
+        throw new Error(`Witness marker timeline violation: events must progress forward in time`);
+      }
       
       const boundary = await this.findExaminationBoundary(
         witnessEvent,
@@ -74,7 +81,15 @@ export class WitnessMarkerDiscovery {
         allEvents
       );
       
+      // Validate that end marker is not before start marker
+      if (boundary.endEvent && boundary.endEvent.startTime && boundary.startEvent.startTime && 
+          boundary.endEvent.startTime < boundary.startEvent.startTime) {
+        this.logger.error(`End marker before start marker for witness ${witnessEvent.witness?.name || 'Unknown'}! Start: ${boundary.startEvent.startTime}, End: ${boundary.endEvent.startTime}`);
+        throw new Error(`Marker boundary violation: end marker cannot be before start marker`);
+      }
+      
       examinationBoundaries.push(boundary);
+      lastProcessedTime = boundary.endEvent?.startTime || boundary.startEvent.startTime;
     }
 
     // Create examination markers
@@ -101,6 +116,17 @@ export class WitnessMarkerDiscovery {
   ): Promise<WitnessExaminationBoundary> {
     const startEvent = witnessEvent.event;
     let endEvent: TrialEvent | null = null;
+
+    // Special handling for video depositions - no Q&A in transcript
+    // Set both start and end to the same event
+    if (witnessEvent.examinationType === 'VIDEO_DEPOSITION') {
+      this.logger.debug(`Video deposition detected for witness ${witnessEvent.witness?.name || 'Unknown'} - using same event for start and end`);
+      return {
+        witnessCalledEvent: witnessEvent,
+        startEvent,
+        endEvent: startEvent // Use same event for both markers
+      };
+    }
 
     // Find the constraining event (next witness or end of session)
     const startIndex = allEvents.findIndex(e => e.id === startEvent.id);

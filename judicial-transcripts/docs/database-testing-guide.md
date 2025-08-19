@@ -40,6 +40,12 @@ npm run phase2
 
 # 8. Create backup after Phase 2
 ../scripts/db/backupdb.sh phase2
+
+# 9. Run Phase 3 for marker discovery and accumulator processing
+npm run phase3 process
+
+# 10. Create backup after Phase 3
+../scripts/db/backupdb.sh phase3
 ```
 
 ### Using Existing Backups
@@ -53,9 +59,11 @@ ls backups/judicial_transcripts_*.sql
 # - judicial_transcripts_seed.sql
 # - judicial_transcripts_phase1.sql  
 # - judicial_transcripts_phase2.sql
+# - judicial_transcripts_phase3.sql
 
 # Restore directly to desired state
 ../scripts/db/restoredb.sh phase2  # Restores judicial_transcripts_phase2.sql
+../scripts/db/restoredb.sh phase3  # Restores judicial_transcripts_phase3.sql
 ```
 
 ### Quick Reset Using Scripts
@@ -95,6 +103,41 @@ npm run phase2
 - Builds search indices
 - Creates relationship mappings
 
+### Phase 3: Marker Discovery
+Phase 3 discovers markers and evaluates accumulators:
+```bash
+npm run phase3 process
+```
+- Evaluates ElasticSearch expressions against statements
+- Processes accumulator expressions (sliding window analysis)
+- Discovers witness testimony markers and boundaries
+- Creates activity markers for significant trial events
+- Handles special cases like video depositions
+
+**Phase 3 Command Options:**
+```bash
+# Process all trials
+npm run phase3 process
+
+# Process specific trial by ID
+npm run phase3 process -t 1
+
+# Process specific trial by case number
+npm run phase3 process -c "2:19-CV-00123-JRG"
+
+# Clean existing markers before processing
+npm run phase3 process --clean
+
+# Export markers to JSON
+npm run phase3 export -t 1 -o markers.json
+
+# Import/upsert markers from JSON
+npm run phase3 import -t 1 -i markers.json
+
+# View Phase 3 statistics
+npm run phase3 stats
+```
+
 ## Database Backup and Restore
 
 ### Backup Naming Convention
@@ -104,6 +147,7 @@ The backup scripts use a standard naming convention:
   - `seed` - After initial seed data load
   - `phase1` - After Phase 1 completion
   - `phase2` - After Phase 2 completion
+  - `phase3` - After Phase 3 completion
   - Custom names for specific test states
 
 ### Creating Backups
@@ -112,6 +156,7 @@ The backup scripts use a standard naming convention:
 ../scripts/db/backupdb.sh seed    # Creates: backups/judicial_transcripts_seed.sql
 ../scripts/db/backupdb.sh phase1  # Creates: backups/judicial_transcripts_phase1.sql
 ../scripts/db/backupdb.sh phase2  # Creates: backups/judicial_transcripts_phase2.sql
+../scripts/db/backupdb.sh phase3  # Creates: backups/judicial_transcripts_phase3.sql
 
 # Custom backup for testing
 ../scripts/db/backupdb.sh my_test_state  # Creates: backups/judicial_transcripts_my_test_state.sql
@@ -123,6 +168,7 @@ The backup scripts use a standard naming convention:
 ../scripts/db/restoredb.sh seed    # Restores from judicial_transcripts_seed.sql
 ../scripts/db/restoredb.sh phase1  # Restores from judicial_transcripts_phase1.sql
 ../scripts/db/restoredb.sh phase2  # Restores from judicial_transcripts_phase2.sql
+../scripts/db/restoredb.sh phase3  # Restores from judicial_transcripts_phase3.sql
 
 # List available backups
 ls -la backups/judicial_transcripts_*.sql

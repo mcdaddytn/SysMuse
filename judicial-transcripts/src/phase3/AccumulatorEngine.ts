@@ -36,6 +36,8 @@ export class AccumulatorEngine {
       }
     });
 
+    this.logger.info(`Found ${accumulators.length} active accumulators`);
+
     // Load trial events with related data
     const trialEvents = await this.prisma.trialEvent.findMany({
       where: { trialId },
@@ -56,12 +58,20 @@ export class AccumulatorEngine {
       }
     });
 
+    this.logger.info(`Loaded ${trialEvents.length} trial events`);
+
     // Process each accumulator
-    for (const accumulator of accumulators) {
-      await this.evaluateAccumulator(accumulator, trialEvents, trialId);
+    let totalResults = 0;
+    for (let i = 0; i < accumulators.length; i++) {
+      const accumulator = accumulators[i];
+      this.logger.info(`Processing accumulator ${i + 1}/${accumulators.length}: ${accumulator.name}`);
+      const results = await this.evaluateAccumulator(accumulator, trialEvents, trialId);
+      this.logger.info(`  Generated ${results} results for ${accumulator.name}`);
+      totalResults += results;
     }
 
     this.logger.info(`Completed accumulator evaluation for trial ${trialId}`);
+    this.logger.info(`Total accumulator results generated: ${totalResults}`);
   }
 
   /**
@@ -71,11 +81,15 @@ export class AccumulatorEngine {
     accumulator: any,
     trialEvents: any[],
     trialId: number
-  ): Promise<void> {
-    this.logger.info(`Evaluating accumulator: ${accumulator.name}`);
-
+  ): Promise<number> {
     const windowSize = accumulator.windowSize;
     const statementEvents = trialEvents.filter(e => e.eventType === 'STATEMENT' && e.statement);
+    
+    const totalWindows = Math.max(0, statementEvents.length - windowSize + 1);
+    this.logger.debug(`  Sliding window size ${windowSize} through ${statementEvents.length} statements (${totalWindows} windows)`);
+    
+    let resultsStored = 0;
+    let windowsProcessed = 0;
 
     // Slide window through statements
     for (let i = 0; i <= statementEvents.length - windowSize; i++) {
@@ -84,11 +98,21 @@ export class AccumulatorEngine {
       // Evaluate window
       const evaluation = await this.evaluateWindow(accumulator, window);
 
-      // Store result if matched
+      // Store result if matched (optimization: only store positive results)
       if (evaluation.matched || evaluation.score > 0) {
         await this.storeResult(accumulator, window, evaluation, trialId);
+        resultsStored++;
+      }
+      
+      windowsProcessed++;
+      
+      // Progress logging every 100 windows
+      if (windowsProcessed % 100 === 0) {
+        this.logger.debug(`    Processed ${windowsProcessed}/${totalWindows} windows, found ${resultsStored} matches`);
       }
     }
+    
+    return resultsStored;
   }
 
   /**
@@ -317,37 +341,70 @@ export class AccumulatorEngine {
       }
     });
 
+    this.logger.info(`Processing ${expressions.length} expressions against ${statements.length} statements`);
+    
+    let totalMatches = 0;
+    let totalProcessed = 0;
+    const totalOperations = expressions.length * statements.length;
+    const batchSize = 100;
+    const matchesToInsert: any[] = [];
+    
     // For each expression, evaluate against each statement
-    // Note: In production, this would actually query ElasticSearch
-    // For now, we'll do simple pattern matching
-    for (const expression of expressions) {
-      for (const statement of statements) {
+    for (let i = 0; i < expressions.length; i++) {
+      const expression = expressions[i];
+      let expressionMatches = 0;
+      
+      for (let j = 0; j < statements.length; j++) {
+        const statement = statements[j];
         const matched = await this.evaluateESExpression(expression, statement);
         
-        // Store result
-        await this.prisma.elasticSearchResult.upsert({
-          where: {
-            expressionId_statementId: {
-              expressionId: expression.id,
-              statementId: statement.id
-            }
-          },
-          update: {
-            matched,
-            score: matched ? 1.0 : 0.0
-          },
-          create: {
+        // ONLY store matches to reduce data by 99%+
+        if (matched) {
+          matchesToInsert.push({
             expressionId: expression.id,
             statementId: statement.id,
             trialId,
-            matched,
-            score: matched ? 1.0 : 0.0
-          }
-        });
+            matched: true,
+            score: 1.0
+          });
+          expressionMatches++;
+          totalMatches++;
+        }
+        
+        totalProcessed++;
+        
+        // Progress logging every 1000 operations
+        if (totalProcessed % 1000 === 0) {
+          const percent = ((totalProcessed / totalOperations) * 100).toFixed(1);
+          this.logger.info(`Progress: ${totalProcessed}/${totalOperations} (${percent}%) - Found ${totalMatches} matches so far`);
+        }
+        
+        // Batch insert when we have enough matches
+        if (matchesToInsert.length >= batchSize) {
+          await this.prisma.elasticSearchResult.createMany({
+            data: matchesToInsert,
+            skipDuplicates: true
+          });
+          this.logger.debug(`Inserted batch of ${matchesToInsert.length} matches`);
+          matchesToInsert.length = 0; // Clear array
+        }
       }
+      
+      if (expressionMatches > 0) {
+        this.logger.info(`Expression "${expression.name}": ${expressionMatches} matches found`);
+      }
+    }
+    
+    // Insert remaining matches
+    if (matchesToInsert.length > 0) {
+      await this.prisma.elasticSearchResult.createMany({
+        data: matchesToInsert,
+        skipDuplicates: true
+      });
     }
 
     this.logger.info(`Completed ES expression evaluation for trial ${trialId}`);
+    this.logger.info(`Total matches found: ${totalMatches} (${((totalMatches / totalOperations) * 100).toFixed(2)}% match rate)`);
   }
 
   /**

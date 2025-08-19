@@ -1,0 +1,62 @@
+[
+  {
+    "name": "John Smith",
+    "barNumber": "12345",
+    "firm": "Smith & Associates LLP",
+    "role": "PLAINTIFF"
+  },
+  {
+    "name": "Jane Doe",
+    "barNumber": "23456",
+    "firm": "Doe Legal Group",
+    "role": "PLAINTIFF"
+  },
+  {
+    "name": "Robert Johnson",
+    "barNumber": "34567",
+    "firm": "Johnson, Miller & Partners",
+    "role": "DEFENDANT"
+  },
+  {
+    "name": "Sarah Williams",
+    "barNumber": "45678",
+    "firm": "Williams Law Firm PC",
+    "role": "DEFENDANT"
+  },
+  {
+    "name": "Michael Brown",
+    "barNumber": "56789",
+    "firm": "Brown & Davis PLLC",
+    "role": "PLAINTIFF"
+  },
+  {
+    "name": "Emily Davis",
+    "barNumber": "67890",
+    "firm": "Davis Legal Services",
+    "role": "DEFENDANT"
+  },
+  {
+    "name": "David Miller",
+    "barNumber": "78901",
+    "firm": "Miller & Associates",
+    "role": "PLAINTIFF"
+  },
+  {
+    "name": "Lisa Anderson",
+    "barNumber": "89012",
+    "firm": "Anderson Law Group LLC",
+    "role": "DEFENDANT"
+  },
+  {
+    "name": "James Wilson",
+    "barNumber": "90123",
+    "firm": "Wilson & Taylor LLP",
+    "role": "PLAINTIFF"
+  },
+  {
+    "name": "Mary Taylor",
+    "barNumber": "01234",
+    "firm": "Taylor Legal Counsel",
+    "role": "DEFENDANT"
+  }
+]

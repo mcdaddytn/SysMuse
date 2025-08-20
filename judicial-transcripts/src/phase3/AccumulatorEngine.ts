@@ -41,7 +41,7 @@ export class AccumulatorEngine {
     // Load trial events with related data
     const trialEvents = await this.prisma.trialEvent.findMany({
       where: { trialId },
-      orderBy: { startTime: 'asc' },
+      orderBy: { id: 'asc' },  // Use ID for chronological order
       include: {
         statement: {
           include: {
@@ -336,6 +336,7 @@ export class AccumulatorEngine {
           trialId
         }
       },
+      orderBy: { id: 'asc' },  // Ensure chronological order
       include: {
         event: true
       }

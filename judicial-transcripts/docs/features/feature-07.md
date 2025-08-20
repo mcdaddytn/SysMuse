@@ -198,37 +198,7 @@ csv_to_es_json.ts (code to translate csv records to ES searches)
 
 
 
-## Implementation Summary
-
-### Phase 3 Optimizations and Bug Fixes
-
-#### 1. ElasticSearchResult Storage Optimization
-**Issue:** Originally storing results for every expression-statement combination was creating excessive records (millions for a single trial).
-
-**Solution:** Modified `AccumulatorEngine.evaluateESExpressions()` to only store matches (when `matched === true`), reducing data volume by 99%+. This dramatically improved performance and reduced database storage requirements.
-
-**Implementation:** In `src/phase3/AccumulatorEngine.ts` lines 361-372, we now only create ElasticSearchResult records when there's an actual match, rather than storing all negative results.
-
-#### 2. Video Deposition Marker Handling
-**Issue:** Video depositions have no Q&A recorded in the transcript (everything is on video). The backward search for the last "A." speaker prefix was causing the end marker to be set before the start marker, creating invalid marker boundaries and potentially infinite loops.
-
-**Solution:** Added special handling for `VIDEO_DEPOSITION` examination type in `WitnessMarkerDiscovery.findExaminationBoundary()`. For video depositions, both start and end markers are set to the same WitnessCalledEvent location.
-
-**Implementation:** In `src/phase3/WitnessMarkerDiscovery.ts` lines 107-114, we detect video depositions and immediately return with the same event for both start and end markers.
-
-#### 3. Marker Timeline Validation
-**Issue:** Markers could potentially be created out of chronological order or with end markers before start markers.
-
-**Solution:** Added validation to ensure:
-- Witness events are processed in chronological order
-- End markers never come before their corresponding start markers
-- Each marker moves forward in the timeline
-
-**Implementation:** In `src/phase3/WitnessMarkerDiscovery.ts` lines 72-88, added validation checks that throw errors if timeline violations are detected.
-
-### Key Performance Metrics
-- ElasticSearchResult records reduced from ~40,000+ to ~400 (99% reduction)
-- Marker generation now completes without errors for video depositions
-- Processing time significantly reduced due to fewer database writes
+## Implementation Notes
+See `docs/impl/feature-07-implementation.md` for detailed implementation guide, lessons learned, and diagnostic tools.
 
 

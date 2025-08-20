@@ -1,0 +1,564 @@
+[
+  {
+    "name": "exhibit_introduction",
+    "description": "Detection of exhibit introduction and discussion",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 6,
+    "thresholdValue": 0.6,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "phrases": ["exhibit", "mark", "introduce", "show you", "look at", "document", "display", "screen"],
+      "weights": {
+        "exhibit": 1.0,
+        "mark": 0.8,
+        "introduce": 0.9,
+        "show you": 0.7,
+        "look at": 0.6,
+        "document": 0.7,
+        "display": 0.6,
+        "screen": 0.5
+      },
+      "speakerTypes": ["ATTORNEY"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "motion_to_strike",
+    "description": "Motion to strike testimony or evidence",
+    "expressionType": "BOOLEAN",
+    "windowSize": 4,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "attorneyPhrases": ["move to strike", "strike that", "motion to strike"],
+      "judgePhrases": ["granted", "denied", "I'll strike", "stricken"],
+      "requiredSpeakers": ["ATTORNEY", "JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "foundation_objection",
+    "description": "Objection based on lack of foundation",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["foundation", "lack of foundation", "no foundation", "objection foundation"],
+      "judgePhrases": ["sustained", "overruled", "lay foundation", "establish foundation"],
+      "weights": {
+        "foundation": 0.9,
+        "lack of foundation": 1.0,
+        "no foundation": 1.0,
+        "objection foundation": 1.0,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "lay foundation": 0.8,
+        "establish foundation": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "hearsay_objection",
+    "description": "Objection based on hearsay",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["hearsay", "objection hearsay", "calls for hearsay"],
+      "judgePhrases": ["sustained", "overruled", "exception", "not for the truth"],
+      "weights": {
+        "hearsay": 1.0,
+        "objection hearsay": 1.0,
+        "calls for hearsay": 1.0,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "exception": 0.7,
+        "not for the truth": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "leading_question_objection",
+    "description": "Objection to leading questions",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 4,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["leading", "objection leading", "leading the witness"],
+      "judgePhrases": ["sustained", "overruled", "rephrase", "restate"],
+      "weights": {
+        "leading": 0.9,
+        "objection leading": 1.0,
+        "leading the witness": 1.0,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "rephrase": 0.8,
+        "restate": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "permission_to_approach",
+    "description": "Request permission to approach witness or bench",
+    "expressionType": "BOOLEAN",
+    "windowSize": 3,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["permission to approach", "may I approach", "can I approach", "approach the witness"],
+      "responsePhrases": ["you may", "yes", "go ahead", "proceed"],
+      "speakerTypes": ["ATTORNEY", "JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_hostile",
+    "description": "Declaration or treatment of hostile witness",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 8,
+    "thresholdValue": 0.6,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["hostile witness", "adverse witness", "treat as hostile", "declare hostile", "leading questions permitted"],
+      "weights": {
+        "hostile witness": 1.0,
+        "adverse witness": 0.9,
+        "treat as hostile": 1.0,
+        "declare hostile": 1.0,
+        "leading questions permitted": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "jury_instruction_discussion",
+    "description": "Discussion about jury instructions",
+    "expressionType": "BOOLEAN",
+    "windowSize": 8,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "phrases": ["jury instruction", "charge", "instruct the jury", "proposed instruction", "instruction number"],
+      "requiredSpeakers": ["JUDGE"],
+      "minDistinctSpeakers": 2
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_memory_issue",
+    "description": "Witness indicates memory problems",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 3,
+    "thresholdValue": 0.6,
+    "minConfidenceLevel": "LOW",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["don't remember", "don't recall", "can't remember", "can't recall", "no recollection", "memory", "forgot"],
+      "weights": {
+        "don't remember": 1.0,
+        "don't recall": 1.0,
+        "can't remember": 1.0,
+        "can't recall": 1.0,
+        "no recollection": 1.0,
+        "memory": 0.5,
+        "forgot": 0.8
+      },
+      "speakerPrefix": ["A."]
+    },
+    "isActive": true
+  },
+  {
+    "name": "refresh_recollection",
+    "description": "Attempt to refresh witness recollection",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 6,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["refresh your recollection", "refresh your memory", "show you", "look at this", "does this help", "remember now"],
+      "weights": {
+        "refresh your recollection": 1.0,
+        "refresh your memory": 1.0,
+        "show you": 0.6,
+        "look at this": 0.6,
+        "does this help": 0.8,
+        "remember now": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "speculation_objection",
+    "description": "Objection based on speculation",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["speculation", "calls for speculation", "speculative"],
+      "judgePhrases": ["sustained", "overruled", "foundation", "personal knowledge"],
+      "weights": {
+        "speculation": 0.9,
+        "calls for speculation": 1.0,
+        "speculative": 0.9,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "foundation": 0.6,
+        "personal knowledge": 0.7
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "relevance_objection",
+    "description": "Objection based on relevance",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["relevance", "irrelevant", "not relevant", "objection relevance"],
+      "judgePhrases": ["sustained", "overruled", "tie it up", "connect", "relevance"],
+      "weights": {
+        "relevance": 0.9,
+        "irrelevant": 1.0,
+        "not relevant": 1.0,
+        "objection relevance": 1.0,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "tie it up": 0.7,
+        "connect": 0.6
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "argumentative_objection",
+    "description": "Objection that question is argumentative",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["argumentative", "arguing with the witness", "objection argumentative"],
+      "judgePhrases": ["sustained", "overruled", "rephrase", "move on"],
+      "weights": {
+        "argumentative": 1.0,
+        "arguing with the witness": 1.0,
+        "objection argumentative": 1.0,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "rephrase": 0.7,
+        "move on": 0.6
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "compound_question_objection",
+    "description": "Objection to compound questions",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 4,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["compound", "compound question", "multiple questions"],
+      "judgePhrases": ["sustained", "overruled", "one at a time", "break it down"],
+      "weights": {
+        "compound": 0.9,
+        "compound question": 1.0,
+        "multiple questions": 0.9,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "one at a time": 0.8,
+        "break it down": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "asked_and_answered",
+    "description": "Objection that question was already asked and answered",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["asked and answered", "already answered", "repetitive"],
+      "judgePhrases": ["sustained", "overruled", "move on", "I'll allow it"],
+      "weights": {
+        "asked and answered": 1.0,
+        "already answered": 0.9,
+        "repetitive": 0.8,
+        "sustained": 1.0,
+        "overruled": 1.0,
+        "move on": 0.7,
+        "I'll allow it": 0.8
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "bench_conference",
+    "description": "Extended bench conference or sidebar",
+    "expressionType": "BOOLEAN",
+    "windowSize": 10,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "phrases": ["bench conference", "sidebar", "approach", "off the record", "on the record"],
+      "requiredSpeakers": ["JUDGE"],
+      "minDistinctSpeakers": 3,
+      "minAttorneys": 2
+    },
+    "isActive": true
+  },
+  {
+    "name": "expert_qualification",
+    "description": "Expert witness qualification process",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 10,
+    "thresholdValue": 0.6,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["qualify as an expert", "tender", "expert in", "specialized knowledge", "education and training", "experience in the field", "publications", "accepted as an expert"],
+      "weights": {
+        "qualify as an expert": 1.0,
+        "tender": 0.9,
+        "expert in": 0.9,
+        "specialized knowledge": 0.8,
+        "education and training": 0.8,
+        "experience in the field": 0.8,
+        "publications": 0.7,
+        "accepted as an expert": 1.0
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "voir_dire_expert",
+    "description": "Voir dire of expert witness",
+    "expressionType": "BOOLEAN",
+    "windowSize": 8,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "phrases": ["voir dire", "qualifications", "challenge", "expert witness"],
+      "requiredSpeakers": ["ATTORNEY", "JUDGE"],
+      "minDistinctSpeakers": 3
+    },
+    "isActive": true
+  },
+  {
+    "name": "court_admonishment",
+    "description": "Judge admonishing counsel or witness",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 6,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "judgePhrases": ["counsel", "admonish", "warn", "caution", "improper", "inappropriate", "out of order", "enough"],
+      "weights": {
+        "counsel": 0.5,
+        "admonish": 1.0,
+        "warn": 0.9,
+        "caution": 0.9,
+        "improper": 0.9,
+        "inappropriate": 0.9,
+        "out of order": 1.0,
+        "enough": 0.7
+      },
+      "requiredSpeakers": ["JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "recess_break",
+    "description": "Court recess or break announcement",
+    "expressionType": "BOOLEAN",
+    "windowSize": 3,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["take a recess", "take a break", "we'll recess", "court is in recess", "reconvene", "resume at", "back at"],
+      "requiredSpeakers": ["JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "stipulation",
+    "description": "Parties stipulating to facts or evidence",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 6,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["stipulate", "stipulation", "parties agree", "agreed", "no objection", "stipulated"],
+      "weights": {
+        "stipulate": 1.0,
+        "stipulation": 1.0,
+        "parties agree": 0.9,
+        "agreed": 0.7,
+        "no objection": 0.6,
+        "stipulated": 1.0
+      },
+      "minDistinctSpeakers": 2
+    },
+    "isActive": true
+  },
+  {
+    "name": "limiting_instruction",
+    "description": "Judge giving limiting instruction to jury",
+    "expressionType": "BOOLEAN",
+    "windowSize": 8,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "phrases": ["limiting instruction", "limited purpose", "not for the truth", "only consider", "disregard", "strike from your mind"],
+      "requiredSpeakers": ["JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_unresponsive",
+    "description": "Witness being unresponsive to questions",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 6,
+    "thresholdValue": 0.6,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["unresponsive", "non-responsive", "answer the question", "yes or no", "that's not what I asked", "please answer"],
+      "weights": {
+        "unresponsive": 1.0,
+        "non-responsive": 1.0,
+        "answer the question": 0.9,
+        "yes or no": 0.7,
+        "that's not what I asked": 0.8,
+        "please answer": 0.7
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "video_deposition",
+    "description": "Playing or discussing video deposition",
+    "expressionType": "BOOLEAN",
+    "windowSize": 5,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["video deposition", "deposition video", "play the video", "deposition of", "recorded testimony", "videotaped deposition"],
+      "speakerTypes": ["ATTORNEY", "JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "mistrial_motion",
+    "description": "Motion for mistrial",
+    "expressionType": "BOOLEAN",
+    "windowSize": 8,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "phrases": ["mistrial", "move for mistrial", "motion for mistrial", "prejudicial", "incurable"],
+      "requiredSpeakers": ["ATTORNEY", "JUDGE"],
+      "minDistinctSpeakers": 2
+    },
+    "isActive": true
+  },
+  {
+    "name": "contempt_threat",
+    "description": "Threat or finding of contempt",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 6,
+    "thresholdValue": 0.8,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["contempt", "contempt of court", "hold you in contempt", "sanctions", "fine"],
+      "weights": {
+        "contempt": 1.0,
+        "contempt of court": 1.0,
+        "hold you in contempt": 1.0,
+        "sanctions": 0.8,
+        "fine": 0.6
+      },
+      "requiredSpeakers": ["JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "plea_discussion",
+    "description": "Discussion of plea agreement or negotiations",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 8,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["plea", "plea agreement", "plea deal", "plead guilty", "plea negotiations", "offer"],
+      "weights": {
+        "plea": 0.7,
+        "plea agreement": 1.0,
+        "plea deal": 1.0,
+        "plead guilty": 1.0,
+        "plea negotiations": 1.0,
+        "offer": 0.5
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "discovery_dispute",
+    "description": "Discussion of discovery disputes or violations",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 10,
+    "thresholdValue": 0.6,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["discovery", "disclosure", "produce", "failed to produce", "discovery violation", "sanctions", "compel"],
+      "weights": {
+        "discovery": 0.8,
+        "disclosure": 0.8,
+        "produce": 0.6,
+        "failed to produce": 1.0,
+        "discovery violation": 1.0,
+        "sanctions": 0.9,
+        "compel": 0.9
+      },
+      "requiredSpeakers": ["ATTORNEY", "JUDGE"]
+    },
+    "isActive": true
+  }
+]

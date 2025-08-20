@@ -1,0 +1,8 @@
+================================================================================
+CASE: {Trial.caseNumber} - {Trial.trialName}
+DATE: {Session.sessionDate}	SESSION: {Session.sessionType}
+TIME: {TrialEvent.startTime}	LINES: {TrialEvent.startLineNumber}-{TrialEvent.endLineNumber}
+--------------------------------------------------------------------------------
+THE COURT:
+{StatementEvent.text}
+================================================================================

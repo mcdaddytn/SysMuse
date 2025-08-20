@@ -1,0 +1,9 @@
+{{#isStatement}}
+{{#lineNumber}}{{lineNumber,5}}{{/lineNumber}}  {{speakerHandle}}:  {{text}}
+{{/isStatement}}
+{{#isWitnessCalled}}
+{{#lineNumber}}{{lineNumber,5}}{{/lineNumber}}  ({{examinationType}} of {{witnessName}}{{#swornStatus}}, {{swornStatus}}{{/swornStatus}})
+{{/isWitnessCalled}}
+{{#isCourtDirective}}
+{{#lineNumber}}{{lineNumber,5}}{{/lineNumber}}  THE COURT:  {{directiveText}}
+{{/isCourtDirective}}

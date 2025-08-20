@@ -1,0 +1,23 @@
+{
+  "maxResults": 10,
+  "resultSeparator": "\n====== EXCHANGE ======\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    },
+    {
+      "name": "overruled",
+      "query": "overruled",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "judge-with-context-{caseHandle}.txt",
+  "fileTemplate": "judge-with-context.txt"
+}

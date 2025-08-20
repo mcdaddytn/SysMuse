@@ -1,0 +1,34 @@
+DIRECT EXAMINATION
+
+BY MR. SMITH:
+
+Q. Please state your name for the record.
+A. My name is Jennifer Martinez.
+
+Q. Ms. Martinez, where do you work?
+A. I work at Global Technologies Inc.
+
+Q. How long have you been employed there?
+A. I've been with the company for eight years.
+
+Q. What is your current position?
+A. I'm the Senior Vice President of Operations.
+
+Q. Were you employed at Global Technologies on March 15, 2023?
+A. Yes, I was.
+
+Q. Did you attend a meeting on that date regarding the contract in question?
+A. Yes, I did.
+
+MR. JOHNSON: Objection, leading.
+THE COURT: Overruled. The witness may answer.
+
+Q. Who else was present at that meeting?
+A. The CEO, Mr. Thompson, our legal counsel Ms. Davis, and representatives from the defendant's company.
+
+Q. I'm showing you what's been marked as Plaintiff's Exhibit 42. Do you recognize this document?
+A. Yes, these are the meeting minutes from March 15, 2023.
+
+MR. SMITH: Your Honor, we move to admit Plaintiff's Exhibit 42 into evidence.
+MR. JOHNSON: No objection.
+THE COURT: Plaintiff's Exhibit 42 is admitted.

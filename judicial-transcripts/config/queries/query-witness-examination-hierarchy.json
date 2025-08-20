@@ -1,0 +1,15 @@
+{
+  "templateQuery": "TrialEventHierarchy",
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "eventType": ["WITNESS_CALLED", "STATEMENT", "COURT_DIRECTIVE"]
+  },
+  "templateType": "Mustache",
+  "fileNameTemplate": "witness-examination-{{caseNumber}}.txt",
+  "templateFile": "witness-examination-hierarchy.mustache",
+  "resultSeparator": "\n\n",
+  "templateParams": {
+    "reportTitle": "Witness Examination Flow",
+    "generatedDate": "2024"
+  }
+}

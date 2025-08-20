@@ -1,0 +1,5 @@
+--- {Session.sessionDate} | {Session.sessionType} Session ---
+[Lines {TrialEvent.startLineNumber}-{TrialEvent.endLineNumber}]
+
+{Speaker.speakerPrefix} ({Speaker.speakerType}):
+{StatementEvent.text}

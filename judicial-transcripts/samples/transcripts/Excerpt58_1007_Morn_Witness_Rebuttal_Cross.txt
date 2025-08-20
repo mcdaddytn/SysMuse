@@ -1,0 +1,46 @@
+09:36:21   24   Q.   So what did you conclude at the end of your entire
+
+09:36:25   25   analysis regarding the validity of the Claims 1 and 8 of
+
+    Case 2:19-cv-00123-JRG Document 338 Filed 10/09/20 Page 56 of 82 PageID #: 19616
+                                                                                   1214
+
+
+
+09:36:30    1   the '049 patent?
+
+09:36:31    2   A.   I conclude that Claims 1 and 8 are valid.
+
+09:36:34    3               MR. LAMBRIANAKOS:    Pass the witness, Your Honor.
+
+09:36:35    4               THE COURT:    Cross-examination?
+
+09:36:36    5               MR. HADDEN:    Yes, Your Honor.
+
+09:36:45    6               MR. LAQUER:    May I approach?
+
+09:36:46    7               THE COURT:    You may distribute binders.
+
+09:37:19    8               All right.    Mr. Hadden, you may proceed with
+
+09:37:22    9   cross-examination.
+
+09:37:22   10               MR. HADDEN:    Thank you, Your Honor.
+
+09:37:22   11                             CROSS-EXAMINATION
+
+09:37:24   12   BY MR. HADDEN:
+
+09:37:24   13   Q.   You agree that Dr. Stern is an expert in microphone
+
+09:37:28   14   arrays, correct?
+
+09:37:29   15   A.   Yes, I believe he's been proffered and accepted by this
+
+09:37:33   16   Court.
+
+09:37:33   17   Q.   And you agree that Dr. Stern is an expert in adaptive
+
+09:37:37   18   beamforming, correct?
+
+09:37:39   19   A.   Yes.

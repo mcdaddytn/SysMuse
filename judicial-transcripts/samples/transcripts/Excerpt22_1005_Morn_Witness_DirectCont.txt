@@ -1,0 +1,204 @@
+Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 1 of 134 PageID #: 18913
+                                                                                   577
+
+
+
+      1                  IN THE UNITED STATES DISTRICT COURT
+
+      2                   FOR THE EASTERN DISTRICT OF TEXAS
+
+          Marshall, TX 75670
+     25
+
+Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 2 of 134 PageID #: 18914
+                                                                                   578
+
+
+
+      1   FOR THE DEFENDANTS:
+
+      2   MR. JOSEPH R. RE
+          ALAN G. LAQUER
+
+     23
+
+     24   (Proceedings recorded by mechanical stenography, transcript
+          produced on a CAT system.)
+     25
+
+    Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 3 of 134 PageID #: 18915
+                                                                                       579
+
+
+
+08:00:32    1                            P R O C E E D I N G S
+
+08:30:11    2              (Jury out.)
+
+08:30:12    3              COURT SECURITY OFFICER:        All rise.
+
+08:30:12    4              THE COURT:     Be seated, please.
+
+08:30:25    5              Are the parties prepared to read into the record
+
+08:30:28    6   those items from the list of pre-admitted exhibits used
+
+08:30:31    7   during Friday's portion of the trial?
+
+08:30:34    8              MR. AKIN:     Yes, Your Honor.
+
+08:30:35    9              MS. PARK:     Yes, Your Honor.
+
+08:30:36   10              THE COURT:     Please proceed.
+
+08:30:40   11              MS. PARK:     Amy Park for Plaintiff, Vocalife.
+
+08:30:48   12              The following exhibits were used on Friday and are
+
+08:30:51   13   being moved into evidence:       PTX-109, PTX-110, PTX-111, and
+
+08:30:58   14   PTX-130.
+
+08:31:00   15              THE COURT:     Any objection to that rendition from
+
+08:31:02   16   the Defendants?
+
+08:31:03   17              MR. AKIN:     No objection.
+
+08:31:05   18              THE COURT:     Do Defendants have a similar rendition
+
+08:31:08   19   to read into the record?
+
+08:31:08   20              MR. AKIN:     Yes, Your Honor.     Kyle Akin on behalf
+
+08:31:12   21   of Amazon.
+
+08:31:13   22              Amazon moves the following exhibits into evidence
+
+08:31:15   23   that were used last Friday, October 2nd:          DTX-1, DTX-14,
+
+08:31:19   24   DTX-685, DTX-689, DTX-980, and DTX-980A.
+
+08:31:30   25              THE COURT:     All right.     Any objection to that
+
+    Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 4 of 134 PageID #: 18916
+                                                                                       580
+
+
+
+08:31:32    1   rendition by the Plaintiff?
+
+08:31:35    2             MS. PARK:     No objection.
+
+08:31:36    3             THE COURT:     Thank you, counsel.
+
+08:31:41    4             We ended Friday with Mr. McAlexander on the
+
+08:31:46    5   witness stand.
+
+08:31:47    6             Is Mr. McAlexander present?
+
+08:31:50    7             If you would, please, return to the witness stand,
+
+08:31:50    8   sir.
+
+08:31:53    9             And, Mr. Rubino, were we in the middle of your
+
+08:31:57   10   direct?
+
+08:31:57   11             MR. RUBINO:     Yes, Your Honor.
+
+08:31:58   12             THE COURT:     If you'd like to go to the podium and
+
+08:32:01   13   prepare to continue.
+
+08:32:02   14             And while he's doing that, Mr. Johnston, if you'd
+
+08:32:09   15   bring in the jury.
+
+08:32:48   16             COURT SECURITY OFFICER:       All rise.
+
+08:32:51   17             (Jury in.)
+
+08:32:53   18             THE COURT:     Welcome back, ladies and gentlemen of
+
+08:33:12   19   the jury.   Please have a seat.
+
+08:33:14   20             When we recessed on Friday evening,
+
+08:33:24   21   Mr. McAlexander was testifying as Plaintiff's technical
+
+08:33:28   22   expert witness.    We'll continue with the direct examination
+
+08:33:32   23   of Mr. McAlexander by the Plaintiff.
+
+08:33:33   24             Mr. Rubino, you may continue your direct
+
+08:33:35   25   examination.
+
+    Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 5 of 134 PageID #: 18917
+                                                                                       581
+
+
+
+08:33:35    1           JOSEPH MCALEXANDER, III, PLAINTIFF'S WITNESS,
+
+08:33:35    2                             PREVIOUSLY SWORN
+
+08:33:35    3                      DIRECT EXAMINATION CONTINUED
+
+08:33:38    4   BY MR. RUBINO:
+
+08:33:38    5   Q.   Good morning, Mr. McAlexander.
+
+08:33:40    6   A.   Good morning, sir.
+
+08:33:42    7               MR. RUBINO:   If we could please, Mr. Thompson,
+
+08:33:48    8   have Slide Demonstrative 10.       Slide 10, please.
+
+08:33:53    9   Q.   (By Mr. Rubino)      Mr. McAlexander, can you refresh us as
+
+08:33:57   10   to what we were discussing on Friday regarding your
+
+08:33:59   11   analysis?
+
+08:34:00   12   A.   Yes.    We were just starting the claim construction
+
+08:34:02   13   analysis, looking at Claim 1 of the '049 patent.            And we
+
+08:34:07   14   were generally describing what -- what is before you in
+
+08:34:12   15   this slide is a demonstrative that recites the language
+
+08:34:17   16   from the claim.
+
+08:34:18   17               And I have specifically inserted the bracketed
+
+08:34:21   18   letters [A] through [F] so that as I navigate step-by-step
+
+08:34:26   19   through this claim, it would help the jury hopefully to
+
+08:34:31   20   orient or can stay oriented as to exactly where we are in
+
+08:34:37   21   the claim analysis.
+
+08:34:38   22               MR. RUBINO:   Mr. Thompson, if we could have
+
+08:34:41   23   Slide 15, please?
+
+08:34:42   24   Q.   (By Mr. Rubino)      And, Mr. McAlexander, if you could
+
+08:34:45   25   refresh us as to what you were talking about on Friday with
+
+    Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 6 of 134 PageID #: 18918
+                                                                                       582
+
+
+
+08:34:49    1   regard to this slide?
+
+08:34:50    2   A.   Yes.    With regard to Slide 15, I have identified the
+
+08:34:52    3   listing of the accused Amazon products and listed in the
+

@@ -1,0 +1,149 @@
+01:33:57   20   Q.   And when you say 128 in the time domain, you're
+
+01:34:01   21   referring to hertz or kilohertz?
+
+01:34:08   22   A.   I meant the number of samples.       So -- so if you're
+
+01:34:10   23   sampling a 16 kilohertz, for example, then you have one
+
+01:34:14   24   sample every 1 over 16,000 second, right.
+
+01:34:19   25   Q.   And so in the example of the seven-microphone array
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 30 of 120 PageID #: 19076
+                                                                                     740
+
+
+
+01:34:29    1   with six beams -- six beams, your look-direction would be
+
+01:34:34    2   0, 60, 120, 180, 240, 300, and then 0 again, right?
+
+01:34:46    3   A.   Yeah.    So it's going to be, yeah, 60-degree increments.
+
+01:34:49    4   Q.   But that's not what I'm asking you.         In the output of
+
+01:34:54    5   the beam selector, it has the ability to change the beam
+
+01:34:57    6   based on differences in SNR, right?
+
+01:35:00    7   A.   Yes.
+
+01:35:01    8   Q.    Other than to -- let me ask you a different question.
+
+01:35:14    9               So it does not stay on the same beam no matter
+
+01:35:20   10   what, right?     It has the ability to change, correct?
+
+01:35:24   11   A.   It does have the ability to change, of course.
+
+01:35:26   12   Q.   And that change would be a change in direction, right?
+
+01:35:30   13   A.   Yeah, changing the beam means changing direction, yes.
+
+01:35:35   14   Q.   So, among other things, the MediaTek and Texas
+
+01:35:40   15   Instruments processors run the AFE and MPAF software,
+
+01:35:49   16   right?
+
+01:35:49   17               ATTORNEY:   Objection to form.
+
+01:35:50   18   A.   Right.
+
+01:35:51   19   Q.   And within that MPAF or AFE software, you have code
+
+01:35:55   20   that processes digital signals, right?
+
+01:36:00   21   A.   Yes.
+
+01:36:02   22   Q.   And that's code that you specially designed for this
+
+01:36:08   23   system, right?
+
+01:36:08   24   A.   The purpose is audio signal processing.
+
+01:36:10   25   Q.   And it's fair to say that within that audio signal
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 31 of 120 PageID #: 19077
+                                                                                     741
+
+
+
+01:36:14    1   processing, there are mathematical calculations, right?
+
+01:36:19    2   A.   Yes.
+
+01:36:20    3   Q.   Okay.    So you would say that each of the microphones
+
+01:36:30    4   for any given microphone array of the Echo product has
+
+01:36:33    5   coefficients associated with it for beamforming, correct?
+
+01:36:37    6   A.   Yes.
+
+01:36:40    7               (Videoclip ends.)
+
+01:36:42    8               THE COURT:    Does that complete this witness by
+
+01:36:44    9   deposition?
+
+01:36:44   10               MR. FABRICANT:    Yes, it does, Your Honor.
+
+01:36:46   11               THE COURT:    Call your next witness, Plaintiff.
+
+01:36:48   12               MR. FABRICANT:    Yes, Your Honor.     Ms. Park will
+
+01:36:49   13   announce the next witness.
+
+01:36:51   14               MS. PARK:    Plaintiff calls by deposition Carlo
+
+01:36:58   15   Murgia, senior manager of audio algorithms and software
+
+01:37:02   16   development at Amazon's Lab126.
+
+01:37:05   17               Playing time for Plaintiff is 11 minutes, 54
+
+01:37:08   18   seconds; playing time for Defendants is 19 seconds.
+
+01:37:16   19               THE COURT:    Please proceed with this witness by
+
+01:37:18   20   deposition.
+
+01:37:18   21                   CARLO MURGIA, PLAINTIFF'S WITNESS
+
+01:37:19   22                     PRESENTED BY VIDEO DEPOSITION
+
+01:37:19   23               (Videoclip played.)
+
+01:37:19   24   Q.   Good morning, sir.      Can you please state your full name
+
+01:37:23   25   for the record?
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 32 of 120 PageID #: 19078
+                                                                                     742
+
+
+
+01:37:24    1   A.   Good morning.    My name is Carlo Murgia.
+
+01:37:26    2   Q.   Mr. Murgia, where do you currently work?
+
+01:37:29    3   A.   I work at Amazon.
+
+01:37:31    4   Q.   What is your current job role?
+
+01:37:33    5   A.   I'm a senior manager of audio algorithm and software
+
+01:37:38    6   development.
+
+01:37:38    7   Q.   And do you oversee the production code for all versions
+
+01:37:41    8   of Echo products?
+
+01:37:45    9               And you are familiar with the MPAF, M-P-A-F,
+
+01:37:50   10   framework, right?
+
+01:37:52   11   A.   Yes.
+

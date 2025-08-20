@@ -1,0 +1,7 @@
+{
+  "inputDir": "./samples/transcripts/case2",
+  "outputDir": "./output",
+  "logLevel": "info",
+  "batchSize": 100,
+  "enableElasticSearch": false
+}

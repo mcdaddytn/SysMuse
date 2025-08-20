@@ -1,0 +1,32 @@
+TRIAL: {{trialName}}
+Case Number: {{caseNumber}}
+Court: {{court}}
+{{#courtDivision}}Division: {{courtDivision}}{{/courtDivision}}
+Report: Judge Statements with Context
+========================================
+
+{{#sessions}}
+----------------------------------------
+SESSION: {{sessionType}} - {{sessionDate}}
+----------------------------------------
+
+{{#events}}
+{{#statement}}
+[{{startTime}}] {{#speaker}}{{speakerPrefix}}{{/speaker}}{{^speaker}}UNKNOWN{{/speaker}}: {{rawText}}
+
+{{/statement}}
+{{#witnessCalled}}
+[{{startTime}}] WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}} - {{examinationType}}
+
+{{/witnessCalled}}
+{{#courtDirective}}
+[{{startTime}}] {{#directiveType}}{{name}}{{/directiveType}}{{^directiveType}}COURT DIRECTIVE{{/directiveType}}: {{rawText}}
+
+{{/courtDirective}}
+{{^statement}}{{^witnessCalled}}{{^courtDirective}}
+[{{startTime}}] {{eventType}}: {{rawText}}
+
+{{/courtDirective}}{{/witnessCalled}}{{/statement}}
+{{/events}}
+
+{{/sessions}}

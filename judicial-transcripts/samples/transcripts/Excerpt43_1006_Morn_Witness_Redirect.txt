@@ -1,0 +1,76 @@
+11:24:39    2   Q.   Was this a mistake?      Should this have been an
+
+11:24:44    3   experimental paragraph rather than an actual?
+
+11:24:47    4   A.   Perhaps.   I mean, I -- I don't see any issue with
+
+11:24:53    5   referring to it here, though, that we collected a lot of
+
+11:24:57    6   data when designing these algorithms.
+
+11:25:17    7              MR. FABRICANT:    Your Honor, I pass the witness.
+
+11:25:19    8              THE COURT:    Redirect by the Defendant?
+
+11:25:21    9              MR. HADDEN:    Thank you, Your Honor.
+
+11:25:21   10                            REDIRECT EXAMINATION
+
+11:25:21   11   BY MR. HADDEN:
+
+11:25:21   12   Q.   Okay, Mr. Hilmes.
+
+11:25:57   13              MR. HADDEN:    Could we look at the paper that was
+
+11:25:59   14   just up, Plaintiff's 301, please, Mr. Berk?
+
+11:25:59   15   Q.   (By Mr. Hadden)      What's the purpose for peer-review in
+
+11:26:02   16   a scientific journal, Mr. Hilmes?
+
+11:26:04   17   A.   Peer-review is to basically give feedback on the paper
+
+11:26:09   18   about its technical merits.
+
+11:26:13   19   Q.   Okay.   And do peer-reviewers try to figure out how
+
+11:26:16   20   actual products work?
+
+11:26:19   21   A.   No.
+
+11:26:19   22   Q.   Is the purpose of writing a technical argument --
+
+11:26:24   23   tech -- strike that.
+
+11:26:25   24              Is the purpose of writing a technical paper to
+
+11:26:29   25   submit to a peer-reviewed scientific journal to describe
+
+   Case 2:19-cv-00123-JRG Document 335 Filed 10/09/20 Page 118 of 141 PageID #: 19333
+                                                                                    948
+
+
+
+11:26:34    1   how a specific product works?
+
+11:26:37    2               MR. FABRICANT:    Objection, Your Honor.
+
+11:26:39    3               THE COURT:    State --
+
+11:26:39    4               MR. FABRICANT:    Leading, Your Honor.
+
+11:26:40    5               THE COURT:    Sustained.
+
+11:26:42    6   Q.   (By Mr. Hadden)      What's the purpose for providing a
+
+11:26:44    7   technical paper to a peer-reviewed journal, Mr. Hilmes?
+
+11:26:47    8   A.   The purpose of providing a paper like this is to share
+
+11:26:55    9   with the scientific community our learnings about things
+
+11:27:01   10   that we have worked on, and -- and then the -- the
+
+11:27:05   11   peer-reviewers will give us feedback on whether they think
+
+11:27:10   12   we have something technically interesting.

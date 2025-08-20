@@ -1,0 +1,23 @@
+{
+  "maxResults": 50,
+  "resultSeparator": "\n\n---\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    },
+    {
+      "name": "overruled",
+      "query": "overruled",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "judge-statements-{caseHandle}.txt",
+  "fileTemplate": "judge-statements.txt"
+}

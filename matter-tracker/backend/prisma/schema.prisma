@@ -23,9 +23,16 @@ model TeamMember {
   id                String            @id @default(cuid())
   name              String
   email             String            @unique
+  password          String?           // Hashed password for authentication
+  title             String?           // Job title (Associate, Partner, etc.)
+  role              TeamMemberRole    @default(ASSOCIATE)
+  accessLevel       AccessLevel       @default(USER)
   workingHours      Int?              // Made optional
   timeIncrementType TimeIncrementType? // Made optional
   timeIncrement     Int?              // Made optional
+  userITActivity    Boolean?          // Override global setting for IT Activities access
+  lastLoginAt       DateTime?         // Track last login
+  isActive          Boolean           @default(true)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   timesheets        Timesheet[]
@@ -54,13 +61,14 @@ model Matter {
 }
 
 model Task {
-  id          String          @id @default(cuid())
-  description String
-  matterId    String
-  matter      Matter          @relation(fields: [matterId], references: [id])
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  entries     TimesheetEntry[]
+  id                    String          @id @default(cuid())
+  description           String
+  matterId              String
+  defaultProjectedHours Float?          // Default projected hours for this task (nullable)
+  matter                Matter          @relation(fields: [matterId], references: [id])
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  entries               TimesheetEntry[]
   
   @@unique([matterId, description])
 }
@@ -170,6 +178,7 @@ enum ITActivityType {
   DOCUMENT    // OneDrive documents created/modified
   RELATIVITY  // Relativity e-discovery system sessions
   CLAUDE_SESSION // Claude LLM chat sessions
+  COCOUNSEL_SESSION // CoCounsel LLM chat sessions
 }
 
 enum MatterLookaheadMode {
@@ -183,4 +192,18 @@ enum TimesheetMode {
   WEEKLY                  // Only weekly timesheets
   DAILY                   // Only daily timesheets
   BOTH                    // Both weekly and daily (can switch)
+}
+
+enum TeamMemberRole {
+  PARALEGAL
+  ASSOCIATE
+  TECHNICAL_SUPPORT
+  PARTNER
+  SENIOR_PARTNER
+}
+
+enum AccessLevel {
+  USER                    // Regular user - can only view/edit own data
+  MANAGER                 // Can view/edit other team members' data
+  ADMIN                   // Full access to all functionality
 }

@@ -2,7 +2,7 @@
   <q-page class="q-pa-md">
     <div class="q-mb-md">
       <div class="row items-center justify-between q-mb-md">
-        <div class="text-h4">IT Activity Tracker</div>
+        <div class="text-h4">Activities Dashboard</div>
         <div class="row items-center q-gutter-md">
           <q-btn
             label="Back to Timesheets"
@@ -23,6 +23,7 @@
             option-value="id"
             label="Team Member"
             filled
+            :disable="isRegularUser"
             @update:model-value="onTeamMemberChange"
           />
         </div>
@@ -77,6 +78,21 @@
           />
         </div>
 
+        <div style="min-width: 200px">
+          <q-input
+            v-model="textSearchFilter"
+            label="Search Title/Description"
+            filled
+            clearable
+            debounce="300"
+            @update:model-value="loadActivities"
+          >
+            <template v-slot:prepend>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+        </div>
+
         <q-btn
           icon="refresh"
           flat
@@ -127,6 +143,13 @@
           <q-card-section>
             <div class="text-h6">Claude Sessions</div>
             <div class="text-h4 text-teal">{{ statistics.activityCounts.claudeSession }}</div>
+          </q-card-section>
+        </q-card>
+        
+        <q-card class="col">
+          <q-card-section>
+            <div class="text-h6">CoCounsel Sessions</div>
+            <div class="text-h4 text-indigo">{{ statistics.activityCounts.cocounselSession }}</div>
           </q-card-section>
         </q-card>
         
@@ -463,6 +486,7 @@ import { date, Notify, Dialog } from 'quasar';
 import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from 'src/services/api';
+import { authService } from 'src/services/auth';
 import { 
   formatTime, 
   parseTimeInput,
@@ -480,7 +504,8 @@ import type {
   ITActivity,
   ITActivityType,
   Urgency,
-  MatterLookaheadMode
+  MatterLookaheadMode,
+  AuthUser
 } from 'src/types/models';
 
 interface ActivityStatistics {
@@ -534,6 +559,7 @@ export default defineComponent({
     const activityTypeFilter = ref<ITActivityType | null>(null); // Default to All
     const associationFilter = ref<boolean | null>(null);
     const tableFilter = ref('');
+    const textSearchFilter = ref('');
     const loading = ref(false);
     const associating = ref(false);
     
@@ -566,6 +592,9 @@ export default defineComponent({
     const selectedMatterForTask = ref<Matter | null>(null);
     const showMetadataTooltip = ref(false);
     const showGridMetadataTooltip = ref<string | null>(null);
+    
+    // User state
+    const currentUser = ref<AuthUser | null>(null);
 
     // Table configuration
     const pagination = ref({
@@ -631,6 +660,7 @@ export default defineComponent({
       { label: 'Documents', value: 'DOCUMENT' },
       { label: 'Relativity Sessions', value: 'RELATIVITY' },
       { label: 'Claude Sessions', value: 'CLAUDE_SESSION' },
+      { label: 'CoCounsel Sessions', value: 'COCOUNSEL_SESSION' },
     ];
 
     const associationOptions = [
@@ -669,6 +699,7 @@ export default defineComponent({
         case 'DOCUMENT': return 'orange';
         case 'RELATIVITY': return 'purple';
         case 'CLAUDE_SESSION': return 'teal';
+        case 'COCOUNSEL_SESSION': return 'indigo';
         default: return 'grey';
       }
     }
@@ -680,6 +711,7 @@ export default defineComponent({
         case 'DOCUMENT': return 'description';
         case 'RELATIVITY': return 'search';
         case 'CLAUDE_SESSION': return 'psychology';
+        case 'COCOUNSEL_SESSION': return 'smart_toy';
         default: return 'help';
       }
     }
@@ -691,6 +723,7 @@ export default defineComponent({
         case 'DOCUMENT': return 'Document';
         case 'RELATIVITY': return 'Relativity';
         case 'CLAUDE_SESSION': return 'Claude Session';
+        case 'COCOUNSEL_SESSION': return 'CoCounsel Session';
         default: return 'Unknown';
       }
     }
@@ -836,13 +869,16 @@ export default defineComponent({
         teamMembers.value = response.data;
         console.log('Loaded team members');
         
-        // Set initial team member if provided
+        // Set initial team member if provided from route
         if (initialTeamMemberId) {
           console.log('Loading team member initialTeamMemberId: ', initialTeamMemberId);
           selectedTeamMember.value = teamMembers.value.find(tm => tm.id === initialTeamMemberId) || null;
           if (selectedTeamMember.value) {
             await loadActivities();
           }
+        } else {
+          // Auto-select current user for non-admin users
+          await autoSelectCurrentUser();
         }
       } catch (error) {
         Notify.create({
@@ -881,7 +917,8 @@ export default defineComponent({
           startDate: startDate.value,
           endDate: endDate.value,
           activityType: activityTypeFilter.value,
-          isAssociated: associationFilter.value
+          isAssociated: associationFilter.value,
+          textSearch: textSearchFilter.value
         });
         
         // Build query parameters
@@ -897,6 +934,10 @@ export default defineComponent({
         
         if (associationFilter.value !== null) {
           params.append('isAssociated', associationFilter.value.toString());
+        }
+        
+        if (textSearchFilter.value) {
+          params.append('textSearch', textSearchFilter.value);
         }
         
         console.log('🔗 API URL:', `/it-activities?${params.toString()}`);
@@ -1351,8 +1392,33 @@ export default defineComponent({
       }
     }
 
+    async function loadCurrentUser(): Promise<void> {
+      try {
+        currentUser.value = await authService.getCurrentUser();
+      } catch (error) {
+        console.error('Failed to load current user:', error);
+      }
+    }
+
+    async function autoSelectCurrentUser(): Promise<void> {
+      if (!currentUser.value || currentUser.value.accessLevel === 'ADMIN') {
+        return; // Admins don't get auto-selected
+      }
+
+      const currentTeamMember = teamMembers.value.find(tm => tm.id === currentUser.value?.id);
+      if (currentTeamMember) {
+        selectedTeamMember.value = currentTeamMember;
+        await loadActivities();
+      }
+    }
+
+    const isRegularUser = computed(() => {
+      return currentUser.value?.accessLevel === 'USER';
+    });
+
     // Lifecycle
-    onMounted(() => {
+    onMounted(async () => {
+      await loadCurrentUser();
       loadSettings();
       loadTeamMembers();
       loadMatters();
@@ -1383,6 +1449,8 @@ export default defineComponent({
       activityTypeFilter,
       associationFilter,
       tableFilter,
+      textSearchFilter,
+      isRegularUser,
       loading,
       associating,
       teamMembers,

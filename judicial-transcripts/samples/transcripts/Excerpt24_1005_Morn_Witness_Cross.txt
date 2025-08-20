@@ -1,0 +1,92 @@
+10:45:57   22            I think it also gives great freedom to the user to
+
+10:46:00   23   know that -- whether you are near it or far away from it it
+
+10:46:04   24   can still pick up and discern, is great value added from a
+
+10:46:08   25   technology standpoint, because there's a lot of things you
+
+    Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 82 of 134 PageID #: 18994
+                                                                                     658
+
+
+
+10:46:11    1   can do with it once it can discern the words that you're
+
+10:46:15    2   saying.
+
+10:46:15    3   Q.   Thank you, Mr. McAlexander.
+
+10:46:22    4             MR. RUBINO:    I pass the witness.
+
+10:46:23    5             THE COURT:    Cross-examination by the Defendant?
+
+10:46:25    6             MR. HADDEN:    Yes, Your Honor.
+
+10:46:26    7             May we approach with some binders, Your Honor?
+
+10:46:29    8             THE COURT:    You have leave to distribute binders.
+
+10:46:31    9             MR. HADDEN:    Thank you, Your Honor.
+
+10:46:52   10             THE COURT:    All right.    Counsel, you may proceed
+
+10:46:54   11   with cross-examination.
+
+10:46:55   12             MR. HADDEN:    Thank you, Your Honor.
+
+10:46:55   13                           CROSS-EXAMINATION
+
+10:46:57   14   BY MR. HADDEN:
+
+10:46:57   15   Q.   Good morning, Mr. McAlexander.
+
+10:46:58   16   A.   Good morning, sir.
+
+10:46:59   17   Q.   You're not an expert in adaptive beamforming, are you?
+
+10:47:02   18   A.   Not in adaptive beamforming, per se, no.
+
+10:47:05   19   Q.   And you've not authored any publications regarding
+
+10:47:09   20   adaptive beamforming, have you?
+
+10:47:10   21   A.   That's correct, no.
+
+10:47:11   22   Q.   And you've not taught any classes regarding adaptive
+
+10:47:14   23   beamforming, have you?
+
+10:47:15   24   A.   That's also correct.
+
+10:47:16   25   Q.   In fact, you haven't even taken any classes related to
+
+    Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 83 of 134 PageID #: 18995
+                                                                                     659
+
+
+
+10:47:20    1   adaptive beamforming, have you, Mr. McAlexander?
+
+10:47:22    2   A.    Not any official classes, no.
+
+10:47:24    3   Q.    Okay.    And, in fact, you have no experience with
+
+10:47:26    4   adaptive beamforming as it is used in these patents, do
+
+10:47:30    5   you, Mr. McAlexander?
+
+10:47:31    6   A.    Not correct.    As I mentioned, I have used -- in
+
+10:47:34    7   acoustic design of systems, I have used equipment.            I
+
+10:47:38    8   haven't designed the actual construct of the -- the
+
+10:47:42    9   adaptive beamformer itself, but I've used it.
+
+10:47:44   10   Q.    Well, do you recall being -- having your deposition
+
+10:47:47   11   taken in this case, Mr. McAlexander?
+
+10:47:49   12   A.    Certainly.
+

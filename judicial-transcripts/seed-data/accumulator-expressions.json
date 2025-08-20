@@ -1,0 +1,102 @@
+[
+  {
+    "name": "judge_attorney_interaction",
+    "description": "Find interactions where judge and at least 2 attorneys speak within 10 statements",
+    "expressionType": "BOOLEAN",
+    "windowSize": 10,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "AND",
+    "metadata": {
+      "requiredSpeakers": ["JUDGE"],
+      "minAttorneys": 2,
+      "minDistinctSpeakers": 3
+    },
+    "isActive": false
+  },
+  {
+    "name": "opposing_counsel_interaction",
+    "description": "Find interactions between plaintiff and defense attorneys with judge within 8 statements",
+    "expressionType": "BOOLEAN",
+    "windowSize": 8,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "AND",
+    "metadata": {
+      "requiredSpeakers": ["JUDGE"],
+      "requirePlaintiffAttorney": true,
+      "requireDefenseAttorney": true,
+      "minDistinctSpeakers": 3
+    },
+    "isActive": false
+  },
+  {
+    "name": "objection_sustained",
+    "description": "Attorney objects and judge sustains within 5 statements",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["objection", "I object", "we object"],
+      "judgePhrases": ["sustained"],
+      "weights": {
+        "objection": 1.0,
+        "I object": 1.0,
+        "we object": 0.9,
+        "sustained": 1.0
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "objection_overruled",
+    "description": "Attorney objects and judge overrules within 5 statements",
+    "expressionType": "CONFIDENCE",
+    "windowSize": 5,
+    "thresholdValue": 0.7,
+    "minConfidenceLevel": "MEDIUM",
+    "combinationType": "MULTIPLY",
+    "metadata": {
+      "attorneyPhrases": ["objection", "I object", "we object"],
+      "judgePhrases": ["overruled", "I'll allow it"],
+      "weights": {
+        "objection": 1.0,
+        "I object": 1.0,
+        "we object": 0.9,
+        "overruled": 1.0,
+        "I'll allow it": 0.7
+      }
+    },
+    "isActive": true
+  },
+  {
+    "name": "sidebar_request",
+    "description": "Request for sidebar or approach to bench",
+    "expressionType": "BOOLEAN",
+    "windowSize": 3,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["sidebar", "approach the bench", "may we approach", "counsel approach"],
+      "speakerTypes": ["ATTORNEY", "JUDGE"]
+    },
+    "isActive": true
+  },
+  {
+    "name": "witness_examination_transition",
+    "description": "Transition between examination types",
+    "expressionType": "BOOLEAN",
+    "windowSize": 5,
+    "thresholdValue": 1.0,
+    "minConfidenceLevel": "HIGH",
+    "combinationType": "OR",
+    "metadata": {
+      "phrases": ["pass the witness", "cross-examination", "redirect", "recross", "no further questions"],
+      "speakerTypes": ["ATTORNEY"]
+    },
+    "isActive": true
+  }
+]

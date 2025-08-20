@@ -1,0 +1,24 @@
+{
+  "maxResults": 10,
+  "resultSeparator": "\n\n========== RULING EXCHANGE ==========\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained_by_judge",
+      "query": "sustained",
+      "type": "match",
+      "field": "text"
+    },
+    {
+      "name": "overruled_by_judge",
+      "query": "overruled",
+      "type": "match",
+      "field": "text"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "judge-rulings-with-context-{caseHandle}.txt",
+  "fileTemplate": "judge-with-context.txt"
+}

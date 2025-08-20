@@ -1,0 +1,18 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "objection",
+      "query": "objection",
+      "type": "match"
+    }
+  ],
+  "maxResults": 20,
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "ATTORNEY",
+    "speakerPrefix": [
+      "MR. FABRICANT",
+      "MR. LAMBRIANAKOS"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "transcriptPath": "./transcripts",
+  "format": "txt",
+  "caseName": "",
+  "caseNumber": "",
+  "phases": {
+    "phase1": true,
+    "phase2": false,
+    "phase3": false
+  },
+  "pdfExtractOptions": {
+    "layout": "preserve",
+    "encoding": "UTF-8"
+  },
+  "parsingOptions": {
+    "ignoreBlankLines": true,
+    "trimWhitespace": true,
+    "lineDelimiters": ["\n", "\r\n"],
+    "pageDelimiters": ["\\f", "Page \\d+ of \\d+"]
+  },
+  "elasticsearchOptions": {
+    "url": "http://localhost:9200",
+    "index": "judicial_transcripts"
+  }
+}

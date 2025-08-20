@@ -1,0 +1,23 @@
+{
+  "maxResults": 10,
+  "resultSeparator": "\n\n================ NEXT RULING ================\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    },
+    {
+      "name": "overruled",
+      "query": "overruled",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "courtroom-dialogue-{caseHandle}.txt",
+  "fileTemplate": "courtroom-dialogue.txt"
+}

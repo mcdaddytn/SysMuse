@@ -1,0 +1,49 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "is_there_objection",
+      "query": "is there objection",
+      "type": "match_phrase"
+    },
+    {
+      "name": "state_your_objection",
+      "query": "state your objection",
+      "type": "match_phrase"
+    },
+    {
+      "name": "any_objections",
+      "query": "any objections",
+      "type": "match_phrase"
+    },
+    {
+      "name": "whats_your_objection",
+      "query": "what's your objection",
+      "type": "match_phrase"
+    },
+    {
+      "name": "strike_from_record",
+      "query": "strike from the record",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "i_will_strike",
+      "query": "I will strike",
+      "type": "match_phrase"
+    },
+    {
+      "name": "record_will_reflect",
+      "query": "record will reflect",
+      "type": "match_phrase"
+    },
+    {
+      "name": "its_overruled",
+      "query": "it's overruled",
+      "type": "match_phrase"
+    }
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerPrefix": "THE COURT"
+  }
+}

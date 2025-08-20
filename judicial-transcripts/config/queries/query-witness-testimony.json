@@ -1,0 +1,23 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "uncertainty",
+      "query": "I don't remember I don't recall",
+      "type": "match"
+    },
+    {
+      "name": "affirmative",
+      "query": "yes correct that's right",
+      "type": "match"
+    },
+    {
+      "name": "not_sure",
+      "query": "I'm not sure",
+      "type": "match_phrase"
+    }
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "WITNESS"
+  }
+}

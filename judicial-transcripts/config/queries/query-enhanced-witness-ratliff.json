@@ -1,0 +1,28 @@
+{
+  "maxResults": 25,
+  "resultSeparator": "\n\n==========\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "yes",
+      "query": "yes",
+      "type": "match"
+    },
+    {
+      "name": "no",
+      "query": "no",
+      "type": "match"
+    },
+    {
+      "name": "dont_know",
+      "query": "don't know",
+      "type": "match_phrase"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "WITNESS"
+  },
+  "surroundingEvents": 2,
+  "fileNameTemplate": "witness-ratliff-testimony.txt",
+  "fileTemplate": "witness-testimony.txt"
+}

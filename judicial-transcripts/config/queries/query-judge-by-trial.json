@@ -1,0 +1,13 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "evidentiary_rulings",
+      "query": "admitted OR excluded OR strike",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  }
+}

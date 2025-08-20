@@ -1,19 +1,64 @@
 {
   "settings": [
     {
-      "key": "default_working_hours",
+      "key": "workingHours",
       "value": 40,
-      "description": "Default working hours per week for team members"
+      "description": "Global default working hours per week"
     },
     {
-      "key": "default_time_increment_type",
-      "value": "PERCENT",
-      "description": "Default time increment type (PERCENT or HOURS_MINUTES)"
+      "key": "timeIncrementType",
+      "value": "HOURS_MINUTES",
+      "description": "Global default time increment type"
     },
     {
-      "key": "default_time_increment",
-      "value": 1,
-      "description": "Default time increment value"
+      "key": "timeIncrement",
+      "value": 15,
+      "description": "Global default time increment value"
+    },
+    {
+      "key": "userITActivity",
+      "value": "MANAGER",
+      "description": "Access level required for IT Activities page (NONE, USER, MANAGER, ADMIN)"
+    },
+    {
+      "key": "maxHoursPerDay",
+      "value": 12,
+      "description": "Maximum hours per day for timesheet validation"
+    },
+    {
+      "key": "maxHoursPerWeek",
+      "value": 60,
+      "description": "Maximum hours per week for timesheet validation"
+    },
+    {
+      "key": "matterLookaheadMode",
+      "value": "INDIVIDUAL_STARTS_WITH",
+      "description": "Default matter search mode"
+    },
+    {
+      "key": "timesheetMode",
+      "value": "WEEKLY",
+      "description": "Default timesheet mode"
+    },
+    {
+      "key": "projectedHoursWarning",
+      "value": "Never",
+      "description": "When to warn for low projected hours (Never, Always, Past)"
+    },
+    {
+      "key": "relativitySessionsPerDay",
+      "value": 2,
+      "description": "Number of Relativity sessions to generate per day in seed data"
+    },
+    {
+      "key": "cocounselSessionsPerDay",
+      "value": 2,
+      "description": "Number of Cocounsel sessions to generate per day in seed data"
+    },
+    {
+      "key": "claudeSessionsPerDay",
+      "value": 2,
+      "description": "Number of Claude Chat sessions to generate per day in seed data"
     }
   ]
 }

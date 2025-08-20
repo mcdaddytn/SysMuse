@@ -1,0 +1,228 @@
+
+05:02:43   13   A.   Yes.
+
+05:02:43   14   Q.   Did you intend anything else?
+
+05:02:45   15   A.   That's it.
+
+05:02:46   16   Q.   Did you intend to -- to intimate that this patent was
+
+05:02:50   17   invalid?
+
+05:02:52   18   A.   Could you repeat your question?
+
+05:02:54   19   Q.   Did you intend to suggest that the patent was invalid?
+
+05:02:58   20   A.   No.
+
+05:02:58   21   Q.   Were you referring to the '049 patent at all?
+
+05:03:01   22   A.   No.
+
+05:03:10   23               MR. FABRICANT:   Your Honor, I pass the witness.
+
+05:03:12   24               THE COURT:   Cross-examination?
+
+05:03:18   25               MR. RE:   Yes, Your Honor.   Thank you.
+
+   Case 2:19-cv-00123-JRG Document 329 Filed 10/09/20 Page 123 of 156 PageID #: 18584
+                                                                                    248
+
+
+
+05:03:29    1               MR. LAQUER:    May I approach?
+
+05:03:33    2               THE COURT:    You may approach with binders.
+
+05:04:08    3               MR. LAQUER:    Your Honor, may I approach one more
+
+05:04:10    4   time to retrieve a physical?
+
+05:04:12    5               THE COURT:    To retrieve what?
+
+05:04:15    6               MR. LAQUER:    The physical exhibit that is --
+
+05:04:19    7               THE COURT:    Oh, yes, you may approach the witness.
+
+05:04:26    8   The Court Security Officer will hand it to you.
+
+05:04:28    9               All right.    Mr. Re, you may proceed with
+
+05:04:31   10   cross-examination.
+
+05:04:32   11               MR. RE:   Thank you, Your Honor.
+
+05:04:33   12               And thank you.
+
+05:04:33   13                             CROSS-EXAMINATION
+
+05:04:35   14   BY MR. RE:
+
+05:04:35   15   Q.   Good afternoon, Dr. Li.
+
+05:04:37   16   A.   Hi, Mr. Re.
+
+05:04:39   17   Q.   How are you?     It's nice to see you in person.
+
+05:04:42   18   A.   Yes.
+
+05:04:42   19   Q.   It's better than Zoom, right?
+
+05:04:45   20   A.   Right.
+
+05:04:46   21   Q.   I understand that you met with Amazon, you said, in
+
+05:04:49   22   October of 2011; is that right?
+
+05:04:51   23   A.   That's right.
+
+05:04:53   24   Q.   And the features that you discussed with them at the
+
+05:04:58   25   meeting, if I understand, was the circular microphone
+
+   Case 2:19-cv-00123-JRG Document 329 Filed 10/09/20 Page 124 of 156 PageID #: 18585
+                                                                                    249
+
+
+
+05:05:04    1   array; is that right?
+
+05:05:04    2   A.   Microphone array, including circular array.
+
+05:05:07    3   Q.   Yes.     And also about -- you also went there to discuss
+
+05:05:12    4   noise reduction, right?
+
+05:05:12    5   A.   Yes.
+
+05:05:15    6   Q.   And echo cancellation; is that right?
+
+05:05:17    7   A.   Yes.
+
+05:05:18    8   Q.   And sound source localization, right?
+
+05:05:22    9   A.   Right.
+
+05:05:24   10   Q.   Right.
+
+05:05:26   11               MR. RE:   And if we can call up Exhibit 45.
+
+05:05:29   12   Q.   (By Mr. Re)      I believe those are listed in your
+
+05:05:32   13   presentation.      Is this the presentation you discussed with
+
+05:05:34   14   counsel?
+
+05:05:34   15   A.   Yes.
+
+05:05:35   16   Q.   And these are the slides that you presented or sent to
+
+05:05:44   17   Amazon on or about October 17th, 2011?
+
+05:05:47   18   A.   Yes.
+
+05:05:48   19   Q.   And let's take a look, particularly at the page that
+
+05:05:51   20   actually discusses the subject matter relevant to your '049
+
+05:05:55   21   patent.
+
+05:05:55   22               MR. RE:   If we can go to Page 5, please.
+
+05:05:58   23   Q.   (By Mr. Re)      And these where you list your core
+
+05:06:04   24   technologies?
+
+05:06:04   25   A.   Yes.
+
+   Case 2:19-cv-00123-JRG Document 329 Filed 10/09/20 Page 125 of 156 PageID #: 18586
+                                                                                    250
+
+
+
+05:06:05    1   Q.   And is it your testimony you presented these
+
+05:06:08    2   technologies to Amazon in October of 2011?
+
+05:06:13    3   A.   Right.
+
+05:06:17    4   Q.   Let's go through those one at a time, and I have those
+
+05:06:20    5   blown up because I want to take some notes.
+
+05:06:23    6               You recognize this coming from the top of Page 5
+
+05:06:30    7   on your screen?
+
+05:06:34    8   A.   Could you repeat your question?
+
+05:06:36    9   Q.   You see how this is just a picture of the top of Page 5
+
+05:06:39   10   from the exhibit you sent to Amazon after your meeting on
+
+05:06:42   11   October 2011.     Do you see that?
+
+05:06:44   12   A.   Yes.
+
+05:06:44   13   Q.   And I want to break this down a little bit to see if we
+
+05:06:49   14   can see a little more about these ideas.
+
+05:06:51   15               Now, the first item on the list is microphone
+
+05:06:55   16   array, linear, circular; do you see that?
+
+05:06:57   17   A.   Yes.
+
+05:06:57   18   Q.   And you did not invent the linear or circular
+
+05:07:02   19   microphone array, correct?
+
+05:07:07   20   A.   Right.
+
+05:07:07   21   Q.   And you know that those are very well-known by the time
+
+05:07:15   22   you came to Amazon in 2011, right?
+
+05:07:17   23   A.   Linear array was very well-known.       Circular array,
+
+05:07:25   24   there was no product.
+
+05:07:26   25   Q.   Let me show you what's been previously marked as
+
+   Case 2:19-cv-00123-JRG Document 329 Filed 10/09/20 Page 126 of 156 PageID #: 18587
+                                                                                    251
+
+
+
+05:07:30    1   exhibit -- Defendants' Exhibit 51.
+
+05:07:40    2                Are you familiar with exhibit -- Defendant's
+
+05:07:43    3   Exhibit 51, this article by Jacek Dmochowski?
+
+05:07:48    4   A.    Uh-huh.
+
+05:07:50    5   Q.    You are?    You've seen this before?
+
+05:07:53    6                THE COURT:   You'll have to answer out loud,
+
+05:07:56    7   Dr. Li.       Non-verbalized answers won't work.     So say yes or
+
+05:08:01    8   no.     Don't say uh-huh.
+
+05:08:03    9   A.    Yes.
+
+05:08:04   10   Q.    (By Mr. Re)    And you see that this article was first
+
+05:08:08   11   published in May of 2007.       Do you see that?
+
+05:08:11   12   A.    Yes.
+
+05:08:11   13   Q.    And I'd like to show you Page 2 of this exhibit, and at
+
+05:08:20   14   the bottom, beginning with circular arrays, do you see
+
+05:08:22   15   that?
+
+05:08:23   16   A.    Yeah.

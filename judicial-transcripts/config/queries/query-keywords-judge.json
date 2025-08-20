@@ -1,0 +1,52 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "rephrase_question",
+      "query": "rephrase the question",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "disregard_that",
+      "query": "disregard that",
+      "type": "match_phrase"
+    },
+    {
+      "name": "motion_granted",
+      "query": "motion is granted",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "motion_denied",
+      "query": "motion is denied",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "approach_the_bench",
+      "query": "approach the bench",
+      "type": "match_phrase"
+    },
+    {
+      "name": "beyond_scope",
+      "query": "beyond the scope",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "sustained_objection",
+      "query": "sustained",
+      "type": "term"
+    },
+    {
+      "name": "overruled_objection",
+      "query": "overruled",
+      "type": "term"
+    }
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerPrefix": "THE COURT"
+  }
+}

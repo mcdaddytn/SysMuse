@@ -1,0 +1,11 @@
+name,bar_number,firm,role
+"John Smith","12345","Smith & Associates LLP","PLAINTIFF"
+"Jane Doe","23456","Doe Legal Group","PLAINTIFF"
+"Robert Johnson","34567","Johnson, Miller & Partners","DEFENDANT"
+"Sarah Williams","45678","Williams Law Firm PC","DEFENDANT"
+"Michael Brown","56789","Brown & Davis PLLC","PLAINTIFF"
+"Emily Davis","67890","Davis Legal Services","DEFENDANT"
+"David Miller","78901","Miller & Associates","PLAINTIFF"
+"Lisa Anderson","89012","Anderson Law Group LLC","DEFENDANT"
+"James Wilson","90123","Wilson & Taylor LLP","PLAINTIFF"
+"Mary Taylor","01234","Taylor Legal Counsel","DEFENDANT"

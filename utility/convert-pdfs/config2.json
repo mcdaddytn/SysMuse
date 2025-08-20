@@ -1,0 +1,6 @@
+{
+  "inputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\PacketTrialPDF",
+  "outputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\PacketTrialMix",
+  "convertersAll": ["pdf-parse", "pdf2json", "pdf-text-extract", "pdfjs-dist"],
+  "converters": ["pdf-text-extract"]
+}

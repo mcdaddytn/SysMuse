@@ -1,0 +1,16 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    }
+  ],
+  "maxResults": 5,
+  "outputFormat": "MATCHED",
+  "queryParams": {
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 1,
+  "fileNameTemplate": "test-matched-only.txt"
+}

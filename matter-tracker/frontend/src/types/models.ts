@@ -3,7 +3,9 @@
 export type TimeIncrementType = 'PERCENT' | 'HOURS_MINUTES';
 export type DateIncrementType = 'DAY' | 'WEEK';
 export type Urgency = 'HOT' | 'MEDIUM' | 'MILD';
-export type ITActivityType = 'CALENDAR' | 'EMAIL' | 'DOCUMENT' | 'RELATIVITY' | 'CLAUDE_SESSION';
+export type ITActivityType = 'CALENDAR' | 'EMAIL' | 'DOCUMENT' | 'RELATIVITY' | 'CLAUDE_SESSION' | 'COCOUNSEL_SESSION';
+export type TeamMemberRole = 'PARALEGAL' | 'ASSOCIATE' | 'TECHNICAL_SUPPORT' | 'PARTNER' | 'SENIOR_PARTNER';
+export type AccessLevel = 'USER' | 'MANAGER' | 'ADMIN';
 export type MatterLookaheadMode = 'COMBINED_STARTS_WITH' | 'INDIVIDUAL_STARTS_WITH' | 'COMBINED_CONTAINS' | 'INDIVIDUAL_CONTAINS';
 export type TimesheetMode = 'WEEKLY' | 'DAILY' | 'BOTH';
 
@@ -11,9 +13,15 @@ export interface TeamMember {
   id: string;
   name: string;
   email: string;
-  workingHours: number;
-  timeIncrementType: TimeIncrementType;
-  timeIncrement: number;
+  title?: string;
+  role: TeamMemberRole;
+  accessLevel: AccessLevel;
+  workingHours?: number;
+  timeIncrementType?: TimeIncrementType;
+  timeIncrement?: number;
+  userITActivity?: boolean;
+  lastLoginAt?: string;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -143,6 +151,17 @@ export interface ClaudeSessionActivityMetadata {
   wordsGenerated: number;
 }
 
+export interface CoCounselSessionActivityMetadata {
+  sessionTitle: string;
+  durationMinutes: number;
+  promptCount: number;
+  responseCount: number;
+  clientContext: string;
+  sessionType: 'research' | 'drafting';
+  wordsGenerated: number;
+  documentsAnalyzed: number;
+}
+
 // Request/Response interfaces for API
 export interface ITActivityFilters {
   teamMemberId: string;
@@ -172,5 +191,31 @@ export interface CreateTimesheetEntryFromActivityRequest {
 export interface Settings {
   matterLookaheadMode: MatterLookaheadMode;
   timesheetMode: TimesheetMode;
+  workingHours: number;
+  timeIncrementType: TimeIncrementType;
+  timeIncrement: number;
+  userITActivity: string;
+  maxHoursPerDay: number;
+  maxHoursPerWeek: number;
   [key: string]: any;
+}
+
+// Authentication interfaces
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  accessLevel: AccessLevel;
+  role: TeamMemberRole;
+  title?: string;
+  userITActivity?: boolean;
+}
+
+export interface LoginResponse {
+  user: AuthUser;
 }

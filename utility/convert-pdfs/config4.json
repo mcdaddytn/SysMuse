@@ -1,0 +1,6 @@
+{
+  "inputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VIRNETXPDF",
+  "outputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VIRNETXTXT",
+  "convertersAll": ["pdf-parse", "pdf2json", "pdf-text-extract", "pdfjs-dist"],
+  "converters": ["pdf-text-extract"]
+}

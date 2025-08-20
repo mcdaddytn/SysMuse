@@ -1,0 +1,218 @@
+01:38:32   21   Q.   Right.     But this lawyer, Mr. Tankha, seems to do a very
+
+01:38:36   22   good job at sending you the communications from the Patent
+
+01:38:40   23   Office to you and Dr. Zhu and Craig Adams, right?
+
+01:38:46   24   A.   He did.
+
+01:38:48   25   Q.   Yes.
+
+    Case 2:19-cv-00123-JRG Document 341 Filed 10/09/20 Page 32 of 136 PageID #: 19827
+                                                                                    1425
+
+
+
+01:38:58    1               MR. RE:   I have no further questions, Your Honor.
+
+01:39:02    2   Thank you.
+
+01:39:02    3               THE COURT:   Cross-examination?
+
+01:39:10    4               MR. FABRICANT:    May I proceed, Your Honor?
+
+01:39:12    5               THE COURT:   You may.
+
+01:39:12    6                            CROSS-EXAMINATION
+
+01:39:14    7   BY MR. FABRICANT:
+
+01:39:14    8   Q.   Good afternoon, Dr. Li.
+
+01:39:18    9   A.   Hi.    Good afternoon.
+
+01:39:19   10   Q.   You were shown a redacted email a few minutes ago dated
+
+01:39:27   11   2013, in which there was a reference to your 2009 article?
+
+01:39:31   12   A.   Yes.
+
+01:39:32   13   Q.   As you sit here today, do you know whether you had
+
+01:39:35   14   forwarded that article to him previously, in prior years?
+
+01:39:40   15   A.   You know, I believe we submit everything, including
+
+01:39:46   16   article, to our patent attorneys.        And the email showed
+
+01:39:51   17   that one, we may send again.
+
+01:39:56   18   Q.   The article from 2009 that you co-authored with
+
+01:40:02   19   Dr. Zhu --
+
+01:40:02   20   A.   Yes.
+
+01:40:03   21   Q.   -- with respect to that article, does that article, as
+
+01:40:07   22   you authored it, disclose adaptive beamforming, Dr. Li?
+
+01:40:13   23   A.   In the article, there's no adaptive beamforming.
+
+01:40:21   24   There's no sound source localization.
+
+01:40:24   25   Q.   And you were asked about delay.        Is the type of delay
+
+    Case 2:19-cv-00123-JRG Document 341 Filed 10/09/20 Page 33 of 136 PageID #: 19828
+                                                                                    1426
+
+
+
+01:40:27    1   referenced in your article different because it's a fixed
+
+01:40:32    2   beam rather than an adaptive beam?
+
+01:40:38    3            MR. RE:     Leading, Your Honor.
+
+01:40:43    4   A.   Okay.
+
+01:40:44    5            THE COURT:     Just a minute, Dr. Li.
+
+01:40:45    6            It is technically leading, but this is before the
+
+01:40:48    7   Court.   And given the challenges this witness has with
+
+01:40:53    8   English as a spoken language, I'm going to allow some
+
+01:40:56    9   latitude.
+
+01:40:57   10            MR. FABRICANT:     Thank you.
+
+01:41:02   11            THE COURT:     Rephrase your question, Mr. Fabricant.
+
+01:41:04   12            MR. FABRICANT:     Yes, I will.      Yes, I will,
+
+01:41:07   13   Your Honor.
+
+
+01:41:07   14   Q.   (By Mr. Fabricant)     Can you tell the Court how the type
+
+01:41:10   15   of delay, which is set forth in your article with respect
+
+01:41:14   16   to the CrispMic I, compares to the type of delay
+
+01:41:19   17   calculations regarding your '049 invention?
+
+01:41:22   18   A.   That's different.    The first one is a fixed
+
+01:41:27   19   beamforming.   The second one is adaptive beamforming.
+
+01:41:29   20   Q.   And is the way of the delay determined different
+
+01:41:32   21   because of the different type of beamformers?
+
+01:41:35   22   A.   That's right.
+
+01:41:35   23   Q.   In the patent that issued from the '049, the actual
+
+01:41:47   24   patent -- and I think it's PTX-1 -- do you know whether the
+
+01:41:55   25   provisional application which led to the '756, which led to
+
+    Case 2:19-cv-00123-JRG Document 341 Filed 10/09/20 Page 34 of 136 PageID #: 19829
+                                                                                    1427
+
+
+
+01:42:03    1   the '042 [sic], is in the '049 patent incorporated by
+
+01:42:10    2   reference in the file history as part of the public record?
+
+01:42:13    3   Do you know that?
+
+01:42:14    4   A.   Yes.
+
+01:42:15    5   Q.   And is it?
+
+01:42:15    6   A.   It means that the provisional -- I saw that provisional
+
+01:42:20    7   application number and the time.
+
+01:42:22    8   Q.   My question to you is, if someone in the public looks
+
+01:42:25    9   at the file history --
+
+01:42:26   10   A.   Yes.
+
+01:42:27   11   Q.   -- of the '049, they will see the provisional, and they
+
+01:42:31   12   will see the reference to the Brandstein book, will they
+
+01:42:35   13   not?
+
+01:42:35   14   A.   I don't think the public can see the provisional,
+
+01:42:38   15   right?
+
+01:42:38   16   Q.   No, I'm asking you about the '049.
+
+01:42:40   17   A.   Yeah.
+
+01:42:41   18   Q.   Which incorporates by reference the provisional, which
+
+01:42:45   19   is in the whole file wrapper, which is available to the
+
+01:42:47   20   public today.     Anyone reading that can see that there was a
+
+01:42:49   21   reference to the Brandstein book, could they not?
+
+01:42:51   22   A.   Yes.
+
+01:42:52   23               MR. RE:   Leading, Your Honor.
+
+01:43:00   24               THE COURT:   I'll allow that question, but
+
+01:43:02   25   Mr. Fabricant, when I said some latitude, I didn't mean
+
+    Case 2:19-cv-00123-JRG Document 341 Filed 10/09/20 Page 35 of 136 PageID #: 19830
+                                                                                    1428
+
+
+
+01:43:06    1   unlimited latitude.
+
+01:43:07    2               MR. FABRICANT:   Yes, Your Honor.
+
+01:43:08    3               THE COURT:   Let's proceed.
+
+01:43:09    4   Q.   (By Mr. Fabricant)      I'll rephrase it for you, Doctor.
+
+01:43:13    5               Do you know one way or the other, if you pull the
+
+01:43:15    6   entire file wrapper today of the '049, whether you find the
+
+01:43:18    7   provisional application in the file history?
+
+01:43:23    8   A.   People should be able to see that.
+
+01:43:28    9               MR. FABRICANT:   No further questions.       I pass the
+
+01:43:30   10   witness, Your Honor.
+
+01:43:30   11               THE COURT:   Redirect?
+
+01:43:30   12                            REDIRECT EXAMINATION
+
+01:43:32   13   BY MR. RE:
+
+01:43:32   14   Q.   You -- you paid attention throughout this trial, didn't
+
+01:43:38   15   you?   Did you pay attention?
+
+01:43:40   16   A.   Yes.
+
+01:43:40   17   Q.   And you listened to the questions and answers that were
+
+01:43:42   18   given to Dr. Zhu?
+
+01:43:52   19   A.   Yes.

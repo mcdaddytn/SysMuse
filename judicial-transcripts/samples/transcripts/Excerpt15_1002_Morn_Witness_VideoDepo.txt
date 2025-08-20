@@ -1,0 +1,73 @@
+10:47:27    1   Q.   Where the feature is software-related, how does Amazon
+
+10:47:36    2   determine whether it's present in other similar products?
+
+10:47:39    3   A.   Usually, you can tell by the specifications of what it
+
+10:47:43    4   does, and it could be it has, you know, this noise
+
+10:47:49    5   canceling.    It could have that ability to turn something on
+
+10:47:55    6   or off, or the ability to phone home, or lots of different
+
+10:47:59    7   things.   But, usually, it's in the specification.
+
+10:48:01    8             If it's not, then sometimes we're able to send
+
+10:48:04    9   those to people that can do evaluations to try and run
+
+10:48:08   10   numerous tests to determine if something has something
+
+10:48:10   11   inside or not.
+
+10:48:11   12             (Videoclip ends.)
+
+10:48:12   13             THE COURT:   Does that complete this witness by
+
+10:48:18   14   deposition?
+
+10:48:18   15             MR. FABRICANT:    Yes, it does, Your Honor.
+
+10:48:19   16             THE COURT:   Call your next witness.
+
+10:48:22   17             MR. LAMBRIANAKOS:     Your Honor, Plaintiff calls by
+
+10:48:31   18   deposition Wei Li, former hardware design manager at
+
+10:48:35   19   Amazon's Lab126.
+
+10:48:38   20             The splits are for Plaintiff, 24 minutes, 53
+
+10:48:41   21   seconds, and for Defendant 7 minutes, 38 seconds.
+
+10:48:44   22             THE COURT:   Proceed with this witness by
+
+10:48:46   23   deposition.
+
+10:48:46   24             MR. LAMBRIANAKOS:     Thank you.
+
+10:48:46   25                      WEI LI, PLAINTIFF'S WITNESS
+
+    Case 2:19-cv-00123-JRG Document 330 Filed 10/09/20 Page 84 of 121 PageID #: 18701
+                                                                                     365
+
+
+
+10:48:47    1                      PRESENTED BY VIDEO DEPOSITION
+
+10:48:47    2               (Videoclip played.)
+
+10:48:48    3   Q.   Mr. Li, could you please spell your name for the
+
+10:48:55    4   record?
+
+10:48:56    5   A.   Yes.    My first name is Wei, spelled as W-e-i.         My last
+
+10:49:05    6   name is Li, spelled L-i.
+
+10:49:06    7   Q.   And what did you do after receiving your Master's
+
+10:49:10    8   degree?
+
+10:49:10    9   A.   I went to work at the Li Creative.
+

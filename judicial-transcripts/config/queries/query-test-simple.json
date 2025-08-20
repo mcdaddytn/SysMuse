@@ -1,0 +1,12 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "speakerType": "JUDGE"
+  }
+}

@@ -1,0 +1,132 @@
+03:37:21   19   Q.   Looking at Exhibit 11, Mr. Caruccio, what does units
+
+03:37:27   20   shipped refer to?
+
+03:37:27   21   A.   Those would be the units of items purchased through the
+
+03:37:38   22   voice shopping -- direct voice, number of units.
+
+03:37:42   23   Q.   And to confirm, this is data in Exhibit 11 that Amazon
+
+03:37:56   24   collects in the ordinary course of business?
+
+03:37:58   25   A.   Yes.
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 85 of 120 PageID #: 19131
+                                                                                     795
+
+
+
+03:37:58    1            (Videoclip ends.)
+
+03:38:05    2            THE COURT:     Does that complete this witness by
+
+03:38:07    3   deposition?
+
+03:38:07    4            MR. FABRICANT:     Yes, it does, Your Honor.
+
+03:38:08    5            THE COURT:     All right.    Call your next witness.
+
+03:38:11    6            MR. FABRICANT:     Your Honor, we call to the stand
+
+03:38:12    7   Alan Ratliff.
+
+03:38:13    8            THE COURT:     All right.    Mr. Ratliff, if you'll
+
+03:38:16    9   come forward and be sworn, please.
+
+03:38:19   10            (Witness sworn.)
+
+03:38:33   11            THE COURT:     Please come around, have a seat on the
+
+03:38:35   12   witness stand.
+
+03:38:36   13            You may go to the podium, counsel.          Are there
+
+03:38:54   14   binders to distribute for this witness?
+
+03:38:56   15            MR. LAMBRIANAKOS:      Yes, Your Honor.
+
+03:38:58   16            THE COURT:     Let's do that next.
+
+03:39:23   17            THE WITNESS:     Good afternoon, Your Honor.
+
+03:39:25   18            THE COURT:     All right.    Counsel, you may proceed
+
+03:39:27   19   with your direct examination.
+
+03:39:29   20            MR. LAMBRIANAKOS:      Thank you, Your Honor.
+
+03:39:29   21             ALAN RATLIFF, PLAINTIFF'S WITNESS, SWORN
+
+03:39:29   22                           DIRECT EXAMINATION
+
+03:39:32   23   BY MR. LAMBRIANAKOS:
+
+03:39:32   24   Q.   Mr. Ratliff, please introduce yourself to the jury.
+
+03:39:35   25   A.   Good afternoon.    My name is Alan Ratliff.        I live in
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 86 of 120 PageID #: 19132
+                                                                                     796
+
+
+
+03:39:38    1   Houston, Texas.    I'm a partner in a consulting firm called
+
+03:39:42    2   StoneTurn Group.     We have got about a dozen offices between
+
+03:39:47    3   the U.S. and overseas.
+
+03:39:48    4            The type of consulting we provide includes
+
+03:39:51    5   financial investigations, evaluations, serving as experts
+
+03:39:56    6   in litigation, certain types of government regulatory
+
+03:40:00    7   investigation/consulting.
+
+03:40:02    8            I'm married, my wife's name is Trisha.           We've been
+
+03:40:06    9   married about a little over 30 years.         And she's an
+
+03:40:09   10   assistant principal for a school for low-income kids in
+
+03:40:15   11   East Houston.
+
+03:40:15   12   Q.   What was your assignment in this case?
+
+03:40:17   13   A.   To determine the amount of damages that Amazon would
+
+03:40:20   14   owe to Vocalife if you, the jury, determine that there's
+
+03:40:25   15   been infringement of the '049 patent, and that that patent
+
+03:40:28   16   is not invalid.
+
+03:40:30   17            So in the course of this, I'm going to assume
+
+03:40:33   18   those things are true, in order to give you my damages
+
+03:40:37   19   opinions, but you still have to determine those things.
+
+03:40:39   20   Q.   Did you prepare some demonstrative slides to assist in
+
+03:40:42   21   your presentation?
+
+03:40:43   22   A.   I did.
+
+03:41:02   23   Q.   Mr. Ratliff, tell the jury about your education.
+
+03:41:05   24   A.   I did my undergraduate and graduate degrees at Baylor
+
+03:41:11   25   University, business administration, accounting and tax.
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 87 of 120 PageID #: 19133
+                                                                                     797
+
+
+
+03:41:14    1   And then I did my law degree at Southern Methodist
+
+03:41:17    2   University.

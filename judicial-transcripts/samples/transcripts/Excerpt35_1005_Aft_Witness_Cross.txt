@@ -1,0 +1,149 @@
+04:08:52   16            MR. LAMBRIANAKOS:     At this time, Your Honor,
+
+04:08:54   17   Amazon requested that the courtroom be sealed because we're
+
+04:08:56   18   about to get into some of the proprietary financial metrics
+
+04:08:59   19   of Amazon.
+
+04:09:02   20            THE COURT:    All right.     Based on the request of
+
+04:09:03   21   counsel, I'll order the courtroom sealed at this time.
+
+04:09:07   22            If you're present and not subject to the
+
+04:09:09   23   protective order that's been entered in this case, you
+
+04:09:12   24   should excuse yourselves until the courtroom is unsealed
+
+04:09:15   25   and reopened.
+
+   Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 107 of 120 PageID #: 19153
+                                                                                    817
+
+
+
+04:09:28    1              And, counsel, I'll rely on you to look around the
+
+04:09:34    2   room and make sure everyone that needs to comply has
+
+04:09:38    3   complied.
+
+04:09:38    4              All right.    The courtroom is sealed.
+
+04:09:41    5              (Courtroom sealed.)
+
+04:09:41    6              (This portion of the transcript is sealed
+
+04:09:41    7              and filed under separate cover as
+
+04:09:41    8              Sealed Portion No. 1.)
+
+04:33:22    9              (Courtroom unsealed.)
+
+04:33:22   10              THE COURT:    Please during recess follow all the
+
+04:33:25   11   instructions I've given you, including not to discuss the
+
+04:33:28   12   case among yourselves.      And we'll be back shortly to
+
+04:33:33   13   continue with the Defendants' cross-examination of this
+
+04:33:37   14   witness.
+
+04:33:37   15              The jury is excused for recess at this time.
+
+04:33:38   16              COURT SECURITY OFFICER:     All rise.
+
+04:33:39   17              (Jury out.)
+
+04:33:40   18              THE COURT:    Court stands in recess.
+
+04:34:10   19              COURT SECURITY OFFICER:     All rise.
+
+04:34:11   20              (Jury out.)
+
+04:34:11   21              (Recess.)
+
+04:34:11   22              COURT SECURITY OFFICER:     All rise.
+
+04:34:12   23              THE COURT:    Be seated, please.
+
+04:44:59   24              Mr. Dacus, if you're going to cross-examine this
+
+04:45:02   25   witness, you may go to the podium and prepare.
+
+   Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 108 of 120 PageID #: 19154
+                                                                                    818
+
+
+
+04:45:04    1            MR. DACUS:    Thank you.
+
+04:45:05    2            THE COURT:    Are there binders to pass out?
+
+04:45:10    3            MR. DACUS:    There are, Your Honor.       Thank you.
+
+04:45:14    4            THE COURT:    While they're doing that, let's bring
+
+04:45:15    5   in the jury, please, Mr. Mixon.
+
+04:45:19    6            COURT SECURITY OFFICER:       All rise.
+
+04:45:21    7            (Jury in.)
+
+04:45:34    8            THE COURT:    Please be seated.
+
+04:45:47    9            All right.    Mr. Dacus, you may proceed with
+
+04:45:57   10   cross-examination.
+
+04:45:57   11            MR. DACUS:    Thank you, Your Honor.
+
+04:45:57   12                           CROSS-EXAMINATION
+
+04:45:58   13   BY MR. DACUS:
+
+04:45:58   14   Q.   Good afternoon, Mr. Ratliff.
+
+04:46:00   15   A.   Good afternoon.
+
+04:46:00   16   Q.   You're not here, sir, to tell this jury whether or not
+
+04:46:05   17   Amazon infringes, correct?
+
+04:46:06   18   A.   Correct.
+
+04:46:06   19   Q.   Not here to tell this jury whether or not this patent
+
+04:46:09   20   is valid, correct?
+
+04:46:10   21   A.   Correct.
+
+04:46:10   22   Q.   And, indeed, if this jury finds that, in fact, Amazon
+
+04:46:16   23   does not infringe, that is, does not use this patent, then
+
+04:46:19   24   damages are zero, correct?
+
+04:46:21   25   A.   Correct.
+
+   Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 109 of 120 PageID #: 19155
+                                                                                    819
+
+
+
+04:46:21    1   Q.   Likewise, if the jury were to find that the patent is
+
+04:46:26    2   invalid, then damages are zero, correct?
+
+04:46:27    3   A.   Correct.
+
+04:46:28    4   Q.   And if I understood you, in your calculation, you
+
+04:46:31    5   assumed both that there was infringement and that the
+
+04:46:35    6   patent was valid, fair?
+
+04:46:36    7   A.   That's correct.
+

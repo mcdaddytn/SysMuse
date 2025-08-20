@@ -1,0 +1,24 @@
+TRIAL: {{trialName}}
+Case Number: {{caseNumber}}
+Court: {{court}}
+{{#courtDivision}}Division: {{courtDivision}}{{/courtDivision}}
+
+{{#sessions}}
+========================================
+SESSION: {{sessionType}} - {{sessionDate}}
+========================================
+
+{{#events}}
+{{#statement}}
+[{{startLineNumber}}-{{endLineNumber}}] {{#speaker}}{{speakerPrefix}}{{/speaker}}: {{text}}
+{{/statement}}
+
+{{#witnessCalled}}
+[{{startLineNumber}}] WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}} ({{examinationType}})
+{{/witnessCalled}}
+
+{{#courtDirective}}
+[{{startLineNumber}}] COURT: {{rawText}}
+{{/courtDirective}}
+{{/events}}
+{{/sessions}}

@@ -1,0 +1,26 @@
+TRIAL: {{trialName}}
+Case Number: {{caseNumber}}
+Report: Witness Examination Flow
+========================================
+
+{{#sessions}}
+SESSION: {{sessionType}} ({{sessionDate}})
+----------------------------------------
+
+{{#events}}
+{{#witnessCalled}}
+>>> WITNESS CALLED: {{#witness}}{{displayName}}{{/witness}}
+    Examination Type: {{examinationType}}
+    Sworn Status: {{swornStatus}}
+{{/witnessCalled}}
+
+{{#statement}}
+{{#speaker}}[{{speakerPrefix}}]{{/speaker}}: {{#rawText}}{{rawText}}{{/rawText}}{{^rawText}}{{text}}{{/rawText}}
+{{/statement}}
+
+{{#courtDirective}}
+[COURT DIRECTIVE]: {{rawText}}
+{{/courtDirective}}
+{{/events}}
+
+{{/sessions}}

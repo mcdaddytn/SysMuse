@@ -1,0 +1,30 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "exhibit_discussion",
+      "query": "exhibit",
+      "type": "match"
+    },
+    {
+      "name": "timeline_references",
+      "query": "morning OR afternoon OR evening OR night",
+      "type": "match"
+    },
+    {
+      "name": "location_references",
+      "query": "street OR avenue OR road OR highway",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "sessionType": [
+      "MORNING",
+      "AFTERNOON"
+    ],
+    "speakerType": [
+      "ATTORNEY",
+      "WITNESS"
+    ]
+  }
+}

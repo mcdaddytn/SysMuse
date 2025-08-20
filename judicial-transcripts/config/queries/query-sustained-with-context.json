@@ -1,0 +1,18 @@
+{
+  "maxResults": 20,
+  "resultSeparator": "\n\n========== RULING SEQUENCE ==========\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "sustained-rulings-context.txt",
+  "fileTemplate": "interchange-context.txt"
+}

@@ -1,0 +1,254 @@
+{
+  "version": "1.0.0",
+  "description": "Parser patterns configuration for judicial transcript processing",
+  "parsers": {
+    "court": {
+      "type": "REGEX",
+      "pattern": "IN THE ([A-Z\\s]+COURT)",
+      "flags": "i",
+      "captures": {
+        "1": "courtName"
+      }
+    },
+    "courtDivision": {
+      "type": "REGEX",
+      "pattern": "([A-Z]+\\s+DIVISION)",
+      "flags": "",
+      "captures": {
+        "1": "divisionName"
+      }
+    },
+    "courtDivisionAlternate": {
+      "type": "REGEX",
+      "pattern": "\\)\\(\\s*([A-Z]+,?\\s*[A-Z]*)",
+      "flags": "",
+      "captures": {
+        "1": "divisionName"
+      }
+    },
+    "courtDistrict": {
+      "type": "REGEX",
+      "pattern": "FOR THE ([A-Z\\s]+DISTRICT[A-Z\\s]*)",
+      "flags": "i",
+      "captures": {
+        "1": "districtName"
+      }
+    },
+    "caseNumber": {
+      "type": "REGEX",
+      "patterns": [
+        {
+          "pattern": "CIVIL ACTION NO\\.\\s*\\)\\(\\s*([\\d:\\-CV\\-cv]+)",
+          "flags": "",
+          "captures": { "1": "caseNumber" }
+        },
+        {
+          "pattern": "(?:CIVIL ACTION NO\\.|Case No\\.|Cause No\\.)\\s*([\\d:\\-CV\\-cv]+)",
+          "flags": "",
+          "captures": { "1": "caseNumber" }
+        },
+        {
+          "pattern": "No\\.\\s*([\\d:\\-cv]+)",
+          "flags": "i",
+          "captures": { "1": "caseNumber" }
+        }
+      ]
+    },
+    "judge": {
+      "type": "REGEX",
+      "pattern": "BEFORE THE (HONORABLE)\\s+(?:JUDGE\\s+)?([A-Z\\s]+?)(?:\\n|\\s+UNITED)",
+      "flags": "m",
+      "captures": {
+        "1": "honorific",
+        "2": "judgeName"
+      }
+    },
+    "judgeTitle": {
+      "type": "REGEX",
+      "pattern": "HONORABLE[^\\n]+\\n\\s*([A-Z\\s]+(?:JUDGE|MAGISTRATE)[A-Z\\s]*)",
+      "flags": "m",
+      "captures": {
+        "1": "title"
+      }
+    },
+    "attorneyTitle": {
+      "type": "REGEX",
+      "pattern": "^(MR\\.|MS\\.|MRS\\.|DR\\.)\\s+([A-Z][A-Z\\s\\.,'-]+)",
+      "flags": "",
+      "captures": {
+        "1": "title",
+        "2": "name"
+      }
+    },
+    "lawFirmIndicators": {
+      "type": "CUSTOM",
+      "implementation": "LawFirmDetector",
+      "indicators": [
+        "LLP", "L.L.P.",
+        "LLLP", "L.L.L.P.",
+        "LLC", "L.L.C.",
+        "PLLC", "P.L.L.C.",
+        "PLLP", "P.L.L.P.",
+        "PC", "P.C.",
+        "PA", "P.A.",
+        "LAW FIRM",
+        "LAW OFFICE",
+        "LAW GROUP",
+        "LEGAL",
+        "ATTORNEYS",
+        "ASSOCIATES",
+        "PARTNERS",
+        "& ASSOCIATES",
+        "COUNSEL"
+      ]
+    },
+    "address": {
+      "type": "REGEX",
+      "pattern": "^([^,]+),\\s*([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)",
+      "flags": "",
+      "captures": {
+        "1": "city",
+        "2": "state",
+        "3": "zipCode"
+      }
+    },
+    "speakerWithColon": {
+      "type": "REGEX",
+      "pattern": "^([A-Z][A-Z\\s\\.,'-]+?):\\s*",
+      "flags": "",
+      "captures": {
+        "1": "speakerPrefix"
+      }
+    },
+    "contextualSpeaker": {
+      "type": "REGEX",
+      "pattern": "^(Q\\.|A\\.|THE WITNESS|THE COURT)\\s*",
+      "flags": "i",
+      "captures": {
+        "1": "speakerPrefix"
+      }
+    },
+    "byAttorney": {
+      "type": "REGEX",
+      "pattern": "^BY\\s+(MR\\.|MS\\.|MRS\\.|DR\\.)\\s+([A-Z]+)",
+      "flags": "i",
+      "captures": {
+        "1": "title",
+        "2": "lastName"
+      }
+    },
+    "jurorSpeaker": {
+      "type": "REGEX",
+      "pattern": "^(JUROR\\s+[A-Z0-9]+)",
+      "flags": "i",
+      "captures": {
+        "1": "jurorId"
+      }
+    },
+    "witnessName": {
+      "type": "REGEX",
+      "pattern": "^([A-Z][A-Z\\s,'\"\\.\\-]+?),?\\s+(PLAINTIFF'S?|DEFENDANT'S?)\\s+WITNESS",
+      "flags": "i",
+      "captures": {
+        "1": "witnessName",
+        "2": "side"
+      }
+    },
+    "witnessNameAlternate": {
+      "type": "REGEX",
+      "pattern": "^([A-Z\\s,'\"\\.\\-]+?)\\s*,\\s*(PLAINTIFF'S?|DEFENDANT'S?)\\s+WITNESS",
+      "flags": "i",
+      "captures": {
+        "1": "witnessName",
+        "2": "side"
+      }
+    },
+    "witnessWithNickname": {
+      "type": "REGEX",
+      "pattern": "^([A-Z]+)\\s+[\"']([A-Z]+)[\"']\\s+([A-Z]+)",
+      "flags": "i",
+      "captures": {
+        "1": "firstName",
+        "2": "nickname",
+        "3": "lastName"
+      }
+    },
+    "examinationType": {
+      "type": "REGEX",
+      "patterns": [
+        {
+          "pattern": "DIRECT\\s+EXAMINATION",
+          "flags": "i",
+          "value": "DIRECT_EXAMINATION"
+        },
+        {
+          "pattern": "CROSS[\\s-]EXAMINATION",
+          "flags": "i",
+          "value": "CROSS_EXAMINATION"
+        },
+        {
+          "pattern": "REDIRECT\\s+EXAMINATION",
+          "flags": "i",
+          "value": "REDIRECT_EXAMINATION"
+        },
+        {
+          "pattern": "RECROSS[\\s-]EXAMINATION",
+          "flags": "i",
+          "value": "RECROSS_EXAMINATION"
+        }
+      ]
+    },
+    "swornStatus": {
+      "type": "REGEX",
+      "patterns": [
+        {
+          "pattern": "having been (?:previously\\s+)?(?:duly\\s+)?sworn",
+          "flags": "i",
+          "value": "PREVIOUSLY_SWORN"
+        },
+        {
+          "pattern": "having been (?:duly\\s+)?sworn",
+          "flags": "i",
+          "value": "SWORN"
+        },
+        {
+          "pattern": "(?:previously\\s+)?sworn",
+          "flags": "i",
+          "value": "PREVIOUSLY_SWORN"
+        }
+      ]
+    },
+    "courtReporter": {
+      "type": "REGEX",
+      "pattern": "COURT REPORTER:\\s*([^\\n]+)",
+      "flags": "",
+      "captures": {
+        "1": "reporterInfo"
+      }
+    },
+    "pageHeader": {
+      "type": "REGEX",
+      "pattern": "^(\\d+)\\s*$",
+      "flags": "",
+      "captures": {
+        "1": "pageNumber"
+      }
+    },
+    "timestamp": {
+      "type": "REGEX",
+      "pattern": "^(\\d{1,2}:\\d{2}:\\d{2})\\s*",
+      "flags": "",
+      "captures": {
+        "1": "time"
+      }
+    },
+    "lineNumber": {
+      "type": "REGEX",
+      "pattern": "^\\s*(\\d+)\\s+",
+      "flags": "",
+      "captures": {
+        "1": "lineNum"
+      }
+    }
+  }
+}

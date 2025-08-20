@@ -1,0 +1,15 @@
+{
+  "templateQuery": "TrialEventHierarchy",
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  },
+  "templateType": "Mustache",
+  "fileNameTemplate": "objections-rulings-{{caseNumber}}.txt",
+  "templateFile": "objections-rulings-hierarchy.mustache",
+  "resultSeparator": "\n\n========================================\n\n",
+  "templateParams": {
+    "reportTitle": "Objections and Rulings",
+    "generatedDate": "2024"
+  },
+  "maxResults": 100
+}

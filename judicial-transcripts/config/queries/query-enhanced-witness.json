@@ -1,0 +1,22 @@
+{
+  "maxResults": 50,
+  "resultSeparator": "\n\n=========\n\n",
+  "elasticSearchQueries": [
+    {
+      "name": "yes_no",
+      "query": "yes no",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "WITNESS",
+    "speakerHandle": [
+      "WITNESS_JOSEPH_C__MCALEXANDER__III",
+      "WITNESS_QI_PETER_LI"
+    ]
+  },
+  "surroundingEvents": 1,
+  "fileNameTemplate": "witness-{Speaker.speakerPrefix}-testimony.txt",
+  "fileTemplate": "witness-testimony.txt"
+}

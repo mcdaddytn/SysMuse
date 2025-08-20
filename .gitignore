@@ -115,4 +115,17 @@ timesheet-app.zip
 
 timesheet-app/backend/package-lock.json
 
+<<<<<<< HEAD
+esindex/.DS_Store
+
+timesheet-app/.DS_Store
+
+=======
+>>>>>>> origin/main
 .DS_Store
+
+utility/convert-pdfs/package-lock.json
+
+judicial-transcripts/output/
+
+judicial-transcripts/.env.backup

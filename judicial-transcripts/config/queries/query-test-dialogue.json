@@ -1,0 +1,18 @@
+{
+  "maxResults": 3,
+  "resultSeparator": "\n================\n",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  },
+  "surroundingEvents": 5,
+  "fileNameTemplate": "dialogue-context-test.txt",
+  "fileTemplate": "dialogue-context.txt"
+}

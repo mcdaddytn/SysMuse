@@ -1,0 +1,24 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "sustained_objection",
+      "query": "objection sustained",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "overruled_objection",
+      "query": "objection overruled",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "hearsay",
+      "query": "hearsay",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  }
+}

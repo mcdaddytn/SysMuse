@@ -1,0 +1,13 @@
+{
+  "templateQuery": "CourtTranscript",
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  },
+  "templateType": "Mustache",
+  "fileNameTemplate": "transcript-{{caseNumber}}-{{sessionDate}}.txt",
+  "templateBody": "{{#isStatement}}\n{{lineNumber,5}}  {{speakerHandle}}:  {{text}}\n{{/isStatement}}{{#isWitnessCalled}}\n{{lineNumber,5}}  ({{examinationType}} of {{witnessName}}{{#swornStatus}}, {{swornStatus}}{{/swornStatus}})\n{{/isWitnessCalled}}{{#isCourtDirective}}\n{{lineNumber,5}}  THE COURT:  {{directiveText}}\n{{/isCourtDirective}}",
+  "resultSeparator": "",
+  "templateParams": {
+    "context": "Official Court Transcript"
+  }
+}

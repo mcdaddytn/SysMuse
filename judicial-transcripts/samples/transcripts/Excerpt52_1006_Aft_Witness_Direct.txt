@@ -1,0 +1,178 @@
+04:44:12   12   Q.   In fact, it says:       We have affordable DSPs that allow
+
+04:44:18   13   us to implement all but --
+
+04:44:20   14   A.   The most complex schemes.
+
+04:44:22   15               THE COURT:     Gentlemen, you're going to talk one at
+
+04:44:24   16   a time in this courtroom.        I've made that clear.     There's
+
+04:44:26   17   no reason you can't do that.
+
+04:44:28   18               THE WITNESS:     I apologize, Your Honor.
+
+04:44:29   19               THE COURT:     One at a time.
+
+04:44:30   20               Continue, counsel.
+
+04:44:33   21   Q.   (By Mr. Re)    I just want it clear in the record what
+
+04:44:35   22   Brandstein says.
+
+04:44:37   23               Today we have affordable DSPs that allow us to
+
+04:44:40   24   implement all but the most complex schemes cheaply in a
+
+04:44:48   25   digital signal processing technology in real-time.
+
+   Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 150 of 187 PageID #: 19506
+                                                                                   1121
+
+
+
+04:44:51    1               Do you see that?
+
+04:44:51    2   A.   I do.
+
+04:44:52    3   Q.   And does that suggest to one of ordinary skill in the
+
+04:44:54    4   art to put various units of all kinds in a DSP?
+
+04:44:58    5   A.   That's what the text teaches.
+
+04:45:01    6               MR. RE:   I'll pass the witness, Your Honor.       Thank
+
+04:45:03    7   you.
+
+04:45:03    8               THE COURT:    Additional cross-examination?
+
+04:45:06    9               MR. RUBINO:    Yes, Your Honor.
+
+04:45:06   10                             RECROSS-EXAMINATION
+
+04:45:18   11   BY MR. RUBINO:
+
+04:45:18   12   Q.   Dr. Stern?
+
+04:45:24   13   A.   Yes.
+
+04:45:24   14   Q.   You didn't reference an Xbox in your analysis today,
+
+04:45:29   15   did you?
+
+04:45:29   16   A.   That was just a comment.
+
+04:45:31   17   Q.   And that's not one of the references you combined?
+
+04:45:34   18   A.   No.
+
+04:45:34   19   Q.   You just made that up just now, right?
+
+04:45:37   20   A.   I didn't make it up, but it's not part of the
+
+04:45:39   21   testimony.     But it's -- it's not legally part of the
+
+04:45:42   22   testimony.     It's not part of the report.
+
+04:45:45   23   Q.   So the references that you did combine --
+
+04:45:48   24   A.   Yes.
+
+04:45:48   25   Q.   -- were only Brandstein, Li, Abutalebi --
+
+   Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 151 of 187 PageID #: 19507
+                                                                                   1122
+
+
+
+04:45:53    1   A.   Dmochowski.
+
+04:45:54    2   Q.   And Dmochowski, right?
+
+04:45:55    3   A.   Correct, correct.
+
+04:45:57    4   Q.   Those are the references -- that's the world of items
+
+04:45:58    5   you're looking at for your motivation, right?
+
+04:46:02    6   A.   That's correct.
+
+04:46:02    7              MR. RUBINO:     Pass the witness, Your Honor.
+
+04:46:03    8              THE COURT:     Further direct?
+
+04:46:04    9              MR. RE:   Nothing further, Your Honor.       Thank you.
+
+04:46:06   10              THE COURT:     All right.     Dr. Stern, you may step
+
+04:46:08   11   down.
+
+04:46:08   12              THE WITNESS:     Thank you, Your Honor.
+
+04:46:09   13              THE COURT:     Mr. Re, does the Defendant desire this
+
+04:46:18   14   witness to be excused?
+
+04:46:19   15              MR. RE:   Yes, we do, Your Honor.
+
+04:46:21   16              THE COURT:     Is there objection?
+
+04:46:22   17              MR. RUBINO:     No, Your Honor.
+
+04:46:23   18              THE COURT:     Dr. Stern, you are excused.
+
+04:46:25   19              THE WITNESS:     Thank you.
+
+04:46:26   20              THE COURT:     That means, sir, you're free to leave
+
+04:46:28   21   us; you're free to stay.       It's your call.
+
+04:46:30   22              THE WITNESS:     I'll stay for now.
+
+04:46:32   23              THE COURT:     All right.     Defendant, call your next
+
+04:46:33   24   witness.
+
+04:46:34   25              MR. DACUS:     Thank you, Your Honor.     We call Dan
+
+   Case 2:19-cv-00123-JRG Document 336 Filed 10/09/20 Page 152 of 187 PageID #: 19508
+                                                                                   1123
+
+
+
+04:46:37    1   McGavock, and we have some binders to pass out, if we may
+
+04:46:41    2   approach, Your Honor.
+
+04:46:42    3              THE COURT:   All right.    Mr. McGavock, if you'll
+
+04:46:47    4   come forward and be sworn.
+
+04:47:01    5              (Witness sworn.)
+
+04:47:01    6              THE COURT:   Please come around, sir, have a seat
+
+04:47:04    7   at the witness stand.
+
+04:47:32    8              All right.   Mr. Dacus, you may proceed.
+
+04:47:34    9              MR. DACUS:   Thank you, Your Honor.
+
+04:47:34   10          DANIEL M. MCGAVOCK, DEFENDANTS' WITNESS, SWORN
+
+04:47:34   11                           DIRECT EXAMINATION
+
+04:47:35   12   BY MR. DACUS:
+
+04:47:35   13   Q.   Mr. McGavock, would you introduce yourself to the jury,
+
+04:47:41   14   please, sir?
+
+04:47:43   15   A.   Yes, my name is Dan McGavock.      I'm from a suburb in
+
+04:47:47   16   Chicago.    I'm married.   I've been married for 33 years.          I
+
+04:47:51   17   have a son and a daughter, ages 25 and 26.
+
+04:47:54   18   Q.   And where do you work, Mr. McGavock?

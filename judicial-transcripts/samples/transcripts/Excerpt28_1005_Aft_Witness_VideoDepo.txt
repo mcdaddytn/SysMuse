@@ -1,0 +1,104 @@
+01:21:58   20   Q.   And Amazon uses filter-and-sum beamformer?
+
+01:22:03   21   A.   That is correct.
+
+01:22:05   22            MR. RUBINO:     No further questions.
+
+01:22:06   23            THE COURT:     You pass the witness, counsel?
+
+01:22:08   24            MR. RUBINO:     Yes.
+
+01:22:09   25            THE COURT:     Is there further cross-examination?
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 23 of 120 PageID #: 19069
+                                                                                     733
+
+
+
+01:22:13    1             MR. HADDEN:     No, Your Honor.
+
+01:22:14    2             THE COURT:     Then you may step down,
+
+01:22:16    3   Mr. McAlexander.
+
+01:22:17    4             THE WITNESS:     Thank you, sir.
+
+01:22:18    5             THE COURT:     Plaintiff, call your next witness.
+
+01:22:21    6             MR. FABRICANT:     Your Honor, our next witness is by
+
+01:22:24    7   video from deposition testimony.        Ms. Park will announce
+
+01:22:30    8   the witness, Your Honor.
+
+01:22:31    9             THE COURT:     All right.
+
+01:22:31   10             MS. PARK:     Amy Park for Plaintiff, Your Honor.
+
+01:22:43   11             Plaintiff calls by deposition Wai Chu, engineer at
+
+01:22:43   12   Amazon's Lab126.      Playing time for Plaintiff is 12 minutes,
+
+01:22:50   13   41 seconds; and for Defendants, 29 seconds.
+
+01:22:50   14             THE COURT:     Proceed with this witness by
+
+01:22:52   15   deposition.
+
+01:22:52   16                    WAI CHU, PLAINTIFF'S WITNESS
+
+01:22:53   17                    PRESENTED BY VIDEO DEPOSITION
+
+01:22:53   18             (Videoclip played.)
+
+01:22:54   19   Q.   Okay.   Mr. Wu, can you please state your name for the
+
+01:23:04   20   record?
+
+01:23:04   21   A.   Sure.   My name is Jerry Wu --
+
+01:23:10   22             (Videoclip stops.)
+
+01:23:10   23             MR. FABRICANT:     Apologize, Your Honor.       It was the
+
+01:23:12   24   wrong video.
+
+01:23:14   25             THE COURT:     Well, let's play the right video.
+
+    Case 2:19-cv-00123-JRG Document 333 Filed 10/09/20 Page 24 of 120 PageID #: 19070
+                                                                                     734
+
+
+
+01:23:16    1             MR. FABRICANT:    Yes, sir.
+
+01:23:16    2             (Videoclip played.)
+
+01:23:28    3   Q.   Can you please state your full name for the record?
+
+01:23:29    4   A.   My first name is W-a-i, Wai.       My last name is C-h-u.
+
+01:23:35    5   Q.   Mr. Chu, for whom do you currently work?
+
+01:23:39    6   A.   Amazon Lab126.
+
+01:23:40    7   Q.   How long have you worked for Amazon?
+
+01:23:42    8   A.   I started in November 2010.
+
+01:23:45    9   Q.   Have you heard of a company called Bell Labs?
+
+01:23:49   10   A.   Bell Labs, of course, in New Jersey, right?          Yeah, of
+
+01:23:54   11   course.
+
+01:23:54   12   Q.   But when you heard of them, you thought -- you would
+
+01:23:58   13   have held them in high regard, right?
+
+01:24:00   14   A.   It's highly respected because there have -- there have
+
+01:24:04   15   been some Nobel Prize, right, and there are very good
+
+01:24:07   16   people there.
+

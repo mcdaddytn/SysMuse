@@ -1,0 +1,44 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "hearsay_objection",
+      "query": "objection hearsay",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "relevance_objection",
+      "query": "objection relevance",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "speculation_objection",
+      "query": "objection speculation",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "foundation_objection",
+      "query": "objection foundation",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "form_objection",
+      "query": "objection form",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "non_responsive_objection",
+      "query": "objection non-responsive",
+      "type": "match_phrase",
+      "proximity": 2
+    }
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "ATTORNEY"
+  }
+}

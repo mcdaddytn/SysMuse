@@ -1,0 +1,24 @@
+{
+  "maxResults": 10,
+  "surroundingEvents": 5,
+  "fileNameTemplate": "courtroom-dialogue-{{caseHandle}}.txt",
+  "templateBody": "{{Speaker.speakerPrefix}} ({{Speaker.speakerType}}):\n[Lines {{TrialEvent.startLineNumber}}-{{TrialEvent.endLineNumber}}]\n{{StatementEvent.text}}",
+  "resultSeparator": "\n\n================ NEXT RULING ================\n\n",
+  "templateType": "Mustache",
+  "elasticSearchQueries": [
+    {
+      "name": "sustained",
+      "query": "sustained",
+      "type": "match"
+    },
+    {
+      "name": "overruled",
+      "query": "overruled",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerType": "JUDGE"
+  }
+}

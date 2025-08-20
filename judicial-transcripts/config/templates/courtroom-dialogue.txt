@@ -1,0 +1,3 @@
+{Speaker.speakerPrefix} ({Speaker.speakerType}):
+[Lines {TrialEvent.startLineNumber}-{TrialEvent.endLineNumber}]
+{StatementEvent.text}

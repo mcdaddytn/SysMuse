@@ -2,6 +2,7 @@
 
 import express, { Request, Response, NextFunction } from 'express';
 import { PrismaClient, Urgency, TimeIncrementType, DateIncrementType } from '@prisma/client';
+import { requireAuth } from './auth.routes';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -22,7 +23,7 @@ interface TimesheetInput {
 }
 
 // Get timesheet for a specific team member, date, and increment type
-router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
+router.get('/:teamMemberId/:startDate/:dateIncrementType', requireAuth, async (req: Request<{teamMemberId: string, startDate: string, dateIncrementType: string}>, res: Response): Promise<void> => {
   const { teamMemberId, startDate, dateIncrementType } = req.params;
   console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Fetching timesheet`);
   try {
@@ -87,14 +88,29 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
     });
 
     if (!timesheet) {
-      // Create empty timesheet if it doesn't exist, using team member's defaults
+      // Get global settings for fallback values
+      const globalTimeIncrementType = await prisma.settings.findUnique({
+        where: { key: 'timeIncrementType' }
+      });
+      const globalTimeIncrement = await prisma.settings.findUnique({
+        where: { key: 'timeIncrement' }
+      });
+
+      // Use team member settings or fall back to global settings
+      const effectiveTimeIncrementType = teamMember.timeIncrementType ?? 
+        (globalTimeIncrementType?.value as string) ?? 'HOURS_MINUTES';
+      const effectiveTimeIncrement = teamMember.timeIncrement ?? 
+        (globalTimeIncrement?.value as number) ?? 15;
+
+
+      // Create empty timesheet if it doesn't exist, using effective defaults
       timesheet = await prisma.timesheet.create({
         data: {
           teamMemberId,
           startDate: parsedStartDate,
           dateIncrementType: dateIncrementType as DateIncrementType,
-          timeIncrementType: teamMember.timeIncrementType ?? undefined,
-          timeIncrement: teamMember.timeIncrement ?? undefined,
+          timeIncrementType: effectiveTimeIncrementType as TimeIncrementType,
+          timeIncrement: effectiveTimeIncrement,
         },
         include: {
           entries: {
@@ -119,6 +135,24 @@ router.get('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<{
           teamMember: true,
         },
       });
+    }
+
+    // Apply inheritance logic for team members without explicit time settings
+    if (timesheet && teamMember && (!teamMember.timeIncrementType || !teamMember.timeIncrement)) {
+      const globalTimeIncrementType = await prisma.settings.findUnique({
+        where: { key: 'timeIncrementType' }
+      });
+      const globalTimeIncrement = await prisma.settings.findUnique({
+        where: { key: 'timeIncrement' }
+      });
+
+      // Override timesheet settings with proper inheritance
+      if (!teamMember.timeIncrementType) {
+        timesheet.timeIncrementType = ((globalTimeIncrementType?.value as string) || 'HOURS_MINUTES') as TimeIncrementType;
+      }
+      if (!teamMember.timeIncrement) {
+        timesheet.timeIncrement = (globalTimeIncrement?.value as number) || 15;
+      }
     }
 
     console.log(`API: GET /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Successfully fetched timesheet (ID: ${timesheet?.id})`);
@@ -165,6 +199,112 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
       }
     }
 
+    // Check projected hours warning setting
+    const projectedHoursWarningSetting = await prisma.settings.findUnique({
+      where: { key: 'projectedHoursWarning' }
+    });
+    const projectedHoursWarning = projectedHoursWarningSetting?.value as string || 'Never';
+
+    let warnings: string[] = [];
+
+    if (projectedHoursWarning !== 'Never') {
+      // Get team member's working hours
+      const teamMember = await prisma.teamMember.findUnique({
+        where: { id: teamMemberId },
+        select: { workingHours: true }
+      });
+
+      const projectedSum = entries.reduce((sum, entry) => sum + entry.projectedTime, 0);
+
+      if (timeIncrementType === 'PERCENT') {
+        // For percentage mode, check if projected is below 100%
+        if (projectedSum < 100) {
+          // Determine if timesheet period is in the past
+          const isInPast = () => {
+            const today = new Date();
+            if (dateIncrementType === 'WEEK') {
+              // Check if week ending date has passed
+              const weekEnd = new Date(parsedStartDate);
+              weekEnd.setDate(weekEnd.getDate() + 6);
+              return today > weekEnd;
+            } else {
+              // Check if day has passed
+              return today > new Date(parsedStartDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+          };
+
+          const isPast = isInPast();
+          const shouldWarn = projectedHoursWarning === 'Always' || 
+                           (projectedHoursWarning === 'Past' && isPast);
+
+          console.log('ProjectedHoursWarning debug (PERCENT):', {
+            setting: projectedHoursWarning,
+            projectedPercent: projectedSum,
+            target: '100%',
+            isPast,
+            shouldWarn,
+            startDate: startDate,
+            timeIncrementType
+          });
+
+          if (shouldWarn) {
+            const periodType = dateIncrementType === 'WEEK' ? 'week' : 'day';
+            warnings.push(
+              `Projected time (${projectedSum}%) is below target (100%) for this ${periodType}.`
+            );
+          }
+        }
+      } else if (teamMember?.workingHours) {
+        // For hours/minutes mode, check against working hours
+        const targetHours = dateIncrementType === 'DAY' 
+          ? teamMember.workingHours / 5  // Daily target
+          : teamMember.workingHours;     // Weekly target
+        
+        // Convert to hours if needed
+        const projectedHours = timeIncrementType === 'HOURS_MINUTES' 
+          ? projectedSum / 60  // Convert minutes to hours
+          : projectedSum;      // Already in hours
+
+        // Check if projected hours are below target
+        if (projectedHours < targetHours) {
+          // Determine if timesheet period is in the past
+          const isInPast = () => {
+            const today = new Date();
+            if (dateIncrementType === 'WEEK') {
+              // Check if week ending date has passed
+              const weekEnd = new Date(parsedStartDate);
+              weekEnd.setDate(weekEnd.getDate() + 6);
+              return today > weekEnd;
+            } else {
+              // Check if day has passed
+              return today > new Date(parsedStartDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+          };
+
+          const isPast = isInPast();
+          const shouldWarn = projectedHoursWarning === 'Always' || 
+                           (projectedHoursWarning === 'Past' && isPast);
+
+          console.log('ProjectedHoursWarning debug (HOURS):', {
+            setting: projectedHoursWarning,
+            projectedHours: projectedHours.toFixed(1),
+            targetHours,
+            isPast,
+            shouldWarn,
+            startDate: startDate,
+            timeIncrementType
+          });
+
+          if (shouldWarn) {
+            const periodType = dateIncrementType === 'WEEK' ? 'week' : 'day';
+            warnings.push(
+              `Projected time (${projectedHours.toFixed(1)}h) is below target hours (${targetHours}h) for this ${periodType}.`
+            );
+          }
+        }
+      }
+    }
+
     // Validate no duplicate entries
     const uniqueEntries = new Set(
       entries.map(e => `${e.matterId}-${e.taskDescription}`)
@@ -174,6 +314,24 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
         error: 'Duplicate entries found for the same matter and task description' 
       });
       return;
+    }
+
+    // Get global settings for fallback if needed
+    let effectiveTimeIncrementType = timeIncrementType;
+    let effectiveTimeIncrement = timeIncrement;
+
+    if (!timeIncrementType || !timeIncrement) {
+      const globalTimeIncrementType = await prisma.settings.findUnique({
+        where: { key: 'timeIncrementType' }
+      });
+      const globalTimeIncrement = await prisma.settings.findUnique({
+        where: { key: 'timeIncrement' }
+      });
+
+      effectiveTimeIncrementType = timeIncrementType || 
+        (globalTimeIncrementType?.value as string) || 'HOURS_MINUTES';
+      effectiveTimeIncrement = timeIncrement || 
+        (globalTimeIncrement?.value as number) || 15;
     }
 
     // Create or update timesheet
@@ -191,8 +349,8 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
           teamMemberId,
           startDate: parsedStartDate,
           dateIncrementType: dateIncrementType as DateIncrementType,
-          timeIncrementType,
-          timeIncrement,
+          timeIncrementType: effectiveTimeIncrementType as TimeIncrementType,
+          timeIncrement: effectiveTimeIncrement,
         },
       });
     } else {
@@ -200,8 +358,8 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
       timesheet = await prisma.timesheet.update({
         where: { id: timesheet.id },
         data: {
-          timeIncrementType,
-          timeIncrement,
+          timeIncrementType: effectiveTimeIncrementType as TimeIncrementType,
+          timeIncrement: effectiveTimeIncrement,
         },
       });
     }
@@ -270,7 +428,14 @@ router.post('/:teamMemberId/:startDate/:dateIncrementType', async (req: Request<
     });
 
     console.log(`API: POST /timesheets/${teamMemberId}/${startDate}/${dateIncrementType} - Successfully saved timesheet (ID: ${timesheet.id})`);
-    res.json(updatedTimesheet);
+    
+    // Include warnings in response if any
+    const response: any = updatedTimesheet;
+    if (warnings.length > 0) {
+      response.warnings = warnings;
+    }
+    
+    res.json(response);
   } catch (error) {
     console.error('Error saving timesheet:', error);
     res.status(500).json({ error: 'Failed to save timesheet' });

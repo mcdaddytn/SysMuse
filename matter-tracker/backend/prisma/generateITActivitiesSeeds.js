@@ -47,6 +47,13 @@ const claudeSessionTitles = [
   "Due Diligence Research", "Regulatory Compliance Check", "Patent Analysis"
 ];
 
+const cocounselSessionTitles = [
+  "Legal Brief Generation", "Case Law Research", "Document Review Summary",
+  "Contract Analysis", "Deposition Preparation", "Motion Drafting",
+  "Client Memo Writing", "Discovery Response", "Settlement Analysis",
+  "Compliance Review", "Legal Opinion Draft", "Court Filing Review"
+];
+
 function generateId(type, index) {
   return `${type}_${String(index).padStart(4, '0')}`;
 }
@@ -410,6 +417,64 @@ function generateClaudeSessions(startDate, endDate) {
   return sessions;
 }
 
+function generateCoCounselSessions(startDate, endDate) {
+  const sessions = [];
+  let idCounter = 1;
+  
+  let current = new Date(startDate);
+  
+  while (current <= endDate) {
+    teamMembers.forEach(member => {
+      // Average 0.6 sessions per day (slightly less than Claude)
+      const sessionsThisDay = Math.random() < 0.6 ? 1 : (Math.random() < 0.2 ? 2 : 0);
+      
+      for (let i = 0; i < sessionsThisDay; i++) {
+        const client = getRandomElement(clients);
+        const sessionTitle = getRandomElement(cocounselSessionTitles);
+        const sessionTime = getRandomTime();
+        
+        const sessionDate = new Date(current);
+        sessionDate.setUTCHours(sessionTime.hour, sessionTime.minute, 0, 0);
+        
+        if (sessionDate <= endDate) {
+          // Session duration: 20 minutes to 2.5 hours
+          const durationMinutes = Math.floor(Math.random() * 130) + 20; // 20-150 minutes
+          const endTime = new Date(sessionDate);
+          endTime.setMinutes(endTime.getMinutes() + durationMinutes);
+          
+          const promptCount = Math.floor(Math.random() * 12) + 2; // 2-14 prompts
+          const responseCount = promptCount; // Same as prompts
+          
+          sessions.push({
+            id: generateId('it_cocounsel', idCounter++),
+            teamMemberId: member.id,
+            activityType: "COCOUNSEL_SESSION",
+            title: `${sessionTitle} - ${client.name}`,
+            description: `CoCounsel AI session: ${sessionTitle} for ${client.name}`,
+            startDate: sessionDate.toISOString(),
+            endDate: endTime.toISOString(),
+            metadata: {
+              sessionTitle: sessionTitle,
+              durationMinutes: durationMinutes,
+              promptCount: promptCount,
+              responseCount: responseCount,
+              clientContext: client.name,
+              sessionType: Math.random() > 0.6 ? "research" : "drafting",
+              wordsGenerated: Math.floor(Math.random() * 1800) + 400, // 400-2200 words
+              documentsAnalyzed: Math.floor(Math.random() * 5) + 1 // 1-5 documents
+            },
+            isAssociated: false
+          });
+        }
+      }
+    });
+    
+    current = addDays(current, 1); // Next day
+  }
+  
+  return sessions;
+}
+
 function generateITActivitiesSeeds() {
   const startDate = new Date('2025-06-01');
   const endDate = new Date('2025-07-05');
@@ -423,7 +488,8 @@ function generateITActivitiesSeeds() {
     ...generateDocuments(startDate, endDate),
     ...generateEmails(startDate, endDate),
     ...generateRelativitySessions(startDate, endDate),
-    ...generateClaudeSessions(startDate, endDate)
+    ...generateClaudeSessions(startDate, endDate),
+    ...generateCoCounselSessions(startDate, endDate)
   ];
   
   // Sort by date
@@ -435,6 +501,7 @@ function generateITActivitiesSeeds() {
   console.log(`- ${activities.filter(a => a.activityType === 'EMAIL').length} email activities`);
   console.log(`- ${activities.filter(a => a.activityType === 'RELATIVITY').length} relativity sessions`);
   console.log(`- ${activities.filter(a => a.activityType === 'CLAUDE_SESSION').length} claude sessions`);
+  console.log(`- ${activities.filter(a => a.activityType === 'COCOUNSEL_SESSION').length} cocounsel sessions`);
   
   const seedData = {
     itActivities: activities

@@ -1,0 +1,14 @@
+{
+  "templateQuery": "TrialEventHierarchy",
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG"
+  },
+  "templateType": "Mustache",
+  "fileNameTemplate": "trial-hierarchy-{{caseNumber}}.txt",
+  "templateFile": "trial-hierarchy.mustache",
+  "resultSeparator": "\n\n",
+  "templateParams": {
+    "reportTitle": "Full Trial Transcript",
+    "generatedDate": "2024"
+  }
+}

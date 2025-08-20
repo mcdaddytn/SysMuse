@@ -1,0 +1,157 @@
+01:26:20   14   Q.   If you were to hook that to that monitor and stand over
+
+01:26:23   15   here where I am and talk to it --
+
+01:26:26   16   A.   Your voice is going to be very weak.
+
+01:26:28   17   Q.   Okay.     It's not going to work?
+
+01:26:29   18   A.   Yeah.
+
+01:26:30   19   Q.   Okay.     Did it have anything, I mean anything, to do
+
+01:26:37   20   with the development of the '049 patent, this paper?
+
+01:26:39   21   A.   No, no.
+
+01:26:47   22   Q.   So if lawyers for Amazon tell the jury that this paper
+
+01:26:49   23   in 2009 was prior art, that is, it forecast the '049 patent
+
+01:26:55   24   and told you how to write the '049 patent or build a
+
+01:26:59   25   product, would that be correct?
+
+    Case 2:19-cv-00123-JRG Document 331 Filed 10/09/20 Page 34 of 174 PageID #: 18772
+                                                                                     436
+
+
+
+01:27:02    1   A.   I think that different technologies, yeah.
+
+01:27:04    2   Q.   Okay.    Not the same at all?
+
+01:27:06    3   A.   Not same at all.    There's a noise reduction unit in
+
+01:27:10    4   this one, and also there's a noise reduction unit in the
+
+01:27:14    5   patent.      So that's the unit probably in common, yeah.
+
+01:27:18    6   Q.   But that's it?
+
+01:27:19    7   A.   Yeah, that's it.
+
+01:27:20    8   Q.   Okay.    Thank you, Dr. Zhu.
+
+01:27:23    9             MR. BAXTER:    I pass the witness, Your Honor.
+
+01:27:25   10             THE COURT:    Cross-examination by the Defendants.
+
+01:27:37   11             MR. LAQUER:    Permission to approach, Your Honor?
+
+01:27:39   12             THE COURT:    You may approach with binders.
+
+01:28:22   13             All right.    Mr. Hadden, you may proceed with
+
+01:28:24   14   cross-examination.
+
+01:28:25   15             MR. HADDEN:    Thank you, Your Honor.
+
+01:28:25   16                            CROSS-EXAMINATION
+
+01:28:26   17   BY MR. HADDEN:
+
+01:28:26   18   Q.   Good afternoon, Dr. Zhu.
+
+01:28:28   19   A.   Good afternoon.
+
+01:28:28   20   Q.   Can you hear me okay?
+
+01:28:30   21   A.   Yeah, I can hear you clearly.
+
+01:28:32   22   Q.   Thank you.
+
+01:28:32   23             MR. HADDEN:    Can we get DX-14, please, Mr. Berk?
+
+01:28:33   24   Q.   (By Mr. Hadden)    I'm going to ask you some questions,
+
+01:28:44   25   Dr. Zhu, about the paper that you were just discussing with
+
+    Case 2:19-cv-00123-JRG Document 331 Filed 10/09/20 Page 35 of 174 PageID #: 18773
+                                                                                     437
+
+
+
+01:28:47    1   your counsel; is that all right?
+
+01:28:48    2   A.   Yes.
+
+01:28:48    3   Q.   Thank you.
+
+01:28:49    4               MR. HADDEN:    Could we go to the second page of
+
+01:28:55    5   this paper, Mr. Berk, where we have the heading Beam --
+
+01:29:00    6   Broadband Beamforming?
+
+01:29:06    7   Q.   (By Mr. Hadden)      Now, I heard you testify to your
+
+01:29:08    8   counsel that you -- you drafted this paper; is that right,
+
+01:29:11    9   Dr. Zhu?
+
+01:29:12   10   A.   Yes.
+
+01:29:12   11   Q.   Okay.    And if you look on the second page, there's a
+
+01:29:16   12   heading Broadband Beamforming.        Do you see that?
+
+01:29:18   13   A.   Yes.
+
+01:29:18   14   Q.   Okay.    And underneath that in that column there's a
+
+01:29:22   15   diagram, Figure 3.        Do you see that?
+
+01:29:23   16   A.   Yes.
+
+01:29:25   17               MR. HADDEN:    Could we blow that up, Mr. Berk,
+
+01:29:28   18   Figure 3?
+
+01:29:31   19   Q.   (By Mr. Hadden)      So Figure 3 shows a linear microphone
+
+01:29:35   20   array; is that right, Dr. Zhu?
+
+01:29:36   21   A.   Yes.
+
+01:29:39   22   Q.   Okay.    And just to help the jury, that -- that dotted
+
+01:29:42   23   line that is running horizontally toward the top, is that
+
+01:29:46   24   the line that specifies the microphone array?
+
+01:29:52   25   A.   Yes.
+
+    Case 2:19-cv-00123-JRG Document 331 Filed 10/09/20 Page 36 of 174 PageID #: 18774
+                                                                                     438
+
+
+
+01:29:52    1   Q.   And what Mr. Berk has helpfully colored green, those
+
+01:30:00    2   dots represent the different microphones in that array?
+
+01:30:03    3   A.   Yes.
+
+01:30:03    4   Q.   Okay.    And it's linear because they're all lined up in
+
+01:30:08    5   a line; is that right, Dr. Zhu?
+
+01:30:09    6   A.   Yes.
+
+01:30:11    7   Q.   Okay.    And there are some arrows that are coming in at
+
+01:30:15    8   an angle of that line.      Do you see that?
+
+01:30:17    9   A.   The vertical one?
+

@@ -7,6 +7,7 @@ const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
 export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,12 +18,6 @@ api.interceptors.request.use(
   (config) => {
     // Log the API call
     console.log(`CLIENT API: ${config.method?.toUpperCase()} ${config.url} - Starting request`);
-    
-    // Add auth token if available
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {

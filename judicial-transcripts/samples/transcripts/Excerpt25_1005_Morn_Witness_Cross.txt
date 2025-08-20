@@ -1,0 +1,138 @@
+11:58:32    4   Q.   But the question, sir, was, with respect to the number
+
+11:58:36    5   of samples.     You're saying the number of samples is somehow
+
+11:58:38    6   related to this Fast Fourier Transform, but that Fast
+
+11:58:41    7   Fourier Transform has nothing to do with the weighting
+
+11:58:44    8   factors.     We apply the weighting factors later when we get
+
+11:58:47    9   to the Ws.     Right?
+
+11:58:48   10              THE COURT:    Is that a question, counsel?       I heard
+
+11:58:50   11   about five statements, and then a question at the end.
+
+11:58:53   12              MR. HADDEN:    I'll rephrase it.    I apologize,
+
+11:58:56   13   Your Honor.
+
+11:58:56   14   Q.   (By Mr. Hadden)     You talked about the geometry somehow
+
+11:59:01   15   being in the weighting factors.
+
+11:59:03   16              Isn't it true, sir, that when we're doing the
+
+11:59:06   17   Fourier Transform and we're creating these Xs, we haven't
+
+11:59:11   18   dealt with anything regarding the geometry of those
+
+11:59:15   19   microphones?     We're just dealing with the outputs and these
+
+11:59:18   20   128 samples per frame; isn't that right?
+
+11:59:21   21   A.   No, that's not correct.
+
+11:59:22   22   Q.   So are you saying that the number of samples from each
+
+11:59:27   23   microphone varies depending on its angle with respect to
+
+11:59:32   24   the reference axis?
+
+11:59:33   25   A.   There's nothing in the claim that says the number of
+
+   Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 132 of 134 PageID #: 19044
+                                                                                    708
+
+
+
+11:59:35    1   samples varies in accordance with; it's just represented by
+
+11:59:40    2   a number of samples.
+
+11:59:41    3   Q.   Okay.   But if the delays are going to be different,
+
+11:59:47    4   then the number of samples has to be different, right?
+
+11:59:50    5   A.   No.
+
+11:59:50    6   Q.   No?
+
+11:59:51    7   A.   It doesn't have to be.       It can be.
+
+11:59:53    8   Q.   If you're going to have two delays that are not the
+
+11:59:56    9   same and each of them is represented by or in terms of a
+
+12:00:01   10   number of samples, don't the number of samples have to be
+
+12:00:07   11   different between those two?
+
+12:00:08   12   A.   The eventual result would result in a factor that when
+
+12:00:13   13   it's converted back to a time domain would be
+
+12:00:18   14   representative of a difference, yes.
+
+12:00:19   15   Q.   But nowhere in this diagram or this process, have we
+
+12:00:23   16   determined anything in terms of a number of samples other
+
+12:00:27   17   than a fixed 128-sample frame, right?
+
+12:00:32   18   A.   Again, that's per frame, and then you -- you -- the
+
+12:00:35   19   different -- the value is different based upon the
+
+12:00:36   20   weighting factors.       So it's going to be a difference.
+
+12:00:44   21              THE COURT:    Let me interrupt here, gentlemen.
+
+12:00:46   22              MR. HADDEN:    Sure.
+
+12:00:46   23              THE COURT:    It's clear this cross-examination has
+
+12:00:48   24   some additional time to go, and we're at the noon hour now.
+
+12:00:51   25   So we're going to recess for lunch.
+
+   Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 133 of 134 PageID #: 19045
+                                                                                    709
+
+
+
+12:00:53    1           Ladies and gentlemen of the jury, if you'll close
+
+
+12:01:21    9   back at that time or close thereto, to continue with the
+
+12:01:25   10   Defendants' cross-examination of this witness.
+
+12:01:28   11           The jury is excused for lunch at this time.
+
+12:01:32   12           COURT SECURITY OFFICER:        All rise.
+
+12:01:32   13           (Jury out.)
+
+12:01:32   14           THE COURT:     The Court stands in recess for lunch.
+
+12:01:56   15           (Recess.)
+
+           16
+
+
+           25
+
+Case 2:19-cv-00123-JRG Document 332 Filed 10/09/20 Page 134 of 134 PageID #: 19046
+                                                                                 710
+
+
+
+       1                               CERTIFICATION
+
+      11   Expiration Date: 12/31/2020
+
+      12
+
+      13

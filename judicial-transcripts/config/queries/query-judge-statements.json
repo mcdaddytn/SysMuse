@@ -1,0 +1,36 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "objection_sustained",
+      "query": "objection is sustained",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "objection_overruled",
+      "query": "objection is overruled",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "is_there_objection",
+      "query": "is there objection",
+      "type": "match_phrase",
+      "proximity": 2
+    },
+    {
+      "name": "you_may_approach",
+      "query": "you may approach",
+      "type": "match_phrase"
+    },
+    {
+      "name": "the_record",
+      "query": "the record",
+      "type": "match_phrase"
+    }
+  ],
+  "queryParams": {
+    "trialName": "VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.",
+    "speakerType": "JUDGE"
+  }
+}

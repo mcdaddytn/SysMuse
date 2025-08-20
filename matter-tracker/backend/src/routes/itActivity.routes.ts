@@ -13,7 +13,8 @@ router.get('/', async (req: Request, res: Response) => {
     startDate, 
     endDate, 
     activityType, 
-    isAssociated 
+    isAssociated,
+    textSearch 
   } = req.query;
   console.log(`API: GET /it-activities - Fetching activities for team member: ${teamMemberId}, period: ${startDate} to ${endDate}`);
   try {
@@ -45,6 +46,23 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (isAssociated !== undefined) {
       whereClause.isAssociated = isAssociated === 'true';
+    }
+
+    if (textSearch) {
+      whereClause.OR = [
+        {
+          title: {
+            contains: textSearch as string,
+            mode: 'insensitive'
+          }
+        },
+        {
+          description: {
+            contains: textSearch as string,
+            mode: 'insensitive'
+          }
+        }
+      ];
     }
 
     const activities = await prisma.iTActivity.findMany({
@@ -619,6 +637,10 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
       where: { ...whereClause, activityType: 'CLAUDE_SESSION' },
     });
 
+    const cocounselSessionCount = await prisma.iTActivity.count({
+      where: { ...whereClause, activityType: 'COCOUNSEL_SESSION' },
+    });
+
     // Get associated vs unassociated counts
     const associatedCount = await prisma.iTActivity.count({
       where: { ...whereClause, isAssociated: true },
@@ -650,7 +672,8 @@ router.get('/stats/:teamMemberId', async (req: Request, res: Response) => {
         document: documentCount,
         relativity: relativityCount,
         claudeSession: claudeSessionCount,
-        total: calendarCount + emailCount + documentCount + relativityCount + claudeSessionCount,
+        cocounselSession: cocounselSessionCount,
+        total: calendarCount + emailCount + documentCount + relativityCount + claudeSessionCount + cocounselSessionCount,
       },
       associationStatus: {
         associated: associatedCount,

@@ -1,0 +1,23 @@
+{
+  "maxResults": 20,
+  "resultSeparator": "\n---\n",
+  "elasticSearchQueries": [
+    {
+      "name": "objection",
+      "query": "objection",
+      "type": "match"
+    },
+    {
+      "name": "your_honor",
+      "query": "your honor",
+      "type": "match_phrase"
+    }
+  ],
+  "queryParams": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "speakerPrefix": "MR. HADDEN"
+  },
+  "surroundingEvents": 1,
+  "fileNameTemplate": "attorney-hadden-{Session.sessionDate}.txt",
+  "fileTemplate": "default.txt"
+}

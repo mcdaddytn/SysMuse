@@ -1,0 +1,23 @@
+{
+  "elasticSearchQueries": [
+    {
+      "name": "expert_opinion",
+      "query": "opinion OR conclusion OR analysis",
+      "type": "match"
+    },
+    {
+      "name": "reasonable_certainty",
+      "query": "reasonable degree of certainty",
+      "type": "match_phrase",
+      "proximity": 3
+    },
+    {
+      "name": "methodology",
+      "query": "methodology OR method OR procedure",
+      "type": "match"
+    }
+  ],
+  "queryParams": {
+    "speakerType": "WITNESS"
+  }
+}

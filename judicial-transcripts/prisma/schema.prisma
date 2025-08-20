@@ -1,0 +1,614 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Trial {
+  id                Int                @id @default(autoincrement())
+  name              String
+  caseNumber        String             @unique
+  court             String
+  courtDivision     String?
+  courtDistrict     String?
+  totalPages        Int?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  anonymousSpeakers AnonymousSpeaker[]
+  courtReporter     CourtReporter?
+  judge             Judge?
+  jurors            Juror[]
+  markers           Marker[]
+  markerSections    MarkerSection[]
+  sessions          Session[]
+  attorneys         TrialAttorney[]
+  trialEvents       TrialEvent[]
+  witnesses         Witness[]
+
+  @@index([caseNumber])
+}
+
+model Judge {
+  id        Int     @id @default(autoincrement())
+  name      String
+  title     String?
+  honorific String?
+  speakerId Int     @unique
+  trialId   Int     @unique
+  speaker   Speaker @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  trial     Trial   @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([trialId])
+}
+
+model CourtReporter {
+  id             Int       @id @default(autoincrement())
+  name           String
+  credentials    String?
+  title          String?
+  stateNumber    String?
+  expirationDate DateTime?
+  addressId      Int?
+  phone          String?
+  trialId        Int       @unique
+  address        Address?  @relation(fields: [addressId], references: [id])
+  trial          Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([trialId])
+}
+
+model Session {
+  id                  Int          @id @default(autoincrement())
+  trialId             Int
+  sessionDate         DateTime
+  sessionType         SessionType
+  documentNumber      Int?
+  fileName            String?
+  totalPages          Int?
+  transcriptStartPage Int?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  pages               Page[]
+  trial               Trial        @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  trialEvents         TrialEvent[]
+
+  @@unique([trialId, sessionDate, sessionType])
+  @@index([trialId, sessionDate])
+}
+
+model Page {
+  id              Int             @id @default(autoincrement())
+  sessionId       Int
+  pageNumber      Int
+  documentSection DocumentSection @default(UNKNOWN)
+  trialPageNumber Int?
+  pageId          String?
+  headerText      String?
+  createdAt       DateTime        @default(now())
+  lines           Line[]
+  session         Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, pageNumber])
+  @@index([sessionId, pageNumber])
+  @@index([documentSection])
+}
+
+model Line {
+  id                Int      @id @default(autoincrement())
+  pageId            Int
+  lineNumber        Int
+  trialLineNumber   Int?
+  sessionLineNumber Int?
+  timestamp         String?
+  text              String?
+  speakerPrefix     String?
+  isBlank           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  page              Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, lineNumber])
+  @@index([pageId, lineNumber])
+  @@index([trialLineNumber])
+  @@index([sessionLineNumber])
+}
+
+model Attorney {
+  id             Int             @id @default(autoincrement())
+  name           String
+  title          String?
+  firstName      String?
+  middleInitial  String?
+  lastName       String?
+  suffix         String?
+  speakerPrefix  String?
+  barNumber      String?
+  speakerId      Int             @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  speaker        Speaker         @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  trialAttorneys TrialAttorney[]
+
+  @@index([name])
+  @@index([speakerPrefix])
+  @@index([lastName])
+}
+
+model TrialAttorney {
+  id              Int            @id @default(autoincrement())
+  trialId         Int
+  attorneyId      Int
+  role            AttorneyRole
+  lawFirmId       Int?
+  lawFirmOfficeId Int?
+  attorney        Attorney       @relation(fields: [attorneyId], references: [id], onDelete: Cascade)
+  lawFirm         LawFirm?       @relation(fields: [lawFirmId], references: [id])
+  lawFirmOffice   LawFirmOffice? @relation(fields: [lawFirmOfficeId], references: [id])
+  trial           Trial          @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@unique([trialId, attorneyId])
+  @@index([trialId, role])
+}
+
+model LawFirm {
+  id             Int             @id @default(autoincrement())
+  name           String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  offices        LawFirmOffice[]
+  trialAttorneys TrialAttorney[]
+
+  @@index([name])
+}
+
+model LawFirmOffice {
+  id             Int             @id @default(autoincrement())
+  lawFirmId      Int
+  name           String
+  addressId      Int             @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  address        Address         @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  lawFirm        LawFirm         @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  trialAttorneys TrialAttorney[]
+
+  @@unique([lawFirmId, name])
+  @@index([lawFirmId])
+}
+
+model Address {
+  id             Int             @id @default(autoincrement())
+  street1        String?
+  street2        String?
+  city           String?
+  state          String?
+  zipCode        String?
+  country        String?         @default("USA")
+  fullAddress    String?
+  courtReporters CourtReporter[]
+  lawFirmOffice  LawFirmOffice?
+
+  @@index([fullAddress])
+}
+
+model Speaker {
+  id               Int               @id @default(autoincrement())
+  trialId          Int
+  speakerPrefix    String
+  speakerHandle    String
+  speakerType      SpeakerType
+  createdAt        DateTime          @default(now())
+  anonymousSpeaker AnonymousSpeaker?
+  attorney         Attorney?
+  judge            Judge?
+  juror            Juror?
+  statements       StatementEvent[]
+  witness          Witness?
+
+  @@unique([trialId, speakerHandle])
+  @@index([trialId, speakerPrefix])
+  @@index([trialId, speakerHandle])
+}
+
+model Witness {
+  id            Int                  @id @default(autoincrement())
+  trialId       Int
+  name          String?
+  firstName     String?
+  middleInitial String?
+  lastName      String?
+  suffix        String?
+  displayName   String?
+  speakerId     Int?                 @unique
+  witnessType   WitnessType?
+  witnessCaller WitnessCaller?
+  expertField   String?
+  swornStatus   SwornStatus          @default(NOT_SWORN)
+  createdAt     DateTime             @default(now())
+  speaker       Speaker?             @relation(fields: [speakerId], references: [id])
+  trial         Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  witnessEvents WitnessCalledEvent[]
+
+  @@index([trialId, witnessType])
+  @@index([speakerId])
+}
+
+model Juror {
+  id          Int      @id @default(autoincrement())
+  trialId     Int
+  speakerId   Int      @unique
+  name        String?
+  lastName    String?
+  jurorNumber Int?
+  alias       String?
+  createdAt   DateTime @default(now())
+  speaker     Speaker  @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  trial       Trial    @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([trialId])
+  @@index([lastName])
+}
+
+model AnonymousSpeaker {
+  id          Int      @id @default(autoincrement())
+  trialId     Int
+  speakerId   Int      @unique
+  role        String?
+  description String?
+  createdAt   DateTime @default(now())
+  speaker     Speaker  @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  trial       Trial    @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([trialId])
+}
+
+model TrialEvent {
+  id                    Int                  @id @default(autoincrement())
+  trialId               Int
+  sessionId             Int?
+  startTime             String?
+  endTime               String?
+  duration              Int?
+  startLineNumber       Int?
+  endLineNumber         Int?
+  lineCount             Int?
+  wordCount             Int?
+  characterCount        Int?
+  eventType             EventType
+  rawText               String?              @db.VarChar(255)
+  createdAt             DateTime             @default(now())
+  courtDirective        CourtDirectiveEvent?
+  statement             StatementEvent?
+  session               Session?             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trial                 Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  witnessCalled         WitnessCalledEvent?
+  markers               Marker[]
+  sectionStarts         MarkerSection[]      @relation("SectionStart")
+  sectionEnds           MarkerSection[]      @relation("SectionEnd")
+  accumStartResults     AccumulatorResult[]  @relation("AccumStartEvent")
+  accumEndResults       AccumulatorResult[]  @relation("AccumEndEvent")
+
+  @@index([trialId, startTime])
+  @@index([sessionId])
+}
+
+model CourtDirectiveEvent {
+  id              Int                @id @default(autoincrement())
+  eventId         Int                @unique
+  directiveTypeId Int
+  isStandard      Boolean            @default(true)
+  directiveType   CourtDirectiveType @relation(fields: [directiveTypeId], references: [id])
+  event           TrialEvent         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([directiveTypeId])
+}
+
+model CourtDirectiveType {
+  id          Int                   @id @default(autoincrement())
+  name        String                @unique
+  description String?
+  isPaired    Boolean               @default(false)
+  pairMateId  Int?
+  isStart     Boolean?
+  aliases     String[]
+  directives  CourtDirectiveEvent[]
+}
+
+model StatementEvent {
+  id                 Int                   @id @default(autoincrement())
+  eventId            Int                   @unique
+  speakerId          Int?
+  speakerAlias       String?
+  text               String
+  elasticSearchId    String?
+  event              TrialEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  speaker            Speaker?              @relation(fields: [speakerId], references: [id])
+  esResults          ElasticSearchResult[]
+
+  @@index([speakerId])
+  @@index([elasticSearchId])
+}
+
+model WitnessCalledEvent {
+  id               Int             @id @default(autoincrement())
+  eventId          Int             @unique
+  witnessId        Int?
+  examinationType  ExaminationType
+  swornStatus      SwornStatus     @default(NOT_SWORN)
+  continued        Boolean         @default(false)
+  presentedByVideo Boolean         @default(false)
+  event            TrialEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  witness          Witness?        @relation(fields: [witnessId], references: [id])
+
+  @@index([witnessId])
+}
+
+model Marker {
+  id                Int              @id @default(autoincrement())
+  trialId           Int
+  markerType        MarkerType
+  eventId           Int?             // Single event associated with the marker
+  name              String?
+  description       String?
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  trial             Trial            @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  event             TrialEvent?      @relation(fields: [eventId], references: [id])
+  startingSections  MarkerSection[]  @relation("StartMarker")
+  endingSections    MarkerSection[]  @relation("EndMarker")
+
+  @@index([trialId, markerType])
+  @@index([eventId])
+}
+
+model MarkerSection {
+  id                Int                 @id @default(autoincrement())
+  trialId           Int
+  markerSectionType MarkerSectionType
+  startMarkerId     Int?
+  endMarkerId       Int?
+  startEventId      Int?                // Event where section starts
+  endEventId        Int?                // Event where section ends
+  startTime         String?
+  endTime           String?
+  name              String?
+  description       String?
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  trial             Trial               @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  startMarker       Marker?             @relation("StartMarker", fields: [startMarkerId], references: [id])
+  endMarker         Marker?             @relation("EndMarker", fields: [endMarkerId], references: [id])
+  startEvent        TrialEvent?         @relation("SectionStart", fields: [startEventId], references: [id])
+  endEvent          TrialEvent?         @relation("SectionEnd", fields: [endEventId], references: [id])
+
+  @@index([trialId, markerSectionType])
+  @@index([startEventId, endEventId])
+}
+
+model MarkerTemplate {
+  id               Int                @id @default(autoincrement())
+  markerType       MarkerType?
+  sectionType      MarkerSectionType?
+  namePattern      String             // Pattern for generating marker/section names
+  descPattern      String?            // Pattern for generating descriptions
+  parentTemplateId Int?               // Parent template for nested sections
+  siblingTemplateId Int?              // Sibling template for adjacent sections
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  parentTemplate   MarkerTemplate?    @relation("ParentChild", fields: [parentTemplateId], references: [id])
+  childTemplates   MarkerTemplate[]   @relation("ParentChild")
+  siblingTemplate  MarkerTemplate?    @relation("Siblings", fields: [siblingTemplateId], references: [id])
+  siblingOf        MarkerTemplate[]   @relation("Siblings")
+
+  @@index([markerType])
+  @@index([sectionType])
+}
+
+model SearchIndex {
+  id             Int      @id @default(autoincrement())
+  entityType     String
+  entityId       Int
+  searchableText String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([entityType, entityId])
+}
+
+enum SessionType {
+  MORNING
+  AFTERNOON
+  SPECIAL
+  BENCH_TRIAL
+  JURY_VERDICT
+  OTHER
+}
+
+enum DocumentSection {
+  SUMMARY
+  PROCEEDINGS
+  CERTIFICATION
+  UNKNOWN
+}
+
+enum AttorneyRole {
+  PLAINTIFF
+  DEFENDANT
+  THIRD_PARTY
+}
+
+enum SpeakerType {
+  ATTORNEY
+  JUDGE
+  WITNESS
+  JUROR
+  ANONYMOUS
+}
+
+enum WitnessType {
+  EXPERT_WITNESS
+  FACT_WITNESS
+  CHARACTER_WITNESS
+  REBUTTAL_WITNESS
+}
+
+enum WitnessCaller {
+  PLAINTIFF
+  DEFENDANT
+}
+
+enum EventType {
+  COURT_DIRECTIVE
+  STATEMENT
+  WITNESS_CALLED
+}
+
+enum ExaminationType {
+  DIRECT_EXAMINATION
+  CROSS_EXAMINATION
+  REDIRECT_EXAMINATION
+  RECROSS_EXAMINATION
+  VIDEO_DEPOSITION
+}
+
+enum SwornStatus {
+  SWORN
+  PREVIOUSLY_SWORN
+  NOT_SWORN
+}
+
+enum MarkerType {
+  ACTIVITY_START
+  ACTIVITY_END
+  WITNESS_TESTIMONY_START
+  WITNESS_TESTIMONY_END
+  WITNESS_EXAMINATION_START
+  WITNESS_EXAMINATION_END
+}
+
+enum MarkerSectionType {
+  WITNESS_TESTIMONY
+  WITNESS_EXAMINATION
+  COMPLETE_WITNESS_TESTIMONY
+  CLOSING_ARGUMENT
+  OPENING_ARGUMENT
+  JURY_SELECTION
+  VERDICT
+  ACTIVITY
+}
+
+model ElasticSearchExpression {
+  id               Int                      @id @default(autoincrement())
+  name             String                   @unique
+  expressionType   String                   // e.g., "Objection Handling", "Witness Handling"
+  phrasePattern    String                   // The pattern to search for
+  searchStrategy   String                   // e.g., "match_phrase", "wildcard", "span_near"
+  esQuery          Json                     // The actual Elasticsearch query
+  description      String?
+  isActive         Boolean                  @default(true)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  results          ElasticSearchResult[]
+  accumulatorExprs AccumulatorExpression[]  @relation("AccumulatorESExpressions")
+
+  @@index([expressionType])
+  @@index([isActive])
+}
+
+model ElasticSearchResult {
+  id            Int                     @id @default(autoincrement())
+  expressionId  Int
+  statementId   Int
+  trialId       Int
+  matched       Boolean                 @default(false)
+  score         Float?
+  metadata      Json?
+  createdAt     DateTime                @default(now())
+  expression    ElasticSearchExpression @relation(fields: [expressionId], references: [id], onDelete: Cascade)
+  statement     StatementEvent          @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@unique([expressionId, statementId])
+  @@index([trialId])
+  @@index([matched])
+}
+
+model AccumulatorExpression {
+  id                    Int                       @id @default(autoincrement())
+  name                  String                    @unique
+  description           String?
+  expressionType        AccumulatorType           // BOOLEAN, CONFIDENCE, FLOAT
+  windowSize            Int                       @default(5) // Number of statements to consider
+  thresholdValue        Float?                    // Threshold for boolean conversion
+  minConfidenceLevel    ConfidenceLevel?          // Min confidence for boolean true
+  combinationType       CombinationType?          // ADD, MULTIPLY, OR, AND
+  metadata              Json?                     // Additional configuration
+  isActive              Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  esExpressions         ElasticSearchExpression[] @relation("AccumulatorESExpressions")
+  components            AccumulatorComponent[]
+  results               AccumulatorResult[]
+
+  @@index([expressionType])
+  @@index([isActive])
+}
+
+model AccumulatorComponent {
+  id                   Int                   @id @default(autoincrement())
+  accumulatorId        Int
+  componentType        String                // "ES_EXPRESSION", "SPEAKER_FILTER", "EVENT_FILTER"
+  esExpressionId       Int?
+  speakerType          SpeakerType?
+  speakerHandle        String?
+  weight               Float                 @default(1.0)
+  requiredForMatch     Boolean               @default(false)
+  metadata             Json?
+  accumulator          AccumulatorExpression @relation(fields: [accumulatorId], references: [id], onDelete: Cascade)
+
+  @@index([accumulatorId])
+}
+
+model AccumulatorResult {
+  id               Int                   @id @default(autoincrement())
+  accumulatorId    Int
+  trialId          Int
+  startEventId     Int
+  endEventId       Int
+  booleanResult    Boolean?
+  confidenceLevel  ConfidenceLevel?
+  floatResult      Float?
+  metadata         Json?                 // Details about matching components
+  createdAt        DateTime              @default(now())
+  accumulator      AccumulatorExpression @relation(fields: [accumulatorId], references: [id])
+  startEvent       TrialEvent            @relation("AccumStartEvent", fields: [startEventId], references: [id])
+  endEvent         TrialEvent            @relation("AccumEndEvent", fields: [endEventId], references: [id])
+
+  @@index([accumulatorId, trialId])
+  @@index([startEventId, endEventId])
+}
+
+enum AccumulatorType {
+  BOOLEAN
+  CONFIDENCE
+  FLOAT
+}
+
+enum ConfidenceLevel {
+  HIGH
+  MEDIUM
+  LOW
+  NONE
+}
+
+enum CombinationType {
+  ADD
+  MULTIPLY
+  OR
+  AND
+}

@@ -180,8 +180,8 @@ End Sub
 Sub DetectPrivBreaks()
     Dim ws As Worksheet: Set ws = ActiveSheet
     Dim internalWS As Worksheet: Set internalWS = ThisWorkbook.Worksheets("Internal")
-    
-    ' Delete existing PrivBreak and PrivBreakReason columns
+
+    ' Delete existing PrivBreak and PrivBreakReason columns if they exist
     Dim col As Integer, lastCol As Integer
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     For col = lastCol To 1 Step -1
@@ -190,17 +190,43 @@ Sub DetectPrivBreaks()
         End If
     Next col
 
-    ' Recalculate headers
-    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-    ws.Cells(1, lastCol + 1).Value = "PrivBreak"
-    ws.Cells(1, lastCol + 2).Value = "PrivBreakReason"
-    Dim colPrivBreak As Long: colPrivBreak = lastCol + 1
-    Dim colPrivReason As Long: colPrivReason = lastCol + 2
+    ' Recalculate header map
+    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
+    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        headerMap(ws.Cells(1, col).Value) = col
+    Next col
+
+    ' Insert PrivBreak and PrivBreakReason columns
+    Dim colInsert As Long
+    colInsert = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column + 1
+    ws.Cells(1, colInsert).Value = "PrivBreak"
+    ws.Cells(1, colInsert + 1).Value = "PrivBreakReason"
+
+    ' Refresh header map
+    headerMap.RemoveAll
+    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+        headerMap(ws.Cells(1, col).Value) = col
+    Next col
+
+    ' Ensure PrivDomains column is inserted before PrivBreakReason
+    If Not headerMap.exists("PrivDomains") Then
+        ws.Columns(headerMap("PrivBreakReason")).Insert
+        ws.Cells(1, headerMap("PrivBreakReason")).Value = "PrivDomains"
+        ' Refresh again
+        headerMap.RemoveAll
+        For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+            headerMap(ws.Cells(1, col).Value) = col
+        Next col
+    End If
+
+    Dim colPrivBreak As Long: colPrivBreak = headerMap("PrivBreak")
+    Dim colPrivReason As Long: colPrivReason = headerMap("PrivBreakReason")
+    Dim colPrivDomains As Long: colPrivDomains = headerMap("PrivDomains")
 
     ' Load internal domains and emails
     Dim internalDomains As Object: Set internalDomains = CreateObject("Scripting.Dictionary")
     Dim internalEmails As Object: Set internalEmails = CreateObject("Scripting.Dictionary")
-    
+
     Dim r As Long: r = 2
     Do While internalWS.Cells(r, 1).Value <> ""
         Dim dom As String: dom = Trim(LCase(internalWS.Cells(r, 1).Value))
@@ -209,23 +235,17 @@ Sub DetectPrivBreaks()
         r = r + 1
     Loop
 
-    ' Build header map
-    Dim headerMap As Object: Set headerMap = CreateObject("Scripting.Dictionary")
-    For col = 1 To ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-        headerMap(ws.Cells(1, col).Value) = col
-    Next col
-
-    ' Check for optional CalcPriv column
+    ' Determine if CalcPriv is present
     Dim hasCalcPriv As Boolean: hasCalcPriv = headerMap.exists("CalcPriv")
 
     Dim emailFields As Variant: emailFields = Array("Email From", "Email To", "Email CC")
-    Dim row As Long: row = 2
 
+    ' Process each row
+    Dim row As Long: row = 2
     Do While ws.Cells(row, 1).Value <> ""
         Dim parentID As String: parentID = Trim(ws.Cells(row, headerMap("ParentID")).Value)
         Dim doCalc As Boolean: doCalc = True
 
-        ' If CalcPriv exists, use its value to determine whether to calculate
         If hasCalcPriv Then
             Dim cpVal As Variant
             cpVal = ws.Cells(row, headerMap("CalcPriv")).Value
@@ -241,24 +261,25 @@ Sub DetectPrivBreaks()
         If parentID = "" And doCalc Then
             Dim reason As String: reason = ""
             Dim anyBreak As Boolean: anyBreak = False
+            Dim privDomDict As Object: Set privDomDict = CreateObject("Scripting.Dictionary")
 
             For Each field In emailFields
                 Dim doCol As String: doCol = field & " DO"
-                If headerMap.exists(doCol) Then
+                If headerMap.exists(doCol) And headerMap.exists(field & " AO") Then
                     Dim domList As Variant
                     domList = Split(ws.Cells(row, headerMap(doCol)).Value, ";")
-                    
+
                     Dim d As Variant
                     For Each d In domList
                         Dim domain As String: domain = Trim(LCase(d))
                         If domain = "" Then GoTo NextDomain
 
                         If Not internalDomains.exists(domain) Then
-                            ' Check if ALL addresses with this domain are internal
+                            ' Check if all email addresses of this domain are listed in internal emails
                             Dim fullField As String
                             fullField = ws.Cells(row, headerMap(field & " AO")).Value
                             Dim emails As Variant: emails = Split(fullField, ";")
-                            
+
                             Dim foundExternal As Boolean: foundExternal = False
                             Dim e As Variant
                             For Each e In emails
@@ -270,11 +291,11 @@ Sub DetectPrivBreaks()
                                     End If
                                 End If
                             Next e
-                            
+
                             If foundExternal Then
                                 anyBreak = True
-                                'reason = reason & field & " domain not internal: " & domain & vbCrLf
                                 reason = reason & field & " domain not internal: " & domain & vbTab
+                                If Not privDomDict.exists(domain) Then privDomDict(domain) = 1
                             End If
                         End If
 NextDomain:
@@ -282,6 +303,7 @@ NextDomain:
                 End If
             Next field
 
+            ' Set output values
             If anyBreak Then
                 ws.Cells(row, colPrivBreak).Value = True
                 ws.Cells(row, colPrivReason).Value = reason
@@ -289,11 +311,19 @@ NextDomain:
                 ws.Cells(row, colPrivBreak).Value = False
                 ws.Cells(row, colPrivReason).Value = ""
             End If
+
+            ' Write PrivDomains
+            Dim dKey As Variant, domListOut As String: domListOut = ""
+            For Each dKey In privDomDict.Keys
+                If domListOut <> "" Then domListOut = domListOut & ";"
+                domListOut = domListOut & dKey
+            Next dKey
+            ws.Cells(row, colPrivDomains).Value = domListOut
         End If
         row = row + 1
     Loop
 
-    'MsgBox "PrivBreak analysis complete (with optional CalcPriv logic).", vbInformation
+    'MsgBox "PrivBreak analysis complete (with PrivDomains export).", vbInformation
 End Sub
 
 Sub PropagatePrivBreaksFromParent()
@@ -381,7 +411,7 @@ Sub AddPrivBreakSummary()
             .Cells(lastRow, headerMap("PrivBreak")).Address & ", FALSE)"
     End With
 
-    ' === Results Export ===
+    ' === Export to Results sheet ===
     On Error Resume Next
     Application.DisplayAlerts = False
     ThisWorkbook.Worksheets("Results").Delete
@@ -394,10 +424,11 @@ Sub AddPrivBreakSummary()
 
     resultsWS.Cells(1, 1).Value = "BegDoc"
     resultsWS.Cells(1, 2).Value = "PrivBreak"
-    resultsWS.Cells(1, 3).Value = "PrivBreakReason"
-    resultsWS.Cells(1, 4).Value = "PrivDomains"
+    resultsWS.Cells(1, 3).Value = "PrivDomains"
+    resultsWS.Cells(1, 4).Value = "PrivBreakReason"
 
     Dim outputRow As Long: outputRow = 2
+    Dim row As Long
 
     For row = 2 To lastRow
         Dim begDoc As String: begDoc = ws.Cells(row, headerMap("BegDoc")).Value
@@ -414,13 +445,13 @@ Sub AddPrivBreakSummary()
         If Not IsEmpty(pbVal) Then
             resultsWS.Cells(outputRow, 1).Value = begDoc
             resultsWS.Cells(outputRow, 2).Value = IIf(pbVal = True, "Yes", "No")
-            resultsWS.Cells(outputRow, 3).Value = reason
-            resultsWS.Cells(outputRow, 4).Value = domainsField
+            resultsWS.Cells(outputRow, 3).Value = domainsField
+            resultsWS.Cells(outputRow, 4).Value = reason
             outputRow = outputRow + 1
         End If
     Next row
 
-    MsgBox "PrivBreak summary and results worksheet created.", vbInformation
+    MsgBox "PrivBreak summary and Results worksheet created.", vbInformation
 End Sub
 
 Sub RunAllPrivBreakSteps()
@@ -443,3 +474,5 @@ Sub RunAllPrivBreakSteps()
     dataSheet.Activate
     AddPrivBreakSummary
 End Sub
+
+

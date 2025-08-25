@@ -34,7 +34,11 @@ REM SET PDFTOTEXT_OPTIONS=-nodiag
 REM Combine options as needed:
 REM SET PDFTOTEXT_OPTIONS=-layout -nodiag
 REM SET PDFTOTEXT_OPTIONS=-layout -fixed 2 -eol dos
-SET PDFTOTEXT_OPTIONS=-layout -table -eol mac
+REM SET PDFTOTEXT_OPTIONS=-layout -table -eol mac
+REM these below working pretty well, trying to kill page break char
+REM SET PDFTOTEXT_OPTIONS=-layout -table
+SET PDFTOTEXT_OPTIONS=-layout -table -nopgbrk
+
 
 REM ===============================
 REM Execute pdftotext

@@ -88,18 +88,18 @@ const convertWithPdftotextDirect = async (filePath: string, options?: any): Prom
       if (options.raw) args.push('-raw');
       if (options.nodiag) args.push('-nodiag');
       
-      // Add other options that take values
-      if (options.f) args.push('-f', options.f.toString());
-      if (options.l) args.push('-l', options.l.toString());
-      if (options.r) args.push('-r', options.r.toString());
-      if (options.x) args.push('-x', options.x.toString());
-      if (options.y) args.push('-y', options.y.toString());
-      if (options.W) args.push('-W', options.W.toString());
-      if (options.H) args.push('-H', options.H.toString());
-      if (options.fixed) args.push('-fixed', options.fixed.toString());
-      if (options.opw) args.push('-opw', options.opw);
-      if (options.upw) args.push('-upw', options.upw);
-      if (options.enc) args.push('-enc', options.enc);
+      // Add other options that take values - check for undefined instead of falsy
+      if (options.f !== undefined) args.push('-f', options.f.toString());
+      if (options.l !== undefined) args.push('-l', options.l.toString());
+      if (options.r !== undefined) args.push('-r', options.r.toString());
+      if (options.x !== undefined) args.push('-x', options.x.toString());
+      if (options.y !== undefined) args.push('-y', options.y.toString());
+      if (options.W !== undefined) args.push('-W', options.W.toString());
+      if (options.H !== undefined) args.push('-H', options.H.toString());
+      if (options.fixed !== undefined) args.push('-fixed', options.fixed.toString());
+      if (options.opw !== undefined) args.push('-opw', options.opw);
+      if (options.upw !== undefined) args.push('-upw', options.upw);
+      if (options.enc !== undefined) args.push('-enc', options.enc);
     }
     
     // Add input file and - for stdout

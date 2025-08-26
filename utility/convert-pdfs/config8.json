@@ -1,6 +1,6 @@
 {
-  "inputDir": "C:\\docs\\rj\\transcripts\\Contentguard\\02 Contentguard",
-  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\02 Contentguard",
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\23 Flexuspine V. Globus Medical",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\23 Flexuspine V. Globus Medical",
   "converters": ["pdftotext-direct"],
   "useSubdirectories": false,
   "pdfTextExtractOptions": {

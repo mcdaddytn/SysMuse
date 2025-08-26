@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const pdfParse = require('pdf-parse');
 const pdfExtract = require('pdf-text-extract');
 const PDFParser = require('pdf2json');
@@ -31,13 +32,104 @@ const convertWithPdfParse = async (filePath: string): Promise<string> => {
 };
 
 const convertWithPdfTextExtract = async (filePath: string, options?: any): Promise<string> => {
-  // Default options if none provided
-  const extractOptions = options || { layout: true };
+  // Build options array for pdf-text-extract
+  // The library expects options as command-line flags
+  let extractOptions = [];
+  
+  if (options) {
+    // Convert boolean options to command-line flags
+    if (options.layout) extractOptions.push('-layout');
+    if (options.table) extractOptions.push('-table');
+    if (options.nopgbrk) extractOptions.push('-nopgbrk');
+    if (options.raw) extractOptions.push('-raw');
+    if (options.nodiag) extractOptions.push('-nodiag');
+    
+    // Add other options that take values
+    if (options.f) extractOptions.push('-f', options.f);
+    if (options.l) extractOptions.push('-l', options.l);
+    if (options.r) extractOptions.push('-r', options.r);
+    if (options.x) extractOptions.push('-x', options.x);
+    if (options.y) extractOptions.push('-y', options.y);
+    if (options.W) extractOptions.push('-W', options.W);
+    if (options.H) extractOptions.push('-H', options.H);
+    if (options.fixed) extractOptions.push('-fixed', options.fixed);
+    if (options.opw) extractOptions.push('-opw', options.opw);
+    if (options.upw) extractOptions.push('-upw', options.upw);
+    if (options.enc) extractOptions.push('-enc', options.enc);
+  } else {
+    // Default to layout mode if no options specified
+    extractOptions = ['-layout'];
+  }
+  
+  // Debug logging
+  console.log(`    pdftotext options:`, extractOptions);
   
   return new Promise((resolve, reject) => {
-    pdfExtract(filePath, extractOptions, (err: any, pages: string[]) => {
+    // pdf-text-extract expects options as an object with 'options' array
+    const optionsObject = extractOptions.length > 0 ? { options: extractOptions } : {};
+    
+    pdfExtract(filePath, optionsObject, (err: any, pages: string[]) => {
       if (err) return reject(err);
       resolve(pages.join('\n'));
+    });
+  });
+};
+
+const convertWithPdftotextDirect = async (filePath: string, options?: any): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    // Build command arguments
+    const args = [];
+    
+    if (options) {
+      // Convert boolean options to command-line flags
+      if (options.layout) args.push('-layout');
+      if (options.table) args.push('-table');
+      if (options.nopgbrk) args.push('-nopgbrk');
+      if (options.raw) args.push('-raw');
+      if (options.nodiag) args.push('-nodiag');
+      
+      // Add other options that take values
+      if (options.f) args.push('-f', options.f.toString());
+      if (options.l) args.push('-l', options.l.toString());
+      if (options.r) args.push('-r', options.r.toString());
+      if (options.x) args.push('-x', options.x.toString());
+      if (options.y) args.push('-y', options.y.toString());
+      if (options.W) args.push('-W', options.W.toString());
+      if (options.H) args.push('-H', options.H.toString());
+      if (options.fixed) args.push('-fixed', options.fixed.toString());
+      if (options.opw) args.push('-opw', options.opw);
+      if (options.upw) args.push('-upw', options.upw);
+      if (options.enc) args.push('-enc', options.enc);
+    }
+    
+    // Add input file and - for stdout
+    args.push(filePath);
+    args.push('-');
+    
+    console.log(`    Executing: pdftotext ${args.join(' ')}`);
+    
+    const pdftotext = spawn('pdftotext', args);
+    let output = '';
+    let error = '';
+    
+    pdftotext.stdout.on('data', (data: Buffer) => {
+      output += data.toString();
+    });
+    
+    pdftotext.stderr.on('data', (data: Buffer) => {
+      error += data.toString();
+    });
+    
+    pdftotext.on('close', (code: number | null) => {
+      if (code !== 0) {
+        reject(new Error(`pdftotext exited with code ${code}: ${error}`));
+      } else {
+        resolve(output);
+      }
+    });
+    
+    pdftotext.on('error', (err: Error) => {
+      reject(new Error(`Failed to spawn pdftotext: ${err.message}`));
     });
   });
 };
@@ -84,6 +176,8 @@ const runConverter = async (
       return await convertWithPdfParse(inputFile);
     case 'pdf-text-extract':
       return await convertWithPdfTextExtract(inputFile, config.pdfTextExtractOptions);
+    case 'pdftotext-direct':
+      return await convertWithPdftotextDirect(inputFile, config.pdfTextExtractOptions);
     case 'pdf2json':
       return await convertWithPdf2Json(inputFile);
     default:
@@ -107,7 +201,7 @@ const run = async (configPath: string) => {
     ensureDir(outPath);
 
     console.log(`\n--- Using converter: ${converter} ---`);
-    if (converter === 'pdf-text-extract' && config.pdfTextExtractOptions) {
+    if ((converter === 'pdf-text-extract' || converter === 'pdftotext-direct') && config.pdfTextExtractOptions) {
       console.log(`    Options: ${JSON.stringify(config.pdfTextExtractOptions)}`);
     }
     

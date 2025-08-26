@@ -1,8 +1,7 @@
 {
   "inputDir": "C:\\docs\\rj\\transcripts\\Contentguard",
   "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard2",
-  "converters": ["pdf-text-extract"],
-  "converter": "pdf-text-extract",
+  "converters": ["pdftotext-direct"],
   "useSubdirectories": false,
   "pdfTextExtractOptions": {
     "layout": true,

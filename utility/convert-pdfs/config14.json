@@ -1,0 +1,18 @@
+{
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\02 Contentguard",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard5",
+  "popplerPath": "C:\\frame\\utilities\\xpdf-tools-win-4.05\\bin64",
+  "pdfTextExtractOptions": {
+    "layout": true,
+    "nopgbrk": true,
+    "enc": "UTF-8",
+    "eol": "unix",
+    "fixed": 0
+  },
+  "postProcessingOptions": {
+    "fixTranscriptSpacing": true,
+    "fixTranscriptQuotes": true,
+    "normalizeWhitespace": true
+  }
+}
+

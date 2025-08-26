@@ -1,0 +1,15 @@
+{
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\02 Contentguard",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard7",
+  "pdfTextExtractOptions": {
+    "layout": true,
+    "r": 300,
+    "nopgbrk": true,
+    "enc": "UTF-8"
+  },
+  "postProcessingOptions": {
+    "fixTranscriptSpacing": true,
+    "fixTranscriptQuotes": true,
+    "normalizeWhitespace": true
+  }
+}

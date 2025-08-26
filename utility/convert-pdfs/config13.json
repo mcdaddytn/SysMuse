@@ -1,0 +1,15 @@
+{
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\02 Contentguard",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard4",
+  "converters": ["pdftotext-direct"],
+  "useSubdirectories": false,
+  "pdfTextExtractOptions": {
+    "layout": true,
+    "nodiag": true,
+    "enc": "UTF-8",
+    "eol": "unix",
+    "nopgbrk": true,
+    "fixed": 0, 
+    "r": 300
+  }
+}

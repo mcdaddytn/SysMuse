@@ -1,0 +1,18 @@
+{
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\02 Contentguard",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard6",
+  "popplerPath": "C:\\frame\\utilities\\poppler-25.07.0\\Library\\bin",
+  "pdfTextExtractOptions": {
+    "layout": true,
+    "r": 300,
+    "nopgbrk": true,
+    "enc": "UTF-8",
+    "eol": "unix",
+    "fixed": 0
+  },
+  "postProcessingOptions": {
+    "fixTranscriptSpacing": false,
+    "fixTranscriptQuotes": false,
+    "normalizeWhitespace": false
+  }
+}

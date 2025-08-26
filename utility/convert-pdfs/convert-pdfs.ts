@@ -8,6 +8,8 @@ interface Config {
   inputDir: string;
   outputDir: string;
   converters: string[];
+  useSubdirectories?: boolean;  // New option - defaults to false
+  pdfTextExtractOptions?: any;   // New option for pdf-text-extract options
 }
 
 const readConfig = (configPath: string): Config => {
@@ -28,9 +30,12 @@ const convertWithPdfParse = async (filePath: string): Promise<string> => {
   return data.text;
 };
 
-const convertWithPdfTextExtract = async (filePath: string): Promise<string> => {
+const convertWithPdfTextExtract = async (filePath: string, options?: any): Promise<string> => {
+  // Default options if none provided
+  const extractOptions = options || { layout: true };
+  
   return new Promise((resolve, reject) => {
-    pdfExtract(filePath, { layout: true }, (err: any, pages: string[]) => {
+    pdfExtract(filePath, extractOptions, (err: any, pages: string[]) => {
       if (err) return reject(err);
       resolve(pages.join('\n'));
     });
@@ -69,53 +74,18 @@ const convertWithPdf2Json = async (filePath: string): Promise<string> => {
   });
 };
 
-//const convertWithPdfjsDist = async (filePath: string): Promise<string> => {
-//  const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
-//  const workerSrc = await import('pdfjs-dist/build/pdf.worker.js?url');
-//  GlobalWorkerOptions.workerSrc = workerSrc.default;
-//
-//  const data = new Uint8Array(fs.readFileSync(filePath));
-//  const pdf = await getDocument({ data }).promise;
-//  let fullText = '';
-//
-//  for (let i = 1; i <= pdf.numPages; i++) {
-//    const page = await pdf.getPage(i);
-//    const content = await page.getTextContent();
-//
-//    const lines: Map<number, string[]> = new Map();
-//
-//    for (const item of content.items) {
-//      const text = (item as any).str;
-//      const y = Math.round((item as any).transform[5]);
-//
-//      if (!lines.has(y)) lines.set(y, []);
-//      lines.get(y)!.push(text);
-//    }
-//
-//    const pageLines = Array.from(lines.entries())
-//      .sort((a, b) => b[0] - a[0])
-//      .map(([, tokens]) => tokens.join(' '))
-//      .join('\n');
-//
-//    fullText += `\n\nPage ${i}\n${pageLines}`;
-//  }
-//
-//  return fullText;
-//};
-
 const runConverter = async (
   converter: string,
-  inputFile: string
+  inputFile: string,
+  config: Config
 ): Promise<string> => {
   switch (converter) {
     case 'pdf-parse':
       return await convertWithPdfParse(inputFile);
     case 'pdf-text-extract':
-      return await convertWithPdfTextExtract(inputFile);
+      return await convertWithPdfTextExtract(inputFile, config.pdfTextExtractOptions);
     case 'pdf2json':
       return await convertWithPdf2Json(inputFile);
-//    case 'pdfjs-dist':
-//      return await convertWithPdfjsDist(inputFile);
     default:
       throw new Error(`Unsupported converter: ${converter}`);
   }
@@ -124,20 +94,31 @@ const runConverter = async (
 const run = async (configPath: string) => {
   const config = readConfig(configPath);
   const pdfs = listPDFs(config.inputDir);
+  
+  // Default useSubdirectories to false if not specified
+  const useSubdirectories = config.useSubdirectories !== undefined ? config.useSubdirectories : false;
 
   for (const converter of config.converters) {
-    const outPath = path.join(config.outputDir, converter);
+    // Determine output path based on configuration
+    const outPath = useSubdirectories 
+      ? path.join(config.outputDir, converter)
+      : config.outputDir;
+    
     ensureDir(outPath);
 
     console.log(`\n--- Using converter: ${converter} ---`);
+    if (converter === 'pdf-text-extract' && config.pdfTextExtractOptions) {
+      console.log(`    Options: ${JSON.stringify(config.pdfTextExtractOptions)}`);
+    }
+    
     for (const file of pdfs) {
       const inputFile = path.join(config.inputDir, file);
       const outputFile = path.join(outPath, file.replace(/\.pdf$/i, '.txt'));
 
       try {
-        const text = await runConverter(converter, inputFile);
+        const text = await runConverter(converter, inputFile, config);
         fs.writeFileSync(outputFile, text, 'utf-8');
-        console.log(`✓ ${file}`);
+        console.log(`✔ ${file}`);
       } catch (err) {
         console.error(`✗ ${file} (Error: ${err})`);
       }

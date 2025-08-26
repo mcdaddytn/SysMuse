@@ -1,0 +1,6 @@
+{
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\50 Packet",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\50 Packet",
+  "convertersAll": ["pdf-parse", "pdf2json", "pdf-text-extract", "pdfjs-dist"],
+  "converters": ["pdf-text-extract"]
+}

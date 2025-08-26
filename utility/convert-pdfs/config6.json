@@ -1,0 +1,11 @@
+{
+  "inputDir": "C:\\docs\\rj\\transcripts\\Contentguard",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard2",
+  "converters": ["pdf-text-extract"],
+  "useSubdirectories": false,
+  "pdfTextExtractOptions": {
+    "layout": true,
+    "table": true,
+    "nopgbrk": true
+  }
+}

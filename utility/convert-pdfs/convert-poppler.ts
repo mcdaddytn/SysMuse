@@ -82,11 +82,16 @@ const postProcessText = (text: string, options: PostProcessingOptions): string =
   // Normalize line number whitespace - remove leading spaces before line numbers
   if (options.normalizeLineNumberWhitespace) {
     // Pattern: Start of line, optional spaces, then 1-2 digit line number
-    // This preserves lines that don't start with line numbers (like headers)
-    processedText = processedText.replace(/^\s+(\d{1,2}\s)/gm, '$1');
-    
-    // Also handle case where line number is followed directly by text (no space)
-    processedText = processedText.replace(/^\s+(\d{1,2})(\S)/gm, '$1$2');
+    // For single digits, add extra space to align with 2-digit numbers
+    processedText = processedText.replace(/^\s+(\d{1,2})(\s|$)/gm, (match, lineNum, trailing) => {
+      if (lineNum.length === 1) {
+        // Single digit - add extra space for alignment
+        return lineNum + ' ' + trailing;
+      } else {
+        // Two digits - just remove leading spaces
+        return lineNum + trailing;
+      }
+    });
   }
   
   return processedText;

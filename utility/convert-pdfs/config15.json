@@ -13,6 +13,7 @@
  "postProcessingOptions": {
     "fixTranscriptSpacing": false,
     "fixTranscriptQuotes": false,
+    "normalizeLineNumberWhitespace": true,
     "normalizeWhitespace": false
   }
 }

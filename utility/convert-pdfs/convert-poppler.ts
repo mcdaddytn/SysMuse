@@ -7,6 +7,7 @@ interface PostProcessingOptions {
   fixTranscriptQuotes?: boolean;
   normalizeWhitespace?: boolean;
   normalizeLineNumberWhitespace?: boolean;
+  removeBlankLines?: boolean;
 }
 
 interface Config {
@@ -81,17 +82,32 @@ const postProcessText = (text: string, options: PostProcessingOptions): string =
   
   // Normalize line number whitespace - remove leading spaces before line numbers
   if (options.normalizeLineNumberWhitespace) {
-    // Pattern: Start of line, optional spaces, then 1-2 digit line number
-    // For single digits, add extra space to align with 2-digit numbers
-    processedText = processedText.replace(/^\s+(\d{1,2})(\s|$)/gm, (match, lineNum, trailing) => {
-      if (lineNum.length === 1) {
-        // Single digit - add extra space for alignment
-        return lineNum + ' ' + trailing;
-      } else {
-        // Two digits - just remove leading spaces
-        return lineNum + trailing;
+    // Split into lines to process each individually
+    const lines = processedText.split('\n');
+    processedText = lines.map(line => {
+      // Check if line starts with optional spaces followed by 1-2 digits
+      const match = line.match(/^(\s*)(\d{1,2})(\s.*|$)/);
+      if (match) {
+        const [, spaces, lineNum, rest] = match;
+        if (lineNum.length === 1) {
+          // Single digit - add extra space for alignment
+          return lineNum + '  ' + rest.trimStart();
+        } else {
+          // Two digits - just remove leading spaces
+          return lineNum + rest;
+        }
       }
-    });
+      // Return unchanged if no line number found (including blank lines)
+      return line;
+    }).join('\n');
+  }
+  
+  // Remove blank lines if requested
+  if (options.removeBlankLines) {
+    // Split into lines, filter out empty lines, rejoin
+    processedText = processedText.split('\n')
+      .filter(line => line.trim().length > 0)
+      .join('\n');
   }
   
   return processedText;

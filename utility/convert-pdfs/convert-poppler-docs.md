@@ -186,11 +186,21 @@ Options for cleaning and normalizing the extracted text. Place these in the `pos
 
 ### `normalizeLineNumberWhitespace` (boolean)
 - **Default**: `false`
-- **Description**: Removes leading whitespace before line numbers
+- **Description**: Removes leading whitespace before line numbers and aligns content
 - **Behavior**:
   - Removes spaces before 1-2 digit numbers at start of lines
+  - Single-digit line numbers (1-9) get an extra space for alignment
+  - Two-digit line numbers (10-99) just have leading spaces removed
   - Preserves lines without line numbers (headers, etc.)
-  - Specifically designed for legal transcript formatting
+  - Ensures all line numbers occupy 2 character positions (left-justified)
+
+### `removeBlankLines` (boolean)
+- **Default**: `false`
+- **Description**: Removes completely blank lines from the output
+- **Behavior**:
+  - When `true`, filters out lines that contain only whitespace
+  - When `false` (default), preserves blank lines for readability
+  - Useful for condensing output or maintaining original spacing
 
 ## Example Configurations
 
@@ -223,7 +233,8 @@ Options for cleaning and normalizing the extracted text. Place these in the `pos
   "postProcessingOptions": {
     "fixTranscriptSpacing": true,
     "fixTranscriptQuotes": true,
-    "normalizeLineNumberWhitespace": true
+    "normalizeLineNumberWhitespace": true,
+    "removeBlankLines": false
   }
 }
 ```

@@ -6,6 +6,7 @@ interface PostProcessingOptions {
   fixTranscriptSpacing?: boolean;
   fixTranscriptQuotes?: boolean;
   normalizeWhitespace?: boolean;
+  normalizeLineNumberWhitespace?: boolean;
 }
 
 interface Config {
@@ -76,6 +77,16 @@ const postProcessText = (text: string, options: PostProcessingOptions): string =
     // Ensure consistent spacing after punctuation
     processedText = processedText.replace(/([.!?])\s{2,}/g, '$1 ');
     processedText = processedText.replace(/([,;:])\s{2,}/g, '$1 ');
+  }
+  
+  // Normalize line number whitespace - remove leading spaces before line numbers
+  if (options.normalizeLineNumberWhitespace) {
+    // Pattern: Start of line, optional spaces, then 1-2 digit line number
+    // This preserves lines that don't start with line numbers (like headers)
+    processedText = processedText.replace(/^\s+(\d{1,2}\s)/gm, '$1');
+    
+    // Also handle case where line number is followed directly by text (no space)
+    processedText = processedText.replace(/^\s+(\d{1,2})(\S)/gm, '$1$2');
   }
   
   return processedText;

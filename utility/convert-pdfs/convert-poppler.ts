@@ -92,11 +92,11 @@ const postProcessText = (text: string, options: PostProcessingOptions): string =
         // Check if this is actually a line number (has space or end after it)
         if (rest === '' || rest.startsWith(' ') || rest.startsWith('\t')) {
           if (lineNum.length === 1) {
-            // Single digit - add one extra space for alignment
-            return lineNum + ' ' + rest;
+            // Single digit - add one extra space for alignment, plus two for indentation
+            return lineNum + '   ' + rest;
           } else {
-            // Two digits - just remove leading spaces
-            return lineNum + rest;
+            // Two digits - just add two spaces for indentation
+            return lineNum + '  ' + rest;
           }
         }
       }

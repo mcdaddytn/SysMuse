@@ -11,6 +11,7 @@ interface PostProcessingOptions {
 interface Config {
   inputDir: string;
   outputDir: string;
+  processSubDirs?: boolean;  // Process subdirectories (defaults to false)
   popplerPath?: string;  // Optional path to pdftotext executable
   pdfTextExtractOptions?: any;
   postProcessingOptions?: PostProcessingOptions;
@@ -159,15 +160,12 @@ const convertWithPoppler = async (
 
 const run = async (configPath: string) => {
   const config = readConfig(configPath);
-  const pdfs = listPDFs(config.inputDir);
+  const processSubDirs = config.processSubDirs || false;
   
-  // Ensure output directory exists
-  ensureDir(config.outputDir);
-
   console.log(`\n--- PDF to Text Conversion using Poppler ---`);
   console.log(`Input directory: ${config.inputDir}`);
   console.log(`Output directory: ${config.outputDir}`);
-  console.log(`Number of PDFs found: ${pdfs.length}`);
+  console.log(`Process subdirectories: ${processSubDirs}`);
   
   if (config.popplerPath) {
     console.log(`Using pdftotext from: ${config.popplerPath}`);
@@ -183,23 +181,75 @@ const run = async (configPath: string) => {
     console.log(`Post-processing: ${JSON.stringify(config.postProcessingOptions)}`);
   }
   
-  console.log(`\nProcessing files...`);
-  
-  for (const file of pdfs) {
-    const inputFile = path.join(config.inputDir, file);
-    const outputFile = path.join(config.outputDir, file.replace(/\.pdf$/i, '.txt'));
+  if (processSubDirs) {
+    // Process subdirectories
+    const subDirs = fs.readdirSync(config.inputDir)
+      .filter((f: string) => fs.statSync(path.join(config.inputDir, f)).isDirectory());
+    
+    console.log(`\nFound ${subDirs.length} subdirectories to process`);
+    
+    for (const subDir of subDirs) {
+      const inputSubDir = path.join(config.inputDir, subDir);
+      const outputSubDir = path.join(config.outputDir, subDir);
+      
+      // Get PDFs in this subdirectory
+      const pdfs = listPDFs(inputSubDir);
+      
+      if (pdfs.length === 0) {
+        console.log(`\nSkipping "${subDir}" (no PDFs found)`);
+        continue;
+      }
+      
+      console.log(`\nProcessing "${subDir}" (${pdfs.length} PDFs)...`);
+      
+      // Ensure output subdirectory exists
+      ensureDir(outputSubDir);
+      
+      for (const file of pdfs) {
+        const inputFile = path.join(inputSubDir, file);
+        const outputFile = path.join(outputSubDir, file.replace(/\.pdf$/i, '.txt'));
 
-    try {
-      const text = await convertWithPoppler(
-        inputFile,
-        config.popplerPath,
-        config.pdfTextExtractOptions,
-        config.postProcessingOptions
-      );
-      fs.writeFileSync(outputFile, text, 'utf-8');
-      console.log(`✔ ${file}`);
-    } catch (err) {
-      console.error(`✗ ${file} (Error: ${err})`);
+        try {
+          const text = await convertWithPoppler(
+            inputFile,
+            config.popplerPath,
+            config.pdfTextExtractOptions,
+            config.postProcessingOptions
+          );
+          fs.writeFileSync(outputFile, text, 'utf-8');
+          console.log(`  ✔ ${file}`);
+        } catch (err) {
+          console.error(`  ✗ ${file} (Error: ${err})`);
+        }
+      }
+    }
+  } else {
+    // Process single directory (original behavior)
+    const pdfs = listPDFs(config.inputDir);
+    
+    console.log(`\nNumber of PDFs found: ${pdfs.length}`);
+    
+    // Ensure output directory exists
+    ensureDir(config.outputDir);
+    
+    console.log(`\nProcessing files...`);
+    
+    for (const file of pdfs) {
+      const inputFile = path.join(config.inputDir, file);
+      const outputFile = path.join(config.outputDir, file.replace(/\.pdf$/i, '.txt'));
+
+      try {
+        const text = await convertWithPoppler(
+          inputFile,
+          config.popplerPath,
+          config.pdfTextExtractOptions,
+          config.postProcessingOptions
+        );
+        fs.writeFileSync(outputFile, text, 'utf-8');
+        console.log(`✔ ${file}`);
+      } catch (err) {
+        console.error(`✗ ${file} (Error: ${err})`);
+      }
     }
   }
   

@@ -1,15 +1,18 @@
 {
-  "inputDir": "C:\\docs\\rj\\transcripts\\pdf\\02 Contentguard",
-  "outputDir": "C:\\docs\\rj\\transcripts\\txt\\Contentguard7",
+  "processSubDirs": true,
+  "inputDir": "C:\\docs\\rj\\transcripts\\pdf",
+  "outputDir": "C:\\docs\\rj\\transcripts\\txt",
   "pdfTextExtractOptions": {
     "layout": true,
     "r": 300,
     "nopgbrk": true,
-    "enc": "UTF-8"
+    "enc": "UTF-8",
+    "eol": "unix",
+    "fixed": 0
   },
-  "postProcessingOptions": {
-    "fixTranscriptSpacing": true,
-    "fixTranscriptQuotes": true,
-    "normalizeWhitespace": true
+ "postProcessingOptions": {
+    "fixTranscriptSpacing": false,
+    "fixTranscriptQuotes": false,
+    "normalizeWhitespace": false
   }
 }

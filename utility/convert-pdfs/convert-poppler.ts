@@ -86,15 +86,18 @@ const postProcessText = (text: string, options: PostProcessingOptions): string =
     const lines = processedText.split('\n');
     processedText = lines.map(line => {
       // Check if line starts with optional spaces followed by 1-2 digits
-      const match = line.match(/^(\s*)(\d{1,2})(\s.*|$)/);
+      const match = line.match(/^(\s*)(\d{1,2})(.*)$/);
       if (match) {
         const [, spaces, lineNum, rest] = match;
-        if (lineNum.length === 1) {
-          // Single digit - add extra space for alignment
-          return lineNum + '  ' + rest.trimStart();
-        } else {
-          // Two digits - just remove leading spaces
-          return lineNum + rest;
+        // Check if this is actually a line number (has space or end after it)
+        if (rest === '' || rest.startsWith(' ') || rest.startsWith('\t')) {
+          if (lineNum.length === 1) {
+            // Single digit - add one extra space for alignment
+            return lineNum + ' ' + rest;
+          } else {
+            // Two digits - just remove leading spaces
+            return lineNum + rest;
+          }
         }
       }
       // Return unchanged if no line number found (including blank lines)

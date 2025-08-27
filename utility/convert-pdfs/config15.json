@@ -14,6 +14,7 @@
     "fixTranscriptSpacing": false,
     "fixTranscriptQuotes": false,
     "normalizeLineNumberWhitespace": true,
-    "normalizeWhitespace": false
+    "normalizeWhitespace": false,
+    "removeBlankLines": false
   }
 }

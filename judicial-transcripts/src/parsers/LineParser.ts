@@ -42,6 +42,7 @@ export class LineParser {
     
     let timestamp: string | undefined;
     let lineNumber = 0;
+    let linePrefix: string | undefined;
     let content = '';
     
     // Detect line format based on fixed positions
@@ -60,6 +61,7 @@ export class LineParser {
           timestamp = first8.trim();
         }
         lineNumber = possibleLineNum;
+        linePrefix = line.substring(0, 13);  // Capture the whole prefix
         content = line.substring(13).trim();
       }
       // Otherwise check if it's a 7-character SUMMARY format
@@ -68,6 +70,7 @@ export class LineParser {
         const summaryLineNum = parseInt(firstSeven);
         if (summaryLineNum > 0 && line.length > 7) {
           lineNumber = summaryLineNum;
+          linePrefix = line.substring(0, 7);  // Capture the prefix
           content = line.substring(7).trim();
         } else {
           // Not a formatted line
@@ -82,6 +85,7 @@ export class LineParser {
       
       if (possibleLineNum > 0 && line.length > 7) {
         lineNumber = possibleLineNum;
+        linePrefix = line.substring(0, 7);  // Capture the prefix
         content = line.substring(7).trim();
       } else {
         content = line.trim();
@@ -107,6 +111,7 @@ export class LineParser {
       return {
         lineNumber,
         timestamp,
+        linePrefix,
         text: '',
         speakerPrefix: undefined,
         isBlank: true
@@ -119,6 +124,7 @@ export class LineParser {
     return {
       lineNumber,
       timestamp,
+      linePrefix,
       text: speakerResult.text !== undefined ? speakerResult.text : content,
       speakerPrefix: speakerResult.speakerPrefix,
       isBlank: false

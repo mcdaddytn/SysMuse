@@ -412,13 +412,25 @@ export class TranscriptParser {
             sessionLineNumber++;
             trialLineNumber++;
             
+            // Calculate dateTime if we have timestamp and session date
+            let dateTime: Date | null = null;
+            if (parsedLine.timestamp && session?.sessionDate) {
+              // Combine session date with timestamp
+              const sessionDate = new Date(session.sessionDate);
+              const [hours, minutes, seconds] = parsedLine.timestamp.split(':').map(n => parseInt(n));
+              dateTime = new Date(sessionDate);
+              dateTime.setHours(hours, minutes, seconds, 0);
+            }
+            
             // Add to batch instead of immediate insert
             this.lineBatch.push({
               pageId: currentPage.id,
               lineNumber: parsedLine.lineNumber || sessionLineNumber,
               trialLineNumber,
               sessionLineNumber,
+              linePrefix: parsedLine.linePrefix || null,
               timestamp: parsedLine.timestamp || null,
+              dateTime: dateTime,
               text: parsedLine.text || null,
               speakerPrefix: parsedLine.speakerPrefix || null,
               documentSection: currentSection as any,  // Add current section
@@ -1238,6 +1250,7 @@ export class TranscriptParser {
         sessionId,
         pageNumber,
         trialPageNumber: pageInfo?.trialPageNumber,
+        parsedTrialLine: pageInfo?.parsedTrialLine,
         pageId: pageInfo?.pageId,
         headerText: pageInfo?.headerText
       }
@@ -1260,24 +1273,49 @@ export class TranscriptParser {
    */
   private getPageHeaderLineCount(lines: string[], index: number): number {
     let headerLines = 0;
+    let foundCaseLine = false;
+    let foundTrialLine = false;
     
     // Check next few lines for header pattern
     for (let i = index; i < Math.min(index + 10, lines.length); i++) {
       const line = lines[i].trim();
       
-      // Page headers usually contain:
-      // - Case number line
-      // - PageID line
-      // - Page number line
-      // - Blank lines
-      // - Sometimes date/time info
+      // First line: Case header
+      if (i === index && line.includes('Case') && line.includes('Document')) {
+        foundCaseLine = true;
+        headerLines = 1;
+        continue;
+      }
       
-      if (line.includes('Case') || 
+      // Second line: parsedTrialLine (single number)
+      if (i === index + 1 && foundCaseLine) {
+        const lineNum = parseInt(line);
+        if (lineNum > 0 && line === lineNum.toString()) {
+          foundTrialLine = true;
+          headerLines = 2;
+          continue;
+        }
+      }
+      
+      // Additional blank lines after header
+      if (foundTrialLine && line === '') {
+        headerLines++;
+      } else if (foundTrialLine && line.match(/^\d{2}:\d{2}:\d{2}/)) {
+        // Stop at first content line with timestamp
+        break;
+      } else if (foundTrialLine) {
+        // Stop at first non-blank line after 2-line header
+        break;
+      }
+      
+      // Legacy: handle other header patterns if not 2-line format
+      if (!foundCaseLine && (
+          line.includes('Case') || 
           line.includes('PageID') || 
           line.match(/^\d+$/) ||
           line.includes('Document') ||
           line === '' ||
-          line.includes('Page ')) {
+          line.includes('Page '))) {
         headerLines++;
       } else if (line.match(/^\d{2}:\d{2}:\d{2}/)) {
         // Found first content line with timestamp
@@ -1288,7 +1326,7 @@ export class TranscriptParser {
       }
     }
     
-    return Math.max(headerLines, 3); // Skip at least 3 lines for safety
+    return Math.max(headerLines, 2); // Skip at least 2 lines for Vocalife format
   }
 
   /**
@@ -1299,34 +1337,47 @@ export class TranscriptParser {
     
     // Look for PageID and page number in header
     // Pattern: "Case 2:19-cv-00123-JRG Document 328 Filed 10/09/20 Page X of 125 PageID #: 18337"
+    // For Vocalife: 2-line header with parsedTrialLine on second line
+    let headerLines: string[] = [];
+    
     for (let i = index; i < Math.min(index + 5, lines.length); i++) {
       const line = lines[i];
       
       // Store the header text (first line of the page)
       if (i === index && line.includes('Case')) {
+        headerLines.push(line);
         pageInfo.headerText = line;
-      }
-      
-      // Extract both page number and PageID from the same line if possible
-      const fullHeaderMatch = line.match(/Page\s+(\d+)\s+of\s+\d+\s+PageID\s*#:\s*(\d+)/);
-      if (fullHeaderMatch) {
-        pageInfo.trialPageNumber = parseInt(fullHeaderMatch[1]);
-        pageInfo.pageId = fullHeaderMatch[2];
-        if (!pageInfo.headerText) {
-          pageInfo.headerText = line;
+        
+        // Extract both page number and PageID from the same line if possible
+        const fullHeaderMatch = line.match(/Page\s+(\d+)\s+of\s+\d+\s+PageID\s*#:\s*(\d+)/);
+        if (fullHeaderMatch) {
+          pageInfo.trialPageNumber = parseInt(fullHeaderMatch[1]);
+          pageInfo.pageId = fullHeaderMatch[2];
+        } else {
+          // Fallback to individual patterns
+          const pageIdMatch = line.match(/PageID\s*#:\s*(\d+)/);
+          if (pageIdMatch) {
+            pageInfo.pageId = pageIdMatch[1];
+          }
+          
+          const pageNumMatch = line.match(/Page\s+(\d+)\s+of/);
+          if (pageNumMatch) {
+            pageInfo.trialPageNumber = parseInt(pageNumMatch[1]);
+          }
         }
-        break;
       }
       
-      // Fallback to individual patterns
-      const pageIdMatch = line.match(/PageID\s*#:\s*(\d+)/);
-      if (pageIdMatch) {
-        pageInfo.pageId = pageIdMatch[1];
-      }
-      
-      const pageNumMatch = line.match(/Page\s+(\d+)\s+of/);
-      if (pageNumMatch) {
-        pageInfo.trialPageNumber = parseInt(pageNumMatch[1]);
+      // Check if next line is the parsedTrialLine (single number on its own line)
+      if (i === index + 1 && headerLines.length > 0) {
+        const trimmedLine = line.trim();
+        const lineNum = parseInt(trimmedLine);
+        if (lineNum > 0 && trimmedLine === lineNum.toString()) {
+          // This is the parsedTrialLine
+          pageInfo.parsedTrialLine = lineNum;
+          headerLines.push(line);
+          pageInfo.headerText = headerLines.join('\n');
+          break;
+        }
       }
     }
     

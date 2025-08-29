@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { LineParser } from './LineParser';
 import logger from '../utils/logger';
 
 interface SectionMetadata {
@@ -14,9 +15,11 @@ interface SessionSection {
 
 export class SessionSectionParser {
   private prisma: PrismaClient;
+  private lineParser: LineParser;
   
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    this.lineParser = new LineParser();
   }
   
   /**
@@ -30,12 +33,15 @@ export class SessionSectionParser {
     const sections = this.identifySections(lines);
     
     for (const section of sections) {
+      // Clean the section text by removing line prefixes and page headers
+      const cleanedText = this.cleanSectionText(section.sectionText);
+      
       await this.prisma.sessionSection.create({
         data: {
           sessionId,
           trialId,
           sectionType: section.sectionType,
-          sectionText: section.sectionText,
+          sectionText: cleanedText,
           orderIndex: section.orderIndex,
           metadata: section.metadata || undefined
         }
@@ -55,14 +61,15 @@ export class SessionSectionParser {
     trialId: number
   ): Promise<void> {
     const certificationText = this.extractCertificationText(lines, startIndex);
-    const metadata = this.extractCertificationMetadata(certificationText);
+    const cleanedText = this.cleanSectionText(certificationText);
+    const metadata = this.extractCertificationMetadata(cleanedText);
     
     await this.prisma.sessionSection.create({
       data: {
         sessionId,
         trialId,
         sectionType: 'CERTIFICATION',
-        sectionText: certificationText,
+        sectionText: cleanedText,
         orderIndex: 999, // Always last
         metadata
       }
@@ -626,5 +633,31 @@ export class SessionSectionParser {
     }
     
     return metadata;
+  }
+  
+  /**
+   * Clean section text by removing line prefixes and page headers
+   */
+  private cleanSectionText(text: string): string {
+    const lines = text.split('\n');
+    const cleanedLines: string[] = [];
+    
+    for (const line of lines) {
+      // Skip page headers
+      if (line.includes('Case ') && line.includes(' Document ') && line.includes(' PageID')) {
+        continue;
+      }
+      
+      // Parse the line to remove prefix
+      const parsed = this.lineParser.parse(line);
+      if (parsed && parsed.text) {
+        cleanedLines.push(parsed.text);
+      } else if (!parsed?.isBlank) {
+        // Keep the line if it's not parsed as blank
+        cleanedLines.push(line.trim());
+      }
+    }
+    
+    return cleanedLines.join('\n');
   }
 }

@@ -109,6 +109,7 @@ model Page {
   sessionId       Int
   pageNumber      Int
   trialPageNumber Int?
+  parsedTrialLine Int?            // Trial line number from last line of page header
   pageId          String?
   headerText      String?         // Now stores multi-line headers
   createdAt       DateTime        @default(now())
@@ -125,7 +126,6 @@ model Line {
   lineNumber        Int
   trialLineNumber   Int?            // Calculated line number within trial
   sessionLineNumber Int?            // Calculated line number within session
-  parsedTrialLine   Int?            // Line number parsed from page header
   linePrefix        String?         // Whatever was parsed as prefix (timestamp, line number, etc)
   documentSection   DocumentSection @default(UNKNOWN)  // Moved from Page
   timestamp         String?

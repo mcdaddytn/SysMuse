@@ -39,6 +39,7 @@ export interface SessionInfo {
 export interface ParsedLine {
   lineNumber: number;
   timestamp?: string;
+  linePrefix?: string;  // The raw prefix that was parsed out
   text?: string;
   speakerPrefix?: string;
   isBlank: boolean;

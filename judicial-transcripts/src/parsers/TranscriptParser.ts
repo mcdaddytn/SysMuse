@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { LineParser } from './LineParser';
 import { Phase2Processor } from './Phase2Processor';
+import { SessionSectionParser } from './SessionSectionParser';
 import { AttorneyService } from '../services/AttorneyService';
 import { AddressService } from '../services/AddressService';
 import { 
@@ -20,6 +21,7 @@ export class TranscriptParser {
   private config: TranscriptConfig;
   private lineParser: LineParser;
   private phase2Processor: Phase2Processor;
+  private sessionSectionParser: SessionSectionParser;
   private attorneyService: AttorneyService;
   private addressService: AddressService;
   private trialId?: number;
@@ -44,6 +46,7 @@ export class TranscriptParser {
     this.prisma = new PrismaClient();
     this.lineParser = new LineParser();
     this.phase2Processor = new Phase2Processor(config);
+    this.sessionSectionParser = new SessionSectionParser(this.prisma);
     this.attorneyService = new AttorneyService(this.prisma);
     this.addressService = new AddressService(this.prisma);
   }
@@ -192,6 +195,7 @@ export class TranscriptParser {
     let trialLineNumber = 0;
     let session: any = null;
     let summaryProcessed = false;
+    let summaryLines: string[] = [];
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -202,13 +206,60 @@ export class TranscriptParser {
         continue;
       }
       
-      // Parse the line first to extract text content
+      // Parse the line first to extract text content (removes line prefix)
       let parsedLine = this.lineParser.parse(line);
       
+      // Use the parsed text content for all comparisons (line prefix has been removed)
+      const textContent = parsedLine?.text?.trim() || '';
+      
+      // Check for CERTIFICATION section - this will occur while in PROCEEDINGS section
+      if (textContent === 'CERTIFICATION') {
+        currentSection = 'CERTIFICATION';
+        logger.info(`Detected CERTIFICATION section at line ${i}`);
+        // Don't create pages for CERTIFICATION section
+        currentPage = null;
+        
+        // Parse and store certification section
+        if (session && this.trialId) {
+          await this.sessionSectionParser.parseCertificationSection(
+            lines,
+            i,
+            session.id,
+            this.trialId
+          );
+        }
+        continue;
+      }
+      
       // Check for exact "P R O C E E D I N G S" in the parsed text
-      if (currentSection !== 'PROCEEDINGS' && parsedLine && parsedLine.text) {
-        const textContent = parsedLine.text.trim();
-        if (textContent === 'P R O C E E D I N G S') {
+      if (currentSection !== 'PROCEEDINGS' && textContent === 'P R O C E E D I N G S') {
+          // Process summary if not already done
+          if (!summaryProcessed) {
+            currentSection = 'SUMMARY';
+            summaryInfo = await this.parseSummarySection(lines, 0);
+            
+            if (summaryInfo) {
+              await this.createOrUpdateTrial(summaryInfo);
+            }
+            
+            sessionInfo = this.extractSessionInfo(lines, fileName);
+            summaryProcessed = true;
+            logger.info('Summary section processed (early PROCEEDINGS detection)');
+            
+            // Create session
+            if (!session && this.trialId) {
+              session = await this.createSession(sessionInfo, fileName);
+              logger.info(`Created session: ${session.id} for file: ${fileName}`);
+              
+              // Parse and store summary sections (use lines up to current position)
+              await this.sessionSectionParser.parseSummarySections(
+                lines.slice(0, i), 
+                session.id, 
+                this.trialId
+              );
+            }
+          }
+          
           currentSection = 'PROCEEDINGS';
           logger.info(`Detected PROCEEDINGS section at line ${i} with text: "${textContent}"`);
           
@@ -236,22 +287,12 @@ export class TranscriptParser {
             logger.info(`Created first PROCEEDINGS page: ${currentPage.id} (trial page ${pageInfo.trialPageNumber}, pageId ${pageInfo.pageId})`);
           }
         }
-      }
-      
-      // Check for CERTIFICATION section
-      if (trimmedLine.includes('REPORTER\'S CERTIFICATE') || 
-          trimmedLine === 'CERTIFICATION') {
-        currentSection = 'CERTIFICATION';
-        logger.info(`Detected CERTIFICATION section at line ${i}`);
-        // Don't create pages for CERTIFICATION section
-        currentPage = null;
-        continue;
-      }
       
       // Process summary section (first part of document)
       if (currentSection === 'UNKNOWN' && !summaryProcessed) {
         // Collect lines for summary parsing (first ~100 lines)
         if (i < 100) {
+          summaryLines.push(line);
           continue; // Collect more lines
         } else {
           // Parse summary once we have enough lines
@@ -270,6 +311,13 @@ export class TranscriptParser {
           if (!session && this.trialId) {
             session = await this.createSession(sessionInfo, fileName);
             logger.info(`Created session: ${session.id} for file: ${fileName}`);
+            
+            // Parse and store summary sections
+            await this.sessionSectionParser.parseSummarySections(
+              summaryLines, 
+              session.id, 
+              this.trialId
+            );
           }
           
           // Reset index to process from where we detected proceedings
@@ -294,13 +342,16 @@ export class TranscriptParser {
           // Check if next page is CERTIFICATION
           let isNextPageCertification = false;
           for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
-            const checkLine = lines[j].trim();
-            if (checkLine.includes('CERTIFICATION') || checkLine.includes('REPORTER\'S CERTIFICATE')) {
+            // Parse the line to get text without line prefix
+            const checkParsed = this.lineParser.parse(lines[j]);
+            const checkText = checkParsed?.text?.trim() || '';
+            
+            if (checkText === 'CERTIFICATION') {
               isNextPageCertification = true;
               break;
             }
-            // If we hit proceedings content, it's not certification
-            if (checkLine.match(/^\d{2}:\d{2}:\d{2}/)) {
+            // If we hit proceedings content (timestamp), it's not certification
+            if (checkParsed?.timestamp) {
               break;
             }
           }

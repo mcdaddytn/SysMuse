@@ -1,5 +1,5 @@
 // src/utils/logger.ts
-import winston from 'winston';
+import * as winston from 'winston';
 
 const logLevel = process.env.LOG_LEVEL || 'info';
 
@@ -25,8 +25,8 @@ const logger = winston.createLogger({
 });
 
 // Only add file logging if logs directory exists
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const logsDir = path.join(process.cwd(), 'logs');
 try {
@@ -49,6 +49,7 @@ try {
 }
 
 export default logger;
+export { logger };
 
 // Wrapper class for consistent logging interface
 export class Logger {
@@ -77,4 +78,13 @@ export class Logger {
   debug(message: string): void {
     logger.debug(`[${this.context}] ${message}`);
   }
+
+  setLevel(level: string): void {
+    logger.level = level;
+  }
 }
+
+// Add setLevel function to the logger object for compatibility
+(logger as any).setLevel = (level: string) => {
+  logger.level = level;
+};

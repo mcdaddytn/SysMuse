@@ -370,6 +370,7 @@ export class TranscriptParser {
               timestamp: parsedLine.timestamp || null,
               text: parsedLine.text || null,
               speakerPrefix: parsedLine.speakerPrefix || null,
+              documentSection: currentSection as any,  // Add current section
               isBlank: false  // Always false since we're skipping blanks
             });
             
@@ -1185,7 +1186,6 @@ export class TranscriptParser {
       data: {
         sessionId,
         pageNumber,
-        documentSection: section as any,
         trialPageNumber: pageInfo?.trialPageNumber,
         pageId: pageInfo?.pageId,
         headerText: pageInfo?.headerText

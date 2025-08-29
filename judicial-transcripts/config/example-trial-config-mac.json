@@ -1,7 +1,10 @@
 {
-  "inputDir": "/Users/gmcaveney/Documents/dev/test/pdf-text-extract",
-  "outputDir": "./output",
+  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/42 Vocalife Amazon",
+  "outputDir": "./output/transcripts/42 Vocalife Amazon",
   "logLevel": "info",
   "batchSize": 100,
-  "enableElasticSearch": true
+  "enableElasticSearch": true,
+  "processSubDirs": false,
+  "pdfToTextConfig": "./config/pdftotext.json",
+  "trialStyleConfig": "./config/trialstyle.json"
 }

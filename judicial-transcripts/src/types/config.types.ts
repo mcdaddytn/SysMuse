@@ -16,6 +16,9 @@ export interface TranscriptConfig {
   enableElasticSearch: boolean;
   elasticSearchUrl?: string;
   runPhase2?: boolean;
+  processSubDirs?: boolean;
+  pdfToTextConfig?: string;  // Path to pdftotext.json
+  trialStyleConfig?: string; // Path to trialstyle.json
   trial?: {
     name?: string;
     caseNumber?: string;
@@ -217,6 +220,28 @@ export interface Phase2Context {
 
 // Document Section Types
 export type DocumentSection = 'SUMMARY' | 'PROCEEDINGS' | 'CERTIFICATION' | 'UNKNOWN';
+
+// Trial Style Configuration
+export type FileConvention = 'AUTO' | 'DATEAMPM' | 'DATEMORNAFT' | 'DOCID';
+export type FileSortingMode = 'AUTO' | 'dateAndSession' | 'documentNumber' | 'custom';
+export type StatementAppendMode = 'space' | 'newline' | 'windowsNewline' | 'unixNewline';
+export type SummaryCenterDelimiter = 'AUTO' | ')(' | '()' | '*' | '(' | ')';
+
+export interface TrialStyleConfig {
+  fileConvention: FileConvention;
+  fileSortingMode: FileSortingMode;
+  pageHeaderLines: number;
+  statementAppendMode: StatementAppendMode;
+  summaryCenterDelimiter: SummaryCenterDelimiter;
+  orderedFiles?: string[];
+  unidentifiedFiles?: string[];
+  metadata?: {
+    caseNumber?: string;
+    plaintiff?: string;
+    defendant?: string;
+    [key: string]: any;
+  };
+}
 
 // Database management types
 export interface DatabaseBackupInfo {

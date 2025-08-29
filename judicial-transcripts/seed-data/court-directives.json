@@ -17,20 +17,48 @@
       "aliases": ["Jury out", "Jury exits"]
     },
     {
-      "name": "Videoclip played.",
+      "name": "Video playing.",
       "description": "Video evidence playback starts",
       "isPaired": true,
       "pairMateId": "video_end",
       "isStart": true,
-      "aliases": ["Videoclip played", "Videoclip starts", "Video begins"]
+      "aliases": [
+        "Video playing",
+        "Video clip playing",
+        "Video clip resumed playing",
+        "Videoclip played",
+        "Video played",
+        "Video clip played",
+        "Video clip plays",
+        "Videoclip starts",
+        "Video begins"
+      ]
     },
     {
-      "name": "Videoclip ends.",
+      "name": "Video stopped.",
       "description": "Video evidence playback ends",
       "isPaired": true,
       "pairMateId": "video_start",
       "isStart": false,
-      "aliases": ["Videoclip ends", "Videoclip stops", "Video ends"]
+      "aliases": [
+        "Videoclip stopped",
+        "Videoclip ends",
+        "Video clip paused",
+        "Video stopped",
+        "Videoclip interrupted",
+        "Video ends",
+        "Videoclip stops"
+      ]
+    },
+    {
+      "name": "Video continued.",
+      "description": "Video evidence playback continues after pause",
+      "isPaired": false,
+      "aliases": [
+        "Videoclip continued",
+        "Video resumed",
+        "Video continues"
+      ]
     },
     {
       "name": "Courtroom sealed.",

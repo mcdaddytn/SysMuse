@@ -1,0 +1,17 @@
+{
+  "pdfTextExtractOptions": {
+    "layout": true,
+    "r": 300,
+    "nopgbrk": true,
+    "enc": "UTF-8",
+    "eol": "unix",
+    "fixed": 0
+  },
+  "postProcessingOptions": {
+    "fixTranscriptSpacing": false,
+    "fixTranscriptQuotes": false,
+    "normalizeLineNumberWhitespace": true,
+    "normalizeWhitespace": false,
+    "removeBlankLines": false
+  }
+}

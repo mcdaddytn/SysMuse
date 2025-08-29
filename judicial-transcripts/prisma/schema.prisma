@@ -8,25 +8,31 @@ datasource db {
 }
 
 model Trial {
-  id                Int                @id @default(autoincrement())
-  name              String
-  caseNumber        String             @unique
-  court             String
-  courtDivision     String?
-  courtDistrict     String?
-  totalPages        Int?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  anonymousSpeakers AnonymousSpeaker[]
-  courtReporter     CourtReporter?
-  judge             Judge?
-  jurors            Juror[]
-  markers           Marker[]
-  markerSections    MarkerSection[]
-  sessions          Session[]
-  attorneys         TrialAttorney[]
-  trialEvents       TrialEvent[]
-  witnesses         Witness[]
+  id                   Int                @id @default(autoincrement())
+  name                 String
+  caseNumber           String             @unique
+  caseHandle           String?            // For file output - remove ":" and invalid chars
+  plaintiff            String?            // Plaintiff name parsed from summary
+  defendant            String?            // Defendant name parsed from summary
+  alternateCaseNumber  String?            // Sometimes there is more than one case
+  alternateDefendant   String?            // Sometimes different defendant specification
+  court                String
+  courtDivision        String?
+  courtDistrict        String?
+  totalPages           Int?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  anonymousSpeakers    AnonymousSpeaker[]
+  courtReporter        CourtReporter?
+  judge                Judge?
+  jurors               Juror[]
+  markers              Marker[]
+  markerSections       MarkerSection[]
+  sessions             Session[]
+  sessionSections      SessionSection[]
+  attorneys            TrialAttorney[]
+  trialEvents          TrialEvent[]
+  witnesses            Witness[]
 
   @@index([caseNumber])
 }
@@ -61,58 +67,80 @@ model CourtReporter {
 }
 
 model Session {
-  id                  Int          @id @default(autoincrement())
+  id                  Int              @id @default(autoincrement())
   trialId             Int
   sessionDate         DateTime
   sessionType         SessionType
+  startTime           String?          // Start time parsed from summary
   documentNumber      Int?
   fileName            String?
+  metadata            Json?            // File name components extracted based on pattern
   totalPages          Int?
   transcriptStartPage Int?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
   pages               Page[]
-  trial               Trial        @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  sessionSections     SessionSection[]
+  trial               Trial            @relation(fields: [trialId], references: [id], onDelete: Cascade)
   trialEvents         TrialEvent[]
 
   @@unique([trialId, sessionDate, sessionType])
   @@index([trialId, sessionDate])
 }
 
+model SessionSection {
+  id            Int      @id @default(autoincrement())
+  sessionId     Int
+  trialId       Int
+  sectionType   String   // e.g., "Court and Division", "Litigants and Docket", etc.
+  sectionText   String   @db.Text
+  orderIndex    Int      // Order of section within session summary
+  metadata      Json?    // Additional parsed data specific to section type
+  createdAt     DateTime @default(now())
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trial         Trial    @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, orderIndex])
+  @@index([trialId])
+}
+
 model Page {
   id              Int             @id @default(autoincrement())
   sessionId       Int
   pageNumber      Int
-  documentSection DocumentSection @default(UNKNOWN)
   trialPageNumber Int?
   pageId          String?
-  headerText      String?
+  headerText      String?         // Now stores multi-line headers
   createdAt       DateTime        @default(now())
   lines           Line[]
   session         Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, pageNumber])
   @@index([sessionId, pageNumber])
-  @@index([documentSection])
 }
 
 model Line {
-  id                Int      @id @default(autoincrement())
+  id                Int             @id @default(autoincrement())
   pageId            Int
   lineNumber        Int
-  trialLineNumber   Int?
-  sessionLineNumber Int?
+  trialLineNumber   Int?            // Calculated line number within trial
+  sessionLineNumber Int?            // Calculated line number within session
+  parsedTrialLine   Int?            // Line number parsed from page header
+  linePrefix        String?         // Whatever was parsed as prefix (timestamp, line number, etc)
+  documentSection   DocumentSection @default(UNKNOWN)  // Moved from Page
   timestamp         String?
+  dateTime          DateTime?       // Constructed from timestamp + session date when available
   text              String?
   speakerPrefix     String?
-  isBlank           Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  page              Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  isBlank           Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  page              Page            @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@unique([pageId, lineNumber])
   @@index([pageId, lineNumber])
   @@index([trialLineNumber])
   @@index([sessionLineNumber])
+  @@index([documentSection])
 }
 
 model Attorney {
@@ -270,6 +298,8 @@ model TrialEvent {
   sessionId             Int?
   startTime             String?
   endTime               String?
+  startDateTime         DateTime?            // When Line.dateTime is available
+  endDateTime           DateTime?            // When Line.dateTime is available
   duration              Int?
   startLineNumber       Int?
   endLineNumber         Int?
@@ -424,6 +454,8 @@ model SearchIndex {
 enum SessionType {
   MORNING
   AFTERNOON
+  ALLDAY
+  EVENING
   SPECIAL
   BENCH_TRIAL
   JURY_VERDICT

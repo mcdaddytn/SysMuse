@@ -316,12 +316,12 @@ export class Phase2Processor {
     // Get all lines for this session in order
     const pages = await this.prisma.page.findMany({
       where: { 
-        sessionId: session.id,
-        documentSection: 'PROCEEDINGS'
+        sessionId: session.id
       },
       orderBy: { pageNumber: 'asc' },
       include: {
         lines: {
+          where: { documentSection: 'PROCEEDINGS' },
           orderBy: { lineNumber: 'asc' }
         }
       }

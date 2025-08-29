@@ -1,0 +1,149 @@
+<Section - Court and Division>
+        IN THE UNITED STATES DISTRICT COURT
+                FOR THE EASTERN DISTRICT OF TEXAS
+                     MARSHALL DIVISION
+<Section - Court and Division>
+                     
+
+<Section - Litigants and Docket>
+CONTENTGUARD HOLDINGS, INC., )(
+        PLAINTIFF,   )( CIVIL DOCKET NO.
+                     )( 2:13-CV-1112-JRG
+VS.                  )( MARSHALL, TEXAS
+                     )(
+SAMSUNG ELECTRONICS CO. LTD.,)(
+ SAMSUNG ELECTRONICS AMERICA, )(
+ INC.,               )( SEPTEMBER 22, 2015
+        DEFENDANTS.  )( 6:29 p.m.
+ CONTENTGUARD HOLDINGS, INC., )(
+        PLAINTIFF,   )( CIVIL DOCKET NO.
+                     )( 214-CV-61-JRG
+ VS.                 )( MARSHALL, TEXAS
+                     )(
+ GOOGLE, INC.,       )( SEPTEMBER 22, 2015
+        DEFENDANT.   )( 6:29 p.m.
+<Section - Litigants and Docket>                     
+
+
+<Section - Litigants and Docket Left>
+CONTENTGUARD HOLDINGS, INC.,
+        PLAINTIFF,                     
+VS.                                       
+SAMSUNG ELECTRONICS CO. LTD.,
+ SAMSUNG ELECTRONICS AMERICA,
+ INC.,               
+        DEFENDANTS.
+ CONTENTGUARD HOLDINGS, INC.,
+        PLAINTIFF,                        
+ VS.                                      
+ GOOGLE, INC.,       
+        DEFENDANT.   
+<Section - Litigants and Docket Left>
+
+
+
+<Section - Litigants and Docket Right>
+CIVIL DOCKET NO.
+2:13-CV-1112-JRG
+MARSHALL, TEXAS
+SEPTEMBER 22, 2015
+6:29 p.m.
+CIVIL DOCKET NO.
+214-CV-61-JRG
+MARSHALL, TEXAS
+SEPTEMBER 22, 2015
+6:29 p.m.
+<Section - Litigants and Docket Right>
+
+
+
+<Section - Transcript and Judge>
+                TRANSCRIPT OF JURY TRIAL
+        BEFORE THE HONORABLE RODNEY GILSTRAP
+                UNITED STATES DISTRICT COURT
+<Section - Transcript and Judge>
+
+
+<Section - Appearances and Attorneys>
+APPEARANCES:
+FOR CONTENTGUARD HOLDINGS, INC.:
+              Mr. Samuel F. Baxter
+              Ms. Jennifer Truelove
+              MCKOOL SMITH P.C.
+              104 East Houston Street
+              Suite 300
+              Marshall, Texas 75670
+              (903) 923-9099
+              Mr. Robert A. Cote
+              Mr. Radu A. Lelutiu
+              Mr. John C. Briody
+              Mr. David R. Dehoney
+              Mr. Jonathan R. Yim
+                Ms. Dana E. Vallera
+              Ms. Karly Y. Valenzuela
+                MCKOOL SMITH P.C.
+              One Bryant Park
+                47th Floor
+              New York, New York 10036
+                (212) 402-9400
+
+                Mr. Dirk D. Thomas
+              Mr. Robert A. Auchter
+                MCKOOL SMITH P.C.
+              1999 K Street
+                Suite 600
+              Washington, D.C. 20006
+                (202) 370-8300
+                Ms. Holly E. Engelmann
+              Ms. Rosemary T. Snider
+                Mr. Seth R. Hasenour
+              Mr. Eric S. Hansen
+                MCKOOL SMITH P.C.
+              300 Crescent Court
+                Suite 600
+              Dallas, Texas 75201
+                (214) 978-4000
+                Mr. Christopher J. Mierzejewski
+              MCKOOL SMITH P.C.
+                300 West 6th Street
+              Suite 1700
+                Austin, Texas 75201
+              (512) 692-8700
+APPEARANCES (CONTINUED):
+FOR GOOGLE INC.:  Mr. James Mark Mann
+                  MANN TINDEL & THOMPSON
+                  300 W. Main Street
+                  Henderson, Texas 75652
+                  (903) 657-8540
+                  Mr. Robert W. Unikel
+                    KAYE SCHOLER L.L.P.
+                    80 W. Madison Street
+                    Suite 4200
+                    Chicago, Illinois 60602
+                    (312) 583-2300
+                  Mr. Michael J. Malecek
+                    Mr. Peter E. Root
+                  Ms. Marisa Armanino Williams
+                    KAYE SCHOLER L.L.P.
+                  3000 El Camino Real
+                    2 Palo Alto Square
+                  Suite 400
+                    Palo Alto, California 94306
+                  (650) 319-4500
+        FOR SAMSUNG ELECTRONICS CO., LTD., AND SAMSUNG ELECTRONICS
+ AMERICA, INC.:
+                  Mr. Michael J. Barta
+                    BAKER BOTTS L.L.P.
+                  The Warner
+                    1299 Pennsylvania Avenue
+                  Washington, D.C. 20004
+                    (202) 639-7700
+                    Mr. Neil P. Sirota
+                  Mr. Robert L. Maier
+                    Mr. Brian Boerman
+                  Mr. Joshua Sibble
+                    BAKER BOTTS L.L.P.
+                  30 Rockefeller Plaza
+                    New York, New York 10112
+                  (212) 408-2500
+<Section - Appearances and Attorneys>

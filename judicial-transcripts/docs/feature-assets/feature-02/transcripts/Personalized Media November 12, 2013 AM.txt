@@ -1,0 +1,5721 @@
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 1 of 106 PageID #:
+                                  10252
+1   
+
+1                   IN THE UNITED STATES DISTRICT COURT
+                      FOR THE EASTERN DISTRICT OF TEXAS
+2                            MARSHALL DIVISION
+
+3    PERSONALIZED MEDIA                  *    Civil Docket No.
+      COMMUNICATIONS                      *    2:12-CV-68
+4                                        *
+      VS.                                 *    Marshall, Texas
+5                                        *
+                                          *    November 12, 2013
+6    ZYNGA, INC.                         *    9:00 A.M.
+
+7                       TRANSCRIPT OF JURY TRIAL
+                BEFORE THE HONORABLE JUDGE RODNEY GILSTRAP
+8                     UNITED STATES DISTRICT JUDGE
+
+9   
+
+10   APPEARANCES:
+
+11   FOR THE PLAINTIFF:                   MR. BRETT GOVETT
+                                          Fulbright & Jaworski
+12                                        2200 Ross Avenue, Suite 2800
+                                          Dallas, TX   75201
+13  
+                                          MR. ROBERT HARRELL
+14                                        MR. ERIC HALL
+                                          MR. JON RICE
+15                                        MS. ANDREA FAIR
+                                          Fulbright & Jaworski
+16                                        1301 Mckinney, Suite 5100
+                                          Houston, TX   77010
+17  
+                                          MR. T. JOHN WARD
+18                                        MR. WESLEY HILL
+                                          Ward & Smith
+19                                        1127 Judson Road, Suite 220
+                                          Longview, TX    75606
+20  
+        APPEARANCES CONTINUED ON NEXT PAGE:
+21  
+
+22   COURT REPORTERS:       MS. SHELLY HOLMES, CSR
+                            MS. SUSAN SIMMONS, CSR
+23                          Official Court Reporters
+                            100 East Houston, Suite 125
+24                          Marshall, TX   75670
+                            903/935-3868
+25   (Proceedings recorded by mechanical stenography,
+     transcript produced on CAT system.)
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 2 of 106 PageID #:
+                                  10253
+2   
+
+
+1   
+        APPEARANCES CONTINUED:
+2   
+
+3    FOR THE DEFENDANT:            MR. STEVEN ZAGER
+                                    Akin Gump Strauss Hauer & Feld
+4                                  One Bryant Park
+                                    New York, NY    10036
+5   
+                                    MR. TODD LANDIS
+6                                  Akin Gump Strauss Hauer & Feld
+                                    1700 Pacific Ave., Suite 4100
+7                                  Dallas, TX   75201
+
+8                                  MS. MELISSA SMITH
+                                    Gillam and Smith
+9                                  303 South Washington Avenue
+                                    Marshall, TX   75670
+10  
+
+11  
+
+12                      ***************************************
+
+13  
+
+14                               P R O C E E D I N G S
+
+15                        (Jury panel in.)
+
+16                        COURT SECURITY OFFICER:         All rise.
+
+17                        THE COURT:      Thank you.     Be seated,
+
+18   please.
+
+19                        Good morning, Ladies and Gentlemen.             I
+
+20   want to thank each one of you for being here this
+
+21   morning.       My name is Rodney Gilstrap.          I am the resident
+
+22   United States District Judge for the Marshall Division
+
+23   of the Eastern District of Texas.
+
+24                        I have lived in Marshall since 1981.                I
+
+25   practiced law in the Marshall and surrounding area for
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 3 of 106 PageID #:
+                                  10254
+3   
+
+
+1    just over 30 years before I took the bench in 2011.
+
+2                        I was born and went through high school
+
+3    in Florida, came to Texas to go to Baylor University,
+
+4    stayed and went to Baylor Law School.              I am married.       I
+
+5    have two grown children.          My wife owns and operates a
+
+6    retail floral shop here in Marshall.
+
+7                        Now, I tell you all those things because
+
+8    in a few minutes, I'm going to ask you to answer similar
+
+9    questions, and I think it's only fair that I tell you as
+
+10   much about me as I'm about to learn about each of
+
+11   you-all.
+
+12                        We're about to engage in the selection of
+
+13   a jury in a civil case involving allegations of patent
+
+14   infringement.        I know that you've seen the film this
+
+15   morning about patent cases since they do involve certain
+
+16   issues and things that are not common in other civil
+
+17   cases.
+
+18                        In civil cases such as this one, the
+
+19   United States of America is the only country in the
+
+20   world that guarantees the right to a trial by jury in a
+
+21   civil case.       By being here this morning and
+
+22   participating in this jury selection process, each of
+
+23   you, as ordinary citizens, are in a very real sense
+
+24   doing your part to preserve, protect, and defend our
+
+25   Constitution, the rights guaranteed to all of our
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 4 of 106 PageID #:
+                                  10255
+4   
+
+
+1    citizens under it, particularly those rights to a trial
+
+2    by jury in a civil case set forth in the Seventh
+
+3    Amendment, which is a part of our Bill of Rights.
+
+4                        I always tell jurors, and I believe it
+
+5    more each time, that jury service, in my personal view,
+
+6    is the second highest form of public service that any
+
+7    citizen of our country can perform.              Of course, the
+
+8    highest form of public service, in my view, are those
+
+9    young men and women that are active and participate in
+
+10   our United States armed forces and protect our rights by
+
+11   putting their lives on the line.
+
+12                        Now, when the lawyers address you later
+
+13   this morning, they're going to ask you questions, and I
+
+14   want you to understand they are not intentionally
+
+15   seeking to inquire into your private affairs unduly.
+
+16   They're entitled to ask questions for the purpose of
+
+17   securing a fair and impartial jury to hear this case.
+
+18                        I don't know if it will happen today.              It
+
+19   rarely does, but I want you to know that occasionally in
+
+20   the jury selection process, a member of the panel will
+
+21   get a question that they view to be so personal that
+
+22   they're very uncomfortable answering that question in
+
+23   front of the members -- the other members of the jury
+
+24   panel.      I don't think that will happen, but it is
+
+25   possible.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 5 of 106 PageID #:
+                                  10256
+5   
+
+
+1                        If it should happen, then you just need
+
+2    to simply say that you'd like to discuss that with Judge
+
+3    Gilstrap, and I'll make an accommodation so that you can
+
+4    answer that question outside the presence of all other
+
+5    members of the panel.         Again, that rarely happens, but I
+
+6    want you to be aware that option does exist.
+
+7                        The important thing this morning is when
+
+8    you're asked questions by the lawyers is to give full,
+
+9    complete, and truthful answers.            As long as your
+
+10   responses are full, complete, and truthful, there are no
+
+11   wrong answers.
+
+12                        The trial in this case is going to begin
+
+13   later today.        We will use most of the morning to select
+
+14   and seat the jury in this case, and then after a lunch
+
+15   break, we will start with the evidence in this case.                    So
+
+16   the trial will actually begin today, and I anticipate
+
+17   that it will run probably two or three -- through
+
+18   Tuesday of next week.          That's a guess, but that's my
+
+19   best guess about the length of the trial.
+
+20                        So those of you that are selected to
+
+21   serve on this jury will need to be available from today
+
+22   through Tuesday of next week.             And so I need to ask at
+
+23   this time if there are any members of the panel who
+
+24   either have a surgical procedure scheduled for
+
+25   themselves or they have non-refundable travel tickets
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 6 of 106 PageID #:
+                                  10257
+6   
+
+
+1    that can't be turned back in or if there's any other
+
+2    circumstance that would prevent you from being here from
+
+3    today through Tuesday of next week.
+
+4                        If any of you fall in that category,
+
+5    would you raise your hands and let me make a note of
+
+6    that.
+
+7                        I don't see a single hand.          So that's --
+
+8    that's easy.       Thank you.
+
+9                        At this time, I'm going to call for
+
+10   announcements in the case of Personalized Media
+
+11   Communications, LLC versus Zynga, Inc.                This is Civil
+
+12   Action 2:12-CV-68.
+
+13                        Counsel, as you give your announcements
+
+14   this morning, please identify yourselves and each of the
+
+15   members of your trial team.            Also please identify your
+
+16   corporate representatives that you have with you.                   We'll
+
+17   start with the Plaintiff.
+
+18                        What says the Plaintiff?
+
+19                        MR. HILL:     Good morning, Your Honor.
+
+20   Wesley Hill on behalf of Personalized Media
+
+21   Communications.         We are the Plaintiff in this case, and
+
+22   we're happy to be here this morning and appreciate our
+
+23   jury being here to hear our case.
+
+24                        With me at counsel table, Your Honor, is
+
+25   Brett Govett.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 7 of 106 PageID #:
+                                  10258
+7   
+
+
+1                        MR. GOVETT:      Good morning, Your Honor.
+
+2                        MR. HILL:     Mr. Bob Harrell, also
+
+3    co-counsel, Mr. John Ward, my law partner over in
+
+4    Longview.
+
+5                        The corporate representatives I'd like to
+
+6    introduce to the jury are the principals of PMC.                  First
+
+7    off, we have Mr. John Harvey.            Mr. Harvey is the
+
+8    inventor of the patents.          You'll hear that.
+
+9                        His co-inventor of those patents is a
+
+10   gentleman by the name of Mr. Jim Cuddihy sitting there
+
+11   next to him.
+
+12                        Mr. Harvey's wife, Ms. Kazie Metzger,
+
+13   also Kazie Metzger you'll also see her through the
+
+14   trial.      She is also a principal of PMC and here to
+
+15   support Mr. Harvey.
+
+16                        And then the president of PMC, Mr. Gerald
+
+17   Holtzman.       Mr. Holtzman is a principal in the company
+
+18   and also here for our trial.
+
+19                        Thank you, Your Honor.
+
+20                        THE COURT:      Thank you, Mr. Hill.
+
+21                        What says the Defendant?
+
+22                        MS. SMITH:      Good morning, Your Honor.
+
+23   Good morning, Ladies and Gentlemen.
+
+24                        I join Mr. Hill in thanking each of you
+
+25   for your time this morning.            My name is Melissa Smith.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 8 of 106 PageID #:
+                                  10259
+8   
+
+
+1    I'm a Marshall, Texas, lawyer and I'll be working with
+
+2    lead counsel for Zynga, Mr. Steve Zager.
+
+3                        MR. ZAGER:      Good morning.
+
+4                        MR. HILL:     Mr. Zager and I will also be
+
+5    joined by Mr. Todd Landis.
+
+6                        MR. LANDIS:      Good morning.
+
+7                        MS. SMITH:      You'll be hearing from him
+
+8    quite a bit in this case.
+
+9                        And then I'm also proud to introduce
+
+10   Mr. Dorion Carroll.          Mr. Dorion Carroll is our corporate
+
+11   representative of Zynga.           He'll be here each day of
+
+12   trial, and you'll also be available to visit with
+
+13   Mr. Zynga when he testifies in this case.
+
+14                        And, Your Honor, we're ready to proceed.
+
+15                        THE COURT:      Thank you, Ms. Smith.
+
+16                        Ladies and Gentlemen, as I mentioned,
+
+17   this is a patent case arising from the laws -- the
+
+18   patent laws of the United States.              What the Plaintiff is
+
+19   claiming in this case is that its patents were infringed
+
+20   by the Defendant, and they are seeking money damages
+
+21   because of that infringement.
+
+22                        The Defendant denies that they have
+
+23   infringed the Plaintiff's patents and contends that the
+
+24   patents are invalid.
+
+25                        Now, what I've just told you is a very
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 9 of 106 PageID #:
+                                  10260
+9   
+
+
+1    informal shorthand way of describing the case in
+
+2    layman's terms.        Having seen the patent film, you
+
+3    probably know more about patent cases than most people
+
+4    do when they arrive at the courthouse.
+
+5                        As I mentioned earlier, when the lawyers
+
+6    question you in a few minutes, it is critical that your
+
+7    answers be full, complete, and truthful.               Again, as long
+
+8    as they meet that standard, there are no wrong answers.
+
+9                        And as I mentioned, the lawyers are not
+
+10   attempting to pry unduly into your personal affairs.
+
+11   They're simply discharging their responsibility to their
+
+12   clients to gather necessary information to secure a jury
+
+13   that is fair and impartial in this case.
+
+14                        I don't think any of the lawyers this
+
+15   morning will ask you any improper questions.                 They're
+
+16   all experienced trial lawyers who are well aware of the
+
+17   rules of this Court and the rules of civil procedure.
+
+18                        Certainly if they do, I will stop them,
+
+19   but I don't anticipate that will be a problem this
+
+20   morning.
+
+21                        One thing I want to call to your
+
+22   attention, particularly because some of the lawyers may
+
+23   ask you about your ability to apply this during the
+
+24   trial, is the burden of proof in a patent case.                  Those
+
+25   of you that are chosen to serve on the jury in this case
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 10 of 106 PageID #:
+                                   10261
+10  
+
+
+1    will be called upon to -- to apply two different burdens
+
+2    of proof.
+
+3                        The selected jury may apply the burden of
+
+4    proof known as the preponderance of the evidence as well
+
+5    as a different burden of proof known as clear and
+
+6    convincing evidence.         I need to instruct you that when a
+
+7    party has the burden of proof of either a claim or
+
+8    defense by a preponderance of the evidence, it means
+
+9    that you, the jury, must be persuaded by the credible or
+
+10   believable evidence that the claim or defense is more
+
+11   probably true than not true.
+
+12                       I'll say that again.        More probably true
+
+13   than not true.        Sometimes this is talked about as being
+
+14   the greater weight and degree of credible testimony.
+
+15                       Let me give you an illustration.            I think
+
+16   all of you can see in front of our court reporter the
+
+17   statue of the Lady of Justice in our courtroom.                 In her
+
+18   right hand, she holds the sword of justice.                In the left
+
+19   hand, she holds the scales of justice.
+
+20                       In this case, the jury will hear the
+
+21   evidence from all the parties, and when all the evidence
+
+22   is in, they'll be asked to decide certain questions and
+
+23   apply the burden of proof of a preponderance of the
+
+24   evidence.
+
+25                       In putting all that evidence on those
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 11 of 106 PageID #:
+                                   10262
+11  
+
+
+1    scales in deciding whether the party who has that burden
+
+2    of proof has met it, if that party who has the burden of
+
+3    proof by a preponderance of the evidence has those
+
+4    scales, when all the evidence is placed upon them, tip
+
+5    in their direction, even if it tips -- those scales tip
+
+6    ever so slightly, then that party has met the burden of
+
+7    proof beyond -- or excuse me -- has met the burden of
+
+8    proof of the preponderance of the evidence.
+
+9                        But on the other hand, when a party has
+
+10   the burden of proving a defense by clear and convincing
+
+11   evidence, it means that the jury must have an abiding
+
+12   conviction of the truth of that party's factual
+
+13   contentions and that those contentions are highly
+
+14   probable.
+
+15                       Clear and convincing evidence is a higher
+
+16   standard of proof than a preponderance of the evidence.
+
+17   If you -- if you think about the same example I just
+
+18   gave you, when all the evidence is in and placed on
+
+19   those scales, the party who has a burden by clear and
+
+20   convincing evidence must have those scales tip in their
+
+21   favor more than ever so slightly.             They must definitely
+
+22   tip in that party's direction.
+
+23                       So as you hear the evidence, don't be
+
+24   confused about these burdens of proof.
+
+25                       Also, Ladies and Gentlemen, many of you
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 12 of 106 PageID #:
+                                   10263
+12  
+
+
+1    have heard of a burden of proof in the media and in
+
+2    television called beyond a reasonable doubt.                That's the
+
+3    burden of proof applied in a criminal case.                It has no
+
+4    application here.        So don't confuse any of this with
+
+5    beyond a reasonable doubt.
+
+6                        Clear and convincing evidence is a higher
+
+7    standard of proof than a preponderance of the evidence,
+
+8    but it is not as high a standard as beyond a reasonable
+
+9    doubt.
+
+10                       I give you these instructions because
+
+11   it's quite probable that some of the lawyers will ask
+
+12   you about your ability to apply these two burdens of
+
+13   proof, if you're selected to serve on this jury.
+
+14                       Now, before the lawyers actually begin
+
+15   their questioning of the jury panel, we're going to let
+
+16   each of you all give me the same type of information I
+
+17   gave you when I came out this morning.
+
+18                       You'll see on the screen that there are
+
+19   nine questions, and this is how we're going to proceed
+
+20   at this point.        Our Court Security Officer is going to
+
+21   hand each of you a portable microphone, and if you will
+
+22   stand, when you get that microphone, and then answer
+
+23   those nine questions.         And then we'll move the
+
+24   microphone to the next person.            They can stand and
+
+25   answer the same nine questions.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 13 of 106 PageID #:
+                                   10264
+13  
+
+
+1                        Because it helps significantly for
+
+2    everyone in the courtroom to hear you, please wait until
+
+3    you have the handheld microphone before you begin to
+
+4    answer; otherwise, we may not be able to hear you.
+
+5                        Also please stand when you answer any
+
+6    question with the handheld microphone.
+
+7                        And also after you've given these nine
+
+8    answers to these nine questions, when the jury is -- is
+
+9    examined by the lawyers, if any of you are asked a
+
+10   specific question, we'll follow the same procedure.                  You
+
+11   should stand and use the handheld mic and wait until you
+
+12   get the handheld mic to answer any of the questions that
+
+13   any of the lawyers propound to you as part of the
+
+14   examination.
+
+15                       All right.     With that, we'll start with
+
+16   Panel Member No. 1.         And, sir, if you'll stand and
+
+17   answer those nine questions for us.
+
+18                       JUROR NEWSOM:      My name is Philip Newsom.
+
+19   I'm from Daingerfield.          I am unemployed.       Do not have
+
+20   any children.       Previously I've worked as a dialysis
+
+21   technician as well as a police officer.               I do have some
+
+22   college education.         Currently going to school for
+
+23   nursing.      I've never served on jury duty previously.
+
+24                       THE COURT:     All right.      And if you'll
+
+25   pass that to Ms. Jorgenson.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 14 of 106 PageID #:
+                                   10265
+14  
+
+
+1                        JUROR JORGENSON:       Hello.    I'm Kylee
+
+2    Jorgenson.      I live in Gladewater, Texas.           I'm recently
+
+3    married back in March, so I do not have any children.                    I
+
+4    am an assistant store manager at the retail store in
+
+5    Tyler, Racquet & Jog.         I have worked there for four
+
+6    years.
+
+7                        I will be graduating in May with a
+
+8    business management degree.           My husband's name is Cody
+
+9    Jorgenson.      He works at Acme Air Conditioning in
+
+10   Longview, Texas, and has worked there a little over four
+
+11   years.     And I have not before served on a jury.
+
+12                       THE COURT:     All right.
+
+13                       JUROR SENN:      My name is Trevor Senn.         I
+
+14   live in Gilmer, Texas.          I have three children.        I work
+
+15   at Performance Wellhead & Frac in Kilgore.               I'm a
+
+16   production manager there.           Worked there for three and a
+
+17   half years.       I have an associate's in science.
+
+18                       Spouse's name is Kirsten Senn.           She's not
+
+19   employed.      She previously worked in insurance at
+
+20   Allstate and Farm Bureau.           And I have not previously
+
+21   served as a juror.
+
+22                       THE COURT:     Ms. Barrington.
+
+23                       JUROR BARRINGTON:       Hello.     My name is
+
+24   Kathi Barrington.        I live in Naples.        I have one child.
+
+25   I'm retired.       My previous employment was -- I was a
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 15 of 106 PageID #:
+                                   10266
+15  
+
+
+1    chef.     I owned my own restaurant.          I worked at that 22
+
+2    years.     I have a college education.
+
+3                        My spouse's name is Preston Allen.            He
+
+4    worked for DDRT, Department of Defense at Red River Army
+
+5    Depot for 33 years.         And I've served on a civil case.
+
+6                        JUROR BLANKENSHIP:        Hello.    My name is
+
+7    Susan Blankenship, and I live in Hallsville, Texas.                    I
+
+8    have two grown children.          I'm a high school teacher, and
+
+9    I've worked there for 17 years.            I've taught for 28
+
+10   years.     I have a bachelor of science in education.
+
+11   My spouse's name is Vince Blankenship, and he is vice
+
+12   president of enrollment management at East Texas Baptist
+
+13   University here in Marshall.           And he's worked there for
+
+14   17 years.      And I have never served on a jury before.
+
+15                       JUROR JOHNSON:       My name is Stephen
+
+16   Johnson.      I live in Waskom, Texas.         Three children.
+
+17   Employed for Red Diamond Oilfield Service in Waskom.
+
+18   Been there about four and a half years now.
+
+19                       My wife's name is Amanda.          She work --
+
+20   she is a nurse for Willis-Knighton Medical Center in
+
+21   Shreveport.       She's been there 17 years.           Seems like
+
+22   every time there's a case, they call me.
+
+23                       JUROR BANKSTON:       I am Tony Bankston.          I
+
+24   have three adult children.           I'm a pawn broker here in
+
+25   Marshall, Texas.        I've been there for a year.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 16 of 106 PageID #:
+                                   10267
+16  
+
+
+1                        Previously 27 years, united States Army.
+
+2    My last job was as battalion supply sergeant here in
+
+3    Marshall, Texas.
+
+4                        Let's see what else?        High school
+
+5    diploma.      After I left high school, then I joined the
+
+6    military.      My wife's name is Sherry.          She's a secretary
+
+7    here at MISD.       And I served on a civil case one time
+
+8    about child custody.
+
+9                        THE COURT:     All right.      And next, we'll
+
+10   start with Mr. Hensley.
+
+11                       JUROR HENSLEY:       My name is Billy Joe
+
+12   Hensley.      I have three grown children.          I work at a
+
+13   disciplinary educational placement as a high school
+
+14   teacher.      Been there 16 years.        I have a BS and a BA.
+
+15                       My wife's name is Sue.         She's like
+
+16   retired.      Previous work for her was a bookkeeper, and
+
+17   she did that forever.         And I served on a civil jury.
+
+18                       THE COURT:     All right.      Thank you.
+
+19   Mr. Adair.
+
+20                       JUROR ADAIR:      My name is Michael Adair.
+
+21   I have two children, a boy and a girl.              I'm employed at
+
+22   Master Woodcraft Cabinetry for three years.
+
+23                       THE COURT:     Hold that microphone a little
+
+24   closer, Mr. Adair.
+
+25                       JUROR ADAIR:      Okay.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 17 of 106 PageID #:
+                                   10268
+17  
+
+
+1                        THE COURT:     Thank you.
+
+2                        JUROR ADAIR:      I have a bachelor's degree
+
+3    in graphic science.         My wife's name is Renee.         She is a
+
+4    diagnostician for Liberty-Eylau ISD.              And she's been
+
+5    there three years.         And I have served on a civil jury.
+
+6                        THE COURT:     Thank you.
+
+7    Mr. Mahr.
+
+8                        JUROR MAHR:      Good morning.      My name is
+
+9    Hubert Mahr.       I have here in Marshall, Texas.           I have
+
+10   four children, two girls and two boys.              My place of
+
+11   employment right at the moment is Snider Industries as a
+
+12   scale house operator.         I've been there about a year,
+
+13   which previous prior to that, I worked for the
+
+14   Sheriff's -- Sheriff's Department as a jailor.                My
+
+15   educational background is I got a GED through the
+
+16   military.      I'm -- I'm an ex-Navy.         I'm a Vietnam
+
+17   veteran.
+
+18                       My wife's name is Pam Mahr.          She has in
+
+19   the 26 years we've been married not worked.                She's a
+
+20   housewife.      And I have served on a civil, a criminal,
+
+21   and a grand jury.
+
+22                       THE COURT:     Thank you, sir.
+
+23                       JUROR JONES:      My name is William Jones.
+
+24   I live in Hallsville, Texas.           I have three grown
+
+25   children.      I'm a co-owner of Longview Stone in Longview,
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 18 of 106 PageID #:
+                                   10269
+18  
+
+
+1    Texas.     Been there for 25 years.          I have some college
+
+2    education.
+
+3                        My wife's name is Lavinda Jones.            She's
+
+4    employed by Ore City School District.              She's been there
+
+5    for seven years.        And I have no jury experience.
+
+6                        JUROR PRINCE:      My name is Brandon Prince.
+
+7    I live in Bivins, Texas.          I have two small children.            I
+
+8    work at McLeod ISD as technology director.               I've done
+
+9    for seven years.        I have my associate's degree and
+
+10   currently working on a bachelor's.
+
+11                       My wife's name is Kimberly.          She also
+
+12   works at McLeod School District as a teacher.                This is
+
+13   her second year there.          And I have never served on a
+
+14   jury.
+
+15                       THE COURT:     Thank you, sir.
+
+16                       JUROR PARKER:      My name is Richard Parker.
+
+17   I have one five-year-old daughter.             I'm an assistant
+
+18   retail manager for Home Depot.            I've been there about
+
+19   two years.      I have about one year of college.
+
+20                       My wife's name is Amanda Parker.            She's
+
+21   been a homemaker for our 10 years of marriage, and I've
+
+22   never served on a jury.
+
+23                       THE COURT:     Which Home Depot do you work
+
+24   at?
+
+25                       JUROR PARKER:      I work currently at the
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 19 of 106 PageID #:
+                                   10270
+19  
+
+
+1    Mt. Pleasant Home Depot.          I just transferred from the
+
+2    Longview Home Depot.
+
+3                        THE COURT:     Thank you, sir.
+
+4    Mr. Pharr.
+
+5                        JUROR PHARR:      My name is Charles Pharr.
+
+6    I've got three grown kids.           I work for Oil States Energy
+
+7    over in Kilgore.        I'm an assistant district manager.
+
+8    I've worked there going on five years.              Got a high
+
+9    school education.
+
+10                       My wife's name is Becky Pharr.           She
+
+11   worked for Big Sandy ISD for 13 years.              And I haven't
+
+12   served on a jury.
+
+13                       THE COURT:     Thank you, sir.
+
+14                       Next, we'll go to No. 15, Mr. Sanchez.
+
+15                       JUROR SANCHEZ:       My name is Alex Sanchez.
+
+16   I'm from Marshall, Texas.           Been here since 2001.          I've
+
+17   got three children.         And I'm currently unemployed, but I
+
+18   typically work as an industrial maintenance person.
+
+19   And -- okay.       I'm a high school graduate with some
+
+20   college.      My wife's name is Tonya Sanchez.           She's
+
+21   working for Marshall ISD.           She's a teacher.       And she's
+
+22   worked there as a teacher for three years, but totally
+
+23   ten years.      And I have had prior jury duty, and it was a
+
+24   civil case.
+
+25                       THE COURT:     Thank you, sir.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 20 of 106 PageID #:
+                                   10271
+20  
+
+
+1                        JUROR ROCKWELL:       Good morning.      My name
+
+2    is Candace Rockwell.         I have one grown child.         I worked
+
+3    for Walmart for six years now.            I am from Pittsburg,
+
+4    Texas, and my educational background is two years of
+
+5    college at Kilgore College where I received an
+
+6    associate's of applied arts degree.
+
+7                        I'm not married at this time.           And --
+
+8    let's see.      I have served on a jury for a criminal case.
+
+9                        THE COURT:     Thank you, ma'am.
+
+10   Mr. Greer.
+
+11                       JUROR GREER:      My name is Thaddie Greer.
+
+12   I am from Waskom, Texas.          I have a daughter, three
+
+13   granddaughters, and seven great-grandchildren.                Retired
+
+14   from PPG Industries 10 years ago.             Currently work for a
+
+15   company called Single Source, Incorporated, which just
+
+16   bought out the company that I did work for this July.
+
+17   So I worked there at that company for 10 years.
+
+18                       Graduated from high school, one year at
+
+19   Centenary College.         Business courses at about six
+
+20   different colleges over my lifetime.
+
+21                       My wife's name is Jimmie Lynn Greer.              She
+
+22   works for an automotive repair center in Shreveport.
+
+23   She's been there probably 12 years, I think, now.                 I
+
+24   have served on a civil jury, which was -- I guess you
+
+25   would call it civil.         It was a child custody case.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 21 of 106 PageID #:
+                                   10272
+21  
+
+
+1                        THE COURT:     All right, sir, thank you.
+
+2    Mr. Baxley.
+
+3                        JUROR BAXLEY:      My name is William Baxley.
+
+4    I live in Diana, in between Diana and Ore City.                 I have
+
+5    one child, three stepchildren, thankfully all grown.                  I
+
+6    work for Joy Global in Longview, formerly LeTourneau.
+
+7                        THE COURT:     Hold that microphone a little
+
+8    closer, please, sir.
+
+9                        JUROR BAXLEY:      And I've worked there for
+
+10   seven and a half years.          I have a GED.      My wife's name
+
+11   is Cheryl.      She's a housewife.        She's been one since
+
+12   we've been married.
+
+13                       I'm having trouble reading here.            And
+
+14   I've never really served on a jury.
+
+15                       THE COURT:     All right, sir.
+
+16                       JUROR BAXLEY:      Never been chosen.
+
+17                       THE COURT:     Thank you.
+
+18                       No. 19.
+
+19                       JUROR STOLLE:      My name is Frederick
+
+20   Stolle.      I live in Hallsville.        We have three adult
+
+21   daughters.      I've worked at Eastman Chemical Company
+
+22   Texas Operations in Longview for 27 years.               I have a
+
+23   bachelor's of arts from Texas A&M.
+
+24                       My wife's name is Suzanne is a teacher at
+
+25   Hallsville ISD.        She's worked there for 17 years.           I
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 22 of 106 PageID #:
+                                   10273
+22  
+
+
+1    have served on a grand jury but no civil or criminal
+
+2    juries.
+
+3                        JUROR ASHMORE:       My name is Spencer
+
+4    Ashmore.      I live in Hallsville, Texas.          I don't have any
+
+5    kids.     I work at Pathfinder Land Surveying here in
+
+6    Marshall.      I've worked there for two years.            I have a
+
+7    bachelor of science.         Not currently married.         And I
+
+8    haven't served on a previous jury.
+
+9                        JUROR HAMILTON:       My name is Ann Hamilton.
+
+10   I have one grandson.         I work for Dwight Brannon,
+
+11   attorney at law, in Gilmer, Texas.             I've been there
+
+12   eight years.       I graduated high school.         I've been to
+
+13   college.      I am not married.       And I've never served on a
+
+14   jury.
+
+15                       THE COURT:     Thank you, ma'am.
+
+16   Ms. Hoskins.
+
+17                       JUROR HOSKINS:       My name is Dawn Hoskins.
+
+18   I don't go by Fabia.         I live in Linden, Texas.         I have
+
+19   one daughter who is currently working for her master's
+
+20   degree in criminology.          I work at Linden-Kildare CISD
+
+21   where I'm an RN.        I've also worked for Jordan Home
+
+22   Health Services.        I've worked at the school for 17
+
+23   years.     I'm a widow, and I've never served on a jury
+
+24   before.
+
+25                       THE COURT:     Thank you, ma'am.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 23 of 106 PageID #:
+                                   10274
+23  
+
+
+1                        Mr. Gibbs.
+
+2                        JUROR GIBBS:      Chris Gibbs.      Live in
+
+3    Hallsville, Texas.         Two grown children.        Work for
+
+4    Eastman Chemical.        I'm a supervisor in the electrical
+
+5    department.       About 14 years there.        Trade schools and
+
+6    apprenticeships was my background.
+
+7                        Spouse is Sherry.        She's retired from the
+
+8    RV repair business that we had previously.               And I served
+
+9    on something about 28 years ago.             I don't remember what
+
+10   it was.
+
+11                       THE COURT:     All right, sir.       If you'll
+
+12   hand that back to our CSO, we'll next hear from
+
+13   Ms. Henson.
+
+14                       JUROR HENSON:      Hi.    My name is Sarah
+
+15   Henson.      I live in Jefferson, Texas.          I have three grown
+
+16   girls.     I've been with them for -- or four years.              I
+
+17   have a high school diploma, a little college.
+
+18                       My husband's name is Michael Henson.              He
+
+19   is a fleet coordinator for Smithville Meats.                He's been
+
+20   there 22 years.        And I have been on a criminal case.
+
+21                       JUROR STRANGE:       My name is Sharon
+
+22   Strange, and I live in Marshall.             I have two grown
+
+23   children.      I work for Network Communications.            We
+
+24   install data and phone services for Marshall, Kilgore,
+
+25   and Longview.       I've been there for like three years.              I
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 24 of 106 PageID #:
+                                   10275
+24  
+
+
+1    have one year of college.
+
+2                        My spouse's name is Randall.          He worked
+
+3    for CenterPoint Energy as a senior environmental
+
+4    specialist for 40 years.          And I've never served on a
+
+5    jury.
+
+6                        THE COURT:     Thank you, ma'am.
+
+7    Mr. White.
+
+8                        JUROR WHITE:      My name is Zachary White.
+
+9    I live in Big Sandy.         I do not have any children.          I
+
+10   work for the Texas Department of Public Safety as a
+
+11   state trooper.        I've been there three years.          I have a
+
+12   bachelor's degree.
+
+13                       My wife's name is Amanda White.           She's
+
+14   employed at Hawkins ISD as a fourth-grade teacher.
+
+15   She's been there three years.            And I've never served on
+
+16   a jury.
+
+17                       JUROR PRICE:      My name is Daniel Price.          I
+
+18   live in Waskom, Texas.          I don't have any children.            And
+
+19   I work at Swift Uniforms, a mobile scrub company.                 I've
+
+20   worked there for my employer since 2007.               I have some
+
+21   college.      Unmarried.     And I have never served on a jury.
+
+22                       THE COURT:     All right.      Mr. Johnson.
+
+23                       JUROR JOHNSON:       My name is Joe Johnson.
+
+24   And I have five -- four -- five kids, four boys and one
+
+25   girl.     And I work at Cabot Norit America.            I've been
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 25 of 106 PageID #:
+                                   10276
+25  
+
+
+1    there 34 years.        I went to Marshall High School.
+
+2                        My wife's name is Betty.         She worked --
+
+3    last job was Marshall Heritage House, but she's not
+
+4    working now.       She's hurt.      And I've never served on a
+
+5    jury before.
+
+6                        THE COURT:     Thank you, sir.
+
+7                        Thank you very much, Ladies and
+
+8    Gentlemen.      I need to say a couple more things to you
+
+9    before we begin the questioning by the lawyers.
+
+10                       The jurors that are selected today to
+
+11   comprise this jury will serve as the judges of the
+
+12   facts, and they will make the sole determination about
+
+13   what the facts are in this case.             My job as the judge is
+
+14   to rule on questions of law and evidence, procedure, to
+
+15   control the courtroom and the flow of the trial.
+
+16                       Also, Ladies and Gentlemen, I want to say
+
+17   a couple things to you about our judicial system that I
+
+18   believe will help put things in a proper perspective for
+
+19   you.
+
+20                       In any jury trial, in addition to the
+
+21   actual parties, there are always three participants:
+
+22   The jurors, the judge, and the lawyers.
+
+23                       With regard to the lawyers, I think it's
+
+24   important for each of you to understand that our
+
+25   judicial system is an adversary system, which means
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 26 of 106 PageID #:
+                                   10277
+26  
+
+
+1    simply that during each trial, the parties will seek to
+
+2    present their respective cases to the jury in the very
+
+3    best light possible.
+
+4                        Now, lawyers are frequently criticized in
+
+5    the media, and the Court has come to observe that that
+
+6    is often the result of a misunderstanding about our
+
+7    adversary system in which the lawyers act as advocates
+
+8    for the competing parties.
+
+9                        As an advocate, a lawyer is ethically and
+
+10   legally obligated to zealously assert his or her
+
+11   client's position within the rules of our adversary
+
+12   system.
+
+13                       And by presenting the very best case
+
+14   possible on behalf of their clients, the lawyers
+
+15   hopefully will enable the jury to better weigh the
+
+16   relevant evidence and determine the truth and arrive at
+
+17   a just verdict based on that evidence.
+
+18                       This system of justice has served our
+
+19   nation well for over 200 years, and America's lawyers
+
+20   have been and continue to be a critical and vital part
+
+21   of that process.
+
+22                       So as we go forward during the trial,
+
+23   even though I might occasionally frown at the lawyers
+
+24   from time to time, that's just because I'm trying to
+
+25   make sure that they stay within the bounds of our
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 27 of 106 PageID #:
+                                   10278
+27  
+
+
+1    adversary system.
+
+2                        But keep in mind they are doing their
+
+3    jobs as advocates on behalf of their clients, and I
+
+4    think that's important for all of you to understand as
+
+5    we go forward.
+
+6                        Also, I want you to know that during the
+
+7    trial of this case, I will do my very best to make sure
+
+8    that you have no idea about what I personally think
+
+9    about the evidence that the jury hears.               That's the
+
+10   jury's job to evaluate the evidence, not mine.
+
+11                       Accordingly, the jury should not take any
+
+12   expressions that they see from me as something to
+
+13   consider or as a factor to take into account when making
+
+14   your decisions about the ultimate facts in this case.
+
+15                       At this time, we'll hear from the lawyers
+
+16   for each side.
+
+17                       Mr. Hill, you may address the panel.
+
+18                       MR. HILL:     Thank you, Your Honor.
+
+19                       THE COURT:     Would you like a warning on
+
+20   your time?
+
+21                       MR. HILL:     Please, Your Honor, when I
+
+22   have five minutes remaining.
+
+23                       THE COURT:     All right.      You may proceed.
+
+24                       MR. HILL:     Thank you, Your Honor.
+
+25                       Good morning, Ladies and Gentlemen.            My
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 28 of 106 PageID #:
+                                   10279
+28  
+
+
+1    name is Wesley Hill.         I grew up over in Murchison,
+
+2    Texas, which is over in Henderson County.               Practice law
+
+3    in Longview now with the Ward & Smith Law Firm, and it's
+
+4    my privilege in this case to represent Personalized
+
+5    Media Communications.         You'll hear us refer to it as
+
+6    short -- shorthand throughout the trial as PMC.                 So it's
+
+7    my privilege to represent PMC.
+
+8                        Before I start this morning, I want to
+
+9    take a moment to say thank you to you folks for being
+
+10   here.     I understand this is an imposition.            You're
+
+11   taking a day out of your life, a day off work, a day
+
+12   away from your families, to come down and hear about a
+
+13   case, sit in an uncomfortable courtroom that, you know,
+
+14   you don't feel all that comfortable sitting in, listen
+
+15   to a bunch of lawyers talk to you.
+
+16                       It is a necessary part of our litigant
+
+17   system.      And I know it's an imposition, but we want to
+
+18   say thank you for being here.            This is a case that's
+
+19   very important to PMC, to our company.              And we, frankly,
+
+20   need the jury's help to get it resolved.
+
+21                       So thank you.      You'll hear me throughout
+
+22   the case continue to thank those of you who are the
+
+23   lucky eight to spend the week with us.              I know we ask
+
+24   y'all to drive a long distance to get here, and I
+
+25   just -- I just can't say it enough that I appreciate
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 29 of 106 PageID #:
+                                   10280
+29  
+
+
+1    your time and your energy to be here this morning.
+
+2                        Folks, as I told you earlier, my client
+
+3    is Personalized Media Communications, PMC.               May not have
+
+4    ever heard of PMC.         They were founded in 1981 by
+
+5    Mr. John Harvey, Mr. Harvey here, who you met earlier.
+
+6                        Mr. Harvey is the inventor, along with
+
+7    Mr. Cuddihy, of the patents that are involved in this
+
+8    lawsuit.
+
+9                        PMC's inventions that were developed by
+
+10   Mr. Harvey and Mr. Cuddihy enable a way to provide
+
+11   interactive multimedia experiences that are both
+
+12   personalized and shared and use both local and remote
+
+13   computers.
+
+14                       That's what this case is about.           You'll
+
+15   learn more about that as we go on.             It's about
+
+16   interactive multimedia computer interaction.
+
+17                       We're here today because Zynga, the
+
+18   Defendant in this case, uses these inventions in their
+
+19   games.     PMC's business is the development and licensing
+
+20   of these technologies, these interactive technologies,
+
+21   to companies that desire to use the innovations.
+
+22                       The CEO of PMC is Ms. Kazie Metzger, who
+
+23   we introduced to you earlier.            Ms. Metzger is
+
+24   Mr. Harvey's wife.         The president of PMC is Mr. Gerald
+
+25   Holtzman, who you met earlier.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 30 of 106 PageID #:
+                                   10281
+30  
+
+
+1                        You'll learn as the case goes on that Mr.
+
+2    Holtzman and Ms. Metzger went to high school together in
+
+3    Corpus Christi, Texas.          You'll also hear from most of
+
+4    these folks during the course of the trial.                What you'll
+
+5    learn is that PMC is a family-run, family-owned
+
+6    business.
+
+7                        Now, the facts of our case will come out
+
+8    during the opening statements.            And this is not our
+
+9    opportunity to -- to make an opening statement to you.
+
+10   That -- as Judge Gilstrap instructed you earlier, there
+
+11   are rules that apply to our process, and that would not
+
+12   be what the rules allow.          This is our chance to talk to
+
+13   you.
+
+14                       So for now, all you need to know about
+
+15   the case is that it relates to whether Zynga infringes
+
+16   the asserted patents that were invented by Mr. Harvey
+
+17   and whether Zynga can prove that those patents are
+
+18   somehow invalid and what a reasonable royalty would be
+
+19   that Zynga would owe for its use of those patented
+
+20   technologies without PMC's permission.
+
+21                       THE COURT:     Let's move on to specific
+
+22   questions, Counsel.
+
+23                       MR. HILL:     Yes, sir, Your Honor.
+
+24                       Now, as -- as Judge Gilstrap told you,
+
+25   the only rule of jury selection is that you speak up.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 31 of 106 PageID #:
+                                   10282
+31  
+
+
+1    This is my only chance to hear from you, and I only get
+
+2    30 minutes to do it.
+
+3                        So I want to ask you some questions.
+
+4    There are no wrong answers, and I want you to
+
+5    understand, what we're looking for is a jury that's
+
+6    going to be fair and impartial to both sides.
+
+7                        You'll hear me refer to what's called
+
+8    bias and prejudice.         If I called you biased and
+
+9    prejudiced outside of the courtroom, you'd probably slap
+
+10   my face.      It doesn't mean the bad words in the courtroom
+
+11   that they mean outside the courtroom.              It just means you
+
+12   might have life experiences that make you start out
+
+13   leaning toward one side or the other, not that
+
+14   down-the-middle juror we're looking for.
+
+15                       So I mentioned that this is a lawsuit.
+
+16   So I want to start there.           I want to talk about lawsuits
+
+17   a little bit.
+
+18                       How many agree with this statement?
+
+19   There are too many lawsuits in the world?               Too many
+
+20   lawsuits?
+
+21                       I agree with that.        I'll raise my hand
+
+22   and agree with that.         There are too many lawsuits.
+
+23   There are even frivolous lawsuits, inmates suing for
+
+24   more TV time, you know, other kinds of things that just
+
+25   don't merit folks taking time out of their life to come
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 32 of 106 PageID #:
+                                   10283
+32  
+
+
+1    to the courtroom.
+
+2                        I want to talk to some of you who have
+
+3    had experiences being a defendant in a lawsuit.                 Is
+
+4    there anybody on our jury panel that has ever had the
+
+5    experience personally of having been sued?
+
+6                        All right.     We've got a couple of hands.
+
+7    We've got Mr. Newsom some here, No. 1.
+
+8                        Mr. Newsom, what can you tell me about
+
+9    that?
+
+10                       JUROR NEWSOM:      When I was working as a
+
+11   police officer for Daingerfield, the city was sued, and
+
+12   I was included in the suit.           It was, I think, 2004, if I
+
+13   remember right.
+
+14                       MR. HILL:     Okay.
+
+15                       JUROR NEWSOM:      Anyway, it was from an
+
+16   arrest on an assault on a public servant.               He sued for
+
+17   wrongful imprisonment, among other things.               And it
+
+18   was -- me, the city, mayor, chief of police, as well as
+
+19   the city manager were all named in the suit.
+
+20                       And as far as the case goes, it went to
+
+21   the jury and found not liable or --
+
+22                       MR. HILL:     Okay.    Well, thank you.       Thank
+
+23   you for letting me know about that.
+
+24                       Let me ask you a question while you still
+
+25   have the microphone.         I think it's pretty obvious why I
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 33 of 106 PageID #:
+                                   10284
+33  
+
+
+1    ask this question.         We're the Plaintiff in this lawsuit
+
+2    suing somebody.        I suspect you didn't like it too much.
+
+3    Most people don't.
+
+4                        Is there anything about that experience
+
+5    in your life that you think would start you out leaning
+
+6    toward Zynga a little bit because they're in the
+
+7    circumstance you were in; they're being sued in a
+
+8    lawsuit?
+
+9                        JUROR NEWSOM:      No.    I don't think there's
+
+10   anything that would -- I mean, make me feel one way or
+
+11   the other.
+
+12                       MR. HILL:     Thank you, sir.       I trust you.
+
+13   We had one other over here.           I think it was -- I saw --
+
+14   was that Mr. Greer?
+
+15                       Mr. Greer, No. 17.
+
+16                       JUROR GREER:      Yes, sir.     I was included
+
+17   in many lawsuits over the years when I worked for PPG,
+
+18   but I don't remember the exact year, but a few years
+
+19   ago, I was sued personally over some property.                It took
+
+20   about five years to settle.           It cost me $10,000.
+
+21   It turned out it was really a frivolous lawsuit that was
+
+22   more because the people that bought some property from
+
+23   me had a brother that was an attorney in Alabama, and --
+
+24   and he was thinking he was going to get some quick money
+
+25   from the insurance company, which I did not get my
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 34 of 106 PageID #:
+                                   10285
+34  
+
+
+1    insurance company involved in it, because my attorney
+
+2    said:     Hey, this is a dumb thing.
+
+3                        And it really was.        Even the judge down
+
+4    in Panola told me that.          But it cost me 10 grand that I
+
+5    can't get back, you know, so...
+
+6                        MR. HILL:     Yes, sir.     Yes, sir.     You've
+
+7    had that life experience.           Zynga is the Defendant in
+
+8    this lawsuit.       We're suing them over a property right.
+
+9    We own patents, and we say they're trespassing.
+
+10                       Do you think that life experience of
+
+11   yours might start you out maybe feeling for Zynga
+
+12   because you've been there yourself?
+
+13                       JUROR GREER:      That's a hard question to
+
+14   answer.      I don't think it would because I'm a person
+
+15   that likes to look at facts and weigh them out honestly.
+
+16   I did have a bad experience.           It did cost me 10 grand
+
+17   for nothing.
+
+18                       MR. HILL:     Sure.
+
+19                       JUROR GREER:      And -- and I mean, it was
+
+20   actually thrown out of court and said, hey, this -- you
+
+21   know, this is -- but -- but it still cost me money and
+
+22   it cost me time.
+
+23                       MR. HILL:     Yes, sir.
+
+24                       Now, based on that, do you think it
+
+25   causes you to have a little more jaundiced eye toward
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 35 of 106 PageID #:
+                                   10286
+35  
+
+
+1    PMC because they're the person making this claim saying
+
+2    somebody's trespassing on their patent?
+
+3                        JUROR GREER:      Could.
+
+4                        MR. HILL:     Could.     Okay.
+
+5                        All right.     Well, I appreciate your
+
+6    candor.      Thank you, sir.
+
+7                        Anybody else, defendant in a lawsuit?
+
+8                        Let me ask more broadly.           Anybody here
+
+9    ever been a defendant in a lawsuit because of their
+
+10   business?
+
+11                       I know Mr. Newsom had to do it with his
+
+12   employment a little bit.
+
+13                       You mentioned PPG, Mr. Greer.           Is that
+
+14   the paint company PPG?
+
+15                       JUROR GREER:      Yes.
+
+16                       MR. HILL:     Were those asbestos suits or
+
+17   something?
+
+18                       JUROR GREER:      No, sir.       These were
+
+19   coatings.      This was -- several of the suits were like in
+
+20   Mississippi, one up in Alabama, and it was involving
+
+21   people back from the EPA era when they weren't required
+
+22   to wear respirators and people got lung diseases and
+
+23   stuff.
+
+24                       And so they sued multiple companies.
+
+25   They sued PPG, Dupont, Sherwin Williams, and anybody who
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 36 of 106 PageID #:
+                                   10287
+36  
+
+
+1    was in management was named in the suit.
+
+2                        MR. HILL:     Yes, sir.
+
+3                        JUROR GREER:      And then one of the suits
+
+4    was where we had filed suit against a customer which was
+
+5    a distributor, for non-payment.            It was about $750,000
+
+6    that he was behind owed us, and he turned around and
+
+7    sued us for a whole list of things.
+
+8                        MR. HILL:     Okay.    Is there anybody else
+
+9    like Mr. Greer has been involved in lawsuits in their
+
+10   business, been defendants in lawsuits in their business?
+
+11                       Now, let me ask this:        Is there anyone
+
+12   here who feels they already start out leaning possibly
+
+13   toward one side or the other, particularly leaning
+
+14   toward Zynga, because they're the party that's been sued
+
+15   because PMC brought this lawsuit?
+
+16                       You just identify with them or feel, you
+
+17   know, they're the defendant in the lawsuit and you feel
+
+18   like that put you leaning in their favor?               Anybody feel
+
+19   that way?
+
+20                       Again, there's nothing wrong with it.             We
+
+21   all have different feelings based on life experiences.
+
+22                       Let me ask you this question:           It's --
+
+23   tell me if you agree or you disagree by a show of hands.
+
+24                       If you agree with this statement, please
+
+25   raise your hand for me:          Large corporations typically
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 37 of 106 PageID #:
+                                   10288
+37  
+
+
+1    violate contracts unintentionally.             Large corporations
+
+2    typically violate contracts unintentionally.
+
+3                        Who feels like they agree with that
+
+4    statement?      Anybody?
+
+5                        No.
+
+6                        Okay.    Let me ask this with regard to
+
+7    lawsuits generally:         Is there anyone who is a member or
+
+8    active with social justice organizations, like, for
+
+9    instance, the ACLU or maybe East Texans Against Lawsuit
+
+10   Abuse or Texas Watch?
+
+11                       Anybody that's a member of those
+
+12   organizations or support those organizations or involved
+
+13   in other social justice organizations that have to do
+
+14   with the legal system?          Anybody?
+
+15                       Well, very good.
+
+16                       Well, who has heard of Zynga before
+
+17   today?
+
+18                       We've got several hands right here in the
+
+19   front.     That's Ms. Blankenship.         You've heard of Zynga.
+
+20   What do you know about them?
+
+21                       JUROR BLANKENSHIP:        I only know that I
+
+22   see it on my phone when I play Words with Friends.
+
+23                       MR. HILL:     Okay.    Play Words with
+
+24   Friends.      Anything about your experience as an -- as a
+
+25   game player of a Zynga game that you think would
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 38 of 106 PageID #:
+                                   10289
+38  
+
+
+1    influence your feelings in this case?
+
+2                        JUROR BLANKENSHIP:        No.
+
+3                        MR. HILL:     No okay.     Thank you, ma'am.
+
+4                        Who else do we have?        We have a few other
+
+5    hands behind -- we have No. 12 there.                That's
+
+6    Mr. Prince.       How do you know Zynga?
+
+7                        JUROR PRINCE:      Oh, like she said, just
+
+8    playing their -- playing their games.                Play FarmVille,
+
+9    Words with Friends, that kind of thing.
+
+10                       MR. HILL:     Do you do that regularly?
+
+11                       JUROR PRINCE:      No, not really.
+
+12                       MR. HILL:     Anything about that that you
+
+13   think would influence your feelings in this case?
+
+14                       JUROR PRINCE:      No.
+
+15                       MR. HILL:     If you heard the evidence and
+
+16   believe you had to make a decision against Zynga that
+
+17   make those games, do you think you could do it?
+
+18                       JUROR PRINCE:      Yes, sir.
+
+19                       MR. HILL:     All right.        Next to you there,
+
+20   also Mr. Parker?
+
+21                       JUROR PARKER:      Yes, sir.       Same thing,
+
+22   I've played a couple of their games in the past year.
+
+23                       So no reason why --
+
+24                       MR. HILL:     Let me ask you the same
+
+25   question.      Anything about that you think, if the
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 39 of 106 PageID #:
+                                   10290
+39  
+
+
+1    evidence showed you need to make a decision adverse to
+
+2    Zynga, would prevent you from doing that?
+
+3                        JUROR PARKER:      No, sir.
+
+4                        MR. HILL:     All right.      I appreciate that.
+
+5                        Was there anybody else I missed who are
+
+6    familiar with Zynga.         We've got a few out here in the
+
+7    back.     Let's -- let's hear from them as well.
+
+8                        JUROR PRICE:      I played FarmVille a few
+
+9    years ago.      I don't really play it anymore.            My stepmom
+
+10   still plays it, and I've played Words with Friends.
+
+11                       MR. HILL:     Ask you the same question.
+
+12   Anything about that you think would prevent you from
+
+13   making a decision adverse to Zynga, if you thought the
+
+14   evidence warranted it?
+
+15                       JUROR PRICE:      No.
+
+16                       MR. HILL:     All right.      Thank you, sir.
+
+17                       JUROR STRANGE:       I play Words with Friends
+
+18   every day.
+
+19                       [Laughter]
+
+20                       MR. HILL:     Every day.      Well, let me ask
+
+21   you the same question, Ms. Strange.             Anything about the
+
+22   fact that you play Words with Friends, would that be in
+
+23   your mind, if you thought you needed to make a decision
+
+24   adverse to Zynga?
+
+25                       JUROR STRANGE:       No, sir.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 40 of 106 PageID #:
+                                   10291
+40  
+
+
+1                        MR. HILL:     Thank you.
+
+2                        Let me assure those of you who play these
+
+3    games this lawsuit does not threaten those games.
+
+4                        Now, there's several local firms involved
+
+5    in this lawsuit, and you saw -- you met me.                John Ward
+
+6    is my law partner.         We're the Ward & Smith Law Firm over
+
+7    in Longview.       But also involved are several other firms
+
+8    that are here in Marshall.
+
+9                        We've got Ms. Melissa Smith, who you met
+
+10   earlier.      She's with the Gillam and Smith Law Firm.              Gil
+
+11   Gillam is her law partner.           They have another lawyer
+
+12   that works for them named Bobby Lamb.
+
+13                       Does anybody know Ms. Smith, Mr. Gillam,
+
+14   or the Gillam & Smith Law Firm?
+
+15                       No?   And when I say that, I mean it
+
+16   broadly.      Is there anybody that sees them at church,
+
+17   knows them through community organizations, maybe your
+
+18   kids go to school together, knows an employee that works
+
+19   for them, anything like that?
+
+20                       I'll ask the same question about me and
+
+21   my law firm, Ward & Smith Law Firm.             Anybody familiar
+
+22   with us?
+
+23                       Now, there's another firm involved in
+
+24   this case for the Defendants.            It's called Akin Gump.
+
+25   That's the name of the firm.           They're a national firm.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 41 of 106 PageID #:
+                                   10292
+41  
+
+
+1    They have offices in a number of locations, and they
+
+2    have several of their attorneys here:              Mr. Landis,
+
+3    Mr. Jaeger, Mr. Williams.
+
+4                        Does anybody know of the Akin Gump Law
+
+5    Firm or familiar with any of its attorneys?
+
+6                        Now, I suspect Zynga has other
+
+7    individuals that will be involved in the course of the
+
+8    trial.     I don't know if there are any of them here in
+
+9    the courtroom, but if you're here and you're involved on
+
+10   behalf of Zynga, would you please stand up so we can get
+
+11   a look at you?
+
+12                       We know Mr. Carroll, of course, who we
+
+13   were introduced to earlier.           We have a few folks around
+
+14   the room.      Mr. Parrish, Todd Parrish.          And a couple
+
+15   folks in the back.
+
+16                       Anybody familiar with these individuals?
+
+17   Nobody sees anybody they know?
+
+18                       Okay.    Let me ask this:       Do any of you
+
+19   know a fellow juror?         Look around the room.         You've seen
+
+20   some folks around.
+
+21                       We've got -- right back here on the
+
+22   corner.      That's Mr. Gibbs?
+
+23                       JUROR GIBBS:      Yes, sir.
+
+24                       MR. HILL:     You know somebody on your
+
+25   panel?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 42 of 106 PageID #:
+                                   10293
+42  
+
+
+1                        JUROR GIBBS:      I know Frederick and
+
+2    Ms. Blankenship.
+
+3                        MR. HILL:     All right.      You and Mr. Stolle
+
+4    work there at Eastman together; is that right?
+
+5                        JUROR GIBBS:      Yes, sir.
+
+6                        MR. HILL:     Tell me this.      I mentioned --
+
+7    you mentioned you're an electrical supervisor; is that
+
+8    right?
+
+9                        JUROR GIBBS:       Yes, sir.
+
+10                       MR. HILL:     Is that a union position or a
+
+11   management position, or what kind of position is it?
+
+12                       JUROR GIBBS:      It's a management position.
+
+13   It's non-union.
+
+14                       MR. HILL:     Okay.      Let me ask the same
+
+15   question for you, Mr. Stolle, here on the end.                 You
+
+16   mentioned you've been there a long time as well, 27
+
+17   years.     Is that a management position you're in?
+
+18                       JUROR STOLLE:      No, sir.
+
+19                       MR. HILL:     It's not, is it?
+
+20                       JUROR STOLLE:      No.     I'm in the training
+
+21   department and learning services.
+
+22                       MR. HILL:     It's a union-associated role?
+
+23                       JUROR STOLLE:         No, it is not.
+
+24                       MR. HILL:     Okay.      Thank you, sir.
+
+25                       Now, y'all mentioned as well, you know --
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 43 of 106 PageID #:
+                                   10294
+43  
+
+
+1    you've known one other member of our jury, Mr. Gibbs.
+
+2    That's Mr. Mahr --
+
+3                        JUROR MAHR:      Yes, sir.
+
+4                        MR. HILL:     -- right here, No. 10.
+
+5    Mr. Mahr, how do you know each other?
+
+6                        JUROR MAHR:      I know Ms. Strange through
+
+7    previous employment with McDonald Restaurant as
+
+8    managers.
+
+9                        MR. HILL:     You mentioned you've been a
+
+10   jailer in the past.         Where --
+
+11                       JUROR MAHR:      Yes, sir.
+
+12                       MR. HILL:     Where was that?
+
+13                       JUROR MAHR:      Harrison County.
+
+14                       MR. HILL:     Harrison County?
+
+15                       JUROR MAHR:      Yes, sir.
+
+16                       MR. HILL:     Okay.    Thank you, sir.
+
+17                       Now, I want to talk to you a little bit,
+
+18   folks, about PMC and its business model.               PMC develops
+
+19   and sells technology that Mr. Harvey and his co-inventor
+
+20   created, but it doesn't actually make a product at
+
+21   present.      It's a technology company, not a producing
+
+22   company.
+
+23                       Is there anyone that's familiar with PMC
+
+24   or other companies like PMC that are in the business of
+
+25   selling technology, licensing technology?               Anybody
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 44 of 106 PageID #:
+                                   10295
+44  
+
+
+1    familiar with businesses of that sort?
+
+2                         Is there anyone who feels that if you
+
+3    don't actually make or sell what you patent, then you
+
+4    shouldn't be able to make other people pay for using
+
+5    your invention?        Basically use it or lose it?
+
+6                         And let me -- I'm going to pick on
+
+7    somebody for that.         Let me -- Mr. Johnson over here, you
+
+8    mentioned you're a regular participant in this, so I
+
+9    felt like maybe I could call on you.
+
+10                        You get a lot of jury summons, sir?
+
+11                        JUROR JOHNSON:      Yes, sir.
+
+12                        MR. HILL:    Thank you for answering them
+
+13   dutifully.      Let me ask you about that.           Do you have any
+
+14   feelings about a company who has a patent that doesn't
+
+15   make a product ought to be able to enforce that patent
+
+16   against other people?
+
+17                        JUROR JOHNSON:      I believe honestly, if
+
+18   you patent it, you need to either use it -- use it or
+
+19   lose it.      Yes.
+
+20                        MR. HILL:    Use it or lose it?
+
+21                        JUROR JOHNSON:      Yes.
+
+22                        MR. HILL:    You would start out in a case
+
+23   like this where you have a company like PMC that doesn't
+
+24   make a product, they patented it but don't make a
+
+25   product that that would influence your decision about
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 45 of 106 PageID #:
+                                   10296
+45  
+
+
+1    them being -- trying to enforce it against people who do
+
+2    use it?
+
+3                        JUROR JOHNSON:        Say it again.
+
+4                        MR. HILL:     PMC doesn't make a product.
+
+5    They have a patent.         They don't make a product.          Based
+
+6    on your view that you ought to use it or lose it, that
+
+7    would influence your view of whether PMC ought to be
+
+8    here suing somebody over their patent starts you out
+
+9    leaning against PMC likely because of that?
+
+10                       JUROR JOHNSON:        Pretty much.
+
+11                       MR. HILL:     Okay.     Thank you, sir.
+
+12                       Let me ask here down the row.           Let's see.
+
+13   Mr. Bankston, you're right there close, so we won't have
+
+14   to move the microphone far.
+
+15                       You agree or disagree with Mr. Johnson?
+
+16                       JUROR BANKSTON:        I disagree.    If you look
+
+17   at John Browning, he had patents for many weapons.                  He
+
+18   had Winchester build them, and when they wouldn't build
+
+19   them, then they would go -- he went across the ocean to
+
+20   a placed called Fabrique Nationale.
+
+21                       MR. HILL:     Uh-huh.
+
+22                       JUROR BANKSTON:        So he did the labor, and
+
+23   he just had someone else manufacture it for him.
+
+24                       Is that the question?
+
+25                       MR. HILL:     Yes, sir.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 46 of 106 PageID #:
+                                   10297
+46  
+
+
+1                        JUROR BANKSTON:       Okay.
+
+2                        MR. HILL:     That's right.
+
+3                        What about this:       What if he didn't have
+
+4    somebody manufacture it at all?            He developed the
+
+5    technology and he offered the technology for sale and
+
+6    then someone used his technology without his permission,
+
+7    should he have a right to go after them?
+
+8                        JUROR BANKSTON:       Yeah, because if someone
+
+9    trespasses on my land, I'm going after them.
+
+10                       MR. HILL:     Okay.    Let me ask around the
+
+11   room.     We'll just go down the row here.            Let's start
+
+12   with No. 2 here, Ms. Jorgenson.
+
+13                       Ms. Jorgenson, we've heard two points of
+
+14   view.     Do you think you align more with what you heard,
+
+15   use it or lose it, or would you be open to a company
+
+16   that has a patent but doesn't make a product, enforcing
+
+17   those property rights against someone?
+
+18                       JUROR JORGENSON:       I believe Juror No. 7
+
+19   that you should -- whoever uses something that you've
+
+20   invented, they -- they need to purchase that or they
+
+21   need to have permission for the use and not use it
+
+22   without permission.
+
+23                       MR. HILL:     Let's go down the row here.
+
+24   Let's -- let's go next to you there, Mr. Senn.                Do you
+
+25   agree or disagree with Ms. Jorgenson?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 47 of 106 PageID #:
+                                   10298
+47  
+
+
+1                        JUROR SENN:      I believe that I disagree.
+
+2    If they went through the proper procedures to acquire
+
+3    that patent, it's within their rights to use it as they
+
+4    see fit.
+
+5                        MR. HILL:     Now, what if they're in PMC's
+
+6    case where we acquired the patent from the Patent
+
+7    Office, but we don't make a product with it; we sell
+
+8    that technology to others to use, if they wish.                 In this
+
+9    case, we brought a lawsuit because we say somebody's
+
+10   using it without permission.
+
+11                       You more in the use-it-or-lose-it camp,
+
+12   or do you think a party ought to be able to enforce that
+
+13   property right that somebody was using?
+
+14                       JUROR SENN:      It's their patent.       They can
+
+15   do with it as -- as they wish.              If they choose to use
+
+16   it, they can.       If they choose not to use it, it's their
+
+17   patent and can tell people not to use it.
+
+18                       MR. HILL:     Appreciate you.        Let's go
+
+19   right next to you there, No. 4.
+
+20                       Ms. Barrington, do you have an opinion?
+
+21                       JUROR BARRINGTON:        Yes, sir.     I agree
+
+22   with the gentleman.
+
+23                       JUROR MAHR:      Why?
+
+24                       JUROR BARRINGTON:        Why?   Why patent it
+
+25   and, you know, use it?          If somebody else is going to use
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 48 of 106 PageID #:
+                                   10299
+48  
+
+
+1    it, they need to pay for it.           The service is rendered
+
+2    basically.
+
+3                        MR. HILL:     Thank you, ma'am.
+
+4                        We'll go right here to Ms. Blankenship.
+
+5                        JUROR BLANKENSHIP:        I agree.     What's the
+
+6    patent process for?         If you have a patent, then we need
+
+7    to abide by that.
+
+8                        MR. HILL:     All right.     Let's go back here
+
+9    to the back row, No. 8.
+
+10                       Mr. Hensley, will you weigh in for us?
+
+11                       JUROR HENSLEY:        If they own a patent,
+
+12   then I think that they need -- if somebody's going to
+
+13   use it, then they need to be compensated for it.
+
+14                       MR. HILL:     Thank you, sir.        Let's go
+
+15   right next to you there, No. 9.
+
+16                       Mr. Adair, we've heard various opinions.
+
+17   There's nothing wrong with that.             Everybody has a right
+
+18   to believe and feel how they wish, because that's why we
+
+19   do this selection process, to find out where people
+
+20   stand.
+
+21                       What do you think?
+
+22                       JUROR ADAIR:      I agree with -- that if you
+
+23   have a patent, you should be able to receive money for
+
+24   your patent.
+
+25                       MR. HILL:     Okay.     Let's -- let's ask next
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 49 of 106 PageID #:
+                                   10300
+49  
+
+
+1    to you there, Mr. Mahr?
+
+2                        JUROR MAHR:      Yeah.     I agree with most of
+
+3    them that if you've got a patent, you use it or lose it
+
+4    or you just -- if you want to sell it off to somebody
+
+5    else, it's your real prerogative.
+
+6                        MR. HILL:     Okay.      Next to you there.      Mr.
+
+7    Jones?
+
+8                        JUROR JONES:      Well, you go through the
+
+9    patent process for a reason.           If you have the patent on
+
+10   it and somebody else uses it, it's your patent.
+
+11                       MR. HILL:     Okay.      Next to you there.
+
+12                       JUROR PRINCE:      Yeah.     If you -- if you
+
+13   own the patent then -- I mean, it's yours to do with
+
+14   what you want to.        If I own a piece of property, I can
+
+15   do with it as I please in regards to the law.                So it's
+
+16   the same way I feel about the patent.
+
+17                       MR. HILL:     All right.      And we'll finish
+
+18   out the row here.
+
+19                       Yes, sir, Mr. Parker?
+
+20                       JUROR PARKER:      Yes.     I believe about the
+
+21   same.     If you own a patent and it's a viable patent,
+
+22   then, yes, you should have the right to either sell it.
+
+23   I mean, if you wanted to hold on to it and not even sell
+
+24   it, it's your patent; you own it.
+
+25                       MR. HILL:     All right.      And No. 14,
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 50 of 106 PageID #:
+                                   10301
+50  
+
+
+1    Mr. Pharr?
+
+2                        JUROR PHARR:      Yes, sir.     I agree too that
+
+3    if you own a patent, then you should either sell it or
+
+4    don't sell it or whatever you want to do with it.
+
+5                        MR. HILL:     Okay.
+
+6                        JUROR PHARR:      And while I'm here, I do
+
+7    know Zach White.        I didn't know if you seen me wave my
+
+8    hand.
+
+9                        MR. HILL:     Mr. White, the trooper out
+
+10   here?
+
+11                       JUROR PHARR:      Yes, sir.
+
+12                       MR. HILL:     I hope you know him under good
+
+13   circumstances.
+
+14                       JUROR PHARR:      Yes, sir.     I know him from
+
+15   a nephew-in-law, and I haven't seen him in about three
+
+16   years.
+
+17                       MR. HILL:     Okay.
+
+18                       JUROR PHARR:      I'm glad to get to meet him
+
+19   again.
+
+20                       MR. HILL:     Thank you, sir.       Let me ask
+
+21   the question.
+
+22                       Oh, I'm sorry.        Yes, ma'am,
+
+23   Ms. Jorgenson?
+
+24                       JUROR JORGENSON:        I didn't want to
+
+25   interrupt earlier.         I also grew up with Zach White's
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 51 of 106 PageID #:
+                                   10302
+51  
+
+
+1    wife.
+
+2                        MR. HILL:     Okay.
+
+3                        JUROR JORGENSON:        We went to daycare
+
+4    together as we grew up.          I don't personally know him,
+
+5    but I went to school with his wife.
+
+6                        MR. HILL:     I'm glad to know you also know
+
+7    him under good circumstances.
+
+8                        [Laughter]
+
+9                        MR. HILL:     Let's go here to Mr. Sanchez.
+
+10   I'm going to stop this because I'm not going to run
+
+11   through the whole panel.
+
+12                       THE COURT:     You've got about four more
+
+13   minutes, Mr. Hill.
+
+14                       MR. HILL:     Thank you.     Thank you, Your
+
+15   Honor.
+
+16                       Mr. Sanchez, I tell you what, let me just
+
+17   ask generally with the panel and I'll ask you at the
+
+18   same time.      Is there anyone who feels if you don't use
+
+19   it you lose it?        If you get a patent and you aren't
+
+20   practicing that patent, but you own those rights, you
+
+21   shouldn't be able to enforce it against others who use
+
+22   those rights?
+
+23                       JUROR SANCHEZ:        I personally have mixed
+
+24   emotions about that.
+
+25                       MR. HILL:     Yes, sir.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 52 of 106 PageID #:
+                                   10303
+52  
+
+
+1                        JUROR SANCHEZ:        I feel if you've got a
+
+2    patent that promotes progress for, let's say, the
+
+3    greater good of humanity, it should be used.                And I also
+
+4    feel that it needs to be bought, paid for, given
+
+5    permission to use it by someone.             So if you've got
+
+6    something so good and you don't use it and you sit on
+
+7    it, it's kind of like it's not good either.
+
+8                        MR. HILL:     Okay.     Since we do have a few
+
+9    minutes and we're on the subject, we might as well stick
+
+10   with it.
+
+11                       Ms. Rockwell, let me ask your opinion.
+
+12                       JUROR ROCKWELL:        I think if you have a
+
+13   patent, if it's yours whether you use it or not, someone
+
+14   should have to have permission, or do whatever the
+
+15   process is to get somebody else's patent.                You should
+
+16   have permission.        You shouldn't be able to trespass.
+
+17                       MR. HILL:     Okay.     All right.    We'll --
+
+18   Mr. Greer?
+
+19                       JUROR GREER:      I -- I agree.      That's what
+
+20   the patent law is all about.           If -- if you own the
+
+21   patent on it, until it expires, then that's what it's
+
+22   for.
+
+23                       MR. HILL:     Okay.     And I tell you what,
+
+24   I've asked it generally.          Does anybody else feel like
+
+25   they're in the use-it-or-lose-it camp?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 53 of 106 PageID #:
+                                   10304
+53  
+
+
+1                        No.   Okay.    I'm going to run out of time
+
+2    here, folks, because Judge Gilstrap keeps us on a tight
+
+3    schedule around this courthouse, which is a good thing,
+
+4    because you won't have to hear from us for too long.
+
+5                        He told you about the burdens of proof in
+
+6    this case.      He talked about the preponderance of the
+
+7    evidence standard.         That's the burden by which we have
+
+8    to prove infringement.          That means just enough to tip
+
+9    the scale.      To use a football analogy, pass the 50-yard
+
+10   line.
+
+11                       Zynga is going to claim our patent is
+
+12   invalid, and to prove that, they have to do it by clear
+
+13   and convincing evidence.          That means really tip the
+
+14   scales.      Football field again, getting down into the red
+
+15   zone maybe.
+
+16                       Is there anybody that feels that's
+
+17   unfair?      We have a different burden of proof to prove
+
+18   infringement that they do to prove the invalidity of our
+
+19   patents?
+
+20                       That's what the law says, but you're
+
+21   entitled to disagree with the law.             Is there anybody
+
+22   that thinks that's unfair?
+
+23                       The last thing I want to ask you about is
+
+24   the damages we're going to seek in this case.                The
+
+25   damages in this case could exceed $20 million.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 54 of 106 PageID #:
+                                   10305
+54  
+
+
+1                        Is there anybody who hears that number
+
+2    and says:      You know what, that's more money that I think
+
+3    anybody ought to be asking for at the courthouse?
+
+4                        Yes, ma'am?
+
+5                        THE COURT:     You got two minutes, Counsel.
+
+6                        MR. HILL:     Thank you, Your Honor.
+
+7    That's No. 4; that's Ms. Barrington.
+
+8                        JUROR BARRINGTON:       That's just a lot of
+
+9    money.
+
+10                       MR. HILL:     It is a lot of money.
+
+11                       JUROR BARRINGTON:       It's just a scary
+
+12   figure.
+
+13                       MR. HILL:     And that's what I want to
+
+14   know.
+
+15                       JUROR BARRINGTON:       I mean, since we don't
+
+16   know what their actual income is or whatever, but that's
+
+17   a lot of money.
+
+18                       MR. HILL:     It is and there's going to be
+
+19   evidence on these issues, but what I want to know is,
+
+20   who hears that number and thinks:             You know what, that
+
+21   just sounds like -- that scares me, that amount of money
+
+22   to be dealt with in a lawsuit?
+
+23                       Anybody else?      Mr. Johnson, did you have
+
+24   some comment about that?
+
+25                       JUROR JOHNSON:       Oh, no.    That's a lot of
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 55 of 106 PageID #:
+                                   10306
+55  
+
+
+1    money.
+
+2                        MR. HILL:     I agree, it is.
+
+3                        JUROR BANKSTON:        I -- I do.    I'm sorry
+
+4    for sitting.       That -- that's a lot of money, but in the
+
+5    scope of things, who knows?           I mean, I'd have to have
+
+6    all the evidence and I'd have to weigh it out myself to
+
+7    go, no, you're -- you're -- that's -- that's wrong, or
+
+8    150 million.
+
+9                        MR. HILL:     Right.
+
+10                       JUROR BANKSTON:        I don't know, but at
+
+11   this time, I'm like, that's a chunk of change.
+
+12                       MR. HILL:     Okay.     All right.    I
+
+13   appreciate it.
+
+14                       Anybody else, that just hits you and
+
+15   makes your knee jerk when you hear that?
+
+16                       Mr. Greer, do you fall into that camp,
+
+17   that that number makes you uncomfortable?
+
+18                       Anybody else, that number makes you
+
+19   uncomfortable?
+
+20                       Mr. Sanchez --
+
+21                       JUROR SANCHEZ:        Yes, sir.
+
+22                       MR. HILL:     -- you feel that way?
+
+23                       JUROR SANCHEZ:        Yes, sir.
+
+24                       MR. HILL:     Okay.     I appreciate that.       I
+
+25   appreciate your candor.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 56 of 106 PageID #:
+                                   10307
+56  
+
+1                        Anybody else before I end?
+
+2                        Folks, we only get a limited time.            The
+
+3    last thing I want to ask to you is, if you were me, a
+
+4    lawyer trying to represent a client, trying to put a
+
+5    jury together in a patent case, is there something about
+
+6    you or your life experience that you're sitting there
+
+7    thinking:      I'd bet he'd want to know this, because it's
+
+8    relevant before he chooses a jury to fairly represent
+
+9    his client?
+
+10                       Anybody have anything of that sort in the
+
+11   back of their mind?
+
+12                       I appreciate your time.         I appreciate you
+
+13   being here again.
+
+14                       And, Your Honor, thank you for the
+
+15   opportunity to speak to the jury.
+
+16                       THE COURT:     All right.      Ms. Smith, you
+
+17   may address the panel on behalf of the Defendant.
+
+18                       MS. SMITH:     Thank you, Your Honor.
+
+19                       THE COURT:     Would you like a warning?
+
+20                       MS. SMITH:     I'd appreciate a five-minute
+
+21   warning, please.
+
+22                       THE COURT:     All right.
+
+23                       MS. SMITH:     May it please the Court.
+
+24                       THE COURT:     Proceed.
+
+25  
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 57 of 106 PageID #:
+                                   10308
+57  
+
+
+1                        MS. SMITH:     Good morning, again, Ladies
+
+2    and Gentlemen.        Again, my name is Melissa Smith, and I'm
+
+3    proud to represent Zynga in this case.              And Zynga's the
+
+4    Defendant in this case.
+
+5                        Some of you -- some of you are familiar
+
+6    with Zynga.       We've already heard that some of you play
+
+7    the Words with Friends games, and some of you, if you're
+
+8    lucky enough to be chosen, will get to know us through
+
+9    our games throughout the next week.
+
+10                       First, I always want to start out in
+
+11   joining Mr. Hill again by thanking you for your service.
+
+12   I know that -- I know that you come, Ms. Jorgenson, from
+
+13   Gladewater; Mr. Pharr from Big Sandy.              I know that you
+
+14   come from pretty far places every morning, and we
+
+15   appreciate that.
+
+16                       I also know that every minute that we
+
+17   spend here is a minute you spend away from your families
+
+18   and your jobs, and I appreciate that.
+
+19                       Now, you've been generous in sharing.
+
+20   Some of you were able to share some information on your
+
+21   juror questionnaires with us, and others have been
+
+22   generous in sharing information today.              So I'll tell you
+
+23   a little bit about myself before I begin asking you some
+
+24   questions.
+
+25                       I, like Judge Gilstrap, graduated from
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 58 of 106 PageID #:
+                                   10309
+58  
+
+
+1    Baylor Law School.         I graduated a little bit after Judge
+
+2    Gilstrap, about 16 years ago.            Came to Marshall, Texas,
+
+3    right on graduating from law school, and I've been
+
+4    practicing here ever since.           I have a law firm called
+
+5    Gillam & Smith.        It's an old yellow house that sits
+
+6    about a block behind this courthouse.
+
+7                        I live by Ms. Henson over in Jefferson.
+
+8    Actually, I'm out in the county, in Marion County.                  I
+
+9    live there with my husband, and we have two children.
+
+10   We have a two-year-old baby boy and a six-month-old baby
+
+11   girl.     So -- so in addition to this trial, I'm not
+
+12   getting much sleep these days.
+
+13                       You heard a little bit about what this
+
+14   case is going to be about.           I'll give you a little -- a
+
+15   little snippet and tell you that -- that way back in the
+
+16   1980s before cell phones or smartphones as we know them,
+
+17   before the Internet was commercially available, and
+
+18   certainly before any -- any social media, like Facebook,
+
+19   that PMC, the Plaintiff in this case -- case, came up
+
+20   with an idea, and that idea, they called it personalized
+
+21   TV.
+
+22                       Now, fastforward to this day in this
+
+23   courtroom and this next week.            And what you're going to
+
+24   hear PMC say is that that idea for personalized TV,
+
+25   those '80s kind of vintage -- vintage patents and ideas
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 59 of 106 PageID #:
+                                   10310
+59  
+
+
+1    they had, that they actually apply now to Zynga's
+
+2    web-based games, web-based games like Words with Friends
+
+3    and FarmVille that some of you know.
+
+4                        And so what you might guess is that when
+
+5    Mr. Hill made his introductory comments, I'm going to
+
+6    disagree with just about -- just about everything he
+
+7    said, but we've got a full week to talk about that with
+
+8    those of you lucky enough to be chosen and to convince
+
+9    you of our various positions.
+
+10                       But I, like Mr. Hill, want to use this
+
+11   precious little time that I have with you this morning
+
+12   to really hear from you.          Now, knowing that we're
+
+13   dealing with some '80s technology and that technology
+
+14   isn't going to be as tricky, of course, as the
+
+15   technology we have today, but we'll also be learning
+
+16   about Zynga's technology in this case.
+
+17                       So you see a theme developing here.            And
+
+18   I want to -- I want to kind of understand your comfort
+
+19   level with technology generally.             So I'm going to start
+
+20   with Juror No. 1.
+
+21                       And that's Mr. Newsom; is that correct?
+
+22                       JUROR NEWSOM:      Yes, ma'am.
+
+23                       MS. SMITH:     I want to know, Mr. Newsom,
+
+24   do you have a computer in your home?
+
+25                       JUROR NEWSOM:      Yes, ma'am.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 60 of 106 PageID #:
+                                   10311
+60  
+
+
+1                        MS. SMITH:     Okay.    When something goes
+
+2    wrong with that computer and it goes on the blink, are
+
+3    you the one to fix it, or do you call someone to fix it?
+
+4                        JUROR NEWSOM:      I call a friend.
+
+5                        MS. SMITH:     All right.      All right.     Thank
+
+6    you, sir.
+
+7                        Ms. Jorgenson, same question for you.             Do
+
+8    you use a computer in the home?
+
+9                        JUROR JORGENSON:       Yes.
+
+10                       MS. SMITH:     Are you the one that everyone
+
+11   goes to when it's time to fix it?
+
+12                       JUROR JORGENSON:       Lord, no.
+
+13                       MS. SMITH:     All right.      Okay.    Thank you,
+
+14   ma'am.
+
+15                       All right.     Mr. Senn, got a computer in
+
+16   the home?
+
+17                       JUROR SENN:      I do, and I also send it out
+
+18   to be repaired.
+
+19                       MS. SMITH:     All right.      You're not the
+
+20   one that starts tinkering with it or anything like that?
+
+21                       JUROR SENN:      No, ma'am.
+
+22                       MS. SMITH:     All right.      Let's -- let's
+
+23   look at the rest of the row, and I have a question for
+
+24   the four of you.        Do any of you think:        Well, gosh, I
+
+25   know more than probably the average person knows about
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 61 of 106 PageID #:
+                                   10312
+61  
+
+
+1    computers and technology?           Any of you four have that
+
+2    thought?
+
+3                        All right.     I'm going -- I'm going to
+
+4    assume then that if you-all have computers in the home,
+
+5    are you calling someone else when it's time to fix them?
+
+6                        Is that correct for Juror No. 4,
+
+7    Ms. Barrington?
+
+8                        JUROR BARRINGTON:       Yes, ma'am.
+
+9                        MS. SMITH:     All right.      Juror No. 5,
+
+10   Ms. Blankenship?
+
+11                       JUROR BLANKENSHIP:        Same here.
+
+12                       MS. SMITH:     All right.      Who do you call
+
+13   when it's time to fix a computer?
+
+14                       JUROR BLANKENSHIP:        We usually call my --
+
+15   a friend of my husband's who works in IT at the
+
+16   university.
+
+17                       MS. SMITH:     Okay.    All right.      Fair
+
+18   enough.      Thank you, ma'am.
+
+19                       Mr. Johnson, we -- we talked about
+
+20   technology going back to the '80s, as far back in the
+
+21   '80s.     You may not fix your computer today, but could
+
+22   you program the VCR?
+
+23                       Remember, back in the '80s, that's what
+
+24   we were all struggling to do at times.              Were you the one
+
+25   to program the VCR?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 62 of 106 PageID #:
+                                   10313
+62  
+
+
+1                        JUROR JOHNSON:       No.
+
+2                        MS. SMITH:     No?     Okay.    Thank you, sir.
+
+3                        What about you, Mr. Bankston?
+
+4                        JUROR BANKSTON:        Yes, I -- I could.
+
+5                        MS. SMITH:     All right.
+
+6                        JUROR BANKSTON:        In the '80s.
+
+7                        MS. SMITH:     In the '80s.
+
+8                        JUROR BANKSTON:        Some of the stuff that
+
+9    goes on today, I hand the remote to my kids.
+
+10                       MS. SMITH:     Well, that was kind of a
+
+11   trick question.        So I'm going to fastforward now from --
+
+12   from that '80s technology that they're -- they're going
+
+13   to talk about over at the Plaintiff's table to the
+
+14   computer you have in your home today.
+
+15                       Are you the one that tinkers with the
+
+16   computer when it goes on the -- on the blitz (sic)?
+
+17                       JUROR BANKSTON:        No, I send it off.
+
+18                       MS. SMITH:     Okay.       Thank you, sir.
+
+19                       JUROR BANKSTON:        Okay.
+
+20                       MS. SMITH:     I appreciate that.
+
+21                       Now, on the second row led by the second
+
+22   row leader, Mr. Hensley, Mr. Hensley's row, who on that
+
+23   row says:      You know, I know a little bit more than the
+
+24   average person about computers?             Does anyone fit in that
+
+25   category?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 63 of 106 PageID #:
+                                   10314
+63  
+
+
+1                        I was expecting that from you.           Let's
+
+2    see.     That's Mr. Prince.       Now, I read that you're a
+
+3    technology director.         So I figured I'd spend some time
+
+4    talking to you.
+
+5                        JUROR PRINCE:      Yes.
+
+6                        MS. SMITH:     Tell me, where do you work?
+
+7                        JUROR PRINCE:      I work at McLeod
+
+8    Independent School District.
+
+9                        MS. SMITH:     Okay.      And tell me what you
+
+10   do on a day-to-day basis.
+
+11                       JUROR PRINCE:      I'm the technology
+
+12   director.      I'm the guy they call to fix everything from
+
+13   the -- from the computers.           We have --
+
+14                       MS. SMITH:     You're the guy that
+
+15   everybody --
+
+16                       JUROR PRINCE:      We're getting -- we have
+
+17   iPads for all our kids and laptops for all of our
+
+18   upper-level kids.        So I'm the only one there, and I'm in
+
+19   charge of about 500 computers all by myself.
+
+20                       MS. SMITH:     Okay.
+
+21                       JUROR PRINCE:      All the networking.
+
+22                       MS. SMITH:     All right.      So your comfort
+
+23   level with technology generally is -- on a 1 to 10,
+
+24   you'd probably be a 10?
+
+25                       JUROR PRINCE:      Yes, ma'am.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 64 of 106 PageID #:
+                                   10315
+64  
+
+
+1                        MS. SMITH:     Okay.    You ever read or write
+
+2    code?
+
+3                        JUROR PRINCE:      Never code, no, ma'am.
+
+4    More -- more networking-type stuff is really what I like
+
+5    to do.     So networks and routing and VLANs and all that
+
+6    kind of stuff.
+
+7                        MS. SMITH:       Thank you, sir.
+
+8                        JUROR PRINCE:      Uh-huh.
+
+9                        MS. SMITH:     I appreciate it.
+
+10                       The rest of you on the second row on
+
+11   Mr. Hensley's row, do you fit in the category that when
+
+12   something goes wrong, it's time to call someone else?
+
+13                       You're shaking your head, Juror No. 10,
+
+14   Mr. Mahr.      Does that describe you properly?
+
+15                       JUROR MAHR:      No, because I'll be honest
+
+16   with you, I don't have a computer at home.               I have no
+
+17   interest in working with computers.              I just really
+
+18   don't.     I apologize for that, but that's just me.              I'm
+
+19   old-fashioned.
+
+20                       MS. SMITH:     You have no need to
+
+21   apologize, but I do represent a web-based game maker, so
+
+22   I appreciate your honesty on that point, because we
+
+23   might not always see eye-to-eye on computer things.
+
+24                       Thank you.     Thank you.
+
+25                       Was there another hand?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 65 of 106 PageID #:
+                                   10316
+65  
+
+
+1                        Juror -- Mr. Pharr?
+
+2                        JUROR PHARR:      What's that?
+
+3                        MS. SMITH:     Do you have a computer in
+
+4    your home?
+
+5                        JUROR PHARR:      Yes, ma'am, I do.       My wife,
+
+6    she's on it most of the time, but if something goes
+
+7    wrong, we usually call our kids, you know.
+
+8                        MS. SMITH:     Thank you, sir.
+
+9                        JUROR PHARR:      Or our grandkids.
+
+10                       MS. SMITH:     All right.      Anyone on the --
+
+11   what I'll call the cheap seats out here, beginning with
+
+12   Mr. Sanchez, anyone out there that would describe
+
+13   themselves having more knowledge than the average person
+
+14   about computers?
+
+15                       All right.     Juror No. 19, that's
+
+16   Mr. Stolle?
+
+17                       JUROR STOLLE:      Yes, ma'am.
+
+18                       MS. SMITH:     Mr. Stolle?
+
+19                       JUROR STOLLE:      I actually am the first
+
+20   person to do the diagnostics in our learning department
+
+21   before we go to the IT department.             They come to me
+
+22   first.     And my mom and dad call me, and I do work on my
+
+23   own computer at home.
+
+24                       MS. SMITH:     All right.      So, Mr. Stolle,
+
+25   you probably have the same working knowledge as
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 66 of 106 PageID #:
+                                   10317
+66  
+
+
+1    Mr. Prince who described his day-to-day?
+
+2                        JUROR STOLLE:      Well, I don't have 500
+
+3    machines to work on.         I've only got about 30, so...
+
+4                        MS. SMITH:     Fair enough.      Thank you, sir.
+
+5    And who did I see?         It gets more difficult for me to see
+
+6    your numbers.       I apologize.
+
+7                        Mr. Price, tell me about what you know
+
+8    about computers.
+
+9                        JUROR PRICE:      Well, I didn't mention it
+
+10   earlier, but I work for Swift Uniforms, and I am their
+
+11   IT tech.      I have about four desktops and like six
+
+12   laptops and a server at my house.
+
+13                       MS. SMITH:     That certainly qualifies as
+
+14   more than the average person.            I agree with you.
+
+15                       JUROR PRICE:      Yeah, that's -- yeah.
+
+16                       MS. SMITH:     Okay.    Thank you.      Thank you
+
+17   for that.
+
+18                       All right.     Zynga's games are web-based
+
+19   games, as I mentioned before, and they often are used in
+
+20   conjunction with Facebook.           Do I have any Facebook users
+
+21   on the first row?
+
+22                       Ms. Jorgenson, does Racquet & Jog have a
+
+23   Facebook page?
+
+24                       JUROR JORGENSON:       Yes.
+
+25                       MS. SMITH:     I thought you'd say that.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 67 of 106 PageID #:
+                                   10318
+67  
+
+
+1    Are you the one that does the updates?
+
+2                        JUROR JORGENSON:       I sometimes do that on
+
+3    Instagram and Facebook.
+
+4                        MS. SMITH:     Thank you.      Thanks.
+
+5                        I have some other hands.         Mr. Newsom, are
+
+6    you on Facebook?
+
+7                        JUROR NEWSOM:      I have an account, but I'm
+
+8    rarely on it.
+
+9                        MS. SMITH:     Okay.    Thank you.
+
+10                       Others on the first row on Facebook?
+
+11   Everyone's on Facebook, almost, on the first row.
+
+12   Not Juror No. 7.        Everyone but Mr. Bankston.
+
+13                       All right.     Ms. Barrington, how often do
+
+14   you -- do you get on Facebook?
+
+15                       JUROR BARRINGTON:       Probably about twice a
+
+16   month.
+
+17                       MS. SMITH:     Okay.    And, Ms. Blankenship,
+
+18   what do use Facebook for?
+
+19                       JUROR BLANKENSHIP:        I keep up with my
+
+20   kids.     I keep up with my students.          Just -- I just read
+
+21   it.     I just check in pretty much every day and just see
+
+22   what's going on.
+
+23                       MS. SMITH:     I have young kids, but I have
+
+24   a law partner with older kids, and he's actually able to
+
+25   track his children by Facebook because they -- you know,
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 68 of 106 PageID #:
+                                   10319
+68  
+
+
+1    so I -- I --
+
+2                        JUROR BLANKENSHIP:         I don't know that I
+
+3    want to know exactly where they are.
+
+4                        MS. SMITH:     Mine are too young to know if
+
+5    that's going to be important.
+
+6                        JUROR BLANKENSHIP:         All right.
+
+7                        MS. SMITH:     Thank you.      Thanks.
+
+8                        All right.     Juror No. 6, Mr. Johnson, are
+
+9    you on Facebook?
+
+10                       JUROR JOHNSON:       Yes, ma'am.
+
+11                       MS. SMITH:     Are you a daily user?
+
+12                       JUROR JOHNSON:       No.    Just keep up with
+
+13   the kids and Waskom Wildcat football.
+
+14                       MS. SMITH:     All right.      Thank you, sir.
+
+15                       Second row, led by Mr. Hensley, anyone on
+
+16   Facebook on the second row?
+
+17                       All right.     Jurors 11, 12, 13, and 14.
+
+18   Mr. Pharr, you-all use Facebook?               Regular, daily users
+
+19   of Facebook?       Mr. Pharr, you use it -- how often do you
+
+20   use it?
+
+21                       JUROR PHARR:      I just go on there once in
+
+22   a while.      I sell a product called Zeal, and I go on
+
+23   there and check it out every once in a while.                But my
+
+24   wife mainly does it.
+
+25                       MS. SMITH:     What kind of product is Zeal?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 69 of 106 PageID #:
+                                   10320
+69  
+
+
+1                        JUROR PHARR:      Zeal is a health product.
+
+2    It's a vitamin and mineral that you take every day,
+
+3    powder form.
+
+4                        MS. SMITH:     Thank you, sir.
+
+5                        Back to Mr. Sanchez' row and beyond, can
+
+6    I see hands of anyone that uses Facebook?
+
+7                        16, 17, 18, 19, 20, 21, 22, 27.
+
+8                        Next to Mr. -- Ms. Henson, Ms. Strange.
+
+9    Okay.     Thank you.
+
+10                       Cell phones, this case necessarily
+
+11   involves cell phone technology and playing web-based
+
+12   games on cell phones.         Cell phones have come a long way,
+
+13   so what I'd like to kind of explore with you guys is who
+
+14   owns -- on the first two rows, who currently has a cell
+
+15   phone?
+
+16                       Everybody.
+
+17                       Okay.    Whose phone is a smartphone?
+
+18   Everybody but Juror No. 10, Mr. Mahr?
+
+19                       JUROR MAHR:      Yes, ma'am.
+
+20                       MS. SMITH:     All right.      Mr. Mahr, let's
+
+21   talk about when you got your -- when did you get your
+
+22   cell phone?
+
+23                       JUROR MAHR:      I think I got my first cell
+
+24   phone about three, four years ago.
+
+25                       MS. SMITH:     All right.      What's your cell
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 70 of 106 PageID #:
+                                   10321
+70  
+
+
+1    phone look like?
+
+2                        JUROR MAHR:      It's a flip phone and it's
+
+3    just basic buy your minutes from Verizon.
+
+4                        MS. SMITH:     Okay.    Thank you, sir.       And
+
+5    that was -- was that the first cell phone you ever had?
+
+6                        JUROR MAHR:      Yes, ma'am.
+
+7                        MS. SMITH:     All right.      Thank you, sir.
+
+8                        On Mr. Hensley's row, that second row,
+
+9    who has had a cell phone longer than three or four
+
+10   years?
+
+11                       Okay.    Jurors No. 11 through 14.
+
+12   Mr. Pharr, when did you get your first cell phone?
+
+13                       JUROR PHARR:      About --
+
+14                       THE COURT:     Let's wait until the mic gets
+
+15   there, Mr. Pharr.        Thank you.
+
+16                       JUROR PHARR:      About five years ago.
+
+17                       MS. SMITH:     Okay.
+
+18                       JUROR PHARR:      I got it with work.        It
+
+19   come with the job.
+
+20                       MS. SMITH:     And -- and you now have a
+
+21   smartphone?
+
+22                       JUROR PHARR:      Yes, ma'am.      They upgraded.
+
+23                       MS. SMITH:     Okay.    Thank you, sir.
+
+24                       Did any of you have -- have any of you
+
+25   had a cell phone that goes way back?              You know, we had
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 71 of 106 PageID #:
+                                   10322
+71  
+
+
+1    the bag phones and things.           I see some heads shaking.
+
+2    Juror No. 4, Ms. Barrington, did you have one of those
+
+3    phones in the bag?
+
+4                        JUROR PHARR:      Yes, ma'am.
+
+5                        MS. SMITH:     So you've had a cell phone
+
+6    for a good long time?
+
+7                        JUROR PHARR:      Yes, ma'am.
+
+8                        MS. SMITH:     And Juror No. 11, Mr. Jones,
+
+9    did you have that technology that goes way back from the
+
+10   first cell phone?
+
+11                       JUROR JONES:      Yes, we had a bag phone.
+
+12                       MS. SMITH:     What did that look like?
+
+13                       JUROR JONES:      Looked like a suitcase,
+
+14   yeah, but it got really good reception.
+
+15                       MS. SMITH:     All right.      So we've come a
+
+16   long way in some respects but not in others.
+
+17                       JUROR JONES:      Yes.
+
+18                       MS. SMITH:     Is that what you're saying?
+
+19                       JUROR JONES:      Yes.
+
+20                       MS. SMITH:     Thank you.      Thank you, sir.
+
+21   Anyone else have one of those bag phones?
+
+22                       All right.     Now, Mr. -- Ms. Blankenship,
+
+23   you are a Words with Friends player.              So I -- Mr. Hill
+
+24   asked you questions, you know, is that -- because of
+
+25   your love of Words with Friends, you know, would it be
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 72 of 106 PageID #:
+                                   10323
+72  
+
+
+1    hard to find against Zynga.
+
+2                        I have the opposite question for you.             Is
+
+3    there anything about your experience with Zynga or
+
+4    Zynga's games that you need to tell me about?                Kind of
+
+5    like the reception question, have you had any problems
+
+6    with the games, any frustration?
+
+7                        JUROR BLANKENSHIP:        No.   Just they don't
+
+8    accept some of my words.
+
+9                        [Laughter]
+
+10                       JUROR BLANKENSHIP:        I like to make words
+
+11   up.
+
+12                       [Laughter]
+
+13                       MS. SMITH:     Okay.
+
+14                       JUROR BLANKENSHIP:        No, no.    No problems.
+
+15                       MS. SMITH:     Got a client sitting at the
+
+16   table, and on behalf of Zynga, I'd like to apologize for
+
+17   that, I guess.        That's not --
+
+18                       JUROR BLANKENSHIP:        I'm a Spanish
+
+19   teacher, so sometimes I throw a Spanish word in.
+
+20                       MS. SMITH:     Thank you.       And, you know, I
+
+21   lose a lot of sleep preparing to talk to you guys, and I
+
+22   never know what's going to come up, and I wasn't
+
+23   prepared for that.
+
+24                       JUROR BLANKENSHIP:        Sorry.
+
+25                       MS. SMITH:     But thank you.       Thank you.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 73 of 106 PageID #:
+                                   10324
+73  
+
+
+1    Thank you, ma'am.
+
+2                        All right.     Mr. Prince, Mr. Parker, I'm
+
+3    going to tiptoe around and ask you the same question.
+
+4    Any -- any criticism of -- I know you both spend time
+
+5    playing Zynga games.         Anything I should know about
+
+6    because I'm here representing Zynga today?
+
+7                        No for both of you.        Thank you.
+
+8                        All right.     Generally on the panel, when
+
+9    I became a parent two years ago, prior to that, my
+
+10   husband and I would see these families out at dinner and
+
+11   they'd have a teenager playing a game and they'd have a
+
+12   little one watching a movie or something, and we would
+
+13   improperly judge them and say we're never going to do
+
+14   that; we're going to have these dinners where we all
+
+15   talk to one another.
+
+16                       Well, that was a ridiculous thought,
+
+17   because if we're going to have dinner for 30 minutes and
+
+18   enjoy it occasionally we let the little one watch --
+
+19   play a game or something, you know, something like that.
+
+20   So representing a game maker, I know there are people
+
+21   that have real strong opinions on Facebook and on these
+
+22   games.     And their wife may use them too much or their
+
+23   kids may use them too much, and representing a game
+
+24   maker I'd really like to know if anyone has any -- any
+
+25   real criticism of -- of what we do at Zynga, what we
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 74 of 106 PageID #:
+                                   10325
+74  
+
+
+1    make at Zynga.
+
+2                        Does anyone -- does anyone fit on that
+
+3    camp on Row No. 1, Mr. Newsom?
+
+4                        JUROR NEWSOM:        No.
+
+5                        MS. SMITH:     No.
+
+6                        Ms. Jorgenson?
+
+7                        JUROR JORGENSON:           (Shakes head
+
+8    negatively.)
+
+9                        MS. SMITH:     Mr. Senn, anything you know,
+
+10   on the first row, about what our business model is and
+
+11   what we make possible and the games we make possible?
+
+12                       And on the second row, I know I had a lot
+
+13   of Facebook users so I know there won't be any criticism
+
+14   there.
+
+15                       Anyone starting with Mr. Sanchez, any
+
+16   criticism about our business model, about Zynga and
+
+17   Facebook use and things like that?
+
+18                       Thank you.
+
+19                       JUROR SANCHEZ:        I don't play it.
+
+20                       MS. SMITH:     Mr. Sanchez, you don't play
+
+21   it?
+
+22                       JUROR SANCHEZ:        No, I don't play.
+
+23                       MS. SMITH:     Thank you, sir.
+
+24   Had anyone heard about this lawsuit before coming in the
+
+25   courtroom today?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 75 of 106 PageID #:
+                                   10326
+75  
+
+
+1                        Had anyone -- Mr. Hill spent some time
+
+2    describing the Plaintiff's business model, that they
+
+3    don't make anything, that they don't sell anything, that
+
+4    they license technology.
+
+5                        Has anyone -- I know some of you said in
+
+6    your questionnaires that you got your news online.                  Has
+
+7    anyone read anything about that type of business model
+
+8    online or otherwise?
+
+9                        We asked about -- or Mr. Hill asked some
+
+10   questions about prior jury service.             I know that
+
+11   Mr. Johnson is an expert on that, but have --
+
+12   Mr. Johnson, have you ever done a mock jury where you
+
+13   come in on the weekends or evenings and kind of the
+
+14   lawyers --
+
+15                       JUROR JOHNSON:       No, ma'am.
+
+16                       MS. SMITH:     -- pretend to try a case?
+
+17                       JUROR JOHNSON:       No.
+
+18                       MS. SMITH:     That's something you probably
+
+19   have to look forward to, since you're a target for this
+
+20   type of litigation.
+
+21                       Has anyone else on the panel done that
+
+22   type of exercise?
+
+23                       Okay.    Juror No. 12, Mr. Prince.
+
+24                       Mr. Prince?
+
+25                       JUROR PRINCE:      Well, I wasn't selected
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 76 of 106 PageID #:
+                                   10327
+76  
+
+
+1    for it, but it was like one time about 10 years ago when
+
+2    I was living in Longview, they ran an ad in the paper
+
+3    wanting people to come do it and I went.               They paid us
+
+4    for our time.       That's kind of what it was -- it was kind
+
+5    of like a mock deal.
+
+6                        MS. SMITH:     Was it a patent case?
+
+7                        JUROR PRINCE:      No, it wasn't a patent
+
+8    case.     Tell you the truth, I can't remember what it was
+
+9    about.     I just remember I had to go to -- they had three
+
+10   different juries and they rotated us all around to see
+
+11   what kind of response they would get, I guess.
+
+12                       MS. SMITH:     Okay.    Thank you, sir.
+
+13                       Has anyone ever thought about filing a
+
+14   lawsuit?      Has anyone had a -- you know, a neighbor that
+
+15   made you so mad or someone that made you so mad, but
+
+16   then decided not to file it for some reason?
+
+17                       Anyone on the first row fit in that
+
+18   group, thought about filing a lawsuit and decided not
+
+19   to?
+
+20                       Anyone on the second row?
+
+21                       All right.     Ms. Strange, tell me about
+
+22   that.     Do you think -- what were you thinking about
+
+23   filing a lawsuit about?
+
+24                       JUROR STRANGE:       The reason I wanted to
+
+25   file a lawsuit is because my son, back in January, went
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 77 of 106 PageID #:
+                                   10328
+77  
+
+
+1    to a clinic here in town because he had an infection
+
+2    that was that big on his leg (indicating).               The doctor
+
+3    chose not to do anything about it, and my son almost
+
+4    died.     So yes.
+
+5                        MS. SMITH:     Has your son fully recovered
+
+6    now?
+
+7                        JUROR STRANGE:       He has staph infection
+
+8    that does not respond to antibiotics, so it comes and
+
+9    goes continuously.         He has to live with it for the rest
+
+10   of his life because it got so bad.
+
+11                       MS. SMITH:     I'm very sorry to hear about
+
+12   that.
+
+13                       JUROR STRANGE:       But we were not allowed
+
+14   to do a lawsuit because they said -- the doctor said it
+
+15   was a spider bite when indeed it was not a spider bite.
+
+16                       MS. SMITH:     Thank you.      I appreciate you
+
+17   sharing that.
+
+18                       I think there was -- there was one other
+
+19   hand.
+
+20                       All right.     Juror No. 27, Mr. Price.
+
+21                       JUROR PRICE:      We -- we were -- me and a
+
+22   roommate, we used to -- we have a laser engraver that's
+
+23   a hobby of ours.        Well, earlier this year, we had a
+
+24   power surge at our house from a tree hitting one of the
+
+25   lines, and we -- they weren't going to cover it saying
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 78 of 106 PageID #:
+                                   10329
+78  
+
+
+1    it wasn't their fault and we know it was.
+
+2                        But we talked about carrying them to
+
+3    court over it and suing them for it for damages, but
+
+4    then we just decided, you know, just two people against
+
+5    this big company, we're not going to do it, so...
+
+6                        MS. SMITH:     All right.      Well -- well,
+
+7    that brings up another issue, so I'm going to -- I'm
+
+8    going to keep you standing up right now.
+
+9                        PMC is a smaller company.          I mean, as far
+
+10   as manpower, certainly both these entities make -- make
+
+11   good money, but they're a smaller company, and Zynga has
+
+12   2,000 employees.
+
+13                       So is there anything -- not hearing any
+
+14   other evidence, but just based on the size of the two
+
+15   companies, is there anything that makes you kind of lean
+
+16   towards the Plaintiff initially because it's a smaller
+
+17   company suing a bigger company?
+
+18                       JUROR PRICE:      No.   No.    A smaller company
+
+19   can have the same value as a bigger company and vice
+
+20   versa, so nothing makes me lean towards one or the
+
+21   other.
+
+22                       MS. SMITH:     Okay.    Thank you, Mr. Price.
+
+23                       What about the jurors on the first row?
+
+24   Does anyone -- Mr. Newsom, do you agree or disagree with
+
+25   Mr. Price?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 79 of 106 PageID #:
+                                   10330
+79  
+
+
+1                        JUROR NEWSOM:      I don't have any
+
+2    discrepancies one way or the other.
+
+3                        MS. SMITH:     Thank you, Mr. Newsom.
+
+4                        Ms. Jorgenson?
+
+5                        JUROR JORGENSON:       I agree with both of
+
+6    these gentlemen.
+
+7                        MS. SMITH:     Thank you, Ms. Jorgenson.
+
+8                        Anyone on the first row disagree with
+
+9    these jurors that have spoken up?
+
+10                       What about the second row?          Am I starting
+
+11   on the same level playing field being the larger company
+
+12   in the courtroom today?          Does everyone agree with that?
+
+13   Thank you.
+
+14                       Now, what I don't think you're going to
+
+15   hear is the Judge talking about a football field when he
+
+16   instructs you on the law.           Didn't I -- who mentioned
+
+17   football?      Did someone mention football?
+
+18                       All right.     Mr. Johnson.      Now, who's your
+
+19   team?
+
+20                       JUROR JOHNSON:       Saints.
+
+21                       MS. SMITH:     Saints.
+
+22                       JUROR JOHNSON:       Professional.
+
+23                       MS. SMITH:     Interesting choice in Texas,
+
+24   but we'll go with that.
+
+25                       JUROR JOHNSON:       Uh-huh.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 80 of 106 PageID #:
+                                   10331
+80  
+
+
+1                        MS. SMITH:     All right.      So when the
+
+2    Saints -- this is true, is it not?              When the Saints get
+
+3    on the 51-yard line, you don't breathe a big sigh of
+
+4    relief, go to the snack bar, go home, because they're
+
+5    more likely than not and they're probably not going to
+
+6    score, do you?
+
+7                        JUROR JOHNSON:       What yard line?
+
+8                        MS. SMITH:     51-yard line.
+
+9                        [Laughter]
+
+10                       MS. SMITH:     Every time they get there.
+
+11   That doesn't make sense, does it?
+
+12                       JUROR JOHNSON:       Huh-uh.
+
+13                       MS. SMITH:     Because if they were more
+
+14   probable than not to score every time they got on the
+
+15   51-yard line, we'd have some high-scoring games,
+
+16   wouldn't we?
+
+17                       JUROR JOHNSON:       Yes.
+
+18                       MS. SMITH:     Okay.    All right.      So what
+
+19   I'm asking you all is, if you can kind of -- if you can
+
+20   follow the Judge's instruction about the law and the
+
+21   burden of proof, which is a preponderance of the
+
+22   evidence, which has absolutely nothing to do with
+
+23   football.
+
+24                       Can I have that agreement from everyone
+
+25   on the first row?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 81 of 106 PageID #:
+                                   10332
+81  
+
+
+1                        Second row?
+
+2                        Okay.    And in the same light, the Judge
+
+3    is going to tell you that the Plaintiff, to prove
+
+4    infringement, has to prove each and every element of
+
+5    their claim.       And you heard in the patent video that's
+
+6    not 9 out of 10, and it's certainly not, on the Saints'
+
+7    football field, 51 percent of the claims.
+
+8                        Is everyone in agreement that they could
+
+9    follow the law and make Plaintiff prove each and every
+
+10   element of their claim to prove infringement?
+
+11                       All right.     Now let's talk about damages.
+
+12   You know, some of you were a little bit shocked and
+
+13   surprised about that damage number.             I know Ms.
+
+14   Barrington is shaking her head.            And some of you are
+
+15   pretty outspoken about that.
+
+16                       Well, what's going to happen in this
+
+17   case, or what I think is going to happen in this case is
+
+18   no different than -- than even a smaller case.
+
+19                       If there was about a five-mile-an-hour
+
+20   fender-bender out in front of this courthouse and the
+
+21   person jumps out of the car and says to the other
+
+22   person:      You hit me, you wrecked my car going five miles
+
+23   an hour, and I've got $20,000 worth of damage to my car,
+
+24   well, if that case ultimately ends up in this courtroom,
+
+25   that Plaintiff is going to say:            You ran into me and you
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 82 of 106 PageID #:
+                                   10333
+82  
+
+
+1    owe me $20,000.
+
+2                        And not surprisingly, the Defendant is
+
+3    going to say:       It's not my fault, and on top of that,
+
+4    five miles an hour didn't do $20,000 in damage.
+
+5                        Does everyone follow me?
+
+6                        So this is a big case.         You heard it's a
+
+7    lot of money.       But it's not going to be any different
+
+8    because the Defendant here, Zynga, who I represent,
+
+9    every -- we're going to rebut or we're going to defend
+
+10   ourselves on the claims that Plaintiff brings.
+
+11                       THE COURT:     Five minutes, Counsel.
+
+12                       MS. SMITH:     Thank you, Your Honor.
+
+13                       So I have a sneaking suspicion that the
+
+14   Plaintiff is going to bring the damage expert in here.
+
+15                       And he hinted at it, and he's going to
+
+16   say that we owe $20 million.
+
+17                       So is there anyone, starting with
+
+18   Mr. Bankston on the first row, that thinks just because
+
+19   the Defendants are coming in here and bringing a damage
+
+20   expert and talking about damages, kind of where there's
+
+21   smoke, there's fire, that we must have done something
+
+22   wrong if we're going to have to talk about damages?
+
+23                       Do you -- do you -- what are your
+
+24   thoughts on that, Mr. Bankston?
+
+25                       JUROR BANKSTON:        I have to be
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 83 of 106 PageID #:
+                                   10334
+83  
+
+
+1    100 percent -- I mean, clear on the evidence.
+
+2                        MS. SMITH:     To be able to award
+
+3    $20 million?
+
+4                        JUROR BANKSTON:        To -- to come up with --
+
+5    I'd have to be 100 percent, no questions.
+
+6                        MS. SMITH:     Okay.
+
+7                        JUROR BANKSTON:        That's just my -- the
+
+8    way I am.
+
+9                        MS. SMITH:     Okay.     But you're not going
+
+10   to hold it against Zynga if we talk about damages but
+
+11   still maintain a position that we just don't infringe
+
+12   this -- this 1980s patent?
+
+13                       JUROR BANKSTON:        No.
+
+14                       MS. SMITH:     All right.      Thank you.
+
+15                       Is there anyone on this first row that
+
+16   disagrees?
+
+17                       Anyone on the second row?
+
+18                       Now, I, like Mr. Hill, have -- have the
+
+19   same -- same kind of final question.              And I'll tell you,
+
+20   I'm not always on this side of the courtroom.                Sometimes
+
+21   I'm in your position.         And about a year ago, I was over
+
+22   in Marion County, state court, and I was about four
+
+23   months pregnant, and I was -- I was called for jury
+
+24   duty.
+
+25                       And four months, you know, didn't look
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 84 of 106 PageID #:
+                                   10335
+84  
+
+
+1    real pregnant, but it certainly was on my mind.                 So the
+
+2    case I was called for dealt with an intentional injury
+
+3    to a child, and no none -- none of those lawyers asked
+
+4    me a single question that would cause me to tell them,
+
+5    you know, I might not be the best juror for this one.
+
+6    You know, I -- had that prosecutor or had the defense
+
+7    attorney asked, I would have told them.               You know,
+
+8    there's something personal here, and I don't want to sit
+
+9    on a case about intentionally hurting a child.
+
+10                       So my question to each of you is this:             I
+
+11   can't possibly -- and we have proved this through Juror
+
+12   No. 5, Ms. Blankenship -- I can't possibly think of
+
+13   every question to ask you or any question you're going
+
+14   to ask me.
+
+15                       But is there anyone sitting there that's
+
+16   heard about this case that knows we're going to be knee
+
+17   deep in technology, that knows it involves a small
+
+18   company versus a big company -- is there anybody out
+
+19   there that says:        If Ms. Smith would just ask me this
+
+20   one question, I would tell her that I'm just not the
+
+21   best juror for this case?
+
+22                       Is there anyone that has that thought?
+
+23   Anyone that has something personal that -- that -- and I
+
+24   don't need to know what it is, but some personal reason
+
+25   why you wouldn't be the best juror for this case?
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 85 of 106 PageID #:
+                                   10336
+85  
+
+
+1                        Well, I -- I thank you for your time.
+
+2    And I -- on behalf of Zynga and the trial team, I thank
+
+3    you.     And I really look forward to bringing this case to
+
+4    the eight of you that are -- that are lucky enough to be
+
+5    chosen.      Thank you.
+
+6                        Thank you, Your Honor.
+
+7                        THE COURT:     Counsel, approach the bench,
+
+8    please.
+
+9                        (Bench conference.)
+
+10                       THE COURT:     Does the Plaintiff have any
+
+11   challenges for cause?
+
+12                       MR. HILL:     Yes, Your Honor.
+
+13                       And we request an opportunity for brief
+
+14   individual voir dire with the jurors for the cause
+
+15   challenge, if possible.          Juror No. 4, Juror No. 6, Juror
+
+16   No. 7, and Juror No. 17.
+
+17                       THE COURT:     And does Defendant have
+
+18   challenges for cause?
+
+19                       MS. SMITH:     No, Your Honor.
+
+20                       THE COURT:     Okay.    4, 6, 7, and 17?
+
+21                       MR. HILL:      Yes, Your Honor.
+
+22                       THE COURT:     Okay.    I'm going to excuse
+
+23   everybody except these four, and then I'll bring them up
+
+24   one at a time here at the bench and question them.                  And
+
+25   I'll give the -- probably let each of you ask them a
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 86 of 106 PageID #:
+                                   10337
+86  
+
+
+1    question if you want.
+
+2                        MR. HILL:     Thank you.
+
+3                        MS. SMITH:     Thank you.
+
+4                        THE COURT:     Why don't you have a seat.
+
+5                        I'll send everybody out but these four,
+
+6    and then we'll be back up here.
+
+7                        MR. HILL:     Thank you.
+
+8                        (Bench conference concluded.)
+
+9                        THE COURT:     Ladies and Gentlemen of the
+
+10   Panel, I'm going to give you a brief recess, excuse you
+
+11   for a few minutes, except there are four of you I need
+
+12   to ask to stay behind and let me have a word with you
+
+13   briefly.      And those are Jury Panel Members No. 4, No. 6,
+
+14   No. 7, and No. 17.
+
+15                       Everybody but those four, we'll excuse
+
+16   you for a brief recess.          I'm going to ask you, as you
+
+17   leave the courtroom through the doors at the back, to
+
+18   stay inside the building, and I'm going to ask you to
+
+19   make sure that you don't discuss among yourselves
+
+20   anything that's happened while you've been in the
+
+21   courtroom this morning.
+
+22                       You've heard absolutely no evidence in
+
+23   this case.      And this case must be decided solely on the
+
+24   evidence that you hear under oath from the witness stand
+
+25   and the exhibits that are admitted into evidence by the
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 87 of 106 PageID #:
+                                   10338
+87  
+
+
+1    Court.     None of that has happened yet.           You have heard
+
+2    no evidence in the case.
+
+3                        Nonetheless, don't discuss anything
+
+4    that's happened in the courtroom while you've been here.
+
+5    Talk about the football game; talk about the weather;
+
+6    talk about whatever you want to talk about; but don't
+
+7    talk about anything that's happened in the courtroom.
+
+8                        If you will stay close, we will have you
+
+9    back in here in a little bit and proceed with seating
+
+10   our eight jurors that are going to make up this panel.
+
+11                       But with those instructions, everybody
+
+12   but those four jury panel members, you're excused in
+
+13   recess for this -- at this time.
+
+14                       COURT SECURITY OFFICER:         All rise.
+
+15                       THE COURT:     And No. 6 and No. 7 need to
+
+16   stay.
+
+17                       JUROR JOHNSON:       Where do you want us to
+
+18   stay at?
+
+19                       THE COURT:     So just step back out of the
+
+20   way and let everybody else by.
+
+21                       (Jury panel out.)
+
+22                       THE COURT:     All right.      Be seated,
+
+23   please.
+
+24                       And, Ms. Barrington, would you come up
+
+25   and see me at the bench.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 88 of 106 PageID #:
+                                   10339
+88  
+
+
+1                        And, Counsel, you may approach.
+
+2                        (Bench conference.)
+
+3                        JUROR BARRINGTON:       Yes, sir.
+
+4                        THE COURT:     Just got a question.         We'll
+
+5    wait until they get here.
+
+6                        You had indicated during the voir dire
+
+7    that you thought $20 million was a scary figure and a
+
+8    lot of money, but I never heard you say that you
+
+9    couldn't award $20 million or more if the evidence
+
+10   supported it.
+
+11                       JUROR BARRINGTON:       If the evidence
+
+12   supported it, yes.
+
+13                       THE COURT:     So that's what I really
+
+14   needed to know about.
+
+15                       JUROR BARRINGTON:       I was a small business
+
+16   owner, and you just think, ahh, $20 million, so...
+
+17                       THE COURT:     Right.     But if the evidence
+
+18   in your mind supported it, you'd have no problem?
+
+19                       JUROR BARRINGTON:       No problem whatsoever.
+
+20                       THE COURT:     And just the fact that that's
+
+21   a big amount of money, that in and of itself wouldn't
+
+22   keep you from awarding it if the evidence supported it?
+
+23                       JUROR BARRINGTON:       If the evidence
+
+24   supported it, yes, sir.
+
+25                       THE COURT:     Okay.    Mr. Hill, do you have
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 89 of 106 PageID #:
+                                   10340
+89  
+
+
+1    any questions?
+
+2                        MR. HILL:     I have one question.
+
+3                        Ms. Barrington, the fact that we're
+
+4    asking for that amount of sum, you may see evidence
+
+5    supporting that kind of a sum and questioning that kind
+
+6    of a sum, does that in your mind start PMC out as
+
+7    suspicious, someone you're suspicious of, our claims,
+
+8    looking at us with a jaundiced eye because we are asking
+
+9    for in excess of $20 million?
+
+10                       JUROR BARRINGTON:       No.    If you have the
+
+11   claims to support it and -- you know, I'm just brand new
+
+12   to this, so I want to know why you want that much money.
+
+13                       MR. HILL:     Okay.
+
+14                       JUROR BARRINGTON:       I don't -- it's a --
+
+15   I'm not going to say, oh, yeah, go ahead and take it,
+
+16   no.
+
+17                       MR. HILL:     Okay.
+
+18                       JUROR BARRINGTON:       I mean, people's lives
+
+19   are here.
+
+20                       MR. HILL:     Uh-huh.
+
+21                       JUROR BARRINGTON:       I mean their
+
+22   livelihoods.
+
+23                       THE COURT:     But you can follow my
+
+24   instructions --
+
+25                       JUROR BARRINGTON:       Yes, sir.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 90 of 106 PageID #:
+                                   10341
+90  
+
+
+1                        THE COURT:     -- and you can apply the
+
+2    evidence fairly?
+
+3                        JUROR BARRINGTON:       Yes, sir.
+
+4                        THE COURT:     And whatever the evidence
+
+5    shows, you can award that amount?
+
+6                        JUROR BARRINGTON:       Yes, sir.
+
+7                        THE COURT:     If it's $20 or $200 million,
+
+8    whatever the evidence supports, you can do that?
+
+9                        JUROR BARRINGTON:       If the evidence is
+
+10   there, yes, sir.
+
+11                       THE COURT:     Okay.    Ms. Smith, do you have
+
+12   any questions?
+
+13                       MS. SMITH:     No questions, Your Honor.
+
+14                       THE COURT:     Okay.    Ms. Barrington, I'm
+
+15   going to excuse you to wait out in the hall with
+
+16   everybody else.
+
+17                       JUROR BARRINGTON:       All right.      Thank you.
+
+18                       THE COURT:     Thank you, ma'am.
+
+19                       (Juror Barrington leaves the courtroom.)
+
+20                       (Open court.)
+
+21                       THE COURT:     Mr. Johnson, would you step
+
+22   up here, please.
+
+23                       (Bench conference continued.)
+
+24                       THE COURT:     Mr. Johnson, during the
+
+25   questioning, you were asked about patents and if a
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 91 of 106 PageID #:
+                                   10342
+91  
+
+
+1    company owns patents, but they don't manufacture
+
+2    anything; how did you feel about them enforcing those
+
+3    patents in a court of law like this.
+
+4                        And as I understood it, you basically
+
+5    took the position that if a patent owner didn't use
+
+6    their patents, then they ought to lose them, and they
+
+7    shouldn't have the right to enforce them.
+
+8                        Did I understand that's how you feel
+
+9    about that?
+
+10                       JUROR JOHNSON:       Yes, sir.
+
+11                       THE COURT:     Okay.    That's not the law,
+
+12   Mr. Johnson.
+
+13                       JUROR JOHNSON:       I understand.
+
+14                       THE COURT:     And if you're selected for
+
+15   the jury and I instruct you that the law is that an
+
+16   owner of their patent is entitled to seek recovery for
+
+17   what they say is infringement, whether they manufacture
+
+18   anything or not, can you follow that, or would you have
+
+19   any difficulty following my instructions?
+
+20                       JUROR JOHNSON:       I'd probably have a
+
+21   little difficulty, but, I mean, I understand it's the
+
+22   law.
+
+23                       THE COURT:     All right.      But it goes
+
+24   against --
+
+25                       JUROR JOHNSON:       Right.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 92 of 106 PageID #:
+                                   10343
+92  
+
+
+1                        THE COURT:     -- how you feel?
+
+2                        And I gather you feel pretty strongly
+
+3    about this?
+
+4                        JUROR JOHNSON:        Yes.
+
+5                        THE COURT:     Okay.     Mr. Hill, do you have
+
+6    any questions?
+
+7                        MR. HILL:     Mr. Johnson, I think you
+
+8    answered the question I have.             This is a strongly held
+
+9    belief of yours, not one that you'll be lightly
+
+10   dissuaded from, I take it?
+
+11                       JUROR JOHNSON:        I don't believe so.
+
+12                       MR. HILL:     Okay.     Thank you, sir.
+
+13                       THE COURT:     Ms. Smith?
+
+14                       MS. SMITH:     No questions, Your Honor.
+
+15                       THE COURT:     Okay.     Mr. Johnson, I'm going
+
+16   to let you wait out in the hall with everybody else,
+
+17   okay?
+
+18                       (Juror Johnson leaves the courtroom.)
+
+19                       THE COURT:     I'm not sure what your basis
+
+20   for a challenge for cause with Mr. Bankston is, but --
+
+21                       MR. HILL:     And I was mistaken about
+
+22   Mr. Bankston, Your Honor.           I wanted to let you know.         As
+
+23   I got back to the table, they told me I had an extra
+
+24   number on my list that I shouldn't have.
+
+25                       THE COURT:     So you're not challenging him
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 93 of 106 PageID #:
+                                   10344
+93  
+
+
+1    for cause?
+
+2                        MR. HILL:     No, sir.
+
+3                        THE COURT:     Okay.
+
+4                        (Open Court.)
+
+5                        THE COURT:     Mr. Bankston, you can join
+
+6    the rest of the group outside.             We decided we didn't
+
+7    need to talk to you after all.
+
+8                        JUROR BANKSTON:        All right.
+
+9                        (Juror Bankston leaves the courtroom.)
+
+10                       THE COURT:     And, Mr. Greer, if you'd come
+
+11   forward.
+
+12                       (Bench conference continued.)
+
+13                       THE COURT:     Mr. Greer, when you were
+
+14   questioned this morning, you talked about the fact that
+
+15   you'd been in a lawsuit, you'd been sued, and it cost
+
+16   you $10,000 to get your property situation straightened
+
+17   out.
+
+18                       JUROR GREER:      Uh-huh.
+
+19                       THE COURT:     I understand all of that.
+
+20   When you were asked if that experience would cause you
+
+21   to favor one side in this case over the other, you
+
+22   said -- I believe you said that it could cause you to
+
+23   favor the Defendants.
+
+24                       Is that still the case?         Do you feel like
+
+25   you'd have any difficulty putting that out of your mind
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 94 of 106 PageID #:
+                                   10345
+94  
+
+
+1    completely and hearing the evidence and basing your
+
+2    decision solely on the evidence, or can you not put that
+
+3    out of your mind, that experience?             Are you afraid it
+
+4    would be there even if you tried to put it out?
+
+5                        JUROR GREER:      It -- it would be hard
+
+6    because that took over three years of my life, a lot of
+
+7    depositions, cost me 10 grand.            And even the judge
+
+8    agreed with it.        My attorney said I could probably get
+
+9    the money back, but it would cost me half of that to do
+
+10   it, so -- you know, so, I mean, it's been a very --
+
+11                       THE COURT:     Is it -- is it fair to say
+
+12   you felt like you were personally wronged in that
+
+13   situation.
+
+14                       JUROR GREER:      Yes.    Yeah, yeah.
+
+15                       THE COURT:     And --
+
+16                       JUROR GREER:      Everybody did, but it
+
+17   didn't do me any good, and it still cost me money, you
+
+18   know.
+
+19                       THE COURT:     Right.     I understand.
+
+20                       Mr. Hill, do you have any questions?
+
+21                       MR. HILL:     Mr. Greer, would you agree
+
+22   that that was a pretty strong personal experience that
+
+23   would be difficult for you to set aside and eliminate
+
+24   from your mind in considering a case like this?
+
+25                       JUROR GREER:      Yes, sir, I'm afraid it
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 95 of 106 PageID #:
+                                   10346
+95  
+
+
+1    would.
+
+2                        MR. HILL:     Thank you, sir.
+
+3                        THE COURT:     Ms. Smith, do you have any
+
+4    questions?
+
+5                        MS. SMITH:     No, Your Honor.
+
+6                        THE COURT:     Okay.    You can join everybody
+
+7    else outside, Mr. Greer.          Thank you.
+
+8                        (Juror Greer leaves the courtroom.)
+
+9                        THE COURT:     Okay.    Counsel, I am not
+
+10   going to excuse Ms. Barrington, but I am going to excuse
+
+11   Mr. Johnson, No. 6, and I'm going to excuse Mr. Greer,
+
+12   No. 17.
+
+13                       That means, with only one excuse, we've
+
+14   got 8 to seat, 4 strikes per side, through 16 and --
+
+15   let's see.      I'm sorry.      We've excused 2, so we need to
+
+16   strike through 18.
+
+17                       Does everybody agree with the math?
+
+18                       MS. SMITH:     Yes.
+
+19                       MR. HILL:     Yes, Your Honor.
+
+20                       THE COURT:     Okay.    How long do you need
+
+21   to exercise your peremptory challenges?
+
+22                       MS. SMITH:     May we have 20 minutes?
+
+23                       THE COURT:     All right.      Have them back in
+
+24   to Ms. Lockhart by a quarter after 11:00.
+
+25                       MS. SMITH:     Thank you.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 96 of 106 PageID #:
+                                   10347
+96  
+
+
+1                        MR. HILL:     On the jury notebooks, was the
+
+2    extra patent -- are there three patents?
+
+3                        THE COURT:     I don't know, but we can look
+
+4    at that before we start the trial.
+
+5                        MR. GOVETT:      Thank you.
+
+6                        MR. HILL:     Thank you, Your Honor.
+
+7                        (Bench conference concluded.)
+
+8                        THE COURT:     All right.      We're going to
+
+9    stand in recess until 11:15 while Counsel exercise their
+
+10   peremptory challenges.
+
+11                       Court stands in recess.
+
+12                       COURT SECURITY OFFICER:         All rise.
+
+13                       (Recess.)
+
+14                       COURT SECURITY OFFICER:         All rise.
+
+15                       (Jury panel in.)
+
+16                       THE COURT:     Be seated, please.
+
+17                       Ladies and Gentlemen, if you will listen
+
+18   carefully.      As your name is called, if you'll come
+
+19   forward and take your seat in the jury box.
+
+20                       We are going to seat eight jurors in this
+
+21   case, and we'll put the first four on the front row and
+
+22   the second four on the second row.
+
+23                       And just so that you're well positioned
+
+24   inside the box, if the first person in would leave two
+
+25   vacant seats at the end of each row, there will be two
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 97 of 106 PageID #:
+                                   10348
+97  
+
+
+1    vacant seats and then the first of the four on the front
+
+2    row, two vacant seats and then the second four on the
+
+3    second row.
+
+4                        All right.     With that, Ms. Lockhart, if
+
+5    you will call the name of the jurors that have been
+
+6    selected.
+
+7                        COURTROOM DEPUTY:       Okay.     Philip Newsom;
+
+8    Kylee Jorgenson; Susan Blankenship; Billy Joe Hensley;
+
+9    Michael Adair; William Jones; Charles Pharr; and Alex
+
+10   Sanchez.
+
+11                       THE COURT:     All right.       Those of you who
+
+12   were not selected to serve on this jury, I'm about to
+
+13   excuse you, but before I do, I want to take a moment and
+
+14   thank each one of you personally for being here
+
+15   participating in this process.
+
+16                       Our system -- justice system depends upon
+
+17   citizens such as yourselves being available and active
+
+18   and participating in jury selections such as we've done
+
+19   this morning.       Even though you weren't selected to
+
+20   serve, we could not do what we do without you being
+
+21   here.
+
+22                       So on behalf of the Court, thank you
+
+23   very, very much.        If you need anything for your employer
+
+24   or any documentation that you've been here this morning,
+
+25   Ms. Martin in the clerk's office will be glad to help
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 98 of 106 PageID #:
+                                   10349
+98  
+
+
+1    you.
+
+2                        You are excused at this time.           Thank you,
+
+3    again, Ladies and Gentlemen.
+
+4                        COURT SECURITY OFFICER:         All rise.
+
+5                        (Jury panel out.)
+
+6                        THE COURT:     All right.      Everyone except
+
+7    the members of the jury may be seated, please.
+
+8                        And, Ms. Lockhart, if you would
+
+9    administer the oath to the jurors at this time.
+
+10                       (Jury sworn.)
+
+11                       THE COURT:     Have a seat, Ladies and
+
+12   Gentlemen.
+
+13                       We're about to excuse you for lunch in
+
+14   just a few moments.         The evidence in this case will
+
+15   start at 1:00 o'clock.          I'd like you to assemble in the
+
+16   jury room about 10 minutes until 1:00 so that we can
+
+17   start at exactly 1:00 or as close as possible.
+
+18                       You'll get a little extra lunch hour
+
+19   today, and you'll get a head start on the local people,
+
+20   so that will be good.
+
+21                       Before, though -- before I excuse you for
+
+22   lunch, there are a few important instructions that I
+
+23   need to give you.
+
+24                       This case is going to be decided solely
+
+25   upon the evidence that you hear in this courtroom and
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 99 of 106 PageID #:
+                                   10350
+99  
+
+
+1    the exhibits that are admitted into evidence by the
+
+2    Court.     Up until this point, you have heard absolutely
+
+3    no evidence in this case.
+
+4                        One of the first instructions you're
+
+5    going to hear from me when you come back from lunch is,
+
+6    I'll tell you that the -- what the lawyers say in this
+
+7    case is not evidence.         And that's why I say you've heard
+
+8    no evidence in this case so far.             You've merely heard
+
+9    what the lawyers believe the evidence will show.
+
+10                       Again, Ladies and Gentlemen, now that you
+
+11   are impaneled and seated as the jury in this case, you
+
+12   are the sole judges of the facts in this case based upon
+
+13   the evidence that you hear during the trial.
+
+14                       And so it's very important at the very
+
+15   outset that you understand that you must receive your
+
+16   information solely from the evidence that comes in under
+
+17   oath from the witness stand and the exhibits that I
+
+18   admit during the course of the trial.
+
+19                       Therefore, it's absolutely critical that
+
+20   you not receive any other outside information or
+
+21   influences of any type.
+
+22                       So in this regard, when I recess you for
+
+23   lunch and you're out in the public in a few minutes and
+
+24   particularly when you go home tonight, you are most
+
+25   likely going to get questions about what happened down
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 100 of 106 PageID #:
+                                    10351
+                                                                             100
+
+
+1    in Federal Court in Marshall today.
+
+2                       I'm telling you right now don't answer
+
+3    that first question, because if you answer the first
+
+4    one, you'll answer the second one, and before you know
+
+5    it, you will have violated my instruction to you.
+
+6                       So don't discuss the case, anything about
+
+7    the case with each other.          You'll only do that after all
+
+8    the evidence is in and you have retired to deliberate
+
+9    upon your verdict, and don't discuss the case at any
+
+10   time with anyone else.
+
+11                       And that means family; that means
+
+12   friends; that means neighbors in the grocery store.
+
+13   Don't fall into an innocent slip and violate this
+
+14   instruction, because you must base your decisions and
+
+15   render your verdict in this case solely upon the
+
+16   evidence that comes during the trial.              That's absolutely
+
+17   essential, and that's why that instruction is so
+
+18   important.
+
+19                       And let me just warn you now, you're
+
+20   going to get that instruction from me every day probably
+
+21   several times every day.           By the time this case is over,
+
+22   you're going to be very sick of hearing me say:                 Don't
+
+23   discuss the case among yourselves or with anyone else.
+
+24   But it's just that important, and I want you to
+
+25   understand that from the very beginning.
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 101 of 106 PageID #:
+                                    10352
+                                                                             101
+
+
+1                       Along the same lines, when I say don't
+
+2    discuss the case, I mean don't communicate in any
+
+3    fashion.     That means don't go home and post on Facebook
+
+4    about what you did in court today.            Don't go on Twitter.
+
+5    Don't do any of the social media that's out there that
+
+6    involves e-mail, text messages.           Any form of
+
+7    communication whatsoever about the case is prohibited,
+
+8    and that's what my instruction goes to.              So bear that in
+
+9    mind.
+
+10                       Also, when you come back and we begin the
+
+11   trial after lunch today and during each day of the
+
+12   trial, I'm going to ask you to leave your cell phones in
+
+13   your car.
+
+14                       You'll have breaks, and you'll certainly
+
+15   have a lunch hour where you can go to your car and check
+
+16   your messages or check your e-mail, if you have a
+
+17   smartphone, but I -- it's my instruction that you not
+
+18   bring your cell phones into the courtroom.
+
+19                       And I assure you, you will not hear other
+
+20   people's cell phones in the courtroom.              If you do, they
+
+21   will not have their cell phone very long.               So I'm going
+
+22   to hold them to that same standard.              But if you will,
+
+23   leave your cell phone in the car when you come back from
+
+24   lunch and each day during the trial.
+
+25                       Also, I want you to understand that
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 102 of 106 PageID #:
+                                    10353
+                                                                             102
+
+
+1    during the -- the course of this trial, the lawyers are
+
+2    prohibited from talking with you.            And that means when
+
+3    we have a recess or you're coming in in the morning or
+
+4    leaving at the end of the day or you're coming in and
+
+5    going back and forth over the lunch hour.
+
+6                       If you pass one or more of these lawyers
+
+7    in the hallway or on the front steps or anywhere around
+
+8    the courthouse, if they walk right by you and don't say
+
+9    hello or engage in conversation with you, don't hold
+
+10   that against them; don't think they're being unfriendly;
+
+11   don't think they're being rude.            They're doing what I
+
+12   have instructed them to do.
+
+13                       So bear that in mind, because they will
+
+14   not enter into discussions with you until -- well, at
+
+15   any time during this trial.
+
+16                       Also, I don't think this is likely, but
+
+17   in any and every case, it's always within the realm of
+
+18   possibility, and that is, it is possible that some third
+
+19   party could try to contact you or influence you with
+
+20   regard to securing your vote a certain way in this case
+
+21   or ruling a certain way or finding a certain fact a
+
+22   certain way.       That's highly improper.
+
+23                       I don't think it's -- I don't think it's
+
+24   likely to happen, but this is an important case, and
+
+25   there's a lot at stake for both parties, and it's always
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 103 of 106 PageID #:
+                                    10354
+                                                                             103
+
+
+1    within the realm of possibility.
+
+2                       So let me simply say, if anyone makes any
+
+3    attempt to contact you in any manner that you feel
+
+4    uneasy about or suspicious about, then you should advise
+
+5    the clerk's office through Ms. Martin immediately, she
+
+6    will contact me, and the Court will deal with it.
+
+7                       Again, I don't think that's likely, but
+
+8    it is within the realm of possibility.
+
+9                       And one other thing, when I say don't
+
+10   communicate about the case, don't discuss the case, I
+
+11   also want to take that a step further and instruct you
+
+12   not to attempt to do any research during the course of
+
+13   the trial.       Don't go home and get on Google or Yahoo or
+
+14   pull up these products or the patents.              Don't do any
+
+15   research of any type.          That includes the old fashioned
+
+16   kind at the local public library.             Just don't attempt to
+
+17   research anything about the case.
+
+18                       Because, again, it is vital that your
+
+19   decisions be made solely and only upon the sworn
+
+20   testimony of the witnesses from the witness stand and
+
+21   the exhibits that the Court has carefully reviewed and
+
+22   admitted into evidence as trial exhibits.               Those are the
+
+23   only two sources of your information.              So don't attempt
+
+24   to do any research.
+
+25                       If you have not already given Ms. Martin
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 104 of 106 PageID #:
+                                    10355
+                                                                             104
+
+
+1    your cell phone numbers, sometime over the lunch hour
+
+2    today, would you be sure you stop by the clerk's office
+
+3    and make sure they have a cell phone number for you.
+
+4    There are always possibilities that some emergency could
+
+5    arise or something where we would need to get in touch
+
+6    with you before you're back in court on a certain day,
+
+7    and we just want to make sure we have a good cell phone
+
+8    number for each member of the jury.             If you'd do that,
+
+9    we would appreciate it.
+
+10                       With those instructions, Ladies and
+
+11   Gentlemen, I'm going to excuse you for lunch.                And,
+
+12   again, please be back assembled in the jury room before
+
+13   1:00 o'clock, and we'll attempt to start as close to
+
+14   1:00 o'clock as we can.          Don't discuss the case among
+
+15   yourselves or with anyone else.
+
+16                       With those instructions, you're excused
+
+17   for lunch at this time.
+
+18                       COURT SECURITY OFFICER:         All rise for the
+
+19   jury.
+
+20                       (Jury out.)
+
+21                       THE COURT:      Be seated, please.
+
+22                       Counsel, we're going to recess for lunch
+
+23   as well.      I would simply like to have counsel back in
+
+24   the courtroom by about 12:45.            There have been some
+
+25   joint motions filed overnight and some narrowing of the
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 105 of 106 PageID #:
+                                    10356
+                                                                             105
+
+1    case.
+
+2                       I want to get those things on the record
+
+3    before we start, and I want to have an opportunity to
+
+4    make sure there are not any other developments before we
+
+5    bring the jury back in at 1:00 o'clock.
+
+6                       So with that, you're excused for lunch,
+
+7    and I'll see you at 12:45.
+
+8                       COURT SECURITY OFFICER:         All rise.
+
+9                       THE COURT:      Court stands in recess.
+
+10                       (Lunch recess.)
+
+11                       *******************
+
+12  
+
+13  
+
+14  
+
+15  
+
+16  
+
+17  
+
+18  
+
+19  
+
+20  
+
+21  
+
+22  
+
+23  
+
+24  
+
+25  
+Case 2:12-cv-00068-JRG-RSP Document 257 Filed 11/27/13 Page 106 of 106 PageID #:
+                                    10357
+                                                                             106
+
+1   
+
+2   
+
+3   
+
+4   
+
+5                                CERTIFICATION
+
+6   
+
+7                      I HEREBY CERTIFY that the foregoing is a
+
+8    true and correct transcript from the stenographic notes
+
+9    of the proceedings in the above-entitled matter to the
+
+10   best of my ability.
+
+11  
+
+12  
+
+13  
+
+14   /s/___________________                          _________________
+      SHELLY HOLMES, CSR                               Date
+15   Official Court Reporter
+      State of Texas No.: 7804
+16   Expiration Date 12/31/14
+
+17  
+
+18   /s/______________________                      ____________________
+      SUSAN SIMMONS, CSR                             Date
+19   Official Court Reporter
+      State of Texas No.: 267
+20   Expiration Date 12/31/14
+
+21  
+
+22  
+
+23  
+
+24  
+
+25  

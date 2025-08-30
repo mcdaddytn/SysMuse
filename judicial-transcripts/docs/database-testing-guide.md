@@ -30,19 +30,19 @@ npm run seed
 ../scripts/db/backupdb.sh seed
 
 # 5. Run Phase 1 to parse and load transcript data
-npm run phase1
+npm run cli parse:phase1 config/example-trial-config-mac.json
 
 # 6. Create backup after Phase 1
 ../scripts/db/backupdb.sh phase1
 
 # 7. Run Phase 2 to process and enhance the data
-npm run phase2
+npm run cli parse:phase2 config/example-trial-config-mac.json
 
 # 8. Create backup after Phase 2
 ../scripts/db/backupdb.sh phase2
 
 # 9. Run Phase 3 for marker discovery and accumulator processing
-npm run phase3 process
+npm run cli parse:phase3 config/example-trial-config-mac.json
 
 # 10. Create backup after Phase 3
 ../scripts/db/backupdb.sh phase3
@@ -78,7 +78,13 @@ ls backups/judicial_transcripts_*.sql
 ## Data Loading Process
 
 ### Configuration Files
-The system uses configuration files (in source control) that reference the actual data files:
+**IMPORTANT**: The system REQUIRES configuration JSON files for all operations. Command-line arguments alone are insufficient.
+
+For testing with Claude Code on Mac:
+- **Always use**: `config/example-trial-config-mac.json`
+- **Required for all phases**: convert, phase1, phase2, phase3
+
+Other configuration files in source control:
 - `config/transcripts.json` - Defines transcript file locations
 - `config/settings.json` - System-wide settings
 - `.env` - Environment variables including data paths
@@ -86,7 +92,7 @@ The system uses configuration files (in source control) that reference the actua
 ### Phase 1: Initial Data Load
 Phase 1 reads raw transcript files and parses them into the database:
 ```bash
-npm run phase1
+npm run cli parse:phase1 config/example-trial-config-mac.json
 ```
 - Reads transcript files from configured locations
 - Parses transcript structure (sessions, pages, lines)
@@ -96,7 +102,7 @@ npm run phase1
 ### Phase 2: Data Enhancement
 Phase 2 processes the parsed data to add relationships and metadata:
 ```bash
-npm run phase2
+npm run cli parse:phase2 config/example-trial-config-mac.json
 ```
 - Links testimonies to witnesses
 - Processes examination types
@@ -106,7 +112,7 @@ npm run phase2
 ### Phase 3: Marker Discovery
 Phase 3 discovers markers and evaluates accumulators:
 ```bash
-npm run phase3 process
+npm run cli parse:phase3 config/example-trial-config-mac.json
 ```
 - Evaluates ElasticSearch expressions against statements
 - Processes accumulator expressions (sliding window analysis)

@@ -1,6 +1,6 @@
-import { ElasticSearchService } from '../services/ElasticsearchService';
-import { EnhancedSearchService } from '../services/EnhancedSearchService';
-import logger from '../utils/logger';
+import { ElasticSearchService } from '../../services/ElasticsearchService';
+import { EnhancedSearchService } from '../../services/EnhancedSearchService';
+import logger from '../../utils/logger';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 

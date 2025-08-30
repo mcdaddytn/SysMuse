@@ -26,6 +26,11 @@ export class TranscriptParser {
   private addressService: AddressService;
   private trialId?: number;
   
+  // Line numbering - persistent across entire parsing
+  private globalTrialLineNumber: number = 0;
+  private currentSessionId?: number;
+  private sessionLineNumbers: Map<number, number> = new Map(); // sessionId -> last line number
+  
   // Statistics tracking
   private directoryStats = {
     totalFiles: 0,
@@ -191,11 +196,13 @@ export class TranscriptParser {
     let summaryInfo: SummaryInfo | null = null;
     let currentPage: any = null;
     let pageNumber = 0;
-    let sessionLineNumber = 0;
-    let trialLineNumber = 0;
+    let pageLineNumber = 0;  // Line number within current page
     let session: any = null;
     let summaryProcessed = false;
     let summaryLines: string[] = [];
+    
+    // Get or initialize session line number
+    let sessionLineNumber = 0;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -214,10 +221,20 @@ export class TranscriptParser {
       
       // Check for CERTIFICATION section - this will occur while in PROCEEDINGS section
       if (textContent === 'CERTIFICATION') {
+        // Flush any pending PROCEEDINGS lines
+        await this.flushLineBatch();
+        
         currentSection = 'CERTIFICATION';
         logger.info(`Detected CERTIFICATION section at line ${i}`);
-        // Don't create pages for CERTIFICATION section
-        currentPage = null;
+        
+        // Create a page for CERTIFICATION section
+        if (session) {
+          pageNumber++;
+          pageLineNumber = 0;  // Reset page line number for new page
+          const certPageInfo = this.extractPageInfo(lines, i);
+          currentPage = await this.createPage(session.id, pageNumber, 'CERTIFICATION', certPageInfo);
+          logger.info(`Created CERTIFICATION page: ${currentPage.id}`);
+        }
         
         // Parse and store certification section
         if (session && this.trialId) {
@@ -228,7 +245,9 @@ export class TranscriptParser {
             this.trialId
           );
         }
-        continue;
+        
+        // Continue to store the CERTIFICATION lines
+        // Don't continue here, let it fall through to store this line
       }
       
       // Check for exact "P R O C E E D I N G S" in the parsed text
@@ -251,6 +270,52 @@ export class TranscriptParser {
               session = await this.createSession(sessionInfo, fileName);
               logger.info(`Created session: ${session.id} for file: ${fileName}`);
               
+              // Initialize session line numbering
+              this.currentSessionId = session.id;
+              sessionLineNumber = this.sessionLineNumbers.get(session.id) || 0;
+              
+              // Create a page for SUMMARY section
+              pageNumber = 1;  // Initialize page number for this session
+              pageLineNumber = 0;  // Reset page line number
+              const summaryPageInfo = this.extractPageInfo(lines, 0);
+              const summaryPage = await this.createPage(session.id, pageNumber, 'SUMMARY', summaryPageInfo);
+              logger.info(`Created SUMMARY page: ${summaryPage.id}`);
+              
+              // Store SUMMARY lines in Line table (lines before PROCEEDINGS)
+              for (let j = 0; j < i; j++) {
+                const summaryLine = lines[j];
+                const parsedSummaryLine = this.lineParser.parse(summaryLine);
+                
+                if (parsedSummaryLine && !parsedSummaryLine.isBlank) {
+                  if (parsedSummaryLine.text) {
+                    pageLineNumber++;
+                    sessionLineNumber++;
+                    this.globalTrialLineNumber++;
+                    
+                    this.lineBatch.push({
+                      pageId: summaryPage.id,
+                      lineNumber: pageLineNumber,  // Use page line number
+                      trialLineNumber: this.globalTrialLineNumber,
+                      sessionLineNumber,
+                      linePrefix: parsedSummaryLine.linePrefix || null,
+                      timestamp: null,
+                      dateTime: null,
+                      text: parsedSummaryLine.text || null,
+                      speakerPrefix: parsedSummaryLine.speakerPrefix || null,
+                      documentSection: 'SUMMARY',
+                      isBlank: false
+                    });
+                    
+                    this.directoryStats.totalLines++;
+                    this.directoryStats.nonBlankLines++;
+                    
+                    if (this.lineBatch.length >= this.config.batchSize) {
+                      await this.flushLineBatch();
+                    }
+                  }
+                }
+              }
+              
               // Parse and store summary sections (use lines up to current position)
               await this.sessionSectionParser.parseSummarySections(
                 lines.slice(0, i), 
@@ -271,6 +336,12 @@ export class TranscriptParser {
           // Create first PROCEEDINGS page if needed
           // Look for the page that starts proceedings (usually page 3)
           if (!currentPage && session) {
+            // Initialize session line numbering if not already done
+            if (!this.currentSessionId || this.currentSessionId !== session.id) {
+              this.currentSessionId = session.id;
+              sessionLineNumber = this.sessionLineNumbers.get(session.id) || 0;
+            }
+            
             // Find the actual page break for this PROCEEDINGS page
             let pageStartIndex = i;
             // Look backwards for the page header
@@ -281,9 +352,10 @@ export class TranscriptParser {
               }
             }
             
-            pageNumber = 1; // Start PROCEEDINGS page numbering at 1
+            pageNumber++; // Increment from SUMMARY page
+            pageLineNumber = 0;  // Reset page line number for new page
             const pageInfo = this.extractPageInfo(lines, pageStartIndex);
-            currentPage = await this.createPage(session.id, pageNumber, currentSection, pageInfo);
+            currentPage = await this.createPage(session.id, pageNumber, 'PROCEEDINGS', pageInfo);
             logger.info(`Created first PROCEEDINGS page: ${currentPage.id} (trial page ${pageInfo.trialPageNumber}, pageId ${pageInfo.pageId})`);
           }
         }
@@ -293,6 +365,8 @@ export class TranscriptParser {
         // Collect lines for summary parsing (first ~100 lines)
         if (i < 100) {
           summaryLines.push(line);
+          // Mark section as SUMMARY for line storage
+          currentSection = 'SUMMARY';
           continue; // Collect more lines
         } else {
           // Parse summary once we have enough lines
@@ -312,6 +386,52 @@ export class TranscriptParser {
             session = await this.createSession(sessionInfo, fileName);
             logger.info(`Created session: ${session.id} for file: ${fileName}`);
             
+            // Initialize session line numbering
+            this.currentSessionId = session.id;
+            sessionLineNumber = this.sessionLineNumbers.get(session.id) || 0;
+            
+            // Create a page for SUMMARY section
+            pageNumber = 1;  // Initialize page number
+            pageLineNumber = 0;  // Reset page line number
+            const summaryPageInfo = this.extractPageInfo(lines, 0);
+            currentPage = await this.createPage(session.id, pageNumber, 'SUMMARY', summaryPageInfo);
+            logger.info(`Created SUMMARY page: ${currentPage.id}`);
+            
+            // Store SUMMARY lines in Line table
+            for (let j = 0; j < summaryLines.length; j++) {
+              const summaryLine = summaryLines[j];
+              const parsedSummaryLine = this.lineParser.parse(summaryLine);
+              
+              if (parsedSummaryLine && !parsedSummaryLine.isBlank) {
+                if (parsedSummaryLine.text) {
+                  pageLineNumber++;
+                  sessionLineNumber++;
+                  this.globalTrialLineNumber++;
+                  
+                  this.lineBatch.push({
+                    pageId: currentPage.id,
+                    lineNumber: pageLineNumber,  // Use page line number
+                    trialLineNumber: this.globalTrialLineNumber,
+                    sessionLineNumber,
+                    linePrefix: parsedSummaryLine.linePrefix || null,
+                    timestamp: null, // No timestamps in SUMMARY
+                    dateTime: null,
+                    text: parsedSummaryLine.text || null,
+                    speakerPrefix: parsedSummaryLine.speakerPrefix || null,
+                    documentSection: 'SUMMARY',
+                    isBlank: false
+                  });
+                  
+                  this.directoryStats.totalLines++;
+                  this.directoryStats.nonBlankLines++;
+                  
+                  if (this.lineBatch.length >= this.config.batchSize) {
+                    await this.flushLineBatch();
+                  }
+                }
+              }
+            }
+            
             // Parse and store summary sections
             await this.sessionSectionParser.parseSummarySections(
               summaryLines, 
@@ -320,14 +440,18 @@ export class TranscriptParser {
             );
           }
           
-          // Reset index to process from where we detected proceedings
-          i = 100; // Skip past summary
+          // Reset for PROCEEDINGS
+          currentPage = null;
+          pageNumber = 0;
+          currentSection = 'SUMMARY'; // Keep as SUMMARY until we hit PROCEEDINGS
+          
+          // Continue processing from where we are
           continue;
         }
       }
       
-      // Process PROCEEDINGS section
-      if (currentSection === 'PROCEEDINGS' && this.trialId) {
+      // Process PROCEEDINGS or CERTIFICATION sections
+      if ((currentSection === 'PROCEEDINGS' || currentSection === 'CERTIFICATION') && this.trialId) {
         // Ensure we have a session
         if (!session) {
           if (!sessionInfo) {
@@ -335,6 +459,10 @@ export class TranscriptParser {
           }
           session = await this.createSession(sessionInfo, fileName);
           logger.info(`Created session: ${session.id}`);
+          
+          // Initialize session line numbering
+          this.currentSessionId = session.id;
+          sessionLineNumber = this.sessionLineNumbers.get(session.id) || 0;
         }
         
         // Check for page break
@@ -356,11 +484,9 @@ export class TranscriptParser {
             }
           }
           
-          // If next page is CERTIFICATION, stop creating pages
+          // If next page is CERTIFICATION, prepare for certification
           if (isNextPageCertification) {
-            currentSection = 'CERTIFICATION';
-            currentPage = null;
-            logger.info('Reached CERTIFICATION section, stopping page creation');
+            // Continue to next iteration, CERTIFICATION will be detected
             continue;
           }
           
@@ -369,10 +495,11 @@ export class TranscriptParser {
           
           // Save current page and create new PROCEEDINGS page
           if (currentPage) {
-            logger.debug(`Page ${pageNumber} completed with ${sessionLineNumber} lines`);
+            logger.debug(`Page ${pageNumber} completed with ${pageLineNumber} lines`);
           }
           
           pageNumber++;
+          pageLineNumber = 0;  // Reset page line number for new page
           const pageInfo = this.extractPageInfo(lines, i);
           currentPage = await this.createPage(
             session.id,
@@ -389,6 +516,7 @@ export class TranscriptParser {
         // Ensure we have a page (but don't create if in CERTIFICATION)
         if (!currentPage && currentSection === 'PROCEEDINGS') {
           pageNumber++;
+          pageLineNumber = 0;  // Reset page line number for new page
           // Look backwards to find the most recent page header
           let pageStartIndex = i;
           for (let j = i; j >= Math.max(0, i - 20); j--) {
@@ -409,8 +537,9 @@ export class TranscriptParser {
         if (parsedLine && !parsedLine.isBlank) {  // Only store non-blank lines
           // Only increment line numbers for non-blank lines with content
           if (parsedLine.text || parsedLine.timestamp) {
+            pageLineNumber++;
             sessionLineNumber++;
-            trialLineNumber++;
+            this.globalTrialLineNumber++;
             
             // Calculate dateTime if we have timestamp and session date
             let dateTime: Date | null = null;
@@ -422,18 +551,29 @@ export class TranscriptParser {
               dateTime.setHours(hours, minutes, seconds, 0);
             }
             
+            // Extract speaker ONLY in PROCEEDINGS section
+            let speakerPrefix: string | null = null;
+            let textToStore = parsedLine.text || null;
+            if (currentSection === 'PROCEEDINGS' && parsedLine.text) {
+              const speakerResult = this.extractSpeakerFromText(parsedLine.text);
+              if (speakerResult.speakerPrefix) {
+                speakerPrefix = speakerResult.speakerPrefix;
+                textToStore = speakerResult.text || null;
+              }
+            }
+            
             // Add to batch instead of immediate insert
             this.lineBatch.push({
               pageId: currentPage.id,
-              lineNumber: parsedLine.lineNumber || sessionLineNumber,
-              trialLineNumber,
+              lineNumber: pageLineNumber,  // Use page line number
+              trialLineNumber: this.globalTrialLineNumber,
               sessionLineNumber,
               linePrefix: parsedLine.linePrefix || null,
               timestamp: parsedLine.timestamp || null,
               dateTime: dateTime,
-              text: parsedLine.text || null,
-              speakerPrefix: parsedLine.speakerPrefix || null,
-              documentSection: currentSection as any,  // Add current section
+              text: textToStore,
+              speakerPrefix: speakerPrefix,
+              documentSection: currentSection as any,  // Use actual current section
               isBlank: false  // Always false since we're skipping blanks
             });
             
@@ -460,8 +600,15 @@ export class TranscriptParser {
     // Flush any remaining lines in the batch
     await this.flushLineBatch();
     
+    // Save the session line number for potential continuation
+    if (session) {
+      this.sessionLineNumbers.set(session.id, sessionLineNumber);
+    }
+    
     logger.info(`File processing completed: ${fileName}`);
-    logger.info(`  Total lines processed: ${sessionLineNumber}`);
+    logger.info(`  Session lines in this file: ${sessionLineNumber - (this.sessionLineNumbers.get(session?.id || 0) || 0)}`);
+    logger.info(`  Total session lines so far: ${sessionLineNumber}`);
+    logger.info(`  Total trial lines so far: ${this.globalTrialLineNumber}`);
     logger.info(`  Pages created: ${pageNumber}`);
     
     // Count EXAMINATION and DEPOSITION strings for debugging
@@ -493,6 +640,11 @@ export class TranscriptParser {
       logger.info(`  EXAMINATION occurrences in this session: ${examLines}`);
       logger.info(`  DEPOSITION occurrences in this session: ${depLines}`);
       logger.info(`  Total EXAMINATION/DEPOSITION lines: ${examLines + depLines}`);
+    }
+    
+    // Save the session line number for potential continuation
+    if (session) {
+      this.sessionLineNumbers.set(session.id, sessionLineNumber);
     }
   }
 
@@ -1423,5 +1575,59 @@ export class TranscriptParser {
     const avgLinesPerSecond = processingTime > 0 ? (totalLines / processingTime).toFixed(0) : '0';
     logger.info(`\n🚀 Overall processing speed: ${avgLinesPerSecond} lines/second`);
     logger.info('='.repeat(60));
+  }
+
+  /**
+   * Extract speaker from text (only for PROCEEDINGS sections)
+   */
+  private extractSpeakerFromText(text: string): { speakerPrefix?: string; text?: string } {
+    if (!text) return { text: '' };
+    
+    // Speaker patterns for extracting speaker prefix from the text content
+    const speakerPatterns = [
+      // THE COURT: pattern
+      /^\s*(THE COURT):\s*(.*)$/,
+      // COURT SECURITY OFFICER: pattern
+      /^\s*(COURT SECURITY OFFICER):\s*(.*)$/,
+      // MR./MS./MRS./DR. NAME: pattern  
+      /^\s*((?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+      // JUROR NAME: pattern
+      /^\s*(JUROR\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+      // Q./A. pattern (these don't have colons)
+      /^\s*(Q\.|A\.)\s+(.*)$/,
+      // BY MR./MS. pattern
+      /^\s*(BY\s+(?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
+      // THE WITNESS: pattern
+      /^\s*(THE WITNESS):\s*(.*)$/,
+      // Other formal speakers (WITNESS, BAILIFF, etc.)
+      /^\s*((?:WITNESS|BAILIFF|COURT REPORTER|INTERPRETER)):\s*(.*)$/i,
+      // Generic capitalized speaker pattern (any capitalized word(s) followed by colon)
+      /^\s*([A-Z][A-Z\s]*?):\s*(.*)$/
+    ];
+    
+    // Pattern for court directives (parenthetical content)
+    const directivePattern = /^\s*\((.*?)\)\s*$/;
+    
+    // Check each speaker pattern
+    for (const pattern of speakerPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        return {
+          speakerPrefix: match[1].trim(),
+          text: match[2] !== undefined ? match[2].trim() : ''
+        };
+      }
+    }
+    
+    // Check for court directive (parenthetical content)
+    const directiveMatch = text.match(directivePattern);
+    if (directiveMatch) {
+      return {
+        text: text  // Keep the full directive text including parentheses
+      };
+    }
+    
+    // No speaker found, return original text
+    return { text };
   }
 }

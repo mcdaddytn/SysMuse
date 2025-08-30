@@ -1,6 +1,6 @@
-import { EnhancedSearchService } from '../services/EnhancedSearchService';
-import { CombinedSearchService } from '../services/CombinedSearchService';
-import logger from '../utils/logger';
+import { EnhancedSearchService } from '../../services/EnhancedSearchService';
+import { CombinedSearchService } from '../../services/CombinedSearchService';
+import logger from '../../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
 

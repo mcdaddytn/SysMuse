@@ -1,6 +1,6 @@
 // Test script to verify witness event parsing for Feature 02D
 import { PrismaClient } from '@prisma/client';
-import logger from '../utils/logger';
+import logger from '../../utils/logger';
 
 const prisma = new PrismaClient();
 

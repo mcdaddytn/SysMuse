@@ -33,15 +33,14 @@ export class SessionSectionParser {
     const sections = this.identifySections(lines);
     
     for (const section of sections) {
-      // Clean the section text by removing line prefixes and page headers
-      const cleanedText = this.cleanSectionText(section.sectionText);
+      // Section text is already cleaned in identifySections method
       
       await this.prisma.sessionSection.create({
         data: {
           sessionId,
           trialId,
           sectionType: section.sectionType,
-          sectionText: cleanedText,
+          sectionText: section.sectionText,
           orderIndex: section.orderIndex,
           metadata: section.metadata || undefined
         }
@@ -87,9 +86,29 @@ export class SessionSectionParser {
     let currentLines: string[] = [];
     let orderIndex = 1;
     
+    // First pass: clean all lines by removing line prefixes
+    const cleanedLines: string[] = [];
+    for (const line of lines) {
+      // Parse the line to remove any line number prefix
+      const parsed = this.lineParser.parse(line);
+      if (parsed) {
+        if (parsed.isBlank) {
+          cleanedLines.push('');
+        } else {
+          // Use the parsed text (line prefix removed)
+          cleanedLines.push(parsed.text || '');
+        }
+      } else {
+        // If LineParser couldn't parse it, just use trimmed line
+        cleanedLines.push(line.trim());
+      }
+    }
+    
+    // Second pass: identify sections using CLEANED lines
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
+      const rawLine = lines[i];
+      const cleanedLine = cleanedLines[i];
+      const trimmedLine = cleanedLine.trim();
       
       // Check if we've reached PROCEEDINGS section
       if (trimmedLine === 'P R O C E E D I N G S') {
@@ -102,7 +121,7 @@ export class SessionSectionParser {
       }
       
       // Detect header section (first few lines with case number)
-      if (i < 3 && line.includes('Case ') && line.includes(' Document ')) {
+      if (i < 3 && rawLine.includes('Case ') && rawLine.includes(' Document ')) {
         if (currentSection) {
           currentSection.sectionText = currentLines.join('\n');
           sections.push(currentSection);
@@ -113,9 +132,9 @@ export class SessionSectionParser {
           sectionType: 'HEADER',
           sectionText: '',
           orderIndex: orderIndex++,
-          metadata: this.extractHeaderMetadata(line)
+          metadata: this.extractHeaderMetadata(rawLine)
         };
-        currentLines = [line];
+        currentLines = [rawLine];
         continue;
       }
       
@@ -134,13 +153,15 @@ export class SessionSectionParser {
           orderIndex: orderIndex++,
           metadata: {}
         };
-        currentLines = [line];
+        currentLines = [cleanedLine];
         continue;
       }
       
       // Detect Case Title section (plaintiff vs defendant)
+      // Use cleaned line for detection
       if ((trimmedLine.includes('PLAINTIFF') || trimmedLine.includes('VS.') || 
-           trimmedLine.includes('DEFENDANT')) && i < 50) {
+           trimmedLine.includes('DEFENDANT')) && i < 50 && 
+           !trimmedLine.match(/FOR THE PLAINTIFF/i)) {
         // Check if this is the start of a case title block
         const isNewSection = currentSection?.sectionType !== 'CASE_TITLE';
         
@@ -162,7 +183,7 @@ export class SessionSectionParser {
             metadata: {}
           };
         }
-        currentLines.push(line);
+        currentLines.push(cleanedLine);
         continue;
       }
       
@@ -184,7 +205,7 @@ export class SessionSectionParser {
           orderIndex: orderIndex++,
           metadata: {}
         };
-        currentLines = [line];
+        currentLines = [cleanedLine];
         continue;
       }
       
@@ -206,12 +227,14 @@ export class SessionSectionParser {
           orderIndex: orderIndex++,
           metadata: {}
         };
-        currentLines = [line];
+        currentLines = [cleanedLine];
         continue;
       }
       
       // Detect Appearances section
+      // Now using cleaned line for detection
       if (trimmedLine.match(/FOR THE PLAINTIFF/i) || 
+          trimmedLine.match(/FOR THE DEFENDANT/i) ||
           trimmedLine.match(/APPEARANCES:/i)) {
         if (currentSection && currentLines.length > 0) {
           currentSection.sectionText = currentLines.join('\n');
@@ -229,7 +252,7 @@ export class SessionSectionParser {
           orderIndex: orderIndex++,
           metadata: {}
         };
-        currentLines = [line];
+        currentLines = [cleanedLine];
         continue;
       }
       
@@ -253,13 +276,14 @@ export class SessionSectionParser {
             metadata: {}
           };
         }
-        currentLines.push(line);
+        currentLines.push(cleanedLine);
         continue;
       }
       
-      // Add line to current section if we have one
+      // Add CLEANED line to current section if we have one
+      // We want the cleaned version without line prefixes for section content
       if (currentSection) {
-        currentLines.push(line);
+        currentLines.push(cleanedLine);
       }
     }
     
@@ -648,13 +672,75 @@ export class SessionSectionParser {
         continue;
       }
       
-      // Parse the line to remove prefix
+      // IMPORTANT: Check if this is a continuation line FIRST
+      // Continuation lines start with spaces and should NOT be parsed for line numbers
+      if (line.match(/^\s+/)) {
+        // This is a continuation line - just trim and keep it
+        const trimmed = line.trim();
+        if (trimmed) {
+          cleanedLines.push(trimmed);
+        }
+        continue; // Skip to next line
+      }
+      
+      // For lines that start at position 0, try to parse with LineParser
       const parsed = this.lineParser.parse(line);
-      if (parsed && parsed.text) {
-        cleanedLines.push(parsed.text);
+      
+      // Check if LineParser gave us a result
+      if (parsed && parsed.text !== undefined) {
+        // LineParser successfully parsed the line
+        // Now check if the PARSED TEXT (not original line) looks like an address
+        if (parsed.text && parsed.text.match(/^\d{1,4}\s+[A-Z][a-z]/)) {
+          // The parsed text starts with digits followed by a capitalized word
+          // This might be a street address that LineParser mistakenly cleaned
+          // Examples: "230 Park Avenue", "104 East Houston", "2040 Main Street"
+          // In this case, use the parsed text as-is (LineParser already removed the line number)
+          cleanedLines.push(parsed.text);
+        } else if (parsed.text) {
+          // Normal case - trust LineParser's result
+          cleanedLines.push(parsed.text);
+        }
       } else if (!parsed?.isBlank) {
-        // Keep the line if it's not parsed as blank
-        cleanedLines.push(line.trim());
+        // LineParser couldn't handle it, try manual prefix removal
+        let cleanedLine = line;
+        
+        // Check for SUMMARY format (7-char numeric prefix like "17     ")
+        // Must be 1-2 digits followed by at least 5 spaces
+        const summaryMatch = line.match(/^(\d{1,2})\s{5,}(.*)/);
+        if (summaryMatch) {
+          cleanedLine = summaryMatch[2];
+        } else {
+          // Check for PROCEEDINGS format (13-char timestamp+number prefix)
+          const proceedingsMatch = line.match(/^(\d{2}:\d{2}:\d{2}\s+\d+)\s+(.*)/);
+          if (proceedingsMatch) {
+            cleanedLine = proceedingsMatch[2];
+          } else {
+            // Check for simple line number at start (e.g., "123 " or "1 ")
+            // But be careful not to match things like "230 Park Avenue"
+            // Only match if followed by multiple spaces or uppercase text that looks like a label
+            const simpleMatch = line.match(/^(\d{1,3})\s{2,}(.*)/);
+            if (simpleMatch) {
+              // Additional check: is this likely a line number or part of content?
+              const afterNumber = simpleMatch[2];
+              // If what follows looks like a label or name (all caps or title case), it's likely a line number
+              if (afterNumber.match(/^[A-Z]/) || afterNumber.match(/^(FOR|MR\.|MS\.|DR\.)/)) {
+                cleanedLine = simpleMatch[2];
+              } else {
+                // Likely part of content (like an address), keep the whole line
+                cleanedLine = line;
+              }
+            } else {
+              // No prefix detected, keep the line as-is
+              cleanedLine = line;
+            }
+          }
+        }
+        
+        // Only add non-empty cleaned lines
+        const trimmed = cleanedLine.trim();
+        if (trimmed) {
+          cleanedLines.push(trimmed);
+        }
       }
     }
     

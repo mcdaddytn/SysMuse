@@ -45,53 +45,59 @@ export class LineParser {
     let linePrefix: string | undefined;
     let content = '';
     
-    // Detect line format based on fixed positions
-    // Check if this is a 13-character header line (PROCEEDINGS format)
-    if (line.length >= 13) {
-      // First 8 chars might be timestamp (HH:MM:SS) or spaces
-      const first8 = line.substring(0, 8);
-      // Next 5 chars should be line number
-      const lineNumStr = line.substring(8, 13).trim();
-      const possibleLineNum = parseInt(lineNumStr);
+    // Simple logic: Check what the line starts with
+    
+    // Check if line starts with a timestamp (HH:MM:SS format)
+    if (line.length >= 8 && line[2] === ':' && line[5] === ':') {
+      // This is a PROCEEDINGS format line with timestamp
+      timestamp = line.substring(0, 8).trim();
       
-      // If we have a valid line number in positions 8-13, this is a PROCEEDINGS line
-      if (possibleLineNum > 0) {
-        // Check if first 8 chars contain a timestamp
-        if (first8[2] === ':' && first8[5] === ':') {
-          timestamp = first8.trim();
-        }
-        lineNumber = possibleLineNum;
-        linePrefix = line.substring(0, 13);  // Capture the whole prefix
-        content = line.substring(13).trim();
-      }
-      // Otherwise check if it's a 7-character SUMMARY format
-      else {
-        const firstSeven = line.substring(0, 7).trim();
-        const summaryLineNum = parseInt(firstSeven);
-        if (summaryLineNum > 0 && line.length > 7) {
-          lineNumber = summaryLineNum;
-          linePrefix = line.substring(0, 7);  // Capture the prefix
-          content = line.substring(7).trim();
-        } else {
-          // Not a formatted line
-          content = line.trim();
-        }
+      // After timestamp, find the line number (skip spaces)
+      let pos = 8;
+      while (pos < line.length && line[pos] === ' ') pos++;
+      
+      // Now get the line number
+      let numEnd = pos;
+      while (numEnd < line.length && line[numEnd] >= '0' && line[numEnd] <= '9') numEnd++;
+      
+      if (numEnd > pos) {
+        lineNumber = parseInt(line.substring(pos, numEnd));
+        linePrefix = line.substring(0, numEnd);
+        
+        // Skip spaces after line number to get to content
+        let contentStart = numEnd;
+        while (contentStart < line.length && line[contentStart] === ' ') contentStart++;
+        content = line.substring(contentStart);
+      } else {
+        // No line number found after timestamp
+        content = line.substring(8).trim();
       }
     }
-    // Check for 7-character header (SUMMARY format)
-    else if (line.length >= 7) {
-      const firstSeven = line.substring(0, 7).trim();
-      const possibleLineNum = parseInt(firstSeven);
+    // Check if line starts with a 1-2 digit number (at position 0)
+    else if (line[0] >= '0' && line[0] <= '9') {
+      // Find where the number ends
+      let numEnd = 1;
+      while (numEnd < line.length && line[numEnd] >= '0' && line[numEnd] <= '9') numEnd++;
       
-      if (possibleLineNum > 0 && line.length > 7) {
-        lineNumber = possibleLineNum;
-        linePrefix = line.substring(0, 7);  // Capture the prefix
-        content = line.substring(7).trim();
+      // Parse the line number
+      lineNumber = parseInt(line.substring(0, numEnd));
+      
+      // The content starts after the line number (may have spaces between)
+      // For SUMMARY format, there are typically spaces that are part of the prefix
+      // We'll consider up to position 7 as the prefix for SUMMARY format
+      if (numEnd <= 2 && line.length > 7) {
+        // This looks like SUMMARY format (1-2 digit number at start)
+        linePrefix = line.substring(0, 7);
+        content = line.substring(7);
       } else {
-        content = line.trim();
+        // Other format or short line
+        linePrefix = line.substring(0, numEnd);
+        content = line.substring(numEnd);
       }
-    } else {
-      // Short line, treat as plain text
+    }
+    // Otherwise it's a continuation line - no prefix
+    else {
+      // Just return the trimmed content
       content = line.trim();
     }
     
@@ -118,15 +124,14 @@ export class LineParser {
       };
     }
     
-    // Check for speaker patterns in the content
-    const speakerResult = this.extractSpeakerFromText(content);
-    
+    // Return the parsed line without speaker extraction
+    // Speaker extraction should only happen in PROCEEDINGS sections
     return {
       lineNumber,
       timestamp,
       linePrefix,
-      text: speakerResult.text !== undefined ? speakerResult.text : content,
-      speakerPrefix: speakerResult.speakerPrefix,
+      text: content,
+      speakerPrefix: undefined,
       isBlank: false
     };
   }

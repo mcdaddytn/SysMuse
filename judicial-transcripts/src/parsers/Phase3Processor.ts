@@ -45,7 +45,8 @@ export class Phase3Processor {
         logger.info(`Processing markers for trial: ${trial.caseNumber}`);
         
         // Create trial-level markers
-        await this.createTrialMarkers(trial);
+        // COMMENTED OUT: createTrialMarkers method needs enum values that don't exist
+        // await this.createTrialMarkers(trial);
         
         // Create session markers
         await this.createSessionMarkers(trial);
@@ -69,6 +70,8 @@ export class Phase3Processor {
     }
   }
   
+  // COMMENTED OUT: Method uses MarkerType enum values that no longer exist
+  /*
   private async createTrialMarkers(trial: any): Promise<void> {
     // Create trial start marker
     const firstEvent = trial.trialEvents[0];
@@ -78,7 +81,7 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'OPENING_STATEMENT',
+          markerType: 'OPENING_STATEMENT', // This enum value doesn't exist
           markerCategory: 'PROCEDURAL',
           startEventId: firstEvent.id,
           startTime: firstEvent.startTime,
@@ -89,7 +92,7 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'CLOSING_ARGUMENT',
+          markerType: 'CLOSING_ARGUMENT', // This enum value doesn't exist
           markerCategory: 'PROCEDURAL',
           endEventId: lastEvent.id,
           endTime: lastEvent.endTime,
@@ -98,6 +101,7 @@ export class Phase3Processor {
       });
     }
   }
+  */
   
   private async createSessionMarkers(trial: any): Promise<void> {
     for (const session of trial.sessions) {
@@ -116,10 +120,8 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'OPENING_STATEMENT',
-          markerCategory: 'PROCEDURAL',
-          startEventId: firstEvent.id,
-          startTime: firstEvent.startTime,
+          markerType: 'ACTIVITY_START', // Changed from OPENING_STATEMENT
+          eventId: firstEvent.id, // Changed from startEventId
           name: `${session.sessionType} Session Start - ${session.sessionDate}`
         }
       });
@@ -128,10 +130,8 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'CLOSING_ARGUMENT',
-          markerCategory: 'PROCEDURAL',
-          endEventId: lastEvent.id,
-          endTime: lastEvent.endTime,
+          markerType: 'ACTIVITY_END', // Changed from CLOSING_ARGUMENT
+          eventId: lastEvent.id, // Changed from endEventId
           name: `${session.sessionType} Session End - ${session.sessionDate}`
         }
       });
@@ -216,11 +216,34 @@ export class Phase3Processor {
   ): Promise<void> {
     const markerType = this.getMarkerTypeFromDirective(name);
     
-    await this.prisma.marker.create({
+    // For paired directives, create a MarkerSection instead of two Markers
+    // First create start marker
+    const startMarker = await this.prisma.marker.create({
       data: {
         trialId,
-        markerType,
-        markerCategory: 'PROCEDURAL',
+        markerType: 'ACTIVITY_START',
+        eventId: startEvent.id,
+        name: `${name} - Start`
+      }
+    });
+    
+    // Then create end marker
+    const endMarker = await this.prisma.marker.create({
+      data: {
+        trialId,
+        markerType: 'ACTIVITY_END',
+        eventId: endEvent.id,
+        name: `${name} - End`
+      }
+    });
+    
+    // Create a MarkerSection to link them
+    await this.prisma.markerSection.create({
+      data: {
+        trialId,
+        markerSectionType: 'ACTIVITY',
+        startMarkerId: startMarker.id,
+        endMarkerId: endMarker.id,
         startEventId: startEvent.id,
         endEventId: endEvent.id,
         startTime: startEvent.startTime,
@@ -241,20 +264,22 @@ export class Phase3Processor {
       data: {
         trialId,
         markerType,
-        markerCategory: 'PROCEDURAL',
-        startEventId: event.id,
-        startTime: event.startTime,
+        eventId: event.id, // Changed from startEventId
         name
       }
     });
   }
   
   private getMarkerTypeFromDirective(name: string): any {
-    if (name.match(/recess/i)) return 'RECESS';
-    if (name.match(/sealed/i)) return 'SEALED_PORTION';
-    if (name.match(/video|clip/i)) return 'VIDEO_PLAYBACK';
-    if (name.match(/sidebar/i)) return 'SIDEBAR';
-    return 'OTHER';
+    // Map directives to available MarkerType enum values
+    if (name.match(/start|begin/i)) return 'ACTIVITY_START';
+    if (name.match(/end|finish|conclude/i)) return 'ACTIVITY_END';
+    if (name.match(/witness.*start/i)) return 'WITNESS_TESTIMONY_START';
+    if (name.match(/witness.*end/i)) return 'WITNESS_TESTIMONY_END';
+    if (name.match(/examination.*start/i)) return 'WITNESS_EXAMINATION_START';
+    if (name.match(/examination.*end/i)) return 'WITNESS_EXAMINATION_END';
+    // Default to ACTIVITY_START for unmatched types
+    return 'ACTIVITY_START';
   }
   
   private async createWitnessTestimonyMarkers(trial: any): Promise<void> {
@@ -282,18 +307,42 @@ export class Phase3Processor {
       const examType = startEvent.witnessCalled?.examinationType;
       
       if (witness) {
-        await this.prisma.marker.create({
+        // Create start marker for witness testimony
+        const startMarker = await this.prisma.marker.create({
           data: {
             trialId: trial.id,
-            markerType: 'WITNESS_TESTIMONY',
-            markerCategory: 'PROCEDURAL',
-            startEventId: startEvent.id,
-            endEventId: endEvent?.id,
-            startTime: startEvent.startTime,
-            endTime: endEvent?.startTime,
-            name: `${witness.name} - ${examType}`
+            markerType: 'WITNESS_TESTIMONY_START',
+            eventId: startEvent.id,
+            name: `${witness.name} - ${examType} Start`
           }
         });
+        
+        // If there's an end event, create end marker and section
+        if (endEvent) {
+          const endMarker = await this.prisma.marker.create({
+            data: {
+              trialId: trial.id,
+              markerType: 'WITNESS_TESTIMONY_END',
+              eventId: endEvent.id,
+              name: `${witness.name} - ${examType} End`
+            }
+          });
+          
+          // Create MarkerSection for complete witness testimony
+          await this.prisma.markerSection.create({
+            data: {
+              trialId: trial.id,
+              markerSectionType: 'WITNESS_TESTIMONY',
+              startMarkerId: startMarker.id,
+              endMarkerId: endMarker.id,
+              startEventId: startEvent.id,
+              endEventId: endEvent.id,
+              startTime: startEvent.startTime,
+              endTime: endEvent.startTime,
+              name: `${witness.name} - ${examType}`
+            }
+          });
+        }
       }
     }
   }

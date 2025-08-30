@@ -1,8 +1,8 @@
 #!/usr/bin/env ts-node
 import * as fs from 'fs';
 import * as path from 'path';
-import { CombinedSearchService } from '../services/CombinedSearchService';
-import logger from '../utils/logger';
+import { CombinedSearchService } from '../../services/CombinedSearchService';
+import logger from '../../utils/logger';
 
 async function executeTestQueries() {
   const configDir = path.resolve('./config/queries');

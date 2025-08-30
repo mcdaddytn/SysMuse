@@ -1,5 +1,5 @@
-import { EnhancedSearchService } from '../services/EnhancedSearchService';
-import logger from '../utils/logger';
+import { EnhancedSearchService } from '../../services/EnhancedSearchService';
+import logger from '../../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
 

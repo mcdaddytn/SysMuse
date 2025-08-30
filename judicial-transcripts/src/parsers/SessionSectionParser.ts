@@ -153,10 +153,23 @@ export class SessionSectionParser {
       }
       
       // Detect Case Title section (plaintiff vs defendant)
-      // Use cleaned line for detection
-      if ((trimmedLine.includes('PLAINTIFF') || trimmedLine.includes('VS.') || 
-           trimmedLine.includes('DEFENDANT')) && i < 50 && 
-           !trimmedLine.match(/FOR THE PLAINTIFF/i)) {
+      // Look for party names ending with LLC, INC, CORP, or followed by )(
+      // Also check for PLAINTIFF, VS., DEFENDANT keywords
+      // But don't switch to CASE_TITLE if we're already in APPEARANCES section
+      const isCasePartyLine = (
+        trimmedLine.match(/^[A-Z][A-Z\s,\.]+\s+(LLC|INC|CORP|LTD|LP|LLP|L\.L\.C\.|INC\.|CORPORATION)/i) ||
+        trimmedLine.match(/^[A-Z][A-Z\s,\.]+\s*\)\s*\(/) ||
+        trimmedLine.includes('PLAINTIFF') || 
+        trimmedLine.includes('VS.') || 
+        trimmedLine.includes('DEFENDANT')
+      );
+      
+      // Don't create CASE_TITLE if we're already in APPEARANCES or later sections
+      const skipCaseTitle = currentSection?.sectionType === 'APPEARANCES' || 
+                           currentSection?.sectionType === 'COURT_PERSONNEL' ||
+                           currentSection?.sectionType === 'JUDGE_INFO';
+      
+      if (isCasePartyLine && i < 50 && !trimmedLine.match(/FOR THE PLAINTIFF/i) && !skipCaseTitle) {
         // Check if this is the start of a case title block
         const isNewSection = currentSection?.sectionType !== 'CASE_TITLE';
         
@@ -182,13 +195,62 @@ export class SessionSectionParser {
         continue;
       }
       
+      // Detect Transcript Info section (TRANSCRIPT OF..., SESSION TYPE)
+      if ((trimmedLine.includes('TRANSCRIPT OF') || 
+           trimmedLine.includes('MORNING SESSION') || 
+           trimmedLine.includes('AFTERNOON SESSION') ||
+           trimmedLine.includes('JURY TRIAL') ||
+           trimmedLine.includes('BENCH TRIAL')) && 
+          i > 10 && i < 80 && 
+          currentSection?.sectionType === 'CASE_TITLE') {
+        // This is the transcript info part that comes after case title
+        if (currentSection && currentLines.length > 0) {
+          // Find where TRANSCRIPT OF starts in currentLines
+          let transcriptStartIdx = -1;
+          for (let j = currentLines.length - 1; j >= 0; j--) {
+            if (currentLines[j].includes('TRANSCRIPT OF')) {
+              transcriptStartIdx = j;
+              break;
+            }
+          }
+          
+          if (transcriptStartIdx > 0) {
+            // Split the current lines into case title and transcript info
+            const caseTitleLines = currentLines.slice(0, transcriptStartIdx);
+            const transcriptInfoLines = currentLines.slice(transcriptStartIdx);
+            
+            // Save the case title section
+            currentSection.sectionText = caseTitleLines.join('\n');
+            currentSection.metadata = this.extractCaseTitleMetadata(caseTitleLines);
+            sections.push(currentSection);
+            
+            // Start new transcript info section with the lines we already have
+            currentSection = {
+              sectionType: 'TRANSCRIPT_INFO',
+              sectionText: '',
+              orderIndex: orderIndex++,
+              metadata: {}
+            };
+            currentLines = [...transcriptInfoLines, cleanedLine];
+          } else {
+            // Just add to current lines
+            currentLines.push(cleanedLine);
+          }
+        } else {
+          currentLines.push(cleanedLine);
+        }
+        continue;
+      }
+      
       // Detect Session Info section (date and time)
       if (this.isDateLine(trimmedLine) && i > 10 && i < 80) {
         if (currentSection && currentLines.length > 0) {
           currentSection.sectionText = currentLines.join('\n');
-          // Extract metadata for case title if that's what we were processing
+          // Extract metadata based on section type
           if (currentSection.sectionType === 'CASE_TITLE') {
             currentSection.metadata = this.extractCaseTitleMetadata(currentLines);
+          } else if (currentSection.sectionType === 'TRANSCRIPT_INFO') {
+            currentSection.metadata = this.extractTranscriptInfoMetadata(currentLines);
           }
           sections.push(currentSection);
           currentLines = [];
@@ -392,6 +454,40 @@ export class SessionSectionParser {
       const caseNumMatch = text.match(/CIVIL ACTION NO\.\s*([\d:\-CV\-A-Z]+)/i);
       if (caseNumMatch) {
         metadata.caseNumber = caseNumMatch[1];
+      }
+    }
+    
+    return metadata;
+  }
+  
+  /**
+   * Extract transcript info metadata
+   */
+  private extractTranscriptInfoMetadata(lines: string[]): SectionMetadata {
+    const metadata: SectionMetadata = {};
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // Extract transcript type
+      if (trimmed.includes('TRANSCRIPT OF')) {
+        metadata.transcriptType = trimmed.replace('TRANSCRIPT OF', '').trim();
+      }
+      
+      // Extract session type
+      if (trimmed.includes('MORNING SESSION')) {
+        metadata.sessionType = 'MORNING';
+      } else if (trimmed.includes('AFTERNOON SESSION')) {
+        metadata.sessionType = 'AFTERNOON';
+      } else if (trimmed.includes('EVENING SESSION')) {
+        metadata.sessionType = 'EVENING';
+      }
+      
+      // Extract trial type
+      if (trimmed.includes('JURY TRIAL')) {
+        metadata.trialType = 'JURY';
+      } else if (trimmed.includes('BENCH TRIAL')) {
+        metadata.trialType = 'BENCH';
       }
     }
     

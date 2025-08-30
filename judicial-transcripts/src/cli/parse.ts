@@ -114,7 +114,7 @@ program
               batchSize: config.batchSize || 1000
             };
             
-            const multiPassParser = new MultiPassTranscriptParser(prisma, logger, multiPassConfig);
+            const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
             
             const files = fs.readdirSync(config.inputDir)
               .filter(f => f.endsWith('.txt'))
@@ -127,13 +127,11 @@ program
             } else {
               const newTrial = await prisma.trial.create({
                 data: {
+                  name: 'Multi-Pass Parser Test',
                   caseNumber: 'MULTI-PASS-TEST',
-                  caseName: 'Multi-Pass Parser Test',
-                  judge: 'Test Judge',
+                  court: 'Test Court',
                   plaintiff: 'Test Plaintiff',
-                  defendant: 'Test Defendant',
-                  startDate: new Date(),
-                  endDate: new Date()
+                  defendant: 'Test Defendant'
                 }
               });
               trialId = newTrial.id;
@@ -146,8 +144,8 @@ program
               const session = await prisma.session.create({
                 data: {
                   trialId,
-                  date: new Date(),
-                  sessionType: file.includes('Morning') ? 'Morning' : 'Afternoon',
+                  sessionDate: new Date(),
+                  sessionType: file.includes('Morning') ? 'MORNING' : 'AFTERNOON',
                   fileName: file
                 }
               });

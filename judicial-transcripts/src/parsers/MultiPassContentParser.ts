@@ -3,7 +3,8 @@ import { Logger } from '../utils/logger';
 import {
   ParsedMetadata,
   StructureAnalysis,
-  DocumentSection
+  DocumentSection,
+  SectionBoundary
 } from './MultiPassTypes';
 
 export class ContentParser {
@@ -76,15 +77,11 @@ export class ContentParser {
     for (const [pageNum, page] of metadata.pages) {
       pageData.push({
         sessionId,
-        trialId,
         pageNumber: page.pageNumber,
         trialPageNumber: page.trialPageNumber,
         parsedTrialPage: page.parsedTrialPage,
         headerText: page.headerText,
-        pageStartLine: 0,
-        pageEndLine: 0,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date()
       });
     }
     
@@ -145,21 +142,15 @@ export class ContentParser {
       const isExamination = this.isExaminationLine(line.cleanText);
       
       lineData.push({
-        sessionId,
-        trialId,
         pageId,
         lineNumber: lineNum + 1,
         trialLineNumber: lineNum + 1,
-        prefix: line.prefix,
+        linePrefix: line.prefix,
         text: line.cleanText,
-        fullText: line.rawText,
         timestamp: line.timestamp,
         documentSection: section,
         speakerPrefix: speakerInfo?.prefix,
-        speakerType: speakerInfo?.type,
-        isExamination,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date()
       });
     }
     
@@ -260,16 +251,16 @@ export class ContentParser {
         sessionId,
         trialId,
         sectionType: 'SUMMARY',
-        startLine: section.startLine,
-        endLine: section.endLine,
-        content: summaryText.substring(0, 5000),
+        sectionText: summaryText.substring(0, 5000),
+        orderIndex: 1,
         metadata: {
           attorneys,
           judge,
-          courtReporter
+          courtReporter,
+          startLine: section.startLine,
+          endLine: section.endLine
         },
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date()
       }
     });
   }
@@ -312,16 +303,16 @@ export class ContentParser {
         sessionId,
         trialId,
         sectionType: 'PROCEEDINGS',
-        startLine: section.startLine,
-        endLine: section.endLine,
-        content: '',
+        sectionText: '',
+        orderIndex: 2,
         metadata: {
           startPage: section.startPage,
           endPage: section.endPage,
-          lineCount: section.endLine - section.startLine + 1
+          lineCount: section.endLine - section.startLine + 1,
+          startLine: section.startLine,
+          endLine: section.endLine
         },
-        createdAt: new Date(),
-        updatedAt: new Date()
+        createdAt: new Date()
       }
     });
   }

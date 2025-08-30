@@ -5,7 +5,7 @@ export interface EnhancedParsedLine {
   lineNumber: number;
   trialLineNumber?: number;
   sessionLineNumber?: number;
-  parsedTrialLine?: number;
+  parsedTrialPage?: number;
   linePrefix?: string;
   timestamp?: string;
   dateTime?: Date;
@@ -109,7 +109,7 @@ export class EnhancedLineParser {
       lineNumber: actualLineNumber || 0,
       trialLineNumber: this.trialLineCounter,
       sessionLineNumber: this.sessionLineCounter,
-      parsedTrialLine: undefined, // Will be parsed from page header separately
+      parsedTrialPage: undefined, // Will be parsed from page header separately
       linePrefix,
       timestamp,
       dateTime,

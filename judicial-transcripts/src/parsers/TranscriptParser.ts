@@ -26,8 +26,9 @@ export class TranscriptParser {
   private addressService: AddressService;
   private trialId?: number;
   
-  // Line numbering - persistent across entire parsing
+  // Line and page numbering - persistent across entire parsing
   private globalTrialLineNumber: number = 0;
+  private globalTrialPageNumber: number = 0;  // Track total pages across all sessions
   private currentSessionId?: number;
   private sessionLineNumbers: Map<number, number> = new Map(); // sessionId -> last line number
   
@@ -231,7 +232,17 @@ export class TranscriptParser {
         if (session) {
           pageNumber++;
           pageLineNumber = 0;  // Reset page line number for new page
-          const certPageInfo = this.extractPageInfo(lines, i);
+          
+          // Look backwards for the page header before CERTIFICATION
+          let pageStartIndex = i;
+          for (let j = i - 1; j >= Math.max(0, i - 10); j--) {
+            if (this.isPageBreak(lines[j])) {
+              pageStartIndex = j;
+              break;
+            }
+          }
+          
+          const certPageInfo = this.extractPageInfo(lines, pageStartIndex);
           currentPage = await this.createPage(session.id, pageNumber, 'CERTIFICATION', certPageInfo);
           logger.info(`Created CERTIFICATION page: ${currentPage.id}`);
         }
@@ -282,8 +293,25 @@ export class TranscriptParser {
               logger.info(`Created SUMMARY page: ${summaryPage.id}`);
               
               // Store SUMMARY lines in Line table (lines before PROCEEDINGS)
+              let currentSummaryPage = summaryPage;
               for (let j = 0; j < i; j++) {
                 const summaryLine = lines[j];
+                
+                // Check for page break within summary
+                if (j > 0 && this.isPageBreak(summaryLine)) {
+                  // Found a new page within the summary
+                  pageNumber++;
+                  pageLineNumber = 0;  // Reset page line number for new page
+                  const newPageInfo = this.extractPageInfo(lines, j);
+                  currentSummaryPage = await this.createPage(session.id, pageNumber, 'SUMMARY', newPageInfo);
+                  logger.info(`Created additional SUMMARY page: ${currentSummaryPage.id} (page ${pageNumber})`);
+                  
+                  // Skip the page header lines
+                  const headerLineCount = this.getPageHeaderLineCount(lines, j);
+                  j += headerLineCount - 1;  // -1 because the for loop will increment j
+                  continue;
+                }
+                
                 const parsedSummaryLine = this.lineParser.parse(summaryLine);
                 
                 if (parsedSummaryLine && !parsedSummaryLine.isBlank) {
@@ -293,7 +321,7 @@ export class TranscriptParser {
                     this.globalTrialLineNumber++;
                     
                     this.lineBatch.push({
-                      pageId: summaryPage.id,
+                      pageId: currentSummaryPage.id,
                       lineNumber: pageLineNumber,  // Use page line number
                       trialLineNumber: this.globalTrialLineNumber,
                       sessionLineNumber,
@@ -333,8 +361,8 @@ export class TranscriptParser {
             logger.warn('No session found when entering PROCEEDINGS - this should not happen');
           }
           
-          // Create first PROCEEDINGS page if needed
-          // Look for the page that starts proceedings (usually page 3)
+          // Use the existing page that was created during SUMMARY processing
+          // PROCEEDINGS typically starts on the same page where SUMMARY ends (usually page 3)
           if (!currentPage && session) {
             // Initialize session line numbering if not already done
             if (!this.currentSessionId || this.currentSessionId !== session.id) {
@@ -342,21 +370,36 @@ export class TranscriptParser {
               sessionLineNumber = this.sessionLineNumbers.get(session.id) || 0;
             }
             
-            // Find the actual page break for this PROCEEDINGS page
-            let pageStartIndex = i;
-            // Look backwards for the page header
-            for (let j = i; j >= Math.max(0, i - 10); j--) {
-              if (this.isPageBreak(lines[j])) {
-                pageStartIndex = j;
-                break;
+            // Get the last page that was created (should be the page where PROCEEDINGS starts)
+            currentPage = await this.prisma.page.findFirst({
+              where: {
+                sessionId: session.id
+              },
+              orderBy: {
+                pageNumber: 'desc'
               }
-            }
+            });
             
-            pageNumber++; // Increment from SUMMARY page
-            pageLineNumber = 0;  // Reset page line number for new page
-            const pageInfo = this.extractPageInfo(lines, pageStartIndex);
-            currentPage = await this.createPage(session.id, pageNumber, 'PROCEEDINGS', pageInfo);
-            logger.info(`Created first PROCEEDINGS page: ${currentPage.id} (trial page ${pageInfo.trialPageNumber}, pageId ${pageInfo.pageId})`);
+            if (currentPage) {
+              logger.info(`Using existing page for PROCEEDINGS: ${currentPage.id} (page ${currentPage.pageNumber}, trial page ${currentPage.trialPageNumber})`);
+              // Update pageNumber to match the current page
+              pageNumber = currentPage.pageNumber;
+              // Sync the globalTrialPageNumber with the current state
+              // Since we're reusing a page, we need to ensure our counter is accurate
+              if (currentPage.trialPageNumber) {
+                this.globalTrialPageNumber = currentPage.trialPageNumber;
+              }
+              // Don't reset pageLineNumber - continue from where we left off in SUMMARY
+              // Get the current line count on this page
+              const existingLines = await this.prisma.line.count({
+                where: {
+                  pageId: currentPage.id
+                }
+              });
+              pageLineNumber = existingLines;
+            } else {
+              logger.warn('No existing page found when entering PROCEEDINGS - this should not happen');
+            }
           }
         }
       
@@ -398,8 +441,25 @@ export class TranscriptParser {
             logger.info(`Created SUMMARY page: ${currentPage.id}`);
             
             // Store SUMMARY lines in Line table
+            let currentSummaryPage2 = currentPage;
             for (let j = 0; j < summaryLines.length; j++) {
               const summaryLine = summaryLines[j];
+              
+              // Check for page break within summary
+              if (j > 0 && this.isPageBreak(summaryLine)) {
+                // Found a new page within the summary
+                pageNumber++;
+                pageLineNumber = 0;  // Reset page line number for new page
+                const newPageInfo = this.extractPageInfo(summaryLines, j);
+                currentSummaryPage2 = await this.createPage(session.id, pageNumber, 'SUMMARY', newPageInfo);
+                logger.info(`Created additional SUMMARY page: ${currentSummaryPage2.id} (page ${pageNumber})`);
+                
+                // Skip the page header lines
+                const headerLineCount = this.getPageHeaderLineCount(summaryLines, j);
+                j += headerLineCount - 1;  // -1 because the for loop will increment j
+                continue;
+              }
+              
               const parsedSummaryLine = this.lineParser.parse(summaryLine);
               
               if (parsedSummaryLine && !parsedSummaryLine.isBlank) {
@@ -409,7 +469,7 @@ export class TranscriptParser {
                   this.globalTrialLineNumber++;
                   
                   this.lineBatch.push({
-                    pageId: currentPage.id,
+                    pageId: currentSummaryPage2.id,
                     lineNumber: pageLineNumber,  // Use page line number
                     trialLineNumber: this.globalTrialLineNumber,
                     sessionLineNumber,
@@ -1396,13 +1456,18 @@ export class TranscriptParser {
     pageInfo?: any
   ): Promise<any> {
     this.directoryStats.totalPages++;
+    this.globalTrialPageNumber++;
+    
+    // Use the globalTrialPageNumber as the calculated trial page number
+    // This ensures continuity across sessions
+    const calculatedTrialPageNumber = this.globalTrialPageNumber;
     
     return await this.prisma.page.create({
       data: {
         sessionId,
         pageNumber,
-        trialPageNumber: pageInfo?.trialPageNumber,
-        parsedTrialLine: pageInfo?.parsedTrialLine,
+        trialPageNumber: calculatedTrialPageNumber,
+        parsedTrialPage: pageInfo?.parsedTrialPage,
         pageId: pageInfo?.pageId,
         headerText: pageInfo?.headerText
       }
@@ -1439,7 +1504,7 @@ export class TranscriptParser {
         continue;
       }
       
-      // Second line: parsedTrialLine (single number)
+      // Second line: parsedTrialPage (single number)
       if (i === index + 1 && foundCaseLine) {
         const lineNum = parseInt(line);
         if (lineNum > 0 && line === lineNum.toString()) {
@@ -1489,7 +1554,7 @@ export class TranscriptParser {
     
     // Look for PageID and page number in header
     // Pattern: "Case 2:19-cv-00123-JRG Document 328 Filed 10/09/20 Page X of 125 PageID #: 18337"
-    // For Vocalife: 2-line header with parsedTrialLine on second line
+    // For Vocalife: 2-line header with parsedTrialPage on second line
     let headerLines: string[] = [];
     
     for (let i = index; i < Math.min(index + 5, lines.length); i++) {
@@ -1519,13 +1584,13 @@ export class TranscriptParser {
         }
       }
       
-      // Check if next line is the parsedTrialLine (single number on its own line)
+      // Check if next line is the parsedTrialPage (single number on its own line)
       if (i === index + 1 && headerLines.length > 0) {
         const trimmedLine = line.trim();
         const lineNum = parseInt(trimmedLine);
         if (lineNum > 0 && trimmedLine === lineNum.toString()) {
-          // This is the parsedTrialLine
-          pageInfo.parsedTrialLine = lineNum;
+          // This is the parsedTrialPage
+          pageInfo.parsedTrialPage = lineNum;
           headerLines.push(line);
           pageInfo.headerText = headerLines.join('\n');
           break;

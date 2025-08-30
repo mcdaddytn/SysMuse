@@ -7,7 +7,7 @@ export interface ParsedPageHeader {
   currentPage: number;
   totalPages: number;
   pageId?: string;
-  parsedTrialLine?: number;
+  parsedTrialPage?: number;
   headerText: string;
   isValid: boolean;
   hasBleed?: boolean; // When pageId bleeds into trial line number
@@ -54,7 +54,7 @@ export class EnhancedPageHeaderParser {
       
       // Check for bleed between pageId and trial line number
       let pageId: string | undefined;
-      let parsedTrialLine: number | undefined;
+      let parsedTrialPage: number | undefined;
       let hasBleed = false;
       
       if (pageIdAndLine) {
@@ -65,7 +65,7 @@ export class EnhancedPageHeaderParser {
           pageId = trimmed.substring(0, 5);
           const lineNum = trimmed.substring(5).trim();
           if (lineNum) {
-            parsedTrialLine = parseInt(lineNum);
+            parsedTrialPage = parseInt(lineNum);
             hasBleed = true;
           }
         } else {
@@ -73,7 +73,7 @@ export class EnhancedPageHeaderParser {
           const parts = trimmed.split(/\s+/);
           if (parts.length >= 2) {
             pageId = parts[0];
-            parsedTrialLine = parseInt(parts[parts.length - 1]);
+            parsedTrialPage = parseInt(parts[parts.length - 1]);
           } else {
             pageId = parts[0];
           }
@@ -87,7 +87,7 @@ export class EnhancedPageHeaderParser {
         currentPage: parseInt(currentPage),
         totalPages: parseInt(totalPages),
         pageId,
-        parsedTrialLine,
+        parsedTrialPage,
         headerText,
         isValid: true,
         hasBleed
@@ -108,7 +108,7 @@ export class EnhancedPageHeaderParser {
       
       // Second line typically has the trial line number
       const secondLine = lines[1].trim();
-      const parsedTrialLine = this.extractNumberFromEnd(secondLine);
+      const parsedTrialPage = this.extractNumberFromEnd(secondLine);
       
       return {
         caseNumber,
@@ -117,7 +117,7 @@ export class EnhancedPageHeaderParser {
         currentPage: parseInt(currentPage),
         totalPages: parseInt(totalPages),
         pageId: pageIdPart?.trim(),
-        parsedTrialLine,
+        parsedTrialPage,
         headerText,
         isValid: true
       };
@@ -144,7 +144,7 @@ export class EnhancedPageHeaderParser {
     
     // Second line often has the trial line number
     if (lines[1]) {
-      result.parsedTrialLine = this.extractNumberFromEnd(lines[1]);
+      result.parsedTrialPage = this.extractNumberFromEnd(lines[1]);
     }
     
     if (result.caseNumber) {
@@ -183,7 +183,7 @@ export class EnhancedPageHeaderParser {
     
     // Third line has trial line number
     if (lines[2]) {
-      result.parsedTrialLine = this.extractNumberFromEnd(lines[2]);
+      result.parsedTrialPage = this.extractNumberFromEnd(lines[2]);
     }
     
     if (result.caseNumber) {

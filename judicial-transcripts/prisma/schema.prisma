@@ -109,7 +109,7 @@ model Page {
   sessionId       Int
   pageNumber      Int
   trialPageNumber Int?
-  parsedTrialLine Int?            // Trial line number from last line of page header
+  parsedTrialPage Int?            // Trial page number from last line of page header
   pageId          String?
   headerText      String?         // Now stores multi-line headers
   createdAt       DateTime        @default(now())

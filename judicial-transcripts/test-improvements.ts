@@ -25,23 +25,23 @@ async function testImprovements() {
       console.log(`  DateTime: ${sample.dateTime}`);
     }
     
-    // Check for Pages with parsedTrialLine
+    // Check for Pages with parsedTrialPage
     const pagesWithParsedTrialLine = await prisma.page.findMany({
       where: {
-        parsedTrialLine: {
+        parsedTrialPage: {
           not: null
         }
       },
       take: 5
     });
     
-    console.log(`\nPages with parsedTrialLine: ${pagesWithParsedTrialLine.length}`);
+    console.log(`\nPages with parsedTrialPage: ${pagesWithParsedTrialLine.length}`);
     if (pagesWithParsedTrialLine.length > 0) {
       console.log('Sample page:');
       const page = pagesWithParsedTrialLine[0];
       console.log(`  Page ID: ${page.id}`);
       console.log(`  Trial page number: ${page.trialPageNumber}`);
-      console.log(`  Parsed trial line: ${page.parsedTrialLine}`);
+      console.log(`  Parsed trial page: ${page.parsedTrialPage}`);
       console.log(`  Header text: ${page.headerText?.substring(0, 100)}...`);
     }
     

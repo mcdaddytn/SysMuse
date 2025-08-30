@@ -120,21 +120,16 @@ export class SessionSectionParser {
         break;
       }
       
-      // Detect header section (first few lines with case number)
-      if (i < 3 && rawLine.includes('Case ') && rawLine.includes(' Document ')) {
-        if (currentSection) {
-          currentSection.sectionText = currentLines.join('\n');
-          sections.push(currentSection);
-          currentLines = [];
+      // Skip page headers - they are now properly handled in Page records
+      if (rawLine.includes('Case ') && rawLine.includes(' Document ') && rawLine.includes('PageID')) {
+        // Skip this line and potentially the next line if it's a page number
+        if (i + 1 < lines.length) {
+          const nextLine = cleanedLines[i + 1].trim();
+          const pageNum = parseInt(nextLine);
+          if (pageNum > 0 && nextLine === pageNum.toString()) {
+            i++; // Skip the page number line too
+          }
         }
-        
-        currentSection = {
-          sectionType: 'HEADER',
-          sectionText: '',
-          orderIndex: orderIndex++,
-          metadata: this.extractHeaderMetadata(rawLine)
-        };
-        currentLines = [rawLine];
         continue;
       }
       

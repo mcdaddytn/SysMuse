@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { TranscriptParser } from '../parsers/TranscriptParser';
 import { Phase2Processor } from '../parsers/Phase2Processor';
+import { MultiPassTranscriptParser } from '../parsers/MultiPassTranscriptParser';
 import { TranscriptConfig } from '../types/config.types';
 import logger from '../utils/logger';
 
@@ -34,6 +35,8 @@ program
   .option('--phase2', 'Run only Phase 2 (event processing)')
   .option('--trial-id <id>', 'Trial ID for Phase 2 processing', parseInt)
   .option('--log-level <level>', 'Log level (debug, info, warn, error)', 'info')
+  .option('--parser-mode <mode>', 'Parser mode: legacy or multi-pass', 'legacy')
+  .option('--debug-output', 'Enable debug output for multi-pass parser')
   .action(async (options) => {
     try {
       // Load configuration
@@ -89,6 +92,7 @@ program
       logger.info(`Input Directory: ${config.inputDir}`);
       logger.info(`Output Directory: ${config.outputDir}`);
       logger.info(`Log Level: ${config.logLevel}`);
+      logger.info(`Parser Mode: ${options.parserMode}`);
       logger.info(`Phases to run: ${runPhase1 ? 'Phase 1' : ''}${runPhase1 && runPhase2 ? ' + ' : ''}${runPhase2 ? 'Phase 2' : ''}`);
       logger.info('='.repeat(60));
       
@@ -99,8 +103,66 @@ program
           logger.info('\n📚 Starting Phase 1: Line Parsing');
           logger.info('-'.repeat(40));
           
-          const parser = new TranscriptParser(config);
-          await parser.parseDirectory();
+          if (options.parserMode === 'multi-pass') {
+            logger.info('Using Multi-Pass Parser');
+            
+            const multiPassConfig = {
+              mode: 'multi-pass' as const,
+              loadInMemory: true,
+              validatePasses: true,
+              debugOutput: options.debugOutput || false,
+              batchSize: config.batchSize || 1000
+            };
+            
+            const multiPassParser = new MultiPassTranscriptParser(prisma, logger, multiPassConfig);
+            
+            const files = fs.readdirSync(config.inputDir)
+              .filter(f => f.endsWith('.txt'))
+              .sort();
+            
+            let trialId = 1;
+            const trial = await prisma.trial.findFirst();
+            if (trial) {
+              trialId = trial.id;
+            } else {
+              const newTrial = await prisma.trial.create({
+                data: {
+                  caseNumber: 'MULTI-PASS-TEST',
+                  caseName: 'Multi-Pass Parser Test',
+                  judge: 'Test Judge',
+                  plaintiff: 'Test Plaintiff',
+                  defendant: 'Test Defendant',
+                  startDate: new Date(),
+                  endDate: new Date()
+                }
+              });
+              trialId = newTrial.id;
+            }
+            
+            for (const file of files) {
+              const filePath = path.join(config.inputDir, file);
+              logger.info(`Processing: ${file}`);
+              
+              const session = await prisma.session.create({
+                data: {
+                  trialId,
+                  date: new Date(),
+                  sessionType: file.includes('Morning') ? 'Morning' : 'Afternoon',
+                  fileName: file
+                }
+              });
+              
+              const success = await multiPassParser.parseTranscript(filePath, session.id, trialId);
+              
+              if (!success) {
+                logger.error(`Failed to parse ${file}`);
+              }
+            }
+          } else {
+            logger.info('Using Legacy Parser');
+            const parser = new TranscriptParser(config);
+            await parser.parseDirectory();
+          }
           
           logger.info('✅ Phase 1 completed successfully');
         }

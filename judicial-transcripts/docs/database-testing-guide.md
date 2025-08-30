@@ -3,6 +3,33 @@
 ## Overview
 This guide documents the correct procedures for database management, data loading, and testing in the Judicial Transcripts system. The production data files are too large to check into source control, but are referenced via configuration files that ARE in source control.
 
+## Docker Container Setup
+The system runs with the following Docker containers:
+- **PostgreSQL**: Container name: `judicial-postgres` (postgres:15-alpine)
+  - Port: 5432
+  - Database: `judicial_transcripts`
+  - Schema: `public` (NOT `judicial_transcripts` - this is important!)
+  - User: `judicial_user`
+  - Password: `judicial_pass`
+  - Connection: `postgresql://judicial_user:judicial_pass@localhost:5432/judicial_transcripts?schema=public`
+- **Elasticsearch**: Container name: `judicial-elasticsearch`
+  - Port: 9200
+  - URL: `http://localhost:9200`
+- **Kibana**: Container name: `judicial-kibana`
+  - Port: 5601
+
+### Accessing PostgreSQL Database
+```bash
+# Via Docker exec (use judicial_user, NOT postgres)
+docker exec -it judicial-postgres psql -U judicial_user -d judicial_transcripts
+
+# Direct connection from host (requires psql client)
+psql -h localhost -p 5432 -U judicial_user -d judicial_transcripts
+
+# Getting table record counts (IMPORTANT: use schema 'public' not 'judicial_transcripts')
+docker exec judicial-postgres psql -U judicial_user -d judicial_transcripts -c "SELECT table_name, (xpath('/row/cnt/text()', xml_count))[1]::text::int as row_count FROM (SELECT table_name, table_schema, query_to_xml(format('SELECT count(*) as cnt FROM %I.%I', table_schema, table_name), false, true, '') as xml_count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE') t ORDER BY table_name;"
+```
+
 ## Important Notes
 - **NEVER** attempt to check in large transcript data files or backup files
 - **ALWAYS** use the documented procedures below for database operations

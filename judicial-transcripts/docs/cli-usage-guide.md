@@ -16,7 +16,7 @@ The Judicial Transcripts system uses a phased command-line interface for process
 Converts PDF transcript files to text format for processing.
 
 ```bash
-npm run cli convert config/example-trial-config-mac.json
+npm run convert-pdf config/example-trial-config-mac.json
 ```
 
 **What it does:**
@@ -28,7 +28,11 @@ npm run cli convert config/example-trial-config-mac.json
 Parses raw transcript text files into database structure.
 
 ```bash
-npm run cli parse:phase1 config/example-trial-config-mac.json
+# Legacy parser (default - well-tested):
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+
+# Multi-pass parser (new - more modular architecture):
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
 ```
 
 **What it does:**
@@ -37,12 +41,13 @@ npm run cli parse:phase1 config/example-trial-config-mac.json
 - Extracts metadata (page headers, line prefixes)
 - Identifies speakers, attorneys, witnesses
 - Creates initial database records (Trial, Session, Page, Line)
+- Creates SessionSection records (CASE_TITLE, APPEARANCES, etc.)
 
 ### Phase 2: Enhanced Processing
 Enhances parsed data with pattern matching and relationships.
 
 ```bash
-npm run cli parse:phase2 config/example-trial-config-mac.json
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
 ```
 
 **What it does:**
@@ -56,7 +61,7 @@ npm run cli parse:phase2 config/example-trial-config-mac.json
 Completes processing with advanced analysis and validation.
 
 ```bash
-npm run cli parse:phase3 config/example-trial-config-mac.json
+npx ts-node src/cli/phase3.ts process
 ```
 
 **What it does:**
@@ -103,16 +108,19 @@ npx prisma generate
 npm run seed
 
 # 3. Convert PDFs to text (if starting from PDFs)
-npm run cli convert config/example-trial-config-mac.json
+npm run convert-pdf config/example-trial-config-mac.json
 
-# 4. Run Phase 1 parsing
-npm run cli parse:phase1 config/example-trial-config-mac.json
+# 4. Run Phase 1 parsing (choose one parser)
+# Legacy parser:
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+# OR Multi-pass parser:
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
 
 # 5. Run Phase 2 enhancement
-npm run cli parse:phase2 config/example-trial-config-mac.json
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
 
 # 6. Run Phase 3 final processing
-npm run cli parse:phase3 config/example-trial-config-mac.json
+npx ts-node src/cli/phase3.ts process
 ```
 
 ## Debugging and Testing
@@ -126,7 +134,7 @@ npm run prisma studio
 ### Run specific test transcript
 Always use the test configuration for debugging:
 ```bash
-npm run cli parse:phase1 config/example-trial-config-mac.json
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
 ```
 
 ### Common Issues

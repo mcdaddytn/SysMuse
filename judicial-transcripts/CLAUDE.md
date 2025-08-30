@@ -37,12 +37,13 @@ To implement a feature:
 
 ### CLI Usage
 The system uses phased parsing:
-1. **convert**: PDF to text conversion
-2. **phase1**: Initial parsing and database population  
-3. **phase2**: Enhanced parsing with pattern matching
-4. **phase3**: Final processing and validation
+1. **convert**: PDF to text conversion - `npm run convert-pdf config/example-trial-config-mac.json`
+2. **phase1**: Initial parsing and database population - `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json`
+3. **phase2**: Enhanced parsing with pattern matching - `npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1`
+4. **phase3**: Final processing and validation - `npx ts-node src/cli/phase3.ts process`
 
-Example: `npm run cli parse:phase1 config/example-trial-config-mac.json`
+Multi-pass parser (new): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass`
+Legacy parser (default): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy`
 
 ## Development Process
 1. Read feature specification completely

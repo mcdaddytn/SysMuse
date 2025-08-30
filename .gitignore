@@ -129,3 +129,5 @@ utility/convert-pdfs/package-lock.json
 judicial-transcripts/output/
 
 judicial-transcripts/.env.backup
+
+judicial-transcripts/debug-output/

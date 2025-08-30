@@ -49,27 +49,105 @@ export class StructureAnalyzer {
     const sections: SectionBoundary[] = [];
     const sectionMapping = new Map<number, DocumentSection>();
     
-    const summaryBoundary = this.findSummarySection(metadata);
-    if (summaryBoundary) {
+    // START IN SUMMARY SECTION BY DEFAULT
+    // Documents always begin with SUMMARY section
+    let currentSection = DocumentSection.SUMMARY;
+    let summaryStartLine = 0;
+    let proceedingsStartLine = -1;
+    let certificationStartLine = -1;
+    
+    // Find where PROCEEDINGS section starts
+    for (const [lineNum, line] of metadata.lines) {
+      const text = line.cleanText;
+      
+      // Check for explicit PROCEEDINGS marker
+      if (/P\s*R\s*O\s*C\s*E\s*E\s*D\s*I\s*N\s*G\s*S/i.test(text) || 
+          /^\s*PROCEEDINGS\s*$/i.test(text)) {
+        proceedingsStartLine = lineNum;
+        this.logger.info(`Found PROCEEDINGS section at line ${lineNum}: ${text}`);
+        break;
+      }
+      
+      // Also check for timestamp pattern which indicates proceedings
+      if (/^\s*\d{2}:\d{2}:\d{2}/.test(text) && lineNum > 50) {
+        proceedingsStartLine = lineNum;
+        this.logger.info(`Found PROCEEDINGS section (via timestamp) at line ${lineNum}: ${text}`);
+        break;
+      }
+    }
+    
+    // Find where CERTIFICATION section starts
+    for (const [lineNum, line] of metadata.lines) {
+      const text = line.cleanText;
+      
+      if (/CERTIFICATION/i.test(text) || /CERTIFICATE/i.test(text)) {
+        // Make sure we're past proceedings section
+        if (proceedingsStartLine === -1 || lineNum > proceedingsStartLine + 100) {
+          certificationStartLine = lineNum;
+          this.logger.info(`Found CERTIFICATION section at line ${lineNum}: ${text}`);
+          break;
+        }
+      }
+    }
+    
+    // Create section boundaries
+    const lastLineNum = Math.max(...Array.from(metadata.lines.keys()));
+    
+    // SUMMARY section (from start until PROCEEDINGS)
+    const summaryEndLine = proceedingsStartLine > 0 ? proceedingsStartLine - 1 : 
+                          (certificationStartLine > 0 ? certificationStartLine - 1 : lastLineNum);
+    
+    if (summaryEndLine >= summaryStartLine) {
+      const summaryBoundary: SectionBoundary = {
+        section: DocumentSection.SUMMARY,
+        startLine: summaryStartLine,
+        endLine: summaryEndLine,
+        startPage: 1,
+        endPage: this.getPageForLine(summaryEndLine, metadata)
+      };
       sections.push(summaryBoundary);
       this.mapSectionLines(summaryBoundary, sectionMapping);
     }
     
-    const proceedingsBoundary = this.findProceedingsSection(metadata, summaryBoundary);
-    if (proceedingsBoundary) {
+    // PROCEEDINGS section
+    if (proceedingsStartLine >= 0) {
+      const proceedingsEndLine = certificationStartLine > 0 ? certificationStartLine - 1 : lastLineNum;
+      const proceedingsBoundary: SectionBoundary = {
+        section: DocumentSection.PROCEEDINGS,
+        startLine: proceedingsStartLine,
+        endLine: proceedingsEndLine,
+        startPage: this.getPageForLine(proceedingsStartLine, metadata),
+        endPage: this.getPageForLine(proceedingsEndLine, metadata)
+      };
       sections.push(proceedingsBoundary);
       this.mapSectionLines(proceedingsBoundary, sectionMapping);
     }
     
-    const certificationBoundary = this.findCertificationSection(metadata, proceedingsBoundary);
-    if (certificationBoundary) {
+    // CERTIFICATION section
+    if (certificationStartLine >= 0) {
+      const certificationBoundary: SectionBoundary = {
+        section: DocumentSection.CERTIFICATION,
+        startLine: certificationStartLine,
+        endLine: lastLineNum,
+        startPage: this.getPageForLine(certificationStartLine, metadata),
+        endPage: this.getPageForLine(lastLineNum, metadata)
+      };
       sections.push(certificationBoundary);
       this.mapSectionLines(certificationBoundary, sectionMapping);
     }
     
+    // Fill any remaining unmapped lines with their appropriate section
+    // based on their position relative to section boundaries
     for (const [lineNum, line] of metadata.lines) {
       if (!sectionMapping.has(lineNum)) {
-        sectionMapping.set(lineNum, DocumentSection.UNKNOWN);
+        if (certificationStartLine >= 0 && lineNum >= certificationStartLine) {
+          sectionMapping.set(lineNum, DocumentSection.CERTIFICATION);
+        } else if (proceedingsStartLine >= 0 && lineNum >= proceedingsStartLine) {
+          sectionMapping.set(lineNum, DocumentSection.PROCEEDINGS);
+        } else {
+          // Default to SUMMARY for early lines
+          sectionMapping.set(lineNum, DocumentSection.SUMMARY);
+        }
       }
     }
     
@@ -84,6 +162,16 @@ export class StructureAnalyzer {
       sections,
       sectionMapping
     };
+  }
+  
+  private getPageForLine(lineNum: number, metadata: ParsedMetadata): number {
+    // Find the page number for a given line
+    for (const [fileLineNum, location] of metadata.fileLineMapping) {
+      if (location.lineNumber === lineNum) {
+        return location.pageNumber;
+      }
+    }
+    return 1; // Default to page 1 if not found
   }
 
   private findSummarySection(metadata: ParsedMetadata): SectionBoundary | null {

@@ -57,19 +57,22 @@ npm run seed
 ../scripts/db/backupdb.sh seed
 
 # 5. Run Phase 1 to parse and load transcript data
-npm run cli parse:phase1 config/example-trial-config-mac.json
+# Legacy parser (default):
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+# OR Multi-pass parser (new):
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
 
 # 6. Create backup after Phase 1
 ../scripts/db/backupdb.sh phase1
 
 # 7. Run Phase 2 to process and enhance the data
-npm run cli parse:phase2 config/example-trial-config-mac.json
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
 
 # 8. Create backup after Phase 2
 ../scripts/db/backupdb.sh phase2
 
 # 9. Run Phase 3 for marker discovery and accumulator processing
-npm run cli parse:phase3 config/example-trial-config-mac.json
+npx ts-node src/cli/phase3.ts process
 
 # 10. Create backup after Phase 3
 ../scripts/db/backupdb.sh phase3

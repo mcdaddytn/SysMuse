@@ -127,44 +127,42 @@ export class MetadataExtractor {
     currentIndex: number
   ): { trialPageNumber: number; parsedTrialPage: number; headerText: string; headerLines: string[]; skipLines: number } | null {
     
-    const singleLineMatch = this.PAGE_HEADER_PATTERN.exec(line);
-    if (singleLineMatch) {
-      const pageNum = parseInt(singleLineMatch[1]);
-      const middleText = singleLineMatch[2];
-      const trialPageNum = parseInt(singleLineMatch[3]);
-      
-      if (this.isValidPageHeader(pageNum, trialPageNum)) {
-        return {
-          trialPageNumber: trialPageNum,
-          parsedTrialPage: pageNum,
-          headerText: line.trim(),
-          headerLines: [line],
-          skipLines: 0
-        };
-      }
+    // Check for Case document header pattern (2-line header)
+    // First line: Case 2:19-cv-00123-JRG Document XXX Filed MM/DD/YY Page X of Y PageID #: ZZZZZ
+    // Second line: page number
+    // Make sure the line doesn't start with a line number prefix (avoid "25 Case..." patterns)
+    const trimmedLine = line.trim();
+    
+    // Skip if line starts with a line number followed by Case (this is a false positive)
+    if (/^\d{1,2}\s+Case\s+/.test(trimmedLine)) {
+      return null;
     }
     
-    const firstLineMatch = this.PAGE_HEADER_MULTILINE_PATTERN.exec(line);
-    if (firstLineMatch && currentIndex + 2 < fileContent.length) {
-      const pageNum = parseInt(firstLineMatch[1]);
+    const caseHeaderPattern = /^\s*Case\s+[\d:cv-]+.*Document\s+\d+.*Page\s+(\d+)\s+of\s+\d+\s+PageID/i;
+    const caseMatch = caseHeaderPattern.exec(line);
+    
+    if (caseMatch && currentIndex + 1 < fileContent.length) {
       const nextLine = fileContent[currentIndex + 1];
-      const thirdLine = fileContent[currentIndex + 2];
+      const pageNumMatch = /^\s*(\d+)\s*$/.exec(nextLine.trim());
       
-      const thirdLineMatch = /^\s*(\d+)\s*$/.exec(thirdLine);
-      if (thirdLineMatch) {
-        const trialPageNum = parseInt(thirdLineMatch[1]);
-        
-        if (this.isValidPageHeader(pageNum, trialPageNum)) {
+      if (pageNumMatch) {
+        const pageNum = parseInt(pageNumMatch[1]);
+        // Validate the page number is reasonable
+        if (pageNum > 0 && pageNum < 10000) {
           return {
-            trialPageNumber: trialPageNum,
+            trialPageNumber: pageNum,
             parsedTrialPage: pageNum,
-            headerText: `${line.trim()} ${nextLine.trim()} ${thirdLine.trim()}`,
-            headerLines: [line, nextLine, thirdLine],
-            skipLines: 2
+            headerText: `${line.trim()}\n${nextLine.trim()}`,
+            headerLines: [line, nextLine],
+            skipLines: 1
           };
         }
       }
     }
+    
+    // Skip the traditional court header patterns for now as they're causing false positives
+    // These patterns like "18  19" or "23  24" are not real page headers
+    // The real headers are the Case document headers above
     
     return null;
   }

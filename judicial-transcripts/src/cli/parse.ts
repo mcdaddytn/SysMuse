@@ -117,40 +117,102 @@ program
             const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
             
             const files = fs.readdirSync(config.inputDir)
-              .filter(f => f.endsWith('.txt'))
-              .sort();
+              .filter(f => f.endsWith('.txt'));
             
-            let trialId = 1;
-            const trial = await prisma.trial.findFirst();
-            if (trial) {
-              trialId = trial.id;
-            } else {
-              const newTrial = await prisma.trial.create({
+            // TODO: Implement proper file convention parsing to handle different naming patterns
+            // This is a temporary solution that works for the current test data format
+            // Sort files properly: by date, then morning before afternoon
+            files.sort((a, b) => {
+              const getDateAndType = (filename: string) => {
+                const dateMatch = filename.match(/held on (\d+)_(\d+)_(\d+)/);
+                let date = '';
+                if (dateMatch) {
+                  const month = dateMatch[1].padStart(2, '0');
+                  const day = dateMatch[2].padStart(2, '0');
+                  const year = '20' + dateMatch[3];
+                  date = `${year}-${month}-${day}`;
+                }
+                
+                let sessionType = '';
+                const lowerFile = filename.toLowerCase();
+                if (lowerFile.includes('morning')) {
+                  sessionType = '1_morning';
+                } else if (lowerFile.includes('afternoon')) {
+                  sessionType = '2_afternoon';
+                } else if (lowerFile.includes('bench')) {
+                  sessionType = '3_bench';
+                } else if (lowerFile.includes('verdict')) {
+                  sessionType = '4_verdict';
+                } else {
+                  sessionType = '5_other';
+                }
+                
+                return { date, sessionType };
+              };
+              
+              const aInfo = getDateAndType(a);
+              const bInfo = getDateAndType(b);
+              
+              if (aInfo.date !== bInfo.date) {
+                return aInfo.date.localeCompare(bInfo.date);
+              }
+              
+              return aInfo.sessionType.localeCompare(bInfo.sessionType);
+            });
+            
+            // Create or get trial first
+            let trial = await prisma.trial.findFirst({
+              where: {
+                caseNumber: '2:19-cv-00123-JRG'
+              }
+            });
+            
+            if (!trial) {
+              trial = await prisma.trial.create({
                 data: {
-                  name: 'Multi-Pass Parser Test',
-                  caseNumber: 'MULTI-PASS-TEST',
-                  court: 'Test Court',
-                  plaintiff: 'Test Plaintiff',
-                  defendant: 'Test Defendant'
+                  name: 'VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.',
+                  caseNumber: '2:19-cv-00123-JRG',
+                  court: 'UNITED STATES DISTRICT COURT FOR THE EASTERN DISTRICT OF TEXAS',
+                  plaintiff: 'VOCALIFE LLC',
+                  defendant: 'AMAZON.COM, INC. and AMAZON.COM LLC'
                 }
               });
-              trialId = newTrial.id;
             }
             
+            // Process files using multi-pass parser
             for (const file of files) {
               const filePath = path.join(config.inputDir, file);
               logger.info(`Processing: ${file}`);
               
+              // Extract session date from filename
+              const dateMatch = file.match(/held on (\d+)_(\d+)_(\d+)/);
+              let sessionDate = new Date();
+              if (dateMatch) {
+                const month = parseInt(dateMatch[1]) - 1; // JS months are 0-indexed
+                const day = parseInt(dateMatch[2]);
+                const year = 2000 + parseInt(dateMatch[3]);
+                sessionDate = new Date(year, month, day);
+              }
+              
+              // Determine session type using SessionType enum
+              let sessionType: 'MORNING' | 'AFTERNOON' | 'ALLDAY' | 'EVENING' | 'SPECIAL' = 'MORNING';
+              if (file.toLowerCase().includes('afternoon')) {
+                sessionType = 'AFTERNOON';
+              } else if (file.toLowerCase().includes('verdict') || file.toLowerCase().includes('bench')) {
+                sessionType = 'SPECIAL';  // Use SPECIAL for verdict and bench sessions
+              }
+              
+              // Create session
               const session = await prisma.session.create({
                 data: {
-                  trialId,
-                  sessionDate: new Date(),
-                  sessionType: file.includes('Morning') ? 'MORNING' : 'AFTERNOON',
+                  trialId: trial.id,
+                  sessionDate,
+                  sessionType,
                   fileName: file
                 }
               });
               
-              const success = await multiPassParser.parseTranscript(filePath, session.id, trialId);
+              const success = await multiPassParser.parseTranscript(filePath, session.id, trial.id);
               
               if (!success) {
                 logger.error(`Failed to parse ${file}`);

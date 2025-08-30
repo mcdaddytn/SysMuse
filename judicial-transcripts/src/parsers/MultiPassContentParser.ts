@@ -6,10 +6,12 @@ import {
   DocumentSection,
   SectionBoundary
 } from './MultiPassTypes';
+import { SessionSectionParser } from './SessionSectionParser';
 
 export class ContentParser {
   private prisma: PrismaClient;
   private logger: Logger;
+  private sessionSectionParser: SessionSectionParser;
   
   private readonly SPEAKER_PATTERNS = [
     { pattern: /^THE COURT:/i, type: 'COURT' },
@@ -33,6 +35,7 @@ export class ContentParser {
   constructor(prisma: PrismaClient, logger: Logger) {
     this.prisma = prisma;
     this.logger = logger;
+    this.sessionSectionParser = new SessionSectionParser(prisma);
   }
 
   async parseContent(
@@ -43,6 +46,9 @@ export class ContentParser {
     batchSize: number = 1000
   ): Promise<void> {
     this.logger.info('Starting content parsing (Pass 3)');
+    
+    // Update session with metadata (totalPages, transcriptStartPage)
+    await this.updateSessionMetadata(metadata, sessionId, trialId);
     
     await this.createPages(metadata, sessionId, trialId);
     
@@ -65,6 +71,52 @@ export class ContentParser {
     await this.processSessionSections(metadata, structure, sessionId, trialId);
     
     this.logger.info(`Content parsing complete: ${metadata.lines.size} lines processed`);
+  }
+  
+  private async updateSessionMetadata(
+    metadata: ParsedMetadata,
+    sessionId: number,
+    trialId: number
+  ): Promise<void> {
+    const totalPages = metadata.pages.size;
+    
+    // Calculate transcriptStartPage based on previous sessions
+    const previousSessions = await this.prisma.session.findMany({
+      where: { 
+        trialId,
+        id: { lt: sessionId }  // Sessions before this one
+      },
+      orderBy: { id: 'asc' }
+    });
+    
+    let transcriptStartPage = 1;
+    for (const prevSession of previousSessions) {
+      if (prevSession.totalPages) {
+        transcriptStartPage += prevSession.totalPages;
+      }
+    }
+    
+    // Extract document number from first page header if available
+    let documentNumber: number | undefined;
+    const firstPage = metadata.pages.get(1);
+    if (firstPage?.headerText) {
+      const docMatch = firstPage.headerText.match(/Document\s+(\d+)/);
+      if (docMatch) {
+        documentNumber = parseInt(docMatch[1]);
+      }
+    }
+    
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        totalPages,
+        transcriptStartPage,
+        documentNumber
+      }
+    });
+    
+    const transcriptEndPage = transcriptStartPage + totalPages - 1;
+    this.logger.debug(`Updated session ${sessionId}: pages ${transcriptStartPage}-${transcriptEndPage} (${totalPages} total)`);
   }
 
   private async createPages(
@@ -211,6 +263,29 @@ export class ContentParser {
         trialId
       );
     }
+    
+    // Process CERTIFICATION section
+    const certificationSection = structure.sections.find(s => s.section === DocumentSection.CERTIFICATION);
+    
+    if (certificationSection) {
+      const certLines: string[] = [];
+      
+      // Collect certification lines
+      for (let lineNum = certificationSection.startLine; lineNum <= certificationSection.endLine; lineNum++) {
+        const line = metadata.lines.get(lineNum);
+        if (line) {
+          certLines.push(line.rawText);
+        }
+      }
+      
+      // Use SessionSectionParser to create CERTIFICATION section
+      await this.sessionSectionParser.parseCertificationSection(
+        certLines,
+        0,  // Start index is 0 since we're passing just the certification lines
+        sessionId,
+        trialId
+      );
+    }
   }
 
   private async processSummarySection(
@@ -221,15 +296,25 @@ export class ContentParser {
   ): Promise<void> {
     const summaryLines: string[] = [];
     
+    // Collect the raw text lines for the SUMMARY section
     for (let lineNum = section.startLine; lineNum <= section.endLine; lineNum++) {
       const line = metadata.lines.get(lineNum);
       if (line) {
-        summaryLines.push(line.cleanText);
+        // Include the full raw text to preserve line prefixes for the parser
+        summaryLines.push(line.rawText);
       }
     }
     
-    const summaryText = summaryLines.join('\n');
+    // Use SessionSectionParser to parse the summary into detailed sections
+    // (CASE_TITLE, APPEARANCES, COURT_AND_DIVISION, etc.)
+    await this.sessionSectionParser.parseSummarySections(
+      summaryLines,
+      sessionId,
+      trialId
+    );
     
+    // Also extract metadata for other purposes
+    const summaryText = summaryLines.join('\n');
     const attorneys = this.extractAttorneys(summaryText);
     const judge = this.extractJudge(summaryText);
     const courtReporter = this.extractCourtReporter(summaryText);
@@ -246,23 +331,8 @@ export class ContentParser {
       this.logger.debug(`Found court reporter: ${courtReporter}`);
     }
     
-    await this.prisma.sessionSection.create({
-      data: {
-        sessionId,
-        trialId,
-        sectionType: 'SUMMARY',
-        sectionText: summaryText.substring(0, 5000),
-        orderIndex: 1,
-        metadata: {
-          attorneys,
-          judge,
-          courtReporter,
-          startLine: section.startLine,
-          endLine: section.endLine
-        },
-        createdAt: new Date()
-      }
-    });
+    // Don't create a duplicate SUMMARY section - SessionSectionParser handles all sections
+    // The SessionSectionParser creates detailed sections like CASE_TITLE, APPEARANCES, etc.
   }
 
   private extractAttorneys(text: string): string[] {

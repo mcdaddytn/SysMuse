@@ -1,5 +1,42 @@
 # Quick Command Reference
 
+## Minimal Setup and Run Sequence
+
+### From Scratch (No Existing Backups)
+```bash
+# 1. Reset database and apply schema
+npx prisma db push --force-reset
+
+# 2. Generate Prisma client
+npx prisma generate
+
+# 3. Load seed data
+npm run seed
+
+# 4. Run Phase 1 parsing (choose one parser mode)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
+# OR for legacy parser:
+# npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+
+# 5. Run Phase 2 processing
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+
+# 6. Run Phase 3 marker processing
+npx ts-node src/cli/phase3.ts process
+```
+
+### Quick Start (With Existing Backups)
+```bash
+# Check available backups
+ls backups/judicial_transcripts_*.sql
+
+# Restore to desired state (example: phase2 complete)
+../scripts/db/restoredb.sh phase2_mp
+
+# Continue from there (e.g., run phase3)
+npx ts-node src/cli/phase3.ts process
+```
+
 ## Database Operations
 ```bash
 # Reset database and schema
@@ -12,18 +49,18 @@ npx prisma generate
 npm run seed
 
 # Open database GUI
-npm run prisma studio
+npx prisma studio
 ```
 
 ## Parsing Commands
 
 ### Phase 1: Initial Parsing
 ```bash
-# Legacy Parser (default, well-tested)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
-
-# Multi-Pass Parser (new, modular architecture)
+# Multi-Pass Parser (recommended, new modular architecture)
 npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
+
+# Legacy Parser (well-tested, for comparison)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
 
 # With debug output (multi-pass only)
 npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass --debug-output
@@ -34,30 +71,48 @@ npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config
 npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
 ```
 
-### Phase 3: Final Processing
+### Phase 3: Marker Processing
 ```bash
 npx ts-node src/cli/phase3.ts process
+
+# With specific trial
+npx ts-node src/cli/phase3.ts process -t 1
+
+# Clean existing markers first
+npx ts-node src/cli/phase3.ts process --clean
 ```
 
-## Complete Reset and Parse Sequence
+## Optional: Backup and Restore
+
+### Create Backups at Key Points
 ```bash
-# 1. Reset database
-npx prisma db push --force-reset
+# After seed data
+../scripts/db/backupdb.sh seed
 
-# 2. Load seed data
-npm run seed
+# After each phase (multi-pass parser)
+../scripts/db/backupdb.sh phase1_mp
+../scripts/db/backupdb.sh phase2_mp
+../scripts/db/backupdb.sh phase3_mp
 
-# 3. Parse with chosen parser
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
-
-# 4. Run phase 2
-npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
-
-# 5. Run phase 3
-npx ts-node src/cli/phase3.ts process
+# After each phase (legacy parser)
+../scripts/db/backupdb.sh phase1_legacy
+../scripts/db/backupdb.sh phase2_legacy
+../scripts/db/backupdb.sh phase3_legacy
 ```
 
-## Docker Operations
+### Restore from Backup
+```bash
+# List available backups
+ls backups/judicial_transcripts_*.sql
+
+# Restore to specific state
+../scripts/db/restoredb.sh phase2_mp  # Multi-pass phase 2 complete
+../scripts/db/restoredb.sh phase2_legacy  # Legacy phase 2 complete
+```
+
+## Optional: Additional Commands
+
+### Docker Operations
 ```bash
 # Check running containers
 docker ps
@@ -69,17 +124,31 @@ docker exec -it judicial-postgres psql -U judicial_user -d judicial_transcripts
 docker exec judicial-postgres psql -U judicial_user -d judicial_transcripts -c "SELECT 'Sessions' as entity, COUNT(*) FROM \"Session\" UNION ALL SELECT 'Pages', COUNT(*) FROM \"Page\" UNION ALL SELECT 'Lines', COUNT(*) FROM \"Line\";"
 ```
 
-## Backup/Restore (if scripts exist)
+### Testing and Verification
 ```bash
-# Create backup
-../scripts/db/backupdb.sh phase1
+# Run all query tests
+npm run run-all-queries
 
-# Restore backup
-../scripts/db/restoredb.sh phase1
+# Compare parser outputs
+npx ts-node scripts/compare-parsers.ts data-export-legacy data-export-multipass
+
+# Run regression tests
+npx ts-node src/scripts/testRegression.ts --trial-id 1 --regression-type phase2
 ```
 
-## Notes
-- **ALWAYS** use the configuration file - command line arguments alone don't work
+### Reports and Export
+```bash
+# Generate speaker report
+npx ts-node src/scripts/generateSpeakerReport.ts --trial-id 1
+
+# Export comparison data
+npx ts-node scripts/export-comparison-data.ts
+```
+
+## Important Notes
+- **ALWAYS** use the configuration file - command line arguments alone are insufficient
 - Default config for Mac testing: `config/example-trial-config-mac.json`
-- Parser modes: `legacy` (default) or `multi-pass` (new)
-- Trial ID is usually 1 for phase 2
+- Parser modes: `multi-pass` (recommended) or `legacy` (for comparison)
+- Trial ID is usually 1 for phase 2 and phase 3
+- Backups are stored in `backups/` directory (not in source control)
+- For detailed database operations, see `docs/database-testing-guide.md`

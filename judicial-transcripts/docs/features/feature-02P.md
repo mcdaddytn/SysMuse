@@ -116,30 +116,54 @@ interface ExaminationState {
 ### Part C: Testing Configuration
 
 #### 1. Test Trial Directories
-Structure:
-```
-/test-trials/
-  /trial-001-standard/    # Standard Q. and A. patterns
-    trialstyle.json       # Generated, then modified
-    *.txt                 # Converted transcripts
-  /trial-002-colon/       # Uses Q: and A: patterns
-    trialstyle.json
-    *.txt
-  /trial-003-mixed/       # Mixed patterns
-    trialstyle.json
-    *.txt
-  /trial-004-no-by/       # No "BY MR." indicators
-    trialstyle.json
-    *.txt
-```
+Available at: `/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf`
+
+##### Trial Details:
+
+**42 Vocalife Amazon**
+- Standard trial format (baseline test case)
+- Standard Q. and A. patterns
+- BY MR./MS. attorney indicators
+- Expected to match existing test output exactly
+
+**01 Genband**
+- Alternative speaker conventions
+- File naming: `Genband_January 11, 2016 AM.pdf`
+- Patterns found:
+  ```
+  QUESTION:      Did you design any of the hardware...
+  ANSWER:        Did I design the hardware?
+  Q.    (By Mr. Verhoeven) Does that refresh...
+  A.    Yes.
+  Q     Yesterday, you drew us this chart...
+  A     Yes.
+  ```
+- Variable whitespace requiring normalization
+- Mixed Q/A formats within same trial
+
+**50 Packet Netscout**
+- Document ID naming convention
+- Example: `US_DIS_TXED_2_16cv230_d74990699e16592_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.pdf`
+
+**14 Optis Wireless Technology V. Apple Inc**
+- "AM AND PM" variant: `Optis Apple August 11 2020 AM and PM.pdf`
+- Contains attorney TRUELOVE (appears in multiple trials - good for cross-trial testing)
+- Standard Q./A. patterns
 
 #### 2. Pattern Testing Matrix
-| Trial | Question | Answer | Attorney | Generic Needed |
-|-------|----------|--------|----------|----------------|
-| 001   | Q.       | A.     | BY MR.   | No             |
-| 002   | Q:       | A:     | BY MS.   | No             |
-| 003   | Q        | A      | SMITH:   | Sometimes      |
-| 004   | QUESTION | ANSWER | None     | Yes            |
+| Trial | Question Patterns | Answer Patterns | File Convention | Special Notes |
+|-------|------------------|-----------------|-----------------|---------------|
+| 42 Vocalife | Q. | A. | DATEAMPM | Baseline test |
+| 01 Genband | Q., Q, QUESTION: | A., A, ANSWER: | DATEMORNAFT | Variable whitespace |
+| 50 Packet | Q., Q: | A., A: | DOCID | Long filenames |
+| 14 Optis | Q. | A. | DATEAMPM | AM AND PM variant, TRUELOVE |
+
+#### 3. Whitespace Normalization Requirements
+- Remove linePrefix and store separately
+- Strip leading whitespace from remaining text
+- Store normalized text in Line.text
+- Apply speaker identification to normalized text
+- Single character patterns (Q, A) must be followed by space
 
 #### 3. Verification Queries
 ```sql
@@ -168,11 +192,18 @@ ORDER BY pattern_start;
 
 ## Implementation Plan
 
+### Phase 0: PDF Conversion Setup
+1. Use `multi-trial-config-mac.json` to process PDF directory
+2. Convert all PDFs in subdirectories to text
+3. Generate initial `trialstyle.json` for each trial
+4. Verify 42 Vocalife output matches existing test data
+
 ### Phase 1: Configuration Enhancement
 1. Update `trialstyle.json` schema with Q&A patterns
 2. Add pattern configuration to PDF conversion phase
 3. Implement pattern detection in file ordering logic
 4. Generate trial-specific configs in output directories
+5. Handle whitespace normalization in LineParser
 
 ### Phase 2: Pattern Detection
 1. Create `QAPatternDetector` service
@@ -274,11 +305,19 @@ ORDER BY pattern_start;
 
 ## Testing Plan
 
+### Cross-Trial Attorney Verification
+**Attorney TRUELOVE Test Case**
+- Appears in: 42 Vocalife Amazon, 14 Optis Wireless
+- Should have same fingerprint: TRUELOVE_J (Jennifer L. Truelove)
+- Verify cross-trial matching works correctly
+- Check law firm associations remain trial-specific
+
 ### Unit Tests
-1. Pattern detection with various formats
-2. Generic speaker creation
-3. Examination context state machine
-4. Configuration validation
+1. Pattern detection with various formats (Q, Q., Q:, QUESTION:)
+2. Whitespace normalization (leading spaces, tabs)
+3. Generic speaker creation
+4. Examination context state machine
+5. Configuration validation
 
 ### Integration Tests
 1. Multi-trial batch processing

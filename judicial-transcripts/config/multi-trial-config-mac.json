@@ -1,0 +1,61 @@
+{
+  "inputDirectory": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
+  "outputDirectory": "./output/multi-trial",
+  "logLevel": "info",
+  "processSubDirs": true,
+  "pdfToTextConfig": "./config/pdftotext.json",
+  "trialStyleConfig": "./config/trialstyle.json",
+  "batchProcessing": {
+    "enabled": true,
+    "createSubDirectories": true,
+    "preserveSourceStructure": true
+  },
+  "trials": {
+    "42 Vocalife Amazon": {
+      "description": "Standard trial format - baseline test case",
+      "expectedPatterns": {
+        "question": ["Q."],
+        "answer": ["A."],
+        "attorney": ["BY MR.", "BY MS."]
+      }
+    },
+    "01 Genband": {
+      "description": "Alternative speaker conventions with QUESTION: and varying whitespace",
+      "expectedPatterns": {
+        "question": ["Q.", "Q", "QUESTION:"],
+        "answer": ["A.", "A", "ANSWER:"],
+        "attorney": ["BY MR.", "BY MS.", "Mr.", "Ms."]
+      },
+      "fileConvention": "DATEMORNAFT"
+    },
+    "50 Packet Netscout": {
+      "description": "Document ID naming convention",
+      "expectedPatterns": {
+        "question": ["Q.", "Q:"],
+        "answer": ["A.", "A:"]
+      },
+      "fileConvention": "DOCID"
+    },
+    "14 Optis Wireless Technology V. Apple Inc": {
+      "description": "AM AND PM variant naming, contains attorney TRUELOVE",
+      "expectedPatterns": {
+        "question": ["Q."],
+        "answer": ["A."]
+      },
+      "fileConvention": "DATEAMPM",
+      "notableAttorneys": ["TRUELOVE"]
+    }
+  },
+  "parsingOptions": {
+    "removeLeadingWhitespace": true,
+    "preserveLinePrefix": true,
+    "normalizeWhitespace": true,
+    "detectSpeakerPatterns": true
+  },
+  "elasticsearch": {
+    "enabled": false,
+    "host": "localhost",
+    "port": 9200,
+    "indexPrefix": "judicial"
+  }
+}

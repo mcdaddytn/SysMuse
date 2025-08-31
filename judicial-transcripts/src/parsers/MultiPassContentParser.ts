@@ -76,6 +76,8 @@ export class ContentParser {
     
     const lineBatches = this.createLineBatches(metadata, structure, batchSize);
     
+    this.logger.info(`Processing ${metadata.lines.size} lines in ${lineBatches.length} batches of ${batchSize}`);
+    
     for (let i = 0; i < lineBatches.length; i++) {
       await this.processLineBatch(
         lineBatches[i],
@@ -85,8 +87,8 @@ export class ContentParser {
         trialId
       );
       
-      if ((i + 1) % 10 === 0) {
-        this.logger.debug(`Processed ${(i + 1) * batchSize} lines`);
+      if ((i + 1) % 10 === 0 || i === lineBatches.length - 1) {
+        this.logger.debug(`Processed batch ${i + 1}/${lineBatches.length} (${Math.min((i + 1) * batchSize, metadata.lines.size)} lines)`);
       }
     }
     
@@ -140,7 +142,7 @@ export class ContentParser {
       }
     }
     
-    // Parse attorneys from APPEARANCES section
+    // Parse attorneys from summary (will be refined after SessionSections are created)
     await this.parseAttorneysFromSummary(summaryLines, trialId);
     
     // Parse judge
@@ -153,56 +155,65 @@ export class ContentParser {
   ): Promise<void> {
     if (!this.speakerService) return;
     
-    // Find APPEARANCES section
-    const appearancesIndex = lines.findIndex(l => 
-      l.includes('APPEARANCES:') || l.includes('APPEARING:')
-    );
-    
-    if (appearancesIndex === -1) {
-      this.logger.warn('No APPEARANCES section found in summary');
-      return;
-    }
-    
-    // Parse attorney blocks (usually separated by FOR PLAINTIFF/DEFENDANT)
+    // Look for the sections that start with "FOR THE PLAINTIFF:" or "FOR THE DEFENDANT:"
     let currentRole: 'PLAINTIFF' | 'DEFENDANT' | null = null;
+    let inAttorneySection = false;
     
-    for (let i = appearancesIndex + 1; i < lines.length; i++) {
+    for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
-      // Check for role markers
-      if (line.includes('FOR PLAINTIFF') || line.includes('FOR THE PLAINTIFF')) {
+      // Check for role markers - these are section headers
+      if (line === 'FOR THE PLAINTIFF:' || line.startsWith('FOR THE PLAINTIFF:')) {
         currentRole = 'PLAINTIFF';
+        inAttorneySection = true;
         continue;
       }
-      if (line.includes('FOR DEFENDANT') || line.includes('FOR THE DEFENDANT')) {
+      if (line === 'FOR THE DEFENDANT:' || line === 'FOR THE DEFENDANTS:' || 
+          line.startsWith('FOR THE DEFENDANT:') || line.startsWith('FOR THE DEFENDANTS:')) {
         currentRole = 'DEFENDANT';
+        inAttorneySection = true;
         continue;
       }
       
-      // Stop at next section
-      if (line.includes('BEFORE THE HONORABLE') || line.includes('COURT REPORTER')) {
-        break;
+      // Stop at next major section
+      if (line.includes('BEFORE THE HONORABLE') || line.includes('COURT REPORTER') || 
+          line.includes('OFFICIAL COURT REPORTER')) {
+        inAttorneySection = false;
+        continue;
       }
       
-      // Parse attorney name
-      const attorneyMatch = line.match(/^(MR\.|MS\.|MRS\.|DR\.)?\s*([A-Z][A-Z\s\.',-]+?)(?:\s*,|$)/i);
-      if (attorneyMatch && currentRole) {
-        const title = attorneyMatch[1] || 'MR.';
-        const name = attorneyMatch[2].trim();
-        
-        // Extract last name
-        const nameParts = name.split(/\s+/);
-        const lastName = nameParts[nameParts.length - 1];
-        
-        await this.speakerService.createAttorneyWithSpeaker({
-          name,
-          title,
-          lastName,
-          speakerPrefix: `${title} ${lastName}`.toUpperCase(),
-          role: currentRole
-        });
-        
-        this.logger.info(`Created attorney: ${title} ${name} for ${currentRole}`);
+      // Skip empty lines
+      if (!line || line.length === 0) continue;
+      
+      // Parse attorney name if we're in an attorney section
+      if (inAttorneySection && currentRole) {
+        // Match attorney names with titles (MR., MS., MRS., DR.)
+        const attorneyMatch = line.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z][A-Z\s\.',-]+?)(?:\s*$|,)/i);
+        if (attorneyMatch) {
+          const title = attorneyMatch[1].toUpperCase();
+          const fullName = attorneyMatch[2].trim();
+          
+          // Extract last name (handle names like "RUBINO, III")
+          const nameParts = fullName.split(/\s+/);
+          let lastName = nameParts[nameParts.length - 1];
+          
+          // Handle suffixes like III, Jr., Sr.
+          if (lastName.match(/^(III|II|IV|V|JR\.?|SR\.?)$/i) && nameParts.length > 1) {
+            lastName = nameParts[nameParts.length - 2];
+          }
+          
+          this.logger.debug(`Creating attorney: ${fullName} (${title} ${lastName}) for ${currentRole}`);
+          
+          await this.speakerService.createAttorneyWithSpeaker({
+            name: fullName,
+            title,
+            lastName,
+            speakerPrefix: `${title} ${lastName}`.toUpperCase(),
+            role: currentRole
+          });
+          
+          this.logger.info(`Created attorney: ${fullName} for ${currentRole}`);
+        }
       }
     }
   }
@@ -345,11 +356,19 @@ export class ContentParser {
       const location = metadata.fileLineMapping.get(line.fileLineNumber);
       const section = structure.sectionMapping.get(lineNum) || DocumentSection.UNKNOWN;
       
-      if (!location) continue;
+      if (!location) {
+        this.logger.warn(`No location found for line ${lineNum} (fileLineNumber: ${line.fileLineNumber})`);
+        continue;
+      }
       
       const pageId = pageMap.get(location.pageNumber);
       if (!pageId) {
         this.logger.warn(`Page ${location.pageNumber} not found for line ${lineNum}`);
+        continue;
+      }
+      
+      // Skip blank lines - don't persist them
+      if (!line.cleanText || line.cleanText.trim() === '') {
         continue;
       }
       
@@ -379,35 +398,20 @@ export class ContentParser {
       });
       
       // Create statement event if we have a speaker and are in PROCEEDINGS
-      if (speakerInfo?.speaker && section === DocumentSection.PROCEEDINGS) {
-        statementEvents.push({
-          trialId,
-          sessionId,
-          speakerId: speakerInfo.speaker.id,
-          startTime: line.timestamp,
-          startLineNumber: lineNum + 1,
-          endLineNumber: lineNum + 1,
-          eventType: 'STATEMENT',
-          text: line.cleanText,
-          rawText: line.rawText || line.cleanText
-        });
-      }
+      // Note: We'll need to create these properly in Phase 2 with TrialEvents
+      // For now, just skip statement events in the multi-pass parser
+      // as they should be created in Phase 2 processing
     }
     
     if (lineData.length > 0) {
+      this.logger.debug(`Creating ${lineData.length} lines in database for batch`);
       await this.prisma.line.createMany({
         data: lineData,
         skipDuplicates: true
       });
     }
     
-    // Create statement events for identified speakers
-    if (statementEvents.length > 0) {
-      await this.prisma.statementEvent.createMany({
-        data: statementEvents,
-        skipDuplicates: true
-      });
-    }
+    // Statement events will be created in Phase 2 when TrialEvents are properly created
   }
   
   private async identifySpeaker(
@@ -484,15 +488,48 @@ export class ContentParser {
   }
 
   private extractSpeaker(text: string): { prefix: string; type: string } | null {
+    // Strict speaker identification rules:
+    // 1. Must be at the start of the line (no whitespace to the left)
+    // 2. Must have whitespace to the right (or end of line for Q/A)
+    // 3. Case sensitive comparison
+    
+    if (!text || text.length === 0) return null;
+    
+    // Check if line starts with whitespace - if so, not a speaker
+    if (text[0] === ' ' || text[0] === '\t') return null;
+    
+    // Special handling for Q. and A. patterns (case sensitive)
+    if (text === 'Q.' || text.startsWith('Q. ')) {
+      return { prefix: 'Q.', type: 'QUESTION' };
+    }
+    if (text === 'A.' || text.startsWith('A. ')) {
+      return { prefix: 'A.', type: 'ANSWER' };
+    }
+    
+    // Exclude bare Q and A (without periods) for this trial
+    // These would be: text === 'Q' || text.startsWith('Q ') || text === 'A' || text.startsWith('A ')
+    // We're explicitly NOT matching these
+    
+    // Check other speaker patterns
     for (const { pattern, type } of this.SPEAKER_PATTERNS) {
+      // Skip Q/A patterns as we've handled them specially above
+      if (type === 'QUESTION' || type === 'ANSWER') continue;
+      
       const match = pattern.exec(text);
-      if (match) {
-        return {
-          prefix: match[0].replace(':', '').trim(),
-          type
-        };
+      if (match && match.index === 0) { // Must match at start of line
+        const fullMatch = match[0];
+        
+        // Check if there's whitespace or end of line after the match
+        const afterMatch = text.substring(fullMatch.length);
+        if (afterMatch.length === 0 || afterMatch[0] === ' ' || afterMatch[0] === '\t') {
+          return {
+            prefix: fullMatch.replace(':', '').trim(),
+            type
+          };
+        }
       }
     }
+    
     return null;
   }
 

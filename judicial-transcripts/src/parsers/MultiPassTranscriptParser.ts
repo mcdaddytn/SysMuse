@@ -202,6 +202,7 @@ export class MultiPassTranscriptParser {
         }
       };
     } catch (error) {
+      this.logger.error('Pass 3 error details:', error);
       return {
         success: false,
         errors: [error instanceof Error ? error.message : 'Unknown error in Pass 3'],

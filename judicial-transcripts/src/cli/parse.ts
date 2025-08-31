@@ -133,31 +133,32 @@ program
                   date = `${year}-${month}-${day}`;
                 }
                 
-                let sessionType = '';
+                // Determine session order based on content, not alphabetical
+                let sessionOrder = 5; // default for unknown
                 const lowerFile = filename.toLowerCase();
                 if (lowerFile.includes('morning')) {
-                  sessionType = '1_morning';
+                  sessionOrder = 1; // Morning comes first
                 } else if (lowerFile.includes('afternoon')) {
-                  sessionType = '2_afternoon';
+                  sessionOrder = 2; // Afternoon comes second
                 } else if (lowerFile.includes('bench')) {
-                  sessionType = '3_bench';
+                  sessionOrder = 3; // Special sessions come after regular ones
                 } else if (lowerFile.includes('verdict')) {
-                  sessionType = '4_verdict';
-                } else {
-                  sessionType = '5_other';
+                  sessionOrder = 4;
                 }
                 
-                return { date, sessionType };
+                return { date, sessionOrder };
               };
               
               const aInfo = getDateAndType(a);
               const bInfo = getDateAndType(b);
               
+              // First sort by date
               if (aInfo.date !== bInfo.date) {
                 return aInfo.date.localeCompare(bInfo.date);
               }
               
-              return aInfo.sessionType.localeCompare(bInfo.sessionType);
+              // Then sort by session order (morning=1, afternoon=2, etc.)
+              return aInfo.sessionOrder - bInfo.sessionOrder;
             });
             
             // Create or get trial first
@@ -202,15 +203,33 @@ program
                 sessionType = 'SPECIAL';  // Use SPECIAL for verdict and bench sessions
               }
               
-              // Create session
-              const session = await prisma.session.create({
-                data: {
+              // Create or find session
+              let session = await prisma.session.findFirst({
+                where: {
                   trialId: trial.id,
                   sessionDate,
-                  sessionType,
-                  fileName: file
+                  sessionType
                 }
               });
+              
+              if (!session) {
+                session = await prisma.session.create({
+                  data: {
+                    trialId: trial.id,
+                    sessionDate,
+                    sessionType,
+                    fileName: file
+                  }
+                });
+              } else {
+                // Update fileName if needed
+                if (session.fileName !== file) {
+                  session = await prisma.session.update({
+                    where: { id: session.id },
+                    data: { fileName: file }
+                  });
+                }
+              }
               
               const success = await multiPassParser.parseTranscript(filePath, session.id, trial.id);
               

@@ -1,6 +1,6 @@
 {
-  "inputDirectory": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
-  "outputDirectory": "./output/multi-trial",
+  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
+  "outputDir": "./output/multi-trial",
   "logLevel": "info",
   "processSubDirs": true,
   "pdfToTextConfig": "./config/pdftotext.json",
@@ -26,7 +26,7 @@
         "answer": ["A.", "A", "ANSWER:"],
         "attorney": ["BY MR.", "BY MS.", "Mr.", "Ms."]
       },
-      "fileConvention": "DATEMORNAFT"
+      "fileConvention": "DATEAMPM"
     },
     "50 Packet Netscout": {
       "description": "Document ID naming convention",

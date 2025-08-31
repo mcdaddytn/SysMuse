@@ -1,8 +1,12 @@
 // src/parsers/LineParser.ts
-import { ParsedLine } from '../types/config.types';
+import { ParsedLine, TrialStyleConfig } from '../types/config.types';
+import { QAPatternDetector } from '../services/QAPatternDetector';
 import logger from '../utils/logger';
 
 export class LineParser {
+  private qaDetector: QAPatternDetector | null = null;
+  private trialConfig: TrialStyleConfig | null = null;
+  
   // Speaker patterns for extracting speaker prefix from the text content
   private readonly speakerPatterns = [
     // THE COURT: pattern
@@ -27,6 +31,13 @@ export class LineParser {
   
   // Pattern for court directives (parenthetical content)
   private readonly directivePattern = /^\s*\((.*?)\)\s*$/;
+  
+  constructor(trialConfig?: TrialStyleConfig) {
+    this.trialConfig = trialConfig || null;
+    if (trialConfig) {
+      this.qaDetector = new QAPatternDetector(trialConfig);
+    }
+  }
   
   parse(line: string): ParsedLine | null {
     // Check if line is blank
@@ -138,6 +149,32 @@ export class LineParser {
   
   private extractSpeakerFromText(text: string): { speakerPrefix?: string; text?: string } {
     if (!text) return { text: '' };
+    
+    // Use QA detector if available for Q&A patterns
+    if (this.qaDetector) {
+      const detection = this.qaDetector.detect(text);
+      if (detection.isQuestion) {
+        // Extract the Q pattern and remaining text
+        const pattern = detection.pattern || 'Q.';
+        const idx = text.indexOf(pattern);
+        if (idx >= 0) {
+          return {
+            speakerPrefix: pattern,
+            text: text.substring(idx + pattern.length).trim()
+          };
+        }
+      } else if (detection.isAnswer) {
+        // Extract the A pattern and remaining text
+        const pattern = detection.pattern || 'A.';
+        const idx = text.indexOf(pattern);
+        if (idx >= 0) {
+          return {
+            speakerPrefix: pattern,
+            text: text.substring(idx + pattern.length).trim()
+          };
+        }
+      }
+    }
     
     // Check each speaker pattern
     for (const pattern of this.speakerPatterns) {

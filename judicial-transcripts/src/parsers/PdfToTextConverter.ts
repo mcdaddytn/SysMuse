@@ -48,9 +48,11 @@ export interface PdfToTextConfig {
 
 export class PdfToTextConverter {
   private config: PdfToTextConfig;
+  private trialConfigs: Record<string, any> = {};
 
-  constructor(config: PdfToTextConfig = {}) {
+  constructor(config: PdfToTextConfig = {}, trialConfigs?: Record<string, any>) {
     this.config = config;
+    this.trialConfigs = trialConfigs || {};
   }
 
   private postProcessText(text: string, options: PostProcessingOptions): string {
@@ -245,8 +247,9 @@ export class PdfToTextConverter {
           fs.mkdirSync(outputSubDir, { recursive: true });
         }
 
-        // Generate trialstyle.json for this subdirectory
-        await this.generateTrialStyleConfig(outputSubDir, pdfs);
+        // Generate trialstyle.json for this subdirectory with trial-specific config
+        const trialConfig = this.trialConfigs[subDir] || {};
+        await this.generateTrialStyleConfig(outputSubDir, pdfs, trialConfig);
         
         for (const file of pdfs) {
           const inputFile = path.join(inputSubDir, file);
@@ -281,7 +284,7 @@ export class PdfToTextConverter {
       }
 
       // Generate trialstyle.json for this directory
-      await this.generateTrialStyleConfig(outputDir, pdfs);
+      await this.generateTrialStyleConfig(outputDir, pdfs, null);
     }
   }
 
@@ -289,7 +292,11 @@ export class PdfToTextConverter {
     return fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.pdf'));
   }
 
-  private async generateTrialStyleConfig(outputDir: string, files: string[]): Promise<void> {
+  private async generateTrialStyleConfig(
+    outputDir: string, 
+    files: string[], 
+    trialSpecificConfig?: any
+  ): Promise<void> {
     const detector = new FileConventionDetector();
     
     // Load default config if exists
@@ -298,6 +305,32 @@ export class PdfToTextConverter {
     if (fs.existsSync(defaultConfigPath)) {
       const configContent = fs.readFileSync(defaultConfigPath, 'utf-8');
       defaultConfig = JSON.parse(configContent);
+    }
+    
+    // Merge trial-specific config if provided
+    if (trialSpecificConfig) {
+      // Extract expected patterns from trial config
+      if (trialSpecificConfig.expectedPatterns) {
+        if (trialSpecificConfig.expectedPatterns.question) {
+          defaultConfig.questionPatterns = trialSpecificConfig.expectedPatterns.question;
+        }
+        if (trialSpecificConfig.expectedPatterns.answer) {
+          defaultConfig.answerPatterns = trialSpecificConfig.expectedPatterns.answer;
+        }
+        if (trialSpecificConfig.expectedPatterns.attorney) {
+          // Convert simple attorney patterns to regex patterns
+          defaultConfig.attorneyIndicatorPatterns = trialSpecificConfig.expectedPatterns.attorney
+            .map((p: string) => p.includes('(') ? p : `${p} ([A-Z][A-Z\\s'-]+?)`);
+        }
+      }
+      
+      // Set file convention if specified
+      if (trialSpecificConfig.fileConvention) {
+        defaultConfig.fileConvention = trialSpecificConfig.fileConvention;
+      }
+      
+      // Enable generic fallback based on config
+      defaultConfig.enableGenericFallback = trialSpecificConfig.enableGenericFallback || false;
     }
     
     // Convert PDF names to txt names for detection

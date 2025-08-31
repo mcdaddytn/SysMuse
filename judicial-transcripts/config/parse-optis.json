@@ -1,0 +1,14 @@
+{
+  "inputDir": "./output/multi-trial/14 Optis Wireless Technology V. Apple Inc",
+  "outputDir": "./output/parsed/14 Optis",
+  "logLevel": "info",
+  "batchSize": 100,
+  "enableElasticSearch": false,
+  "processSubDirs": false,
+  "trial": {
+    "name": "Optis Wireless Technology v. Apple Inc",
+    "caseNumber": "14-OPTIS",
+    "court": "United States District Court",
+    "courtDistrict": "Eastern District of Texas"
+  }
+}

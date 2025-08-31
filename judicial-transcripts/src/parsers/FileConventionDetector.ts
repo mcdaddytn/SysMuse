@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { FileConvention, FileSortingMode, TrialStyleConfig } from '../types/config.types';
+import { QAPatternDetector } from '../services/QAPatternDetector';
 import { logger } from '../utils/logger';
 
 interface ParsedFileName {
@@ -18,11 +19,13 @@ interface ParsedFileName {
 export class FileConventionDetector {
   // Patterns for different file naming conventions
   private readonly patterns = {
-    // DATEAMPM: e.g., "Genband_January 11, 2016 AM.txt"
-    DATEAMPM: /^(.+?)[\s_]+([A-Z][a-z]+\s+\d{1,2},\s+\d{4})\s+(AM|PM|AM\s+and\s+PM)(?:\d+)?\.txt$/i,
+    // DATEAMPM: e.g., "Genband_January 11, 2016 AM.txt" or "Optis Apple August 3 2020 AM.txt"
+    // Updated to handle both comma and no comma after day, and 4-digit years
+    DATEAMPM: /^(.+?)[\s_]+([A-Z][a-z]+\s+\d{1,2}(?:,)?\s+\d{4})\s+(AM|PM|AM\s+and\s+PM)(?:\d+)?\.txt$/i,
     
     // DATEMORNAFT: e.g., "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Afternoon.txt"
-    DATEMORNAFT: /.*held on (\d{1,2}_\d{1,2}_\d{2,4}).*\((.*?)(Morning|Afternoon|Day)\)?\.txt$/i,
+    // Updated to handle truncated Morning/Afternoon (e.g., "Morning S" for "Morning Session")
+    DATEMORNAFT: /.*held on (\d{1,2}_\d{1,2}_\d{2,4}).*\(.*?(Morning|Afternoon|Day).*?\)?\.txt$/i,
     
     // DOCID: e.g., "US_DIS_TXED_2_16cv230_d74990699e16592_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt"
     DOCID: /^([^_]+_[^_]+_[^_]+)_([^_]+)_([^_]+)_(.+)\.txt$/i
@@ -146,7 +149,7 @@ export class FileConventionDetector {
     return {
       convention: 'DATEMORNAFT',
       date,
-      session: session.toUpperCase(),
+      session: session ? session.toUpperCase() : 'UNKNOWN',
       metadata: {
         originalFileName: fileName,
         dateStr
@@ -174,14 +177,20 @@ export class FileConventionDetector {
   }
 
   private parseDate(dateStr: string): Date {
-    // Parse dates like "January 11, 2016"
+    // Parse dates like "January 11, 2016" or "August 3 2020"
     const months: { [key: string]: number } = {
       'january': 0, 'february': 1, 'march': 2, 'april': 3,
       'may': 4, 'june': 5, 'july': 6, 'august': 7,
       'september': 8, 'october': 9, 'november': 10, 'december': 11
     };
     
-    const match = dateStr.match(/([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/i);
+    // Try with comma first
+    let match = dateStr.match(/([A-Z][a-z]+)\s+(\d{1,2}),\s+(\d{4})/i);
+    if (!match) {
+      // Try without comma
+      match = dateStr.match(/([A-Z][a-z]+)\s+(\d{1,2})\s+(\d{4})/i);
+    }
+    
     if (match) {
       const [, monthName, day, year] = match;
       const month = months[monthName.toLowerCase()];
@@ -282,6 +291,40 @@ export class FileConventionDetector {
       }
     }
     
+    // Detect Q&A patterns from first file if available
+    let detectedPatterns: Partial<TrialStyleConfig> = {};
+    if (orderedFiles.length > 0) {
+      const firstFilePath = path.join(outputDir, orderedFiles[0]);
+      if (fs.existsSync(firstFilePath)) {
+        try {
+          const content = fs.readFileSync(firstFilePath, 'utf-8');
+          const lines = content.split('\n').slice(0, 500); // Sample first 500 lines
+          
+          // Use a temporary detector to analyze patterns
+          const tempConfig: TrialStyleConfig = {
+            fileConvention: 'AUTO',
+            fileSortingMode: 'AUTO',
+            pageHeaderLines: 2,
+            statementAppendMode: 'space',
+            summaryCenterDelimiter: 'AUTO',
+            ...defaultConfig
+          };
+          const tempDetector = new QAPatternDetector(tempConfig);
+          detectedPatterns = tempDetector.suggestPatternsForTrial(lines);
+          
+          logger.info(`Detected patterns for ${path.basename(outputDir)}:`);
+          if (detectedPatterns.questionPatterns) {
+            logger.info(`  Question patterns: ${detectedPatterns.questionPatterns.join(', ')}`);
+          }
+          if (detectedPatterns.answerPatterns) {
+            logger.info(`  Answer patterns: ${detectedPatterns.answerPatterns.join(', ')}`);
+          }
+        } catch (err) {
+          logger.warn(`Could not detect Q&A patterns: ${err}`);
+        }
+      }
+    }
+    
     const config: TrialStyleConfig = {
       fileConvention: convention === 'AUTO' ? 'DATEAMPM' : convention,
       fileSortingMode: sortingMode === 'AUTO' ? 'dateAndSession' : sortingMode,
@@ -290,7 +333,22 @@ export class FileConventionDetector {
       summaryCenterDelimiter: defaultConfig?.summaryCenterDelimiter || 'AUTO',
       orderedFiles,
       unidentifiedFiles,
-      metadata
+      metadata,
+      // Add Q&A pattern configuration (Feature 02P)
+      questionPatterns: detectedPatterns.questionPatterns || defaultConfig?.questionPatterns || ['Q.', 'Q:', 'Q'],
+      answerPatterns: detectedPatterns.answerPatterns || defaultConfig?.answerPatterns || ['A.', 'A:', 'A'],
+      attorneyIndicatorPatterns: detectedPatterns.attorneyIndicatorPatterns || defaultConfig?.attorneyIndicatorPatterns || [
+        'BY MR\\. ([A-Z]+)',
+        'BY MS\\. ([A-Z]+)',
+        'BY MRS\\. ([A-Z]+)',
+        'BY DR\\. ([A-Z]+)'
+      ],
+      enableGenericFallback: defaultConfig?.enableGenericFallback || false,
+      genericFallbackConfig: defaultConfig?.genericFallbackConfig || {
+        plaintiffGenericName: 'PLAINTIFF COUNSEL',
+        defenseGenericName: 'DEFENSE COUNSEL',
+        assumeExaminerFromContext: true
+      }
     };
     
     // Write config to output directory

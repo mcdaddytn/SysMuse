@@ -242,6 +242,19 @@ export interface TrialStyleConfig {
     defendant?: string;
     [key: string]: any;
   };
+  // Q&A Pattern Configuration (Feature 02P)
+  questionPatterns?: string[];
+  answerPatterns?: string[];
+  attorneyIndicatorPatterns?: string[];
+  speakerHandleVariations?: {
+    [key: string]: string[];
+  };
+  enableGenericFallback?: boolean;
+  genericFallbackConfig?: {
+    plaintiffGenericName?: string;
+    defenseGenericName?: string;
+    assumeExaminerFromContext?: boolean;
+  };
 }
 
 // Database management types

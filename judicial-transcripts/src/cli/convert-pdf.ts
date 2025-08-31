@@ -44,8 +44,15 @@ async function main() {
       }
     }
     
-    // Create converter
-    const converter = new PdfToTextConverter(pdfConfig);
+    // Load trial-specific configs if using multi-trial config
+    let trialConfigs: Record<string, any> = {};
+    if ((config as any).trials) {
+      trialConfigs = (config as any).trials;
+      logger.info(`Loaded ${Object.keys(trialConfigs).length} trial-specific configurations`);
+    }
+    
+    // Create converter with trial configs
+    const converter = new PdfToTextConverter(pdfConfig, trialConfigs);
     
     // Convert PDFs
     await converter.convertDirectory(

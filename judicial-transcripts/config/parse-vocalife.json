@@ -1,0 +1,14 @@
+{
+  "inputDir": "./output/multi-trial/42 Vocalife Amazon",
+  "outputDir": "./output/parsed/42 Vocalife",
+  "logLevel": "info",
+  "batchSize": 100,
+  "enableElasticSearch": false,
+  "processSubDirs": false,
+  "trial": {
+    "name": "Vocalife LLC v. Amazon.com Inc",
+    "caseNumber": "42-VOCALIFE",
+    "court": "United States District Court",
+    "courtDistrict": "Western District of Washington"
+  }
+}

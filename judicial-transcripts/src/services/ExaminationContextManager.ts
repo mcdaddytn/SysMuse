@@ -1,4 +1,7 @@
 import { SpeakerWithRelations, SpeakerRegistry } from './SpeakerRegistry';
+import { GenericSpeakerService, GenericSpeakers } from './GenericSpeakerService';
+import { QAPatternDetector } from './QAPatternDetector';
+import { TrialStyleConfig } from '../types/config.types';
 import logger from '../utils/logger';
 
 export type ExaminationType = 'DIRECT' | 'CROSS' | 'REDIRECT' | 'RECROSS' | 'VOIR_DIRE' | 'CONTINUED';
@@ -25,6 +28,15 @@ export interface AttorneyInfo {
   speaker?: SpeakerWithRelations;
 }
 
+export interface ExaminationState {
+  currentWitness: WitnessInfo | null;
+  currentExaminer: AttorneyInfo | null;
+  examinationType: ExaminationType | null;
+  witnessCalledBy: 'plaintiff' | 'defense' | null;
+  lastSpecificAttorney: AttorneyInfo | null;
+  usingGenericFallback: boolean;
+}
+
 export class ExaminationContextManager {
   private currentWitness: WitnessInfo | null = null;
   private examiningAttorney: AttorneyInfo | null = null;
@@ -33,6 +45,15 @@ export class ExaminationContextManager {
   private isVideoDeposition: boolean = false;
   private lastQSpeaker: SpeakerWithRelations | null = null;
   private speakerRegistry: SpeakerRegistry;
+  
+  // Generic speaker tracking (Feature 02P)
+  private genericSpeakerService: GenericSpeakerService | null = null;
+  private qaPatternDetector: QAPatternDetector | null = null;
+  private genericSpeakers: GenericSpeakers | null = null;
+  private lastSpecificAttorney: AttorneyInfo | null = null;
+  private usingGenericFallback: boolean = false;
+  private trialStyleConfig: TrialStyleConfig | null = null;
+  private witnessCalledBy: 'plaintiff' | 'defense' | null = null;
 
   // Pattern definitions
   private readonly PATTERNS = {
@@ -65,8 +86,28 @@ export class ExaminationContextManager {
     theDeponent: /^THE DEPONENT:\s*/i
   };
 
-  constructor(speakerRegistry: SpeakerRegistry) {
+  constructor(
+    speakerRegistry: SpeakerRegistry,
+    genericSpeakerService?: GenericSpeakerService,
+    trialStyleConfig?: TrialStyleConfig
+  ) {
     this.speakerRegistry = speakerRegistry;
+    this.genericSpeakerService = genericSpeakerService || null;
+    this.trialStyleConfig = trialStyleConfig || null;
+    
+    if (trialStyleConfig) {
+      this.qaPatternDetector = new QAPatternDetector(trialStyleConfig);
+    }
+  }
+  
+  async initializeGenericSpeakers(trialId: number): Promise<void> {
+    if (this.genericSpeakerService && this.trialStyleConfig?.enableGenericFallback) {
+      this.genericSpeakers = await this.genericSpeakerService.createGenericSpeakers(
+        trialId,
+        this.trialStyleConfig
+      );
+      logger.info(`Initialized generic speakers for trial ${trialId}`);
+    }
   }
 
   async updateFromLine(line: ParsedLine): Promise<void> {
@@ -163,6 +204,8 @@ export class ExaminationContextManager {
     
     if (this.examiningAttorney?.speaker) {
       this.lastQSpeaker = this.examiningAttorney.speaker;
+      this.lastSpecificAttorney = this.examiningAttorney;
+      this.usingGenericFallback = false;
       return this.examiningAttorney.speaker;
     }
     
@@ -171,8 +214,39 @@ export class ExaminationContextManager {
       return this.lastQSpeaker;
     }
     
+    // Use generic fallback if enabled
+    if (this.trialStyleConfig?.enableGenericFallback && this.genericSpeakers) {
+      const side = this.determineExaminerSide();
+      if (side) {
+        this.usingGenericFallback = true;
+        logger.debug(`Using generic ${side} attorney for Q speaker`);
+        return side === 'plaintiff' 
+          ? this.genericSpeakers.plaintiffAttorney as any
+          : this.genericSpeakers.defenseAttorney as any;
+      }
+    }
+    
     logger.warn('Unable to resolve Q speaker - no examining attorney set');
     return null;
+  }
+  
+  private determineExaminerSide(): 'plaintiff' | 'defense' | null {
+    if (!this.currentWitness || !this.witnessCalledBy) {
+      return null;
+    }
+    
+    // During direct examination, examiner is from the side that called the witness
+    if (this.examinationType === 'DIRECT' || this.examinationType === 'REDIRECT') {
+      return this.witnessCalledBy;
+    }
+    
+    // During cross examination, examiner is from the opposite side
+    if (this.examinationType === 'CROSS' || this.examinationType === 'RECROSS') {
+      return this.witnessCalledBy === 'plaintiff' ? 'defense' : 'plaintiff';
+    }
+    
+    // Default based on who called the witness
+    return this.witnessCalledBy;
   }
 
   resolveASpeaker(): SpeakerWithRelations | null {
@@ -221,6 +295,9 @@ export class ExaminationContextManager {
   ): Promise<void> {
     const caller: WitnessCaller = callerText.includes('PLAINTIFF') ? 
       'PLAINTIFF' : 'DEFENDANT';
+    
+    // Track who called the witness for generic attribution
+    this.witnessCalledBy = caller === 'PLAINTIFF' ? 'plaintiff' : 'defense';
     
     // Clean up witness name
     const cleanName = witnessName
@@ -338,7 +415,26 @@ export class ExaminationContextManager {
       examiningAttorney: this.examiningAttorney?.fullName || 'none',
       opposingAttorney: this.opposingAttorney?.fullName || 'none',
       examinationType: this.examinationType || 'none',
-      isVideoDeposition: this.isVideoDeposition
+      isVideoDeposition: this.isVideoDeposition,
+      witnessCalledBy: this.witnessCalledBy || 'none',
+      usingGenericFallback: this.usingGenericFallback,
+      lastSpecificAttorney: this.lastSpecificAttorney?.fullName || 'none'
     });
+  }
+  
+  // Get current examination state (Feature 02P)
+  getExaminationState(): ExaminationState {
+    return {
+      currentWitness: this.currentWitness,
+      currentExaminer: this.examiningAttorney,
+      examinationType: this.examinationType,
+      witnessCalledBy: this.witnessCalledBy,
+      lastSpecificAttorney: this.lastSpecificAttorney,
+      usingGenericFallback: this.usingGenericFallback
+    };
+  }
+  
+  isUsingGenericFallback(): boolean {
+    return this.usingGenericFallback;
   }
 }

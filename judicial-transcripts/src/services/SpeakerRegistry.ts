@@ -13,6 +13,7 @@ export class SpeakerRegistry {
   private speakers: Map<string, SpeakerWithRelations> = new Map();
   private attorneysByName: Map<string, Attorney> = new Map();
   private attorneysByLastName: Map<string, Attorney> = new Map();
+  private attorneysByHandle: Map<string, SpeakerWithRelations> = new Map();
   private contextualSpeakers: Map<string, SpeakerWithRelations> = new Map();
   private theCourt: SpeakerWithRelations | null = null;
   private currentWitness: SpeakerWithRelations | null = null;
@@ -71,6 +72,13 @@ export class SpeakerRegistry {
         // Add speaker prefix variations
         if (attorney.speakerPrefix) {
           this.speakers.set(attorney.speakerPrefix, speaker);
+          this.attorneysByHandle.set(attorney.speakerPrefix.toUpperCase(), speaker);
+        }
+        
+        // Also register common handle formats
+        if (attorney.title && attorney.lastName) {
+          const handle = `${attorney.title} ${attorney.lastName}`.toUpperCase();
+          this.attorneysByHandle.set(handle, speaker);
         }
       }
       
@@ -327,6 +335,26 @@ export class SpeakerRegistry {
   }
 
   // Get statistics about speakers in registry
+  // Register an attorney handle for strict matching
+  async registerAttorney(handle: string, fullName: string): Promise<void> {
+    const upperHandle = handle.toUpperCase();
+    const attorney = await this.findAttorneyByName(fullName);
+    
+    if (attorney) {
+      const speaker = await this.findSpeakerByAttorneyName(fullName);
+      if (speaker) {
+        this.attorneysByHandle.set(upperHandle, speaker);
+        this.speakers.set(upperHandle, speaker);
+      }
+    }
+  }
+  
+  // Find attorney by exact handle match (e.g., "MR. SMITH")
+  findAttorneyByHandle(handle: string): SpeakerWithRelations | null {
+    const upperHandle = handle.toUpperCase();
+    return this.attorneysByHandle.get(upperHandle) || null;
+  }
+  
   getStatistics(): {
     total: number;
     byType: Record<string, number>;

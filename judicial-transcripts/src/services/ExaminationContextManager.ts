@@ -203,6 +203,17 @@ export class ExaminationContextManager {
     logger.warn('Unable to resolve THE ATTORNEY - no opposing attorney set');
     return null;
   }
+  
+  // Check if we're currently in witness examination context
+  isInExamination(): boolean {
+    // We're in examination if:
+    // 1. We have a current witness being examined
+    // 2. We have an examination type set
+    // 3. We have an examining attorney
+    return this.currentWitness !== null && 
+           this.examinationType !== null &&
+           this.examiningAttorney !== null;
+  }
 
   private async handleWitnessCall(
     witnessName: string,

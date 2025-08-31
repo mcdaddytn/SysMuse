@@ -131,3 +131,7 @@ judicial-transcripts/output/
 judicial-transcripts/.env.backup
 
 judicial-transcripts/debug-output/
+
+judicial-transcripts/data-export-legacy/
+
+judicial-transcripts/data-export-multipass/

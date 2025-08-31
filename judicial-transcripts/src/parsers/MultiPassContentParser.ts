@@ -19,25 +19,16 @@ export class ContentParser {
   private examinationContext: ExaminationContextManager | null = null;
   private speakerService: MultiTrialSpeakerService | null = null;
   
-  private readonly SPEAKER_PATTERNS = [
-    { pattern: /^THE COURT:/i, type: 'JUDGE' },
-    { pattern: /^THE WITNESS:/i, type: 'WITNESS' },
-    { pattern: /^THE DEPONENT:/i, type: 'WITNESS' },
-    { pattern: /^THE ATTORNEY:/i, type: 'ATTORNEY' },
-    { pattern: /^MR\.\s+([A-Z][A-Z\s'-]+?):/i, type: 'ATTORNEY' },
-    { pattern: /^MS\.\s+([A-Z][A-Z\s'-]+?):/i, type: 'ATTORNEY' },
-    { pattern: /^MRS\.\s+([A-Z][A-Z\s'-]+?):/i, type: 'ATTORNEY' },
-    { pattern: /^DR\.\s+([A-Z][A-Z\s'-]+?):/i, type: 'ATTORNEY' },
-    { pattern: /^JUDGE\s+([A-Z][A-Z\s]+):/i, type: 'JUDGE' },
-    { pattern: /^JUROR\s+(?:NO\.\s+)?(\d+):/i, type: 'JUROR' },
-    { pattern: /^PROSPECTIVE JUROR\s+([A-Z][A-Z\s]+):/i, type: 'JUROR' },
-    { pattern: /^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z][A-Z\s'-]+?):/i, type: 'BY_ATTORNEY' },
-    { pattern: /^Q\.?\s*/i, type: 'QUESTION' },
-    { pattern: /^A\.?\s*/i, type: 'ANSWER' },
-    { pattern: /^QUESTION:?\s*/i, type: 'QUESTION' },
-    { pattern: /^ANSWER:?\s*/i, type: 'ANSWER' },
-    { pattern: /^([A-Z][A-Z\s]+):/i, type: 'SPEAKER' }
-  ];
+  // Court official handles that are exact matches
+  private readonly COURT_OFFICIALS: { [key: string]: SpeakerType } = {
+    'THE COURT': 'JUDGE',
+    'THE WITNESS': 'WITNESS',
+    'THE CLERK': 'ANONYMOUS',
+    'THE BAILIFF': 'ANONYMOUS',
+    'THE COURT REPORTER': 'ANONYMOUS',
+    'COURTROOM DEPUTY': 'ANONYMOUS',
+    'COURT SECURITY OFFICER': 'ANONYMOUS'
+  };
   
   private readonly EXAMINATION_PATTERNS = [
     /DIRECT EXAMINATION/i,
@@ -156,13 +147,14 @@ export class ContentParser {
     if (!this.speakerService) return;
     
     // Look for the sections that start with "FOR THE PLAINTIFF:" or "FOR THE DEFENDANT:"
+    // These are section headers, NOT speakers
     let currentRole: 'PLAINTIFF' | 'DEFENDANT' | null = null;
     let inAttorneySection = false;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
-      // Check for role markers - these are section headers
+      // Check for role markers - these are section headers, NOT speakers
       if (line === 'FOR THE PLAINTIFF:' || line.startsWith('FOR THE PLAINTIFF:')) {
         currentRole = 'PLAINTIFF';
         inAttorneySection = true;
@@ -213,6 +205,11 @@ export class ContentParser {
           });
           
           this.logger.info(`Created attorney: ${fullName} for ${currentRole}`);
+          
+          // Also register in speaker registry for quick lookup
+          if (this.speakerRegistry) {
+            await this.speakerRegistry.registerAttorney(`${title} ${lastName}`.toUpperCase(), fullName);
+          }
         }
       }
     }
@@ -488,48 +485,108 @@ export class ContentParser {
   }
 
   private extractSpeaker(text: string): { prefix: string; type: string } | null {
-    // Strict speaker identification rules:
-    // 1. Must be at the start of the line (no whitespace to the left)
-    // 2. Must have whitespace to the right (or end of line for Q/A)
-    // 3. Case sensitive comparison
+    // Strict speaker identification using EXACT string matching
+    // No regular expressions - only exact matches
     
     if (!text || text.length === 0) return null;
     
-    // Check if line starts with whitespace - if so, not a speaker
+    // Must start at position 0 (no leading whitespace)
     if (text[0] === ' ' || text[0] === '\t') return null;
     
-    // Special handling for Q. and A. patterns (case sensitive)
+    // Check for Q. and A. patterns (exact matches only)
+    // Must be "Q." or "A." with period, not bare Q or A
     if (text === 'Q.' || text.startsWith('Q. ')) {
-      return { prefix: 'Q.', type: 'QUESTION' };
+      // Only valid during witness examination
+      if (this.examinationContext && this.examinationContext.isInExamination()) {
+        return { prefix: 'Q.', type: 'QUESTION' };
+      }
+      return null; // Not in examination context
     }
     if (text === 'A.' || text.startsWith('A. ')) {
-      return { prefix: 'A.', type: 'ANSWER' };
+      // Only valid during witness examination
+      if (this.examinationContext && this.examinationContext.isInExamination()) {
+        return { prefix: 'A.', type: 'ANSWER' };
+      }
+      return null; // Not in examination context
     }
     
-    // Exclude bare Q and A (without periods) for this trial
-    // These would be: text === 'Q' || text.startsWith('Q ') || text === 'A' || text.startsWith('A ')
-    // We're explicitly NOT matching these
-    
-    // Check other speaker patterns
-    for (const { pattern, type } of this.SPEAKER_PATTERNS) {
-      // Skip Q/A patterns as we've handled them specially above
-      if (type === 'QUESTION' || type === 'ANSWER') continue;
+    // Check for colon-delimited speakers
+    const colonIndex = text.indexOf(':');
+    if (colonIndex > 0) {
+      const handle = text.substring(0, colonIndex);
+      const afterColon = text.substring(colonIndex + 1);
       
-      const match = pattern.exec(text);
-      if (match && match.index === 0) { // Must match at start of line
-        const fullMatch = match[0];
-        
-        // Check if there's whitespace or end of line after the match
-        const afterMatch = text.substring(fullMatch.length);
-        if (afterMatch.length === 0 || afterMatch[0] === ' ' || afterMatch[0] === '\t') {
+      // Must have space or end-of-line after colon
+      if (afterColon.length > 0 && afterColon[0] !== ' ') {
+        return null;
+      }
+      
+      // Check exact matches for court officials
+      if (this.COURT_OFFICIALS[handle]) {
+        return {
+          prefix: handle,
+          type: this.COURT_OFFICIALS[handle]
+        };
+      }
+      
+      // Check for attorney patterns (MR./MS./MRS./DR. + LASTNAME)
+      if (handle.startsWith('MR. ') || handle.startsWith('MS. ') || 
+          handle.startsWith('MRS. ') || handle.startsWith('DR. ')) {
+        // Extract the title and last name
+        const parts = handle.split(' ');
+        if (parts.length >= 2) {
+          const title = parts[0]; // MR., MS., etc.
+          const lastName = parts[parts.length - 1];
+          
+          // Must match a known attorney from the registry
+          if (this.speakerRegistry) {
+            const attorney = this.speakerRegistry.findAttorneyByHandle(handle);
+            if (attorney) {
+              return {
+                prefix: handle,
+                type: 'ATTORNEY'
+              };
+            }
+          }
+          // If no match in registry, NOT a speaker
+          return null;
+        }
+      }
+      
+      // Check for BY MR./MS./etc. pattern (sets examination context)
+      if (handle.startsWith('BY MR. ') || handle.startsWith('BY MS. ') ||
+          handle.startsWith('BY MRS. ') || handle.startsWith('BY DR. ')) {
+        return {
+          prefix: handle,
+          type: 'BY_ATTORNEY'
+        };
+      }
+      
+      // Check for JUROR patterns
+      if (handle.startsWith('JUROR NO. ')) {
+        const jurorMatch = handle.match(/^JUROR NO\. (\d+)$/);
+        if (jurorMatch) {
           return {
-            prefix: fullMatch.replace(':', '').trim(),
-            type
+            prefix: handle,
+            type: 'JUROR'
           };
         }
       }
+      
+      if (handle.startsWith('PROSPECTIVE JUROR ')) {
+        return {
+          prefix: handle,
+          type: 'JUROR'
+        };
+      }
+      
+      // If we found a colon but the handle doesn't match any known pattern,
+      // this is NOT a speaker (e.g., "It says:", "The question is:", etc.)
+      // Return null to prevent false positives
+      return null;
     }
     
+    // No colon found - not a speaker
     return null;
   }
 

@@ -1,0 +1,132 @@
+{
+  "standardQA": [
+    {
+      "format": "Q. and A.",
+      "example": [
+        "Q. What is your name?",
+        "A. John Smith.",
+        "Q. Where do you live?",
+        "A. 123 Main Street."
+      ],
+      "context": "Standard direct examination"
+    },
+    {
+      "format": "QUESTION: and ANSWER:",
+      "example": [
+        "QUESTION: State your occupation.",
+        "ANSWER: I'm a software engineer.",
+        "QUESTION: How long have you worked there?",
+        "ANSWER: Five years."
+      ],
+      "context": "Formal examination format"
+    }
+  ],
+  "mixedFormats": [
+    {
+      "format": "Mixed Q/A with speaker transitions",
+      "example": [
+        "BY MR. SMITH:",
+        "Q. You were present on that day?",
+        "A. Yes, I was.",
+        "THE COURT: Please speak up.",
+        "THE WITNESS: Yes, Your Honor.",
+        "Q. What time did you arrive?",
+        "A. Around 9 AM."
+      ],
+      "context": "Examination with interruptions"
+    }
+  ],
+  "depositionFormats": [
+    {
+      "format": "Video deposition with THE ATTORNEY",
+      "example": [
+        "QUESTION: Did you review the documents?",
+        "ANSWER: Yes.",
+        "THE ATTORNEY: Objection, foundation.",
+        "QUESTION: Let me rephrase. Which documents did you review?",
+        "ANSWER: The contract and the emails."
+      ],
+      "context": "Video deposition with opposing counsel objections"
+    },
+    {
+      "format": "Deposition with THE WITNESS",
+      "example": [
+        "BY MR. JONES:",
+        "Q. State your name for the record.",
+        "THE WITNESS: Jane Doe.",
+        "Q. And your address?",
+        "THE WITNESS: I'd prefer not to state that publicly.",
+        "THE ATTORNEY: We can go off the record."
+      ],
+      "context": "Deposition with witness referred to as THE WITNESS"
+    }
+  ],
+  "complexTransitions": [
+    {
+      "format": "Witness change with Q/A continuation",
+      "example": [
+        "JOHN SMITH, PLAINTIFF'S WITNESS, PREVIOUSLY SWORN",
+        "DIRECT EXAMINATION",
+        "BY MR. DAVIS:",
+        "Q. Good morning, Mr. Smith.",
+        "A. Good morning.",
+        "Q. You work at ABC Company?",
+        "A. Yes, for ten years.",
+        "CROSS-EXAMINATION",
+        "BY MS. JOHNSON:",
+        "Q. Mr. Smith, you mentioned ten years?",
+        "A. That's correct."
+      ],
+      "context": "Examination type changes with same witness"
+    },
+    {
+      "format": "Multiple attorneys questioning",
+      "example": [
+        "BY MR. BROWN:",
+        "Q. First question from Mr. Brown?",
+        "A. Answer to Mr. Brown.",
+        "BY MR. GREEN:",
+        "Q. Question from Mr. Green?",
+        "A. Answer to Mr. Green.",
+        "MR. BROWN: Objection.",
+        "THE COURT: Overruled."
+      ],
+      "context": "Multiple attorneys taking turns"
+    }
+  ],
+  "edgeCases": [
+    {
+      "format": "Q without period or colon",
+      "example": [
+        "Q What happened next",
+        "A I called the police",
+        "Q And then",
+        "A They arrived in five minutes"
+      ],
+      "context": "Informal transcription style"
+    },
+    {
+      "format": "Nested conversations",
+      "example": [
+        "Q. What did he say?",
+        "A. He said, quote, 'I don't know.'",
+        "Q. Did you ask him why?",
+        "A. Yes, and he said, 'Ask my lawyer.'",
+        "THE COURT: Let's take a brief recess."
+      ],
+      "context": "Quoted speech within Q&A"
+    }
+  ],
+  "jurorQuestions": [
+    {
+      "format": "Juror questions during voir dire",
+      "example": [
+        "THE COURT: Juror Number 5, do you have any questions?",
+        "JUROR NO. 5: Yes, Your Honor. How long will the trial last?",
+        "THE COURT: Approximately two weeks.",
+        "JUROR NO. 5: Thank you."
+      ],
+      "context": "Jury selection process"
+    }
+  ]
+}

@@ -13,6 +13,8 @@ import {
 } from '../types/config.types';
 import { AttorneyService } from '../services/AttorneyService';
 import { WitnessJurorService } from '../services/WitnessJurorService';
+import { SpeakerRegistry } from '../services/SpeakerRegistry';
+import { ExaminationContextManager } from '../services/ExaminationContextManager';
 import { syncStatementEvents } from '../scripts/syncElasticsearch';
 import logger from '../utils/logger';
 
@@ -46,6 +48,8 @@ export class Phase2Processor {
   private config: TranscriptConfig;
   private attorneyService: AttorneyService;
   private witnessJurorService: WitnessJurorService;
+  private speakerRegistry: SpeakerRegistry | null = null;
+  private examinationContext: ExaminationContextManager | null = null;
   private context: Phase2Context;
   private stats: {
     totalEvents: number;
@@ -309,6 +313,13 @@ export class Phase2Processor {
    */
   private async processSession(session: any): Promise<void> {
     logger.info(`Processing session: ${session.sessionDate} - ${session.sessionType}`);
+    
+    // Initialize speaker services for this trial if not done yet
+    if (!this.speakerRegistry) {
+      this.speakerRegistry = new SpeakerRegistry(this.prisma, this.context.trialId);
+      await this.speakerRegistry.initialize();
+      this.examinationContext = new ExaminationContextManager(this.speakerRegistry);
+    }
     
     // Set current session in context
     this.context.currentSession = session;
@@ -1036,10 +1047,46 @@ export class Phase2Processor {
   ): Promise<SpeakerInfo | null> {
     const upperPrefix = speakerPrefix.toUpperCase();
     
-    // Check contextual speakers first (most common case)
+    // First, try to resolve through the new speaker registry if available
+    if (this.speakerRegistry && this.examinationContext) {
+      // Update examination context with the line
+      await this.examinationContext.updateFromLine({ text: lineText, speakerPrefix });
+      
+      // Try contextual resolution first (Q, A, etc.)
+      const resolved = await this.examinationContext.resolveSpeaker({ text: lineText, speakerPrefix });
+      if (resolved) {
+        return {
+          id: resolved.id,
+          speakerPrefix: resolved.speakerPrefix,
+          speakerHandle: resolved.speakerHandle,
+          speakerType: resolved.speakerType as SpeakerType,
+          attorneyId: resolved.attorney?.id,
+          witnessId: resolved.witness?.id,
+          jurorId: resolved.juror?.id,
+          name: resolved.attorney?.name || resolved.witness?.displayName || resolved.judge?.name
+        };
+      }
+      
+      // Try direct lookup in registry
+      const speaker = await this.speakerRegistry.findOrCreateSpeaker(speakerPrefix, this.inferSpeakerType(speakerPrefix));
+      if (speaker) {
+        return {
+          id: speaker.id,
+          speakerPrefix: speaker.speakerPrefix,
+          speakerHandle: speaker.speakerHandle,
+          speakerType: speaker.speakerType as SpeakerType,
+          attorneyId: speaker.attorney?.id,
+          witnessId: speaker.witness?.id,
+          jurorId: speaker.juror?.id,
+          name: speaker.attorney?.name || speaker.witness?.displayName || speaker.judge?.name
+        };
+      }
+    }
+    
+    // Fallback to legacy contextual speakers (for backward compatibility)
     const contextual = state.contextualSpeakers.get(upperPrefix);
     if (contextual) {
-      logger.debug(`Found ${upperPrefix} in contextual speakers: ${contextual.name}`);
+      logger.debug(`Found ${upperPrefix} in legacy contextual speakers: ${contextual.name}`);
       return contextual;
     }
     
@@ -1207,6 +1254,24 @@ export class Phase2Processor {
       speakerHandle: `ANONYMOUS_${upperPrefix.replace(/\s+/g, '_')}`,
       speakerType: SpeakerType.ANONYMOUS
     };
+  }
+
+  /**
+   * Infer speaker type from prefix
+   */
+  private inferSpeakerType(prefix: string): SpeakerType {
+    const upper = prefix.toUpperCase();
+    
+    if (upper === 'THE COURT') return SpeakerType.JUDGE;
+    if (upper.includes('JUDGE')) return SpeakerType.JUDGE;
+    if (upper.includes('JUROR')) return SpeakerType.JUROR;
+    if (upper === 'THE WITNESS' || upper === 'THE DEPONENT') return SpeakerType.WITNESS;
+    if (upper === 'THE CLERK' || upper === 'THE BAILIFF') return SpeakerType.ANONYMOUS;
+    if (upper.match(/^(MR\.|MS\.|MRS\.|DR\.)/)) return SpeakerType.ATTORNEY;
+    if (upper === 'Q' || upper === 'Q.' || upper === 'QUESTION') return SpeakerType.ATTORNEY;
+    if (upper === 'A' || upper === 'A.' || upper === 'ANSWER') return SpeakerType.WITNESS;
+    
+    return SpeakerType.ANONYMOUS;
   }
 
   /**

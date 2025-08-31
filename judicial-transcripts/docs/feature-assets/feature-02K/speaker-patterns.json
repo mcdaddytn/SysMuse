@@ -1,0 +1,262 @@
+{
+  "standardSpeakers": {
+    "patterns": [
+      {
+        "name": "standard",
+        "regex": "^([A-Z][A-Z\\s\\.,'-]+?):\\s*",
+        "description": "Standard speaker format with colon",
+        "examples": [
+          "THE COURT:",
+          "MR. SMITH:",
+          "MS. JONES:",
+          "DR. WILLIAMS:"
+        ]
+      },
+      {
+        "name": "theCourt",
+        "regex": "^THE COURT:\\s*",
+        "description": "The presiding judge",
+        "speakerType": "JUDGE"
+      },
+      {
+        "name": "theWitness",
+        "regex": "^THE WITNESS:\\s*",
+        "description": "Current witness on stand",
+        "speakerType": "WITNESS"
+      },
+      {
+        "name": "theClerk",
+        "regex": "^THE CLERK:\\s*",
+        "description": "Court clerk",
+        "speakerType": "COURT_STAFF"
+      },
+      {
+        "name": "theBailiff",
+        "regex": "^THE BAILIFF:\\s*",
+        "description": "Court bailiff",
+        "speakerType": "COURT_STAFF"
+      }
+    ]
+  },
+  "attorneySpeakers": {
+    "patterns": [
+      {
+        "name": "mrAttorney",
+        "regex": "^MR\\.\\s+([A-Z][A-Z\\s'-]+?):\\s*",
+        "description": "Male attorney",
+        "speakerType": "ATTORNEY"
+      },
+      {
+        "name": "msAttorney",
+        "regex": "^MS\\.\\s+([A-Z][A-Z\\s'-]+?):\\s*",
+        "description": "Female attorney (Ms.)",
+        "speakerType": "ATTORNEY"
+      },
+      {
+        "name": "mrsAttorney",
+        "regex": "^MRS\\.\\s+([A-Z][A-Z\\s'-]+?):\\s*",
+        "description": "Female attorney (Mrs.)",
+        "speakerType": "ATTORNEY"
+      },
+      {
+        "name": "drAttorney",
+        "regex": "^DR\\.\\s+([A-Z][A-Z\\s'-]+?):\\s*",
+        "description": "Attorney with doctorate",
+        "speakerType": "ATTORNEY"
+      },
+      {
+        "name": "byAttorney",
+        "regex": "^BY\\s+(MR\\.|MS\\.|MRS\\.|DR\\.)\\s+([A-Z][A-Z\\s'-]+?):\\s*",
+        "description": "Attorney introducing examination",
+        "speakerType": "ATTORNEY",
+        "setsContext": true
+      }
+    ]
+  },
+  "jurorSpeakers": {
+    "patterns": [
+      {
+        "name": "jurorNumber",
+        "regex": "^JUROR\\s+(?:NO\\.\\s+)?(\\d+):\\s*",
+        "description": "Numbered juror",
+        "speakerType": "JUROR",
+        "examples": [
+          "JUROR NO. 5:",
+          "JUROR 12:"
+        ]
+      },
+      {
+        "name": "jurorLetter",
+        "regex": "^JUROR\\s+([A-Z]):\\s*",
+        "description": "Lettered juror",
+        "speakerType": "JUROR",
+        "examples": [
+          "JUROR A:",
+          "JUROR B:"
+        ]
+      },
+      {
+        "name": "prospectiveJuror",
+        "regex": "^PROSPECTIVE\\s+JUROR\\s+(?:NO\\.\\s+)?(\\w+):\\s*",
+        "description": "Prospective juror during voir dire",
+        "speakerType": "JUROR"
+      }
+    ]
+  },
+  "qaFormats": {
+    "patterns": [
+      {
+        "name": "qShort",
+        "regex": "^Q\\.\\s*",
+        "description": "Short question format",
+        "mapsTo": "EXAMINING_ATTORNEY"
+      },
+      {
+        "name": "aShort",
+        "regex": "^A\\.\\s*",
+        "description": "Short answer format",
+        "mapsTo": "CURRENT_WITNESS"
+      },
+      {
+        "name": "qNoSpace",
+        "regex": "^Q\\s+",
+        "description": "Q without period",
+        "mapsTo": "EXAMINING_ATTORNEY"
+      },
+      {
+        "name": "aNoSpace",
+        "regex": "^A\\s+",
+        "description": "A without period",
+        "mapsTo": "CURRENT_WITNESS"
+      },
+      {
+        "name": "qColon",
+        "regex": "^Q:\\s*",
+        "description": "Q with colon",
+        "mapsTo": "EXAMINING_ATTORNEY"
+      },
+      {
+        "name": "aColon",
+        "regex": "^A:\\s*",
+        "description": "A with colon",
+        "mapsTo": "CURRENT_WITNESS"
+      },
+      {
+        "name": "questionLong",
+        "regex": "^QUESTION:\\s*",
+        "description": "Full QUESTION format",
+        "mapsTo": "EXAMINING_ATTORNEY"
+      },
+      {
+        "name": "answerLong",
+        "regex": "^ANSWER:\\s*",
+        "description": "Full ANSWER format",
+        "mapsTo": "CURRENT_WITNESS"
+      }
+    ]
+  },
+  "depositionFormats": {
+    "patterns": [
+      {
+        "name": "theAttorney",
+        "regex": "^THE ATTORNEY:\\s*",
+        "description": "Opposing attorney in deposition",
+        "mapsTo": "OPPOSING_ATTORNEY",
+        "context": "VIDEO_DEPOSITION"
+      },
+      {
+        "name": "theDeponent",
+        "regex": "^THE DEPONENT:\\s*",
+        "description": "Deponent in deposition",
+        "mapsTo": "CURRENT_WITNESS",
+        "context": "DEPOSITION"
+      },
+      {
+        "name": "examiningAttorney",
+        "regex": "^EXAMINING ATTORNEY:\\s*",
+        "description": "Examining attorney in deposition",
+        "mapsTo": "EXAMINING_ATTORNEY",
+        "context": "DEPOSITION"
+      }
+    ]
+  },
+  "examinationMarkers": {
+    "patterns": [
+      {
+        "name": "directExamination",
+        "regex": "DIRECT\\s+EXAMINATION",
+        "type": "DIRECT",
+        "description": "Start of direct examination"
+      },
+      {
+        "name": "crossExamination",
+        "regex": "CROSS[\\s-]EXAMINATION",
+        "type": "CROSS",
+        "description": "Start of cross-examination"
+      },
+      {
+        "name": "redirectExamination",
+        "regex": "REDIRECT\\s+EXAMINATION",
+        "type": "REDIRECT",
+        "description": "Start of redirect examination"
+      },
+      {
+        "name": "recrossExamination",
+        "regex": "RECROSS\\s+EXAMINATION",
+        "type": "RECROSS",
+        "description": "Start of recross examination"
+      },
+      {
+        "name": "examinationContinued",
+        "regex": "EXAMINATION\\s+CONTINUED",
+        "type": "CONTINUED",
+        "description": "Continuation of previous examination"
+      }
+    ]
+  },
+  "witnessMarkers": {
+    "patterns": [
+      {
+        "name": "witnessCall",
+        "regex": "^([A-Z][A-Z\\s,'\"\\.-]+?),?\\s+(PLAINTIFF'S?|DEFENDANT'S?)\\s+WITNESS",
+        "description": "Witness being called to stand",
+        "examples": [
+          "JOHN SMITH, PLAINTIFF'S WITNESS",
+          "JANE \"JENNY\" DOE, DEFENDANT'S WITNESS"
+        ]
+      },
+      {
+        "name": "swornStatus",
+        "regex": "(PREVIOUSLY\\s+)?SWORN",
+        "description": "Witness sworn status"
+      },
+      {
+        "name": "videoDeposition",
+        "regex": "PRESENTED\\s+BY\\s+VIDEO|VIDEO\\s+DEPOSITION",
+        "description": "Video deposition presentation"
+      }
+    ]
+  },
+  "specialSpeakers": {
+    "patterns": [
+      {
+        "name": "unidentifiedSpeaker",
+        "regex": "^UNIDENTIFIED\\s+SPEAKER:\\s*",
+        "description": "Speaker who cannot be identified",
+        "speakerType": "ANONYMOUS"
+      },
+      {
+        "name": "multipleSpeakers",
+        "regex": "^MULTIPLE\\s+SPEAKERS:\\s*",
+        "description": "Multiple people speaking simultaneously",
+        "speakerType": "ANONYMOUS"
+      },
+      {
+        "name": "courtDirective",
+        "regex": "^\\(([^)]+)\\)\\s*$",
+        "description": "Court directive or action in parentheses",
+        "speakerType": "DIRECTIVE"
+      }
+    ]
+  }
+}

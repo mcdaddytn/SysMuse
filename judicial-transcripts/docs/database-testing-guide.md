@@ -41,7 +41,9 @@ docker exec judicial-postgres psql -U judicial_user -d judicial_transcripts -c "
 ## Database Reset and Initialization
 
 ### Complete Database Reset Sequence
-The correct order for a full database reset and data load:
+
+#### Option 1: Multi-Pass Parser (Recommended - New)
+The correct order for a full database reset and data load with the multi-pass parser:
 
 ```bash
 # 1. Clear the existing database and rebuild schema
@@ -56,26 +58,64 @@ npm run seed
 # 4. Create backup after seeding
 ../scripts/db/backupdb.sh seed
 
-# 5. Run Phase 1 to parse and load transcript data
-# Legacy parser (default):
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
-# OR Multi-pass parser (new):
+# 5. Run Phase 1 with multi-pass parser
 npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
 
-# 6. Create backup after Phase 1
-../scripts/db/backupdb.sh phase1
+# 6. Create backup after Phase 1 (multi-pass specific)
+../scripts/db/backupdb.sh phase1_mp
 
 # 7. Run Phase 2 to process and enhance the data
 npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
 
-# 8. Create backup after Phase 2
-../scripts/db/backupdb.sh phase2
+# 8. Create backup after Phase 2 (multi-pass specific)
+../scripts/db/backupdb.sh phase2_mp
 
 # 9. Run Phase 3 for marker discovery and accumulator processing
 npx ts-node src/cli/phase3.ts process
 
-# 10. Create backup after Phase 3
-../scripts/db/backupdb.sh phase3
+# 10. Create backup after Phase 3 (multi-pass specific)
+../scripts/db/backupdb.sh phase3_mp
+
+# 11. Test queries and output
+npm run run-all-queries
+```
+
+#### Option 2: Legacy Parser (For Comparison)
+The sequence using the legacy parser:
+
+```bash
+# 1. Clear the existing database and rebuild schema
+npx prisma db push --force-reset
+
+# 2. Regenerate Prisma client code stubs
+npx prisma generate
+
+# 3. Load basic seed data from JSON files
+npm run seed
+
+# 4. Create backup after seeding
+../scripts/db/backupdb.sh seed
+
+# 5. Run Phase 1 with legacy parser
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+
+# 6. Create backup after Phase 1 (legacy specific)
+../scripts/db/backupdb.sh phase1_legacy
+
+# 7. Run Phase 2 to process and enhance the data
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+
+# 8. Create backup after Phase 2 (legacy specific)
+../scripts/db/backupdb.sh phase2_legacy
+
+# 9. Run Phase 3 for marker discovery and accumulator processing
+npx ts-node src/cli/phase3.ts process
+
+# 10. Create backup after Phase 3 (legacy specific)
+../scripts/db/backupdb.sh phase3_legacy
+
+# 11. Test queries and output
+npm run run-all-queries
 ```
 
 ### Using Existing Backups
@@ -85,15 +125,26 @@ Before running phases, check if backups already exist:
 # Check for existing backups
 ls backups/judicial_transcripts_*.sql
 
-# If backups exist and code hasn't changed:
+# Multi-pass parser backups:
 # - judicial_transcripts_seed.sql
-# - judicial_transcripts_phase1.sql  
-# - judicial_transcripts_phase2.sql
-# - judicial_transcripts_phase3.sql
+# - judicial_transcripts_phase1_mp.sql  
+# - judicial_transcripts_phase2_mp.sql
+# - judicial_transcripts_phase3_mp.sql
 
-# Restore directly to desired state
-../scripts/db/restoredb.sh phase2  # Restores judicial_transcripts_phase2.sql
-../scripts/db/restoredb.sh phase3  # Restores judicial_transcripts_phase3.sql
+# Legacy parser backups:
+# - judicial_transcripts_phase1_legacy.sql  
+# - judicial_transcripts_phase2_legacy.sql
+# - judicial_transcripts_phase3_legacy.sql
+
+# Restore directly to desired state (multi-pass)
+../scripts/db/restoredb.sh phase1_mp  # Restores judicial_transcripts_phase1_mp.sql
+../scripts/db/restoredb.sh phase2_mp  # Restores judicial_transcripts_phase2_mp.sql
+../scripts/db/restoredb.sh phase3_mp  # Restores judicial_transcripts_phase3_mp.sql
+
+# Restore directly to desired state (legacy)
+../scripts/db/restoredb.sh phase1_legacy  # Restores judicial_transcripts_phase1_legacy.sql
+../scripts/db/restoredb.sh phase2_legacy  # Restores judicial_transcripts_phase2_legacy.sql
+../scripts/db/restoredb.sh phase3_legacy  # Restores judicial_transcripts_phase3_legacy.sql
 ```
 
 ### Quick Reset Using Scripts
@@ -179,20 +230,29 @@ npm run phase3 stats
 ### Backup Naming Convention
 The backup scripts use a standard naming convention:
 - **Pattern**: `judicial_transcripts_[stage].sql`
-- **Stages**: 
+- **Stages for Multi-Pass Parser**: 
   - `seed` - After initial seed data load
-  - `phase1` - After Phase 1 completion
-  - `phase2` - After Phase 2 completion
-  - `phase3` - After Phase 3 completion
-  - Custom names for specific test states
+  - `phase1_mp` - After Phase 1 completion (multi-pass)
+  - `phase2_mp` - After Phase 2 completion (multi-pass)
+  - `phase3_mp` - After Phase 3 completion (multi-pass)
+- **Stages for Legacy Parser**:
+  - `phase1_legacy` - After Phase 1 completion (legacy)
+  - `phase2_legacy` - After Phase 2 completion (legacy)
+  - `phase3_legacy` - After Phase 3 completion (legacy)
+- **Custom names** for specific test states
 
 ### Creating Backups
 ```bash
-# Standard backups (following naming convention)
-../scripts/db/backupdb.sh seed    # Creates: backups/judicial_transcripts_seed.sql
-../scripts/db/backupdb.sh phase1  # Creates: backups/judicial_transcripts_phase1.sql
-../scripts/db/backupdb.sh phase2  # Creates: backups/judicial_transcripts_phase2.sql
-../scripts/db/backupdb.sh phase3  # Creates: backups/judicial_transcripts_phase3.sql
+# Multi-pass parser backups
+../scripts/db/backupdb.sh seed       # Creates: backups/judicial_transcripts_seed.sql
+../scripts/db/backupdb.sh phase1_mp  # Creates: backups/judicial_transcripts_phase1_mp.sql
+../scripts/db/backupdb.sh phase2_mp  # Creates: backups/judicial_transcripts_phase2_mp.sql
+../scripts/db/backupdb.sh phase3_mp  # Creates: backups/judicial_transcripts_phase3_mp.sql
+
+# Legacy parser backups
+../scripts/db/backupdb.sh phase1_legacy  # Creates: backups/judicial_transcripts_phase1_legacy.sql
+../scripts/db/backupdb.sh phase2_legacy  # Creates: backups/judicial_transcripts_phase2_legacy.sql
+../scripts/db/backupdb.sh phase3_legacy  # Creates: backups/judicial_transcripts_phase3_legacy.sql
 
 # Custom backup for testing
 ../scripts/db/backupdb.sh my_test_state  # Creates: backups/judicial_transcripts_my_test_state.sql
@@ -364,23 +424,43 @@ npm run phase2
 npx prisma db push --force-reset  # Reset database and apply schema
 npx prisma generate               # Generate Prisma client
 
-# Data Loading Sequence
+# Data Loading - Multi-Pass Parser (Recommended)
 npm run seed                      # Load seed data
-npm run phase1                    # Parse and load transcripts
-npm run phase2                    # Process and enhance data
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+npx ts-node src/cli/phase3.ts process
 
-# Backup Management (creates backups/judicial_transcripts_[name].sql)
+# Data Loading - Legacy Parser (For Comparison)
+npm run seed                      # Load seed data
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+npx ts-node src/cli/phase3.ts process
+
+# Backup Management - Multi-Pass
 ../scripts/db/backupdb.sh seed       # Backup after seeding
-../scripts/db/backupdb.sh phase1     # Backup after Phase 1
-../scripts/db/backupdb.sh phase2     # Backup after Phase 2
+../scripts/db/backupdb.sh phase1_mp  # Backup after Phase 1 (multi-pass)
+../scripts/db/backupdb.sh phase2_mp  # Backup after Phase 2 (multi-pass)
+../scripts/db/backupdb.sh phase3_mp  # Backup after Phase 3 (multi-pass)
 
-# Restore from Backups
-../scripts/db/restoredb.sh seed      # Restore to seed state
-../scripts/db/restoredb.sh phase1    # Restore to Phase 1 complete
-../scripts/db/restoredb.sh phase2    # Restore to Phase 2 complete
+# Backup Management - Legacy
+../scripts/db/backupdb.sh phase1_legacy  # Backup after Phase 1 (legacy)
+../scripts/db/backupdb.sh phase2_legacy  # Backup after Phase 2 (legacy)
+../scripts/db/backupdb.sh phase3_legacy  # Backup after Phase 3 (legacy)
 
-# Testing
+# Restore from Backups - Multi-Pass
+../scripts/db/restoredb.sh seed       # Restore to seed state
+../scripts/db/restoredb.sh phase1_mp  # Restore to Phase 1 complete (multi-pass)
+../scripts/db/restoredb.sh phase2_mp  # Restore to Phase 2 complete (multi-pass)
+../scripts/db/restoredb.sh phase3_mp  # Restore to Phase 3 complete (multi-pass)
+
+# Restore from Backups - Legacy
+../scripts/db/restoredb.sh phase1_legacy  # Restore to Phase 1 complete (legacy)
+../scripts/db/restoredb.sh phase2_legacy  # Restore to Phase 2 complete (legacy)
+../scripts/db/restoredb.sh phase3_legacy  # Restore to Phase 3 complete (legacy)
+
+# Testing & Verification
 npm run run-all-queries          # Run all query tests
+npx ts-node scripts/compare-parsers.ts data-export-legacy data-export-multipass  # Compare parser outputs
 
 # Elasticsearch
 ../scripts/db/reset-elasticsearch.sh # Reset Elasticsearch

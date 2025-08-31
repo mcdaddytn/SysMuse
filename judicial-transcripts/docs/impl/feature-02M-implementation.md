@@ -85,19 +85,24 @@ Successfully established clean baseline comparison between legacy and multi-pass
 - Multi-pass parser: 1529 pages, 39673 lines, 39 speakers
 - JURY_VERDICT session: Correctly parsed (136 pages) but labeled as SPECIAL vs JURY_VERDICT
 
-#### Critical Issues Identified
-1. **Missing Last Pages** (4 pages total)
-   - Session 2020-10-01 AFTERNOON: Missing page 157
-   - Session 2020-10-05 AFTERNOON: Missing page 121  
-   - Session 2020-10-06 MORNING: Missing page 142
-   - Session 2020-10-08 MORNING: Missing page 109
-   - Pattern: Always the last page of certain sessions
+#### Issues Fixed
+1. **Line export ordering** - Fixed export script ordering by `id` instead of `lineNumber`
+2. **Missing last page logic** - Added check to avoid overwriting last page in pages Map
+3. **Comparison script** - Made configurable to accept different export directories
 
-2. **Line Extraction Differences**
-   - First lines completely different between parsers
-   - Legacy starts with actual content (e.g., "Around the time of my joining...")
-   - Multi-pass starts with numbers (e.g., "972...")
-   - Indicates fundamental difference in line extraction logic
+#### Critical Issues RESOLVED
+1. **Page Count Difference - NOT A BUG**
+   - Legacy parser creates extra pages (157, 121, 142, 109)
+   - Multi-pass correctly extracts 156, 120, 141, 108 pages
+   - Files show "Page X of 156" etc. - multi-pass is CORRECT
+   - Legacy parser has a bug creating an extra blank page at end
+   - **Resolution**: Multi-pass parser is working correctly
+
+2. **Line Export Ordering - FIXED**
+   - Export script was ordering by `lineNumber` (page line 1-25)
+   - Should order by `id` or `trialLineNumber` for global order
+   - **Fix Applied**: Changed export script to order by `id`
+   - Lines now export in correct sequential order
 
 3. **Entity Parsing Gaps**
    - Law firms: 0 vs 6 (not implemented)

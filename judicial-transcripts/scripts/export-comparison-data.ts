@@ -46,7 +46,7 @@ async function exportComparisonData(outputDir: string) {
   // Export lines (sample first 1000 and last 1000)
   const firstLines = await prisma.line.findMany({
     take: 1000,
-    orderBy: { lineNumber: 'asc' },
+    orderBy: { id: 'asc' },
     select: {
       id: true,
       lineNumber: true,
@@ -61,7 +61,7 @@ async function exportComparisonData(outputDir: string) {
   const totalLines = await prisma.line.count();
   const lastLines = await prisma.line.findMany({
     skip: Math.max(0, totalLines - 1000),
-    orderBy: { lineNumber: 'asc' },
+    orderBy: { id: 'asc' },
     select: {
       id: true,
       lineNumber: true,

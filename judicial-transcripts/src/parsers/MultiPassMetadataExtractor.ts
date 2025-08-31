@@ -109,6 +109,10 @@ export class MetadataExtractor {
     
     if (currentPage) {
       currentPage.endFileLine = fileContent.length - 1;
+      // Add the last page to the collection if it hasn't been added yet
+      if (!pages.has(currentPage.pageNumber)) {
+        pages.set(currentPage.pageNumber, currentPage);
+      }
     }
     
     this.logger.info(`Extracted ${pages.size} pages and ${lines.size} lines`);

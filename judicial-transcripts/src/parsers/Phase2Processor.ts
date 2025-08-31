@@ -413,6 +413,12 @@ export class Phase2Processor {
       return;
     }
     
+    // Check for "BY MR./MS." pattern in line text to set examining attorney
+    // This typically follows examination type lines
+    if (await this.checkExaminingAttorney(sessionId, line, lineText, state)) {
+      return;
+    }
+    
     // Check for witness being called
     if (await this.checkWitnessCalled(sessionId, line, lineText, state)) {
       return;
@@ -478,6 +484,72 @@ export class Phase2Processor {
     state.eventLines = [];
     
     return true;
+  }
+
+  /**
+   * Check for "BY MR./MS." pattern in line text to set examining attorney context
+   * This handles lines like "BY MR. FABRICANT:" that indicate who is conducting the examination
+   */
+  private async checkExaminingAttorney(
+    sessionId: number,
+    line: any,
+    lineText: string,
+    state: ProcessingState
+  ): Promise<boolean> {
+    // Only check lines with no speaker prefix (the whole line is the text)
+    if (line.speakerPrefix) {
+      return false;
+    }
+    
+    const trimmed = lineText.trim();
+    
+    // Check for "BY MR./MS./MRS./DR. LASTNAME:" pattern
+    const byMatch = trimmed.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+):?$/);
+    if (!byMatch) {
+      return false;
+    }
+    
+    const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
+    logger.info(`Found examining attorney indicator: ${trimmed}`);
+    
+    // Find the attorney
+    const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
+      this.context.trialId,
+      attorneyPrefix
+    );
+    
+    if (attorney) {
+      // Create speaker info for this attorney
+      const speaker: SpeakerInfo = {
+        id: attorney.speaker.id,
+        speakerPrefix: attorney.speaker.speakerPrefix,
+        speakerHandle: attorney.speaker.speakerHandle,
+        speakerType: SpeakerType.ATTORNEY,
+        attorneyId: attorney.id,
+        name: attorney.name
+      };
+      
+      // Set as the examining attorney (Q. context)
+      state.lastQSpeaker = speaker;
+      state.contextualSpeakers.set('Q.', speaker);
+      
+      logger.info(`Set examining attorney context: ${attorney.name} will be Q.`);
+      
+      // Add this line to the current event if we have one (usually witness called event)
+      if (state.currentEvent) {
+        state.eventLines.push(line);
+        state.currentEvent.endLineNumber = line.lineNumber;
+        if (line.timestamp) {
+          state.currentEvent.endTime = line.timestamp;
+        }
+      }
+      
+      return true; // We handled this line
+    } else {
+      logger.warn(`Could not find attorney for: ${attorneyPrefix}`);
+    }
+    
+    return false;
   }
 
   /**

@@ -195,10 +195,10 @@ model LawFirmOffice {
   id             Int             @id @default(autoincrement())
   lawFirmId      Int
   name           String
-  addressId      Int             @unique
+  addressId      Int?            @unique
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  address        Address         @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  address        Address?        @relation(fields: [addressId], references: [id], onDelete: Cascade)
   lawFirm        LawFirm         @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
   trialAttorneys TrialAttorney[]
 

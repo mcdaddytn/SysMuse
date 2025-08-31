@@ -10,6 +10,8 @@ import { SessionSectionParser } from './SessionSectionParser';
 import { SpeakerRegistry } from '../services/SpeakerRegistry';
 import { ExaminationContextManager } from '../services/ExaminationContextManager';
 import { MultiTrialSpeakerService } from '../services/MultiTrialSpeakerService';
+import { SummaryPageParser } from './SummaryPageParser';
+import { AttorneyService } from '../services/AttorneyService';
 
 export class ContentParser {
   private prisma: PrismaClient;
@@ -39,10 +41,15 @@ export class ContentParser {
     /EXAMINATION CONTINUED/i
   ];
 
+  private summaryParser: SummaryPageParser;
+  private attorneyService: AttorneyService;
+  
   constructor(prisma: PrismaClient, logger: Logger) {
     this.prisma = prisma;
     this.logger = logger;
     this.sessionSectionParser = new SessionSectionParser(prisma);
+    this.summaryParser = new SummaryPageParser();
+    this.attorneyService = new AttorneyService(prisma);
   }
 
   async parseContent(
@@ -124,20 +131,105 @@ export class ContentParser {
       return;
     }
     
-    // Extract lines from summary section
-    const summaryLines: string[] = [];
+    // Extract lines from summary section organized by pages for SummaryPageParser
+    const summaryPages: string[][] = [];
+    let currentPage: string[] = [];
+    let lastPageNumber: number | undefined;
+    
     for (let i = summarySection.startLine; i <= summarySection.endLine; i++) {
       const line = metadata.lines.get(i);
-      if (line?.cleanText) {
-        summaryLines.push(line.cleanText);
+      if (line) {
+        // Get page number from DocumentLocation
+        const location = metadata.fileLineMapping.get(i);
+        const pageNumber = location?.pageNumber;
+        
+        // Check if this is a new page
+        if (pageNumber && lastPageNumber && pageNumber !== lastPageNumber) {
+          if (currentPage.length > 0) {
+            summaryPages.push(currentPage);
+            currentPage = [];
+          }
+        }
+        if (line.cleanText) {
+          currentPage.push(line.cleanText);
+        }
+        lastPageNumber = pageNumber;
       }
     }
     
-    // Parse attorneys from summary (will be refined after SessionSections are created)
-    await this.parseAttorneysFromSummary(summaryLines, trialId);
+    // Add the last page
+    if (currentPage.length > 0) {
+      summaryPages.push(currentPage);
+    }
     
-    // Parse judge
-    await this.parseJudgeFromSummary(summaryLines, trialId);
+    // Use SummaryPageParser to extract detailed information including law firms
+    const summaryInfo = this.summaryParser.parse(summaryPages);
+    
+    if (summaryInfo) {
+      this.logger.info('Using SummaryPageParser results with law firm information');
+      
+      // Create attorneys with law firm information
+      for (const attorneyInfo of summaryInfo.plaintiffAttorneys) {
+        await this.attorneyService.createOrUpdateAttorney(trialId, attorneyInfo, 'PLAINTIFF');
+        
+        // Extract speaker prefix for registry
+        const nameMatch = attorneyInfo.name.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/);
+        if (nameMatch && this.speakerRegistry) {
+          const title = nameMatch[1];
+          const fullName = nameMatch[2];
+          const nameParts = fullName.split(/\s+/);
+          let lastName = nameParts[nameParts.length - 1];
+          
+          // Handle suffixes
+          if (lastName.match(/^(III|II|IV|V|JR\.?|SR\.?)$/i) && nameParts.length > 1) {
+            lastName = nameParts[nameParts.length - 2];
+          }
+          
+          const speakerPrefix = `${title} ${lastName}`.toUpperCase();
+          await this.speakerRegistry.registerAttorney(speakerPrefix, attorneyInfo.name);
+        }
+      }
+      this.logger.info(`Created ${summaryInfo.plaintiffAttorneys.length} plaintiff attorneys with law firm info`);
+      
+      for (const attorneyInfo of summaryInfo.defendantAttorneys) {
+        await this.attorneyService.createOrUpdateAttorney(trialId, attorneyInfo, 'DEFENDANT');
+        
+        // Extract speaker prefix for registry
+        const nameMatch = attorneyInfo.name.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/);
+        if (nameMatch && this.speakerRegistry) {
+          const title = nameMatch[1];
+          const fullName = nameMatch[2];
+          const nameParts = fullName.split(/\s+/);
+          let lastName = nameParts[nameParts.length - 1];
+          
+          // Handle suffixes
+          if (lastName.match(/^(III|II|IV|V|JR\.?|SR\.?)$/i) && nameParts.length > 1) {
+            lastName = nameParts[nameParts.length - 2];
+          }
+          
+          const speakerPrefix = `${title} ${lastName}`.toUpperCase();
+          await this.speakerRegistry.registerAttorney(speakerPrefix, attorneyInfo.name);
+        }
+      }
+      this.logger.info(`Created ${summaryInfo.defendantAttorneys.length} defendant attorneys with law firm info`);
+      
+      // Parse judge
+      if (summaryInfo.judge) {
+        await this.parseJudgeFromSummaryInfo(summaryInfo.judge, trialId);
+      }
+    } else {
+      // Fallback to original parsing if SummaryPageParser fails
+      this.logger.warn('SummaryPageParser failed, falling back to simple parsing');
+      const summaryLines: string[] = [];
+      for (let i = summarySection.startLine; i <= summarySection.endLine; i++) {
+        const line = metadata.lines.get(i);
+        if (line?.cleanText) {
+          summaryLines.push(line.cleanText);
+        }
+      }
+      await this.parseAttorneysFromSummary(summaryLines, trialId);
+      await this.parseJudgeFromSummary(summaryLines, trialId);
+    }
   }
   
   private async parseAttorneysFromSummary(
@@ -213,6 +305,23 @@ export class ContentParser {
         }
       }
     }
+  }
+  
+  private async parseJudgeFromSummaryInfo(
+    judgeInfo: { name: string; title?: string; honorific?: string },
+    trialId: number
+  ): Promise<void> {
+    if (!this.speakerService) return;
+    
+    this.logger.debug(`Creating judge from SummaryPageParser: ${judgeInfo.name}`);
+    
+    await this.speakerService.createJudgeWithSpeaker(
+      judgeInfo.name,
+      judgeInfo.title || 'UNITED STATES DISTRICT JUDGE',
+      judgeInfo.honorific || 'HONORABLE'
+    );
+    
+    this.logger.info(`Created judge: ${judgeInfo.name}`);
   }
   
   private async parseJudgeFromSummary(

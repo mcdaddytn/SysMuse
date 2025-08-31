@@ -243,11 +243,12 @@ export class AttorneyService {
         });
         
         if (!office) {
+          // Only create office if we have an address (addressId can be null)
           office = await this.prisma.lawFirmOffice.create({
             data: {
               lawFirmId: lawFirm.id,
               name: officeInfo.name,
-              addressId: addressId!
+              addressId: addressId
             }
           });
           logger.info(`Created law firm office: ${officeInfo.name}`);

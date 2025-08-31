@@ -144,24 +144,26 @@ model Line {
 }
 
 model Attorney {
-  id             Int             @id @default(autoincrement())
-  name           String
-  title          String?
-  firstName      String?
-  middleInitial  String?
-  lastName       String?
-  suffix         String?
-  speakerPrefix  String?
-  barNumber      String?
-  speakerId      Int             @unique
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  speaker        Speaker         @relation(fields: [speakerId], references: [id], onDelete: Cascade)
-  trialAttorneys TrialAttorney[]
+  id                  Int             @id @default(autoincrement())
+  name                String
+  title               String?
+  firstName           String?
+  middleInitial       String?
+  lastName            String?
+  suffix              String?
+  speakerPrefix       String?
+  barNumber           String?
+  attorneyFingerprint String?         // For cross-trial matching
+  speakerId           Int             @unique
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  speaker             Speaker         @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  trialAttorneys      TrialAttorney[]
 
   @@index([name])
   @@index([speakerPrefix])
   @@index([lastName])
+  @@index([attorneyFingerprint])
 }
 
 model TrialAttorney {
@@ -227,6 +229,7 @@ model Speaker {
   speakerPrefix    String
   speakerHandle    String
   speakerType      SpeakerType
+  isGeneric        Boolean           @default(false) // For generic attorney fallback
   createdAt        DateTime          @default(now())
   anonymousSpeaker AnonymousSpeaker?
   attorney         Attorney?

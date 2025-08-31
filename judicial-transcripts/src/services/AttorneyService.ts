@@ -14,6 +14,36 @@ export class AttorneyService {
   }
 
   /**
+   * Generate a fingerprint for attorney matching across trials
+   * Uses lastName, firstName initial, and suffix for matching
+   */
+  private generateFingerprint(attorneyInfo: {
+    lastName?: string;
+    firstName?: string;
+    middleInitial?: string;
+    suffix?: string;
+  }): string {
+    const parts: string[] = [];
+    
+    // Always include last name (normalized)
+    if (attorneyInfo.lastName) {
+      parts.push(attorneyInfo.lastName.toUpperCase().replace(/[^A-Z]/g, ''));
+    }
+    
+    // Include first initial if available
+    if (attorneyInfo.firstName) {
+      parts.push(attorneyInfo.firstName.charAt(0).toUpperCase());
+    }
+    
+    // Include suffix if present (important for Jr., III, etc.)
+    if (attorneyInfo.suffix) {
+      parts.push(attorneyInfo.suffix.toUpperCase().replace(/[^A-Z]/g, ''));
+    }
+    
+    return parts.join('_');
+  }
+
+  /**
    * Parse attorney name to extract title, last name, and handle suffixes
    */
   private parseAttorneyName(fullName: string): { 
@@ -87,6 +117,7 @@ export class AttorneyService {
 
   /**
    * Create or update attorney with associated speaker and law firm
+   * Now checks for existing attorneys across trials using fingerprint
    */
   async createOrUpdateAttorney(
     trialId: number,
@@ -97,6 +128,14 @@ export class AttorneyService {
       // Parse attorney name for components
       const parsed = this.parseAttorneyName(attorneyInfo.name);
       const { title, firstName, lastName, suffix, speakerPrefix, speakerHandle } = parsed;
+      
+      // Generate fingerprint for cross-trial matching
+      const fingerprint = this.generateFingerprint({
+        lastName: lastName || attorneyInfo.lastName,
+        firstName: firstName || attorneyInfo.firstName,
+        middleInitial: attorneyInfo.middleInitial,
+        suffix: suffix || attorneyInfo.suffix
+      });
       
       // Use provided speakerPrefix if available, otherwise use parsed
       const finalSpeakerPrefix = attorneyInfo.speakerPrefix || speakerPrefix || attorneyInfo.name.toUpperCase();
@@ -122,15 +161,32 @@ export class AttorneyService {
         logger.info(`Created speaker for attorney: ${finalSpeakerPrefix} with handle: ${finalSpeakerHandle}`);
       }
 
-      // Find or create attorney
+      // Check if attorney already exists across ANY trial (using fingerprint)
       let attorney = await this.prisma.attorney.findFirst({
-        where: { 
-          name: attorneyInfo.name,
-          speakerId: speaker.id
+        where: {
+          attorneyFingerprint: fingerprint,
+          // Also check if they're with the same law firm
+          trialAttorneys: {
+            some: {
+              lawFirm: attorneyInfo.lawFirm ? {
+                name: attorneyInfo.lawFirm.name
+              } : undefined
+            }
+          }
         }
       });
       
+      // If not found by fingerprint, check within this trial by speaker
       if (!attorney) {
+        attorney = await this.prisma.attorney.findFirst({
+          where: { 
+            speakerId: speaker.id
+          }
+        });
+      }
+      
+      if (!attorney) {
+        // Create new attorney with fingerprint
         attorney = await this.prisma.attorney.create({
           data: { 
             name: attorneyInfo.name,
@@ -141,12 +197,13 @@ export class AttorneyService {
             suffix: suffix || attorneyInfo.suffix,
             speakerPrefix: finalSpeakerPrefix,
             barNumber: attorneyInfo.barNumber,
+            attorneyFingerprint: fingerprint,
             speakerId: speaker.id
           }
         });
-        logger.info(`Created attorney: ${attorneyInfo.name} with speaker prefix: ${finalSpeakerPrefix}`);
-      } else {
-        // Update attorney if we have new information
+        logger.info(`Created attorney: ${attorneyInfo.name} with fingerprint: ${fingerprint}`);
+      } else if (!attorney.attorneyFingerprint) {
+        // Update existing attorney to add fingerprint if missing
         attorney = await this.prisma.attorney.update({
           where: { id: attorney.id },
           data: {
@@ -156,9 +213,13 @@ export class AttorneyService {
             lastName: lastName || attorney.lastName,
             suffix: suffix || attorney.suffix,
             speakerPrefix: finalSpeakerPrefix,
-            barNumber: attorneyInfo.barNumber || attorney.barNumber
+            barNumber: attorneyInfo.barNumber || attorney.barNumber,
+            attorneyFingerprint: fingerprint
           }
         });
+        logger.info(`Updated attorney ${attorney.name} with fingerprint: ${fingerprint}`);
+      } else {
+        logger.info(`Found existing attorney ${attorney.name} with fingerprint: ${fingerprint}`);
       }
       
       // Handle law firm and office if provided
@@ -288,6 +349,121 @@ export class AttorneyService {
     });
   }
 
+  /**
+   * Find all instances of an attorney across trials
+   */
+  async findAttorneyAcrossTrials(attorneyId: number): Promise<any[]> {
+    const attorney = await this.prisma.attorney.findUnique({
+      where: { id: attorneyId },
+      include: {
+        trialAttorneys: {
+          include: {
+            trial: true,
+            lawFirm: true,
+            lawFirmOffice: true
+          }
+        }
+      }
+    });
+    
+    if (!attorney || !attorney.attorneyFingerprint) {
+      return attorney ? [attorney] : [];
+    }
+    
+    // Find all attorneys with same fingerprint
+    const relatedAttorneys = await this.prisma.attorney.findMany({
+      where: {
+        attorneyFingerprint: attorney.attorneyFingerprint
+      },
+      include: {
+        speaker: true,
+        trialAttorneys: {
+          include: {
+            trial: true,
+            lawFirm: true,
+            lawFirmOffice: true
+          }
+        }
+      }
+    });
+    
+    return relatedAttorneys;
+  }
+  
+  /**
+   * Get cross-trial statement events for an attorney
+   */
+  async getAttorneyStatementsAcrossTrials(
+    attorneyFingerprint: string,
+    filters?: {
+      trialIds?: number[];
+      statementTypes?: string[];
+      searchText?: string;
+    }
+  ): Promise<any[]> {
+    // Find all attorney records with this fingerprint
+    const attorneys = await this.prisma.attorney.findMany({
+      where: {
+        attorneyFingerprint: attorneyFingerprint,
+        trialAttorneys: filters?.trialIds ? {
+          some: {
+            trialId: {
+              in: filters.trialIds
+            }
+          }
+        } : undefined
+      },
+      select: {
+        speakerId: true
+      }
+    });
+    
+    const speakerIds = attorneys.map(a => a.speakerId);
+    
+    // Get all statements from these speakers
+    const statements = await this.prisma.statementEvent.findMany({
+      where: {
+        speakerId: {
+          in: speakerIds
+        },
+        text: filters?.searchText ? {
+          contains: filters.searchText,
+          mode: 'insensitive'
+        } : undefined
+      },
+      include: {
+        event: {
+          include: {
+            session: {
+              include: {
+                trial: true
+              }
+            }
+          }
+        },
+        speaker: {
+          include: {
+            attorney: {
+              include: {
+                trialAttorneys: {
+                  include: {
+                    trial: true,
+                    lawFirm: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: [
+        { eventId: 'asc' }
+      ]
+    });
+    
+    return statements;
+  }
+  
   /**
    * Find attorney by speaker prefix
    */

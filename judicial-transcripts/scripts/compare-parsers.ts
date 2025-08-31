@@ -6,8 +6,8 @@ function loadJson(filePath: string): any {
 }
 
 function compareParsers() {
-  const legacyDir = 'data-export-legacy';
-  const multipassDir = 'data-export-multipass';
+  const legacyDir = process.argv[2] || 'data-export-legacy-fixed';
+  const multipassDir = process.argv[3] || 'data-export-multipass';
 
   // Compare statistics
   console.log('='.repeat(60));

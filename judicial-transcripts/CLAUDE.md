@@ -46,6 +46,10 @@ The system uses phased parsing:
 Multi-pass parser (new): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass`
 Legacy parser (default): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy`
 
+Multi-trial processing: `npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass`
+
+Data corrections (Feature-02S): `npx ts-node src/cli/override.ts overrides/trial-corrections.json`
+
 ## Development Process
 1. Read feature specification completely
 2. Check for feature assets in `docs/feature-assets/feature-NN/`

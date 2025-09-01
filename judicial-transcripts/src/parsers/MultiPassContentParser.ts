@@ -755,6 +755,28 @@ export class ContentParser {
     const match = reporterPattern.exec(text);
     return match ? match[1].trim() : null;
   }
+  
+  private parseSessionDate(dateStr: string): Date | null {
+    // Parse date strings like "OCTOBER 10, 2017" or "NOVEMBER 12, 2015"
+    const months: { [key: string]: number } = {
+      'JANUARY': 0, 'FEBRUARY': 1, 'MARCH': 2, 'APRIL': 3,
+      'MAY': 4, 'JUNE': 5, 'JULY': 6, 'AUGUST': 7,
+      'SEPTEMBER': 8, 'OCTOBER': 9, 'NOVEMBER': 10, 'DECEMBER': 11
+    };
+    
+    const match = dateStr.match(/([A-Z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+    if (match) {
+      const monthName = match[1];
+      const day = parseInt(match[2]);
+      const year = parseInt(match[3]);
+      
+      if (months.hasOwnProperty(monthName)) {
+        return new Date(year, months[monthName], day);
+      }
+    }
+    
+    return null;
+  }
 
   
   private async detectSummaryCenterDelimiter(lines: string[]): Promise<string> {
@@ -813,43 +835,47 @@ export class ContentParser {
     const updateData: any = {};
     
     if (caseTitleSection) {
-      // Clean up the case title - remove extra spaces and line breaks but preserve format
-      const caseTitleRaw = caseTitleSection.sectionText;
+      // Parse CASE_TITLE using the two-column format approach
+      // Step 1: Split raw text into lines
+      const lines = caseTitleSection.sectionText.split('\n');
       
-      // Split each line by delimiter and collect both sides
-      const lines = caseTitleRaw.split('\n');
-      
-      // Detect or use configured delimiter
+      // Step 2: Detect the center delimiter (usually ")(" but can vary)
       const delimiter = await this.detectSummaryCenterDelimiter(lines);
-      const leftSideParts: string[] = [];
-      const rightSideParts: string[] = [];
+      
+      // Step 3: Split each line by delimiter to separate left (party names) from right (case info)
+      const leftSideLines: string[] = [];
+      const rightSideLines: string[] = [];
       
       for (const line of lines) {
         if (line.includes(delimiter)) {
-          const parts = line.split(delimiter);
-          if (parts[0]) {
-            leftSideParts.push(parts[0].trim());
-          }
-          if (parts[1]) {
-            rightSideParts.push(parts[1].trim());
-          }
+          // Split at delimiter position to preserve spacing
+          const delimiterIndex = line.indexOf(delimiter);
+          const leftPart = line.substring(0, delimiterIndex).trim();
+          const rightPart = line.substring(delimiterIndex + delimiter.length).trim();
+          
+          if (leftPart) leftSideLines.push(leftPart);
+          if (rightPart) rightSideLines.push(rightPart);
         } else {
-          // If no delimiter, include the whole line on left (might be continuation)
-          leftSideParts.push(line.trim());
+          // Lines without delimiter typically belong to left side (party names continuation)
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.match(/^\d+$/)) { // Skip standalone page numbers
+            leftSideLines.push(trimmed);
+          }
         }
       }
       
-      // Join the left side parts (party names) and clean up
-      const leftSideText = leftSideParts
+      // Step 4: Clean and join the separated content
+      // Left side contains party names (plaintiff, defendant)
+      const leftSideText = leftSideLines
+        .filter(line => line.length > 0)
         .join(' ')
-        .replace(/[\(\)]/g, ' ')  // Remove remaining parentheses
         .replace(/\s+/g, ' ')  // Collapse multiple spaces
         .trim();
       
-      // Join the right side parts (case info, dates, times)
-      const rightSideText = rightSideParts
+      // Right side contains case info (case number, date, time, location)
+      const rightSideText = rightSideLines
+        .filter(line => line.length > 0)
         .join(' ')
-        .replace(/[\(\)]/g, ' ')  // Remove remaining parentheses
         .replace(/\s+/g, ' ')  // Collapse multiple spaces
         .trim();
       
@@ -861,10 +887,17 @@ export class ContentParser {
       });
       let nextOrderIndex = (maxOrderIndex._max.orderIndex || 0) + 1;
       
+      // Step 6: Parse right side for case metadata
       // Extract and create CIVIL_ACTION_NO section
-      const caseNumberMatch = rightSideText.match(/(?:Civil Action No\.|Case)\s*(\d+:\d+-cv-\d+-\w+)/i);
+      // Try multiple patterns for case numbers
+      let caseNumberMatch = rightSideText.match(/(?:Civil (?:Action |Docket )?No\.?|Case)\s*(\d+:\d+-cv-\d+(?:-\w+)?)/i);
+      if (!caseNumberMatch) {
+        // Try simpler pattern for format like "2:16-CV-230-JRG"
+        caseNumberMatch = rightSideText.match(/\b(\d+:\d+-CV-\d+(?:-\w+)?)\b/i);
+      }
+      
       if (caseNumberMatch) {
-        updateData.caseNumber = caseNumberMatch[1];
+        updateData.caseNumber = caseNumberMatch[1].toUpperCase();
         this.logger.info(`Extracted case number: ${caseNumberMatch[1]}`);
         
         // Get sessionId from the first existing section
@@ -939,7 +972,7 @@ export class ContentParser {
         }
       }
       
-      // Extract and create TRIAL_DATE section
+      // Extract and create TRIAL_DATE section (actually SESSION_DATE)
       // Need to remove location prefix (e.g., "MARSHALL, TEXAS" from "MARSHALL, TEXAS OCTOBER 1, 2020")
       const dateMatch = rightSideText.match(/\b([A-Z]+\s+\d{1,2},?\s+\d{4})\b/);
       if (dateMatch) {
@@ -961,6 +994,31 @@ export class ContentParser {
               metadata: { source: 'CASE_TITLE_right_side' }
             }
           });
+          
+          // Also update Session.sessionDate if it's a placeholder date
+          const session = await this.prisma.session.findUnique({
+            where: { id: firstSection.sessionId },
+            select: { sessionDate: true }
+          });
+          
+          // Check if session date is the default/placeholder
+          if (session && session.sessionDate) {
+            const sessionDateStr = session.sessionDate.toISOString().split('T')[0];
+            const currentYear = new Date().getFullYear();
+            
+            // If session date is in current year (likely a placeholder), update it
+            if (sessionDateStr.startsWith(String(currentYear))) {
+              // Parse the date from the match (e.g., "OCTOBER 10, 2017")
+              const parsedDate = this.parseSessionDate(dateMatch[1]);
+              if (parsedDate) {
+                await this.prisma.session.update({
+                  where: { id: firstSection.sessionId },
+                  data: { sessionDate: parsedDate }
+                });
+                this.logger.info(`Updated session date to: ${parsedDate.toISOString()}`);
+              }
+            }
+          }
         }
       }
       
@@ -990,11 +1048,13 @@ export class ContentParser {
         }
       }
       
-      // Extract plaintiff and defendant from LEFT side based on VS. or V.
+      // Step 5: Extract plaintiff and defendant from LEFT side
+      // The left side typically contains party names separated by VS., V., or on separate lines
       let plaintiff = '';
       let defendant = '';
       let vsDelimiter = '';
       
+      // Try different patterns for extracting parties
       if (leftSideText.includes(' VS. ')) {
         vsDelimiter = ' VS. ';
         const parts = leftSideText.split(' VS. ');
@@ -1009,6 +1069,30 @@ export class ContentParser {
           plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
           defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
         }
+      } else if (leftSideText.includes('VS.')) {
+        // Handle case where VS. is on its own line
+        vsDelimiter = 'VS.';
+        const parts = leftSideText.split('VS.');
+        if (parts.length >= 2) {
+          plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
+          defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
+        }
+      }
+      
+      // Clean up party names - remove trailing commas, PLAINTIFF/DEFENDANT labels, etc.
+      if (plaintiff) {
+        plaintiff = plaintiff
+          .replace(/,\s*$/, '')  // Remove trailing comma
+          .replace(/\s+/g, ' ')  // Normalize spaces
+          .trim();
+      }
+      
+      if (defendant) {
+        defendant = defendant
+          .replace(/,\s*$/, '')  // Remove trailing comma
+          .replace(/\s+/g, ' ')  // Normalize spaces
+          .replace(/\s*TRANSCRIPT OF JURY TRIAL.*$/i, '') // Remove transcript info that might be appended
+          .trim();
       }
       
       if (plaintiff) {

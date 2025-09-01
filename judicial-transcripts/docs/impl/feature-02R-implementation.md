@@ -195,20 +195,55 @@ if (existingTrial) {
 
 ## Implementation Order
 
-1. **Immediate**: Remove PROCEEDINGS section type
-2. **Next**: Parse right side into separate SessionSections
-3. **Then**: Implement delimiter auto-detection
-4. **Finally**: Test with multiple trials and refine
+1. **Immediate**: Remove PROCEEDINGS section type ✅
+2. **Next**: Parse right side into separate SessionSections ✅
+3. **Then**: Implement delimiter auto-detection ✅
+4. **Finally**: Fix multi-trial processing (see below)
+
+## Critical Multi-Trial Processing Issue
+
+**See detailed documentation**: `docs/multi-trial-parsing-fix.md`
+
+### Summary of Issue
+The parse.ts file has two critical bugs preventing proper multi-trial processing:
+1. Uses partial string matching (`dir.includes(trial)`) instead of exact matching
+2. Processes only the first matching trial then exits, instead of looping through all
+
+### Required Fix
+- Change to exact directory name matching: `trialsToProcess.includes(dir)`
+- Wrap entire trial processing logic in a for loop to handle all matching directories
+- Reset trial-specific variables (like `trialStyleConfig`) for each trial
+
+### Current Status
+- PDF conversion works for all trials ✅
+- Single trial parsing works correctly ✅
+- Multi-trial parsing only processes first match ❌
+- Need to restructure parse.ts to process all trials in `includedTrials` array
 
 ## Success Criteria
 
-- [ ] No PROCEEDINGS sections created
-- [ ] Right side metadata in separate SessionSections
-- [ ] Session.startTime populated from SESSION_START_TIME
-- [ ] Automatic delimiter detection working
-- [ ] No duplicate trials created
-- [ ] All metadata correctly extracted and stored
-- [ ] Multiple trials process successfully
+- [x] No PROCEEDINGS sections created
+- [x] Right side metadata in separate SessionSections
+- [x] Session.startTime populated from SESSION_START_TIME
+- [x] Automatic delimiter detection working
+- [x] No duplicate trials created
+- [x] All metadata correctly extracted and stored
+- [ ] Multiple trials process successfully in single run
+
+## Testing Status
+
+Successfully tested with Vocalife trial (42 Vocalife Amazon):
+- 12 sessions parsed correctly
+- Metadata extraction working
+- Delimiter auto-detection successful
+- CERTIFICATION section correctly identified
+
+Pending: Full multi-trial test with:
+- 01 Genband (8 sessions)
+- 02 Contentguard (29 sessions)
+- 14 Optis (9 sessions)
+- 42 Vocalife (12 sessions)
+- 50 Packet Netscout (6 sessions)
 
 ## Priority Issues and Solutions
 

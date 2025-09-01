@@ -136,30 +136,12 @@ export class Phase2Processor {
       await this.loadExistingEntities(trialId);
       
       // Get all sessions for this trial
+      // Sessions are already properly ordered by their IDs, which reflects
+      // the order they were created during phase 1 parsing
+      // Phase 1 respects the trialstyle.json ordering, so we just sort by ID
       const sessions = await this.prisma.session.findMany({
         where: { trialId },
-        orderBy: [
-          { sessionDate: 'asc' },
-          { sessionType: 'asc' }
-        ]
-      });
-      
-      // Custom sort sessions to ensure Morning before Afternoon before other types
-      sessions.sort((a, b) => {
-        // First sort by date
-        const dateCompare = a.sessionDate.getTime() - b.sessionDate.getTime();
-        if (dateCompare !== 0) return dateCompare;
-        
-        // Then by session type priority
-        const getTypePriority = (type: string) => {
-          const lower = type.toLowerCase();
-          if (lower.includes('morning')) return 1;
-          if (lower.includes('afternoon')) return 2;
-          if (lower.includes('bench')) return 3;
-          return 4;
-        };
-        
-        return getTypePriority(a.sessionType) - getTypePriority(b.sessionType);
+        orderBy: { id: 'asc' }  // Simple ID ordering - preserves phase 1 order
       });
       
       logger.info(`Found ${sessions.length} sessions to process`);

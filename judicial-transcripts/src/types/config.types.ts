@@ -30,7 +30,7 @@ export interface TranscriptConfig {
 
 export interface SessionInfo {
   sessionDate: Date;
-  sessionType: 'MORNING' | 'AFTERNOON' | 'SPECIAL' | 'BENCH_TRIAL' | 'JURY_VERDICT' | 'OTHER';
+  sessionType: 'MORNING' | 'AFTERNOON' | 'ALLDAY' | 'EVENING' | 'SPECIAL' | 'BENCH_TRIAL' | 'JURY_VERDICT' | 'OTHER';
   fileName?: string;
   documentNumber?: number;
   totalPages?: number;

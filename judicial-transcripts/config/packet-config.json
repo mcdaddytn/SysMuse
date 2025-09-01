@@ -1,0 +1,6 @@
+{
+  "inputDir": "./output/multi-trial/50 Packet Netscout",
+  "outputDir": "./output/multi-trial/50 Packet Netscout",
+  "logLevel": "info",
+  "parserMode": "legacy"
+}

@@ -12,7 +12,8 @@ import {
   SessionInfo, 
   SummaryInfo,
   AttorneyInfo,
-  AddressInfo
+  AddressInfo,
+  TrialStyleConfig
 } from '../types/config.types';
 import logger from '../utils/logger';
 
@@ -60,6 +61,15 @@ export class TranscriptParser {
   /**
    * Flush pending line batch to database
    */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async flushLineBatch(): Promise<void> {
     if (this.lineBatch.length === 0) return;
     
@@ -90,9 +100,37 @@ export class TranscriptParser {
     const startTime = Date.now();
     
     try {
-      // Get all text files in directory
-      const files = await fs.readdir(this.config.inputDir);
-      const textFiles = files.filter(f => f.endsWith('.txt'));
+      // Check for trialstyle.json in output directory
+      let textFiles: string[] = [];
+      const trialStylePath = path.join(this.config.outputDir, 'trialstyle.json');
+      
+      if (await this.fileExists(trialStylePath)) {
+        // Load trialstyle.json
+        const trialStyleContent = await fs.readFile(trialStylePath, 'utf-8');
+        const trialStyle: TrialStyleConfig = JSON.parse(trialStyleContent);
+        logger.info('Loading file order from trialstyle.json');
+        
+        if (trialStyle.orderedFiles && trialStyle.orderedFiles.length > 0) {
+          // Use the ordered files from trialstyle.json
+          textFiles = trialStyle.orderedFiles;
+          logger.info(`Using ${textFiles.length} ordered files from trialstyle.json`);
+          
+          // If there are unidentified files, warn about them
+          if (trialStyle.unidentifiedFiles && trialStyle.unidentifiedFiles.length > 0) {
+            logger.warn(`${trialStyle.unidentifiedFiles.length} files in unidentifiedFiles will not be processed:`);
+            trialStyle.unidentifiedFiles.forEach(f => logger.warn(`  - ${f}`));
+          }
+        } else {
+          // No ordered files in trialstyle.json, fall back to directory listing
+          logger.warn('No orderedFiles found in trialstyle.json, falling back to directory listing');
+          const files = await fs.readdir(this.config.inputDir);
+          textFiles = files.filter(f => f.endsWith('.txt'));
+        }
+      } else {
+        // No trialstyle.json, use directory listing with sorting
+        logger.info('No trialstyle.json found, using directory listing with auto-sorting');
+        const files = await fs.readdir(this.config.inputDir);
+        textFiles = files.filter(f => f.endsWith('.txt'));
       
       // Custom sort to ensure Morning comes before Afternoon for each date
       textFiles.sort((a, b) => {
@@ -135,9 +173,10 @@ export class TranscriptParser {
           return aInfo.date.localeCompare(bInfo.date);
         }
         
-        // Then by session type (morning before afternoon before bench)
-        return aInfo.sessionType.localeCompare(bInfo.sessionType);
-      });
+          // Then by session type (morning before afternoon before bench)
+          return aInfo.sessionType.localeCompare(bInfo.sessionType);
+        });
+      }
       
       logger.info(`Files will be processed in order: ${textFiles.join(', ')}`);
       
@@ -826,13 +865,13 @@ export class TranscriptParser {
           }
           
           // Process the collected lines to form case name
-          if (partyLines.length >= 4) {  // Need at least name, plaintiff, vs, defendant
+          if (partyLines.length >= 2) {  // Reduced requirement - at least plaintiff and defendant names
             // Join and clean up the party lines
             const fullText = partyLines.join(' ')
               .replace(/\s+/g, ' ')  // Normalize spaces
               .trim();
             
-            // Check if this contains the key elements of a case name
+            // Strategy 1: Look for explicit PLAINTIFF/DEFENDANT markers
             if (fullText.includes('PLAINTIFF') && fullText.includes('DEFENDANT') && 
                 (fullText.includes('VS.') || fullText.includes('V.'))) {
               caseName = fullText
@@ -843,6 +882,59 @@ export class TranscriptParser {
               // Ensure proper ending
               if (!caseName.endsWith('.')) {
                 caseName += '.';
+              }
+            }
+            // Strategy 2: Look for VS. without explicit markers (like GENBAND US LLC VS. METASWITCH)
+            else if (fullText.includes('VS.')) {
+              // Split by VS. to get plaintiff and defendant parts
+              const parts = fullText.split(/\s+VS\.\s+/i);
+              if (parts.length === 2) {
+                const plaintiff = parts[0].trim();
+                const defendant = parts[1].trim();
+                
+                // Only use if both parts look like entity names (contain uppercase letters)
+                if (plaintiff.match(/[A-Z]{2,}/) && defendant.match(/[A-Z]{2,}/)) {
+                  caseName = `${plaintiff} VS. ${defendant}`;
+                  
+                  // Clean up any trailing company indicators that got separated
+                  caseName = caseName
+                    .replace(/\s+(CORP|INC|LLC|LTD|LLP)\s*\.?\s*/gi, ' $1. ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                }
+              }
+            }
+            // Strategy 3: Look for pattern with just a period separator (like PACKET INTELLIGENCE LLC . NETSCOUT)
+            else if (partyLines.length >= 2) {
+              // Check if we have entity names separated by blank lines or periods
+              const entities: string[] = [];
+              let currentEntity = '';
+              
+              for (const line of partyLines) {
+                // If line is just a period or VS, it's a separator
+                if (line === '.' || line.toUpperCase() === 'VS' || line.toUpperCase() === 'VS.') {
+                  if (currentEntity) {
+                    entities.push(currentEntity.trim());
+                    currentEntity = '';
+                  }
+                }
+                // Otherwise accumulate entity name
+                else if (line.match(/[A-Z]{2,}/)) {
+                  currentEntity = currentEntity ? currentEntity + ' ' + line : line;
+                }
+              }
+              
+              // Don't forget the last entity
+              if (currentEntity) {
+                entities.push(currentEntity.trim());
+              }
+              
+              // If we have at least 2 entities, form the case name
+              if (entities.length >= 2) {
+                // Take first as plaintiff, rest as defendants
+                const plaintiff = entities[0];
+                const defendants = entities.slice(1).join(', ');
+                caseName = `${plaintiff} VS. ${defendants}`;
               }
             }
           }
@@ -1265,7 +1357,10 @@ export class TranscriptParser {
     }
     
     // Determine session type from filename
-    if (fileName.includes('Morning') || fileName.includes('AM')) {
+    // Check for full-day transcript first (contains both AM and PM)
+    if (fileName.includes('AM and PM') || fileName.includes('AM & PM')) {
+      sessionType = 'ALLDAY';  // Full day transcript containing both morning and afternoon
+    } else if (fileName.includes('Morning') || fileName.includes('AM')) {
       sessionType = 'MORNING';
     } else if (fileName.includes('Afternoon') || fileName.includes('PM')) {
       sessionType = 'AFTERNOON';

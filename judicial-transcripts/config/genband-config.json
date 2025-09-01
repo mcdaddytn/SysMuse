@@ -1,0 +1,6 @@
+{
+  "inputDir": "./output/multi-trial/01 Genband",
+  "outputDir": "./output/multi-trial/01 Genband",
+  "logLevel": "info",
+  "parserMode": "legacy"
+}

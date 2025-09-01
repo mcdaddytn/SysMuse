@@ -161,24 +161,14 @@ program
               const trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
               
               if (trialsToProcess.length > 0) {
-                // Process each trial in the list
-                logger.info(`Processing ${trialsToProcess.length} trials: ${trialsToProcess.join(', ')}`);
+                // Find matching subdirectory
+                const matchingDir = subdirs.find(dir => 
+                  trialsToProcess.some((trial: string) => dir.includes(trial))
+                );
                 
-                for (const trialDirName of trialsToProcess) {
-                  // Find exact matching subdirectory (no partial matches)
-                  const matchingDir = subdirs.find(dir => dir === trialDirName);
-                
-                  if (!matchingDir) {
-                    logger.warn(`No matching trial directory found for: ${trialDirName}`);
-                    continue;
-                  }
+                if (matchingDir) {
                   actualInputDir = path.join(searchDir, matchingDir);
-                  logger.info(`\n${'='.repeat(60)}`);
-                  logger.info(`Processing trial: ${matchingDir}`);
-                  logger.info(`${'='.repeat(60)}`);
-                  
-                  // Reset trialStyleConfig for each trial
-                  trialStyleConfig = null;
+                  logger.info(`Processing trial directory: ${matchingDir}`);
                   
                   // Load trialstyle.json from the subdirectory
                   const subDirTrialStylePath = path.join(actualInputDir, 'trialstyle.json');
@@ -190,8 +180,24 @@ program
                       logger.warn(`Failed to parse trialstyle.json: ${error}`);
                     }
                   }
-                  
-                  // Continue processing this trial directory below...
+                } else {
+                  logger.warn(`No matching trial directory found for: ${trialsToProcess.join(', ')}`);
+                  logger.info('✅ Phase 1 completed successfully');
+                  return;
+                }
+              }
+            } else if (!fs.existsSync(trialStylePath)) {
+              // Update trialStylePath for the actual directory
+              const trialStylePath = path.join(actualInputDir, 'trialstyle.json');
+              if (fs.existsSync(trialStylePath)) {
+                try {
+                  trialStyleConfig = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
+                  logger.info(`Loaded trialstyle.json from ${actualInputDir}`);
+                } catch (error) {
+                  logger.warn(`Failed to parse trialstyle.json: ${error}`);
+                }
+              }
+            }
             
             // ALWAYS use orderedFiles from trialstyle.json if available
             let files: string[];
@@ -430,14 +436,6 @@ program
                 logger.error(`Failed to parse ${file}`);
               }
             }
-            } // End of for loop over trialsToProcess
-            
-            // All trials have been processed
-            logger.info('\n' + '='.repeat(60));
-            logger.info('✅ All trials processed successfully');
-            logger.info('='.repeat(60));
-            } // End of if (trialsToProcess.length > 0)
-            } // End of if (config.processSubDirs)
           } else {
             logger.info('Using Legacy Parser');
             const parser = new TranscriptParser(config);

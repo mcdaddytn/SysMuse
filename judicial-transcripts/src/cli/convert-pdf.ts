@@ -44,15 +44,27 @@ async function main() {
       }
     }
     
-    // Load trial-specific configs if using multi-trial config
-    let trialConfigs: Record<string, any> = {};
-    if ((config as any).trials) {
-      trialConfigs = (config as any).trials;
-      logger.info(`Loaded ${Object.keys(trialConfigs).length} trial-specific configurations`);
+    // Get trial selection settings and default trial style from config
+    const trialSelectionMode = (config as any).trialSelectionMode || 'ALL';
+    const includedTrials = (config as any).includedTrials || [];
+    const excludedTrials = (config as any).excludedTrials || [];
+    const defaultTrialStyle = (config as any).defaultTrialStyle || {};
+    
+    logger.info(`Trial selection mode: ${trialSelectionMode}`);
+    if (trialSelectionMode === 'INCLUDE' && includedTrials.length > 0) {
+      logger.info(`Including trials: ${includedTrials.join(', ')}`);
+    } else if (trialSelectionMode === 'EXCLUDE' && excludedTrials.length > 0) {
+      logger.info(`Excluding trials: ${excludedTrials.join(', ')}`);
     }
     
-    // Create converter with trial configs
-    const converter = new PdfToTextConverter(pdfConfig, trialConfigs);
+    // Create converter with new parameters
+    const converter = new PdfToTextConverter(
+      pdfConfig, 
+      defaultTrialStyle,
+      trialSelectionMode,
+      includedTrials,
+      excludedTrials
+    );
     
     // Convert PDFs
     await converter.convertDirectory(

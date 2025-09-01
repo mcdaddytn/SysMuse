@@ -48,11 +48,23 @@ export interface PdfToTextConfig {
 
 export class PdfToTextConverter {
   private config: PdfToTextConfig;
-  private trialConfigs: Record<string, any> = {};
+  private defaultTrialStyle: any = {};
+  private trialSelectionMode: 'ALL' | 'INCLUDE' | 'EXCLUDE' = 'ALL';
+  private includedTrials: string[] = [];
+  private excludedTrials: string[] = [];
 
-  constructor(config: PdfToTextConfig = {}, trialConfigs?: Record<string, any>) {
+  constructor(
+    config: PdfToTextConfig = {}, 
+    defaultTrialStyle?: any,
+    trialSelectionMode?: 'ALL' | 'INCLUDE' | 'EXCLUDE',
+    includedTrials?: string[],
+    excludedTrials?: string[]
+  ) {
     this.config = config;
-    this.trialConfigs = trialConfigs || {};
+    this.defaultTrialStyle = defaultTrialStyle || {};
+    this.trialSelectionMode = trialSelectionMode || 'ALL';
+    this.includedTrials = includedTrials || [];
+    this.excludedTrials = excludedTrials || [];
   }
 
   private postProcessText(text: string, options: PostProcessingOptions): string {
@@ -223,10 +235,13 @@ export class PdfToTextConverter {
 
     if (processSubDirs) {
       // Process subdirectories
-      const subDirs = fs.readdirSync(inputDir)
+      let subDirs = fs.readdirSync(inputDir)
         .filter(f => fs.statSync(path.join(inputDir, f)).isDirectory());
       
-      logger.info(`Found ${subDirs.length} subdirectories to process`);
+      // Apply trial selection filter
+      subDirs = this.filterTrials(subDirs);
+      
+      logger.info(`Found ${subDirs.length} subdirectories to process after filtering`);
       
       for (const subDir of subDirs) {
         const inputSubDir = path.join(inputDir, subDir);
@@ -247,9 +262,17 @@ export class PdfToTextConverter {
           fs.mkdirSync(outputSubDir, { recursive: true });
         }
 
-        // Generate trialstyle.json for this subdirectory with trial-specific config
-        const trialConfig = this.trialConfigs[subDir] || {};
-        await this.generateTrialStyleConfig(outputSubDir, pdfs, trialConfig);
+        // Read trial-specific config from PDF directory if exists
+        const pdfDirConfigPath = path.join(inputSubDir, 'trialstyle.json');
+        let trialSpecificConfig = {};
+        if (fs.existsSync(pdfDirConfigPath)) {
+          const configContent = fs.readFileSync(pdfDirConfigPath, 'utf-8');
+          trialSpecificConfig = JSON.parse(configContent);
+          logger.info(`Found trial-specific config in PDF directory: ${subDir}`);
+        }
+        
+        // Generate trialstyle.json for this subdirectory
+        await this.generateTrialStyleConfig(outputSubDir, pdfs, trialSpecificConfig);
         
         for (const file of pdfs) {
           const inputFile = path.join(inputSubDir, file);
@@ -292,6 +315,18 @@ export class PdfToTextConverter {
     return fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.pdf'));
   }
 
+  private filterTrials(trials: string[]): string[] {
+    switch (this.trialSelectionMode) {
+      case 'INCLUDE':
+        return trials.filter(trial => this.includedTrials.includes(trial));
+      case 'EXCLUDE':
+        return trials.filter(trial => !this.excludedTrials.includes(trial));
+      case 'ALL':
+      default:
+        return trials;
+    }
+  }
+
   private async generateTrialStyleConfig(
     outputDir: string, 
     files: string[], 
@@ -299,44 +334,50 @@ export class PdfToTextConverter {
   ): Promise<void> {
     const detector = new FileConventionDetector();
     
-    // Load default config if exists
-    let defaultConfig: Partial<TrialStyleConfig> = {};
-    const defaultConfigPath = path.join(process.cwd(), 'config', 'trialstyle.json');
-    if (fs.existsSync(defaultConfigPath)) {
-      const configContent = fs.readFileSync(defaultConfigPath, 'utf-8');
-      defaultConfig = JSON.parse(configContent);
-    }
+    // Start with default trial style from main config
+    let mergedConfig: Partial<TrialStyleConfig> = { ...this.defaultTrialStyle };
     
-    // Merge trial-specific config if provided
+    // Merge with trial-specific config from PDF directory if provided
     if (trialSpecificConfig) {
-      // Extract expected patterns from trial config
+      // Deep merge the configurations
+      mergedConfig = { ...mergedConfig, ...trialSpecificConfig };
+      
+      // Handle nested expectedPatterns specially
       if (trialSpecificConfig.expectedPatterns) {
+        mergedConfig.expectedPatterns = {
+          ...this.defaultTrialStyle.expectedPatterns,
+          ...trialSpecificConfig.expectedPatterns
+        };
+        
+        // Convert expected patterns to the format used by FileConventionDetector
         if (trialSpecificConfig.expectedPatterns.question) {
-          defaultConfig.questionPatterns = trialSpecificConfig.expectedPatterns.question;
+          mergedConfig.questionPatterns = trialSpecificConfig.expectedPatterns.question;
         }
         if (trialSpecificConfig.expectedPatterns.answer) {
-          defaultConfig.answerPatterns = trialSpecificConfig.expectedPatterns.answer;
+          mergedConfig.answerPatterns = trialSpecificConfig.expectedPatterns.answer;
         }
         if (trialSpecificConfig.expectedPatterns.attorney) {
           // Convert simple attorney patterns to regex patterns
-          defaultConfig.attorneyIndicatorPatterns = trialSpecificConfig.expectedPatterns.attorney
+          mergedConfig.attorneyIndicatorPatterns = trialSpecificConfig.expectedPatterns.attorney
             .map((p: string) => p.includes('(') ? p : `${p} ([A-Z][A-Z\\s'-]+?)`);
         }
       }
       
       // Set file convention if specified
       if (trialSpecificConfig.fileConvention) {
-        defaultConfig.fileConvention = trialSpecificConfig.fileConvention;
+        mergedConfig.fileConvention = trialSpecificConfig.fileConvention;
       }
       
       // Enable generic fallback based on config
-      defaultConfig.enableGenericFallback = trialSpecificConfig.enableGenericFallback || false;
+      if (trialSpecificConfig.enableGenericFallback !== undefined) {
+        mergedConfig.enableGenericFallback = trialSpecificConfig.enableGenericFallback;
+      }
     }
     
     // Convert PDF names to txt names for detection
     const txtFiles = files.map(f => f.replace(/\.pdf$/i, '.txt'));
     
-    // Generate config
-    await detector.generateTrialStyleConfig(outputDir, txtFiles, defaultConfig);
+    // Generate config with merged settings
+    await detector.generateTrialStyleConfig(outputDir, txtFiles, mergedConfig);
   }
 }

@@ -1,7 +1,0 @@
-{
-  "inputDir": "C:\\Users\\gmac\\GrassLabel Dropbox\\Grass Label Home\\docs\\sysmuse\\transcripts\\VocalLivevAmazon",
-  "outputDir": "./output",
-  "logLevel": "info",
-  "batchSize": 100,
-  "enableElasticSearch": true
-}

@@ -1,7 +1,0 @@
-{
-  "inputDir": "F:\\docs\\rj\\JudicialAccess\\Transcripts\\VocalLivevAmazonMix\\pdf-text-extract",
-  "outputDir": "./output",
-  "logLevel": "info",
-  "batchSize": 100,
-  "enableElasticSearch": true
-}

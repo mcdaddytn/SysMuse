@@ -117,13 +117,41 @@ program
             
             const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
             
-            const files = fs.readdirSync(config.inputDir)
-              .filter(f => f.endsWith('.txt'));
+            // Load trialstyle.json FIRST to get file ordering and trial info
+            let trialStyleConfig: TrialStyleConfig | null = null;
+            const trialStylePath = path.join(config.inputDir, 'trialstyle.json');
             
-            // TODO: Implement proper file convention parsing to handle different naming patterns
-            // This is a temporary solution that works for the current test data format
-            // Sort files properly: by date, then morning before afternoon
-            files.sort((a, b) => {
+            if (fs.existsSync(trialStylePath)) {
+              try {
+                trialStyleConfig = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
+                logger.info(`Loaded trialstyle.json from ${config.inputDir}`);
+              } catch (error) {
+                logger.warn(`Failed to parse trialstyle.json: ${error}`);
+              }
+            } else {
+              logger.info(`No trialstyle.json found in ${config.inputDir}`);
+            }
+            
+            // ALWAYS use orderedFiles from trialstyle.json if available
+            let files: string[];
+            if (trialStyleConfig?.orderedFiles && trialStyleConfig.orderedFiles.length > 0) {
+              // Always use the orderedFiles from trialstyle.json
+              files = trialStyleConfig.orderedFiles.filter(f => {
+                const fullPath = path.join(config.inputDir, f);
+                return fs.existsSync(fullPath) && f.endsWith('.txt');
+              });
+              logger.info(`Using orderedFiles from trialstyle.json (${files.length} files)`);
+            } else {
+              // Fall back to directory listing with sorting only if no trialstyle.json
+              files = fs.readdirSync(config.inputDir)
+                .filter(f => f.endsWith('.txt'));
+              
+              // Only apply custom sorting if no orderedFiles available
+              if (true) {
+              // TODO: Implement proper file convention parsing to handle different naming patterns
+              // This is a temporary solution that works for the current test data format
+              // Sort files properly: by date, then morning before afternoon
+              files.sort((a, b) => {
               const getDateAndType = (filename: string) => {
                 const dateMatch = filename.match(/held on (\d+)_(\d+)_(\d+)/);
                 let date = '';
@@ -161,18 +189,7 @@ program
               // Then sort by session order (morning=1, afternoon=2, etc.)
               return aInfo.sessionOrder - bInfo.sessionOrder;
             });
-            
-            // Feature 03C: Load trialstyle.json to get case number and trial info
-            let trialStyleConfig: TrialStyleConfig | null = null;
-            const trialStylePath = path.join(config.inputDir, 'trialstyle.json');
-            
-            if (fs.existsSync(trialStylePath)) {
-              try {
-                trialStyleConfig = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
-                logger.info(`Loaded trialstyle.json from ${config.inputDir}`);
-              } catch (error) {
-                logger.warn(`Could not parse trialstyle.json: ${error}`);
-              }
+            }
             }
             
             // Feature 03C: Extract case number from various sources

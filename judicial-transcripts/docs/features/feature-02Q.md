@@ -61,12 +61,19 @@ Process:
   1. Check for trialstyle.json in PDF directory
   2. Merge with default configuration
   3. Generate trialstyle.json in TXT directory
-  4. Convert PDFs to text files
+  4. Convert PDFs to text files (always overwrites existing)
   5. Auto-detect file ordering based on naming patterns
   6. Update orderedFiles/unidentifiedFiles in generated trialstyle.json
   7. Set fileSortingMode=MANUAL after ordering established
 Output: TXT files + trialstyle.json in destination directory
 ```
+
+**Note on Conversion Behavior:**
+- PDF to text conversion always overwrites existing TXT files
+- No timestamp checking or skip logic currently implemented
+- Deletion of TXT directories only needed for housekeeping (e.g., when source PDFs are renamed or removed)
+- The generated orderedFiles collection dictates what files are parsed, regardless of other TXT files present
+- Future enhancement: `--force` flag for explicit overwrite control
 
 ### 2. User Review (Optional)
 - User can edit trialstyle.json in TXT directory

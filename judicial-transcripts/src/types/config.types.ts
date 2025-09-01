@@ -252,6 +252,15 @@ export interface TrialStyleConfig {
     [key: string]: string[];
   };
   enableGenericFallback?: boolean;
+  // Feature 02Q: Expected patterns for Q&A and attorney detection
+  expectedPatterns?: {
+    question?: string[];
+    answer?: string[];
+    attorney?: string[];
+  };
+  parserMode?: 'legacy' | 'multi-pass';
+  description?: string;
+  notableAttorneys?: string[];
   genericFallbackConfig?: {
     plaintiffGenericName?: string;
     defenseGenericName?: string;

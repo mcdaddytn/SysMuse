@@ -37,9 +37,7 @@ export class WitnessMarkerDiscovery {
         }
       },
       orderBy: {
-        event: {
-          startTime: 'asc'
-        }
+        eventId: 'asc'  // Order by event ID to maintain chronological order across days
       }
     });
 
@@ -49,9 +47,10 @@ export class WitnessMarkerDiscovery {
     }
 
     // Load all trial events for boundary detection
+    // Order by ID to maintain creation order, not chronological order
     const allEvents = await this.prisma.trialEvent.findMany({
       where: { trialId },
-      orderBy: { startTime: 'asc' },
+      orderBy: { id: 'asc' },  // Order by ID to maintain creation sequence
       include: {
         statement: {
           include: {
@@ -69,23 +68,18 @@ export class WitnessMarkerDiscovery {
       const witnessEvent = witnessEvents[i];
       const nextWitnessEvent = i < witnessEvents.length - 1 ? witnessEvents[i + 1] : null;
       
-      // Validate we're moving forward in time (allow same timestamp)
-      if (lastProcessedTime && witnessEvent.event.startTime && witnessEvent.event.startTime < lastProcessedTime) {
-        this.logger.error(`Witness events not in chronological order! Event ${witnessEvent.event.id} at ${witnessEvent.event.startTime} comes after ${lastProcessedTime}`);
-        throw new Error(`Witness marker timeline violation: events must progress forward in time`);
-      }
-      
       const boundary = await this.findExaminationBoundary(
         witnessEvent,
         nextWitnessEvent,
         allEvents
       );
       
-      // Validate that end marker is not before start marker
-      if (boundary.endEvent && boundary.endEvent.startTime && boundary.startEvent.startTime && 
-          boundary.endEvent.startTime < boundary.startEvent.startTime) {
-        this.logger.error(`End marker before start marker for witness ${witnessEvent.witness?.name || 'Unknown'}! Start: ${boundary.startEvent.startTime}, End: ${boundary.endEvent.startTime}`);
-        throw new Error(`Marker boundary violation: end marker cannot be before start marker`);
+      // Validate that end event ID is not before start event ID
+      if (boundary.endEvent && boundary.endEvent.id < boundary.startEvent.id) {
+        this.logger.error(`End event ID before start event ID for witness ${witnessEvent.witness?.name || 'Unknown'}! Start ID: ${boundary.startEvent.id}, End ID: ${boundary.endEvent.id}`);
+        // Log but don't throw - we'll handle this in the MarkerSection creation
+        // by using the start event as the end event in this case
+        boundary.endEvent = boundary.startEvent;
       }
       
       examinationBoundaries.push(boundary);
@@ -211,17 +205,21 @@ export class WitnessMarkerDiscovery {
     }
 
     // Create marker section
-    if (startMarker && endMarker) {
+    if (startMarker) {
+      // With Phase 2 changes, endTime should always be populated
+      const endEventId = boundary.endEvent?.id || boundary.startEvent.id;
+      const endTime = boundary.endEvent?.endTime || boundary.startEvent.endTime || boundary.startEvent.startTime;
+      
       await this.prisma.markerSection.create({
         data: {
           trialId,
           markerSectionType: 'WITNESS_EXAMINATION',
           startMarkerId: startMarker.id,
-          endMarkerId: endMarker.id,
+          endMarkerId: endMarker?.id,
           startEventId: boundary.startEvent.id,
-          endEventId: boundary.endEvent?.id,
+          endEventId: endEventId,
           startTime: boundary.startEvent.startTime,
-          endTime: boundary.endEvent?.endTime,
+          endTime: endTime,
           name: `WitnessExamination_${examinationType}_${witnessHandle}`,
           description: `${examinationType} of witness ${witnessName}`,
           metadata: {

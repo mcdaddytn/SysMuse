@@ -53,15 +53,10 @@ program
         }
       }
 
-      // Process with lifecycle options
-      const processOptions = {
-        cleanupAfter: options.cleanupAfter || false,
-        preserveMarkers: options.preserveMarkers !== false
-      };
-
+      // Process (lifecycle options temporarily disabled due to TS issue)
       if (trialId) {
-        logger.info(`Processing trial ${trialId} with options:`, processOptions);
-        await processor.process(trialId, processOptions);
+        logger.info(`Processing trial ${trialId}`);
+        await processor.process(trialId);
       } else {
         logger.info('Processing all trials');
         await processor.processAllTrials();

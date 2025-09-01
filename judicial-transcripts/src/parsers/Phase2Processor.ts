@@ -1392,9 +1392,13 @@ export class Phase2Processor {
   ): Promise<void> {
     try {
       // Calculate duration if we have timestamps
-      let duration: number | undefined;
-      if (eventInfo.startTime && eventInfo.endTime) {
-        duration = this.calculateDuration(eventInfo.startTime, eventInfo.endTime);
+      // For single-line events or events without endTime, set endTime = startTime
+      const effectiveEndTime = eventInfo.endTime || eventInfo.startTime;
+      
+      // Calculate duration - 0 for single-line/point events
+      let duration: number = 0;
+      if (eventInfo.startTime && effectiveEndTime && eventInfo.startTime !== effectiveEndTime) {
+        duration = this.calculateDuration(eventInfo.startTime, effectiveEndTime);
       }
       
       // Calculate word and character counts
@@ -1417,7 +1421,7 @@ export class Phase2Processor {
           trialId,
           sessionId,
           startTime: eventInfo.startTime,
-          endTime: eventInfo.endTime,
+          endTime: effectiveEndTime,
           duration,
           startLineNumber: eventInfo.startLineNumber,
           endLineNumber: eventInfo.endLineNumber,

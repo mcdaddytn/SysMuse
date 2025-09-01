@@ -5,6 +5,7 @@ System to parse judicial transcripts from Lexis Nexis and other sources into a d
 
 ## Key Documentation
 - **Tech Stack & Conventions**: `docs/coding-conventions.md`
+- **Documentation Conventions**: `docs/documentation-conventions.md` ⚠️ MUST FOLLOW
 - **Source Material Format**: `docs/transcript-conventions.md`
 - **Database & Testing**: `docs/database-testing-guide.md` ⚠️ MUST READ
 - **Pattern Abstraction**: `docs/pattern-abstraction-guide.md`
@@ -53,4 +54,11 @@ Legacy parser (default): `npx ts-node src/cli/parse.ts parse --phase1 --config c
 5. Follow conventions in `docs/coding-conventions.md`
 6. Reference transcript format details in `docs/transcript-conventions.md`
 7. Implement with tests and documentation
-8. Implementation guides go in `docs/impl/feature-NN-implementation.md`
+8. Follow documentation conventions in `docs/documentation-conventions.md`
+
+## Documentation Organization
+- Feature specs: `docs/features/feature-XXX.md` (no descriptive suffixes)
+- Implementation guides: `docs/impl/feature-XXX-implementation.md`
+- Status reports: `docs/impl/STATUS-FEATURE-XXX.md`
+- Scripts: `scripts/` directory (not in docs)
+- All documentation under `docs/` (except CLAUDE.md)

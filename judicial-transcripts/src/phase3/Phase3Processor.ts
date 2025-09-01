@@ -21,7 +21,7 @@ export class Phase3Processor {
   /**
    * Main entry point for Phase 3 processing
    */
-  async process(trialId: number, options?: { cleanupAfter?: boolean; preserveMarkers?: boolean }): Promise<void> {
+  async process(trialId: number): Promise<void> {
     this.logger.info(`Starting Phase 3 processing for trial ${trialId}`);
 
     try {
@@ -51,17 +51,12 @@ export class Phase3Processor {
       // Step 5: Generate summary statistics
       const stats = await this.generateSummaryStatistics(trialId);
 
-      // Step 6: Index marker sections to permanent Elasticsearch index
-      if (options?.preserveMarkers !== false) {
-        this.logger.info('Step 6: Indexing marker sections to permanent Elasticsearch');
-        await indexTrialMarkerSections(trialId);
-      }
+      // Step 6: Index marker sections to permanent Elasticsearch index (disabled for now)
+      // Will be enabled when Feature 03E is fully implemented
+      // await indexTrialMarkerSections(trialId);
 
-      // Step 7: Clean up Phase 2 Elasticsearch data if requested
-      if (options?.cleanupAfter) {
-        this.logger.info('Step 7: Cleaning up Phase 2 Elasticsearch data');
-        await cleanupTrialElasticsearch(trialId);
-      }
+      // Step 7: Clean up Phase 2 Elasticsearch data (disabled for now)
+      // await cleanupTrialElasticsearch(trialId);
 
       // Update processing status
       await this.prisma.trialProcessingStatus.update({

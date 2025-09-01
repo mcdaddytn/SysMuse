@@ -254,54 +254,50 @@ export class ElasticsearchLifecycleService {
         throw new Error(`Trial ${trialId} not found`);
       }
       
-      // Get all markers with their sections for the trial
-      const markers = await this.prisma.marker.findMany({
+      // Get all marker sections for the trial
+      const markerSections = await this.prisma.markerSection.findMany({
         where: { trialId },
         include: {
-          sections: true
+          startMarker: true,
+          endMarker: true,
+          startEvent: true,
+          endEvent: true
         }
       });
       
-      let totalSections = 0;
-      const bulkBody: any[] = [];
+      logger.info(`Found ${markerSections.length} marker sections for trial ${trialId}`);
       
-      for (const marker of markers) {
-        totalSections += marker.sections.length;
-        
-        for (const section of marker.sections) {
-          const doc = {
-            trialId: trial.id,
-            trialName: trial.name,
-            caseNumber: trial.caseNumber,
-            markerId: marker.id,
-            markerType: marker.markerType,
-            markerSectionId: section.id,
-            sectionText: section.sectionText,
-            startPage: marker.startPage,
-            endPage: marker.endPage,
-            startLine: marker.startLine,
-            endLine: marker.endLine,
-            witnessName: marker.witnessName,
-            attorneyName: marker.attorneyName,
-            examinationType: marker.examinationType,
-            timestamp: new Date(),
-            metadata: {
-              ...marker.metadata,
-              sectionNumber: section.sectionNumber
-            }
-          };
-          
-          bulkBody.push(
-            { index: { _index: indexName, _id: `${trialId}_marker_${marker.id}_section_${section.id}` } },
-            doc
-          );
-        }
+      if (markerSections.length === 0) {
+        return;
       }
       
-      logger.info(`Indexing ${totalSections} marker sections from ${markers.length} markers for trial ${trialId}`);
+      const bulkBody: any[] = [];
       
-      if (totalSections === 0) {
-        return;
+      for (const section of markerSections) {
+        // Note: Text aggregation will be implemented in Feature 03E
+        // For now, we'll index the metadata and structure
+        const doc = {
+          trialId: trial.id,
+          trialName: trial.name,
+          caseNumber: trial.caseNumber,
+          markerSectionId: section.id,
+          markerSectionType: section.markerSectionType,
+          startMarkerId: section.startMarkerId,
+          endMarkerId: section.endMarkerId,
+          startMarkerType: section.startMarker?.markerType,
+          endMarkerType: section.endMarker?.markerType,
+          name: section.name,
+          description: section.description,
+          // Text will be aggregated and added in Feature 03E
+          text: section.description || '',
+          timestamp: new Date(),
+          metadata: section.metadata
+        };
+        
+        bulkBody.push(
+          { index: { _index: indexName, _id: `${trialId}_section_${section.id}` } },
+          doc
+        );
       }
       
       // Bulk index to Elasticsearch
@@ -313,7 +309,7 @@ export class ElasticsearchLifecycleService {
       if (result.errors) {
         logger.error('Bulk indexing errors:', result.items.filter((item: any) => item.index?.error));
       } else {
-        logger.info(`Successfully indexed ${totalSections} marker sections to permanent index`);
+        logger.info(`Successfully indexed ${markerSections.length} marker sections to permanent index`);
       }
     } catch (error) {
       logger.error(`Error indexing Phase 3 marker sections for trial ${trialId}:`, error);

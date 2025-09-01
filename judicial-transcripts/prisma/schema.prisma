@@ -33,6 +33,7 @@ model Trial {
   attorneys            TrialAttorney[]
   trialEvents          TrialEvent[]
   witnesses            Witness[]
+  processingStatus     TrialProcessingStatus?
 
   @@index([caseNumber])
 }
@@ -648,4 +649,33 @@ enum CombinationType {
   MULTIPLY
   OR
   AND
+}
+
+model TrialProcessingStatus {
+  id                   Int       @id @default(autoincrement())
+  trialId              Int       @unique
+  trial                Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  
+  // Phase 2 tracking
+  phase2StartedAt      DateTime?
+  phase2CompletedAt    DateTime?
+  phase2IndexName      String?
+  phase2DocumentCount  Int       @default(0)
+  
+  // Phase 3 tracking  
+  phase3StartedAt      DateTime?
+  phase3CompletedAt    DateTime?
+  phase3MarkerCount    Int       @default(0)
+  phase3SectionCount   Int       @default(0)
+  
+  // Elasticsearch lifecycle
+  elasticsearchCleared Boolean   @default(false)
+  elasticsearchClearedAt DateTime?
+  phase2IndexSize      String?   // Store size as string (e.g., "1.2gb")
+  
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  
+  @@index([trialId])
+  @@index([elasticsearchCleared])
 }

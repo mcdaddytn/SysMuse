@@ -236,6 +236,8 @@ export interface TrialStyleConfig {
   summaryCenterDelimiter: SummaryCenterDelimiter;
   orderedFiles?: string[];
   unidentifiedFiles?: string[];
+  folderName?: string;  // Feature 03C: Store original folder name
+  extractedCaseNumber?: string;  // Feature 03C: Case number extracted from page header
   metadata?: {
     caseNumber?: string;
     plaintiff?: string;

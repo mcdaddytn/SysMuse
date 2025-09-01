@@ -22,6 +22,8 @@ program
   .option('-t, --trial <id>', 'Process specific trial by ID')
   .option('-c, --case <number>', 'Process specific trial by case number')
   .option('--clean', 'Clean existing markers before processing')
+  .option('--cleanup-after', 'Clean up Phase 2 Elasticsearch data after processing')
+  .option('--no-preserve-markers', 'Skip indexing marker sections to permanent ES')
   .action(async (options) => {
     try {
       const processor = new Phase3Processor(prisma);
@@ -51,10 +53,15 @@ program
         }
       }
 
-      // Process
+      // Process with lifecycle options
+      const processOptions = {
+        cleanupAfter: options.cleanupAfter || false,
+        preserveMarkers: options.preserveMarkers !== false
+      };
+
       if (trialId) {
-        logger.info(`Processing trial ${trialId}`);
-        await processor.process(trialId);
+        logger.info(`Processing trial ${trialId} with options:`, processOptions);
+        await processor.process(trialId, processOptions);
       } else {
         logger.info('Processing all trials');
         await processor.processAllTrials();

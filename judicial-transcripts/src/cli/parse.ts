@@ -6,7 +6,8 @@ import * as path from 'path';
 import { TranscriptParser } from '../parsers/TranscriptParser';
 import { Phase2Processor } from '../parsers/Phase2Processor';
 import { MultiPassTranscriptParser } from '../parsers/MultiPassTranscriptParser';
-import { TranscriptConfig } from '../types/config.types';
+import { TranscriptConfig, TrialStyleConfig } from '../types/config.types';
+import { caseNumberExtractor } from '../utils/CaseNumberExtractor';
 import logger from '../utils/logger';
 
 const program = new Command();
@@ -161,23 +162,83 @@ program
               return aInfo.sessionOrder - bInfo.sessionOrder;
             });
             
-            // Create or get trial first
-            let trial = await prisma.trial.findFirst({
-              where: {
-                caseNumber: '2:19-cv-00123-JRG'
+            // Feature 03C: Load trialstyle.json to get case number and trial info
+            let trialStyleConfig: TrialStyleConfig | null = null;
+            const trialStylePath = path.join(config.inputDir, 'trialstyle.json');
+            
+            if (fs.existsSync(trialStylePath)) {
+              try {
+                trialStyleConfig = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
+                logger.info(`Loaded trialstyle.json from ${config.inputDir}`);
+              } catch (error) {
+                logger.warn(`Could not parse trialstyle.json: ${error}`);
               }
+            }
+            
+            // Feature 03C: Extract case number from various sources
+            let caseNumber: string | undefined;
+            let trialName: string;
+            
+            // Priority 1: Use extractedCaseNumber from trialstyle.json
+            if (trialStyleConfig?.extractedCaseNumber) {
+              caseNumber = trialStyleConfig.extractedCaseNumber;
+              logger.info(`Using case number from trialstyle.json: ${caseNumber}`);
+            }
+            
+            // Priority 2: Try to extract from first transcript file
+            if (!caseNumber && files.length > 0) {
+              const firstFilePath = path.join(config.inputDir, files[0]);
+              if (fs.existsSync(firstFilePath)) {
+                const firstContent = fs.readFileSync(firstFilePath, 'utf-8').substring(0, 1000);
+                const extracted = caseNumberExtractor.extractFromTranscript(firstContent);
+                if (extracted) {
+                  caseNumber = extracted.caseNumber;
+                  logger.info(`Extracted case number from transcript: ${caseNumber}`);
+                }
+              }
+            }
+            
+            // Priority 3: Use config trial.caseNumber if provided
+            if (!caseNumber && config.trial?.caseNumber) {
+              caseNumber = config.trial.caseNumber;
+              logger.info(`Using case number from config: ${caseNumber}`);
+            }
+            
+            // Priority 4: Generate unique identifier from folder name
+            if (!caseNumber) {
+              const folderName = trialStyleConfig?.folderName || path.basename(config.inputDir);
+              // Create a unique identifier based on folder name and timestamp
+              const timestamp = new Date().toISOString().split('T')[0];
+              caseNumber = `UNKNOWN-${folderName.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
+              logger.warn(`No case number found, using identifier: ${caseNumber}`);
+            }
+            
+            // Determine trial name from folder or config
+            const folderName = trialStyleConfig?.folderName || path.basename(config.inputDir);
+            if (config.trial?.name) {
+              trialName = config.trial.name;
+            } else {
+              trialName = folderName;
+            }
+            
+            // Create or get trial
+            let trial = await prisma.trial.findFirst({
+              where: { caseNumber }
             });
             
             if (!trial) {
               trial = await prisma.trial.create({
                 data: {
-                  name: 'VOCALIFE LLC, PLAINTIFF, VS. AMAZON.COM, INC. and AMAZON.COM LLC, DEFENDANTS.',
-                  caseNumber: '2:19-cv-00123-JRG',
-                  court: 'UNITED STATES DISTRICT COURT FOR THE EASTERN DISTRICT OF TEXAS',
-                  plaintiff: 'VOCALIFE LLC',
-                  defendant: 'AMAZON.COM, INC. and AMAZON.COM LLC'
+                  name: trialName,
+                  caseNumber,
+                  court: config.trial?.court || 'UNKNOWN COURT',
+                  plaintiff: trialStyleConfig?.metadata?.plaintiff || 'Unknown Plaintiff',
+                  defendant: trialStyleConfig?.metadata?.defendant || 'Unknown Defendant'
                 }
               });
+              logger.info(`Created new trial: ${trialName} (${caseNumber})`);
+            } else {
+              logger.info(`Using existing trial: ${trial.name} (${caseNumber})`);
             }
             
             // Process files using multi-pass parser

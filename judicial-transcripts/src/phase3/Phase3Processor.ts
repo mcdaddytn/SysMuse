@@ -3,6 +3,8 @@ import { Logger } from '../utils/logger';
 import { AccumulatorEngine } from './AccumulatorEngine';
 import { WitnessMarkerDiscovery } from './WitnessMarkerDiscovery';
 import { ActivityMarkerDiscovery } from './ActivityMarkerDiscovery';
+import { ElasticsearchLifecycleService } from '../services/ElasticsearchLifecycleService';
+import { indexTrialMarkerSections, cleanupTrialElasticsearch } from '../scripts/syncElasticsearchLifecycle';
 
 export class Phase3Processor {
   private logger = new Logger('Phase3Processor');
@@ -19,10 +21,17 @@ export class Phase3Processor {
   /**
    * Main entry point for Phase 3 processing
    */
-  async process(trialId: number): Promise<void> {
+  async process(trialId: number, options?: { cleanupAfter?: boolean; preserveMarkers?: boolean }): Promise<void> {
     this.logger.info(`Starting Phase 3 processing for trial ${trialId}`);
 
     try {
+      // Update processing status
+      await this.prisma.trialProcessingStatus.upsert({
+        where: { trialId },
+        update: { phase3StartedAt: new Date() },
+        create: { trialId, phase3StartedAt: new Date() }
+      });
+
       // Step 1: Evaluate ElasticSearch expressions
       this.logger.info('Step 1: Evaluating ElasticSearch expressions');
       await this.accumulatorEngine.evaluateESExpressions(trialId);
@@ -40,7 +49,29 @@ export class Phase3Processor {
       await this.activityMarkerDiscovery.discoverActivityMarkers(trialId);
 
       // Step 5: Generate summary statistics
-      await this.generateSummaryStatistics(trialId);
+      const stats = await this.generateSummaryStatistics(trialId);
+
+      // Step 6: Index marker sections to permanent Elasticsearch index
+      if (options?.preserveMarkers !== false) {
+        this.logger.info('Step 6: Indexing marker sections to permanent Elasticsearch');
+        await indexTrialMarkerSections(trialId);
+      }
+
+      // Step 7: Clean up Phase 2 Elasticsearch data if requested
+      if (options?.cleanupAfter) {
+        this.logger.info('Step 7: Cleaning up Phase 2 Elasticsearch data');
+        await cleanupTrialElasticsearch(trialId);
+      }
+
+      // Update processing status
+      await this.prisma.trialProcessingStatus.update({
+        where: { trialId },
+        data: {
+          phase3CompletedAt: new Date(),
+          phase3MarkerCount: stats.markers,
+          phase3SectionCount: stats.markerSections
+        }
+      });
 
       this.logger.info(`Completed Phase 3 processing for trial ${trialId}`);
     } catch (error) {
@@ -70,7 +101,7 @@ export class Phase3Processor {
   /**
    * Generate summary statistics for markers
    */
-  private async generateSummaryStatistics(trialId: number): Promise<void> {
+  private async generateSummaryStatistics(trialId: number): Promise<{ markers: number; markerSections: number; accumulatorResults: number }> {
     const markers = await this.prisma.marker.count({
       where: { trialId }
     });
@@ -87,6 +118,8 @@ export class Phase3Processor {
     this.logger.info(`  - Markers created: ${markers}`);
     this.logger.info(`  - Marker sections created: ${markerSections}`);
     this.logger.info(`  - Accumulator results: ${accumulatorResults}`);
+
+    return { markers, markerSections, accumulatorResults };
   }
 
   /**

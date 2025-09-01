@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { FileConvention, FileSortingMode, TrialStyleConfig } from '../types/config.types';
 import { QAPatternDetector } from '../services/QAPatternDetector';
+import { caseNumberExtractor } from '../utils/CaseNumberExtractor';
 import { logger } from '../utils/logger';
 
 interface ParsedFileName {
@@ -23,6 +24,10 @@ export class FileConventionDetector {
     // Updated to handle both comma and no comma after day, and 4-digit years
     DATEAMPM: /^(.+?)[\s_]+([A-Z][a-z]+\s+\d{1,2}(?:,)?\s+\d{4})\s+(AM|PM|AM\s+and\s+PM)(?:\d+)?\.txt$/i,
     
+    // DATETRIAL: e.g., "Koninklijke August 22, 2022 Trial.txt" - indicates full day transcript
+    // Similar to DATEAMPM but with "Trial" suffix instead of AM/PM
+    DATETRIAL: /^(.+?)[\s_]+([A-Z][a-z]+\s+\d{1,2}(?:,)?\s+\d{4})\s+Trial\.txt$/i,
+    
     // DATEMORNAFT: e.g., "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Afternoon.txt"
     // Updated to handle truncated Morning/Afternoon (e.g., "Morning S" for "Morning Session")
     DATEMORNAFT: /.*held on (\d{1,2}_\d{1,2}_\d{2,4}).*\(.*?(Morning|Afternoon|Day).*?\)?\.txt$/i,
@@ -41,6 +46,9 @@ export class FileConventionDetector {
       const file = files[i];
       
       if (this.patterns.DATEAMPM.test(file)) {
+        conventions.set('DATEAMPM', (conventions.get('DATEAMPM') || 0) + 1);
+      } else if (this.patterns.DATETRIAL.test(file)) {
+        // Check for Trial suffix pattern - treat as same convention as DATEAMPM
         conventions.set('DATEAMPM', (conventions.get('DATEAMPM') || 0) + 1);
       } else if (this.patterns.DATEMORNAFT.test(file)) {
         conventions.set('DATEMORNAFT', (conventions.get('DATEMORNAFT') || 0) + 1);
@@ -66,13 +74,21 @@ export class FileConventionDetector {
 
   parseFileName(fileName: string, convention: FileConvention): ParsedFileName | null {
     if (convention === 'AUTO') {
-      // Try each pattern
+      // Try each pattern, checking DATETRIAL before DATEAMPM
+      if (this.patterns.DATETRIAL.test(fileName)) {
+        return this.parseDateTrial(fileName);
+      }
       for (const [conv, pattern] of Object.entries(this.patterns)) {
         if (pattern.test(fileName)) {
           convention = conv as FileConvention;
           break;
         }
       }
+    }
+    
+    // Check if it's actually a DATETRIAL pattern and parse accordingly
+    if ((convention === 'DATEAMPM' || convention === 'AUTO') && this.patterns.DATETRIAL.test(fileName)) {
+      return this.parseDateTrial(fileName);
     }
     
     switch (convention) {
@@ -85,6 +101,44 @@ export class FileConventionDetector {
       default:
         return null;
     }
+  }
+
+  private parseDateTrial(fileName: string): ParsedFileName | null {
+    const match = fileName.match(this.patterns.DATETRIAL);
+    if (!match) return null;
+    
+    const [, caseInfo, dateStr] = match;
+    
+    // Parse plaintiff/defendant from case info
+    let plaintiff: string | undefined;
+    let defendant: string | undefined;
+    
+    // Handle variations like "Plaintiff v Defendant" or just "Plaintiff"
+    const vsMatch = caseInfo.match(/(.+?)\s+[Vv]\.?\s+(.+)/);
+    if (vsMatch) {
+      plaintiff = vsMatch[1].trim();
+      defendant = vsMatch[2].trim();
+    } else {
+      plaintiff = caseInfo.trim();
+    }
+    
+    // Parse date
+    const date = this.parseDate(dateStr);
+    
+    return {
+      convention: 'DATEAMPM',  // Treat as DATEAMPM convention
+      date,
+      session: 'TRIAL',  // Use TRIAL as the session indicator for full day transcripts
+      plaintiff,
+      defendant,
+      metadata: {
+        originalFileName: fileName,
+        caseInfo,
+        dateStr,
+        sessionRaw: 'Trial',
+        isFullDay: true
+      }
+    };
   }
 
   private parseDateAMPM(fileName: string): ParsedFileName | null {
@@ -235,6 +289,7 @@ export class FileConventionDetector {
           'PM': 2,
           'AFTERNOON': 2,
           'AM AND PM': 3,
+          'TRIAL': 3,  // Full day trial transcript, same priority as AM AND PM
           'ALLDAY': 3,
           'EVENING': 4,
           'PM1': 5,
@@ -268,6 +323,9 @@ export class FileConventionDetector {
   ): Promise<TrialStyleConfig> {
     const txtFiles = files.filter(f => f.toLowerCase().endsWith('.txt'));
     
+    // Feature 03C: Extract folder name
+    const folderName = path.basename(outputDir);
+    
     // Detect convention
     const convention = defaultConfig?.fileConvention === 'AUTO' ? 
       this.detectConvention(txtFiles) : 
@@ -291,6 +349,9 @@ export class FileConventionDetector {
       }
     }
     
+    // Feature 03C: Extract case number from first file
+    let extractedCaseNumber: string | undefined;
+    
     // Detect Q&A patterns from first file if available
     let detectedPatterns: Partial<TrialStyleConfig> = {};
     if (orderedFiles.length > 0) {
@@ -298,6 +359,14 @@ export class FileConventionDetector {
       if (fs.existsSync(firstFilePath)) {
         try {
           const content = fs.readFileSync(firstFilePath, 'utf-8');
+          
+          // Feature 03C: Try to extract case number from page header
+          const caseNumberInfo = caseNumberExtractor.extractFromTranscript(content);
+          if (caseNumberInfo) {
+            extractedCaseNumber = caseNumberInfo.caseNumber;
+            logger.info(`Extracted case number: ${extractedCaseNumber} from ${path.basename(firstFilePath)}`);
+          }
+          
           const lines = content.split('\n').slice(0, 500); // Sample first 500 lines
           
           // Use a temporary detector to analyze patterns
@@ -333,7 +402,12 @@ export class FileConventionDetector {
       summaryCenterDelimiter: defaultConfig?.summaryCenterDelimiter || 'AUTO',
       orderedFiles,
       unidentifiedFiles,
-      metadata,
+      folderName,  // Feature 03C: Store folder name
+      extractedCaseNumber,  // Feature 03C: Store extracted case number
+      metadata: {
+        ...metadata,
+        extractedCaseNumber  // Also store in metadata for backward compatibility
+      },
       // Add Q&A pattern configuration (Feature 02P)
       questionPatterns: detectedPatterns.questionPatterns || defaultConfig?.questionPatterns || ['Q.', 'Q:', 'Q'],
       answerPatterns: detectedPatterns.answerPatterns || defaultConfig?.answerPatterns || ['A.', 'A:', 'A'],

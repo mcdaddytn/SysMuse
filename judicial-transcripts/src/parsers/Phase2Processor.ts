@@ -15,7 +15,7 @@ import { AttorneyService } from '../services/AttorneyService';
 import { WitnessJurorService } from '../services/WitnessJurorService';
 import { SpeakerRegistry } from '../services/SpeakerRegistry';
 import { ExaminationContextManager } from '../services/ExaminationContextManager';
-import { syncStatementEvents } from '../scripts/syncElasticsearch';
+import { syncTrialStatementEvents } from '../scripts/syncElasticsearchLifecycle';
 import logger from '../utils/logger';
 
 interface ProcessingState {
@@ -161,8 +161,8 @@ export class Phase2Processor {
         logger.info('SYNCING STATEMENT EVENTS TO ELASTICSEARCH');
         logger.info('============================================================');
         try {
-          await syncStatementEvents();
-          logger.info('Elasticsearch sync completed successfully');
+          await syncTrialStatementEvents(this.context.trialId);
+          logger.info(`Elasticsearch sync completed successfully for trial ${this.context.trialId}`);
         } catch (syncError) {
           logger.error('Elasticsearch sync failed:', syncError);
           logger.warn('Continuing without Elasticsearch - search functionality may be limited');

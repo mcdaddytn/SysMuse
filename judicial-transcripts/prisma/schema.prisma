@@ -10,6 +10,7 @@ datasource db {
 model Trial {
   id                   Int                @id @default(autoincrement())
   name                 String
+  shortName            String?            // Folder name from configuration (e.g., "42 Vocalife Amazon")
   caseNumber           String             @unique
   caseHandle           String?            // For file output - remove ":" and invalid chars
   plaintiff            String?            // Plaintiff name parsed from summary
@@ -72,6 +73,7 @@ model Session {
   trialId             Int
   sessionDate         DateTime
   sessionType         SessionType
+  shortName           String?          // Parsed identifier from filename (e.g., "Afternoon")
   startTime           String?          // Start time parsed from summary
   documentNumber      Int?
   fileName            String?

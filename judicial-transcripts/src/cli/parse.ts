@@ -107,16 +107,6 @@ program
           if (options.parserMode === 'multi-pass') {
             logger.info('Using Multi-Pass Parser');
             
-            const multiPassConfig = {
-              mode: 'multi-pass' as const,
-              loadInMemory: true,
-              validatePasses: true,
-              debugOutput: options.debugOutput || false,
-              batchSize: config.batchSize || 1000
-            };
-            
-            const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
-            
             // Load trialstyle.json FIRST to get file ordering and trial info
             let trialStyleConfig: TrialStyleConfig | null = null;
             const trialStylePath = path.join(config.inputDir, 'trialstyle.json');
@@ -131,6 +121,17 @@ program
             } else {
               logger.info(`No trialstyle.json found in ${config.inputDir}`);
             }
+            
+            const multiPassConfig = {
+              mode: 'multi-pass' as const,
+              loadInMemory: true,
+              validatePasses: true,
+              debugOutput: options.debugOutput || false,
+              batchSize: config.batchSize || 1000,
+              pageHeaderLines: trialStyleConfig?.pageHeaderLines || 2
+            };
+            
+            const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
             
             // ALWAYS use orderedFiles from trialstyle.json if available
             let files: string[];
@@ -247,6 +248,7 @@ program
               trial = await prisma.trial.create({
                 data: {
                   name: trialName,
+                  shortName: trialStyleConfig?.folderName || path.basename(config.inputDir),
                   caseNumber,
                   court: config.trial?.court || 'UNKNOWN COURT',
                   plaintiff: trialStyleConfig?.metadata?.plaintiff || 'Unknown Plaintiff',
@@ -296,15 +298,20 @@ program
                     trialId: trial.id,
                     sessionDate,
                     sessionType,
+                    shortName: sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase(),
                     fileName: file
                   }
                 });
               } else {
-                // Update fileName if needed
-                if (session.fileName !== file) {
+                // Update fileName and shortName if needed
+                const shortName = sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase();
+                if (session.fileName !== file || session.shortName !== shortName) {
                   session = await prisma.session.update({
                     where: { id: session.id },
-                    data: { fileName: file }
+                    data: { 
+                      fileName: file,
+                      shortName: shortName
+                    }
                   });
                 }
               }

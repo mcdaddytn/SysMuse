@@ -1,4 +1,4 @@
-# Feature 03R: Phase 1 Parser Corrections and Metadata Enhancement
+# Feature 02R: Phase 1 Parser Corrections and Metadata Enhancement
 
 ## Overview
 Address critical issues discovered in Phase 1 parsing including improper speaker resolution, missing trial metadata extraction, page number handling, and add new fields for better trial and session identification.
@@ -61,7 +61,7 @@ Address critical issues discovered in Phase 1 parsing including improper speaker
 ### Session Table Additions
 ```typescript
 {
-  shortName: string;  // Parsed identifier from filename (e.g., "10_1_20 Afternoon")
+  shortName: string;  // Parsed identifier from filename (e.g., "Afternoon")
   metadata: JSON;     // Store all parsed file convention data
   // Existing 'sessionType' continues to store MORNING/AFTERNOON/etc.
 }
@@ -107,7 +107,7 @@ Address critical issues discovered in Phase 1 parsing including improper speaker
   - court: "UNITED STATES DISTRICT COURT"
   
 - Session table contains:
-  - shortName: "10_1_20 Afternoon" (from filename)
+  - shortName: "Afternoon" (from filename)
   - sessionType: "AFTERNOON"
   - metadata: { originalFileName, dateStr, sessionIndicator, etc. }
 

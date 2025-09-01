@@ -59,13 +59,15 @@ export class ContentParser {
     trialId: number,
     batchSize: number = 1000
   ): Promise<void> {
-    this.logger.info('Starting content parsing (Pass 3) with speaker identification');
+    this.logger.info('Starting content parsing (Pass 3) - Phase 1: Basic extraction only');
     
-    // Initialize speaker services
-    await this.initializeSpeakerServices(trialId);
+    // Phase 1: Skip speaker service initialization
+    // Phase 2 will handle speaker resolution and examination context
+    // await this.initializeSpeakerServices(trialId);
     
-    // Parse summary section first to extract attorneys, judge, etc.
-    await this.parseSummaryForSpeakers(metadata, structure, trialId);
+    // Phase 1: Skip summary speaker parsing
+    // Phase 2 will extract attorneys, judge, etc.
+    // await this.parseSummaryForSpeakers(metadata, structure, trialId);
     
     // Update session with metadata (totalPages, transcriptStartPage)
     await this.updateSessionMetadata(metadata, sessionId, trialId);
@@ -92,15 +94,10 @@ export class ContentParser {
     
     await this.processSessionSections(metadata, structure, sessionId, trialId);
     
-    // Log speaker statistics
-    if (this.speakerRegistry) {
-      const stats = this.speakerRegistry.getStatistics();
-      this.logger.info(`Speaker identification complete: ${stats.total} speakers identified`);
-      this.logger.info(`Speaker breakdown: ${JSON.stringify(stats.byType)}`);
-      if (stats.unmatched.length > 0) {
-        this.logger.warn(`Unmatched speakers: ${stats.unmatched.join(', ')}`);
-      }
-    }
+    // Extract and update Trial metadata from SessionSections  
+    await this.updateTrialMetadataFromSections(trialId);
+    
+    // Phase 1: Skip speaker statistics - Phase 2 will handle speaker resolution
     
     this.logger.info(`Content parsing complete: ${metadata.lines.size} lines processed`);
   }
@@ -478,14 +475,8 @@ export class ContentParser {
         continue;
       }
       
-      // Update examination context
-      if (this.examinationContext) {
-        await this.examinationContext.updateFromLine({
-          text: line.cleanText,
-          lineNumber: lineNum,
-          timestamp: line.timestamp
-        });
-      }
+      // Phase 1: Skip examination context update
+      // Phase 2 will handle examination context
       
       // Extract speaker with enhanced identification
       const speakerInfo = await this.identifySpeaker(line.cleanText, lineNum);
@@ -524,57 +515,9 @@ export class ContentParser {
     text: string,
     lineNumber: number
   ): Promise<{ prefix: string; type: string; speaker?: any } | null> {
-    if (!text || !this.speakerRegistry || !this.examinationContext) {
-      return this.extractSpeaker(text);
-    }
-    
-    // First try to resolve through examination context (Q&A formats)
-    const contextualSpeaker = await this.examinationContext.resolveSpeaker({
-      text,
-      lineNumber
-    });
-    
-    if (contextualSpeaker) {
-      return {
-        prefix: contextualSpeaker.speakerPrefix,
-        type: contextualSpeaker.speakerType,
-        speaker: contextualSpeaker
-      };
-    }
-    
-    // Extract speaker prefix from text
-    const speakerInfo = this.extractSpeaker(text);
-    if (!speakerInfo) return null;
-    
-    // Handle special cases
-    if (speakerInfo.type === 'BY_ATTORNEY') {
-      // This sets the examining attorney context but doesn't create a statement
-      return null;
-    }
-    
-    // Try to find or create speaker in registry
-    let speaker = null;
-    
-    if (speakerInfo.type === 'JUDGE' || speakerInfo.prefix === 'THE COURT') {
-      speaker = this.speakerRegistry.getTheCourt();
-    } else if (speakerInfo.type === 'QUESTION' || speakerInfo.type === 'ANSWER') {
-      // These should have been handled by examination context
-      // If not, try contextual lookup
-      speaker = this.speakerRegistry.resolveContextualSpeaker(speakerInfo.prefix);
-    } else {
-      // Standard speaker lookup/creation
-      const speakerType = this.mapToSpeakerType(speakerInfo.type);
-      speaker = await this.speakerRegistry.findOrCreateSpeaker(
-        speakerInfo.prefix,
-        speakerType
-      );
-    }
-    
-    return {
-      prefix: speakerInfo.prefix,
-      type: speakerInfo.type,
-      speaker
-    };
+    // Phase 1: Only extract basic speaker prefixes, no resolution
+    // Q&A resolution and examination context should be handled in Phase 2
+    return this.extractSpeaker(text);
   }
   
   private mapToSpeakerType(type: string): SpeakerType {
@@ -603,20 +546,13 @@ export class ContentParser {
     if (text[0] === ' ' || text[0] === '\t') return null;
     
     // Check for Q. and A. patterns (exact matches only)
-    // Must be "Q." or "A." with period, not bare Q or A
+    // Phase 1: Store raw Q. and A. prefixes without resolution
+    // Phase 2 will handle examination context and speaker resolution
     if (text === 'Q.' || text.startsWith('Q. ')) {
-      // Only valid during witness examination
-      if (this.examinationContext && this.examinationContext.isInExamination()) {
-        return { prefix: 'Q.', type: 'QUESTION' };
-      }
-      return null; // Not in examination context
+      return { prefix: 'Q.', type: 'QUESTION' };
     }
     if (text === 'A.' || text.startsWith('A. ')) {
-      // Only valid during witness examination
-      if (this.examinationContext && this.examinationContext.isInExamination()) {
-        return { prefix: 'A.', type: 'ANSWER' };
-      }
-      return null; // Not in examination context
+      return { prefix: 'A.', type: 'ANSWER' };
     }
     
     // Check for colon-delimited speakers
@@ -647,18 +583,12 @@ export class ContentParser {
           const title = parts[0]; // MR., MS., etc.
           const lastName = parts[parts.length - 1];
           
-          // Must match a known attorney from the registry
-          if (this.speakerRegistry) {
-            const attorney = this.speakerRegistry.findAttorneyByHandle(handle);
-            if (attorney) {
-              return {
-                prefix: handle,
-                type: 'ATTORNEY'
-              };
-            }
-          }
-          // If no match in registry, NOT a speaker
-          return null;
+          // Phase 1: Store attorney prefix without validation
+          // Phase 2 will verify against registry
+          return {
+            prefix: handle,
+            type: 'ATTORNEY'
+          };
         }
       }
       
@@ -725,16 +655,8 @@ export class ContentParser {
       );
     }
     
-    const proceedingsSection = structure.sections.find(s => s.section === DocumentSection.PROCEEDINGS);
-    
-    if (proceedingsSection) {
-      await this.processProceedingsMetadata(
-        metadata,
-        proceedingsSection,
-        sessionId,
-        trialId
-      );
-    }
+    // PROCEEDINGS section should not be created as a SessionSection
+    // The proceedings content is part of the main transcript body
     
     // Process CERTIFICATION section
     const certificationSection = structure.sections.find(s => s.section === DocumentSection.CERTIFICATION);
@@ -834,28 +756,161 @@ export class ContentParser {
     return match ? match[1].trim() : null;
   }
 
-  private async processProceedingsMetadata(
-    metadata: ParsedMetadata,
-    section: SectionBoundary,
-    sessionId: number,
-    trialId: number
-  ): Promise<void> {
-    await this.prisma.sessionSection.create({
-      data: {
-        sessionId,
+  
+  private async updateTrialMetadataFromSections(trialId: number): Promise<void> {
+    this.logger.info('Extracting trial metadata from SessionSections');
+    
+    // Get the CASE_TITLE section
+    const caseTitleSection = await this.prisma.sessionSection.findFirst({
+      where: {
         trialId,
-        sectionType: 'PROCEEDINGS',
-        sectionText: '',
-        orderIndex: 2,
-        metadata: {
-          startPage: section.startPage,
-          endPage: section.endPage,
-          lineCount: section.endLine - section.startLine + 1,
-          startLine: section.startLine,
-          endLine: section.endLine
-        },
-        createdAt: new Date()
+        sectionType: 'CASE_TITLE'
       }
     });
+    
+    // Get ALL COURT_AND_DIVISION sections (there may be multiple lines)
+    const courtSections = await this.prisma.sessionSection.findMany({
+      where: {
+        trialId,
+        sectionType: 'COURT_AND_DIVISION'
+      },
+      orderBy: {
+        orderIndex: 'asc'
+      }
+    });
+    
+    const updateData: any = {};
+    
+    if (caseTitleSection) {
+      // Clean up the case title - remove extra spaces and line breaks but preserve format
+      const caseTitleRaw = caseTitleSection.sectionText;
+      
+      // Split by )( delimiter to separate left (parties) from right (case info)
+      // For now, hardcode )( as it's the delimiter for Vocalife trial
+      // TODO: Get delimiter from trialstyle.json or detect automatically
+      const delimiter = ')(';
+      
+      // Split each line by delimiter and collect both sides
+      const lines = caseTitleRaw.split('\n');
+      const leftSideParts: string[] = [];
+      const rightSideParts: string[] = [];
+      
+      for (const line of lines) {
+        if (line.includes(delimiter)) {
+          const parts = line.split(delimiter);
+          if (parts[0]) {
+            leftSideParts.push(parts[0].trim());
+          }
+          if (parts[1]) {
+            rightSideParts.push(parts[1].trim());
+          }
+        } else {
+          // If no delimiter, include the whole line on left (might be continuation)
+          leftSideParts.push(line.trim());
+        }
+      }
+      
+      // Join the left side parts (party names) and clean up
+      const leftSideText = leftSideParts
+        .join(' ')
+        .replace(/[\(\)]/g, ' ')  // Remove remaining parentheses
+        .replace(/\s+/g, ' ')  // Collapse multiple spaces
+        .trim();
+      
+      // Join the right side parts (case info, dates, times)
+      const rightSideText = rightSideParts
+        .join(' ')
+        .replace(/[\(\)]/g, ' ')  // Remove remaining parentheses
+        .replace(/\s+/g, ' ')  // Collapse multiple spaces
+        .trim();
+      
+      // Extract case number from right side (format: 2:19-CV-123-JRG or similar)
+      const caseNumberMatch = rightSideText.match(/\b(\d+:\d+-CV-\d+-\w+)\b/);
+      if (caseNumberMatch) {
+        updateData.caseNumber = caseNumberMatch[1];
+        this.logger.info(`Extracted case number: ${caseNumberMatch[1]}`);
+      }
+      
+      // Extract session start time from right side (format: 9:24 A.M. or similar)
+      const timeMatch = rightSideText.match(/\b(\d{1,2}:\d{2}\s*[AP]\.?M\.?)\b/i);
+      if (timeMatch) {
+        // Store in metadata for now - could update Session.startTime later
+        this.logger.info(`Found session start time in CASE_TITLE: ${timeMatch[1]}`);
+      }
+      
+      // Extract plaintiff and defendant from LEFT side based on VS. or V.
+      let plaintiff = '';
+      let defendant = '';
+      let vsDelimiter = '';
+      
+      if (leftSideText.includes(' VS. ')) {
+        vsDelimiter = ' VS. ';
+        const parts = leftSideText.split(' VS. ');
+        if (parts.length >= 2) {
+          plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
+          defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
+        }
+      } else if (leftSideText.includes(' V. ')) {
+        vsDelimiter = ' V. ';
+        const parts = leftSideText.split(' V. ');
+        if (parts.length >= 2) {
+          plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
+          defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
+        }
+      }
+      
+      if (plaintiff) {
+        updateData.plaintiff = plaintiff;
+        this.logger.info(`Extracted plaintiff: ${plaintiff}`);
+      }
+      
+      if (defendant) {
+        updateData.defendant = defendant;
+        this.logger.info(`Extracted defendant: ${defendant}`);
+      }
+      
+      // Set the trial name preserving the original VS. or V. format
+      if (plaintiff && defendant && vsDelimiter) {
+        updateData.name = `${plaintiff}${vsDelimiter}${defendant}`;
+      }
+    }
+    
+    if (courtSections.length > 0) {
+      // Combine all court section lines
+      const courtTextCombined = courtSections
+        .map(s => s.sectionText)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      // Extract court components - these are constants for all test cases
+      if (courtTextCombined.includes('UNITED STATES DISTRICT COURT')) {
+        updateData.court = 'UNITED STATES DISTRICT COURT';
+      }
+      
+      if (courtTextCombined.includes('EASTERN DISTRICT OF TEXAS')) {
+        updateData.courtDistrict = 'EASTERN DISTRICT OF TEXAS';
+      }
+      
+      if (courtTextCombined.includes('MARSHALL DIVISION')) {
+        updateData.courtDivision = 'MARSHALL DIVISION';
+      }
+      
+      this.logger.info(`Extracted court: ${updateData.court}`);
+      this.logger.info(`Extracted district: ${updateData.courtDistrict}`);
+      this.logger.info(`Extracted division: ${updateData.courtDivision}`);
+    }
+    
+    // Only update if we have data to update
+    if (Object.keys(updateData).length > 0) {
+      await this.prisma.trial.update({
+        where: { id: trialId },
+        data: updateData
+      });
+      
+      this.logger.info(`Updated trial metadata for trial ${trialId}`);
+    } else {
+      this.logger.warn('No trial metadata found in SessionSections to update');
+    }
   }
 }

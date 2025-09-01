@@ -8,6 +8,7 @@ import {
 
 export class MetadataExtractor {
   private logger: Logger;
+  private pageHeaderLines: number;
   
   private readonly PAGE_HEADER_PATTERN = /^\s*(\d+)\s+(.+?)\s+(\d+)\s*$/;
   
@@ -21,8 +22,9 @@ export class MetadataExtractor {
     NUMBER_ONLY: /^(\d+)\s+(.*)$/
   };
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, pageHeaderLines: number = 2) {
     this.logger = logger;
+    this.pageHeaderLines = pageHeaderLines;
   }
 
   async extractMetadata(fileContent: string[], filePath: string): Promise<ParsedMetadata> {
@@ -158,7 +160,7 @@ export class MetadataExtractor {
             parsedTrialPage: pageNum,
             headerText: `${line.trim()}\n${nextLine.trim()}`,
             headerLines: [line, nextLine],
-            skipLines: 1
+            skipLines: this.pageHeaderLines - 1  // Use configured header lines
           };
         }
       }

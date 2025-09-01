@@ -33,7 +33,7 @@ export class MultiPassTranscriptParser {
       ...config
     };
 
-    this.metadataExtractor = new MetadataExtractor(logger);
+    this.metadataExtractor = new MetadataExtractor(logger, this.config.pageHeaderLines);
     this.structureAnalyzer = new StructureAnalyzer(logger);
     this.contentParser = new ContentParser(prisma, logger);
   }

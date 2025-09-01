@@ -185,7 +185,7 @@ export class FileConventionDetector {
     const match = fileName.match(this.patterns.DATEMORNAFT);
     if (!match) return null;
     
-    const [, dateStr, , session] = match;
+    const [, dateStr, session] = match;
     
     // Parse date from format like "10_1_20"
     const dateParts = dateStr.split('_');

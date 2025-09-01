@@ -57,6 +57,7 @@ export interface MultiPassConfig {
   validatePasses: boolean;
   debugOutput: boolean;
   batchSize: number;
+  pageHeaderLines?: number;  // Number of lines to skip for page headers (default: 2)
 }
 
 export interface PassResult<T> {

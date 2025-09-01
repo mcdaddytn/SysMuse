@@ -77,16 +77,16 @@ export class StructureAnalyzer {
     }
     
     // Find where CERTIFICATION section starts
+    // CERTIFICATION is ALWAYS in ALL CAPS on its own line at the end of the transcript
     for (const [lineNum, line] of metadata.lines) {
-      const text = line.cleanText;
+      const text = line.cleanText.trim();
       
-      if (/CERTIFICATION/i.test(text) || /CERTIFICATE/i.test(text)) {
-        // Make sure we're past proceedings section
-        if (proceedingsStartLine === -1 || lineNum > proceedingsStartLine + 100) {
-          certificationStartLine = lineNum;
-          this.logger.info(`Found CERTIFICATION section at line ${lineNum}: ${text}`);
-          break;
-        }
+      // EXACT match for "CERTIFICATION" - no regex, no case-insensitive
+      // This is ALWAYS at the end of the transcript, in ALL CAPS, on its own line
+      if (text === 'CERTIFICATION') {
+        certificationStartLine = lineNum;
+        this.logger.info(`Found CERTIFICATION section at line ${lineNum}: ${text}`);
+        break;
       }
     }
     

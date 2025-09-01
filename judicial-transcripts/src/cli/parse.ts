@@ -133,18 +133,84 @@ program
             
             const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
             
+            // Process subdirectories if configured
+            let actualInputDir = config.inputDir;
+            
+            // Check if we should process subdirectories
+            if (config.processSubDirs) {
+              // When processing subdirectories after PDF conversion, look in the output directory
+              // for the text files, not the input PDF directory
+              let searchDir = config.inputDir;
+              
+              // Check if this is a PDF directory that's been converted
+              const isPdfDir = config.inputDir.includes('/pdf');
+              if (isPdfDir && config.outputDir) {
+                // Look for text files in the output directory instead
+                searchDir = config.outputDir;
+                logger.info(`Looking for converted text files in output directory: ${searchDir}`);
+              }
+              
+              // Get list of subdirectories
+              const subdirs = fs.readdirSync(searchDir, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+              
+              // Filter by includedTrials if specified
+              const includedTrials = (config as any).includedTrials || [];
+              const activeTrials = (config as any).activeTrials || [];
+              const trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
+              
+              if (trialsToProcess.length > 0) {
+                // Find matching subdirectory
+                const matchingDir = subdirs.find(dir => 
+                  trialsToProcess.some((trial: string) => dir.includes(trial))
+                );
+                
+                if (matchingDir) {
+                  actualInputDir = path.join(searchDir, matchingDir);
+                  logger.info(`Processing trial directory: ${matchingDir}`);
+                  
+                  // Load trialstyle.json from the subdirectory
+                  const subDirTrialStylePath = path.join(actualInputDir, 'trialstyle.json');
+                  if (fs.existsSync(subDirTrialStylePath)) {
+                    try {
+                      trialStyleConfig = JSON.parse(fs.readFileSync(subDirTrialStylePath, 'utf-8'));
+                      logger.info(`Loaded trialstyle.json from ${actualInputDir}`);
+                    } catch (error) {
+                      logger.warn(`Failed to parse trialstyle.json: ${error}`);
+                    }
+                  }
+                } else {
+                  logger.warn(`No matching trial directory found for: ${trialsToProcess.join(', ')}`);
+                  logger.info('✅ Phase 1 completed successfully');
+                  return;
+                }
+              }
+            } else if (!fs.existsSync(trialStylePath)) {
+              // Update trialStylePath for the actual directory
+              const trialStylePath = path.join(actualInputDir, 'trialstyle.json');
+              if (fs.existsSync(trialStylePath)) {
+                try {
+                  trialStyleConfig = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
+                  logger.info(`Loaded trialstyle.json from ${actualInputDir}`);
+                } catch (error) {
+                  logger.warn(`Failed to parse trialstyle.json: ${error}`);
+                }
+              }
+            }
+            
             // ALWAYS use orderedFiles from trialstyle.json if available
             let files: string[];
             if (trialStyleConfig?.orderedFiles && trialStyleConfig.orderedFiles.length > 0) {
               // Always use the orderedFiles from trialstyle.json
               files = trialStyleConfig.orderedFiles.filter(f => {
-                const fullPath = path.join(config.inputDir, f);
+                const fullPath = path.join(actualInputDir, f);
                 return fs.existsSync(fullPath) && f.endsWith('.txt');
               });
               logger.info(`Using orderedFiles from trialstyle.json (${files.length} files)`);
             } else {
               // Fall back to directory listing with sorting only if no trialstyle.json
-              files = fs.readdirSync(config.inputDir)
+              files = fs.readdirSync(actualInputDir)
                 .filter(f => f.endsWith('.txt'));
               
               // Only apply custom sorting if no orderedFiles available
@@ -193,6 +259,13 @@ program
             }
             }
             
+            // Skip if no files to process
+            if (files.length === 0) {
+              logger.warn(`No transcript files found in ${actualInputDir}`);
+              logger.info('✅ Phase 1 completed successfully');
+              return;
+            }
+            
             // Feature 03C: Extract case number from various sources
             let caseNumber: string | undefined;
             let trialName: string;
@@ -205,7 +278,7 @@ program
             
             // Priority 2: Try to extract from first transcript file
             if (!caseNumber && files.length > 0) {
-              const firstFilePath = path.join(config.inputDir, files[0]);
+              const firstFilePath = path.join(actualInputDir, files[0]);
               if (fs.existsSync(firstFilePath)) {
                 const firstContent = fs.readFileSync(firstFilePath, 'utf-8').substring(0, 1000);
                 const extracted = caseNumberExtractor.extractFromTranscript(firstContent);
@@ -224,7 +297,7 @@ program
             
             // Priority 4: Generate unique identifier from folder name
             if (!caseNumber) {
-              const folderName = trialStyleConfig?.folderName || path.basename(config.inputDir);
+              const folderName = trialStyleConfig?.folderName || path.basename(actualInputDir);
               // Create a unique identifier based on folder name and timestamp
               const timestamp = new Date().toISOString().split('T')[0];
               caseNumber = `UNKNOWN-${folderName.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
@@ -232,23 +305,41 @@ program
             }
             
             // Determine trial name from folder or config
-            const folderName = trialStyleConfig?.folderName || path.basename(config.inputDir);
+            const folderName = trialStyleConfig?.folderName || path.basename(actualInputDir);
             if (config.trial?.name) {
               trialName = config.trial.name;
             } else {
               trialName = folderName;
             }
             
-            // Create or get trial
+            // Normalize case number for comparison
+            const normalizeCaseNumber = (caseNo: string): string => {
+              return caseNo.replace(/[^0-9a-zA-Z]/g, '').toLowerCase();
+            };
+            
+            const shortName = trialStyleConfig?.folderName || path.basename(actualInputDir);
+            
+            // Create or get trial - check both caseNumber and shortName
             let trial = await prisma.trial.findFirst({
-              where: { caseNumber }
+              where: {
+                OR: [
+                  { caseNumber },
+                  { shortName },
+                  // Also check normalized case number
+                  { 
+                    caseNumber: {
+                      contains: normalizeCaseNumber(caseNumber)
+                    }
+                  }
+                ]
+              }
             });
             
             if (!trial) {
               trial = await prisma.trial.create({
                 data: {
                   name: trialName,
-                  shortName: trialStyleConfig?.folderName || path.basename(config.inputDir),
+                  shortName,
                   caseNumber,
                   court: config.trial?.court || 'UNKNOWN COURT',
                   plaintiff: trialStyleConfig?.metadata?.plaintiff || 'Unknown Plaintiff',
@@ -258,11 +349,34 @@ program
               logger.info(`Created new trial: ${trialName} (${caseNumber})`);
             } else {
               logger.info(`Using existing trial: ${trial.name} (${caseNumber})`);
+              
+              // Update trial if we have better metadata
+              const updateData: any = {};
+              if (trial.name === 'Unknown Trial' && trialName !== 'Unknown Trial') {
+                updateData.name = trialName;
+              }
+              if (!trial.shortName && shortName) {
+                updateData.shortName = shortName;
+              }
+              if (trial.plaintiff === 'Unknown Plaintiff' && trialStyleConfig?.metadata?.plaintiff) {
+                updateData.plaintiff = trialStyleConfig.metadata.plaintiff;
+              }
+              if (trial.defendant === 'Unknown Defendant' && trialStyleConfig?.metadata?.defendant) {
+                updateData.defendant = trialStyleConfig.metadata.defendant;
+              }
+              
+              if (Object.keys(updateData).length > 0) {
+                trial = await prisma.trial.update({
+                  where: { id: trial.id },
+                  data: updateData
+                });
+                logger.info('Updated trial with better metadata');
+              }
             }
             
             // Process files using multi-pass parser
             for (const file of files) {
-              const filePath = path.join(config.inputDir, file);
+              const filePath = path.join(actualInputDir, file);
               logger.info(`Processing: ${file}`);
               
               // Extract session date from filename

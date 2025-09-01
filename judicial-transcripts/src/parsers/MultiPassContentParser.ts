@@ -757,6 +757,37 @@ export class ContentParser {
   }
 
   
+  private async detectSummaryCenterDelimiter(lines: string[]): Promise<string> {
+    // Check if delimiter is configured in trialstyle
+    // TODO: Get from trialstyle.json if not "AUTO"
+    
+    // Auto-detect delimiter by checking frequency
+    const candidates = [')(', ') (', '|', '||', ' v. ', ' vs. ', ' V. ', ' VS. '];
+    const counts = new Map<string, number>();
+    
+    for (const line of lines) {
+      for (const delimiter of candidates) {
+        if (line.includes(delimiter)) {
+          counts.set(delimiter, (counts.get(delimiter) || 0) + 1);
+        }
+      }
+    }
+    
+    // Return delimiter with highest count > 5
+    let maxCount = 0;
+    let bestDelimiter = ')('; // default
+    
+    for (const [delimiter, count] of counts) {
+      if (count > maxCount && count >= 5) {
+        maxCount = count;
+        bestDelimiter = delimiter;
+      }
+    }
+    
+    this.logger.info(`Detected summaryCenterDelimiter: "${bestDelimiter}" (found ${maxCount} times)`);
+    return bestDelimiter;
+  }
+  
   private async updateTrialMetadataFromSections(trialId: number): Promise<void> {
     this.logger.info('Extracting trial metadata from SessionSections');
     
@@ -785,13 +816,11 @@ export class ContentParser {
       // Clean up the case title - remove extra spaces and line breaks but preserve format
       const caseTitleRaw = caseTitleSection.sectionText;
       
-      // Split by )( delimiter to separate left (parties) from right (case info)
-      // For now, hardcode )( as it's the delimiter for Vocalife trial
-      // TODO: Get delimiter from trialstyle.json or detect automatically
-      const delimiter = ')(';
-      
       // Split each line by delimiter and collect both sides
       const lines = caseTitleRaw.split('\n');
+      
+      // Detect or use configured delimiter
+      const delimiter = await this.detectSummaryCenterDelimiter(lines);
       const leftSideParts: string[] = [];
       const rightSideParts: string[] = [];
       
@@ -824,18 +853,141 @@ export class ContentParser {
         .replace(/\s+/g, ' ')  // Collapse multiple spaces
         .trim();
       
-      // Extract case number from right side (format: 2:19-CV-123-JRG or similar)
-      const caseNumberMatch = rightSideText.match(/\b(\d+:\d+-CV-\d+-\w+)\b/);
+      // Parse right side into separate SessionSections
+      // Get the highest orderIndex from existing sections
+      const maxOrderIndex = await this.prisma.sessionSection.aggregate({
+        where: { trialId },
+        _max: { orderIndex: true }
+      });
+      let nextOrderIndex = (maxOrderIndex._max.orderIndex || 0) + 1;
+      
+      // Extract and create CIVIL_ACTION_NO section
+      const caseNumberMatch = rightSideText.match(/(?:Civil Action No\.|Case)\s*(\d+:\d+-cv-\d+-\w+)/i);
       if (caseNumberMatch) {
         updateData.caseNumber = caseNumberMatch[1];
         this.logger.info(`Extracted case number: ${caseNumberMatch[1]}`);
+        
+        // Get sessionId from the first existing section
+        const firstSection = await this.prisma.sessionSection.findFirst({
+          where: { trialId },
+          select: { sessionId: true }
+        });
+        
+        if (firstSection) {
+          await this.prisma.sessionSection.create({
+            data: {
+              sessionId: firstSection.sessionId,
+              trialId,
+              sectionType: 'CIVIL_ACTION_NO',
+              sectionText: caseNumberMatch[1],
+              orderIndex: nextOrderIndex++,
+              metadata: { source: 'CASE_TITLE_right_side' }
+            }
+          });
+        }
       }
       
-      // Extract session start time from right side (format: 9:24 A.M. or similar)
+      // Extract and create SESSION_START_TIME section
       const timeMatch = rightSideText.match(/\b(\d{1,2}:\d{2}\s*[AP]\.?M\.?)\b/i);
       if (timeMatch) {
-        // Store in metadata for now - could update Session.startTime later
-        this.logger.info(`Found session start time in CASE_TITLE: ${timeMatch[1]}`);
+        this.logger.info(`Found session start time: ${timeMatch[1]}`);
+        
+        const firstSection = await this.prisma.sessionSection.findFirst({
+          where: { trialId },
+          select: { sessionId: true }
+        });
+        
+        if (firstSection) {
+          await this.prisma.sessionSection.create({
+            data: {
+              sessionId: firstSection.sessionId,
+              trialId,
+              sectionType: 'SESSION_START_TIME',
+              sectionText: timeMatch[1],
+              orderIndex: nextOrderIndex++,
+              metadata: { source: 'CASE_TITLE_right_side' }
+            }
+          });
+          
+          // Also update Session.startTime
+          const timeStr = timeMatch[1].toUpperCase();
+          const timeParts = timeStr.match(/(\d{1,2}):(\d{2})\s*([AP])\.?M\.?/);
+          if (timeParts) {
+            let hours = parseInt(timeParts[1]);
+            const minutes = parseInt(timeParts[2]);
+            const isPM = timeParts[3] === 'P';
+            
+            if (isPM && hours !== 12) hours += 12;
+            if (!isPM && hours === 12) hours = 0;
+            
+            // Get session date
+            const session = await this.prisma.session.findUnique({
+              where: { id: firstSection.sessionId },
+              select: { sessionDate: true }
+            });
+            
+            if (session && session.sessionDate) {
+              const startTime = new Date(session.sessionDate);
+              startTime.setHours(hours, minutes, 0, 0);
+              
+              await this.prisma.session.update({
+                where: { id: firstSection.sessionId },
+                data: { startTime: startTime.toISOString() }
+              });
+            }
+          }
+        }
+      }
+      
+      // Extract and create TRIAL_DATE section
+      // Need to remove location prefix (e.g., "MARSHALL, TEXAS" from "MARSHALL, TEXAS OCTOBER 1, 2020")
+      const dateMatch = rightSideText.match(/\b([A-Z]+\s+\d{1,2},?\s+\d{4})\b/);
+      if (dateMatch) {
+        this.logger.info(`Found trial date: ${dateMatch[1]}`);
+        
+        const firstSection = await this.prisma.sessionSection.findFirst({
+          where: { trialId },
+          select: { sessionId: true }
+        });
+        
+        if (firstSection) {
+          await this.prisma.sessionSection.create({
+            data: {
+              sessionId: firstSection.sessionId,
+              trialId,
+              sectionType: 'TRIAL_DATE',
+              sectionText: dateMatch[1],
+              orderIndex: nextOrderIndex++,
+              metadata: { source: 'CASE_TITLE_right_side' }
+            }
+          });
+        }
+      }
+      
+      // Extract and create TRIAL_LOCATION section (usually city, state)
+      // Look for pattern like "MARSHALL, TEXAS" - city and state in caps
+      const locationMatch = rightSideText.match(/\b([A-Z]+,\s+[A-Z]+)\b/);
+      if (locationMatch && !locationMatch[1].match(/\d/) && !locationMatch[1].match(/OCTOBER|NOVEMBER|DECEMBER|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER/)) { 
+        // Ensure no numbers (not a date) and not a month name
+        this.logger.info(`Found trial location: ${locationMatch[1]}`);
+        
+        const firstSection = await this.prisma.sessionSection.findFirst({
+          where: { trialId },
+          select: { sessionId: true }
+        });
+        
+        if (firstSection) {
+          await this.prisma.sessionSection.create({
+            data: {
+              sessionId: firstSection.sessionId,
+              trialId,
+              sectionType: 'TRIAL_LOCATION',
+              sectionText: locationMatch[1],
+              orderIndex: nextOrderIndex++,
+              metadata: { source: 'CASE_TITLE_right_side' }
+            }
+          });
+        }
       }
       
       // Extract plaintiff and defendant from LEFT side based on VS. or V.

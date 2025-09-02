@@ -203,9 +203,157 @@ export class Phase2Processor {
   }
 
   /**
+   * Load participants (attorneys, judge) from SessionSection metadata
+   */
+  private async loadParticipantsFromSessionSections(trialId: number): Promise<void> {
+    logger.info('Loading participants from SessionSection metadata...');
+    
+    // Load JUDGE_INFO sections
+    const judgeSections = await this.prisma.sessionSection.findMany({
+      where: { 
+        trialId,
+        sectionType: 'JUDGE_INFO',
+        metadata: { not: {} }
+      }
+    });
+    
+    // Find the first non-empty judge info
+    for (const section of judgeSections) {
+      const metadata = section.metadata as any;
+      if (metadata?.name) {
+        // Check if judge already exists
+        let judge = await this.prisma.judge.findFirst({
+          where: { trialId }
+        });
+        
+        if (!judge) {
+          // Create speaker for judge
+          const judgeSpeaker = await this.prisma.speaker.create({
+            data: {
+              trialId,
+              speakerPrefix: 'THE COURT',
+              speakerHandle: 'JUDGE',
+              speakerType: 'JUDGE'
+            }
+          });
+          
+          // Create judge record
+          judge = await this.prisma.judge.create({
+            data: {
+              trialId,
+              name: metadata.name,
+              title: metadata.title || 'UNITED STATES DISTRICT JUDGE',
+              honorific: metadata.honorific || 'HONORABLE',
+              speakerId: judgeSpeaker.id
+            }
+          });
+          
+          logger.info(`Created judge: ${judge.name}`);
+        }
+        break; // Only need one judge
+      }
+    }
+    
+    // Load APPEARANCES sections for attorneys
+    const appearancesSections = await this.prisma.sessionSection.findMany({
+      where: { 
+        trialId,
+        sectionType: 'APPEARANCES',
+        metadata: { not: {} }
+      }
+    });
+    
+    // Process attorneys from appearances
+    for (const section of appearancesSections) {
+      const metadata = section.metadata as any;
+      
+      // Process plaintiff attorneys
+      if (metadata?.plaintiffAttorneys && Array.isArray(metadata.plaintiffAttorneys)) {
+        for (const attorneyData of metadata.plaintiffAttorneys) {
+          if (attorneyData.name && !attorneyData.name.includes('L.L.P') && !attorneyData.name.includes('LLP')) {
+            await this.createAttorneyFromMetadata(trialId, attorneyData, 'PLAINTIFF');
+          }
+        }
+      }
+      
+      // Process defendant attorneys
+      if (metadata?.defendantAttorneys && Array.isArray(metadata.defendantAttorneys)) {
+        for (const attorneyData of metadata.defendantAttorneys) {
+          if (attorneyData.name && !attorneyData.name.includes('L.L.P') && !attorneyData.name.includes('LLP')) {
+            await this.createAttorneyFromMetadata(trialId, attorneyData, 'DEFENDANT');
+          }
+        }
+      }
+    }
+  }
+  
+  /**
+   * Create attorney from SessionSection metadata
+   */
+  private async createAttorneyFromMetadata(
+    trialId: number, 
+    attorneyData: any, 
+    side: 'PLAINTIFF' | 'DEFENDANT'
+  ): Promise<void> {
+    // Parse name to get prefix (MR./MS./etc)
+    const nameParts = attorneyData.name.split(' ');
+    let speakerPrefix = '';
+    let lastName = '';
+    
+    // Simple parsing - can be improved
+    if (nameParts.length >= 2) {
+      lastName = nameParts[nameParts.length - 1].toUpperCase();
+      
+      // Guess prefix based on common first names
+      // This is simplified - real implementation would be more sophisticated
+      speakerPrefix = `MR. ${lastName}`;
+    }
+    
+    // Check if attorney already exists
+    const existing = await this.prisma.attorney.findFirst({
+      where: {
+        name: attorneyData.name,
+        AND: [
+          { speaker: { trialId } }
+        ]
+      },
+      include: { speaker: true }
+    });
+    
+    if (existing) {
+      return; // Already exists
+    }
+    
+    // Create speaker for attorney
+    const speaker = await this.prisma.speaker.create({
+      data: {
+        trialId,
+        speakerPrefix,
+        speakerHandle: `ATTORNEY_${lastName}`,
+        speakerType: 'ATTORNEY'
+      }
+    });
+    
+    // Create attorney record
+    await this.prisma.attorney.create({
+      data: {
+        name: attorneyData.name,
+        speakerPrefix,
+        lastName,
+        speakerId: speaker.id
+      }
+    });
+    
+    logger.info(`Created attorney: ${attorneyData.name} (${side})`);
+  }
+
+  /**
    * Load existing entities into context
    */
   private async loadExistingEntities(trialId: number): Promise<void> {
+    // First, parse and create attorneys/judge from SessionSection metadata
+    await this.loadParticipantsFromSessionSections(trialId);
+    
     // Load attorneys
     const attorneys = await this.attorneyService.getAttorneysForTrial(trialId);
     for (const attorney of attorneys) {
@@ -1108,6 +1256,13 @@ export class Phase2Processor {
     // Check if line has a speaker prefix (from Phase 1 parsing)
     if (!line.speakerPrefix) return false;
     
+    // IMPORTANT: Skip "BY MR./MS." lines - these are attorney indicators, not speakers
+    // They should be handled by checkExaminingAttorney, not create speaker statements
+    if (line.speakerPrefix.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)/)) {
+      logger.debug(`Skipping BY MR./MS. line as speaker statement: ${line.speakerPrefix}`);
+      return false;
+    }
+    
     // Save current event if it's different
     if (state.currentEvent && 
         (state.currentEvent.type !== EventType.STATEMENT || 
@@ -1340,8 +1495,16 @@ export class Phase2Processor {
       };
     }
     
-    // Check for known anonymous speakers
-    const knownAnonymousSpeakers = ['COURT SECURITY OFFICER', 'BAILIFF', 'COURT REPORTER', 'INTERPRETER'];
+    // Check for known anonymous speakers (limited to actual court personnel)
+    const knownAnonymousSpeakers = [
+      'COURT SECURITY OFFICER', 
+      'COURTROOM DEPUTY',
+      'BAILIFF', 
+      'COURT REPORTER', 
+      'INTERPRETER',
+      'THE CLERK',
+      'CLERK'
+    ];
     if (knownAnonymousSpeakers.includes(upperPrefix)) {
       const speakerId = await this.witnessJurorService.createAnonymousSpeaker(
         this.context.trialId,
@@ -1358,20 +1521,13 @@ export class Phase2Processor {
       };
     }
     
-    // Create anonymous speaker as last resort
-    const speakerId = await this.witnessJurorService.createAnonymousSpeaker(
-      this.context.trialId,
-      upperPrefix
-    );
+    // Log unmatched speaker and return null instead of creating anonymous
+    logger.warn(`Unmatched speaker prefix: ${upperPrefix} - not creating anonymous speaker`);
+    this.stats.unmatchedSpeakers.push(upperPrefix);
     
-    this.stats.anonymousSpeakers++;
-    
-    return {
-      id: speakerId,
-      speakerPrefix: upperPrefix,
-      speakerHandle: `ANONYMOUS_${upperPrefix.replace(/\s+/g, '_')}`,
-      speakerType: SpeakerType.ANONYMOUS
-    };
+    // Return null - we don't want to create anonymous speakers for unrecognized prefixes
+    // This will prevent statements from being created for unmatched speakers
+    return null;
   }
 
   /**

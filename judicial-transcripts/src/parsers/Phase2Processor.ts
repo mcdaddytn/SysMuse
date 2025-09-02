@@ -722,6 +722,16 @@ export class Phase2Processor {
     // Update service context
     this.witnessJurorService.setCurrentWitness(state.currentWitness);
     
+    // IMPORTANT: Also update the SpeakerRegistry if available
+    // This ensures the ExaminationContextManager can resolve A. properly
+    if (this.speakerRegistry && speaker) {
+      const speakerWithRelations = await this.speakerRegistry.findSpeakerByHandle(speaker.speakerHandle);
+      if (speakerWithRelations) {
+        this.speakerRegistry.setCurrentWitness(speakerWithRelations);
+        logger.debug(`Updated SpeakerRegistry with current witness: ${displayName}`);
+      }
+    }
+    
     logger.info(`Set current witness context: ${displayName}, A. will now resolve to this witness`);
     
     // Determine initial examination type based on context or default to DIRECT
@@ -932,6 +942,16 @@ export class Phase2Processor {
         
         // Update service context
         this.witnessJurorService.setCurrentWitness(state.currentWitness);
+        
+        // IMPORTANT: Also update the SpeakerRegistry if available
+        // This ensures the ExaminationContextManager can resolve A. properly
+        if (this.speakerRegistry && witness.speaker) {
+          const speakerWithRelations = await this.speakerRegistry.findSpeakerByHandle(witness.speaker.speakerHandle);
+          if (speakerWithRelations) {
+            this.speakerRegistry.setCurrentWitness(speakerWithRelations);
+            logger.debug(`Updated SpeakerRegistry with current witness: ${witness.displayName}`);
+          }
+        }
       }
     }
     

@@ -12,7 +12,9 @@
   },
   "trialSelectionMode": "INCLUDE",
   "activeTrials": [],
-  "includedTrials": [],
+  "includedTrials": [
+    "05 Personalized Media v Zynga"
+  ],
   "excludedTrials": [],
   "invalidTrials": [
     "23 Flexuspine V. Globus Medical",

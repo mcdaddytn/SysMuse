@@ -1,0 +1,29 @@
+{
+  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
+  "outputDir": "./output/multi-trial",
+  "logLevel": "info",
+  "processSubDirs": true,
+  "pdfToTextConfig": "./config/pdftotext.json",
+  "trialStyleConfig": "./config/trialstyle.json",
+  "batchProcessing": {
+    "enabled": true,
+    "createSubDirectories": true,
+    "preserveSourceStructure": true
+  },
+  "trialSelectionMode": "INCLUDE",
+  "includedTrials": [
+    "41 Varia Holdings Llc V. Ebay",
+    "42 Vocalife Amazon",
+    "43 Whirlpool V. Tst",
+    "44 Beneficial V. Advance",
+    "45 Chrimar V. Dell"
+  ],
+  "excludedTrials": [],
+  "invalidTrials": [
+    "23 Flexuspine V. Globus Medical",
+    "50 Packet Netscout",
+    "50 Packet",
+    "68 Contentguard Holdings, Inc. V. Google",
+    "72 Taylor V Turner"
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "fileConvention": "DATEAMPM",
   "fileSortingMode": "dateAndSession",
-  "pageHeaderLines": 2,
+  "pageHeaderLines": 1,
   "statementAppendMode": "space",
   "summaryCenterDelimiter": "AUTO",
   "orderedFiles": [],

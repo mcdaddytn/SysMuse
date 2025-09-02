@@ -74,10 +74,11 @@ export class Phase2Processor {
     byAttorney: /^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)/i,
     jurorSpeaker: /^(JUROR\s+[A-Z0-9]+)/i,
     
-    // Enhanced witness name patterns to handle quotes and nicknames
-    // Must start with capital letter and be at beginning of line (after timestamp/line number)
-    witnessName: /^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS(?:\s|,|$)/i,
-    witnessNameAlternate: /^([A-Z][A-Z\s,'"\.\-]+?)\s*,\s*(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS(?:\s|,|$)/i,
+    // Enhanced witness name patterns to handle all variations found in database
+    // Handles: PLAINTIFF'S, PLAINTIFFS', PLAINTIFFS, DEFENDANT'S, DEFENDANTS', DEFENDANTS, DEFENSE
+    // Case-sensitive match for structural WITNESS markers only
+    witnessName: /^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'?S?'?|DEFENDANT'?S?'?|DEFENSE)\s+WITNESS(?:ES)?(?:\s|,|$)/,
+    witnessNameAlternate: /^([A-Z][A-Z\s,'"\.\-]+?)\s*,\s*(PLAINTIFF'?S?'?|DEFENDANT'?S?'?|DEFENSE)\s+WITNESS(?:ES)?(?:\s|,|$)/,
     witnessWithNickname: /^([A-Z]+)\s+["']([A-Z]+)["']\s+([A-Z]+)/i,
     
     // Examination patterns
@@ -604,7 +605,7 @@ export class Phase2Processor {
       const nicknameMatch = lineText.match(this.PATTERNS.witnessWithNickname);
       if (nicknameMatch) {
         const fullName = `${nicknameMatch[1]} "${nicknameMatch[2]}" ${nicknameMatch[3]}`;
-        const witnessLineMatch = lineText.match(/(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i);
+        const witnessLineMatch = lineText.match(/(PLAINTIFF'?S?'?|DEFENDANT'?S?'?|DEFENSE)\s+WITNESS/);
         if (witnessLineMatch) {
           nameMatch = [lineText, fullName, witnessLineMatch[1]];
         }
@@ -625,7 +626,9 @@ export class Phase2Processor {
     const displayName = witnessName; // Keep original for display
     witnessName = witnessName.replace(/['"]/g, ''); // Remove quotes for storage
     
-    const witnessCaller = nameMatch[2].toUpperCase().includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
+    // Normalize witness caller to PLAINTIFF or DEFENDANT
+    const callerText = nameMatch[2].toUpperCase();
+    const witnessCaller = callerText.includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
     
     logger.info(`Witness called detected: ${displayName} (${witnessCaller})`);
     
@@ -844,12 +847,13 @@ export class Phase2Processor {
       logger.debug(`Looking at previous line for witness info: ${prevText}`);
       
       // Check if previous line contains witness information
-      const witnessMatch = prevText.match(/^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'S?|DEFENDANT'S?)\s+WITNESS/i);
+      const witnessMatch = prevText.match(/^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'?S?'?|DEFENDANT'?S?'?|DEFENSE)\s+WITNESS/);
       if (witnessMatch) {
         let witnessName = witnessMatch[1].trim();
         const displayName = witnessName;
         witnessName = witnessName.replace(/['"]/g, '');
-        const witnessCaller = witnessMatch[2].toUpperCase().includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
+        const callerText = witnessMatch[2].toUpperCase();
+        const witnessCaller = callerText.includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
         
         // Check for sworn status in previous line
         if (prevText.match(/\bPREVIOUSLY\s+SWORN\b/i)) {

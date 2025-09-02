@@ -91,7 +91,23 @@ export class Phase2Processor {
 
   constructor(config: TranscriptConfig) {
     this.config = config;
-    this.prisma = new PrismaClient();
+    // Enable Prisma query logging to debug filtering issues
+    this.prisma = new PrismaClient({
+      log: [
+        { level: 'query', emit: 'event' },
+        { level: 'warn', emit: 'event' },
+        { level: 'error', emit: 'event' }
+      ]
+    });
+    
+    // Log all SQL queries for debugging
+    (this.prisma as any).$on('query', (e: any) => {
+      // Only log session and event queries to reduce noise
+      if (e.query.includes('Session') || e.query.includes('TrialEvent')) {
+        logger.debug(`[PRISMA SQL] ${e.query}`);
+        logger.debug(`[PRISMA PARAMS] ${e.params}`);
+      }
+    });
     this.attorneyService = new AttorneyService(this.prisma);
     this.witnessJurorService = new WitnessJurorService(this.prisma);
     
@@ -131,6 +147,7 @@ export class Phase2Processor {
     
     try {
       this.context.trialId = trialId;
+      logger.info(`[PHASE2 DEBUG] Setting context.trialId = ${trialId}`);
       
       // Load existing entities
       await this.loadExistingEntities(trialId);
@@ -139,15 +156,20 @@ export class Phase2Processor {
       // Sessions are already properly ordered by their IDs, which reflects
       // the order they were created during phase 1 parsing
       // Phase 1 respects the trialstyle.json ordering, so we just sort by ID
+      logger.info(`[PHASE2 DEBUG] Querying sessions with trialId = ${trialId}`);
+      
       const sessions = await this.prisma.session.findMany({
         where: { trialId },
         orderBy: { id: 'asc' }  // Simple ID ordering - preserves phase 1 order
       });
       
-      logger.info(`Found ${sessions.length} sessions to process`);
+      logger.info(`[PHASE2 DEBUG] Found ${sessions.length} sessions for trialId ${trialId}`);
+      logger.info(`[PHASE2 DEBUG] Session IDs: ${sessions.map(s => s.id).join(', ')}`);
+      logger.info(`[PHASE2 DEBUG] Session trialIds: ${sessions.map(s => s.trialId).join(', ')}`);
       
       // Process each session
       for (const session of sessions) {
+        logger.info(`[PHASE2 DEBUG] Processing session ${session.id} of ${sessions.length} (trialId ${session.trialId})`);
         this.context.currentSession = session;
         await this.processSession(session);
       }
@@ -294,7 +316,8 @@ export class Phase2Processor {
    * Process a session
    */
   private async processSession(session: any): Promise<void> {
-    logger.info(`Processing session: ${session.sessionDate} - ${session.sessionType}`);
+    logger.info(`[PHASE2 DEBUG] Processing session ID ${session.id} for trial ${session.trialId}: ${session.sessionDate} - ${session.sessionType}`);
+    logger.info(`[PHASE2 DEBUG] Context trialId = ${this.context.trialId}`);
     
     // Initialize speaker services for this trial if not done yet
     if (!this.speakerRegistry) {
@@ -307,6 +330,8 @@ export class Phase2Processor {
     this.context.currentSession = session;
     
     // Get all lines for this session in order
+    logger.info(`[PHASE2 DEBUG] Fetching pages for sessionId = ${session.id}`);
+    
     const pages = await this.prisma.page.findMany({
       where: { 
         sessionId: session.id
@@ -320,11 +345,19 @@ export class Phase2Processor {
       }
     });
     
+    logger.info(`[PHASE2 DEBUG] Found ${pages.length} pages for sessionId ${session.id}`);
+    logger.info(`[PHASE2 DEBUG] Page IDs: ${pages.map(p => p.id).join(', ')}`)
+    
     // Flatten all lines from all pages
     const allLines: any[] = [];
+    let totalLinesFromPages = 0;
     for (const page of pages) {
+      const pageLineCount = page.lines.length;
+      totalLinesFromPages += pageLineCount;
+      logger.debug(`[PHASE2 DEBUG] Page ${page.id} has ${pageLineCount} lines`);
       allLines.push(...page.lines);
     }
+    logger.info(`[PHASE2 DEBUG] Total lines collected: ${allLines.length} (should equal ${totalLinesFromPages})`)
     
     // Initialize state with current witness context
     const state: ProcessingState = {
@@ -1390,6 +1423,7 @@ export class Phase2Processor {
     eventInfo: EventInfo,
     lines: any[]
   ): Promise<void> {
+    logger.debug(`[PHASE2 DEBUG] saveEvent called with trialId=${trialId}, sessionId=${sessionId}, eventType=${eventInfo.type}`);
     try {
       // Calculate duration if we have timestamps
       // For single-line events or events without endTime, set endTime = startTime
@@ -1416,6 +1450,7 @@ export class Phase2Processor {
       }
       
       // Create trial event
+      logger.debug(`[PHASE2 DEBUG] Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}`);
       const event = await this.prisma.trialEvent.create({
         data: {
           trialId,
@@ -1434,6 +1469,7 @@ export class Phase2Processor {
       });
       
       this.stats.totalEvents++;
+      logger.debug(`[PHASE2 DEBUG] Event saved. Total events so far: ${this.stats.totalEvents}`);
       
       // Create specific event type
       switch (eventInfo.type) {
@@ -1579,6 +1615,7 @@ export class Phase2Processor {
     logger.info('============================================================');
     logger.info('PHASE 2 PROCESSING COMPLETE');
     logger.info('============================================================');
+    logger.info(`[PHASE2 DEBUG] Final trialId in context: ${this.context.trialId}`);
     logger.info(`Total Events: ${this.stats.totalEvents}`);
     logger.info(`Statement Events: ${this.stats.statementEvents}`);
     logger.info(`Witness Events: ${this.stats.witnessEvents}`);

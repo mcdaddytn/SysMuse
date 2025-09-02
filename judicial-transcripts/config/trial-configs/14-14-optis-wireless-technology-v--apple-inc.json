@@ -1,0 +1,55 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Optis Apple August 3 2020 AM.txt",
+    "Optis Apple August 3 2020 PM.txt",
+    "Optis Apple August 4 2020 AM.txt",
+    "Optis Apple August 4 2020 PM.txt",
+    "Optis Apple August 5 2020 AM.txt",
+    "Optis Apple August 5 2020 PM.txt",
+    "Optis Apple August 6 2020 AM.txt",
+    "Optis Apple August 6 2020 PM.txt",
+    "Optis Apple August 11 2020 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "14 Optis Wireless Technology V. Apple Inc",
+  "extractedCaseNumber": "2:19-CV-00066-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Optis Apple",
+    "originalFileName": "Optis Apple August 3 2020 AM.txt",
+    "caseInfo": "Optis Apple",
+    "dateStr": "August 3 2020",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:19-CV-00066-JRG"
+  },
+  "questionPatterns": [
+    "Q."
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  },
+  "overrides": {
+    "trial": {
+      "name": "OPTIS WIRELESS TECHNOLOGY, LLC, ET AL VS. APPLE INC.",
+      "plaintiff": "OPTIS WIRELESS TECHNOLOGY, LLC, ET AL",
+      "defendant": "APPLE INC."
+    }
+  }
+}

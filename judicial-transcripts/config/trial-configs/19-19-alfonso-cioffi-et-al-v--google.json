@@ -1,0 +1,54 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Alfonso V Google February 6, 2017 AM.txt",
+    "Alfonso V Google February 6, 2017 PM.txt",
+    "Alfonso V Google February 7, 2017 AM.txt",
+    "Alfonso V Google February 7, 2017 PM.txt",
+    "Alfonso V Google February 8, 2017 AM.txt",
+    "Alfonso V Google February 8, 2017 PM.txt",
+    "Alfonso V Google February 9, 2017 AM.txt",
+    "Alfonso V Google February 9, 2017 PM.txt",
+    "Alfonso V Google February 10, 2017 AM.txt",
+    "Alfonso V Google February 10, 2017 PM.txt"
+  ],
+  "unidentifiedFiles": [
+    "July 6, 2017 Motion Hearing.txt"
+  ],
+  "folderName": "19 Alfonso Cioffi Et Al V. Google",
+  "extractedCaseNumber": "2:13-CV-00103-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Alfonso",
+    "defendant": "Google",
+    "originalFileName": "Alfonso V Google February 6, 2017 AM.txt",
+    "caseInfo": "Alfonso V Google",
+    "dateStr": "February 6, 2017",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:13-CV-00103-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -43,13 +43,15 @@ export class ContentParser {
 
   private summaryParser: SummaryPageParser;
   private attorneyService: AttorneyService;
+  private customDelimiter?: string;
   
-  constructor(prisma: PrismaClient, logger: Logger) {
+  constructor(prisma: PrismaClient, logger: Logger, customDelimiter?: string) {
     this.prisma = prisma;
     this.logger = logger;
     this.sessionSectionParser = new SessionSectionParser(prisma);
     this.summaryParser = new SummaryPageParser();
     this.attorneyService = new AttorneyService(prisma);
+    this.customDelimiter = customDelimiter;
   }
 
   async parseContent(
@@ -781,11 +783,14 @@ export class ContentParser {
 
   
   private async detectSummaryCenterDelimiter(lines: string[]): Promise<string> {
-    // Check if delimiter is configured in trialstyle
-    // TODO: Get from trialstyle.json if not "AUTO"
+    // Check if delimiter is configured
+    if (this.customDelimiter && this.customDelimiter !== 'AUTO') {
+      this.logger.info(`Using custom summaryCenterDelimiter from config: "${this.customDelimiter}"`);
+      return this.customDelimiter;
+    }
     
     // Auto-detect delimiter by checking frequency
-    const candidates = [')(', ') (', '|', '||', ' v. ', ' vs. ', ' V. ', ' VS. '];
+    const candidates = [')(', ') (', '*', '|', '||', ' v. ', ' vs. ', ' V. ', ' VS. '];
     const counts = new Map<string, number>();
     
     for (const line of lines) {

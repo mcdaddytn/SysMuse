@@ -1,0 +1,54 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Optis Wireless Technology V. Huawei August 20 2018 AM.txt",
+    "Optis Wireless Technology V. Huawei August 20 2018 PM.txt",
+    "Optis Wireless Technology V. Huawei August 21 2018 AM.txt",
+    "Optis Wireless Technology V. Huawei August 21 2018 PM.txt",
+    "Optis Wireless Technology V. Huawei August 22 2018 PM.txt",
+    "Optis Wireless Technology V. Huawei August 23 2018 AM.txt",
+    "Optis Wireless Technology V. Huawei August 23 2018 PM.txt",
+    "Optis Wireless Technology V. Huawei August 24 2018 AM and PM.txt",
+    "Optis Wireless Technology V. Huawei August 25 2018 AM.txt",
+    "Optis Wireless Technology V. Huawei August 27 2018 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "15 Optis Wireless Technology V. Huawei",
+  "extractedCaseNumber": "2:17-CV-00123-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Optis Wireless Technology",
+    "defendant": "Huawei",
+    "originalFileName": "Optis Wireless Technology V. Huawei August 20 2018 AM.txt",
+    "caseInfo": "Optis Wireless Technology V. Huawei",
+    "dateStr": "August 20 2018",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:17-CV-00123-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

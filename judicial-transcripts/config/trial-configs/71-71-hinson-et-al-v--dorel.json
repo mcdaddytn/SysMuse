@@ -1,0 +1,47 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Hinson Et Al V. Dorel June 13, 2016 Trial.txt",
+    "Hinson Et Al V. Dorel June 14, 2016 Trial.txt",
+    "Hinson Et Al V. Dorel June 15, 2016 Trial.txt",
+    "Hinson Et Al V. Dorel June 17, 2016 Trial.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "71 Hinson Et Al V. Dorel",
+  "extractedCaseNumber": "2:15-CV-00713-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Hinson Et Al",
+    "defendant": "Dorel",
+    "originalFileName": "Hinson Et Al V. Dorel June 13, 2016 Trial.txt",
+    "caseInfo": "Hinson Et Al V. Dorel",
+    "dateStr": "June 13, 2016",
+    "sessionRaw": "Trial",
+    "isFullDay": true,
+    "extractedCaseNumber": "2:15-CV-00713-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Solas Oled Ltd. V. Samsung March 1 2021 Trial.txt",
+    "Solas Oled Ltd. V. Samsung March 2 2021 Trial.txt",
+    "Solas Oled Ltd. V. Samsung March 3 2021 Trial.txt",
+    "Solas Oled Ltd. V. Samsung March 4 2021 Trial.txt",
+    "Solas Oled Ltd. V. Samsung March 5 2021 Trial.txt",
+    "Solas Oled Ltd. V. Samsung March 8 2021 Trial.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "63 Solas Oled Ltd. V. Samsung",
+  "extractedCaseNumber": "2:19-CV-00152-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Solas Oled Ltd.",
+    "defendant": "Samsung",
+    "originalFileName": "Solas Oled Ltd. V. Samsung March 1 2021 Trial.txt",
+    "caseInfo": "Solas Oled Ltd. V. Samsung",
+    "dateStr": "March 1 2021",
+    "sessionRaw": "Trial",
+    "isFullDay": true,
+    "extractedCaseNumber": "2:19-CV-00152-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

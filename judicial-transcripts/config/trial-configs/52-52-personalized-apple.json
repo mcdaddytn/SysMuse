@@ -1,0 +1,47 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Personalized Apple March 17, 2021 Trial.txt"
+  ],
+  "unidentifiedFiles": [
+    "Personalized Apple March 15, 2021 Jury Selection.txt"
+  ],
+  "folderName": "52 Personalized Apple",
+  "extractedCaseNumber": "2:15-CV-01366-JRG",
+  "metadata": {
+    "detectedConvention": "AUTO",
+    "plaintiff": "Personalized Apple",
+    "originalFileName": "Personalized Apple March 17, 2021 Trial.txt",
+    "caseInfo": "Personalized Apple",
+    "dateStr": "March 17, 2021",
+    "sessionRaw": "Trial",
+    "isFullDay": true,
+    "extractedCaseNumber": "2:15-CV-01366-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

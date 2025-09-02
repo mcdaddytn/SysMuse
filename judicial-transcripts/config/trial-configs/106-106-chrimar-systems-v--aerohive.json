@@ -1,0 +1,48 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": ")",
+  "orderedFiles": [
+    "Chrimar Systems V. Aerohive January 3, 2017 AM.txt",
+    "Chrimar Systems V. Aerohive January 3, 2017 PM.txt",
+    "Chrimar Systems V. Aerohive January 4, 2017 AM.txt",
+    "Chrimar Systems V. Aerohive January 4, 2017 PM.txt",
+    "Chrimar Systems V. Aerohive January 5, 2017 AM.txt",
+    "Chrimar Systems V. Aerohive January 5, 2017 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "106 Chrimar Systems V. Aerohive",
+  "extractedCaseNumber": "2:15-CV-01915-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Chrimar Systems",
+    "defendant": "Aerohive",
+    "originalFileName": "Chrimar Systems V. Aerohive January 3, 2017 AM.txt",
+    "caseInfo": "Chrimar Systems V. Aerohive",
+    "dateStr": "January 3, 2017",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:15-CV-01915-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

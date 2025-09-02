@@ -1,0 +1,61 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Wi-Lan Apple October 13, 2013 AM.txt",
+    "Wi-Lan Apple October 15, 2013 AM.txt",
+    "Wi-Lan Apple October 15, 2013 PM.txt",
+    "Wi-Lan Apple October 15, 2013 PM1.txt",
+    "Wi-Lan Apple October 16, 2013 AM.txt",
+    "Wi-Lan Apple October 16, 2013 AM1.txt",
+    "Wi-Lan Apple October 16, 2013 PM.txt",
+    "Wi-Lan Apple October 16, 2013 PM1.txt",
+    "Wi-Lan Apple October 17, 2013 AM.txt",
+    "Wi-Lan Apple October 17, 2013 AM1.txt",
+    "Wi-Lan Apple October 17, 2013 PM.txt",
+    "Wi-Lan Apple October 17, 2013 PM1.txt",
+    "Wi-Lan Apple October 18, 2013 AM.txt",
+    "Wi-Lan Apple October 18, 2013 PM.txt",
+    "Wi-Lan Apple October 21, 2013 PM.txt",
+    "Wi-Lan Apple October 21, 2013 PM1.txt",
+    "Wi-Lan Apple October 22, 2013 AM.txt",
+    "Wi-Lan Apple October 22, 2013 AM1.txt",
+    "Wi-Lan Apple October 22, 2013 PM.txt",
+    "Wi-Lan Apple October 23, 2013 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "17 Wi-Lan V. Apple,",
+  "extractedCaseNumber": "2:12-CV-00600-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Wi-Lan Apple",
+    "originalFileName": "Wi-Lan Apple October 13, 2013 AM.txt",
+    "caseInfo": "Wi-Lan Apple",
+    "dateStr": "October 13, 2013",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:12-CV-00600-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

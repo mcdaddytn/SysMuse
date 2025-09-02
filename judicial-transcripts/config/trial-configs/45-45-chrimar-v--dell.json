@@ -1,0 +1,49 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": ")",
+  "orderedFiles": [
+    "Chrimar Dell January 3, 2017 AM.txt",
+    "Chrimar Dell January 3, 2017 PM.txt",
+    "Chrimar Dell January 4, 2017 AM.txt",
+    "Chrimar Dell January 4, 2017 PM.txt",
+    "Chrimar Dell January 5, 2017 AM.txt",
+    "Chrimar Dell January 5, 2017 PM.txt",
+    "Chrimar Dell January 6, 2017 AM.txt",
+    "Chrimar Dell January 6, 2017 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "45 Chrimar V. Dell",
+  "extractedCaseNumber": "6:15-CV-00639-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Chrimar Dell",
+    "originalFileName": "Chrimar Dell January 3, 2017 AM.txt",
+    "caseInfo": "Chrimar Dell",
+    "dateStr": "January 3, 2017",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "6:15-CV-00639-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

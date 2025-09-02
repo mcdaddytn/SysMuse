@@ -1,0 +1,44 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Lake Cherokee August 12, 2013 PM.txt",
+    "Lake Cherokee August 14, 2013 PM.txt",
+    "Lake Cherokee August 16, 2013 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "95 Lake Cherokee",
+  "extractedCaseNumber": "2:10-CV-00216-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Lake Cherokee",
+    "originalFileName": "Lake Cherokee August 12, 2013 PM.txt",
+    "caseInfo": "Lake Cherokee",
+    "dateStr": "August 12, 2013",
+    "sessionRaw": "PM",
+    "extractedCaseNumber": "2:10-CV-00216-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

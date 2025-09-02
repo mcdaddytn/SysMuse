@@ -21,7 +21,7 @@ export class MultiPassTranscriptParser {
   private structureAnalyzer: StructureAnalyzer;
   private contentParser: ContentParser;
 
-  constructor(prisma: PrismaClient, logger: Logger, config?: Partial<MultiPassConfig>) {
+  constructor(prisma: PrismaClient, logger: Logger, config?: Partial<MultiPassConfig>, customDelimiter?: string) {
     this.prisma = prisma;
     this.logger = logger;
     this.config = {
@@ -35,7 +35,7 @@ export class MultiPassTranscriptParser {
 
     this.metadataExtractor = new MetadataExtractor(logger, this.config.pageHeaderLines);
     this.structureAnalyzer = new StructureAnalyzer(logger);
-    this.contentParser = new ContentParser(prisma, logger);
+    this.contentParser = new ContentParser(prisma, logger, customDelimiter);
   }
 
   async parseTranscript(

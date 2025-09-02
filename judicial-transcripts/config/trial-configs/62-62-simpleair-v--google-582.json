@@ -1,0 +1,48 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Simpleair V. Google 582 March 17, 2014 AM.txt",
+    "Simpleair V. Google 582 March 17, 2014 PM.txt",
+    "Simpleair V. Google 582 March 18, 2014 AM.txt",
+    "Simpleair V. Google 582 March 18, 2014 PM.txt",
+    "Simpleair V. Google 582 March 19, 2014 AM.txt",
+    "Simpleair V. Google 582 March 19, 2014 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "62 Simpleair V. Google 582",
+  "extractedCaseNumber": "2:13-CV-00587-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Simpleair",
+    "defendant": "Google 582",
+    "originalFileName": "Simpleair V. Google 582 March 17, 2014 AM.txt",
+    "caseInfo": "Simpleair V. Google 582",
+    "dateStr": "March 17, 2014",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:13-CV-00587-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

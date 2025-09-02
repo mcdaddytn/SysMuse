@@ -1,0 +1,53 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Biscotti V Microsoft June 5, 2017 AM.txt",
+    "Biscotti V Microsoft June 5, 2017 PM.txt",
+    "Biscotti V Microsoft June 6, 2017 AM.txt",
+    "Biscotti V Microsoft June 6, 2017 PM.txt",
+    "Biscotti V Microsoft June 7, 2017 AM.txt",
+    "Biscotti V Microsoft June 7, 2017 PM.txt",
+    "Biscotti V Microsoft June 8, 2017 AM.txt",
+    "Biscotti V Microsoft June 8, 2017 PM.txt",
+    "Biscotti V Microsoft June 9, 2017 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "20 Biscotti Inc. V. Microsoft Corp",
+  "extractedCaseNumber": "2:13-CV-01015-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Biscotti",
+    "defendant": "Microsoft",
+    "originalFileName": "Biscotti V Microsoft June 5, 2017 AM.txt",
+    "caseInfo": "Biscotti V Microsoft",
+    "dateStr": "June 5, 2017",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:13-CV-01015-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

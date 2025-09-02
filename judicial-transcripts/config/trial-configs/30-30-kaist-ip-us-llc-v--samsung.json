@@ -1,0 +1,53 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Kaist V. Samsung June 11, 2018 AM.txt",
+    "Kaist V. Samsung June 11, 2018 PM.txt",
+    "Kaist V. Samsung June 12, 2018 AM.txt",
+    "Kaist V. Samsung June 12, 2018 PM.txt",
+    "Kaist V. Samsung June 13, 2018 AM.txt",
+    "Kaist V. Samsung June 13, 2018 PM.txt",
+    "Kaist V. Samsung June 14, 2018 AM.txt",
+    "Kaist V. Samsung June 14, 2018 PM.txt",
+    "Kaist V. Samsung June 15, 2018 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "30 Kaist Ip Us Llc V. Samsung",
+  "extractedCaseNumber": "2:16-CV-01314-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Kaist",
+    "defendant": "Samsung",
+    "originalFileName": "Kaist V. Samsung June 11, 2018 AM.txt",
+    "caseInfo": "Kaist V. Samsung",
+    "dateStr": "June 11, 2018",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:16-CV-01314-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

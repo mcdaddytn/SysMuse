@@ -1,0 +1,50 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Personalized Media V Google November 2, 2020 AM.txt",
+    "Personalized Media V Google November 2, 2020 PM.txt",
+    "Personalized Media V Google November 3, 2020 AM.txt",
+    "Personalized Media V Google November 3, 2020 PM.txt",
+    "Personalized Media V Google November 4, 2020 AM.txt",
+    "Personalized Media V Google November 4, 2020 PM.txt",
+    "Personalized Media V Google November 5, 2020 AM.txt",
+    "Personalized Media V Google November 5, 2020 PM.txt",
+    "Personalized Media V Google November 6, 2020 AM.txt",
+    "Personalized Media V Google November 6, 2020 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "34 Personalized Media V Google",
+  "extractedCaseNumber": "2:19-CV-00090-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Personalized Media",
+    "defendant": "Google",
+    "originalFileName": "Personalized Media V Google November 2, 2020 AM.txt",
+    "caseInfo": "Personalized Media V Google",
+    "dateStr": "November 2, 2020",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:19-CV-00090-JRG"
+  },
+  "questionPatterns": [
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

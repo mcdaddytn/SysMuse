@@ -1,0 +1,53 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Intellectual Ventures I Llc V. T Mobile February 4, 2019 AM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 4, 2019 PM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 5, 2019 AM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 5, 2019 PM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 6, 2019 AM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 6, 2019 PM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 7, 2019 AM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 7, 2019 PM.txt",
+    "Intellectual Ventures I Llc V. T Mobile February 8, 2019 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "29 Intellectual Ventures V. T Mobile",
+  "extractedCaseNumber": "2:17-CV-00577-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Intellectual Ventures I Llc",
+    "defendant": "T Mobile",
+    "originalFileName": "Intellectual Ventures I Llc V. T Mobile February 4, 2019 AM.txt",
+    "caseInfo": "Intellectual Ventures I Llc V. T Mobile",
+    "dateStr": "February 4, 2019",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:17-CV-00577-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

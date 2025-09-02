@@ -1,0 +1,53 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Netlist V Samsung November 12, 2024 TRIAL.txt",
+    "Netlist V Samsung November 13, 2024 TRIAL.txt",
+    "Netlist V Samsung November 14, 2024 TRIAL.txt",
+    "Netlist V Samsung November 15, 2024 TRIAL.txt",
+    "Netlist V Samsung November 21, 2024 TRIAL.txt",
+    "Netlist V Samsung November 22, 2024 TRIAL.txt"
+  ],
+  "unidentifiedFiles": [
+    "Netlist V Samsung September 26, 2023 Markman.txt"
+  ],
+  "folderName": "32 Netlist V Samsung",
+  "extractedCaseNumber": "2:22-CV-00293-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Netlist",
+    "defendant": "Samsung",
+    "originalFileName": "Netlist V Samsung November 12, 2024 TRIAL.txt",
+    "caseInfo": "Netlist V Samsung",
+    "dateStr": "November 12, 2024",
+    "sessionRaw": "Trial",
+    "isFullDay": true,
+    "extractedCaseNumber": "2:22-CV-00293-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

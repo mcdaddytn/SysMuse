@@ -1,0 +1,50 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Metaswitch  March 11, 2016 AM.txt",
+    "Metaswitch  March 11, 2016 PM.txt",
+    "Metaswitch  March 14, 2016 AM.txt",
+    "Metaswitch  March 14, 2016 PM.txt",
+    "Metaswitch  March 15, 2016 AM.txt",
+    "Metaswitch  March 15, 2016 PM.txt",
+    "Metaswitch  March 16, 2016 AM.txt",
+    "Metaswitch  March 16, 2016 PM.txt",
+    "Metaswitch  March 17, 2016 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "10 Metaswitch Genband 2016",
+  "extractedCaseNumber": "2:14-CV-00033-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Metaswitch",
+    "originalFileName": "Metaswitch  March 11, 2016 AM.txt",
+    "caseInfo": "Metaswitch",
+    "dateStr": "March 11, 2016",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:14-CV-00033-JRG"
+  },
+  "questionPatterns": [
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": ")",
+  "orderedFiles": [
+    "Core Wireless V Apple March 9, 2015 AM.txt",
+    "Core Wireless V Apple March 9, 2015 PM.txt",
+    "Core Wireless V Apple March 10, 2015 AM.txt",
+    "Core Wireless V Apple March 10, 2015 PM.txt",
+    "Core Wireless V Apple March 11, 2015 AM.txt",
+    "Core Wireless V Apple March 11, 2015 PM.txt",
+    "Core Wireless V Apple March 12, 2015 AM.txt",
+    "Core Wireless V Apple March 12, 2015 PM.txt",
+    "Core Wireless V Apple March 13, 2015 AM.txt",
+    "Core Wireless V Apple March 13, 2015 PM.txt",
+    "Core Wireless V Apple March 16, 2015 PM.txt"
+  ],
+  "unidentifiedFiles": [
+    "Core Wireless V Apple JUly 6, 2015 Motion Hearing.txt",
+    "Core Wireless V Apple Pretrial Hearing.txt"
+  ],
+  "folderName": "22 Core Wireless V. Apple",
+  "extractedCaseNumber": "6:12-CV-00100-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Core Wireless",
+    "defendant": "Apple",
+    "originalFileName": "Core Wireless V Apple March 9, 2015 AM.txt",
+    "caseInfo": "Core Wireless V Apple",
+    "dateStr": "March 9, 2015",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "6:12-CV-00100-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Genband_January 11, 2016 AM.txt",
+    "Genband_January 11, 2016 PM.txt",
+    "Genband_January 12, 2016 AM.txt",
+    "Genband_January 13, 2016 AM.txt",
+    "Genband_January 14, 2016 AM.txt",
+    "Genband_January 14, 2016 PM.txt",
+    "Genband_January 15, 2016 AM.txt",
+    "Genband_January 15, 2016 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "01 Genband",
+  "extractedCaseNumber": "2:14-CV-00033-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Genband",
+    "originalFileName": "Genband_January 11, 2016 AM.txt",
+    "caseInfo": "Genband",
+    "dateStr": "January 11, 2016",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:14-CV-00033-JRG"
+  },
+  "questionPatterns": [
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A",
+    "ANSWER:"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR. ([A-Z][A-Z\\s'-]+?)",
+    "BY MS. ([A-Z][A-Z\\s'-]+?)",
+    "Mr. ([A-Z][A-Z\\s'-]+?)",
+    "Ms. ([A-Z][A-Z\\s'-]+?)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

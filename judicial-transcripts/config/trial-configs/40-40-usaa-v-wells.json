@@ -1,0 +1,52 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "USAA V Wells October 30, 2019 AM.txt",
+    "USAA V Wells October 30, 2019 PM.txt",
+    "USAA V Wells October 31, 2019 AM.txt",
+    "USAA V Wells October 31, 2019 PM.txt",
+    "USAA V Wells November 1, 2019 AM.txt",
+    "USAA V Wells November 4, 2019 AM.txt",
+    "USAA V Wells November 4, 2019 PM.txt",
+    "USAA V Wells November 5, 2019 AM.txt",
+    "USAA V Wells November 5, 2019 PM.txt",
+    "USAA V Wells November 6, 2019 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "40 USAA V Wells",
+  "extractedCaseNumber": "2:18-CV-00245-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "USAA",
+    "defendant": "Wells",
+    "originalFileName": "USAA V Wells October 30, 2019 AM.txt",
+    "caseInfo": "USAA V Wells",
+    "dateStr": "October 30, 2019",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:18-CV-00245-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

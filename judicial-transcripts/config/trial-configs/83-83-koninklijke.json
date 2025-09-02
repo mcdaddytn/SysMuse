@@ -1,0 +1,49 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Koninklijke August 22, 2022 Trial.txt",
+    "Koninklijke August 23, 2022 Trial.txt",
+    "Koninklijke August 24, 2022 Trial.txt",
+    "Koninklijke August 25, 2022 Trial.txt",
+    "Koninklijke August 26, 2022 Trial.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "83 Koninklijke",
+  "extractedCaseNumber": "2:21-CV-00113-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Koninklijke",
+    "originalFileName": "Koninklijke August 22, 2022 Trial.txt",
+    "caseInfo": "Koninklijke",
+    "dateStr": "August 22, 2022",
+    "sessionRaw": "Trial",
+    "isFullDay": true,
+    "extractedCaseNumber": "2:21-CV-00113-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

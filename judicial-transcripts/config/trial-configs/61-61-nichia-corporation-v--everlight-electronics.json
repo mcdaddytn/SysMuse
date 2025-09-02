@@ -1,0 +1,48 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Nichia V Everlight May 11, 2015 AM.txt",
+    "Nichia V Everlight May 12, 2015 AM.txt",
+    "Nichia V Everlight May 13, 2015 AM.txt",
+    "Nichia V Everlight May 13, 2015 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "61 Nichia Corporation V. Everlight Electronics",
+  "extractedCaseNumber": "2:13-CV-00702-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Nichia",
+    "defendant": "Everlight",
+    "originalFileName": "Nichia V Everlight May 11, 2015 AM.txt",
+    "caseInfo": "Nichia V Everlight",
+    "dateStr": "May 11, 2015",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:13-CV-00702-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

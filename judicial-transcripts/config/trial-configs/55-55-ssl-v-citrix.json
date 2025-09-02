@@ -1,0 +1,53 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "SSL V Citrix June 12, 2012 AM.txt",
+    "SSL V Citrix June 12, 2012 PM.txt",
+    "SSL V Citrix June 13, 2012 AM.txt",
+    "SSL V Citrix June 13, 2012 PM.txt",
+    "SSL V Citrix June 13, 2012 PM1.txt",
+    "SSL V Citrix June 14, 2012 AM.txt",
+    "SSL V Citrix June 14, 2012 AM1.txt",
+    "SSL V Citrix June 14, 2012 PM.txt",
+    "SSL V Citrix June 14, 2012 PM1.txt",
+    "SSL V Citrix June 15, 2012 PM.txt",
+    "SSL V Citrix June 15, 2012 PM1.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "55 SSL V Citrix",
+  "extractedCaseNumber": "2:08-CV-00158-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "SSL",
+    "defendant": "Citrix",
+    "originalFileName": "SSL V Citrix June 12, 2012 AM.txt",
+    "caseInfo": "SSL V Citrix",
+    "dateStr": "June 12, 2012",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:08-CV-00158-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

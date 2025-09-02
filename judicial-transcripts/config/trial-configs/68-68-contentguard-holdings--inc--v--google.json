@@ -1,0 +1,55 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Contentguard Holdings, Inc. V. Google September 14, 2015 AM.txt",
+    "Contentguard Holdings, Inc. V. Google September 15, 2015 AM.txt",
+    "Contentguard Holdings, Inc. V. Google September 15, 2015 PM.txt",
+    "Contentguard Holdings, Inc. V. Google September 16, 2015 AM.txt",
+    "Contentguard Holdings, Inc. V. Google September 17, 2015 AM.txt",
+    "Contentguard Holdings, Inc. V. Google September 17, 2015 PM.txt",
+    "Contentguard Holdings, Inc. V. Google September 21, 2015 AM.txt",
+    "Contentguard Holdings, Inc. V. Google September 21, 2015 PM.txt",
+    "Contentguard Holdings, Inc. V. Google September 22, 2015 AM.txt",
+    "Contentguard Holdings, Inc. V. Google September 22, 2015 PM.txt",
+    "Contentguard Holdings, Inc. V. Google September 22, 2015 PM1.txt",
+    "Contentguard Holdings, Inc. V. Google September 23, 2015 PM.txt",
+    "Contentguard Holdings, Inc. V. Google September 24, 2015 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "68 Contentguard Holdings, Inc. V. Google",
+  "extractedCaseNumber": "2:14-CV-00061-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Contentguard Holdings, Inc.",
+    "defendant": "Google",
+    "originalFileName": "Contentguard Holdings, Inc. V. Google September 14, 2015 AM.txt",
+    "caseInfo": "Contentguard Holdings, Inc. V. Google",
+    "dateStr": "September 14, 2015",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:14-CV-00061-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

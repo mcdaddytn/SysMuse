@@ -1,0 +1,49 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Core Wireless March 21, 2016 AM.txt",
+    "Core Wireless March 21, 2016 PM.txt",
+    "Core Wireless March 22, 2016 AM.txt",
+    "Core Wireless March 22, 2016 PM.txt",
+    "Core Wireless March 23, 2016 AM.txt",
+    "Core Wireless March 23, 2016 PM.txt",
+    "Core Wireless March 24, 2016 AM.txt",
+    "Core Wireless March 24, 2016 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "03 Core Wireless",
+  "extractedCaseNumber": "2:14-CV-00911-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Core Wireless",
+    "originalFileName": "Core Wireless March 21, 2016 AM.txt",
+    "caseInfo": "Core Wireless",
+    "dateStr": "March 21, 2016",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:14-CV-00911-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

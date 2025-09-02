@@ -1,0 +1,48 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Beneficial V Advance January 21, 2014 AM.txt",
+    "Beneficial V Advance January 22, 2014 AM.txt",
+    "Beneficial V Advance January 22, 2014 PM.txt",
+    "Beneficial V Advance January 23, 2014 AM.txt",
+    "Beneficial V Advance January 23, 2014 PM.txt",
+    "Beneficial V Advance January 24, 2014 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "44 Beneficial V. Advance",
+  "extractedCaseNumber": "2:11-CV-00229-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Beneficial",
+    "defendant": "Advance",
+    "originalFileName": "Beneficial V Advance January 21, 2014 AM.txt",
+    "caseInfo": "Beneficial V Advance",
+    "dateStr": "January 21, 2014",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:11-CV-00229-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

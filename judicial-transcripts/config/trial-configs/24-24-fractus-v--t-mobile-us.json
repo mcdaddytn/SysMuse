@@ -1,0 +1,50 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Fractus TMobile October 3, 2019 AM.txt",
+    "Fractus TMobile October 3, 2019 PM.txt",
+    "Fractus TMobile October 4, 2019 AM.txt",
+    "Fractus TMobile October 4, 2019 PM.txt",
+    "Fractus TMobile October 7, 2019 AM.txt",
+    "Fractus TMobile October 7, 2019 PM.txt",
+    "Fractus TMobile October 8, 2019 AM.txt",
+    "Fractus TMobile October 8, 2019 PM.txt",
+    "Fractus TMobile October 9, 2019 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "24 Fractus V. T-Mobile Us",
+  "extractedCaseNumber": "2:19-CV-00255-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Fractus TMobile",
+    "originalFileName": "Fractus TMobile October 3, 2019 AM.txt",
+    "caseInfo": "Fractus TMobile",
+    "dateStr": "October 3, 2019",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:19-CV-00255-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

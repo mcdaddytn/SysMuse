@@ -1,0 +1,51 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "LuvNCare V Royal King October 7, 2013 AM.txt",
+    "LuvNCare V Royal King October 7, 2013 PM.txt",
+    "LuvNCare V Royal King October 8, 2013 AM.txt",
+    "LuvNCare V Royal King October 8, 2013 PM.txt",
+    "LuvNCare V Royal King October 9, 2013 PM.txt",
+    "LuvNCare V Royal King October 10, 2013 AM.txt",
+    "LuvNCare V Royal King October 10, 2013 PM.txt"
+  ],
+  "unidentifiedFiles": [
+    "LuvNCare V Royal King October 9, 2013 PM (2).txt"
+  ],
+  "folderName": "49 Luvncare V Royal King",
+  "extractedCaseNumber": "2:10-CV-00461-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "LuvNCare",
+    "defendant": "Royal King",
+    "originalFileName": "LuvNCare V Royal King October 7, 2013 AM.txt",
+    "caseInfo": "LuvNCare V Royal King",
+    "dateStr": "October 7, 2013",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:10-CV-00461-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

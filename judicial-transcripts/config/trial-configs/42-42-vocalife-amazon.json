@@ -1,0 +1,48 @@
+{
+  "fileConvention": "DATEMORNAFT",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_2_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_2_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_5_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_5_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_6_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_6_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_7_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_7_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_8_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_8_20 (Bench Trial_Jury Verdict) be.txt"
+  ],
+  "unidentifiedFiles": [
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_8_20 (Bench Trial_Jury Verdict) be.txt"
+  ],
+  "folderName": "42 Vocalife Amazon",
+  "extractedCaseNumber": "2:19-CV-00123-JRG",
+  "metadata": {
+    "detectedConvention": "DATEMORNAFT",
+    "originalFileName": "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Morning S.txt",
+    "dateStr": "10_1_20",
+    "extractedCaseNumber": "2:19-CV-00123-JRG"
+  },
+  "questionPatterns": [
+    "Q."
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR. ([A-Z][A-Z\\s'-]+?)",
+    "BY MS. ([A-Z][A-Z\\s'-]+?)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Rembrandt V Samsung February 9, 2015 AM.txt",
+    "Rembrandt V Samsung February 9, 2015 PM.txt",
+    "Rembrandt V Samsung February 10, 2015 AM.txt",
+    "Rembrandt V Samsung February 10, 2015 PM.txt",
+    "Rembrandt V Samsung February 11, 2015 AM.txt",
+    "Rembrandt V Samsung February 11, 2015 PM.txt",
+    "Rembrandt V Samsung February 12, 2015 AM.txt",
+    "Rembrandt V Samsung February 12, 2015 PM.txt",
+    "Rembrandt V Samsung February 13, 2015 AM.txt",
+    "Rembrandt V Samsung February 13, 2015 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "35 Rembrandt V Samsung",
+  "extractedCaseNumber": "2:13-CV-00213-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Rembrandt",
+    "defendant": "Samsung",
+    "originalFileName": "Rembrandt V Samsung February 9, 2015 AM.txt",
+    "caseInfo": "Rembrandt V Samsung",
+    "dateStr": "February 9, 2015",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:13-CV-00213-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

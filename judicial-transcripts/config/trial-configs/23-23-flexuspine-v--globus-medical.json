@@ -1,0 +1,52 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Flexuspine V. Globus Medical August 15, 2016 PM.txt",
+    "Flexuspine V. Globus Medical August 16, 2016 AM.txt",
+    "Flexuspine V. Globus Medical August 16, 2016 PM.txt",
+    "Flexuspine V. Globus Medical August 17, 2016 AM.txt",
+    "Flexuspine V. Globus Medical August 17, 2016 PM.txt",
+    "Flexuspine V. Globus Medical August 18, 2016 AM.txt",
+    "Flexuspine V. Globus Medical August 18, 2016 PM.txt",
+    "Flexuspine V. Globus Medical August 19, 2016 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [
+    "Flexuspine V. Globus Medical August 15, 2016 Jury Selection.txt"
+  ],
+  "folderName": "23 Flexuspine V. Globus Medical",
+  "extractedCaseNumber": "6:15-CV-00201-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Flexuspine",
+    "defendant": "Globus Medical",
+    "originalFileName": "Flexuspine V. Globus Medical August 15, 2016 PM.txt",
+    "caseInfo": "Flexuspine V. Globus Medical",
+    "dateStr": "August 15, 2016",
+    "sessionRaw": "PM",
+    "extractedCaseNumber": "6:15-CV-00201-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

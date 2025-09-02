@@ -1,0 +1,54 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Gree Supercell September 10, 2020 AM.txt",
+    "Gree Supercell September 10, 2020 PM.txt",
+    "Gree Supercell September 11, 2020 AM.txt",
+    "Gree Supercell September 11, 2020 PM.txt",
+    "Gree Supercell September 14, 2020 AM.txt",
+    "Gree Supercell September 14, 2020 PM.txt",
+    "Gree Supercell September 15, 2020 AM.txt",
+    "Gree Supercell September 15, 2020 PM.txt",
+    "Gree Supercell September 16, 2020 AM.txt",
+    "Gree Supercell September 16, 2020 PM.txt",
+    "Gree Supercell September 17, 2020 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "12 Gree Supercell",
+  "extractedCaseNumber": "2:19-CV-00070-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Gree Supercell",
+    "originalFileName": "Gree Supercell September 10, 2020 AM.txt",
+    "caseInfo": "Gree Supercell",
+    "dateStr": "September 10, 2020",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:19-CV-00070-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A.",
+    "A:",
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Cassidian V Microdata December 19, 2013 PM.txt",
+    "Cassidian V Microdata December 20, 2013 AM.txt",
+    "Cassidian V Microdata December 20, 2013 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "21 Cassidian V Microdata",
+  "extractedCaseNumber": "2:12-CV-00162-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Cassidian",
+    "defendant": "Microdata",
+    "originalFileName": "Cassidian V Microdata December 19, 2013 PM.txt",
+    "caseInfo": "Cassidian V Microdata",
+    "dateStr": "December 19, 2013",
+    "sessionRaw": "PM",
+    "extractedCaseNumber": "2:12-CV-00162-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "*",
+  "orderedFiles": [
+    "Personalized Media November 12, 2013 AM.txt",
+    "Personalized Media November 12, 2013 PM.txt",
+    "Personalized Media November 13, 2013 AM.txt",
+    "Personalized Media November 13, 2013 PM.txt",
+    "Personalized Media November 14, 2013 AM.txt",
+    "Personalized Media November 14, 2013 PM.txt",
+    "Personalized Media November 15, 2013 AM.txt",
+    "Personalized Media November 18, 2013 PM.txt",
+    "Personalized Media November 19, 2013 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "05 Personalized Media v Zynga",
+  "extractedCaseNumber": "2:12-CV-00068-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Personalized Media",
+    "originalFileName": "Personalized Media November 12, 2013 AM.txt",
+    "caseInfo": "Personalized Media",
+    "dateStr": "November 12, 2013",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:12-CV-00068-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

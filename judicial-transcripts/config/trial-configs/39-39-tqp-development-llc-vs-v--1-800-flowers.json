@@ -1,0 +1,54 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "TQP V 1800Flowers November 19, 2013 AM.txt",
+    "TQP V 1800Flowers November 19, 2013 PM.txt",
+    "TQP V 1800Flowers November 20, 2013 AM.txt",
+    "TQP V 1800Flowers November 20, 2013 PM.txt",
+    "TQP V 1800Flowers November 21, 2013 AM.txt",
+    "TQP V 1800Flowers November 21, 2013 PM.txt",
+    "TQP V 1800Flowers November 22, 2013 AM.txt",
+    "TQP V 1800Flowers November 22, 2013 PM.txt",
+    "TQP V 1800Flowers November 25, 2013 AM.txt",
+    "TQP V 1800Flowers November 25, 2013 PM.txt"
+  ],
+  "unidentifiedFiles": [
+    "TQP V 1800Flowers November 25, 2013 Notes Verdict.txt"
+  ],
+  "folderName": "39 Tqp Development Llc Vs V. 1-800-Flowers",
+  "extractedCaseNumber": "2:11-CV-00248-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "TQP",
+    "defendant": "1800Flowers",
+    "originalFileName": "TQP V 1800Flowers November 19, 2013 AM.txt",
+    "caseInfo": "TQP V 1800Flowers",
+    "dateStr": "November 19, 2013",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:11-CV-00248-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

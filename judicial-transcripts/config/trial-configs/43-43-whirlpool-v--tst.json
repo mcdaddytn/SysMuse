@@ -1,0 +1,49 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": ")",
+  "orderedFiles": [
+    "Whirlpool V. Tst March 6, 2017 AM.txt",
+    "Whirlpool V. Tst March 6, 2017 PM.txt",
+    "Whirlpool V. Tst March 7, 2017 AM.txt",
+    "Whirlpool V. Tst March 7, 2017 PM.txt",
+    "Whirlpool V. Tst March 9, 2017 AM.txt",
+    "Whirlpool V. Tst March 9, 2017 PM.txt",
+    "Whirlpool V. Tst March 10, 2017 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "43 Whirlpool V. Tst",
+  "extractedCaseNumber": "2:15-CV-01528-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Whirlpool",
+    "defendant": "Tst",
+    "originalFileName": "Whirlpool V. Tst March 6, 2017 AM.txt",
+    "caseInfo": "Whirlpool V. Tst",
+    "dateStr": "March 6, 2017",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:15-CV-01528-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "fileConvention": "DOCID",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "US_DIS_TXED_2_16cv230_d74990699e16592_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt",
+    "US_DIS_TXED_2_16cv230_d74990699e16620_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt",
+    "US_DIS_TXED_2_16cv230_d74990699e16686_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt",
+    "US_DIS_TXED_2_16cv230_d74990699e16714_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt",
+    "US_DIS_TXED_2_16cv230_d74990699e16742_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt",
+    "US_DIS_TXED_2_16cv230_d74990699e16799_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "50 Packet",
+  "extractedCaseNumber": "2:16-CV-00230-JRG",
+  "metadata": {
+    "detectedConvention": "DOCID",
+    "originalFileName": "US_DIS_TXED_2_16cv230_d74990699e16592_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed.txt",
+    "district": "US_DIS_TXED",
+    "caseNumber": "2",
+    "documentId": "16cv230",
+    "description": "d74990699e16592_NOTICE_OF_FILING_OF_OFFICIAL_TRANSCRIPT_of_Proceed",
+    "extractedCaseNumber": "2:16-CV-00230-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": ")",
+  "orderedFiles": [
+    "Smartflash February 16, 2015 AM.txt",
+    "Smartflash February 16, 2015 PM.txt",
+    "Smartflash February 17, 2015 AM.txt",
+    "Smartflash February 17, 2015 PM.txt",
+    "Smartflash February 18, 2015 AM.txt",
+    "Smartflash February 18, 2015 PM.txt",
+    "Smartflash February 19, 2015 AM.txt",
+    "Smartflash February 19, 2015 PM.txt",
+    "Smartflash February 23, 2015 AM.txt",
+    "Smartflash February 23, 2015 PM.txt",
+    "Smartflash February 24, 2015 AM and PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "103 Smartflash",
+  "extractedCaseNumber": "6:13-CV-00447-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Smartflash",
+    "originalFileName": "Smartflash February 16, 2015 AM.txt",
+    "caseInfo": "Smartflash",
+    "dateStr": "February 16, 2015",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "6:13-CV-00447-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

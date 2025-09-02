@@ -1,0 +1,46 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Saint Lawrence March 20, 2017 AM.txt",
+    "Saint Lawrence March 20, 2017 PM.txt",
+    "Saint Lawrence March 21, 2017 AM.txt",
+    "Saint Lawrence March 22, 2017 AM.txt",
+    "Saint Lawrence March 23, 2017 PM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "16 Saint Lawrence V. Motorola",
+  "extractedCaseNumber": "2:15-CV-00351-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Saint Lawrence",
+    "originalFileName": "Saint Lawrence March 20, 2017 AM.txt",
+    "caseInfo": "Saint Lawrence",
+    "dateStr": "March 20, 2017",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:15-CV-00351-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

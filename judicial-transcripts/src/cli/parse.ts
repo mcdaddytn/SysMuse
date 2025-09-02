@@ -221,17 +221,6 @@ program
               logger.info(`No trialstyle.json found in ${config.inputDir}`);
             }
             
-            const multiPassConfig = {
-              mode: 'multi-pass' as const,
-              loadInMemory: true,
-              validatePasses: true,
-              debugOutput: options.debugOutput || false,
-              batchSize: config.batchSize || 1000,
-              pageHeaderLines: trialStyleConfig?.pageHeaderLines || 2
-            };
-            
-            const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig);
-            
             // Process subdirectories if configured
             let actualInputDir = config.inputDir;
             
@@ -289,6 +278,21 @@ program
                       logger.warn(`Failed to parse trialstyle.json: ${error}`);
                     }
                   }
+                  
+                  // Create MultiPassParser with trial-specific configuration
+                  const multiPassConfig = {
+                    mode: 'multi-pass' as const,
+                    loadInMemory: true,
+                    validatePasses: true,
+                    debugOutput: options.debugOutput || false,
+                    batchSize: config.batchSize || 1000,
+                    pageHeaderLines: trialStyleConfig?.pageHeaderLines || 2
+                  };
+                  
+                  // Get custom delimiter from trialstyle.json if not AUTO
+                  const customDelimiter = trialStyleConfig?.summaryCenterDelimiter;
+                  
+                  const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig, customDelimiter);
                   
                   // Continue processing this trial directory below...
             
@@ -654,7 +658,12 @@ program
               if (lowerFile.includes('bench')) extractedMetadata.sessionTypeIndicators.push('bench');
               if (lowerFile.includes('am and pm')) extractedMetadata.sessionTypeIndicators.push('am_and_pm');
               
-              if (lowerFile.includes('afternoon') || lowerFile.includes(' pm')) {
+              // Check for numbered sessions first (PM1, AM1, etc.)
+              if (lowerFile.includes('pm1')) {
+                sessionType = 'EVENING';  // PM1 indicates evening session or continuation
+              } else if (lowerFile.includes('am1')) {
+                sessionType = 'SPECIAL';  // AM1 is rare, use SPECIAL
+              } else if (lowerFile.includes('afternoon') || lowerFile.includes(' pm')) {
                 sessionType = 'AFTERNOON';
               } else if (lowerFile.includes(' am')) {
                 sessionType = 'MORNING';

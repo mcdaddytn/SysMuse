@@ -1,0 +1,45 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 5,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Taykir V Turner October 15, 2012 Trial.txt",
+    "Taykir V Turner October 18, 2012 Trial.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "72 Taylor V Turner",
+  "extractedCaseNumber": "2:11-CV-00057-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Taykir",
+    "defendant": "Turner",
+    "originalFileName": "Taykir V Turner October 15, 2012 Trial.txt",
+    "caseInfo": "Taykir V Turner",
+    "dateStr": "October 15, 2012",
+    "sessionRaw": "Trial",
+    "isFullDay": true,
+    "extractedCaseNumber": "2:11-CV-00057-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

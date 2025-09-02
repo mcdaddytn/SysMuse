@@ -1,0 +1,51 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Implicit V Netscout December 9, 2019 AM.txt",
+    "Implicit V Netscout December 9, 2019 PM.txt",
+    "Implicit V Netscout December 10, 2019 AM.txt",
+    "Implicit V Netscout December 10, 2019 PM.txt",
+    "Implicit V Netscout December 11, 2019 AM.txt",
+    "Implicit V Netscout December 11, 2019 PM.txt",
+    "Implicit V Netscout December 12, 2019 AM.txt",
+    "Implicit V Netscout December 12, 2019 PM.txt",
+    "Implicit V Netscout December 13, 2019 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "28 Implicit V Netscout",
+  "extractedCaseNumber": "2:18-CV-00053-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Implicit",
+    "defendant": "Netscout",
+    "originalFileName": "Implicit V Netscout December 9, 2019 AM.txt",
+    "caseInfo": "Implicit V Netscout",
+    "dateStr": "December 9, 2019",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:18-CV-00053-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

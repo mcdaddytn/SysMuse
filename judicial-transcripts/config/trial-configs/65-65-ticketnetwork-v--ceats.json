@@ -1,0 +1,45 @@
+{
+  "fileConvention": "DATEAMPM",
+  "fileSortingMode": "dateAndSession",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "orderedFiles": [
+    "Ticketnetwork, Inc. Et Al V. Ceats January 22, 2019 AM.txt",
+    "Ticketnetwork, Inc. Et Al V. Ceats January 24, 2019 Trial.txt",
+    "Ticketnetwork, Inc. Et Al V. Ceats January 25, 2019 AM.txt"
+  ],
+  "unidentifiedFiles": [],
+  "folderName": "65 Ticketnetwork V. Ceats",
+  "extractedCaseNumber": "2:15-CV-01470-JRG",
+  "metadata": {
+    "detectedConvention": "DATEAMPM",
+    "plaintiff": "Ticketnetwork, Inc. Et Al",
+    "defendant": "Ceats",
+    "originalFileName": "Ticketnetwork, Inc. Et Al V. Ceats January 22, 2019 AM.txt",
+    "caseInfo": "Ticketnetwork, Inc. Et Al V. Ceats",
+    "dateStr": "January 22, 2019",
+    "sessionRaw": "AM",
+    "extractedCaseNumber": "2:15-CV-01470-JRG"
+  },
+  "questionPatterns": [
+    "Q.",
+    "Q:",
+    "Q"
+  ],
+  "answerPatterns": [
+    "A"
+  ],
+  "attorneyIndicatorPatterns": [
+    "BY MR\\. ([A-Z]+)",
+    "BY MS\\. ([A-Z]+)",
+    "BY MRS\\. ([A-Z]+)",
+    "BY DR\\. ([A-Z]+)"
+  ],
+  "enableGenericFallback": false,
+  "genericFallbackConfig": {
+    "plaintiffGenericName": "PLAINTIFF COUNSEL",
+    "defenseGenericName": "DEFENSE COUNSEL",
+    "assumeExaminerFromContext": true
+  }
+}

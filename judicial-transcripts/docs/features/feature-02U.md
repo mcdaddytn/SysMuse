@@ -24,6 +24,8 @@ Current issues discovered during testing:
 - [ ] Document reasons for invalidation
 
 Current invalid trials:
+- **03 Core Wireless**: Inverted 2-line headers (line 2 appears before line 1), similar to Flexuspine
+- **23 Flexuspine V. Globus Medical**: Inverted 2-line headers
 - **50 Packet Netscout**: Parsing issues
 - **50 Packet**: Duplicate/parsing issues  
 - **68 Contentguard Holdings, Inc. V. Google**: Page structure errors (1 page per session)

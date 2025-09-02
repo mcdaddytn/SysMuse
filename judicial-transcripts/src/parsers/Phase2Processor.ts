@@ -724,10 +724,19 @@ export class Phase2Processor {
     
     // IMPORTANT: Also update the SpeakerRegistry if available
     // This ensures the ExaminationContextManager can resolve A. properly
-    if (this.speakerRegistry && speaker) {
-      const speakerWithRelations = await this.speakerRegistry.findSpeakerByHandle(speaker.speakerHandle);
+    if (this.speakerRegistry) {
+      // The speaker from the database already has all relations
+      const speakerWithRelations = await this.prisma.speaker.findUnique({
+        where: { id: speaker.id },
+        include: {
+          attorney: true,
+          witness: true,
+          judge: true,
+          juror: true
+        }
+      });
       if (speakerWithRelations) {
-        this.speakerRegistry.setCurrentWitness(speakerWithRelations);
+        this.speakerRegistry.setCurrentWitness(speakerWithRelations as any);
         logger.debug(`Updated SpeakerRegistry with current witness: ${displayName}`);
       }
     }
@@ -946,11 +955,9 @@ export class Phase2Processor {
         // IMPORTANT: Also update the SpeakerRegistry if available
         // This ensures the ExaminationContextManager can resolve A. properly
         if (this.speakerRegistry && witness.speaker) {
-          const speakerWithRelations = await this.speakerRegistry.findSpeakerByHandle(witness.speaker.speakerHandle);
-          if (speakerWithRelations) {
-            this.speakerRegistry.setCurrentWitness(speakerWithRelations);
-            logger.debug(`Updated SpeakerRegistry with current witness: ${witness.displayName}`);
-          }
+          // The witness.speaker already has the relations we need
+          this.speakerRegistry.setCurrentWitness(witness.speaker as any);
+          logger.debug(`Updated SpeakerRegistry with current witness: ${witness.displayName}`);
         }
       }
     }

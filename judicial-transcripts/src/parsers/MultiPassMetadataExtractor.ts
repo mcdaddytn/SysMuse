@@ -147,28 +147,68 @@ export class MetadataExtractor {
     }
     
     // Extract PageID from the header line
-    const caseHeaderPattern = /^\s*Case\s+[\d:cv-]+.*Document\s+\d+.*Page\s+(\d+)\s+of\s+\d+\s+PageID\s*#?:?\s*(\d+)/i;
+    // Handle two patterns: PageID on same line, or PageID on next line
+    const caseHeaderPattern = /^\s*Case\s+[\d:\w-]+.*Document\s+\d+.*Page\s+(\d+)\s+of\s+\d+\s+PageID\s*#?:?\s*(\d*)/i;
     const caseMatch = caseHeaderPattern.exec(line);
     
-    if (caseMatch && currentIndex + 1 < fileContent.length) {
-      const nextLine = fileContent[currentIndex + 1];
-      const pageNumMatch = /^\s*(\d+)\s*$/.exec(nextLine.trim());
-      const pageId = caseMatch[2]; // Extract PageID from the regex match
+    if (caseMatch) {
+      let pageId = caseMatch[2]; // Extract PageID from the regex match
+      const headerLines: string[] = [line];
+      let pageNum: number | null = null;
+      let searchLimit = Math.min(currentIndex + 5, fileContent.length); // Look ahead up to 5 lines
       
-      if (pageNumMatch) {
-        const pageNum = parseInt(pageNumMatch[1]);
-        // Validate the page number is reasonable
-        if (pageNum > 0 && pageNum < 10000) {
-          return {
-            trialPageNumber: pageNum,
-            parsedTrialPage: pageNum,
-            pageId: pageId, // Include PageID in the metadata
-            headerText: `${line.trim()}\n${nextLine.trim()}`,
-            headerLines: [line, nextLine],
-            skipLines: this.pageHeaderLines - 1  // Use configured header lines
-          };
+      // If PageID wasn't on the first line, check if it's on the next line
+      if (!pageId && currentIndex + 1 < fileContent.length) {
+        const nextLine = fileContent[currentIndex + 1].trim();
+        if (/^\d+$/.test(nextLine) && nextLine.length > 3) {
+          // Likely a PageID (more than 3 digits)
+          pageId = nextLine;
         }
       }
+      
+      // Look for page number, skipping blank lines
+      for (let i = currentIndex + 1; i < searchLimit; i++) {
+        const nextLine = fileContent[i];
+        const trimmed = nextLine.trim();
+        
+        if (trimmed === '') {
+          headerLines.push(nextLine);
+          continue; // Skip blank lines
+        }
+        
+        // Check if it's a page number (digits only, max 3 digits)
+        const pageNumMatch = /^\s*(\d{1,3})\s*$/.exec(trimmed);
+        if (pageNumMatch) {
+          pageNum = parseInt(pageNumMatch[1]);
+          headerLines.push(nextLine);
+          break;
+        }
+        
+        // If we hit alphabetic content, we've gone too far
+        if (/[a-zA-Z]/.test(trimmed)) {
+          this.logger.warn(`Warning: Found alphabetic content while looking for page number after header: "${trimmed.substring(0, 50)}"`);
+          break;
+        }
+      }
+      
+      // Even if we don't find a page number, we still detected a page header
+      if (!pageNum) {
+        // Try to extract page number from the header itself
+        const headerPageMatch = caseMatch[1];
+        if (headerPageMatch) {
+          pageNum = parseInt(headerPageMatch);
+        }
+      }
+      
+      // Always return when we find a Case header pattern
+      return {
+        trialPageNumber: pageNum || 0,
+        parsedTrialPage: pageNum || 0,
+        pageId: pageId,
+        headerText: headerLines.join('\n'),
+        headerLines: headerLines,
+        skipLines: Math.max(this.pageHeaderLines - 1, headerLines.length - 1)
+      };
     }
     
     // Skip the traditional court header patterns for now as they're causing false positives

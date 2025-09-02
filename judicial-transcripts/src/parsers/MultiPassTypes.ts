@@ -9,6 +9,7 @@ export interface PageMetadata {
   pageNumber: number;
   trialPageNumber: number;
   parsedTrialPage: number;
+  pageId?: string;
   headerText: string;
   startFileLine: number;
   endFileLine: number;

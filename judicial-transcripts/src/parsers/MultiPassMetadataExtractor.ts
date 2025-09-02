@@ -57,6 +57,7 @@ export class MetadataExtractor {
           pageNumber: pages.size + 1,
           trialPageNumber: pageHeader.trialPageNumber,
           parsedTrialPage: pageHeader.parsedTrialPage,
+          pageId: pageHeader.pageId,
           headerText: pageHeader.headerText,
           startFileLine: fileLineIndex,
           endFileLine: fileLineIndex,
@@ -81,6 +82,7 @@ export class MetadataExtractor {
           pageNumber: 1,
           trialPageNumber: 1,
           parsedTrialPage: 1,
+          pageId: undefined,
           headerText: '',
           startFileLine: 0,
           endFileLine: fileLineIndex,
@@ -131,7 +133,7 @@ export class MetadataExtractor {
     line: string,
     fileContent: string[],
     currentIndex: number
-  ): { trialPageNumber: number; parsedTrialPage: number; headerText: string; headerLines: string[]; skipLines: number } | null {
+  ): { trialPageNumber: number; parsedTrialPage: number; pageId?: string; headerText: string; headerLines: string[]; skipLines: number } | null {
     
     // Check for Case document header pattern (2-line header)
     // First line: Case 2:19-cv-00123-JRG Document XXX Filed MM/DD/YY Page X of Y PageID #: ZZZZZ
@@ -144,12 +146,14 @@ export class MetadataExtractor {
       return null;
     }
     
-    const caseHeaderPattern = /^\s*Case\s+[\d:cv-]+.*Document\s+\d+.*Page\s+(\d+)\s+of\s+\d+\s+PageID/i;
+    // Extract PageID from the header line
+    const caseHeaderPattern = /^\s*Case\s+[\d:cv-]+.*Document\s+\d+.*Page\s+(\d+)\s+of\s+\d+\s+PageID\s*#?:?\s*(\d+)/i;
     const caseMatch = caseHeaderPattern.exec(line);
     
     if (caseMatch && currentIndex + 1 < fileContent.length) {
       const nextLine = fileContent[currentIndex + 1];
       const pageNumMatch = /^\s*(\d+)\s*$/.exec(nextLine.trim());
+      const pageId = caseMatch[2]; // Extract PageID from the regex match
       
       if (pageNumMatch) {
         const pageNum = parseInt(pageNumMatch[1]);
@@ -158,6 +162,7 @@ export class MetadataExtractor {
           return {
             trialPageNumber: pageNum,
             parsedTrialPage: pageNum,
+            pageId: pageId, // Include PageID in the metadata
             headerText: `${line.trim()}\n${nextLine.trim()}`,
             headerLines: [line, nextLine],
             skipLines: this.pageHeaderLines - 1  // Use configured header lines

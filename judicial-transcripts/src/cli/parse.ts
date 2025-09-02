@@ -21,6 +21,105 @@ const defaultConfig: TranscriptConfig = {
   enableElasticSearch: false
 };
 
+// Apply overrides from trialstyle.json
+async function applyTrialOverrides(
+  trialId: number,
+  overrides: any,
+  prisma: PrismaClient,
+  logger: any
+): Promise<void> {
+  try {
+    // Apply trial-level overrides
+    if (overrides.trial) {
+      const trialUpdates: any = {};
+      
+      if (overrides.trial.plaintiff) trialUpdates.plaintiff = overrides.trial.plaintiff;
+      if (overrides.trial.defendant) trialUpdates.defendant = overrides.trial.defendant;
+      if (overrides.trial.name) trialUpdates.name = overrides.trial.name;
+      if (overrides.trial.court) trialUpdates.court = overrides.trial.court;
+      
+      if (Object.keys(trialUpdates).length > 0) {
+        await prisma.trial.update({
+          where: { id: trialId },
+          data: trialUpdates
+        });
+        logger.info(`Applied trial overrides: ${Object.keys(trialUpdates).join(', ')}`);
+      }
+    }
+    
+    // Apply session-level overrides
+    if (overrides.sessions && Array.isArray(overrides.sessions)) {
+      for (const sessionOverride of overrides.sessions) {
+        const sessionUpdates: any = {};
+        
+        // Find session by fileName or other criteria
+        let session = null;
+        if (sessionOverride.fileName) {
+          session = await prisma.session.findFirst({
+            where: {
+              trialId,
+              fileName: sessionOverride.fileName
+            }
+          });
+        } else if (sessionOverride.sessionId) {
+          session = await prisma.session.findUnique({
+            where: { id: sessionOverride.sessionId }
+          });
+        }
+        
+        if (session) {
+          if (sessionOverride.sessionDate) {
+            sessionUpdates.sessionDate = new Date(sessionOverride.sessionDate);
+          }
+          if (sessionOverride.startTime) {
+            sessionUpdates.startTime = sessionOverride.startTime;
+          }
+          if (sessionOverride.documentNumber) {
+            sessionUpdates.documentNumber = sessionOverride.documentNumber;
+          }
+          
+          if (Object.keys(sessionUpdates).length > 0) {
+            await prisma.session.update({
+              where: { id: session.id },
+              data: sessionUpdates
+            });
+            logger.info(`Applied overrides to session ${session.fileName}: ${Object.keys(sessionUpdates).join(', ')}`);
+          }
+        }
+      }
+    }
+    
+    // Apply page-level overrides if needed
+    if (overrides.pages && Array.isArray(overrides.pages)) {
+      for (const pageOverride of overrides.pages) {
+        if (pageOverride.sessionFileName && pageOverride.pageNumber && pageOverride.pageId) {
+          const session = await prisma.session.findFirst({
+            where: {
+              trialId,
+              fileName: pageOverride.sessionFileName
+            }
+          });
+          
+          if (session) {
+            await prisma.page.updateMany({
+              where: {
+                sessionId: session.id,
+                pageNumber: pageOverride.pageNumber
+              },
+              data: {
+                pageId: pageOverride.pageId
+              }
+            });
+            logger.info(`Applied pageId override to page ${pageOverride.pageNumber} in ${pageOverride.sessionFileName}`);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    logger.error(`Error applying overrides: ${error}`);
+  }
+}
+
 program
   .name('transcript-parser')
   .description('CLI for parsing judicial transcripts')
@@ -373,14 +472,31 @@ program
               const filePath = path.join(actualInputDir, file);
               logger.info(`Processing: ${file}`);
               
-              // Extract session date from filename
-              const dateMatch = file.match(/held on (\d+)_(\d+)_(\d+)/);
+              // Extract session date from filename with improved year handling
+              const dateMatch = file.match(/held on (\d{1,2})_(\d{1,2})_(\d{2})/);
               let sessionDate = new Date();
               if (dateMatch) {
                 const month = parseInt(dateMatch[1]) - 1; // JS months are 0-indexed
                 const day = parseInt(dateMatch[2]);
-                const year = 2000 + parseInt(dateMatch[3]);
+                let year = parseInt(dateMatch[3]);
+                
+                // Smart year detection
+                if (year < 50) {
+                  year = 2000 + year; // 00-49 = 2000-2049
+                } else {
+                  year = 1900 + year; // 50-99 = 1950-1999
+                }
+                
+                // Our trials are typically 2014-2020, so if we got a 1900s date, adjust
+                if (year < 2000) {
+                  year = 2000 + (year - 1900);
+                }
+                
                 sessionDate = new Date(year, month, day);
+                logger.info(`Extracted session date from filename: ${sessionDate.toISOString().split('T')[0]}`);
+              } else {
+                // Try to extract from other parts of the filename or use a default
+                logger.warn(`Could not extract date from filename: ${file}`);
               }
               
               // Determine session type using SessionType enum
@@ -429,6 +545,12 @@ program
               if (!success) {
                 logger.error(`Failed to parse ${file}`);
               }
+            }
+            
+            // Apply overrides if specified in trialstyle.json
+            if (trialStyleConfig?.overrides) {
+              logger.info('\n📝 Applying data overrides from trialstyle.json...');
+              await applyTrialOverrides(trial.id, trialStyleConfig.overrides, prisma, logger);
             }
             } // End of for loop over trialsToProcess
             

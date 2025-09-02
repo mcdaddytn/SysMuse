@@ -408,6 +408,7 @@ export class ContentParser {
         pageNumber: page.pageNumber,
         trialPageNumber: page.trialPageNumber,
         parsedTrialPage: page.parsedTrialPage,
+        pageId: page.pageId,
         headerText: page.headerText,
         createdAt: new Date()
       });
@@ -1049,33 +1050,68 @@ export class ContentParser {
       }
       
       // Step 5: Extract plaintiff and defendant from LEFT side
-      // The left side typically contains party names separated by VS., V., or on separate lines
+      // Handle multi-party plaintiffs/defendants properly
       let plaintiff = '';
       let defendant = '';
       let vsDelimiter = '';
       
-      // Try different patterns for extracting parties
-      if (leftSideText.includes(' VS. ')) {
-        vsDelimiter = ' VS. ';
-        const parts = leftSideText.split(' VS. ');
-        if (parts.length >= 2) {
-          plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
-          defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
+      // Parse the left side line by line to handle complex multi-party cases
+      const leftLines = leftSideLines.map(l => l.trim()).filter(l => l);
+      let inPlaintiff = true;
+      let plaintiffLines: string[] = [];
+      let defendantLines: string[] = [];
+      
+      for (const line of leftLines) {
+        // Check for VS delimiter
+        if (line === 'VS.' || line === 'V.' || line.match(/^VS\.?$/i) || line.match(/^V\.?$/i)) {
+          inPlaintiff = false;
+          vsDelimiter = line;
+          continue;
         }
-      } else if (leftSideText.includes(' V. ')) {
-        vsDelimiter = ' V. ';
-        const parts = leftSideText.split(' V. ');
-        if (parts.length >= 2) {
-          plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
-          defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
+        
+        // Add to appropriate party
+        if (inPlaintiff) {
+          // Check if line contains VS. inline
+          if (line.includes(' VS. ') || line.includes(' V. ')) {
+            const delimiter = line.includes(' VS. ') ? ' VS. ' : ' V. ';
+            const parts = line.split(delimiter);
+            if (parts.length >= 2) {
+              plaintiffLines.push(parts[0].trim());
+              defendantLines.push(parts[1].trim());
+              vsDelimiter = delimiter.trim();
+              inPlaintiff = false;
+            } else {
+              plaintiffLines.push(line);
+            }
+          } else {
+            plaintiffLines.push(line);
+          }
+        } else {
+          defendantLines.push(line);
         }
-      } else if (leftSideText.includes('VS.')) {
-        // Handle case where VS. is on its own line
-        vsDelimiter = 'VS.';
-        const parts = leftSideText.split('VS.');
-        if (parts.length >= 2) {
-          plaintiff = parts[0].replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '').trim();
-          defendant = parts[1].replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '').trim();
+      }
+      
+      // Join the lines and clean up
+      plaintiff = plaintiffLines.join(' ')
+        .replace(/,?\s*PLAINTIFF[S]?[,\s]*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      defendant = defendantLines.join(' ')
+        .replace(/,?\s*DEFENDANT[S]?[,\s]*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+        
+      // Handle "ET AL" expansion if we have more complete info in the text
+      if (plaintiff.includes('ET AL')) {
+        // Look for a more complete listing with "AND" that might give us full party names
+        const fullPlaintiffMatch = leftSideText.match(/([A-Z][A-Z0-9\s,\.]+(?:LLC|INC|CORP|LTD|LIMITED)[A-Z0-9\s,\.]*(?:,\s*[A-Z][A-Z0-9\s,\.]+(?:LLC|INC|CORP|LTD|LIMITED)[A-Z0-9\s,\.]*)*(?:,?\s*AND\s+[A-Z][A-Z0-9\s,\.]+(?:LLC|INC|CORP|LTD|LIMITED)[A-Z0-9\s,\.]*)*)(?:\s+VS\.?\s+|\s+V\.?\s+)/i);
+        if (fullPlaintiffMatch) {
+          const candidatePlaintiff = fullPlaintiffMatch[1].trim();
+          // Only use if it's longer/more complete than what we have
+          if (candidatePlaintiff.length > plaintiff.length && !candidatePlaintiff.includes('VS.') && !candidatePlaintiff.includes(' V.')) {
+            plaintiff = candidatePlaintiff;
+          }
         }
       }
       

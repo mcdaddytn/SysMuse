@@ -1,0 +1,35 @@
+{
+  "fileConvention": "AUTO",
+  "fileSortingMode": "AUTO",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "folderName": "42 Vocalife Amazon",
+  "extractedCaseNumber": "2:19-CV-00123-JRG",
+  "metadata": {
+    "plaintiff": "VOCALIFE LLC",
+    "defendant": "AMAZON.COM, INC. AND AMAZON.COM LLC"
+  },
+  "orderedFiles": [
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_2_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_2_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_5_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_5_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_6_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_6_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_7_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_7_20 (Trial Transcript - Afternoon.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_8_20 (Trial Transcript - Morning S.txt",
+    "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_8_20 (Bench Trial_Jury Verdict) be.txt"
+  ],
+  "overrides": {
+    "trial": {
+      "plaintiff": "VOCALIFE LLC",
+      "defendant": "AMAZON.COM, INC. AND AMAZON.COM LLC",
+      "name": "VOCALIFE LLC VS. AMAZON.COM, INC. AND AMAZON.COM LLC"
+    },
+    "sessions": []
+  }
+}

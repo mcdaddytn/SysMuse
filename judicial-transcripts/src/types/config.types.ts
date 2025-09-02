@@ -266,6 +266,27 @@ export interface TrialStyleConfig {
     defenseGenericName?: string;
     assumeExaminerFromContext?: boolean;
   };
+  // Feature 02S: Data override system for manual corrections
+  overrides?: {
+    trial?: {
+      plaintiff?: string;
+      defendant?: string;
+      name?: string;
+      court?: string;
+    };
+    sessions?: Array<{
+      fileName?: string;
+      sessionId?: number;
+      sessionDate?: string;
+      startTime?: string;
+      documentNumber?: number;
+    }>;
+    pages?: Array<{
+      sessionFileName?: string;
+      pageNumber?: number;
+      pageId?: string;
+    }>;
+  };
 }
 
 // Database management types

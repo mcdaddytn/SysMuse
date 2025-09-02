@@ -1,0 +1,29 @@
+{
+  "fileConvention": "AUTO",
+  "fileSortingMode": "AUTO",
+  "pageHeaderLines": 2,
+  "statementAppendMode": "space",
+  "summaryCenterDelimiter": "AUTO",
+  "folderName": "14 Optis Wireless Technology V. Apple Inc",
+  "extractedCaseNumber": "2:19-CV-00066-JRG",
+  "metadata": {
+    "plaintiff": "OPTIS WIRELESS TECHNOLOGY, LLC, OPTIS CELLULAR TECHNOLOGY, LLC, UNWIRED PLANET, LLC, UNWIRED PLANET INTERNATIONAL LIMITED, AND PANOPTIS PATENT MANAGEMENT, LLC",
+    "defendant": "APPLE INC."
+  },
+  "orderedFiles": [],
+  "overrides": {
+    "trial": {
+      "plaintiff": "OPTIS WIRELESS TECHNOLOGY, LLC, OPTIS CELLULAR TECHNOLOGY, LLC, UNWIRED PLANET, LLC, UNWIRED PLANET INTERNATIONAL LIMITED, AND PANOPTIS PATENT MANAGEMENT, LLC",
+      "defendant": "APPLE INC.",
+      "name": "OPTIS WIRELESS TECHNOLOGY, LLC, OPTIS CELLULAR TECHNOLOGY, LLC, UNWIRED PLANET, LLC, UNWIRED PLANET INTERNATIONAL LIMITED, AND PANOPTIS PATENT MANAGEMENT, LLC VS. APPLE INC."
+    },
+    "sessions": [
+      {
+        "fileName": "NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 08_03_20 Trial Transcript before Judg.txt",
+        "sessionDate": "2020-08-03",
+        "startTime": "08:30:00",
+        "documentNumber": 1423
+      }
+    ]
+  }
+}

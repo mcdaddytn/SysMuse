@@ -472,47 +472,206 @@ program
               const filePath = path.join(actualInputDir, file);
               logger.info(`Processing: ${file}`);
               
-              // Extract session date from filename with improved year handling
-              const dateMatch = file.match(/held on (\d{1,2})_(\d{1,2})_(\d{2})/);
+              // Extract session date from filename - handle multiple simple patterns
               let sessionDate = new Date();
-              if (dateMatch) {
-                const month = parseInt(dateMatch[1]) - 1; // JS months are 0-indexed
-                const day = parseInt(dateMatch[2]);
-                let year = parseInt(dateMatch[3]);
+              let dateFound = false;
+              
+              // Pattern 1: "held on MM_DD_YY" (e.g., "held on 10_1_20")
+              if (file.includes('held on')) {
+                const parts = file.split('held on ')[1];
+                if (parts) {
+                  const datePart = parts.split(' ')[0]; // Get "10_1_20"
+                  const pieces = datePart.split('_');
+                  if (pieces.length === 3) {
+                    const month = parseInt(pieces[0]) - 1; // JS months are 0-indexed
+                    const day = parseInt(pieces[1]);
+                    const year = 2000 + parseInt(pieces[2]); // All our trials are 2000+
+                    sessionDate = new Date(year, month, day);
+                    dateFound = true;
+                    logger.info(`Extracted date from 'held on' pattern: ${sessionDate.toISOString().split('T')[0]}`);
+                  }
+                }
+              }
+              
+              // Pattern 2: "Month DD, YYYY" (e.g., "January 11, 2016" or "SEPTEMBER 14, 2015")
+              if (!dateFound) {
+                const months: { [key: string]: number } = {
+                  'january': 0, 'february': 1, 'march': 2, 'april': 3,
+                  'may': 4, 'june': 5, 'july': 6, 'august': 7,
+                  'september': 8, 'october': 9, 'november': 10, 'december': 11
+                };
                 
-                // Smart year detection
-                if (year < 50) {
-                  year = 2000 + year; // 00-49 = 2000-2049
-                } else {
-                  year = 1900 + year; // 50-99 = 1950-1999
+                for (const [monthName, monthNum] of Object.entries(months)) {
+                  if (file.toLowerCase().includes(monthName)) {
+                    // Find the month name and what follows it
+                    const upperFile = file.toUpperCase();
+                    const upperMonth = monthName.toUpperCase();
+                    const monthIndex = upperFile.indexOf(upperMonth);
+                    if (monthIndex !== -1) {
+                      const afterMonth = file.substring(monthIndex + upperMonth.length).trim();
+                      // Look for "DD, YYYY" or "DD YYYY"
+                      const numbers = afterMonth.match(/(\d{1,2}),?\s+(\d{4})/);
+                      if (numbers) {
+                        const day = parseInt(numbers[1]);
+                        const year = parseInt(numbers[2]);
+                        sessionDate = new Date(year, monthNum, day);
+                        dateFound = true;
+                        logger.info(`Extracted date from month name pattern: ${sessionDate.toISOString().split('T')[0]}`);
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+              
+              // Pattern 3: "Month D YYYY" without comma (e.g., "August 3 2020")
+              if (!dateFound) {
+                const months: { [key: string]: number } = {
+                  'january': 0, 'february': 1, 'march': 2, 'april': 3,
+                  'may': 4, 'june': 5, 'july': 6, 'august': 7,
+                  'september': 8, 'october': 9, 'november': 10, 'december': 11
+                };
+                
+                for (const [monthName, monthNum] of Object.entries(months)) {
+                  if (file.toLowerCase().includes(monthName)) {
+                    const words = file.split(' ');
+                    for (let i = 0; i < words.length; i++) {
+                      if (words[i].toLowerCase() === monthName) {
+                        if (i + 2 < words.length) {
+                          const day = parseInt(words[i + 1]);
+                          const year = parseInt(words[i + 2]);
+                          if (!isNaN(day) && !isNaN(year) && year > 1900 && year < 2100) {
+                            sessionDate = new Date(year, monthNum, day);
+                            dateFound = true;
+                            logger.info(`Extracted date from simple month pattern: ${sessionDate.toISOString().split('T')[0]}`);
+                            break;
+                          }
+                        }
+                      }
+                    }
+                    if (dateFound) break;
+                  }
+                }
+              }
+              
+              // Collect all extracted metadata for debugging
+              const extractedMetadata: any = {
+                originalFileName: file,
+                dateFound: dateFound,
+                extractedDate: dateFound ? sessionDate.toISOString().split('T')[0] : null,
+                datePattern: null,
+                extractedMonth: null,
+                extractedDay: null,
+                extractedYear: null,
+                sessionTypeIndicators: []
+              };
+              
+              // Store what pattern matched for date extraction
+              if (dateFound) {
+                if (file.includes('held on')) {
+                  extractedMetadata.datePattern = 'held_on_MM_DD_YY';
+                } else if (file.toLowerCase().includes('january') || file.toLowerCase().includes('february') || 
+                          file.toLowerCase().includes('march') || file.toLowerCase().includes('april') ||
+                          file.toLowerCase().includes('may') || file.toLowerCase().includes('june') ||
+                          file.toLowerCase().includes('july') || file.toLowerCase().includes('august') ||
+                          file.toLowerCase().includes('september') || file.toLowerCase().includes('october') ||
+                          file.toLowerCase().includes('november') || file.toLowerCase().includes('december')) {
+                  extractedMetadata.datePattern = 'month_name_pattern';
+                }
+                extractedMetadata.extractedMonth = sessionDate.getMonth() + 1;
+                extractedMetadata.extractedDay = sessionDate.getDate();
+                extractedMetadata.extractedYear = sessionDate.getFullYear();
+              }
+              
+              // FALLBACK: If no date found in filename, try to extract from transcript content
+              if (!dateFound) {
+                logger.warn(`Could not extract date from filename: ${file} - attempting to parse from transcript`);
+                
+                // Read first 5000 characters of the file to find date
+                try {
+                  const content = fs.readFileSync(filePath, 'utf-8').substring(0, 5000);
+                  
+                  // Look for patterns like "TRIAL DATE: Month DD, YYYY" or similar
+                  const lines = content.split('\n');
+                  for (const line of lines) {
+                    const upperLine = line.toUpperCase();
+                    
+                    // Check for TRIAL DATE pattern
+                    if (upperLine.includes('TRIAL DATE') || upperLine.includes('DATE OF TRIAL') || 
+                        upperLine.includes('PROCEEDINGS') || upperLine.includes('TRANSCRIPT DATE')) {
+                      // Try to extract date from this line or next few lines
+                      const months: { [key: string]: number } = {
+                        'january': 0, 'february': 1, 'march': 2, 'april': 3,
+                        'may': 4, 'june': 5, 'july': 6, 'august': 7,
+                        'september': 8, 'october': 9, 'november': 10, 'december': 11
+                      };
+                      
+                      for (const [monthName, monthNum] of Object.entries(months)) {
+                        if (line.toLowerCase().includes(monthName)) {
+                          const dateMatch = line.match(/(\d{1,2}),?\s+(\d{4})/);
+                          if (dateMatch) {
+                            const day = parseInt(dateMatch[1]);
+                            const year = parseInt(dateMatch[2]);
+                            sessionDate = new Date(year, monthNum, day);
+                            dateFound = true;
+                            extractedMetadata.datePattern = 'transcript_content';
+                            extractedMetadata.dateFound = true;
+                            extractedMetadata.extractedDate = sessionDate.toISOString().split('T')[0];
+                            extractedMetadata.extractedMonth = monthNum + 1;
+                            extractedMetadata.extractedDay = day;
+                            extractedMetadata.extractedYear = year;
+                            logger.info(`Extracted date from transcript content: ${sessionDate.toISOString().split('T')[0]}`);
+                            break;
+                          }
+                        }
+                      }
+                      if (dateFound) break;
+                    }
+                  }
+                } catch (err) {
+                  logger.error(`Could not read file for date extraction: ${err}`);
                 }
                 
-                // Our trials are typically 2014-2020, so if we got a 1900s date, adjust
-                if (year < 2000) {
-                  year = 2000 + (year - 1900);
+                if (!dateFound) {
+                  // NEVER use current date - use a placeholder that's obviously wrong
+                  sessionDate = new Date(1900, 0, 1); // Jan 1, 1900 - clearly a placeholder
+                  logger.error(`CRITICAL: No date found for ${file} - using placeholder 1900-01-01`);
+                  extractedMetadata.dateError = 'NO_DATE_FOUND';
+                  extractedMetadata.needsManualOverride = true;
                 }
-                
-                sessionDate = new Date(year, month, day);
-                logger.info(`Extracted session date from filename: ${sessionDate.toISOString().split('T')[0]}`);
-              } else {
-                // Try to extract from other parts of the filename or use a default
-                logger.warn(`Could not extract date from filename: ${file}`);
               }
               
               // Determine session type using SessionType enum
               let sessionType: 'MORNING' | 'AFTERNOON' | 'ALLDAY' | 'EVENING' | 'SPECIAL' = 'MORNING';
-              if (file.toLowerCase().includes('afternoon')) {
+              const lowerFile = file.toLowerCase();
+              
+              // Store all indicators found
+              if (lowerFile.includes('afternoon')) extractedMetadata.sessionTypeIndicators.push('afternoon');
+              if (lowerFile.includes(' pm')) extractedMetadata.sessionTypeIndicators.push('pm');
+              if (lowerFile.includes(' am')) extractedMetadata.sessionTypeIndicators.push('am');
+              if (lowerFile.includes('morning')) extractedMetadata.sessionTypeIndicators.push('morning');
+              if (lowerFile.includes('verdict')) extractedMetadata.sessionTypeIndicators.push('verdict');
+              if (lowerFile.includes('bench')) extractedMetadata.sessionTypeIndicators.push('bench');
+              if (lowerFile.includes('am and pm')) extractedMetadata.sessionTypeIndicators.push('am_and_pm');
+              
+              if (lowerFile.includes('afternoon') || lowerFile.includes(' pm')) {
                 sessionType = 'AFTERNOON';
-              } else if (file.toLowerCase().includes('verdict') || file.toLowerCase().includes('bench')) {
+              } else if (lowerFile.includes(' am')) {
+                sessionType = 'MORNING';
+              } else if (lowerFile.includes('am and pm') || lowerFile.includes('all day')) {
+                sessionType = 'ALLDAY';
+              } else if (lowerFile.includes('verdict') || lowerFile.includes('bench')) {
                 sessionType = 'SPECIAL';  // Use SPECIAL for verdict and bench sessions
               }
               
-              // Create or find session
+              extractedMetadata.determinedSessionType = sessionType;
+              
+              // Create or find session - use fileName as part of uniqueness check
+              // This prevents duplicate sessions when dates are missing (e.g., Packet trial)
               let session = await prisma.session.findFirst({
                 where: {
                   trialId: trial.id,
-                  sessionDate,
-                  sessionType
+                  fileName: file  // fileName is the unique identifier
                 }
               });
               
@@ -523,21 +682,24 @@ program
                     sessionDate,
                     sessionType,
                     shortName: sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase(),
-                    fileName: file
+                    fileName: file,
+                    metadata: extractedMetadata
                   }
                 });
+                logger.info(`Created session with metadata: ${JSON.stringify(extractedMetadata)}`);
               } else {
-                // Update fileName and shortName if needed
+                // Update sessionDate, sessionType, and metadata
                 const shortName = sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase();
-                if (session.fileName !== file || session.shortName !== shortName) {
-                  session = await prisma.session.update({
-                    where: { id: session.id },
-                    data: { 
-                      fileName: file,
-                      shortName: shortName
-                    }
-                  });
-                }
+                session = await prisma.session.update({
+                  where: { id: session.id },
+                  data: { 
+                    sessionDate,  // Update date in case it was extracted better this time
+                    sessionType,  // Update type in case it was determined better
+                    shortName: shortName,
+                    metadata: extractedMetadata
+                  }
+                });
+                logger.info(`Updated session with metadata: ${JSON.stringify(extractedMetadata)}`);
               }
               
               const success = await multiPassParser.parseTranscript(filePath, session.id, trial.id);

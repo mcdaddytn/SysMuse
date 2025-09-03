@@ -8,6 +8,7 @@ import { Phase2Processor } from '../parsers/Phase2Processor';
 import { MultiPassTranscriptParser } from '../parsers/MultiPassTranscriptParser';
 import { TranscriptConfig, TrialStyleConfig } from '../types/config.types';
 import { caseNumberExtractor } from '../utils/CaseNumberExtractor';
+import { generateCaseHandle } from '../utils/fileTokenGenerator';
 import logger from '../utils/logger';
 
 const program = new Command();
@@ -438,6 +439,7 @@ program
                   name: trialName,
                   shortName,
                   caseNumber,
+                  caseHandle: generateCaseHandle(caseNumber),
                   court: config.trial?.court || 'UNKNOWN COURT',
                   plaintiff: trialStyleConfig?.metadata?.plaintiff || 'Unknown Plaintiff',
                   defendant: trialStyleConfig?.metadata?.defendant || 'Unknown Defendant'

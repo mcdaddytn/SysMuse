@@ -5,10 +5,12 @@ import {
   LineMetadata,
   DocumentLocation
 } from './MultiPassTypes';
+import { SmartPageHeaderParser, ParsedPageHeader } from './SmartPageHeaderParser';
 
 export class MetadataExtractor {
   private logger: Logger;
   private pageHeaderLines: number;
+  private smartHeaderParser: SmartPageHeaderParser;
   
   private readonly PAGE_HEADER_PATTERN = /^\s*(\d+)\s+(.+?)\s+(\d+)\s*$/;
   
@@ -25,97 +27,87 @@ export class MetadataExtractor {
   constructor(logger: Logger, pageHeaderLines: number = 2) {
     this.logger = logger;
     this.pageHeaderLines = pageHeaderLines;
+    this.smartHeaderParser = new SmartPageHeaderParser(pageHeaderLines);
   }
 
   async extractMetadata(fileContent: string[], filePath: string): Promise<ParsedMetadata> {
     this.logger.info(`Extracting metadata from ${fileContent.length} lines`);
     
+    // First, detect page boundaries using page breaks
+    const pageStarts = this.detectPageBoundaries(fileContent);
+    this.logger.info(`Detected ${pageStarts.length} page boundaries`);
+    
     const pages = new Map<number, PageMetadata>();
     const lines = new Map<number, LineMetadata>();
     const fileLineMapping = new Map<number, DocumentLocation>();
     
-    let currentPage: PageMetadata | null = null;
-    let pageLineNumber = 0;
     let globalLineNumber = 0;
-    let skipNextLine = false;
     
-    for (let fileLineIndex = 0; fileLineIndex < fileContent.length; fileLineIndex++) {
-      const rawLine = fileContent[fileLineIndex];
+    // Process each page
+    for (let pageIdx = 0; pageIdx < pageStarts.length; pageIdx++) {
+      const pageStartLine = pageStarts[pageIdx];
+      const pageEndLine = (pageIdx + 1 < pageStarts.length) ? pageStarts[pageIdx + 1] - 1 : fileContent.length - 1;
       
-      if (skipNextLine) {
-        skipNextLine = false;
-        continue;
+      // First, grab the actual header lines for storage
+      const actualHeaderLines: string[] = [];
+      for (let i = 0; i < this.pageHeaderLines && pageStartLine + i <= pageEndLine; i++) {
+        const line = fileContent[pageStartLine + i];
+        if (line !== undefined) {
+          actualHeaderLines.push(line);
+        }
       }
+      const actualHeaderText = actualHeaderLines.join('\n');
       
-      const pageHeader = this.detectPageHeader(rawLine, fileContent, fileLineIndex);
-      if (pageHeader) {
-        if (currentPage) {
-          currentPage.endFileLine = fileLineIndex - 1;
+      // Use SmartPageHeaderParser for header detection
+      const headerResult = this.smartHeaderParser.parseHeader(fileContent, pageStartLine);
+      
+      // Create page metadata - ALWAYS use the actual header text we captured
+      const pageNumber = pageIdx + 1;
+      const currentPage: PageMetadata = {
+        pageNumber,
+        trialPageNumber: headerResult.parsedTrialPage || headerResult.parsedPageNumber || pageNumber,
+        parsedTrialPage: headerResult.parsedTrialPage || headerResult.parsedPageNumber || pageNumber,
+        pageId: headerResult.pageId || (headerResult.lineRangeText ? `${headerResult.startLineNumber}-${headerResult.endLineNumber}` : undefined),
+        headerText: actualHeaderText,  // Use the actual header lines we captured
+        startFileLine: pageStartLine,
+        endFileLine: pageEndLine,
+        headerLines: actualHeaderLines  // Use actual header lines array
+      };
+      
+      pages.set(pageNumber, currentPage);
+      
+      // Process transcript lines (skip header lines)
+      // Use the maximum of what the parser detected or our configured header lines
+      const headerLinesCount = Math.max(headerResult.headerLinesUsed, actualHeaderLines.length);
+      const transcriptStartLine = pageStartLine + headerLinesCount;
+      let pageLineNumber = 0;
+      
+      // Process main transcript content (skip the header lines entirely)
+      for (let fileLineIndex = transcriptStartLine; fileLineIndex <= pageEndLine; fileLineIndex++) {
+        const rawLine = fileContent[fileLineIndex];
+      
+        if (this.isBlankLine(rawLine)) {
+          continue;
         }
         
-        currentPage = {
-          pageNumber: pages.size + 1,
-          trialPageNumber: pageHeader.trialPageNumber,
-          parsedTrialPage: pageHeader.parsedTrialPage,
-          pageId: pageHeader.pageId,
-          headerText: pageHeader.headerText,
-          startFileLine: fileLineIndex,
-          endFileLine: fileLineIndex,
-          headerLines: pageHeader.headerLines
-        };
+        const lineMetadata = this.extractLineMetadata(
+          rawLine,
+          fileLineIndex,
+          pageLineNumber,
+          globalLineNumber
+        );
         
-        pages.set(currentPage.pageNumber, currentPage);
-        pageLineNumber = 0;
-        
-        if (pageHeader.skipLines > 0) {
-          fileLineIndex += pageHeader.skipLines - 1;
+        if (lineMetadata) {
+          lines.set(globalLineNumber, lineMetadata);
+          
+          fileLineMapping.set(fileLineIndex, {
+            pageNumber,
+            lineNumber: globalLineNumber
+          });
+          
+          pageLineNumber++;
+          globalLineNumber++;
         }
-        continue;
-      }
-      
-      if (this.isBlankLine(rawLine)) {
-        continue;
-      }
-      
-      if (!currentPage) {
-        currentPage = {
-          pageNumber: 1,
-          trialPageNumber: 1,
-          parsedTrialPage: 1,
-          pageId: undefined,
-          headerText: '',
-          startFileLine: 0,
-          endFileLine: fileLineIndex,
-          headerLines: []
-        };
-        pages.set(1, currentPage);
-      }
-      
-      const lineMetadata = this.extractLineMetadata(
-        rawLine,
-        fileLineIndex,
-        pageLineNumber,
-        globalLineNumber
-      );
-      
-      if (lineMetadata) {
-        lines.set(globalLineNumber, lineMetadata);
-        
-        fileLineMapping.set(fileLineIndex, {
-          pageNumber: currentPage.pageNumber,
-          lineNumber: globalLineNumber
-        });
-        
-        pageLineNumber++;
-        globalLineNumber++;
-      }
-    }
-    
-    if (currentPage) {
-      currentPage.endFileLine = fileContent.length - 1;
-      // Add the last page to the collection if it hasn't been added yet
-      if (!pages.has(currentPage.pageNumber)) {
-        pages.set(currentPage.pageNumber, currentPage);
       }
     }
     
@@ -129,11 +121,79 @@ export class MetadataExtractor {
     };
   }
 
+  private detectPageBoundaries(fileContent: string[]): number[] {
+    const pageStarts: number[] = [0];  // First page always starts at line 0
+    let foundFormFeeds = false;
+    
+    // Look for form feed characters in the file content
+    for (let i = 0; i < fileContent.length; i++) {
+      const line = fileContent[i];
+      if (line && line.includes('\f')) {
+        foundFormFeeds = true;
+        // Form feed found - the NEXT line starts a new page
+        // (unless the form feed is at the very end of the line with nothing after it)
+        const formFeedIndex = line.indexOf('\f');
+        if (formFeedIndex < line.length - 1) {
+          // There's content after the form feed on the same line
+          // Split the line and treat the part after \f as the start of a new page
+          const beforeFF = line.substring(0, formFeedIndex);
+          const afterFF = line.substring(formFeedIndex + 1);
+          
+          // Replace the current line with just the part before form feed
+          fileContent[i] = beforeFF;
+          
+          // Insert the part after form feed as a new line
+          if (afterFF.trim()) {
+            fileContent.splice(i + 1, 0, afterFF);
+            // The new page starts at the newly inserted line
+            pageStarts.push(i + 1);
+          } else if (i + 1 < fileContent.length) {
+            // If nothing after form feed, next line is the page start
+            pageStarts.push(i + 1);
+          }
+        } else if (i + 1 < fileContent.length) {
+          // Form feed is at the end of the line, next line starts new page
+          pageStarts.push(i + 1);
+        }
+      }
+    }
+    
+    if (!foundFormFeeds) {
+      this.logger.info('No page breaks found, falling back to header-based page detection');
+      return this.detectPageBoundariesByHeaders(fileContent);
+    }
+    
+    this.logger.info(`Detected ${pageStarts.length} pages using form feed characters`);
+    return pageStarts;
+  }
+  
+  private detectPageBoundariesByHeaders(fileContent: string[]): number[] {
+    const pageStarts: number[] = [0];
+    
+    for (let i = 1; i < fileContent.length; i++) {
+      // Use smart header parser to check if this looks like a page start
+      const headerResult = this.smartHeaderParser.parseHeader(fileContent, i);
+      
+      // If we found header content with page numbers, it's likely a page start
+      if (headerResult.parsedPageNumber || headerResult.parsedTrialPage) {
+        // Make sure we're not too close to the last page start
+        const lastPageStart = pageStarts[pageStarts.length - 1];
+        if (i - lastPageStart > 10) {  // Minimum 10 lines between pages
+          pageStarts.push(i);
+        }
+      }
+    }
+    
+    return pageStarts;
+  }
+  
   private detectPageHeader(
     line: string,
     fileContent: string[],
     currentIndex: number
   ): { trialPageNumber: number; parsedTrialPage: number; pageId?: string; headerText: string; headerLines: string[]; skipLines: number } | null {
+    
+    if (!line) return null;  // Safety check for undefined/null lines
     
     // Check for Case document header pattern (2-line header)
     // First line: Case 2:19-cv-00123-JRG Document XXX Filed MM/DD/YY Page X of Y PageID #: ZZZZZ
@@ -159,7 +219,7 @@ export class MetadataExtractor {
       let searchLimit = Math.min(currentIndex + this.pageHeaderLines, fileContent.length);
       
       // If PageID wasn't on the first line, check if it's on the next line
-      if (!pageId && currentIndex + 1 < fileContent.length) {
+      if (!pageId && currentIndex + 1 < fileContent.length && fileContent[currentIndex + 1]) {
         const nextLine = fileContent[currentIndex + 1].trim();
         if (/^\d+$/.test(nextLine) && nextLine.length > 3) {
           // Likely a PageID (more than 3 digits)
@@ -173,6 +233,7 @@ export class MetadataExtractor {
       let foundPageNum = false;
       for (let i = currentIndex + 1; i < searchLimit && i <= currentIndex + 2; i++) {
         const nextLine = fileContent[i];
+        if (!nextLine) continue;  // Skip undefined lines
         const trimmed = nextLine.trim();
         
         // Skip if we already added this as PageID
@@ -246,6 +307,8 @@ export class MetadataExtractor {
     globalLineNumber: number
   ): LineMetadata | null {
     
+    if (!rawLine) return null;  // Safety check for undefined/null lines
+    
     const timestampMatch = this.LINE_PREFIX_PATTERNS.TIMESTAMP_AND_NUMBER.exec(rawLine);
     if (timestampMatch) {
       return {
@@ -301,6 +364,6 @@ export class MetadataExtractor {
   }
 
   private isBlankLine(line: string): boolean {
-    return line.trim().length === 0;
+    return !line || line.trim().length === 0;
   }
 }

@@ -124,8 +124,13 @@ export class MultiPassTranscriptParser {
         }
       };
     } catch (error) {
+      this.logger.error('Pass 1 execution error:', error);
+      if (error instanceof Error) {
+        this.logger.error('Stack trace:', error.stack);
+      }
       return {
         success: false,
+        data: undefined,
         errors: [error instanceof Error ? error.message : 'Unknown error in Pass 1'],
         warnings: [],
         stats: {

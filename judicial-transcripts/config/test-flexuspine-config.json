@@ -1,0 +1,15 @@
+{
+  "inputDir": "./output/multi-trial",
+  "outputDir": "./output/test",
+  "logLevel": "error",
+  "enableElasticSearch": false,
+  "processSubDirs": true,
+  "trialSelectionMode": "INCLUDE",
+  "includedTrials": [    
+    "23 Flexuspine V. Globus Medical"
+  ],
+  "defaultTrialStyle": {
+    "pageHeaderLines": 4,
+    "debugOutput": true
+  }
+}

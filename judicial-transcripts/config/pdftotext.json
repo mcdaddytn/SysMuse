@@ -2,7 +2,7 @@
   "pdfTextExtractOptions": {
     "layout": true,
     "r": 300,
-    "nopgbrk": true,
+    "nopgbrk": false,
     "enc": "UTF-8",
     "eol": "unix",
     "fixed": 0

@@ -81,10 +81,13 @@ app.get('/api/trials/:id', async (req: Request, res: Response) => {
             lawFirm: true
           }
         },
+        witnesses: true
+        /*
         witnesses: true,
         markers: {
           orderBy: { startTime: 'asc' }
         }
+        */
       }
     });
     
@@ -266,8 +269,10 @@ app.get('/api/trials/:id/markers', async (req: Request, res: Response) => {
     
     const markers = await prisma.marker.findMany({
       where,
-      orderBy: { startTime: 'asc' },
-      include: {}
+      orderBy: { createdAt: 'asc' },
+      include: {
+        event: true
+      }
     });
     
     res.json(markers);

@@ -1,6 +1,6 @@
 // src/cli/parse.ts
 import { Command } from 'commander';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, LLMTaskStatus } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TranscriptParser } from '../parsers/TranscriptParser';
@@ -21,6 +21,56 @@ const defaultConfig: TranscriptConfig = {
   batchSize: 100,
   enableElasticSearch: false
 };
+
+// Helper function to update workflow state for Phase 1
+async function updatePhase1WorkflowState(prisma: PrismaClient, trialId: number): Promise<void> {
+  try {
+    await prisma.trialWorkflowState.upsert({
+      where: { trialId },
+      create: {
+        trialId,
+        phase1Completed: true,
+        phase1CompletedAt: new Date(),
+        llmOverrideStatus: LLMTaskStatus.PENDING,
+        llmMarkerStatus: LLMTaskStatus.PENDING
+      },
+      update: {
+        phase1Completed: true,
+        phase1CompletedAt: new Date()
+      }
+    });
+    logger.debug(`Updated workflow state for trial ${trialId}: Phase 1 completed`);
+  } catch (error) {
+    logger.warn(`Failed to update workflow state for trial ${trialId}: ${error}`);
+  }
+}
+
+// Helper function to update workflow state for Phase 2
+async function updatePhase2WorkflowState(prisma: PrismaClient, trialId: number): Promise<void> {
+  try {
+    await prisma.trialWorkflowState.upsert({
+      where: { trialId },
+      create: {
+        trialId,
+        phase2Completed: true,
+        phase2CompletedAt: new Date(),
+        phase2IndexCompleted: true,
+        phase2IndexAt: new Date(),
+        llmOverrideStatus: LLMTaskStatus.PENDING,
+        llmMarkerStatus: LLMTaskStatus.PENDING
+      },
+      update: {
+        phase2Completed: true,
+        phase2CompletedAt: new Date(),
+        phase2IndexCompleted: true,
+        phase2IndexAt: new Date()
+      }
+    });
+    logger.debug(`Updated workflow state for trial ${trialId}: Phase 2 completed`);
+  } catch (error) {
+    logger.warn(`Failed to update workflow state for trial ${trialId}: ${error}`);
+  }
+}
 
 // Apply overrides from trialstyle.json
 async function applyTrialOverrides(
@@ -724,6 +774,10 @@ program
               logger.info('\n📝 Applying data overrides from trialstyle.json...');
               await applyTrialOverrides(trial.id, trialStyleConfig.overrides, prisma, logger);
             }
+            
+            // Update workflow state for Phase 1 completion
+            await updatePhase1WorkflowState(prisma, trial.id);
+            
             } // End of for loop over trialsToProcess
             
             // All trials have been processed
@@ -760,6 +814,9 @@ program
               logger.info(`Using latest trial: ${latestTrial.caseNumber} (ID: ${latestTrial.id})`);
               const processor = new Phase2Processor(config);
               await processor.processTrial(latestTrial.id);
+              
+              // Update workflow state for Phase 2 completion
+              await updatePhase2WorkflowState(prisma, latestTrial.id);
             } else {
               logger.error('No trial found in database. Please run Phase 1 first.');
               process.exit(1);
@@ -781,6 +838,9 @@ program
                 
                 const processor = new Phase2Processor(config);
                 await processor.processTrial(trial.id);
+                
+                // Update workflow state for Phase 2 completion
+                await updatePhase2WorkflowState(prisma, trial.id);
               } else {
                 logger.warn(`Trial not found in database: ${trialDirName}. Run Phase 1 first.`);
               }

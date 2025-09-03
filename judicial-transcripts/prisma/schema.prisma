@@ -35,6 +35,8 @@ model Trial {
   trialEvents          TrialEvent[]
   witnesses            Witness[]
   processingStatus     TrialProcessingStatus?
+  workflowState        TrialWorkflowState?
+  trialStyle           Json?                  // Merged trialstyle.json for this trial
 
   @@index([caseNumber])
 }
@@ -681,4 +683,66 @@ model TrialProcessingStatus {
   
   @@index([trialId])
   @@index([elasticsearchCleared])
+}
+
+model TrialWorkflowState {
+  id                    Int                    @id @default(autoincrement())
+  trialId               Int                    @unique
+  trial                 Trial                  @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  
+  // Workflow step completion tracking
+  pdfConvertCompleted   Boolean                @default(false)
+  pdfConvertAt          DateTime?
+  phase1Completed       Boolean                @default(false)
+  phase1CompletedAt     DateTime?
+  llmOverrideCompleted  Boolean                @default(false)
+  llmOverrideAt         DateTime?
+  overrideImportCompleted Boolean              @default(false)
+  overrideImportAt      DateTime?
+  phase2Completed       Boolean                @default(false)
+  phase2CompletedAt     DateTime?
+  phase2IndexCompleted  Boolean                @default(false)
+  phase2IndexAt         DateTime?
+  phase3Completed       Boolean                @default(false)
+  phase3CompletedAt     DateTime?
+  llmMarkerCompleted    Boolean                @default(false)
+  llmMarkerAt           DateTime?
+  markerImportCompleted Boolean                @default(false)
+  markerImportAt        DateTime?
+  phase3IndexCompleted  Boolean                @default(false)
+  phase3IndexAt         DateTime?
+  phase2CleanupCompleted Boolean               @default(false)
+  phase2CleanupAt       DateTime?
+  
+  // Configuration tracking
+  trialStylePath        String?                // Path to trial-specific trialstyle.json
+  overrideFilesPath     String?                // Path to override files directory
+  sourcePdfPath         String?                // Source PDF directory path
+  destinationTxtPath    String?                // Destination text directory path
+  
+  // LLM task tracking
+  llmOverrideTaskId     String?                // Task ID for LLM override generation
+  llmOverrideStatus     LLMTaskStatus          @default(PENDING)
+  llmMarkerTaskId       String?                // Task ID for LLM marker discovery
+  llmMarkerStatus       LLMTaskStatus          @default(PENDING)
+  
+  // Error tracking
+  lastError             String?                @db.Text
+  lastErrorAt           DateTime?
+  retryCount            Int                    @default(0)
+  
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  
+  @@index([trialId])
+  @@index([llmOverrideStatus])
+  @@index([llmMarkerStatus])
+}
+
+enum LLMTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  SKIPPED
 }

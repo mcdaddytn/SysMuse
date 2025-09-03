@@ -1,4 +1,4 @@
-import { ElasticSearchService } from '../../services/ElasticsearchService';
+import { ElasticSearchService } from '../../services/ElasticSearchService';
 import { EnhancedSearchService } from '../../services/EnhancedSearchService';
 import logger from '../../utils/logger';
 import * as fs from 'fs/promises';

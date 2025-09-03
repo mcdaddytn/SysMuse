@@ -1,5 +1,19 @@
 # Quick Command Reference
 
+## Most Concise Commands (Recommended)
+These are the simplest commands using all defaults:
+```bash
+# Complete reset and run (uses multi-pass parser by default)
+npx prisma db push --force-reset
+npx prisma generate
+npm run seed
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
+npx ts-node src/cli/phase3.ts process
+```
+
+All phases use the configuration file's `includedTrials` array to determine which trials to process. No --trial-id parameter is needed anywhere.
+
 ## Minimal Setup and Run Sequence
 
 ### From Scratch (No Existing Backups)
@@ -13,13 +27,13 @@ npx prisma generate
 # 3. Load seed data
 npm run seed
 
-# 4. Run Phase 1 parsing (choose one parser mode)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
-# OR for legacy parser:
-# npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+# 4. Run Phase 1 parsing (defaults to multi-pass)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
+# OR for legacy parser (must specify explicitly):
+# npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode legacy
 
-# 5. Run Phase 2 processing
-npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+# 5. Run Phase 2 processing (uses config's includedTrials)
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
 
 # 6. Run Phase 3 marker processing
 npx ts-node src/cli/phase3.ts process
@@ -56,19 +70,29 @@ npx prisma studio
 
 ### Phase 1: Initial Parsing
 ```bash
-# Multi-Pass Parser (recommended, new modular architecture)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
+# Standard command (defaults to multi-pass parser)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
 
-# Legacy Parser (well-tested, for comparison)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+# Legacy Parser (must specify explicitly)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode legacy
 
-# With debug output (multi-pass only)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass --debug-output
+# With debug output
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --debug-output
 ```
 
 ### Phase 2: Enhanced Processing
 ```bash
-npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+# Phase 2 now uses config's includedTrials array - no --trial-id needed
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
+```
+
+### Reporting Commands
+```bash
+# View Phase 1 parsing report
+npx ts-node src/cli/reports.ts phase1
+
+# View Phase 2 processing report
+npx ts-node src/cli/reports.ts phase2
 ```
 
 ### Phase 3: Marker Processing
@@ -147,8 +171,9 @@ npx ts-node scripts/export-comparison-data.ts
 
 ## Important Notes
 - **ALWAYS** use the configuration file - command line arguments alone are insufficient
-- Default config for Mac testing: `config/example-trial-config-mac.json`
-- Parser modes: `multi-pass` (recommended) or `legacy` (for comparison)
-- Trial ID is usually 1 for phase 2 and phase 3
+- Primary config: `config/multi-trial-config-mac.json` (supports multiple trials)
+- Trial selection: All phases use config's `includedTrials` array - no --trial-id needed
+- Parser default: Multi-pass parser is default (omit --parser-mode unless using legacy)
+- Most concise commands: Just specify --phase1/--phase2 and --config
 - Backups are stored in `backups/` directory (not in source control)
 - For detailed database operations, see `docs/database-testing-guide.md`

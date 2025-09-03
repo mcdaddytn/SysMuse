@@ -134,9 +134,8 @@ program
   .option('-o, --output <path>', 'Output directory for parsed data')
   .option('--phase1', 'Run only Phase 1 (line parsing)')
   .option('--phase2', 'Run only Phase 2 (event processing)')
-  .option('--trial-id <id>', 'Trial ID for Phase 2 processing', parseInt)
   .option('--log-level <level>', 'Log level (debug, info, warn, error)', 'info')
-  .option('--parser-mode <mode>', 'Parser mode: legacy or multi-pass', 'legacy')
+  .option('--parser-mode <mode>', 'Parser mode: legacy or multi-pass', 'multi-pass')
   .option('--debug-output', 'Enable debug output for multi-pass parser')
   .action(async (options) => {
     try {
@@ -746,25 +745,47 @@ program
           logger.info('\n🔄 Starting Phase 2: Event Processing');
           logger.info('-'.repeat(40));
           
-          let trialId = options.trialId;
+          // Get trials to process from config
+          const includedTrials = (config as any).includedTrials || [];
+          const activeTrials = (config as any).activeTrials || [];
+          const trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
           
-          // If no trial ID provided, try to find the most recent trial
-          if (!trialId) {
+          if (trialsToProcess.length === 0) {
+            // If no trials specified in config, process the most recent trial
             const latestTrial = await prisma.trial.findFirst({
               orderBy: { createdAt: 'desc' }
             });
             
             if (latestTrial) {
-              trialId = latestTrial.id;
-              logger.info(`Using latest trial: ${latestTrial.caseNumber} (ID: ${trialId})`);
+              logger.info(`Using latest trial: ${latestTrial.caseNumber} (ID: ${latestTrial.id})`);
+              const processor = new Phase2Processor(config);
+              await processor.processTrial(latestTrial.id);
             } else {
               logger.error('No trial found in database. Please run Phase 1 first.');
               process.exit(1);
             }
+          } else {
+            // Process each trial specified in the config
+            logger.info(`Processing ${trialsToProcess.length} trials from config: ${trialsToProcess.join(', ')}`);
+            
+            for (const trialDirName of trialsToProcess) {
+              // Find the trial by shortName (which is the folder name)
+              const trial = await prisma.trial.findFirst({
+                where: { shortName: trialDirName }
+              });
+              
+              if (trial) {
+                logger.info(`\n${'='.repeat(60)}`);
+                logger.info(`Processing Phase 2 for trial: ${trial.name} (${trial.caseNumber})`);
+                logger.info(`${'='.repeat(60)}`);
+                
+                const processor = new Phase2Processor(config);
+                await processor.processTrial(trial.id);
+              } else {
+                logger.warn(`Trial not found in database: ${trialDirName}. Run Phase 1 first.`);
+              }
+            }
           }
-          
-          const processor = new Phase2Processor(config);
-          await processor.processTrial(trialId);
           
           logger.info('✅ Phase 2 completed successfully');
         }

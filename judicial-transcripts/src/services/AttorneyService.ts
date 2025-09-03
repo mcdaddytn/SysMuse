@@ -504,7 +504,10 @@ export class AttorneyService {
       }
     });
     
-    if (speaker?.attorney) return speaker.attorney;
+    if (speaker?.attorney) {
+      // Return attorney with speaker relation included
+      return { ...speaker.attorney, speaker };
+    }
     
     // NEW: Try to match by lastName for attorneys without titles
     // Parse the speakerPrefix to extract title and lastName

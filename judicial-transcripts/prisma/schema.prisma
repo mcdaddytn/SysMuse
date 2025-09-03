@@ -479,6 +479,7 @@ enum AttorneyRole {
   PLAINTIFF
   DEFENDANT
   THIRD_PARTY
+  UNKNOWN
 }
 
 enum SpeakerType {

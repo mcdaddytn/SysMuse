@@ -324,25 +324,43 @@ export class Phase2Processor {
       return; // Already exists
     }
     
-    // Create speaker for attorney
-    const speaker = await this.prisma.speaker.create({
-      data: {
+    // Check if speaker handle already exists
+    const speakerHandle = `ATTORNEY_${lastName}`;
+    let speaker = await this.prisma.speaker.findFirst({
+      where: {
         trialId,
-        speakerPrefix,
-        speakerHandle: `ATTORNEY_${lastName}`,
-        speakerType: 'ATTORNEY'
+        speakerHandle
       }
     });
     
-    // Create attorney record
-    await this.prisma.attorney.create({
-      data: {
-        name: attorneyData.name,
-        speakerPrefix,
-        lastName,
-        speakerId: speaker.id
-      }
+    // Create speaker for attorney if it doesn't exist
+    if (!speaker) {
+      speaker = await this.prisma.speaker.create({
+        data: {
+          trialId,
+          speakerPrefix,
+          speakerHandle,
+          speakerType: 'ATTORNEY'
+        }
+      });
+    }
+    
+    // Check if attorney already exists with this speakerId
+    const existingAttorney = await this.prisma.attorney.findFirst({
+      where: { speakerId: speaker.id }
     });
+    
+    if (!existingAttorney) {
+      // Create attorney record
+      await this.prisma.attorney.create({
+        data: {
+          name: attorneyData.name,
+          speakerPrefix,
+          lastName,
+          speakerId: speaker.id
+        }
+      });
+    }
     
     logger.info(`Created attorney: ${attorneyData.name} (${side})`);
   }
@@ -579,7 +597,9 @@ export class Phase2Processor {
     
     // Check for "BY MR./MS." pattern in line text to set examining attorney
     // This typically follows examination type lines
+    logger.debug(`[BY LINE DEBUG] Checking line ${line.lineNumber}: "${lineText.substring(0, 30)}..."`);
     if (await this.checkExaminingAttorney(sessionId, line, lineText, state)) {
+      logger.info(`[BY LINE DEBUG] Line ${line.lineNumber} was handled as BY line`);
       return;
     }
     
@@ -660,15 +680,13 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    // Only check lines with no speaker prefix (the whole line is the text)
-    if (line.speakerPrefix) {
-      return false;
-    }
-    
+    // Check the text for BY pattern
+    // Note: BY lines DO have speakerPrefix from Phase 1, so we check the text not the prefix
     const trimmed = lineText.trim();
     
     // Check for "BY MR./MS./MRS./DR. LASTNAME:" pattern
     const byMatch = trimmed.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+):?$/);
+    logger.debug(`[BY LINE DEBUG] checkExaminingAttorney: trimmed="${trimmed}", match=${byMatch ? 'YES' : 'NO'}`);
     if (!byMatch) {
       return false;
     }
@@ -682,22 +700,131 @@ export class Phase2Processor {
       attorneyPrefix
     );
     
-    if (attorney) {
-      // Create speaker info for this attorney
-      const speaker: SpeakerInfo = {
-        id: attorney.speaker.id,
-        speakerPrefix: attorney.speaker.speakerPrefix,
-        speakerHandle: attorney.speaker.speakerHandle,
-        speakerType: SpeakerType.ATTORNEY,
-        attorneyId: attorney.id,
-        name: attorney.name
-      };
+    let speaker: SpeakerInfo | null = null;
+    
+    try {
+      if (attorney) {
+        // Create speaker info for this attorney
+        if (!attorney.speaker) {
+          logger.error(`Attorney ${attorney.name} has no speaker record!`);
+          return false;
+        }
+        speaker = {
+          id: attorney.speaker.id,
+          speakerPrefix: attorney.speaker.speakerPrefix,
+          speakerHandle: attorney.speaker.speakerHandle,
+          speakerType: SpeakerType.ATTORNEY,
+          attorneyId: attorney.id,
+          name: attorney.name
+        };
+        logger.info(`Found existing attorney: ${attorney.name}`);
+      } else {
+      // Attorney not found - create dynamically
+      logger.warn(`Attorney not found for: ${attorneyPrefix} - creating dynamically`);
       
+      // Parse the attorney prefix
+      const titleMatch = attorneyPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/);
+      if (titleMatch) {
+        const title = titleMatch[1];
+        const lastName = titleMatch[2];
+        const speakerHandle = `ATTORNEY_${lastName}_${title.replace(/\./g, '')}`;
+        
+        // Check if speaker handle already exists
+        let dbSpeaker = await this.prisma.speaker.findFirst({
+          where: {
+            trialId: this.context.trialId,
+            speakerHandle
+          }
+        });
+        
+        // Create speaker if it doesn't exist
+        if (!dbSpeaker) {
+          dbSpeaker = await this.prisma.speaker.create({
+            data: {
+              trialId: this.context.trialId,
+              speakerPrefix: attorneyPrefix,
+              speakerHandle,
+              speakerType: 'ATTORNEY'
+            }
+          });
+          logger.info(`Created speaker for dynamically created attorney: ${attorneyPrefix}`);
+        }
+        
+        // Check if attorney already exists with this speaker
+        let newAttorney = await this.prisma.attorney.findFirst({
+          where: {
+            speakerId: dbSpeaker.id
+          }
+        });
+        
+        if (!newAttorney) {
+          // Create attorney record
+          newAttorney = await this.prisma.attorney.create({
+            data: {
+              name: attorneyPrefix,
+              title,
+              lastName,
+              speakerPrefix: attorneyPrefix,
+              attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`,
+              speakerId: dbSpeaker.id
+            }
+          });
+        } else {
+          logger.info(`Found existing attorney with speaker ID ${dbSpeaker.id}`);
+        }
+        
+        // Create trial attorney association if it doesn't exist
+        await this.prisma.trialAttorney.upsert({
+          where: {
+            trialId_attorneyId: {
+              trialId: this.context.trialId,
+              attorneyId: newAttorney.id
+            }
+          },
+          update: {}, // Nothing to update
+          create: {
+            trialId: this.context.trialId,
+            attorneyId: newAttorney.id,
+            role: 'UNKNOWN' // We don't know their role yet
+          }
+        });
+        
+        if (newAttorney) {
+          logger.info(`Created attorney dynamically: ${attorneyPrefix} with ID ${newAttorney.id}`);
+          
+          // Create speaker info
+          speaker = {
+            id: dbSpeaker.id,
+            speakerPrefix: attorneyPrefix,
+            speakerHandle,
+            speakerType: SpeakerType.ATTORNEY,
+            attorneyId: newAttorney.id,
+            name: attorneyPrefix
+          };
+        } else {
+          logger.error(`Failed to create attorney for ${attorneyPrefix} - newAttorney is null`);
+        }
+      }
+    }
+    } catch (error) {
+      logger.error(`Error in checkExaminingAttorney for ${attorneyPrefix}: ${error}`);
+      if (error instanceof Error) {
+        logger.error(`Stack trace: ${error.stack}`);
+      }
+      return false;
+    }
+    
+    if (speaker) {
       // Set as the examining attorney (Q. context)
       state.lastQSpeaker = speaker;
       state.contextualSpeakers.set('Q.', speaker);
       
-      logger.info(`Set examining attorney context: ${attorney.name} will be Q.`);
+      // IMPORTANT: Also update the ExaminationContextManager
+      if (this.examinationContext) {
+        this.examinationContext.setExaminingAttorneyFromSpeaker(speaker);
+      }
+      
+      logger.info(`Set examining attorney context: ${speaker.name} will be Q.`);
       
       // Add this line to the current event if we have one (usually witness called event)
       if (state.currentEvent) {
@@ -710,7 +837,7 @@ export class Phase2Processor {
       
       return true; // We handled this line
     } else {
-      logger.warn(`Could not find attorney for: ${attorneyPrefix}`);
+      logger.warn(`Could not create attorney for: ${attorneyPrefix}`);
     }
     
     return false;
@@ -1637,7 +1764,7 @@ export class Phase2Processor {
       }
       
       // Create trial event
-      logger.debug(`[PHASE2 DEBUG] Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}`);
+      logger.debug(`[PHASE2 DEBUG] Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}, startLine=${eventInfo.startLineNumber}, endLine=${eventInfo.endLineNumber}, type=${eventInfo.type}`);
       const event = await this.prisma.trialEvent.create({
         data: {
           trialId,

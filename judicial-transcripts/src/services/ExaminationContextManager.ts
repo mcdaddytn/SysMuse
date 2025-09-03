@@ -384,6 +384,33 @@ export class ExaminationContextManager {
     return this.examiningAttorney;
   }
 
+  /**
+   * Set examining attorney directly (used when BY MR./MS. line is detected)
+   */
+  setExaminingAttorneyFromSpeaker(speaker: any): void {
+    logger.info(`Setting examining attorney from speaker: ${speaker.speakerPrefix}`);
+    
+    // Extract attorney info from speaker
+    const match = speaker.speakerPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/);
+    if (match) {
+      this.examiningAttorney = {
+        title: match[1],
+        lastName: match[2],
+        speaker: speaker
+      };
+      
+      // Also update the lastQSpeaker
+      this.lastQSpeaker = speaker;
+      
+      // Update registry
+      if (speaker) {
+        this.speakerRegistry.setExaminingAttorney(speaker);
+      }
+      
+      logger.info(`Examining attorney set to: ${speaker.speakerPrefix}`);
+    }
+  }
+
   getOpposingAttorney(): AttorneyInfo | null {
     return this.opposingAttorney;
   }

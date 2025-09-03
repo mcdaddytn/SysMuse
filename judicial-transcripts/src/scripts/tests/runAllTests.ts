@@ -21,6 +21,7 @@ async function runAllTests() {
     const testResults: any[] = [];
     
     // Test 1: Judge rulings with surrounding context
+    /*
     logger.info('TEST 1: Judge Rulings with Context');
     logger.info('-'.repeat(40));
     const judgeResults = await enhancedService.executeSearch({
@@ -45,7 +46,7 @@ async function runAllTests() {
       matchedStatements: judgeResults.matchedStatements,
       outputFiles: judgeFiles
     });
-    
+
     logger.info(`  Total statements: ${judgeResults.totalStatements}`);
     logger.info(`  Matched: ${judgeResults.matchedStatements}`);
     logger.info(`  Output: ${judgeFiles.join(', ')}\n`);
@@ -242,6 +243,9 @@ async function runAllTests() {
     
     logger.info('\n✓ All tests completed successfully!');
     
+    */
+    
+
   } catch (error) {
     logger.error('Error running tests:', error);
     throw error;

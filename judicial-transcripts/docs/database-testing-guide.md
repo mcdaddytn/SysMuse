@@ -424,17 +424,21 @@ npm run phase2
 npx prisma db push --force-reset  # Reset database and apply schema
 npx prisma generate               # Generate Prisma client
 
-# Data Loading - Multi-Pass Parser (Recommended)
+# Most Concise Commands (Multi-Pass Parser by default)
 npm run seed                      # Load seed data
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass
-npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
 npx ts-node src/cli/phase3.ts process
 
-# Data Loading - Legacy Parser (For Comparison)
+# Data Loading - Legacy Parser (Must Specify Explicitly)
 npm run seed                      # Load seed data
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
-npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode legacy
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
 npx ts-node src/cli/phase3.ts process
+
+# Reporting Commands
+npx ts-node src/cli/reports.ts phase1        # Phase 1 parsing report
+npx ts-node src/cli/reports.ts phase2        # Phase 2 processing report
 
 # Backup Management - Multi-Pass
 ../scripts/db/backupdb.sh seed       # Backup after seeding

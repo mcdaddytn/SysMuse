@@ -1,0 +1,16 @@
+{
+  "judge": {
+    "name": "Hon. Robert Johnson",
+    "honorific": "The Honorable",
+    "fullName": "Robert M. Johnson",
+    "court": "United States District Court",
+    "district": "Eastern District of Texas",
+    "division": "Marshall Division",
+    "courtAddress": {
+      "street": "100 E. Houston St.",
+      "city": "Marshall",
+      "state": "TX",
+      "zip": "75670"
+    }
+  }
+}

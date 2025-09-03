@@ -1,13 +1,40 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, LLMTaskStatus } from '@prisma/client';
 import { Phase3Processor } from '../phase3/Phase3Processor';
 import { MarkerUpsert } from '../phase3/MarkerUpsert';
 import { Logger } from '../utils/logger';
-import path from 'path';
+import * as path from 'path';
 
 const prisma = new PrismaClient();
 const logger = new Logger('Phase3CLI');
+
+// Helper function to update workflow state for Phase 3
+async function updatePhase3WorkflowState(trialId: number): Promise<void> {
+  try {
+    await prisma.trialWorkflowState.upsert({
+      where: { trialId },
+      create: {
+        trialId,
+        phase3Completed: true,
+        phase3CompletedAt: new Date(),
+        phase3IndexCompleted: true,
+        phase3IndexAt: new Date(),
+        llmOverrideStatus: LLMTaskStatus.PENDING,
+        llmMarkerStatus: LLMTaskStatus.PENDING
+      },
+      update: {
+        phase3Completed: true,
+        phase3CompletedAt: new Date(),
+        phase3IndexCompleted: true,
+        phase3IndexAt: new Date()
+      }
+    });
+    logger.debug(`Updated workflow state for trial ${trialId}: Phase 3 completed`);
+  } catch (error) {
+    logger.warn(`Failed to update workflow state for trial ${trialId}: ${error}`);
+  }
+}
 
 const program = new Command();
 
@@ -57,9 +84,18 @@ program
       if (trialId) {
         logger.info(`Processing trial ${trialId}`);
         await processor.process(trialId);
+        
+        // Update workflow state for Phase 3 completion
+        await updatePhase3WorkflowState(trialId);
       } else {
         logger.info('Processing all trials');
         await processor.processAllTrials();
+        
+        // Update workflow state for all trials
+        const trials = await prisma.trial.findMany();
+        for (const trial of trials) {
+          await updatePhase3WorkflowState(trial.id);
+        }
       }
 
       logger.info('Phase 3 processing completed successfully');

@@ -52,7 +52,7 @@ export class TranscriptExportService {
             ]
           },
           markers: {
-            orderBy: { startTime: 'asc' }
+            orderBy: { createdAt: 'asc' }
           }
         }
       });
@@ -62,7 +62,7 @@ export class TranscriptExportService {
       }
       
       // Filter markers based on section config
-      const filteredMarkers = this.filterMarkersBySection(trial.markers, config.sections);
+      const filteredMarkers = this.filterMarkersBySection((trial as any).markers || [], config.sections);
       
       // Generate transcript content
       let content: string;

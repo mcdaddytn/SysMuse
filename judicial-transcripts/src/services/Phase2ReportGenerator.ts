@@ -231,9 +231,24 @@ export class Phase2ReportGenerator {
         lines.push(`  Recross: ${witnessData.examinationTypes.recross}`);
         lines.push('');
 
+        // Group examinations by date for better readability
+        const examsByDate = new Map<string, any[]>();
         for (const exam of witnessData.examinations) {
-          const date = exam.session ? new Date(exam.session.sessionDate).toLocaleDateString() : 'Unknown';
-          lines.push(`  ${exam.examinationType} on ${date}`);
+          const date = exam.sessionDate ? new Date(exam.sessionDate).toLocaleDateString() : 'Unknown';
+          if (!examsByDate.has(date)) {
+            examsByDate.set(date, []);
+          }
+          examsByDate.get(date)!.push(exam);
+        }
+
+        // Output examinations grouped by date
+        for (const [date, exams] of examsByDate) {
+          for (const exam of exams) {
+            const sessionType = exam.sessionType ? ` (${exam.sessionType})` : '';
+            const attorney = exam.examiningAttorney !== 'Unknown' ? ` by ${exam.examiningAttorney}` : '';
+            const examType = exam.examinationType.replace('_', ' ');
+            lines.push(`  ${examType} on ${date}${sessionType}${attorney}`);
+          }
         }
         lines.push('');
         lines.push('-'.repeat(60));

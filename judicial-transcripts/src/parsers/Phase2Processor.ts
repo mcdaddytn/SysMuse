@@ -148,7 +148,7 @@ export class Phase2Processor {
     
     try {
       this.context.trialId = trialId;
-      logger.info(`[PHASE2 DEBUG] Setting context.trialId = ${trialId}`);
+      logger.info(`Setting context.trialId = ${trialId}`);
       
       // Load existing entities
       await this.loadExistingEntities(trialId);
@@ -157,20 +157,20 @@ export class Phase2Processor {
       // Sessions are already properly ordered by their IDs, which reflects
       // the order they were created during phase 1 parsing
       // Phase 1 respects the trialstyle.json ordering, so we just sort by ID
-      logger.info(`[PHASE2 DEBUG] Querying sessions with trialId = ${trialId}`);
+      logger.info(`Querying sessions with trialId = ${trialId}`);
       
       const sessions = await this.prisma.session.findMany({
         where: { trialId },
         orderBy: { id: 'asc' }  // Simple ID ordering - preserves phase 1 order
       });
       
-      logger.info(`[PHASE2 DEBUG] Found ${sessions.length} sessions for trialId ${trialId}`);
-      logger.info(`[PHASE2 DEBUG] Session IDs: ${sessions.map(s => s.id).join(', ')}`);
-      logger.info(`[PHASE2 DEBUG] Session trialIds: ${sessions.map(s => s.trialId).join(', ')}`);
+      logger.info(`Found ${sessions.length} sessions for trialId ${trialId}`);
+      logger.debug(`Session IDs: ${sessions.map(s => s.id).join(', ')}`);
+      logger.debug(`Session trialIds: ${sessions.map(s => s.trialId).join(', ')}`);
       
       // Process each session
       for (const session of sessions) {
-        logger.info(`[PHASE2 DEBUG] Processing session ${session.id} of ${sessions.length} (trialId ${session.trialId})`);
+        logger.info(`Processing session ${session.id} of ${sessions.length}`);
         this.context.currentSession = session;
         await this.processSession(session);
       }
@@ -483,8 +483,8 @@ export class Phase2Processor {
    * Process a session
    */
   private async processSession(session: any): Promise<void> {
-    logger.info(`[PHASE2 DEBUG] Processing session ID ${session.id} for trial ${session.trialId}: ${session.sessionDate} - ${session.sessionType}`);
-    logger.info(`[PHASE2 DEBUG] Context trialId = ${this.context.trialId}`);
+    logger.info(`Processing session: ${session.sessionDate} - ${session.sessionType}`);
+    logger.debug(`Session ID ${session.id}, Trial ID ${session.trialId}`);
     
     // Initialize speaker services for this trial if not done yet
     if (!this.speakerRegistry) {
@@ -497,7 +497,7 @@ export class Phase2Processor {
     this.context.currentSession = session;
     
     // Get all lines for this session in order
-    logger.info(`[PHASE2 DEBUG] Fetching pages for sessionId = ${session.id}`);
+    logger.debug(`Fetching pages for sessionId = ${session.id}`);
     
     const pages = await this.prisma.page.findMany({
       where: { 
@@ -512,8 +512,8 @@ export class Phase2Processor {
       }
     });
     
-    logger.info(`[PHASE2 DEBUG] Found ${pages.length} pages for sessionId ${session.id}`);
-    logger.info(`[PHASE2 DEBUG] Page IDs: ${pages.map(p => p.id).join(', ')}`)
+    logger.debug(`Found ${pages.length} pages for session ${session.id}`);
+    logger.debug(`Page IDs: ${pages.map(p => p.id).join(', ')}`)
     
     // Flatten all lines from all pages
     const allLines: any[] = [];
@@ -521,10 +521,9 @@ export class Phase2Processor {
     for (const page of pages) {
       const pageLineCount = page.lines.length;
       totalLinesFromPages += pageLineCount;
-      logger.debug(`[PHASE2 DEBUG] Page ${page.id} has ${pageLineCount} lines`);
       allLines.push(...page.lines);
     }
-    logger.info(`[PHASE2 DEBUG] Total lines collected: ${allLines.length} (should equal ${totalLinesFromPages})`)
+    logger.debug(`Total lines collected: ${allLines.length}`)
     
     // Initialize state with current witness context
     const state: ProcessingState = {
@@ -599,7 +598,7 @@ export class Phase2Processor {
     // This typically follows examination type lines
     logger.debug(`[BY LINE DEBUG] Checking line ${line.lineNumber}: "${lineText.substring(0, 30)}..."`);
     if (await this.checkExaminingAttorney(sessionId, line, lineText, state)) {
-      logger.info(`[BY LINE DEBUG] Line ${line.lineNumber} was handled as BY line`);
+      logger.debug(`BY line ${line.lineNumber} was handled`);
       return;
     }
     
@@ -692,9 +691,9 @@ export class Phase2Processor {
     }
     
     const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
-    logger.info(`Found examining attorney indicator: ${trimmed}`);
+    logger.debug(`Found examining attorney indicator: ${trimmed}`);
     
-    // Find the attorney
+    // Find the attorney (with speaker relation included)
     const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
       this.context.trialId,
       attorneyPrefix
@@ -717,7 +716,7 @@ export class Phase2Processor {
           attorneyId: attorney.id,
           name: attorney.name
         };
-        logger.info(`Found existing attorney: ${attorney.name}`);
+        logger.debug(`Found existing attorney: ${attorney.name}`);
       } else {
       // Attorney not found - create dynamically
       logger.warn(`Attorney not found for: ${attorneyPrefix} - creating dynamically`);
@@ -754,7 +753,8 @@ export class Phase2Processor {
         let newAttorney = await this.prisma.attorney.findFirst({
           where: {
             speakerId: dbSpeaker.id
-          }
+          },
+          include: { speaker: true }  // Include speaker relation
         });
         
         if (!newAttorney) {
@@ -767,13 +767,33 @@ export class Phase2Processor {
               speakerPrefix: attorneyPrefix,
               attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`,
               speakerId: dbSpeaker.id
-            }
+            },
+            include: { speaker: true }  // Include speaker relation
           });
         } else {
-          logger.info(`Found existing attorney with speaker ID ${dbSpeaker.id}`);
+          logger.debug(`Found existing attorney with speaker ID ${dbSpeaker.id}`);
         }
         
-        // Create trial attorney association if it doesn't exist
+        // Determine role based on witness context if available
+        let attorneyRole: 'PLAINTIFF' | 'DEFENDANT' | 'UNKNOWN' = 'UNKNOWN';
+        if (state.currentWitness?.witnessCaller) {
+          // If we're in a witness context and the witness is called by PLAINTIFF/DEFENDANT,
+          // the examining attorney is typically from the same side for DIRECT examination
+          // and opposite side for CROSS examination
+          const witnessCaller = state.currentWitness.witnessCaller;
+          if (state.currentExaminationType === ExaminationType.DIRECT_EXAMINATION ||
+              state.currentExaminationType === ExaminationType.REDIRECT_EXAMINATION) {
+            // Direct/Redirect - attorney is same side as witness caller
+            attorneyRole = witnessCaller as 'PLAINTIFF' | 'DEFENDANT';
+          } else if (state.currentExaminationType === ExaminationType.CROSS_EXAMINATION ||
+                     state.currentExaminationType === ExaminationType.RECROSS_EXAMINATION) {
+            // Cross/Recross - attorney is opposite side
+            attorneyRole = witnessCaller === 'PLAINTIFF' ? 'DEFENDANT' : 'PLAINTIFF';
+          }
+          logger.info(`Determined attorney role as ${attorneyRole} based on witness caller ${witnessCaller} and exam type ${state.currentExaminationType}`);
+        }
+        
+        // Create or update trial attorney association
         await this.prisma.trialAttorney.upsert({
           where: {
             trialId_attorneyId: {
@@ -781,28 +801,31 @@ export class Phase2Processor {
               attorneyId: newAttorney.id
             }
           },
-          update: {}, // Nothing to update
+          update: {
+            // Update role if we determined it and it's currently UNKNOWN
+            role: attorneyRole !== 'UNKNOWN' ? attorneyRole : undefined
+          },
           create: {
             trialId: this.context.trialId,
             attorneyId: newAttorney.id,
-            role: 'UNKNOWN' // We don't know their role yet
+            role: attorneyRole
           }
         });
         
-        if (newAttorney) {
-          logger.info(`Created attorney dynamically: ${attorneyPrefix} with ID ${newAttorney.id}`);
+        if (newAttorney && newAttorney.speaker) {
+          logger.info(`Created attorney dynamically: ${attorneyPrefix} with ID ${newAttorney.id} and role ${attorneyRole}`);
           
-          // Create speaker info
+          // Create speaker info using the included speaker relation
           speaker = {
-            id: dbSpeaker.id,
-            speakerPrefix: attorneyPrefix,
-            speakerHandle,
+            id: newAttorney.speaker.id,
+            speakerPrefix: newAttorney.speaker.speakerPrefix,
+            speakerHandle: newAttorney.speaker.speakerHandle,
             speakerType: SpeakerType.ATTORNEY,
             attorneyId: newAttorney.id,
             name: attorneyPrefix
           };
         } else {
-          logger.error(`Failed to create attorney for ${attorneyPrefix} - newAttorney is null`);
+          logger.error(`Failed to create attorney for ${attorneyPrefix} - newAttorney or speaker is null`);
         }
       }
     }
@@ -824,7 +847,7 @@ export class Phase2Processor {
         this.examinationContext.setExaminingAttorneyFromSpeaker(speaker);
       }
       
-      logger.info(`Set examining attorney context: ${speaker.name} will be Q.`);
+      logger.debug(`Set examining attorney context: ${speaker.name} will be Q.`);
       
       // Add this line to the current event if we have one (usually witness called event)
       if (state.currentEvent) {
@@ -1103,7 +1126,7 @@ export class Phase2Processor {
     
     if (!isExamination && !isVideo) return false;
     
-    logger.info(`Examination line detected: ${lineText} (type: ${examType}, continued: ${continued})`);
+    logger.debug(`Examination line detected: ${lineText} (type: ${examType}, continued: ${continued}`);
     
     // Save current event if exists
     if (state.currentEvent) {
@@ -1737,7 +1760,7 @@ export class Phase2Processor {
     eventInfo: EventInfo,
     lines: any[]
   ): Promise<void> {
-    logger.debug(`[PHASE2 DEBUG] saveEvent called with trialId=${trialId}, sessionId=${sessionId}, eventType=${eventInfo.type}`);
+    logger.debug(`saveEvent called with trialId=${trialId}, sessionId=${sessionId}, eventType=${eventInfo.type}`);
     try {
       // Calculate duration if we have timestamps
       // For single-line events or events without endTime, set endTime = startTime
@@ -1764,7 +1787,7 @@ export class Phase2Processor {
       }
       
       // Create trial event
-      logger.debug(`[PHASE2 DEBUG] Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}, startLine=${eventInfo.startLineNumber}, endLine=${eventInfo.endLineNumber}, type=${eventInfo.type}`);
+      logger.debug(`Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}, startLine=${eventInfo.startLineNumber}, endLine=${eventInfo.endLineNumber}, type=${eventInfo.type}`);
       const event = await this.prisma.trialEvent.create({
         data: {
           trialId,
@@ -1783,7 +1806,7 @@ export class Phase2Processor {
       });
       
       this.stats.totalEvents++;
-      logger.debug(`[PHASE2 DEBUG] Event saved. Total events so far: ${this.stats.totalEvents}`);
+      logger.debug(`Event saved. Total events so far: ${this.stats.totalEvents}`);
       
       // Create specific event type
       switch (eventInfo.type) {
@@ -1903,7 +1926,7 @@ export class Phase2Processor {
         }
       });
       
-      logger.info(`Created witness called event for witness ${witnessId}, exam type: ${examinationType}`);
+      logger.debug(`Created witness called event for witness ${witnessId}, exam type: ${examinationType}`);
     } else {
       logger.warn(`Missing witness or examination type for witness called event`);
     }
@@ -1929,13 +1952,13 @@ export class Phase2Processor {
     logger.info('============================================================');
     logger.info('PHASE 2 PROCESSING COMPLETE');
     logger.info('============================================================');
-    logger.info(`[PHASE2 DEBUG] Final trialId in context: ${this.context.trialId}`);
     logger.info(`Total Events: ${this.stats.totalEvents}`);
     logger.info(`Statement Events: ${this.stats.statementEvents}`);
     logger.info(`Witness Events: ${this.stats.witnessEvents}`);
     logger.info(`Directive Events: ${this.stats.directiveEvents}`);
     logger.info(`Juror Statements: ${this.stats.jurorStatements}`);
     logger.info(`Anonymous Speakers: ${this.stats.anonymousSpeakers}`);
+    logger.debug(`Final trialId in context: ${this.context.trialId}`);
     
     if (this.stats.unmatchedSpeakers.length > 0) {
       logger.warn(`Unmatched Speakers: ${[...new Set(this.stats.unmatchedSpeakers)].join(', ')}`);

@@ -1,0 +1,30 @@
+{
+  "metadata": {
+    "caseName": "Plaintiff Corporation v. Defendant Incorporated",
+    "caseNumber": "2:19-CV-00123-JRG",
+    "alternateCaseNumber": null,
+    "plaintiff": "Plaintiff Corporation",
+    "plaintiffType": "Corporation",
+    "defendant": "Defendant Incorporated",
+    "defendantType": "Corporation",
+    "alternateDefendant": null,
+    "caseType": "Patent Infringement",
+    "filingDate": "2019-03-15",
+    "trialStartDate": "2021-06-01",
+    "trialEndDate": "2021-06-10",
+    "courtReporter": {
+      "name": "Mary Williams",
+      "credentials": "CSR, RPR",
+      "licenseNumber": "CSR No. 12345",
+      "firm": "Court Reporting Services, Inc.",
+      "phone": "(903) 555-0100",
+      "email": "mwilliams@courtreporting.com"
+    },
+    "verdict": {
+      "date": "2021-06-10",
+      "type": "Jury Verdict",
+      "favorOf": "Plaintiff",
+      "damages": 15000000
+    }
+  }
+}

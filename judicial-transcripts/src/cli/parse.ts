@@ -29,17 +29,21 @@ async function updatePhase1WorkflowState(prisma: PrismaClient, trialId: number):
       where: { trialId },
       create: {
         trialId,
+        pdfConvertCompleted: true,  // PDF conversion must be done before Phase 1 can run
+        pdfConvertAt: new Date(),
         phase1Completed: true,
         phase1CompletedAt: new Date(),
         llmOverrideStatus: LLMTaskStatus.PENDING,
         llmMarkerStatus: LLMTaskStatus.PENDING
       },
       update: {
+        pdfConvertCompleted: true,  // PDF conversion must be done before Phase 1 can run
+        pdfConvertAt: new Date(),
         phase1Completed: true,
         phase1CompletedAt: new Date()
       }
     });
-    logger.debug(`Updated workflow state for trial ${trialId}: Phase 1 completed`);
+    logger.debug(`Updated workflow state for trial ${trialId}: PDF conversion and Phase 1 completed`);
   } catch (error) {
     logger.warn(`Failed to update workflow state for trial ${trialId}: ${error}`);
   }
@@ -52,6 +56,9 @@ async function updatePhase2WorkflowState(prisma: PrismaClient, trialId: number):
       where: { trialId },
       create: {
         trialId,
+        // Note: PDF conversion and Phase 1 should already be completed at this point
+        pdfConvertCompleted: true,
+        phase1Completed: true,
         phase2Completed: true,
         phase2CompletedAt: new Date(),
         phase2IndexCompleted: true,
@@ -774,6 +781,19 @@ program
               logger.info('\n📝 Applying data overrides from trialstyle.json...');
               await applyTrialOverrides(trial.id, trialStyleConfig.overrides, prisma, logger);
             }
+            
+            // Update Trial.totalPages as sum of all Session.totalPages
+            const totalPagesResult = await prisma.session.aggregate({
+              where: { trialId: trial.id },
+              _sum: { totalPages: true }
+            });
+            const totalPages = totalPagesResult._sum.totalPages || 0;
+            
+            await prisma.trial.update({
+              where: { id: trial.id },
+              data: { totalPages }
+            });
+            logger.info(`Updated trial total pages: ${totalPages}`);
             
             // Update workflow state for Phase 1 completion
             await updatePhase1WorkflowState(prisma, trial.id);

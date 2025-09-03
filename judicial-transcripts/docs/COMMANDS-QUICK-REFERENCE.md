@@ -1,5 +1,20 @@
 # Quick Command Reference
 
+## Most Common Commands - Quick Start
+```bash
+# 1. Process all trials through Phase 3 (automatic prerequisite handling)
+npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json --verbose
+
+# 2. Generate ALL reports (run after processing)
+npm run run-all-queries
+
+# 3. Check workflow status
+npx ts-node src/cli/workflow.ts status --all
+
+# 4. Process specific trial by case number
+npx ts-node src/cli/workflow.ts run --phase phase3 --case-number "2:13-CV-1112-JRG" --config config/multi-trial-config-mac.json
+```
+
 ## Workflow Management (NEW - Recommended)
 Automated workflow management with state tracking and prerequisite handling:
 ```bash
@@ -7,7 +22,7 @@ Automated workflow management with state tracking and prerequisite handling:
 npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json
 
 # Run workflow for specific trial by case number
-npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG" --config config/example-trial-config-mac.json
+npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG" --config config/multi-trial-config-mac.json
 
 # Check workflow status
 npx ts-node src/cli/workflow.ts status --all                    # All trials
@@ -105,11 +120,24 @@ npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-m
 
 ### Reporting Commands
 ```bash
-# View Phase 1 parsing report
-npx ts-node src/cli/reports.ts phase1
+# Generate Phase 1 reports
+npm run run-phase1-reports
 
-# View Phase 2 processing report
-npx ts-node src/cli/reports.ts phase2
+# Generate Phase 2 reports  
+npm run run-phase2-reports
+
+# Run ALL queries and generate comprehensive reports
+npm run run-all-queries
+
+# Alternative individual report commands
+npx ts-node src/cli/report.ts generate-all        # Phase 1 reports
+npx ts-node src/cli/phase2-report.ts generate-all  # Phase 2 reports
+
+# Analyze trial data
+npx ts-node src/scripts/analyzeTrialData.ts
+
+# Analyze witness events
+npx ts-node src/scripts/analyzeWitnessEvents.ts
 ```
 
 ### Phase 3: Marker Processing
@@ -148,10 +176,10 @@ npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-c
 ### Trial-Specific Workflow
 ```bash
 # Run workflow for specific trial by case number (more convenient than ID)
-npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG" --config config/example-trial-config-mac.json
+npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG" --config config/multi-trial-config-mac.json
 
 # Or by trial ID if known
-npx ts-node src/cli/workflow.ts run --phase phase2 --trial-id 1 --config config/example-trial-config-mac.json
+npx ts-node src/cli/workflow.ts run --phase phase2 --trial-id 1 --config config/multi-trial-config-mac.json
 ```
 
 ### Workflow Status Monitoring
@@ -253,36 +281,130 @@ npx ts-node src/scripts/generateSpeakerReport.ts --trial-id 1
 npx ts-node scripts/export-comparison-data.ts
 ```
 
-## Common Workflow Examples
+## Comprehensive Reporting Commands
 
-### Example 1: Process a new trial from PDFs
+### Run All Reports at Once
 ```bash
-# Assuming PDFs are in the configured directory
-npx ts-node src/cli/workflow.ts run --phase complete --config config/example-trial-config-mac.json --verbose
+# Run ALL reports and queries (fastest way to get all output)
+npm run run-all-queries
+
+# Run phase-specific reports
+npm run run-phase1-reports     # All Phase 1 reports
+npm run run-phase2-reports     # All Phase 2 reports
+
+# Alternative: Run reports directly
+npx ts-node src/cli/report.ts generate-all        # Phase 1 reports
+npx ts-node src/cli/phase2-report.ts generate-all  # Phase 2 reports
 ```
 
-### Example 2: Re-process Phase 2 after code changes
+### Analysis and Statistics Reports
+```bash
+# Analyze trial data comprehensively
+npx ts-node src/scripts/analyzeTrialData.ts
+
+# Analyze witness events and testimonies
+npx ts-node src/scripts/analyzeWitnessEvents.ts
+
+# Find sustained objection contexts
+npx ts-node src/scripts/findSustainedContext.ts
+
+# Get database statistics
+npx ts-node src/cli/parse.ts stats
+
+# Get Phase 3 marker statistics
+npx ts-node src/cli/phase3.ts stats
+```
+
+### Export and Output Reports
+```bash
+# Export marker data from Phase 3
+npx ts-node src/cli/phase3.ts export -t 1 -o markers.json
+
+# Import markers (for corrections/updates)
+npx ts-node src/cli/phase3.ts import -t 1 -i markers.json
+
+# Generate comparison report between parser modes
+npx ts-node scripts/compare-parsers.ts data-export-legacy data-export-multipass
+
+# Export comparison data
+npx ts-node scripts/export-comparison-data.ts
+```
+
+### Elasticsearch and Search Reports
+```bash
+# Run enhanced queries
+npx ts-node src/scripts/runEnhancedQueries.ts
+
+# Sync data to Elasticsearch
+npx ts-node src/scripts/syncElasticsearch.ts
+
+# Reset Elasticsearch (careful!)
+npm run es:reset
+
+# Reset and resync Elasticsearch
+npm run es:reset:sync
+```
+
+## Common Workflow Examples
+
+### Example 1: Complete Processing and Reporting Pipeline
+```bash
+# Process all trials through Phase 3
+npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json --verbose
+
+# Generate all reports
+npm run run-all-queries
+```
+
+### Example 2: Process a New Trial from PDFs
+```bash
+# Assuming PDFs are in the configured directory
+npx ts-node src/cli/workflow.ts run --phase complete --config config/multi-trial-config-mac.json --verbose
+
+# Check status
+npx ts-node src/cli/workflow.ts status --all
+
+# Generate reports
+npm run run-all-queries
+```
+
+### Example 3: Re-process Phase 2 After Code Changes
 ```bash
 # Reset just the trial you want to re-process
 npx ts-node src/cli/workflow.ts reset --case-number "2:13-CV-1112-JRG"
 
 # Run Phase 2 (Phase 1 will run automatically if needed)
-npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG" --config config/example-trial-config-mac.json
+npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG" --config config/multi-trial-config-mac.json
+
+# Generate Phase 2 report to verify changes
+npx ts-node src/cli/reports.ts phase2
 ```
 
-### Example 3: Check progress across all trials
-```bash
-# Quick status table
-npx ts-node src/cli/workflow.ts status --all
-
-# Detailed JSON for specific trial
-npx ts-node src/cli/workflow.ts status --case-number "2:13-CV-1112-JRG" --format json
-```
-
-### Example 4: Complete reset and process multiple trials
+### Example 4: Complete System Reset and Multi-Trial Processing
 ```bash
 # This will reset database and process all trials in config
 npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json --reset-system --verbose
+
+# Generate all reports for all trials
+npm run run-all-queries
+
+# Check final status
+npx ts-node src/cli/workflow.ts status --all
+```
+
+### Example 5: Quick Trial Analysis
+```bash
+# Check what trials are available
+npx ts-node src/cli/parse.ts stats
+
+# Process specific trial
+npx ts-node src/cli/workflow.ts run --phase phase3 --case-number "2:13-CV-1112-JRG" --config config/multi-trial-config-mac.json
+
+# Generate comprehensive reports for that trial
+npx ts-node src/cli/reports.ts phase1 && \
+npx ts-node src/cli/reports.ts phase2 && \
+npx ts-node src/cli/reports.ts phase3 && \
+npx ts-node src/scripts/generateSpeakerReport.ts --trial-id 1
 ```
 
 ## Important Notes

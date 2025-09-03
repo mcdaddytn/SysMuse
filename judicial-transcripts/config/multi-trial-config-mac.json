@@ -20,7 +20,11 @@
     "06 Simpleair"
   ],
   "includedTrials": [
-    "02 Contentguard"
+    "01 Genband",
+    "02 Contentguard",
+    "04 Intellectual Ventures",
+    "05 Personalized Media v Zynga",
+    "06 Simpleair"
   ],
   "excludedTrials": [],
   "invalidTrials": [

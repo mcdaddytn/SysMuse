@@ -307,34 +307,38 @@ export class ExaminationReportQuery implements QueryExecutor {
       // For each examination, try to find the examining attorney
       const examinations = await Promise.all(witnessCalledEvents.map(async (wce) => {
         // Try to find the first Q. statement after this witness called event
-        const firstQStatement = await prisma.statementEvent.findFirst({
-          where: {
-            event: {
-              sessionId: wce.event.sessionId,
-              startLineNumber: {
-                gt: wce.event.startLineNumber
-              }
-            },
-            speakerAlias: 'Q.'
-          },
-          include: {
-            speaker: {
-              include: {
-                attorney: true
-              }
-            },
-            event: true
-          },
-          orderBy: {
-            event: {
-              startLineNumber: 'asc'
-            }
-          }
-        });
-
         let examiningAttorney = 'Unknown';
-        if (firstQStatement?.speaker?.attorney) {
-          examiningAttorney = firstQStatement.speaker.attorney.name || firstQStatement.speaker.attorney.speakerPrefix || 'Unknown';
+        
+        // Only search if we have a valid startLineNumber
+        if (wce.event.startLineNumber) {
+          const firstQStatement = await prisma.statementEvent.findFirst({
+            where: {
+              event: {
+                sessionId: wce.event.sessionId,
+                startLineNumber: {
+                  gt: wce.event.startLineNumber
+                }
+              },
+              speakerAlias: 'Q.'
+            },
+            include: {
+              speaker: {
+                include: {
+                  attorney: true
+                }
+              },
+              event: true
+            },
+            orderBy: {
+              event: {
+                startLineNumber: 'asc'
+              }
+            }
+          });
+
+          if (firstQStatement?.speaker?.attorney) {
+            examiningAttorney = firstQStatement.speaker.attorney.name || firstQStatement.speaker.attorney.speakerPrefix || 'Unknown';
+          }
         }
 
         return {

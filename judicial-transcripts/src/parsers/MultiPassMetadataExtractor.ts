@@ -155,7 +155,8 @@ export class MetadataExtractor {
       let pageId = caseMatch[2]; // Extract PageID from the regex match
       const headerLines: string[] = [line];
       let pageNum: number | null = null;
-      let searchLimit = Math.min(currentIndex + 5, fileContent.length); // Look ahead up to 5 lines
+      // Use pageHeaderLines as the maximum search distance, but stop early if we find content
+      let searchLimit = Math.min(currentIndex + this.pageHeaderLines, fileContent.length);
       
       // If PageID wasn't on the first line, check if it's on the next line
       if (!pageId && currentIndex + 1 < fileContent.length) {
@@ -163,32 +164,46 @@ export class MetadataExtractor {
         if (/^\d+$/.test(nextLine) && nextLine.length > 3) {
           // Likely a PageID (more than 3 digits)
           pageId = nextLine;
+          headerLines.push(fileContent[currentIndex + 1]);
         }
       }
       
-      // Look for page number, skipping blank lines
-      for (let i = currentIndex + 1; i < searchLimit; i++) {
+      // Look for page number on the next line only (after header and possibly PageID)
+      // Don't search beyond 1-2 lines after the header
+      let foundPageNum = false;
+      for (let i = currentIndex + 1; i < searchLimit && i <= currentIndex + 2; i++) {
         const nextLine = fileContent[i];
         const trimmed = nextLine.trim();
         
+        // Skip if we already added this as PageID
+        if (trimmed === pageId) {
+          continue;
+        }
+        
         if (trimmed === '') {
-          headerLines.push(nextLine);
-          continue; // Skip blank lines
+          // Only add blank lines if we haven't found the page number yet
+          if (!foundPageNum) {
+            headerLines.push(nextLine);
+          }
+          continue;
         }
         
-        // Check if it's a page number (digits only, max 3 digits)
-        const pageNumMatch = /^\s*(\d{1,3})\s*$/.exec(trimmed);
+        // Check if it's a page number (digits only, 1-4 digits)
+        const pageNumMatch = /^\s*(\d{1,4})\s*$/.exec(trimmed);
         if (pageNumMatch) {
-          pageNum = parseInt(pageNumMatch[1]);
-          headerLines.push(nextLine);
-          break;
+          const num = parseInt(pageNumMatch[1]);
+          // Page numbers should be reasonable (not PageID which is typically > 1000)
+          if (num <= 999) {
+            pageNum = num;
+            headerLines.push(nextLine);
+            foundPageNum = true;
+            break;
+          }
         }
         
-        // If we hit alphabetic content, we've gone too far
-        if (/[a-zA-Z]/.test(trimmed)) {
-          this.logger.warn(`Warning: Found alphabetic content while looking for page number after header: "${trimmed.substring(0, 50)}"`);
-          break;
-        }
+        // If we hit any non-numeric content, stop looking
+        // This is actual transcript content, not part of header
+        break;
       }
       
       // Even if we don't find a page number, we still detected a page header
@@ -207,7 +222,7 @@ export class MetadataExtractor {
         pageId: pageId,
         headerText: headerLines.join('\n'),
         headerLines: headerLines,
-        skipLines: Math.max(this.pageHeaderLines - 1, headerLines.length - 1)
+        skipLines: headerLines.length  // Skip exactly the number of header lines we found
       };
     }
     

@@ -598,7 +598,7 @@ export class Phase2Processor {
     // This typically follows examination type lines
     logger.debug(`[BY LINE DEBUG] Checking line ${line.lineNumber}: "${lineText.substring(0, 30)}..."`);
     if (await this.checkExaminingAttorney(sessionId, line, lineText, state)) {
-      logger.info(`[BY LINE DEBUG] Line ${line.lineNumber} was handled as BY line`);
+      logger.debug(`BY line ${line.lineNumber} was handled`);
       return;
     }
     
@@ -691,7 +691,7 @@ export class Phase2Processor {
     }
     
     const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
-    logger.info(`Found examining attorney indicator: ${trimmed}`);
+    logger.debug(`Found examining attorney indicator: ${trimmed}`);
     
     // Find the attorney (with speaker relation included)
     const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
@@ -716,7 +716,7 @@ export class Phase2Processor {
           attorneyId: attorney.id,
           name: attorney.name
         };
-        logger.info(`Found existing attorney: ${attorney.name}`);
+        logger.debug(`Found existing attorney: ${attorney.name}`);
       } else {
       // Attorney not found - create dynamically
       logger.warn(`Attorney not found for: ${attorneyPrefix} - creating dynamically`);
@@ -771,7 +771,7 @@ export class Phase2Processor {
             include: { speaker: true }  // Include speaker relation
           });
         } else {
-          logger.info(`Found existing attorney with speaker ID ${dbSpeaker.id}`);
+          logger.debug(`Found existing attorney with speaker ID ${dbSpeaker.id}`);
         }
         
         // Determine role based on witness context if available
@@ -847,7 +847,7 @@ export class Phase2Processor {
         this.examinationContext.setExaminingAttorneyFromSpeaker(speaker);
       }
       
-      logger.info(`Set examining attorney context: ${speaker.name} will be Q.`);
+      logger.debug(`Set examining attorney context: ${speaker.name} will be Q.`);
       
       // Add this line to the current event if we have one (usually witness called event)
       if (state.currentEvent) {
@@ -1126,7 +1126,7 @@ export class Phase2Processor {
     
     if (!isExamination && !isVideo) return false;
     
-    logger.info(`Examination line detected: ${lineText} (type: ${examType}, continued: ${continued})`);
+    logger.debug(`Examination line detected: ${lineText} (type: ${examType}, continued: ${continued}`);
     
     // Save current event if exists
     if (state.currentEvent) {
@@ -1926,7 +1926,7 @@ export class Phase2Processor {
         }
       });
       
-      logger.info(`Created witness called event for witness ${witnessId}, exam type: ${examinationType}`);
+      logger.debug(`Created witness called event for witness ${witnessId}, exam type: ${examinationType}`);
     } else {
       logger.warn(`Missing witness or examination type for witness called event`);
     }

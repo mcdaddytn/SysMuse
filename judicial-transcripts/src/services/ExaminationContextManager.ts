@@ -388,7 +388,7 @@ export class ExaminationContextManager {
    * Set examining attorney directly (used when BY MR./MS. line is detected)
    */
   setExaminingAttorneyFromSpeaker(speaker: any): void {
-    logger.info(`Setting examining attorney from speaker: ${speaker.speakerPrefix}`);
+    logger.debug(`Setting examining attorney from speaker: ${speaker.speakerPrefix}`);
     
     // Extract attorney info from speaker
     const match = speaker.speakerPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+(.+)$/);
@@ -407,7 +407,7 @@ export class ExaminationContextManager {
         this.speakerRegistry.setExaminingAttorney(speaker);
       }
       
-      logger.info(`Examining attorney set to: ${speaker.speakerPrefix}`);
+      logger.debug(`Examining attorney set to: ${speaker.speakerPrefix}`);
     }
   }
 

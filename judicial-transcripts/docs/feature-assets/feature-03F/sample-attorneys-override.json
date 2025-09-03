@@ -1,0 +1,36 @@
+{
+  "attorneys": [
+    {
+      "name": "John Smith",
+      "barNumber": "TX12345",
+      "role": "PLAINTIFF",
+      "firm": "Smith & Associates",
+      "office": "Dallas, TX",
+      "email": "jsmith@smithlaw.com"
+    },
+    {
+      "name": "Jane Doe",
+      "barNumber": "TX67890",
+      "role": "DEFENDANT",
+      "firm": "Doe Legal Group",
+      "office": "Houston, TX",
+      "email": "jdoe@doelegal.com"
+    },
+    {
+      "name": "Robert Williams",
+      "barNumber": "TX11111",
+      "role": "PLAINTIFF",
+      "firm": "Smith & Associates",
+      "office": "Dallas, TX",
+      "email": "rwilliams@smithlaw.com"
+    },
+    {
+      "name": "Sarah Johnson",
+      "barNumber": "TX22222",
+      "role": "DEFENDANT",
+      "firm": "Johnson & Partners",
+      "office": "Austin, TX",
+      "email": "sjohnson@johnsonlaw.com"
+    }
+  ]
+}

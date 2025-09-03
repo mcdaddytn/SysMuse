@@ -1,0 +1,119 @@
+{
+  "configName": "Multi-Trial Workflow Configuration",
+  "configVersion": "1.0.0",
+  "description": "Configuration for processing multiple trials with workflow management",
+  
+  "globalSettings": {
+    "parallelProcessing": false,
+    "maxConcurrentTrials": 1,
+    "errorHandling": "continue",
+    "logLevel": "info"
+  },
+  
+  "defaultWorkflow": {
+    "enableLLMOverrides": true,
+    "enableLLMMarkers": false,
+    "cleanupPhase2After": true,
+    "phase2RetentionHours": 24,
+    
+    "steps": {
+      "pdfConvert": { "enabled": true, "required": true },
+      "phase1": { "enabled": true, "required": true },
+      "llmOverride": { "enabled": true, "required": false },
+      "overrideImport": { "enabled": true, "required": false },
+      "phase2": { "enabled": true, "required": true },
+      "phase2Index": { "enabled": true, "required": true },
+      "phase3": { "enabled": true, "required": true },
+      "llmMarker": { "enabled": false, "required": false },
+      "markerImport": { "enabled": false, "required": false },
+      "phase3Index": { "enabled": true, "required": true },
+      "phase2Cleanup": { "enabled": true, "required": false }
+    }
+  },
+  
+  "trials": [
+    {
+      "id": 1,
+      "shortName": "01 Generic Plaintiff v Generic Defendant",
+      "sourcePdfPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf/01 Generic Plaintiff v Generic Defendant",
+      "destinationTxtPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/01 Generic Plaintiff v Generic Defendant",
+      "workflow": "default"
+    },
+    {
+      "id": 2,
+      "shortName": "42 Vocalife Amazon",
+      "sourcePdfPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf/42 Vocalife Amazon",
+      "destinationTxtPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/42 Vocalife Amazon",
+      "workflow": {
+        "inherit": "default",
+        "overrides": {
+          "enableLLMMarkers": true,
+          "cleanupPhase2After": false
+        }
+      }
+    },
+    {
+      "id": 3,
+      "shortName": "03 Sample Trial",
+      "sourcePdfPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf/03 Sample Trial",
+      "destinationTxtPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/03 Sample Trial",
+      "workflow": {
+        "inherit": "default",
+        "overrides": {
+          "enableLLMOverrides": false,
+          "steps": {
+            "llmOverride": { "enabled": false },
+            "llmMarker": { "enabled": false }
+          }
+        }
+      }
+    }
+  ],
+  
+  "llmConfig": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "apiKey": "${OPENAI_API_KEY}",
+    "maxRetries": 3,
+    "timeout": 300000,
+    "temperature": 0.3,
+    "maxTokens": 4096,
+    
+    "prompts": {
+      "overrideGeneration": "Extract case metadata, attorneys, judge, and other entities from the transcript summary.",
+      "markerDiscovery": "Identify significant events and markers in the trial transcript."
+    }
+  },
+  
+  "elasticsearchConfig": {
+    "host": "http://localhost:9200",
+    "phase2IndexPrefix": "trial-phase2-",
+    "phase3IndexPrefix": "trial-phase3-",
+    "batchSize": 1000,
+    "requestTimeout": 30000
+  },
+  
+  "notifications": {
+    "enabled": false,
+    "webhook": {
+      "url": "https://example.com/webhook",
+      "events": ["workflow.started", "workflow.completed", "workflow.failed", "step.failed"]
+    },
+    "email": {
+      "smtp": {
+        "host": "smtp.example.com",
+        "port": 587,
+        "secure": false
+      },
+      "from": "system@example.com",
+      "to": ["admin@example.com"],
+      "events": ["workflow.failed", "workflow.completed"]
+    }
+  },
+  
+  "scheduling": {
+    "enabled": false,
+    "cron": "0 2 * * *",
+    "timezone": "America/Chicago"
+  }
+}

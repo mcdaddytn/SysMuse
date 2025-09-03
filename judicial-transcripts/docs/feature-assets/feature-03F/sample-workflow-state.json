@@ -1,0 +1,84 @@
+{
+  "trialId": 1,
+  "trialName": "01 Generic Plaintiff v Generic Defendant",
+  "caseNumber": "2:19-CV-00123-JRG",
+  
+  "workflowState": {
+    "id": 1,
+    "trialId": 1,
+    
+    "pdfConvertCompleted": true,
+    "pdfConvertAt": "2024-01-15T10:00:00Z",
+    
+    "phase1Completed": true,
+    "phase1CompletedAt": "2024-01-15T10:30:00Z",
+    
+    "llmOverrideCompleted": false,
+    "llmOverrideAt": null,
+    
+    "overrideImportCompleted": false,
+    "overrideImportAt": null,
+    
+    "phase2Completed": false,
+    "phase2CompletedAt": null,
+    
+    "phase2IndexCompleted": false,
+    "phase2IndexAt": null,
+    
+    "phase3Completed": false,
+    "phase3CompletedAt": null,
+    
+    "llmMarkerCompleted": false,
+    "llmMarkerAt": null,
+    
+    "markerImportCompleted": false,
+    "markerImportAt": null,
+    
+    "phase3IndexCompleted": false,
+    "phase3IndexAt": null,
+    
+    "phase2CleanupCompleted": false,
+    "phase2CleanupAt": null,
+    
+    "trialStylePath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/01 Generic Plaintiff v Generic Defendant/trialstyle.json",
+    "overrideFilesPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/01 Generic Plaintiff v Generic Defendant/overrides/",
+    "sourcePdfPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf/01 Generic Plaintiff v Generic Defendant/",
+    "destinationTxtPath": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/01 Generic Plaintiff v Generic Defendant/",
+    
+    "llmOverrideTaskId": null,
+    "llmOverrideStatus": "PENDING",
+    "llmMarkerTaskId": null,
+    "llmMarkerStatus": "SKIPPED",
+    
+    "lastError": null,
+    "lastErrorAt": null,
+    "retryCount": 0,
+    
+    "createdAt": "2024-01-15T10:00:00Z",
+    "updatedAt": "2024-01-15T10:30:00Z"
+  },
+  
+  "nextSteps": [
+    {
+      "step": "llmOverride",
+      "description": "Generate override files using LLM",
+      "optional": true,
+      "enabled": true
+    },
+    {
+      "step": "overrideImport",
+      "description": "Import override files",
+      "optional": false,
+      "enabled": true
+    },
+    {
+      "step": "phase2",
+      "description": "Run Phase 2 processing",
+      "optional": false,
+      "enabled": true
+    }
+  ],
+  
+  "completionPercentage": 25,
+  "estimatedTimeRemaining": "45 minutes"
+}

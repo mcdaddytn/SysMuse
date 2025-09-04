@@ -1,0 +1,14 @@
+{
+"CourtReporter": [
+	{
+		"id" : 1,
+		"name" : "19   COURT REPORTER:       Shelly Holmes",
+		"credentials" : "CSR, TCRR",
+		"title" : null,
+		"stateNumber" : null,
+		"expirationDate" : null,
+		"addressId" : null,
+		"phone" : null,
+		"trialId" : 1
+	}
+]}

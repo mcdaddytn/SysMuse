@@ -1,0 +1,73 @@
+{
+"Address": [
+	{
+		"id" : 1,
+		"street1" : "230 Park Avenue, 3rd Floor W.",
+		"street2" : null,
+		"city" : "New York",
+		"state" : "NY",
+		"zipCode" : "10169",
+		"country" : "USA",
+		"fullAddress" : "230 Park Avenue, 3rd Floor W., New York, NY, 10169"
+	},
+	{
+		"id" : 2,
+		"street1" : "104 East Houston Street, Suite 300",
+		"street2" : null,
+		"city" : "Marshall",
+		"state" : "TX",
+		"zipCode" : "75670",
+		"country" : "USA",
+		"fullAddress" : "104 East Houston Street, Suite 300, Marshall, TX, 75670"
+	},
+	{
+		"id" : 3,
+		"street1" : "Main Street, Fourteenth Floor",
+		"street2" : null,
+		"city" : "Irvine",
+		"state" : "CA",
+		"zipCode" : "92614",
+		"country" : "USA",
+		"fullAddress" : "Main Street, Fourteenth Floor, Irvine, CA, 92614"
+	},
+	{
+		"id" : 4,
+		"street1" : "925 Fourth Avenue, Suite 2500",
+		"street2" : null,
+		"city" : "Seattle",
+		"state" : "WA",
+		"zipCode" : "98104",
+		"country" : "USA",
+		"fullAddress" : "925 Fourth Avenue, Suite 2500, Seattle, WA, 98104"
+	},
+	{
+		"id" : 5,
+		"street1" : "Summerhill Road, Suite 100",
+		"street2" : null,
+		"city" : "Texarkana",
+		"state" : "TX",
+		"zipCode" : "75503",
+		"country" : "USA",
+		"fullAddress" : "Summerhill Road, Suite 100, Texarkana, TX, 75503"
+	},
+	{
+		"id" : 6,
+		"street1" : "801 California Street",
+		"street2" : null,
+		"city" : "Mountain View",
+		"state" : "CA",
+		"zipCode" : "94041",
+		"country" : "USA",
+		"fullAddress" : "801 California Street, Mountain View, CA, 94041"
+	},
+	{
+		"id" : 7,
+		"street1" : "ESE Loop 323, Suite 430",
+		"street2" : null,
+		"city" : "Tyler",
+		"state" : "TX",
+		"zipCode" : "75701",
+		"country" : "USA",
+		"fullAddress" : "ESE Loop 323, Suite 430, Tyler, TX, 75701"
+	}
+]}

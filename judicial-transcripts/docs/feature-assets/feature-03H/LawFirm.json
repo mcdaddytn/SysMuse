@@ -1,0 +1,39 @@
+{
+"LawFirm": [
+	{
+		"id" : 1,
+		"name" : "FABRICANT LLP",
+		"createdAt" : "2025-08-20T18:44:51.971Z",
+		"updatedAt" : "2025-08-20T18:44:51.971Z"
+	},
+	{
+		"id" : 2,
+		"name" : "MCKOOL SMITH, P.C.",
+		"createdAt" : "2025-08-20T18:44:52.042Z",
+		"updatedAt" : "2025-08-20T18:44:52.042Z"
+	},
+	{
+		"id" : 3,
+		"name" : "KNOBBE, MARTENS, OLSON & BEAR, LLP",
+		"createdAt" : "2025-08-20T18:44:52.169Z",
+		"updatedAt" : "2025-08-20T18:44:52.169Z"
+	},
+	{
+		"id" : 4,
+		"name" : "HALTOM & DOAN",
+		"createdAt" : "2025-08-20T18:44:52.275Z",
+		"updatedAt" : "2025-08-20T18:44:52.275Z"
+	},
+	{
+		"id" : 5,
+		"name" : "FENWICK & WEST LLP",
+		"createdAt" : "2025-08-20T18:44:52.364Z",
+		"updatedAt" : "2025-08-20T18:44:52.364Z"
+	},
+	{
+		"id" : 6,
+		"name" : "THE DACUS FIRM, PC",
+		"createdAt" : "2025-08-20T18:44:52.401Z",
+		"updatedAt" : "2025-08-20T18:44:52.401Z"
+	}
+]}

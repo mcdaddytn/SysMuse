@@ -1,0 +1,59 @@
+{
+"LawFirmOffice": [
+	{
+		"id" : 1,
+		"lawFirmId" : 1,
+		"name" : "New York",
+		"addressId" : 1,
+		"createdAt" : "2025-08-20T18:44:51.989Z",
+		"updatedAt" : "2025-08-20T18:44:51.989Z"
+	},
+	{
+		"id" : 2,
+		"lawFirmId" : 2,
+		"name" : "Marshall",
+		"addressId" : 2,
+		"createdAt" : "2025-08-20T18:44:52.058Z",
+		"updatedAt" : "2025-08-20T18:44:52.058Z"
+	},
+	{
+		"id" : 3,
+		"lawFirmId" : 3,
+		"name" : "Irvine",
+		"addressId" : 3,
+		"createdAt" : "2025-08-20T18:44:52.181Z",
+		"updatedAt" : "2025-08-20T18:44:52.181Z"
+	},
+	{
+		"id" : 4,
+		"lawFirmId" : 3,
+		"name" : "Seattle",
+		"addressId" : 4,
+		"createdAt" : "2025-08-20T18:44:52.208Z",
+		"updatedAt" : "2025-08-20T18:44:52.208Z"
+	},
+	{
+		"id" : 5,
+		"lawFirmId" : 4,
+		"name" : "Texarkana",
+		"addressId" : 5,
+		"createdAt" : "2025-08-20T18:44:52.285Z",
+		"updatedAt" : "2025-08-20T18:44:52.285Z"
+	},
+	{
+		"id" : 6,
+		"lawFirmId" : 5,
+		"name" : "Mountain View",
+		"addressId" : 6,
+		"createdAt" : "2025-08-20T18:44:52.380Z",
+		"updatedAt" : "2025-08-20T18:44:52.380Z"
+	},
+	{
+		"id" : 7,
+		"lawFirmId" : 6,
+		"name" : "Tyler",
+		"addressId" : 7,
+		"createdAt" : "2025-08-20T18:44:52.422Z",
+		"updatedAt" : "2025-08-20T18:44:52.422Z"
+	}
+]}

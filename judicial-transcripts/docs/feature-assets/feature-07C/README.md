@@ -6,8 +6,20 @@ This directory contains supporting assets for Feature 07C implementation.
 
 ### Sample Files
 - `sample-marker-override.json` - Example marker override file with various location formats
-- `marker-hierarchy-example.json` - Example of hierarchical marker structure
-- `llm-prompt-templates/` - Templates for different marker extraction scenarios
+- `marker-hierarchy-example.json` - Example of hierarchical marker structure with examination sequences
+
+### LLM Prompt Templates
+- `llm-prompt-template-opening.md` - Opening statements detection
+- `llm-prompt-template-closing.md` - Closing statements detection  
+- `llm-prompt-template-examination.md` - Witness examination phase detection with tactical analysis
+
+### Strategic Documentation
+- `examination-sequence-rules.md` - Procedural rules for examination sequences
+- `tactical-examination-patterns.md` - Strategic patterns and attorney decision-making in examinations
+  - Incorporates insights from IP litigation tactics
+  - Party-specific strategies (plaintiff vs. defense)
+  - Witness type patterns (expert vs. fact)
+  - Detection confidence scoring based on tactical context
 
 ### Implementation References
 - Reuses LLM integration from Feature 03H (`src/services/llm/`)

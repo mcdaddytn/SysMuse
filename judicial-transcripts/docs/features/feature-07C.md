@@ -152,6 +152,11 @@ interface MarkerExtractionContext {
 - **Jury Selection**: Near beginning, before opening statements
 - **Jury Deliberation/Verdict**: Near end, after closing statements
 - Use existing witness markers as anchors
+- **Examination Sequences**: Apply tactical patterns by witness type:
+  - Technical experts: Expect extended redirect/recross cycles
+  - Damages experts: Cross-examination typically longest segment
+  - Fact witnesses: Usually limited to direct and cross
+  - Consider party strategy (plaintiff as risk manager, defense as opportunist)
 
 ### 4. Override System
 
@@ -275,6 +280,7 @@ Body: {
 - LLM analysis for complex sections
 - Pattern matching for standard phrases
 - Statistical analysis of speech patterns
+- Tactical pattern recognition based on witness type and party strategy
 
 #### 7.3 Human-in-the-Loop Workflow
 1. Run automated marker generation

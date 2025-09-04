@@ -1,0 +1,318 @@
+{
+  "corpus": {
+    "name": "Gilstrap Trials",
+    "description": "Patent litigation trials from Judge Rodney Gilstrap, Eastern District of Texas, Marshall Division",
+    "trials": [
+      {
+        "shortName": "01 Genband",
+        "shortNameHandle": "01_Genband",
+        "caseNumber": "2:16-CV-00348-JRG"
+      },
+      {
+        "shortName": "02 Contentguard",
+        "shortNameHandle": "02_Contentguard",
+        "caseNumber": "2:13-CV-01112-JRG"
+      },
+      {
+        "shortName": "03 Core Wireless",
+        "shortNameHandle": "03_Core_Wireless",
+        "caseNumber": "2:14-CV-00751-JRG"
+      },
+      {
+        "shortName": "04 Intellectual Ventures",
+        "shortNameHandle": "04_Intellectual_Ventures",
+        "caseNumber": "2:17-CV-00123-JRG"
+      },
+      {
+        "shortName": "05 Personalized Media v Zynga",
+        "shortNameHandle": "05_Personalized_Media_v_Zynga",
+        "caseNumber": "2:18-CV-00044-JRG"
+      },
+      {
+        "shortName": "06 Simpleair",
+        "shortNameHandle": "06_Simpleair",
+        "caseNumber": "2:14-CV-00011-JRG"
+      },
+      {
+        "shortName": "07 Usa Re Joshua Harman V Trinity Industries",
+        "shortNameHandle": "07_Usa_Re_Joshua_Harman_V_Trinity_Industries",
+        "caseNumber": "2:12-CV-00089-JRG"
+      },
+      {
+        "shortName": "10 Metaswitch Genband 2016",
+        "shortNameHandle": "10_Metaswitch_Genband_2016",
+        "caseNumber": "2:14-CV-00744-JRG"
+      },
+      {
+        "shortName": "11 Dataquill Limited V. Zte Corporation Et Al",
+        "shortNameHandle": "11_Dataquill_Limited_V_Zte_Corporation_Et_Al",
+        "caseNumber": "2:17-CV-00104-JRG"
+      },
+      {
+        "shortName": "12 Gree Supercell",
+        "shortNameHandle": "12_Gree_Supercell",
+        "caseNumber": "2:19-CV-00070-JRG"
+      },
+      {
+        "shortName": "14 Optis Wireless Technology V. Apple Inc",
+        "shortNameHandle": "14_Optis_Wireless_Technology_V_Apple_Inc",
+        "caseNumber": "2:19-CV-00066-JRG"
+      },
+      {
+        "shortName": "15 Optis Wireless Technology V. Huawei",
+        "shortNameHandle": "15_Optis_Wireless_Technology_V_Huawei",
+        "caseNumber": "2:17-CV-00123-JRG"
+      },
+      {
+        "shortName": "16 Saint Lawrence V. Motorola",
+        "shortNameHandle": "16_Saint_Lawrence_V_Motorola",
+        "caseNumber": "2:15-CV-00351-JRG"
+      },
+      {
+        "shortName": "17 Wi-Lan V. Apple,",
+        "shortNameHandle": "17_Wi_Lan_V_Apple_",
+        "caseNumber": "2:14-CV-00222-JRG"
+      },
+      {
+        "shortName": "18 Wi-Lan V. Htc",
+        "shortNameHandle": "18_Wi_Lan_V_Htc",
+        "caseNumber": "2:13-CV-00323-JRG"
+      },
+      {
+        "shortName": "19 Alfonso Cioffi Et Al V. Google",
+        "shortNameHandle": "19_Alfonso_Cioffi_Et_Al_V_Google",
+        "caseNumber": "2:13-CV-00103-JRG"
+      },
+      {
+        "shortName": "20 Biscotti Inc. V. Microsoft Corp",
+        "shortNameHandle": "20_Biscotti_Inc_V_Microsoft_Corp",
+        "caseNumber": "2:13-CV-01015-JRG"
+      },
+      {
+        "shortName": "21 Cassidian V Microdata",
+        "shortNameHandle": "21_Cassidian_V_Microdata",
+        "caseNumber": "2:17-CV-00421-JRG"
+      },
+      {
+        "shortName": "22 Core Wireless V. Apple",
+        "shortNameHandle": "22_Core_Wireless_V_Apple",
+        "caseNumber": "2:14-CV-00912-JRG"
+      },
+      {
+        "shortName": "23 Flexuspine V. Globus Medical",
+        "shortNameHandle": "23_Flexuspine_V_Globus_Medical",
+        "caseNumber": "2:18-CV-00274-JRG"
+      },
+      {
+        "shortName": "24 Fractus V. T-Mobile Us",
+        "shortNameHandle": "24_Fractus_V_T_Mobile_Us",
+        "caseNumber": "2:18-CV-00135-JRG"
+      },
+      {
+        "shortName": "28 Implicit V Netscout",
+        "shortNameHandle": "28_Implicit_V_Netscout",
+        "caseNumber": "2:17-CV-00185-JRG"
+      },
+      {
+        "shortName": "29 Intellectual Ventures V. T Mobile",
+        "shortNameHandle": "29_Intellectual_Ventures_V_T_Mobile",
+        "caseNumber": "2:17-CV-00577-JRG"
+      },
+      {
+        "shortName": "30 Kaist Ip Us Llc V. Samsung",
+        "shortNameHandle": "30_Kaist_Ip_Us_Llc_V_Samsung",
+        "caseNumber": "2:16-CV-01314-JRG"
+      },
+      {
+        "shortName": "31 Mobile Tele V. Htc",
+        "shortNameHandle": "31_Mobile_Tele_V_Htc",
+        "caseNumber": "2:13-CV-00258-JRG"
+      },
+      {
+        "shortName": "32 Netlist V Samsung",
+        "shortNameHandle": "32_Netlist_V_Samsung",
+        "caseNumber": "2:21-CV-00463-JRG"
+      },
+      {
+        "shortName": "33 Personal Audio V. Cbs",
+        "shortNameHandle": "33_Personal_Audio_V_Cbs",
+        "caseNumber": "2:13-CV-00014-JRG"
+      },
+      {
+        "shortName": "34 Personalized Media V Google",
+        "shortNameHandle": "34_Personalized_Media_V_Google",
+        "caseNumber": "2:19-CV-00090-JRG"
+      },
+      {
+        "shortName": "35 Rembrandt V Samsung",
+        "shortNameHandle": "35_Rembrandt_V_Samsung",
+        "caseNumber": "2:15-CV-00525-JRG"
+      },
+      {
+        "shortName": "36 Salazar V. Htc",
+        "shortNameHandle": "36_Salazar_V_Htc",
+        "caseNumber": "2:17-CV-00306-JRG"
+      },
+      {
+        "shortName": "37 Simpleair V. Google",
+        "shortNameHandle": "37_Simpleair_V_Google",
+        "caseNumber": "2:14-CV-00011-JRG"
+      },
+      {
+        "shortName": "39 Tqp Development Llc Vs V. 1-800-Flowers",
+        "shortNameHandle": "39_Tqp_Development_Llc_Vs_V_1_800_Flowers",
+        "caseNumber": "2:11-CV-00248-JRG"
+      },
+      {
+        "shortName": "40 USAA V Wells",
+        "shortNameHandle": "40_USAA_V_Wells",
+        "caseNumber": "2:18-CV-00366-JRG"
+      },
+      {
+        "shortName": "42 Vocalife Amazon",
+        "shortNameHandle": "42_Vocalife_Amazon",
+        "caseNumber": "2:19-CV-00123-JRG"
+      },
+      {
+        "shortName": "43 Whirlpool V. Tst",
+        "shortNameHandle": "43_Whirlpool_V_Tst",
+        "caseNumber": "2:15-CV-01408-JRG"
+      },
+      {
+        "shortName": "44 Beneficial V. Advance",
+        "shortNameHandle": "44_Beneficial_V_Advance",
+        "caseNumber": "2:19-CV-00136-JRG"
+      },
+      {
+        "shortName": "45 Chrimar V. Dell",
+        "shortNameHandle": "45_Chrimar_V_Dell",
+        "caseNumber": "2:13-CV-01044-JRG"
+      },
+      {
+        "shortName": "46 Droplets V. Ebay",
+        "shortNameHandle": "46_Droplets_V_Ebay",
+        "caseNumber": "2:18-CV-00471-JRG"
+      },
+      {
+        "shortName": "48 Intellectual V Great West",
+        "shortNameHandle": "48_Intellectual_V_Great_West",
+        "caseNumber": "2:17-CV-00104-JRG"
+      },
+      {
+        "shortName": "49 Luvncare V Royal King",
+        "shortNameHandle": "49_Luvncare_V_Royal_King",
+        "caseNumber": "2:18-CV-00519-JRG"
+      },
+      {
+        "shortName": "50 Packet Netscout",
+        "shortNameHandle": "50_Packet_Netscout",
+        "caseNumber": "2:16-CV-00230-JRG"
+      },
+      {
+        "shortName": "51 Packet Sandvine",
+        "shortNameHandle": "51_Packet_Sandvine",
+        "caseNumber": "2:16-CV-00094-JRG"
+      },
+      {
+        "shortName": "52 Personalized Apple",
+        "shortNameHandle": "52_Personalized_Apple",
+        "caseNumber": "2:15-CV-01749-JRG"
+      },
+      {
+        "shortName": "55 SSL V Citrix",
+        "shortNameHandle": "55_SSL_V_Citrix",
+        "caseNumber": "2:16-CV-00110-JRG"
+      },
+      {
+        "shortName": "59 Gree V. Supercell",
+        "shortNameHandle": "59_Gree_V_Supercell",
+        "caseNumber": "2:19-CV-00310-JRG"
+      },
+      {
+        "shortName": "61 Nichia Corporation V. Everlight Electronics",
+        "shortNameHandle": "61_Nichia_Corporation_V_Everlight_Electronics",
+        "caseNumber": "2:18-CV-00038-JRG"
+      },
+      {
+        "shortName": "62 Simpleair V. Google 582",
+        "shortNameHandle": "62_Simpleair_V_Google_582",
+        "caseNumber": "2:16-CV-00582-JRG"
+      },
+      {
+        "shortName": "63 Solas Oled Ltd. V. Samsung",
+        "shortNameHandle": "63_Solas_Oled_Ltd_V_Samsung",
+        "caseNumber": "2:19-CV-00152-JRG"
+      },
+      {
+        "shortName": "65 Ticketnetwork V. Ceats",
+        "shortNameHandle": "65_Ticketnetwork_V_Ceats",
+        "caseNumber": "2:15-CV-01470-JRG"
+      },
+      {
+        "shortName": "67 Gonzalez V. New Life",
+        "shortNameHandle": "67_Gonzalez_V_New_Life",
+        "caseNumber": "2:15-CV-00799-JRG"
+      },
+      {
+        "shortName": "68 Contentguard Holdings, Inc. V. Google",
+        "shortNameHandle": "68_Contentguard_Holdings_Inc_V_Google",
+        "caseNumber": "2:14-CV-00061-JRG"
+      },
+      {
+        "shortName": "71 Hinson Et Al V. Dorel",
+        "shortNameHandle": "71_Hinson_Et_Al_V_Dorel",
+        "caseNumber": "2:18-CV-00391-JRG"
+      },
+      {
+        "shortName": "72 Taylor V Turner",
+        "shortNameHandle": "72_Taylor_V_Turner",
+        "caseNumber": "2:16-CV-01419-JRG"
+      },
+      {
+        "shortName": "73 Tq Delta, Llc V. Commscope",
+        "shortNameHandle": "73_Tq_Delta_Llc_V_Commscope",
+        "caseNumber": "2:14-CV-00954-JRG"
+      },
+      {
+        "shortName": "75 Garrett V Wood County",
+        "shortNameHandle": "75_Garrett_V_Wood_County",
+        "caseNumber": "2:17-CV-00766-JRG"
+      },
+      {
+        "shortName": "83 Koninklijke",
+        "shortNameHandle": "83_Koninklijke",
+        "caseNumber": "2:14-CV-01445-JRG"
+      },
+      {
+        "shortName": "85 Navico V. Garmin",
+        "shortNameHandle": "85_Navico_V_Garmin",
+        "caseNumber": "2:16-CV-00190-JRG"
+      },
+      {
+        "shortName": "86 Ollnova",
+        "shortNameHandle": "86_Ollnova",
+        "caseNumber": "2:16-CV-00998-JRG"
+      },
+      {
+        "shortName": "95 Lake Cherokee",
+        "shortNameHandle": "95_Lake_Cherokee",
+        "caseNumber": "2:15-CV-00293-JRG"
+      },
+      {
+        "shortName": "101 Netlist, Inc. V. Samsung",
+        "shortNameHandle": "101_Netlist_Inc_V_Samsung",
+        "caseNumber": "2:22-CV-00293-JRG"
+      },
+      {
+        "shortName": "103 Smartflash",
+        "shortNameHandle": "103_Smartflash",
+        "caseNumber": "2:12-CV-00666-JRG"
+      },
+      {
+        "shortName": "106 Chrimar Systems V. Aerohive",
+        "shortNameHandle": "106_Chrimar_Systems_V_Aerohive",
+        "caseNumber": "2:16-CV-00865-JRG"
+      }
+    ]
+  }
+}

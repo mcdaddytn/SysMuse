@@ -1,0 +1,29 @@
+{
+  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt/42 Vocalife Amazon",
+  "outputDir": "./output/test-jurors",
+  "logLevel": "debug",
+  "enableElasticSearch": false,
+  "processSubDirs": false,
+  "pdfToTextConfig": "./config/pdftotext.json",
+  "trialStyleConfig": "./config/trialstyle.json",
+  "sessionFiles": ["NOTICE OF FILING OF OFFICIAL TRANSCRIPT of Proceedings held on 10_1_20 (Trial Transcript - Morning S.txt"],
+  "defaultTrialStyle": {
+    "fileConvention": "AUTO",
+    "fileSortingMode": "AUTO",
+    "pageHeaderLines": 2,
+    "statementAppendMode": "space",
+    "summaryCenterDelimiter": "AUTO",
+    "parserMode": "multi-pass",
+    "expectedPatterns": {
+      "question": ["Q."],
+      "answer": ["A."],
+      "attorney": ["BY MR.", "BY MS."]
+    }
+  },
+  "parsingOptions": {
+    "removeLeadingWhitespace": true,
+    "preserveLinePrefix": true,
+    "normalizeWhitespace": true,
+    "detectSpeakerPatterns": true
+  }
+}

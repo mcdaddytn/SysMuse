@@ -622,6 +622,17 @@ export class ContentParser {
         };
       }
       
+      // Check for simple JUROR LASTNAME pattern (e.g., "JUROR BANKS:")
+      if (handle.startsWith('JUROR ')) {
+        const jurorNameMatch = handle.match(/^JUROR\s+([A-Z][A-Z\s]*?)$/);
+        if (jurorNameMatch) {
+          return {
+            prefix: handle,
+            type: 'JUROR'
+          };
+        }
+      }
+      
       // If we found a colon but the handle doesn't match any known pattern,
       // this is NOT a speaker (e.g., "It says:", "The question is:", etc.)
       // Return null to prevent false positives

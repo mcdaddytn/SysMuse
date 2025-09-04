@@ -197,6 +197,8 @@ export class WitnessJurorService {
     fullText?: string
   ): Promise<JurorInfo> {
     try {
+      logger.info(`createOrFindJuror called with trialId=${trialId}, speakerPrefix="${speakerPrefix}"`);
+      
       // Parse juror information from speaker prefix
       let name: string | undefined;
       let lastName: string | undefined;
@@ -260,7 +262,12 @@ export class WitnessJurorService {
         }
       });
       
+      if (juror) {
+        logger.info(`Found existing juror with id=${juror.id} for ${speakerPrefix}`);
+      }
+      
       if (!juror) {
+        logger.info(`Creating new Juror record for ${speakerPrefix} with speakerId=${speaker.id}, name=${name}, lastName=${lastName}, jurorNumber=${jurorNumber}`);
         juror = await this.prisma.juror.create({
           data: {
             trialId,
@@ -272,7 +279,7 @@ export class WitnessJurorService {
           }
         });
         
-        logger.info(`Created juror: ${speakerPrefix}`);
+        logger.info(`Successfully created juror: ${speakerPrefix} with id=${juror.id}`);
         
         // Add to alias map if we have a last name
         if (lastName) {

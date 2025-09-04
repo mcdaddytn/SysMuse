@@ -293,6 +293,41 @@ export class SpeakerRegistry {
           description: `Unidentified speaker: ${prefix}`
         }
       });
+    } else if (type === 'JUROR') {
+      // Parse juror information from speaker prefix
+      let lastName: string | undefined;
+      let name: string | undefined;
+      let jurorNumber: number | undefined;
+      
+      // Match patterns like "JUROR BANKS" or "JUROR 40"
+      const jurorMatch = prefix.match(/^JUROR\s+(.+)$/i);
+      if (jurorMatch) {
+        const identifier = jurorMatch[1];
+        
+        // Check if it's a number
+        const numberMatch = identifier.match(/^\d+$/);
+        if (numberMatch) {
+          jurorNumber = parseInt(numberMatch[0]);
+        } else {
+          // It's a name
+          lastName = identifier.toUpperCase();
+          name = identifier;
+        }
+      }
+      
+      // Create the Juror record
+      await this.prisma.juror.create({
+        data: {
+          trialId: this.trialId,
+          speakerId: speaker.id,
+          name,
+          lastName,
+          jurorNumber,
+          alias: lastName ? `MR. ${lastName}` : undefined
+        }
+      });
+      
+      logger.info(`Created Juror record for ${prefix} with speakerId=${speaker.id}`);
     }
     
     return speaker;

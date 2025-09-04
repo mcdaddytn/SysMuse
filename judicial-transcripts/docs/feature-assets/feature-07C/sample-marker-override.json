@@ -1,0 +1,304 @@
+{
+  "trial": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "name": "VOCALIFE LLC VS. AMAZON.COM, INC."
+  },
+  "markers": [
+    {
+      "name": "Jury Selection Begin",
+      "markerType": "SECTION_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210315AM",
+        "sessionLineNumber": 51
+      },
+      "confidence": 0.95,
+      "notes": "Judge begins voir dire process"
+    },
+    {
+      "name": "Jury Selection End",
+      "markerType": "SECTION_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "trialLineNumber": 500
+      },
+      "confidence": 0.95,
+      "notes": "Jury sworn in"
+    },
+    {
+      "name": "Opening Statements Period Begin",
+      "markerType": "SECTION_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210315PM",
+        "pageNumber": 45,
+        "lineNumber": 1
+      },
+      "confidence": 0.9,
+      "notes": "Judge introduces opening statements"
+    },
+    {
+      "name": "Plaintiff Opening Begin",
+      "markerType": "OPENING_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210315PM",
+        "pageNumber": 46,
+        "lineNumber": 5
+      },
+      "confidence": 0.95,
+      "speaker": "MR. FABRICANT",
+      "notes": "Plaintiff's counsel begins opening statement"
+    },
+    {
+      "name": "Plaintiff Opening End",
+      "markerType": "OPENING_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210315PM",
+        "sessionLineNumber": 650
+      },
+      "confidence": 0.95,
+      "notes": "Plaintiff's counsel concludes"
+    },
+    {
+      "name": "Defense Opening Begin",
+      "markerType": "OPENING_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "trialLineNumber": 651
+      },
+      "confidence": 0.92,
+      "speaker": "MS. JONES",
+      "notes": "Defense counsel begins opening statement"
+    },
+    {
+      "name": "Defense Opening End",
+      "markerType": "OPENING_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "trialLineNumber": 800
+      },
+      "confidence": 0.92,
+      "notes": "Defense counsel concludes"
+    },
+    {
+      "name": "Opening Statements Period End",
+      "markerType": "SECTION_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "trialLineNumber": 800
+      },
+      "confidence": 0.9,
+      "notes": "Judge transitions to witness testimony"
+    },
+    {
+      "name": "Closing Statements Period Begin",
+      "markerType": "SECTION_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210319PM",
+        "sessionLineNumber": 2001
+      },
+      "confidence": 0.88,
+      "notes": "Judge introduces closing arguments"
+    },
+    {
+      "name": "Plaintiff Closing Begin",
+      "markerType": "CLOSING_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210319PM",
+        "sessionLineNumber": 2010
+      },
+      "confidence": 0.9,
+      "speaker": "MR. FABRICANT",
+      "notes": "Plaintiff's closing argument begins"
+    },
+    {
+      "name": "Plaintiff Closing End",
+      "markerType": "CLOSING_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210319PM",
+        "sessionLineNumber": 2200
+      },
+      "confidence": 0.9,
+      "notes": "Plaintiff's closing argument ends"
+    },
+    {
+      "name": "Defense Closing Begin",
+      "markerType": "CLOSING_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210319PM",
+        "sessionLineNumber": 2201
+      },
+      "confidence": 0.88,
+      "speaker": "MS. JONES",
+      "notes": "Defense closing argument begins"
+    },
+    {
+      "name": "Defense Closing End",
+      "markerType": "CLOSING_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210319PM",
+        "sessionLineNumber": 2400
+      },
+      "confidence": 0.88,
+      "notes": "Defense closing argument ends"
+    },
+    {
+      "name": "Closing Statements Period End",
+      "markerType": "SECTION_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210319PM",
+        "sessionLineNumber": 2400
+      },
+      "confidence": 0.88,
+      "notes": "Judge begins jury instructions"
+    },
+    {
+      "name": "Jury Deliberation Begin",
+      "markerType": "DELIBERATION_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210320AM",
+        "sessionLineNumber": 100
+      },
+      "confidence": 0.95,
+      "notes": "Jury retires for deliberation"
+    },
+    {
+      "name": "Jury Verdict Begin",
+      "markerType": "VERDICT_BEGIN",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210320PM",
+        "sessionLineNumber": 50
+      },
+      "confidence": 0.98,
+      "notes": "Jury returns with verdict"
+    },
+    {
+      "name": "Jury Verdict End",
+      "markerType": "VERDICT_END",
+      "location": {
+        "caseNumber": "2:19-CV-00123-JRG",
+        "sessionShortName": "20210320PM",
+        "sessionLineNumber": 150
+      },
+      "confidence": 0.98,
+      "notes": "Verdict reading complete"
+    }
+  ],
+  "markerSections": [
+    {
+      "name": "Jury Selection",
+      "sectionType": "JURY_SELECTION",
+      "startMarker": "Jury Selection Begin",
+      "endMarker": "Jury Selection End",
+      "metadata": {
+        "duration": "4 hours",
+        "juryCount": 12,
+        "alternates": 2
+      }
+    },
+    {
+      "name": "Opening Statements Period",
+      "sectionType": "OPENING_STATEMENTS_PERIOD",
+      "startMarker": "Opening Statements Period Begin",
+      "endMarker": "Opening Statements Period End",
+      "metadata": {
+        "totalDuration": "2 hours"
+      }
+    },
+    {
+      "name": "Plaintiff Opening Statement",
+      "sectionType": "OPENING_STATEMENT_PLAINTIFF",
+      "startMarker": "Plaintiff Opening Begin",
+      "endMarker": "Plaintiff Opening End",
+      "parentSection": "Opening Statements Period",
+      "metadata": {
+        "attorney": "Mr. Fabricant",
+        "duration": "55 minutes",
+        "themes": ["innovation", "willful infringement", "damages"]
+      }
+    },
+    {
+      "name": "Defense Opening Statement",
+      "sectionType": "OPENING_STATEMENT_DEFENSE",
+      "startMarker": "Defense Opening Begin",
+      "endMarker": "Defense Opening End",
+      "parentSection": "Opening Statements Period",
+      "metadata": {
+        "attorney": "Ms. Jones",
+        "duration": "45 minutes",
+        "themes": ["invalidity", "non-infringement", "prior art"]
+      }
+    },
+    {
+      "name": "Closing Statements Period",
+      "sectionType": "CLOSING_STATEMENTS_PERIOD",
+      "startMarker": "Closing Statements Period Begin",
+      "endMarker": "Closing Statements Period End",
+      "metadata": {
+        "totalDuration": "3 hours"
+      }
+    },
+    {
+      "name": "Plaintiff Closing Statement",
+      "sectionType": "CLOSING_STATEMENT_PLAINTIFF",
+      "startMarker": "Plaintiff Closing Begin",
+      "endMarker": "Plaintiff Closing End",
+      "parentSection": "Closing Statements Period",
+      "metadata": {
+        "attorney": "Mr. Fabricant",
+        "duration": "1.5 hours",
+        "rebuttalIncluded": true
+      }
+    },
+    {
+      "name": "Defense Closing Statement",
+      "sectionType": "CLOSING_STATEMENT_DEFENSE",
+      "startMarker": "Defense Closing Begin",
+      "endMarker": "Defense Closing End",
+      "parentSection": "Closing Statements Period",
+      "metadata": {
+        "attorney": "Ms. Jones",
+        "duration": "1.5 hours"
+      }
+    },
+    {
+      "name": "Jury Deliberation",
+      "sectionType": "JURY_DELIBERATION",
+      "startMarker": "Jury Deliberation Begin",
+      "endMarker": "Jury Verdict Begin",
+      "metadata": {
+        "duration": "6 hours",
+        "daysOfDeliberation": 1
+      }
+    },
+    {
+      "name": "Jury Verdict",
+      "sectionType": "JURY_VERDICT",
+      "startMarker": "Jury Verdict Begin",
+      "endMarker": "Jury Verdict End",
+      "metadata": {
+        "verdict": "Plaintiff",
+        "damages": "$25,000,000",
+        "unanimous": true
+      }
+    }
+  ],
+  "metadata": {
+    "generatedBy": "LLM",
+    "llmProvider": "openai",
+    "llmModel": "gpt-4",
+    "generatedAt": "2024-01-15T10:30:00Z",
+    "validatedBy": "human",
+    "validationNotes": "Reviewed and adjusted opening statement boundaries"
+  }
+}

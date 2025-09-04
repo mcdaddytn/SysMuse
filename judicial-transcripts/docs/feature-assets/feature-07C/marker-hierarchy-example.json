@@ -1,0 +1,282 @@
+{
+  "description": "Example of hierarchical marker structure for a complete trial",
+  "trial": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "name": "VOCALIFE LLC VS. AMAZON.COM, INC."
+  },
+  "hierarchy": {
+    "root": {
+      "name": "Complete Trial",
+      "sectionType": "CUSTOM",
+      "children": [
+        {
+          "name": "Case Introduction",
+          "sectionType": "CASE_INTRO",
+          "lineRange": [1, 50],
+          "children": []
+        },
+        {
+          "name": "Jury Selection Period",
+          "sectionType": "JURY_SELECTION",
+          "lineRange": [51, 500],
+          "children": [
+            {
+              "name": "Voir Dire",
+              "sectionType": "CUSTOM",
+              "lineRange": [51, 400]
+            },
+            {
+              "name": "Jury Swearing In",
+              "sectionType": "CUSTOM",
+              "lineRange": [401, 500]
+            }
+          ]
+        },
+        {
+          "name": "Opening Statements Period",
+          "sectionType": "OPENING_STATEMENTS_PERIOD",
+          "lineRange": [501, 800],
+          "children": [
+            {
+              "name": "Judge Introduction",
+              "sectionType": "CUSTOM",
+              "lineRange": [501, 510]
+            },
+            {
+              "name": "Plaintiff Opening Statement",
+              "sectionType": "OPENING_STATEMENT_PLAINTIFF",
+              "lineRange": [511, 650],
+              "metadata": {
+                "speaker": "MR. FABRICANT",
+                "duration": "55 minutes"
+              }
+            },
+            {
+              "name": "Defense Opening Statement",
+              "sectionType": "OPENING_STATEMENT_DEFENSE",
+              "lineRange": [651, 790],
+              "metadata": {
+                "speaker": "MS. JONES",
+                "duration": "45 minutes"
+              }
+            },
+            {
+              "name": "Judge Transition",
+              "sectionType": "CUSTOM",
+              "lineRange": [791, 800]
+            }
+          ]
+        },
+        {
+          "name": "Witness Testimony Period",
+          "sectionType": "WITNESS_TESTIMONY_PERIOD",
+          "lineRange": [801, 5000],
+          "children": [
+            {
+              "name": "Plaintiff's Case",
+              "sectionType": "WITNESS_TESTIMONY_PLAINTIFF",
+              "lineRange": [801, 3000],
+              "children": [
+                {
+                  "name": "Witness 1 - Dr. Smith",
+                  "sectionType": "WITNESS_EXAMINATION",
+                  "lineRange": [801, 1200],
+                  "children": [
+                    {
+                      "name": "Direct Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [801, 1000],
+                      "metadata": {
+                        "examiner": "MR. FABRICANT",
+                        "witness": "Dr. Smith"
+                      }
+                    },
+                    {
+                      "name": "Cross Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [1001, 1150],
+                      "metadata": {
+                        "examiner": "MS. JONES",
+                        "witness": "Dr. Smith"
+                      }
+                    },
+                    {
+                      "name": "Redirect Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [1151, 1200],
+                      "metadata": {
+                        "examiner": "MR. FABRICANT",
+                        "witness": "Dr. Smith"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Witness 2 - Ms. Johnson",
+                  "sectionType": "WITNESS_EXAMINATION",
+                  "lineRange": [1201, 1600],
+                  "children": [
+                    {
+                      "name": "Direct Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [1201, 1450],
+                      "metadata": {
+                        "examiner": "MR. LAMBRIANAKOS",
+                        "witness": "Ms. Johnson"
+                      }
+                    },
+                    {
+                      "name": "Cross Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [1451, 1600],
+                      "metadata": {
+                        "examiner": "MR. CHEN",
+                        "witness": "Ms. Johnson"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Defense's Case",
+              "sectionType": "WITNESS_TESTIMONY_DEFENSE",
+              "lineRange": [3001, 5000],
+              "children": [
+                {
+                  "name": "Witness 3 - Mr. Anderson",
+                  "sectionType": "WITNESS_EXAMINATION",
+                  "lineRange": [3001, 3500],
+                  "children": [
+                    {
+                      "name": "Direct Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [3001, 3300],
+                      "metadata": {
+                        "examiner": "MS. JONES",
+                        "witness": "Mr. Anderson"
+                      }
+                    },
+                    {
+                      "name": "Cross Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [3301, 3450],
+                      "metadata": {
+                        "examiner": "MR. FABRICANT",
+                        "witness": "Mr. Anderson"
+                      }
+                    },
+                    {
+                      "name": "Recross Examination",
+                      "sectionType": "CUSTOM",
+                      "lineRange": [3451, 3500],
+                      "metadata": {
+                        "examiner": "MR. FABRICANT",
+                        "witness": "Mr. Anderson"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Closing Statements Period",
+          "sectionType": "CLOSING_STATEMENTS_PERIOD",
+          "lineRange": [5001, 5400],
+          "children": [
+            {
+              "name": "Plaintiff Closing Statement",
+              "sectionType": "CLOSING_STATEMENT_PLAINTIFF",
+              "lineRange": [5001, 5200],
+              "metadata": {
+                "speaker": "MR. FABRICANT",
+                "includesRebuttal": true
+              }
+            },
+            {
+              "name": "Defense Closing Statement",
+              "sectionType": "CLOSING_STATEMENT_DEFENSE",
+              "lineRange": [5201, 5400],
+              "metadata": {
+                "speaker": "MS. JONES"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Jury Instructions",
+          "sectionType": "CUSTOM",
+          "lineRange": [5401, 5600],
+          "children": []
+        },
+        {
+          "name": "Jury Deliberation",
+          "sectionType": "JURY_DELIBERATION",
+          "lineRange": [5601, 5650],
+          "children": []
+        },
+        {
+          "name": "Jury Verdict",
+          "sectionType": "JURY_VERDICT",
+          "lineRange": [5651, 5700],
+          "children": []
+        },
+        {
+          "name": "Case Wrapup",
+          "sectionType": "CASE_WRAPUP",
+          "lineRange": [5701, 5750],
+          "children": []
+        }
+      ]
+    }
+  },
+  "statistics": {
+    "totalMarkerSections": 28,
+    "maxDepth": 4,
+    "sectionTypes": {
+      "CASE_INTRO": 1,
+      "JURY_SELECTION": 1,
+      "OPENING_STATEMENTS_PERIOD": 1,
+      "OPENING_STATEMENT_PLAINTIFF": 1,
+      "OPENING_STATEMENT_DEFENSE": 1,
+      "WITNESS_TESTIMONY_PERIOD": 1,
+      "WITNESS_TESTIMONY_PLAINTIFF": 1,
+      "WITNESS_TESTIMONY_DEFENSE": 1,
+      "WITNESS_EXAMINATION": 3,
+      "CLOSING_STATEMENTS_PERIOD": 1,
+      "CLOSING_STATEMENT_PLAINTIFF": 1,
+      "CLOSING_STATEMENT_DEFENSE": 1,
+      "JURY_DELIBERATION": 1,
+      "JURY_VERDICT": 1,
+      "CASE_WRAPUP": 1,
+      "CUSTOM": 11
+    }
+  },
+  "validationRules": {
+    "sequentialOrder": [
+      "CASE_INTRO",
+      "JURY_SELECTION",
+      "OPENING_STATEMENTS_PERIOD",
+      "WITNESS_TESTIMONY_PERIOD",
+      "CLOSING_STATEMENTS_PERIOD",
+      "JURY_DELIBERATION",
+      "JURY_VERDICT",
+      "CASE_WRAPUP"
+    ],
+    "requiredNesting": {
+      "OPENING_STATEMENT_PLAINTIFF": "OPENING_STATEMENTS_PERIOD",
+      "OPENING_STATEMENT_DEFENSE": "OPENING_STATEMENTS_PERIOD",
+      "CLOSING_STATEMENT_PLAINTIFF": "CLOSING_STATEMENTS_PERIOD",
+      "CLOSING_STATEMENT_DEFENSE": "CLOSING_STATEMENTS_PERIOD",
+      "WITNESS_TESTIMONY_PLAINTIFF": "WITNESS_TESTIMONY_PERIOD",
+      "WITNESS_TESTIMONY_DEFENSE": "WITNESS_TESTIMONY_PERIOD"
+    },
+    "allowedChildren": {
+      "WITNESS_EXAMINATION": ["CUSTOM"],
+      "WITNESS_TESTIMONY_PLAINTIFF": ["WITNESS_EXAMINATION"],
+      "WITNESS_TESTIMONY_DEFENSE": ["WITNESS_EXAMINATION"]
+    }
+  }
+}

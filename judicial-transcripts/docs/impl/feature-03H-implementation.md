@@ -88,10 +88,32 @@ Speaker handles properly generated:
 npx ts-node src/cli/override.ts import docs/feature-assets/feature-03H/sample-override-complete.json --verbose
 ```
 
-### Extract with LLM (requires OPENAI_API_KEY)
+### Extract with LLM (requires API keys)
 ```bash
-export OPENAI_API_KEY="your-key"
-npx ts-node src/cli/override.ts extract --trial-path "/path/to/trial/folder" --output extracted.json
+# OpenAI
+export OPENAI_API_KEY="sk-..."
+npx ts-node src/cli/override.ts extract --trial-path "/path/to/trial" --provider openai --model gpt-4
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+npx ts-node src/cli/override.ts extract --trial-path "/path/to/trial" --provider anthropic --model claude-3-opus
+
+# Google Gemini
+export GOOGLE_API_KEY="..."
+npx ts-node src/cli/override.ts extract --trial-path "/path/to/trial" --provider google --model gemini-pro
+```
+
+### Batch Processing
+```bash
+# Using CLI command
+npx ts-node src/cli/override.ts batch-extract \
+  --input-dir "output/multi-trial" \
+  --output-dir "output/overrides/batch" \
+  --provider openai \
+  --model gpt-4
+
+# Using bash script
+./scripts/batch-override.sh openai gpt-4 true
 ```
 
 ### Export Existing Data
@@ -112,7 +134,10 @@ npx ts-node src/cli/override.ts export --trial-id 1 --output export.json
 
 ### Configuration
 - Uses existing Prisma models and database schema
-- Requires OPENAI_API_KEY environment variable for LLM extraction
+- Requires API keys for LLM providers:
+  - `OPENAI_API_KEY` for OpenAI (GPT models)
+  - `ANTHROPIC_API_KEY` for Anthropic (Claude models)  
+  - `GOOGLE_API_KEY` for Google (Gemini models)
 - Compatible with existing multi-pass parser workflow
 
 ## Integration Points

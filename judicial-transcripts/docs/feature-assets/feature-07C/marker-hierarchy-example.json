@@ -81,31 +81,38 @@
                   "name": "Witness 1 - Dr. Smith",
                   "sectionType": "WITNESS_EXAMINATION",
                   "lineRange": [801, 1200],
+                  "metadata": {
+                    "callingParty": "PLAINTIFF",
+                    "witness": "Dr. Smith"
+                  },
                   "children": [
                     {
                       "name": "Direct Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "DIRECT_EXAMINATION",
                       "lineRange": [801, 1000],
                       "metadata": {
                         "examiner": "MR. FABRICANT",
+                        "party": "PLAINTIFF",
                         "witness": "Dr. Smith"
                       }
                     },
                     {
                       "name": "Cross Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "CROSS_EXAMINATION",
                       "lineRange": [1001, 1150],
                       "metadata": {
                         "examiner": "MS. JONES",
+                        "party": "DEFENSE",
                         "witness": "Dr. Smith"
                       }
                     },
                     {
                       "name": "Redirect Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "REDIRECT_EXAMINATION",
                       "lineRange": [1151, 1200],
                       "metadata": {
                         "examiner": "MR. FABRICANT",
+                        "party": "PLAINTIFF",
                         "witness": "Dr. Smith"
                       }
                     }
@@ -115,23 +122,30 @@
                   "name": "Witness 2 - Ms. Johnson",
                   "sectionType": "WITNESS_EXAMINATION",
                   "lineRange": [1201, 1600],
+                  "metadata": {
+                    "callingParty": "PLAINTIFF",
+                    "witness": "Ms. Johnson"
+                  },
                   "children": [
                     {
                       "name": "Direct Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "DIRECT_EXAMINATION",
                       "lineRange": [1201, 1450],
                       "metadata": {
                         "examiner": "MR. LAMBRIANAKOS",
+                        "party": "PLAINTIFF",
                         "witness": "Ms. Johnson"
                       }
                     },
                     {
                       "name": "Cross Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "CROSS_EXAMINATION",
                       "lineRange": [1451, 1600],
                       "metadata": {
                         "examiner": "MR. CHEN",
-                        "witness": "Ms. Johnson"
+                        "party": "DEFENSE",
+                        "witness": "Ms. Johnson",
+                        "note": "Defense declined redirect"
                       }
                     }
                   ]
@@ -147,31 +161,48 @@
                   "name": "Witness 3 - Mr. Anderson",
                   "sectionType": "WITNESS_EXAMINATION",
                   "lineRange": [3001, 3500],
+                  "metadata": {
+                    "callingParty": "DEFENSE",
+                    "witness": "Mr. Anderson"
+                  },
                   "children": [
                     {
                       "name": "Direct Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "DIRECT_EXAMINATION",
                       "lineRange": [3001, 3300],
                       "metadata": {
                         "examiner": "MS. JONES",
+                        "party": "DEFENSE",
                         "witness": "Mr. Anderson"
                       }
                     },
                     {
                       "name": "Cross Examination",
-                      "sectionType": "CUSTOM",
+                      "sectionType": "CROSS_EXAMINATION",
                       "lineRange": [3301, 3450],
                       "metadata": {
                         "examiner": "MR. FABRICANT",
+                        "party": "PLAINTIFF",
+                        "witness": "Mr. Anderson"
+                      }
+                    },
+                    {
+                      "name": "Redirect Examination",
+                      "sectionType": "REDIRECT_EXAMINATION",
+                      "lineRange": [3451, 3480],
+                      "metadata": {
+                        "examiner": "MS. JONES",
+                        "party": "DEFENSE",
                         "witness": "Mr. Anderson"
                       }
                     },
                     {
                       "name": "Recross Examination",
-                      "sectionType": "CUSTOM",
-                      "lineRange": [3451, 3500],
+                      "sectionType": "RECROSS_EXAMINATION",
+                      "lineRange": [3481, 3500],
                       "metadata": {
                         "examiner": "MR. FABRICANT",
+                        "party": "PLAINTIFF",
                         "witness": "Mr. Anderson"
                       }
                     }

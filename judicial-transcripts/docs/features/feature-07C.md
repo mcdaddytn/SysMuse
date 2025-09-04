@@ -37,6 +37,10 @@ enum MarkerSectionType {
   WITNESS_TESTIMONY_PLAINTIFF
   WITNESS_TESTIMONY_DEFENSE
   WITNESS_EXAMINATION
+  DIRECT_EXAMINATION
+  CROSS_EXAMINATION
+  REDIRECT_EXAMINATION
+  RECROSS_EXAMINATION
   CLOSING_STATEMENTS_PERIOD
   CLOSING_STATEMENT_PLAINTIFF
   CLOSING_STATEMENT_DEFENSE
@@ -64,12 +68,18 @@ enum MarkerSectionType {
 4. Witness Testimony Period
    ├── Plaintiff Called Witnesses
    │   └── Individual Witness Testimony
-   │       ├── Direct Examination
-   │       ├── Cross Examination
-   │       ├── Redirect Examination
-   │       └── Recross Examination
+   │       ├── Direct Examination (Plaintiff)
+   │       ├── Cross Examination (Defense - optional)
+   │       ├── Redirect Examination (Plaintiff - optional)
+   │       ├── Recross Examination (Defense - optional)
+   │       └── [Additional Redirect/Recross cycles possible]
    └── Defense Called Witnesses
-       └── [Same structure as above]
+       └── Individual Witness Testimony
+           ├── Direct Examination (Defense)
+           ├── Cross Examination (Plaintiff - optional)
+           ├── Redirect Examination (Defense - optional)
+           ├── Recross Examination (Plaintiff - optional)
+           └── [Additional Redirect/Recross cycles possible]
 5. Closing Statements Period
    ├── Plaintiff Closing Statement
    └── Defense Closing Statement
@@ -77,6 +87,35 @@ enum MarkerSectionType {
 7. Jury Verdict
 8. Case Wrapup
 ```
+
+#### 2.1.1 Witness Examination Sequences
+The examination sequence follows a predictable pattern based on who called the witness:
+
+**Plaintiff Called Witness:**
+- Direct Examination (Plaintiff attorney)
+- Cross Examination (Defense attorney - optional)
+- Redirect Examination (Plaintiff attorney - optional)
+- Recross Examination (Defense attorney - optional)
+- [Additional cycles possible but rare]
+
+**Defense Called Witness:**
+- Direct Examination (Defense attorney)
+- Cross Examination (Plaintiff attorney - optional)
+- Redirect Examination (Defense attorney - optional)
+- Recross Examination (Plaintiff attorney - optional)
+- [Additional cycles possible but rare]
+
+**Common Examination Patterns:**
+```
+1. Direct → Cross (minimal)
+2. Direct → Cross → Redirect (common)
+3. Direct → Cross → Redirect → Recross (full standard)
+4. Direct → Cross → Redirect → Recross → Redirect (extended)
+5. Direct → Cross → Redirect → Recross → Redirect → Recross (rare, judge may limit)
+6. Direct → Cross → Redirect → Recross → Redirect → Recross → Redirect (very rare)
+```
+
+Note: While procedurally possible to continue alternating redirect/recross examinations, judges typically intervene to limit excessive back-and-forth. The system should support these extended sequences but flag them as unusual.
 
 #### 2.2 Hierarchy Rules
 - MarkerSections can be nested within other MarkerSections

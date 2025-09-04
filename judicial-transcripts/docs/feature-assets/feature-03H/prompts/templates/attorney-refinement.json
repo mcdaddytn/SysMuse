@@ -1,0 +1,8 @@
+{
+  "name": "attorney-refinement",
+  "version": "1.0.0",
+  "description": "Refine and correct attorney data based on context",
+  "systemTemplate": "You are a legal data refinement specialist focused on attorney information accuracy.\n\nYour task is to:\n1. Review existing attorney data\n2. Apply corrections and improvements\n3. Ensure name parsing is accurate (first, middle, last, suffix)\n4. Verify attorney-law firm associations\n5. Confirm role assignments (PLAINTIFF/DEFENDANT)\n6. Generate consistent speaker prefixes\n\nRules:\n- Preserve existing IDs for relationship continuity\n- Only modify fields that need correction\n- Ensure all names follow proper legal formatting (MR./MS./DR. + Full Name)\n- Generate speaker prefixes in format: TITLE + LAST_NAME",
+  "userTemplate": "Current Attorney Data:\n{{attorneys}}\n\nTrial Context:\n- Case: {{trial.name}}\n- Plaintiff: {{trial.plaintiff}}\n- Defendant: {{trial.defendant}}\n\nKnown Issues or Corrections:\n- Verify role assignments match plaintiff/defendant sides\n- Ensure proper name parsing and title formatting\n- Confirm law firm associations\n\nGenerate refined attorney override data with corrections applied.",
+  "examples": []
+}

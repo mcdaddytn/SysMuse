@@ -1,0 +1,134 @@
+{
+  "directories": {
+    "input": {
+      "transcripts": "input/transcripts",
+      "pdf": "input/pdf"
+    },
+    "output": {
+      "base": "output",
+      "multiTrial": "output/multi-trial",
+      "reports": "output/reports",
+      "llm": "output/llm"
+    },
+    "temp": "temp",
+    "backups": "backups",
+    "logs": "logs"
+  },
+  "llm": {
+    "defaultProvider": "openai",
+    "defaultModel": "gpt-4",
+    "providers": {
+      "openai": {
+        "models": {
+          "gpt-4": {
+            "maxTokens": 4000,
+            "temperature": 0.1,
+            "contextWindow": 8192
+          },
+          "gpt-4-turbo": {
+            "maxTokens": 4000,
+            "temperature": 0.1,
+            "contextWindow": 128000
+          },
+          "gpt-3.5-turbo": {
+            "maxTokens": 2000,
+            "temperature": 0.1,
+            "contextWindow": 16384
+          }
+        }
+      },
+      "anthropic": {
+        "models": {
+          "claude-3-opus-20240229": {
+            "maxTokens": 4000,
+            "temperature": 0.1,
+            "contextWindow": 200000
+          },
+          "claude-3-sonnet-20240229": {
+            "maxTokens": 4000,
+            "temperature": 0.1,
+            "contextWindow": 200000
+          },
+          "claude-3-haiku-20240307": {
+            "maxTokens": 4000,
+            "temperature": 0.1,
+            "contextWindow": 200000
+          },
+          "claude-2.1": {
+            "maxTokens": 4000,
+            "temperature": 0.1,
+            "contextWindow": 200000
+          }
+        }
+      },
+      "google": {
+        "models": {
+          "gemini-pro": {
+            "maxTokens": 2048,
+            "temperature": 0.1,
+            "contextWindow": 32000
+          },
+          "gemini-1.5-pro": {
+            "maxTokens": 8192,
+            "temperature": 0.1,
+            "contextWindow": 1000000
+          },
+          "gemini-1.5-flash": {
+            "maxTokens": 8192,
+            "temperature": 0.1,
+            "contextWindow": 1000000
+          }
+        }
+      }
+    },
+    "retryAttempts": 3,
+    "timeout": 60000,
+    "output": {
+      "baseDir": "output/llm",
+      "contexts": "output/llm/contexts",
+      "prompts": "output/llm/prompts",
+      "responses": "output/llm/responses",
+      "overrides": "output/llm/overrides"
+    },
+    "saveOptions": {
+      "savePrompts": true,
+      "saveContexts": true,
+      "saveResponses": true,
+      "timestampFormat": "YYYY-MM-DD-HHmmss",
+      "organizeByTrial": true
+    }
+  },
+  "override": {
+    "baseDir": "docs/feature-assets/feature-03H",
+    "preserveSourceIds": false,
+    "regenerateTimestamps": true,
+    "validateRelationships": true,
+    "speakerHandleGeneration": {
+      "removeSpecialChars": true,
+      "convertToUppercase": true,
+      "replaceSpacesWithUnderscores": true
+    },
+    "regeneration": {
+      "useExistingData": true,
+      "includeRelatedEntities": true,
+      "mergeWithTranscriptData": true,
+      "batchSize": 10
+    }
+  },
+  "parsing": {
+    "pageHeaderLines": 2,
+    "pageBreakCharacter": "\f",
+    "statementAppendMode": "space",
+    "summaryCenterDelimiter": "AUTO"
+  },
+  "database": {
+    "maxRetries": 3,
+    "retryDelay": 1000,
+    "transactionTimeout": 30000
+  },
+  "reporting": {
+    "outputFormat": "json",
+    "includeStatistics": true,
+    "detailedErrors": true
+  }
+}

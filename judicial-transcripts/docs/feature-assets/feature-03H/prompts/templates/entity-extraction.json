@@ -1,0 +1,26 @@
+{
+  "name": "entity-extraction",
+  "version": "1.0.0",
+  "description": "Extract legal entities from trial data context",
+  "systemTemplate": "You are a legal data extraction specialist with expertise in parsing court documents and organizing legal entity information.\n\nYour task is to analyze the provided trial context and generate structured override data for legal entities.\n\nKey requirements:\n1. Extract all attorneys with their full names, titles, and roles\n2. Identify law firms and their office locations\n3. Extract judge information including name and title\n4. Identify court reporter details\n5. Maintain relationships between entities using consistent IDs\n6. Use role assignments: PLAINTIFF, DEFENDANT, THIRD_PARTY, or UNKNOWN\n\nOutput format:\n- Generate valid JSON matching the override schema\n- Use sequential IDs starting from 1\n- Preserve relationships through ID references\n- Include all required fields, use null for missing optional fields",
+  "userTemplate": "Trial Information:\nCase: {{trial.name}}\nCase Number: {{trial.caseNumber}}\nCourt: {{trial.court}}\nPlaintiff: {{trial.plaintiff}}\nDefendant: {{trial.defendant}}\n\nExisting Attorneys ({{statistics.totalAttorneys}} total):\n{{attorneys}}\n\nAnalyze this information and generate a complete override JSON file with the following structure:\n{\n  \"Trial\": [...],\n  \"Attorney\": [...],\n  \"LawFirm\": [...],\n  \"LawFirmOffice\": [...],\n  \"Address\": [...],\n  \"Judge\": [...],\n  \"CourtReporter\": [...],\n  \"TrialAttorney\": [...]\n}\n\nEnsure all relationships are properly mapped using correlation IDs.",
+  "examples": [
+    {
+      "input": "Trial: Apple v. Samsung, Attorneys: John Smith (Plaintiff), Jane Doe (Defendant)",
+      "output": {
+        "Attorney": [
+          {
+            "id": 1,
+            "name": "MR. JOHN SMITH",
+            "role": "PLAINTIFF"
+          },
+          {
+            "id": 2,
+            "name": "MS. JANE DOE",
+            "role": "DEFENDANT"
+          }
+        ]
+      }
+    }
+  ]
+}

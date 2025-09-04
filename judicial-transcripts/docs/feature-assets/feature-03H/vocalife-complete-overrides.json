@@ -1,0 +1,545 @@
+{
+  "Trial": [
+    {
+      "id": 1,
+      "name": "VOCALIFE LLC VS. AMAZON.COM, INC. AND AMAZON.COM LLC",
+      "shortName": "42 Vocalife Amazon",
+      "caseNumber": "2:19-CV-00123-JRG",
+      "caseHandle": "Vocalife v Amazon",
+      "plaintiff": "VOCALIFE LLC",
+      "defendant": "AMAZON.COM, INC. AND AMAZON.COM LLC",
+      "court": "UNITED STATES DISTRICT COURT",
+      "courtDivision": "MARSHALL DIVISION",
+      "courtDistrict": "EASTERN DISTRICT OF TEXAS"
+    }
+  ],
+  "Attorney": [
+    {
+      "id": 1,
+      "name": "MR. ALFRED R. FABRICANT",
+      "title": "MR.",
+      "firstName": "ALFRED R.",
+      "middleInitial": "R.",
+      "lastName": "FABRICANT",
+      "suffix": null,
+      "speakerPrefix": "MR. FABRICANT",
+      "barNumber": null
+    },
+    {
+      "id": 2,
+      "name": "MR. PETER LAMBRIANAKOS",
+      "title": "MR.",
+      "firstName": "PETER",
+      "middleInitial": null,
+      "lastName": "LAMBRIANAKOS",
+      "suffix": null,
+      "speakerPrefix": "MR. LAMBRIANAKOS",
+      "barNumber": null
+    },
+    {
+      "id": 3,
+      "name": "MR. VINCENT J. RUBINO, III",
+      "title": "MR.",
+      "firstName": "VINCENT J.",
+      "middleInitial": "J.",
+      "lastName": "RUBINO",
+      "suffix": "III",
+      "speakerPrefix": "MR. RUBINO",
+      "barNumber": null
+    },
+    {
+      "id": 4,
+      "name": "MS. AMY PARK",
+      "title": "MS.",
+      "firstName": "AMY",
+      "middleInitial": null,
+      "lastName": "PARK",
+      "suffix": null,
+      "speakerPrefix": "MS. PARK",
+      "barNumber": null
+    },
+    {
+      "id": 5,
+      "name": "MR. ENRIQUE ITURRALDE",
+      "title": "MR.",
+      "firstName": "ENRIQUE",
+      "middleInitial": null,
+      "lastName": "ITURRALDE",
+      "suffix": null,
+      "speakerPrefix": "MR. ITURRALDE",
+      "barNumber": null
+    },
+    {
+      "id": 6,
+      "name": "MR. SAMUEL F. BAXTER",
+      "title": "MR.",
+      "firstName": "SAMUEL F.",
+      "middleInitial": "F.",
+      "lastName": "BAXTER",
+      "suffix": null,
+      "speakerPrefix": "MR. BAXTER",
+      "barNumber": null
+    },
+    {
+      "id": 7,
+      "name": "MS. JENNIFER L. TRUELOVE",
+      "title": "MS.",
+      "firstName": "JENNIFER L.",
+      "middleInitial": "L.",
+      "lastName": "TRUELOVE",
+      "suffix": null,
+      "speakerPrefix": "MS. TRUELOVE",
+      "barNumber": null
+    },
+    {
+      "id": 8,
+      "name": "MR. JOSEPH R. RE",
+      "title": "MR.",
+      "firstName": "JOSEPH R.",
+      "middleInitial": "R.",
+      "lastName": "RE",
+      "suffix": null,
+      "speakerPrefix": "MR. RE",
+      "barNumber": null
+    },
+    {
+      "id": 9,
+      "name": "MR. ALAN G. LAQUER",
+      "title": "MR.",
+      "firstName": "ALAN G.",
+      "middleInitial": "G.",
+      "lastName": "LAQUER",
+      "suffix": null,
+      "speakerPrefix": "MR. LAQUER",
+      "barNumber": null
+    },
+    {
+      "id": 10,
+      "name": "MS. KENDALL M. LOEBBAKA",
+      "title": "MS.",
+      "firstName": "KENDALL M.",
+      "middleInitial": "M.",
+      "lastName": "LOEBBAKA",
+      "suffix": null,
+      "speakerPrefix": "MS. LOEBBAKA",
+      "barNumber": null
+    },
+    {
+      "id": 11,
+      "name": "MR. JOSHUA J. STOWELL",
+      "title": "MR.",
+      "firstName": "JOSHUA J.",
+      "middleInitial": "J.",
+      "lastName": "STOWELL",
+      "suffix": null,
+      "speakerPrefix": "MR. STOWELL",
+      "barNumber": null
+    },
+    {
+      "id": 12,
+      "name": "MR. COLIN B. HEIDEMAN",
+      "title": "MR.",
+      "firstName": "COLIN B.",
+      "middleInitial": "B.",
+      "lastName": "HEIDEMAN",
+      "suffix": null,
+      "speakerPrefix": "MR. HEIDEMAN",
+      "barNumber": null
+    },
+    {
+      "id": 13,
+      "name": "MS. JENNIFER H. DOAN",
+      "title": "MS.",
+      "firstName": "JENNIFER H.",
+      "middleInitial": "H.",
+      "lastName": "DOAN",
+      "suffix": null,
+      "speakerPrefix": "MS. DOAN",
+      "barNumber": null
+    },
+    {
+      "id": 14,
+      "name": "MR. JOSHUA R. THANE",
+      "title": "MR.",
+      "firstName": "JOSHUA R.",
+      "middleInitial": "R.",
+      "lastName": "THANE",
+      "suffix": null,
+      "speakerPrefix": "MR. THANE",
+      "barNumber": null
+    },
+    {
+      "id": 15,
+      "name": "MR. KYLE R. AKIN",
+      "title": "MR.",
+      "firstName": "KYLE R.",
+      "middleInitial": "R.",
+      "lastName": "AKIN",
+      "suffix": null,
+      "speakerPrefix": "MR. AKIN",
+      "barNumber": null
+    },
+    {
+      "id": 16,
+      "name": "MR. J. DAVID HADDEN",
+      "title": "MR.",
+      "firstName": "J. DAVID",
+      "middleInitial": "DAVID",
+      "lastName": "HADDEN",
+      "suffix": null,
+      "speakerPrefix": "MR. HADDEN",
+      "barNumber": null
+    },
+    {
+      "id": 17,
+      "name": "MR. RAVI RANGANATH",
+      "title": "MR.",
+      "firstName": "RAVI",
+      "middleInitial": null,
+      "lastName": "RANGANATH",
+      "suffix": null,
+      "speakerPrefix": "MR. RANGANATH",
+      "barNumber": null
+    },
+    {
+      "id": 18,
+      "name": "MR. THOMAS JOHN FOX",
+      "title": "MR.",
+      "firstName": "THOMAS JOHN",
+      "middleInitial": "JOHN",
+      "lastName": "FOX",
+      "suffix": null,
+      "speakerPrefix": "MR. FOX",
+      "barNumber": null
+    },
+    {
+      "id": 19,
+      "name": "MR. DERON R. DACUS",
+      "title": "MR.",
+      "firstName": "DERON R.",
+      "middleInitial": "R.",
+      "lastName": "DACUS",
+      "suffix": null,
+      "speakerPrefix": "MR. DACUS",
+      "barNumber": null
+    }
+  ],
+  "LawFirm": [
+    {
+      "id": 1,
+      "name": "FABRICANT LLP"
+    },
+    {
+      "id": 2,
+      "name": "MCKOOL SMITH, P.C."
+    },
+    {
+      "id": 3,
+      "name": "KNOBBE, MARTENS, OLSON & BEAR, LLP"
+    },
+    {
+      "id": 4,
+      "name": "HALTOM & DOAN"
+    },
+    {
+      "id": 5,
+      "name": "FENWICK & WEST LLP"
+    },
+    {
+      "id": 6,
+      "name": "THE DACUS FIRM, PC"
+    }
+  ],
+  "LawFirmOffice": [
+    {
+      "id": 1,
+      "lawFirmId": 1,
+      "name": "New York Office",
+      "addressId": 1
+    },
+    {
+      "id": 2,
+      "lawFirmId": 2,
+      "name": "Marshall Office",
+      "addressId": 2
+    },
+    {
+      "id": 3,
+      "lawFirmId": 3,
+      "name": "Irvine Office",
+      "addressId": 3
+    },
+    {
+      "id": 4,
+      "lawFirmId": 3,
+      "name": "Seattle Office",
+      "addressId": 4
+    },
+    {
+      "id": 5,
+      "lawFirmId": 4,
+      "name": "Texarkana Office",
+      "addressId": 5
+    },
+    {
+      "id": 6,
+      "lawFirmId": 5,
+      "name": "Mountain View Office",
+      "addressId": 6
+    },
+    {
+      "id": 7,
+      "lawFirmId": 6,
+      "name": "Tyler Office",
+      "addressId": 7
+    }
+  ],
+  "Address": [
+    {
+      "id": 1,
+      "street1": "230 Park Avenue, 3rd Floor W.",
+      "street2": null,
+      "city": "New York",
+      "state": "NY",
+      "zipCode": "10169",
+      "country": "USA",
+      "fullAddress": "230 Park Avenue, 3rd Floor W., New York, NY, 10169"
+    },
+    {
+      "id": 2,
+      "street1": "104 East Houston Street, Suite 300",
+      "street2": null,
+      "city": "Marshall",
+      "state": "TX",
+      "zipCode": "75670",
+      "country": "USA",
+      "fullAddress": "104 East Houston Street, Suite 300, Marshall, TX, 75670"
+    },
+    {
+      "id": 3,
+      "street1": "2040 Main Street, Fourteenth Floor",
+      "street2": null,
+      "city": "Irvine",
+      "state": "CA",
+      "zipCode": "92614",
+      "country": "USA",
+      "fullAddress": "2040 Main Street, Fourteenth Floor, Irvine, CA, 92614"
+    },
+    {
+      "id": 4,
+      "street1": "925 Fourth Avenue, Suite 2500",
+      "street2": null,
+      "city": "Seattle",
+      "state": "WA",
+      "zipCode": "98104",
+      "country": "USA",
+      "fullAddress": "925 Fourth Avenue, Suite 2500, Seattle, WA, 98104"
+    },
+    {
+      "id": 5,
+      "street1": "6500 Summerhill Road, Suite 100",
+      "street2": null,
+      "city": "Texarkana",
+      "state": "TX",
+      "zipCode": "75503",
+      "country": "USA",
+      "fullAddress": "6500 Summerhill Road, Suite 100, Texarkana, TX, 75503"
+    },
+    {
+      "id": 6,
+      "street1": "801 California Street",
+      "street2": null,
+      "city": "Mountain View",
+      "state": "CA",
+      "zipCode": "94041",
+      "country": "USA",
+      "fullAddress": "801 California Street, Mountain View, CA, 94041"
+    },
+    {
+      "id": 7,
+      "street1": "821 ESE Loop 323, Suite 430",
+      "street2": null,
+      "city": "Tyler",
+      "state": "TX",
+      "zipCode": "75701",
+      "country": "USA",
+      "fullAddress": "821 ESE Loop 323, Suite 430, Tyler, TX, 75701"
+    }
+  ],
+  "Judge": [
+    {
+      "id": 1,
+      "name": "RODNEY GILSTRAP",
+      "title": "UNITED STATES CHIEF DISTRICT JUDGE",
+      "honorific": "THE HONORABLE JUDGE",
+      "trialId": 1
+    }
+  ],
+  "CourtReporter": [
+    {
+      "id": 1,
+      "name": "Shelly Holmes",
+      "credentials": "CSR, TCRR",
+      "title": "Official Reporter",
+      "stateNumber": null,
+      "expirationDate": null,
+      "addressId": null,
+      "phone": "(903) 923-7464",
+      "trialId": 1
+    }
+  ],
+  "TrialAttorney": [
+    {
+      "id": 1,
+      "trialId": 1,
+      "attorneyId": 1,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 2,
+      "trialId": 1,
+      "attorneyId": 2,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 3,
+      "trialId": 1,
+      "attorneyId": 3,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 4,
+      "trialId": 1,
+      "attorneyId": 4,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 5,
+      "trialId": 1,
+      "attorneyId": 5,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 6,
+      "trialId": 1,
+      "attorneyId": 6,
+      "lawFirmId": 2,
+      "lawFirmOfficeId": 2,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 7,
+      "trialId": 1,
+      "attorneyId": 7,
+      "lawFirmId": 2,
+      "lawFirmOfficeId": 2,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 8,
+      "trialId": 1,
+      "attorneyId": 8,
+      "lawFirmId": 3,
+      "lawFirmOfficeId": 3,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 9,
+      "trialId": 1,
+      "attorneyId": 9,
+      "lawFirmId": 3,
+      "lawFirmOfficeId": 3,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 10,
+      "trialId": 1,
+      "attorneyId": 10,
+      "lawFirmId": 3,
+      "lawFirmOfficeId": 3,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 11,
+      "trialId": 1,
+      "attorneyId": 11,
+      "lawFirmId": 3,
+      "lawFirmOfficeId": 3,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 12,
+      "trialId": 1,
+      "attorneyId": 12,
+      "lawFirmId": 3,
+      "lawFirmOfficeId": 4,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 13,
+      "trialId": 1,
+      "attorneyId": 13,
+      "lawFirmId": 4,
+      "lawFirmOfficeId": 5,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 14,
+      "trialId": 1,
+      "attorneyId": 14,
+      "lawFirmId": 4,
+      "lawFirmOfficeId": 5,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 15,
+      "trialId": 1,
+      "attorneyId": 15,
+      "lawFirmId": 4,
+      "lawFirmOfficeId": 5,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 16,
+      "trialId": 1,
+      "attorneyId": 16,
+      "lawFirmId": 5,
+      "lawFirmOfficeId": 6,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 17,
+      "trialId": 1,
+      "attorneyId": 17,
+      "lawFirmId": 5,
+      "lawFirmOfficeId": 6,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 18,
+      "trialId": 1,
+      "attorneyId": 18,
+      "lawFirmId": 5,
+      "lawFirmOfficeId": 6,
+      "role": "DEFENDANT"
+    },
+    {
+      "id": 19,
+      "trialId": 1,
+      "attorneyId": 19,
+      "lawFirmId": 6,
+      "lawFirmOfficeId": 7,
+      "role": "DEFENDANT"
+    }
+  ]
+}

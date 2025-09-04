@@ -1,0 +1,123 @@
+export interface OverrideData {
+  Trial?: TrialOverride[];
+  Attorney?: AttorneyOverride[];
+  LawFirm?: LawFirmOverride[];
+  LawFirmOffice?: LawFirmOfficeOverride[];
+  Address?: AddressOverride[];
+  Judge?: JudgeOverride[];
+  CourtReporter?: CourtReporterOverride[];
+  TrialAttorney?: TrialAttorneyOverride[];
+}
+
+export interface BaseOverride {
+  id: number | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TrialOverride extends BaseOverride {
+  name: string;
+  shortName?: string | null;
+  caseNumber: string;
+  caseHandle?: string | null;
+  plaintiff?: string | null;
+  defendant?: string | null;
+  alternateCaseNumber?: string | null;
+  alternateDefendant?: string | null;
+  court: string;
+  courtDivision?: string | null;
+  courtDistrict?: string | null;
+  totalPages?: number | null;
+}
+
+export interface AttorneyOverride extends BaseOverride {
+  name: string;
+  title?: string | null;
+  firstName?: string | null;
+  middleInitial?: string | null;
+  lastName?: string | null;
+  suffix?: string | null;
+  speakerPrefix?: string | null;
+  barNumber?: string | null;
+  speakerId?: number;
+}
+
+export interface LawFirmOverride extends BaseOverride {
+  name: string;
+}
+
+export interface LawFirmOfficeOverride extends BaseOverride {
+  lawFirmId: number | string;
+  name: string;
+  addressId?: number | string | null;
+}
+
+export interface AddressOverride extends BaseOverride {
+  street1?: string | null;
+  street2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  country?: string | null;
+  fullAddress?: string | null;
+}
+
+export interface JudgeOverride extends BaseOverride {
+  name: string;
+  title?: string | null;
+  honorific?: string | null;
+  speakerId?: number;
+  trialId?: number | string;
+}
+
+export interface CourtReporterOverride extends BaseOverride {
+  name: string;
+  credentials?: string | null;
+  title?: string | null;
+  stateNumber?: string | null;
+  expirationDate?: string | null;
+  addressId?: number | string | null;
+  phone?: string | null;
+  trialId?: number | string;
+}
+
+export interface TrialAttorneyOverride extends BaseOverride {
+  trialId: number | string;
+  attorneyId: number | string;
+  lawFirmId?: number | string | null;
+  lawFirmOfficeId?: number | string | null;
+  role?: 'PLAINTIFF' | 'DEFENDANT' | 'THIRD_PARTY' | 'UNKNOWN';
+}
+
+export interface CorrelationMap {
+  Trial: Map<number | string, number>;
+  Attorney: Map<number | string, number>;
+  LawFirm: Map<number | string, number>;
+  LawFirmOffice: Map<number | string, number>;
+  Address: Map<number | string, number>;
+  Judge: Map<number | string, number>;
+  CourtReporter: Map<number | string, number>;
+  Speaker: Map<number | string, number>;
+}
+
+export interface ImportResult {
+  success: boolean;
+  imported: {
+    trials?: number;
+    attorneys?: number;
+    lawFirms?: number;
+    lawFirmOffices?: number;
+    addresses?: number;
+    judges?: number;
+    courtReporters?: number;
+    trialAttorneys?: number;
+  };
+  errors?: string[];
+  correlationMap?: CorrelationMap;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}

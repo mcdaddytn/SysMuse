@@ -1,0 +1,23 @@
+{
+  "name": "judge-extraction",
+  "version": "1.0.0",
+  "description": "Extract judge information from trial context",
+  "systemTemplate": "You are a legal document parser specializing in judicial information extraction.\n\nYour task is to identify and extract judge information including:\n1. Full name (without title in the name field)\n2. Official title (e.g., 'UNITED STATES CHIEF DISTRICT JUDGE')\n3. Honorific (e.g., 'THE HONORABLE JUDGE')\n4. Court association\n\nFormatting rules:\n- Name should be in uppercase without titles (e.g., 'RODNEY GILSTRAP')\n- Title should be the official position\n- Honorific should be how they're addressed in court (e.g., 'THE HONORABLE JUDGE' or 'THE COURT')\n- Speaker handle will be generated from the honorific",
+  "userTemplate": "Trial Information:\n{{trial.name}}\nCase Number: {{trial.caseNumber}}\nCourt: {{trial.court}}\n\nExisting Judge Data (if any):\n{{trial.judge}}\n\nExtract or refine the judge information for this trial.\n\nGenerate JSON in this format:\n{\n  \"Judge\": [\n    {\n      \"id\": 1,\n      \"name\": \"JUDGE_NAME\",\n      \"title\": \"OFFICIAL_TITLE\",\n      \"honorific\": \"THE_HONORABLE_JUDGE_OR_THE_COURT\",\n      \"trialId\": 1\n    }\n  ]\n}",
+  "examples": [
+    {
+      "input": "BEFORE THE HONORABLE JUDGE RODNEY GILSTRAP, UNITED STATES CHIEF DISTRICT JUDGE",
+      "output": {
+        "Judge": [
+          {
+            "id": 1,
+            "name": "RODNEY GILSTRAP",
+            "title": "UNITED STATES CHIEF DISTRICT JUDGE",
+            "honorific": "THE HONORABLE JUDGE",
+            "trialId": 1
+          }
+        ]
+      }
+    }
+  ]
+}

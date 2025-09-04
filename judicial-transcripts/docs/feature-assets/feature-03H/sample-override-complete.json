@@ -1,0 +1,180 @@
+{
+  "Trial": [
+    {
+      "id": 1,
+      "name": "VOCALIFE LLC v. AMAZON.COM, INC. and AMAZON.COM LLC",
+      "shortName": "42 Vocalife Amazon",
+      "caseNumber": "2:19-CV-123-JRG",
+      "caseHandle": "Vocalife v Amazon",
+      "plaintiff": "VOCALIFE LLC",
+      "defendant": "AMAZON.COM, INC. and AMAZON.COM LLC",
+      "court": "UNITED STATES DISTRICT COURT",
+      "courtDivision": "MARSHALL DIVISION",
+      "courtDistrict": "EASTERN DISTRICT OF TEXAS"
+    }
+  ],
+  "Attorney": [
+    {
+      "id": 1,
+      "name": "MR. ALFRED R. FABRICANT",
+      "title": "MR.",
+      "firstName": "ALFRED R.",
+      "middleInitial": "R.",
+      "lastName": "FABRICANT",
+      "suffix": null,
+      "speakerPrefix": "MR. FABRICANT",
+      "barNumber": null
+    },
+    {
+      "id": 2,
+      "name": "MR. PETER LAMBRIANAKOS",
+      "title": "MR.",
+      "firstName": "PETER",
+      "middleInitial": null,
+      "lastName": "LAMBRIANAKOS",
+      "suffix": null,
+      "speakerPrefix": "MR. LAMBRIANAKOS",
+      "barNumber": null
+    },
+    {
+      "id": 3,
+      "name": "MR. SAMUEL F. BAXTER",
+      "title": "MR.",
+      "firstName": "SAMUEL F.",
+      "middleInitial": "F.",
+      "lastName": "BAXTER",
+      "suffix": null,
+      "speakerPrefix": "MR. BAXTER",
+      "barNumber": null
+    },
+    {
+      "id": 4,
+      "name": "MR. JOSEPH R. RE",
+      "title": "MR.",
+      "firstName": "JOSEPH R.",
+      "middleInitial": "R.",
+      "lastName": "RE",
+      "suffix": null,
+      "speakerPrefix": "MR. RE",
+      "barNumber": null
+    }
+  ],
+  "LawFirm": [
+    {
+      "id": 1,
+      "name": "FABRICANT LLP"
+    },
+    {
+      "id": 2,
+      "name": "MCKOOL SMITH, P.C."
+    },
+    {
+      "id": 3,
+      "name": "KNOBBE, MARTENS, OLSON & BEAR, LLP"
+    }
+  ],
+  "LawFirmOffice": [
+    {
+      "id": 1,
+      "lawFirmId": 1,
+      "name": "New York Office",
+      "addressId": 1
+    },
+    {
+      "id": 2,
+      "lawFirmId": 2,
+      "name": "Marshall Office",
+      "addressId": 2
+    },
+    {
+      "id": 3,
+      "lawFirmId": 3,
+      "name": "Irvine Office",
+      "addressId": 3
+    }
+  ],
+  "Address": [
+    {
+      "id": 1,
+      "street1": "230 Park Avenue, 3rd Floor W.",
+      "street2": null,
+      "city": "New York",
+      "state": "NY",
+      "zipCode": "10169",
+      "country": "USA",
+      "fullAddress": "230 Park Avenue, 3rd Floor W., New York, NY, 10169"
+    },
+    {
+      "id": 2,
+      "street1": "104 East Houston Street, Suite 300",
+      "street2": null,
+      "city": "Marshall",
+      "state": "TX",
+      "zipCode": "75670",
+      "country": "USA",
+      "fullAddress": "104 East Houston Street, Suite 300, Marshall, TX, 75670"
+    },
+    {
+      "id": 3,
+      "street1": "2040 Main Street, Fourteenth Floor",
+      "street2": null,
+      "city": "Irvine",
+      "state": "CA",
+      "zipCode": "92614",
+      "country": "USA",
+      "fullAddress": "2040 Main Street, Fourteenth Floor, Irvine, CA, 92614"
+    }
+  ],
+  "Judge": [
+    {
+      "id": 1,
+      "name": "RODNEY GILSTRAP",
+      "title": "UNITED STATES CHIEF DISTRICT JUDGE",
+      "honorific": "THE HONORABLE JUDGE",
+      "trialId": 1
+    }
+  ],
+  "CourtReporter": [
+    {
+      "id": 1,
+      "name": "Shelly Holmes",
+      "credentials": "CSR, TCRR",
+      "title": "Official Reporter",
+      "trialId": 1
+    }
+  ],
+  "TrialAttorney": [
+    {
+      "id": 1,
+      "trialId": 1,
+      "attorneyId": 1,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 2,
+      "trialId": 1,
+      "attorneyId": 2,
+      "lawFirmId": 1,
+      "lawFirmOfficeId": 1,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 3,
+      "trialId": 1,
+      "attorneyId": 3,
+      "lawFirmId": 2,
+      "lawFirmOfficeId": 2,
+      "role": "PLAINTIFF"
+    },
+    {
+      "id": 4,
+      "trialId": 1,
+      "attorneyId": 4,
+      "lawFirmId": 3,
+      "lawFirmOfficeId": 3,
+      "role": "DEFENDANT"
+    }
+  ]
+}

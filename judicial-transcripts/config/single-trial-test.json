@@ -1,0 +1,18 @@
+{
+  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
+  "outputDir": "./output/multi-trial",
+  "logLevel": "info",
+  "enableElasticSearch": false,
+  "processSubDirs": true,
+  "pdfToTextConfig": "./config/pdftotext.json",
+  "trialStyleConfig": "./config/trialstyle.json",
+  "batchProcessing": {
+    "enabled": true,
+    "createSubDirectories": true,
+    "preserveSourceStructure": true
+  },
+  "trialSelectionMode": "INCLUDE",
+  "includedTrials": [    
+    "02 Contentguard"
+  ]
+}

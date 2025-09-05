@@ -107,12 +107,34 @@ program
         console.log(`\n📂 Processing: ${trialName}`);
         
         const trialDir = path.join(outputDir, trialName);
-        const transcriptPath = path.join(trialDir, 'transcript_header.txt');
+        let transcriptPath = path.join(trialDir, 'transcript_header.txt');
         
-        // Check if we have transcript header to work with
+        // Check if we have transcript header, if not try to extract from first transcript
         if (!fs.existsSync(transcriptPath)) {
-          console.log(`  ⚠️  No transcript header found, skipping`);
-          continue;
+          // Find the first transcript file
+          const files = fs.readdirSync(trialDir);
+          const transcriptFiles = files
+            .filter(f => f.endsWith('.txt') && !f.includes('header'))
+            .sort();
+          
+          if (transcriptFiles.length === 0) {
+            console.log(`  ⚠️  No transcript files found, skipping`);
+            continue;
+          }
+          
+          // Extract header from first transcript
+          console.log(`  📄 Extracting header from: ${transcriptFiles[0]}`);
+          const firstTranscript = path.join(trialDir, transcriptFiles[0]);
+          const content = fs.readFileSync(firstTranscript, 'utf-8');
+          
+          // Take first ~150 lines or up to page 2 (if page breaks exist)
+          const lines = content.split('\n');
+          const headerLines = lines.slice(0, 150);
+          const header = headerLines.join('\n');
+          
+          // Save header for future use
+          fs.writeFileSync(transcriptPath, header);
+          console.log(`  ✅ Created transcript_header.txt`);
         }
         
         try {

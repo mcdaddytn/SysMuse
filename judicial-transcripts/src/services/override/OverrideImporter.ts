@@ -70,7 +70,7 @@ export class OverrideImporter {
       const trials = Array.isArray(data.Trial) ? data.Trial : [data.Trial];
       trials.forEach((trial, index) => {
         // For Update action, id is required
-        if (trial.overrideAction !== 'Add' && !trial.id) {
+        if (trial.overrideAction !== 'Insert' && !trial.id) {
           errors.push(`Trial[${index}]: missing id for Update action`);
         }
         if (!trial.name) errors.push(`Trial[${index}]: missing name`);
@@ -82,7 +82,7 @@ export class OverrideImporter {
     // Validate Attorney data
     if (data.Attorney) {
       data.Attorney.forEach((attorney, index) => {
-        if (attorney.overrideAction !== 'Add' && !attorney.id) {
+        if (attorney.overrideAction !== 'Insert' && !attorney.id) {
           errors.push(`Attorney[${index}]: missing id for Update action`);
         }
         if (!attorney.name) errors.push(`Attorney[${index}]: missing name`);
@@ -92,7 +92,7 @@ export class OverrideImporter {
     // Validate Witness data
     if (data.Witness) {
       data.Witness.forEach((witness, index) => {
-        if (witness.overrideAction !== 'Add' && !witness.id && !witness.name) {
+        if (witness.overrideAction !== 'Insert' && !witness.id && !witness.name) {
           errors.push(`Witness[${index}]: missing id or name for Update action`);
         }
         if (!witness.name) errors.push(`Witness[${index}]: missing name`);
@@ -127,7 +127,8 @@ export class OverrideImporter {
         if (!ta.trialId) errors.push(`TrialAttorney[${index}]: missing trialId`);
         if (!ta.attorneyId) errors.push(`TrialAttorney[${index}]: missing attorneyId`);
         
-        if (data.Trial && !data.Trial.find(t => t.id === ta.trialId)) {
+        const trials = data.Trial ? (Array.isArray(data.Trial) ? data.Trial : [data.Trial]) : [];
+        if (trials.length > 0 && !trials.find((t: TrialOverride) => t.id === ta.trialId)) {
           warnings.push(`TrialAttorney[${index}]: references non-existent Trial ${ta.trialId}`);
         }
         if (data.Attorney && !data.Attorney.find(a => a.id === ta.attorneyId)) {
@@ -237,7 +238,9 @@ export class OverrideImporter {
           fullAddress: address.fullAddress
         }
       });
-      this.correlationMap.Address.set(address.id, created.id);
+      if (address.id) {
+        this.correlationMap.Address.set(address.id, created.id);
+      }
       count++;
     }
     return count;
@@ -252,7 +255,7 @@ export class OverrideImporter {
       const shortNameHandle = trial.shortNameHandle || 
         (trial.shortName ? generateFileToken(trial.shortName) : null);
       
-      if (action === 'Add') {
+      if (action === 'Insert') {
         // Create new trial
         const created = await tx.trial.create({
           data: {
@@ -327,12 +330,53 @@ export class OverrideImporter {
   private async importLawFirms(tx: any, firms: LawFirmOverride[]): Promise<number> {
     let count = 0;
     for (const firm of firms) {
-      const created = await tx.lawFirm.create({
-        data: {
-          name: firm.name
+      const action = firm.overrideAction || 'Update';
+      const overrideKey = firm.overrideKey || 'id';
+      
+      let existingFirm = null;
+      
+      // Find existing firm based on override key
+      if (action === 'Update' || action === 'Upsert') {
+        if (overrideKey === 'id' && firm.id) {
+          existingFirm = await tx.lawFirm.findUnique({
+            where: { id: Number(firm.id) }
+          });
+        } else if (overrideKey === 'lawFirmFingerprint' && firm.lawFirmFingerprint) {
+          existingFirm = await tx.lawFirm.findFirst({
+            where: { lawFirmFingerprint: firm.lawFirmFingerprint }
+          });
         }
-      });
-      this.correlationMap.LawFirm.set(firm.id, created.id);
+      }
+      
+      if (action === 'Insert' && existingFirm) {
+        throw new Error(`LawFirm already exists with ${overrideKey}: ${firm[overrideKey as keyof LawFirmOverride]}`);
+      }
+      
+      if (action === 'Update' && !existingFirm) {
+        throw new Error(`LawFirm not found with ${overrideKey}: ${firm[overrideKey as keyof LawFirmOverride]}`);
+      }
+      
+      let created;
+      if (existingFirm) {
+        // Update existing firm
+        created = await tx.lawFirm.update({
+          where: { id: existingFirm.id },
+          data: {
+            name: firm.name,
+            lawFirmFingerprint: firm.lawFirmFingerprint
+          }
+        });
+      } else {
+        // Create new firm
+        created = await tx.lawFirm.create({
+          data: {
+            name: firm.name,
+            lawFirmFingerprint: firm.lawFirmFingerprint
+          }
+        });
+      }
+      
+      this.correlationMap.LawFirm.set(firm.id || created.id, created.id);
       count++;
     }
     return count;
@@ -341,6 +385,9 @@ export class OverrideImporter {
   private async importLawFirmOffices(tx: any, offices: LawFirmOfficeOverride[]): Promise<number> {
     let count = 0;
     for (const office of offices) {
+      const action = office.overrideAction || 'Update';
+      const overrideKey = office.overrideKey || 'id';
+      
       const lawFirmId = this.correlationMap.LawFirm.get(office.lawFirmId);
       if (!lawFirmId) {
         throw new Error(`LawFirm not found for office: ${office.id}`);
@@ -348,15 +395,55 @@ export class OverrideImporter {
 
       const addressId = office.addressId ? 
         this.correlationMap.Address.get(office.addressId) : undefined;
-
-      const created = await tx.lawFirmOffice.create({
-        data: {
-          lawFirmId,
-          name: office.name,
-          addressId
+      
+      let existingOffice = null;
+      
+      // Find existing office based on override key
+      if (action === 'Update' || action === 'Upsert') {
+        if (overrideKey === 'id' && office.id) {
+          existingOffice = await tx.lawFirmOffice.findUnique({
+            where: { id: Number(office.id) }
+          });
+        } else if (overrideKey === 'lawFirmOfficeFingerprint' && office.lawFirmOfficeFingerprint) {
+          existingOffice = await tx.lawFirmOffice.findFirst({
+            where: { lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint }
+          });
         }
-      });
-      this.correlationMap.LawFirmOffice.set(office.id, created.id);
+      }
+      
+      if (action === 'Insert' && existingOffice) {
+        throw new Error(`LawFirmOffice already exists with ${overrideKey}: ${office[overrideKey as keyof LawFirmOfficeOverride]}`);
+      }
+      
+      if (action === 'Update' && !existingOffice) {
+        throw new Error(`LawFirmOffice not found with ${overrideKey}: ${office[overrideKey as keyof LawFirmOfficeOverride]}`);
+      }
+      
+      let created;
+      if (existingOffice) {
+        // Update existing office
+        created = await tx.lawFirmOffice.update({
+          where: { id: existingOffice.id },
+          data: {
+            lawFirmId,
+            name: office.name,
+            addressId,
+            lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
+          }
+        });
+      } else {
+        // Create new office
+        created = await tx.lawFirmOffice.create({
+          data: {
+            lawFirmId,
+            name: office.name,
+            addressId,
+            lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
+          }
+        });
+      }
+      
+      this.correlationMap.LawFirmOffice.set(office.id || created.id, created.id);
       count++;
     }
     return count;
@@ -374,42 +461,107 @@ export class OverrideImporter {
     const trialId = trialIds[0];
     
     for (const attorney of attorneys) {
+      const action = attorney.overrideAction || 'Update';
+      const overrideKey = attorney.overrideKey || 'id';
+      
+      // Generate attorney fingerprint (use provided or generate)
+      const fingerprint = attorney.attorneyFingerprint || this.generateAttorneyFingerprint(attorney);
+      
+      let existingAttorney = null;
+      
+      // Find existing attorney based on override key
+      if (action === 'Update' || action === 'Upsert') {
+        if (overrideKey === 'id' && attorney.id) {
+          existingAttorney = await tx.attorney.findUnique({
+            where: { id: Number(attorney.id) },
+            include: { speaker: true }
+          });
+        } else if (overrideKey === 'attorneyFingerprint' && fingerprint) {
+          existingAttorney = await tx.attorney.findFirst({
+            where: { attorneyFingerprint: fingerprint },
+            include: { speaker: true }
+          });
+        }
+      }
+      
+      if (action === 'Insert' && existingAttorney) {
+        throw new Error(`Attorney already exists with ${overrideKey}: ${attorney[overrideKey as keyof AttorneyOverride]}`);
+      }
+      
+      if (action === 'Update' && !existingAttorney) {
+        throw new Error(`Attorney not found with ${overrideKey}: ${attorney[overrideKey as keyof AttorneyOverride]}`);
+      }
+      
       // Generate consistent speaker handle that will match during parsing
       const speakerHandle = generateSpeakerHandle(attorney.name);
       const speakerPrefix = generateSpeakerPrefix(attorney.name, attorney.speakerPrefix || undefined);
       
-      // Create a placeholder speaker for this attorney
-      // This will be matched during transcript parsing by the speakerHandle
-      const speaker = await tx.speaker.create({
-        data: {
-          trialId,
-          speakerHandle,
-          speakerPrefix,
-          speakerType: 'ATTORNEY',
-          isGeneric: false
+      let speaker;
+      let created;
+      
+      if (existingAttorney) {
+        // Update existing attorney
+        speaker = existingAttorney.speaker;
+        
+        // Update speaker if needed
+        if (speaker) {
+          await tx.speaker.update({
+            where: { id: speaker.id },
+            data: {
+              speakerHandle,
+              speakerPrefix
+            }
+          });
         }
-      });
+        
+        // Update attorney
+        created = await tx.attorney.update({
+          where: { id: existingAttorney.id },
+          data: {
+            name: attorney.name,
+            title: attorney.title,
+            firstName: attorney.firstName,
+            middleInitial: attorney.middleInitial,
+            lastName: attorney.lastName,
+            suffix: attorney.suffix,
+            speakerPrefix: attorney.speakerPrefix,
+            barNumber: attorney.barNumber,
+            attorneyFingerprint: fingerprint
+          }
+        });
+      } else {
+        // Create new attorney
+        // Create a placeholder speaker for this attorney
+        speaker = await tx.speaker.create({
+          data: {
+            trialId,
+            speakerHandle,
+            speakerPrefix,
+            speakerType: 'ATTORNEY',
+            isGeneric: false
+          }
+        });
+        
+        created = await tx.attorney.create({
+          data: {
+            name: attorney.name,
+            title: attorney.title,
+            firstName: attorney.firstName,
+            middleInitial: attorney.middleInitial,
+            lastName: attorney.lastName,
+            suffix: attorney.suffix,
+            speakerPrefix: attorney.speakerPrefix,
+            barNumber: attorney.barNumber,
+            attorneyFingerprint: fingerprint,
+            speakerId: speaker.id
+          }
+        });
+      }
       
-      // Generate attorney fingerprint for cross-trial matching
-      const fingerprint = this.generateAttorneyFingerprint(attorney);
-      
-      const created = await tx.attorney.create({
-        data: {
-          name: attorney.name,
-          title: attorney.title,
-          firstName: attorney.firstName,
-          middleInitial: attorney.middleInitial,
-          lastName: attorney.lastName,
-          suffix: attorney.suffix,
-          speakerPrefix: attorney.speakerPrefix,
-          barNumber: attorney.barNumber,
-          attorneyFingerprint: fingerprint,
-          speakerId: speaker.id
-        }
-      });
-      
-      this.correlationMap.Attorney.set(attorney.id, created.id);
-      this.correlationMap.Speaker.set(attorney.speakerId || attorney.id, speaker.id);
+      this.correlationMap.Attorney.set(attorney.id || created.id, created.id);
+      if (speaker) {
+        this.correlationMap.Speaker.set(attorney.speakerId || attorney.id || created.id, speaker.id);
+      }
       count++;
     }
     return count;
@@ -461,7 +613,9 @@ export class OverrideImporter {
           trialId
         }
       });
-      this.correlationMap.Judge.set(judge.id, created.id);
+      if (judge.id) {
+        this.correlationMap.Judge.set(judge.id, created.id);
+      }
       count++;
     }
     return count;
@@ -492,7 +646,9 @@ export class OverrideImporter {
           trialId
         }
       });
-      this.correlationMap.CourtReporter.set(reporter.id, created.id);
+      if (reporter.id) {
+        this.correlationMap.CourtReporter.set(reporter.id, created.id);
+      }
       count++;
     }
     return count;
@@ -539,7 +695,7 @@ export class OverrideImporter {
     for (const witness of witnesses) {
       const action = witness.overrideAction || 'Update';
       
-      if (action === 'Add') {
+      if (action === 'Insert') {
         // Create speaker for witness
         const speakerHandle = generateSpeakerHandle(witness.name);
         const speaker = await tx.speaker.create({
@@ -608,7 +764,7 @@ export class OverrideImporter {
         throw new Error(`Trial not found for marker: ${marker.name}`);
       }
       
-      if (action === 'Add') {
+      if (action === 'Insert') {
         // Create new marker
         const created = await tx.marker.create({
           data: {
@@ -645,7 +801,7 @@ export class OverrideImporter {
         throw new Error(`Marker not found for section: ${section.sectionName}`);
       }
       
-      if (action === 'Add') {
+      if (action === 'Insert') {
         // Create new marker section
         const created = await tx.markerSection.create({
           data: {

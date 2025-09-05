@@ -66,6 +66,17 @@ Note: `inputDir` and `outputDir` refer to the directories specified in the main 
 - Input files are reference copies
 - Explicit CLI command copies from output back to input
 
+#### Override Processing Rules
+- **Unique Key Required**: Each record must have a unique key for updates (either `id` or another unique field)
+- **Override Actions**:
+  - `"Update"` (default): Updates existing records using unique key
+  - `"Add"`: Creates new records
+- **ID Handling for New Records**:
+  - IDs in override files are used for relationship correlation within the file
+  - Auto-generated database IDs are used for actual records
+  - Related entities with foreign keys should be in the same override file
+- **Entity Naming**: Use singular entity name as JSON key (e.g., "Attorney" not "attorneys")
+
 ### 4. Schema Enhancements
 
 #### Trial Entity Updates
@@ -220,12 +231,22 @@ Note: All commands operate on trials listed in `activeTrials` in the main workfl
 #### Entity Override Format (Attorney.json)
 ```json
 {
-  "attorneys": [
+  "Attorney": [
     {
+      "id": 1,  // Used as unique key for update
       "name": "John Doe",
       "speakerPrefix": "MR. DOE",
       "role": "PLAINTIFF",
       "lawFirmName": "Doe & Associates"
+      // overrideAction: "Update" (default, can be omitted)
+    },
+    {
+      "overrideAction": "Add",
+      "id": 101,  // Temporary ID for relationship correlation only
+      "name": "Jane Smith",
+      "speakerPrefix": "MS. SMITH",
+      "role": "DEFENDANT",
+      "lawFirmName": "Smith & Partners"
     }
   ]
 }
@@ -234,11 +255,18 @@ Note: All commands operate on trials listed in `activeTrials` in the main workfl
 #### Entity Override Format (Witness.json)
 ```json
 {
-  "witnesses": [
+  "Witness": [
     {
-      "name": "Jane Smith",
+      "name": "Jane Smith",  // Using name as unique key
       "witnessType": "FACT_WITNESS",
       "witnessCaller": "PLAINTIFF"
+    },
+    {
+      "overrideAction": "Add",
+      "name": "Dr. John Expert",
+      "witnessType": "EXPERT_WITNESS",
+      "witnessCaller": "DEFENDANT",
+      "expertField": "Software Engineering"
     }
   ]
 }
@@ -247,14 +275,46 @@ Note: All commands operate on trials listed in `activeTrials` in the main workfl
 #### Entity Override Format (Trial.json)
 ```json
 {
-  "trial": {
-    "caseNumber": "2:19-CV-00123-JRG",
+  "Trial": {
+    "caseNumber": "2:19-CV-00123-JRG",  // Using caseNumber as unique key
     "plaintiff": "VocaLife LLC",
     "defendant": "Amazon.com, Inc.",
     "court": "United States District Court",
     "district": "Eastern District of Texas",
     "division": "Marshall Division"
   }
+}
+```
+
+#### Entity Override Format (Marker.json) - Multiple Related Entities
+```json
+{
+  "Marker": [
+    {
+      "overrideAction": "Add",
+      "id": 1001,  // Temporary ID for correlation
+      "name": "Opening Statement - Plaintiff",
+      "markerType": "OPENING_STATEMENT",
+      "startLineId": 150,
+      "endLineId": 450
+    }
+  ],
+  "MarkerSection": [
+    {
+      "overrideAction": "Add",
+      "markerId": 1001,  // References temporary Marker ID above
+      "sectionName": "Introduction",
+      "startLineId": 150,
+      "endLineId": 200
+    },
+    {
+      "overrideAction": "Add", 
+      "markerId": 1001,  // References same temporary Marker ID
+      "sectionName": "Main Argument",
+      "startLineId": 201,
+      "endLineId": 400
+    }
+  ]
 }
 ```
 

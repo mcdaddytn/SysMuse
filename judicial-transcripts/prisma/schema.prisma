@@ -43,32 +43,36 @@ model Trial {
 }
 
 model Judge {
-  id        Int     @id @default(autoincrement())
-  name      String
-  title     String?
-  honorific String?
-  speakerId Int     @unique
-  trialId   Int     @unique
-  speaker   Speaker @relation(fields: [speakerId], references: [id], onDelete: Cascade)
-  trial     Trial   @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  id               Int     @id @default(autoincrement())
+  name             String
+  title            String?
+  honorific        String?
+  judgeFingerprint String? // For cross-trial matching
+  speakerId        Int     @unique
+  trialId          Int     @unique
+  speaker          Speaker @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  trial            Trial   @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
+  @@index([judgeFingerprint])
 }
 
 model CourtReporter {
-  id             Int       @id @default(autoincrement())
-  name           String
-  credentials    String?
-  title          String?
-  stateNumber    String?
-  expirationDate DateTime?
-  addressId      Int?
-  phone          String?
-  trialId        Int       @unique
-  address        Address?  @relation(fields: [addressId], references: [id])
-  trial          Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  id                     Int       @id @default(autoincrement())
+  name                   String
+  credentials            String?
+  title                  String?
+  stateNumber            String?
+  expirationDate         DateTime?
+  addressId              Int?
+  phone                  String?
+  courtReporterFingerprint String? // For cross-trial matching
+  trialId                Int       @unique
+  address                Address?  @relation(fields: [addressId], references: [id])
+  trial                  Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
+  @@index([courtReporterFingerprint])
 }
 
 model Session {
@@ -191,29 +195,33 @@ model TrialAttorney {
 }
 
 model LawFirm {
-  id             Int             @id @default(autoincrement())
-  name           String
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  offices        LawFirmOffice[]
-  trialAttorneys TrialAttorney[]
+  id                 Int             @id @default(autoincrement())
+  name               String
+  lawFirmFingerprint String?         // For cross-trial matching
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  offices            LawFirmOffice[]
+  trialAttorneys     TrialAttorney[]
 
   @@index([name])
+  @@index([lawFirmFingerprint])
 }
 
 model LawFirmOffice {
-  id             Int             @id @default(autoincrement())
-  lawFirmId      Int
-  name           String
-  addressId      Int?            @unique
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  address        Address?        @relation(fields: [addressId], references: [id], onDelete: Cascade)
-  lawFirm        LawFirm         @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
-  trialAttorneys TrialAttorney[]
+  id                      Int             @id @default(autoincrement())
+  lawFirmId               Int
+  name                    String
+  addressId               Int?            @unique
+  lawFirmOfficeFingerprint String?        // For cross-trial matching
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  address                 Address?        @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  lawFirm                 LawFirm         @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  trialAttorneys          TrialAttorney[]
 
   @@unique([lawFirmId, name])
   @@index([lawFirmId])
+  @@index([lawFirmOfficeFingerprint])
 }
 
 model Address {
@@ -252,26 +260,28 @@ model Speaker {
 }
 
 model Witness {
-  id            Int                  @id @default(autoincrement())
-  trialId       Int
-  name          String?
-  firstName     String?
-  middleInitial String?
-  lastName      String?
-  suffix        String?
-  displayName   String?
-  speakerId     Int?                 @unique
-  witnessType   WitnessType?
-  witnessCaller WitnessCaller?
-  expertField   String?
-  swornStatus   SwornStatus          @default(NOT_SWORN)
-  createdAt     DateTime             @default(now())
-  speaker       Speaker?             @relation(fields: [speakerId], references: [id])
-  trial         Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  witnessEvents WitnessCalledEvent[]
+  id                Int                  @id @default(autoincrement())
+  trialId           Int
+  name              String?
+  firstName         String?
+  middleInitial     String?
+  lastName          String?
+  suffix            String?
+  displayName       String?
+  speakerId         Int?                 @unique
+  witnessFingerprint String?             // For cross-trial matching
+  witnessType       WitnessType?
+  witnessCaller     WitnessCaller?
+  expertField       String?
+  swornStatus       SwornStatus          @default(NOT_SWORN)
+  createdAt         DateTime             @default(now())
+  speaker           Speaker?             @relation(fields: [speakerId], references: [id])
+  trial             Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  witnessEvents     WitnessCalledEvent[]
 
   @@index([trialId, witnessType])
   @@index([speakerId])
+  @@index([witnessFingerprint])
 }
 
 model Juror {

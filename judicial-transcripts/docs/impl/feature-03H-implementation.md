@@ -12,6 +12,14 @@ Implemented comprehensive entity override system with LLM extraction capabilitie
 - Manages entity correlation using source IDs
 - Creates database records with proper relationships
 - Generates consistent speaker handles for attorney/judge matching
+- **Supports three override modes**:
+  - **Insert**: Creates new records only (fails if exists)
+  - **Update**: Updates existing records only (default, fails if not exists)
+  - **Upsert**: Creates new or updates existing based on key match
+- **Override key support**:
+  - Default key: `id` field
+  - Custom keys: `attorneyFingerprint`, `lawFirmFingerprint`, etc.
+  - Specified via `overrideKey` field in override data
 
 #### LLMExtractor (`src/services/llm/LLMExtractor.ts`)
 - Extracts first 2 pages from transcript files
@@ -20,6 +28,12 @@ Implemented comprehensive entity override system with LLM extraction capabilitie
 - Supports single trial or batch processing
 - **Focuses on Attorney-related entities only** (Attorney, LawFirm, LawFirmOffice, Address, TrialAttorney)
 - **Does NOT extract Witnesses** (witnesses are identified during transcript parsing, not from headers)
+- **Generates fingerprints for entities**:
+  - Attorney: `lastName_firstName` (e.g., "fabricant_alfred")
+  - LawFirm: normalized firm name (e.g., "fabricant_llp")
+  - LawFirmOffice: `firmFingerprint_city` (e.g., "fabricant_llp_new_york")
+  - Judge: `lastName_firstName`
+  - CourtReporter: `lastName_firstName`
 
 #### Speaker Utilities (`src/services/speakers/speakerUtils.ts`)
 - Generates consistent speaker handles from names
@@ -32,9 +46,16 @@ Implemented comprehensive entity override system with LLM extraction capabilitie
 # Import override file
 npx ts-node src/cli/override.ts import <file.json> [--validate-only] [--verbose]
 
-# Extract entities using LLM
-npx ts-node src/cli/override.ts extract --trial-path <path> [--output <file>] [--import]
-npx ts-node src/cli/override.ts extract --all-trials <path> [--output <file>]
+# Generate entity overrides using LLM
+npx ts-node src/cli/generate.ts <entity-type> [options]
+  Entity types: Attorney, Judge, CourtReporter, all
+  Options:
+    --config <path>        Path to multi-trial configuration
+    --provider <provider>  LLM provider: openai, anthropic, google
+    --model <model>        LLM model to use
+    --temperature <temp>   LLM temperature (0-1)
+    --dry-run             Show what would be generated without saving
+    --no-backup           Do not backup existing files
 
 # Export existing data
 npx ts-node src/cli/override.ts export --trial-id <id> [--output <file>]
@@ -68,6 +89,22 @@ npx ts-node src/cli/override.ts export --trial-id <id> [--output <file>]
 - Source IDs used as correlation keys (not database IDs)
 - Database generates new auto-increment IDs
 - Relationships preserved through correlation mapping
+
+#### Fingerprint Generation
+- **Purpose**: Enable cross-trial entity matching and upsert operations
+- **Format**: Lowercase, underscore-separated, normalized strings
+- **Generation Rules**:
+  - Person entities (Attorney, Judge, CourtReporter): `lastName_firstName`
+  - LawFirm: Normalized firm name removing common suffixes (LLP, P.C., etc.)
+  - LawFirmOffice: `firmFingerprint_city`
+- **Future**: Will be scoped by TrialCorpus for multi-corpus support
+
+#### Upsert Behavior
+- **Insert Mode**: Creates new records, fails if key exists
+- **Update Mode** (default): Updates existing records by ID
+- **Upsert Mode**: Creates or updates based on fingerprint match
+- **Override Key**: Specified via `overrideKey` field (defaults to "id")
+- **Use Case**: LLM can enhance partial attorney data from Phase 1 parsing
 
 #### Reference Data Approach
 - Attorneys and Judges imported with placeholder speakers

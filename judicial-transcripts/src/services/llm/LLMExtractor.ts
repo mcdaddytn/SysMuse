@@ -6,6 +6,11 @@ import { OverrideData } from '../override/types';
 import { PromptBuilder, LLMPrompt, DatabaseContext } from './PromptBuilder';
 import { MultiProviderLLM, LLMProvider } from './MultiProviderLLM';
 import { PrismaClient } from '@prisma/client';
+import { 
+  generatePersonFingerprint, 
+  generateLawFirmFingerprint,
+  generateLawFirmOfficeFingerprint
+} from '../../utils/fingerprintUtils';
 
 export interface LLMContext {
   transcriptHeader: string;
@@ -215,6 +220,9 @@ ${context.transcriptHeader}`;
       const jsonStr = response.content as string;
       const entities = JSON.parse(jsonStr) as ExtractedEntities;
 
+      // Add fingerprints to entities
+      this.addFingerprints(entities);
+
       // Add metadata
       entities.metadata = {
         extractedAt: new Date().toISOString(),
@@ -400,5 +408,89 @@ ${prompt.user}
     }
 
     fs.writeFileSync(outputPath, JSON.stringify(entities, null, 2));
+  }
+
+  private addFingerprints(entities: ExtractedEntities): void {
+    // Add fingerprints to Attorney entities
+    if (entities.Attorney) {
+      entities.Attorney.forEach(attorney => {
+        if (attorney.lastName && attorney.firstName) {
+          attorney.attorneyFingerprint = generatePersonFingerprint(attorney.lastName, attorney.firstName);
+        }
+      });
+    }
+
+    // Add fingerprints to LawFirm entities
+    if (entities.LawFirm) {
+      entities.LawFirm.forEach(firm => {
+        if (firm.name) {
+          firm.lawFirmFingerprint = generateLawFirmFingerprint(firm.name);
+        }
+      });
+    }
+
+    // Add fingerprints to LawFirmOffice entities
+    if (entities.LawFirmOffice && entities.LawFirm) {
+      entities.LawFirmOffice.forEach(office => {
+        // Find the related law firm
+        const lawFirm = entities.LawFirm?.find(f => f.id === office.lawFirmId);
+        if (lawFirm?.lawFirmFingerprint && entities.Address) {
+          // Find the office address
+          const address = entities.Address.find(a => a.id === office.addressId);
+          if (address?.city) {
+            office.lawFirmOfficeFingerprint = generateLawFirmOfficeFingerprint(
+              lawFirm.lawFirmFingerprint, 
+              address.city
+            );
+          }
+        }
+      });
+    }
+
+    // Add fingerprints to Judge entities
+    if (entities.Judge) {
+      entities.Judge.forEach(judge => {
+        // Parse name to extract first and last name
+        const nameParts = this.parseJudgeName(judge.name);
+        if (nameParts.lastName && nameParts.firstName) {
+          judge.judgeFingerprint = generatePersonFingerprint(nameParts.lastName, nameParts.firstName);
+        }
+      });
+    }
+
+    // Add fingerprints to CourtReporter entities
+    if (entities.CourtReporter) {
+      entities.CourtReporter.forEach(reporter => {
+        // Parse name to extract first and last name
+        const nameParts = this.parseReporterName(reporter.name);
+        if (nameParts.lastName && nameParts.firstName) {
+          reporter.courtReporterFingerprint = generatePersonFingerprint(nameParts.lastName, nameParts.firstName);
+        }
+      });
+    }
+  }
+
+  private parseJudgeName(fullName: string): { firstName: string | null; lastName: string | null } {
+    // Remove honorifics
+    let cleanName = fullName.replace(/^(THE HONORABLE|HONORABLE|JUDGE|JUSTICE)\s+/i, '');
+    const parts = cleanName.trim().split(/\s+/);
+    
+    if (parts.length < 2) {
+      return { firstName: null, lastName: null };
+    }
+    
+    return { firstName: parts[0], lastName: parts[parts.length - 1] };
+  }
+
+  private parseReporterName(fullName: string): { firstName: string | null; lastName: string | null } {
+    // Remove credentials
+    let cleanName = fullName.replace(/,?\s*(CSR|TCRR|RPR|CRR|RMR|CRC|CCR).*$/i, '');
+    const parts = cleanName.trim().split(/\s+/);
+    
+    if (parts.length < 2) {
+      return { firstName: null, lastName: null };
+    }
+    
+    return { firstName: parts[0], lastName: parts[parts.length - 1] };
   }
 }

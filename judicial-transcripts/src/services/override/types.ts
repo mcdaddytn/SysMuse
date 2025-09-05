@@ -14,7 +14,8 @@ export interface OverrideData {
 
 export interface BaseOverride {
   id?: number | string;  // Made optional for new records
-  overrideAction?: 'Update' | 'Add';  // Default is 'Update' if omitted
+  overrideAction?: 'Insert' | 'Update' | 'Upsert';  // Default is 'Update' if omitted
+  overrideKey?: string;  // Field to use for matching (default: 'id', can be 'attorneyFingerprint', etc.)
   createdAt?: string;
   updatedAt?: string;
 }
@@ -44,17 +45,20 @@ export interface AttorneyOverride extends BaseOverride {
   suffix?: string | null;
   speakerPrefix?: string | null;
   barNumber?: string | null;
+  attorneyFingerprint?: string | null;
   speakerId?: number;
 }
 
 export interface LawFirmOverride extends BaseOverride {
   name: string;
+  lawFirmFingerprint?: string | null;
 }
 
 export interface LawFirmOfficeOverride extends BaseOverride {
   lawFirmId: number | string;
   name: string;
   addressId?: number | string | null;
+  lawFirmOfficeFingerprint?: string | null;
 }
 
 export interface AddressOverride extends BaseOverride {
@@ -71,6 +75,7 @@ export interface JudgeOverride extends BaseOverride {
   name: string;
   title?: string | null;
   honorific?: string | null;
+  judgeFingerprint?: string | null;
   speakerId?: number;
   trialId?: number | string;
 }
@@ -83,6 +88,7 @@ export interface CourtReporterOverride extends BaseOverride {
   expirationDate?: string | null;
   addressId?: number | string | null;
   phone?: string | null;
+  courtReporterFingerprint?: string | null;
   trialId?: number | string;
 }
 
@@ -100,6 +106,7 @@ export interface WitnessOverride extends BaseOverride {
   witnessType?: 'FACT_WITNESS' | 'EXPERT_WITNESS' | 'CHARACTER_WITNESS' | 'UNKNOWN';
   witnessCaller?: 'PLAINTIFF' | 'DEFENDANT' | 'COURT' | 'JOINT' | 'UNKNOWN';
   expertField?: string | null;
+  witnessFingerprint?: string | null;
   speakerId?: number;
 }
 

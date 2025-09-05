@@ -66,7 +66,8 @@ function saveOverrideFile(filePath: string, data: any, backup: boolean = true): 
  * Generate attorney overrides from LLM
  */
 program
-  .command('attorneys')
+  .command('attorney')
+  .alias('Attorney')
   .description('Generate attorney overrides from LLM for active trials')
   .option('--config <path>', 'Path to multi-trial configuration')
   .option('--provider <provider>', 'LLM provider: openai, anthropic, google')
@@ -134,23 +135,26 @@ program
               const attorneyData: OverrideData = {
                 Attorney: entities.Attorney.map(e => ({
                   ...e,
-                  overrideAction: 'Add' as const
+                  overrideAction: 'Upsert' as const,
+                  overrideKey: 'attorneyFingerprint'
                 })),
                 LawFirm: entities.LawFirm?.map(e => ({
                   ...e,
-                  overrideAction: 'Add' as const
+                  overrideAction: 'Upsert' as const,
+                  overrideKey: 'lawFirmFingerprint'
                 })),
                 LawFirmOffice: entities.LawFirmOffice?.map(e => ({
                   ...e,
-                  overrideAction: 'Add' as const
+                  overrideAction: 'Upsert' as const,
+                  overrideKey: 'lawFirmOfficeFingerprint'
                 })),
                 Address: entities.Address?.map(e => ({
                   ...e,
-                  overrideAction: 'Add' as const
+                  overrideAction: 'Upsert' as const
                 })),
                 TrialAttorney: entities.TrialAttorney?.map(e => ({
                   ...e,
-                  overrideAction: 'Add' as const
+                  overrideAction: 'Upsert' as const
                 }))
               };
               
@@ -195,7 +199,8 @@ program
  * Generate judge overrides from LLM (placeholder for future implementation)
  */
 program
-  .command('judges')
+  .command('judge')
+  .alias('Judge')
   .description('Generate judge overrides from LLM for active trials (not yet implemented)')
   .action(async (options) => {
     console.log('⚠️  Judge extraction is not yet implemented');
@@ -207,7 +212,9 @@ program
  * Generate court reporter overrides from LLM (placeholder for future implementation)
  */
 program
-  .command('court-reporters')
+  .command('courtreporter')
+  .alias('CourtReporter')
+  .alias('court-reporter')
   .description('Generate court reporter overrides from LLM for active trials (not yet implemented)')
   .action(async (options) => {
     console.log('⚠️  Court reporter extraction is not yet implemented');
@@ -272,11 +279,29 @@ program
               // This includes Attorney, LawFirm, LawFirmOffice, Address, and TrialAttorney
               if (entities.Attorney && entities.Attorney.length > 0) {
                 const data: OverrideData = {
-                  Attorney: entities.Attorney.map(e => ({ ...e, overrideAction: 'Add' as const })),
-                  LawFirm: entities.LawFirm?.map(e => ({ ...e, overrideAction: 'Add' as const })),
-                  LawFirmOffice: entities.LawFirmOffice?.map(e => ({ ...e, overrideAction: 'Add' as const })),
-                  Address: entities.Address?.map(e => ({ ...e, overrideAction: 'Add' as const })),
-                  TrialAttorney: entities.TrialAttorney?.map(e => ({ ...e, overrideAction: 'Add' as const }))
+                  Attorney: entities.Attorney.map(e => ({ 
+                    ...e, 
+                    overrideAction: 'Upsert' as const,
+                    overrideKey: 'attorneyFingerprint'
+                  })),
+                  LawFirm: entities.LawFirm?.map(e => ({ 
+                    ...e, 
+                    overrideAction: 'Upsert' as const,
+                    overrideKey: 'lawFirmFingerprint'
+                  })),
+                  LawFirmOffice: entities.LawFirmOffice?.map(e => ({ 
+                    ...e, 
+                    overrideAction: 'Upsert' as const,
+                    overrideKey: 'lawFirmOfficeFingerprint'
+                  })),
+                  Address: entities.Address?.map(e => ({ 
+                    ...e, 
+                    overrideAction: 'Upsert' as const
+                  })),
+                  TrialAttorney: entities.TrialAttorney?.map(e => ({ 
+                    ...e, 
+                    overrideAction: 'Upsert' as const
+                  }))
                 };
                 saveOverrideFile(path.join(trialDir, 'Attorney.json'), data, options.backup !== false);
                 console.log(`  ✅ Generated attorney-related entities`);

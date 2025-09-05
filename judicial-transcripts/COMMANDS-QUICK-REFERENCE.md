@@ -59,18 +59,27 @@ npx ts-node src/cli/generate.ts courtreporter --config config/multi-trial-config
 npx ts-node src/cli/generate.ts all --config config/multi-trial-config-mac.json --provider openai --model gpt-4
 ```
 
-## Override Management
+## Attorney Metadata Management
 
-### Import Override Files
+### Import Attorney Metadata (NOT to Database)
 ```bash
-# Import single override file
+# Import attorney metadata from generated files
+# This creates attorney-metadata.json WITHOUT creating database records
+npx ts-node scripts/import-attorney-metadata.ts
+
+# The metadata will be used during Phase 1 parsing to enhance attorney records
+```
+
+### Legacy Override Import (DEPRECATED - Do Not Use)
+```bash
+# ⚠️ DEPRECATED - Creates database records incorrectly
+# npx ts-node scripts/import-attorney-overrides.ts  # DO NOT USE
+
+# For single override files (future implementation)
 npx ts-node src/cli/override.ts import <file.json> --verbose
 
 # Validate without importing
 npx ts-node src/cli/override.ts import <file.json> --validate-only
-
-# Import all Attorney.json files for active trials
-npx ts-node scripts/import-attorney-overrides.ts
 
 # Export existing data to override format
 npx ts-node src/cli/override.ts export --trial-id 1 --output export.json
@@ -156,15 +165,15 @@ npm run convert-pdf config/multi-trial-config-mac.json
 
 ## Workflow Examples
 
-### Complete Attorney Override Workflow
+### Complete Attorney Metadata Workflow
 ```bash
 # 1. Generate attorney data using LLM
 npx ts-node src/cli/generate.ts attorney --config config/multi-trial-config-mac.json --provider openai --model gpt-4
 
-# 2. Import generated overrides into database
-npx ts-node scripts/import-attorney-overrides.ts
+# 2. Import attorney metadata (NOT to database, only to JSON file)
+npx ts-node scripts/import-attorney-metadata.ts
 
-# 3. Run Phase 1 parsing with pre-populated attorneys
+# 3. Run Phase 1 parsing (attorneys enhanced with metadata during creation)
 npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
 ```
 
@@ -191,8 +200,8 @@ npx prisma db push --force-reset
 # 3. Seed with base data
 npm run seed
 
-# 4. Import attorney overrides
-npx ts-node scripts/import-attorney-overrides.ts
+# 4. Import attorney metadata (if using LLM-generated data)
+npx ts-node scripts/import-attorney-metadata.ts
 
 # 5. Fix speaker prefixes (if needed)
 npx ts-node scripts/fix-speaker-prefixes.ts
@@ -237,6 +246,17 @@ ELASTICSEARCH_PORT="9200"
 ### Temporary
 - Processing logs: `./logs/`
 - LLM prompts/responses: `./output/llm/`
+
+## Database Cleanup
+
+### Remove Incorrectly Created Records
+```bash
+# Check what would be deleted (safe preview)
+npx ts-node scripts/cleanup-incorrect-records.ts
+
+# Actually delete incorrect records
+npx ts-node scripts/cleanup-incorrect-records.ts --force
+```
 
 ## Troubleshooting
 
@@ -294,6 +314,9 @@ prisma.speaker.findMany({
 
 ## Notes
 
+- **Attorney Metadata**: Stored in JSON files and loaded during Phase 1 parsing (NOT imported to database)
+- **Configuration**: Set `useAttorneyMetadata: true` in `config/trialstyle.json` to enable (default: true)
+- **No Database Records During Import**: Trials and Speakers are ONLY created during Phase 1 parsing
 - **Upsert Mode**: Generated overrides use `overrideAction: "Upsert"` with fingerprint matching
 - **Fingerprints**: Format is `lastName_firstName` for persons, normalized name for firms
 - **Speaker Handles**: Generated consistently to match between override data and parsed transcripts

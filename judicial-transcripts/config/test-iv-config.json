@@ -1,0 +1,24 @@
+{
+  "phase": 2,
+  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/txt",
+  "outputDir": "./output/multi-trial",
+  "database": "postgresql://gmac:Sysmaker1!@localhost:5432/judicial_transcripts",
+  "trialSelectionMode": "INCLUDE",
+  "parserMode": "multi-pass",
+  "processSubDirs": true,
+  "includedTrials": [
+    "04 Intellectual Ventures"
+  ],
+  "backupBeforeParse": false,
+  "createChecksums": false,
+  "elasticsearchSettings": {
+    "enabled": false
+  },
+  "pdfConversion": {
+    "enabled": false
+  },
+  "logging": {
+    "level": "info",
+    "file": "./logs/parse.log"
+  }
+}

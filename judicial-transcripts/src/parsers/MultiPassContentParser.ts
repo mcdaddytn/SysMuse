@@ -44,14 +44,16 @@ export class ContentParser {
   private summaryParser: SummaryPageParser;
   private attorneyService: AttorneyService;
   private customDelimiter?: string;
+  private trialStyleConfig?: any;
   
-  constructor(prisma: PrismaClient, logger: Logger, customDelimiter?: string) {
+  constructor(prisma: PrismaClient, logger: Logger, customDelimiter?: string, trialStyleConfig?: any) {
     this.prisma = prisma;
     this.logger = logger;
     this.sessionSectionParser = new SessionSectionParser(prisma);
     this.summaryParser = new SummaryPageParser();
-    this.attorneyService = new AttorneyService(prisma);
+    this.attorneyService = new AttorneyService(prisma, trialStyleConfig);
     this.customDelimiter = customDelimiter;
+    this.trialStyleConfig = trialStyleConfig;
   }
 
   async parseContent(

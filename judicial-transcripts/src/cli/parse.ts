@@ -349,7 +349,7 @@ program
                   // Get custom delimiter from trialstyle.json if not AUTO
                   const customDelimiter = trialStyleConfig?.summaryCenterDelimiter;
                   
-                  const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig, customDelimiter);
+                  const multiPassParser = new MultiPassTranscriptParser(prisma, logger as any, multiPassConfig, customDelimiter, trialStyleConfig);
                   
                   // Continue processing this trial directory below...
             

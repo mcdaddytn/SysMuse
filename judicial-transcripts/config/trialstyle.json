@@ -6,5 +6,7 @@
   "summaryCenterDelimiter": "AUTO",
   "orderedFiles": [],
   "unidentifiedFiles": [],
-  "metadata": {}
+  "metadata": {},
+  "useAttorneyMetadata": true,
+  "attorneyMetadataFile": "./output/multi-trial/attorney-metadata.json"
 }

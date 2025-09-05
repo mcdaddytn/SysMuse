@@ -3,14 +3,89 @@ import { PrismaClient } from '@prisma/client';
 import { AttorneyInfo, AddressInfo } from '../types/config.types';
 import { AddressService } from './AddressService';
 import logger from '../utils/logger';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface AttorneyMetadata {
+  name: string;
+  title?: string;
+  firstName?: string;
+  middleInitial?: string;
+  lastName?: string;
+  suffix?: string;
+  speakerPrefix?: string;
+  barNumber?: string;
+  attorneyFingerprint?: string;
+  lawFirm?: {
+    name: string;
+    lawFirmFingerprint?: string;
+    office?: {
+      name: string;
+      address?: any;
+    };
+  };
+  role?: string;
+  trialName: string;
+  sourceTrial: string;
+}
 
 export class AttorneyService {
   private prisma: PrismaClient;
   private addressService: AddressService;
+  private attorneyMetadata: Map<string, AttorneyMetadata[]> = new Map();
+  private metadataLoaded: boolean = false;
+  private useMetadata: boolean = false;
 
-  constructor(prisma: PrismaClient) {
+  constructor(prisma: PrismaClient, config?: any) {
     this.prisma = prisma;
     this.addressService = new AddressService(prisma);
+    
+    // Check if metadata loading is enabled in config
+    if (config?.useAttorneyMetadata !== false) { // Default to true if not specified
+      this.useMetadata = true;
+      const metadataFile = config?.attorneyMetadataFile || './output/multi-trial/attorney-metadata.json';
+      this.loadMetadata(metadataFile);
+    } else {
+      logger.info('Attorney metadata loading is disabled by configuration');
+    }
+  }
+
+  /**
+   * Load attorney metadata from the saved JSON file
+   * This metadata is used to enhance attorneys during Phase 1 parsing
+   */
+  private loadMetadata(metadataFile: string): void {
+    try {
+      if (fs.existsSync(metadataFile)) {
+        const data = JSON.parse(fs.readFileSync(metadataFile, 'utf-8'));
+        
+        // Group metadata by multiple keys for better matching
+        for (const attorney of data) {
+          // Store by fingerprint
+          const fingerprintKey = `${attorney.sourceTrial}:fingerprint:${attorney.attorneyFingerprint}`;
+          if (!this.attorneyMetadata.has(fingerprintKey)) {
+            this.attorneyMetadata.set(fingerprintKey, []);
+          }
+          this.attorneyMetadata.get(fingerprintKey)!.push(attorney);
+          
+          // Also store by speakerPrefix for fallback matching
+          if (attorney.speakerPrefix) {
+            const prefixKey = `${attorney.sourceTrial}:prefix:${attorney.speakerPrefix}`;
+            if (!this.attorneyMetadata.has(prefixKey)) {
+              this.attorneyMetadata.set(prefixKey, []);
+            }
+            this.attorneyMetadata.get(prefixKey)!.push(attorney);
+          }
+        }
+        
+        this.metadataLoaded = true;
+        logger.info(`Loaded attorney metadata for ${data.length} attorneys`);
+      } else {
+        logger.info(`Attorney metadata file not found: ${metadataFile}`);
+      }
+    } catch (error) {
+      logger.warn('Could not load attorney metadata file:', error);
+    }
   }
 
   /**
@@ -118,6 +193,7 @@ export class AttorneyService {
   /**
    * Create or update attorney with associated speaker and law firm
    * Now checks for existing attorneys across trials using fingerprint
+   * Enhanced with metadata from LLM generation if available
    */
   async createOrUpdateAttorney(
     trialId: number,
@@ -125,6 +201,12 @@ export class AttorneyService {
     role: 'PLAINTIFF' | 'DEFENDANT' | 'THIRD_PARTY'
   ): Promise<number> {
     try {
+      // Get trial info to match with metadata
+      const trial = await this.prisma.trial.findUnique({
+        where: { id: trialId },
+        select: { shortName: true }
+      });
+      
       // Parse attorney name for components
       const parsed = this.parseAttorneyName(attorneyInfo.name);
       const { title, firstName, lastName, suffix, speakerPrefix, speakerHandle } = parsed;
@@ -137,9 +219,53 @@ export class AttorneyService {
         suffix: suffix || attorneyInfo.suffix
       });
       
-      // Use provided speakerPrefix if available, otherwise use parsed
-      const finalSpeakerPrefix = attorneyInfo.speakerPrefix || speakerPrefix || attorneyInfo.name.toUpperCase();
-      const finalSpeakerHandle = speakerHandle || `ATTORNEY_${attorneyInfo.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
+      // Check if we have metadata for this attorney
+      let enhancedInfo = { ...attorneyInfo };
+      let metadataFound = false;
+      let enhancedFingerprint = fingerprint;
+      
+      if (this.metadataLoaded && trial) {
+        // Try to find metadata by fingerprint first
+        const fingerprintKey = `${trial.shortName}:fingerprint:${fingerprint}`;
+        let metadata = this.attorneyMetadata.get(fingerprintKey);
+        
+        // If not found by fingerprint, try by speakerPrefix
+        if (!metadata || metadata.length === 0) {
+          const prefixToCheck = attorneyInfo.speakerPrefix || speakerPrefix || attorneyInfo.name.toUpperCase();
+          const prefixKey = `${trial.shortName}:prefix:${prefixToCheck}`;
+          metadata = this.attorneyMetadata.get(prefixKey);
+          
+          if (metadata && metadata.length > 0) {
+            logger.info(`Found metadata for attorney by speaker prefix: ${prefixToCheck}`);
+          }
+        }
+        
+        if (metadata && metadata.length > 0) {
+          const attorneyMeta = metadata[0]; // Use first match
+          metadataFound = true;
+          logger.info(`Found metadata for attorney ${attorneyInfo.name} - will use enhanced fingerprint: ${attorneyMeta.attorneyFingerprint}`);
+          
+          // Use the fingerprint from metadata for better matching
+          enhancedFingerprint = attorneyMeta.attorneyFingerprint || fingerprint;
+          
+          // Enhance with metadata
+          enhancedInfo = {
+            ...attorneyInfo,
+            title: attorneyMeta.title || attorneyInfo.title || title,
+            firstName: attorneyMeta.firstName || attorneyInfo.firstName || firstName,
+            middleInitial: attorneyMeta.middleInitial || attorneyInfo.middleInitial,
+            lastName: attorneyMeta.lastName || attorneyInfo.lastName || lastName,
+            suffix: attorneyMeta.suffix || attorneyInfo.suffix || suffix,
+            barNumber: attorneyMeta.barNumber || attorneyInfo.barNumber,
+            lawFirm: attorneyMeta.lawFirm || attorneyInfo.lawFirm,
+            speakerPrefix: attorneyMeta.speakerPrefix || attorneyInfo.speakerPrefix
+          };
+        }
+      }
+      
+      // Use enhanced info for speaker generation
+      const finalSpeakerPrefix = enhancedInfo.speakerPrefix || speakerPrefix || enhancedInfo.name.toUpperCase();
+      const finalSpeakerHandle = speakerHandle || `ATTORNEY_${enhancedInfo.name.replace(/[^A-Z0-9]/gi, '_').toUpperCase()}`;
       
       // First, find or create the speaker record using handle
       let speaker = await this.prisma.speaker.findFirst({
@@ -161,75 +287,98 @@ export class AttorneyService {
         logger.info(`Created speaker for attorney: ${finalSpeakerPrefix} with handle: ${finalSpeakerHandle}`);
       }
 
-      // Check if attorney already exists across ANY trial (using fingerprint)
-      let attorney = await this.prisma.attorney.findFirst({
-        where: {
-          attorneyFingerprint: fingerprint,
-          // Also check if they're with the same law firm
-          trialAttorneys: {
-            some: {
-              lawFirm: attorneyInfo.lawFirm ? {
-                name: attorneyInfo.lawFirm.name
-              } : undefined
-            }
-          }
-        }
-      });
+      // If we have metadata, try to find existing attorney with the enhanced fingerprint
+      let attorney = null;
       
-      // If not found by fingerprint, check within this trial by speaker
+      if (metadataFound && enhancedFingerprint) {
+        // First try to find by enhanced fingerprint from metadata
+        attorney = await this.prisma.attorney.findFirst({
+          where: {
+            attorneyFingerprint: enhancedFingerprint
+          }
+        });
+        
+        if (attorney) {
+          logger.info(`Found existing attorney by enhanced fingerprint: ${enhancedFingerprint}`);
+        }
+      }
+      
+      // If not found by enhanced fingerprint, try original fingerprint
+      if (!attorney && fingerprint) {
+        attorney = await this.prisma.attorney.findFirst({
+          where: {
+            attorneyFingerprint: fingerprint
+          }
+        });
+        
+        if (attorney) {
+          logger.info(`Found existing attorney by original fingerprint: ${fingerprint}`);
+        }
+      }
+      
+      // If still not found, check by speaker (last resort)
       if (!attorney) {
         attorney = await this.prisma.attorney.findFirst({
           where: { 
             speakerId: speaker.id
           }
         });
+        
+        if (attorney) {
+          logger.info(`Found existing attorney by speaker ID`);
+        }
       }
       
       if (!attorney) {
-        // Create new attorney with fingerprint
+        // Only create new attorney if we don't have metadata OR if metadata says to create
+        if (!metadataFound) {
+          logger.info(`No metadata found for attorney ${attorneyInfo.name} - creating from transcript`);
+        }
+        
+        // Create new attorney with enhanced fingerprint from metadata (if available)
         attorney = await this.prisma.attorney.create({
           data: { 
-            name: attorneyInfo.name,
-            title: title || attorneyInfo.title,
-            firstName: firstName || attorneyInfo.firstName,
-            middleInitial: attorneyInfo.middleInitial,
-            lastName: lastName || attorneyInfo.lastName,
-            suffix: suffix || attorneyInfo.suffix,
+            name: enhancedInfo.name,
+            title: enhancedInfo.title || title,
+            firstName: enhancedInfo.firstName || firstName,
+            middleInitial: enhancedInfo.middleInitial,
+            lastName: enhancedInfo.lastName || lastName,
+            suffix: enhancedInfo.suffix || suffix,
             speakerPrefix: finalSpeakerPrefix,
-            barNumber: attorneyInfo.barNumber,
-            attorneyFingerprint: fingerprint,
+            barNumber: enhancedInfo.barNumber,
+            attorneyFingerprint: enhancedFingerprint || fingerprint,
             speakerId: speaker.id
           }
         });
-        logger.info(`Created attorney: ${attorneyInfo.name} with fingerprint: ${fingerprint}`);
-      } else if (!attorney.attorneyFingerprint) {
-        // Update existing attorney to add fingerprint if missing
+        logger.info(`Created attorney: ${enhancedInfo.name} with fingerprint: ${enhancedFingerprint || fingerprint}`);
+      } else if (!attorney.attorneyFingerprint || (metadataFound && attorney.attorneyFingerprint !== enhancedFingerprint)) {
+        // Update existing attorney to add/fix fingerprint and enhance with metadata
         attorney = await this.prisma.attorney.update({
           where: { id: attorney.id },
           data: {
-            title: title || attorney.title,
-            firstName: firstName || attorney.firstName,
-            middleInitial: attorneyInfo.middleInitial || attorney.middleInitial,
-            lastName: lastName || attorney.lastName,
-            suffix: suffix || attorney.suffix,
+            title: enhancedInfo.title || attorney.title,
+            firstName: enhancedInfo.firstName || attorney.firstName,
+            middleInitial: enhancedInfo.middleInitial || attorney.middleInitial,
+            lastName: enhancedInfo.lastName || attorney.lastName,
+            suffix: enhancedInfo.suffix || attorney.suffix,
             speakerPrefix: finalSpeakerPrefix,
-            barNumber: attorneyInfo.barNumber || attorney.barNumber,
-            attorneyFingerprint: fingerprint
+            barNumber: enhancedInfo.barNumber || attorney.barNumber,
+            attorneyFingerprint: enhancedFingerprint || fingerprint
           }
         });
-        logger.info(`Updated attorney ${attorney.name} with fingerprint: ${fingerprint}`);
+        logger.info(`Updated attorney ${attorney.name} with enhanced fingerprint: ${enhancedFingerprint || fingerprint}`);
       } else {
         logger.info(`Found existing attorney ${attorney.name} with fingerprint: ${fingerprint}`);
       }
       
-      // Handle law firm and office if provided
+      // Handle law firm and office if provided (use enhanced info)
       let lawFirmId: number | null = null;
       let lawFirmOfficeId: number | null = null;
       
-      if (attorneyInfo.lawFirm) {
+      if (enhancedInfo.lawFirm) {
         const { lawFirm, office } = await this.createOrUpdateLawFirm(
-          attorneyInfo.lawFirm.name,
-          attorneyInfo.lawFirm.office
+          enhancedInfo.lawFirm.name,
+          enhancedInfo.lawFirm.office
         );
         lawFirmId = lawFirm.id;
         lawFirmOfficeId = office?.id || null;

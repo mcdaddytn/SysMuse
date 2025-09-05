@@ -17,16 +17,12 @@
     "02 Contentguard",
     "04 Intellectual Ventures",
     "05 Personalized Media v Zynga",
-    "06 Simpleair"
-  ],
-  "includedTrials": [    
-    "01 Genband",
-    "02 Contentguard",
-    "04 Intellectual Ventures",
-    "05 Personalized Media v Zynga",
     "06 Simpleair",
     "07 Usa Re Joshua Harman V Trinity Industries",
     "10 Metaswitch Genband 2016"
+  ],
+  "includedTrials": [    
+    "04 Intellectual Ventures"
   ],
   "excludedTrials": [],
   "invalidTrials": [

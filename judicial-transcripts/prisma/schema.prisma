@@ -8,36 +8,36 @@ datasource db {
 }
 
 model Trial {
-  id                   Int                @id @default(autoincrement())
-  name                 String
-  shortName            String?            // Directory name (e.g., "42 Vocalife Amazon")
-  shortNameHandle      String?            // Generated via generateFileToken(shortName)
-  caseNumber           String             @unique
-  caseHandle           String?            // For file output - remove ":" and invalid chars
-  plaintiff            String?            // Plaintiff name parsed from summary
-  defendant            String?            // Defendant name parsed from summary
-  alternateCaseNumber  String?            // Sometimes there is more than one case
-  alternateDefendant   String?            // Sometimes different defendant specification
-  court                String
-  courtDivision        String?
-  courtDistrict        String?
-  totalPages           Int?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  anonymousSpeakers    AnonymousSpeaker[]
-  courtReporter        CourtReporter?
-  judge                Judge?
-  jurors               Juror[]
-  markers              Marker[]
-  markerSections       MarkerSection[]
-  sessions             Session[]
-  sessionSections      SessionSection[]
-  attorneys            TrialAttorney[]
-  trialEvents          TrialEvent[]
-  witnesses            Witness[]
-  processingStatus     TrialProcessingStatus?
-  workflowState        TrialWorkflowState?
-  trialStyle           Json?                  // Merged trialstyle.json for this trial
+  id                  Int                    @id @default(autoincrement())
+  name                String
+  shortName           String?
+  shortNameHandle     String?
+  caseNumber          String                 @unique
+  caseHandle          String?
+  plaintiff           String?
+  defendant           String?
+  alternateCaseNumber String?
+  alternateDefendant  String?
+  court               String
+  courtDivision       String?
+  courtDistrict       String?
+  totalPages          Int?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  trialStyle          Json?
+  anonymousSpeakers   AnonymousSpeaker[]
+  courtReporter       CourtReporter?
+  judge               Judge?
+  jurors              Juror[]
+  markers             Marker[]
+  markerSections      MarkerSection[]
+  sessions            Session[]
+  sessionSections     SessionSection[]
+  attorneys           TrialAttorney[]
+  trialEvents         TrialEvent[]
+  processingStatus    TrialProcessingStatus?
+  workflowState       TrialWorkflowState?
+  witnesses           Witness[]
 
   @@index([caseNumber])
 }
@@ -47,7 +47,7 @@ model Judge {
   name             String
   title            String?
   honorific        String?
-  judgeFingerprint String? // For cross-trial matching
+  judgeFingerprint String?
   speakerId        Int     @unique
   trialId          Int     @unique
   speaker          Speaker @relation(fields: [speakerId], references: [id], onDelete: Cascade)
@@ -58,18 +58,18 @@ model Judge {
 }
 
 model CourtReporter {
-  id                     Int       @id @default(autoincrement())
-  name                   String
-  credentials            String?
-  title                  String?
-  stateNumber            String?
-  expirationDate         DateTime?
-  addressId              Int?
-  phone                  String?
-  courtReporterFingerprint String? // For cross-trial matching
-  trialId                Int       @unique
-  address                Address?  @relation(fields: [addressId], references: [id])
-  trial                  Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  id                       Int       @id @default(autoincrement())
+  name                     String
+  credentials              String?
+  title                    String?
+  stateNumber              String?
+  expirationDate           DateTime?
+  addressId                Int?
+  phone                    String?
+  courtReporterFingerprint String?
+  trialId                  Int       @unique
+  address                  Address?  @relation(fields: [addressId], references: [id])
+  trial                    Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
   @@index([courtReporterFingerprint])
@@ -80,19 +80,19 @@ model Session {
   trialId             Int
   sessionDate         DateTime
   sessionType         SessionType
-  ordinal             Int?             // Order within trial (1, 2, 3...)
-  shortName           String?          // Parsed identifier from filename (e.g., "Afternoon")
-  startTime           String?          // Start time parsed from summary
+  ordinal             Int?
+  shortName           String?
+  startTime           String?
   documentNumber      Int?
   fileName            String?
-  metadata            Json?            // File name components extracted based on pattern
+  metadata            Json?
   totalPages          Int?
   transcriptStartPage Int?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   pages               Page[]
-  sessionSections     SessionSection[]
   trial               Trial            @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  sessionSections     SessionSection[]
   trialEvents         TrialEvent[]
 
   @@unique([trialId, sessionDate, sessionType])
@@ -100,32 +100,32 @@ model Session {
 }
 
 model SessionSection {
-  id            Int      @id @default(autoincrement())
-  sessionId     Int
-  trialId       Int
-  sectionType   String   // e.g., "Court and Division", "Litigants and Docket", etc.
-  sectionText   String   @db.Text
-  orderIndex    Int      // Order of section within session summary
-  metadata      Json?    // Additional parsed data specific to section type
-  createdAt     DateTime @default(now())
-  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  trial         Trial    @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  sessionId   Int
+  trialId     Int
+  sectionType String
+  sectionText String
+  orderIndex  Int
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trial       Trial    @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, orderIndex])
   @@index([trialId])
 }
 
 model Page {
-  id              Int             @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   sessionId       Int
   pageNumber      Int
   trialPageNumber Int?
-  parsedTrialPage Int?            // Trial page number from last line of page header
+  parsedTrialPage Int?
   pageId          String?
-  headerText      String?         // Now stores multi-line headers
-  createdAt       DateTime        @default(now())
+  headerText      String?
+  createdAt       DateTime @default(now())
   lines           Line[]
-  session         Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, pageNumber])
   @@index([sessionId, pageNumber])
@@ -135,12 +135,12 @@ model Line {
   id                Int             @id @default(autoincrement())
   pageId            Int
   lineNumber        Int
-  trialLineNumber   Int?            // Calculated line number within trial
-  sessionLineNumber Int?            // Calculated line number within session
-  linePrefix        String?         // Whatever was parsed as prefix (timestamp, line number, etc)
-  documentSection   DocumentSection @default(UNKNOWN)  // Moved from Page
+  trialLineNumber   Int?
+  sessionLineNumber Int?
+  linePrefix        String?
+  documentSection   DocumentSection @default(UNKNOWN)
   timestamp         String?
-  dateTime          DateTime?       // Constructed from timestamp + session date when available
+  dateTime          DateTime?
   text              String?
   speakerPrefix     String?
   isBlank           Boolean         @default(false)
@@ -164,7 +164,7 @@ model Attorney {
   suffix              String?
   speakerPrefix       String?
   barNumber           String?
-  attorneyFingerprint String?              // For cross-trial matching
+  attorneyFingerprint String?
   speakerId           Int                  @unique
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -197,7 +197,7 @@ model TrialAttorney {
 model LawFirm {
   id                 Int             @id @default(autoincrement())
   name               String
-  lawFirmFingerprint String?         // For cross-trial matching
+  lawFirmFingerprint String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   offices            LawFirmOffice[]
@@ -208,16 +208,16 @@ model LawFirm {
 }
 
 model LawFirmOffice {
-  id                      Int             @id @default(autoincrement())
-  lawFirmId               Int
-  name                    String
-  addressId               Int?            @unique
-  lawFirmOfficeFingerprint String?        // For cross-trial matching
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
-  address                 Address?        @relation(fields: [addressId], references: [id], onDelete: Cascade)
-  lawFirm                 LawFirm         @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
-  trialAttorneys          TrialAttorney[]
+  id                       Int             @id @default(autoincrement())
+  lawFirmId                Int
+  name                     String
+  addressId                Int?            @unique
+  lawFirmOfficeFingerprint String?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+  address                  Address?        @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  lawFirm                  LawFirm         @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  trialAttorneys           TrialAttorney[]
 
   @@unique([lawFirmId, name])
   @@index([lawFirmId])
@@ -245,7 +245,7 @@ model Speaker {
   speakerPrefix    String
   speakerHandle    String
   speakerType      SpeakerType
-  isGeneric        Boolean           @default(false) // For generic attorney fallback
+  isGeneric        Boolean           @default(false)
   createdAt        DateTime          @default(now())
   anonymousSpeaker AnonymousSpeaker?
   attorney         Attorney?
@@ -260,24 +260,24 @@ model Speaker {
 }
 
 model Witness {
-  id                Int                  @id @default(autoincrement())
-  trialId           Int
-  name              String?
-  firstName         String?
-  middleInitial     String?
-  lastName          String?
-  suffix            String?
-  displayName       String?
-  speakerId         Int?                 @unique
-  witnessFingerprint String?             // For cross-trial matching
-  witnessType       WitnessType?
-  witnessCaller     WitnessCaller?
-  expertField       String?
-  swornStatus       SwornStatus          @default(NOT_SWORN)
-  createdAt         DateTime             @default(now())
-  speaker           Speaker?             @relation(fields: [speakerId], references: [id])
-  trial             Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  witnessEvents     WitnessCalledEvent[]
+  id                 Int                  @id @default(autoincrement())
+  trialId            Int
+  name               String?
+  firstName          String?
+  middleInitial      String?
+  lastName           String?
+  suffix             String?
+  displayName        String?
+  speakerId          Int?                 @unique
+  witnessFingerprint String?
+  witnessType        WitnessType?
+  witnessCaller      WitnessCaller?
+  expertField        String?
+  swornStatus        SwornStatus          @default(NOT_SWORN)
+  createdAt          DateTime             @default(now())
+  speaker            Speaker?             @relation(fields: [speakerId], references: [id])
+  trial              Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  witnessEvents      WitnessCalledEvent[]
 
   @@index([trialId, witnessType])
   @@index([speakerId])
@@ -314,33 +314,33 @@ model AnonymousSpeaker {
 }
 
 model TrialEvent {
-  id                    Int                  @id @default(autoincrement())
-  trialId               Int
-  sessionId             Int?
-  ordinal               Int?                 // Global order within entire trial
-  startTime             String?
-  endTime               String?
-  startDateTime         DateTime?            // When Line.dateTime is available
-  endDateTime           DateTime?            // When Line.dateTime is available
-  duration              Int?
-  startLineNumber       Int?
-  endLineNumber         Int?
-  lineCount             Int?
-  wordCount             Int?
-  characterCount        Int?
-  eventType             EventType
-  rawText               String?              @db.VarChar(255)
-  createdAt             DateTime             @default(now())
-  courtDirective        CourtDirectiveEvent?
-  statement             StatementEvent?
-  session               Session?             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  trial                 Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  witnessCalled         WitnessCalledEvent?
-  markers               Marker[]
-  sectionStarts         MarkerSection[]      @relation("SectionStart")
-  sectionEnds           MarkerSection[]      @relation("SectionEnd")
-  accumStartResults     AccumulatorResult[]  @relation("AccumStartEvent")
-  accumEndResults       AccumulatorResult[]  @relation("AccumEndEvent")
+  id                Int                  @id @default(autoincrement())
+  trialId           Int
+  sessionId         Int?
+  ordinal           Int?
+  startTime         String?
+  endTime           String?
+  startDateTime     DateTime?
+  endDateTime       DateTime?
+  duration          Int?
+  startLineNumber   Int?
+  endLineNumber     Int?
+  lineCount         Int?
+  wordCount         Int?
+  characterCount    Int?
+  eventType         EventType
+  rawText           String?              @db.VarChar(255)
+  createdAt         DateTime             @default(now())
+  accumEndResults   AccumulatorResult[]  @relation("AccumEndEvent")
+  accumStartResults AccumulatorResult[]  @relation("AccumStartEvent")
+  courtDirective    CourtDirectiveEvent?
+  markers           Marker[]
+  sectionEnds       MarkerSection[]      @relation("SectionEnd")
+  sectionStarts     MarkerSection[]      @relation("SectionStart")
+  statement         StatementEvent?
+  session           Session?             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  trial             Trial                @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  witnessCalled     WitnessCalledEvent?
 
   @@index([trialId, startTime])
   @@index([sessionId])
@@ -369,15 +369,15 @@ model CourtDirectiveType {
 }
 
 model StatementEvent {
-  id                 Int                   @id @default(autoincrement())
-  eventId            Int                   @unique
-  speakerId          Int?
-  speakerAlias       String?
-  text               String
-  elasticSearchId    String?
-  event              TrialEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  speaker            Speaker?              @relation(fields: [speakerId], references: [id])
-  esResults          ElasticSearchResult[]
+  id              Int                   @id @default(autoincrement())
+  eventId         Int                   @unique
+  speakerId       Int?
+  speakerAlias    String?
+  text            String
+  elasticSearchId String?
+  esResults       ElasticSearchResult[]
+  event           TrialEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  speaker         Speaker?              @relation(fields: [speakerId], references: [id])
 
   @@index([speakerId])
   @@index([elasticSearchId])
@@ -392,73 +392,73 @@ model WitnessCalledEvent {
   swornStatus      SwornStatus     @default(NOT_SWORN)
   continued        Boolean         @default(false)
   presentedByVideo Boolean         @default(false)
+  attorney         Attorney?       @relation(fields: [attorneyId], references: [id])
   event            TrialEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   witness          Witness?        @relation(fields: [witnessId], references: [id])
-  attorney         Attorney?       @relation(fields: [attorneyId], references: [id])
 
   @@index([witnessId])
   @@index([attorneyId])
 }
 
 model Marker {
-  id                Int              @id @default(autoincrement())
-  trialId           Int
-  markerType        MarkerType
-  eventId           Int?             // Single event associated with the marker
-  name              String?
-  description       String?
-  metadata          Json?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  trial             Trial            @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  event             TrialEvent?      @relation(fields: [eventId], references: [id])
-  startingSections  MarkerSection[]  @relation("StartMarker")
-  endingSections    MarkerSection[]  @relation("EndMarker")
+  id               Int             @id @default(autoincrement())
+  trialId          Int
+  markerType       MarkerType
+  eventId          Int?
+  name             String?
+  description      String?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  event            TrialEvent?     @relation(fields: [eventId], references: [id])
+  trial            Trial           @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  endingSections   MarkerSection[] @relation("EndMarker")
+  startingSections MarkerSection[] @relation("StartMarker")
 
   @@index([trialId, markerType])
   @@index([eventId])
 }
 
 model MarkerSection {
-  id                Int                 @id @default(autoincrement())
+  id                Int               @id @default(autoincrement())
   trialId           Int
   markerSectionType MarkerSectionType
   startMarkerId     Int?
   endMarkerId       Int?
-  startEventId      Int?                // Event where section starts
-  endEventId        Int?                // Event where section ends
+  startEventId      Int?
+  endEventId        Int?
   startTime         String?
   endTime           String?
   name              String?
   description       String?
   metadata          Json?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  trial             Trial               @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  startMarker       Marker?             @relation("StartMarker", fields: [startMarkerId], references: [id])
-  endMarker         Marker?             @relation("EndMarker", fields: [endMarkerId], references: [id])
-  startEvent        TrialEvent?         @relation("SectionStart", fields: [startEventId], references: [id])
-  endEvent          TrialEvent?         @relation("SectionEnd", fields: [endEventId], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  endEvent          TrialEvent?       @relation("SectionEnd", fields: [endEventId], references: [id])
+  endMarker         Marker?           @relation("EndMarker", fields: [endMarkerId], references: [id])
+  startEvent        TrialEvent?       @relation("SectionStart", fields: [startEventId], references: [id])
+  startMarker       Marker?           @relation("StartMarker", fields: [startMarkerId], references: [id])
+  trial             Trial             @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId, markerSectionType])
   @@index([startEventId, endEventId])
 }
 
 model MarkerTemplate {
-  id               Int                @id @default(autoincrement())
-  markerType       MarkerType?
-  sectionType      MarkerSectionType?
-  namePattern      String             // Pattern for generating marker/section names
-  descPattern      String?            // Pattern for generating descriptions
-  parentTemplateId Int?               // Parent template for nested sections
-  siblingTemplateId Int?              // Sibling template for adjacent sections
-  isActive         Boolean            @default(true)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  parentTemplate   MarkerTemplate?    @relation("ParentChild", fields: [parentTemplateId], references: [id])
-  childTemplates   MarkerTemplate[]   @relation("ParentChild")
-  siblingTemplate  MarkerTemplate?    @relation("Siblings", fields: [siblingTemplateId], references: [id])
-  siblingOf        MarkerTemplate[]   @relation("Siblings")
+  id                Int                @id @default(autoincrement())
+  markerType        MarkerType?
+  sectionType       MarkerSectionType?
+  namePattern       String
+  descPattern       String?
+  parentTemplateId  Int?
+  siblingTemplateId Int?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  parentTemplate    MarkerTemplate?    @relation("ParentChild", fields: [parentTemplateId], references: [id])
+  childTemplates    MarkerTemplate[]   @relation("ParentChild")
+  siblingTemplate   MarkerTemplate?    @relation("Siblings", fields: [siblingTemplateId], references: [id])
+  siblingOf         MarkerTemplate[]   @relation("Siblings")
 
   @@index([markerType])
   @@index([sectionType])
@@ -474,6 +474,163 @@ model SearchIndex {
   updatedAt      DateTime @updatedAt
 
   @@index([entityType, entityId])
+}
+
+model ElasticSearchExpression {
+  id               Int                     @id @default(autoincrement())
+  name             String                  @unique
+  expressionType   String
+  phrasePattern    String
+  searchStrategy   String
+  esQuery          Json
+  description      String?
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  results          ElasticSearchResult[]
+  accumulatorExprs AccumulatorExpression[] @relation("AccumulatorESExpressions")
+
+  @@index([expressionType])
+  @@index([isActive])
+}
+
+model ElasticSearchResult {
+  id           Int                     @id @default(autoincrement())
+  expressionId Int
+  statementId  Int
+  trialId      Int
+  matched      Boolean                 @default(false)
+  score        Float?
+  metadata     Json?
+  createdAt    DateTime                @default(now())
+  expression   ElasticSearchExpression @relation(fields: [expressionId], references: [id], onDelete: Cascade)
+  statement    StatementEvent          @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@unique([expressionId, statementId])
+  @@index([trialId])
+  @@index([matched])
+}
+
+model AccumulatorExpression {
+  id                 Int                       @id @default(autoincrement())
+  name               String                    @unique
+  description        String?
+  expressionType     AccumulatorType
+  windowSize         Int                       @default(5)
+  thresholdValue     Float?
+  minConfidenceLevel ConfidenceLevel?
+  combinationType    CombinationType?
+  metadata           Json?
+  isActive           Boolean                   @default(true)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  components         AccumulatorComponent[]
+  results            AccumulatorResult[]
+  esExpressions      ElasticSearchExpression[] @relation("AccumulatorESExpressions")
+
+  @@index([expressionType])
+  @@index([isActive])
+}
+
+model AccumulatorComponent {
+  id               Int                   @id @default(autoincrement())
+  accumulatorId    Int
+  componentType    String
+  esExpressionId   Int?
+  speakerType      SpeakerType?
+  speakerHandle    String?
+  weight           Float                 @default(1.0)
+  requiredForMatch Boolean               @default(false)
+  metadata         Json?
+  accumulator      AccumulatorExpression @relation(fields: [accumulatorId], references: [id], onDelete: Cascade)
+
+  @@index([accumulatorId])
+}
+
+model AccumulatorResult {
+  id              Int                   @id @default(autoincrement())
+  accumulatorId   Int
+  trialId         Int
+  startEventId    Int
+  endEventId      Int
+  booleanResult   Boolean?
+  confidenceLevel ConfidenceLevel?
+  floatResult     Float?
+  metadata        Json?
+  createdAt       DateTime              @default(now())
+  accumulator     AccumulatorExpression @relation(fields: [accumulatorId], references: [id])
+  endEvent        TrialEvent            @relation("AccumEndEvent", fields: [endEventId], references: [id])
+  startEvent      TrialEvent            @relation("AccumStartEvent", fields: [startEventId], references: [id])
+
+  @@index([accumulatorId, trialId])
+  @@index([startEventId, endEventId])
+}
+
+model TrialProcessingStatus {
+  id                     Int       @id @default(autoincrement())
+  trialId                Int       @unique
+  phase2StartedAt        DateTime?
+  phase2CompletedAt      DateTime?
+  phase2IndexName        String?
+  phase2DocumentCount    Int       @default(0)
+  phase3StartedAt        DateTime?
+  phase3CompletedAt      DateTime?
+  phase3MarkerCount      Int       @default(0)
+  phase3SectionCount     Int       @default(0)
+  elasticsearchCleared   Boolean   @default(false)
+  elasticsearchClearedAt DateTime?
+  phase2IndexSize        String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  trial                  Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([trialId])
+  @@index([elasticsearchCleared])
+}
+
+model TrialWorkflowState {
+  id                      Int           @id @default(autoincrement())
+  trialId                 Int           @unique
+  pdfConvertCompleted     Boolean       @default(false)
+  pdfConvertAt            DateTime?
+  phase1Completed         Boolean       @default(false)
+  phase1CompletedAt       DateTime?
+  llmOverrideCompleted    Boolean       @default(false)
+  llmOverrideAt           DateTime?
+  overrideImportCompleted Boolean       @default(false)
+  overrideImportAt        DateTime?
+  phase2Completed         Boolean       @default(false)
+  phase2CompletedAt       DateTime?
+  phase2IndexCompleted    Boolean       @default(false)
+  phase2IndexAt           DateTime?
+  phase3Completed         Boolean       @default(false)
+  phase3CompletedAt       DateTime?
+  llmMarkerCompleted      Boolean       @default(false)
+  llmMarkerAt             DateTime?
+  markerImportCompleted   Boolean       @default(false)
+  markerImportAt          DateTime?
+  phase3IndexCompleted    Boolean       @default(false)
+  phase3IndexAt           DateTime?
+  phase2CleanupCompleted  Boolean       @default(false)
+  phase2CleanupAt         DateTime?
+  trialStylePath          String?
+  overrideFilesPath       String?
+  sourcePdfPath           String?
+  destinationTxtPath      String?
+  llmOverrideTaskId       String?
+  llmOverrideStatus       LLMTaskStatus @default(PENDING)
+  llmMarkerTaskId         String?
+  llmMarkerStatus         LLMTaskStatus @default(PENDING)
+  lastError               String?
+  lastErrorAt             DateTime?
+  retryCount              Int           @default(0)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  trial                   Trial         @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([trialId])
+  @@index([llmOverrideStatus])
+  @@index([llmMarkerStatus])
 }
 
 enum SessionType {
@@ -563,96 +720,6 @@ enum MarkerSectionType {
   ACTIVITY
 }
 
-model ElasticSearchExpression {
-  id               Int                      @id @default(autoincrement())
-  name             String                   @unique
-  expressionType   String                   // e.g., "Objection Handling", "Witness Handling"
-  phrasePattern    String                   // The pattern to search for
-  searchStrategy   String                   // e.g., "match_phrase", "wildcard", "span_near"
-  esQuery          Json                     // The actual Elasticsearch query
-  description      String?
-  isActive         Boolean                  @default(true)
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  results          ElasticSearchResult[]
-  accumulatorExprs AccumulatorExpression[]  @relation("AccumulatorESExpressions")
-
-  @@index([expressionType])
-  @@index([isActive])
-}
-
-model ElasticSearchResult {
-  id            Int                     @id @default(autoincrement())
-  expressionId  Int
-  statementId   Int
-  trialId       Int
-  matched       Boolean                 @default(false)
-  score         Float?
-  metadata      Json?
-  createdAt     DateTime                @default(now())
-  expression    ElasticSearchExpression @relation(fields: [expressionId], references: [id], onDelete: Cascade)
-  statement     StatementEvent          @relation(fields: [statementId], references: [id], onDelete: Cascade)
-
-  @@unique([expressionId, statementId])
-  @@index([trialId])
-  @@index([matched])
-}
-
-model AccumulatorExpression {
-  id                    Int                       @id @default(autoincrement())
-  name                  String                    @unique
-  description           String?
-  expressionType        AccumulatorType           // BOOLEAN, CONFIDENCE, FLOAT
-  windowSize            Int                       @default(5) // Number of statements to consider
-  thresholdValue        Float?                    // Threshold for boolean conversion
-  minConfidenceLevel    ConfidenceLevel?          // Min confidence for boolean true
-  combinationType       CombinationType?          // ADD, MULTIPLY, OR, AND
-  metadata              Json?                     // Additional configuration
-  isActive              Boolean                   @default(true)
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  esExpressions         ElasticSearchExpression[] @relation("AccumulatorESExpressions")
-  components            AccumulatorComponent[]
-  results               AccumulatorResult[]
-
-  @@index([expressionType])
-  @@index([isActive])
-}
-
-model AccumulatorComponent {
-  id                   Int                   @id @default(autoincrement())
-  accumulatorId        Int
-  componentType        String                // "ES_EXPRESSION", "SPEAKER_FILTER", "EVENT_FILTER"
-  esExpressionId       Int?
-  speakerType          SpeakerType?
-  speakerHandle        String?
-  weight               Float                 @default(1.0)
-  requiredForMatch     Boolean               @default(false)
-  metadata             Json?
-  accumulator          AccumulatorExpression @relation(fields: [accumulatorId], references: [id], onDelete: Cascade)
-
-  @@index([accumulatorId])
-}
-
-model AccumulatorResult {
-  id               Int                   @id @default(autoincrement())
-  accumulatorId    Int
-  trialId          Int
-  startEventId     Int
-  endEventId       Int
-  booleanResult    Boolean?
-  confidenceLevel  ConfidenceLevel?
-  floatResult      Float?
-  metadata         Json?                 // Details about matching components
-  createdAt        DateTime              @default(now())
-  accumulator      AccumulatorExpression @relation(fields: [accumulatorId], references: [id])
-  startEvent       TrialEvent            @relation("AccumStartEvent", fields: [startEventId], references: [id])
-  endEvent         TrialEvent            @relation("AccumEndEvent", fields: [endEventId], references: [id])
-
-  @@index([accumulatorId, trialId])
-  @@index([startEventId, endEventId])
-}
-
 enum AccumulatorType {
   BOOLEAN
   CONFIDENCE
@@ -671,89 +738,6 @@ enum CombinationType {
   MULTIPLY
   OR
   AND
-}
-
-model TrialProcessingStatus {
-  id                   Int       @id @default(autoincrement())
-  trialId              Int       @unique
-  trial                Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  
-  // Phase 2 tracking
-  phase2StartedAt      DateTime?
-  phase2CompletedAt    DateTime?
-  phase2IndexName      String?
-  phase2DocumentCount  Int       @default(0)
-  
-  // Phase 3 tracking  
-  phase3StartedAt      DateTime?
-  phase3CompletedAt    DateTime?
-  phase3MarkerCount    Int       @default(0)
-  phase3SectionCount   Int       @default(0)
-  
-  // Elasticsearch lifecycle
-  elasticsearchCleared Boolean   @default(false)
-  elasticsearchClearedAt DateTime?
-  phase2IndexSize      String?   // Store size as string (e.g., "1.2gb")
-  
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  
-  @@index([trialId])
-  @@index([elasticsearchCleared])
-}
-
-model TrialWorkflowState {
-  id                    Int                    @id @default(autoincrement())
-  trialId               Int                    @unique
-  trial                 Trial                  @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  
-  // Workflow step completion tracking
-  pdfConvertCompleted   Boolean                @default(false)
-  pdfConvertAt          DateTime?
-  phase1Completed       Boolean                @default(false)
-  phase1CompletedAt     DateTime?
-  llmOverrideCompleted  Boolean                @default(false)
-  llmOverrideAt         DateTime?
-  overrideImportCompleted Boolean              @default(false)
-  overrideImportAt      DateTime?
-  phase2Completed       Boolean                @default(false)
-  phase2CompletedAt     DateTime?
-  phase2IndexCompleted  Boolean                @default(false)
-  phase2IndexAt         DateTime?
-  phase3Completed       Boolean                @default(false)
-  phase3CompletedAt     DateTime?
-  llmMarkerCompleted    Boolean                @default(false)
-  llmMarkerAt           DateTime?
-  markerImportCompleted Boolean                @default(false)
-  markerImportAt        DateTime?
-  phase3IndexCompleted  Boolean                @default(false)
-  phase3IndexAt         DateTime?
-  phase2CleanupCompleted Boolean               @default(false)
-  phase2CleanupAt       DateTime?
-  
-  // Configuration tracking
-  trialStylePath        String?                // Path to trial-specific trialstyle.json
-  overrideFilesPath     String?                // Path to override files directory
-  sourcePdfPath         String?                // Source PDF directory path
-  destinationTxtPath    String?                // Destination text directory path
-  
-  // LLM task tracking
-  llmOverrideTaskId     String?                // Task ID for LLM override generation
-  llmOverrideStatus     LLMTaskStatus          @default(PENDING)
-  llmMarkerTaskId       String?                // Task ID for LLM marker discovery
-  llmMarkerStatus       LLMTaskStatus          @default(PENDING)
-  
-  // Error tracking
-  lastError             String?                @db.Text
-  lastErrorAt           DateTime?
-  retryCount            Int                    @default(0)
-  
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  
-  @@index([trialId])
-  @@index([llmOverrideStatus])
-  @@index([llmMarkerStatus])
 }
 
 enum LLMTaskStatus {

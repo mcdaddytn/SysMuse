@@ -1,19 +1,11 @@
-# Feature-02Y: TrialCorpus and Configuration Management System
+# Feature-02Y: Configuration Management and Schema Enhancements
 
 ## Overview
-Introduce TrialCorpus entity to group related trials for search and speaker resolution scope. Restructure configuration management to use custom configuration system with proper file organization and naming conventions.
+Restructure configuration management to use custom configuration system with proper file organization and naming conventions. Add schema enhancements for better tracking and reporting.
 
 ## Core Components
 
-### 1. TrialCorpus Entity
-- **Purpose**: Group related trials for scoped search and entity resolution
-- **Initial corpus**: "Gilstrap Trials" - all trials from Judge Gilstrap, Eastern District of Texas
-- **Benefits**:
-  - Scoped Elasticsearch indexing
-  - Attorney/speaker name collision management
-  - Logical grouping for reporting and analysis
-
-### 2. Configuration Restructuring
+### 1. Configuration Restructuring
 
 #### Directory Structure
 ```
@@ -21,27 +13,21 @@ config/
 ├── trialstyle.json                    # Default configuration
 ├── trial-configs/
 │   ├── custom/                        # Custom trial configurations (diff from default)
-│   │   ├── genband.json
-│   │   ├── contentguard.json
-│   │   └── vocalife-amazon.json
+│   │   ├── 01_Genband.json
+│   │   ├── 02_Contentguard.json
+│   │   └── 42_Vocalife_Amazon.json
 │   └── merged/                        # Full merged configs (last run)
-│       ├── genband/
-│       │   └── trialstyle.json
-│       ├── contentguard/
-│       │   └── trialstyle.json
-│       └── vocalife-amazon/
-│           └── trialstyle.json
+│       ├── 01_Genband.json
+│       ├── 02_Contentguard.json
+│       └── 42_Vocalife_Amazon.json
 ```
 
 #### File Naming Convention
 - **shortName**: Original directory name (e.g., "42 Vocalife Amazon")
-- **shortNameHandle**: Result of `generateFileToken(shortName)` (e.g., "vocalife-amazon")
-- Use shortNameHandle for:
-  - Config file names in `trial-configs/custom/`
-  - Directory names in `trial-configs/merged/`
-  - Override file references
+- **shortNameHandle**: Result of `generateFileToken(shortName)` (e.g., "42_Vocalife_Amazon")
+- Use shortNameHandle for all config file names (both custom and merged)
 
-### 3. Configuration System
+### 2. Configuration System
 
 #### Custom Configuration Files
 - Located in `config/trial-configs/custom/[shortNameHandle].json`
@@ -55,9 +41,9 @@ config/
 #### Active Configuration
 - Created by merging default + custom configurations
 - Stored in destination: `[outputDir]/[shortName]/trialstyle.json`
-- Copied to: `config/trial-configs/merged/[shortNameHandle]/trialstyle.json`
+- Copied to: `config/trial-configs/merged/[shortNameHandle].json`
 
-### 4. Entity Override System
+### 3. Entity Override System
 
 #### Override Files
 - **Purpose**: Data files for entity updates (Trial, Attorney, Witness, etc.)
@@ -65,39 +51,27 @@ config/
 - **NOT in source control** (managed separately)
 
 #### Override File Locations
-- **Source directories**: `[sourceDir]/[shortName]/overrides/`
-  - `attorneys.json`
-  - `witnesses.json`
-  - `trial-metadata.json`
-- **Destination directories**: `[outputDir]/[shortName]/overrides/`
+- **Input directories**: `[inputDir]/[shortName]/`
+  - `Attorney.json`
+  - `Witness.json`
+  - `Trial.json`
+- **Output directories**: `[outputDir]/[shortName]/`
   - Active versions used during processing
   - May be modified by LLM generation
 
+Note: `inputDir` and `outputDir` refer to the directories specified in the main workflow configuration (e.g., multi-trial-config-mac.json)
+
 #### Override File Management
-- Destination files are imported during processing
-- Source files are reference copies
-- Explicit CLI command copies from destination back to source
+- Output files are imported during processing
+- Input files are reference copies
+- Explicit CLI command copies from output back to input
 
-### 5. Schema Enhancements
-
-#### New Entity: TrialCorpus
-```prisma
-model TrialCorpus {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  trials      Trial[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-```
+### 4. Schema Enhancements
 
 #### Trial Entity Updates
 ```prisma
 model Trial {
   // ... existing fields ...
-  corpusId         Int?
-  corpus           TrialCorpus? @relation(fields: [corpusId], references: [id])
   shortName        String?      // Directory name (e.g., "42 Vocalife Amazon")
   shortNameHandle  String?      // Generated via generateFileToken(shortName)
 }
@@ -132,11 +106,11 @@ model WitnessCalledEvent {
 ```prisma
 model Line {
   // ... existing fields ...
-  sessionLineNumber Int?  // Line number within session
+  sessionLineNumber Int?  // Line number within session (field exists, needs to be populated)
 }
 ```
 
-### 6. Attorney Association System
+### 5. Attorney Association System
 
 #### Speaker Prefix Convention
 - Default pattern: `TITLE. LASTNAME`
@@ -151,79 +125,70 @@ model Line {
 #### TrialAttorney Overrides
 - Import attorneys via override files
 - Maintain proper associations through ID correlation
-- Scope resolution within TrialCorpus
 
-### 7. Command-Line Operations
+### 6. Command-Line Operations
 
 #### New CLI Commands
 
 ##### Sync Override Files
 ```bash
-# Copy entity override files from destination back to source
-npx ts-node src/cli/sync.ts overrides --trial [shortName]
-
-# Copy all trial override files to source
-npx ts-node src/cli/sync.ts overrides --all
+# Copy entity override files from output back to input for active trials
+npx ts-node src/cli/sync.ts overrides
 
 # Extract custom config (diff from default) and save to trial-configs/custom/
-npx ts-node src/cli/sync.ts config --trial [shortName]
-
-# Extract and save all custom configs
-npx ts-node src/cli/sync.ts config --all
+npx ts-node src/cli/sync.ts config
 ```
 
 ##### Restore Override Files
 ```bash
-# Copy override files from source to destination (for processing)
-npx ts-node src/cli/restore.ts overrides --trial [shortName]
-
-# Restore all trial override files
-npx ts-node src/cli/restore.ts overrides --all
+# Copy override files from input to output for active trials (for processing)
+npx ts-node src/cli/restore.ts overrides
 ```
 
 ##### Generate Override Files
 ```bash
-# Generate attorney overrides from LLM
-npx ts-node src/cli/generate.ts attorneys --trial [shortName]
+# Generate attorney overrides from LLM for active trials
+npx ts-node src/cli/generate.ts attorneys
 
-# Generate witness overrides from LLM
-npx ts-node src/cli/generate.ts witnesses --trial [shortName]
+# Generate witness overrides from LLM for active trials
+npx ts-node src/cli/generate.ts witnesses
 ```
 
-### 8. Workflow Integration
+Note: All commands operate on trials listed in `activeTrials` in the main workflow configuration
+
+### 7. Workflow Integration
 
 #### Processing Workflow
 1. Check for custom configuration in `trial-configs/custom/[shortNameHandle].json`
 2. Merge custom config with default `trialstyle.json`
-3. Check for entity override files in source directory
-4. Copy entity overrides to destination directory
+3. Check for entity override files in input directory
+4. Copy entity overrides to output directory
 5. Process trial with merged configuration
 6. Import entity overrides during processing
-7. Save full merged config to `trial-configs/merged/[shortNameHandle]/trialstyle.json`
+7. Save full merged config to `trial-configs/merged/[shortNameHandle].json`
 
 #### Override Generation Workflow
 1. LLM generates entity override files
-2. Files saved to destination: `[outputDir]/[shortName]/overrides/`
+2. Files saved to output: `[outputDir]/[shortName]/`
 3. Existing files backed up with `.bk` extension
 4. Manual review and tweaking
 5. Test by re-running processing
-6. Use explicit CLI command to sync back to source
+6. Use explicit CLI command to sync back to input
 
 #### Configuration Sync Workflow
-1. After successful processing, active trialstyle.json exists in destination
+1. After successful processing, active trialstyle.json exists in output
 2. Run `sync config` command to:
    - Calculate diff between active and default configurations
    - Save diff to `trial-configs/custom/[shortNameHandle].json`
 3. Run `sync overrides` command to:
-   - Copy entity override files from destination to source
+   - Copy entity override files from output to input
 
-### 9. Implementation Tasks
+### 8. Implementation Tasks
 
 1. **Database Schema Updates**
-   - Add TrialCorpus entity
-   - Add ordinal fields
-   - Add WitnessCalledEvent.attorneyId
-   - Add Line.sessionLineNumber
+   - Add Trial.shortName and Trial.shortNameHandle fields
+   - Add ordinal fields (Session.ordinal, TrialEvent.ordinal)
+   - Add WitnessCalledEvent.attorneyId relationship
 
 2. **Configuration Management**
    - Create directory structure for trial-configs/custom and trial-configs/merged
@@ -232,42 +197,16 @@ npx ts-node src/cli/generate.ts witnesses --trial [shortName]
    - Create merge system for custom + default configs
 
 3. **CLI Command Implementation**
-   - `src/cli/sync.ts` - Sync configs and overrides to source
-   - `src/cli/restore.ts` - Restore overrides from source  
+   - `src/cli/sync.ts` - Sync configs and overrides to input
+   - `src/cli/restore.ts` - Restore overrides from input  
    - `src/cli/generate.ts` - Generate overrides via LLM
 
 4. **Parser Updates**
-   - Calculate sessionLineNumber during parsing
+   - Calculate Line.sessionLineNumber during parsing
    - Set ordinals for sessions and events
    - Associate attorneys with witness called events
 
-5. **TrialCorpus Seed Data**
-   - Create JSON seed file for Gilstrap Trials corpus
-   - Map all current trials to corpus
-
-### 10. Data Formats
-
-#### TrialCorpus Seed Format
-```json
-{
-  "corpus": {
-    "name": "Gilstrap Trials",
-    "description": "Trials from Judge Rodney Gilstrap, Eastern District of Texas",
-    "trials": [
-      { 
-        "shortName": "42 Vocalife Amazon",
-        "shortNameHandle": "vocalife-amazon",
-        "caseNumber": "2:19-CV-00123-JRG"
-      },
-      { 
-        "shortName": "01 Genband",
-        "shortNameHandle": "genband", 
-        "caseNumber": "2:16-CV-00348-JRG"
-      }
-    ]
-  }
-}
-```
+### 9. Data Formats
 
 #### Custom Configuration Format (trial-configs/custom/)
 ```json
@@ -278,7 +217,7 @@ npx ts-node src/cli/generate.ts witnesses --trial [shortName]
 }
 ```
 
-#### Entity Override Format (overrides/attorneys.json)
+#### Entity Override Format (Attorney.json)
 ```json
 {
   "attorneys": [
@@ -292,27 +231,54 @@ npx ts-node src/cli/generate.ts witnesses --trial [shortName]
 }
 ```
 
-### 11. Success Criteria
+#### Entity Override Format (Witness.json)
+```json
+{
+  "witnesses": [
+    {
+      "name": "Jane Smith",
+      "witnessType": "FACT_WITNESS",
+      "witnessCaller": "PLAINTIFF"
+    }
+  ]
+}
+```
 
-- [ ] TrialCorpus entity created and seeded
+#### Entity Override Format (Trial.json)
+```json
+{
+  "trial": {
+    "caseNumber": "2:19-CV-00123-JRG",
+    "plaintiff": "VocaLife LLC",
+    "defendant": "Amazon.com, Inc.",
+    "court": "United States District Court",
+    "district": "Eastern District of Texas",
+    "division": "Marshall Division"
+  }
+}
+```
+
+### 10. Success Criteria
+
 - [ ] Trial.shortName and shortNameHandle fields populated
 - [ ] Custom configuration files in trial-configs/custom/
-- [ ] Merged configuration files in trial-configs/merged/[shortNameHandle]/
-- [ ] Entity override files managed in source and destination directories
+- [ ] Merged configuration files in trial-configs/merged/
+- [ ] Entity override files managed in input and output directories
 - [ ] Ordinal fields populated correctly (Session.ordinal, TrialEvent.ordinal)
-- [ ] Line.sessionLineNumber calculated accurately
+- [ ] Line.sessionLineNumber calculated and populated
 - [ ] WitnessCalledEvent.attorneyId relationship added
 - [ ] Attorney associations working through override files
 - [ ] CLI commands for sync/restore/generate implemented
-- [ ] LLM generation saves to destination overrides directory
+- [ ] LLM generation saves to output directory
 - [ ] Backup system (.bk files) prevents data loss
 - [ ] Configuration diff calculation working correctly
+- [ ] All commands operate on activeTrials from workflow configuration
 
 ## Notes
 
-- This feature provides foundational improvements for configuration and data management
-- TrialCorpus enables future multi-corpus support and scoped search
 - Custom configuration system reduces duplication (only store diffs)
 - Entity override files enable manual and LLM-assisted data corrections
 - Ordinal fields enable better reporting and navigation
 - Clear separation between source control (configs) and managed data (overrides)
+- All commands use activeTrials from main workflow configuration
+- Simplified directory structure with files at trial level (no additional subdirectories)

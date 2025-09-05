@@ -1498,7 +1498,7 @@ export class TranscriptParser {
       throw new Error('Trial ID not set');
     }
     
-    // Calculate transcriptStartPage based on previous sessions
+    // Calculate transcriptStartPage and ordinal based on previous sessions
     const previousSessions = await this.prisma.session.findMany({
       where: { trialId: this.trialId },
       orderBy: [
@@ -1514,6 +1514,8 @@ export class TranscriptParser {
       }
     }
     
+    // Calculate ordinal - it's the count of sessions + 1
+    const ordinal = previousSessions.length + 1;
     
     return await this.prisma.session.upsert({
       where: {
@@ -1527,7 +1529,8 @@ export class TranscriptParser {
         fileName,
         documentNumber: sessionInfo.documentNumber,
         totalPages: sessionInfo.totalPages,
-        transcriptStartPage
+        transcriptStartPage,
+        ordinal
       },
       create: {
         trialId: this.trialId,
@@ -1536,7 +1539,8 @@ export class TranscriptParser {
         fileName,
         documentNumber: sessionInfo.documentNumber,
         totalPages: sessionInfo.totalPages,
-        transcriptStartPage
+        transcriptStartPage,
+        ordinal
       }
     });
   }

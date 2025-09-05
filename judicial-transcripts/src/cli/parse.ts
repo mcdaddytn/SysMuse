@@ -743,6 +743,12 @@ program
               });
               
               if (!session) {
+                // Calculate ordinal for new session
+                const sessionCount = await prisma.session.count({
+                  where: { trialId: trial.id }
+                });
+                const ordinal = sessionCount + 1;
+                
                 session = await prisma.session.create({
                   data: {
                     trialId: trial.id,
@@ -750,10 +756,11 @@ program
                     sessionType,
                     shortName: sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase(),
                     fileName: file,
-                    metadata: extractedMetadata
+                    metadata: extractedMetadata,
+                    ordinal
                   }
                 });
-                logger.info(`Created session with metadata: ${JSON.stringify(extractedMetadata)}`);
+                logger.info(`Created session with metadata: ${JSON.stringify(extractedMetadata)}, ordinal: ${ordinal}`);
               } else {
                 // Update sessionDate, sessionType, and metadata
                 const shortName = sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase();
@@ -764,6 +771,7 @@ program
                     sessionType,  // Update type in case it was determined better
                     shortName: shortName,
                     metadata: extractedMetadata
+                    // Note: we don't update ordinal on existing sessions
                   }
                 });
                 logger.info(`Updated session with metadata: ${JSON.stringify(extractedMetadata)}`);

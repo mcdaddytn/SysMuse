@@ -10,7 +10,8 @@ datasource db {
 model Trial {
   id                   Int                @id @default(autoincrement())
   name                 String
-  shortName            String?            // Folder name from configuration (e.g., "42 Vocalife Amazon")
+  shortName            String?            // Directory name (e.g., "42 Vocalife Amazon")
+  shortNameHandle      String?            // Generated via generateFileToken(shortName)
   caseNumber           String             @unique
   caseHandle           String?            // For file output - remove ":" and invalid chars
   plaintiff            String?            // Plaintiff name parsed from summary
@@ -75,6 +76,7 @@ model Session {
   trialId             Int
   sessionDate         DateTime
   sessionType         SessionType
+  ordinal             Int?             // Order within trial (1, 2, 3...)
   shortName           String?          // Parsed identifier from filename (e.g., "Afternoon")
   startTime           String?          // Start time parsed from summary
   documentNumber      Int?
@@ -149,7 +151,7 @@ model Line {
 }
 
 model Attorney {
-  id                  Int             @id @default(autoincrement())
+  id                  Int                  @id @default(autoincrement())
   name                String
   title               String?
   firstName           String?
@@ -158,12 +160,13 @@ model Attorney {
   suffix              String?
   speakerPrefix       String?
   barNumber           String?
-  attorneyFingerprint String?         // For cross-trial matching
-  speakerId           Int             @unique
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  speaker             Speaker         @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  attorneyFingerprint String?              // For cross-trial matching
+  speakerId           Int                  @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  speaker             Speaker              @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   trialAttorneys      TrialAttorney[]
+  witnessCalledEvents WitnessCalledEvent[]
 
   @@index([name])
   @@index([speakerPrefix])
@@ -304,6 +307,7 @@ model TrialEvent {
   id                    Int                  @id @default(autoincrement())
   trialId               Int
   sessionId             Int?
+  ordinal               Int?                 // Global order within entire trial
   startTime             String?
   endTime               String?
   startDateTime         DateTime?            // When Line.dateTime is available
@@ -373,14 +377,17 @@ model WitnessCalledEvent {
   id               Int             @id @default(autoincrement())
   eventId          Int             @unique
   witnessId        Int?
+  attorneyId       Int?
   examinationType  ExaminationType
   swornStatus      SwornStatus     @default(NOT_SWORN)
   continued        Boolean         @default(false)
   presentedByVideo Boolean         @default(false)
   event            TrialEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
   witness          Witness?        @relation(fields: [witnessId], references: [id])
+  attorney         Attorney?       @relation(fields: [attorneyId], references: [id])
 
   @@index([witnessId])
+  @@index([attorneyId])
 }
 
 model Marker {

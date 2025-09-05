@@ -8,15 +8,19 @@ import {
   ValidationResult,
   TrialOverride,
   AttorneyOverride,
+  WitnessOverride,
   LawFirmOverride,
   LawFirmOfficeOverride,
   AddressOverride,
   JudgeOverride,
   CourtReporterOverride,
-  TrialAttorneyOverride
+  TrialAttorneyOverride,
+  MarkerOverride,
+  MarkerSectionOverride
 } from './types';
 import { createOrFindSpeaker } from '../speakers/speakerService';
 import { generateSpeakerHandle, generateSpeakerPrefix } from '../speakers/speakerUtils';
+import { generateFileToken } from '../../utils/fileTokenGenerator';
 
 export class OverrideImporter {
   private prisma: PrismaClient;
@@ -31,12 +35,15 @@ export class OverrideImporter {
     return {
       Trial: new Map(),
       Attorney: new Map(),
+      Witness: new Map(),
       LawFirm: new Map(),
       LawFirmOffice: new Map(),
       Address: new Map(),
       Judge: new Map(),
       CourtReporter: new Map(),
-      Speaker: new Map()
+      Speaker: new Map(),
+      Marker: new Map(),
+      MarkerSection: new Map()
     };
   }
 
@@ -60,8 +67,12 @@ export class OverrideImporter {
 
     // Validate Trial data
     if (data.Trial) {
-      data.Trial.forEach((trial, index) => {
-        if (!trial.id) errors.push(`Trial[${index}]: missing id`);
+      const trials = Array.isArray(data.Trial) ? data.Trial : [data.Trial];
+      trials.forEach((trial, index) => {
+        // For Update action, id is required
+        if (trial.overrideAction !== 'Add' && !trial.id) {
+          errors.push(`Trial[${index}]: missing id for Update action`);
+        }
         if (!trial.name) errors.push(`Trial[${index}]: missing name`);
         if (!trial.caseNumber) errors.push(`Trial[${index}]: missing caseNumber`);
         if (!trial.court) errors.push(`Trial[${index}]: missing court`);
@@ -71,8 +82,20 @@ export class OverrideImporter {
     // Validate Attorney data
     if (data.Attorney) {
       data.Attorney.forEach((attorney, index) => {
-        if (!attorney.id) errors.push(`Attorney[${index}]: missing id`);
+        if (attorney.overrideAction !== 'Add' && !attorney.id) {
+          errors.push(`Attorney[${index}]: missing id for Update action`);
+        }
         if (!attorney.name) errors.push(`Attorney[${index}]: missing name`);
+      });
+    }
+
+    // Validate Witness data
+    if (data.Witness) {
+      data.Witness.forEach((witness, index) => {
+        if (witness.overrideAction !== 'Add' && !witness.id && !witness.name) {
+          errors.push(`Witness[${index}]: missing id or name for Update action`);
+        }
+        if (!witness.name) errors.push(`Witness[${index}]: missing name`);
       });
     }
 
@@ -137,8 +160,11 @@ export class OverrideImporter {
         }
 
         // 2. Import Trials (no dependencies on other override entities)
-        if (data.Trial && data.Trial.length > 0) {
-          result.imported.trials = await this.importTrials(tx, data.Trial);
+        if (data.Trial) {
+          const trials = Array.isArray(data.Trial) ? data.Trial : [data.Trial];
+          if (trials.length > 0) {
+            result.imported.trials = await this.importTrials(tx, trials);
+          }
         }
 
         // 3. Import LawFirms (no dependencies)
@@ -169,6 +195,21 @@ export class OverrideImporter {
         // 8. Import TrialAttorneys (depends on Trial, Attorney, LawFirm, LawFirmOffice)
         if (data.TrialAttorney && data.TrialAttorney.length > 0) {
           result.imported.trialAttorneys = await this.importTrialAttorneys(tx, data.TrialAttorney);
+        }
+
+        // 9. Import Witnesses (needs speaker creation)
+        if (data.Witness && data.Witness.length > 0) {
+          result.imported.witnesses = await this.importWitnesses(tx, data.Witness);
+        }
+
+        // 10. Import Markers
+        if (data.Marker && data.Marker.length > 0) {
+          result.imported.markers = await this.importMarkers(tx, data.Marker);
+        }
+
+        // 11. Import MarkerSections (depends on Marker)
+        if (data.MarkerSection && data.MarkerSection.length > 0) {
+          result.imported.markerSections = await this.importMarkerSections(tx, data.MarkerSection);
         }
       });
 
@@ -205,24 +246,80 @@ export class OverrideImporter {
   private async importTrials(tx: any, trials: TrialOverride[]): Promise<number> {
     let count = 0;
     for (const trial of trials) {
-      const created = await tx.trial.create({
-        data: {
-          name: trial.name,
-          shortName: trial.shortName,
-          caseNumber: trial.caseNumber,
-          caseHandle: trial.caseHandle,
-          plaintiff: trial.plaintiff,
-          defendant: trial.defendant,
-          alternateCaseNumber: trial.alternateCaseNumber,
-          alternateDefendant: trial.alternateDefendant,
-          court: trial.court,
-          courtDivision: trial.courtDivision,
-          courtDistrict: trial.courtDistrict,
-          totalPages: trial.totalPages
+      const action = trial.overrideAction || 'Update';
+      
+      // Generate shortNameHandle from shortName if not provided
+      const shortNameHandle = trial.shortNameHandle || 
+        (trial.shortName ? generateFileToken(trial.shortName) : null);
+      
+      if (action === 'Add') {
+        // Create new trial
+        const created = await tx.trial.create({
+          data: {
+            name: trial.name,
+            shortName: trial.shortName,
+            shortNameHandle,
+            caseNumber: trial.caseNumber,
+            caseHandle: trial.caseHandle,
+            plaintiff: trial.plaintiff,
+            defendant: trial.defendant,
+            alternateCaseNumber: trial.alternateCaseNumber,
+            alternateDefendant: trial.alternateDefendant,
+            court: trial.court,
+            courtDivision: trial.courtDivision,
+            courtDistrict: trial.courtDistrict,
+            totalPages: trial.totalPages
+          }
+        });
+        if (trial.id) {
+          this.correlationMap.Trial.set(trial.id, created.id);
         }
-      });
-      this.correlationMap.Trial.set(trial.id, created.id);
-      count++;
+        count++;
+      } else {
+        // Update existing trial
+        let updated;
+        if (typeof trial.id === 'number') {
+          // Update by ID
+          updated = await tx.trial.update({
+            where: { id: trial.id },
+            data: {
+              name: trial.name,
+              shortName: trial.shortName,
+              shortNameHandle,
+              plaintiff: trial.plaintiff,
+              defendant: trial.defendant,
+              alternateCaseNumber: trial.alternateCaseNumber,
+              alternateDefendant: trial.alternateDefendant,
+              court: trial.court,
+              courtDivision: trial.courtDivision,
+              courtDistrict: trial.courtDistrict,
+              totalPages: trial.totalPages
+            }
+          });
+        } else {
+          // Update by caseNumber as unique key
+          updated = await tx.trial.update({
+            where: { caseNumber: trial.caseNumber },
+            data: {
+              name: trial.name,
+              shortName: trial.shortName,
+              shortNameHandle,
+              plaintiff: trial.plaintiff,
+              defendant: trial.defendant,
+              alternateCaseNumber: trial.alternateCaseNumber,
+              alternateDefendant: trial.alternateDefendant,
+              court: trial.court,
+              courtDivision: trial.courtDivision,
+              courtDistrict: trial.courtDistrict,
+              totalPages: trial.totalPages
+            }
+          });
+        }
+        if (trial.id) {
+          this.correlationMap.Trial.set(trial.id, updated.id);
+        }
+        count++;
+      }
     }
     return count;
   }
@@ -425,6 +522,149 @@ export class OverrideImporter {
         }
       });
       count++;
+    }
+    return count;
+  }
+
+  private async importWitnesses(tx: any, witnesses: WitnessOverride[]): Promise<number> {
+    let count = 0;
+    
+    // Get the first trial from our correlation map for speaker creation
+    const trialIds = Array.from(this.correlationMap.Trial.values());
+    if (trialIds.length === 0) {
+      throw new Error('No trial found to associate witnesses with. Import trials first.');
+    }
+    const trialId = trialIds[0];
+    
+    for (const witness of witnesses) {
+      const action = witness.overrideAction || 'Update';
+      
+      if (action === 'Add') {
+        // Create speaker for witness
+        const speakerHandle = generateSpeakerHandle(witness.name);
+        const speaker = await tx.speaker.create({
+          data: {
+            trialId,
+            speakerHandle,
+            speakerPrefix: witness.name.toUpperCase(),
+            speakerType: 'WITNESS',
+            isGeneric: false
+          }
+        });
+        
+        // Create new witness
+        const created = await tx.witness.create({
+          data: {
+            trialId: witness.trialId ? this.correlationMap.Trial.get(witness.trialId) || trialId : trialId,
+            name: witness.name,
+            witnessType: witness.witnessType || 'UNKNOWN',
+            witnessCaller: witness.witnessCaller || 'UNKNOWN',
+            expertField: witness.expertField,
+            speakerId: speaker.id
+          }
+        });
+        
+        if (witness.id) {
+          this.correlationMap.Witness.set(witness.id, created.id);
+        }
+        count++;
+      } else {
+        // Update existing witness by name (as unique key within trial)
+        const existingWitness = await tx.witness.findFirst({
+          where: {
+            trialId: witness.trialId ? this.correlationMap.Trial.get(witness.trialId) || trialId : trialId,
+            name: witness.name
+          }
+        });
+        
+        if (existingWitness) {
+          await tx.witness.update({
+            where: { id: existingWitness.id },
+            data: {
+              witnessType: witness.witnessType || existingWitness.witnessType,
+              witnessCaller: witness.witnessCaller || existingWitness.witnessCaller,
+              expertField: witness.expertField !== undefined ? witness.expertField : existingWitness.expertField
+            }
+          });
+          
+          if (witness.id) {
+            this.correlationMap.Witness.set(witness.id, existingWitness.id);
+          }
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  private async importMarkers(tx: any, markers: MarkerOverride[]): Promise<number> {
+    let count = 0;
+    
+    for (const marker of markers) {
+      const action = marker.overrideAction || 'Update';
+      const trialId = marker.trialId ? this.correlationMap.Trial.get(marker.trialId) : null;
+      
+      if (!trialId) {
+        throw new Error(`Trial not found for marker: ${marker.name}`);
+      }
+      
+      if (action === 'Add') {
+        // Create new marker
+        const created = await tx.marker.create({
+          data: {
+            trialId,
+            name: marker.name,
+            markerType: marker.markerType || 'CUSTOM',
+            startLineId: marker.startLineId ? Number(marker.startLineId) : null,
+            endLineId: marker.endLineId ? Number(marker.endLineId) : null,
+            metadata: marker.metadata || {}
+          }
+        });
+        
+        if (marker.id) {
+          this.correlationMap.Marker.set(marker.id, created.id);
+        }
+        count++;
+      } else {
+        // Update existing marker - would need unique identifier
+        // For now, skip updates as markers don't have a natural unique key
+        console.warn(`Marker updates not yet supported for: ${marker.name}`);
+      }
+    }
+    return count;
+  }
+
+  private async importMarkerSections(tx: any, sections: MarkerSectionOverride[]): Promise<number> {
+    let count = 0;
+    
+    for (const section of sections) {
+      const action = section.overrideAction || 'Update';
+      const markerId = this.correlationMap.Marker.get(section.markerId);
+      
+      if (!markerId) {
+        throw new Error(`Marker not found for section: ${section.sectionName}`);
+      }
+      
+      if (action === 'Add') {
+        // Create new marker section
+        const created = await tx.markerSection.create({
+          data: {
+            markerId,
+            sectionName: section.sectionName,
+            startLineId: section.startLineId ? Number(section.startLineId) : null,
+            endLineId: section.endLineId ? Number(section.endLineId) : null,
+            orderIndex: section.orderIndex || 0
+          }
+        });
+        
+        if (section.id) {
+          this.correlationMap.MarkerSection.set(section.id, created.id);
+        }
+        count++;
+      } else {
+        // Update existing marker section - would need unique identifier
+        console.warn(`MarkerSection updates not yet supported for: ${section.sectionName}`);
+      }
     }
     return count;
   }

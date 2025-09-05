@@ -1786,12 +1786,19 @@ export class Phase2Processor {
         rawText = combinedText.substring(0, 255);
       }
       
+      // Calculate ordinal for this trial event
+      const eventCount = await this.prisma.trialEvent.count({
+        where: { trialId }
+      });
+      const ordinal = eventCount + 1;
+      
       // Create trial event
-      logger.debug(`Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}, startLine=${eventInfo.startLineNumber}, endLine=${eventInfo.endLineNumber}, type=${eventInfo.type}`);
+      logger.debug(`Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}, startLine=${eventInfo.startLineNumber}, endLine=${eventInfo.endLineNumber}, type=${eventInfo.type}, ordinal=${ordinal}`);
       const event = await this.prisma.trialEvent.create({
         data: {
           trialId,
           sessionId,
+          ordinal,
           startTime: eventInfo.startTime,
           endTime: effectiveEndTime,
           duration,

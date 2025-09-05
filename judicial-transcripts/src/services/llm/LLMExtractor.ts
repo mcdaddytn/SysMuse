@@ -356,13 +356,18 @@ ${prompt.user}
     const errors: string[] = [];
 
     // Check for required Trial fields
-    if (!entities.Trial || entities.Trial.length === 0) {
+    if (!entities.Trial) {
       errors.push('No Trial entity extracted');
     } else {
-      const trial = entities.Trial[0];
-      if (!trial.caseNumber) errors.push('Missing trial caseNumber');
-      if (!trial.name) errors.push('Missing trial name');
-      if (!trial.court) errors.push('Missing trial court');
+      const trials = Array.isArray(entities.Trial) ? entities.Trial : [entities.Trial];
+      if (trials.length === 0) {
+        errors.push('No Trial entity extracted');
+      } else {
+        const trial = trials[0];
+        if (!trial.caseNumber) errors.push('Missing trial caseNumber');
+        if (!trial.name) errors.push('Missing trial name');
+        if (!trial.court) errors.push('Missing trial court');
+      }
     }
 
     // Check for at least one attorney

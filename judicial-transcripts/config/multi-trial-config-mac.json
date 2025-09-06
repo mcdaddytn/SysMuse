@@ -19,14 +19,22 @@
     "05 Personalized Media v Zynga",
     "06 Simpleair",
     "07 Usa Re Joshua Harman V Trinity Industries",
-    "10 Metaswitch Genband 2016"
+    "10 Metaswitch Genband 2016",
+    "11 Dataquill Limited V. Zte Corporation Et Al",
+    "12 Gree Supercell",
+    "14 Optis Wireless Technology V. Apple Inc",
+    "15 Optis Wireless Technology V. Huawei",
+    "16 Saint Lawrence V. Motorola",
+    "17 Wi-Lan V. Apple,",
+    "18 Wi-Lan V. Htc"
   ],
   "includedTrials": [    
-    "01 Genband",
-    "02 Contentguard",
-    "04 Intellectual Ventures",
-    "05 Personalized Media v Zynga",
-    "06 Simpleair"
+    "10 Metaswitch Genband 2016",
+    "11 Dataquill Limited V. Zte Corporation Et Al",
+    "12 Gree Supercell",
+    "14 Optis Wireless Technology V. Apple Inc",
+    "15 Optis Wireless Technology V. Huawei",
+    "16 Saint Lawrence V. Motorola"
   ],
   "excludedTrials": [],
   "invalidTrials": [
@@ -90,9 +98,6 @@
     "75 Garrett V Wood County",
     "83 Koninklijke",
     "85 Navico V. Garmin",
-
-
-
     "86 Ollnova",
     "95 Lake Cherokee",
     "101 Netlist, Inc. V. Samsung",

@@ -407,6 +407,99 @@ npx ts-node src/cli/reports.ts phase3 && \
 npx ts-node src/scripts/generateSpeakerReport.ts --trial-id 1
 ```
 
+## Workflow States Documentation
+
+### Workflow Status Values
+The workflow system tracks the following states for each trial:
+
+| Status | Description | Next Action |
+|--------|-------------|-------------|
+| `not_started` | Trial workflow has not begun | Run workflow |
+| `pdf_converting` | Converting PDFs to text files | Wait for completion |
+| `generating_overrides` | LLM generating entity overrides | Wait for completion |
+| `awaiting_override_review` | Override files need user review | Review and approve files |
+| `importing_overrides` | Importing approved overrides | Wait for completion |
+| `phase1_processing` | Running Phase 1 parsing | Wait for completion |
+| `phase2_processing` | Running Phase 2 processing | Wait for completion |
+| `generating_markers_1` | LLM generating post-Phase2 markers | Wait for completion |
+| `awaiting_marker1_review` | Phase2 markers need review | Review and approve files |
+| `importing_markers_1` | Importing Phase2 markers | Wait for completion |
+| `phase3_processing` | Running Phase 3 processing | Wait for completion |
+| `generating_markers_2` | LLM generating post-Phase3 markers | Wait for completion |
+| `awaiting_marker2_review` | Phase3 markers need review | Review and approve files |
+| `importing_markers_2` | Importing Phase3 markers | Wait for completion |
+| `completed` | All processing complete | Generate reports |
+| `error` | Processing failed | Check logs and retry |
+| `paused` | Workflow paused for review | Review files and resume |
+
+### Workflow Step Completion Flags
+Each trial tracks completion of individual steps:
+
+- `pdfConvertCompleted` - PDF to text conversion done
+- `llmOverrideCompleted` - LLM override generation done
+- `overrideReviewCompleted` - User reviewed overrides
+- `overrideImportCompleted` - Overrides imported to database
+- `phase1Completed` - Phase 1 parsing complete
+- `phase2Completed` - Phase 2 processing complete
+- `llmMarker1Completed` - Post-Phase2 markers generated
+- `marker1ReviewCompleted` - Phase2 markers reviewed
+- `marker1ImportCompleted` - Phase2 markers imported
+- `phase3Completed` - Phase 3 processing complete
+- `llmMarker2Completed` - Post-Phase3 markers generated
+- `marker2ReviewCompleted` - Phase3 markers reviewed
+- `marker2ImportCompleted` - Phase3 markers imported
+
+## Sync Commands for Metadata Management
+
+### Sync Override Files
+```bash
+# Copy override files from output to source (for version control)
+npx ts-node src/cli/sync.ts overrides
+
+# Copy and mark as reviewed/approved
+npx ts-node src/cli/sync.ts overrides --approve
+
+# Dry run to see what would be copied
+npx ts-node src/cli/sync.ts overrides --dry-run
+```
+
+### Sync Marker Files
+```bash
+# Sync post-Phase2 markers
+npx ts-node src/cli/sync.ts markers --phase 1
+
+# Sync post-Phase3 markers with approval
+npx ts-node src/cli/sync.ts markers --phase 2 --approve
+```
+
+### Sync Trial Style Configuration
+```bash
+# Copy trialstyle.json from source to destination
+npx ts-node src/cli/sync.ts trialstyle --direction to-dest
+
+# Copy modified trialstyle.json back to source
+npx ts-node src/cli/sync.ts trialstyle --direction to-source
+
+# Sync all trial configurations
+npx ts-node src/cli/sync.ts trialstyle --all
+```
+
+### Complete Metadata Sync Workflow
+```bash
+# 1. After LLM generates overrides, review them
+cat output/[trial-name]/Attorney.json
+
+# 2. If satisfied, sync back to source with approval
+npx ts-node src/cli/sync.ts overrides --approve
+
+# 3. Resume workflow (will skip override generation)
+npx ts-node src/cli/workflow.ts resume --trial-id 1
+
+# 4. After markers are generated, review and sync
+npx ts-node src/cli/sync.ts markers --phase 1 --approve
+npx ts-node src/cli/sync.ts markers --phase 2 --approve
+```
+
 ## Important Notes
 - **ALWAYS** use the configuration file - command line arguments alone are insufficient
 - Primary config: `config/multi-trial-config-mac.json` (supports multiple trials)
@@ -414,6 +507,9 @@ npx ts-node src/scripts/generateSpeakerReport.ts --trial-id 1
 - Parser default: Multi-pass parser is default (omit --parser-mode unless using legacy)
 - **NEW**: Workflow commands automatically handle prerequisites - no need to run phases in order manually
 - **NEW**: Use `--case-number` instead of `--trial-id` for easier trial identification
+- **NEW**: LLM overrides run automatically before Phase 1 when enabled
+- **NEW**: User review gates pause workflow when `autoReview: false`
+- **NEW**: Sync commands manage metadata between source and destination
 - Most concise commands: Just specify --phase1/--phase2 and --config
 - Backups are stored in `backups/` directory (not in source control)
 - For detailed database operations, see `docs/database-testing-guide.md`

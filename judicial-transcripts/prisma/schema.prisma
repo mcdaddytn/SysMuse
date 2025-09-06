@@ -48,9 +48,9 @@ model Judge {
   title            String?
   honorific        String?
   judgeFingerprint String?
-  speakerId        Int     @unique
+  speakerId        Int?    @unique
   trialId          Int     @unique
-  speaker          Speaker @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  speaker          Speaker? @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   trial            Trial   @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
@@ -165,10 +165,10 @@ model Attorney {
   speakerPrefix       String?
   barNumber           String?
   attorneyFingerprint String?
-  speakerId           Int                  @unique
+  speakerId           Int?                 @unique
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  speaker             Speaker              @relation(fields: [speakerId], references: [id], onDelete: Cascade)
+  speaker             Speaker?             @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   trialAttorneys      TrialAttorney[]
   witnessCalledEvents WitnessCalledEvent[]
 

@@ -182,7 +182,10 @@ program
       // Display extracted entities summary
       if (entities && !Array.isArray(entities)) {
         console.log('\n📊 Extraction summary:');
-        if (entities.Trial) console.log(`  - Trials: ${entities.Trial.length}`);
+        if (entities.Trial) {
+          const trialCount = Array.isArray(entities.Trial) ? entities.Trial.length : 1;
+          console.log(`  - Trials: ${trialCount}`);
+        }
         if (entities.Attorney) console.log(`  - Attorneys: ${entities.Attorney.length}`);
         if (entities.LawFirm) console.log(`  - Law Firms: ${entities.LawFirm.length}`);
         if (entities.Judge) console.log(`  - Judges: ${entities.Judge.length}`);
@@ -251,6 +254,7 @@ program
         Address: [],
         Judge: trial.judge ? [{
           ...trial.judge,
+          speakerId: trial.judge.speakerId ?? undefined,
           createdAt: undefined,
           updatedAt: undefined
         }] : [],
@@ -273,6 +277,7 @@ program
         if (!overrideData.Attorney!.find(a => a.id === ta.attorney.id)) {
           overrideData.Attorney!.push({
             ...ta.attorney,
+            speakerId: ta.attorney.speakerId ?? undefined,
             createdAt: ta.attorney.createdAt.toISOString(),
             updatedAt: ta.attorney.updatedAt.toISOString()
           });
@@ -320,13 +325,14 @@ program
 
       console.log(`✅ Exported to ${outputPath}`);
       console.log('\n📊 Export summary:');
-      console.log(`  - Trials: ${overrideData.Trial!.length}`);
-      console.log(`  - Attorneys: ${overrideData.Attorney!.length}`);
-      console.log(`  - Law Firms: ${overrideData.LawFirm!.length}`);
-      console.log(`  - Law Firm Offices: ${overrideData.LawFirmOffice!.length}`);
-      console.log(`  - Addresses: ${overrideData.Address!.length}`);
-      console.log(`  - Judges: ${overrideData.Judge!.length}`);
-      console.log(`  - Court Reporters: ${overrideData.CourtReporter!.length}`);
+      const trialCount = overrideData.Trial ? (Array.isArray(overrideData.Trial) ? overrideData.Trial.length : 1) : 0;
+      console.log(`  - Trials: ${trialCount}`);
+      console.log(`  - Attorneys: ${overrideData.Attorney?.length || 0}`);
+      console.log(`  - Law Firms: ${overrideData.LawFirm?.length || 0}`);
+      console.log(`  - Law Firm Offices: ${overrideData.LawFirmOffice?.length || 0}`);
+      console.log(`  - Addresses: ${overrideData.Address?.length || 0}`);
+      console.log(`  - Judges: ${overrideData.Judge?.length || 0}`);
+      console.log(`  - Court Reporters: ${overrideData.CourtReporter?.length || 0}`);
 
     } catch (error) {
       console.error('❌ Error:', error);
@@ -470,9 +476,13 @@ function mergeExtractions(extractions: OverrideData[]): OverrideData {
   extractions.forEach(extraction => {
     // Merge each entity type with ID offset to avoid conflicts
     if (extraction.Trial) {
-      extraction.Trial.forEach(t => {
+      const trials = Array.isArray(extraction.Trial) ? extraction.Trial : [extraction.Trial];
+      trials.forEach((t: any) => {
         t.id = typeof t.id === 'number' ? t.id + idOffset : `${idOffset}-${t.id}`;
-        merged.Trial!.push(t);
+        if (!merged.Trial) merged.Trial = [];
+        if (Array.isArray(merged.Trial)) {
+          merged.Trial.push(t);
+        }
       });
     }
     

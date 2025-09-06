@@ -18,8 +18,7 @@ import {
   MarkerOverride,
   MarkerSectionOverride
 } from './types';
-import { createOrFindSpeaker } from '../speakers/speakerService';
-import { generateSpeakerHandle, generateSpeakerPrefix } from '../speakers/speakerUtils';
+// Speaker imports removed - speakers are now created during transcript parsing, not import
 import { generateFileToken } from '../../utils/fileTokenGenerator';
 
 export class OverrideImporter {
@@ -249,7 +248,7 @@ export class OverrideImporter {
   private async importTrials(tx: any, trials: TrialOverride[]): Promise<number> {
     let count = 0;
     for (const trial of trials) {
-      const action = trial.overrideAction || 'Update';
+      const action = trial.overrideAction || 'Upsert';
       
       // Generate shortNameHandle from shortName if not provided
       const shortNameHandle = trial.shortNameHandle || 
@@ -330,7 +329,7 @@ export class OverrideImporter {
   private async importLawFirms(tx: any, firms: LawFirmOverride[]): Promise<number> {
     let count = 0;
     for (const firm of firms) {
-      const action = firm.overrideAction || 'Update';
+      const action = firm.overrideAction || 'Upsert';
       const overrideKey = firm.overrideKey || 'id';
       
       let existingFirm = null;
@@ -385,7 +384,7 @@ export class OverrideImporter {
   private async importLawFirmOffices(tx: any, offices: LawFirmOfficeOverride[]): Promise<number> {
     let count = 0;
     for (const office of offices) {
-      const action = office.overrideAction || 'Update';
+      const action = office.overrideAction || 'Upsert';
       const overrideKey = office.overrideKey || 'id';
       
       const lawFirmId = this.correlationMap.LawFirm.get(office.lawFirmId);
@@ -461,7 +460,7 @@ export class OverrideImporter {
     const trialId = trialIds[0];
     
     for (const attorney of attorneys) {
-      const action = attorney.overrideAction || 'Update';
+      const action = attorney.overrideAction || 'Upsert';
       const overrideKey = attorney.overrideKey || 'id';
       
       // Generate attorney fingerprint (use provided or generate)
@@ -492,28 +491,10 @@ export class OverrideImporter {
         throw new Error(`Attorney not found with ${overrideKey}: ${attorney[overrideKey as keyof AttorneyOverride]}`);
       }
       
-      // Generate consistent speaker handle that will match during parsing
-      const speakerHandle = generateSpeakerHandle(attorney.name);
-      const speakerPrefix = generateSpeakerPrefix(attorney.name, attorney.speakerPrefix || undefined);
-      
-      let speaker;
       let created;
       
       if (existingAttorney) {
         // Update existing attorney
-        speaker = existingAttorney.speaker;
-        
-        // Update speaker if needed
-        if (speaker) {
-          await tx.speaker.update({
-            where: { id: speaker.id },
-            data: {
-              speakerHandle,
-              speakerPrefix
-            }
-          });
-        }
-        
         // Update attorney
         created = await tx.attorney.update({
           where: { id: existingAttorney.id },
@@ -530,18 +511,7 @@ export class OverrideImporter {
           }
         });
       } else {
-        // Create new attorney
-        // Create a placeholder speaker for this attorney
-        speaker = await tx.speaker.create({
-          data: {
-            trialId,
-            speakerHandle,
-            speakerPrefix,
-            speakerType: 'ATTORNEY',
-            isGeneric: false
-          }
-        });
-        
+        // Create new attorney (without speaker - speakers are created during parsing)
         created = await tx.attorney.create({
           data: {
             name: attorney.name,
@@ -552,16 +522,14 @@ export class OverrideImporter {
             suffix: attorney.suffix,
             speakerPrefix: attorney.speakerPrefix,
             barNumber: attorney.barNumber,
-            attorneyFingerprint: fingerprint,
-            speakerId: speaker.id
+            attorneyFingerprint: fingerprint
+            // Note: speakerId removed - speakers are created during transcript parsing
           }
         });
       }
       
       this.correlationMap.Attorney.set(attorney.id || created.id, created.id);
-      if (speaker) {
-        this.correlationMap.Speaker.set(attorney.speakerId || attorney.id || created.id, speaker.id);
-      }
+      // Note: Speaker correlation removed - speakers are created during parsing
       count++;
     }
     return count;
@@ -589,27 +557,13 @@ export class OverrideImporter {
         throw new Error(`Trial not found for judge: ${judge.name}`);
       }
 
-      // Generate consistent speaker handle for the judge
-      const speakerHandle = generateSpeakerHandle(judge.honorific || 'THE COURT');
-      const speakerPrefix = judge.honorific || 'THE COURT';
-      
-      // Create speaker for judge
-      const speaker = await tx.speaker.create({
-        data: {
-          trialId,
-          speakerHandle,
-          speakerPrefix,
-          speakerType: 'JUDGE',
-          isGeneric: false
-        }
-      });
-
+      // Create judge (without speaker - speakers are created during parsing)
       const created = await tx.judge.create({
         data: {
           name: judge.name,
           title: judge.title,
           honorific: judge.honorific,
-          speakerId: speaker.id,
+          // Note: speakerId removed - speakers are created during transcript parsing
           trialId
         }
       });
@@ -693,30 +647,18 @@ export class OverrideImporter {
     const trialId = trialIds[0];
     
     for (const witness of witnesses) {
-      const action = witness.overrideAction || 'Update';
+      const action = witness.overrideAction || 'Upsert';
       
       if (action === 'Insert') {
-        // Create speaker for witness
-        const speakerHandle = generateSpeakerHandle(witness.name);
-        const speaker = await tx.speaker.create({
-          data: {
-            trialId,
-            speakerHandle,
-            speakerPrefix: witness.name.toUpperCase(),
-            speakerType: 'WITNESS',
-            isGeneric: false
-          }
-        });
-        
-        // Create new witness
+        // Create new witness (without speaker - speakers are created during parsing)
         const created = await tx.witness.create({
           data: {
             trialId: witness.trialId ? this.correlationMap.Trial.get(witness.trialId) || trialId : trialId,
             name: witness.name,
             witnessType: witness.witnessType || 'UNKNOWN',
             witnessCaller: witness.witnessCaller || 'UNKNOWN',
-            expertField: witness.expertField,
-            speakerId: speaker.id
+            expertField: witness.expertField
+            // Note: speakerId removed - speakers are created during transcript parsing
           }
         });
         
@@ -757,7 +699,7 @@ export class OverrideImporter {
     let count = 0;
     
     for (const marker of markers) {
-      const action = marker.overrideAction || 'Update';
+      const action = marker.overrideAction || 'Upsert';
       const trialId = marker.trialId ? this.correlationMap.Trial.get(marker.trialId) : null;
       
       if (!trialId) {
@@ -794,7 +736,7 @@ export class OverrideImporter {
     let count = 0;
     
     for (const section of sections) {
-      const action = section.overrideAction || 'Update';
+      const action = section.overrideAction || 'Upsert';
       const markerId = this.correlationMap.Marker.get(section.markerId);
       
       if (!markerId) {

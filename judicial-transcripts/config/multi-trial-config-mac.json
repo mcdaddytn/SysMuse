@@ -1,5 +1,5 @@
 {
-  "inputDir": "/Users/gmac/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
+  "inputDir": "/Users/gmcaveney/GrassLabel Dropbox/Grass Label Home/docs/transcripts/pdf",
   "outputDir": "./output/multi-trial",
   "logLevel": "info",
   "enableElasticSearch": false,
@@ -22,7 +22,11 @@
     "10 Metaswitch Genband 2016"
   ],
   "includedTrials": [    
-    "04 Intellectual Ventures"
+    "01 Genband",
+    "02 Contentguard",
+    "04 Intellectual Ventures",
+    "05 Personalized Media v Zynga",
+    "06 Simpleair"
   ],
   "excludedTrials": [],
   "invalidTrials": [

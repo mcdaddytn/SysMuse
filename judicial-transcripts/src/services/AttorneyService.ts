@@ -567,7 +567,7 @@ export class AttorneyService {
       }
     });
     
-    const speakerIds = attorneys.map(a => a.speakerId);
+    const speakerIds = attorneys.map(a => a.speakerId).filter((id): id is number => id !== null);
     
     // Get all statements from these speakers
     const statements = await this.prisma.statementEvent.findMany({
@@ -706,13 +706,15 @@ export class AttorneyService {
           }
         });
         
-        // Update the speaker record as well
-        await this.prisma.speaker.update({
-          where: { id: attorney.speakerId },
-          data: {
-            speakerPrefix: speakerPrefix
-          }
-        });
+        // Update the speaker record as well (if it exists)
+        if (attorney.speakerId) {
+          await this.prisma.speaker.update({
+            where: { id: attorney.speakerId },
+            data: {
+              speakerPrefix: speakerPrefix
+            }
+          });
+        }
         
         logger.info(`Updated attorney ${updatedAttorney.name} with speaker prefix: ${speakerPrefix}`);
         return updatedAttorney;

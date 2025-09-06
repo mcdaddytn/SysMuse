@@ -222,6 +222,9 @@ ${context.transcriptHeader}`;
 
       // Add fingerprints to entities
       this.addFingerprints(entities);
+      
+      // Add override configuration fields
+      this.addOverrideFields(entities);
 
       // Add metadata
       entities.metadata = {
@@ -492,5 +495,63 @@ ${prompt.user}
     }
     
     return { firstName: parts[0], lastName: parts[parts.length - 1] };
+  }
+
+  private addOverrideFields(entities: any): void {
+    // Add override fields for Attorneys
+    if (entities.Attorney) {
+      entities.Attorney.forEach((attorney: any) => {
+        attorney.overrideAction = 'Upsert';
+        attorney.overrideKey = 'attorneyFingerprint';
+      });
+    }
+
+    // Add override fields for Judges
+    if (entities.Judge) {
+      entities.Judge.forEach((judge: any) => {
+        judge.overrideAction = 'Upsert';
+        judge.overrideKey = 'judgeFingerprint';
+      });
+    }
+
+    // Add override fields for LawFirms
+    if (entities.LawFirm) {
+      entities.LawFirm.forEach((firm: any) => {
+        firm.overrideAction = 'Upsert';
+        firm.overrideKey = 'lawFirmFingerprint';
+      });
+    }
+
+    // Add override fields for LawFirmOffices
+    if (entities.LawFirmOffice) {
+      entities.LawFirmOffice.forEach((office: any) => {
+        office.overrideAction = 'Upsert';
+        office.overrideKey = 'lawFirmOfficeFingerprint';
+      });
+    }
+
+    // Add override fields for CourtReporters
+    if (entities.CourtReporter) {
+      entities.CourtReporter.forEach((reporter: any) => {
+        reporter.overrideAction = 'Upsert';
+        reporter.overrideKey = 'courtReporterFingerprint';
+      });
+    }
+
+    // Add override fields for Trials
+    if (entities.Trial) {
+      const trials = Array.isArray(entities.Trial) ? entities.Trial : [entities.Trial];
+      trials.forEach((trial: any) => {
+        trial.overrideAction = 'Insert';
+        trial.overrideKey = 'caseNumber';
+      });
+    }
+
+    // Add override fields for Addresses (always insert)
+    if (entities.Address) {
+      entities.Address.forEach((address: any) => {
+        address.overrideAction = 'Insert';
+      });
+    }
   }
 }

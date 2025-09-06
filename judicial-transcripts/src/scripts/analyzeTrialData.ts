@@ -72,7 +72,7 @@ async function analyzeData() {
     const statementCount = await prisma.statementEvent.count({
       where: { speakerId: judge.speakerId }
     });
-    console.log(`  ${judge.name} (${judge.speaker.speakerPrefix}): ${statementCount} statements`);
+    console.log(`  ${judge.name} (${judge.speaker?.speakerPrefix || 'N/A'}): ${statementCount} statements`);
   }
   
   // Sample some actual text for objections

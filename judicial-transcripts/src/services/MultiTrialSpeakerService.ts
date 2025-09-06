@@ -222,6 +222,24 @@ export class MultiTrialSpeakerService {
     
     if (existingJudge) {
       logger.debug(`Judge already exists for trial ${this.trialId}`);
+      if (!existingJudge.speaker) {
+        // Create speaker for existing judge
+        const speaker = await this.createSpeaker({
+          speakerPrefix: 'THE COURT',
+          speakerType: 'JUDGE'
+        });
+        
+        // Update judge with speaker
+        const updatedJudge = await this.prisma.judge.update({
+          where: { id: existingJudge.id },
+          data: { speakerId: speaker.id }
+        });
+        
+        return {
+          judge: updatedJudge,
+          speaker: speaker
+        };
+      }
       return {
         judge: existingJudge,
         speaker: existingJudge.speaker

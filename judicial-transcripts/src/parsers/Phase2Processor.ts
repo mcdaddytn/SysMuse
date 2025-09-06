@@ -1,5 +1,5 @@
 // src/parsers/Phase2Processor.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AttorneyRole } from '@prisma/client';
 import { 
   TranscriptConfig, 
   Phase2Context,
@@ -295,36 +295,28 @@ export class Phase2Processor {
     attorneyData: any, 
     side: 'PLAINTIFF' | 'DEFENDANT'
   ): Promise<void> {
-    // Parse name to get prefix (MR./MS./etc)
-    const nameParts = attorneyData.name.split(' ');
-    let speakerPrefix = '';
-    let lastName = '';
+    // Generate speaker prefix from name
+    const speakerPrefix = this.generateSpeakerPrefix(attorneyData.name);
+    const lastName = this.extractLastName(attorneyData.name);
+    const attorneyFingerprint = this.generateAttorneyFingerprint(attorneyData.name);
     
-    // Simple parsing - can be improved
-    if (nameParts.length >= 2) {
-      lastName = nameParts[nameParts.length - 1].toUpperCase();
-      
-      // Guess prefix based on common first names
-      // This is simplified - real implementation would be more sophisticated
-      speakerPrefix = `MR. ${lastName}`;
-    }
-    
-    // Check if attorney already exists
-    const existing = await this.prisma.attorney.findFirst({
-      where: {
-        name: attorneyData.name,
-        AND: [
-          { speaker: { trialId } }
-        ]
-      },
-      include: { speaker: true }
+    // First, check if attorney already exists by speaker prefix
+    let attorney = await this.prisma.attorney.findFirst({
+      where: { 
+        speakerPrefix: speakerPrefix 
+      }
     });
     
-    if (existing) {
-      return; // Already exists
+    // If not found by prefix, try fingerprint
+    if (!attorney) {
+      attorney = await this.prisma.attorney.findFirst({
+        where: { 
+          attorneyFingerprint: attorneyFingerprint 
+        }
+      });
     }
     
-    // Check if speaker handle already exists
+    // Create speaker for this trial
     const speakerHandle = `ATTORNEY_${lastName}`;
     let speaker = await this.prisma.speaker.findFirst({
       where: {
@@ -333,36 +325,60 @@ export class Phase2Processor {
       }
     });
     
-    // Create speaker for attorney if it doesn't exist
     if (!speaker) {
       speaker = await this.prisma.speaker.create({
         data: {
           trialId,
           speakerPrefix,
           speakerHandle,
-          speakerType: 'ATTORNEY'
+          speakerType: 'ATTORNEY',
+          isGeneric: false
         }
       });
     }
     
-    // Check if attorney already exists with this speakerId
-    const existingAttorney = await this.prisma.attorney.findFirst({
-      where: { speakerId: speaker.id }
-    });
-    
-    if (!existingAttorney) {
-      // Create attorney record
-      await this.prisma.attorney.create({
+    if (attorney) {
+      // Update existing attorney with speaker if needed
+      if (!attorney.speakerId) {
+        attorney = await this.prisma.attorney.update({
+          where: { id: attorney.id },
+          data: { speakerId: speaker.id }
+        });
+      }
+      logger.info(`Matched existing attorney: ${attorney.name} with prefix: ${speakerPrefix}`);
+    } else {
+      // Create new attorney
+      attorney = await this.prisma.attorney.create({
         data: {
           name: attorneyData.name,
           speakerPrefix,
           lastName,
+          attorneyFingerprint,
           speakerId: speaker.id
         }
       });
+      logger.info(`Created new attorney: ${attorney.name} with prefix: ${speakerPrefix}`);
     }
     
-    logger.info(`Created attorney: ${attorneyData.name} (${side})`);
+    // Always create or update TrialAttorney association
+    const existingAssoc = await this.prisma.trialAttorney.findFirst({
+      where: {
+        trialId,
+        attorneyId: attorney.id
+      }
+    });
+    
+    if (!existingAssoc) {
+      await this.prisma.trialAttorney.create({
+        data: {
+          trialId,
+          attorneyId: attorney.id,
+          role: side,
+          lawFirmId: attorneyData.lawFirmId || null
+        }
+      });
+      logger.info(`Created TrialAttorney association for ${attorney.name} as ${side}`);
+    }
   }
 
   /**
@@ -1976,5 +1992,93 @@ export class Phase2Processor {
     }
     
     logger.info('============================================================');
+  }
+
+  /**
+   * Generate speaker prefix from attorney name
+   */
+  private generateSpeakerPrefix(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    let title = '';
+    let lastName = '';
+    
+    // Check for common titles
+    if (parts[0].match(/^(Mr\.?|Ms\.?|Mrs\.?|Dr\.?|Judge)/i)) {
+      title = parts[0].toUpperCase().replace(/\./g, '');
+      if (!title.includes('.')) {
+        title = title.replace(/^(MR|MS|MRS|DR)$/, '$1.');
+      }
+      lastName = parts[parts.length - 1].toUpperCase();
+    } else {
+      // No title found, assume MR. for males, MS. for females
+      // This is a simplification - could be improved with name database
+      title = 'MR.';
+      lastName = parts[parts.length - 1].toUpperCase();
+    }
+    
+    return `${title} ${lastName}`;
+  }
+
+  /**
+   * Extract last name from full name
+   */
+  private extractLastName(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    return parts[parts.length - 1].toUpperCase();
+  }
+
+  /**
+   * Generate attorney fingerprint for matching
+   */
+  private generateAttorneyFingerprint(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    let firstName = '';
+    let lastName = '';
+    
+    // Skip title if present
+    let startIdx = 0;
+    if (parts[0].match(/^(Mr\.?|Ms\.?|Mrs\.?|Dr\.?|Judge)/i)) {
+      startIdx = 1;
+    }
+    
+    if (parts.length > startIdx) {
+      firstName = parts[startIdx].toLowerCase().replace(/[^a-z]/g, '');
+      lastName = parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '');
+    }
+    
+    return `${lastName}_${firstName}`;
+  }
+
+  /**
+   * Create anonymous speaker for unmatched prefix
+   */
+  private async createAnonymousSpeaker(
+    trialId: number,
+    speakerPrefix: string,
+    context: string
+  ): Promise<any> {
+    const speakerHandle = `ANONYMOUS_${speakerPrefix.replace(/[^A-Z]/g, '_')}`;
+    
+    const speaker = await this.prisma.speaker.create({
+      data: {
+        trialId,
+        speakerPrefix,
+        speakerHandle,
+        speakerType: 'ANONYMOUS',
+        isGeneric: false
+      }
+    });
+    
+    await this.prisma.anonymousSpeaker.create({
+      data: {
+        speakerId: speaker.id,
+        trialId,
+        role: 'UNKNOWN',
+        description: `${speakerPrefix} - ${context}`
+      }
+    });
+    
+    logger.warn(`Created AnonymousSpeaker for unmatched prefix: ${speakerPrefix} (${context})`);
+    return speaker;
   }
 }

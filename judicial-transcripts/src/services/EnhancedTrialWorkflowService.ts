@@ -715,19 +715,36 @@ export class EnhancedTrialWorkflowService {
 
     try {
       const trialDir = path.join(this.config.outputDir, trial.shortName || trial.name);
-      const overrideFiles = ['Attorney.json', 'Witness.json', 'Trial.json'];
+      
+      // First check for trial-metadata.json (the new format)
+      const trialMetadataPath = path.join(trialDir, 'trial-metadata.json');
+      
+      if (fs.existsSync(trialMetadataPath)) {
+        // Import trial-metadata.json
+        const command = `npx ts-node src/cli/override.ts import "${trialMetadataPath}"`;
+        if (this.config.verbose) {
+          console.log(`Running: ${command}`);
+        }
+        execSync(command, { 
+          stdio: this.config.verbose ? 'inherit' : 'pipe',
+          timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+        });
+      } else {
+        // Fall back to old format files if trial-metadata.json doesn't exist
+        const overrideFiles = ['Attorney.json', 'Witness.json', 'Trial.json'];
 
-      for (const file of overrideFiles) {
-        const filePath = path.join(trialDir, file);
-        if (fs.existsSync(filePath)) {
-          const command = `npx ts-node src/cli/override.ts import ${filePath}`;
-          if (this.config.verbose) {
-            console.log(`Running: ${command}`);
+        for (const file of overrideFiles) {
+          const filePath = path.join(trialDir, file);
+          if (fs.existsSync(filePath)) {
+            const command = `npx ts-node src/cli/override.ts import "${filePath}"`;
+            if (this.config.verbose) {
+              console.log(`Running: ${command}`);
+            }
+            execSync(command, { 
+              stdio: this.config.verbose ? 'inherit' : 'pipe',
+              timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+            });
           }
-          execSync(command, { 
-        stdio: this.config.verbose ? 'inherit' : 'pipe',
-        timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
-      });
         }
       }
 

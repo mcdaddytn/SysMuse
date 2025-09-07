@@ -47,14 +47,13 @@ model Judge {
   name             String
   title            String?
   honorific        String?
-  judgeFingerprint String?
+  judgeFingerprint String? @unique
   speakerId        Int?    @unique
   trialId          Int     @unique
   speaker          Speaker? @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   trial            Trial   @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
-  @@index([judgeFingerprint])
 }
 
 model CourtReporter {
@@ -66,13 +65,12 @@ model CourtReporter {
   expirationDate           DateTime?
   addressId                Int?
   phone                    String?
-  courtReporterFingerprint String?
+  courtReporterFingerprint String?  @unique
   trialId                  Int       @unique
   address                  Address?  @relation(fields: [addressId], references: [id])
   trial                    Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
-  @@index([courtReporterFingerprint])
 }
 
 model Session {
@@ -164,7 +162,7 @@ model Attorney {
   suffix              String?
   speakerPrefix       String?
   barNumber           String?
-  attorneyFingerprint String?
+  attorneyFingerprint String?              @unique
   speakerId           Int?                 @unique
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -175,7 +173,6 @@ model Attorney {
   @@index([name])
   @@index([speakerPrefix])
   @@index([lastName])
-  @@index([attorneyFingerprint])
 }
 
 model TrialAttorney {
@@ -197,14 +194,13 @@ model TrialAttorney {
 model LawFirm {
   id                 Int             @id @default(autoincrement())
   name               String
-  lawFirmFingerprint String?
+  lawFirmFingerprint String?           @unique
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   offices            LawFirmOffice[]
   trialAttorneys     TrialAttorney[]
 
   @@index([name])
-  @@index([lawFirmFingerprint])
 }
 
 model LawFirmOffice {
@@ -212,7 +208,7 @@ model LawFirmOffice {
   lawFirmId                Int
   name                     String
   addressId                Int?            @unique
-  lawFirmOfficeFingerprint String?
+  lawFirmOfficeFingerprint String?        @unique
   createdAt                DateTime        @default(now())
   updatedAt                DateTime        @updatedAt
   address                  Address?        @relation(fields: [addressId], references: [id], onDelete: Cascade)
@@ -221,7 +217,6 @@ model LawFirmOffice {
 
   @@unique([lawFirmId, name])
   @@index([lawFirmId])
-  @@index([lawFirmOfficeFingerprint])
 }
 
 model Address {
@@ -269,7 +264,7 @@ model Witness {
   suffix             String?
   displayName        String?
   speakerId          Int?                 @unique
-  witnessFingerprint String?
+  witnessFingerprint String?              @unique
   witnessType        WitnessType?
   witnessCaller      WitnessCaller?
   expertField        String?
@@ -281,7 +276,6 @@ model Witness {
 
   @@index([trialId, witnessType])
   @@index([speakerId])
-  @@index([witnessFingerprint])
 }
 
 model Juror {

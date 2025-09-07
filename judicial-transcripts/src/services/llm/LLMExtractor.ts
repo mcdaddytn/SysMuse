@@ -541,8 +541,10 @@ ${prompt.user}
     if (entities.Trial) {
       const trials = Array.isArray(entities.Trial) ? entities.Trial : [entities.Trial];
       trials.forEach((trial: any) => {
-        trial.overrideAction = 'Insert';
+        trial.overrideAction = 'upsert';  // Use upsert since trial may already exist from phase1
         trial.overrideKey = 'caseNumber';
+        // Remove caseHandle if it exists (will be derived at import time)
+        delete trial.caseHandle;
       });
     }
 

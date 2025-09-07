@@ -618,16 +618,43 @@ export class OverrideImporter {
         throw new Error(`Trial not found for judge: ${judge.name}`);
       }
 
-      // Create judge (without speaker - speakers are created during parsing)
-      const created = await tx.judge.create({
-        data: {
-          name: judge.name,
-          title: judge.title,
-          honorific: judge.honorific,
-          // Note: speakerId removed - speakers are created during transcript parsing
-          trialId
-        }
-      });
+      const action = judge.overrideAction?.toLowerCase() || 'insert';
+      let created;
+      
+      if (action === 'upsert' && judge.judgeFingerprint) {
+        // Upsert based on judgeFingerprint (unique constraint)
+        created = await tx.judge.upsert({
+          where: { 
+            judgeFingerprint: judge.judgeFingerprint 
+          },
+          update: {
+            name: judge.name,
+            title: judge.title,
+            honorific: judge.honorific,
+            trialId  // Update the trial association
+          },
+          create: {
+            name: judge.name,
+            title: judge.title,
+            honorific: judge.honorific,
+            judgeFingerprint: judge.judgeFingerprint,
+            trialId
+          }
+        });
+      } else {
+        // Create judge (without speaker - speakers are created during parsing)
+        created = await tx.judge.create({
+          data: {
+            name: judge.name,
+            title: judge.title,
+            honorific: judge.honorific,
+            judgeFingerprint: judge.judgeFingerprint,
+            // Note: speakerId removed - speakers are created during transcript parsing
+            trialId
+          }
+        });
+      }
+      
       if (judge.id) {
         this.correlationMap.Judge.set(judge.id, created.id);
       }
@@ -649,17 +676,16 @@ export class OverrideImporter {
       const addressId = reporter.addressId ? 
         this.correlationMap.Address.get(reporter.addressId) : undefined;
 
-      // First check if a court reporter already exists for this trial
-      const existing = await tx.courtReporter.findUnique({
-        where: { trialId }
-      });
-
+      const action = reporter.overrideAction?.toLowerCase() || 'insert';
       let created;
-      if (existing) {
-        // Update existing court reporter
-        created = await tx.courtReporter.update({
-          where: { trialId },
-          data: {
+      
+      if (action === 'upsert' && reporter.courtReporterFingerprint) {
+        // Upsert based on courtReporterFingerprint
+        created = await tx.courtReporter.upsert({
+          where: { 
+            courtReporterFingerprint: reporter.courtReporterFingerprint 
+          },
+          update: {
             name: reporter.name,
             credentials: reporter.credentials,
             title: reporter.title,
@@ -667,7 +693,18 @@ export class OverrideImporter {
             expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
             addressId,
             phone: reporter.phone,
-            courtReporterFingerprint: reporter.courtReporterFingerprint
+            trialId  // Update the trial association
+          },
+          create: {
+            name: reporter.name,
+            credentials: reporter.credentials,
+            title: reporter.title,
+            stateNumber: reporter.stateNumber,
+            expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
+            addressId,
+            phone: reporter.phone,
+            courtReporterFingerprint: reporter.courtReporterFingerprint,
+            trialId
           }
         });
       } else {

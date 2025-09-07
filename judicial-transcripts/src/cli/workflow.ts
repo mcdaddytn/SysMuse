@@ -158,8 +158,27 @@ program
           // The Phase 1 process will create the trial
           if (trialId === -1) {
             console.log(chalk.cyan('Processing new trial from configuration...'));
-            // Run Phase 1 parse which will create the trial
+            
+            // IMPORTANT: Run PDF convert FIRST to sync metadata files from source
             const { execSync } = require('child_process');
+            
+            // Get the trial name from config to filter PDF conversion
+            const configContent = fs.readFileSync(options.config, 'utf-8');
+            const configData = JSON.parse(configContent);
+            const trialName = configData.includedTrials?.[0];
+            
+            if (trialName) {
+              console.log(chalk.yellow(`Running PDF convert for ${trialName} to sync metadata...`));
+              const convertCmd = `npm run convert-pdf ${options.config} --trial "${trialName}"`;
+              if (options.verbose) {
+                console.log(`Running: ${convertCmd}`);
+              }
+              execSync(convertCmd, { stdio: options.verbose ? 'inherit' : 'pipe' });
+              console.log(chalk.green('✓ PDF convert and metadata sync complete'));
+            }
+            
+            // Now run Phase 1 parse which will create the trial
+            console.log(chalk.yellow('Running Phase 1 parsing...'));
             const phase1Cmd = `npx ts-node src/cli/parse.ts parse --phase1 --config ${options.config}`;
             if (options.verbose) {
               console.log(`Running: ${phase1Cmd}`);
@@ -195,9 +214,9 @@ program
                     const workflowState = await prisma.trialWorkflowState.create({
                       data: {
                         trialId: newTrialId,
-                        pdfConvertCompleted: true,
+                        pdfConvertCompleted: true,  // We ran PDF convert above
                         pdfConvertAt: new Date(),
-                        phase1Completed: true,
+                        phase1Completed: true,  // We ran phase1 parse above
                         phase1CompletedAt: new Date(),
                         currentStatus: 'IN_PROGRESS'
                       }
@@ -205,6 +224,18 @@ program
                     console.log(chalk.green(`✓ TrialWorkflowState created with ID: ${workflowState.id}`));
                   } else {
                     console.log(chalk.yellow('TrialWorkflowState already exists'));
+                    // Update to mark PDF convert and phase1 as complete
+                    await prisma.trialWorkflowState.update({
+                      where: { trialId: newTrialId },
+                      data: {
+                        pdfConvertCompleted: true,
+                        pdfConvertAt: new Date(),
+                        phase1Completed: true,
+                        phase1CompletedAt: new Date(),
+                        currentStatus: 'IN_PROGRESS'
+                      }
+                    });
+                    console.log(chalk.green('✓ Updated TrialWorkflowState'));
                   }
                   
                   // Now run the workflow to complete phase1 (LLM steps)

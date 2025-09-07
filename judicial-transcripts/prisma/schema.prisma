@@ -10,7 +10,7 @@ datasource db {
 model Trial {
   id                  Int                    @id @default(autoincrement())
   name                String
-  shortName           String?
+  shortName           String?                @unique
   shortNameHandle     String?
   caseNumber          String                 @unique
   caseHandle          String?

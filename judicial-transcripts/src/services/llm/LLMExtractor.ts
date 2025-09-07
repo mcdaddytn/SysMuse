@@ -222,8 +222,8 @@ ${context.transcriptHeader}`;
       // Add fingerprints to entities
       this.addFingerprints(entities);
       
-      // Add override configuration fields
-      this.addOverrideFields(entities);
+      // Add override configuration fields (pass context for trial shortName)
+      this.addOverrideFields(entities, context);
 
       // Add metadata
       entities.metadata = {
@@ -496,7 +496,7 @@ ${prompt.user}
     return { firstName: parts[0], lastName: parts[parts.length - 1] };
   }
 
-  private addOverrideFields(entities: any): void {
+  private addOverrideFields(entities: any, context?: LLMContext): void {
     // Add override fields for Attorneys
     if (entities.Attorney) {
       entities.Attorney.forEach((attorney: any) => {
@@ -541,8 +541,12 @@ ${prompt.user}
     if (entities.Trial) {
       const trials = Array.isArray(entities.Trial) ? entities.Trial : [entities.Trial];
       trials.forEach((trial: any) => {
+        // Set shortName from the trial folder name (passed in context)
+        if (context?.trialName) {
+          trial.shortName = context.trialName;
+        }
         trial.overrideAction = 'upsert';  // Use upsert since trial may already exist from phase1
-        trial.overrideKey = 'caseNumber';
+        trial.overrideKey = 'shortName';  // Use shortName for upsert instead of caseNumber
         // Remove caseHandle if it exists (will be derived at import time)
         delete trial.caseHandle;
       });

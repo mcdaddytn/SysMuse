@@ -281,9 +281,15 @@ export class OverrideImporter {
         }
         count++;
       } else if (action === 'upsert') {
-        // Upsert based on caseNumber
+        // Determine upsert key based on overrideKey field
+        const upsertKey = trial.overrideKey || 'caseNumber';
+        const whereClause = upsertKey === 'shortName' 
+          ? { shortName: trial.shortName }
+          : { caseNumber: trial.caseNumber };
+        
+        // Upsert based on the specified key
         const upserted = await tx.trial.upsert({
-          where: { caseNumber: trial.caseNumber },
+          where: whereClause,
           create: {
             name: trial.name,
             shortName: trial.shortName,

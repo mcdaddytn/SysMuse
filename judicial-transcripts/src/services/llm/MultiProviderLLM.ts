@@ -60,11 +60,11 @@ export class MultiProviderLLM {
 
   private getDefaultModelForProvider(provider: LLMProvider): string {
     const defaults = {
-      openai: 'gpt-4',
+      openai: 'gpt-4-turbo-preview',  // Using gpt-4-turbo for 128k context window
       anthropic: 'claude-3-sonnet-20240229',
       google: 'gemini-pro'
     };
-    return defaults[provider] || 'gpt-4';
+    return defaults[provider] || 'gpt-4-turbo-preview';
   }
 
   private getApiKeyForProvider(provider: LLMProvider): string | undefined {
@@ -85,7 +85,22 @@ export class MultiProviderLLM {
       return modelConfig;
     }
 
-    // Default configurations
+    // Default configurations - adjusted for model capabilities
+    if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) {
+      return {
+        maxTokens: 4000,
+        temperature: 0.1,
+        contextWindow: 128000  // 128k context for gpt-4-turbo
+      };
+    } else if (model.includes('gpt-3.5-turbo-16k')) {
+      return {
+        maxTokens: 4000,
+        temperature: 0.1,
+        contextWindow: 16384  // 16k context
+      };
+    }
+    
+    // Default for standard models
     return {
       maxTokens: 4000,
       temperature: 0.1,
@@ -189,7 +204,7 @@ export class MultiProviderLLM {
 
     // Fallback to known models
     const fallbackModels = {
-      openai: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+      openai: ['gpt-4', 'gpt-4-turbo-preview', 'gpt-4-1106-preview', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'],
       anthropic: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
       google: ['gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash']
     };

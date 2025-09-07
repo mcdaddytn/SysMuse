@@ -207,9 +207,18 @@ npx ts-node src/cli/phase3.ts process -t 1
 npx ts-node src/cli/phase3.ts process --clean
 ```
 
-## Workflow Management Commands (Feature 03F)
+## Workflow Management Commands (Feature 03F/03L)
 
 The workflow system automatically manages trial processing state and executes prerequisite steps as needed.
+
+### Process Control and Cleanup
+```bash
+# Kill all running workflow processes (use when processes are stuck)
+npm run workflow:kill
+
+# Alternative direct command
+bash scripts/kill-workflow-processes.sh
+```
 
 ### Basic Workflow Commands
 ```bash
@@ -227,6 +236,18 @@ npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-c
 
 # Skip optional steps (LLM tasks, cleanup)
 npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json --skip-optional
+
+# Continue processing even if a trial fails (for batch processing)
+npx ts-node src/cli/workflow.ts run --phase phase2 --config config/multi-trial-config-mac.json --continue-on-error
+```
+
+### Batch Processing (Reliable for Long-Running Jobs)
+```bash
+# Process multiple trials with continue-on-error flag
+npx ts-node src/cli/workflow.ts run --phase phase2 --config config/multi-trial-config-mac.json --continue-on-error --verbose
+
+# The workflow will process trials sequentially based on the config's includedTrials array
+# Use --continue-on-error to ensure processing continues even if individual trials fail
 ```
 
 ### Trial-Specific Workflow

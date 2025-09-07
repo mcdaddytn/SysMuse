@@ -32,7 +32,9 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "setup": "bash scripts/setup.sh"
+    "setup": "bash scripts/setup.sh",
+    "workflow": "ts-node src/cli/workflow.ts",
+    "workflow:kill": "bash scripts/kill-workflow-processes.sh"
   },
   "keywords": [
     "judicial",

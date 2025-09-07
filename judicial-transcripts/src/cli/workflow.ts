@@ -30,6 +30,7 @@ program
   .option('--verbose', 'Show verbose output')
   .option('--force-rerun', 'Force rerun of completed steps')
   .option('--skip-optional', 'Skip optional steps (LLM, cleanup)')
+  .option('--continue-on-error', 'Continue processing even if a trial fails')
   .action(async (options) => {
     try {
       console.log(chalk.blue('═══════════════════════════════════════'));
@@ -66,6 +67,7 @@ program
       // Load configuration
       let configData: any = {};
       let trialIds: number[] = [];
+      let trialNames: string[] = [];  // Track trial names in order
 
       if (options.config) {
         if (!fs.existsSync(options.config)) {
@@ -80,6 +82,7 @@ program
         if (configData.includedTrials) {
           for (const trialPath of configData.includedTrials) {
             const shortName = path.basename(trialPath);
+            trialNames.push(shortName);  // Store trial names in order
             const trial = await prisma.trial.findFirst({
               where: { shortName }
             });
@@ -87,8 +90,8 @@ program
             if (!trial) {
               // Trial doesn't exist yet, it will be created during PDF convert/Phase 1
               console.log(chalk.yellow(`Trial not found, will be created: ${shortName}`));
-              // For new trials, we'll use a placeholder ID
-              trialIds.push(-1);
+              // For new trials, we'll use negative indexes to track which trial
+              trialIds.push(-(trialNames.length));  // Use negative index
             } else {
               trialIds.push(trial.id);
             }
@@ -138,7 +141,7 @@ program
         outputDir: configData.outputDir || 'output/multi-trial',
         inputDir: configData.inputDir,
         autoReview: configData.workflow?.autoReview,
-        execTimeout: configData.workflow?.execTimeout || 600000
+        execTimeout: configData.workflow?.execTimeout || 1200000  // Default 20 minutes for batch processing
       };
 
       const workflowService = new EnhancedTrialWorkflowService(prisma, workflowConfig);
@@ -147,53 +150,83 @@ program
       console.log(chalk.cyan(`Trials to process: ${chalk.bold(trialIds.filter(id => id > 0).length || 'from config')}`));
       console.log();
 
-      // Process each trial
+      // Process each trial sequentially
       let successCount = 0;
       let failCount = 0;
-      const failures: Array<{ trialId: number; error: string }> = [];
+      const failures: Array<{ trialId: number | string; error: string }> = [];
 
-      for (const trialId of trialIds) {
+      for (let i = 0; i < trialIds.length; i++) {
+        const trialId = trialIds[i];
+        
         try {
-          // For new trials (id = -1), we'll run the workflow without a specific trial ID
+          // For new trials (negative id), we'll run the workflow without a specific trial ID
           // The Phase 1 process will create the trial
-          if (trialId === -1) {
-            console.log(chalk.cyan('Processing new trial from configuration...'));
+          if (trialId < 0) {
+            // Get the correct trial name based on the negative index
+            const trialIndex = Math.abs(trialId) - 1;
+            const trialName = trialNames[trialIndex];
             
-            // IMPORTANT: Run PDF convert FIRST to sync metadata files from source
-            const { execSync } = require('child_process');
+            if (!trialName) {
+              console.error(chalk.red(`Invalid trial index: ${trialIndex}`));
+              failCount++;
+              failures.push({ trialId: `index-${trialIndex}`, error: 'Invalid trial index' });
+              continue;
+            }
             
-            // Get the trial name from config to filter PDF conversion
-            const configContent = fs.readFileSync(options.config, 'utf-8');
-            const configData = JSON.parse(configContent);
-            const trialName = configData.includedTrials?.[0];
+            console.log(chalk.cyan(`Processing new trial: ${trialName}`));
             
-            if (trialName) {
-              console.log(chalk.yellow(`Running PDF convert for ${trialName} to sync metadata...`));
-              const convertCmd = `npm run convert-pdf ${options.config} --trial "${trialName}"`;
+            // IMPORTANT: Instead of spawning subprocesses, we'll call the workflow service directly
+            console.log(chalk.yellow(`Running PDF convert for ${trialName} to sync metadata...`));
+            
+            // Create a modified config for this specific trial
+            const trialConfig = {
+              ...configData,
+              includedTrials: [trialName],
+              activeTrials: configData.activeTrials || configData.includedTrials
+            };
+            
+            // Write temporary config file for this trial
+            const tempConfigPath = path.join(path.dirname(options.config), `.temp-${trialName.replace(/\s+/g, '-')}.json`);
+            fs.writeFileSync(tempConfigPath, JSON.stringify(trialConfig, null, 2));
+            
+            try {
+              // Run PDF convert using execSync but with trial-specific config
+              const { execSync } = require('child_process');
+              const convertCmd = `npm run convert-pdf "${tempConfigPath}"`;
               if (options.verbose) {
                 console.log(`Running: ${convertCmd}`);
               }
-              execSync(convertCmd, { stdio: options.verbose ? 'inherit' : 'pipe' });
+              execSync(convertCmd, { 
+                stdio: options.verbose ? 'inherit' : 'pipe',
+                timeout: configData.workflow?.execTimeout || 600000
+              });
               console.log(chalk.green('✓ PDF convert and metadata sync complete'));
+            
+              // Now run Phase 1 parse which will create the trial
+              console.log(chalk.yellow('Running Phase 1 parsing...'));
+              const phase1Cmd = `npx ts-node src/cli/parse.ts parse --phase1 --config "${tempConfigPath}"`;
+              if (options.verbose) {
+                console.log(`Running: ${phase1Cmd}`);
+              }
+              execSync(phase1Cmd, { 
+                stdio: options.verbose ? 'inherit' : 'pipe',
+                timeout: configData.workflow?.execTimeout || 600000
+              });
+            } finally {
+              // Clean up temp config file
+              if (fs.existsSync(tempConfigPath)) {
+                fs.unlinkSync(tempConfigPath);
+              }
             }
             
-            // Now run Phase 1 parse which will create the trial
-            console.log(chalk.yellow('Running Phase 1 parsing...'));
-            const phase1Cmd = `npx ts-node src/cli/parse.ts parse --phase1 --config ${options.config}`;
-            if (options.verbose) {
-              console.log(`Running: ${phase1Cmd}`);
-            }
-            execSync(phase1Cmd, { stdio: options.verbose ? 'inherit' : 'pipe' });
-            
-            // Get the newly created trial
-            const trials = await prisma.trial.findMany({
-              orderBy: { id: 'desc' },
-              take: 1
+            // Get the newly created trial by shortName
+            const newTrial = await prisma.trial.findFirst({
+              where: { shortName: trialName }
             });
             
-            if (trials.length > 0) {
-              const newTrialId = trials[0].id;
-              console.log(chalk.cyan(`New trial created with ID: ${newTrialId}`));
+            if (newTrial) {
+              const newTrialId = newTrial.id;
+              console.log(chalk.cyan(`Trial ${trialName} has ID: ${newTrialId}`));
               
               // For phase1, we still need to run LLM override and import steps
               // The workflow service will handle the remaining phase1 steps
@@ -249,6 +282,10 @@ program
                 // Continue with remaining phases if target is beyond phase1
                 await workflowService.runToPhase(newTrialId, options.phase as WorkflowPhase);
               }
+            } else {
+              console.error(chalk.red(`Could not find or create trial: ${trialName}`));
+              failCount++;
+              failures.push({ trialId: trialName, error: 'Trial not found after creation' });
             }
             successCount++;
           } else {
@@ -272,12 +309,21 @@ program
             successCount++;
           }
         } catch (error) {
-          console.error(chalk.red(`✗ Trial ${trialId} failed: ${error instanceof Error ? error.message : error}`));
+          const trialDesc = trialId < 0 ? trialNames[Math.abs(trialId) - 1] : `ID ${trialId}`;
+          console.error(chalk.red(`✗ Trial ${trialDesc} failed: ${error instanceof Error ? error.message : error}`));
           failCount++;
           failures.push({ 
-            trialId, 
+            trialId: trialDesc, 
             error: error instanceof Error ? error.message : String(error)
           });
+          
+          // Continue processing next trial if configured to do so
+          if (options.continueOnError) {
+            console.log(chalk.yellow('Continuing with next trial...'));
+          } else if (i < trialIds.length - 1) {
+            console.log(chalk.red('Stopping due to error. Use --continue-on-error to proceed despite failures.'));
+            break;
+          }
         }
       }
 

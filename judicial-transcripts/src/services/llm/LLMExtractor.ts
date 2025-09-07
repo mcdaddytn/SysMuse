@@ -216,7 +216,20 @@ ${context.transcriptHeader}`;
       const response = await llm.call(messages);
       
       // Parse the JSON response
-      const jsonStr = response.content as string;
+      let jsonStr = response.content as string;
+      
+      // Clean up the response - remove markdown code blocks if present
+      jsonStr = jsonStr.trim();
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.slice(7); // Remove ```json
+      } else if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.slice(3); // Remove ```
+      }
+      if (jsonStr.endsWith('```')) {
+        jsonStr = jsonStr.slice(0, -3); // Remove trailing ```
+      }
+      jsonStr = jsonStr.trim();
+      
       const entities = JSON.parse(jsonStr) as ExtractedEntities;
 
       // Add fingerprints to entities
@@ -545,7 +558,7 @@ ${prompt.user}
         if (context?.trialName) {
           trial.shortName = context.trialName;
         }
-        trial.overrideAction = 'upsert';  // Use upsert since trial may already exist from phase1
+        trial.overrideAction = 'Upsert';  // Use upsert since trial may already exist from phase1
         trial.overrideKey = 'shortName';  // Use shortName for upsert instead of caseNumber
         // Remove caseHandle if it exists (will be derived at import time)
         delete trial.caseHandle;

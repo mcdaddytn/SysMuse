@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { PrismaClient } from '@prisma/client';
-import { TrialWorkflowService, WorkflowPhase, WorkflowConfig } from '../services/TrialWorkflowService';
+import { EnhancedTrialWorkflowService, WorkflowPhase, WorkflowConfig } from '../services/EnhancedTrialWorkflowService';
 import * as fs from 'fs';
 import * as path from 'path';
 const chalk = require('chalk');
@@ -134,10 +134,14 @@ program
         enableLLMOverrides: configData.workflow?.enableLLMOverrides || false,
         enableLLMMarkers: configData.workflow?.enableLLMMarkers || false,
         cleanupPhase2After: configData.workflow?.cleanupPhase2After || false,
-        phase2RetentionHours: configData.workflow?.phase2RetentionHours || 24
+        phase2RetentionHours: configData.workflow?.phase2RetentionHours || 24,
+        outputDir: configData.outputDir || 'output/multi-trial',
+        inputDir: configData.inputDir,
+        autoReview: configData.workflow?.autoReview,
+        execTimeout: configData.workflow?.execTimeout || 600000
       };
 
-      const workflowService = new TrialWorkflowService(prisma, workflowConfig);
+      const workflowService = new EnhancedTrialWorkflowService(prisma, workflowConfig);
 
       console.log(chalk.cyan(`Target phase: ${chalk.bold(options.phase)}`));
       console.log(chalk.cyan(`Trials to process: ${chalk.bold(trialIds.filter(id => id > 0).length || 'from config')}`));
@@ -154,7 +158,7 @@ program
           // The Phase 1 process will create the trial
           if (trialId === -1) {
             console.log(chalk.cyan('Processing new trial from configuration...'));
-            // Run Phase 1 which will create the trial
+            // Run Phase 1 parse which will create the trial
             const { execSync } = require('child_process');
             const phase1Cmd = `npx ts-node src/cli/parse.ts parse --phase1 --config ${options.config}`;
             if (options.verbose) {
@@ -162,16 +166,56 @@ program
             }
             execSync(phase1Cmd, { stdio: options.verbose ? 'inherit' : 'pipe' });
             
-            // Now continue with remaining phases if needed
-            if (options.phase !== WorkflowPhase.PHASE1) {
-              // Get the newly created trial
-              const trials = await prisma.trial.findMany({
-                orderBy: { id: 'desc' },
-                take: 1
-              });
+            // Get the newly created trial
+            const trials = await prisma.trial.findMany({
+              orderBy: { id: 'desc' },
+              take: 1
+            });
+            
+            if (trials.length > 0) {
+              const newTrialId = trials[0].id;
+              console.log(chalk.cyan(`New trial created with ID: ${newTrialId}`));
               
-              if (trials.length > 0) {
-                const newTrialId = trials[0].id;
+              // For phase1, we still need to run LLM override and import steps
+              // The workflow service will handle the remaining phase1 steps
+              if (options.phase === WorkflowPhase.PHASE1) {
+                console.log(chalk.yellow('Running remaining phase1 steps (LLM override, import)...'));
+                
+                // Run the remaining phase1 steps (LLM override, import)
+                // but skip PDF convert and phase1 parse since they're done
+                const trial = await prisma.trial.findUnique({
+                  where: { id: newTrialId },
+                  include: { workflowState: true }
+                });
+                
+                if (trial) {
+                  // Create workflow state if it doesn't exist
+                  if (!trial.workflowState) {
+                    console.log(chalk.yellow('Creating TrialWorkflowState record...'));
+                    const workflowState = await prisma.trialWorkflowState.create({
+                      data: {
+                        trialId: newTrialId,
+                        pdfConvertCompleted: true,
+                        pdfConvertAt: new Date(),
+                        phase1Completed: true,
+                        phase1CompletedAt: new Date(),
+                        currentStatus: 'IN_PROGRESS'
+                      }
+                    });
+                    console.log(chalk.green(`✓ TrialWorkflowState created with ID: ${workflowState.id}`));
+                  } else {
+                    console.log(chalk.yellow('TrialWorkflowState already exists'));
+                  }
+                  
+                  // Now run the workflow to complete phase1 (LLM steps)
+                  console.log(chalk.yellow('Running workflow service to complete phase1...'));
+                  await workflowService.runToPhase(newTrialId, options.phase as WorkflowPhase);
+                  console.log(chalk.green('✓ Workflow service completed'));
+                } else {
+                  console.error(chalk.red(`Could not find trial with ID ${newTrialId}`));
+                }
+              } else if (options.phase !== WorkflowPhase.PHASE1) {
+                // Continue with remaining phases if target is beyond phase1
                 await workflowService.runToPhase(newTrialId, options.phase as WorkflowPhase);
               }
             }
@@ -244,7 +288,7 @@ program
   .option('--format <format>', 'Output format (table, json, summary)', 'table')
   .action(async (options) => {
     try {
-      const workflowService = new TrialWorkflowService(prisma);
+      const workflowService = new EnhancedTrialWorkflowService(prisma, {});
 
       let trialId: number | null = null;
       

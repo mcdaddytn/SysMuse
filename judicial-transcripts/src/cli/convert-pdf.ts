@@ -8,10 +8,13 @@ import { logger } from '../utils/logger';
 
 async function main() {
   const configPath = process.argv[2];
+  const trialFilter = process.argv.includes('--trial') ? 
+    process.argv[process.argv.indexOf('--trial') + 1] : null;
   
   if (!configPath) {
-    console.error('Usage: npm run convert-pdf <config-file>');
+    console.error('Usage: npm run convert-pdf <config-file> [--trial <trial-name>]');
     console.error('Example: npm run convert-pdf config/example-trial-config-mac.json');
+    console.error('Example: npm run convert-pdf config/example-trial-config-mac.json --trial "21 Cassidian V Microdata"');
     process.exit(1);
   }
 
@@ -45,10 +48,17 @@ async function main() {
     }
     
     // Get trial selection settings and default trial style from config
-    const trialSelectionMode = (config as any).trialSelectionMode || 'ALL';
-    const includedTrials = (config as any).includedTrials || [];
+    let trialSelectionMode = (config as any).trialSelectionMode || 'ALL';
+    let includedTrials = (config as any).includedTrials || [];
     const excludedTrials = (config as any).excludedTrials || [];
     const defaultTrialStyle = (config as any).defaultTrialStyle || {};
+    
+    // Apply --trial filter if specified
+    if (trialFilter) {
+      trialSelectionMode = 'INCLUDE';
+      includedTrials = [trialFilter];
+      logger.info(`Filtering to single trial: ${trialFilter}`);
+    }
     
     logger.info(`Trial selection mode: ${trialSelectionMode}`);
     if (trialSelectionMode === 'INCLUDE' && includedTrials.length > 0) {

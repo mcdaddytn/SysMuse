@@ -589,48 +589,69 @@ model TrialProcessingStatus {
 }
 
 model TrialWorkflowState {
-  id                      Int           @id @default(autoincrement())
-  trialId                 Int           @unique
-  pdfConvertCompleted     Boolean       @default(false)
+  id                      Int            @id @default(autoincrement())
+  trialId                 Int            @unique
+  
+  // Step completion flags
+  pdfConvertCompleted     Boolean        @default(false)
   pdfConvertAt            DateTime?
-  phase1Completed         Boolean       @default(false)
-  phase1CompletedAt       DateTime?
-  llmOverrideCompleted    Boolean       @default(false)
+  llmOverrideCompleted    Boolean        @default(false)
   llmOverrideAt           DateTime?
-  overrideImportCompleted Boolean       @default(false)
+  overrideReviewCompleted Boolean        @default(false)
+  overrideReviewAt        DateTime?
+  overrideImportCompleted Boolean        @default(false)
   overrideImportAt        DateTime?
-  phase2Completed         Boolean       @default(false)
+  phase1Completed         Boolean        @default(false)
+  phase1CompletedAt       DateTime?
+  phase2Completed         Boolean        @default(false)
   phase2CompletedAt       DateTime?
-  phase2IndexCompleted    Boolean       @default(false)
+  phase2IndexCompleted    Boolean        @default(false)
   phase2IndexAt           DateTime?
-  phase3Completed         Boolean       @default(false)
+  llmMarker1Completed     Boolean        @default(false)
+  llmMarker1At            DateTime?
+  marker1ReviewCompleted  Boolean        @default(false)
+  marker1ReviewAt         DateTime?
+  marker1ImportCompleted  Boolean        @default(false)
+  marker1ImportAt         DateTime?
+  phase3Completed         Boolean        @default(false)
   phase3CompletedAt       DateTime?
-  llmMarkerCompleted      Boolean       @default(false)
-  llmMarkerAt             DateTime?
-  markerImportCompleted   Boolean       @default(false)
-  markerImportAt          DateTime?
-  phase3IndexCompleted    Boolean       @default(false)
+  llmMarker2Completed     Boolean        @default(false)
+  llmMarker2At            DateTime?
+  marker2ReviewCompleted  Boolean        @default(false)
+  marker2ReviewAt         DateTime?
+  marker2ImportCompleted  Boolean        @default(false)
+  marker2ImportAt         DateTime?
+  phase3IndexCompleted    Boolean        @default(false)
   phase3IndexAt           DateTime?
-  phase2CleanupCompleted  Boolean       @default(false)
+  phase2CleanupCompleted  Boolean        @default(false)
   phase2CleanupAt         DateTime?
-  trialStylePath          String?
-  overrideFilesPath       String?
-  sourcePdfPath           String?
-  destinationTxtPath      String?
+  
+  // Status tracking
+  currentStatus           WorkflowStatus @default(NOT_STARTED)
+  llmOverrideStatus       LLMTaskStatus  @default(PENDING)
+  llmMarker1Status        LLMTaskStatus  @default(PENDING)
+  llmMarker2Status        LLMTaskStatus  @default(PENDING)
+  
+  // Task IDs for tracking
   llmOverrideTaskId       String?
-  llmOverrideStatus       LLMTaskStatus @default(PENDING)
-  llmMarkerTaskId         String?
-  llmMarkerStatus         LLMTaskStatus @default(PENDING)
+  llmMarker1TaskId        String?
+  llmMarker2TaskId        String?
+  
+  // Error tracking
   lastError               String?
   lastErrorAt             DateTime?
-  retryCount              Int           @default(0)
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
-  trial                   Trial         @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  retryCount              Int            @default(0)
+  
+  // Metadata
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  
+  trial                   Trial          @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId])
   @@index([llmOverrideStatus])
-  @@index([llmMarkerStatus])
+  @@index([llmMarker1Status])
+  @@index([llmMarker2Status])
 }
 
 enum SessionType {
@@ -746,4 +767,25 @@ enum LLMTaskStatus {
   COMPLETED
   FAILED
   SKIPPED
+}
+
+enum WorkflowStatus {
+  NOT_STARTED
+  PDF_CONVERTING
+  GENERATING_OVERRIDES
+  AWAITING_OVERRIDE_REVIEW
+  IMPORTING_OVERRIDES
+  PHASE1_PROCESSING
+  PHASE2_PROCESSING
+  GENERATING_MARKERS_1
+  AWAITING_MARKER1_REVIEW
+  IMPORTING_MARKERS_1
+  PHASE3_PROCESSING
+  GENERATING_MARKERS_2
+  AWAITING_MARKER2_REVIEW
+  IMPORTING_MARKERS_2
+  COMPLETED
+  ERROR
+  PAUSED
+  IN_PROGRESS
 }

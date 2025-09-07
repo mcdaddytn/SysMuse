@@ -19,7 +19,7 @@ import {
   MarkerSectionOverride
 } from './types';
 // Speaker imports removed - speakers are now created during transcript parsing, not import
-import { generateFileToken } from '../../utils/fileTokenGenerator';
+import { generateFileToken, generateCaseHandle } from '../../utils/fileTokenGenerator';
 
 export class OverrideImporter {
   private prisma: PrismaClient;
@@ -248,13 +248,16 @@ export class OverrideImporter {
   private async importTrials(tx: any, trials: TrialOverride[]): Promise<number> {
     let count = 0;
     for (const trial of trials) {
-      const action = trial.overrideAction || 'Upsert';
+      const action = (trial.overrideAction || 'Upsert').toLowerCase();
       
       // Generate shortNameHandle from shortName if not provided
       const shortNameHandle = trial.shortNameHandle || 
         (trial.shortName ? generateFileToken(trial.shortName) : null);
       
-      if (action === 'Insert') {
+      // ALWAYS derive caseHandle from caseNumber, never trust override data
+      const caseHandle = generateCaseHandle(trial.caseNumber);
+      
+      if (action === 'insert') {
         // Create new trial
         const created = await tx.trial.create({
           data: {
@@ -262,7 +265,7 @@ export class OverrideImporter {
             shortName: trial.shortName,
             shortNameHandle,
             caseNumber: trial.caseNumber,
-            caseHandle: trial.caseHandle,
+            caseHandle, // Use derived value, not from override
             plaintiff: trial.plaintiff,
             defendant: trial.defendant,
             alternateCaseNumber: trial.alternateCaseNumber,
@@ -277,6 +280,44 @@ export class OverrideImporter {
           this.correlationMap.Trial.set(trial.id, created.id);
         }
         count++;
+      } else if (action === 'upsert') {
+        // Upsert based on caseNumber
+        const upserted = await tx.trial.upsert({
+          where: { caseNumber: trial.caseNumber },
+          create: {
+            name: trial.name,
+            shortName: trial.shortName,
+            shortNameHandle,
+            caseNumber: trial.caseNumber,
+            caseHandle, // Use derived value, not from override
+            plaintiff: trial.plaintiff,
+            defendant: trial.defendant,
+            alternateCaseNumber: trial.alternateCaseNumber,
+            alternateDefendant: trial.alternateDefendant,
+            court: trial.court,
+            courtDivision: trial.courtDivision,
+            courtDistrict: trial.courtDistrict,
+            totalPages: trial.totalPages
+          },
+          update: {
+            name: trial.name,
+            shortName: trial.shortName,
+            shortNameHandle,
+            caseHandle, // Use derived value, not from override
+            plaintiff: trial.plaintiff,
+            defendant: trial.defendant,
+            alternateCaseNumber: trial.alternateCaseNumber,
+            alternateDefendant: trial.alternateDefendant,
+            court: trial.court,
+            courtDivision: trial.courtDivision,
+            courtDistrict: trial.courtDistrict,
+            totalPages: trial.totalPages
+          }
+        });
+        if (trial.id) {
+          this.correlationMap.Trial.set(trial.id, upserted.id);
+        }
+        count++;
       } else {
         // Update existing trial
         let updated;
@@ -288,6 +329,7 @@ export class OverrideImporter {
               name: trial.name,
               shortName: trial.shortName,
               shortNameHandle,
+              caseHandle, // Use derived value, not from override
               plaintiff: trial.plaintiff,
               defendant: trial.defendant,
               alternateCaseNumber: trial.alternateCaseNumber,
@@ -431,15 +473,34 @@ export class OverrideImporter {
           }
         });
       } else {
-        // Create new office
-        created = await tx.lawFirmOffice.create({
-          data: {
+        // Check if office already exists with same lawFirmId and name
+        const existingByName = await tx.lawFirmOffice.findFirst({
+          where: {
             lawFirmId,
-            name: office.name,
-            addressId,
-            lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
+            name: office.name
           }
         });
+        
+        if (existingByName) {
+          // Update the existing office instead of creating a duplicate
+          created = await tx.lawFirmOffice.update({
+            where: { id: existingByName.id },
+            data: {
+              addressId,
+              lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
+            }
+          });
+        } else {
+          // Create new office
+          created = await tx.lawFirmOffice.create({
+            data: {
+              lawFirmId,
+              name: office.name,
+              addressId,
+              lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
+            }
+          });
+        }
       }
       
       this.correlationMap.LawFirmOffice.set(office.id || created.id, created.id);
@@ -588,18 +649,43 @@ export class OverrideImporter {
       const addressId = reporter.addressId ? 
         this.correlationMap.Address.get(reporter.addressId) : undefined;
 
-      const created = await tx.courtReporter.create({
-        data: {
-          name: reporter.name,
-          credentials: reporter.credentials,
-          title: reporter.title,
-          stateNumber: reporter.stateNumber,
-          expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
-          addressId,
-          phone: reporter.phone,
-          trialId
-        }
+      // First check if a court reporter already exists for this trial
+      const existing = await tx.courtReporter.findUnique({
+        where: { trialId }
       });
+
+      let created;
+      if (existing) {
+        // Update existing court reporter
+        created = await tx.courtReporter.update({
+          where: { trialId },
+          data: {
+            name: reporter.name,
+            credentials: reporter.credentials,
+            title: reporter.title,
+            stateNumber: reporter.stateNumber,
+            expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
+            addressId,
+            phone: reporter.phone,
+            courtReporterFingerprint: reporter.courtReporterFingerprint
+          }
+        });
+      } else {
+        // Create new court reporter
+        created = await tx.courtReporter.create({
+          data: {
+            name: reporter.name,
+            credentials: reporter.credentials,
+            title: reporter.title,
+            stateNumber: reporter.stateNumber,
+            expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
+            addressId,
+            phone: reporter.phone,
+            trialId,
+            courtReporterFingerprint: reporter.courtReporterFingerprint
+          }
+        });
+      }
       if (reporter.id) {
         this.correlationMap.CourtReporter.set(reporter.id, created.id);
       }

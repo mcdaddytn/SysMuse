@@ -140,6 +140,62 @@ npx ts-node src/scripts/analyzeTrialData.ts
 npx ts-node src/scripts/analyzeWitnessEvents.ts
 ```
 
+## Manual LLM Override Generation
+
+### Generate LLM overrides for a single trial
+```bash
+# By trial directory path
+npx ts-node src/cli/override.ts extract --trial-path "output/multi-trial/21 Cassidian V Microdata" --output "output/multi-trial/21 Cassidian V Microdata/trial-metadata.json"
+
+# Generate for all trials missing overrides
+for dir in output/multi-trial/*/; do 
+  if [ ! -f "$dir/trial-metadata.json" ]; then 
+    trial=$(basename "$dir")
+    echo "Generating for $trial..."
+    npx ts-node src/cli/override.ts extract --trial-path "$dir" --output "$dir/trial-metadata.json"
+  fi
+done
+
+# Batch extract for all trials
+npx ts-node src/cli/override.ts batch-extract --all-trials output/multi-trial --output output/overrides-batch.json
+```
+
+### Check which trials need LLM overrides
+```bash
+# SQL query to find trials without LLM overrides
+docker exec judicial-postgres psql -U judicial_user -d judicial_transcripts -c "
+  SELECT t.id, t.\"shortName\", tw.\"llmOverrideCompleted\" 
+  FROM \"Trial\" t 
+  LEFT JOIN \"TrialWorkflowState\" tw ON tw.\"trialId\" = t.id 
+  WHERE tw.\"llmOverrideCompleted\" = false OR tw.\"llmOverrideCompleted\" IS NULL
+  ORDER BY t.id;"
+
+# Check files on disk
+for dir in output/multi-trial/*/; do 
+  trial=$(basename "$dir")
+  if [ -f "$dir/trial-metadata.json" ]; then 
+    echo "✅ $trial"
+  else 
+    echo "❌ $trial - MISSING"
+  fi
+done
+```
+
+### Reset workflow state for re-processing
+```bash
+# Reset specific workflow flags for a trial
+docker exec judicial-postgres psql -U judicial_user -d judicial_transcripts -c "
+  UPDATE \"TrialWorkflowState\" 
+  SET \"llmOverrideCompleted\" = false 
+  WHERE \"trialId\" = 22;"
+
+# Reset all trials missing LLM overrides
+docker exec judicial-postgres psql -U judicial_user -d judicial_transcripts -c "
+  UPDATE \"TrialWorkflowState\" 
+  SET \"llmOverrideCompleted\" = false 
+  WHERE \"llmOverrideCompleted\" = false OR \"llmOverrideCompleted\" IS NULL;"
+```
+
 ### Phase 3: Marker Processing
 ```bash
 npx ts-node src/cli/phase3.ts process

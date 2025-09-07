@@ -97,8 +97,7 @@ Generate a JSON object with the following structure. Use sequential IDs starting
   "Trial": [{
     "id": 1,
     "name": "Full case name",
-    "caseNumber": "Case number",
-    "caseHandle": "Short handle (e.g., 'Apple v. Samsung')",
+    "caseNumber": "Case number (CRITICAL: extract exactly as shown, e.g., '2:13-CV-00103-JRG')",
     "plaintiff": "Plaintiff name",
     "defendant": "Defendant name", 
     "court": "Court name",

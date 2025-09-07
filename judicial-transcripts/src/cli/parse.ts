@@ -34,7 +34,8 @@ async function updatePhase1WorkflowState(prisma: PrismaClient, trialId: number):
         phase1Completed: true,
         phase1CompletedAt: new Date(),
         llmOverrideStatus: LLMTaskStatus.PENDING,
-        llmMarkerStatus: LLMTaskStatus.PENDING
+        llmMarker1Status: LLMTaskStatus.PENDING,
+        llmMarker2Status: LLMTaskStatus.PENDING
       },
       update: {
         pdfConvertCompleted: true,  // PDF conversion must be done before Phase 1 can run
@@ -64,7 +65,8 @@ async function updatePhase2WorkflowState(prisma: PrismaClient, trialId: number):
         phase2IndexCompleted: true,
         phase2IndexAt: new Date(),
         llmOverrideStatus: LLMTaskStatus.PENDING,
-        llmMarkerStatus: LLMTaskStatus.PENDING
+        llmMarker1Status: LLMTaskStatus.PENDING,
+        llmMarker2Status: LLMTaskStatus.PENDING
       },
       update: {
         phase2Completed: true,
@@ -191,6 +193,8 @@ program
   .option('-o, --output <path>', 'Output directory for parsed data')
   .option('--phase1', 'Run only Phase 1 (line parsing)')
   .option('--phase2', 'Run only Phase 2 (event processing)')
+  .option('--trial <name>', 'Process only the specified trial')
+  .option('--trial-id <id>', 'Process only the trial with specified ID')
   .option('--log-level <level>', 'Log level (debug, info, warn, error)', 'info')
   .option('--parser-mode <mode>', 'Parser mode: legacy or multi-pass', 'multi-pass')
   .option('--debug-output', 'Enable debug output for multi-pass parser')
@@ -303,7 +307,17 @@ program
               // Filter by includedTrials if specified
               const includedTrials = (config as any).includedTrials || [];
               const activeTrials = (config as any).activeTrials || [];
-              const trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
+              let trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
+              
+              // Apply --trial filter if specified
+              if (options.trial) {
+                trialsToProcess = trialsToProcess.filter((t: string) => t === options.trial);
+                if (trialsToProcess.length === 0) {
+                  logger.error(`Trial "${options.trial}" not found in includedTrials or activeTrials`);
+                  process.exit(1);
+                }
+                logger.info(`Filtering to single trial: ${options.trial}`);
+              }
               
               if (trialsToProcess.length > 0) {
                 // Process each trial in the list
@@ -830,7 +844,32 @@ program
           // Get trials to process from config
           const includedTrials = (config as any).includedTrials || [];
           const activeTrials = (config as any).activeTrials || [];
-          const trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
+          let trialsToProcess = includedTrials.length > 0 ? includedTrials : activeTrials;
+          
+          // Apply --trial-id filter if specified for phase2
+          if (options.trialId) {
+            const trialId = parseInt(options.trialId);
+            const trial = await prisma.trial.findUnique({
+              where: { id: trialId }
+            });
+            if (!trial) {
+              logger.error(`Trial with ID ${trialId} not found`);
+              process.exit(1);
+            }
+            // Filter trialsToProcess to just this trial's shortName
+            if (trial.shortName) {
+              trialsToProcess = trialsToProcess.filter((t: string) => t === trial.shortName);
+            }
+            logger.info(`Filtering to trial ID ${trialId}: ${trial.shortName || trial.name}`);
+          } else if (options.trial) {
+            // Apply --trial filter if specified
+            trialsToProcess = trialsToProcess.filter((t: string) => t === options.trial);
+            if (trialsToProcess.length === 0) {
+              logger.error(`Trial "${options.trial}" not found in includedTrials or activeTrials`);
+              process.exit(1);
+            }
+            logger.info(`Filtering to single trial: ${options.trial}`);
+          }
           
           if (trialsToProcess.length === 0) {
             // If no trials specified in config, process the most recent trial

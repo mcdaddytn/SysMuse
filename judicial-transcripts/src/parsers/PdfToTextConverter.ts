@@ -274,6 +274,10 @@ export class PdfToTextConverter {
         // Generate trialstyle.json for this subdirectory
         await this.generateTrialStyleConfig(outputSubDir, pdfs, trialSpecificConfig);
         
+        // Track converted files for summary
+        const convertedFiles: string[] = [];
+        const metadataCopied: string[] = [];
+        
         for (const file of pdfs) {
           const inputFile = path.join(inputSubDir, file);
           const outputFile = path.join(outputSubDir, file.replace(/\.pdf$/i, '.txt'));
@@ -282,10 +286,40 @@ export class PdfToTextConverter {
             const text = await this.convertFile(inputFile);
             fs.writeFileSync(outputFile, text, 'utf-8');
             logger.info(`✔ ${file}`);
+            convertedFiles.push(file.replace(/\.pdf$/i, '.txt'));
           } catch (err) {
             logger.error(`✗ ${file} (Error: ${err})`);
           }
         }
+        
+        // Copy metadata files if they exist
+        const metadataFiles = ['trial-metadata.json', 'Attorney.json', 'Witness.json', 'Trial.json', 'Judge.json', 'CourtReporter.json'];
+        for (const metaFile of metadataFiles) {
+          const sourcePath = path.join(inputSubDir, metaFile);
+          const destPath = path.join(outputSubDir, metaFile);
+          if (fs.existsSync(sourcePath)) {
+            fs.copyFileSync(sourcePath, destPath);
+            metadataCopied.push(metaFile);
+            logger.info(`✔ Copied metadata: ${metaFile}`);
+          }
+        }
+        
+        // Generate conversion summary
+        const conversionSummary = {
+          timestamp: new Date().toISOString(),
+          trialName: subDir,
+          filesConverted: convertedFiles,
+          metadataCopied: metadataCopied,
+          sourceDir: inputSubDir,
+          destDir: outputSubDir,
+          pdfCount: pdfs.length,
+          successCount: convertedFiles.length,
+          complete: convertedFiles.length === pdfs.length
+        };
+        
+        const summaryPath = path.join(outputSubDir, 'conversion-summary.json');
+        fs.writeFileSync(summaryPath, JSON.stringify(conversionSummary, null, 2));
+        logger.info(`✔ Generated conversion summary for ${subDir}`);
       }
     } else {
       // Process single directory

@@ -26,15 +26,31 @@
     "15 Optis Wireless Technology V. Huawei",
     "16 Saint Lawrence V. Motorola",
     "17 Wi-Lan V. Apple,",
-    "18 Wi-Lan V. Htc"
+    "18 Wi-Lan V. Htc",
+    "19 Alfonso Cioffi Et Al V. Google",
+    "20 Biscotti Inc. V. Microsoft Corp",
+    "21 Cassidian V Microdata",
+    "22 Core Wireless V. Apple",
+    "24 Fractus V. T-Mobile Us",
+    "28 Implicit V Netscout",
+    "29 Intellectual Ventures V. T Mobile",
+    "30 Kaist Ip Us Llc V. Samsung",
+    "31 Mobile Tele V. Htc",
+    "32 Netlist V Samsung",
+    "33 Personal Audio V. Cbs",
+    "34 Personalized Media V Google",
+    "35 Rembrandt V Samsung",
+    "36 Salazar V. Htc",
+    "37 Simpleair V. Google",
+    "39 Tqp Development Llc Vs V. 1-800-Flowers",
+    "40 USAA V Wells",
+    "42 Vocalife Amazon",
+    "43 Whirlpool V. Tst",
+    "44 Beneficial V. Advance",
+    "45 Chrimar V. Dell"
   ],
   "includedTrials": [    
-    "10 Metaswitch Genband 2016",
-    "11 Dataquill Limited V. Zte Corporation Et Al",
-    "12 Gree Supercell",
-    "14 Optis Wireless Technology V. Apple Inc",
-    "15 Optis Wireless Technology V. Huawei",
-    "16 Saint Lawrence V. Motorola"
+    "04 Intellectual Ventures"
   ],
   "excludedTrials": [],
   "invalidTrials": [
@@ -122,6 +138,18 @@
     "preserveLinePrefix": true,
     "normalizeWhitespace": true,
     "detectSpeakerPatterns": true
+  },
+  "workflow": {
+    "enableLLMOverrides": true,
+    "enableLLMMarkers": true,
+    "cleanupPhase2After": false,
+    "phase2RetentionHours": 24,
+    "execTimeout": 1200000,
+    "autoReview": {
+      "overrides": true,
+      "markers1": false,
+      "markers2": false
+    }
   },
   "elasticsearch": {
     "enabled": false,

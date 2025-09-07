@@ -188,8 +188,8 @@ export class TrialWorkflowService {
       [WorkflowStep.PHASE2]: state.phase2Completed,
       [WorkflowStep.PHASE2_INDEX]: state.phase2IndexCompleted,
       [WorkflowStep.PHASE3]: state.phase3Completed,
-      [WorkflowStep.LLM_MARKER]: state.llmMarkerCompleted,
-      [WorkflowStep.MARKER_IMPORT]: state.markerImportCompleted,
+      [WorkflowStep.LLM_MARKER]: state.llmMarker1Completed,
+      [WorkflowStep.MARKER_IMPORT]: state.marker1ImportCompleted,
       [WorkflowStep.PHASE3_INDEX]: state.phase3IndexCompleted,
       [WorkflowStep.PHASE2_CLEANUP]: state.phase2CleanupCompleted
     };
@@ -382,7 +382,8 @@ export class TrialWorkflowService {
       data: {
         trialId,
         llmOverrideStatus: LLMTaskStatus.PENDING,
-        llmMarkerStatus: LLMTaskStatus.PENDING
+        llmMarker1Status: LLMTaskStatus.PENDING,
+        llmMarker2Status: LLMTaskStatus.PENDING
       }
     });
   }
@@ -425,13 +426,13 @@ export class TrialWorkflowService {
         updateData.phase3CompletedAt = success ? now : null;
         break;
       case WorkflowStep.LLM_MARKER:
-        updateData.llmMarkerCompleted = success;
-        updateData.llmMarkerAt = success ? now : null;
-        updateData.llmMarkerStatus = success ? LLMTaskStatus.COMPLETED : LLMTaskStatus.FAILED;
+        updateData.llmMarker1Completed = success;
+        updateData.llmMarker1At = success ? now : null;
+        updateData.llmMarker1Status = success ? LLMTaskStatus.COMPLETED : LLMTaskStatus.FAILED;
         break;
       case WorkflowStep.MARKER_IMPORT:
-        updateData.markerImportCompleted = success;
-        updateData.markerImportAt = success ? now : null;
+        updateData.marker1ImportCompleted = success;
+        updateData.marker1ImportAt = success ? now : null;
         break;
       case WorkflowStep.PHASE3_INDEX:
         updateData.phase3IndexCompleted = success;
@@ -449,7 +450,8 @@ export class TrialWorkflowService {
         trialId,
         ...updateData,
         llmOverrideStatus: LLMTaskStatus.PENDING,
-        llmMarkerStatus: LLMTaskStatus.PENDING
+        llmMarker1Status: LLMTaskStatus.PENDING,
+        llmMarker2Status: LLMTaskStatus.PENDING
       },
       update: updateData
     });

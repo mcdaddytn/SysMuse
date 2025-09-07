@@ -33,8 +33,8 @@ function loadMultiTrialConfig(configPath?: string): any {
  * Get active trials from configuration
  */
 function getActiveTrials(config: any): string[] {
-  // Use activeTrials if present, otherwise use includedTrials
-  return config.activeTrials || config.includedTrials || [];
+  // Always use includedTrials - includedTrials is deprecated/placeholder
+  return config.includedTrials || [];
 }
 
 /**
@@ -63,16 +63,17 @@ function calculateDiff(base: any, custom: any): any {
  */
 program
   .command('overrides')
-  .description('Copy entity override files from output back to input for active trials')
+  .description('Copy entity override files from output back to input for included trials')
   .option('--config <path>', 'Path to multi-trial configuration')
+  .option('--approve', 'Mark files as reviewed/approved during sync')
   .option('--dry-run', 'Show what would be copied without actually copying')
   .action(async (options) => {
     try {
       const config = loadMultiTrialConfig(options.config);
-      const activeTrials = getActiveTrials(config);
+      const includedTrials = getActiveTrials(config);
       
-      if (activeTrials.length === 0) {
-        console.log('❌ No active trials found in configuration');
+      if (includedTrials.length === 0) {
+        console.log('❌ No included trials found in configuration');
         process.exit(1);
       }
       
@@ -84,7 +85,7 @@ program
         process.exit(1);
       }
       
-      console.log(`\n🔄 Syncing override files for ${activeTrials.length} trials...`);
+      console.log(`\n🔄 Syncing override files for ${includedTrials.length} trials...`);
       console.log(`  From: ${outputDir}`);
       console.log(`  To: ${inputDir}\n`);
       
@@ -94,12 +95,13 @@ program
         'Trial.json',
         'Judge.json',
         'CourtReporter.json',
-        'Marker.json'
+        'Marker.json',
+        'trial-metadata.json'  // LLM-generated metadata
       ];
       
       let totalCopied = 0;
       
-      for (const trialName of activeTrials) {
+      for (const trialName of includedTrials) {
         const sourceDir = path.join(outputDir, trialName);
         const targetDir = path.join(inputDir, trialName);
         
@@ -125,14 +127,28 @@ program
             if (options.dryRun) {
               console.log(`  Would copy: ${fileName}`);
             } else {
+              // Read the source file
+              let content = JSON.parse(fs.readFileSync(sourcePath, 'utf-8'));
+              
+              // Add review metadata if --approve flag is set
+              if (options.approve) {
+                if (!content.metadata) {
+                  content.metadata = {};
+                }
+                content.metadata.userReviewed = true;
+                content.metadata.reviewedAt = new Date().toISOString();
+                content.metadata.reviewedBy = 'sync-command';
+              }
+              
               // Backup existing file if it exists
               if (fs.existsSync(targetPath)) {
                 const backupPath = targetPath + '.bk';
                 fs.copyFileSync(targetPath, backupPath);
               }
               
-              fs.copyFileSync(sourcePath, targetPath);
-              console.log(`  ✅ Copied: ${fileName}`);
+              // Write the potentially modified content
+              fs.writeFileSync(targetPath, JSON.stringify(content, null, 2));
+              console.log(`  ✅ Copied: ${fileName}${options.approve ? ' (approved)' : ''}`);
             }
             trialFilesCopied++;
           }
@@ -164,10 +180,10 @@ program
   .action(async (options) => {
     try {
       const config = loadMultiTrialConfig(options.config);
-      const activeTrials = getActiveTrials(config);
+      const includedTrials = getActiveTrials(config);
       
-      if (activeTrials.length === 0) {
-        console.log('❌ No active trials found in configuration');
+      if (includedTrials.length === 0) {
+        console.log('❌ No included trials found in configuration');
         process.exit(1);
       }
       
@@ -186,7 +202,7 @@ program
       
       const defaultConfig = JSON.parse(fs.readFileSync(defaultConfigPath, 'utf-8'));
       
-      console.log(`\n🔄 Extracting custom configurations for ${activeTrials.length} trials...`);
+      console.log(`\n🔄 Extracting custom configurations for ${includedTrials.length} trials...`);
       
       const customDir = 'config/trial-configs/custom';
       if (!options.dryRun && !fs.existsSync(customDir)) {
@@ -195,7 +211,7 @@ program
       
       let savedCount = 0;
       
-      for (const trialName of activeTrials) {
+      for (const trialName of includedTrials) {
         const trialConfigPath = path.join(outputDir, trialName, 'trialstyle.json');
         
         if (!fs.existsSync(trialConfigPath)) {
@@ -241,7 +257,7 @@ program
         fs.mkdirSync(mergedDir, { recursive: true });
       }
       
-      for (const trialName of activeTrials) {
+      for (const trialName of includedTrials) {
         const trialConfigPath = path.join(outputDir, trialName, 'trialstyle.json');
         
         if (fs.existsSync(trialConfigPath)) {
@@ -256,6 +272,176 @@ program
       }
       
       console.log(`\n✨ ${options.dryRun ? 'Would save' : 'Saved'} ${savedCount} custom config files`);
+      
+    } catch (error) {
+      console.error('❌ Error:', error);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Sync marker files from output to input directories
+ */
+program
+  .command('markers')
+  .description('Copy marker files from output back to input for active trials')
+  .option('--config <path>', 'Path to multi-trial configuration')
+  .option('--phase <number>', 'Phase number (1 for post-Phase2, 2 for post-Phase3)', '1')
+  .option('--approve', 'Mark files as reviewed/approved during sync')
+  .option('--dry-run', 'Show what would be copied without actually copying')
+  .action(async (options) => {
+    try {
+      const config = loadMultiTrialConfig(options.config);
+      const includedTrials = getActiveTrials(config);
+      
+      if (includedTrials.length === 0) {
+        console.log('❌ No included trials found in configuration');
+        process.exit(1);
+      }
+      
+      const inputDir = config.inputDir;
+      const outputDir = config.outputDir;
+      
+      if (!inputDir || !outputDir) {
+        console.error('❌ Input and output directories must be specified in config');
+        process.exit(1);
+      }
+      
+      const markerFile = options.phase === '1' ? 'markers-phase2.json' : 'markers-phase3.json';
+      const phaseName = options.phase === '1' ? 'post-Phase2' : 'post-Phase3';
+      
+      console.log(`\n🔄 Syncing ${phaseName} marker files for ${includedTrials.length} trials...`);
+      console.log(`  From: ${outputDir}`);
+      console.log(`  To: ${inputDir}\n`);
+      
+      let totalCopied = 0;
+      
+      for (const trialName of includedTrials) {
+        const sourceDir = path.join(outputDir, trialName);
+        const targetDir = path.join(inputDir, trialName);
+        const sourcePath = path.join(sourceDir, markerFile);
+        const targetPath = path.join(targetDir, markerFile);
+        
+        if (!fs.existsSync(sourcePath)) {
+          console.log(`⚠️  Marker file not found: ${sourcePath}`);
+          continue;
+        }
+        
+        console.log(`\n📂 Processing: ${trialName}`);
+        
+        // Ensure target directory exists
+        if (!options.dryRun && !fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+        
+        if (options.dryRun) {
+          console.log(`  Would copy: ${markerFile}`);
+        } else {
+          // Read the source file
+          let content = JSON.parse(fs.readFileSync(sourcePath, 'utf-8'));
+          
+          // Add review metadata if --approve flag is set
+          if (options.approve) {
+            if (!content.metadata) {
+              content.metadata = {};
+            }
+            content.metadata.userReviewed = true;
+            content.metadata.reviewedAt = new Date().toISOString();
+            content.metadata.reviewedBy = 'sync-command';
+          }
+          
+          // Backup existing file if it exists
+          if (fs.existsSync(targetPath)) {
+            const backupPath = targetPath + '.bk';
+            fs.copyFileSync(targetPath, backupPath);
+          }
+          
+          // Write the potentially modified content
+          fs.writeFileSync(targetPath, JSON.stringify(content, null, 2));
+          console.log(`  ✅ Copied: ${markerFile}${options.approve ? ' (approved)' : ''}`);
+        }
+        totalCopied++;
+      }
+      
+      console.log(`\n✨ ${options.dryRun ? 'Would copy' : 'Copied'} ${totalCopied} marker files`);
+      
+    } catch (error) {
+      console.error('❌ Error:', error);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Sync trial style configuration between directories
+ */
+program
+  .command('trialstyle')
+  .description('Sync trialstyle.json files between source and destination')
+  .option('--config <path>', 'Path to multi-trial configuration')
+  .option('--direction <dir>', 'Direction: to-source or to-dest', 'to-dest')
+  .option('--all', 'Sync all trials (not just active ones)')
+  .option('--dry-run', 'Show what would be copied without actually copying')
+  .action(async (options) => {
+    try {
+      const config = loadMultiTrialConfig(options.config);
+      const trials = options.all ? config.trials : getActiveTrials(config);
+      
+      if (trials.length === 0) {
+        console.log('❌ No trials found in configuration');
+        process.exit(1);
+      }
+      
+      const inputDir = config.inputDir;
+      const outputDir = config.outputDir;
+      
+      if (!inputDir || !outputDir) {
+        console.error('❌ Input and output directories must be specified in config');
+        process.exit(1);
+      }
+      
+      const [sourceBase, targetBase] = options.direction === 'to-source' 
+        ? [outputDir, inputDir] 
+        : [inputDir, outputDir];
+      
+      console.log(`\n🔄 Syncing trialstyle.json files...`);
+      console.log(`  Direction: ${options.direction}`);
+      console.log(`  From: ${sourceBase}`);
+      console.log(`  To: ${targetBase}\n`);
+      
+      let totalCopied = 0;
+      
+      for (const trialName of trials) {
+        const sourceDir = path.join(sourceBase, typeof trialName === 'string' ? trialName : trialName.name);
+        const targetDir = path.join(targetBase, typeof trialName === 'string' ? trialName : trialName.name);
+        const sourcePath = path.join(sourceDir, 'trialstyle.json');
+        const targetPath = path.join(targetDir, 'trialstyle.json');
+        
+        if (!fs.existsSync(sourcePath)) {
+          console.log(`⚠️  Source file not found: ${sourcePath}`);
+          continue;
+        }
+        
+        if (options.dryRun) {
+          console.log(`Would copy: ${sourcePath} -> ${targetPath}`);
+        } else {
+          // Ensure target directory exists
+          if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+          }
+          
+          // Backup existing file if it exists
+          if (fs.existsSync(targetPath)) {
+            const backupPath = targetPath + '.bk';
+            fs.copyFileSync(targetPath, backupPath);
+          }
+          
+          fs.copyFileSync(sourcePath, targetPath);
+          console.log(`✅ Copied: ${typeof trialName === 'string' ? trialName : trialName.name}/trialstyle.json`);
+        }
+        totalCopied++;
+      }
+      
+      console.log(`\n✨ ${options.dryRun ? 'Would copy' : 'Copied'} ${totalCopied} trialstyle.json files`);
       
     } catch (error) {
       console.error('❌ Error:', error);

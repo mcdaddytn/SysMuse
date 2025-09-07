@@ -137,8 +137,42 @@ Both had speakerPrefix "MR. PENNINGTON" causing Phase2 to fail when processing "
 3. **Smart Speaker Prefix Generation**: Automatically detect and handle same-last-name conflicts during metadata generation
 4. **Examination Context**: Better parsing of "BY MR. [FULL NAME]" patterns to match against attorney first names
 
+## Metadata Import Issue (Discovered during implementation)
+
+### Problem
+Attorneys imported from trial-metadata.json files are not automatically associated with trials through TrialAttorney records during the import phase. This causes Phase2 to fail to find them when processing transcripts, leading to:
+1. Creation of duplicate attorneys with the same speakerPrefix
+2. Loss of rich metadata (firstName, middleInitial, barNumber, etc.) from the imported attorneys  
+3. Anonymous speakers or dynamically created attorneys without proper data
+
+### Example Case
+- Attorney id=2: "MR. DACUS" with full metadata from trial-metadata.json import
+- Attorney id=4: "MR. DACUS" created dynamically in Phase2 without metadata
+- Only id=4 gets TrialAttorney association, id=2 remains orphaned
+
+### Current Workaround
+Modified `AttorneyService.findAttorneyBySpeakerPrefix()` to:
+1. First search for attorney WITH trial association (existing behavior)
+2. If not found, search for attorney by speakerPrefix WITHOUT requiring trial association
+3. Return the attorney if found (Phase2 will create the TrialAttorney association)
+4. Only create AnonymousSpeaker if no attorney exists at all
+
+This ensures imported attorneys are found and properly associated when encountered in transcripts.
+
+### Proper Fix Required
+The metadata import process (`src/cli/override.ts`) needs to create TrialAttorney associations when importing attorneys. The trial-metadata.json files contain associative IDs that should link:
+- Attorney → TrialAttorney → Trial
+- Attorney → TrialAttorney → LawFirm  
+- Attorney → TrialAttorney → LawFirmOffice
+
+Implementation is complex due to:
+- Need to maintain backward compatibility with existing trial-metadata.json files
+- Must preserve ability to share attorneys across trials (same attorney, different TrialAttorney records)
+- Override logic handles multiple entity types and relationships
+
 ## Future Considerations
 - The API layer will need updates to properly query attorney-speaker relationships through TrialAttorney
 - Consider adding indexes on TrialAttorney.speakerId for performance
 - May want to add validation to ensure attorneys don't get duplicate speakers within same trial
 - Implement more sophisticated attorney matching logic that considers first names and middle initials
+- Fix metadata import to properly create TrialAttorney associations

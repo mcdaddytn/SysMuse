@@ -722,7 +722,7 @@ export class Phase2Processor {
     try {
       if (attorney) {
         // Get the TrialAttorney association to find the speaker
-        const trialAttorney = await this.prisma.trialAttorney.findFirst({
+        let trialAttorney = await this.prisma.trialAttorney.findFirst({
           where: {
             trialId: this.context.trialId,
             attorneyId: attorney.id
@@ -731,6 +731,50 @@ export class Phase2Processor {
             speaker: true
           }
         });
+        
+        // If no TrialAttorney exists (attorney from metadata import), create it now
+        if (!trialAttorney) {
+          logger.info(`Creating TrialAttorney association for imported attorney: ${attorney.name}`);
+          
+          // Create speaker for this attorney
+          const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
+          const dbSpeaker = await this.prisma.speaker.create({
+            data: {
+              trialId: this.context.trialId,
+              speakerPrefix: attorneyPrefix,
+              speakerHandle,
+              speakerType: 'ATTORNEY'
+            }
+          });
+          
+          // Determine role based on witness context if available
+          let attorneyRole: 'PLAINTIFF' | 'DEFENDANT' | 'UNKNOWN' = 'UNKNOWN';
+          if (state.currentWitness?.witnessCaller) {
+            const witnessCaller = state.currentWitness.witnessCaller;
+            if (state.currentExaminationType === ExaminationType.DIRECT_EXAMINATION ||
+                state.currentExaminationType === ExaminationType.REDIRECT_EXAMINATION) {
+              attorneyRole = witnessCaller as 'PLAINTIFF' | 'DEFENDANT';
+            } else if (state.currentExaminationType === ExaminationType.CROSS_EXAMINATION ||
+                       state.currentExaminationType === ExaminationType.RECROSS_EXAMINATION) {
+              attorneyRole = witnessCaller === 'PLAINTIFF' ? 'DEFENDANT' : 'PLAINTIFF';
+            }
+          }
+          
+          // Create TrialAttorney association
+          trialAttorney = await this.prisma.trialAttorney.create({
+            data: {
+              trialId: this.context.trialId,
+              attorneyId: attorney.id,
+              speakerId: dbSpeaker.id,
+              role: attorneyRole
+            },
+            include: {
+              speaker: true
+            }
+          });
+          
+          logger.info(`Created TrialAttorney association for ${attorney.name} with role ${attorneyRole}`);
+        }
         
         if (!trialAttorney?.speaker) {
           logger.error(`Attorney ${attorney.name} has no speaker record for trial ${this.context.trialId}!`);
@@ -780,9 +824,10 @@ export class Phase2Processor {
         }
         
         // Check if attorney already exists with this fingerprint
+        const attorneyFingerprint = `${lastName.toLowerCase().replace(/[^a-z]/g, '_')}_${title.charAt(0).toLowerCase()}`;
         let newAttorney = await this.prisma.attorney.findFirst({
           where: {
-            attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`
+            attorneyFingerprint: attorneyFingerprint
           }
         });
         
@@ -794,11 +839,11 @@ export class Phase2Processor {
               title,
               lastName,
               speakerPrefix: attorneyPrefix,
-              attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`
+              attorneyFingerprint: attorneyFingerprint
             }
           });
         } else {
-          logger.debug(`Found existing attorney with fingerprint ${lastName.toUpperCase()}_${title.charAt(0)}`);
+          logger.debug(`Found existing attorney with fingerprint ${attorneyFingerprint}`);
         }
         
         // Determine role based on witness context if available

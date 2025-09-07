@@ -688,6 +688,23 @@ export class AttorneyService {
       };
     }
     
+    // WORKAROUND: Try to find attorney WITHOUT trial association (imported from metadata)
+    // This handles attorneys imported from trial-metadata.json that don't have TrialAttorney associations yet
+    const unassociatedAttorney = await this.prisma.attorney.findFirst({
+      where: {
+        speakerPrefix: speakerPrefix
+      }
+    });
+    
+    if (unassociatedAttorney) {
+      logger.info(`Found attorney ${unassociatedAttorney.name} by speakerPrefix without trial association - likely from metadata import`);
+      // Return attorney without speaker (will be created in Phase2)
+      return {
+        ...unassociatedAttorney,
+        speaker: null
+      };
+    }
+    
     // NEW: Try to match by lastName for attorneys without titles
     // Parse the speakerPrefix to extract title and lastName
     const prefixMatch = speakerPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)$/);

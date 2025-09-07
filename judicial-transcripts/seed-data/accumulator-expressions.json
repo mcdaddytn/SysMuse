@@ -3,8 +3,8 @@
     "name": "judge_attorney_interaction",
     "description": "Find interactions where judge and at least 2 attorneys speak within 10 statements",
     "expressionType": "BOOLEAN",
-    "windowSize": 10,
-    "thresholdValue": 1.0,
+    "windowSize": 8,
+    "thresholdValue": 0.95,
     "minConfidenceLevel": "MEDIUM",
     "combinationType": "AND",
     "metadata": {
@@ -12,7 +12,7 @@
       "minAttorneys": 2,
       "minDistinctSpeakers": 3
     },
-    "isActive": false
+    "isActive": true
   },
   {
     "name": "opposing_counsel_interaction",

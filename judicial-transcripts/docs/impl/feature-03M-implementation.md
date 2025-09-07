@@ -120,9 +120,16 @@ When multiple attorneys in the same trial share the same last name (e.g., two at
 
 Both had speakerPrefix "MR. PENNINGTON" causing Phase2 to fail when processing "BY MR. EDWARD PENNINGTON" in examinations.
 
-**Current Workaround**: Manually update trial-metadata.json to use more specific speaker prefixes:
-- "MR. EDWARD PENNINGTON" or "MR. ED PENNINGTON"
-- "MR. JOHN PENNINGTON"
+**Solution Applied**: 
+1. Updated trial-metadata.json to use more specific speaker prefixes:
+   - "MR. EDWARD PENNINGTON" for Ed Pennington
+   - "MR. JOHN PENNINGTON" for John Pennington
+
+2. Enhanced Phase2Processor regex pattern (line 703) to capture full names in examination lines:
+   - Old: `/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+):?$/` (captures last name only)
+   - New: `/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+(?:\s+[A-Z]+)*):?$/` (captures full name)
+   
+   This allows matching "BY MR. EDWARD PENNINGTON:" to "MR. EDWARD PENNINGTON" in metadata.
 
 ### Future Improvements Needed
 1. **Enhanced Attorney Matching**: Use full names or first name initials when attorneys share last names

@@ -58,16 +58,14 @@ export class GenericSpeakerService {
       }
     });
     
-    // Also create Attorney records for them
+    // Also create Attorney records for them (without speakerId - that's now on TrialAttorney)
     await this.prisma.attorney.createMany({
       data: [
         {
-          speakerId: plaintiffAttorney.id,
           name: plaintiffName,
           attorneyFingerprint: `GENERIC_PLAINTIFF_${trialId}`
         },
         {
-          speakerId: defenseAttorney.id,
           name: defenseName,
           attorneyFingerprint: `GENERIC_DEFENSE_${trialId}`
         }

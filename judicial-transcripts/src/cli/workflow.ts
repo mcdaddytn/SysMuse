@@ -53,7 +53,19 @@ program
         
         // In a real implementation, we'd prompt for confirmation
         console.log(chalk.cyan('Resetting database...'));
+        
+        // Clear all main tables explicitly
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "TrialAttorney" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "Attorney" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "LawFirmOffice" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "LawFirm" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "Address" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "Judge" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "CourtReporter" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "Witness" CASCADE');
+        await prisma.$executeRawUnsafe('TRUNCATE TABLE "Speaker" CASCADE');
         await prisma.$executeRawUnsafe('TRUNCATE TABLE "Trial" CASCADE');
+        
         console.log(chalk.green('✓ Database reset complete'));
         
         // Run seed

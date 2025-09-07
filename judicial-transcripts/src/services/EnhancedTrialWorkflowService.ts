@@ -482,46 +482,87 @@ export class EnhancedTrialWorkflowService {
   }
 
   /**
+   * Log entity counts for debugging
+   */
+  private async logEntityCounts(context: string): Promise<void> {
+    const attorneyCount = await this.prisma.attorney.count();
+    const lawFirmCount = await this.prisma.lawFirm.count();
+    const speakerCount = await this.prisma.speaker.count();
+    const trialAttorneyCount = await this.prisma.trialAttorney.count();
+    
+    console.log(`\n📊 [${context}] Entity counts:`);
+    console.log(`   Attorneys: ${attorneyCount}`);
+    console.log(`   Law Firms: ${lawFirmCount}`);
+    console.log(`   Speakers: ${speakerCount}`);
+    console.log(`   Trial Attorneys: ${trialAttorneyCount}\n`);
+  }
+
+  /**
    * Execute a workflow step
    */
   private async executeStep(trialId: number, step: WorkflowStep, trial: any): Promise<StepResult> {
     try {
+      // Log counts before the step
+      await this.logEntityCounts(`BEFORE ${step}`);
+      
+      let result: StepResult;
       switch (step) {
         case WorkflowStep.PDF_CONVERT:
-          return await this.executePdfConvert(trialId, trial);
+          result = await this.executePdfConvert(trialId, trial);
+          break;
         case WorkflowStep.LLM_OVERRIDE:
-          return await this.executeLLMOverride(trialId, trial);
+          result = await this.executeLLMOverride(trialId, trial);
+          break;
         case WorkflowStep.OVERRIDE_REVIEW:
-          return await this.executeOverrideReview(trialId, trial);
+          result = await this.executeOverrideReview(trialId, trial);
+          break;
         case WorkflowStep.OVERRIDE_IMPORT:
-          return await this.executeOverrideImport(trialId, trial);
+          result = await this.executeOverrideImport(trialId, trial);
+          break;
         case WorkflowStep.PHASE1:
-          return await this.executePhase1(trialId, trial);
+          result = await this.executePhase1(trialId, trial);
+          break;
         case WorkflowStep.PHASE2:
-          return await this.executePhase2(trialId);
+          result = await this.executePhase2(trialId);
+          break;
         case WorkflowStep.PHASE2_INDEX:
-          return await this.executePhase2Index(trialId);
+          result = await this.executePhase2Index(trialId);
+          break;
         case WorkflowStep.LLM_MARKER_1:
-          return await this.executeLLMMarker1(trialId, trial);
+          result = await this.executeLLMMarker1(trialId, trial);
+          break;
         case WorkflowStep.MARKER1_REVIEW:
-          return await this.executeMarker1Review(trialId, trial);
+          result = await this.executeMarker1Review(trialId, trial);
+          break;
         case WorkflowStep.MARKER1_IMPORT:
-          return await this.executeMarker1Import(trialId, trial);
+          result = await this.executeMarker1Import(trialId, trial);
+          break;
         case WorkflowStep.PHASE3:
-          return await this.executePhase3(trialId);
+          result = await this.executePhase3(trialId);
+          break;
         case WorkflowStep.LLM_MARKER_2:
-          return await this.executeLLMMarker2(trialId, trial);
+          result = await this.executeLLMMarker2(trialId, trial);
+          break;
         case WorkflowStep.MARKER2_REVIEW:
-          return await this.executeMarker2Review(trialId, trial);
+          result = await this.executeMarker2Review(trialId, trial);
+          break;
         case WorkflowStep.MARKER2_IMPORT:
-          return await this.executeMarker2Import(trialId, trial);
+          result = await this.executeMarker2Import(trialId, trial);
+          break;
         case WorkflowStep.PHASE3_INDEX:
-          return await this.executePhase3Index(trialId);
+          result = await this.executePhase3Index(trialId);
+          break;
         case WorkflowStep.PHASE2_CLEANUP:
-          return await this.executePhase2Cleanup(trialId);
+          result = await this.executePhase2Cleanup(trialId);
+          break;
         default:
           throw new Error(`Unknown step: ${step}`);
       }
+      
+      // Log counts after the step
+      await this.logEntityCounts(`AFTER ${step}`);
+      
+      return result;
     } catch (error) {
       return {
         success: false,

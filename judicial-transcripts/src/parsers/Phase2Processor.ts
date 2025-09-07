@@ -385,8 +385,10 @@ export class Phase2Processor {
    * Load existing entities into context
    */
   private async loadExistingEntities(trialId: number): Promise<void> {
-    // First, parse and create attorneys/judge from SessionSection metadata
-    await this.loadParticipantsFromSessionSections(trialId);
+    // DISABLED: We now use trial-metadata.json for attorney information
+    // Phase2 should not create attorneys from parsing transcript headers
+    // as it incorrectly treats law firm names as attorney names
+    // await this.loadParticipantsFromSessionSections(trialId);
     
     // Load attorneys
     const attorneys = await this.attorneyService.getAttorneysForTrial(trialId);
@@ -699,8 +701,8 @@ export class Phase2Processor {
     // Note: BY lines DO have speakerPrefix from Phase 1, so we check the text not the prefix
     const trimmed = lineText.trim();
     
-    // Check for "BY MR./MS./MRS./DR. LASTNAME:" pattern
-    const byMatch = trimmed.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+):?$/);
+    // Check for "BY MR./MS./MRS./DR. LASTNAME:" or "BY MR./MS./MRS./DR. FIRSTNAME LASTNAME:" pattern
+    const byMatch = trimmed.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+(?:\s+[A-Z]+)*):?$/);
     logger.debug(`[BY LINE DEBUG] checkExaminingAttorney: trimmed="${trimmed}", match=${byMatch ? 'YES' : 'NO'}`);
     if (!byMatch) {
       return false;

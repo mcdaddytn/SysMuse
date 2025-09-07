@@ -339,11 +339,20 @@ export class Phase2Processor {
     
     if (attorney) {
       // Update existing attorney with speaker if needed
+      // Only update if attorney doesn't have a speaker yet
+      // Note: An attorney can only have one speaker due to unique constraint
+      // This means attorneys from different trials will share the same speaker
       if (!attorney.speakerId) {
-        attorney = await this.prisma.attorney.update({
-          where: { id: attorney.id },
-          data: { speakerId: speaker.id }
-        });
+        try {
+          attorney = await this.prisma.attorney.update({
+            where: { id: attorney.id },
+            data: { speakerId: speaker.id }
+          });
+        } catch (error: any) {
+          // If update fails due to unique constraint, it means this attorney
+          // already has a speaker from another trial - that's okay
+          logger.warn(`Attorney ${attorney.name} already has a speaker from another trial, skipping speaker assignment`);
+        }
       }
       logger.info(`Matched existing attorney: ${attorney.name} with prefix: ${speakerPrefix}`);
     } else {

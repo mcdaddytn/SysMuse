@@ -2,7 +2,9 @@ import { PrismaClient, Speaker, Attorney, Witness, Judge, Juror, SpeakerType } f
 import logger from '../utils/logger';
 
 export interface SpeakerWithRelations extends Speaker {
-  attorney?: Attorney | null;
+  trialAttorneys?: ({
+    attorney: Attorney;
+  })[];
   witness?: Witness | null;
   judge?: Judge | null;
   juror?: Juror | null;
@@ -32,7 +34,11 @@ export class SpeakerRegistry {
     const speakers = await this.prisma.speaker.findMany({
       where: { trialId: this.trialId },
       include: {
-        attorney: true,
+        trialAttorneys: {
+          include: {
+            attorney: true
+          }
+        },
         witness: true,
         judge: true,
         juror: true
@@ -52,8 +58,9 @@ export class SpeakerRegistry {
       }
       
       // Build attorney lookup maps
-      if (speaker.attorney) {
-        const attorney = speaker.attorney;
+      if (speaker.trialAttorneys && speaker.trialAttorneys.length > 0) {
+        // Get the attorney from the TrialAttorney relation
+        const attorney = speaker.trialAttorneys[0].attorney;
         
         // Full name lookup
         this.attorneysByName.set(attorney.name.toUpperCase(), attorney);
@@ -129,7 +136,11 @@ export class SpeakerRegistry {
         ]
       },
       include: {
-        attorney: true,
+        trialAttorneys: {
+          include: {
+            attorney: true
+          }
+        },
         witness: true,
         judge: true,
         juror: true
@@ -196,10 +207,18 @@ export class SpeakerRegistry {
     const speaker = await this.prisma.speaker.findFirst({
       where: {
         trialId: this.trialId,
-        attorney: { id: attorney.id }
+        trialAttorneys: {
+          some: {
+            attorneyId: attorney.id
+          }
+        }
       },
       include: {
-        attorney: true,
+        trialAttorneys: {
+          include: {
+            attorney: true
+          }
+        },
         witness: true,
         judge: true,
         juror: true
@@ -276,7 +295,11 @@ export class SpeakerRegistry {
         speakerType: type
       },
       include: {
-        attorney: true,
+        trialAttorneys: {
+          include: {
+            attorney: true
+          }
+        },
         witness: true,
         judge: true,
         juror: true

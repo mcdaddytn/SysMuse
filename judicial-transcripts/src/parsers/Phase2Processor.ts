@@ -338,32 +338,15 @@ export class Phase2Processor {
     }
     
     if (attorney) {
-      // Update existing attorney with speaker if needed
-      // Only update if attorney doesn't have a speaker yet
-      // Note: An attorney can only have one speaker due to unique constraint
-      // This means attorneys from different trials will share the same speaker
-      if (!attorney.speakerId) {
-        try {
-          attorney = await this.prisma.attorney.update({
-            where: { id: attorney.id },
-            data: { speakerId: speaker.id }
-          });
-        } catch (error: any) {
-          // If update fails due to unique constraint, it means this attorney
-          // already has a speaker from another trial - that's okay
-          logger.warn(`Attorney ${attorney.name} already has a speaker from another trial, skipping speaker assignment`);
-        }
-      }
       logger.info(`Matched existing attorney: ${attorney.name} with prefix: ${speakerPrefix}`);
     } else {
-      // Create new attorney
+      // Create new attorney WITHOUT speaker (speaker is now on TrialAttorney)
       attorney = await this.prisma.attorney.create({
         data: {
           name: attorneyData.name,
           speakerPrefix,
           lastName,
-          attorneyFingerprint,
-          speakerId: speaker.id
+          attorneyFingerprint
         }
       });
       logger.info(`Created new attorney: ${attorney.name} with prefix: ${speakerPrefix}`);
@@ -382,11 +365,19 @@ export class Phase2Processor {
         data: {
           trialId,
           attorneyId: attorney.id,
+          speakerId: speaker.id,  // Associate speaker with TrialAttorney
           role: side,
           lawFirmId: attorneyData.lawFirmId || null
         }
       });
-      logger.info(`Created TrialAttorney association for ${attorney.name} as ${side}`);
+      logger.info(`Created TrialAttorney association for ${attorney.name} as ${side} with speaker`);
+    } else if (!existingAssoc.speakerId) {
+      // Update existing association to add speaker if missing
+      await this.prisma.trialAttorney.update({
+        where: { id: existingAssoc.id },
+        data: { speakerId: speaker.id }
+      });
+      logger.info(`Updated TrialAttorney association with speaker for ${attorney.name}`);
     }
   }
 
@@ -718,7 +709,7 @@ export class Phase2Processor {
     const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
     logger.debug(`Found examining attorney indicator: ${trimmed}`);
     
-    // Find the attorney (with speaker relation included)
+    // Find the attorney (with speaker relation through TrialAttorney)
     const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
       this.context.trialId,
       attorneyPrefix
@@ -728,15 +719,27 @@ export class Phase2Processor {
     
     try {
       if (attorney) {
-        // Create speaker info for this attorney
-        if (!attorney.speaker) {
-          logger.error(`Attorney ${attorney.name} has no speaker record!`);
+        // Get the TrialAttorney association to find the speaker
+        const trialAttorney = await this.prisma.trialAttorney.findFirst({
+          where: {
+            trialId: this.context.trialId,
+            attorneyId: attorney.id
+          },
+          include: {
+            speaker: true
+          }
+        });
+        
+        if (!trialAttorney?.speaker) {
+          logger.error(`Attorney ${attorney.name} has no speaker record for trial ${this.context.trialId}!`);
           return false;
         }
+        
+        // Create speaker info for this attorney using the TrialAttorney's speaker
         speaker = {
-          id: attorney.speaker.id,
-          speakerPrefix: attorney.speaker.speakerPrefix,
-          speakerHandle: attorney.speaker.speakerHandle,
+          id: trialAttorney.speaker.id,
+          speakerPrefix: trialAttorney.speaker.speakerPrefix,
+          speakerHandle: trialAttorney.speaker.speakerHandle,
           speakerType: SpeakerType.ATTORNEY,
           attorneyId: attorney.id,
           name: attorney.name
@@ -774,29 +777,26 @@ export class Phase2Processor {
           logger.info(`Created speaker for dynamically created attorney: ${attorneyPrefix}`);
         }
         
-        // Check if attorney already exists with this speaker
+        // Check if attorney already exists with this fingerprint
         let newAttorney = await this.prisma.attorney.findFirst({
           where: {
-            speakerId: dbSpeaker.id
-          },
-          include: { speaker: true }  // Include speaker relation
+            attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`
+          }
         });
         
         if (!newAttorney) {
-          // Create attorney record
+          // Create attorney record WITHOUT speaker (speaker is on TrialAttorney)
           newAttorney = await this.prisma.attorney.create({
             data: {
               name: attorneyPrefix,
               title,
               lastName,
               speakerPrefix: attorneyPrefix,
-              attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`,
-              speakerId: dbSpeaker.id
-            },
-            include: { speaker: true }  // Include speaker relation
+              attorneyFingerprint: `${lastName.toUpperCase()}_${title.charAt(0)}`
+            }
           });
         } else {
-          logger.debug(`Found existing attorney with speaker ID ${dbSpeaker.id}`);
+          logger.debug(`Found existing attorney with fingerprint ${lastName.toUpperCase()}_${title.charAt(0)}`);
         }
         
         // Determine role based on witness context if available
@@ -818,8 +818,8 @@ export class Phase2Processor {
           logger.info(`Determined attorney role as ${attorneyRole} based on witness caller ${witnessCaller} and exam type ${state.currentExaminationType}`);
         }
         
-        // Create or update trial attorney association
-        await this.prisma.trialAttorney.upsert({
+        // Create or update trial attorney association with speaker
+        const trialAttorney = await this.prisma.trialAttorney.upsert({
           where: {
             trialId_attorneyId: {
               trialId: this.context.trialId,
@@ -827,24 +827,29 @@ export class Phase2Processor {
             }
           },
           update: {
+            speakerId: dbSpeaker.id,  // Associate speaker with TrialAttorney
             // Update role if we determined it and it's currently UNKNOWN
             role: attorneyRole !== 'UNKNOWN' ? attorneyRole : undefined
           },
           create: {
             trialId: this.context.trialId,
             attorneyId: newAttorney.id,
+            speakerId: dbSpeaker.id,  // Associate speaker with TrialAttorney
             role: attorneyRole
+          },
+          include: {
+            speaker: true
           }
         });
         
-        if (newAttorney && newAttorney.speaker) {
+        if (newAttorney && trialAttorney.speaker) {
           logger.info(`Created attorney dynamically: ${attorneyPrefix} with ID ${newAttorney.id} and role ${attorneyRole}`);
           
-          // Create speaker info using the included speaker relation
+          // Create speaker info using the speaker from TrialAttorney
           speaker = {
-            id: newAttorney.speaker.id,
-            speakerPrefix: newAttorney.speaker.speakerPrefix,
-            speakerHandle: newAttorney.speaker.speakerHandle,
+            id: trialAttorney.speaker.id,
+            speakerPrefix: trialAttorney.speaker.speakerPrefix,
+            speakerHandle: trialAttorney.speaker.speakerHandle,
             speakerType: SpeakerType.ATTORNEY,
             attorneyId: newAttorney.id,
             name: attorneyPrefix
@@ -1055,7 +1060,11 @@ export class Phase2Processor {
       const speakerWithRelations = await this.prisma.speaker.findUnique({
         where: { id: speaker.id },
         include: {
-          attorney: true,
+          trialAttorneys: {
+            include: {
+              attorney: true
+            }
+          },
           witness: true,
           judge: true,
           juror: true
@@ -1508,10 +1517,10 @@ export class Phase2Processor {
           speakerPrefix: resolved.speakerPrefix,
           speakerHandle: resolved.speakerHandle,
           speakerType: resolved.speakerType as SpeakerType,
-          attorneyId: resolved.attorney?.id,
+          attorneyId: resolved.trialAttorneys?.[0]?.attorney?.id,
           witnessId: resolved.witness?.id,
           jurorId: resolved.juror?.id,
-          name: resolved.attorney?.name || resolved.witness?.displayName || resolved.judge?.name
+          name: resolved.trialAttorneys?.[0]?.attorney?.name || resolved.witness?.displayName || resolved.judge?.name
         };
       }
       
@@ -1523,10 +1532,10 @@ export class Phase2Processor {
           speakerPrefix: speaker.speakerPrefix,
           speakerHandle: speaker.speakerHandle,
           speakerType: speaker.speakerType as SpeakerType,
-          attorneyId: speaker.attorney?.id,
+          attorneyId: speaker.trialAttorneys?.[0]?.attorney?.id,
           witnessId: speaker.witness?.id,
           jurorId: speaker.juror?.id,
-          name: speaker.attorney?.name || speaker.witness?.displayName || speaker.judge?.name
+          name: speaker.trialAttorneys?.[0]?.attorney?.name || speaker.witness?.displayName || speaker.judge?.name
         };
       }
     }

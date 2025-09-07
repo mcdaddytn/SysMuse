@@ -324,7 +324,11 @@ export class ExaminationReportQuery implements QueryExecutor {
             include: {
               speaker: {
                 include: {
-                  attorney: true
+                  trialAttorneys: {
+                    include: {
+                      attorney: true
+                    }
+                  }
                 }
               },
               event: true
@@ -336,8 +340,9 @@ export class ExaminationReportQuery implements QueryExecutor {
             }
           });
 
-          if (firstQStatement?.speaker?.attorney) {
-            examiningAttorney = firstQStatement.speaker.attorney.name || firstQStatement.speaker.attorney.speakerPrefix || 'Unknown';
+          if (firstQStatement?.speaker?.trialAttorneys?.[0]?.attorney) {
+            const attorney = firstQStatement.speaker.trialAttorneys[0].attorney;
+            examiningAttorney = attorney.name || attorney.speakerPrefix || 'Unknown';
           }
         }
 

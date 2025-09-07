@@ -163,10 +163,8 @@ model Attorney {
   speakerPrefix       String?
   barNumber           String?
   attorneyFingerprint String?              @unique
-  speakerId           Int?                 @unique
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
-  speaker             Speaker?             @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   trialAttorneys      TrialAttorney[]
   witnessCalledEvents WitnessCalledEvent[]
 
@@ -179,16 +177,20 @@ model TrialAttorney {
   id              Int            @id @default(autoincrement())
   trialId         Int
   attorneyId      Int
+  speakerId       Int?           
   role            AttorneyRole
   lawFirmId       Int?
   lawFirmOfficeId Int?
   attorney        Attorney       @relation(fields: [attorneyId], references: [id], onDelete: Cascade)
+  speaker         Speaker?       @relation(fields: [speakerId], references: [id], onDelete: Cascade)
   lawFirm         LawFirm?       @relation(fields: [lawFirmId], references: [id])
   lawFirmOffice   LawFirmOffice? @relation(fields: [lawFirmOfficeId], references: [id])
   trial           Trial          @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@unique([trialId, attorneyId])
+  @@unique([trialId, speakerId])
   @@index([trialId, role])
+  @@index([speakerId])
 }
 
 model LawFirm {
@@ -243,7 +245,7 @@ model Speaker {
   isGeneric        Boolean           @default(false)
   createdAt        DateTime          @default(now())
   anonymousSpeaker AnonymousSpeaker?
-  attorney         Attorney?
+  trialAttorneys   TrialAttorney[]
   judge            Judge?
   juror            Juror?
   statements       StatementEvent[]

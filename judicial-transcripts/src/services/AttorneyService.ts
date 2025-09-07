@@ -317,17 +317,7 @@ export class AttorneyService {
       }
       
       // If still not found, check by speaker (last resort)
-      if (!attorney) {
-        attorney = await this.prisma.attorney.findFirst({
-          where: { 
-            speakerId: speaker.id
-          }
-        });
-        
-        if (attorney) {
-          logger.info(`Found existing attorney by speaker ID`);
-        }
-      }
+      // No longer search by speakerId since it's not on Attorney table
       
       if (!attorney) {
         // Only create new attorney if we don't have metadata OR if metadata says to create
@@ -346,8 +336,7 @@ export class AttorneyService {
             suffix: enhancedInfo.suffix || suffix,
             speakerPrefix: finalSpeakerPrefix,
             barNumber: enhancedInfo.barNumber,
-            attorneyFingerprint: enhancedFingerprint || fingerprint,
-            speakerId: speaker.id
+            attorneyFingerprint: enhancedFingerprint || fingerprint
           }
         });
         logger.info(`Created attorney: ${enhancedInfo.name} with fingerprint: ${enhancedFingerprint || fingerprint}`);
@@ -393,6 +382,7 @@ export class AttorneyService {
           }
         },
         update: {
+          speakerId: speaker.id,  // Update speaker association
           role,
           lawFirmId,
           lawFirmOfficeId
@@ -400,6 +390,7 @@ export class AttorneyService {
         create: {
           trialId,
           attorneyId: attorney.id,
+          speakerId: speaker.id,  // Speaker is now on TrialAttorney
           role,
           lawFirmId,
           lawFirmOfficeId
@@ -477,7 +468,7 @@ export class AttorneyService {
    * Get all attorneys for a trial
    */
   async getAttorneysForTrial(trialId: number): Promise<any[]> {
-    return await this.prisma.attorney.findMany({
+    const attorneys = await this.prisma.attorney.findMany({
       where: {
         trialAttorneys: {
           some: {
@@ -486,15 +477,24 @@ export class AttorneyService {
         }
       },
       include: {
-        speaker: true,
         trialAttorneys: {
           where: { trialId },
           include: {
+            speaker: true,  // Speaker is now on TrialAttorney
             lawFirm: true,
             lawFirmOffice: true
           }
         }
       }
+    });
+    
+    // Map the speaker from TrialAttorney to the attorney object for compatibility
+    return attorneys.map(attorney => {
+      const trialAttorney = attorney.trialAttorneys[0]; // Should only be one per trial
+      return {
+        ...attorney,
+        speaker: trialAttorney?.speaker || null
+      };
     });
   }
 
@@ -525,9 +525,9 @@ export class AttorneyService {
         attorneyFingerprint: attorney.attorneyFingerprint
       },
       include: {
-        speaker: true,
         trialAttorneys: {
           include: {
+            speaker: true,
             trial: true,
             lawFirm: true,
             lawFirmOffice: true
@@ -550,7 +550,7 @@ export class AttorneyService {
       searchText?: string;
     }
   ): Promise<any[]> {
-    // Find all attorney records with this fingerprint
+    // Find all attorney records with this fingerprint and get their speakers from TrialAttorney
     const attorneys = await this.prisma.attorney.findMany({
       where: {
         attorneyFingerprint: attorneyFingerprint,
@@ -562,12 +562,29 @@ export class AttorneyService {
           }
         } : undefined
       },
-      select: {
-        speakerId: true
+      include: {
+        trialAttorneys: {
+          select: {
+            speakerId: true
+          },
+          where: filters?.trialIds ? {
+            trialId: {
+              in: filters.trialIds
+            }
+          } : undefined
+        }
       }
     });
     
-    const speakerIds = attorneys.map(a => a.speakerId).filter((id): id is number => id !== null);
+    // Collect all speakerIds from TrialAttorney associations
+    const speakerIds: number[] = [];
+    for (const attorney of attorneys) {
+      for (const ta of attorney.trialAttorneys) {
+        if (ta.speakerId) {
+          speakerIds.push(ta.speakerId);
+        }
+      }
+    }
     
     // Get all statements from these speakers
     const statements = await this.prisma.statementEvent.findMany({
@@ -592,12 +609,16 @@ export class AttorneyService {
         },
         speaker: {
           include: {
-            attorney: {
+            trialAttorneys: {
               include: {
-                trialAttorneys: {
+                attorney: {
                   include: {
-                    trial: true,
-                    lawFirm: true
+                    trialAttorneys: {
+                      include: {
+                        trial: true,
+                        lawFirm: true
+                      }
+                    }
                   }
                 }
               }
@@ -626,36 +647,45 @@ export class AttorneyService {
         }
       },
       include: { 
-        speaker: true,
         trialAttorneys: {
-          where: { trialId }
-        }
-      }
-    });
-    
-    if (attorney) return attorney;
-    
-    // Try finding by speaker handle
-    const speaker = await this.prisma.speaker.findFirst({
-      where: {
-        trialId,
-        speakerPrefix: speakerPrefix,
-        speakerType: 'ATTORNEY'
-      },
-      include: {
-        attorney: {
+          where: { trialId },
           include: {
-            trialAttorneys: {
-              where: { trialId }
-            }
+            speaker: true  // Speaker is now on TrialAttorney
           }
         }
       }
     });
     
-    if (speaker?.attorney) {
+    if (attorney) {
+      // Map the speaker from TrialAttorney for compatibility
+      const trialAttorney = attorney.trialAttorneys[0];
+      return {
+        ...attorney,
+        speaker: trialAttorney?.speaker || null
+      };
+    }
+    
+    // Try finding by speaker linked to TrialAttorney
+    const trialAttorneyWithSpeaker = await this.prisma.trialAttorney.findFirst({
+      where: {
+        trialId,
+        speaker: {
+          speakerPrefix: speakerPrefix,
+          speakerType: 'ATTORNEY'
+        }
+      },
+      include: {
+        attorney: true,
+        speaker: true
+      }
+    });
+    
+    if (trialAttorneyWithSpeaker?.attorney) {
       // Return attorney with speaker relation included
-      return { ...speaker.attorney, speaker };
+      return { 
+        ...trialAttorneyWithSpeaker.attorney, 
+        speaker: trialAttorneyWithSpeaker.speaker 
+      };
     }
     
     // NEW: Try to match by lastName for attorneys without titles
@@ -679,9 +709,11 @@ export class AttorneyService {
           }
         },
         include: { 
-          speaker: true,
           trialAttorneys: {
-            where: { trialId }
+            where: { trialId },
+            include: {
+              speaker: true
+            }
           }
         }
       });
@@ -699,17 +731,20 @@ export class AttorneyService {
             name: attorney.name.startsWith(title) ? attorney.name : `${title} ${attorney.name}`
           },
           include: { 
-            speaker: true,
             trialAttorneys: {
-              where: { trialId }
+              where: { trialId },
+              include: {
+                speaker: true
+              }
             }
           }
         });
         
-        // Update the speaker record as well (if it exists)
-        if (attorney.speakerId) {
+        // Update the speaker record as well (if it exists on TrialAttorney)
+        const trialAttorney = updatedAttorney.trialAttorneys[0];
+        if (trialAttorney?.speakerId) {
           await this.prisma.speaker.update({
-            where: { id: attorney.speakerId },
+            where: { id: trialAttorney.speakerId },
             data: {
               speakerPrefix: speakerPrefix
             }
@@ -717,7 +752,10 @@ export class AttorneyService {
         }
         
         logger.info(`Updated attorney ${updatedAttorney.name} with speaker prefix: ${speakerPrefix}`);
-        return updatedAttorney;
+        return {
+          ...updatedAttorney,
+          speaker: trialAttorney?.speaker || null
+        };
       }
     }
     

@@ -539,13 +539,13 @@ export class OverrideImporter {
       if (action === 'Update' || action === 'Upsert') {
         if (overrideKey === 'id' && attorney.id) {
           existingAttorney = await tx.attorney.findUnique({
-            where: { id: Number(attorney.id) },
-            include: { speaker: true }
+            where: { id: Number(attorney.id) }
+            // speaker relation removed - now on TrialAttorney
           });
         } else if (overrideKey === 'attorneyFingerprint' && fingerprint) {
           existingAttorney = await tx.attorney.findFirst({
-            where: { attorneyFingerprint: fingerprint },
-            include: { speaker: true }
+            where: { attorneyFingerprint: fingerprint }
+            // speaker relation removed - now on TrialAttorney
           });
         }
       }

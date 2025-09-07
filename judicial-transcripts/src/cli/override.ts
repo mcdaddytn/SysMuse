@@ -277,7 +277,7 @@ program
         if (!overrideData.Attorney!.find(a => a.id === ta.attorney.id)) {
           overrideData.Attorney!.push({
             ...ta.attorney,
-            speakerId: ta.attorney.speakerId ?? undefined,
+            // speakerId removed from Attorney model - now on TrialAttorney
             createdAt: ta.attorney.createdAt.toISOString(),
             updatedAt: ta.attorney.updatedAt.toISOString()
           });
@@ -303,6 +303,7 @@ program
           id: `ta-${ta.id}`,
           trialId: ta.trialId,
           attorneyId: ta.attorneyId,
+          // speakerId not included in override - speakers are created during transcript parsing
           lawFirmId: ta.lawFirmId,
           lawFirmOfficeId: ta.lawFirmOfficeId,
           role: ta.role

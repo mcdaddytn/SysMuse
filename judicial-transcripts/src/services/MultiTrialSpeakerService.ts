@@ -96,15 +96,20 @@ export class MultiTrialSpeakerService {
         }
       },
       include: {
-        speaker: true
+        trialAttorneys: {
+          where: { trialId: this.trialId },
+          include: {
+            speaker: true
+          }
+        }
       }
     });
     
-    if (existingAttorney && existingAttorney.speaker) {
+    if (existingAttorney && existingAttorney.trialAttorneys[0]?.speaker) {
       logger.debug(`Attorney already exists: ${data.name} for trial ${this.trialId}`);
       return {
         attorney: existingAttorney,
-        speaker: existingAttorney.speaker
+        speaker: existingAttorney.trialAttorneys[0].speaker
       };
     }
     
@@ -117,35 +122,37 @@ export class MultiTrialSpeakerService {
       speakerType: 'ATTORNEY'
     });
     
-    // Create or update attorney
-    const attorney = await this.prisma.attorney.upsert({
+    // Check if attorney exists by fingerprint or create new one
+    const attorneyFingerprint = this.generateAttorneyFingerprint(data.name, data.lastName);
+    
+    let attorney = await this.prisma.attorney.findFirst({
       where: {
-        speakerId: speaker.id
-      },
-      update: {
-        name: data.name,
-        title: data.title,
-        firstName: data.firstName,
-        middleInitial: data.middleInitial,
-        lastName: data.lastName,
-        suffix: data.suffix,
-        speakerPrefix: data.speakerPrefix
-      },
-      create: {
-        name: data.name,
-        title: data.title,
-        firstName: data.firstName,
-        middleInitial: data.middleInitial,
-        lastName: data.lastName,
-        suffix: data.suffix,
-        speakerPrefix: data.speakerPrefix,
-        barNumber: data.barNumber,
-        speakerId: speaker.id
+        OR: [
+          { attorneyFingerprint },
+          { name: data.name }
+        ]
       }
     });
     
-    // Create trial association
-    await this.associateAttorneyWithTrial(attorney.id, data.role, data.lawFirmName);
+    if (!attorney) {
+      // Create new attorney WITHOUT speaker (speaker is on TrialAttorney)
+      attorney = await this.prisma.attorney.create({
+        data: {
+          name: data.name,
+          title: data.title,
+          firstName: data.firstName,
+          middleInitial: data.middleInitial,
+          lastName: data.lastName,
+          suffix: data.suffix,
+          speakerPrefix: data.speakerPrefix,
+          barNumber: data.barNumber,
+          attorneyFingerprint
+        }
+      });
+    }
+    
+    // Create trial association with speaker
+    await this.associateAttorneyWithTrial(attorney.id, data.role, data.lawFirmName, speaker.id);
     
     logger.info(`Created attorney: ${data.name} with speaker ${speakerPrefix} for trial ${this.trialId}`);
     
@@ -359,10 +366,16 @@ export class MultiTrialSpeakerService {
     });
   }
 
+  private generateAttorneyFingerprint(name: string, lastName?: string): string {
+    const lastNamePart = lastName || name.split(' ').pop() || name;
+    return lastNamePart.toUpperCase().replace(/[^A-Z]/g, '');
+  }
+
   async associateAttorneyWithTrial(
     attorneyId: number,
     role: AttorneyRole,
-    lawFirmName?: string
+    lawFirmName?: string,
+    speakerId?: number
   ): Promise<void> {
     // Find or create law firm if provided
     let lawFirmId: number | undefined;
@@ -391,14 +404,16 @@ export class MultiTrialSpeakerService {
         }
       },
       update: {
-        role,
-        lawFirmId
+        speakerId: speakerId,  // Update speaker association
+        role: role,
+        lawFirmId: lawFirmId
       },
       create: {
         trialId: this.trialId,
-        attorneyId,
-        role,
-        lawFirmId
+        attorneyId: attorneyId,
+        speakerId: speakerId,  // Associate speaker with TrialAttorney
+        role: role,
+        lawFirmId: lawFirmId
       }
     });
   }
@@ -407,7 +422,11 @@ export class MultiTrialSpeakerService {
     return this.prisma.speaker.findMany({
       where: { trialId: this.trialId },
       include: {
-        attorney: true,
+        trialAttorneys: {
+          include: {
+            attorney: true
+          }
+        },
         witness: true,
         judge: true,
         juror: true,

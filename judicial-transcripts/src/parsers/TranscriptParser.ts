@@ -1445,7 +1445,7 @@ export class TranscriptParser {
           honorific: summaryInfo.judge.honorific,
           speakerId: speaker.id
         }
-      });
+      })
       
       logger.info(`Judge created/updated: ${summaryInfo.judge.name}`);
     }
@@ -1473,7 +1473,7 @@ export class TranscriptParser {
           phone: summaryInfo.courtReporter.phone,
           addressId
         }
-      });
+      })
       
       logger.info(`Court reporter created/updated: ${summaryInfo.courtReporter.name}`);
     }

@@ -47,7 +47,7 @@ model Judge {
   name             String
   title            String?
   honorific        String?
-  judgeFingerprint String? @unique
+  judgeFingerprint String?
   speakerId        Int?    @unique
   trialId          Int     @unique
   speaker          Speaker? @relation(fields: [speakerId], references: [id], onDelete: Cascade)
@@ -65,7 +65,7 @@ model CourtReporter {
   expirationDate           DateTime?
   addressId                Int?
   phone                    String?
-  courtReporterFingerprint String?  @unique
+  courtReporterFingerprint String?
   trialId                  Int       @unique
   address                  Address?  @relation(fields: [addressId], references: [id])
   trial                    Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)

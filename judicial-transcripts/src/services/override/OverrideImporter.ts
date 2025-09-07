@@ -628,25 +628,34 @@ export class OverrideImporter {
       let created;
       
       if (action === 'upsert' && judge.judgeFingerprint) {
-        // Upsert based on judgeFingerprint (unique constraint)
-        created = await tx.judge.upsert({
-          where: { 
-            judgeFingerprint: judge.judgeFingerprint 
-          },
-          update: {
-            name: judge.name,
-            title: judge.title,
-            honorific: judge.honorific,
-            trialId  // Update the trial association
-          },
-          create: {
-            name: judge.name,
-            title: judge.title,
-            honorific: judge.honorific,
-            judgeFingerprint: judge.judgeFingerprint,
-            trialId
-          }
+        // Check if a judge exists for this trial already
+        const existingForTrial = await tx.judge.findUnique({
+          where: { trialId }
         });
+        
+        if (existingForTrial) {
+          // Update the existing judge for this trial
+          created = await tx.judge.update({
+            where: { id: existingForTrial.id },
+            data: {
+              name: judge.name,
+              title: judge.title,
+              honorific: judge.honorific,
+              judgeFingerprint: judge.judgeFingerprint
+            }
+          });
+        } else {
+          // Create a new judge for this trial
+          created = await tx.judge.create({
+            data: {
+              name: judge.name,
+              title: judge.title,
+              honorific: judge.honorific,
+              judgeFingerprint: judge.judgeFingerprint,
+              trialId
+            }
+          });
+        }
       } else {
         // Create judge (without speaker - speakers are created during parsing)
         created = await tx.judge.create({
@@ -686,33 +695,42 @@ export class OverrideImporter {
       let created;
       
       if (action === 'upsert' && reporter.courtReporterFingerprint) {
-        // Upsert based on courtReporterFingerprint
-        created = await tx.courtReporter.upsert({
-          where: { 
-            courtReporterFingerprint: reporter.courtReporterFingerprint 
-          },
-          update: {
-            name: reporter.name,
-            credentials: reporter.credentials,
-            title: reporter.title,
-            stateNumber: reporter.stateNumber,
-            expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
-            addressId,
-            phone: reporter.phone,
-            trialId  // Update the trial association
-          },
-          create: {
-            name: reporter.name,
-            credentials: reporter.credentials,
-            title: reporter.title,
-            stateNumber: reporter.stateNumber,
-            expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
-            addressId,
-            phone: reporter.phone,
-            courtReporterFingerprint: reporter.courtReporterFingerprint,
-            trialId
-          }
+        // Check if a court reporter exists for this trial already
+        const existingForTrial = await tx.courtReporter.findUnique({
+          where: { trialId }
         });
+        
+        if (existingForTrial) {
+          // Update the existing court reporter for this trial
+          created = await tx.courtReporter.update({
+            where: { id: existingForTrial.id },
+            data: {
+              name: reporter.name,
+              credentials: reporter.credentials,
+              title: reporter.title,
+              stateNumber: reporter.stateNumber,
+              expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
+              addressId,
+              phone: reporter.phone,
+              courtReporterFingerprint: reporter.courtReporterFingerprint
+            }
+          });
+        } else {
+          // Create a new court reporter for this trial
+          created = await tx.courtReporter.create({
+            data: {
+              name: reporter.name,
+              credentials: reporter.credentials,
+              title: reporter.title,
+              stateNumber: reporter.stateNumber,
+              expirationDate: reporter.expirationDate ? new Date(reporter.expirationDate) : undefined,
+              addressId,
+              phone: reporter.phone,
+              courtReporterFingerprint: reporter.courtReporterFingerprint,
+              trialId
+            }
+          });
+        }
       } else {
         // Create new court reporter
         created = await tx.courtReporter.create({

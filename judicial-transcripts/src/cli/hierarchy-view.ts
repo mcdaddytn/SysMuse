@@ -2,6 +2,7 @@
 
 import { PrismaClient, MarkerSection, MarkerSectionType, Marker, MarkerType, MarkerSource } from '@prisma/client';
 import { Logger } from '../utils/logger';
+import { TranscriptRenderer } from '../services/TranscriptRenderer';
 import { program } from 'commander';
 import * as fs from 'fs';
 import chalk from 'chalk';
@@ -33,7 +34,11 @@ interface ViewOptions {
 }
 
 class HierarchyViewer {
-  constructor(private prisma: PrismaClient) {}
+  private renderer: TranscriptRenderer;
+  
+  constructor(private prisma: PrismaClient) {
+    this.renderer = new TranscriptRenderer(prisma);
+  }
 
   /**
    * Main entry point for viewing hierarchies
@@ -145,10 +150,27 @@ class HierarchyViewer {
     };
 
     for (const session of sessions) {
+      // Get the actual Session record to get sessionHandle
+      let enhancedSession = { ...session };
+      if (session.metadata && typeof session.metadata === 'object' && 'sessionId' in session.metadata) {
+        const sessionId = (session.metadata as any).sessionId;
+        const sessionRecord = await this.prisma.session.findUnique({
+          where: { id: sessionId }
+        });
+        
+        if (sessionRecord) {
+          // Update the name to use sessionHandle
+          enhancedSession = {
+            ...session,
+            name: sessionRecord.sessionHandle
+          };
+        }
+      }
+      
       trialNode.children.push({
-        section: session,
+        section: enhancedSession,
         children: [],
-        stats: await this.getSectionStats(session)
+        stats: await this.getSectionStats(enhancedSession)
       });
     }
 
@@ -297,12 +319,21 @@ class HierarchyViewer {
       // Show first 20 individual objections
       for (const objection of significantObjections.slice(0, 20)) {
         const type = objection.accumulator.name === 'objection_sustained' ? 'SUSTAINED' : 'OVERRULED';
+        
+        // Get transcript excerpt for individual objection
+        const transcriptExcerpt = await this.getTranscriptExcerpt(
+          objection.trialId,
+          objection.startEventId,
+          objection.endEventId,
+          5 // Fewer lines for individual objections
+        );
+        
         const pseudoSection: MarkerSection = {
           id: -objection.id,
           trialId: objection.trialId,
           markerSectionType: MarkerSectionType.CUSTOM,
-          name: `Objection ${type} at events ${objection.startEventId}-${objection.endEventId}`,
-          description: null,
+          name: `Objection ${type}`,
+          description: `Events ${objection.startEventId}-${objection.endEventId}`,
           startEventId: objection.startEventId,
           endEventId: objection.endEventId,
           confidence: objection.floatResult,
@@ -313,7 +344,7 @@ class HierarchyViewer {
           startTime: null,
           endTime: null,
           metadata: objection.metadata,
-          text: type,
+          text: transcriptExcerpt,
           textTemplate: null,
           elasticSearchId: null,
           llmProvider: null,
@@ -354,12 +385,20 @@ class HierarchyViewer {
       o.accumulator.name === 'objection_overruled'
     ).length;
 
+    // Get transcript excerpt
+    const transcriptExcerpt = await this.getTranscriptExcerpt(
+      firstObj.trialId,
+      firstObj.startEventId,
+      lastObj.endEventId,
+      15 // Get up to 15 lines
+    );
+
     const pseudoSection: MarkerSection = {
       id: -sequenceNum,
       trialId: firstObj.trialId,
       markerSectionType: MarkerSectionType.CUSTOM,
       name: `Objection Sequence ${sequenceNum}`,
-      description: `${objections.length} objections`,
+      description: `${objections.length} objections (SUSTAINED: ${sustainedCount}, OVERRULED: ${overruledCount})`,
       startEventId: firstObj.startEventId,
       endEventId: lastObj.endEventId,
       confidence: 0.9,
@@ -374,7 +413,7 @@ class HierarchyViewer {
         sustained: sustainedCount,
         overruled: overruledCount
       },
-      text: `SUSTAINED: ${sustainedCount}, OVERRULED: ${overruledCount}`,
+      text: transcriptExcerpt,
       textTemplate: null,
       elasticSearchId: null,
       llmProvider: null,
@@ -548,6 +587,14 @@ class HierarchyViewer {
         ? 'Judge-Attorney'
         : 'Opposing Counsel';
 
+      // Get transcript excerpt for the interaction
+      const transcriptExcerpt = await this.getTranscriptExcerpt(
+        result.trialId,
+        result.startEventId,
+        result.endEventId,
+        8 // Show 8 lines for interactions
+      );
+
       const pseudoSection: MarkerSection = {
         id: -result.id,
         trialId: result.trialId,
@@ -564,7 +611,7 @@ class HierarchyViewer {
         startTime: null,
         endTime: null,
         metadata: result.metadata,
-        text: null,
+        text: transcriptExcerpt,
         textTemplate: null,
         elasticSearchId: null,
         llmProvider: null,
@@ -585,6 +632,55 @@ class HierarchyViewer {
     }
 
     return nodes;
+  }
+
+  /**
+   * Get transcript text for an event range
+   */
+  private async getTranscriptExcerpt(
+    trialId: number, 
+    startEventId: number, 
+    endEventId: number,
+    maxLines: number = 10
+  ): Promise<string> {
+    const events = await this.prisma.trialEvent.findMany({
+      where: {
+        trialId,
+        id: {
+          gte: startEventId,
+          lte: endEventId
+        },
+        eventType: 'STATEMENT'
+      },
+      include: {
+        statement: {
+          include: {
+            speaker: true
+          }
+        }
+      },
+      orderBy: { ordinal: 'asc' },
+      take: maxLines
+    });
+    
+    const lines: string[] = [];
+    for (const event of events) {
+      if (event.statement?.speaker && event.statement?.text) {
+        const speaker = event.statement.speaker.speakerHandle || 'UNKNOWN';
+        const text = event.statement.text;
+        lines.push(`${speaker}: ${text}`);
+      }
+    }
+    
+    if (lines.length === 0) {
+      return '[No transcript available]';
+    }
+    
+    const excerpt = lines.join('\n');
+    const eventCount = endEventId - startEventId + 1;
+    const summary = `\n...\n[${eventCount} events total]`;
+    
+    return excerpt + (lines.length < eventCount ? summary : '');
   }
 
   /**
@@ -687,11 +783,24 @@ class HierarchyViewer {
     
     console.log(info);
     
-    // Add summary preview if available
+    // Add summary preview or full text based on section type
     if (section.text) {
-      const summaryLines = section.text.split('\n');
-      const preview = summaryLines[0].substring(0, 80);
-      console.log(chalk.gray(`${indent}  "${preview}${preview.length >= 80 ? '...' : ''}"`));
+      // For objections and interactions (CUSTOM sections), show more of the transcript
+      if (section.markerSectionType === 'CUSTOM') {
+        console.log(chalk.gray(`${indent}  --- Transcript ---`));
+        const lines = section.text.split('\n');
+        for (const line of lines.slice(0, 20)) { // Show up to 20 lines
+          console.log(chalk.gray(`${indent}  ${line}`));
+        }
+        if (lines.length > 20) {
+          console.log(chalk.gray(`${indent}  [... ${lines.length - 20} more lines]`));
+        }
+      } else {
+        // For regular sections, show just the preview
+        const summaryLines = section.text.split('\n');
+        const preview = summaryLines[0].substring(0, 80);
+        console.log(chalk.gray(`${indent}  "${preview}${preview.length >= 80 ? '...' : ''}"`));
+      }
     }
     
     // Print children

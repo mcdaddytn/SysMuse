@@ -1707,8 +1707,8 @@ export class Phase2Processor {
       }
     }
     
-    // Check for JUROR prefix
-    if (upperPrefix.match(/^JUROR\s+/)) {
+    // Check for JUROR prefix or THE FOREPERSON
+    if (upperPrefix.match(/^JUROR\s+/) || upperPrefix === 'THE FOREPERSON') {
       const juror = await this.witnessJurorService.createOrFindJuror(
         this.context.trialId,
         upperPrefix,
@@ -1770,6 +1770,7 @@ export class Phase2Processor {
     if (upper === 'THE COURT') return SpeakerType.JUDGE;
     if (upper.includes('JUDGE')) return SpeakerType.JUDGE;
     if (upper.includes('JUROR')) return SpeakerType.JUROR;
+    if (upper === 'THE FOREPERSON') return SpeakerType.JUROR;
     if (upper === 'THE WITNESS' || upper === 'THE DEPONENT') return SpeakerType.WITNESS;
     if (upper === 'THE CLERK' || upper === 'THE BAILIFF') return SpeakerType.ANONYMOUS;
     if (upper.match(/^(MR\.|MS\.|MRS\.|DR\.)/)) return SpeakerType.ATTORNEY;
@@ -1873,6 +1874,28 @@ export class Phase2Processor {
       });
       const ordinal = eventCount + 1;
       
+      // Get the start and end lines to extract all line number types
+      let startSessLineNum: number | undefined;
+      let endSessLineNum: number | undefined;
+      let startTrialLineNum: number | undefined;
+      let endTrialLineNum: number | undefined;
+      
+      if (eventInfo.startLineNumber && lines.length > 0) {
+        // Get the first line
+        const startLine = lines[0];
+        if (startLine) {
+          startSessLineNum = startLine.sessionLineNumber || undefined;
+          startTrialLineNum = startLine.trialLineNumber || undefined;
+        }
+        
+        // Get the last line
+        const endLine = lines[lines.length - 1];
+        if (endLine) {
+          endSessLineNum = endLine.sessionLineNumber || undefined;
+          endTrialLineNum = endLine.trialLineNumber || undefined;
+        }
+      }
+      
       // Create trial event
       logger.debug(`Creating TrialEvent with trialId=${trialId}, sessionId=${sessionId}, startLine=${eventInfo.startLineNumber}, endLine=${eventInfo.endLineNumber}, type=${eventInfo.type}, ordinal=${ordinal}`);
       const event = await this.prisma.trialEvent.create({
@@ -1885,6 +1908,10 @@ export class Phase2Processor {
           duration,
           startLineNumber: eventInfo.startLineNumber,
           endLineNumber: eventInfo.endLineNumber,
+          startSessLineNum,
+          endSessLineNum,
+          startTrialLineNum,
+          endTrialLineNum,
           lineCount: lines.length,
           wordCount,
           characterCount,

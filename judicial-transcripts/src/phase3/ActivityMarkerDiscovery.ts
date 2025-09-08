@@ -1,12 +1,15 @@
-import { PrismaClient, AccumulatorResult, MarkerType } from '@prisma/client';
+import { PrismaClient, AccumulatorResult, MarkerSectionType, ConfidenceLevel } from '@prisma/client';
 import { Logger } from '../utils/logger';
 
 interface ActivityCluster {
-  accumulatorResult: AccumulatorResult;
-  startEvent: any;
-  endEvent: any;
+  accumulatorResult: AccumulatorResult & {
+    accumulator: any;
+    startEvent: any;
+    endEvent: any;
+  };
   activityType: string;
-  confidence: string;
+  sectionType: MarkerSectionType;
+  confidence: number;
 }
 
 export class ActivityMarkerDiscovery {
@@ -16,6 +19,8 @@ export class ActivityMarkerDiscovery {
 
   /**
    * Discover activity markers based on accumulator results
+   * These create SEARCH_LOCATOR markers that indicate points of interest
+   * They can later be promoted to SECTION_START/END markers if boundaries are found
    */
   async discoverActivityMarkers(trialId: number): Promise<void> {
     this.logger.info(`Discovering activity markers for trial ${trialId}`);
@@ -41,35 +46,34 @@ export class ActivityMarkerDiscovery {
       return;
     }
 
-    // Group results by accumulator type
+    // Group results by accumulator type and create appropriate markers
     const activityClusters = this.groupActivityClusters(accumulatorResults);
 
-    // Create markers for each activity cluster
+    // Create search locator markers for each activity cluster
     for (const cluster of activityClusters) {
-      await this.createActivityMarkers(cluster, trialId);
+      await this.createActivityLocatorMarkers(cluster, trialId);
     }
 
-    // Merge overlapping activity markers
-    await this.mergeOverlappingActivities(trialId);
+    // Create marker sections for continuous activity regions
+    await this.createActivitySections(activityClusters, trialId);
 
     this.logger.info(`Completed activity marker discovery for trial ${trialId}`);
   }
 
   /**
-   * Group accumulator results into activity clusters
+   * Group accumulator results into activity clusters with appropriate section types
    */
   private groupActivityClusters(results: any[]): ActivityCluster[] {
     const clusters: ActivityCluster[] = [];
 
     for (const result of results) {
-      const activityType = this.determineActivityType(result.accumulator.name);
+      const { activityType, sectionType } = this.determineActivityAndSectionType(result.accumulator.name);
       
       clusters.push({
         accumulatorResult: result,
-        startEvent: result.startEvent,
-        endEvent: result.endEvent,
         activityType,
-        confidence: result.confidenceLevel || 'MEDIUM'
+        sectionType,
+        confidence: this.confidenceLevelToNumber(result.confidenceLevel)
       });
     }
 
@@ -77,195 +81,189 @@ export class ActivityMarkerDiscovery {
   }
 
   /**
-   * Determine activity type from accumulator name
+   * Determine activity type and corresponding MarkerSectionType from accumulator name
    */
-  private determineActivityType(accumulatorName: string): string {
-    const typeMap: Record<string, string> = {
-      'objection_sustained': 'OBJECTION_SUSTAINED',
-      'objection_overruled': 'OBJECTION_OVERRULED',
-      'sidebar_request': 'SIDEBAR',
-      'judge_attorney_interaction': 'JUDICIAL_INTERACTION',
-      'opposing_counsel_interaction': 'COUNSEL_INTERACTION',
-      'witness_examination_transition': 'EXAMINATION_TRANSITION'
+  private determineActivityAndSectionType(accumulatorName: string): {
+    activityType: string;
+    sectionType: MarkerSectionType;
+  } {
+    const mappings: Record<string, { activityType: string; sectionType: MarkerSectionType }> = {
+      'objection_sustained': {
+        activityType: 'OBJECTION_SUSTAINED',
+        sectionType: 'OBJECTION_SEQUENCE'
+      },
+      'objection_overruled': {
+        activityType: 'OBJECTION_OVERRULED',
+        sectionType: 'OBJECTION_SEQUENCE'
+      },
+      'sidebar_request': {
+        activityType: 'SIDEBAR_REQUEST',
+        sectionType: 'SIDEBAR'
+      },
+      'judge_attorney_interaction': {
+        activityType: 'JUDICIAL_INTERACTION',
+        sectionType: 'BENCH_CONFERENCE'
+      },
+      'opposing_counsel_interaction': {
+        activityType: 'COUNSEL_INTERACTION',
+        sectionType: 'CUSTOM'
+      },
+      'witness_examination_transition': {
+        activityType: 'EXAMINATION_TRANSITION',
+        sectionType: 'WITNESS_EXAMINATION'
+      }
     };
 
-    return typeMap[accumulatorName] || 'GENERAL_ACTIVITY';
+    return mappings[accumulatorName] || {
+      activityType: 'GENERAL_ACTIVITY',
+      sectionType: 'CUSTOM'
+    };
   }
 
   /**
-   * Create markers for an activity cluster
+   * Convert confidence level enum to numeric value
    */
-  private async createActivityMarkers(
+  private confidenceLevelToNumber(level: ConfidenceLevel | null): number {
+    switch (level) {
+      case 'HIGH': return 0.9;
+      case 'MEDIUM': return 0.7;
+      case 'LOW': return 0.5;
+      default: return 0.5;
+    }
+  }
+
+  /**
+   * Create SEARCH_LOCATOR markers for activity points of interest
+   */
+  private async createActivityLocatorMarkers(
     cluster: ActivityCluster,
     trialId: number
   ): Promise<void> {
-    const startEventId = cluster.startEvent.id;
-    const endEventId = cluster.endEvent.id;
-    const activityType = cluster.activityType;
+    const { accumulatorResult, activityType, sectionType, confidence } = cluster;
 
-    // Create start marker
-    const startMarker = await this.prisma.marker.create({
-      data: {
-        trialId,
-        markerType: 'ACTIVITY_START',
-        eventId: startEventId,
-        name: `Activity_${activityType}_${startEventId}_Start`,
-        description: `Start of ${activityType} activity`,
-        metadata: {
-          activityType,
-          confidence: cluster.confidence,
-          accumulatorId: cluster.accumulatorResult.accumulatorId,
-          accumulatorName: cluster.activityType
+    // Create a search locator at the start of the activity
+    if (accumulatorResult.startEvent) {
+      await this.prisma.marker.create({
+        data: {
+          trialId,
+          markerType: 'SEARCH_LOCATOR',
+          eventId: accumulatorResult.startEvent.id,
+          name: `${activityType}_Locator_${accumulatorResult.startEvent.id}`,
+          description: `${activityType} detected by ${accumulatorResult.accumulator.name}`,
+          source: 'AUTO_PATTERN',
+          confidence,
+          metadata: {
+            activityType,
+            sectionType,
+            accumulatorId: accumulatorResult.accumulatorId,
+            accumulatorName: accumulatorResult.accumulator.name,
+            score: accumulatorResult.floatResult,
+            booleanResult: accumulatorResult.booleanResult,
+            confidenceLevel: accumulatorResult.confidenceLevel
+          }
+        }
+      });
+    }
+
+    // If there's a distinct end event, create another locator
+    if (accumulatorResult.endEvent && 
+        accumulatorResult.endEvent.id !== accumulatorResult.startEvent?.id) {
+      await this.prisma.marker.create({
+        data: {
+          trialId,
+          markerType: 'SEARCH_LOCATOR',
+          eventId: accumulatorResult.endEvent.id,
+          name: `${activityType}_End_Locator_${accumulatorResult.endEvent.id}`,
+          description: `End of ${activityType} detected by ${accumulatorResult.accumulator.name}`,
+          source: 'AUTO_PATTERN',
+          confidence,
+          metadata: {
+            activityType,
+            sectionType,
+            accumulatorId: accumulatorResult.accumulatorId,
+            accumulatorName: accumulatorResult.accumulator.name,
+            isEndMarker: true
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Create marker sections for significant continuous activity regions
+   * This creates sections for clusters that span multiple events
+   */
+  private async createActivitySections(
+    clusters: ActivityCluster[],
+    trialId: number
+  ): Promise<void> {
+    // Group clusters by section type
+    const sectionGroups = new Map<MarkerSectionType, ActivityCluster[]>();
+    
+    for (const cluster of clusters) {
+      if (!sectionGroups.has(cluster.sectionType)) {
+        sectionGroups.set(cluster.sectionType, []);
+      }
+      sectionGroups.get(cluster.sectionType)!.push(cluster);
+    }
+
+    // Create sections for each group where appropriate
+    for (const [sectionType, groupClusters] of sectionGroups) {
+      // Skip custom sections or those without clear boundaries
+      if (sectionType === 'CUSTOM') continue;
+
+      // Sort by start event time
+      const sortedClusters = groupClusters.sort((a, b) => {
+        const aTime = a.accumulatorResult.startEvent?.startTime || '';
+        const bTime = b.accumulatorResult.startEvent?.startTime || '';
+        return aTime.localeCompare(bTime);
+      });
+
+      // Create sections for significant continuous regions
+      for (const cluster of sortedClusters) {
+        if (cluster.accumulatorResult.startEvent && cluster.accumulatorResult.endEvent) {
+          await this.createSectionFromCluster(cluster, trialId);
         }
       }
-    });
+    }
+  }
 
-    // Create end marker
-    const endMarker = await this.prisma.marker.create({
-      data: {
-        trialId,
-        markerType: 'ACTIVITY_END',
-        eventId: endEventId,
-        name: `Activity_${activityType}_${endEventId}_End`,
-        description: `End of ${activityType} activity`,
-        metadata: {
-          activityType,
-          confidence: cluster.confidence,
-          accumulatorId: cluster.accumulatorResult.accumulatorId,
-          accumulatorName: cluster.activityType
-        }
-      }
-    });
+  /**
+   * Create a marker section from an activity cluster
+   */
+  private async createSectionFromCluster(
+    cluster: ActivityCluster,
+    trialId: number
+  ): Promise<void> {
+    const { accumulatorResult, activityType, sectionType, confidence } = cluster;
 
-    // Create marker section
+    // Only create sections for high-confidence results with clear boundaries
+    if (confidence < 0.7) return;
+    if (!accumulatorResult.startEvent || !accumulatorResult.endEvent) return;
+
+    // Create the section without explicit start/end markers
+    // The SEARCH_LOCATOR markers already indicate the points of interest
     await this.prisma.markerSection.create({
       data: {
         trialId,
-        markerSectionType: 'ACTIVITY',
-        startMarkerId: startMarker.id,
-        endMarkerId: endMarker.id,
-        startEventId,
-        endEventId,
-        startTime: cluster.startEvent.startTime,
-        endTime: cluster.endEvent.endTime,
-        name: `Activity_${activityType}_${startEventId}`,
-        description: `${activityType} activity`,
+        markerSectionType: sectionType,
+        startEventId: accumulatorResult.startEvent.id,
+        endEventId: accumulatorResult.endEvent.id,
+        startTime: accumulatorResult.startEvent.startTime,
+        endTime: accumulatorResult.endEvent.endTime,
+        name: `${activityType}_Section_${accumulatorResult.id}`,
+        description: `${activityType} activity region`,
+        source: 'AUTO_PATTERN',
+        confidence,
         metadata: {
           activityType,
-          confidence: cluster.confidence,
-          score: cluster.accumulatorResult.floatResult,
-          accumulatorMetadata: cluster.accumulatorResult.metadata
+          accumulatorId: accumulatorResult.accumulatorId,
+          accumulatorName: accumulatorResult.accumulator.name,
+          score: accumulatorResult.floatResult,
+          booleanResult: accumulatorResult.booleanResult,
+          confidenceLevel: accumulatorResult.confidenceLevel
         }
       }
     });
-  }
-
-  /**
-   * Merge overlapping activity markers of the same type
-   */
-  private async mergeOverlappingActivities(trialId: number): Promise<void> {
-    const activitySections = await this.prisma.markerSection.findMany({
-      where: {
-        trialId,
-        markerSectionType: 'ACTIVITY'
-      },
-      include: {
-        startEvent: true,
-        endEvent: true
-      },
-      orderBy: {
-        startTime: 'asc'
-      }
-    });
-
-    // Group by activity type
-    const typeGroups = new Map<string, typeof activitySections>();
-    for (const section of activitySections) {
-      const activityType = (section.metadata as any)?.activityType || 'GENERAL';
-      if (!typeGroups.has(activityType)) {
-        typeGroups.set(activityType, []);
-      }
-      typeGroups.get(activityType)!.push(section);
-    }
-
-    // Check for overlaps within each type
-    for (const [activityType, sections] of typeGroups) {
-      for (let i = 0; i < sections.length - 1; i++) {
-        const current = sections[i];
-        const next = sections[i + 1];
-
-        // Check if sections overlap or are adjacent
-        if (this.sectionsOverlap(current, next)) {
-          await this.mergeSections(current, next, activityType);
-        }
-      }
-    }
-  }
-
-  /**
-   * Check if two sections overlap
-   */
-  private sectionsOverlap(section1: any, section2: any): boolean {
-    if (!section1.endTime || !section2.startTime) return false;
-    
-    // Simple string comparison for timestamps
-    return section1.endTime >= section2.startTime;
-  }
-
-  /**
-   * Merge two overlapping sections
-   */
-  private async mergeSections(
-    section1: any,
-    section2: any,
-    activityType: string
-  ): Promise<void> {
-    this.logger.info(`Merging overlapping ${activityType} sections`);
-
-    // Update the first section to extend to the end of the second
-    await this.prisma.markerSection.update({
-      where: { id: section1.id },
-      data: {
-        endMarkerId: section2.endMarkerId,
-        endEventId: section2.endEventId,
-        endTime: section2.endTime,
-        metadata: {
-          ...(section1.metadata as any),
-          merged: true,
-          originalEndEventId: section1.endEventId,
-          mergedWithSectionId: section2.id
-        }
-      }
-    });
-
-    // Delete the second section
-    await this.prisma.markerSection.delete({
-      where: { id: section2.id }
-    });
-
-    // Clean up orphaned markers
-    await this.cleanupOrphanedMarkers(section2.startMarkerId);
-  }
-
-  /**
-   * Clean up markers that are no longer referenced by sections
-   */
-  private async cleanupOrphanedMarkers(markerId: number | null): Promise<void> {
-    if (!markerId) return;
-
-    const sectionsUsingMarker = await this.prisma.markerSection.count({
-      where: {
-        OR: [
-          { startMarkerId: markerId },
-          { endMarkerId: markerId }
-        ]
-      }
-    });
-
-    if (sectionsUsingMarker === 0) {
-      await this.prisma.marker.delete({
-        where: { id: markerId }
-      });
-    }
   }
 }

@@ -763,26 +763,37 @@ program
                 });
                 const ordinal = sessionCount + 1;
                 
+                // Generate sessionHandle: YYYYMMDD_sessionType
+                const dateStr = sessionDate.toISOString().split('T')[0].replace(/-/g, '');
+                const sessionHandle = `${dateStr}_${sessionType}`;
+                
                 session = await prisma.session.create({
                   data: {
                     trialId: trial.id,
                     sessionDate,
                     sessionType,
+                    sessionHandle,
                     shortName: sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase(),
                     fileName: file,
                     metadata: extractedMetadata,
                     ordinal
                   }
                 });
-                logger.info(`Created session with metadata: ${JSON.stringify(extractedMetadata)}, ordinal: ${ordinal}`);
+                logger.info(`Created session with metadata: ${JSON.stringify(extractedMetadata)}, ordinal: ${ordinal}, handle: ${sessionHandle}`);
               } else {
                 // Update sessionDate, sessionType, and metadata
                 const shortName = sessionType.charAt(0).toUpperCase() + sessionType.slice(1).toLowerCase();
+                
+                // Generate sessionHandle: YYYYMMDD_sessionType
+                const dateStr = sessionDate.toISOString().split('T')[0].replace(/-/g, '');
+                const sessionHandle = `${dateStr}_${sessionType}`;
+                
                 session = await prisma.session.update({
                   where: { id: session.id },
                   data: { 
                     sessionDate,  // Update date in case it was extracted better this time
                     sessionType,  // Update type in case it was determined better
+                    sessionHandle,
                     shortName: shortName,
                     metadata: extractedMetadata
                     // Note: we don't update ordinal on existing sessions

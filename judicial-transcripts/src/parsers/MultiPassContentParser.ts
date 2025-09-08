@@ -25,6 +25,7 @@ export class ContentParser {
   private readonly COURT_OFFICIALS: { [key: string]: SpeakerType } = {
     'THE COURT': 'JUDGE',
     'THE WITNESS': 'WITNESS',
+    'THE FOREPERSON': 'JUROR',
     'THE CLERK': 'ANONYMOUS',
     'THE BAILIFF': 'ANONYMOUS',
     'THE COURT REPORTER': 'ANONYMOUS',
@@ -56,6 +57,9 @@ export class ContentParser {
     this.trialStyleConfig = trialStyleConfig;
   }
 
+  private sessionLineCounter: number = 0;  // Track line number within session
+  private trialLineCounter: number = 0;    // Track line number within trial
+  
   async parseContent(
     metadata: ParsedMetadata,
     structure: StructureAnalysis,
@@ -64,6 +68,24 @@ export class ContentParser {
     batchSize: number = 1000
   ): Promise<void> {
     this.logger.info('Starting content parsing (Pass 3) - Phase 1: Basic extraction only');
+    
+    // Reset session line counter for this session
+    this.sessionLineCounter = 0;
+    
+    // Get the current max trial line number to continue from
+    const maxTrialLine = await this.prisma.line.aggregate({
+      where: {
+        page: {
+          session: {
+            trialId: trialId
+          }
+        }
+      },
+      _max: {
+        trialLineNumber: true
+      }
+    });
+    this.trialLineCounter = maxTrialLine._max.trialLineNumber || 0;
     
     // Phase 1: Skip speaker service initialization
     // Phase 2 will handle speaker resolution and examination context
@@ -460,6 +482,9 @@ export class ContentParser {
     
     const pageMap = new Map(pages.map(p => [p.pageNumber, p.id]));
     
+    // Track lines per page to calculate proper line number within page
+    const pageLinesCount = new Map<number, number>();
+    
     for (const [lineNum, line] of batch) {
       const location = metadata.fileLineMapping.get(line.fileLineNumber);
       const section = structure.sectionMapping.get(lineNum) || DocumentSection.UNKNOWN;
@@ -480,6 +505,15 @@ export class ContentParser {
         continue;
       }
       
+      // Increment counters for non-blank lines
+      this.sessionLineCounter++;
+      this.trialLineCounter++;
+      
+      // Calculate line number within page
+      const currentPageLines = pageLinesCount.get(location.pageNumber) || 0;
+      const pageLineNumber = currentPageLines + 1;
+      pageLinesCount.set(location.pageNumber, pageLineNumber);
+      
       // Phase 1: Skip examination context update
       // Phase 2 will handle examination context
       
@@ -489,8 +523,9 @@ export class ContentParser {
       
       lineData.push({
         pageId,
-        lineNumber: lineNum + 1,
-        trialLineNumber: lineNum + 1,
+        lineNumber: pageLineNumber,  // Line number within page
+        trialLineNumber: this.trialLineCounter,  // Line number within trial
+        sessionLineNumber: this.sessionLineCounter,  // Line number within session
         linePrefix: line.prefix,
         text: line.cleanText,
         timestamp: line.timestamp,

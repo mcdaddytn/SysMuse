@@ -174,10 +174,12 @@ export class WitnessMarkerDiscovery {
     const startMarker = await this.prisma.marker.create({
       data: {
         trialId,
-        markerType: 'WITNESS_EXAMINATION_START',
+        markerType: 'SECTION_START',
+        sectionType: 'WITNESS_EXAMINATION',
         eventId: boundary.startEvent.id,
         name: `WitnessExamination_${examinationType}_${witnessHandle}_Start`,
         description: `Start of ${examinationType} for witness ${witnessName}`,
+        source: 'AUTO_EVENT',
         metadata: {
           witnessId: witness?.id,
           examinationType,
@@ -192,10 +194,12 @@ export class WitnessMarkerDiscovery {
       endMarker = await this.prisma.marker.create({
         data: {
           trialId,
-          markerType: 'WITNESS_EXAMINATION_END',
+          markerType: 'SECTION_END',
+          sectionType: 'WITNESS_EXAMINATION',
           eventId: boundary.endEvent.id,
           name: `WitnessExamination_${examinationType}_${witnessHandle}_End`,
           description: `End of ${examinationType} for witness ${witnessName}`,
+          source: 'AUTO_EVENT',
           metadata: {
             witnessId: witness?.id,
             examinationType
@@ -268,10 +272,12 @@ export class WitnessMarkerDiscovery {
       const startMarker = await this.prisma.marker.create({
         data: {
           trialId,
-          markerType: 'WITNESS_TESTIMONY_START',
+          markerType: 'SECTION_START',
+          sectionType: 'WITNESS_TESTIMONY',
           eventId: firstBoundary.startEvent.id,
           name: `WitnessTestimony_${witnessHandle}_Start`,
           description: `Start of testimony for witness ${witnessName}`,
+          source: 'AUTO_EVENT',
           metadata: {
             witnessId,
             witnessName,
@@ -286,10 +292,12 @@ export class WitnessMarkerDiscovery {
         endMarker = await this.prisma.marker.create({
           data: {
             trialId,
-            markerType: 'WITNESS_TESTIMONY_END',
+            markerType: 'SECTION_END',
+            sectionType: 'WITNESS_TESTIMONY',
             eventId: lastBoundary.endEvent.id,
             name: `WitnessTestimony_${witnessHandle}_End`,
             description: `End of testimony for witness ${witnessName}`,
+            source: 'AUTO_EVENT',
             metadata: {
               witnessId,
               witnessName,
@@ -341,10 +349,12 @@ export class WitnessMarkerDiscovery {
     const startMarker = await this.prisma.marker.create({
       data: {
         trialId,
-        markerType: 'WITNESS_TESTIMONY_START',
+        markerType: 'SECTION_START',
+        sectionType: 'COMPLETE_WITNESS_TESTIMONY',
         eventId: firstBoundary.startEvent.id,
         name: 'CompleteWitnessTestimony_Start',
         description: 'Start of all witness testimony',
+        source: 'AUTO_EVENT',
         metadata: {
           totalWitnesses: new Set(boundaries.map(b => b.witnessCalledEvent.witnessId)).size,
           totalExaminations: boundaries.length
@@ -358,10 +368,12 @@ export class WitnessMarkerDiscovery {
       endMarker = await this.prisma.marker.create({
         data: {
           trialId,
-          markerType: 'WITNESS_TESTIMONY_END',
+          markerType: 'SECTION_END',
+          sectionType: 'COMPLETE_WITNESS_TESTIMONY',
           eventId: lastBoundary.endEvent.id,
           name: 'CompleteWitnessTestimony_End',
           description: 'End of all witness testimony',
+          source: 'AUTO_EVENT',
           metadata: {
             totalWitnesses: new Set(boundaries.map(b => b.witnessCalledEvent.witnessId)).size,
             totalExaminations: boundaries.length

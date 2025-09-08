@@ -1517,6 +1517,10 @@ export class TranscriptParser {
     // Calculate ordinal - it's the count of sessions + 1
     const ordinal = previousSessions.length + 1;
     
+    // Generate sessionHandle: YYYYMMDD_sessionType
+    const dateStr = sessionInfo.sessionDate.toISOString().split('T')[0].replace(/-/g, '');
+    const sessionHandle = `${dateStr}_${sessionInfo.sessionType}`;
+    
     return await this.prisma.session.upsert({
       where: {
         trialId_sessionDate_sessionType: {
@@ -1530,12 +1534,14 @@ export class TranscriptParser {
         documentNumber: sessionInfo.documentNumber,
         totalPages: sessionInfo.totalPages,
         transcriptStartPage,
-        ordinal
+        ordinal,
+        sessionHandle
       },
       create: {
         trialId: this.trialId,
         sessionDate: sessionInfo.sessionDate,
         sessionType: sessionInfo.sessionType,
+        sessionHandle,
         fileName,
         documentNumber: sessionInfo.documentNumber,
         totalPages: sessionInfo.totalPages,
@@ -1753,6 +1759,8 @@ export class TranscriptParser {
       /^\s*(THE COURT):\s*(.*)$/,
       // COURT SECURITY OFFICER: pattern
       /^\s*(COURT SECURITY OFFICER):\s*(.*)$/,
+      // THE FOREPERSON: pattern
+      /^\s*(THE FOREPERSON):\s*(.*)$/,
       // MR./MS./MRS./DR. NAME: pattern  
       /^\s*((?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
       // JUROR NAME: pattern

@@ -120,9 +120,11 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'ACTIVITY_START', // Changed from OPENING_STATEMENT
-          eventId: firstEvent.id, // Changed from startEventId
-          name: `${session.sessionType} Session Start - ${session.sessionDate}`
+          markerType: 'SECTION_START',
+          sectionType: 'SESSION',
+          eventId: firstEvent.id,
+          name: `${session.sessionType} Session Start - ${session.sessionDate}`,
+          source: 'AUTO_EVENT'
         }
       });
       
@@ -130,9 +132,11 @@ export class Phase3Processor {
       await this.prisma.marker.create({
         data: {
           trialId: trial.id,
-          markerType: 'ACTIVITY_END', // Changed from CLOSING_ARGUMENT
-          eventId: lastEvent.id, // Changed from endEventId
-          name: `${session.sessionType} Session End - ${session.sessionDate}`
+          markerType: 'SECTION_END',
+          sectionType: 'SESSION',
+          eventId: lastEvent.id,
+          name: `${session.sessionType} Session End - ${session.sessionDate}`,
+          source: 'AUTO_EVENT'
         }
       });
     }
@@ -221,9 +225,11 @@ export class Phase3Processor {
     const startMarker = await this.prisma.marker.create({
       data: {
         trialId,
-        markerType: 'ACTIVITY_START',
+        markerType: 'SECTION_START',
+        sectionType: 'ACTIVITY',
         eventId: startEvent.id,
-        name: `${name} - Start`
+        name: `${name} - Start`,
+        source: 'AUTO_PATTERN'
       }
     });
     
@@ -231,9 +237,11 @@ export class Phase3Processor {
     const endMarker = await this.prisma.marker.create({
       data: {
         trialId,
-        markerType: 'ACTIVITY_END',
+        markerType: 'SECTION_END',
+        sectionType: 'ACTIVITY',
         eventId: endEvent.id,
-        name: `${name} - End`
+        name: `${name} - End`,
+        source: 'AUTO_PATTERN'
       }
     });
     
@@ -271,15 +279,14 @@ export class Phase3Processor {
   }
   
   private getMarkerTypeFromDirective(name: string): any {
-    // Map directives to available MarkerType enum values
-    if (name.match(/start|begin/i)) return 'ACTIVITY_START';
-    if (name.match(/end|finish|conclude/i)) return 'ACTIVITY_END';
-    if (name.match(/witness.*start/i)) return 'WITNESS_TESTIMONY_START';
-    if (name.match(/witness.*end/i)) return 'WITNESS_TESTIMONY_END';
-    if (name.match(/examination.*start/i)) return 'WITNESS_EXAMINATION_START';
-    if (name.match(/examination.*end/i)) return 'WITNESS_EXAMINATION_END';
-    // Default to ACTIVITY_START for unmatched types
-    return 'ACTIVITY_START';
+    // Map directives to new MarkerType enum values  
+    // All directive-based markers are now SEARCH_LOCATOR or CUSTOM
+    // They can be promoted to SECTION_START/END later if needed
+    if (name.match(/start|begin|end|finish|conclude/i)) {
+      return 'SEARCH_LOCATOR';
+    }
+    // Default to CUSTOM for unmatched types
+    return 'CUSTOM';
   }
   
   private async createWitnessTestimonyMarkers(trial: any): Promise<void> {
@@ -311,9 +318,11 @@ export class Phase3Processor {
         const startMarker = await this.prisma.marker.create({
           data: {
             trialId: trial.id,
-            markerType: 'WITNESS_TESTIMONY_START',
+            markerType: 'SECTION_START',
+            sectionType: 'WITNESS_TESTIMONY',
             eventId: startEvent.id,
-            name: `${witness.name} - ${examType} Start`
+            name: `${witness.name} - ${examType} Start`,
+            source: 'AUTO_EVENT'
           }
         });
         
@@ -322,9 +331,11 @@ export class Phase3Processor {
           const endMarker = await this.prisma.marker.create({
             data: {
               trialId: trial.id,
-              markerType: 'WITNESS_TESTIMONY_END',
+              markerType: 'SECTION_END',
+              sectionType: 'WITNESS_TESTIMONY',
               eventId: endEvent.id,
-              name: `${witness.name} - ${examType} End`
+              name: `${witness.name} - ${examType} End`,
+              source: 'AUTO_EVENT'
             }
           });
           

@@ -13,6 +13,8 @@ export class LineParser {
     /^\s*(THE COURT):\s*(.*)$/,
     // COURT SECURITY OFFICER: pattern
     /^\s*(COURT SECURITY OFFICER):\s*(.*)$/,
+    // THE FOREPERSON: pattern
+    /^\s*(THE FOREPERSON):\s*(.*)$/,
     // MR./MS./MRS./DR. NAME: pattern  
     /^\s*((?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
     // JUROR NAME: pattern

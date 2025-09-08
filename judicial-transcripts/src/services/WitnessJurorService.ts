@@ -204,19 +204,26 @@ export class WitnessJurorService {
       let lastName: string | undefined;
       let jurorNumber: number | undefined;
       
-      // Match patterns like "JUROR RAGSDALE" or "JUROR 40"
-      const jurorMatch = speakerPrefix.match(/^JUROR\s+(.+)$/i);
-      if (jurorMatch) {
-        const identifier = jurorMatch[1];
-        
-        // Check if it's a number
-        const numberMatch = identifier.match(/^\d+$/);
-        if (numberMatch) {
-          jurorNumber = parseInt(numberMatch[0]);
-        } else {
-          // It's a name
-          lastName = identifier.toUpperCase();
-          name = identifier;
+      // Special handling for THE FOREPERSON
+      if (speakerPrefix.toUpperCase() === 'THE FOREPERSON') {
+        name = 'THE';
+        lastName = 'FOREPERSON';
+        // No juror number for foreperson
+      } else {
+        // Match patterns like "JUROR RAGSDALE" or "JUROR 40"
+        const jurorMatch = speakerPrefix.match(/^JUROR\s+(.+)$/i);
+        if (jurorMatch) {
+          const identifier = jurorMatch[1];
+          
+          // Check if it's a number
+          const numberMatch = identifier.match(/^\d+$/);
+          if (numberMatch) {
+            jurorNumber = parseInt(numberMatch[0]);
+          } else {
+            // It's a name
+            lastName = identifier.toUpperCase();
+            name = identifier;
+          }
         }
       }
       
@@ -267,6 +274,14 @@ export class WitnessJurorService {
       }
       
       if (!juror) {
+        // Set alias based on speaker type
+        let alias: string | undefined;
+        if (speakerPrefix.toUpperCase() === 'THE FOREPERSON') {
+          alias = 'THE FOREPERSON';
+        } else if (lastName) {
+          alias = `MR. ${lastName}`;
+        }
+        
         logger.info(`Creating new Juror record for ${speakerPrefix} with speakerId=${speaker.id}, name=${name}, lastName=${lastName}, jurorNumber=${jurorNumber}`);
         juror = await this.prisma.juror.create({
           data: {
@@ -275,7 +290,7 @@ export class WitnessJurorService {
             name,
             lastName,
             jurorNumber,
-            alias: lastName ? `MR. ${lastName}` : undefined
+            alias
           }
         });
         

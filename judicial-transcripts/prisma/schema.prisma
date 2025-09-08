@@ -38,6 +38,7 @@ model Trial {
   processingStatus    TrialProcessingStatus?
   workflowState       TrialWorkflowState?
   witnesses           Witness[]
+  markerTimelines     MarkerTimeline[]
 
   @@index([caseNumber])
 }
@@ -78,6 +79,7 @@ model Session {
   trialId             Int
   sessionDate         DateTime
   sessionType         SessionType
+  sessionHandle       String?          // YYYYMMDD_sessionType format
   ordinal             Int?
   shortName           String?
   startTime           String?
@@ -321,6 +323,10 @@ model TrialEvent {
   duration          Int?
   startLineNumber   Int?
   endLineNumber     Int?
+  startSessLineNum  Int?                 // Session line number at start
+  endSessLineNum    Int?                 // Session line number at end
+  startTrialLineNum Int?                 // Trial line number at start
+  endTrialLineNum   Int?                 // Trial line number at end
   lineCount         Int?
   wordCount         Int?
   characterCount    Int?
@@ -397,26 +403,30 @@ model WitnessCalledEvent {
 }
 
 model Marker {
-  id               Int             @id @default(autoincrement())
+  id               Int                @id @default(autoincrement())
   trialId          Int
   markerType       MarkerType
+  sectionType      MarkerSectionType? // Required when markerType is SECTION_START/END
   eventId          Int?
   name             String?
   description      String?
   metadata         Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  event            TrialEvent?     @relation(fields: [eventId], references: [id])
-  trial            Trial           @relation(fields: [trialId], references: [id], onDelete: Cascade)
-  endingSections   MarkerSection[] @relation("EndMarker")
-  startingSections MarkerSection[] @relation("StartMarker")
+  source           MarkerSource       @default(MANUAL)
+  confidence       Float?             // 0.0 to 1.0
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  event            TrialEvent?        @relation(fields: [eventId], references: [id])
+  trial            Trial              @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  endingSections   MarkerSection[]    @relation("EndMarker")
+  startingSections MarkerSection[]    @relation("StartMarker")
 
   @@index([trialId, markerType])
+  @@index([trialId, sectionType])
   @@index([eventId])
 }
 
 model MarkerSection {
-  id                Int               @id @default(autoincrement())
+  id                Int                    @id @default(autoincrement())
   trialId           Int
   markerSectionType MarkerSectionType
   startMarkerId     Int?
@@ -428,15 +438,28 @@ model MarkerSection {
   name              String?
   description       String?
   metadata          Json?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  endEvent          TrialEvent?       @relation("SectionEnd", fields: [endEventId], references: [id])
-  endMarker         Marker?           @relation("EndMarker", fields: [endMarkerId], references: [id])
-  startEvent        TrialEvent?       @relation("SectionStart", fields: [startEventId], references: [id])
-  startMarker       Marker?           @relation("StartMarker", fields: [startMarkerId], references: [id])
-  trial             Trial             @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  parentSectionId   Int?
+  parentSection     MarkerSection?         @relation("ParentChild", fields: [parentSectionId], references: [id])
+  childSections     MarkerSection[]        @relation("ParentChild")
+  text              String?                @db.Text
+  textTemplate      String?
+  elasticSearchId   String?
+  source            MarkerSource           @default(MANUAL)
+  confidence        Float?
+  llmProvider       String?
+  llmModel          String?
+  timelineMembers   MarkerTimelineMember[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  endEvent          TrialEvent?            @relation("SectionEnd", fields: [endEventId], references: [id])
+  endMarker         Marker?                @relation("EndMarker", fields: [endMarkerId], references: [id])
+  startEvent        TrialEvent?            @relation("SectionStart", fields: [startEventId], references: [id])
+  startMarker       Marker?                @relation("StartMarker", fields: [startMarkerId], references: [id])
+  trial             Trial                  @relation(fields: [trialId], references: [id], onDelete: Cascade)
 
   @@index([trialId, markerSectionType])
+  @@index([parentSectionId])
+  @@index([source])
   @@index([startEventId, endEventId])
 }
 
@@ -458,6 +481,63 @@ model MarkerTemplate {
 
   @@index([markerType])
   @@index([sectionType])
+}
+
+model MarkerTimeline {
+  id                    Int                      @id @default(autoincrement())
+  trialId               Int
+  name                  String
+  description           String?
+  timelineType          MarkerTimelineType
+  continuousSections    Boolean                  @default(false)
+  gapFillingStrategy    GapFillingStrategy?      @default(NONE)
+  sourceTimelineId      Int?
+  sourceTimeline        MarkerTimeline?          @relation("DerivedTimelines", fields: [sourceTimelineId], references: [id])
+  derivedTimelines      MarkerTimeline[]         @relation("DerivedTimelines")
+  metadata              Json?
+  operationSpec         Json?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  trial                 Trial                    @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  members               MarkerTimelineMember[]
+  templates             MarkerTimelineTemplate[]
+
+  @@index([trialId])
+  @@index([timelineType])
+}
+
+model MarkerTimelineMember {
+  id                Int              @id @default(autoincrement())
+  timelineId        Int
+  sectionId         Int
+  sequenceOrder     Int
+  isGenerated       Boolean          @default(false)
+  generationType    GenerationType?
+  createdAt         DateTime         @default(now())
+  timeline          MarkerTimeline   @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  section           MarkerSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([timelineId, sequenceOrder])
+  @@index([timelineId])
+  @@index([sectionId])
+}
+
+model MarkerTimelineTemplate {
+  id                    Int                  @id @default(autoincrement())
+  timelineId            Int?
+  templateType          TimelineTemplateType
+  gapTemplate           String?
+  introTemplate         String?
+  conclusionTemplate    String?
+  transitionTemplate    String?
+  namePattern           String
+  descriptionPattern    String?
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  timeline              MarkerTimeline?      @relation(fields: [timelineId], references: [id])
+
+  @@index([templateType])
 }
 
 model SearchIndex {
@@ -718,23 +798,69 @@ enum SwornStatus {
 }
 
 enum MarkerType {
-  ACTIVITY_START
-  ACTIVITY_END
-  WITNESS_TESTIMONY_START
-  WITNESS_TESTIMONY_END
-  WITNESS_EXAMINATION_START
-  WITNESS_EXAMINATION_END
+  SECTION_START      // Marks the beginning of a section
+  SECTION_END        // Marks the end of a section
+  SECTION_LOCATOR    // Marks a point within a section (for searching boundaries)
+  SEARCH_LOCATOR     // General search marker (not section-specific)
+  CUSTOM             // User-defined marker
 }
 
 enum MarkerSectionType {
-  WITNESS_TESTIMONY
-  WITNESS_EXAMINATION
-  COMPLETE_WITNESS_TESTIMONY
-  CLOSING_ARGUMENT
-  OPENING_ARGUMENT
+  // Top Level Hierarchy
+  TRIAL                          // Root level
+  SESSION                        // Session level (under TRIAL)
+  
+  // Standard Trial Sequence (under TRIAL)
+  CASE_INTRO
   JURY_SELECTION
-  VERDICT
-  ACTIVITY
+  OPENING_STATEMENTS_PERIOD
+  OPENING_STATEMENT_PLAINTIFF
+  OPENING_STATEMENT_DEFENSE
+  WITNESS_TESTIMONY_PERIOD
+  WITNESS_TESTIMONY_PLAINTIFF    // All plaintiff witnesses
+  WITNESS_TESTIMONY_DEFENSE      // All defense witnesses
+  CLOSING_STATEMENTS_PERIOD
+  CLOSING_STATEMENT_PLAINTIFF
+  CLOSING_STATEMENT_DEFENSE
+  CLOSING_REBUTTAL_PLAINTIFF
+  JURY_DELIBERATION
+  JURY_VERDICT
+  CASE_WRAPUP
+  
+  // Witness Level
+  WITNESS_TESTIMONY              // Individual witness
+  COMPLETE_WITNESS_TESTIMONY     // Legacy compatibility
+  
+  // Examination Level
+  WITNESS_EXAMINATION            // Generic examination
+  DIRECT_EXAMINATION
+  CROSS_EXAMINATION
+  REDIRECT_EXAMINATION
+  RECROSS_EXAMINATION
+  
+  // Special Sections
+  OBJECTION_SEQUENCE
+  SIDEBAR
+  BENCH_CONFERENCE
+  RECESS
+  BREAK
+  HOUSEKEEPING
+  EXHIBIT_ADMISSION
+  DEPOSITION_READING
+  VIDEO_PLAYBACK
+  
+  // Administrative/Legacy
+  OPENING_ARGUMENT              // Legacy compatibility
+  CLOSING_ARGUMENT              // Legacy compatibility
+  VERDICT                        // Legacy compatibility
+  ACTIVITY                       // Legacy compatibility
+  CUSTOM                         // User-defined sections
+  
+  // Timeline Operations
+  TIMELINE_GAP                   // Auto-generated gap filler
+  TIMELINE_INTRO                 // Auto-generated intro
+  TIMELINE_CONCLUSION            // Auto-generated conclusion
+  TIMELINE_TRANSITION            // Auto-generated transition
 }
 
 enum AccumulatorType {
@@ -784,4 +910,47 @@ enum WorkflowStatus {
   ERROR
   PAUSED
   IN_PROGRESS
+}
+
+enum MarkerSource {
+  MANUAL              // User-created
+  AUTO_EVENT          // Generated from events (e.g., witness called)
+  AUTO_PATTERN        // Generated from pattern matching
+  LLM_EXTRACTION      // Generated by LLM
+  IMPORT              // Imported from override file
+  TIMELINE_GENERATED  // Generated by timeline operations
+}
+
+enum MarkerTimelineType {
+  STANDARD_TRIAL      // Standard trial sequence
+  SESSION_BASED       // Session-based timeline
+  WITNESS_BASED       // Witness testimony timeline
+  EXAMINATION_BASED   // Examination sequence timeline
+  OBJECTION_BASED     // Objection sequence timeline
+  FLATTENED           // Derived from flattening operation
+  SUPERIMPOSED        // Derived from superimposition
+  SUMMARIZED          // Derived from summarization
+  CUSTOM              // User-defined timeline
+}
+
+enum GapFillingStrategy {
+  NONE                // No gap filling
+  SIMPLE              // Simple numbered gaps
+  CONTEXTUAL          // Context-aware naming
+  LLM_GENERATED       // LLM-generated descriptions
+}
+
+enum GenerationType {
+  GAP_FILLER          // Fills gap between sections
+  INTRO_FILLER        // Fills beginning before first section
+  CONCLUSION_FILLER   // Fills end after last section
+  TRANSITION          // Transition between major sections
+}
+
+enum TimelineTemplateType {
+  GAP                 // Template for gaps
+  INTRO               // Template for introduction
+  CONCLUSION          // Template for conclusion
+  TRANSITION          // Template for transitions
+  SECTION_NAME        // Template for section naming
 }

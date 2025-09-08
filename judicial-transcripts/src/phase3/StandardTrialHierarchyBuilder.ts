@@ -298,7 +298,114 @@ export class StandardTrialHierarchyBuilder {
       });
     }
 
+    // Fix parent relationships for existing witness sections created by WitnessMarkerDiscovery
+    await this.fixWitnessHierarchyRelationships(trialId, testimonyPeriod.id, plaintiffSection, defenseSection);
+
     return testimonyPeriod;
+  }
+
+  /**
+   * Fix parent relationships for witness sections created by WitnessMarkerDiscovery
+   */
+  private async fixWitnessHierarchyRelationships(
+    trialId: number,
+    testimonyPeriodId: number,
+    plaintiffSection: MarkerSection | null,
+    defenseSection: MarkerSection | null
+  ): Promise<void> {
+    this.logger.info('Fixing witness hierarchy relationships');
+
+    // Fix COMPLETE_WITNESS_TESTIMONY to be child of WITNESS_TESTIMONY_PERIOD
+    const completeTestimony = await this.prisma.markerSection.findFirst({
+      where: {
+        trialId,
+        markerSectionType: MarkerSectionType.COMPLETE_WITNESS_TESTIMONY
+      }
+    });
+    
+    if (completeTestimony && completeTestimony.parentSectionId !== testimonyPeriodId) {
+      await this.prisma.markerSection.update({
+        where: { id: completeTestimony.id },
+        data: { parentSectionId: testimonyPeriodId }
+      });
+      this.logger.debug('Updated COMPLETE_WITNESS_TESTIMONY parent');
+    }
+
+    // Get all WITNESS_TESTIMONY sections (individual witnesses)
+    const witnessTestimonies = await this.prisma.markerSection.findMany({
+      where: {
+        trialId,
+        markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
+        name: {
+          startsWith: 'WitnessTestimony_WITNESS_'
+        }
+      },
+      orderBy: { startEventId: 'asc' }
+    });
+
+    // Assign each witness testimony to plaintiff or defense section
+    for (const testimony of witnessTestimonies) {
+      let parentId: number | null = null;
+      
+      if (plaintiffSection && testimony.startEventId && plaintiffSection.startEventId && plaintiffSection.endEventId) {
+        if (testimony.startEventId >= plaintiffSection.startEventId && 
+            testimony.startEventId <= plaintiffSection.endEventId) {
+          parentId = plaintiffSection.id;
+        }
+      }
+      
+      if (!parentId && defenseSection && testimony.startEventId && defenseSection.startEventId && defenseSection.endEventId) {
+        if (testimony.startEventId >= defenseSection.startEventId && 
+            testimony.startEventId <= defenseSection.endEventId) {
+          parentId = defenseSection.id;
+        }
+      }
+      
+      if (parentId && testimony.parentSectionId !== parentId) {
+        await this.prisma.markerSection.update({
+          where: { id: testimony.id },
+          data: { parentSectionId: parentId }
+        });
+        this.logger.debug(`Updated parent of ${testimony.name} to ${parentId}`);
+      }
+    }
+
+    // Fix WITNESS_EXAMINATION sections to be children of their witness testimony sections
+    const examinations = await this.prisma.markerSection.findMany({
+      where: {
+        trialId,
+        markerSectionType: MarkerSectionType.WITNESS_EXAMINATION
+      },
+      orderBy: { startEventId: 'asc' }
+    });
+
+    for (const exam of examinations) {
+      // Extract witness ID from examination name (e.g., "WitnessExamination_DIRECT_EXAMINATION_WITNESS_54")
+      const examMatch = exam.name?.match(/WITNESS_(\d+)/);
+      if (!examMatch) {
+        this.logger.warn(`Could not extract witness ID from examination name: ${exam.name}`);
+        continue;
+      }
+      const examWitnessId = examMatch[1];
+      
+      // Find the testimony section with matching witness ID
+      const parentTestimony = witnessTestimonies.find(testimony => {
+        const testimonyMatch = testimony.name?.match(/WITNESS_(\d+)/);
+        return testimonyMatch && testimonyMatch[1] === examWitnessId;
+      });
+      
+      if (parentTestimony && exam.parentSectionId !== parentTestimony.id) {
+        await this.prisma.markerSection.update({
+          where: { id: exam.id },
+          data: { parentSectionId: parentTestimony.id }
+        });
+        this.logger.debug(`Updated parent of ${exam.name} to ${parentTestimony.name}`);
+      } else if (!parentTestimony) {
+        this.logger.warn(`Could not find parent testimony for ${exam.name} with witness ID ${examWitnessId}`);
+      }
+    }
+
+    this.logger.info('Completed fixing witness hierarchy relationships');
   }
 
   /**

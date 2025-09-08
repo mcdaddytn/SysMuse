@@ -4,12 +4,33 @@ import { PrismaClient } from '@prisma/client';
 import { Logger } from '../utils/logger';
 
 const prisma = new PrismaClient();
-const logger = new Logger('FixWitnessHierarchy');
+const logger = new Logger('FixAllWitnessHierarchies');
+
+async function fixAllTrials() {
+  try {
+    // Get all trials
+    const trials = await prisma.trial.findMany({
+      select: { id: true, name: true }
+    });
+    
+    logger.info(`Found ${trials.length} trials to process`);
+    
+    for (const trial of trials) {
+      logger.info(`Processing trial ${trial.id}: ${trial.name}`);
+      await fixWitnessHierarchy(trial.id);
+    }
+    
+    logger.info('All trials processed successfully');
+  } catch (error) {
+    logger.error('Error processing trials:', error);
+    throw error;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
 async function fixWitnessHierarchy(trialId: number) {
   try {
-    logger.info(`Fixing witness hierarchy for trial ${trialId}`);
-    
     // Get all witness testimony sections (individual witnesses)
     const witnessTestimonies = await prisma.markerSection.findMany({
       where: {
@@ -23,8 +44,6 @@ async function fixWitnessHierarchy(trialId: number) {
       orderBy: { startEventId: 'asc' }
     });
     
-    logger.info(`Found ${witnessTestimonies.length} individual witness testimony sections`);
-    
     // Get all witness examination sections
     const examinations = await prisma.markerSection.findMany({
       where: {
@@ -34,41 +53,31 @@ async function fixWitnessHierarchy(trialId: number) {
       orderBy: { startEventId: 'asc' }
     });
     
-    logger.info(`Found ${examinations.length} witness examination sections`);
-    
-    let fixedCount = 0;
+    let fixedExamCount = 0;
     
     // For each examination, find its parent testimony section
     for (const exam of examinations) {
-      // Extract witness ID from examination name (e.g., "WitnessExamination_DIRECT_EXAMINATION_WITNESS_54")
-      const examMatch = exam.name?.match(/WITNESS_(\d+)/);
-      if (!examMatch) {
-        logger.warn(`Could not extract witness ID from examination name: ${exam.name}`);
-        continue;
-      }
-      const examWitnessId = examMatch[1];
-      
-      // Find the testimony section with matching witness ID
+      // Find the testimony section that contains this examination
       const parentTestimony = witnessTestimonies.find(testimony => {
-        const testimonyMatch = testimony.name?.match(/WITNESS_(\d+)/);
-        return testimonyMatch && testimonyMatch[1] === examWitnessId;
+        return (
+          exam.startEventId !== null &&
+          exam.endEventId !== null &&
+          testimony.startEventId !== null &&
+          testimony.endEventId !== null &&
+          exam.startEventId >= testimony.startEventId &&
+          exam.endEventId <= testimony.endEventId
+        );
       });
       
-      if (parentTestimony) {
+      if (parentTestimony && exam.parentSectionId !== parentTestimony.id) {
         // Update the examination to have the correct parent
         await prisma.markerSection.update({
           where: { id: exam.id },
           data: { parentSectionId: parentTestimony.id }
         });
-        
-        logger.debug(`Set parent of ${exam.name} to ${parentTestimony.name}`);
-        fixedCount++;
-      } else {
-        logger.warn(`Could not find parent testimony for ${exam.name} with witness ID ${examWitnessId}`);
+        fixedExamCount++;
       }
     }
-    
-    logger.info(`Fixed ${fixedCount} witness examination parent relationships`);
     
     // Now fix the witness testimony sections to be children of the appropriate parent sections
     // First, get the WITNESS_TESTIMONY_PLAINTIFF and WITNESS_TESTIMONY_DEFENSE sections
@@ -86,6 +95,8 @@ async function fixWitnessHierarchy(trialId: number) {
       }
     });
     
+    let fixedTestimonyCount = 0;
+    
     // Now assign each witness testimony to the correct parent
     for (const testimony of witnessTestimonies) {
       let parentId: number | null = null;
@@ -94,7 +105,6 @@ async function fixWitnessHierarchy(trialId: number) {
         if (testimony.startEventId >= plaintiffTestimonyPeriod.startEventId && 
             testimony.startEventId <= plaintiffTestimonyPeriod.endEventId) {
           parentId = plaintiffTestimonyPeriod.id;
-          logger.debug(`Setting ${testimony.name} as child of plaintiff testimony period`);
         }
       }
       
@@ -102,7 +112,6 @@ async function fixWitnessHierarchy(trialId: number) {
         if (testimony.startEventId >= defenseTestimonyPeriod.startEventId && 
             testimony.startEventId <= defenseTestimonyPeriod.endEventId) {
           parentId = defenseTestimonyPeriod.id;
-          logger.debug(`Setting ${testimony.name} as child of defense testimony period`);
         }
       }
       
@@ -111,7 +120,7 @@ async function fixWitnessHierarchy(trialId: number) {
           where: { id: testimony.id },
           data: { parentSectionId: parentId }
         });
-        logger.debug(`Updated parent of ${testimony.name}`);
+        fixedTestimonyCount++;
       }
     }
     
@@ -130,35 +139,29 @@ async function fixWitnessHierarchy(trialId: number) {
       }
     });
     
+    let fixedComplete = false;
     if (completeTestimony && testimonyPeriod && completeTestimony.parentSectionId !== testimonyPeriod.id) {
       await prisma.markerSection.update({
         where: { id: completeTestimony.id },
         data: { parentSectionId: testimonyPeriod.id }
       });
-      logger.info('Fixed COMPLETE_WITNESS_TESTIMONY parent relationship');
+      fixedComplete = true;
     }
     
-    logger.info('Witness hierarchy fixed successfully');
+    if (fixedExamCount > 0 || fixedTestimonyCount > 0 || fixedComplete) {
+      logger.info(`  Trial ${trialId}: Fixed ${fixedExamCount} examinations, ${fixedTestimonyCount} testimonies${fixedComplete ? ', 1 complete testimony' : ''}`);
+    } else {
+      logger.debug(`  Trial ${trialId}: No changes needed`);
+    }
     
   } catch (error) {
-    logger.error('Error fixing witness hierarchy:', error);
-    throw error;
-  } finally {
-    await prisma.$disconnect();
+    logger.error(`Error fixing trial ${trialId}:`, error);
+    // Continue with other trials
   }
 }
 
-// Parse command line arguments
-const trialId = process.argv[2] ? parseInt(process.argv[2]) : null;
-
-if (!trialId) {
-  logger.error('Please provide a trial ID as argument');
-  logger.info('Usage: npx ts-node src/cli/fix-witness-hierarchy.ts <trialId>');
-  process.exit(1);
-}
-
-// Run for specified trial
-fixWitnessHierarchy(trialId)
+// Run for all trials
+fixAllTrials()
   .then(() => process.exit(0))
   .catch((error) => {
     logger.error('Fatal error:', error);

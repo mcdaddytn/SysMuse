@@ -1,0 +1,356 @@
+{
+  "markerTemplates": [
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "TRIAL",
+      "namePattern": "{{trial.shortName}} - Trial Start",
+      "descPattern": "Beginning of trial proceedings for {{trial.caseNumber}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "TRIAL",
+      "namePattern": "{{trial.shortName}} - Trial End",
+      "descPattern": "End of trial proceedings for {{trial.caseNumber}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "SESSION",
+      "namePattern": "Session {{session.sessionHandle}} Start",
+      "descPattern": "Start of {{session.sessionType}} session on {{session.sessionDate}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "SESSION",
+      "namePattern": "Session {{session.sessionHandle}} End",
+      "descPattern": "End of {{session.sessionType}} session on {{session.sessionDate}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CASE_INTRO",
+      "namePattern": "Case Introduction Start",
+      "descPattern": "Beginning of pre-trial proceedings and case introduction",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CASE_INTRO",
+      "namePattern": "Case Introduction End",
+      "descPattern": "End of case introduction",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "JURY_SELECTION",
+      "namePattern": "Jury Selection Start",
+      "descPattern": "Beginning of voir dire and jury selection",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "JURY_SELECTION",
+      "namePattern": "Jury Selection End",
+      "descPattern": "End of jury selection process",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "OPENING_STATEMENTS_PERIOD",
+      "namePattern": "Opening Statements Period Start",
+      "descPattern": "Beginning of opening statements from all parties",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "OPENING_STATEMENTS_PERIOD",
+      "namePattern": "Opening Statements Period End",
+      "descPattern": "End of opening statements from all parties",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "OPENING_STATEMENT_PLAINTIFF",
+      "namePattern": "Plaintiff Opening Statement Start",
+      "descPattern": "Beginning of opening statement by plaintiff counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "OPENING_STATEMENT_PLAINTIFF",
+      "namePattern": "Plaintiff Opening Statement End",
+      "descPattern": "End of opening statement by plaintiff counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "OPENING_STATEMENT_DEFENSE",
+      "namePattern": "Defense Opening Statement Start",
+      "descPattern": "Beginning of opening statement by defense counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "OPENING_STATEMENT_DEFENSE",
+      "namePattern": "Defense Opening Statement End",
+      "descPattern": "End of opening statement by defense counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "WITNESS_TESTIMONY_PERIOD",
+      "namePattern": "Witness Testimony Period Start",
+      "descPattern": "Beginning of all witness testimony",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "WITNESS_TESTIMONY_PERIOD",
+      "namePattern": "Witness Testimony Period End",
+      "descPattern": "End of all witness testimony",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "WITNESS_TESTIMONY_PLAINTIFF",
+      "namePattern": "Plaintiff Witnesses Start",
+      "descPattern": "Beginning of plaintiff's witness testimony",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "WITNESS_TESTIMONY_PLAINTIFF",
+      "namePattern": "Plaintiff Witnesses End",
+      "descPattern": "End of plaintiff's witness testimony",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "WITNESS_TESTIMONY_DEFENSE",
+      "namePattern": "Defense Witnesses Start",
+      "descPattern": "Beginning of defense witness testimony",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "WITNESS_TESTIMONY_DEFENSE",
+      "namePattern": "Defense Witnesses End",
+      "descPattern": "End of defense witness testimony",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "WITNESS_TESTIMONY",
+      "namePattern": "{{witness.name}} Testimony Start",
+      "descPattern": "Beginning of testimony for witness {{witness.name}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "WITNESS_TESTIMONY",
+      "namePattern": "{{witness.name}} Testimony End",
+      "descPattern": "End of testimony for witness {{witness.name}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "DIRECT_EXAMINATION",
+      "namePattern": "Direct Examination of {{witness.name}} Start",
+      "descPattern": "Beginning of direct examination by {{attorney.name}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "DIRECT_EXAMINATION",
+      "namePattern": "Direct Examination of {{witness.name}} End",
+      "descPattern": "End of direct examination",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CROSS_EXAMINATION",
+      "namePattern": "Cross-Examination of {{witness.name}} Start",
+      "descPattern": "Beginning of cross-examination by {{attorney.name}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CROSS_EXAMINATION",
+      "namePattern": "Cross-Examination of {{witness.name}} End",
+      "descPattern": "End of cross-examination",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "REDIRECT_EXAMINATION",
+      "namePattern": "Redirect Examination of {{witness.name}} Start",
+      "descPattern": "Beginning of redirect examination by {{attorney.name}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "REDIRECT_EXAMINATION",
+      "namePattern": "Redirect Examination of {{witness.name}} End",
+      "descPattern": "End of redirect examination",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "RECROSS_EXAMINATION",
+      "namePattern": "Recross-Examination of {{witness.name}} Start",
+      "descPattern": "Beginning of recross-examination by {{attorney.name}}",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "RECROSS_EXAMINATION",
+      "namePattern": "Recross-Examination of {{witness.name}} End",
+      "descPattern": "End of recross-examination",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CLOSING_STATEMENTS_PERIOD",
+      "namePattern": "Closing Statements Period Start",
+      "descPattern": "Beginning of closing statements from all parties",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CLOSING_STATEMENTS_PERIOD",
+      "namePattern": "Closing Statements Period End",
+      "descPattern": "End of closing statements from all parties",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CLOSING_STATEMENT_PLAINTIFF",
+      "namePattern": "Plaintiff Closing Statement Start",
+      "descPattern": "Beginning of closing statement by plaintiff counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CLOSING_STATEMENT_PLAINTIFF",
+      "namePattern": "Plaintiff Closing Statement End",
+      "descPattern": "End of closing statement by plaintiff counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CLOSING_STATEMENT_DEFENSE",
+      "namePattern": "Defense Closing Statement Start",
+      "descPattern": "Beginning of closing statement by defense counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CLOSING_STATEMENT_DEFENSE",
+      "namePattern": "Defense Closing Statement End",
+      "descPattern": "End of closing statement by defense counsel",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CLOSING_REBUTTAL_PLAINTIFF",
+      "namePattern": "Plaintiff Rebuttal Start",
+      "descPattern": "Beginning of plaintiff's rebuttal closing",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CLOSING_REBUTTAL_PLAINTIFF",
+      "namePattern": "Plaintiff Rebuttal End",
+      "descPattern": "End of plaintiff's rebuttal closing",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "JURY_DELIBERATION",
+      "namePattern": "Jury Deliberation Start",
+      "descPattern": "Beginning of jury deliberation period",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "JURY_DELIBERATION",
+      "namePattern": "Jury Deliberation End",
+      "descPattern": "End of jury deliberation period",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "JURY_VERDICT",
+      "namePattern": "Jury Verdict Start",
+      "descPattern": "Beginning of jury verdict delivery",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "JURY_VERDICT",
+      "namePattern": "Jury Verdict End",
+      "descPattern": "End of jury verdict delivery",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_START",
+      "sectionType": "CASE_WRAPUP",
+      "namePattern": "Case Wrapup Start",
+      "descPattern": "Beginning of post-verdict proceedings",
+      "isActive": true
+    },
+    {
+      "markerType": "SECTION_END",
+      "sectionType": "CASE_WRAPUP",
+      "namePattern": "Case Wrapup End",
+      "descPattern": "End of trial proceedings",
+      "isActive": true
+    }
+  ],
+  "hierarchyRelationships": [
+    {
+      "parent": "TRIAL",
+      "children": ["CASE_INTRO", "JURY_SELECTION", "OPENING_STATEMENTS_PERIOD", "WITNESS_TESTIMONY_PERIOD", "CLOSING_STATEMENTS_PERIOD", "JURY_DELIBERATION", "JURY_VERDICT", "CASE_WRAPUP"],
+      "sequence": "REQUIRED",
+      "level": 1
+    },
+    {
+      "parent": "OPENING_STATEMENTS_PERIOD",
+      "children": ["OPENING_STATEMENT_PLAINTIFF", "OPENING_STATEMENT_DEFENSE"],
+      "sequence": "TYPICAL",
+      "level": 2
+    },
+    {
+      "parent": "WITNESS_TESTIMONY_PERIOD",
+      "children": ["WITNESS_TESTIMONY_PLAINTIFF", "WITNESS_TESTIMONY_DEFENSE"],
+      "sequence": "TYPICAL",
+      "level": 2
+    },
+    {
+      "parent": "WITNESS_TESTIMONY_PLAINTIFF",
+      "children": ["WITNESS_TESTIMONY"],
+      "sequence": "MULTIPLE",
+      "level": 3
+    },
+    {
+      "parent": "WITNESS_TESTIMONY_DEFENSE",
+      "children": ["WITNESS_TESTIMONY"],
+      "sequence": "MULTIPLE",
+      "level": 3
+    },
+    {
+      "parent": "WITNESS_TESTIMONY",
+      "children": ["DIRECT_EXAMINATION", "CROSS_EXAMINATION", "REDIRECT_EXAMINATION", "RECROSS_EXAMINATION"],
+      "sequence": "ORDERED_OPTIONAL",
+      "level": 4
+    },
+    {
+      "parent": "CLOSING_STATEMENTS_PERIOD",
+      "children": ["CLOSING_STATEMENT_PLAINTIFF", "CLOSING_STATEMENT_DEFENSE", "CLOSING_REBUTTAL_PLAINTIFF"],
+      "sequence": "TYPICAL_WITH_OPTIONAL",
+      "level": 2
+    }
+  ]
+}

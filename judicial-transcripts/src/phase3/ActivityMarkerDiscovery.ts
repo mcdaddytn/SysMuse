@@ -25,6 +25,11 @@ export class ActivityMarkerDiscovery {
   async discoverActivityMarkers(trialId: number): Promise<void> {
     this.logger.info(`Discovering activity markers for trial ${trialId}`);
 
+    // TEMPORARILY DISABLED - Activity markers creating too many non-standard sections
+    // Will re-enable when we have better filtering for relevant activities
+    this.logger.info('Activity marker discovery is currently disabled to focus on Standard Trial Sequence');
+    return;
+
     // Load accumulator results with high confidence
     const accumulatorResults = await this.prisma.accumulatorResult.findMany({
       where: {

@@ -1,0 +1,9 @@
+{{! Default transcript template for MarkerSection rendering }}
+{{! Renders clean transcript without line numbers, page headers, or session breaks }}
+
+{{#events}}
+{{#statement}}
+{{speaker.speakerHandle}}: {{text}}
+
+{{/statement}}
+{{/events}}

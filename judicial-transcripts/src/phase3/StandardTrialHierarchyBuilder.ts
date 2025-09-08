@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { Logger } from '../utils/logger';
 import { LongStatementsAccumulator } from './LongStatementsAccumulator';
+import { TranscriptRenderer } from '../services/TranscriptRenderer';
 
 interface HierarchyStatistics {
   totalSections: number;
@@ -61,7 +62,10 @@ export class StandardTrialHierarchyBuilder {
       // Step 5: Create Session hierarchy
       await this.createSessionHierarchy(trialId, trialSection.id);
       
-      // Step 6: Calculate and log statistics
+      // Step 6: Generate auto-summaries for all sections
+      await this.generateAutoSummaries(trialId);
+      
+      // Step 7: Calculate and log statistics
       const stats = await this.calculateHierarchyStatistics(trialId);
       this.logger.info(`Hierarchy statistics for trial ${trialId}: ${JSON.stringify(stats, null, 2)}`);
       
@@ -70,6 +74,42 @@ export class StandardTrialHierarchyBuilder {
       this.logger.error(`Error building hierarchy for trial ${trialId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Generate auto-summaries for all sections in the hierarchy
+   */
+  private async generateAutoSummaries(trialId: number): Promise<void> {
+    this.logger.info(`Generating auto-summaries for trial ${trialId} sections`);
+    
+    const renderer = new TranscriptRenderer(this.prisma);
+    
+    // Get all sections that need summaries
+    const sections = await this.prisma.markerSection.findMany({
+      where: {
+        trialId,
+        source: {
+          in: [MarkerSource.PHASE3_HIERARCHY, MarkerSource.PHASE3_DISCOVERY]
+        },
+        // Only sections with actual event ranges
+        startEventId: { not: null },
+        endEventId: { not: null }
+      }
+    });
+    
+    let summaryCount = 0;
+    for (const section of sections) {
+      try {
+        const rendered = await renderer.renderAndSaveSummary(section.id);
+        if (rendered && rendered.summary) {
+          summaryCount++;
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to generate summary for section ${section.id}: ${error}`);
+      }
+    }
+    
+    this.logger.info(`Generated ${summaryCount} auto-summaries for trial ${trialId}`);
   }
 
   /**
@@ -481,40 +521,7 @@ export class StandardTrialHierarchyBuilder {
       closingStatements.push(section);
     }
 
-    // Look for plaintiff rebuttal after defense closing
-    if (defenseClosing) {
-      const plaintiffRebuttal = await this.longStatementsAccumulator.findLongestStatement({
-        trialId,
-        speakerType: 'ATTORNEY',
-        attorneyRole: 'PLAINTIFF',
-        searchStartEvent: defenseClosing.endEvent.id,
-        minWords: 200, // Lower threshold for rebuttal
-        maxInterruptionRatio: 0.2
-      });
-
-      if (plaintiffRebuttal && plaintiffRebuttal.confidence > 0.5) {
-        const section = await this.prisma.markerSection.create({
-          data: {
-            trialId,
-            markerSectionType: MarkerSectionType.CLOSING_REBUTTAL_PLAINTIFF,
-            name: 'Plaintiff Closing Rebuttal',
-            description: 'Rebuttal closing by plaintiff counsel',
-            startEventId: plaintiffRebuttal.startEvent.id,
-            endEventId: plaintiffRebuttal.endEvent.id,
-            startTime: plaintiffRebuttal.startEvent.startTime,
-            endTime: plaintiffRebuttal.endEvent.endTime,
-            source: MarkerSource.PHASE3_DISCOVERY,
-            confidence: plaintiffRebuttal.confidence,
-            metadata: {
-              totalWords: plaintiffRebuttal.totalWords,
-              speakerWords: plaintiffRebuttal.speakerWords,
-              speakerRatio: plaintiffRebuttal.speakerRatio
-            }
-          }
-        });
-        closingStatements.push(section);
-      }
-    }
+    // Removed plaintiff rebuttal logic - not part of standard trial sequence
 
     // Create CLOSING_STATEMENTS_PERIOD
     if (closingStatements.length > 0) {
@@ -536,8 +543,7 @@ export class StandardTrialHierarchyBuilder {
           confidence: 0.8,
           metadata: {
             hasPlaintiffClosing: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_STATEMENT_PLAINTIFF),
-            hasDefenseClosing: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_STATEMENT_DEFENSE),
-            hasPlaintiffRebuttal: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_REBUTTAL_PLAINTIFF)
+            hasDefenseClosing: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_STATEMENT_DEFENSE)
           }
         }
       });

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { PrismaClient, LLMTaskStatus } from '@prisma/client';
-import { Phase3Processor } from '../phase3/Phase3Processor';
+import { Phase3ProcessorV2 } from '../phase3/Phase3ProcessorV2';
+import { TranscriptConfig } from '../types/config.types';
 import { MarkerUpsert } from '../phase3/MarkerUpsert';
 import { Logger } from '../utils/logger';
 import * as path from 'path';
@@ -21,7 +22,8 @@ async function updatePhase3WorkflowState(trialId: number): Promise<void> {
         phase3IndexCompleted: true,
         phase3IndexAt: new Date(),
         llmOverrideStatus: LLMTaskStatus.PENDING,
-        llmMarkerStatus: LLMTaskStatus.PENDING
+        llmMarker1Status: LLMTaskStatus.PENDING,
+        llmMarker2Status: LLMTaskStatus.PENDING
       },
       update: {
         phase3Completed: true,
@@ -53,7 +55,17 @@ program
   .option('--no-preserve-markers', 'Skip indexing marker sections to permanent ES')
   .action(async (options) => {
     try {
-      const processor = new Phase3Processor(prisma);
+      // Create config (minimal config for Phase 3)
+      const config: TranscriptConfig = {
+        enableElasticSearch: false, // Use in-memory search for now
+        elasticSearchUrl: process.env.ELASTICSEARCH_URL || 'http://localhost:9200',
+        inputDir: '',
+        outputDir: '',
+        logLevel: 'info',
+        batchSize: 100
+      };
+      
+      const processor = new Phase3ProcessorV2(prisma, config);
 
       // Determine which trial(s) to process
       let trialId: number | null = null;

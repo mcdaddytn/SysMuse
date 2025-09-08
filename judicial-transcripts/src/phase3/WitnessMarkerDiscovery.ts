@@ -144,9 +144,55 @@ export class WitnessMarkerDiscovery {
         }
       }
     }
+    
+    // If no answer found with 'A.' prefix, try to find by witness speaker type
+    if (!endEvent && witnessEvent.witness) {
+      // Look for last statement by witness (may not have 'A.' prefix)
+      const witnessName = witnessEvent.witness.name;
+      if (witnessName) {
+        for (let i = constraintIndex - 1; i > startIndex; i--) {
+          const event = allEvents[i];
+          if (
+            event.eventType === 'STATEMENT' &&
+            event.statement &&
+            event.statement.speaker &&
+            event.statement.speaker.speakerType === 'WITNESS' &&
+            event.statement.speaker.speakerHandle.includes(witnessName.split(' ').pop())
+          ) {
+            endEvent = event;
+            break;
+          }
+        }
+      }
+    }
 
-    // If no answer found, use the event before constraint
-    if (!endEvent && constraintIndex > startIndex + 1) {
+    // For the last witness, don't extend to end of trial
+    // Look for transition to attorney speech instead
+    if (!endEvent && !nextWitnessEvent) {
+      // Find where attorneys start speaking continuously (likely closing arguments)
+      let attorneyBlockStart = -1;
+      let consecutiveAttorneyCount = 0;
+      
+      for (let i = startIndex + 1; i < Math.min(constraintIndex, startIndex + 500); i++) {
+        const event = allEvents[i];
+        if (event.statement?.speaker?.speakerType === 'ATTORNEY') {
+          consecutiveAttorneyCount++;
+          if (consecutiveAttorneyCount >= 3 && attorneyBlockStart === -1) {
+            attorneyBlockStart = i - 2; // Back up to start of attorney block
+            break;
+          }
+        } else if (event.statement?.speaker?.speakerType === 'WITNESS') {
+          consecutiveAttorneyCount = 0; // Reset if witness speaks again
+        }
+      }
+      
+      if (attorneyBlockStart > startIndex + 1) {
+        endEvent = allEvents[attorneyBlockStart - 1];
+      }
+    }
+
+    // If still no end found and not the last witness, use the event before constraint
+    if (!endEvent && nextWitnessEvent && constraintIndex > startIndex + 1) {
       endEvent = allEvents[constraintIndex - 1];
     }
 

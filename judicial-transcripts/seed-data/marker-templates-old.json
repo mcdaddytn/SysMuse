@@ -1,0 +1,338 @@
+[
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "TRIAL",
+    "namePattern": "Trial_{trial.shortName}_Start",
+    "descPattern": "Start of trial {trial.caseNumber}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "TRIAL",
+    "namePattern": "Trial_{trial.shortName}_End",
+    "descPattern": "End of trial {trial.caseNumber}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "SESSION",
+    "namePattern": "Session_{session.sessionHandle}_Start",
+    "descPattern": "Start of {session.sessionType} session on {session.sessionDate}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "SESSION",
+    "namePattern": "Session_{session.sessionHandle}_End",
+    "descPattern": "End of {session.sessionType} session on {session.sessionDate}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CASE_INTRO",
+    "namePattern": "CaseIntro_Start",
+    "descPattern": "Start of case introduction",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CASE_INTRO",
+    "namePattern": "CaseIntro_End",
+    "descPattern": "End of case introduction",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "JURY_SELECTION",
+    "namePattern": "JurySelection_Start",
+    "descPattern": "Start of jury selection",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "JURY_SELECTION",
+    "namePattern": "JurySelection_End",
+    "descPattern": "End of jury selection",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "OPENING_STATEMENTS_PERIOD",
+    "namePattern": "OpeningStatementsPeriod_Start",
+    "descPattern": "Start of opening statements period",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "OPENING_STATEMENTS_PERIOD",
+    "namePattern": "OpeningStatementsPeriod_End",
+    "descPattern": "End of opening statements period",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "OPENING_STATEMENT_PLAINTIFF",
+    "namePattern": "OpeningStatement_Plaintiff_Start",
+    "descPattern": "Start of plaintiff opening statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "OPENING_STATEMENT_PLAINTIFF",
+    "namePattern": "OpeningStatement_Plaintiff_End",
+    "descPattern": "End of plaintiff opening statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "OPENING_STATEMENT_DEFENSE",
+    "namePattern": "OpeningStatement_Defense_Start",
+    "descPattern": "Start of defense opening statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "OPENING_STATEMENT_DEFENSE",
+    "namePattern": "OpeningStatement_Defense_End",
+    "descPattern": "End of defense opening statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "WITNESS_TESTIMONY_PERIOD",
+    "namePattern": "WitnessTestimonyPeriod_Start",
+    "descPattern": "Start of witness testimony period",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "WITNESS_TESTIMONY_PERIOD",
+    "namePattern": "WitnessTestimonyPeriod_End",
+    "descPattern": "End of witness testimony period",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "WITNESS_TESTIMONY_PLAINTIFF",
+    "namePattern": "WitnessTestimony_Plaintiff_Start",
+    "descPattern": "Start of plaintiff witness testimony",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "WITNESS_TESTIMONY_PLAINTIFF",
+    "namePattern": "WitnessTestimony_Plaintiff_End",
+    "descPattern": "End of plaintiff witness testimony",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "WITNESS_TESTIMONY_DEFENSE",
+    "namePattern": "WitnessTestimony_Defense_Start",
+    "descPattern": "Start of defense witness testimony",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "WITNESS_TESTIMONY_DEFENSE",
+    "namePattern": "WitnessTestimony_Defense_End",
+    "descPattern": "End of defense witness testimony",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "WITNESS_TESTIMONY",
+    "namePattern": "WitnessTestimony_{witness.speakerHandle}_Start",
+    "descPattern": "Start of testimony for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "WITNESS_TESTIMONY",
+    "namePattern": "WitnessTestimony_{witness.speakerHandle}_End",
+    "descPattern": "End of testimony for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "WITNESS_EXAMINATION",
+    "namePattern": "WitnessExamination_{examinationType}_{witness.speakerHandle}_Start",
+    "descPattern": "Start of {examinationType} for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "WITNESS_EXAMINATION",
+    "namePattern": "WitnessExamination_{examinationType}_{witness.speakerHandle}_End",
+    "descPattern": "End of {examinationType} for witness {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "DIRECT_EXAMINATION",
+    "namePattern": "DirectExamination_{witness.speakerHandle}_Start",
+    "descPattern": "Start of direct examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "DIRECT_EXAMINATION",
+    "namePattern": "DirectExamination_{witness.speakerHandle}_End",
+    "descPattern": "End of direct examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CROSS_EXAMINATION",
+    "namePattern": "CrossExamination_{witness.speakerHandle}_Start",
+    "descPattern": "Start of cross-examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CROSS_EXAMINATION",
+    "namePattern": "CrossExamination_{witness.speakerHandle}_End",
+    "descPattern": "End of cross-examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "REDIRECT_EXAMINATION",
+    "namePattern": "RedirectExamination_{witness.speakerHandle}_Start",
+    "descPattern": "Start of redirect examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "REDIRECT_EXAMINATION",
+    "namePattern": "RedirectExamination_{witness.speakerHandle}_End",
+    "descPattern": "End of redirect examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "RECROSS_EXAMINATION",
+    "namePattern": "RecrossExamination_{witness.speakerHandle}_Start",
+    "descPattern": "Start of recross-examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "RECROSS_EXAMINATION",
+    "namePattern": "RecrossExamination_{witness.speakerHandle}_End",
+    "descPattern": "End of recross-examination of {witness.name}",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CLOSING_STATEMENTS_PERIOD",
+    "namePattern": "ClosingStatementsPeriod_Start",
+    "descPattern": "Start of closing statements period",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CLOSING_STATEMENTS_PERIOD",
+    "namePattern": "ClosingStatementsPeriod_End",
+    "descPattern": "End of closing statements period",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CLOSING_STATEMENT_PLAINTIFF",
+    "namePattern": "ClosingStatement_Plaintiff_Start",
+    "descPattern": "Start of plaintiff closing statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CLOSING_STATEMENT_PLAINTIFF",
+    "namePattern": "ClosingStatement_Plaintiff_End",
+    "descPattern": "End of plaintiff closing statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CLOSING_STATEMENT_DEFENSE",
+    "namePattern": "ClosingStatement_Defense_Start",
+    "descPattern": "Start of defense closing statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CLOSING_STATEMENT_DEFENSE",
+    "namePattern": "ClosingStatement_Defense_End",
+    "descPattern": "End of defense closing statement",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CLOSING_REBUTTAL_PLAINTIFF",
+    "namePattern": "ClosingRebuttal_Plaintiff_Start",
+    "descPattern": "Start of plaintiff rebuttal closing",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CLOSING_REBUTTAL_PLAINTIFF",
+    "namePattern": "ClosingRebuttal_Plaintiff_End",
+    "descPattern": "End of plaintiff rebuttal closing",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "JURY_DELIBERATION",
+    "namePattern": "JuryDeliberation_Start",
+    "descPattern": "Start of jury deliberation",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "JURY_DELIBERATION",
+    "namePattern": "JuryDeliberation_End",
+    "descPattern": "End of jury deliberation",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "JURY_VERDICT",
+    "namePattern": "JuryVerdict_Start",
+    "descPattern": "Start of jury verdict",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "JURY_VERDICT",
+    "namePattern": "JuryVerdict_End",
+    "descPattern": "End of jury verdict",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "CASE_WRAPUP",
+    "namePattern": "CaseWrapup_Start",
+    "descPattern": "Start of case wrapup",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "CASE_WRAPUP",
+    "namePattern": "CaseWrapup_End",
+    "descPattern": "End of case wrapup",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_START",
+    "sectionType": "ACTIVITY",
+    "namePattern": "Activity_{activityType}_{eventId}_Start",
+    "descPattern": "Start of {activityType} activity",
+    "isActive": true
+  },
+  {
+    "markerType": "SECTION_END",
+    "sectionType": "ACTIVITY",
+    "namePattern": "Activity_{activityType}_{eventId}_End",
+    "descPattern": "End of {activityType} activity",
+    "isActive": true
+  }
+]

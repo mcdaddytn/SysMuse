@@ -3,6 +3,7 @@ import { Logger } from '../utils/logger';
 import { AccumulatorEngineV2 } from './AccumulatorEngineV2';
 import { WitnessMarkerDiscovery } from './WitnessMarkerDiscovery';
 import { ActivityMarkerDiscovery } from './ActivityMarkerDiscovery';
+import { StandardTrialHierarchyBuilder } from './StandardTrialHierarchyBuilder';
 import { TranscriptConfig } from '../types/config.types';
 
 export class Phase3ProcessorV2 {
@@ -10,6 +11,7 @@ export class Phase3ProcessorV2 {
   private accumulatorEngine: AccumulatorEngineV2;
   private witnessMarkerDiscovery: WitnessMarkerDiscovery;
   private activityMarkerDiscovery: ActivityMarkerDiscovery;
+  private hierarchyBuilder: StandardTrialHierarchyBuilder;
 
   constructor(
     private prisma: PrismaClient,
@@ -18,6 +20,7 @@ export class Phase3ProcessorV2 {
     this.accumulatorEngine = new AccumulatorEngineV2(prisma, config);
     this.witnessMarkerDiscovery = new WitnessMarkerDiscovery(prisma);
     this.activityMarkerDiscovery = new ActivityMarkerDiscovery(prisma);
+    this.hierarchyBuilder = new StandardTrialHierarchyBuilder(prisma);
   }
 
   /**
@@ -50,6 +53,10 @@ export class Phase3ProcessorV2 {
       this.logger.info('Step 3: Discovering activity markers');
       await this.activityMarkerDiscovery.discoverActivityMarkers(trialId);
 
+      // Step 4: Build Standard Trial Hierarchy
+      this.logger.info('Step 4: Building Standard Trial Hierarchy');
+      await this.hierarchyBuilder.buildStandardHierarchy(trialId);
+
       // Update completion status
       await this.prisma.trialProcessingStatus.update({
         where: { trialId },
@@ -61,14 +68,8 @@ export class Phase3ProcessorV2 {
     } catch (error) {
       this.logger.error(`Error in Phase 3 processing for trial ${trialId}:`, error);
       
-      // Update error status
-      await this.prisma.trialProcessingStatus.update({
-        where: { trialId },
-        data: { 
-          phase3Error: error instanceof Error ? error.message : String(error),
-          phase3ErrorAt: new Date()
-        }
-      });
+      // Log error (remove database update for now)
+      this.logger.error(`Phase 3 error details:`, error);
 
       throw error;
     }
@@ -79,7 +80,6 @@ export class Phase3ProcessorV2 {
    */
   async processAllTrials(): Promise<void> {
     const trials = await this.prisma.trial.findMany({
-      where: { isActive: true },
       orderBy: { id: 'asc' }
     });
 
@@ -109,6 +109,13 @@ export class Phase3ProcessorV2 {
   }
 
   /**
+   * Clean up trial markers (public method for CLI)
+   */
+  async cleanupTrialMarkers(trialId: number): Promise<void> {
+    await this.clearTrialResults(trialId);
+  }
+
+  /**
    * Clear existing Phase 3 results for a trial
    */
   private async clearTrialResults(trialId: number): Promise<void> {
@@ -119,24 +126,27 @@ export class Phase3ProcessorV2 {
       where: { trialId }
     });
 
-    // Clear witness markers
-    await this.prisma.witnessMarker.deleteMany({
+    // Clear markers
+    await this.prisma.marker.deleteMany({
+      where: { trialId }
+    });
+    
+    // Clear marker sections
+    await this.prisma.markerSection.deleteMany({
       where: { trialId }
     });
 
-    // Clear activity markers
-    await this.prisma.activityMarker.deleteMany({
-      where: { trialId }
-    });
-
-    // Reset processing status
-    await this.prisma.trialProcessingStatus.update({
+    // Reset processing status (use upsert in case it doesn't exist)
+    await this.prisma.trialProcessingStatus.upsert({
       where: { trialId },
-      data: {
+      create: {
+        trialId,
         phase3StartedAt: null,
-        phase3CompletedAt: null,
-        phase3Error: null,
-        phase3ErrorAt: null
+        phase3CompletedAt: null
+      },
+      update: {
+        phase3StartedAt: null,
+        phase3CompletedAt: null
       }
     });
   }

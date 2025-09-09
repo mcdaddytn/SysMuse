@@ -490,11 +490,11 @@ export class EnhancedTrialWorkflowService {
     const speakerCount = await this.prisma.speaker.count();
     const trialAttorneyCount = await this.prisma.trialAttorney.count();
     
-    console.log(`\n📊 [${context}] Entity counts:`);
-    console.log(`   Attorneys: ${attorneyCount}`);
-    console.log(`   Law Firms: ${lawFirmCount}`);
-    console.log(`   Speakers: ${speakerCount}`);
-    console.log(`   Trial Attorneys: ${trialAttorneyCount}\n`);
+    logger.info(`\n📊 [${context}] Entity counts:`);
+    logger.info(`   Attorneys: ${attorneyCount}`);
+    logger.info(`   Law Firms: ${lawFirmCount}`);
+    logger.info(`   Speakers: ${speakerCount}`);
+    logger.info(`   Trial Attorneys: ${trialAttorneyCount}\n`);
   }
 
   /**

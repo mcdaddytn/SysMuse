@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { format } from 'date-fns';
 import { OverrideData } from '../override/types';
+import logger from '../../utils/logger';
 
 export interface LLMPrompt {
   system: string;
@@ -68,7 +69,7 @@ export class PromptBuilder {
   private loadTemplates(): void {
     const templatesDir = path.join(process.cwd(), 'docs', 'feature-assets', 'feature-03H', 'prompts', 'templates');
     if (!fs.existsSync(templatesDir)) {
-      console.warn(`Templates directory not found: ${templatesDir}`);
+      logger.warn(`Templates directory not found: ${templatesDir}`);
       return;
     }
 
@@ -78,7 +79,7 @@ export class PromptBuilder {
         const template = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
         this.templates.set(template.name, template);
       } catch (error) {
-        console.error(`Failed to load template ${file}:`, error);
+        logger.error(`Failed to load template ${file}:`, error);
       }
     }
   }
@@ -163,7 +164,7 @@ export class PromptBuilder {
       try {
         return JSON.parse(fs.readFileSync(trialOverrideFile, 'utf-8'));
       } catch (error) {
-        console.warn(`Failed to load existing overrides for trial ${trialId}:`, error);
+        logger.warn(`Failed to load existing overrides for trial ${trialId}:`, error);
       }
     }
     

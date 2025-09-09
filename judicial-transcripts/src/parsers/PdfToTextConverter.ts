@@ -247,17 +247,38 @@ export class PdfToTextConverter {
         const inputSubDir = path.join(inputDir, subDir);
         const outputSubDir = path.join(outputDir, subDir);
         
+        logger.info(`\n=== Processing trial: ${subDir} ===`);
+        logger.info(`  Input dir: ${inputSubDir}`);
+        logger.info(`  Output dir: ${outputSubDir}`);
+        
+        // Check if input directory exists
+        if (!fs.existsSync(inputSubDir)) {
+          logger.error(`  ❌ Input directory does not exist: ${inputSubDir}`);
+          continue;
+        }
+        
         // Get PDFs in this subdirectory
         const pdfs = this.listPDFs(inputSubDir);
+        logger.info(`  PDFs found in input: ${pdfs.length}`);
+        if (pdfs.length > 0) {
+          logger.debug(`    PDF files: ${pdfs.slice(0, 3).join(', ')}${pdfs.length > 3 ? '...' : ''}`);
+        }
         
         // Also check for existing text files
         const existingTextFiles = fs.existsSync(outputSubDir) 
           ? fs.readdirSync(outputSubDir).filter(f => f.toLowerCase().endsWith('.txt'))
           : [];
+        logger.info(`  Text files already in output: ${existingTextFiles.length}`);
+        if (existingTextFiles.length > 0) {
+          logger.debug(`    Text files: ${existingTextFiles.slice(0, 3).join(', ')}${existingTextFiles.length > 3 ? '...' : ''}`);
+        }
         
         // Ensure output subdirectory exists
         if (!fs.existsSync(outputSubDir)) {
+          logger.info(`  Creating output directory: ${outputSubDir}`);
           fs.mkdirSync(outputSubDir, { recursive: true });
+        } else {
+          logger.debug(`  Output directory already exists`);
         }
         
         // Track converted files for summary
@@ -265,26 +286,34 @@ export class PdfToTextConverter {
         const metadataCopied: string[] = [];
         const skippedExisting: string[] = [];
         
+        // Read trial-specific config from PDF directory if exists
+        const pdfDirConfigPath = path.join(inputSubDir, 'trialstyle.json');
+        let trialSpecificConfig = {};
+        if (fs.existsSync(pdfDirConfigPath)) {
+          const configContent = fs.readFileSync(pdfDirConfigPath, 'utf-8');
+          trialSpecificConfig = JSON.parse(configContent);
+          logger.info(`  Found trial-specific config in input directory`);
+        } else {
+          logger.info(`  No trialstyle.json found in input directory`);
+        }
+        
         if (pdfs.length === 0) {
-          logger.info(`"${subDir}" - No PDFs found, checking for existing text files and metadata...`);
+          logger.info(`  No PDFs to convert (all text files may already exist)`);
           
           // If no PDFs but we have text files, treat them as already converted
           if (existingTextFiles.length > 0) {
-            logger.info(`"${subDir}" - Found ${existingTextFiles.length} existing text files`);
+            logger.info(`  Using existing ${existingTextFiles.length} text files`);
             convertedFiles.push(...existingTextFiles);
             skippedExisting.push(...existingTextFiles);
+            
+            // Still generate/copy trialstyle.json using existing text files
+            const pseudoPdfs = existingTextFiles.map(f => f.replace(/\.txt$/i, '.pdf'));
+            await this.generateTrialStyleConfig(outputSubDir, pseudoPdfs, trialSpecificConfig);
+          } else {
+            logger.warn(`  No PDFs found and no existing text files!`);
           }
         } else {
-          logger.info(`Processing "${subDir}" (${pdfs.length} PDFs)...`);
-
-          // Read trial-specific config from PDF directory if exists
-          const pdfDirConfigPath = path.join(inputSubDir, 'trialstyle.json');
-          let trialSpecificConfig = {};
-          if (fs.existsSync(pdfDirConfigPath)) {
-            const configContent = fs.readFileSync(pdfDirConfigPath, 'utf-8');
-            trialSpecificConfig = JSON.parse(configContent);
-            logger.info(`Found trial-specific config in PDF directory: ${subDir}`);
-          }
+          logger.info(`  Converting ${pdfs.length} PDFs...`);
           
           // Generate trialstyle.json for this subdirectory
           await this.generateTrialStyleConfig(outputSubDir, pdfs, trialSpecificConfig);
@@ -313,24 +342,37 @@ export class PdfToTextConverter {
         }
         
         // ALWAYS copy metadata files if they exist (even if no PDFs found)
-        const metadataFiles = ['trial-metadata.json', 'Attorney.json', 'Witness.json', 'Trial.json', 'Judge.json', 'CourtReporter.json'];
+        logger.info(`\n  Checking for metadata files to copy...`);
+        const metadataFiles = ['trial-metadata.json', 'Attorney.json', 'Witness.json', 'Trial.json', 'Judge.json', 'CourtReporter.json', 'trialstyle.json'];
         for (const metaFile of metadataFiles) {
           const sourcePath = path.join(inputSubDir, metaFile);
           const destPath = path.join(outputSubDir, metaFile);
-          if (fs.existsSync(sourcePath)) {
-            // Check if destination file is different or doesn't exist
-            if (!fs.existsSync(destPath) || 
-                fs.readFileSync(sourcePath, 'utf-8') !== fs.readFileSync(destPath, 'utf-8')) {
+          
+          if (!fs.existsSync(sourcePath)) {
+            logger.debug(`    ${metaFile}: not found in source`);
+            continue;
+          }
+          
+          if (!fs.existsSync(destPath)) {
+            fs.copyFileSync(sourcePath, destPath);
+            metadataCopied.push(metaFile);
+            logger.info(`    ✔ Copied ${metaFile} (new file)`);
+          } else {
+            // Check if destination file is different
+            const sourceContent = fs.readFileSync(sourcePath, 'utf-8');
+            const destContent = fs.readFileSync(destPath, 'utf-8');
+            if (sourceContent !== destContent) {
               fs.copyFileSync(sourcePath, destPath);
               metadataCopied.push(metaFile);
-              logger.info(`✔ Copied metadata: ${metaFile}`);
+              logger.info(`    ✔ Copied ${metaFile} (updated)`);
             } else {
-              logger.debug(`⏩ Metadata already up-to-date: ${metaFile}`);
+              logger.info(`    ⏩ ${metaFile} already up-to-date`);
             }
           }
         }
         
         // ALWAYS generate conversion summary (even if no PDFs found)
+        logger.info(`\n  Creating conversion summary...`);
         const conversionSummary = {
           timestamp: new Date().toISOString(),
           trialName: subDir,
@@ -346,8 +388,10 @@ export class PdfToTextConverter {
         };
         
         const summaryPath = path.join(outputSubDir, 'conversion-summary.json');
+        logger.info(`    Writing to: ${summaryPath}`);
         fs.writeFileSync(summaryPath, JSON.stringify(conversionSummary, null, 2));
-        logger.info(`✔ Generated conversion summary for ${subDir}`);
+        logger.info(`    ✔ Conversion summary created`);
+        logger.info(`    Summary: ${pdfs.length} PDFs, ${convertedFiles.length} converted, ${skippedExisting.length} skipped, ${metadataCopied.length} metadata copied`);
       }
     } else {
       // Process single directory

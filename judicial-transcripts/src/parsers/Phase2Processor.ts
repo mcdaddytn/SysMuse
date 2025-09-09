@@ -1046,11 +1046,19 @@ export class Phase2Processor {
     });
     
     if (!witness) {
+      // Parse the witness name into components
+      const parsedName = this.parseWitnessName(witnessName);
+      
       witness = await this.prisma.witness.create({
         data: {
           trialId: this.context.trialId,
           name: witnessName,
           displayName: displayName,
+          firstName: parsedName.firstName,
+          middleInitial: parsedName.middleInitial,
+          lastName: parsedName.lastName,
+          suffix: parsedName.suffix,
+          witnessFingerprint: parsedName.fingerprint,
           witnessCaller: witnessCaller,
           speakerId: speaker.id,
           swornStatus: 'NOT_SWORN'
@@ -1060,7 +1068,7 @@ export class Phase2Processor {
         }
       });
       
-      logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}`);
+      logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}, fingerprint: ${parsedName.fingerprint}`);
     }
     
     // Detect sworn status from the text
@@ -1277,11 +1285,19 @@ export class Phase2Processor {
             });
           }
           
+          // Parse the witness name into components
+          const parsedName = this.parseWitnessName(witnessName);
+          
           witness = await this.prisma.witness.create({
             data: {
               trialId: this.context.trialId,
               name: witnessName,
               displayName: displayName,
+              firstName: parsedName.firstName,
+              middleInitial: parsedName.middleInitial,
+              lastName: parsedName.lastName,
+              suffix: parsedName.suffix,
+              witnessFingerprint: parsedName.fingerprint,
               witnessCaller: witnessCaller,
               speakerId: speaker.id,
               swornStatus: swornStatus
@@ -1291,7 +1307,7 @@ export class Phase2Processor {
             }
           });
           
-          logger.info(`Created witness: ${displayName}`);
+          logger.info(`Created witness: ${displayName}, fingerprint: ${parsedName.fingerprint}`);
         } else if (witness.swornStatus !== swornStatus) {
           // Update sworn status if changed
           witness = await this.prisma.witness.update({
@@ -1413,6 +1429,15 @@ export class Phase2Processor {
     const hasBufferedWitnessLine = state.eventLines.length > 0 && 
                                     !state.currentEvent;
     
+    // Get attorney ID from examination context if available
+    let attorneyId = null;
+    if (this.examinationContext) {
+      const examiningAttorney = this.examinationContext.getExaminingAttorney();
+      if (examiningAttorney?.speaker?.trialAttorneys && examiningAttorney.speaker.trialAttorneys.length > 0) {
+        attorneyId = examiningAttorney.speaker.trialAttorneys[0].attorney.id;
+      }
+    }
+    
     // Create witness called event
     if (hasBufferedWitnessLine) {
       // Use the buffered witness line as the start
@@ -1430,7 +1455,8 @@ export class Phase2Processor {
           swornStatus: eventSwornStatus,
           continued: continued,
           presentedByVideo: isVideo,
-          witnessCaller: witnessInfo.witnessCaller
+          witnessCaller: witnessInfo.witnessCaller,
+          attorneyId: attorneyId
         }
       };
       // Add the examination line to the buffered lines
@@ -1450,7 +1476,8 @@ export class Phase2Processor {
           swornStatus: eventSwornStatus,
           continued: continued,
           presentedByVideo: isVideo,
-          witnessCaller: witnessInfo.witnessCaller
+          witnessCaller: witnessInfo.witnessCaller,
+          attorneyId: attorneyId
         }
       };
       state.eventLines = [line];
@@ -1512,6 +1539,13 @@ export class Phase2Processor {
       return false;
     }
     
+    // Remove speaker prefix from text if it's still there
+    let cleanText = lineText;
+    if (line.speakerPrefix && lineText.startsWith(line.speakerPrefix)) {
+      // Remove the speaker prefix and any following colon and whitespace
+      cleanText = lineText.substring(line.speakerPrefix.length).replace(/^:\s*/, '').trim();
+    }
+    
     // Start new statement event or continue existing
     if (!state.currentEvent) {
       state.currentEvent = {
@@ -1520,7 +1554,7 @@ export class Phase2Processor {
         startLineNumber: line.lineNumber,
         endLineNumber: line.lineNumber,
         speakerId: speaker.id,
-        text: lineText,
+        text: cleanText,
         metadata: {
           speakerAlias: line.speakerPrefix  // Save original speaker prefix
         }
@@ -1532,7 +1566,7 @@ export class Phase2Processor {
       state.eventLines.push(line);
       state.currentEvent.endTime = line.timestamp;
       state.currentEvent.endLineNumber = line.lineNumber;
-      state.currentEvent.text = (state.currentEvent.text || '') + '\n' + lineText;
+      state.currentEvent.text = (state.currentEvent.text || '') + '\n' + cleanText;
     }
     
     // Handle contextual speaker updates
@@ -2028,6 +2062,7 @@ export class Phase2Processor {
     const swornStatus = eventInfo.metadata?.swornStatus || 'NOT_SWORN';
     const continued = eventInfo.metadata?.continued || false;
     const presentedByVideo = fullText.includes('VIDEO') || false;
+    const attorneyId = eventInfo.metadata?.attorneyId || null;
     
     if (witnessId && examinationType) {
       await this.prisma.witnessCalledEvent.create({
@@ -2037,7 +2072,8 @@ export class Phase2Processor {
           examinationType,
           swornStatus,
           continued,
-          presentedByVideo
+          presentedByVideo,
+          attorneyId
         }
       });
       
@@ -2045,6 +2081,84 @@ export class Phase2Processor {
     } else {
       logger.warn(`Missing witness or examination type for witness called event`);
     }
+  }
+
+  /**
+   * Parse witness name into components
+   */
+  private parseWitnessName(fullName: string): {
+    firstName?: string;
+    middleInitial?: string;
+    lastName?: string;
+    suffix?: string;
+    fingerprint: string;
+  } {
+    if (!fullName) {
+      return { fingerprint: '' };
+    }
+    
+    // Common suffixes to look for
+    const suffixes = ['JR', 'SR', 'III', 'II', 'IV', 'V', 'ESQ', 'PH.D', 'M.D', 'J.D'];
+    let suffix: string | undefined;
+    let nameParts = fullName.trim().split(/\s+/);
+    
+    // Check for suffix
+    const lastPart = nameParts[nameParts.length - 1].toUpperCase().replace(/[.,]/g, '');
+    if (suffixes.includes(lastPart)) {
+      suffix = lastPart;
+      nameParts = nameParts.slice(0, -1);
+    }
+    
+    // Handle common patterns
+    let firstName: string | undefined;
+    let middleInitial: string | undefined;
+    let lastName: string | undefined;
+    
+    if (nameParts.length === 1) {
+      // Single name (rare)
+      lastName = nameParts[0];
+    } else if (nameParts.length === 2) {
+      // First Last
+      firstName = nameParts[0];
+      lastName = nameParts[1];
+    } else if (nameParts.length === 3) {
+      // First Middle Last or First Last, Suffix
+      firstName = nameParts[0];
+      // Check if middle part is a single initial (with or without period)
+      if (nameParts[1].length <= 2) {
+        middleInitial = nameParts[1].replace('.', '');
+        lastName = nameParts[2];
+      } else {
+        // Treat as First Middle-as-part-of-last Last
+        lastName = nameParts.slice(1).join(' ');
+      }
+    } else {
+      // More complex name - take first as firstName, last as lastName, everything in between as middle
+      firstName = nameParts[0];
+      lastName = nameParts[nameParts.length - 1];
+      // If there's a clear middle initial (single letter with optional period)
+      const middleParts = nameParts.slice(1, -1);
+      const potentialInitial = middleParts.find(p => p.length <= 2);
+      if (potentialInitial) {
+        middleInitial = potentialInitial.replace('.', '');
+      }
+    }
+    
+    // Generate fingerprint from non-null components
+    const fingerprintParts = [];
+    if (firstName) fingerprintParts.push(firstName.toUpperCase().replace(/[^A-Z]/g, ''));
+    if (middleInitial) fingerprintParts.push(middleInitial.toUpperCase().replace(/[^A-Z]/g, ''));
+    if (lastName) fingerprintParts.push(lastName.toUpperCase().replace(/[^A-Z]/g, ''));
+    if (suffix) fingerprintParts.push(suffix);
+    const fingerprint = fingerprintParts.join('_');
+    
+    return {
+      firstName,
+      middleInitial,
+      lastName,
+      suffix,
+      fingerprint
+    };
   }
 
   /**

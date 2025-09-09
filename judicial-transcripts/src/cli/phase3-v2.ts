@@ -58,9 +58,7 @@ program
         logger.info('Completed processing all trials');
       } else {
         // Process first available trial
-        const trial = await prisma.trial.findFirst({
-          where: { isActive: true }
-        });
+        const trial = await prisma.trial.findFirst({});
         
         if (!trial) {
           logger.error('No active trials found');
@@ -116,13 +114,8 @@ async function showProcessingSummary(trialId?: number) {
   const accumulatorResults = await prisma.accumulatorResult.count({ where });
   logger.info(`Accumulator results: ${accumulatorResults}`);
   
-  // Count witness markers
-  const witnessMarkers = await prisma.witnessMarker.count({ where });
-  logger.info(`Witness markers: ${witnessMarkers}`);
-  
-  // Count activity markers
-  const activityMarkers = await prisma.activityMarker.count({ where });
-  logger.info(`Activity markers: ${activityMarkers}`);
+  // Note: witnessMarker and activityMarker tables were removed from schema
+  // These counts are now handled through marker sections with specific types
   
   // Show sample results
   if (accumulatorResults > 0) {
@@ -145,10 +138,11 @@ async function showProcessingSummary(trialId?: number) {
 
 async function showTrialStatus(trialId: number) {
   const trial = await prisma.trial.findUnique({
-    where: { id: trialId },
-    include: {
-      processingStatus: true
-    }
+    where: { id: trialId }
+  });
+  
+  const workflowState = await prisma.trialWorkflowState.findUnique({
+    where: { trialId: trialId }
   });
   
   if (!trial) {
@@ -158,13 +152,13 @@ async function showTrialStatus(trialId: number) {
   
   logger.info(`\nTrial: ${trial.name} (ID: ${trial.id})`);
   
-  if (trial.processingStatus) {
-    const status = trial.processingStatus;
-    logger.info(`Phase 3 started: ${status.phase3StartedAt || 'Not started'}`);
-    logger.info(`Phase 3 completed: ${status.phase3CompletedAt || 'Not completed'}`);
+  if (workflowState) {
+    logger.info(`Phase 3 completed: ${workflowState.phase3CompletedAt || 'Not completed'}`);
+    // Note: phase3MarkerCount and phase3SectionCount were removed from schema
+    // These are now tracked through MarkerSection counts
     
-    if (status.phase3Error) {
-      logger.error(`Phase 3 error: ${status.phase3Error}`);
+    if (workflowState.lastError) {
+      logger.error(`Last error: ${workflowState.lastError}`);
     }
   }
   
@@ -173,28 +167,34 @@ async function showTrialStatus(trialId: number) {
 
 async function showAllTrialsStatus() {
   const trials = await prisma.trial.findMany({
-    where: { isActive: true },
-    include: {
-      processingStatus: true
-    },
     orderBy: { id: 'asc' }
   });
+  
+  // Get all workflow states
+  const workflowStates = await prisma.trialWorkflowState.findMany({
+    where: {
+      trialId: { in: trials.map(t => t.id) }
+    }
+  });
+  
+  // Create a map for easy lookup
+  const stateMap = new Map(workflowStates.map(s => [s.trialId, s]));
   
   logger.info('\n=== All Trials Status ===');
   
   for (const trial of trials) {
-    const status = trial.processingStatus;
+    const status = stateMap.get(trial.id);
     const phase3Status = status?.phase3CompletedAt ? '✓' : 
-                        status?.phase3StartedAt ? '⏳' : 
-                        status?.phase3Error ? '✗' : '-';
+                        status?.phase3Completed ? '⏳' : 
+                        status?.lastError ? '✗' : '-';
     
     logger.info(`${phase3Status} Trial ${trial.id}: ${trial.name}`);
   }
   
   // Overall summary
-  const completed = trials.filter(t => t.processingStatus?.phase3CompletedAt).length;
-  const inProgress = trials.filter(t => t.processingStatus?.phase3StartedAt && !t.processingStatus?.phase3CompletedAt).length;
-  const failed = trials.filter(t => t.processingStatus?.phase3Error).length;
+  const completed = workflowStates.filter(s => s.phase3CompletedAt).length;
+  const inProgress = workflowStates.filter(s => s.phase3Completed && !s.phase3CompletedAt).length;
+  const failed = workflowStates.filter(s => s.lastError && !s.phase3CompletedAt).length;
   
   logger.info(`\nSummary: ${completed} completed, ${inProgress} in progress, ${failed} failed`);
 }

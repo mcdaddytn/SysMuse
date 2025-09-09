@@ -11,6 +11,7 @@ import { SearchService } from '../services/SearchService';
 import { TranscriptExportService } from '../services/TranscriptExportService';
 import { CombinedSearchService } from '../services/CombinedSearchService';
 import logger from '../utils/logger';
+import reportsRouter from './routes/reports';
 const multer = require('multer');
 import path from 'path';
 
@@ -22,6 +23,9 @@ const exportService = new TranscriptExportService();
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Mount report routes
+app.use('/api/reports', reportsRouter);
 
 // File upload configuration
 const upload = multer({

@@ -184,7 +184,7 @@ export class EnhancedTrialWorkflowService {
         WorkflowStep.PHASE1,
         ...(this.config.enableLLMOverrides && !this.config.skipOptional ? [
           WorkflowStep.LLM_OVERRIDE,
-          WorkflowStep.OVERRIDE_REVIEW,
+          ...(this.config.autoReview?.overrides ? [] : [WorkflowStep.OVERRIDE_REVIEW]),
           WorkflowStep.OVERRIDE_IMPORT
         ] : [])
       ],
@@ -193,7 +193,7 @@ export class EnhancedTrialWorkflowService {
         WorkflowStep.PHASE1,
         ...(this.config.enableLLMOverrides && !this.config.skipOptional ? [
           WorkflowStep.LLM_OVERRIDE,
-          WorkflowStep.OVERRIDE_REVIEW,
+          ...(this.config.autoReview?.overrides ? [] : [WorkflowStep.OVERRIDE_REVIEW]),
           WorkflowStep.OVERRIDE_IMPORT
         ] : []),
         WorkflowStep.PHASE2,
@@ -204,20 +204,20 @@ export class EnhancedTrialWorkflowService {
         WorkflowStep.PHASE1,
         ...(this.config.enableLLMOverrides && !this.config.skipOptional ? [
           WorkflowStep.LLM_OVERRIDE,
-          WorkflowStep.OVERRIDE_REVIEW,
+          ...(this.config.autoReview?.overrides ? [] : [WorkflowStep.OVERRIDE_REVIEW]),
           WorkflowStep.OVERRIDE_IMPORT
         ] : []),
         WorkflowStep.PHASE2,
         WorkflowStep.PHASE2_INDEX,
         ...(this.config.enableLLMMarkers && !this.config.skipOptional ? [
           WorkflowStep.LLM_MARKER_1,
-          WorkflowStep.MARKER1_REVIEW,
+          ...(this.config.autoReview?.markers1 ? [] : [WorkflowStep.MARKER1_REVIEW]),
           WorkflowStep.MARKER1_IMPORT
         ] : []),
         WorkflowStep.PHASE3,
         ...(this.config.enableLLMMarkers && !this.config.skipOptional ? [
           WorkflowStep.LLM_MARKER_2,
-          WorkflowStep.MARKER2_REVIEW,
+          ...(this.config.autoReview?.markers2 ? [] : [WorkflowStep.MARKER2_REVIEW]),
           WorkflowStep.MARKER2_IMPORT
         ] : []),
         WorkflowStep.PHASE3_INDEX,
@@ -228,20 +228,20 @@ export class EnhancedTrialWorkflowService {
         WorkflowStep.PHASE1,
         ...(this.config.enableLLMOverrides && !this.config.skipOptional ? [
           WorkflowStep.LLM_OVERRIDE,
-          WorkflowStep.OVERRIDE_REVIEW,
+          ...(this.config.autoReview?.overrides ? [] : [WorkflowStep.OVERRIDE_REVIEW]),
           WorkflowStep.OVERRIDE_IMPORT
         ] : []),
         WorkflowStep.PHASE2,
         WorkflowStep.PHASE2_INDEX,
         ...(this.config.enableLLMMarkers && !this.config.skipOptional ? [
           WorkflowStep.LLM_MARKER_1,
-          WorkflowStep.MARKER1_REVIEW,
+          ...(this.config.autoReview?.markers1 ? [] : [WorkflowStep.MARKER1_REVIEW]),
           WorkflowStep.MARKER1_IMPORT
         ] : []),
         WorkflowStep.PHASE3,
         ...(this.config.enableLLMMarkers && !this.config.skipOptional ? [
           WorkflowStep.LLM_MARKER_2,
-          WorkflowStep.MARKER2_REVIEW,
+          ...(this.config.autoReview?.markers2 ? [] : [WorkflowStep.MARKER2_REVIEW]),
           WorkflowStep.MARKER2_IMPORT
         ] : []),
         WorkflowStep.PHASE3_INDEX,
@@ -733,6 +733,11 @@ export class EnhancedTrialWorkflowService {
    * Check if override review is needed
    */
   private async executeOverrideReview(trialId: number, trial: any): Promise<StepResult> {
+    // Never require review if autoReview is enabled
+    if (this.config.autoReview?.overrides) {
+      return { success: true };
+    }
+    
     const needsReview = await this.shouldRunOverrideReview(trial);
     
     if (needsReview) {
@@ -877,7 +882,7 @@ export class EnhancedTrialWorkflowService {
         metadata: {
           generatedAt: new Date().toISOString(),
           llmModel: 'gpt-4',
-          userReviewed: this.config.autoReview?.markers1 || false,
+          userReviewed: this.config.autoReview?.markers1 === true,  // Ensure boolean
           phase: 'post-phase2'
         },
         markers: []
@@ -897,6 +902,11 @@ export class EnhancedTrialWorkflowService {
    * Check if marker review is needed (Phase 2)
    */
   private async executeMarker1Review(trialId: number, trial: any): Promise<StepResult> {
+    // Never require review if autoReview is enabled
+    if (this.config.autoReview?.markers1) {
+      return { success: true };
+    }
+    
     const needsReview = await this.shouldRunMarker1Review(trial);
     
     if (needsReview) {
@@ -933,7 +943,7 @@ export class EnhancedTrialWorkflowService {
         metadata: {
           generatedAt: new Date().toISOString(),
           llmModel: 'gpt-4',
-          userReviewed: this.config.autoReview?.markers2 || false,
+          userReviewed: this.config.autoReview?.markers2 === true,  // Ensure boolean
           phase: 'post-phase3'
         },
         markers: []
@@ -953,6 +963,11 @@ export class EnhancedTrialWorkflowService {
    * Check if marker review is needed (Phase 3)
    */
   private async executeMarker2Review(trialId: number, trial: any): Promise<StepResult> {
+    // Never require review if autoReview is enabled
+    if (this.config.autoReview?.markers2) {
+      return { success: true };
+    }
+    
     const needsReview = await this.shouldRunMarker2Review(trial);
     
     if (needsReview) {

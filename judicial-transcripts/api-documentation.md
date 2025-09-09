@@ -110,6 +110,179 @@ Get detailed information about a specific trial.
 
 ---
 
+### Reports API (NEW)
+
+#### `GET /api/reports/hierarchy/:trialId`
+Generate hierarchical view of trial structure.
+
+**Parameters:**
+- `trialId` (number): Trial ID
+
+**Query Parameters:**
+- `view` (string): View type - `standard`, `session`, `objections`, `interactions`, `all` (default: `standard`)
+- `includeTranscript` (boolean): Include transcript excerpts (default: `false`)
+- `maxDepth` (number, optional): Maximum hierarchy depth to return
+
+**Example:**
+```
+GET /api/reports/hierarchy/1?view=standard&includeTranscript=false
+```
+
+**Response:**
+```json
+{
+  "trialId": 1,
+  "trialName": "VocalLife vs Amazon",
+  "view": "standard",
+  "hierarchy": [
+    {
+      "section": {
+        "id": 123,
+        "markerSectionType": "TRIAL",
+        "name": "Trial Name",
+        "startEventId": 1,
+        "endEventId": 5000,
+        "confidence": 0.95
+      },
+      "children": [...],
+      "stats": {
+        "eventCount": 5000,
+        "speakerCount": 15,
+        "confidence": 0.95
+      }
+    }
+  ],
+  "metadata": {
+    "generatedAt": "2025-01-09T12:00:00Z",
+    "nodeCount": 45,
+    "maxDepth": 5
+  }
+}
+```
+
+#### `GET /api/reports/phase3/:trialId`
+Get Phase3 processing statistics and results.
+
+**Parameters:**
+- `trialId` (number): Trial ID
+
+**Query Parameters:**
+- `includeMarkers` (boolean): Include detailed marker list (default: `false`)
+- `includeAccumulators` (boolean): Include accumulator results (default: `false`)
+
+**Example:**
+```
+GET /api/reports/phase3/1?includeMarkers=true
+```
+
+**Response:**
+```json
+{
+  "trialId": 1,
+  "phase3Status": {
+    "completed": true,
+    "completedAt": "2025-01-09T10:00:00Z",
+    "markersIndexed": true
+  },
+  "statistics": {
+    "markers": 250,
+    "markerSections": 45,
+    "accumulatorResults": 180,
+    "elasticSearchResults": 1200
+  },
+  "markersByType": {
+    "WITNESS_CALLED": 15,
+    "OBJECTION": 45,
+    "SIDEBAR": 12
+  },
+  "accumulatorSummary": {
+    "objection_sustained": 23,
+    "objection_overruled": 22,
+    "judge_attorney_interaction": 8
+  }
+}
+```
+
+#### `GET /api/reports/phase3/monitor/:trialId`
+Get detailed Phase3 processing progress and monitoring data.
+
+**Parameters:**
+- `trialId` (number): Trial ID
+
+**Response:**
+```json
+{
+  "trialId": 1,
+  "elasticSearch": {
+    "expressions": 50,
+    "statements": 10000,
+    "expectedResults": 500000,
+    "actualResults": 450000,
+    "progress": "90.0",
+    "matched": 5000,
+    "matchedPercentage": "1.11",
+    "topMatchingExpressions": [
+      {"name": "objection", "matches": 250}
+    ]
+  },
+  "accumulators": {
+    "total": 20,
+    "results": 180,
+    "matched": 75
+  },
+  "markers": {
+    "total": 250,
+    "sections": 45,
+    "typeBreakdown": {
+      "WITNESS_CALLED": 15,
+      "OBJECTION": 45
+    }
+  },
+  "witnesses": {
+    "total": 12,
+    "calledEvents": 24,
+    "averageExaminationsPerWitness": "2.0"
+  }
+}
+```
+
+#### `GET /api/reports/status`
+Get overall system and available reports status.
+
+**Response:**
+```json
+{
+  "availableReports": [
+    {
+      "type": "hierarchy",
+      "views": ["standard", "session", "objections", "interactions"],
+      "description": "Hierarchical trial structure views"
+    },
+    {
+      "type": "phase3",
+      "description": "Phase 3 processing statistics and marker analysis"
+    },
+    {
+      "type": "export",
+      "formats": ["txt", "json", "csv"],
+      "description": "Full transcript export with annotations"
+    }
+  ],
+  "systemStatus": {
+    "totalTrials": 5,
+    "phase3Completed": 3,
+    "indexedTrials": 3
+  },
+  "globalStatistics": {
+    "markers": 1250,
+    "markerSections": 225,
+    "accumulatorResults": 900
+  }
+}
+```
+
+---
+
 ### Sessions
 
 #### `GET /api/sessions/:id/events`

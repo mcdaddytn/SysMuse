@@ -11,6 +11,7 @@ import { TranscriptConfig, TrialStyleConfig } from '../types/config.types';
 import { caseNumberExtractor } from '../utils/CaseNumberExtractor';
 import { generateCaseHandle } from '../utils/fileTokenGenerator';
 import logger, { Logger } from '../utils/logger';
+import { initializeLogger } from '../utils/log-config-loader';
 
 const program = new Command();
 
@@ -201,6 +202,9 @@ program
   .option('--debug-output', 'Enable debug output for multi-pass parser')
   .action(async (options) => {
     try {
+      // Initialize logger with centralized config first
+      initializeLogger();
+      
       // Load configuration
       let config: TranscriptConfig = { ...defaultConfig };
       
@@ -209,21 +213,6 @@ program
         if (fs.existsSync(configPath)) {
           const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
           config = { ...config, ...fileConfig };
-          
-          // Initialize logger with configuration if logging config is present
-          if (fileConfig.logging) {
-            Logger.initialize(fileConfig.logging);
-            logger.info(`Initialized logger with configuration from ${configPath}`);
-            
-            // Log which profile is being used
-            if (fileConfig.logging.profile) {
-              logger.info(`Using logging profile: ${fileConfig.logging.profile}`);
-            } else if (fileConfig.logging.appendTimestamp) {
-              logger.info(`Using timestamp-appended log files`);
-            } else {
-              logger.info(`Using default log file names`);
-            }
-          }
           
           logger.info(`Loaded configuration from ${configPath}`);
         } else {

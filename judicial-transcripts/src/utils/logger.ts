@@ -76,7 +76,7 @@ export { logger };
 // Wrapper class for consistent logging interface
 export class Logger {
   private context: string;
-  private static globalConfig: LoggingConfig | undefined;
+  static globalConfig: LoggingConfig | undefined;
 
   constructor(context: string) {
     this.context = context;
@@ -88,14 +88,24 @@ export class Logger {
    */
   static initialize(config: LoggingConfig): void {
     Logger.globalConfig = config;
-    logger = createLogger(config);
+    const newLogger = createLogger(config);
+    
+    // Replace all transports in the existing logger instance
+    logger.clear();
+    newLogger.transports.forEach(transport => {
+      logger.add(transport);
+    });
+    
+    // Update logger level
+    logger.level = newLogger.level;
+    logger.format = newLogger.format;
   }
 
   /**
    * Reinitialize the logger with new configuration
    */
   static reconfigure(config: LoggingConfig): void {
-    logger = ConfigurableLogger.initialize(config);
+    Logger.initialize(config);
   }
 
   info(message: string): void {
@@ -130,7 +140,8 @@ export class Logger {
 
 // Export function to get current log file paths
 export function getLogFilePaths(): { combined: string; error: string; warning?: string } | null {
-  if (loggingConfig) {
+  // Check if Logger has been initialized with a config
+  if (Logger.globalConfig) {
     return ConfigurableLogger.getLogFilePaths();
   }
   // Return legacy paths

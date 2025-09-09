@@ -5,10 +5,14 @@ import { Phase3ProcessorV2 } from '../phase3/Phase3ProcessorV2';
 import { TranscriptConfig } from '../types/config.types';
 import { MarkerUpsert } from '../phase3/MarkerUpsert';
 import { Logger } from '../utils/logger';
+import { initializeLogger } from '../utils/log-config-loader';
 import * as path from 'path';
 
 const prisma = new PrismaClient();
 const logger = new Logger('Phase3CLI');
+
+// Initialize logger with centralized config
+initializeLogger();
 
 // Helper function to update workflow state for Phase 3
 async function updatePhase3WorkflowState(trialId: number): Promise<void> {

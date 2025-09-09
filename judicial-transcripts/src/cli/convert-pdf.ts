@@ -5,8 +5,12 @@ import * as path from 'path';
 import { PdfToTextConverter, PdfToTextConfig } from '../parsers/PdfToTextConverter';
 import { TranscriptConfig } from '../types/config.types';
 import { logger } from '../utils/logger';
+import { initializeLogger } from '../utils/log-config-loader';
 
 async function main() {
+  // Initialize logger with centralized config first
+  initializeLogger();
+  
   const configPath = process.argv[2];
   const trialFilter = process.argv.includes('--trial') ? 
     process.argv[process.argv.indexOf('--trial') + 1] : null;
@@ -22,9 +26,6 @@ async function main() {
     // Load main configuration
     const configContent = fs.readFileSync(configPath, 'utf-8');
     const config: TranscriptConfig = JSON.parse(configContent);
-    
-    // Set up logging
-    (logger as any).setLevel(config.logLevel || 'info');
     
     logger.info('=== PDF to Text Conversion Phase ===');
     logger.info(`Input directory: ${config.inputDir}`);

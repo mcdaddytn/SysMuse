@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '../utils/logger';
+import { initializeLogger } from '../utils/log-config-loader';
 import { Phase1ReportGenerator } from '../services/Phase1ReportGenerator';
 import { HierarchyViewService } from '../services/HierarchyViewService';
 import { TranscriptConfig } from '../types/config.types';
@@ -22,18 +23,15 @@ const defaultConfig: TranscriptConfig = {
 };
 
 async function loadConfig(configPath: string): Promise<TranscriptConfig> {
+  // Initialize logger with centralized config first
+  initializeLogger();
+  
   if (!fs.existsSync(configPath)) {
     throw new Error(`Configuration file not found: ${configPath}`);
   }
   
   const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   const config = { ...defaultConfig, ...fileConfig };
-  
-  // Initialize logger with configuration if logging config is present
-  if (fileConfig.logging) {
-    Logger.initialize(fileConfig.logging);
-    console.log(`Initialized logger with profile: ${fileConfig.logging.profile || 'default'}`);
-  }
   
   return config;
 }

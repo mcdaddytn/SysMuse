@@ -1,0 +1,37 @@
+{
+  "profile": "AppendDatetime",
+  "profiles": {
+    "Default": {
+      "appendTimestamp": false,
+      "timestampFormat": "",
+      "logLevel": "info",
+      "enableWarningLog": true,
+      "logDirectory": "logs",
+      "consoleLevel": "info"
+    },
+    "AppendDatetime": {
+      "appendTimestamp": true,
+      "timestampFormat": "YYYY-MM-DD-HHmmss",
+      "logLevel": "info",
+      "enableWarningLog": true,
+      "logDirectory": "logs",
+      "consoleLevel": "info"
+    },
+    "Debug": {
+      "appendTimestamp": true,
+      "timestampFormat": "YYYY-MM-DD-HHmmss",
+      "logLevel": "debug",
+      "enableWarningLog": true,
+      "logDirectory": "logs",
+      "consoleLevel": "debug"
+    },
+    "Production": {
+      "appendTimestamp": true,
+      "timestampFormat": "YYYY-MM-DD-HHmmss",
+      "logLevel": "warn",
+      "enableWarningLog": true,
+      "logDirectory": "logs",
+      "consoleLevel": "warn"
+    }
+  }
+}

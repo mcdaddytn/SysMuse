@@ -15,6 +15,7 @@ export interface LoggingProfile {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   enableWarningLog: boolean;
   logDirectory?: string;
+  consoleLevel?: 'debug' | 'info' | 'warn' | 'error';
 }
 
 export interface LoggingConfig {
@@ -28,6 +29,7 @@ export interface LoggingConfig {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   enableWarningLog?: boolean;
   logDirectory?: string;
+  consoleLevel?: 'debug' | 'info' | 'warn' | 'error';
 }
 
 export interface TranscriptConfig {

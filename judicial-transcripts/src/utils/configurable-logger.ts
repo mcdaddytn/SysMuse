@@ -11,14 +11,16 @@ const DEFAULT_PROFILES: { [key: string]: LoggingProfile } = {
     timestampFormat: '',
     logLevel: 'info',
     enableWarningLog: true,
-    logDirectory: 'logs'
+    logDirectory: 'logs',
+    consoleLevel: 'info'
   },
   AppendDatetime: {
     appendTimestamp: true,
     timestampFormat: 'YYYY-MM-DD-HHmmss',
     logLevel: 'info',
     enableWarningLog: true,
-    logDirectory: 'logs'
+    logDirectory: 'logs',
+    consoleLevel: 'info'
   }
 };
 
@@ -62,8 +64,9 @@ export class ConfigurableLogger {
         winston.format.json()
       ),
       transports: [
-        // Console transport
+        // Console transport with separate level control
         new winston.transports.Console({
+          level: effectiveConfig.consoleLevel || effectiveConfig.logLevel || 'info',
           format: winston.format.combine(
             winston.format.colorize(),
             winston.format.printf(({ level, message, timestamp }) => {
@@ -105,6 +108,10 @@ export class ConfigurableLogger {
           filename: path.join(logsDir, warningLogFile),
           level: 'warn',
           format: winston.format.combine(
+            // Filter to only include warnings, not errors
+            winston.format((info) => {
+              return info.level === 'warn' ? info : false;
+            })(),
             winston.format.timestamp(),
             winston.format.printf(({ level, message, timestamp }) => {
               return `${timestamp} [${level}]: ${message}`;
@@ -149,7 +156,8 @@ export class ConfigurableLogger {
         timestampFormat: config.timestampFormat || 'YYYY-MM-DD-HHmmss',
         logLevel: config.logLevel || 'info',
         enableWarningLog: config.enableWarningLog !== false,
-        logDirectory: config.logDirectory || 'logs'
+        logDirectory: config.logDirectory || 'logs',
+        consoleLevel: config.consoleLevel || config.logLevel || 'info'
       };
     }
 

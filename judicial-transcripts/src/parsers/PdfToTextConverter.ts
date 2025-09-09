@@ -250,71 +250,99 @@ export class PdfToTextConverter {
         // Get PDFs in this subdirectory
         const pdfs = this.listPDFs(inputSubDir);
         
-        if (pdfs.length === 0) {
-          logger.info(`Skipping "${subDir}" (no PDFs found)`);
-          continue;
-        }
-        
-        logger.info(`Processing "${subDir}" (${pdfs.length} PDFs)...`);
+        // Also check for existing text files
+        const existingTextFiles = fs.existsSync(outputSubDir) 
+          ? fs.readdirSync(outputSubDir).filter(f => f.toLowerCase().endsWith('.txt'))
+          : [];
         
         // Ensure output subdirectory exists
         if (!fs.existsSync(outputSubDir)) {
           fs.mkdirSync(outputSubDir, { recursive: true });
         }
-
-        // Read trial-specific config from PDF directory if exists
-        const pdfDirConfigPath = path.join(inputSubDir, 'trialstyle.json');
-        let trialSpecificConfig = {};
-        if (fs.existsSync(pdfDirConfigPath)) {
-          const configContent = fs.readFileSync(pdfDirConfigPath, 'utf-8');
-          trialSpecificConfig = JSON.parse(configContent);
-          logger.info(`Found trial-specific config in PDF directory: ${subDir}`);
-        }
-        
-        // Generate trialstyle.json for this subdirectory
-        await this.generateTrialStyleConfig(outputSubDir, pdfs, trialSpecificConfig);
         
         // Track converted files for summary
         const convertedFiles: string[] = [];
         const metadataCopied: string[] = [];
+        const skippedExisting: string[] = [];
         
-        for (const file of pdfs) {
-          const inputFile = path.join(inputSubDir, file);
-          const outputFile = path.join(outputSubDir, file.replace(/\.pdf$/i, '.txt'));
+        if (pdfs.length === 0) {
+          logger.info(`"${subDir}" - No PDFs found, checking for existing text files and metadata...`);
+          
+          // If no PDFs but we have text files, treat them as already converted
+          if (existingTextFiles.length > 0) {
+            logger.info(`"${subDir}" - Found ${existingTextFiles.length} existing text files`);
+            convertedFiles.push(...existingTextFiles);
+            skippedExisting.push(...existingTextFiles);
+          }
+        } else {
+          logger.info(`Processing "${subDir}" (${pdfs.length} PDFs)...`);
 
-          try {
-            const text = await this.convertFile(inputFile);
-            fs.writeFileSync(outputFile, text, 'utf-8');
-            logger.info(`✔ ${file}`);
-            convertedFiles.push(file.replace(/\.pdf$/i, '.txt'));
-          } catch (err) {
-            logger.error(`✗ ${file} (Error: ${err})`);
+          // Read trial-specific config from PDF directory if exists
+          const pdfDirConfigPath = path.join(inputSubDir, 'trialstyle.json');
+          let trialSpecificConfig = {};
+          if (fs.existsSync(pdfDirConfigPath)) {
+            const configContent = fs.readFileSync(pdfDirConfigPath, 'utf-8');
+            trialSpecificConfig = JSON.parse(configContent);
+            logger.info(`Found trial-specific config in PDF directory: ${subDir}`);
+          }
+          
+          // Generate trialstyle.json for this subdirectory
+          await this.generateTrialStyleConfig(outputSubDir, pdfs, trialSpecificConfig);
+          
+          for (const file of pdfs) {
+            const inputFile = path.join(inputSubDir, file);
+            const outputFile = path.join(outputSubDir, file.replace(/\.pdf$/i, '.txt'));
+            const outputFileName = file.replace(/\.pdf$/i, '.txt');
+
+            // Check if text file already exists
+            if (fs.existsSync(outputFile)) {
+              logger.info(`⏩ ${file} (text file already exists)`);
+              convertedFiles.push(outputFileName);
+              skippedExisting.push(outputFileName);
+            } else {
+              try {
+                const text = await this.convertFile(inputFile);
+                fs.writeFileSync(outputFile, text, 'utf-8');
+                logger.info(`✔ ${file}`);
+                convertedFiles.push(outputFileName);
+              } catch (err) {
+                logger.error(`✗ ${file} (Error: ${err})`);
+              }
+            }
           }
         }
         
-        // Copy metadata files if they exist
+        // ALWAYS copy metadata files if they exist (even if no PDFs found)
         const metadataFiles = ['trial-metadata.json', 'Attorney.json', 'Witness.json', 'Trial.json', 'Judge.json', 'CourtReporter.json'];
         for (const metaFile of metadataFiles) {
           const sourcePath = path.join(inputSubDir, metaFile);
           const destPath = path.join(outputSubDir, metaFile);
           if (fs.existsSync(sourcePath)) {
-            fs.copyFileSync(sourcePath, destPath);
-            metadataCopied.push(metaFile);
-            logger.info(`✔ Copied metadata: ${metaFile}`);
+            // Check if destination file is different or doesn't exist
+            if (!fs.existsSync(destPath) || 
+                fs.readFileSync(sourcePath, 'utf-8') !== fs.readFileSync(destPath, 'utf-8')) {
+              fs.copyFileSync(sourcePath, destPath);
+              metadataCopied.push(metaFile);
+              logger.info(`✔ Copied metadata: ${metaFile}`);
+            } else {
+              logger.debug(`⏩ Metadata already up-to-date: ${metaFile}`);
+            }
           }
         }
         
-        // Generate conversion summary
+        // ALWAYS generate conversion summary (even if no PDFs found)
         const conversionSummary = {
           timestamp: new Date().toISOString(),
           trialName: subDir,
           filesConverted: convertedFiles,
           metadataCopied: metadataCopied,
+          skippedExisting: skippedExisting,
           sourceDir: inputSubDir,
           destDir: outputSubDir,
           pdfCount: pdfs.length,
+          textFilesFound: existingTextFiles.length,
           successCount: convertedFiles.length,
-          complete: convertedFiles.length === pdfs.length
+          complete: pdfs.length === 0 ? existingTextFiles.length > 0 : convertedFiles.length === pdfs.length
         };
         
         const summaryPath = path.join(outputSubDir, 'conversion-summary.json');

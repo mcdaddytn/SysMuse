@@ -199,8 +199,7 @@ program
               }
               execSync(convertCmd, { 
                 stdio: options.verbose ? 'inherit' : 'pipe',
-                timeout: configData.workflow?.execTimeout || 600000,
-                shell: true
+                timeout: configData.workflow?.execTimeout || 600000
               });
               console.log(chalk.green('✓ PDF convert and metadata sync complete'));
             
@@ -212,8 +211,7 @@ program
               }
               execSync(phase1Cmd, { 
                 stdio: options.verbose ? 'inherit' : 'pipe',
-                timeout: configData.workflow?.execTimeout || 600000,
-                shell: true
+                timeout: configData.workflow?.execTimeout || 600000
               });
             } catch (error) {
               console.error(chalk.red(`Failed to process ${trialName}: ${error}`));

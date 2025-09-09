@@ -676,8 +676,7 @@ export class EnhancedTrialWorkflowService {
         }
         execSync(command, { 
           stdio: this.config.verbose ? 'inherit' : 'pipe',
-          timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
-          shell: true
+          timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
         });
       } else if (needsMetadataSync) {
         // Just sync metadata files without converting PDFs

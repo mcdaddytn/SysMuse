@@ -133,17 +133,17 @@ npx ts-node src/cli/restore.ts overrides --input-dir ./trial-configs/custom --ou
 
 ### Phase 1: Initial Parse
 ```bash
-# Multi-trial processing (RECOMMENDED)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
+# Multi-trial processing (uses multi-pass parser by default)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
 
 # Single trial with configuration file
 npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json
 
-# Legacy parser mode
-npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
-
 # With debug output
-npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass --debug-output
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --debug-output
+
+# Force legacy parser mode (DEPRECATED - not recommended)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
 ```
 
 ### Phase 2: Enhanced Processing

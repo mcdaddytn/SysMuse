@@ -187,48 +187,36 @@ program
             
             console.log(chalk.cyan(`Processing new trial: ${trialName}`));
             
-            // IMPORTANT: Instead of spawning subprocesses, we'll call the workflow service directly
             console.log(chalk.yellow(`Running PDF convert for ${trialName} to sync metadata...`));
             
-            // Create a modified config for this specific trial
-            const trialConfig = {
-              ...configData,
-              includedTrials: [trialName],
-              activeTrials: configData.activeTrials || configData.includedTrials
-            };
-            
-            // Write temporary config file for this trial
-            const tempConfigPath = path.join(path.dirname(options.config), `.temp-${trialName.replace(/\s+/g, '-')}.json`);
-            fs.writeFileSync(tempConfigPath, JSON.stringify(trialConfig, null, 2));
-            
             try {
-              // Run PDF convert using execSync but with trial-specific config
+              // Run PDF convert using the existing config with --trial filter
               const { execSync } = require('child_process');
-              const convertCmd = `npm run convert-pdf "${tempConfigPath}"`;
+              const convertCmd = `npm run convert-pdf "${options.config}" -- --trial "${trialName}"`;
               if (options.verbose) {
                 console.log(`Running: ${convertCmd}`);
               }
               execSync(convertCmd, { 
                 stdio: options.verbose ? 'inherit' : 'pipe',
-                timeout: configData.workflow?.execTimeout || 600000
+                timeout: configData.workflow?.execTimeout || 600000,
+                shell: true
               });
               console.log(chalk.green('✓ PDF convert and metadata sync complete'));
             
-              // Now run Phase 1 parse which will create the trial
+              // Now run Phase 1 parse which will create the trial (also using the main config with trial filter)
               console.log(chalk.yellow('Running Phase 1 parsing...'));
-              const phase1Cmd = `npx ts-node src/cli/parse.ts parse --phase1 --config "${tempConfigPath}"`;
+              const phase1Cmd = `npx ts-node src/cli/parse.ts parse --phase1 --config "${options.config}" --trial "${trialName}"`;
               if (options.verbose) {
                 console.log(`Running: ${phase1Cmd}`);
               }
               execSync(phase1Cmd, { 
                 stdio: options.verbose ? 'inherit' : 'pipe',
-                timeout: configData.workflow?.execTimeout || 600000
+                timeout: configData.workflow?.execTimeout || 600000,
+                shell: true
               });
-            } finally {
-              // Clean up temp config file
-              if (fs.existsSync(tempConfigPath)) {
-                fs.unlinkSync(tempConfigPath);
-              }
+            } catch (error) {
+              console.error(chalk.red(`Failed to process ${trialName}: ${error}`));
+              throw error;
             }
             
             // Get the newly created trial by shortName

@@ -192,7 +192,8 @@ program
             try {
               // Run PDF convert using the existing config with --trial filter
               const { execSync } = require('child_process');
-              const convertCmd = `npm run convert-pdf "${options.config}" -- --trial "${trialName}"`;
+              // Use npx directly to avoid npm script argument passing issues
+              const convertCmd = `npx ts-node src/cli/convert-pdf.ts "${options.config}" --trial "${trialName}"`;
               if (options.verbose) {
                 console.log(`Running: ${convertCmd}`);
               }

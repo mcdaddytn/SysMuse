@@ -670,13 +670,14 @@ export class EnhancedTrialWorkflowService {
       if (needsFullConversion) {
         // Run full PDF conversion
         const trialFilter = trial?.shortName ? ` --trial "${trial.shortName}"` : '';
-        const command = `npm run convert-pdf ${this.config.configFile}${trialFilter}`;
+        const command = `npx ts-node src/cli/convert-pdf.ts "${this.config.configFile}"${trialFilter}`;
         if (this.config.verbose) {
           console.log(`Running: ${command}`);
         }
         execSync(command, { 
           stdio: this.config.verbose ? 'inherit' : 'pipe',
-          timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+          timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
+          shell: true
         });
       } else if (needsMetadataSync) {
         // Just sync metadata files without converting PDFs

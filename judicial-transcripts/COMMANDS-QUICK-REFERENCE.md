@@ -1,8 +1,88 @@
 # Commands Quick Reference
 
-## Quick Start - Common Workflows
+## PRIMARY WORKFLOW COMMANDS (Recommended)
 
-### Complete Processing Pipeline
+### Complete Workflow - All Phases
+```bash
+# Run complete workflow (convert + phase1 + phase2 + phase3)
+npx ts-node src/cli/workflow.ts run --phase complete --config config/multi-trial-config-mac.json
+
+# Or using npm script
+npm run workflow run --phase complete --config config/multi-trial-config-mac.json
+```
+
+### Individual Phase Workflow Commands
+```bash
+# Convert PDFs to text
+npx ts-node src/cli/workflow.ts run --phase convert --config config/multi-trial-config-mac.json
+
+# Phase 1: Initial parsing (creates trials, speakers, lines)
+npx ts-node src/cli/workflow.ts run --phase phase1 --config config/multi-trial-config-mac.json
+
+# Phase 2: Event processing (witness events, examinations)
+npx ts-node src/cli/workflow.ts run --phase phase2 --config config/multi-trial-config-mac.json
+
+# Phase 3: Marker discovery and analysis
+npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json
+```
+
+### Common Workflow Variations
+```bash
+# RESET DATABASE before running (clears all data, reloads seed)
+npx ts-node src/cli/workflow.ts run --phase complete --config config/multi-trial-config-mac.json --reset-system
+
+# Run Phase 1 with database reset
+npx ts-node src/cli/workflow.ts run --phase phase1 --config config/multi-trial-config-mac.json --reset-system
+
+# Run WITHOUT config file (processes all trials in database)
+npx ts-node src/cli/workflow.ts run --phase phase2
+
+# Run for SPECIFIC TRIAL by ID (no config needed)
+npx ts-node src/cli/workflow.ts run --phase phase2 --trial-id 1
+
+# Run for SPECIFIC TRIAL by case number (no config needed)
+npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-JRG"
+
+# Note: To run specific trials by shortName, use the config file with includedTrials:
+# Edit config to have: "includedTrials": ["01 Genband", "02 Contentguard"]
+```
+
+### Workflow Options
+```bash
+# Verbose output for debugging
+npx ts-node src/cli/workflow.ts run --phase phase2 --config config/multi-trial-config-mac.json --verbose
+
+# Force rerun even if already completed
+npx ts-node src/cli/workflow.ts run --phase phase1 --config config/multi-trial-config-mac.json --force-rerun
+
+# Continue on error (don't stop if one trial fails)
+npx ts-node src/cli/workflow.ts run --phase phase2 --config config/multi-trial-config-mac.json --continue-on-error
+
+# Skip optional steps (LLM processing, cleanup)
+npx ts-node src/cli/workflow.ts run --phase phase3 --config config/multi-trial-config-mac.json --skip-optional
+
+# Combine multiple options
+npx ts-node src/cli/workflow.ts run --phase complete --config config/multi-trial-config-mac.json --reset-system --verbose --continue-on-error
+```
+
+### Workflow Status and Management
+```bash
+# Check status of all trials
+npx ts-node src/cli/workflow.ts status --all
+
+# Check status of specific trial
+npx ts-node src/cli/workflow.ts status --case-number "2:13-CV-1112-JRG"
+
+# Reset workflow state for a trial
+npx ts-node src/cli/workflow.ts reset --case-number "2:13-CV-1112-JRG"
+
+# Kill stuck workflow processes
+npm run workflow:kill
+```
+
+## Alternative Direct Commands (Legacy)
+
+### Manual Pipeline Execution
 ```bash
 # 1. Convert PDFs to text
 npm run convert-pdf config/multi-trial-config-mac.json

@@ -1433,8 +1433,19 @@ export class Phase2Processor {
     let attorneyId = null;
     if (this.examinationContext) {
       const examiningAttorney = this.examinationContext.getExaminingAttorney();
-      if (examiningAttorney?.speaker?.trialAttorneys && examiningAttorney.speaker.trialAttorneys.length > 0) {
-        attorneyId = examiningAttorney.speaker.trialAttorneys[0].attorney.id;
+      // The attorney ID might be on the speaker object or we need to look it up
+      if (examiningAttorney?.speaker) {
+        // Check if it's a SpeakerInfo object with attorneyId
+        if ('attorneyId' in examiningAttorney.speaker && examiningAttorney.speaker.attorneyId) {
+          attorneyId = examiningAttorney.speaker.attorneyId;
+        }
+        // Otherwise, check if it's a SpeakerWithRelations from Prisma with trialAttorneys
+        else if ('trialAttorneys' in examiningAttorney.speaker) {
+          const speakerWithRelations = examiningAttorney.speaker as any;
+          if (speakerWithRelations.trialAttorneys && speakerWithRelations.trialAttorneys.length > 0) {
+            attorneyId = speakerWithRelations.trialAttorneys[0].attorneyId;
+          }
+        }
       }
     }
     
@@ -2097,60 +2108,72 @@ export class Phase2Processor {
       return { fingerprint: '' };
     }
     
-    // Common suffixes to look for
-    const suffixes = ['JR', 'SR', 'III', 'II', 'IV', 'V', 'ESQ', 'PH.D', 'M.D', 'J.D'];
-    let suffix: string | undefined;
-    let nameParts = fullName.trim().split(/\s+/);
+    // Simple token-based parsing as requested
+    // Split on spaces, handling extra spaces
+    const tokens = fullName.trim().split(/\s+/).filter(t => t.length > 0);
     
-    // Check for suffix
-    const lastPart = nameParts[nameParts.length - 1].toUpperCase().replace(/[.,]/g, '');
-    if (suffixes.includes(lastPart)) {
-      suffix = lastPart;
-      nameParts = nameParts.slice(0, -1);
+    if (tokens.length === 0) {
+      return { fingerprint: '' };
     }
     
-    // Handle common patterns
     let firstName: string | undefined;
     let middleInitial: string | undefined;
     let lastName: string | undefined;
+    let suffix: string | undefined;
     
-    if (nameParts.length === 1) {
-      // Single name (rare)
-      lastName = nameParts[0];
-    } else if (nameParts.length === 2) {
-      // First Last
-      firstName = nameParts[0];
-      lastName = nameParts[1];
-    } else if (nameParts.length === 3) {
-      // First Middle Last or First Last, Suffix
-      firstName = nameParts[0];
-      // Check if middle part is a single initial (with or without period)
-      if (nameParts[1].length <= 2) {
-        middleInitial = nameParts[1].replace('.', '');
-        lastName = nameParts[2];
+    // Check if there's a comma - everything after it is a suffix
+    const fullStr = tokens.join(' ');
+    const commaIndex = fullStr.indexOf(',');
+    
+    if (commaIndex !== -1) {
+      // Has a comma - split on it
+      const beforeComma = fullStr.substring(0, commaIndex).trim();
+      suffix = fullStr.substring(commaIndex + 1).trim();
+      
+      // Re-tokenize the part before the comma
+      const nameTokens = beforeComma.split(/\s+/).filter(t => t.length > 0);
+      
+      if (nameTokens.length === 0) {
+        return { fingerprint: '' };
+      } else if (nameTokens.length === 1) {
+        // Just last name before comma
+        lastName = nameTokens[0];
       } else {
-        // Treat as First Middle-as-part-of-last Last
-        lastName = nameParts.slice(1).join(' ');
+        // First token is first name
+        firstName = nameTokens[0];
+        // Last token (before comma) is last name
+        lastName = nameTokens[nameTokens.length - 1];
+        // Everything in between is middle name/initial
+        if (nameTokens.length > 2) {
+          middleInitial = nameTokens.slice(1, -1).join(' ');
+        }
       }
     } else {
-      // More complex name - take first as firstName, last as lastName, everything in between as middle
-      firstName = nameParts[0];
-      lastName = nameParts[nameParts.length - 1];
-      // If there's a clear middle initial (single letter with optional period)
-      const middleParts = nameParts.slice(1, -1);
-      const potentialInitial = middleParts.find(p => p.length <= 2);
-      if (potentialInitial) {
-        middleInitial = potentialInitial.replace('.', '');
+      // No comma - simple token parsing
+      if (tokens.length === 1) {
+        // Single name
+        lastName = tokens[0];
+      } else if (tokens.length === 2) {
+        // First Last
+        firstName = tokens[0];
+        lastName = tokens[1];
+      } else {
+        // First [Middle...] Last
+        firstName = tokens[0];
+        lastName = tokens[tokens.length - 1];
+        // Everything in between is middle name/initial
+        middleInitial = tokens.slice(1, -1).join(' ');
       }
     }
     
-    // Generate fingerprint from non-null components
+    // Generate fingerprint using underscores to connect parts
+    // Replace spaces within parts with underscores too
     const fingerprintParts = [];
-    if (firstName) fingerprintParts.push(firstName.toUpperCase().replace(/[^A-Z]/g, ''));
-    if (middleInitial) fingerprintParts.push(middleInitial.toUpperCase().replace(/[^A-Z]/g, ''));
-    if (lastName) fingerprintParts.push(lastName.toUpperCase().replace(/[^A-Z]/g, ''));
-    if (suffix) fingerprintParts.push(suffix);
-    const fingerprint = fingerprintParts.join('_');
+    if (firstName) fingerprintParts.push(firstName.toUpperCase().replace(/\s+/g, '_'));
+    if (middleInitial) fingerprintParts.push(middleInitial.toUpperCase().replace(/\s+/g, '_'));
+    if (lastName) fingerprintParts.push(lastName.toUpperCase().replace(/\s+/g, '_'));
+    if (suffix) fingerprintParts.push(suffix.toUpperCase().replace(/\s+/g, '_'));
+    const fingerprint = fingerprintParts.filter(p => p.length > 0).join('_');
     
     return {
       firstName,

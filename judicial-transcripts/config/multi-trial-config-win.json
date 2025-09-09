@@ -156,5 +156,24 @@
     "host": "localhost",
     "port": 9200,
     "indexPrefix": "judicial"
+  },
+  "logging": {
+    "profile": "AppendDatetime",
+    "profiles": {
+      "Default": {
+        "appendTimestamp": false,
+        "timestampFormat": "",
+        "logLevel": "info",
+        "enableWarningLog": true,
+        "logDirectory": "logs"
+      },
+      "AppendDatetime": {
+        "appendTimestamp": true,
+        "timestampFormat": "YYYY-MM-DD-HHmmss",
+        "logLevel": "info",
+        "enableWarningLog": true,
+        "logDirectory": "logs"
+      }
+    }
   }
 }

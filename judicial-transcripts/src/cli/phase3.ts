@@ -165,8 +165,11 @@ program
   .option('-t, --trial <id>', 'Show stats for specific trial')
   .action(async (options) => {
     try {
+      logger.info('Generating Phase 3 statistics report...');
+      
       if (options.trial) {
         const trialId = parseInt(options.trial);
+        logger.info(`Fetching statistics for trial ${trialId}`);
         
         const markers = await prisma.marker.count({
           where: { trialId }

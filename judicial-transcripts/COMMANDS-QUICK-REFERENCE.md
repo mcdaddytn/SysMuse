@@ -1,5 +1,25 @@
 # Commands Quick Reference
 
+## Quick Start - Common Workflows
+
+### Complete Processing Pipeline
+```bash
+# 1. Convert PDFs to text
+npm run convert-pdf config/multi-trial-config-mac.json
+
+# 2. Run Phase 1 parsing
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
+
+# 3. Run Phase 2 processing
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
+
+# 4. Run Phase 3 processing
+npx ts-node src/cli/phase3.ts process
+
+# 5. Generate all reports
+npm run run-all-reports -- --config config/multi-trial-config-mac.json
+```
+
 ## Database Management
 
 ### Initialize and Seed Database
@@ -113,25 +133,124 @@ npx ts-node src/cli/restore.ts overrides --input-dir ./trial-configs/custom --ou
 
 ### Phase 1: Initial Parse
 ```bash
+# Multi-trial processing (RECOMMENDED)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
+
 # Single trial with configuration file
 npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json
 
-# Multi-trial processing
-npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
-
 # Legacy parser mode
 npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy
+
+# With debug output
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass --debug-output
 ```
 
 ### Phase 2: Enhanced Processing
 ```bash
-# Process specific trial
+# Process all trials in config
+npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
+
+# Process specific trial by ID
 npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1
 ```
 
-### Phase 3: Final Processing
+### Phase 3: Marker Discovery and Processing
 ```bash
+# Process Phase 3 for all trials
 npx ts-node src/cli/phase3.ts process
+
+# Process specific trial by ID
+npx ts-node src/cli/phase3.ts process --trial 1
+
+# Process specific trial by case number
+npx ts-node src/cli/phase3.ts process --case "2_14-CV-00033-JRG"
+
+# Clean existing markers before processing
+npx ts-node src/cli/phase3.ts process --trial 1 --clean
+
+# View Phase 3 statistics
+npx ts-node src/cli/phase3.ts stats --trial 1
+
+# Export markers to JSON
+npx ts-node src/cli/phase3.ts export --trial 1 --output ./markers.json
+
+# Monitor Phase 3 progress
+npx ts-node src/cli/phase3-monitor.ts --trial 1
+```
+
+### Hierarchy View Reports
+```bash
+# Standard trial structure view
+npx ts-node src/cli/hierarchy-view.ts --trial 1 --view standard --format json --output ./output/hierview/genband_std.json
+
+# Session breakdown view
+npx ts-node src/cli/hierarchy-view.ts --trial 1 --view session --format json --output ./output/hierview/genband_sess.json
+
+# Objections sequences view
+npx ts-node src/cli/hierarchy-view.ts --trial 1 --view objections --format json --output ./output/hierview/genband_obj.json
+
+# Judge-attorney interactions view
+npx ts-node src/cli/hierarchy-view.ts --trial 1 --view interactions --format json --output ./output/hierview/genband_int.json
+
+# All views combined
+npx ts-node src/cli/hierarchy-view.ts --trial 1 --all --format json --output ./output/hierview/genband_all.json
+
+# Text format output (for console viewing)
+npx ts-node src/cli/hierarchy-view.ts --trial 1 --view standard --format text
+```
+
+### Phase 1 Reports
+```bash
+# Generate all Phase 1 reports
+npx ts-node src/cli/report.ts generate-all --trial-id 1 --output ./output/phase1
+
+# Session sections report
+npx ts-node src/cli/report.ts session-sections --trial-id 1
+
+# Summary lines report
+npx ts-node src/cli/report.ts summary-lines --trial-id 1
+
+# Full lines report
+npx ts-node src/cli/report.ts full-lines --trial-id 1
+
+# Statistics report
+npx ts-node src/cli/report.ts statistics --trial-id 1
+
+# List all trials
+npx ts-node src/cli/report.ts list-trials
+```
+
+### Phase 2 Reports
+```bash
+# Generate Phase 2 report
+npx ts-node src/cli/phase2-report.ts generate --trial-id 1
+```
+
+## Report Generation
+
+### Consolidated Report Commands (RECOMMENDED)
+```bash
+# Run Phase 1 reports for all trials in config
+npm run run-phase1-reports -- --config config/multi-trial-config-mac.json
+
+# Run Phase 2 reports for all trials in config
+npm run run-phase2-reports -- --config config/multi-trial-config-mac.json
+
+# Run Phase 3 reports for all trials in config (includes hierarchy views)
+npm run run-phase3-reports -- --config config/multi-trial-config-mac.json
+
+# Run ALL reports (Phase 1, 2, and 3) for all trials in config
+npm run run-all-reports -- --config config/multi-trial-config-mac.json
+
+# Custom output directory
+npm run run-phase3-reports -- --config config/multi-trial-config-mac.json --output ./custom-reports
+
+# If config file exists at default location (config/multi-trial-config-mac.json), can omit --config
+npm run run-phase3-reports
+
+# Select specific views for Phase 3
+npx ts-node src/cli/run-reports.ts phase3 --config config/multi-trial-config-mac.json --views standard,objections
 ```
 
 ### PDF to Text Conversion
@@ -143,11 +262,11 @@ npm run convert-pdf config/multi-trial-config-mac.json
 ## Configuration Files
 
 ### Main Configuration Files
-- `config/multi-trial-config-mac.json` - Main multi-trial configuration
+- `config/multi-trial-config-mac.json` - Main multi-trial configuration for Mac
+- `config/multi-trial-config-win.json` - Main multi-trial configuration for Windows
 - `config/example-trial-config-mac.json` - Single trial example
 - `config/pdftotext.json` - PDF conversion settings
 - `config/trialstyle.json` - Default parsing style settings
-- `config/system-config.json` - System-wide settings
 
 ### Configuration Structure
 ```json
@@ -159,9 +278,45 @@ npm run convert-pdf config/multi-trial-config-mac.json
     "02 Contentguard"
   ],
   "trialSelectionMode": "INCLUDE",
-  "parserMode": "multi-pass"
+  "parserMode": "multi-pass",
+  "logging": {
+    "profile": "AppendDatetime",
+    "profiles": {
+      "Default": {
+        "appendTimestamp": false,
+        "logLevel": "info",
+        "enableWarningLog": true
+      },
+      "AppendDatetime": {
+        "appendTimestamp": true,
+        "timestampFormat": "YYYY-MM-DD-HHmmss",
+        "logLevel": "info",
+        "enableWarningLog": true
+      }
+    }
+  }
 }
+
+**Note:** The `includedTrials` list uses folder names (Trial.shortName) like "01 Genband".
 ```
+
+### Trial Selection in Configuration
+
+The system uses a standard `TrialResolver` utility to match trials from configuration:
+
+- **includedTrials**: List of trials to process (uses Trial.shortName)
+- **excludedTrials**: List of trials to skip
+- **activeTrials**: Alternative list of active trials
+- **trialSelectionMode**: 
+  - `"INCLUDE"` - Process only trials in includedTrials
+  - `"EXCLUDE"` - Process all trials except those in excludedTrials  
+  - `"ACTIVE"` - Process trials in activeTrials list
+
+### Logging Configuration
+
+- **Default Profile**: Creates static log files (combined.log, error.log, warning.log)
+- **AppendDatetime Profile**: Creates timestamped log files (combined-2025-01-09-143022.log)
+- To switch profiles, change `"profile": "AppendDatetime"` to `"profile": "Default"`
 
 ## Workflow Examples
 

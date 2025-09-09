@@ -1,51 +1,73 @@
 // src/utils/logger.ts
 import * as winston from 'winston';
-
-const logLevel = process.env.LOG_LEVEL || 'info';
-
-const logger = winston.createLogger({
-  level: logLevel,
-  format: winston.format.combine(
-    winston.format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss'
-    }),
-    winston.format.errors({ stack: true }),
-    winston.format.simple()
-  ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.printf(({ level, message, timestamp }) => {
-          return `${timestamp} [${level}]: ${message}`;
-        })
-      )
-    })
-  ]
-});
-
-// Only add file logging if logs directory exists
 import * as fs from 'fs';
 import * as path from 'path';
+import { ConfigurableLogger, createLogger } from './configurable-logger';
+import { LoggingConfig } from '../types/config.types';
 
-const logsDir = path.join(process.cwd(), 'logs');
-try {
-  if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
+// Check if we have a logging config from environment or global config
+let loggingConfig: LoggingConfig | undefined;
+
+// Try to load config from environment variable
+if (process.env.LOGGING_CONFIG) {
+  try {
+    loggingConfig = JSON.parse(process.env.LOGGING_CONFIG);
+  } catch (e) {
+    console.warn('Failed to parse LOGGING_CONFIG from environment');
   }
-  
-  // Add file transports only if directory creation succeeded
-  logger.add(new winston.transports.File({ 
-    filename: path.join(logsDir, 'error.log'), 
-    level: 'error' 
-  }));
-  
-  logger.add(new winston.transports.File({ 
-    filename: path.join(logsDir, 'combined.log') 
-  }));
-} catch (error) {
-  // If we can't create logs directory, just use console
-  console.warn('Could not create logs directory, using console only');
+}
+
+// Initialize logger with config if available, otherwise use defaults
+let logger: winston.Logger;
+
+if (loggingConfig) {
+  logger = createLogger(loggingConfig);
+} else {
+  // Use legacy logger for backward compatibility
+  const logLevel = process.env.LOG_LEVEL || 'info';
+
+  logger = winston.createLogger({
+    level: logLevel,
+    format: winston.format.combine(
+      winston.format.timestamp({
+        format: 'YYYY-MM-DD HH:mm:ss'
+      }),
+      winston.format.errors({ stack: true }),
+      winston.format.simple()
+    ),
+    transports: [
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.printf(({ level, message, timestamp }) => {
+            return `${timestamp} [${level}]: ${message}`;
+          })
+        )
+      })
+    ]
+  });
+
+  // Only add file logging if logs directory exists
+
+  const logsDir = path.join(process.cwd(), 'logs');
+  try {
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    
+    // Add file transports only if directory creation succeeded
+    logger.add(new winston.transports.File({ 
+      filename: path.join(logsDir, 'error.log'), 
+      level: 'error' 
+    }));
+    
+    logger.add(new winston.transports.File({ 
+      filename: path.join(logsDir, 'combined.log') 
+    }));
+  } catch (error) {
+    // If we can't create logs directory, just use console
+    console.warn('Could not create logs directory, using console only');
+  }
 }
 
 export default logger;
@@ -54,9 +76,26 @@ export { logger };
 // Wrapper class for consistent logging interface
 export class Logger {
   private context: string;
+  private static globalConfig: LoggingConfig | undefined;
 
   constructor(context: string) {
     this.context = context;
+  }
+
+  /**
+   * Initialize logger with configuration
+   * Call this at application startup with your config
+   */
+  static initialize(config: LoggingConfig): void {
+    Logger.globalConfig = config;
+    logger = createLogger(config);
+  }
+
+  /**
+   * Reinitialize the logger with new configuration
+   */
+  static reconfigure(config: LoggingConfig): void {
+    logger = ConfigurableLogger.initialize(config);
   }
 
   info(message: string): void {
@@ -88,3 +127,16 @@ export class Logger {
 (logger as any).setLevel = (level: string) => {
   logger.level = level;
 };
+
+// Export function to get current log file paths
+export function getLogFilePaths(): { combined: string; error: string; warning?: string } | null {
+  if (loggingConfig) {
+    return ConfigurableLogger.getLogFilePaths();
+  }
+  // Return legacy paths
+  const logsDir = path.join(process.cwd(), 'logs');
+  return {
+    combined: path.join(logsDir, 'combined.log'),
+    error: path.join(logsDir, 'error.log')
+  };
+}

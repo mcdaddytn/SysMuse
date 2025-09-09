@@ -8,6 +8,28 @@ import {
   EventType as PrismaEventType
 } from '@prisma/client';
 
+// Logging configuration types
+export interface LoggingProfile {
+  appendTimestamp: boolean;
+  timestampFormat?: string;
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  enableWarningLog: boolean;
+  logDirectory?: string;
+}
+
+export interface LoggingConfig {
+  profile?: 'Default' | 'AppendDatetime' | string;
+  profiles?: {
+    [key: string]: LoggingProfile;
+  };
+  // Direct configuration (used if no profile specified)
+  appendTimestamp?: boolean;
+  timestampFormat?: string;
+  logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  enableWarningLog?: boolean;
+  logDirectory?: string;
+}
+
 export interface TranscriptConfig {
   inputDir: string;
   outputDir: string;
@@ -26,6 +48,7 @@ export interface TranscriptConfig {
     courtDivision?: string;
     courtDistrict?: string;
   };
+  logging?: LoggingConfig;  // Add logging configuration
 }
 
 export interface SessionInfo {

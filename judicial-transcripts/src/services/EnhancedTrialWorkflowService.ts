@@ -313,19 +313,35 @@ export class EnhancedTrialWorkflowService {
    * Check if PDF conversion should run
    */
   private async shouldRunPdfConvert(trial: any): Promise<boolean> {
-    if (!this.config.outputDir) return true;
+    if (!this.config.outputDir) {
+      logger.debug(`[shouldRunPdfConvert] No output directory configured, returning true`);
+      return true;
+    }
 
     const trialDir = path.join(this.config.outputDir, trial.shortName || trial.name);
     const summaryPath = path.join(trialDir, 'conversion-summary.json');
 
+    logger.debug(`[shouldRunPdfConvert] Checking trial: ${trial.shortName || trial.name}`);
+    logger.debug(`[shouldRunPdfConvert] Summary path: ${summaryPath}`);
+
     if (!fs.existsSync(summaryPath)) {
+      logger.info(`[shouldRunPdfConvert] No conversion summary found for ${trial.shortName || trial.name}, PDF conversion needed`);
       return true; // No summary, need to convert
     }
 
     try {
       const summary: ConversionSummary = JSON.parse(fs.readFileSync(summaryPath, 'utf-8'));
-      return !summary.complete;
-    } catch {
+      logger.debug(`[shouldRunPdfConvert] Conversion summary: complete=${summary.complete}, filesConverted=${summary.filesConverted?.length || 0}, metadataCopied=${summary.metadataCopied?.length || 0}`);
+      
+      if (!summary.complete) {
+        logger.info(`[shouldRunPdfConvert] Conversion incomplete for ${trial.shortName || trial.name}, re-running PDF conversion`);
+        return true;
+      } else {
+        logger.info(`[shouldRunPdfConvert] Conversion complete for ${trial.shortName || trial.name}, skipping PDF conversion`);
+        return false;
+      }
+    } catch (error) {
+      logger.error(`[shouldRunPdfConvert] Error reading conversion summary: ${error}`);
       return true; // Error reading, re-run
     }
   }
@@ -334,26 +350,62 @@ export class EnhancedTrialWorkflowService {
    * Check if LLM override generation should run
    */
   private async shouldRunLLMOverride(trial: any): Promise<boolean> {
-    if (!this.config.outputDir) return true;
+    if (!this.config.outputDir) {
+      logger.debug(`[shouldRunLLMOverride] No output directory configured, returning true`);
+      return true;
+    }
 
     const trialDir = path.join(this.config.outputDir, trial.shortName || trial.name);
     const metadataPath = path.join(trialDir, 'trial-metadata.json');
+    const summaryPath = path.join(trialDir, 'conversion-summary.json');
 
-    // Check for new format first
+    logger.debug(`[shouldRunLLMOverride] Checking trial: ${trial.shortName || trial.name}`);
+    logger.debug(`[shouldRunLLMOverride] Metadata path: ${metadataPath}`);
+    logger.debug(`[shouldRunLLMOverride] Summary path: ${summaryPath}`);
+
+    // Check for metadata file first
     if (!fs.existsSync(metadataPath)) {
+      logger.info(`[shouldRunLLMOverride] No metadata file found for ${trial.shortName || trial.name}, LLM override needed`);
       return true; // No metadata file, need to generate
+    }
+
+    // Check if metadata was copied during PDF conversion
+    if (fs.existsSync(summaryPath)) {
+      try {
+        const summary: ConversionSummary = JSON.parse(fs.readFileSync(summaryPath, 'utf-8'));
+        logger.debug(`[shouldRunLLMOverride] Conversion summary found, metadataCopied: ${JSON.stringify(summary.metadataCopied)}`);
+        
+        if (summary.metadataCopied && summary.metadataCopied.includes('trial-metadata.json')) {
+          logger.info(`[shouldRunLLMOverride] Metadata was copied from input directory for ${trial.shortName || trial.name}, skipping LLM generation`);
+          // Metadata was copied from input directory, don't regenerate with LLM
+          return false;
+        } else {
+          logger.debug(`[shouldRunLLMOverride] Conversion summary exists but metadata was not copied`);
+        }
+      } catch (error) {
+        logger.warn(`[shouldRunLLMOverride] Error reading conversion summary: ${error}`);
+        // Ignore errors reading summary, continue with other checks
+      }
+    } else {
+      logger.debug(`[shouldRunLLMOverride] No conversion summary found`);
     }
 
     // Check if metadata has userReviewed flag (indicating it's complete)
     try {
       const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      logger.debug(`[shouldRunLLMOverride] Metadata file exists, checking completion status`);
+      
       // If metadata exists but doesn't have the metadata section or userReviewed flag,
       // it might be incomplete
       if (!metadata.metadata || metadata.metadata.userReviewed === undefined) {
+        logger.info(`[shouldRunLLMOverride] Metadata incomplete for ${trial.shortName || trial.name}, regenerating`);
         return true; // Metadata incomplete, regenerate
       }
+      
+      logger.info(`[shouldRunLLMOverride] Metadata complete for ${trial.shortName || trial.name}, skipping LLM generation`);
       return false; // Metadata exists and is complete
-    } catch {
+    } catch (error) {
+      logger.error(`[shouldRunLLMOverride] Error reading metadata file: ${error}`);
       return true; // Error reading, regenerate
     }
   }

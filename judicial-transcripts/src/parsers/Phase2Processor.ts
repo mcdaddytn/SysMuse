@@ -1438,15 +1438,49 @@ export class Phase2Processor {
         // Check if it's a SpeakerInfo object with attorneyId
         if ('attorneyId' in examiningAttorney.speaker && examiningAttorney.speaker.attorneyId) {
           attorneyId = examiningAttorney.speaker.attorneyId;
+          logger.debug(`Found attorneyId ${attorneyId} from SpeakerInfo for ${examiningAttorney.speaker.speakerPrefix}`);
         }
         // Otherwise, check if it's a SpeakerWithRelations from Prisma with trialAttorneys
         else if ('trialAttorneys' in examiningAttorney.speaker) {
           const speakerWithRelations = examiningAttorney.speaker as any;
           if (speakerWithRelations.trialAttorneys && speakerWithRelations.trialAttorneys.length > 0) {
             attorneyId = speakerWithRelations.trialAttorneys[0].attorneyId;
+            logger.debug(`Found attorneyId ${attorneyId} from trialAttorneys relation for ${examiningAttorney.speaker.speakerPrefix}`);
+          } else {
+            logger.warn(`No trialAttorneys found for examining attorney speaker: ${examiningAttorney.speaker.speakerPrefix}`);
           }
+        } else {
+          logger.warn(`Unable to extract attorneyId from examining attorney speaker: ${JSON.stringify({
+            speakerPrefix: examiningAttorney.speaker.speakerPrefix,
+            speakerHandle: examiningAttorney.speaker.speakerHandle,
+            hasAttorneyId: 'attorneyId' in examiningAttorney.speaker,
+            hasTrialAttorneys: 'trialAttorneys' in examiningAttorney.speaker
+          })}`);
         }
+      } else if (examiningAttorney) {
+        logger.warn(`Examining attorney found but has no speaker: ${JSON.stringify({
+          title: examiningAttorney.title,
+          lastName: examiningAttorney.lastName,
+          fullName: examiningAttorney.fullName
+        })}`);
+      } else {
+        logger.warn(`No examining attorney in context for witness examination at line ${line.lineNumber}`);
       }
+    } else {
+      logger.warn(`No examination context available for witness examination at line ${line.lineNumber}`);
+    }
+    
+    // Log warning if we couldn't find attorney ID
+    if (!attorneyId && witnessInfo) {
+      logger.warn(`Unable to find attorneyId for witness examination. Context: ${JSON.stringify({
+        witnessName: witnessInfo.name,
+        witnessCaller: witnessInfo.witnessCaller,
+        examinationType: examType,
+        lineNumber: line.lineNumber,
+        lineText: lineText.substring(0, 100),
+        hasExaminationContext: !!this.examinationContext,
+        currentExaminingAttorney: this.examinationContext?.getExaminingAttorney()?.lastName || 'none'
+      })}`);
     }
     
     // Create witness called event
@@ -1542,10 +1576,19 @@ export class Phase2Processor {
     }
     
     // Find or create speaker
-    const speaker = await this.findOrCreateSpeaker(line.speakerPrefix, lineText, state);
+    const speaker = await this.findOrCreateSpeaker(line.speakerPrefix, lineText, state, line.lineNumber);
     
     if (!speaker) {
-      logger.warn(`Could not resolve speaker: ${line.speakerPrefix}`);
+      logger.warn(`Could not resolve speaker. Details: ${JSON.stringify({
+        speakerPrefix: line.speakerPrefix,
+        lineNumber: line.lineNumber,
+        lineText: lineText.substring(0, 100),
+        currentWitness: state.currentWitness?.name || 'none',
+        currentExaminationType: state.currentExaminationType || 'none',
+        lastQSpeaker: state.lastQSpeaker?.name || 'none',
+        currentEvent: state.currentEvent?.type || 'none',
+        contextualSpeakers: Array.from(state.contextualSpeakers.keys()).join(', ')
+      })}`);
       this.stats.unmatchedSpeakers.push(line.speakerPrefix);
       return false;
     }
@@ -1592,7 +1635,8 @@ export class Phase2Processor {
   private async findOrCreateSpeaker(
     speakerPrefix: string,
     lineText: string,
-    state: ProcessingState
+    state: ProcessingState,
+    lineNumber?: number
   ): Promise<SpeakerInfo | null> {
     const upperPrefix = speakerPrefix.toUpperCase();
     
@@ -1668,7 +1712,16 @@ export class Phase2Processor {
           return speakerInfo;
         }
       }
-      logger.warn(`${upperPrefix} found but no current witness in context, lineText: ${lineText.substring(0, 50)}`);
+      logger.warn(`${upperPrefix} found but no current witness in context. Details: ${JSON.stringify({
+        lineNumber: lineNumber,
+        lineText: lineText.substring(0, 100),
+        speakerPrefix: upperPrefix,
+        currentWitness: state.currentWitness?.name || 'none',
+        currentExaminationType: state.currentExaminationType || 'none',
+        lastQSpeaker: state.lastQSpeaker?.name || 'none',
+        hasEventInProgress: !!state.currentEvent,
+        eventType: state.currentEvent?.type || 'none'
+      })}`);
       return null;
     }
     
@@ -1798,7 +1851,13 @@ export class Phase2Processor {
     }
     
     // Log unmatched speaker and return null instead of creating anonymous
-    logger.warn(`Unmatched speaker prefix: ${upperPrefix} - not creating anonymous speaker`);
+    logger.warn(`Unmatched speaker prefix: ${upperPrefix} - not creating anonymous speaker. Context: ${JSON.stringify({
+      lineText: lineText.substring(0, 100),
+      currentWitness: state.currentWitness?.name || 'none',
+      currentExaminationType: state.currentExaminationType || 'none',
+      lastQSpeaker: state.lastQSpeaker?.name || 'none',
+      availableContextualSpeakers: Array.from(state.contextualSpeakers.keys()).join(', ')
+    })}`);
     this.stats.unmatchedSpeakers.push(upperPrefix);
     
     // Return null - we don't want to create anonymous speakers for unrecognized prefixes

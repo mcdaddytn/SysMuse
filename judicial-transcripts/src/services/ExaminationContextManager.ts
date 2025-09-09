@@ -45,6 +45,7 @@ export class ExaminationContextManager {
   private isVideoDeposition: boolean = false;
   private lastQSpeaker: SpeakerWithRelations | null = null;
   private speakerRegistry: SpeakerRegistry;
+  private currentLine: ParsedLine | null = null;  // For logging context
   
   // Generic speaker tracking (Feature 02P)
   private genericSpeakerService: GenericSpeakerService | null = null;
@@ -167,6 +168,7 @@ export class ExaminationContextManager {
     if (!line.text) return null;
     
     const text = line.text.trim();
+    this.currentLine = line;  // Store for logging context
     
     // Check Q&A formats first
     if (this.PATTERNS.qShort.test(text) || this.PATTERNS.questionLong.test(text)) {
@@ -226,7 +228,15 @@ export class ExaminationContextManager {
       }
     }
     
-    logger.warn('Unable to resolve Q speaker - no examining attorney set');
+    logger.warn(`Unable to resolve Q speaker - no examining attorney set. Context: ${JSON.stringify({
+      lineNumber: this.currentLine?.lineNumber,
+      lineText: this.currentLine?.text?.substring(0, 100),
+      examinationType: this.examinationType,
+      currentWitness: this.currentWitness?.name || 'none',
+      isVideoDeposition: this.isVideoDeposition,
+      hasGenericSpeakers: !!this.genericSpeakers,
+      lastQSpeaker: this.lastQSpeaker ? (this.lastQSpeaker as any).speakerPrefix || 'none' : 'none'
+    })}`);
     return null;
   }
   
@@ -260,7 +270,17 @@ export class ExaminationContextManager {
       return witnessFromRegistry;
     }
     
-    logger.warn('Unable to resolve A speaker - no current witness');
+    // No witness found - log warning with context
+    logger.warn(`Unable to resolve A speaker - no current witness. Context: ${JSON.stringify({
+      lineNumber: this.currentLine?.lineNumber,
+      lineText: this.currentLine?.text?.substring(0, 100),
+      speakerPrefix: this.currentLine?.speakerPrefix,
+      examinationType: this.examinationType,
+      examiningAttorney: this.examiningAttorney?.lastName || 'none',
+      isVideoDeposition: this.isVideoDeposition,
+      hasCurrentWitness: !!this.currentWitness,
+      lastQSpeaker: this.lastQSpeaker ? (this.lastQSpeaker as any).speakerPrefix || 'none' : 'none'
+    })}`);
     return null;
   }
 

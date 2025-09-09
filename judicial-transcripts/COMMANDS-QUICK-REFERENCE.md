@@ -7,8 +7,8 @@
 # 1. Convert PDFs to text
 npm run convert-pdf config/multi-trial-config-mac.json
 
-# 2. Run Phase 1 parsing
-npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
+# 2. Run Phase 1 parsing (uses multi-pass parser by default)
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
 
 # 3. Run Phase 2 processing
 npx ts-node src/cli/parse.ts parse --phase2 --config config/multi-trial-config-mac.json
@@ -329,7 +329,7 @@ npx ts-node src/cli/generate.ts attorney --config config/multi-trial-config-mac.
 npx ts-node scripts/import-attorney-metadata.ts
 
 # 3. Run Phase 1 parsing (attorneys enhanced with metadata during creation)
-npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass
+npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json
 ```
 
 ### Configuration Management Workflow
@@ -476,4 +476,4 @@ prisma.speaker.findMany({
 - **Fingerprints**: Format is `lastName_firstName` for persons, normalized name for firms
 - **Speaker Handles**: Generated consistently to match between override data and parsed transcripts
 - **Trial Selection**: Use `includedTrials` in config to specify which trials to process
-- **Parser Modes**: `multi-pass` is recommended for better extraction accuracy
+- **Parser Mode**: The default `multi-pass` parser provides better extraction accuracy than the deprecated legacy parser

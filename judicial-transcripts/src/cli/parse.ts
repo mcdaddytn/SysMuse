@@ -6,6 +6,7 @@ import * as path from 'path';
 import { TranscriptParser } from '../parsers/TranscriptParser';
 import { Phase2Processor } from '../parsers/Phase2Processor';
 import { MultiPassTranscriptParser } from '../parsers/MultiPassTranscriptParser';
+import { PdfToTextConverter, PdfToTextConfig } from '../parsers/PdfToTextConverter';
 import { TranscriptConfig, TrialStyleConfig } from '../types/config.types';
 import { caseNumberExtractor } from '../utils/CaseNumberExtractor';
 import { generateCaseHandle } from '../utils/fileTokenGenerator';
@@ -308,17 +309,20 @@ program
               let searchDir = config.inputDir;
               
               // Check if this is a PDF directory that's been converted
-              const isPdfDir = config.inputDir.includes('/pdf');
+              const isPdfDir = config.inputDir.includes('/pdf') || config.inputDir.includes('\\pdf');
               if (isPdfDir && config.outputDir) {
                 // Look for text files in the output directory instead
                 searchDir = config.outputDir;
                 logger.info(`Looking for converted text files in output directory: ${searchDir}`);
               }
               
-              // Get list of subdirectories
-              const subdirs = fs.readdirSync(searchDir, { withFileTypes: true })
-                .filter(dirent => dirent.isDirectory())
-                .map(dirent => dirent.name);
+              // Get list of subdirectories - if output dir doesn't exist, we'll create it and convert PDFs
+              let subdirs: string[] = [];
+              if (fs.existsSync(searchDir)) {
+                subdirs = fs.readdirSync(searchDir, { withFileTypes: true })
+                  .filter(dirent => dirent.isDirectory())
+                  .map(dirent => dirent.name);
+              }
               
               // Filter by includedTrials if specified
               const includedTrials = (config as any).includedTrials || [];
@@ -340,16 +344,51 @@ program
                 logger.info(`Processing ${trialsToProcess.length} trials: ${trialsToProcess.join(', ')}`);
                 
                 for (const trialDirName of trialsToProcess) {
-                  // Find exact matching subdirectory (no partial matches)
-                  const matchingDir = subdirs.find(dir => dir === trialDirName);
-                
-                  if (!matchingDir) {
-                    logger.warn(`No matching trial directory found for: ${trialDirName}`);
-                    continue;
+                  // Check if output directory exists for this trial
+                  const outputTrialDir = path.join(config.outputDir, trialDirName);
+                  const pdfInputDir = path.join(config.inputDir, trialDirName);
+                  
+                  // Check if we need to convert PDFs first
+                  if (!fs.existsSync(outputTrialDir) || fs.readdirSync(outputTrialDir).filter(f => f.endsWith('.txt')).length === 0) {
+                    // No text files exist - need to run PDF conversion
+                    if (!fs.existsSync(pdfInputDir)) {
+                      logger.warn(`No PDF input directory found for: ${trialDirName} at ${pdfInputDir}`);
+                      continue;
+                    }
+                    
+                    logger.info(`No text files found for ${trialDirName}, running PDF conversion...`);
+                    
+                    // Create output directory if it doesn't exist
+                    if (!fs.existsSync(outputTrialDir)) {
+                      fs.mkdirSync(outputTrialDir, { recursive: true });
+                      logger.info(`Created output directory: ${outputTrialDir}`);
+                    }
+                    
+                    // Load PDF config if specified
+                    let pdfConfig: PdfToTextConfig = {};
+                    if (config.pdfToTextConfig) {
+                      const pdfConfigPath = path.isAbsolute(config.pdfToTextConfig) ? 
+                        config.pdfToTextConfig : 
+                        path.join(process.cwd(), config.pdfToTextConfig);
+                      
+                      if (fs.existsSync(pdfConfigPath)) {
+                        pdfConfig = JSON.parse(fs.readFileSync(pdfConfigPath, 'utf-8'));
+                        logger.info(`Loaded PDF config from: ${pdfConfigPath}`);
+                      }
+                    }
+                    
+                    // Run PDF conversion
+                    const converter = new PdfToTextConverter(pdfConfig);
+                    await converter.convertDirectory(pdfInputDir, outputTrialDir, false);
+                    logger.info(`PDF conversion completed for ${trialDirName}`);
+                    
+                    // Note: Workflow state will be created/updated when trial is created during parsing
                   }
-                  actualInputDir = path.join(searchDir, matchingDir);
+                  
+                  // Now we know the output directory exists, set it as the input for parsing
+                  actualInputDir = outputTrialDir;
                   logger.info(`\n${'='.repeat(60)}`);
-                  logger.info(`Processing trial: ${matchingDir}`);
+                  logger.info(`Processing trial: ${trialDirName}`);
                   logger.info(`${'='.repeat(60)}`);
                   
                   // Reset trialStyleConfig for each trial

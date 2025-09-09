@@ -2,6 +2,7 @@ import { PrismaClient, LLMTaskStatus, TrialWorkflowState, WorkflowStatus } from 
 import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import logger from '../utils/logger';
 
 export enum WorkflowStep {
   PDF_CONVERT = 'pdfConvert',

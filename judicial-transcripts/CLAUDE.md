@@ -43,10 +43,10 @@ The system uses phased parsing:
 3. **phase2**: Enhanced parsing with pattern matching - `npx ts-node src/cli/parse.ts parse --phase2 --config config/example-trial-config-mac.json --trial-id 1`
 4. **phase3**: Final processing and validation - `npx ts-node src/cli/phase3.ts process`
 
-Multi-pass parser (new): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode multi-pass`
-Legacy parser (default): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy`
+Default parser (multi-pass): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json`
+Legacy parser (deprecated): `npx ts-node src/cli/parse.ts parse --phase1 --config config/example-trial-config-mac.json --parser-mode legacy`
 
-Multi-trial processing: `npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json --parser-mode multi-pass`
+Multi-trial processing: `npx ts-node src/cli/parse.ts parse --phase1 --config config/multi-trial-config-mac.json`
 
 Data corrections (Feature-02S): `npx ts-node src/cli/override.ts overrides/trial-corrections.json`
 

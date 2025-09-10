@@ -260,8 +260,10 @@ export class OverrideImporter {
   }
 
   private async importAddresses(tx: any, addresses: AddressOverride[]): Promise<number> {
+    console.log(`\n[Address Import] Starting import of ${addresses.length} addresses`);
     let count = 0;
     for (const address of addresses) {
+      console.log(`\n[Address Import] Processing address JSON id=${address.id}: ${address.fullAddress?.substring(0, 50)}...`);
       const action = address.overrideAction || 'Upsert';
       const overrideKey = address.overrideKey || 'fullAddress';
       
@@ -326,6 +328,7 @@ export class OverrideImporter {
           });
         } else {
           // Create new
+          console.log(`  - Creating new address`);
           upserted = await tx.address.create({
             data: {
               street1: address.street1,
@@ -337,11 +340,13 @@ export class OverrideImporter {
               fullAddress: address.fullAddress
             }
           });
+          console.log(`  ✅ Created address with DB id=${upserted.id}`);
         }
         
         // Always set correlation map for address
         if (address.id !== undefined && address.id !== null) {
           this.correlationMap.Address.set(address.id, upserted.id);
+          console.log(`  - Added to correlation map: JSON id=${address.id} -> DB id=${upserted.id}`);
         }
         this.insertedEntities.addresses.add(upserted.id);
         count++;
@@ -613,8 +618,11 @@ export class OverrideImporter {
   }
 
   private async importLawFirmOffices(tx: any, offices: LawFirmOfficeOverride[]): Promise<number> {
+    console.log(`\n[LawFirmOffice Import] Starting import of ${offices.length} offices`);
+    console.log(`[LawFirmOffice Import] Current Address correlations:`, Array.from(this.correlationMap.Address.entries()));
     let count = 0;
     for (const office of offices) {
+      console.log(`\n[LawFirmOffice Import] Processing office: ${office.name} (JSON id=${office.id})`);
       const action = office.overrideAction || 'Upsert';
       const overrideKey = office.overrideKey || 'id';
       
@@ -628,16 +636,18 @@ export class OverrideImporter {
       }
       
       const lawFirmId = this.correlationMap.LawFirm.get(office.lawFirmId);
+      console.log(`  - LawFirm mapping: JSON id=${office.lawFirmId} -> DB id=${lawFirmId}`);
       if (!lawFirmId) {
         throw new Error(`LawFirm not found for office: ${office.id}`);
       }
 
       const addressId = office.addressId ? 
         this.correlationMap.Address.get(office.addressId) : undefined;
+      console.log(`  - Address mapping: JSON id=${office.addressId} -> DB id=${addressId}`);
       
       if (office.addressId && !addressId) {
-        console.log(`Warning: Address ${office.addressId} not found in correlation map for LawFirmOffice ${office.name}`);
-        console.log(`Available address mappings:`, Array.from(this.correlationMap.Address.entries()));
+        console.log(`  ⚠️ Warning: Address ${office.addressId} not found in correlation map for LawFirmOffice ${office.name}`);
+        console.log(`  Available address mappings:`, Array.from(this.correlationMap.Address.entries()));
       }
       
       let existingOffice = null;
@@ -702,6 +712,24 @@ export class OverrideImporter {
           });
         } else {
           // Create new office
+          console.log(`  - Creating new LawFirmOffice with data:`, {
+            lawFirmId,
+            name: office.name,
+            addressId,
+            lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
+          });
+          
+          // Check if addressId is already in use
+          if (addressId) {
+            const existingWithAddress = await tx.lawFirmOffice.findFirst({
+              where: { addressId }
+            });
+            if (existingWithAddress) {
+              console.log(`  ❌ ERROR: Address ${addressId} is already used by LawFirmOffice ${existingWithAddress.id} (${existingWithAddress.name})`);
+              throw new Error(`Address ${addressId} is already assigned to another LawFirmOffice`);
+            }
+          }
+          
           created = await tx.lawFirmOffice.create({
             data: {
               lawFirmId,
@@ -710,6 +738,7 @@ export class OverrideImporter {
               lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
             }
           });
+          console.log(`  ✅ Created LawFirmOffice with DB id=${created.id}`);
           // Track that this office was actually inserted
           this.insertedEntities.lawFirmOffices.add(created.id);
         }

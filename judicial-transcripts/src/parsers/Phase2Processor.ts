@@ -774,6 +774,35 @@ export class Phase2Processor {
           });
           
           logger.info(`Created TrialAttorney association for ${attorney.name} with role ${attorneyRole}`);
+        } else if (!trialAttorney.speaker) {
+          // TrialAttorney exists but has no speaker (from metadata import) - create speaker and update
+          logger.info(`TrialAttorney exists but has no speaker for attorney: ${attorney.name} - creating speaker`);
+          
+          // Create speaker for this attorney
+          const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
+          const dbSpeaker = await this.prisma.speaker.create({
+            data: {
+              trialId: this.context.trialId,
+              speakerPrefix: attorneyPrefix,
+              speakerHandle,
+              speakerType: 'ATTORNEY'
+            }
+          });
+          
+          // Update the existing TrialAttorney with the speaker
+          trialAttorney = await this.prisma.trialAttorney.update({
+            where: {
+              id: trialAttorney.id
+            },
+            data: {
+              speakerId: dbSpeaker.id
+            },
+            include: {
+              speaker: true
+            }
+          });
+          
+          logger.info(`Updated TrialAttorney with speaker for ${attorney.name}`);
         }
         
         if (!trialAttorney?.speaker) {
@@ -1139,7 +1168,7 @@ export class Phase2Processor {
     // Update service context
     this.witnessJurorService.setCurrentWitness(state.currentWitness);
     
-    // IMPORTANT: Also update the SpeakerRegistry if available
+    // IMPORTANT: Also update the SpeakerRegistry and ExaminationContextManager
     // This ensures the ExaminationContextManager can resolve A. properly
     if (this.speakerRegistry) {
       // The speaker from the database already has all relations
@@ -1159,6 +1188,16 @@ export class Phase2Processor {
       if (speakerWithRelations) {
         this.speakerRegistry.setCurrentWitness(speakerWithRelations as any);
         logger.debug(`Updated SpeakerRegistry with current witness: ${displayName}`);
+        
+        // IMPORTANT: Also update the ExaminationContextManager
+        if (this.examinationContext) {
+          this.examinationContext.setCurrentWitnessFromSpeaker(
+            speakerWithRelations,
+            displayName,
+            witnessCaller
+          );
+          logger.debug(`Updated ExaminationContextManager with current witness: ${displayName}`);
+        }
       }
     }
     
@@ -1429,6 +1468,32 @@ export class Phase2Processor {
     
     // Update current examination type
     state.currentExaminationType = examinationType;
+    
+    // IMPORTANT: Also update the ExaminationContextManager
+    // Convert to ExaminationContextManager's type format
+    if (this.examinationContext) {
+      let contextExamType: 'DIRECT' | 'CROSS' | 'REDIRECT' | 'RECROSS' | 'VOIR_DIRE' | 'CONTINUED' | null = null;
+      switch (examinationType) {
+        case ExaminationType.DIRECT_EXAMINATION:
+          contextExamType = 'DIRECT';
+          break;
+        case ExaminationType.CROSS_EXAMINATION:
+          contextExamType = 'CROSS';
+          break;
+        case ExaminationType.REDIRECT_EXAMINATION:
+          contextExamType = 'REDIRECT';
+          break;
+        case ExaminationType.RECROSS_EXAMINATION:
+          contextExamType = 'RECROSS';
+          break;
+        case ExaminationType.VIDEO_DEPOSITION:
+          // Video depositions don't have a direct equivalent, use null or DIRECT
+          contextExamType = 'DIRECT';
+          break;
+      }
+      this.examinationContext.setExaminationType(contextExamType);
+      logger.debug(`Updated ExaminationContextManager with examination type: ${contextExamType}`);
+    }
     
     // Determine the correct sworn status
     let eventSwornStatus: SwornStatus;

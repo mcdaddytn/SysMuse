@@ -431,12 +431,44 @@ export class ExaminationContextManager {
     }
   }
 
+  /**
+   * Set current witness directly (used when witness is identified in Phase2)
+   */
+  setCurrentWitnessFromSpeaker(speaker: any, witnessName: string, caller: 'PLAINTIFF' | 'DEFENDANT'): void {
+    logger.debug(`Setting current witness from speaker: ${speaker.speakerPrefix}, name: ${witnessName}`);
+    
+    this.currentWitness = {
+      name: witnessName,
+      caller: caller === 'PLAINTIFF' ? 'PLAINTIFF' : 'DEFENDANT',
+      speaker: speaker,
+      swornStatus: 'NOT_SWORN'
+    };
+    
+    // Also update the witness caller for examiner side determination
+    this.witnessCalledBy = caller.toLowerCase() as 'plaintiff' | 'defense';
+    
+    // Update registry
+    if (speaker) {
+      this.speakerRegistry.setCurrentWitness(speaker);
+    }
+    
+    logger.debug(`Current witness set to: ${witnessName}`);
+  }
+
   getOpposingAttorney(): AttorneyInfo | null {
     return this.opposingAttorney;
   }
 
   getExaminationType(): ExaminationType | null {
     return this.examinationType;
+  }
+  
+  /**
+   * Set examination type directly (used when examination type is identified in Phase2)
+   */
+  setExaminationType(type: ExaminationType | null): void {
+    this.examinationType = type;
+    logger.debug(`Examination type set to: ${type}`);
   }
 
   isInVideoDeposition(): boolean {

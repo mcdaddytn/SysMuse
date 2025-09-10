@@ -59,6 +59,7 @@ export class ContentParser {
 
   private sessionLineCounter: number = 0;  // Track line number within session
   private trialLineCounter: number = 0;    // Track line number within trial
+  private filteredLineCounts: Map<string, number> = new Map();  // Track filtered line counts
   
   async parseContent(
     metadata: ParsedMetadata,
@@ -71,6 +72,9 @@ export class ContentParser {
     
     // Reset session line counter for this session
     this.sessionLineCounter = 0;
+    
+    // Reset filtered line counts for this session
+    this.filteredLineCounts.clear();
     
     // Get the current max trial line number to continue from
     const maxTrialLine = await this.prisma.line.aggregate({
@@ -124,6 +128,17 @@ export class ContentParser {
     await this.updateTrialMetadataFromSections(trialId);
     
     // Phase 1: Skip speaker statistics - Phase 2 will handle speaker resolution
+    
+    // Log filtered lines summary
+    if (this.filteredLineCounts.size > 0) {
+      let totalFiltered = 0;
+      this.logger.info('Line filtering summary:');
+      for (const [filter, count] of this.filteredLineCounts.entries()) {
+        this.logger.info(`  - Filtered "${filter}": ${count} occurrences`);
+        totalFiltered += count;
+      }
+      this.logger.info(`  Total lines filtered: ${totalFiltered}`);
+    }
     
     this.logger.info(`Content parsing complete: ${metadata.lines.size} lines processed`);
   }
@@ -505,7 +520,16 @@ export class ContentParser {
         continue;
       }
       
-      // Increment counters for non-blank lines
+      // Check if line should be filtered
+      const filterMatch = this.shouldFilterLine(line.cleanText);
+      if (filterMatch) {
+        // Track how many times each filter was matched
+        const currentCount = this.filteredLineCounts.get(filterMatch) || 0;
+        this.filteredLineCounts.set(filterMatch, currentCount + 1);
+        continue; // Skip this line
+      }
+      
+      // Increment counters for non-blank, non-filtered lines
       this.sessionLineCounter++;
       this.trialLineCounter++;
       
@@ -687,6 +711,40 @@ export class ContentParser {
       }
     }
     return false;
+  }
+
+  private shouldFilterLine(text: string): string | null {
+    // Check if line should be filtered based on trialStyleConfig lineFilters
+    if (!this.trialStyleConfig?.lineFilters) {
+      return null;
+    }
+
+    const trimmedText = text?.trim() || '';
+    
+    // Check literal filters (exact match after trimming)
+    if (this.trialStyleConfig.lineFilters.literal) {
+      for (const filter of this.trialStyleConfig.lineFilters.literal) {
+        if (trimmedText === filter) {
+          return filter; // Return the filter that matched
+        }
+      }
+    }
+
+    // Check regex filters
+    if (this.trialStyleConfig.lineFilters.regex) {
+      for (const regexStr of this.trialStyleConfig.lineFilters.regex) {
+        try {
+          const regex = new RegExp(regexStr);
+          if (regex.test(text)) {
+            return regexStr; // Return the regex pattern that matched
+          }
+        } catch (error) {
+          this.logger.warn(`Invalid regex filter: ${regexStr}`);
+        }
+      }
+    }
+
+    return null; // Line should not be filtered
   }
 
   private async processSessionSections(

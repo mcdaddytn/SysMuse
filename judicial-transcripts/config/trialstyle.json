@@ -8,5 +8,11 @@
   "unidentifiedFiles": [],
   "metadata": {},
   "useAttorneyMetadata": true,
-  "attorneyMetadataFile": "./output/multi-trial/attorney-metadata.json"
+  "attorneyMetadataFile": "./output/multi-trial/attorney-metadata.json",
+  "lineFilters": {
+    "literal": [
+      "Shawn M. McRoberts, RMR, CRR",
+      "Federal Official Court Reporter"
+    ]
+  }
 }

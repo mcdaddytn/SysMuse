@@ -291,6 +291,11 @@ export interface TrialStyleConfig {
     defenseGenericName?: string;
     assumeExaminerFromContext?: boolean;
   };
+  // Line filtering configuration to omit unwanted lines during phase 1
+  lineFilters?: {
+    literal?: string[];  // Exact string matches (case-sensitive, whitespace-sensitive)
+    regex?: string[];    // Regular expression patterns
+  };
   // Feature 02S: Data override system for manual corrections
   overrides?: {
     trial?: {

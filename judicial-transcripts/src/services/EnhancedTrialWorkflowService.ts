@@ -895,11 +895,30 @@ export class EnhancedTrialWorkflowService {
       if (this.config.verbose) {
         console.log(`Running: ${command}`);
       }
-      execSync(command, { 
-        stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
-        timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
-        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
-      });
+      
+      // Try with pipe first to capture errors, fall back to ignore if buffer issues
+      try {
+        execSync(command, { 
+          stdio: this.config.verbose ? 'inherit' : ['ignore', 'ignore', 'pipe'], // Capture stderr only
+          timeout: this.config.execTimeout || 600000,
+          maxBuffer: this.config.maxBuffer || 209715200
+        });
+      } catch (execError: any) {
+        // If it's a buffer error, retry with ignore
+        if (execError.code === 'ENOBUFS') {
+          console.log('⚠️ Buffer overflow detected, retrying with output suppression...');
+          execSync(command, { 
+            stdio: this.config.verbose ? 'inherit' : 'ignore',
+            timeout: this.config.execTimeout || 600000,
+            maxBuffer: this.config.maxBuffer || 209715200
+          });
+        } else {
+          // Log the actual error
+          console.error(`Phase2 error output: ${execError.stderr?.toString() || execError.message}`);
+          throw execError;
+        }
+      }
+      
       return { success: true };
     } catch (error) {
       return { success: false, error: error as Error };

@@ -1049,26 +1049,57 @@ export class Phase2Processor {
       // Parse the witness name into components
       const parsedName = this.parseWitnessName(witnessName);
       
-      witness = await this.prisma.witness.create({
-        data: {
-          trialId: this.context.trialId,
-          name: witnessName,
-          displayName: displayName,
-          firstName: parsedName.firstName,
-          middleInitial: parsedName.middleInitial,
-          lastName: parsedName.lastName,
-          suffix: parsedName.suffix,
-          witnessFingerprint: parsedName.fingerprint,
-          witnessCaller: witnessCaller,
-          speakerId: speaker.id,
-          swornStatus: 'NOT_SWORN'
-        },
-        include: {
-          speaker: true
+      // Check if witness with this fingerprint exists in ANY trial
+      const existingWitness = await this.prisma.witness.findFirst({
+        where: {
+          witnessFingerprint: parsedName.fingerprint
         }
       });
       
-      logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}, fingerprint: ${parsedName.fingerprint}`);
+      if (existingWitness) {
+        // If witness exists in another trial, create with modified fingerprint for this trial
+        logger.warn(`Witness with fingerprint ${parsedName.fingerprint} already exists in trial ${existingWitness.trialId}, creating with trial-specific fingerprint`);
+        
+        witness = await this.prisma.witness.create({
+          data: {
+            trialId: this.context.trialId,
+            name: witnessName,
+            displayName: displayName,
+            firstName: parsedName.firstName,
+            middleInitial: parsedName.middleInitial,
+            lastName: parsedName.lastName,
+            suffix: parsedName.suffix,
+            witnessFingerprint: `${parsedName.fingerprint}_trial${this.context.trialId}`,
+            witnessCaller: witnessCaller,
+            speakerId: speaker.id,
+            swornStatus: 'NOT_SWORN'
+          },
+          include: {
+            speaker: true
+          }
+        });
+      } else {
+        witness = await this.prisma.witness.create({
+          data: {
+            trialId: this.context.trialId,
+            name: witnessName,
+            displayName: displayName,
+            firstName: parsedName.firstName,
+            middleInitial: parsedName.middleInitial,
+            lastName: parsedName.lastName,
+            suffix: parsedName.suffix,
+            witnessFingerprint: parsedName.fingerprint,
+            witnessCaller: witnessCaller,
+            speakerId: speaker.id,
+            swornStatus: 'NOT_SWORN'
+          },
+          include: {
+            speaker: true
+          }
+        });
+      }
+      
+      logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}, fingerprint: ${witness.witnessFingerprint}`);
     }
     
     // Detect sworn status from the text

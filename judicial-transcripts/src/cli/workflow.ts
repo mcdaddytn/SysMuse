@@ -71,7 +71,10 @@ program
         // Run seed
         console.log(chalk.cyan('Loading seed data...'));
         const { execSync } = require('child_process');
-        execSync('npm run seed', { stdio: options.verbose ? 'inherit' : 'pipe' });
+        execSync('npm run seed', { 
+          stdio: options.verbose ? 'inherit' : 'ignore',
+          maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+        });
         console.log(chalk.green('✓ Seed data loaded'));
         console.log();
       }

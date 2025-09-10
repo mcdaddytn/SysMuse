@@ -752,8 +752,9 @@ export class EnhancedTrialWorkflowService {
         console.log(`Running: ${command}`);
       }
       execSync(command, { 
-        stdio: this.config.verbose ? 'inherit' : 'pipe',
-        timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+        stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
+        timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
+        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
       });
 
       // Set auto-review if configured
@@ -869,8 +870,9 @@ export class EnhancedTrialWorkflowService {
         console.log(`Running: ${command}`);
       }
       execSync(command, { 
-        stdio: this.config.verbose ? 'inherit' : 'pipe',
-        timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+        stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
+        timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
+        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
       });
       return { success: true };
     } catch (error) {
@@ -893,8 +895,9 @@ export class EnhancedTrialWorkflowService {
         console.log(`Running: ${command}`);
       }
       execSync(command, { 
-        stdio: this.config.verbose ? 'inherit' : 'pipe',
-        timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+        stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
+        timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
+        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
       });
       return { success: true };
     } catch (error) {
@@ -912,8 +915,9 @@ export class EnhancedTrialWorkflowService {
         console.log(`Running: ${command}`);
       }
       execSync(command, { 
-        stdio: this.config.verbose ? 'inherit' : 'pipe',
-        timeout: this.config.execTimeout || 600000 // Default 10 minutes, configurable
+        stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
+        timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
+        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
       });
       return { success: true };
     } catch (error) {

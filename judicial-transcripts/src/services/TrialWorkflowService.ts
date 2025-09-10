@@ -249,7 +249,10 @@ export class TrialWorkflowService {
       if (this.config.verbose) {
         console.log(`Running: ${command}`);
       }
-      execSync(command, { stdio: this.config.verbose ? 'inherit' : 'pipe' });
+      execSync(command, { 
+        stdio: this.config.verbose ? 'inherit' : 'ignore',
+        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+      });
       return { success: true };
     } catch (error) {
       return { success: false, error: error as Error };
@@ -269,7 +272,10 @@ export class TrialWorkflowService {
       if (this.config.verbose) {
         console.log(`Running: ${command}`);
       }
-      execSync(command, { stdio: this.config.verbose ? 'inherit' : 'pipe' });
+      execSync(command, { 
+        stdio: this.config.verbose ? 'inherit' : 'ignore',
+        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+      });
       return { success: true };
     } catch (error) {
       return { success: false, error: error as Error };
@@ -289,7 +295,10 @@ export class TrialWorkflowService {
       if (this.config.verbose) {
         console.log(`Running: ${command}`);
       }
-      execSync(command, { stdio: this.config.verbose ? 'inherit' : 'pipe' });
+      execSync(command, { 
+        stdio: this.config.verbose ? 'inherit' : 'ignore',
+        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+      });
       return { success: true };
     } catch (error) {
       return { success: false, error: error as Error };
@@ -305,7 +314,10 @@ export class TrialWorkflowService {
       if (this.config.verbose) {
         console.log(`Running: ${command}`);
       }
-      execSync(command, { stdio: this.config.verbose ? 'inherit' : 'pipe' });
+      execSync(command, { 
+        stdio: this.config.verbose ? 'inherit' : 'ignore',
+        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+      });
       return { success: true };
     } catch (error) {
       return { success: false, error: error as Error };

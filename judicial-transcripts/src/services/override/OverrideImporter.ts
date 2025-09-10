@@ -173,8 +173,15 @@ export class OverrideImporter {
         // Import in dependency order
         
         // 1. Import Addresses first (no dependencies)
+        // Non-fatal: Address conflicts should not prevent Attorney imports
         if (data.Address && data.Address.length > 0) {
-          result.imported.addresses = await this.importAddresses(tx, data.Address);
+          try {
+            result.imported.addresses = await this.importAddresses(tx, data.Address);
+          } catch (error) {
+            console.log(`⚠️ WARNING: Address import encountered issues: ${error}`);
+            console.log(`⚠️ Continuing with other imports...`);
+            result.imported.addresses = 0;
+          }
         }
 
         // 2. Import Trials (no dependencies on other override entities)
@@ -191,8 +198,15 @@ export class OverrideImporter {
         }
 
         // 4. Import LawFirmOffices (depends on LawFirm and Address)
+        // Non-fatal: We want Attorneys and TrialAttorneys to still be imported even if offices fail
         if (data.LawFirmOffice && data.LawFirmOffice.length > 0) {
-          result.imported.lawFirmOffices = await this.importLawFirmOffices(tx, data.LawFirmOffice);
+          try {
+            result.imported.lawFirmOffices = await this.importLawFirmOffices(tx, data.LawFirmOffice);
+          } catch (error) {
+            console.log(`⚠️ WARNING: LawFirmOffice import encountered issues: ${error}`);
+            console.log(`⚠️ Continuing with Attorney and TrialAttorney imports...`);
+            result.imported.lawFirmOffices = 0;
+          }
         }
 
         // 5. Import Attorneys (needs speaker creation)
@@ -682,13 +696,28 @@ export class OverrideImporter {
       
       let created;
       if (existingOffice) {
-        // Update existing office
+        // Update existing office - check for address conflicts
+        let finalAddressId = addressId;
+        if (addressId && existingOffice.addressId !== addressId) {
+          const existingWithAddress = await tx.lawFirmOffice.findFirst({
+            where: { 
+              addressId,
+              NOT: { id: existingOffice.id }
+            }
+          });
+          if (existingWithAddress) {
+            console.log(`  ⚠️ WARNING: Address ${addressId} is already used by LawFirmOffice ${existingWithAddress.id} (${existingWithAddress.name})`);
+            console.log(`  ⚠️ Keeping existing addressId to avoid conflict`);
+            finalAddressId = existingOffice.addressId;
+          }
+        }
+        
         created = await tx.lawFirmOffice.update({
           where: { id: existingOffice.id },
           data: {
             lawFirmId,
             name: office.name,
-            addressId,
+            addressId: finalAddressId,
             lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
           }
         });
@@ -720,13 +749,15 @@ export class OverrideImporter {
           });
           
           // Check if addressId is already in use
+          let finalAddressId = addressId;
           if (addressId) {
             const existingWithAddress = await tx.lawFirmOffice.findFirst({
               where: { addressId }
             });
             if (existingWithAddress) {
-              console.log(`  ❌ ERROR: Address ${addressId} is already used by LawFirmOffice ${existingWithAddress.id} (${existingWithAddress.name})`);
-              throw new Error(`Address ${addressId} is already assigned to another LawFirmOffice`);
+              console.log(`  ⚠️ WARNING: Address ${addressId} is already used by LawFirmOffice ${existingWithAddress.id} (${existingWithAddress.name})`);
+              console.log(`  ⚠️ Creating LawFirmOffice without address to avoid conflict`);
+              finalAddressId = undefined;
             }
           }
           
@@ -734,7 +765,7 @@ export class OverrideImporter {
             data: {
               lawFirmId,
               name: office.name,
-              addressId,
+              addressId: finalAddressId,
               lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
             }
           });
@@ -1008,12 +1039,18 @@ export class OverrideImporter {
       const attorneyId = this.correlationMap.Attorney.get(ta.attorneyId) || ta.attorneyId;
       const lawFirmId = ta.lawFirmId ? 
         (this.correlationMap.LawFirm.get(ta.lawFirmId) || ta.lawFirmId) : undefined;
-      const lawFirmOfficeId = ta.lawFirmOfficeId ? 
+      let lawFirmOfficeId = ta.lawFirmOfficeId ? 
         (this.correlationMap.LawFirmOffice.get(ta.lawFirmOfficeId) || ta.lawFirmOfficeId) : undefined;
 
       if (!trialId || !attorneyId) {
         console.log(`Skipping TrialAttorney: missing required IDs (trial=${ta.trialId}, attorney=${ta.attorneyId})`);
         continue;
+      }
+      
+      // If lawFirmOfficeId is missing (due to address conflict), just proceed without it
+      if (ta.lawFirmOfficeId && !lawFirmOfficeId) {
+        console.log(`⚠️ WARNING: LawFirmOffice ${ta.lawFirmOfficeId} not found (likely due to address conflict), proceeding without office assignment`);
+        lawFirmOfficeId = undefined;
       }
       
       // Handle ConditionalInsert

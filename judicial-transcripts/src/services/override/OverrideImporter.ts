@@ -303,10 +303,10 @@ export class OverrideImporter {
           existing = await tx.address.findFirst({
             where: { fullAddress: address.fullAddress }
           });
-        } else if (overrideKey === 'id' && address.id) {
-          existing = await tx.address.findUnique({
-            where: { id: address.id }
-          });
+        } else if (overrideKey === 'id') {
+          // Cannot upsert by placeholder ID from JSON
+          console.log(`Warning: Cannot upsert address by placeholder id ${address.id}, treating as insert`);
+          // Skip the existing check, will create new
         }
         
         let upserted;
@@ -339,7 +339,8 @@ export class OverrideImporter {
           });
         }
         
-        if (address.id) {
+        // Always set correlation map for address
+        if (address.id !== undefined && address.id !== null) {
           this.correlationMap.Address.set(address.id, upserted.id);
         }
         this.insertedEntities.addresses.add(upserted.id);
@@ -357,7 +358,8 @@ export class OverrideImporter {
           }
         });
         
-        if (address.id) {
+        // Always set correlation map for address
+        if (address.id !== undefined && address.id !== null) {
           this.correlationMap.Address.set(address.id, created.id);
         }
         this.insertedEntities.addresses.add(created.id);
@@ -632,6 +634,11 @@ export class OverrideImporter {
 
       const addressId = office.addressId ? 
         this.correlationMap.Address.get(office.addressId) : undefined;
+      
+      if (office.addressId && !addressId) {
+        console.log(`Warning: Address ${office.addressId} not found in correlation map for LawFirmOffice ${office.name}`);
+        console.log(`Available address mappings:`, Array.from(this.correlationMap.Address.entries()));
+      }
       
       let existingOffice = null;
       

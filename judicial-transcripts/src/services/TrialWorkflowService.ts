@@ -34,6 +34,7 @@ export interface WorkflowConfig {
   verbose?: boolean;
   forceRerun?: boolean;
   skipOptional?: boolean;
+  maxBuffer?: number;
 }
 
 export interface StepResult {
@@ -251,7 +252,7 @@ export class TrialWorkflowService {
       }
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore',
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {
@@ -274,7 +275,7 @@ export class TrialWorkflowService {
       }
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore',
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {
@@ -297,7 +298,7 @@ export class TrialWorkflowService {
       }
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore',
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {
@@ -316,7 +317,7 @@ export class TrialWorkflowService {
       }
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore',
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {

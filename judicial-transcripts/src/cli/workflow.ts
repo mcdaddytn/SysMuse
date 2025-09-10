@@ -156,7 +156,8 @@ program
         outputDir: configData.outputDir || 'output/multi-trial',
         inputDir: configData.inputDir,
         autoReview: configData.workflow?.autoReview,
-        execTimeout: configData.workflow?.execTimeout || 1200000  // Default 20 minutes for batch processing
+        execTimeout: configData.workflow?.execTimeout || 1200000,  // Default 20 minutes for batch processing
+        maxBuffer: configData.workflow?.maxBuffer || 209715200  // Default 200MB for buffer size
       };
 
       const workflowService = new EnhancedTrialWorkflowService(prisma, workflowConfig);

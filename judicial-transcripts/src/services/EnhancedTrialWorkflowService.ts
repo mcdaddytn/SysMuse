@@ -48,6 +48,7 @@ export interface WorkflowConfig {
   outputDir?: string;
   inputDir?: string;
   execTimeout?: number;  // Custom timeout for execSync operations in milliseconds
+  maxBuffer?: number;  // Maximum buffer size for execSync operations in bytes
 }
 
 export interface StepResult {
@@ -754,7 +755,7 @@ export class EnhancedTrialWorkflowService {
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
         timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
-        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
 
       // Set auto-review if configured
@@ -872,7 +873,7 @@ export class EnhancedTrialWorkflowService {
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
         timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
-        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {
@@ -897,7 +898,7 @@ export class EnhancedTrialWorkflowService {
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
         timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
-        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {
@@ -917,7 +918,7 @@ export class EnhancedTrialWorkflowService {
       execSync(command, { 
         stdio: this.config.verbose ? 'inherit' : 'ignore', // Use 'ignore' instead of 'pipe' to avoid buffer overflow
         timeout: this.config.execTimeout || 600000, // Default 10 minutes, configurable
-        maxBuffer: 50 * 1024 * 1024 // Increase buffer to 50MB if output is captured
+        maxBuffer: this.config.maxBuffer || 209715200 // Use config maxBuffer or default to 200MB
       });
       return { success: true };
     } catch (error) {

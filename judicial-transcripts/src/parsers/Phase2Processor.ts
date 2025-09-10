@@ -973,6 +973,92 @@ export class Phase2Processor {
   }
 
   /**
+   * Parse witness line by removing known components and extracting the name
+   * ALWAYS returns a witness if we detect witness indicators - NEVER fails due to name pattern
+   */
+  private parseWitnessLine(lineText: string): {
+    witnessName: string;
+    witnessCaller: 'PLAINTIFF' | 'DEFENDANT';
+    swornStatus: SwornStatus;
+  } | null {
+    // Check if this line contains the key witness indicators
+    if (!lineText.includes('WITNESS')) {
+      return null;
+    }
+    
+    // Check for PLAINTIFF'S WITNESS or DEFENDANT'S WITNESS (with variations)
+    let witnessCaller: 'PLAINTIFF' | 'DEFENDANT' | null = null;
+    let workingText = lineText;
+    
+    // Check for plaintiff patterns
+    if (workingText.match(/PLAINTIFF'?S?'?\s+WITNESS/i)) {
+      witnessCaller = 'PLAINTIFF';
+      // Remove the pattern from the text
+      workingText = workingText.replace(/PLAINTIFF'?S?'?\s+WITNESS(?:ES)?/gi, '');
+    }
+    // Check for defendant patterns (including DEFENSE)
+    else if (workingText.match(/DEFENDANT'?S?'?\s+WITNESS/i) || workingText.match(/DEFENSE\s+WITNESS/i)) {
+      witnessCaller = 'DEFENDANT';
+      // Remove the pattern from the text
+      workingText = workingText.replace(/DEFENDANT'?S?'?\s+WITNESS(?:ES)?/gi, '');
+      workingText = workingText.replace(/DEFENSE\s+WITNESS(?:ES)?/gi, '');
+    }
+    
+    if (!witnessCaller) {
+      // No valid witness caller found
+      return null;
+    }
+    
+    // Determine sworn status and remove it from the text
+    let swornStatus: SwornStatus = SwornStatus.NOT_SWORN;
+    if (workingText.match(/PREVIOUSLY\s+SWORN/i)) {
+      swornStatus = SwornStatus.PREVIOUSLY_SWORN;
+      workingText = workingText.replace(/PREVIOUSLY\s+SWORN/gi, '');
+    } else if (workingText.match(/\bSWORN\b/i)) {
+      swornStatus = SwornStatus.SWORN;
+      workingText = workingText.replace(/\bSWORN\b/gi, '');
+    } else if (workingText.match(/\bPREVIOUSLY\b/i)) {
+      // Handle case where "PREVIOUSLY" appears alone (likely "PREVIOUSLY SWORN" split across lines)
+      swornStatus = SwornStatus.PREVIOUSLY_SWORN;
+      workingText = workingText.replace(/\bPREVIOUSLY\b/gi, '');
+    }
+    
+    // Remove common patterns that aren't part of the name
+    workingText = workingText.replace(/EXAMINATION\s*(CONTINUED)?/gi, '');
+    workingText = workingText.replace(/DIRECT|CROSS|REDIRECT|RECROSS/gi, '');
+    workingText = workingText.replace(/PRESENTED\s+BY\s+VIDEO/gi, '');
+    workingText = workingText.replace(/VIDEO\s+DEPOSITION/gi, '');
+    workingText = workingText.replace(/DEPOSITION/gi, '');
+    workingText = workingText.replace(/\(CONTINUED\)/gi, '');
+    
+    // Clean up punctuation and whitespace
+    workingText = workingText.replace(/[,;:\(\)]/g, ' ');  // Replace punctuation with spaces
+    workingText = workingText.replace(/\s+/g, ' ');        // Collapse multiple spaces
+    workingText = workingText.trim();
+    
+    // IMPORTANT: Even if the name seems empty or unusual, use what we have
+    // Better to have a witness record than to miss one
+    if (!workingText || workingText.length < 2) {
+      // Use a placeholder if we really can't find a name
+      workingText = "UNKNOWN WITNESS";
+      logger.warn(`Could not extract witness name from line, using placeholder: ${lineText}`);
+    }
+    
+    // Log warning if the name doesn't match expected patterns, but STILL USE IT
+    if (!workingText.match(/^[A-Z][A-Z\s\.'"-]+$/)) {
+      logger.warn(`Witness name has unusual format but using it anyway: "${workingText}" from line: "${lineText}"`);
+    }
+    
+    logger.info(`Successfully parsed witness: name="${workingText}", caller=${witnessCaller}, sworn=${swornStatus} from: "${lineText}"`);
+    
+    return {
+      witnessName: workingText,
+      witnessCaller: witnessCaller,
+      swornStatus: swornStatus
+    };
+  }
+
+  /**
    * Check for witness being called - FIXED VERSION
    */
   private async checkWitnessCalled(
@@ -981,12 +1067,6 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    // Skip if this line contains EXAMINATION or DEPOSITION
-    // These are handled by checkExaminationChange
-    if (lineText.includes('EXAMINATION') || lineText.includes('DEPOSITION')) {
-      return false;
-    }
-    
     // Skip if this line appears to be in the middle of a sentence
     // (e.g., "we'll be back to continue with the next Plaintiff's witness")
     const lowerText = lineText.toLowerCase();
@@ -998,25 +1078,15 @@ export class Phase2Processor {
       return false;
     }
     
-    // Check multiple patterns for witness
-    let nameMatch = lineText.match(this.PATTERNS.witnessName);
-    if (!nameMatch) {
-      nameMatch = lineText.match(this.PATTERNS.witnessNameAlternate);
+    // Use the new simplified parsing approach
+    const parsedWitness = this.parseWitnessLine(lineText);
+    if (!parsedWitness) {
+      return false;
     }
     
-    // Special handling for nicknames like QI "PETER" LI
-    if (!nameMatch) {
-      const nicknameMatch = lineText.match(this.PATTERNS.witnessWithNickname);
-      if (nicknameMatch) {
-        const fullName = `${nicknameMatch[1]} "${nicknameMatch[2]}" ${nicknameMatch[3]}`;
-        const witnessLineMatch = lineText.match(/(PLAINTIFF'?S?'?|DEFENDANT'?S?'?|DEFENSE)\s+WITNESS/);
-        if (witnessLineMatch) {
-          nameMatch = [lineText, fullName, witnessLineMatch[1]];
-        }
-      }
-    }
-    
-    if (!nameMatch) return false;
+    // We have a witness! Extract the components
+    const { witnessName, witnessCaller, swornStatus } = parsedWitness;
+    const displayName = witnessName; // Keep for display
     
     // Save current event if exists
     if (state.currentEvent) {
@@ -1024,15 +1094,6 @@ export class Phase2Processor {
       state.currentEvent = null;
       state.eventLines = [];
     }
-    
-    // Extract and normalize witness name
-    let witnessName = nameMatch[1].trim();
-    const displayName = witnessName; // Keep original for display
-    witnessName = witnessName.replace(/['"]/g, ''); // Remove quotes for storage
-    
-    // Normalize witness caller to PLAINTIFF or DEFENDANT
-    const callerText = nameMatch[2].toUpperCase();
-    const witnessCaller = callerText.includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
     
     logger.info(`Witness called detected: ${displayName} (${witnessCaller})`);
     
@@ -1131,15 +1192,8 @@ export class Phase2Processor {
       logger.info(`Created witness: ${displayName} with handle: ${speakerHandle}, fingerprint: ${witness.witnessFingerprint}`);
     }
     
-    // Detect sworn status from the text
-    let witnessSwornStatus: any = SwornStatus.NOT_SWORN;
-    if (lineText.match(/\bPREVIOUSLY\s+SWORN\b/i)) {
-      witnessSwornStatus = SwornStatus.PREVIOUSLY_SWORN;
-    } else if (lineText.match(/\bSWORN\b/i)) {
-      witnessSwornStatus = SwornStatus.SWORN;
-    }
-    
     // Update state with current witness IMMEDIATELY
+    // Use the swornStatus we already parsed
     state.currentWitness = {
       id: witness.id,
       name: witness.name || undefined,
@@ -1147,7 +1201,7 @@ export class Phase2Processor {
       witnessType: witness.witnessType || undefined,
       witnessCaller: witness.witnessCaller || undefined,
       speakerId: witness.speaker?.id,
-      swornStatus: witnessSwornStatus
+      swornStatus: swornStatus  // Use the parsed sworn status
     };
     
     // Create speaker info for contextual mapping

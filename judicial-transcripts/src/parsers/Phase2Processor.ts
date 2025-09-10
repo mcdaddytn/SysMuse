@@ -1031,10 +1031,8 @@ export class Phase2Processor {
     workingText = workingText.replace(/DEPOSITION/gi, '');
     workingText = workingText.replace(/\(CONTINUED\)/gi, '');
     
-    // Clean up punctuation and whitespace
-    workingText = workingText.replace(/[,;:\(\)\.]/g, ' ');  // Replace punctuation including periods with spaces
-    workingText = workingText.replace(/\s+/g, ' ');        // Collapse multiple spaces
-    workingText = workingText.trim();
+    // Normalize the witness name
+    workingText = this.normalizeWitnessName(workingText);
     
     // IMPORTANT: Even if the name seems empty or unusual, use what we have
     // Better to have a witness record than to miss one
@@ -1042,11 +1040,6 @@ export class Phase2Processor {
       // Use a placeholder if we really can't find a name
       workingText = "UNKNOWN WITNESS";
       logger.warn(`Could not extract witness name from line, using placeholder: ${lineText}`);
-    }
-    
-    // Log warning if the name doesn't match expected patterns, but STILL USE IT
-    if (!workingText.match(/^[A-Z][A-Z\s\.'"-]+$/)) {
-      logger.warn(`Witness name has unusual format but using it anyway: "${workingText}" from line: "${lineText}"`);
     }
     
     logger.info(`Successfully parsed witness: name="${workingText}", caller=${witnessCaller}, sworn=${swornStatus} from: "${lineText}"`);
@@ -1361,8 +1354,9 @@ export class Phase2Processor {
       const witnessMatch = prevText.match(/^([A-Z][A-Z\s,'"\.\-]+?),?\s+(PLAINTIFF'?S?'?|DEFENDANT'?S?'?|DEFENSE)\s+WITNESS/);
       if (witnessMatch) {
         let witnessName = witnessMatch[1].trim();
+        // Normalize the witness name
+        witnessName = this.normalizeWitnessName(witnessName);
         const displayName = witnessName;
-        witnessName = witnessName.replace(/['"]/g, '');
         const callerText = witnessMatch[2].toUpperCase();
         const witnessCaller = callerText.includes('PLAINTIFF') ? 'PLAINTIFF' : 'DEFENDANT';
         
@@ -2349,6 +2343,27 @@ export class Phase2Processor {
     } else {
       logger.warn(`Missing witness or examination type for witness called event`);
     }
+  }
+
+  /**
+   * Normalize witness name by removing punctuation and standardizing format
+   */
+  private normalizeWitnessName(name: string): string {
+    if (!name) return '';
+    
+    // Remove all punctuation characters (periods, commas, colons, semicolons, parentheses, quotes, etc.)
+    let normalized = name.replace(/[.,;:()'"!?]/g, ' ');
+    
+    // Replace multiple spaces with single space
+    normalized = normalized.replace(/\s+/g, ' ');
+    
+    // Trim whitespace from beginning and end
+    normalized = normalized.trim();
+    
+    // Convert to uppercase (standardize capitalization)
+    normalized = normalized.toUpperCase();
+    
+    return normalized;
   }
 
   /**

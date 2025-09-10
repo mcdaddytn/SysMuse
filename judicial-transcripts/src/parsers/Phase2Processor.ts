@@ -1734,12 +1734,15 @@ export class Phase2Processor {
     const byMatch = upperPrefix.match(/BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)/);
     if (byMatch) {
       const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
+      logger.info(`[ATTORNEY MATCH - BY PATTERN] Found 'BY' pattern, searching for attorney: ${attorneyPrefix}`);
+      
       const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
         this.context.trialId, 
         attorneyPrefix
       );
       
       if (attorney) {
+        logger.info(`[ATTORNEY MATCH - BY PATTERN] Successfully matched attorney: ${attorney.name} (id=${attorney.id})`);
         const speaker: SpeakerInfo = {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,
@@ -1753,18 +1756,35 @@ export class Phase2Processor {
         state.contextualSpeakers.set('Q.', speaker);
         logger.info(`Updated Q. context to: ${attorney.name}`);
         return speaker;
+      } else {
+        logger.warn(`[ATTORNEY MATCH - BY PATTERN] No attorney found for prefix: ${attorneyPrefix}`);
       }
     }
     
     // Check for attorney by full prefix (MR. LASTNAME)
     const attorneyMatch = upperPrefix.match(/^(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+)/);
     if (attorneyMatch) {
+      logger.info(`[ATTORNEY MATCH - DIRECT] Searching for attorney with prefix: ${upperPrefix}`);
+      
+      // First check if there's a pre-existing TrialAttorney association
+      const trialAttorneyCount = await this.prisma.trialAttorney.count({
+        where: {
+          trialId: this.context.trialId,
+          attorney: {
+            speakerPrefix: upperPrefix
+          }
+        }
+      });
+      
+      logger.info(`[ATTORNEY MATCH - DIRECT] Found ${trialAttorneyCount} TrialAttorney associations for prefix ${upperPrefix}`);
+      
       const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
         this.context.trialId,
         upperPrefix
       );
       
       if (attorney) {
+        logger.info(`[ATTORNEY MATCH - DIRECT] Successfully matched: ${attorney.name} (id=${attorney.id}, speakerPrefix=${attorney.speakerPrefix})`);
         const speaker: SpeakerInfo = {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,
@@ -1782,10 +1802,21 @@ export class Phase2Processor {
         }
         
         return speaker;
+      } else {
+        // Check if attorney exists but not associated with this trial
+        const globalAttorney = await this.prisma.attorney.findFirst({
+          where: { speakerPrefix: upperPrefix }
+        });
+        
+        if (globalAttorney) {
+          logger.warn(`[ATTORNEY MATCH - DIRECT] Attorney exists globally but not associated with trial ${this.context.trialId}: ${globalAttorney.name} (id=${globalAttorney.id})`);
+        } else {
+          logger.info(`[ATTORNEY MATCH - DIRECT] No attorney exists with prefix: ${upperPrefix}`);
+        }
       }
       
       // Not found as attorney - try juror alias match
-      logger.debug(`Could not find attorney with prefix: ${upperPrefix}, trying juror match`);
+      logger.debug(`[ATTORNEY MATCH] Moving to juror alias matching for: ${upperPrefix}`);
       
       const jurorAlias = await this.witnessJurorService.matchJurorByAlias(
         this.context.trialId,

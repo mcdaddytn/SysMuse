@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { OverrideImporter } from '../services/override/OverrideImporter';
-import { LLMExtractor } from '../services/llm/LLMExtractor';
+import { LLMExtractor, ExtractedEntities } from '../services/llm/LLMExtractor';
 import { PromptBuilder } from '../services/llm/PromptBuilder';
 import { MultiProviderLLM } from '../services/llm/MultiProviderLLM';
 import { OverrideData } from '../services/override/types';
@@ -130,8 +130,8 @@ program
           process.exit(1);
         }
         
-        // Validate
-        const validation = extractor.validateExtraction(entities);
+        // Validate (cast to ExtractedEntities for validation)
+        const validation = extractor.validateExtraction(entities as ExtractedEntities);
         if (!validation.valid) {
           console.error('\n❌ Extraction validation failed:');
           validation.errors.forEach(err => console.error(`  - ${err}`));

@@ -10,11 +10,20 @@ export interface OverrideData {
   TrialAttorney?: TrialAttorneyOverride[];
   Marker?: MarkerOverride[];
   MarkerSection?: MarkerSectionOverride[];
+  metadata?: MetadataOverride;  // Metadata with import flags
+}
+
+export interface MetadataOverride {
+  userReview?: boolean;
+  importAttorney?: boolean;
+  importJudge?: boolean;
+  importCourtReporter?: boolean;
+  [key: string]: any;  // Allow other metadata fields
 }
 
 export interface BaseOverride {
   id?: number | string;  // Made optional for new records
-  overrideAction?: 'Insert' | 'Update' | 'Upsert';  // Default is 'Update' if omitted
+  overrideAction?: 'Insert' | 'Update' | 'Upsert' | 'ConditionalInsert';  // Added ConditionalInsert
   overrideKey?: string;  // Field to use for matching (default: 'id', can be 'attorneyFingerprint', etc.)
   createdAt?: string;
   updatedAt?: string;
@@ -95,6 +104,7 @@ export interface CourtReporterOverride extends BaseOverride {
 export interface TrialAttorneyOverride extends BaseOverride {
   trialId: number | string;
   attorneyId: number | string;
+  speakerId?: number | null;
   lawFirmId?: number | string | null;
   lawFirmOfficeId?: number | string | null;
   role?: 'PLAINTIFF' | 'DEFENDANT' | 'THIRD_PARTY' | 'UNKNOWN';

@@ -2,7 +2,7 @@ import { HumanMessage, SystemMessage } from 'langchain/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { format } from 'date-fns';
-import { OverrideData } from '../override/types';
+import { OverrideData, MetadataOverride } from '../override/types';
 import { PromptBuilder, LLMPrompt, DatabaseContext } from './PromptBuilder';
 import { MultiProviderLLM, LLMProvider } from './MultiProviderLLM';
 import { PrismaClient } from '@prisma/client';
@@ -19,7 +19,7 @@ export interface LLMContext {
 }
 
 export interface ExtractedEntities extends OverrideData {
-  metadata?: {
+  metadata?: MetadataOverride & {
     extractedAt: string;
     model: string;
     trialPath?: string;
@@ -238,11 +238,15 @@ ${context.transcriptHeader}`;
       // Add override configuration fields (pass context for trial shortName)
       this.addOverrideFields(entities, context);
 
-      // Add metadata
+      // Add metadata with import flags
       entities.metadata = {
         extractedAt: new Date().toISOString(),
         model: `${this.multiLLM.getProvider()}:${this.multiLLM.getModel()}`,
-        trialPath: context.trialPath
+        trialPath: context.trialPath,
+        userReview: true,  // Always require user review of LLM extracted data
+        importAttorney: true,  // Default: import attorneys
+        importJudge: false,    // Default: don't import judges (likely shared across trials)
+        importCourtReporter: false  // Default: don't import court reporters (likely shared)
       };
 
       // Save response if prompt was saved
@@ -510,10 +514,10 @@ ${prompt.user}
   }
 
   private addOverrideFields(entities: any, context?: LLMContext): void {
-    // Add override fields for Attorneys
+    // Add override fields for Attorneys - use ConditionalInsert to avoid updating existing
     if (entities.Attorney) {
       entities.Attorney.forEach((attorney: any) => {
-        attorney.overrideAction = 'Upsert';
+        attorney.overrideAction = 'ConditionalInsert';
         attorney.overrideKey = 'attorneyFingerprint';
       });
     }
@@ -526,26 +530,34 @@ ${prompt.user}
       });
     }
 
-    // Add override fields for LawFirms
+    // Add override fields for LawFirms - use ConditionalInsert
     if (entities.LawFirm) {
       entities.LawFirm.forEach((firm: any) => {
-        firm.overrideAction = 'Upsert';
+        firm.overrideAction = 'ConditionalInsert';
         firm.overrideKey = 'lawFirmFingerprint';
       });
     }
 
-    // Add override fields for LawFirmOffices
+    // Add override fields for LawFirmOffices - use ConditionalInsert
     if (entities.LawFirmOffice) {
       entities.LawFirmOffice.forEach((office: any) => {
-        office.overrideAction = 'Upsert';
+        office.overrideAction = 'ConditionalInsert';
         office.overrideKey = 'lawFirmOfficeFingerprint';
       });
     }
+    
+    // Add override fields for Addresses - use ConditionalInsert
+    if (entities.Address) {
+      entities.Address.forEach((address: any) => {
+        address.overrideAction = 'ConditionalInsert';
+        address.overrideKey = 'id';  // Addresses don't have fingerprints
+      });
+    }
 
-    // Add override fields for CourtReporters
+    // Add override fields for CourtReporters - use ConditionalInsert
     if (entities.CourtReporter) {
       entities.CourtReporter.forEach((reporter: any) => {
-        reporter.overrideAction = 'Upsert';
+        reporter.overrideAction = 'ConditionalInsert';
         reporter.overrideKey = 'courtReporterFingerprint';
       });
     }

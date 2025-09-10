@@ -24,10 +24,25 @@ import { generateFileToken, generateCaseHandle } from '../../utils/fileTokenGene
 export class OverrideImporter {
   private prisma: PrismaClient;
   private correlationMap: CorrelationMap;
+  private currentImportData: OverrideData | null = null;
+  private insertedEntities: {
+    attorneys: Set<number>;
+    lawFirms: Set<number>;
+    lawFirmOffices: Set<number>;
+    addresses: Set<number>;
+    courtReporters: Set<number>;
+  };
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
     this.correlationMap = this.initializeCorrelationMap();
+    this.insertedEntities = {
+      attorneys: new Set(),
+      lawFirms: new Set(),
+      lawFirmOffices: new Set(),
+      addresses: new Set(),
+      courtReporters: new Set()
+    };
   }
 
   private initializeCorrelationMap(): CorrelationMap {
@@ -150,6 +165,9 @@ export class OverrideImporter {
       errors: []
     };
 
+    // Store current import data for reference
+    this.currentImportData = data;
+
     try {
       await this.prisma.$transaction(async (tx) => {
         // Import in dependency order
@@ -178,18 +196,36 @@ export class OverrideImporter {
         }
 
         // 5. Import Attorneys (needs speaker creation)
-        if (data.Attorney && data.Attorney.length > 0) {
+        // Check metadata flag - default to true if not specified
+        const importAttorney = data.metadata?.importAttorney !== false;
+        console.log(`[IMPORT FLAGS] importAttorney: ${importAttorney} (metadata value: ${data.metadata?.importAttorney})`);
+        if (importAttorney && data.Attorney && data.Attorney.length > 0) {
+          console.log(`[IMPORT] Importing ${data.Attorney.length} attorneys`);
           result.imported.attorneys = await this.importAttorneys(tx, data.Attorney);
+        } else if (!importAttorney && data.Attorney && data.Attorney.length > 0) {
+          console.log(`[IMPORT] Skipping ${data.Attorney.length} attorneys due to importAttorney=false`);
         }
 
         // 6. Import Judges (depends on Trial and Speaker)
-        if (data.Judge && data.Judge.length > 0) {
+        // Check metadata flag - default to false if not specified
+        const importJudge = data.metadata?.importJudge === true;
+        console.log(`[IMPORT FLAGS] importJudge: ${importJudge} (metadata value: ${data.metadata?.importJudge})`);
+        if (importJudge && data.Judge && data.Judge.length > 0) {
+          console.log(`[IMPORT] Importing ${data.Judge.length} judges`);
           result.imported.judges = await this.importJudges(tx, data.Judge);
+        } else if (!importJudge && data.Judge && data.Judge.length > 0) {
+          console.log(`[IMPORT] Skipping ${data.Judge.length} judges due to importJudge=false`);
         }
 
         // 7. Import CourtReporters (depends on Trial and Address)
-        if (data.CourtReporter && data.CourtReporter.length > 0) {
+        // Check metadata flag - default to false if not specified
+        const importCourtReporter = data.metadata?.importCourtReporter === true;
+        console.log(`[IMPORT FLAGS] importCourtReporter: ${importCourtReporter} (metadata value: ${data.metadata?.importCourtReporter})`);
+        if (importCourtReporter && data.CourtReporter && data.CourtReporter.length > 0) {
+          console.log(`[IMPORT] Importing ${data.CourtReporter.length} court reporters`);
           result.imported.courtReporters = await this.importCourtReporters(tx, data.CourtReporter);
+        } else if (!importCourtReporter && data.CourtReporter && data.CourtReporter.length > 0) {
+          console.log(`[IMPORT] Skipping ${data.CourtReporter.length} court reporters due to importCourtReporter=false`);
         }
 
         // 8. Import TrialAttorneys (depends on Trial, Attorney, LawFirm, LawFirmOffice)
@@ -226,21 +262,107 @@ export class OverrideImporter {
   private async importAddresses(tx: any, addresses: AddressOverride[]): Promise<number> {
     let count = 0;
     for (const address of addresses) {
-      const created = await tx.address.create({
-        data: {
-          street1: address.street1,
-          street2: address.street2,
-          city: address.city,
-          state: address.state,
-          zipCode: address.zipCode,
-          country: address.country || 'USA',
-          fullAddress: address.fullAddress
+      const action = address.overrideAction || 'Upsert';
+      const overrideKey = address.overrideKey || 'fullAddress';
+      
+      // For ConditionalInsert, check if address is referenced by an inserted office or court reporter
+      if (action === 'ConditionalInsert') {
+        const isReferenced = this.insertedEntities.lawFirmOffices.size > 0 || 
+                           this.insertedEntities.courtReporters.size > 0;
+        
+        if (!isReferenced) {
+          console.log(`ConditionalInsert: Address not referenced by any inserted entity, skipping`);
+          continue;
         }
-      });
-      if (address.id) {
-        this.correlationMap.Address.set(address.id, created.id);
+        
+        // Check if address already exists (by matching all fields)
+        const existingAddress = await tx.address.findFirst({
+          where: {
+            street1: address.street1,
+            street2: address.street2,
+            city: address.city,
+            state: address.state,
+            zipCode: address.zipCode
+          }
+        });
+        
+        if (existingAddress) {
+          console.log(`ConditionalInsert: Address already exists, skipping`);
+          if (address.id) {
+            this.correlationMap.Address.set(address.id, existingAddress.id);
+          }
+          continue;
+        }
       }
-      count++;
+      
+      // Handle Upsert
+      if (action === 'Upsert') {
+        // Since fullAddress doesn't have unique constraint, find first then create or update
+        let existing = null;
+        if (overrideKey === 'fullAddress' && address.fullAddress) {
+          existing = await tx.address.findFirst({
+            where: { fullAddress: address.fullAddress }
+          });
+        } else if (overrideKey === 'id' && address.id) {
+          existing = await tx.address.findUnique({
+            where: { id: address.id }
+          });
+        }
+        
+        let upserted;
+        if (existing) {
+          // Update existing
+          upserted = await tx.address.update({
+            where: { id: existing.id },
+            data: {
+              street1: address.street1,
+              street2: address.street2,
+              city: address.city,
+              state: address.state,
+              zipCode: address.zipCode,
+              country: address.country || 'USA',
+              fullAddress: address.fullAddress
+            }
+          });
+        } else {
+          // Create new
+          upserted = await tx.address.create({
+            data: {
+              street1: address.street1,
+              street2: address.street2,
+              city: address.city,
+              state: address.state,
+              zipCode: address.zipCode,
+              country: address.country || 'USA',
+              fullAddress: address.fullAddress
+            }
+          });
+        }
+        
+        if (address.id) {
+          this.correlationMap.Address.set(address.id, upserted.id);
+        }
+        this.insertedEntities.addresses.add(upserted.id);
+        count++;
+      } else if (action === 'Insert') {
+        const created = await tx.address.create({
+          data: {
+            street1: address.street1,
+            street2: address.street2,
+            city: address.city,
+            state: address.state,
+            zipCode: address.zipCode,
+            country: address.country || 'USA',
+            fullAddress: address.fullAddress
+          }
+        });
+        
+        if (address.id) {
+          this.correlationMap.Address.set(address.id, created.id);
+        }
+        this.insertedEntities.addresses.add(created.id);
+        count++;
+      }
     }
     return count;
   }
@@ -248,7 +370,7 @@ export class OverrideImporter {
   private async importTrials(tx: any, trials: TrialOverride[]): Promise<number> {
     let count = 0;
     for (const trial of trials) {
-      const action = (trial.overrideAction || 'Upsert').toLowerCase();
+      const action = trial.overrideAction || 'Upsert';
       
       // Generate shortNameHandle from shortName if not provided
       const shortNameHandle = trial.shortNameHandle || 
@@ -257,7 +379,46 @@ export class OverrideImporter {
       // ALWAYS derive caseHandle from caseNumber, never trust override data
       const caseHandle = generateCaseHandle(trial.caseNumber);
       
-      if (action === 'insert') {
+      // Handle ConditionalInsert
+      if (action === 'ConditionalInsert') {
+        // Check if trial exists
+        const overrideKey = trial.overrideKey || 'caseNumber';
+        const whereClause = overrideKey === 'shortName' 
+          ? { shortName: trial.shortName }
+          : { caseNumber: trial.caseNumber };
+        
+        const existing = await tx.trial.findFirst({ where: whereClause });
+        if (existing) {
+          console.log(`ConditionalInsert: Trial exists (${overrideKey}=${overrideKey === 'shortName' ? trial.shortName : trial.caseNumber}), skipping`);
+          if (trial.id) {
+            this.correlationMap.Trial.set(trial.id, existing.id);
+          }
+          continue;
+        }
+        
+        // Create new trial
+        const created = await tx.trial.create({
+          data: {
+            name: trial.name,
+            shortName: trial.shortName,
+            shortNameHandle,
+            caseNumber: trial.caseNumber,
+            caseHandle,
+            plaintiff: trial.plaintiff,
+            defendant: trial.defendant,
+            alternateCaseNumber: trial.alternateCaseNumber,
+            alternateDefendant: trial.alternateDefendant,
+            court: trial.court,
+            courtDivision: trial.courtDivision,
+            courtDistrict: trial.courtDistrict,
+            totalPages: trial.totalPages
+          }
+        });
+        if (trial.id) {
+          this.correlationMap.Trial.set(trial.id, created.id);
+        }
+        count++;
+      } else if (action === 'Insert') {
         // Create new trial
         const created = await tx.trial.create({
           data: {
@@ -280,7 +441,7 @@ export class OverrideImporter {
           this.correlationMap.Trial.set(trial.id, created.id);
         }
         count++;
-      } else if (action === 'upsert') {
+      } else if (action === 'Upsert') {
         // Determine upsert key based on overrideKey field
         const upsertKey = trial.overrideKey || 'caseNumber';
         const whereClause = upsertKey === 'shortName' 
@@ -324,7 +485,7 @@ export class OverrideImporter {
           this.correlationMap.Trial.set(trial.id, upserted.id);
         }
         count++;
-      } else {
+      } else if (action === 'Update') {
         // Update existing trial
         let updated;
         if (typeof trial.id === 'number') {
@@ -380,10 +541,21 @@ export class OverrideImporter {
       const action = firm.overrideAction || 'Upsert';
       const overrideKey = firm.overrideKey || 'id';
       
+      // For ConditionalInsert, only import if attorneys are being imported
+      if (action === 'ConditionalInsert') {
+        // Check if attorneys are being imported at all (not just inserted)
+        const importingAttorneys = this.currentImportData?.Attorney && this.currentImportData.Attorney.length > 0;
+        
+        if (!importingAttorneys) {
+          console.log(`ConditionalInsert: No attorneys being imported, skipping LawFirm ${firm.name}`);
+          continue;
+        }
+      }
+      
       let existingFirm = null;
       
       // Find existing firm based on override key
-      if (action === 'Update' || action === 'Upsert') {
+      if (action === 'Update' || action === 'Upsert' || action === 'ConditionalInsert') {
         if (overrideKey === 'id' && firm.id) {
           existingFirm = await tx.lawFirm.findUnique({
             where: { id: Number(firm.id) }
@@ -393,6 +565,13 @@ export class OverrideImporter {
             where: { lawFirmFingerprint: firm.lawFirmFingerprint }
           });
         }
+      }
+      
+      // Handle ConditionalInsert - if exists, skip entirely
+      if (action === 'ConditionalInsert' && existingFirm) {
+        console.log(`ConditionalInsert: LawFirm exists (fingerprint=${firm.lawFirmFingerprint}), skipping`);
+        this.correlationMap.LawFirm.set(firm.id || existingFirm.id, existingFirm.id);
+        continue;
       }
       
       if (action === 'Insert' && existingFirm) {
@@ -421,6 +600,8 @@ export class OverrideImporter {
             lawFirmFingerprint: firm.lawFirmFingerprint
           }
         });
+        // Track that this firm was actually inserted
+        this.insertedEntities.lawFirms.add(created.id);
       }
       
       this.correlationMap.LawFirm.set(firm.id || created.id, created.id);
@@ -435,6 +616,15 @@ export class OverrideImporter {
       const action = office.overrideAction || 'Upsert';
       const overrideKey = office.overrideKey || 'id';
       
+      // For ConditionalInsert, check if law firms are being imported
+      if (action === 'ConditionalInsert') {
+        const importingLawFirms = this.currentImportData?.LawFirm && this.currentImportData.LawFirm.length > 0;
+        if (!importingLawFirms) {
+          console.log(`ConditionalInsert: No law firms being imported, skipping LawFirmOffice ${office.name}`);
+          continue;
+        }
+      }
+      
       const lawFirmId = this.correlationMap.LawFirm.get(office.lawFirmId);
       if (!lawFirmId) {
         throw new Error(`LawFirm not found for office: ${office.id}`);
@@ -446,7 +636,7 @@ export class OverrideImporter {
       let existingOffice = null;
       
       // Find existing office based on override key
-      if (action === 'Update' || action === 'Upsert') {
+      if (action === 'Update' || action === 'Upsert' || action === 'ConditionalInsert') {
         if (overrideKey === 'id' && office.id) {
           existingOffice = await tx.lawFirmOffice.findUnique({
             where: { id: Number(office.id) }
@@ -456,6 +646,13 @@ export class OverrideImporter {
             where: { lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint }
           });
         }
+      }
+      
+      // Handle ConditionalInsert - if exists, skip entirely
+      if (action === 'ConditionalInsert' && existingOffice) {
+        console.log(`ConditionalInsert: LawFirmOffice exists (fingerprint=${office.lawFirmOfficeFingerprint}), skipping`);
+        this.correlationMap.LawFirmOffice.set(office.id || existingOffice.id, existingOffice.id);
+        continue;
       }
       
       if (action === 'Insert' && existingOffice) {
@@ -506,6 +703,8 @@ export class OverrideImporter {
               lawFirmOfficeFingerprint: office.lawFirmOfficeFingerprint
             }
           });
+          // Track that this office was actually inserted
+          this.insertedEntities.lawFirmOffices.add(created.id);
         }
       }
       
@@ -536,7 +735,7 @@ export class OverrideImporter {
       let existingAttorney = null;
       
       // Find existing attorney based on override key
-      if (action === 'Update' || action === 'Upsert') {
+      if (action === 'Update' || action === 'Upsert' || action === 'ConditionalInsert') {
         if (overrideKey === 'id' && attorney.id) {
           existingAttorney = await tx.attorney.findUnique({
             where: { id: Number(attorney.id) }
@@ -548,6 +747,13 @@ export class OverrideImporter {
             // speaker relation removed - now on TrialAttorney
           });
         }
+      }
+      
+      // Handle ConditionalInsert - if exists, skip entirely
+      if (action === 'ConditionalInsert' && existingAttorney) {
+        console.log(`ConditionalInsert: Attorney exists (fingerprint=${fingerprint}), skipping`);
+        this.correlationMap.Attorney.set(attorney.id || existingAttorney.id, existingAttorney.id);
+        continue; // Skip this attorney entirely
       }
       
       if (action === 'Insert' && existingAttorney) {
@@ -593,6 +799,8 @@ export class OverrideImporter {
             // Note: speakerId removed - speakers are created during transcript parsing
           }
         });
+        // Track that this attorney was actually inserted
+        this.insertedEntities.attorneys.add(created.id);
       }
       
       this.correlationMap.Attorney.set(attorney.id || created.id, created.id);
@@ -758,27 +966,88 @@ export class OverrideImporter {
   private async importTrialAttorneys(tx: any, trialAttorneys: TrialAttorneyOverride[]): Promise<number> {
     let count = 0;
     for (const ta of trialAttorneys) {
-      const trialId = this.correlationMap.Trial.get(ta.trialId);
-      const attorneyId = this.correlationMap.Attorney.get(ta.attorneyId);
+      const action = ta.overrideAction || 'Upsert';
+      
+      const trialId = this.correlationMap.Trial.get(ta.trialId) || ta.trialId;
+      const attorneyId = this.correlationMap.Attorney.get(ta.attorneyId) || ta.attorneyId;
       const lawFirmId = ta.lawFirmId ? 
-        this.correlationMap.LawFirm.get(ta.lawFirmId) : undefined;
+        (this.correlationMap.LawFirm.get(ta.lawFirmId) || ta.lawFirmId) : undefined;
       const lawFirmOfficeId = ta.lawFirmOfficeId ? 
-        this.correlationMap.LawFirmOffice.get(ta.lawFirmOfficeId) : undefined;
+        (this.correlationMap.LawFirmOffice.get(ta.lawFirmOfficeId) || ta.lawFirmOfficeId) : undefined;
 
       if (!trialId || !attorneyId) {
-        throw new Error(`Missing required IDs for TrialAttorney: trial=${ta.trialId}, attorney=${ta.attorneyId}`);
+        console.log(`Skipping TrialAttorney: missing required IDs (trial=${ta.trialId}, attorney=${ta.attorneyId})`);
+        continue;
       }
-
-      await tx.trialAttorney.create({
-        data: {
-          trialId,
-          attorneyId,
-          lawFirmId,
-          lawFirmOfficeId,
-          role: ta.role || 'UNKNOWN'
+      
+      // Handle ConditionalInsert
+      if (action === 'ConditionalInsert') {
+        // Check if the TrialAttorney association already exists
+        const existing = await tx.trialAttorney.findUnique({
+          where: {
+            trialId_attorneyId: {
+              trialId: Number(trialId),
+              attorneyId: Number(attorneyId)
+            }
+          }
+        });
+        
+        if (existing) {
+          console.log(`ConditionalInsert: TrialAttorney association already exists for attorney ${attorneyId} in trial ${trialId}, skipping`);
+          continue;
         }
-      });
-      count++;
+        
+        // Create new association
+        await tx.trialAttorney.create({
+          data: {
+            trialId: Number(trialId),
+            attorneyId: Number(attorneyId),
+            speakerId: ta.speakerId || null,
+            lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
+            lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
+            role: ta.role || 'UNKNOWN'
+          }
+        });
+        count++;
+      } else if (action === 'Upsert') {
+        // Upsert based on unique constraint
+        await tx.trialAttorney.upsert({
+          where: {
+            trialId_attorneyId: {
+              trialId: Number(trialId),
+              attorneyId: Number(attorneyId)
+            }
+          },
+          create: {
+            trialId: Number(trialId),
+            attorneyId: Number(attorneyId),
+            speakerId: ta.speakerId || null,
+            lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
+            lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
+            role: ta.role || 'UNKNOWN'
+          },
+          update: {
+            speakerId: ta.speakerId || null,
+            lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
+            lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
+            role: ta.role || 'UNKNOWN'
+          }
+        });
+        count++;
+      } else if (action === 'Insert') {
+        // Always create new
+        await tx.trialAttorney.create({
+          data: {
+            trialId: Number(trialId),
+            attorneyId: Number(attorneyId),
+            speakerId: ta.speakerId || null,
+            lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
+            lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
+            role: ta.role || 'UNKNOWN'
+          }
+        });
+        count++;
+      }
     }
     return count;
   }

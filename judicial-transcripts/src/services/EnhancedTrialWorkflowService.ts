@@ -557,7 +557,7 @@ export class EnhancedTrialWorkflowService {
   private async executeStep(trialId: number, step: WorkflowStep, trial: any): Promise<StepResult> {
     try {
       // Log counts before the step
-      await this.logEntityCounts(`BEFORE ${step}`);
+      //await this.logEntityCounts(`BEFORE ${step}`);
       
       let result: StepResult;
       switch (step) {

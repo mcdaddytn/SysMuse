@@ -34,8 +34,11 @@ npx ts-node src/cli/workflow.ts run --phase complete --config config/multi-trial
 # Run Phase 1 with database reset
 npx ts-node src/cli/workflow.ts run --phase phase1 --config config/multi-trial-config-mac.json --reset-system
 
-# Run WITHOUT config file (processes all trials in database)
-npx ts-node src/cli/workflow.ts run --phase phase2
+# Run Phase 2 adding option for continue
+npx ts-node src/cli/workflow.ts run --phase phase2 --config config/multi-trial-config-mac.json --continue-on-error
+
+# Run WITHOUT config file (processes all trials in database), adding option for continue
+npx ts-node src/cli/workflow.ts run --phase phase2 --continue-on-error
 
 # Run for SPECIFIC TRIAL by ID (no config needed)
 npx ts-node src/cli/workflow.ts run --phase phase2 --trial-id 1

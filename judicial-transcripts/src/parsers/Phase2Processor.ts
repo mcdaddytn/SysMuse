@@ -1032,7 +1032,7 @@ export class Phase2Processor {
     workingText = workingText.replace(/\(CONTINUED\)/gi, '');
     
     // Clean up punctuation and whitespace
-    workingText = workingText.replace(/[,;:\(\)]/g, ' ');  // Replace punctuation with spaces
+    workingText = workingText.replace(/[,;:\(\)\.]/g, ' ');  // Replace punctuation including periods with spaces
     workingText = workingText.replace(/\s+/g, ' ');        // Collapse multiple spaces
     workingText = workingText.trim();
     
@@ -1407,12 +1407,28 @@ export class Phase2Processor {
                 speakerType: 'WITNESS'
               }
             });
+          } else {
+            // If speaker exists, check if there's already a witness with this speaker
+            witness = await this.prisma.witness.findFirst({
+              where: {
+                speakerId: speaker.id
+              },
+              include: {
+                speaker: true
+              }
+            });
+            
+            if (witness) {
+              logger.info(`Found existing witness for speaker ${speakerHandle}: ${witness.name}`);
+            }
           }
           
-          // Parse the witness name into components
-          const parsedName = this.parseWitnessName(witnessName);
-          
-          witness = await this.prisma.witness.create({
+          // Only create witness if we don't have one yet
+          if (!witness) {
+            // Parse the witness name into components
+            const parsedName = this.parseWitnessName(witnessName);
+            
+            witness = await this.prisma.witness.create({
             data: {
               trialId: this.context.trialId,
               name: witnessName,
@@ -1432,6 +1448,7 @@ export class Phase2Processor {
           });
           
           logger.info(`Created witness: ${displayName}, fingerprint: ${parsedName.fingerprint}`);
+          }
         } else if (witness.swornStatus !== swornStatus) {
           // Update sworn status if changed
           witness = await this.prisma.witness.update({

@@ -14,6 +14,19 @@ export class Phase2ReportGenerator {
   }
 
   /**
+   * Format a table row with aligned columns
+   */
+  private formatTableRow(columns: Array<{ value: string; width: number; align?: 'left' | 'right' }>): string {
+    return columns.map(col => {
+      const { value, width, align = 'left' } = col;
+      if (align === 'right') {
+        return value.padStart(width);
+      }
+      return value.padEnd(width);
+    }).join(' ');
+  }
+
+  /**
    * Generate all Phase 2 reports
    */
   async generateAll(trialId?: number): Promise<void> {
@@ -46,9 +59,8 @@ export class Phase2ReportGenerator {
         continue;
       }
 
-      const filename = `${trial.caseHandle || `trial_${trial.id}`}_speaker_distribution.csv`;
-      const filepath = path.join(this.outputDir, filename);
-
+      const baseFilename = `${trial.caseHandle || `trial_${trial.id}`}_speaker_distribution`;
+      
       // Generate CSV content
       const csvLines = [
         'Speaker,Type,Total Statements,Line Max,Line Min,Line Mean,Line Median,Line Total,Word Max,Word Min,Word Mean,Word Median,Word Total'
@@ -73,13 +85,61 @@ export class Phase2ReportGenerator {
         csvLines.push(line);
       }
 
-      await fs.writeFile(filepath, csvLines.join('\n'));
-      console.log(`Generated: ${filename}`);
+      // Write CSV file
+      const csvFilepath = path.join(this.outputDir, `${baseFilename}.csv`);
+      await fs.writeFile(csvFilepath, csvLines.join('\n'));
+      console.log(`Generated: ${baseFilename}.csv`);
+
+      // Generate formatted text version
+      const textLines: string[] = [];
+      textLines.push(`Speaker Distribution Report: ${trial.name || trial.caseNumber}`);
+      textLines.push('=' .repeat(100));
+      textLines.push('');
+      
+      // Format header
+      textLines.push(this.formatTableRow([
+        { value: 'Speaker', width: 25 },
+        { value: 'Type', width: 10 },
+        { value: 'Statements', width: 10, align: 'right' },
+        { value: 'Lines', width: 15, align: 'right' },
+        { value: 'Words', width: 15, align: 'right' },
+        { value: 'Avg Lines', width: 10, align: 'right' },
+        { value: 'Avg Words', width: 10, align: 'right' }
+      ]));
+      textLines.push('-'.repeat(100));
+
+      // Sort results by total statements descending
+      const sortedResults = [...results].sort((a, b) => b.totalStatements - a.totalStatements);
+
+      for (const result of sortedResults) {
+        textLines.push(this.formatTableRow([
+          { value: result.speakerAlias, width: 25 },
+          { value: result.speakerType, width: 10 },
+          { value: result.totalStatements.toString(), width: 10, align: 'right' },
+          { value: (result.lineCount?.total || 0).toString(), width: 15, align: 'right' },
+          { value: (result.wordCount?.total || 0).toString(), width: 15, align: 'right' },
+          { value: (result.lineCount?.mean || 0).toFixed(1), width: 10, align: 'right' },
+          { value: (result.wordCount?.mean || 0).toFixed(1), width: 10, align: 'right' }
+        ]));
+      }
+
+      textLines.push('');
+      textLines.push('-'.repeat(100));
+      textLines.push('Summary Statistics:');
+      textLines.push(`  Total Speakers: ${results.length}`);
+      textLines.push(`  Total Statements: ${results.reduce((sum, r) => sum + r.totalStatements, 0)}`);
+      textLines.push(`  Total Lines: ${results.reduce((sum, r) => sum + (r.lineCount?.total || 0), 0)}`);
+      textLines.push(`  Total Words: ${results.reduce((sum, r) => sum + (r.wordCount?.total || 0), 0)}`);
+
+      // Write text file
+      const textFilepath = path.join(this.outputDir, `${baseFilename}.txt`);
+      await fs.writeFile(textFilepath, textLines.join('\n'));
+      console.log(`Generated: ${baseFilename}.txt`);
     }
   }
 
   /**
-   * Generate StatementEvent Distribution by Speaker Type (Session-Level) Reports
+   * Generate StatementEvent Distribution by Speaker Type Reports
    */
   async generateStatementEventBySpeakerTypeReports(trialId?: number): Promise<void> {
     const query = new Phase2Queries.StatementEventBySpeakerType();
@@ -87,25 +147,33 @@ export class Phase2ReportGenerator {
 
     await fs.ensureDir(this.outputDir);
 
-    // Group results by session
+    // Also create trial-level aggregation
+    const trialGroups = new Map<string, any[]>();
+    
+    // Group results by session and trial
     const sessionGroups = new Map<string, any[]>();
     for (const result of results) {
       const session = result.session;
       const date = new Date(session.sessionDate);
       const sessionDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       const sessionType = session.sessionType.toLowerCase();
-      const key = `${result.trial.caseHandle || `trial_${result.trial.id}`}_${sessionDate}_${sessionType}`;
+      const sessionKey = `${result.trial.caseHandle || `trial_${result.trial.id}`}_${sessionDate}_${sessionType}`;
+      const trialKey = result.trial.caseHandle || `trial_${result.trial.id}`;
       
-      if (!sessionGroups.has(key)) {
-        sessionGroups.set(key, []);
+      if (!sessionGroups.has(sessionKey)) {
+        sessionGroups.set(sessionKey, []);
       }
-      sessionGroups.get(key)!.push(result);
+      sessionGroups.get(sessionKey)!.push(result);
+      
+      if (!trialGroups.has(trialKey)) {
+        trialGroups.set(trialKey, []);
+      }
+      trialGroups.get(trialKey)!.push(result);
     }
 
-    // Generate a file for each session
+    // Generate session-level files
     for (const [sessionKey, sessionResults] of sessionGroups) {
-      const filename = `${sessionKey}_speaker_type_distribution.csv`;
-      const filepath = path.join(this.outputDir, filename);
+      const baseFilename = `${sessionKey}_speaker_type_distribution`;
 
       // Generate CSV content
       const csvLines = [
@@ -131,8 +199,155 @@ export class Phase2ReportGenerator {
         csvLines.push(line);
       }
 
-      await fs.writeFile(filepath, csvLines.join('\n'));
-      console.log(`Generated: ${filename}`);
+      // Write CSV file
+      const csvFilepath = path.join(this.outputDir, `${baseFilename}.csv`);
+      await fs.writeFile(csvFilepath, csvLines.join('\n'));
+      console.log(`Generated: ${baseFilename}.csv`);
+
+      // Generate formatted text version
+      const textLines: string[] = [];
+      const sessionInfo = sessionKey.split('_');
+      textLines.push(`Speaker Type Distribution Report: Session ${sessionInfo.slice(-2).join(' ')}`);
+      textLines.push('=' .repeat(100));
+      textLines.push('');
+      
+      // Format header
+      textLines.push(this.formatTableRow([
+        { value: 'Speaker Type', width: 15 },
+        { value: 'Speakers', width: 10, align: 'right' },
+        { value: 'Statements', width: 12, align: 'right' },
+        { value: 'Lines', width: 15, align: 'right' },
+        { value: 'Words', width: 15, align: 'right' },
+        { value: 'Avg Lines', width: 12, align: 'right' },
+        { value: 'Avg Words', width: 12, align: 'right' }
+      ]));
+      textLines.push('-'.repeat(100));
+
+      // Sort results by total statements descending
+      const sortedResults = [...sessionResults].sort((a, b) => b.totalStatements - a.totalStatements);
+
+      for (const result of sortedResults) {
+        textLines.push(this.formatTableRow([
+          { value: result.speakerType, width: 15 },
+          { value: (result.uniqueSpeakers || 0).toString(), width: 10, align: 'right' },
+          { value: result.totalStatements.toString(), width: 12, align: 'right' },
+          { value: (result.lineCount?.total || 0).toString(), width: 15, align: 'right' },
+          { value: (result.wordCount?.total || 0).toString(), width: 15, align: 'right' },
+          { value: (result.lineCount?.mean || 0).toFixed(1), width: 12, align: 'right' },
+          { value: (result.wordCount?.mean || 0).toFixed(1), width: 12, align: 'right' }
+        ]));
+      }
+
+      // Write text file
+      const textFilepath = path.join(this.outputDir, `${baseFilename}.txt`);
+      await fs.writeFile(textFilepath, textLines.join('\n'));
+      console.log(`Generated: ${baseFilename}.txt`);
+    }
+
+    // Generate trial-level aggregation files
+    for (const [trialKey, trialResults] of trialGroups) {
+      const baseFilename = `${trialKey}_speaker_type_summary`;
+      
+      // Aggregate data by speaker type across all sessions
+      const typeAggregates = new Map<string, any>();
+      
+      for (const result of trialResults) {
+        const type = result.speakerType;
+        if (!typeAggregates.has(type)) {
+          typeAggregates.set(type, {
+            speakerType: type,
+            uniqueSpeakers: new Set(),
+            totalStatements: 0,
+            lineTotal: 0,
+            wordTotal: 0,
+            lineCounts: [],
+            wordCounts: []
+          });
+        }
+        
+        const agg = typeAggregates.get(type);
+        agg.totalStatements += result.totalStatements;
+        agg.lineTotal += result.lineCount?.total || 0;
+        agg.wordTotal += result.wordCount?.total || 0;
+        
+        // Track unique speakers (would need speaker IDs from original query)
+        if (result.uniqueSpeakers) {
+          agg.uniqueSpeakers.add(result.session.id + '_' + type);
+        }
+      }
+
+      // Generate CSV content
+      const csvLines = [
+        'Speaker Type,Total Statements,Total Lines,Total Words,Avg Lines/Statement,Avg Words/Statement'
+      ];
+
+      const aggregatedResults = Array.from(typeAggregates.values());
+      for (const agg of aggregatedResults) {
+        const avgLines = agg.totalStatements > 0 ? (agg.lineTotal / agg.totalStatements).toFixed(2) : '0';
+        const avgWords = agg.totalStatements > 0 ? (agg.wordTotal / agg.totalStatements).toFixed(2) : '0';
+        
+        const line = [
+          agg.speakerType,
+          agg.totalStatements,
+          agg.lineTotal,
+          agg.wordTotal,
+          avgLines,
+          avgWords
+        ].join(',');
+        csvLines.push(line);
+      }
+
+      // Write CSV file
+      const csvFilepath = path.join(this.outputDir, `${baseFilename}.csv`);
+      await fs.writeFile(csvFilepath, csvLines.join('\n'));
+      console.log(`Generated: ${baseFilename}.csv`);
+
+      // Generate formatted text version
+      const textLines: string[] = [];
+      const trialName = trialResults[0]?.trial?.name || trialResults[0]?.trial?.caseNumber || trialKey;
+      textLines.push(`Speaker Type Summary Report: ${trialName}`);
+      textLines.push('=' .repeat(100));
+      textLines.push('');
+      
+      // Format header
+      textLines.push(this.formatTableRow([
+        { value: 'Speaker Type', width: 15 },
+        { value: 'Statements', width: 15, align: 'right' },
+        { value: 'Lines', width: 15, align: 'right' },
+        { value: 'Words', width: 15, align: 'right' },
+        { value: 'Avg Lines', width: 15, align: 'right' },
+        { value: 'Avg Words', width: 15, align: 'right' }
+      ]));
+      textLines.push('-'.repeat(100));
+
+      // Sort results by total statements descending
+      const sortedAggregates = aggregatedResults.sort((a, b) => b.totalStatements - a.totalStatements);
+
+      for (const agg of sortedAggregates) {
+        const avgLines = agg.totalStatements > 0 ? (agg.lineTotal / agg.totalStatements).toFixed(1) : '0';
+        const avgWords = agg.totalStatements > 0 ? (agg.wordTotal / agg.totalStatements).toFixed(1) : '0';
+        
+        textLines.push(this.formatTableRow([
+          { value: agg.speakerType, width: 15 },
+          { value: agg.totalStatements.toString(), width: 15, align: 'right' },
+          { value: agg.lineTotal.toString(), width: 15, align: 'right' },
+          { value: agg.wordTotal.toString(), width: 15, align: 'right' },
+          { value: avgLines, width: 15, align: 'right' },
+          { value: avgWords, width: 15, align: 'right' }
+        ]));
+      }
+
+      textLines.push('');
+      textLines.push('-'.repeat(100));
+      textLines.push('Summary Statistics:');
+      textLines.push(`  Total Statement Events: ${aggregatedResults.reduce((sum, r) => sum + r.totalStatements, 0)}`);
+      textLines.push(`  Total Lines: ${aggregatedResults.reduce((sum, r) => sum + r.lineTotal, 0)}`);
+      textLines.push(`  Total Words: ${aggregatedResults.reduce((sum, r) => sum + r.wordTotal, 0)}`);
+
+      // Write text file
+      const textFilepath = path.join(this.outputDir, `${baseFilename}.txt`);
+      await fs.writeFile(textFilepath, textLines.join('\n'));
+      console.log(`Generated: ${baseFilename}.txt`);
     }
   }
 

@@ -304,10 +304,55 @@ npx ts-node src/cli/report.ts statistics --trial-id 1
 npx ts-node src/cli/report.ts list-trials
 ```
 
-### Phase 2 Reports
+### Phase 2 Diagnostic Reports
+
+#### Available Report Types
 ```bash
-# Generate Phase 2 report
-npx ts-node src/cli/phase2-report.ts generate --trial-id 1
+# 1. SPEAKER DISTRIBUTION REPORTS (Individual speakers like Q., A., MR. SMITH)
+#    Generates BOTH CSV and TXT formats automatically
+npx ts-node src/cli/phase2-report.ts speaker-distribution --trial-id 1
+
+# 2. SPEAKER TYPE DISTRIBUTION REPORTS (Aggregated by type: ATTORNEY, WITNESS, JUDGE, JUROR)
+#    Generates THREE types of files:
+#    - Session-level reports: [trial]_[date]_[session]_speaker_type_distribution.csv/.txt
+#    - Trial-level summary: [trial]_speaker_type_summary.csv/.txt (all types rolled up)
+npx ts-node src/cli/phase2-report.ts speaker-type-distribution --trial-id 1
+
+# 3. EVENT TIMELINE REPORTS (Chronological event sequence)
+npx ts-node src/cli/phase2-report.ts event-timeline --trial-id 1
+
+# 4. EXAMINATION REPORTS (Witness examination summary)
+npx ts-node src/cli/phase2-report.ts examinations --trial-id 1
+
+# 5. GENERATE ALL REPORTS AT ONCE
+npx ts-node src/cli/phase2-report.ts generate-all --trial-id 1
+```
+
+#### Report Output Details
+- **Speaker Distribution** (`_speaker_distribution.csv/.txt`):
+  - Shows each individual speaker (Q., A., MR. DACUS, MS. TRUELOVE, etc.)
+  - Includes statement counts, line statistics, word statistics
+  - Sorted by total statements descending
+
+- **Speaker Type Summary** (`_speaker_type_summary.csv/.txt`):
+  - Aggregates all speakers by type (ATTORNEY includes Q. and all attorneys)
+  - Shows total statements, lines, words per type
+  - Perfect for high-level analysis
+
+- **Both CSV and TXT formats** are generated automatically:
+  - CSV: For data analysis and Excel import
+  - TXT: Nicely formatted tables for console viewing
+
+#### List Available Trials
+```bash
+# See all trials in the database with their IDs
+npx ts-node src/cli/phase2-report.ts list-trials
+```
+
+#### Legacy Commands (Deprecated)
+```bash
+# Old speaker report script (NO LONGER EXISTS)
+# npx ts-node src/scripts/generateSpeakerReport.ts --trial-id 1  # DEPRECATED
 ```
 
 ## Report Generation

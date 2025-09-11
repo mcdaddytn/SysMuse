@@ -1,191 +1,146 @@
-# Feature-02Z: Enhanced Speaker Extraction and Line Number Tracking for Marker Detection
+# Feature 02Z: Alternative Document Section Markers
 
 ## Overview
-Enhance the parsing system to extract additional speakers (specifically THE FOREPERSON), calculate comprehensive line numbering across different scopes (session and trial), and prepare the data model for sophisticated marker detection and search capabilities.
+Many transcript files do not contain the standard "P R O C E E D I N G S" or "CERTIFICATION" markers that trigger document section transitions in phase 1 parsing. This feature adds support for configurable alternative markers to properly identify and parse these transcript variations.
 
-## Business Value
-- Enables identification of critical trial moments (verdict readings) through foreperson speaker recognition
-- Provides flexible line number referencing for marker placement and search
-- Prepares foundation for automated and manual marker detection systems
-- Supports LLM and human operator marker placement through precise location references
+## Problem Statement
+Analysis of 515 transcript files revealed:
+- 465 files (90.3%) contain the standard "P R O C E E D I N G S" marker
+- 50 files (9.7%) do NOT contain this marker and use alternative formatting
 
-## Requirements
+Without proper section markers, the parser cannot correctly identify when the main proceedings begin or when the certification section starts, leading to incorrect parsing and data extraction.
 
-### 1. Enhanced Speaker Extraction
+## Affected Trials
+The following trials have files missing the standard "P R O C E E D I N G S" marker:
 
-#### 1.1 THE FOREPERSON Recognition
-- **Parser Enhancement**: Add explicit pattern recognition for "THE FOREPERSON:" in speaker extraction
-- **Database Storage**: Store as Juror record with:
-  - `alias`: "THE FOREPERSON"
-  - `name`: "THE"
-  - `lastName`: "FOREPERSON"
-  - `speakerType`: JUROR
-- **Pattern Priority**: Place THE FOREPERSON pattern before generic capitalized pattern in regex list
+### Trials with ALL files missing the marker (28 files total):
+- **32 Netlist V Samsung** (7 files)
+- **72 Taylor V Turner** (2 files)  
+- **73 Tq Delta, Llc V. Commscope** (6 files)
+- **75 Garrett V Wood County** (2 files)
+- **83 Koninklijke** (5 files)
+- **86 Ollnova** (4 files)
+- **101 Netlist, Inc. V. Samsung** (2 files)
 
-#### 1.2 Parser Implementation
-- Update `TranscriptParser.extractSpeakerFromText()` method
-- Add pattern: `/^\s*(THE FOREPERSON):\s*(.*)$/`
-- Ensure pattern is positioned correctly in pattern hierarchy
+### Trials with SOME files missing the marker:
+- **02 Contentguard** (1 of 29 files)
+- **06 Simpleair** (2 of 14 files)
+- **10 Metaswitch Genband 2016** (1 of 9 files)
+- **15 Optis Wireless Technology V. Huawei** (5 of 10 files)
+- **19 Alfonso Cioffi Et Al V. Google** (1 of 11 files)
+- **22 Core Wireless V. Apple** (2 of 13 files)
+- **29 Intellectual Ventures V. T Mobile** (3 of 9 files)
+- **34 Personalized Media V Google** (1 of 10 files)
+- **44 Beneficial V. Advance** (1 of 6 files)
+- **52 Personalized Apple** (1 of 2 files)
+- **67 Gonzalez V. New Life** (1 of 5 files)
+- **71 Hinson Et Al V. Dorel** (3 of 4 files)
 
-### 2. Comprehensive Line Numbering
+## Solution Design
 
-#### 2.1 Session Line Numbers
-- **Field**: `sessionLineNumber` (already exists in Line table)
-- **Calculation**: Sequential numbering within each session
-  - Starts at 1 for each new session
-  - Increments across all pages within the session
-  - Independent of trial-wide numbering
-- **Scope**: Single session (Morning/Afternoon on a given date)
+### Configuration Structure
+Add new fields to `TrialStyleConfig` to support alternative section markers:
 
-#### 2.2 Trial Line Numbers (Existing)
-- **Field**: `trialLineNumber` (already calculated)
-- **Scope**: Entire trial across all sessions and pages
-
-#### 2.3 Page Line Numbers (Existing)
-- **Field**: `lineNumber` (already calculated)
-- **Scope**: Single page
-
-### 3. Session Handle Implementation
-
-#### 3.1 Session Table Enhancement
-- **New Field**: `sessionHandle` (string)
-- **Format**: `YYYYMMDD_[sessionType]`
-- **Example**: `20201009_MORNING` or `20201009_AFTERNOON`
-- **Purpose**: Single field selector for sessions within trial
-
-### 4. TrialEvent Line Number Tracking
-
-#### 4.1 New Fields for TrialEvent Table
-- `startSessLineNum`: Session line number of event start
-- `endSessLineNum`: Session line number of event end
-- `startTrialLineNum`: Trial line number of event start
-- `endTrialLineNum`: Trial line number of event end
-
-#### 4.2 Calculation Logic
-- Pull from corresponding Line records at event boundaries
-- Map existing startLineNumber/endLineNumber to new fields
-- Maintain consistency across all line number types
-
-## Technical Implementation
-
-### Database Schema Changes
-
-```prisma
-// Update Session model
-model Session {
-  // existing fields...
-  sessionHandle  String?  // New field: YYYYMMDD_[sessionType]
-}
-
-// Update TrialEvent model
-model TrialEvent {
-  // existing fields...
-  startSessLineNum   Int?  // Session line number at start
-  endSessLineNum     Int?  // Session line number at end
-  startTrialLineNum  Int?  // Trial line number at start
-  endTrialLineNum    Int?  // Trial line number at end
+```typescript
+interface TrialStyleConfig {
+  // ... existing fields ...
+  
+  // Alternative markers for document sections
+  sectionMarkers?: {
+    // Markers that trigger PROCEEDINGS section (checked in order)
+    proceedings?: string[];
+    
+    // Markers that trigger CERTIFICATION section (checked in order)
+    certification?: string[];
+  };
 }
 ```
 
-### Parser Updates
+### Default Configuration
+The default configuration should include both standard and common alternative markers:
 
-1. **Speaker Extraction** (TranscriptParser.ts)
-   - Add THE FOREPERSON pattern to speaker regex list
-   - Ensure proper pattern ordering for match priority
+```json
+{
+  "sectionMarkers": {
+    "proceedings": [
+      "P R O C E E D I N G S",
+      "COURT SECURITY OFFICER:",
+      "THE COURT:",
+      "LAW CLERK:",
+      "(Jury out.)",
+      "All rise",
+      "Be seated, please",
+      "TRIAL ON THE MERITS"
+    ],
+    "certification": [
+      "CERTIFICATION",
+      "C E R T I F I C A T I O N",
+      "I HEREBY CERTIFY",
+      "CERTIFY THAT THE FOREGOING",
+      "CERTIFICATE"
+    ]
+  }
+}
+```
 
-2. **Line Number Calculation** (Phase1 and Phase2)
-   - Calculate sessionLineNumber during line processing
-   - Track line count within session boundaries
-   - Reset counter at session transitions
+### Implementation Details
 
-3. **Session Handle Generation**
-   - Format date as YYYYMMDD
-   - Append sessionType with underscore separator
-   - Store during session creation/update
+1. **Marker Detection Logic**:
+   - Check markers in the order specified in configuration
+   - Use case-sensitive exact match after stripping line prefix
+   - First matching marker triggers the section transition
+   - Continue using existing line number tracking for section boundaries
 
-4. **TrialEvent Enhancement**
-   - Query Line records at event boundaries
-   - Extract all line number types
-   - Populate new fields during event creation
+2. **Parser Modifications**:
+   - Update `MultiPassContentParser.ts` to use configurable markers
+   - Modify the `checkForSectionTransition()` method to iterate through marker arrays
+   - Maintain backward compatibility with existing transcripts
 
-## Search Expression Support
+3. **Configuration Merging**:
+   - Trial-specific `trialstyle.json` can override section markers
+   - Markers from source directory config merge with defaults
+   - Empty marker arrays in override completely replace defaults
 
-### Line Number Reference Types
+### Example Trial-Specific Override
+For trials using unique markers, place in source directory `trialstyle.json`:
 
-1. **Trial Line Number Only**
-   - Required: `trialLineNumber`
-   - Scope: Entire trial
-   - Example: Find line 15234 in trial
-
-2. **Session Line Number**
-   - Required: `sessionHandle`, `sessionLineNumber`
-   - Scope: Specific session
-   - Example: Find line 450 in session "20201009_MORNING"
-
-3. **Page Line Number**
-   - Required: `sessionHandle`, `pageNumber`, `lineNumber`
-   - Scope: Specific page
-   - Example: Find line 15 on page 125 of session "20201009_AFTERNOON"
+```json
+{
+  "sectionMarkers": {
+    "proceedings": [
+      "TRIAL ON THE MERITS",
+      "THE COURT:"
+    ]
+  }
+}
+```
 
 ## Testing Requirements
 
-### Validation Queries
-```sql
--- Verify foreperson extraction
-SELECT * FROM "Juror" WHERE alias = 'THE FOREPERSON';
-
--- Check session line numbering
-SELECT "sessionLineNumber", "trialLineNumber", text 
-FROM "Line" 
-WHERE "sessionId" = [test_session_id]
-ORDER BY "sessionLineNumber";
-
--- Validate session handles
-SELECT id, "sessionHandle", date, "sessionType" 
-FROM "Session" 
-WHERE "trialId" = [test_trial_id];
-
--- Verify TrialEvent line numbers
-SELECT id, "startLineNumber", "startSessLineNum", "startTrialLineNum"
-FROM "TrialEvent" 
-WHERE "trialId" = [test_trial_id];
-```
-
-## Implementation Order
-
-1. **Schema Updates**
-   - Add sessionHandle to Session model
-   - Add line number fields to TrialEvent model
-   - Run `npx prisma db push --force-reset` (full database rebuild required)
-
-2. **Parser Enhancements**
-   - Update speaker extraction patterns for THE FOREPERSON
-   - Implement session line number calculation
-   - Generate session handles during parsing
-   - Update TrialEvent population with all line number fields
-
-3. **Testing and Validation**
-   - Reparse sample trials from scratch
-   - Run validation queries
-   - Verify foreperson extraction and line numbering
-
-## Dependencies
-- Existing Line, Session, and TrialEvent tables
-- Phase1 and Phase2 processing pipelines
-- Speaker extraction system
-- Juror management system
+1. **Verify standard markers still work** - Test with trials that have "P R O C E E D I N G S"
+2. **Test alternative markers** - Focus on the 7 trials with ALL files missing standard marker
+3. **Test marker precedence** - Ensure markers are checked in configured order
+4. **Test configuration merging** - Verify trial-specific overrides work correctly
+5. **Performance testing** - Ensure multiple marker checks don't significantly impact parsing speed
 
 ## Success Criteria
-- THE FOREPERSON successfully extracted as speaker
-- All Line records have sessionLineNumber populated
-- All Session records have sessionHandle populated
-- All TrialEvent records have complete line number fields
-- Search expressions can locate events using any line number type
-- Marker detection system can reference events precisely
+
+1. All 50 files without "P R O C E E D I N G S" marker parse correctly
+2. No regression in parsing files with standard markers
+3. Section transitions occur at appropriate locations
+4. Configuration is easily maintainable and extensible
+5. Parser performance remains acceptable (< 10% slowdown)
+
+## Migration Notes
+
+- Existing parsed data remains valid
+- No database schema changes required
+- Only affects phase 1 parsing logic
+- Can be deployed without reprocessing existing successful parses
 
 ## Future Enhancements
-- Additional speaker patterns for other court officials
-- Cross-reference validation for line numbers
-- Performance optimization for line number queries
-- Extended search expression syntax
-- Integration with accumulator engine for speaker-based markers
+
+1. Machine learning to detect section boundaries without explicit markers
+2. Configurable section types beyond PROCEEDINGS and CERTIFICATION
+3. Fuzzy matching for marker variations (e.g., handle typos)
+4. Automatic marker detection and suggestion based on file analysis

@@ -68,6 +68,23 @@ program
   });
 
 program
+  .command('speaker-type-dist-all')
+  .description('Generate speaker type distribution report for all trials')
+  .option('-o, --output <dir>', 'Output directory', './output/phase2')
+  .action(async (options) => {
+    try {
+      const generator = new Phase2ReportGenerator(prisma, options.output);
+      await generator.generateAllTrialsSpeakerTypeDistribution();
+      console.log('✅ All trials speaker type distribution report generated successfully');
+    } catch (error) {
+      console.error('Error generating all trials speaker type distribution report:', error);
+      process.exit(1);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+program
   .command('event-timeline')
   .description('Generate event timeline reports')
   .option('-t, --trial-id <id>', 'Generate reports for specific trial', parseInt)

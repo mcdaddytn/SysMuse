@@ -352,6 +352,173 @@ export class Phase2ReportGenerator {
   }
 
   /**
+   * Generate All Trials Speaker Type Distribution Report
+   */
+  async generateAllTrialsSpeakerTypeDistribution(): Promise<void> {
+    // Get all trials with speaker type distribution data
+    const query = new Phase2Queries.StatementEventBySpeakerType();
+    const results = await query.execute(this.prisma, {}); // No trialId filter - get all
+
+    await fs.ensureDir(this.outputDir);
+
+    // Group results by trial and speaker type
+    const trialData = new Map<number, {
+      trial: any,
+      speakerTypes: Map<string, {
+        type: string,
+        totalStatements: number,
+        lineTotal: number,
+        wordTotal: number,
+        uniqueSpeakers: Set<string>
+      }>
+    }>();
+
+    for (const result of results) {
+      const trialId = result.trial.id;
+      
+      if (!trialData.has(trialId)) {
+        trialData.set(trialId, {
+          trial: result.trial,
+          speakerTypes: new Map()
+        });
+      }
+
+      const trialEntry = trialData.get(trialId)!;
+      const type = result.speakerType;
+
+      if (!trialEntry.speakerTypes.has(type)) {
+        trialEntry.speakerTypes.set(type, {
+          type,
+          totalStatements: 0,
+          lineTotal: 0,
+          wordTotal: 0,
+          uniqueSpeakers: new Set()
+        });
+      }
+
+      const typeData = trialEntry.speakerTypes.get(type)!;
+      typeData.totalStatements += result.totalStatements || 0;
+      typeData.lineTotal += result.lineCount?.total || 0;
+      typeData.wordTotal += result.wordCount?.total || 0;
+      
+      // Track unique speakers per type
+      if (result.uniqueSpeakers) {
+        typeData.uniqueSpeakers.add(`${result.session.id}_${type}`);
+      }
+    }
+
+    // Generate CSV with all trials
+    const csvLines = [
+      'Trial Short Name,Case Number,Speaker Type,Total Statements,Total Lines,Total Words,Avg Lines/Statement,Avg Words/Statement'
+    ];
+
+    const textLines: string[] = [];
+    textLines.push('All Trials Speaker Type Distribution Report');
+    textLines.push('=' .repeat(120));
+    textLines.push('');
+
+    // Sort trials by shortName or id
+    const sortedTrials = Array.from(trialData.entries())
+      .sort((a, b) => {
+        const aName = a[1].trial.shortName || a[1].trial.name || `Trial ${a[0]}`;
+        const bName = b[1].trial.shortName || b[1].trial.name || `Trial ${b[0]}`;
+        return aName.localeCompare(bName);
+      });
+
+    for (const [trialId, data] of sortedTrials) {
+      const trial = data.trial;
+      const shortName = trial.shortName || trial.name || `Trial ${trialId}`;
+      const caseNumber = trial.caseNumber || 'N/A';
+
+      // Add to text report
+      textLines.push(`Trial: ${shortName} (${caseNumber})`);
+      textLines.push('-'.repeat(80));
+      
+      // Sort speaker types alphabetically
+      const sortedTypes = Array.from(data.speakerTypes.values())
+        .sort((a, b) => a.type.localeCompare(b.type));
+
+      for (const typeData of sortedTypes) {
+        const avgLines = typeData.totalStatements > 0 
+          ? (typeData.lineTotal / typeData.totalStatements).toFixed(2) 
+          : '0';
+        const avgWords = typeData.totalStatements > 0 
+          ? (typeData.wordTotal / typeData.totalStatements).toFixed(2) 
+          : '0';
+
+        // Add CSV row
+        csvLines.push([
+          `"${shortName}"`,
+          `"${caseNumber}"`,
+          typeData.type,
+          typeData.totalStatements,
+          typeData.lineTotal,
+          typeData.wordTotal,
+          avgLines,
+          avgWords
+        ].join(','));
+
+        // Add text row
+        textLines.push(`  ${typeData.type.padEnd(20)} - Statements: ${String(typeData.totalStatements).padStart(6)} | Lines: ${String(typeData.lineTotal).padStart(8)} | Words: ${String(typeData.wordTotal).padStart(10)}`);
+      }
+      
+      textLines.push('');
+    }
+
+    // Write CSV file
+    const csvFilepath = path.join(this.outputDir, 'speaker_type_distribution_all_trials.csv');
+    await fs.writeFile(csvFilepath, csvLines.join('\n'));
+    console.log(`Generated: speaker_type_distribution_all_trials.csv`);
+
+    // Write text file
+    const textFilepath = path.join(this.outputDir, 'speaker_type_distribution_all_trials.txt');
+    await fs.writeFile(textFilepath, textLines.join('\n'));
+    console.log(`Generated: speaker_type_distribution_all_trials.txt`);
+
+    // Generate summary statistics
+    const summaryLines: string[] = [];
+    summaryLines.push('');
+    summaryLines.push('SUMMARY STATISTICS');
+    summaryLines.push('=' .repeat(80));
+    summaryLines.push(`Total Trials: ${trialData.size}`);
+    
+    // Aggregate totals across all trials
+    let grandTotalStatements = 0;
+    let grandTotalLines = 0;
+    let grandTotalWords = 0;
+    const speakerTypeGrandTotals = new Map<string, number>();
+
+    for (const [_, data] of trialData) {
+      for (const typeData of data.speakerTypes.values()) {
+        grandTotalStatements += typeData.totalStatements;
+        grandTotalLines += typeData.lineTotal;
+        grandTotalWords += typeData.wordTotal;
+        
+        const current = speakerTypeGrandTotals.get(typeData.type) || 0;
+        speakerTypeGrandTotals.set(typeData.type, current + typeData.totalStatements);
+      }
+    }
+
+    summaryLines.push(`Total Statements: ${grandTotalStatements.toLocaleString()}`);
+    summaryLines.push(`Total Lines: ${grandTotalLines.toLocaleString()}`);
+    summaryLines.push(`Total Words: ${grandTotalWords.toLocaleString()}`);
+    summaryLines.push('');
+    summaryLines.push('Statements by Speaker Type (All Trials):');
+    
+    const sortedGrandTotals = Array.from(speakerTypeGrandTotals.entries())
+      .sort((a, b) => b[1] - a[1]); // Sort by count descending
+    
+    for (const [type, count] of sortedGrandTotals) {
+      const percentage = ((count / grandTotalStatements) * 100).toFixed(1);
+      summaryLines.push(`  ${type.padEnd(20)} - ${String(count).padStart(8)} (${percentage}%)`);
+    }
+
+    // Append summary to text file
+    await fs.appendFile(textFilepath, '\n' + summaryLines.join('\n'));
+    console.log('Added summary statistics to text report');
+  }
+
+  /**
    * Generate Event Timeline Reports
    */
   async generateEventTimelineReports(trialId?: number): Promise<void> {

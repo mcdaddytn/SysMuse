@@ -9,7 +9,9 @@ import {
   ExaminationType,
   SwornStatus,
   WitnessInfo,
-  JurorInfo
+  JurorInfo,
+  TrialStyleConfig,
+  StatementAppendMode
 } from '../types/config.types';
 import { AttorneyService } from '../services/AttorneyService';
 import { WitnessJurorService } from '../services/WitnessJurorService';
@@ -51,6 +53,7 @@ export class Phase2Processor {
   private speakerRegistry: SpeakerRegistry | null = null;
   private examinationContext: ExaminationContextManager | null = null;
   private context: Phase2Context;
+  private trialStyleConfig: TrialStyleConfig | null = null;
   private stats: {
     totalEvents: number;
     statementEvents: number;
@@ -149,6 +152,9 @@ export class Phase2Processor {
     try {
       this.context.trialId = trialId;
       logger.info(`Setting context.trialId = ${trialId}`);
+      
+      // Load trial style config if available
+      await this.loadTrialStyleConfig();
       
       // Load existing entities
       await this.loadExistingEntities(trialId);
@@ -2288,11 +2294,8 @@ export class Phase2Processor {
    * Create statement event
    */
   private async createStatement(eventId: number, eventInfo: EventInfo, lines: any[]): Promise<void> {
-    // Combine all line text
-    const fullText = lines
-      .map(l => l.text || '')
-      .join('\n')
-      .trim();
+    // Combine all line text using the configured append mode
+    const fullText = this.combineStatementText(lines);
     
     // Get the speakerAlias from metadata or use the first line's speakerPrefix
     const speakerAlias = eventInfo.metadata?.speakerAlias || 
@@ -2313,7 +2316,7 @@ export class Phase2Processor {
    * Create witness called event - FIXED VERSION
    */
   private async createWitnessCalled(eventId: number, eventInfo: EventInfo, lines: any[]): Promise<void> {
-    // Combine all lines for parsing
+    // Combine all lines for parsing (use newline for witness called events to preserve structure)
     const fullText = lines
       .map(l => l.text || '')
       .join('\n')
@@ -2582,5 +2585,92 @@ export class Phase2Processor {
     
     logger.warn(`Created AnonymousSpeaker for unmatched prefix: ${speakerPrefix} (${context})`);
     return speaker;
+  }
+
+  /**
+   * Load trial style configuration from file
+   */
+  private async loadTrialStyleConfig(): Promise<void> {
+    try {
+      // First try to load from output directory
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      let trialStylePath = path.join(this.config.outputDir, 'trialstyle.json');
+      
+      // If not in output dir, try input dir
+      if (!fs.existsSync(trialStylePath)) {
+        trialStylePath = path.join(this.config.inputDir, 'trialstyle.json');
+      }
+      
+      // If still not found, try the config directory
+      if (!fs.existsSync(trialStylePath)) {
+        trialStylePath = path.join(process.cwd(), 'config', 'trialstyle.json');
+      }
+      
+      if (fs.existsSync(trialStylePath)) {
+        const content = fs.readFileSync(trialStylePath, 'utf-8');
+        this.trialStyleConfig = JSON.parse(content);
+        logger.info(`Loaded trial style config from ${trialStylePath}`);
+        logger.info(`Statement append mode: ${this.trialStyleConfig?.statementAppendMode || 'space'}`);
+      } else {
+        logger.info('No trialstyle.json found, using default statement append mode: space');
+      }
+    } catch (error) {
+      logger.warn(`Failed to load trial style config: ${error}`);
+      logger.info('Using default statement append mode: space');
+    }
+  }
+
+  /**
+   * Combine lines of text based on the configured statement append mode
+   */
+  private combineStatementText(lines: any[]): string {
+    const mode = this.trialStyleConfig?.statementAppendMode || 'space';
+    
+    // Extract text from each line and trim
+    const textParts = lines
+      .map(l => (l.text || '').trim())
+      .filter(text => text.length > 0);
+    
+    if (textParts.length === 0) {
+      return '';
+    }
+    
+    let separator: string;
+    switch (mode) {
+      case 'newline':
+        separator = '\n';
+        break;
+      case 'windowsNewline':
+        separator = '\r\n';
+        break;
+      case 'unixNewline':
+        separator = '\n';
+        break;
+      case 'space':
+      default:
+        // For space mode, intelligently join with spaces
+        // Ensure words are properly separated
+        return textParts.reduce((result, part, index) => {
+          if (index === 0) {
+            return part;
+          }
+          
+          // Check if we need a space between the last char of result and first char of part
+          const lastChar = result[result.length - 1];
+          const firstChar = part[0];
+          
+          // Add space if both are word characters or if the last doesn't end with space/punctuation
+          const needsSpace = lastChar && firstChar && 
+            !/[\s\-]/.test(lastChar) && // Last char is not space or hyphen
+            !/^[\s\-]/.test(firstChar); // First char is not space or hyphen
+          
+          return result + (needsSpace ? ' ' : '') + part;
+        }, '');
+    }
+    
+    // For newline modes, just join with the separator
+    return textParts.join(separator);
   }
 }

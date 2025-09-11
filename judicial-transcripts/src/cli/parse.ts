@@ -366,8 +366,20 @@ program
                       }
                     }
                     
-                    // Run PDF conversion
-                    const converter = new PdfToTextConverter(pdfConfig);
+                    // Load base trialstyle.json as default config
+                    let defaultTrialStyle: any = {};
+                    const baseTrialStylePath = path.join(process.cwd(), 'config', 'trialstyle.json');
+                    if (fs.existsSync(baseTrialStylePath)) {
+                      try {
+                        defaultTrialStyle = JSON.parse(fs.readFileSync(baseTrialStylePath, 'utf-8'));
+                        logger.info(`Loaded base trialstyle.json from config directory for PDF conversion`);
+                      } catch (error) {
+                        logger.warn(`Failed to parse base trialstyle.json: ${error}`);
+                      }
+                    }
+                    
+                    // Run PDF conversion with base config
+                    const converter = new PdfToTextConverter(pdfConfig, defaultTrialStyle);
                     await converter.convertDirectory(pdfInputDir, outputTrialDir, false);
                     logger.info(`PDF conversion completed for ${trialDirName}`);
                     

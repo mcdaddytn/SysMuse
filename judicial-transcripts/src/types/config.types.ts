@@ -252,6 +252,7 @@ export type DocumentSection = 'SUMMARY' | 'PROCEEDINGS' | 'CERTIFICATION' | 'UNK
 export type FileConvention = 'AUTO' | 'DATEAMPM' | 'DATEMORNAFT' | 'DOCID';
 export type FileSortingMode = 'AUTO' | 'dateAndSession' | 'documentNumber' | 'custom';
 export type StatementAppendMode = 'space' | 'newline' | 'windowsNewline' | 'unixNewline';
+export type StatementCleanMode = 'NONE' | 'REMOVEEXTRASPACE';
 export type SummaryCenterDelimiter = 'AUTO' | ')(' | '()' | '*' | '(' | ')';
 
 export interface TrialStyleConfig {
@@ -259,6 +260,7 @@ export interface TrialStyleConfig {
   fileSortingMode: FileSortingMode;
   pageHeaderLines: number;
   statementAppendMode: StatementAppendMode;
+  statementCleanMode?: StatementCleanMode;
   summaryCenterDelimiter: SummaryCenterDelimiter;
   orderedFiles?: string[];
   unidentifiedFiles?: string[];

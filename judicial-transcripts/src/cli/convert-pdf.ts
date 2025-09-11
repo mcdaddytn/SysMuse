@@ -56,11 +56,22 @@ async function main() {
       }
     }
     
-    // Get trial selection settings and default trial style from config
+    // Get trial selection settings from config
     let trialSelectionMode = (config as any).trialSelectionMode || 'ALL';
     let includedTrials = (config as any).includedTrials || [];
     const excludedTrials = (config as any).excludedTrials || [];
-    const defaultTrialStyle = (config as any).defaultTrialStyle || {};
+    
+    // Load base trialstyle.json from config directory
+    let defaultTrialStyle: any = {};
+    const baseTrialStylePath = path.join(process.cwd(), 'config', 'trialstyle.json');
+    if (fs.existsSync(baseTrialStylePath)) {
+      try {
+        defaultTrialStyle = JSON.parse(fs.readFileSync(baseTrialStylePath, 'utf-8'));
+        logger.info(`Loaded base trialstyle.json from config directory`);
+      } catch (error) {
+        logger.warn(`Failed to parse base trialstyle.json: ${error}`);
+      }
+    }
     
     // Apply --trial filter if specified
     if (trialFilter) {

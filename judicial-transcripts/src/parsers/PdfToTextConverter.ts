@@ -343,8 +343,9 @@ export class PdfToTextConverter {
         }
         
         // ALWAYS copy metadata files if they exist (even if no PDFs found)
+        // NOTE: trialstyle.json is handled separately via generateTrialStyleConfig to merge configs
         logger.info(`\n  Checking for metadata files to copy...`);
-        const metadataFiles = ['trial-metadata.json', 'Attorney.json', 'Witness.json', 'Trial.json', 'Judge.json', 'CourtReporter.json', 'trialstyle.json'];
+        const metadataFiles = ['trial-metadata.json', 'Attorney.json', 'Witness.json', 'Trial.json', 'Judge.json', 'CourtReporter.json'];
         for (const metaFile of metadataFiles) {
           const sourcePath = path.join(inputSubDir, metaFile);
           const destPath = path.join(outputSubDir, metaFile);

@@ -11,7 +11,8 @@ import {
   WitnessInfo,
   JurorInfo,
   TrialStyleConfig,
-  StatementAppendMode
+  StatementAppendMode,
+  StatementCleanMode
 } from '../types/config.types';
 import { AttorneyService } from '../services/AttorneyService';
 import { WitnessJurorService } from '../services/WitnessJurorService';
@@ -2592,20 +2593,57 @@ export class Phase2Processor {
    */
   private async loadTrialStyleConfig(): Promise<void> {
     try {
-      // First try to load from output directory
       const fs = await import('fs');
       const path = await import('path');
       
-      let trialStylePath = path.join(this.config.outputDir, 'trialstyle.json');
+      // For multi-trial processing, we need to find the trial-specific directory
+      let trialStylePath: string | null = null;
       
-      // If not in output dir, try input dir
-      if (!fs.existsSync(trialStylePath)) {
-        trialStylePath = path.join(this.config.inputDir, 'trialstyle.json');
+      // If we have a trialId, try to find the trial-specific trialstyle.json
+      if (this.context.trialId) {
+        // Get the trial from the database
+        const trial = await this.prisma.trial.findUnique({
+          where: { id: this.context.trialId }
+        });
+        
+        if (trial && trial.shortName) {
+          // Use the shortName to find the trial directory
+          trialStylePath = path.join(this.config.outputDir, trial.shortName, 'trialstyle.json');
+          
+          // If shortName path doesn't exist, try other methods
+          if (!fs.existsSync(trialStylePath)) {
+            // Try to find the trial directory in the output folder
+            const outputDir = this.config.outputDir;
+            
+            // List all directories in outputDir
+            if (fs.existsSync(outputDir)) {
+              const dirs = fs.readdirSync(outputDir).filter(f => {
+                const fullPath = path.join(outputDir, f);
+                return fs.statSync(fullPath).isDirectory();
+              });
+              
+              // Find a directory that contains this trial (could be by name or case number)
+              for (const dir of dirs) {
+                // Check if directory name contains trial name or case number
+                if (dir.includes(trial.name) || 
+                    (trial.caseNumber && dir.includes(trial.caseNumber)) ||
+                    dir.toLowerCase().includes(trial.name.toLowerCase().substring(0, 20))) {
+                  const candidatePath = path.join(outputDir, dir, 'trialstyle.json');
+                  if (fs.existsSync(candidatePath)) {
+                    trialStylePath = candidatePath;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
       }
       
-      // If still not found, try the config directory
-      if (!fs.existsSync(trialStylePath)) {
-        trialStylePath = path.join(process.cwd(), 'config', 'trialstyle.json');
+      // Don't fall back to root trialstyle.json - it shouldn't exist
+      if (!trialStylePath) {
+        logger.warn(`No trial-specific trialstyle.json found for trial ${this.context.trialId}`);
+        return;
       }
       
       if (fs.existsSync(trialStylePath)) {
@@ -2613,8 +2651,11 @@ export class Phase2Processor {
         this.trialStyleConfig = JSON.parse(content);
         logger.info(`Loaded trial style config from ${trialStylePath}`);
         logger.info(`Statement append mode: ${this.trialStyleConfig?.statementAppendMode || 'space'}`);
+        logger.info(`Statement clean mode: ${this.trialStyleConfig?.statementCleanMode || 'NONE'}`);
       } else {
-        logger.info('No trialstyle.json found, using default statement append mode: space');
+        logger.info('No trialstyle.json found, using defaults:');
+        logger.info('  Statement append mode: space');
+        logger.info('  Statement clean mode: NONE');
       }
     } catch (error) {
       logger.warn(`Failed to load trial style config: ${error}`);
@@ -2626,39 +2667,55 @@ export class Phase2Processor {
    * Combine lines of text based on the configured statement append mode
    */
   private combineStatementText(lines: any[]): string {
-    const mode = this.trialStyleConfig?.statementAppendMode || 'space';
+    const appendMode = this.trialStyleConfig?.statementAppendMode || 'space';
+    const cleanMode = this.trialStyleConfig?.statementCleanMode || 'NONE';
     
-    // Extract text from each line and trim
+    // Extract text from each line and apply cleaning if needed
     const textParts = lines
-      .map(l => (l.text || '').trim())
+      .map(l => {
+        let text = (l.text || '').trim();
+        
+        // Apply cleaning mode to each line before combining
+        if (cleanMode === 'REMOVEEXTRASPACE' && text) {
+          // Replace multiple spaces with single space
+          text = text.replace(/\s+/g, ' ');
+        }
+        
+        return text;
+      })
       .filter(text => text.length > 0);
     
     if (textParts.length === 0) {
       return '';
     }
     
+    let result: string;
     let separator: string;
-    switch (mode) {
+    
+    switch (appendMode) {
       case 'newline':
         separator = '\n';
+        result = textParts.join(separator);
         break;
       case 'windowsNewline':
         separator = '\r\n';
+        result = textParts.join(separator);
         break;
       case 'unixNewline':
         separator = '\n';
+        result = textParts.join(separator);
         break;
       case 'space':
       default:
         // For space mode, intelligently join with spaces
         // Ensure words are properly separated
-        return textParts.reduce((result, part, index) => {
+        result = textParts.reduce((acc, part, index) => {
           if (index === 0) {
             return part;
           }
           
           // Check if we need a space between the last char of result and first char of part
-          const lastChar = result[result.length - 1];
+          const lastChar = acc[acc.length - 1];
           const firstChar = part[0];
           
           // Add space if both are word characters or if the last doesn't end with space/punctuation
@@ -2666,11 +2723,26 @@ export class Phase2Processor {
             !/[\s\-]/.test(lastChar) && // Last char is not space or hyphen
             !/^[\s\-]/.test(firstChar); // First char is not space or hyphen
           
-          return result + (needsSpace ? ' ' : '') + part;
+          return acc + (needsSpace ? ' ' : '') + part;
         }, '');
+        break;
     }
     
-    // For newline modes, just join with the separator
-    return textParts.join(separator);
+    // Apply final cleaning if in REMOVEEXTRASPACE mode
+    // Only clean spaces, not newlines
+    if (cleanMode === 'REMOVEEXTRASPACE' && result) {
+      if (appendMode === 'space') {
+        // For space mode, replace all whitespace with single space
+        result = result.replace(/\s+/g, ' ').trim();
+      } else {
+        // For newline modes, only clean spaces within lines, preserve newlines
+        const lines = result.split(/\r?\n/);
+        result = lines.map(line => line.replace(/\s+/g, ' ').trim()).join(
+          appendMode === 'windowsNewline' ? '\r\n' : '\n'
+        );
+      }
+    }
+    
+    return result;
   }
 }

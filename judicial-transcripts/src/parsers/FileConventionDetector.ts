@@ -413,38 +413,35 @@ export class FileConventionDetector {
       }
     }
     
+    // Start with all fields from defaultConfig (which should be the merged config)
+    // Then override only the fields that need to be detected/generated
     const config: TrialStyleConfig = {
+      // Set defaults for required fields first
+      pageHeaderLines: 2,
+      statementAppendMode: 'space',
+      statementCleanMode: 'NONE',
+      summaryCenterDelimiter: 'AUTO',
+      
+      // Spread all fields from defaultConfig (this overrides the defaults above)
+      ...(defaultConfig || {}),
+      
+      // Then override ONLY the fields that are detected/generated
       fileConvention: convention === 'AUTO' ? 'DATEAMPM' : convention,
       fileSortingMode: sortingMode === 'AUTO' ? 'dateAndSession' : sortingMode,
-      pageHeaderLines: defaultConfig?.pageHeaderLines || 2,
-      statementAppendMode: defaultConfig?.statementAppendMode || 'space',
-      summaryCenterDelimiter: defaultConfig?.summaryCenterDelimiter || 'AUTO',
       orderedFiles,
       unidentifiedFiles,
       folderName,  // Feature 03C: Store folder name
       extractedCaseNumber,  // Feature 03C: Store extracted case number
       metadata: {
+        ...defaultConfig?.metadata,
         ...metadata,
         extractedCaseNumber  // Also store in metadata for backward compatibility
       },
-      // Add Q&A pattern configuration (Feature 02P)
-      questionPatterns: detectedPatterns.questionPatterns || defaultConfig?.questionPatterns || ['Q.', 'Q:', 'Q'],
-      answerPatterns: detectedPatterns.answerPatterns || defaultConfig?.answerPatterns || ['A.', 'A:', 'A'],
-      attorneyIndicatorPatterns: detectedPatterns.attorneyIndicatorPatterns || defaultConfig?.attorneyIndicatorPatterns || [
-        'BY MR\\. ([A-Z]+)',
-        'BY MS\\. ([A-Z]+)',
-        'BY MRS\\. ([A-Z]+)',
-        'BY DR\\. ([A-Z]+)'
-      ],
-      enableGenericFallback: defaultConfig?.enableGenericFallback || false,
-      genericFallbackConfig: defaultConfig?.genericFallbackConfig || {
-        plaintiffGenericName: 'PLAINTIFF COUNSEL',
-        defenseGenericName: 'DEFENSE COUNSEL',
-        assumeExaminerFromContext: true
-      },
-      // Include exclude patterns if provided
-      excludePatterns: defaultConfig?.excludePatterns
-    };
+      // Only override Q&A patterns if detected, otherwise keep from defaultConfig
+      ...(detectedPatterns.questionPatterns ? { questionPatterns: detectedPatterns.questionPatterns } : {}),
+      ...(detectedPatterns.answerPatterns ? { answerPatterns: detectedPatterns.answerPatterns } : {}),
+      ...(detectedPatterns.attorneyIndicatorPatterns ? { attorneyIndicatorPatterns: detectedPatterns.attorneyIndicatorPatterns } : {})
+    } as TrialStyleConfig;
     
     // Write config to output directory
     const configPath = path.join(outputDir, 'trialstyle.json');

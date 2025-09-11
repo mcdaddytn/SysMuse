@@ -3,6 +3,7 @@
   "fileSortingMode": "AUTO",
   "pageHeaderLines": 3,
   "statementAppendMode": "space",
+  "statementCleanMode": "REMOVEEXTRASPACE",
   "summaryCenterDelimiter": "AUTO",
   "orderedFiles": [],
   "unidentifiedFiles": [],

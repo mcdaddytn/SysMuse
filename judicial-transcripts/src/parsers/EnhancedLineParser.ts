@@ -152,8 +152,8 @@ export class EnhancedLineParser {
     timestamp?: string;
     remainingText: string;
   } {
-    // Try timestamp + line number pattern first
-    const timestampMatch = line.match(/^(\d{2}:\d{2}:\d{2})\s+(\d{1,2})\s+/);
+    // Try timestamp (HH:MM:SS or HH:MM) + line number pattern first
+    const timestampMatch = line.match(/^(\d{2}:\d{2}(?::\d{2})?)\s+(\d{1,2})\s+/);
     if (timestampMatch) {
       return {
         linePrefix: timestampMatch[0].trim(),

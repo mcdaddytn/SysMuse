@@ -36,7 +36,7 @@ export class MultiPassTranscriptParser {
     this.trialStyleConfig = trialStyleConfig;
 
     this.metadataExtractor = new MetadataExtractor(logger, this.config.pageHeaderLines);
-    this.structureAnalyzer = new StructureAnalyzer(logger);
+    this.structureAnalyzer = new StructureAnalyzer(logger, trialStyleConfig);
     this.contentParser = new ContentParser(prisma, logger, customDelimiter, trialStyleConfig);
   }
 

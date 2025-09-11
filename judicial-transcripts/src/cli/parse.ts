@@ -380,15 +380,39 @@ program
                   logger.info(`Processing trial: ${trialDirName}`);
                   logger.info(`${'='.repeat(60)}`);
                   
-                  // Reset trialStyleConfig for each trial
-                  trialStyleConfig = null;
+                  // Load base trialstyle.json from config directory first
+                  let baseTrialStyleConfig: any = {};
+                  const baseTrialStylePath = path.join(process.cwd(), 'config', 'trialstyle.json');
+                  if (fs.existsSync(baseTrialStylePath)) {
+                    try {
+                      baseTrialStyleConfig = JSON.parse(fs.readFileSync(baseTrialStylePath, 'utf-8'));
+                      logger.info(`Loaded base trialstyle.json from config directory`);
+                      if (baseTrialStyleConfig.sectionMarkers) {
+                        logger.info(`Base config has sectionMarkers with ${baseTrialStyleConfig.sectionMarkers.proceedings?.length || 0} proceedings markers`);
+                      }
+                    } catch (error) {
+                      logger.warn(`Failed to parse base trialstyle.json: ${error}`);
+                    }
+                  }
                   
-                  // Load trialstyle.json from the subdirectory
+                  // Load trial-specific trialstyle.json from the subdirectory and merge
+                  trialStyleConfig = { ...baseTrialStyleConfig };
                   const subDirTrialStylePath = path.join(actualInputDir, 'trialstyle.json');
                   if (fs.existsSync(subDirTrialStylePath)) {
                     try {
-                      trialStyleConfig = JSON.parse(fs.readFileSync(subDirTrialStylePath, 'utf-8'));
-                      logger.info(`Loaded trialstyle.json from ${actualInputDir}`);
+                      const trialSpecificConfig = JSON.parse(fs.readFileSync(subDirTrialStylePath, 'utf-8'));
+                      // Deep merge configuration
+                      trialStyleConfig = {
+                        ...baseTrialStyleConfig,
+                        ...trialSpecificConfig,
+                        // Preserve nested objects from base if not overridden
+                        sectionMarkers: trialSpecificConfig.sectionMarkers || baseTrialStyleConfig.sectionMarkers,
+                        lineFilters: trialSpecificConfig.lineFilters || baseTrialStyleConfig.lineFilters
+                      };
+                      logger.info(`Loaded and merged trialstyle.json from ${actualInputDir}`);
+                      if (trialStyleConfig?.sectionMarkers) {
+                        logger.info(`Merged config has sectionMarkers with ${trialStyleConfig.sectionMarkers.proceedings?.length || 0} proceedings markers`);
+                      }
                     } catch (error) {
                       logger.warn(`Failed to parse trialstyle.json: ${error}`);
                     }

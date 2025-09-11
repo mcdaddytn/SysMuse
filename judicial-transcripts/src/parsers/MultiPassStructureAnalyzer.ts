@@ -5,9 +5,11 @@ import {
   SectionBoundary,
   DocumentSection
 } from './MultiPassTypes';
+import { TrialStyleConfig } from '../types/config.types';
 
 export class StructureAnalyzer {
   private logger: Logger;
+  private trialStyleConfig?: TrialStyleConfig;
   
   private readonly SUMMARY_INDICATORS = [
     /APPEARANCES/i,
@@ -39,8 +41,14 @@ export class StructureAnalyzer {
     /TRUE AND CORRECT/i
   ];
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, trialStyleConfig?: TrialStyleConfig) {
     this.logger = logger;
+    this.trialStyleConfig = trialStyleConfig;
+    if (trialStyleConfig?.sectionMarkers) {
+      this.logger.info(`StructureAnalyzer received sectionMarkers with ${trialStyleConfig.sectionMarkers.proceedings?.length || 0} proceedings markers`);
+    } else {
+      this.logger.warn('StructureAnalyzer did not receive sectionMarkers configuration');
+    }
   }
 
   async analyzeStructure(metadata: ParsedMetadata): Promise<StructureAnalysis> {
@@ -56,38 +64,49 @@ export class StructureAnalyzer {
     let proceedingsStartLine = -1;
     let certificationStartLine = -1;
     
-    // Find where PROCEEDINGS section starts
-    for (const [lineNum, line] of metadata.lines) {
-      const text = line.cleanText;
-      
-      // Check for explicit PROCEEDINGS marker
-      if (/P\s*R\s*O\s*C\s*E\s*E\s*D\s*I\s*N\s*G\s*S/i.test(text) || 
-          /^\s*PROCEEDINGS\s*$/i.test(text)) {
-        proceedingsStartLine = lineNum;
-        this.logger.info(`Found PROCEEDINGS section at line ${lineNum}: ${text}`);
-        break;
-      }
-      
-      // Also check for timestamp pattern which indicates proceedings
-      if (/^\s*\d{2}:\d{2}:\d{2}/.test(text) && lineNum > 50) {
-        proceedingsStartLine = lineNum;
-        this.logger.info(`Found PROCEEDINGS section (via timestamp) at line ${lineNum}: ${text}`);
-        break;
-      }
-    }
+    // Get configured section markers from trialstyle.json
+    const proceedingsMarkers = this.trialStyleConfig?.sectionMarkers?.proceedings || [];
     
-    // Find where CERTIFICATION section starts
-    // CERTIFICATION is ALWAYS in ALL CAPS on its own line at the end of the transcript
+    // Find where PROCEEDINGS section starts
+    let checkCount = 0;
     for (const [lineNum, line] of metadata.lines) {
       const text = line.cleanText.trim();
       
-      // EXACT match for "CERTIFICATION" - no regex, no case-insensitive
-      // This is ALWAYS at the end of the transcript, in ALL CAPS, on its own line
-      if (text === 'CERTIFICATION') {
-        certificationStartLine = lineNum;
-        this.logger.info(`Found CERTIFICATION section at line ${lineNum}: ${text}`);
-        break;
+      // Debug first few lines with "THE COURT"
+      if (text.includes('THE COURT:') && checkCount < 3) {
+        this.logger.info(`DEBUG: Line ${lineNum} contains THE COURT: "${text}"`);
+        checkCount++;
       }
+      
+      // Check configured markers in order
+      let markerFound = false;
+      for (const marker of proceedingsMarkers) {
+        if (text === marker || text.startsWith(marker)) {
+          proceedingsStartLine = lineNum;
+          this.logger.info(`Found PROCEEDINGS section with marker "${marker}" at line ${lineNum}: ${text}`);
+          markerFound = true;
+          break;
+        }
+      }
+      if (markerFound) break;
+    }
+    
+    // Get configured certification markers from trialstyle.json
+    const certificationMarkers = this.trialStyleConfig?.sectionMarkers?.certification || [];
+    
+    // Find where CERTIFICATION section starts
+    for (const [lineNum, line] of metadata.lines) {
+      const text = line.cleanText.trim();
+      
+      // Check configured markers in order
+      for (const marker of certificationMarkers) {
+        if (text === marker || text.startsWith(marker)) {
+          certificationStartLine = lineNum;
+          this.logger.info(`Found CERTIFICATION section with marker "${marker}" at line ${lineNum}: ${text}`);
+          break;
+        }
+      }
+      if (certificationStartLine >= 0) break;
     }
     
     // Create section boundaries

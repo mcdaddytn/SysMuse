@@ -26,6 +26,7 @@ export class ContentParser {
     'THE COURT': 'JUDGE',
     'THE WITNESS': 'WITNESS',
     'THE FOREPERSON': 'JUROR',
+    'THE PANEL MEMBER': 'JUROR',
     'THE CLERK': 'ANONYMOUS',
     'THE BAILIFF': 'ANONYMOUS',
     'THE COURT REPORTER': 'ANONYMOUS',
@@ -545,13 +546,35 @@ export class ContentParser {
       const speakerInfo = await this.identifySpeaker(line.cleanText, lineNum);
       const isExamination = this.isExaminationLine(line.cleanText);
       
+      // Remove speaker prefix from text if found
+      let textWithoutPrefix = line.cleanText;
+      if (speakerInfo?.prefix) {
+        const prefixPattern = speakerInfo.prefix;
+        
+        
+        // For Q. and A., they're already the full prefix
+        if (prefixPattern === 'Q.' || prefixPattern === 'A.') {
+          if (textWithoutPrefix.startsWith(prefixPattern + ' ')) {
+            textWithoutPrefix = textWithoutPrefix.substring(prefixPattern.length + 1).trimStart();
+          } else if (textWithoutPrefix === prefixPattern) {
+            textWithoutPrefix = '';
+          }
+        } else {
+          // For other speakers, remove "SPEAKER:" pattern
+          const fullPrefix = prefixPattern + ':';
+          if (textWithoutPrefix.startsWith(fullPrefix)) {
+            textWithoutPrefix = textWithoutPrefix.substring(fullPrefix.length).trimStart();
+          }
+        }
+      }
+      
       lineData.push({
         pageId,
         lineNumber: pageLineNumber,  // Line number within page
         trialLineNumber: this.trialLineCounter,  // Line number within trial
         sessionLineNumber: this.sessionLineCounter,  // Line number within session
         linePrefix: line.prefix,
-        text: line.cleanText,
+        text: textWithoutPrefix,  // Text without speaker prefix
         timestamp: line.timestamp,
         documentSection: section,
         speakerPrefix: speakerInfo?.prefix,

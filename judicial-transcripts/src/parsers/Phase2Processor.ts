@@ -2067,6 +2067,7 @@ export class Phase2Processor {
     if (upper.includes('JUDGE')) return SpeakerType.JUDGE;
     if (upper.includes('JUROR')) return SpeakerType.JUROR;
     if (upper === 'THE FOREPERSON') return SpeakerType.JUROR;
+    if (upper === 'THE PANEL MEMBER') return SpeakerType.JUROR;
     if (upper === 'THE WITNESS' || upper === 'THE DEPONENT') return SpeakerType.WITNESS;
     if (upper === 'THE CLERK' || upper === 'THE BAILIFF') return SpeakerType.ANONYMOUS;
     if (upper.match(/^(MR\.|MS\.|MRS\.|DR\.)/)) return SpeakerType.ATTORNEY;

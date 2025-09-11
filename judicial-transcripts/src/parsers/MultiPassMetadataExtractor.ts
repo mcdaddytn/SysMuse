@@ -17,7 +17,9 @@ export class MetadataExtractor {
   private readonly PAGE_HEADER_MULTILINE_PATTERN = /^\s*(\d+)\s*$/;
   
   private readonly LINE_PREFIX_PATTERNS = {
-    TIMESTAMP_AND_NUMBER: /^(\d{2}:\d{2}:\d{2})\s+(\d+)\s+(.*)$/,
+    TIMESTAMP_HMS_AND_NUMBER: /^(\d{2}:\d{2}:\d{2})\s+(\d+)\s+(.*)$/,
+    
+    TIMESTAMP_HM_AND_NUMBER: /^(\d{2}:\d{2})\s+(\d+)\s+(.*)$/,
     
     NUMBER_WITH_SPACES: /^(\d{1,2})\s{2,}(.*)$/,
     
@@ -309,31 +311,48 @@ export class MetadataExtractor {
     
     if (!rawLine) return null;  // Safety check for undefined/null lines
     
-    const timestampMatch = this.LINE_PREFIX_PATTERNS.TIMESTAMP_AND_NUMBER.exec(rawLine);
-    if (timestampMatch) {
+    // Check for HH:MM:SS timestamp with line number
+    const timestampHMSMatch = this.LINE_PREFIX_PATTERNS.TIMESTAMP_HMS_AND_NUMBER.exec(rawLine);
+    if (timestampHMSMatch) {
       return {
         fileLineNumber,
         pageLineNumber,
-        timestamp: timestampMatch[1],
-        prefix: `${timestampMatch[1]} ${timestampMatch[2]}`,
-        contentStart: timestampMatch[0].length - timestampMatch[3].length,
+        timestamp: timestampHMSMatch[1],
+        prefix: `${timestampHMSMatch[1]} ${timestampHMSMatch[2]}`.trim(),
+        contentStart: timestampHMSMatch[0].length - timestampHMSMatch[3].length,
         rawText: rawLine,
-        cleanText: timestampMatch[3].trim()
+        cleanText: timestampHMSMatch[3].trim()
       };
     }
     
+    // Check for HH:MM timestamp with line number
+    const timestampHMMatch = this.LINE_PREFIX_PATTERNS.TIMESTAMP_HM_AND_NUMBER.exec(rawLine);
+    if (timestampHMMatch) {
+      return {
+        fileLineNumber,
+        pageLineNumber,
+        timestamp: timestampHMMatch[1],
+        prefix: `${timestampHMMatch[1]} ${timestampHMMatch[2]}`.trim(),
+        contentStart: timestampHMMatch[0].length - timestampHMMatch[3].length,
+        rawText: rawLine,
+        cleanText: timestampHMMatch[3].trim()
+      };
+    }
+    
+    // Check for line number with significant spaces (at least 2 spaces)
     const spacedNumberMatch = this.LINE_PREFIX_PATTERNS.NUMBER_WITH_SPACES.exec(rawLine);
     if (spacedNumberMatch) {
       return {
         fileLineNumber,
         pageLineNumber,
-        prefix: spacedNumberMatch[1],
+        prefix: spacedNumberMatch[1].trim(),
         contentStart: spacedNumberMatch[0].length - spacedNumberMatch[2].length,
         rawText: rawLine,
         cleanText: spacedNumberMatch[2].trim()
       };
     }
     
+    // Check for line number with single space
     const numberOnlyMatch = this.LINE_PREFIX_PATTERNS.NUMBER_ONLY.exec(rawLine);
     if (numberOnlyMatch) {
       const lineNum = parseInt(numberOnlyMatch[1]);
@@ -341,7 +360,7 @@ export class MetadataExtractor {
         return {
           fileLineNumber,
           pageLineNumber,
-          prefix: numberOnlyMatch[1],
+          prefix: numberOnlyMatch[1].trim(),
           contentStart: numberOnlyMatch[0].length - numberOnlyMatch[2].length,
           rawText: rawLine,
           cleanText: numberOnlyMatch[2].trim()

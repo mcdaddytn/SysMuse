@@ -14,5 +14,23 @@
       "Shawn M. McRoberts, RMR, CRR",
       "Federal Official Court Reporter"
     ]
+  },
+  "sectionMarkers": {
+    "proceedings": [
+      "P R O C E E D I N G S",
+      "COURT SECURITY OFFICER:",
+      "THE COURT:",
+      "LAW CLERK:",
+      "(Jury out.)",
+      "All rise",
+      "Be seated, please"
+    ],
+    "certification": [
+      "CERTIFICATION",
+      "C E R T I F I C A T I O N",
+      "I HEREBY CERTIFY",
+      "CERTIFY THAT THE FOREGOING",
+      "CERTIFICATE"
+    ]
   }
 }

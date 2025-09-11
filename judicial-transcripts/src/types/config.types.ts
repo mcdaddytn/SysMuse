@@ -43,6 +43,7 @@ export interface TranscriptConfig {
   processSubDirs?: boolean;
   pdfToTextConfig?: string;  // Path to pdftotext.json
   trialStyleConfig?: string; // Path to trialstyle.json
+  forceOverwrite?: boolean;  // Force overwrite existing text files during conversion
   trial?: {
     name?: string;
     caseNumber?: string;
@@ -298,6 +299,13 @@ export interface TrialStyleConfig {
   };
   // File exclude patterns - files matching these patterns will be excluded from processing
   excludePatterns?: string[];  // Array of patterns to match against filenames (e.g., ["Motion Hearing", "Jury Selection", "Verdict"])
+  // Feature 02Z: Alternative markers for document sections
+  sectionMarkers?: {
+    // Markers that trigger PROCEEDINGS section (checked in order)
+    proceedings?: string[];
+    // Markers that trigger CERTIFICATION section (checked in order)
+    certification?: string[];
+  };
   // Feature 02S: Data override system for manual corrections
   overrides?: {
     trial?: {

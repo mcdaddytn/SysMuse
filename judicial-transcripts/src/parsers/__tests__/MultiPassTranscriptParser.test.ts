@@ -194,7 +194,7 @@ describe('StructureAnalyzer', () => {
       error: jest.fn()
     } as any;
 
-    analyzer = new StructureAnalyzer(logger);
+    analyzer = new StructureAnalyzer(logger, undefined);
   });
 
   describe('analyzeStructure', () => {

@@ -342,10 +342,10 @@ export class OverrideImporter {
         }
       }
 
-      // Set success if we imported at least something
-      result.success = (result.imported.trials || 0) > 0 || 
-                      (result.imported.attorneys || 0) > 0 ||
-                      (result.imported.witnesses || 0) > 0;
+      // Set success based on whether there were any errors
+      // It's OK if nothing was imported (e.g., ConditionalInsert found everything already exists)
+      // We only fail if there were actual errors
+      result.success = !result.errors || result.errors.length === 0;
       result.correlationMap = this.correlationMap;
     } catch (error) {
       result.success = false;

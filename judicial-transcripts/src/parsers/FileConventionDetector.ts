@@ -321,7 +321,26 @@ export class FileConventionDetector {
     files: string[],
     defaultConfig?: Partial<TrialStyleConfig>
   ): Promise<TrialStyleConfig> {
-    const txtFiles = files.filter(f => f.toLowerCase().endsWith('.txt'));
+    let txtFiles = files.filter(f => f.toLowerCase().endsWith('.txt'));
+    
+    // Apply exclude patterns if provided
+    if (defaultConfig?.excludePatterns && defaultConfig.excludePatterns.length > 0) {
+      const originalCount = txtFiles.length;
+      txtFiles = txtFiles.filter(file => {
+        // Check if file matches any exclude pattern
+        for (const pattern of defaultConfig.excludePatterns!) {
+          if (file.toLowerCase().includes(pattern.toLowerCase())) {
+            logger.info(`  Excluding file: ${file} (matches pattern: "${pattern}")`);
+            return false;
+          }
+        }
+        return true;
+      });
+      
+      if (originalCount !== txtFiles.length) {
+        logger.info(`  Excluded ${originalCount - txtFiles.length} files based on exclude patterns`);
+      }
+    }
     
     // Feature 03C: Extract folder name
     const folderName = path.basename(outputDir);
@@ -422,7 +441,9 @@ export class FileConventionDetector {
         plaintiffGenericName: 'PLAINTIFF COUNSEL',
         defenseGenericName: 'DEFENSE COUNSEL',
         assumeExaminerFromContext: true
-      }
+      },
+      // Include exclude patterns if provided
+      excludePatterns: defaultConfig?.excludePatterns
     };
     
     // Write config to output directory

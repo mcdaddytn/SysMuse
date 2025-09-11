@@ -48,6 +48,14 @@ async function main() {
       }
     }
     
+    // Apply forceOverwrite from main config if set
+    if (config.forceOverwrite !== undefined) {
+      pdfConfig.forceOverwrite = config.forceOverwrite;
+      if (config.forceOverwrite) {
+        logger.info('Force overwrite mode enabled - will overwrite all existing files');
+      }
+    }
+    
     // Get trial selection settings and default trial style from config
     let trialSelectionMode = (config as any).trialSelectionMode || 'ALL';
     let includedTrials = (config as any).includedTrials || [];

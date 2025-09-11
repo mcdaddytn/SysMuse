@@ -44,6 +44,7 @@ export interface PdfToTextConfig {
   popplerPath?: string;
   pdfTextExtractOptions?: PdfTextExtractOptions;
   postProcessingOptions?: PostProcessingOptions;
+  forceOverwrite?: boolean;  // Force copy all files without checking if up-to-date
 }
 
 export class PdfToTextConverter {
@@ -324,7 +325,7 @@ export class PdfToTextConverter {
             const outputFileName = file.replace(/\.pdf$/i, '.txt');
 
             // Check if text file already exists
-            if (fs.existsSync(outputFile)) {
+            if (fs.existsSync(outputFile) && !this.config.forceOverwrite) {
               logger.info(`⏩ ${file} (text file already exists)`);
               convertedFiles.push(outputFileName);
               skippedExisting.push(outputFileName);
@@ -332,7 +333,7 @@ export class PdfToTextConverter {
               try {
                 const text = await this.convertFile(inputFile);
                 fs.writeFileSync(outputFile, text, 'utf-8');
-                logger.info(`✔ ${file}`);
+                logger.info(`✔ ${file}${this.config.forceOverwrite && fs.existsSync(outputFile) ? ' (forced overwrite)' : ''}`);
                 convertedFiles.push(outputFileName);
               } catch (err) {
                 logger.error(`✗ ${file} (Error: ${err})`);
@@ -353,7 +354,12 @@ export class PdfToTextConverter {
             continue;
           }
           
-          if (!fs.existsSync(destPath)) {
+          if (this.config.forceOverwrite) {
+            // Force copy without checking
+            fs.copyFileSync(sourcePath, destPath);
+            metadataCopied.push(metaFile);
+            logger.info(`    ✔ Copied ${metaFile} (forced)`);
+          } else if (!fs.existsSync(destPath)) {
             fs.copyFileSync(sourcePath, destPath);
             metadataCopied.push(metaFile);
             logger.info(`    ✔ Copied ${metaFile} (new file)`);
@@ -477,6 +483,11 @@ export class PdfToTextConverter {
       // Enable generic fallback based on config
       if (trialSpecificConfig.enableGenericFallback !== undefined) {
         mergedConfig.enableGenericFallback = trialSpecificConfig.enableGenericFallback;
+      }
+      
+      // Merge exclude patterns if provided
+      if (trialSpecificConfig.excludePatterns) {
+        mergedConfig.excludePatterns = trialSpecificConfig.excludePatterns;
       }
     }
     

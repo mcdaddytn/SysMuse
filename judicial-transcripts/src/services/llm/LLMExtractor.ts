@@ -162,7 +162,16 @@ Generate a JSON object with the following structure. Use sequential IDs starting
       "addressId": null
     }
   ],
-  "TrialAttorney": []
+  "TrialAttorney": [
+    {
+      "id": 1,
+      "trialId": 1,
+      "attorneyId": 1,
+      "lawFirmOfficeId": 1,
+      "side": "plaintiff or defendant",
+      "leadCounsel": false
+    }
+  ]
 }
 
 Important rules:
@@ -172,7 +181,13 @@ Important rules:
 4. Extract all attorneys listed for both plaintiff and defendant
 5. Parse names carefully to separate title, first, middle, last, and suffix
 6. If information is not present, use null rather than empty string
-7. TrialAttorney relationships will be created separately, leave as empty array
+7. CRITICAL: Create TrialAttorney associations for EVERY attorney you extract:
+   - Look for "FOR THE PLAINTIFF:" or "FOR PLAINTIFF:" sections - these attorneys have side="plaintiff"
+   - Look for "FOR THE DEFENDANT:" or "FOR DEFENDANT:" or "FOR THE DEFENDANTS:" sections - these attorneys have side="defendant"
+   - Match attorneyId to the Attorney you extracted
+   - Match lawFirmOfficeId to the office the attorney is associated with
+   - Set leadCounsel to false by default
+   - If you cannot determine the side from context, use "unknown" as the side value
 
 Return ONLY the JSON object, no additional text or explanation.`;
   }
@@ -490,6 +505,9 @@ ${prompt.user}
   }
 
   private parseJudgeName(fullName: string): { firstName: string | null; lastName: string | null } {
+    if (!fullName) {
+      return { firstName: null, lastName: null };
+    }
     // Remove honorifics
     let cleanName = fullName.replace(/^(THE HONORABLE|HONORABLE|JUDGE|JUSTICE)\s+/i, '');
     const parts = cleanName.trim().split(/\s+/);
@@ -502,6 +520,9 @@ ${prompt.user}
   }
 
   private parseReporterName(fullName: string): { firstName: string | null; lastName: string | null } {
+    if (!fullName) {
+      return { firstName: null, lastName: null };
+    }
     // Remove credentials
     let cleanName = fullName.replace(/,?\s*(CSR|TCRR|RPR|CRR|RMR|CRC|CCR).*$/i, '');
     const parts = cleanName.trim().split(/\s+/);
@@ -581,6 +602,14 @@ ${prompt.user}
     if (entities.Address) {
       entities.Address.forEach((address: any) => {
         address.overrideAction = 'Insert';
+      });
+    }
+
+    // Add override fields for TrialAttorney associations
+    if (entities.TrialAttorney) {
+      entities.TrialAttorney.forEach((ta: any) => {
+        ta.overrideAction = 'ConditionalInsert';
+        ta.overrideKey = 'attorneyFingerprint';  // Use attorney fingerprint to avoid duplicates
       });
     }
   }

@@ -296,6 +296,8 @@ export interface TrialStyleConfig {
     literal?: string[];  // Exact string matches (case-sensitive, whitespace-sensitive)
     regex?: string[];    // Regular expression patterns
   };
+  // File exclude patterns - files matching these patterns will be excluded from processing
+  excludePatterns?: string[];  // Array of patterns to match against filenames (e.g., ["Motion Hearing", "Jury Selection", "Verdict"])
   // Feature 02S: Data override system for manual corrections
   overrides?: {
     trial?: {

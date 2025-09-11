@@ -122,6 +122,12 @@ For trials using unique markers, place in source directory `trialstyle.json`:
 3. **Test marker precedence** - Ensure markers are checked in configured order
 4. **Test configuration merging** - Verify trial-specific overrides work correctly
 5. **Performance testing** - Ensure multiple marker checks don't significantly impact parsing speed
+6. **Verify Line record distribution** - Check that Line records have documentSection properly distributed:
+   - SUMMARY section: First few pages (typically 1-5 pages)
+   - PROCEEDINGS section: Main body (typically 90-95% of lines, often 100+ pages)
+   - CERTIFICATION section: Final pages (typically 1-2 pages)
+   - A successful parse should NOT have all Lines in SUMMARY or undefined sections
+   - Query to verify: `SELECT documentSection, COUNT(*) FROM "Line" WHERE sessionId = ? GROUP BY documentSection`
 
 ## Success Criteria
 

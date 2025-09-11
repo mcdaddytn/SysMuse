@@ -530,6 +530,8 @@ program
             };
             
             const shortName = trialStyleConfig?.folderName || path.basename(actualInputDir);
+            logger.info(`Trial shortName will be: "${shortName}" (from ${trialStyleConfig?.folderName ? 'folderName' : 'actualInputDir'})`);
+            logger.info(`Trial search will use name: "${trialName}", caseNumber: "${caseNumber}", shortName: "${shortName}"`);
             
             // Create or get trial - check both caseNumber and shortName
             let trial = await prisma.trial.findFirst({
@@ -559,6 +561,7 @@ program
                   defendant: trialStyleConfig?.metadata?.defendant || 'Unknown Defendant'
                 }
               });
+              logger.info(`Created new trial with ID ${trial.id}: name="${trial.name}", shortName="${trial.shortName}", caseNumber="${trial.caseNumber}"`);
               logger.info(`Created new trial: ${trialName} (${caseNumber})`);
             } else {
               logger.info(`Using existing trial: ${trial.name} (${caseNumber})`);

@@ -222,10 +222,45 @@ program
               throw error;
             }
             
-            // Get the newly created trial by shortName
-            const newTrial = await prisma.trial.findFirst({
+            // Get the newly created trial by shortName or partial match
+            // Try exact match first, then fallback to contains
+            let newTrial = await prisma.trial.findFirst({
               where: { shortName: trialName }
             });
+            
+            // If not found by exact shortName, try other approaches
+            if (!newTrial) {
+              // Try finding by name contains
+              newTrial = await prisma.trial.findFirst({
+                where: {
+                  OR: [
+                    { name: { contains: trialName } },
+                    { shortName: { contains: trialName } }
+                  ]
+                }
+              });
+            }
+            
+            // If still not found, look for the most recently created trial
+            // This helps when there's a timing issue or naming mismatch
+            if (!newTrial) {
+              console.log(chalk.yellow(`Could not find trial by name "${trialName}", checking recently created trials...`));
+              newTrial = await prisma.trial.findFirst({
+                orderBy: { id: 'desc' },
+                take: 1
+              });
+              
+              // Verify this is likely the right trial by checking if it was created very recently
+              if (newTrial) {
+                const createdRecently = newTrial.id > (await prisma.trial.count()) - 5;
+                if (!createdRecently) {
+                  console.log(chalk.yellow(`Found trial ${newTrial.id} but it doesn't appear to be recently created`));
+                  newTrial = null;
+                } else {
+                  console.log(chalk.green(`Found recently created trial: ${newTrial.name} (ID: ${newTrial.id})`));
+                }
+              }
+            }
             
             if (newTrial) {
               const newTrialId = newTrial.id;

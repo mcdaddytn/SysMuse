@@ -169,101 +169,183 @@ export class OverrideImporter {
     this.currentImportData = data;
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        // Import in dependency order
-        
-        // 1. Import Addresses first (no dependencies)
-        // Non-fatal: Address conflicts should not prevent Attorney imports
-        if (data.Address && data.Address.length > 0) {
+      // NOTE: We're NOT using a single transaction for everything anymore
+      // Each entity type gets its own transaction to prevent cascading failures
+      // This is appropriate for override imports where we use ConditionalInsert
+      
+      // Import in dependency order, but with separate transactions
+      
+      // 1. Import Addresses first (no dependencies) - Own transaction
+      if (data.Address && data.Address.length > 0) {
+        try {
+          console.log(`[IMPORT] Starting Address import (${data.Address.length} items)...`);
+          result.imported.addresses = await this.prisma.$transaction(async (tx) => {
+            return await this.importAddresses(tx, data.Address!);
+          });
+          console.log(`[IMPORT] ✅ Address import completed: ${result.imported.addresses} imported`);
+        } catch (error) {
+          console.log(`⚠️ WARNING: Address import encountered issues: ${error}`);
+          console.log(`⚠️ Continuing with other imports...`);
+          result.imported.addresses = 0;
+        }
+      }
+
+      // 2. Import Trials (no dependencies on other override entities) - Own transaction
+      if (data.Trial) {
+        const trials = Array.isArray(data.Trial) ? data.Trial : [data.Trial];
+        if (trials.length > 0) {
           try {
-            result.imported.addresses = await this.importAddresses(tx, data.Address);
+            console.log(`[IMPORT] Starting Trial import (${trials.length} items)...`);
+            result.imported.trials = await this.prisma.$transaction(async (tx) => {
+              return await this.importTrials(tx, trials);
+            });
+            console.log(`[IMPORT] ✅ Trial import completed: ${result.imported.trials} imported`);
           } catch (error) {
-            console.log(`⚠️ WARNING: Address import encountered issues: ${error}`);
-            console.log(`⚠️ Continuing with other imports...`);
-            result.imported.addresses = 0;
+            console.error(`❌ ERROR: Trial import failed: ${error}`);
+            result.errors?.push(`Trial import failed: ${error}`);
+            // Don't throw - continue with other imports
           }
         }
+      }
 
-        // 2. Import Trials (no dependencies on other override entities)
-        if (data.Trial) {
-          const trials = Array.isArray(data.Trial) ? data.Trial : [data.Trial];
-          if (trials.length > 0) {
-            result.imported.trials = await this.importTrials(tx, trials);
-          }
+      // 3. Import LawFirms (no dependencies) - Own transaction
+      if (data.LawFirm && data.LawFirm.length > 0) {
+        try {
+          console.log(`[IMPORT] Starting LawFirm import (${data.LawFirm.length} items)...`);
+          result.imported.lawFirms = await this.prisma.$transaction(async (tx) => {
+            return await this.importLawFirms(tx, data.LawFirm!);
+          });
+          console.log(`[IMPORT] ✅ LawFirm import completed: ${result.imported.lawFirms} imported`);
+        } catch (error) {
+          console.error(`❌ ERROR: LawFirm import failed: ${error}`);
+          result.errors?.push(`LawFirm import failed: ${error}`);
+          // Don't throw - continue with other imports
         }
+      }
 
-        // 3. Import LawFirms (no dependencies)
-        if (data.LawFirm && data.LawFirm.length > 0) {
-          result.imported.lawFirms = await this.importLawFirms(tx, data.LawFirm);
+      // 4. Import LawFirmOffices (depends on LawFirm and Address) - Own transaction
+      if (data.LawFirmOffice && data.LawFirmOffice.length > 0) {
+        try {
+          console.log(`[IMPORT] Starting LawFirmOffice import (${data.LawFirmOffice.length} items)...`);
+          result.imported.lawFirmOffices = await this.prisma.$transaction(async (tx) => {
+            return await this.importLawFirmOffices(tx, data.LawFirmOffice!);
+          });
+          console.log(`[IMPORT] ✅ LawFirmOffice import completed: ${result.imported.lawFirmOffices} imported`);
+        } catch (error) {
+          console.log(`⚠️ WARNING: LawFirmOffice import encountered issues: ${error}`);
+          console.log(`⚠️ Continuing with Attorney and TrialAttorney imports...`);
+          result.imported.lawFirmOffices = 0;
         }
+      }
 
-        // 4. Import LawFirmOffices (depends on LawFirm and Address)
-        // Non-fatal: We want Attorneys and TrialAttorneys to still be imported even if offices fail
-        if (data.LawFirmOffice && data.LawFirmOffice.length > 0) {
-          try {
-            result.imported.lawFirmOffices = await this.importLawFirmOffices(tx, data.LawFirmOffice);
-          } catch (error) {
-            console.log(`⚠️ WARNING: LawFirmOffice import encountered issues: ${error}`);
-            console.log(`⚠️ Continuing with Attorney and TrialAttorney imports...`);
-            result.imported.lawFirmOffices = 0;
-          }
-        }
-
-        // 5. Import Attorneys (needs speaker creation)
-        // Check metadata flag - default to true if not specified
-        const importAttorney = data.metadata?.importAttorney !== false;
-        console.log(`[IMPORT FLAGS] importAttorney: ${importAttorney} (metadata value: ${data.metadata?.importAttorney})`);
-        if (importAttorney && data.Attorney && data.Attorney.length > 0) {
+      // 5. Import Attorneys (needs speaker creation) - Own transaction
+      // Check metadata flag - default to true if not specified
+      const importAttorney = data.metadata?.importAttorney !== false;
+      console.log(`[IMPORT FLAGS] importAttorney: ${importAttorney} (metadata value: ${data.metadata?.importAttorney})`);
+      if (importAttorney && data.Attorney && data.Attorney.length > 0) {
+        try {
           console.log(`[IMPORT] Importing ${data.Attorney.length} attorneys`);
-          result.imported.attorneys = await this.importAttorneys(tx, data.Attorney);
-        } else if (!importAttorney && data.Attorney && data.Attorney.length > 0) {
-          console.log(`[IMPORT] Skipping ${data.Attorney.length} attorneys due to importAttorney=false`);
+          result.imported.attorneys = await this.prisma.$transaction(async (tx) => {
+            return await this.importAttorneys(tx, data.Attorney!);
+          });
+          console.log(`[IMPORT] ✅ Attorney import completed: ${result.imported.attorneys} imported`);
+        } catch (error) {
+          console.error(`❌ ERROR: Attorney import failed: ${error}`);
+          result.errors?.push(`Attorney import failed: ${error}`);
+          // Don't throw - continue with other imports
         }
+      } else if (!importAttorney && data.Attorney && data.Attorney.length > 0) {
+        console.log(`[IMPORT] Skipping ${data.Attorney.length} attorneys due to importAttorney=false`);
+      }
 
-        // 6. Import Judges (depends on Trial and Speaker)
-        // Check metadata flag - default to false if not specified
-        const importJudge = data.metadata?.importJudge === true;
-        console.log(`[IMPORT FLAGS] importJudge: ${importJudge} (metadata value: ${data.metadata?.importJudge})`);
-        if (importJudge && data.Judge && data.Judge.length > 0) {
+      // 6. Import Judges (depends on Trial and Speaker) - Own transaction
+      // Check metadata flag - default to false if not specified
+      const importJudge = data.metadata?.importJudge === true;
+      console.log(`[IMPORT FLAGS] importJudge: ${importJudge} (metadata value: ${data.metadata?.importJudge})`);
+      if (importJudge && data.Judge && data.Judge.length > 0) {
+        try {
           console.log(`[IMPORT] Importing ${data.Judge.length} judges`);
-          result.imported.judges = await this.importJudges(tx, data.Judge);
-        } else if (!importJudge && data.Judge && data.Judge.length > 0) {
-          console.log(`[IMPORT] Skipping ${data.Judge.length} judges due to importJudge=false`);
+          result.imported.judges = await this.prisma.$transaction(async (tx) => {
+            return await this.importJudges(tx, data.Judge!);
+          });
+        } catch (error) {
+          console.error(`❌ ERROR: Judge import failed: ${error}`);
+          result.errors?.push(`Judge import failed: ${error}`);
         }
+      } else if (!importJudge && data.Judge && data.Judge.length > 0) {
+        console.log(`[IMPORT] Skipping ${data.Judge.length} judges due to importJudge=false`);
+      }
 
-        // 7. Import CourtReporters (depends on Trial and Address)
-        // Check metadata flag - default to false if not specified
-        const importCourtReporter = data.metadata?.importCourtReporter === true;
-        console.log(`[IMPORT FLAGS] importCourtReporter: ${importCourtReporter} (metadata value: ${data.metadata?.importCourtReporter})`);
-        if (importCourtReporter && data.CourtReporter && data.CourtReporter.length > 0) {
+      // 7. Import CourtReporters (depends on Trial and Address) - Own transaction
+      // Check metadata flag - default to false if not specified
+      const importCourtReporter = data.metadata?.importCourtReporter === true;
+      console.log(`[IMPORT FLAGS] importCourtReporter: ${importCourtReporter} (metadata value: ${data.metadata?.importCourtReporter})`);
+      if (importCourtReporter && data.CourtReporter && data.CourtReporter.length > 0) {
+        try {
           console.log(`[IMPORT] Importing ${data.CourtReporter.length} court reporters`);
-          result.imported.courtReporters = await this.importCourtReporters(tx, data.CourtReporter);
-        } else if (!importCourtReporter && data.CourtReporter && data.CourtReporter.length > 0) {
-          console.log(`[IMPORT] Skipping ${data.CourtReporter.length} court reporters due to importCourtReporter=false`);
+          result.imported.courtReporters = await this.prisma.$transaction(async (tx) => {
+            return await this.importCourtReporters(tx, data.CourtReporter!);
+          });
+        } catch (error) {
+          console.error(`❌ ERROR: CourtReporter import failed: ${error}`);
+          result.errors?.push(`CourtReporter import failed: ${error}`);
         }
+      } else if (!importCourtReporter && data.CourtReporter && data.CourtReporter.length > 0) {
+        console.log(`[IMPORT] Skipping ${data.CourtReporter.length} court reporters due to importCourtReporter=false`);
+      }
 
-        // 8. Import TrialAttorneys (depends on Trial, Attorney, LawFirm, LawFirmOffice)
-        if (data.TrialAttorney && data.TrialAttorney.length > 0) {
-          result.imported.trialAttorneys = await this.importTrialAttorneys(tx, data.TrialAttorney);
+      // 8. Import TrialAttorneys (depends on Trial, Attorney, LawFirm, LawFirmOffice) - Own transaction
+      if (data.TrialAttorney && data.TrialAttorney.length > 0) {
+        try {
+          result.imported.trialAttorneys = await this.prisma.$transaction(async (tx) => {
+            return await this.importTrialAttorneys(tx, data.TrialAttorney!);
+          });
+        } catch (error) {
+          console.error(`❌ ERROR: TrialAttorney import failed: ${error}`);
+          result.errors?.push(`TrialAttorney import failed: ${error}`);
         }
+      }
 
-        // 9. Import Witnesses (needs speaker creation)
-        if (data.Witness && data.Witness.length > 0) {
-          result.imported.witnesses = await this.importWitnesses(tx, data.Witness);
+      // 9. Import Witnesses (needs speaker creation) - Own transaction
+      if (data.Witness && data.Witness.length > 0) {
+        try {
+          result.imported.witnesses = await this.prisma.$transaction(async (tx) => {
+            return await this.importWitnesses(tx, data.Witness!);
+          });
+        } catch (error) {
+          console.error(`❌ ERROR: Witness import failed: ${error}`);
+          result.errors?.push(`Witness import failed: ${error}`);
         }
+      }
 
-        // 10. Import Markers
-        if (data.Marker && data.Marker.length > 0) {
-          result.imported.markers = await this.importMarkers(tx, data.Marker);
+      // 10. Import Markers - Own transaction
+      if (data.Marker && data.Marker.length > 0) {
+        try {
+          result.imported.markers = await this.prisma.$transaction(async (tx) => {
+            return await this.importMarkers(tx, data.Marker!);
+          });
+        } catch (error) {
+          console.error(`❌ ERROR: Marker import failed: ${error}`);
+          result.errors?.push(`Marker import failed: ${error}`);
         }
+      }
 
-        // 11. Import MarkerSections (depends on Marker)
-        if (data.MarkerSection && data.MarkerSection.length > 0) {
-          result.imported.markerSections = await this.importMarkerSections(tx, data.MarkerSection);
+      // 11. Import MarkerSections (depends on Marker) - Own transaction
+      if (data.MarkerSection && data.MarkerSection.length > 0) {
+        try {
+          result.imported.markerSections = await this.prisma.$transaction(async (tx) => {
+            return await this.importMarkerSections(tx, data.MarkerSection!);
+          });
+        } catch (error) {
+          console.error(`❌ ERROR: MarkerSection import failed: ${error}`);
+          result.errors?.push(`MarkerSection import failed: ${error}`);
         }
-      });
+      }
 
-      result.success = true;
+      // Set success if we imported at least something
+      result.success = (result.imported.trials || 0) > 0 || 
+                      (result.imported.attorneys || 0) > 0 ||
+                      (result.imported.witnesses || 0) > 0;
       result.correlationMap = this.correlationMap;
     } catch (error) {
       result.success = false;
@@ -402,15 +484,22 @@ export class OverrideImporter {
       
       // Handle ConditionalInsert
       if (action === 'ConditionalInsert') {
-        // Check if trial exists
-        const overrideKey = trial.overrideKey || 'caseNumber';
-        const whereClause = overrideKey === 'shortName' 
-          ? { shortName: trial.shortName }
-          : { caseNumber: trial.caseNumber };
+        // Check if trial exists by EITHER shortName OR caseNumber
+        // This prevents duplicate key violations
+        const existing = await tx.trial.findFirst({ 
+          where: {
+            OR: [
+              { shortName: trial.shortName },
+              { caseNumber: trial.caseNumber }
+            ]
+          }
+        });
         
-        const existing = await tx.trial.findFirst({ where: whereClause });
         if (existing) {
-          console.log(`ConditionalInsert: Trial exists (${overrideKey}=${overrideKey === 'shortName' ? trial.shortName : trial.caseNumber}), skipping`);
+          const matchedBy = existing.shortName === trial.shortName ? 'shortName' : 'caseNumber';
+          console.log(`ConditionalInsert: Trial exists (matched by ${matchedBy}), skipping creation`);
+          console.log(`  Existing: id=${existing.id}, shortName="${existing.shortName}", caseNumber="${existing.caseNumber}"`);
+          console.log(`  Override: shortName="${trial.shortName}", caseNumber="${trial.caseNumber}"`);
           if (trial.id) {
             this.correlationMap.Trial.set(trial.id, existing.id);
           }

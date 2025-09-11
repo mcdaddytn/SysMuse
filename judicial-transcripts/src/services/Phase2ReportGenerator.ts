@@ -369,7 +369,7 @@ export class Phase2ReportGenerator {
         totalStatements: number,
         lineTotal: number,
         wordTotal: number,
-        uniqueSpeakers: Set<string>
+        uniqueSpeakers: Set<number>  // Track unique speaker IDs
       }>
     }>();
 
@@ -401,15 +401,15 @@ export class Phase2ReportGenerator {
       typeData.lineTotal += result.lineCount?.total || 0;
       typeData.wordTotal += result.wordCount?.total || 0;
       
-      // Track unique speakers per type
-      if (result.uniqueSpeakers) {
-        typeData.uniqueSpeakers.add(`${result.session.id}_${type}`);
+      // Track unique speakers per type using speaker IDs
+      if (result.uniqueSpeakerIds && result.uniqueSpeakerIds.length > 0) {
+        result.uniqueSpeakerIds.forEach((id: number) => typeData.uniqueSpeakers.add(id));
       }
     }
 
     // Generate CSV with all trials
     const csvLines = [
-      'Trial Short Name,Case Number,Speaker Type,Total Statements,Total Lines,Total Words,Avg Lines/Statement,Avg Words/Statement'
+      'Trial Short Name,Case Number,Speaker Type,Speaker Count,Total Statements,Total Lines,Total Words,Avg Lines/Statement,Avg Words/Statement'
     ];
 
     const textLines: string[] = [];
@@ -451,6 +451,7 @@ export class Phase2ReportGenerator {
           `"${shortName}"`,
           `"${caseNumber}"`,
           typeData.type,
+          typeData.uniqueSpeakers.size,  // Add speaker count
           typeData.totalStatements,
           typeData.lineTotal,
           typeData.wordTotal,
@@ -459,7 +460,7 @@ export class Phase2ReportGenerator {
         ].join(','));
 
         // Add text row
-        textLines.push(`  ${typeData.type.padEnd(20)} - Statements: ${String(typeData.totalStatements).padStart(6)} | Lines: ${String(typeData.lineTotal).padStart(8)} | Words: ${String(typeData.wordTotal).padStart(10)}`);
+        textLines.push(`  ${typeData.type.padEnd(20)} - Speakers: ${String(typeData.uniqueSpeakers.size).padStart(3)} | Statements: ${String(typeData.totalStatements).padStart(6)} | Lines: ${String(typeData.lineTotal).padStart(8)} | Words: ${String(typeData.wordTotal).padStart(10)}`);
       }
       
       textLines.push('');
@@ -482,11 +483,20 @@ export class Phase2ReportGenerator {
     summaryLines.push('=' .repeat(80));
     summaryLines.push(`Total Trials: ${trialData.size}`);
     
+    // Calculate total unique speakers across all trials
+    const allUniqueSpeakers = new Set<number>();
+    for (const [_, data] of trialData) {
+      for (const typeData of data.speakerTypes.values()) {
+        typeData.uniqueSpeakers.forEach(id => allUniqueSpeakers.add(id));
+      }
+    }
+    
     // Aggregate totals across all trials
     let grandTotalStatements = 0;
     let grandTotalLines = 0;
     let grandTotalWords = 0;
     const speakerTypeGrandTotals = new Map<string, number>();
+    const speakerTypeUniqueSpeakers = new Map<string, Set<number>>();
 
     for (const [_, data] of trialData) {
       for (const typeData of data.speakerTypes.values()) {
@@ -496,21 +506,32 @@ export class Phase2ReportGenerator {
         
         const current = speakerTypeGrandTotals.get(typeData.type) || 0;
         speakerTypeGrandTotals.set(typeData.type, current + typeData.totalStatements);
+        
+        // Track unique speakers across all trials for each type
+        if (!speakerTypeUniqueSpeakers.has(typeData.type)) {
+          speakerTypeUniqueSpeakers.set(typeData.type, new Set());
+        }
+        typeData.uniqueSpeakers.forEach(id => 
+          speakerTypeUniqueSpeakers.get(typeData.type)!.add(id)
+        );
       }
     }
 
+    summaryLines.push(`Total Unique Speakers: ${allUniqueSpeakers.size.toLocaleString()}`);
     summaryLines.push(`Total Statements: ${grandTotalStatements.toLocaleString()}`);
     summaryLines.push(`Total Lines: ${grandTotalLines.toLocaleString()}`);
     summaryLines.push(`Total Words: ${grandTotalWords.toLocaleString()}`);
     summaryLines.push('');
-    summaryLines.push('Statements by Speaker Type (All Trials):');
+    summaryLines.push('Statements and Speakers by Type (All Trials):');
+    summaryLines.push('-'.repeat(60));
     
     const sortedGrandTotals = Array.from(speakerTypeGrandTotals.entries())
       .sort((a, b) => b[1] - a[1]); // Sort by count descending
     
     for (const [type, count] of sortedGrandTotals) {
       const percentage = ((count / grandTotalStatements) * 100).toFixed(1);
-      summaryLines.push(`  ${type.padEnd(20)} - ${String(count).padStart(8)} (${percentage}%)`);
+      const speakerCount = speakerTypeUniqueSpeakers.get(type)?.size || 0;
+      summaryLines.push(`  ${type.padEnd(20)} - Speakers: ${String(speakerCount).padStart(4)} | Statements: ${String(count).padStart(8)} (${percentage}%)`);
     }
 
     // Append summary to text file

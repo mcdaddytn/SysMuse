@@ -148,7 +148,8 @@ export class StatementEventBySpeakerTypeQuery implements QueryExecutor {
           ...e.statement!,
           lineCount: e.lineCount,
           wordCount: e.wordCount,
-          speakerType: e.statement!.speaker?.speakerType || 'UNKNOWN'
+          speakerType: e.statement!.speaker?.speakerType || 'UNKNOWN',
+          speakerId: e.statement!.speaker?.id || null
         }));
 
       // Group by speakerType
@@ -168,14 +169,16 @@ export class StatementEventBySpeakerTypeQuery implements QueryExecutor {
         
         if (lineCounts.length === 0 && wordCounts.length === 0) continue;
 
-        // Get unique speakers of this type
-        const uniqueSpeakers = new Set(events.map(e => e.speakerAlias)).size;
+        // Get unique speakers of this type (by speaker ID)
+        const uniqueSpeakerIds = new Set(events.filter(e => e.speakerId).map(e => e.speakerId));
+        const uniqueSpeakers = uniqueSpeakerIds.size;
 
         results.push({
           trial: session.trial,
           session,
           speakerType,
           uniqueSpeakers,
+          uniqueSpeakerIds: Array.from(uniqueSpeakerIds),  // Include the actual IDs for aggregation
           totalStatements: events.length,
           lineCount: {
             max: lineCounts.length > 0 ? Math.max(...lineCounts) : 0,

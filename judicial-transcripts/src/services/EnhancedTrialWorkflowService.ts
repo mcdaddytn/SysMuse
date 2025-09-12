@@ -385,6 +385,15 @@ export class EnhancedTrialWorkflowService {
 
     // If noRegenLLMMetadata is set and metadata exists, skip regeneration regardless of completeness
     if (this.config.workflow?.noRegenLLMMetadata && fs.existsSync(metadataPath)) {
+      // Check if metadata is incomplete (just for warning, not for regeneration)
+      try {
+        const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+        if (!metadata.metadata || metadata.metadata.userReview === undefined) {
+          logger.warn(`[shouldRunLLMOverride] WARNING: Metadata may be incomplete for ${trial.shortName || trial.name} but noRegenLLMMetadata is set, skipping regeneration`);
+        }
+      } catch (error) {
+        logger.warn(`[shouldRunLLMOverride] WARNING: Error reading metadata for ${trial.shortName || trial.name} but noRegenLLMMetadata is set, skipping regeneration`);
+      }
       logger.info(`[shouldRunLLMOverride] noRegenLLMMetadata is set and metadata exists for ${trial.shortName || trial.name}, skipping LLM generation`);
       return false;
     }

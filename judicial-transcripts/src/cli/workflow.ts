@@ -222,44 +222,36 @@ program
               throw error;
             }
             
-            // Get the newly created trial by shortName or partial match
-            // Try exact match first, then fallback to contains
+            // Get the newly created trial by shortName - must be exact match
+            // The shortName should match the directory name exactly
             let newTrial = await prisma.trial.findFirst({
               where: { shortName: trialName }
             });
             
-            // If not found by exact shortName, try other approaches
             if (!newTrial) {
-              // Try finding by name contains
-              newTrial = await prisma.trial.findFirst({
-                where: {
-                  OR: [
-                    { name: { contains: trialName } },
-                    { shortName: { contains: trialName } }
-                  ]
-                }
-              });
-            }
-            
-            // If still not found, look for the most recently created trial
-            // This helps when there's a timing issue or naming mismatch
-            if (!newTrial) {
-              console.log(chalk.yellow(`Could not find trial by name "${trialName}", checking recently created trials...`));
-              newTrial = await prisma.trial.findFirst({
+              console.log(chalk.red(`ERROR: Trial with shortName "${trialName}" not found after Phase 1.`));
+              console.log(chalk.yellow(`This indicates Phase 1 created the trial with a different shortName than the directory name.`));
+              console.log(chalk.yellow(`To fix this issue:`));
+              console.log(chalk.yellow(`  1. Ensure the trial directory name matches the desired shortName`));
+              console.log(chalk.yellow(`  2. Check that trialstyle.json in the output directory has correct "folderName"`));
+              console.log(chalk.yellow(`  3. Verify trial-metadata.json uses consistent naming`));
+              
+              // Show what trials exist to help debug
+              const allTrials = await prisma.trial.findMany({
+                select: { id: true, shortName: true, name: true, caseNumber: true },
                 orderBy: { id: 'desc' },
-                take: 1
+                take: 5
               });
               
-              // Verify this is likely the right trial by checking if it was created very recently
-              if (newTrial) {
-                const createdRecently = newTrial.id > (await prisma.trial.count()) - 5;
-                if (!createdRecently) {
-                  console.log(chalk.yellow(`Found trial ${newTrial.id} but it doesn't appear to be recently created`));
-                  newTrial = null;
-                } else {
-                  console.log(chalk.green(`Found recently created trial: ${newTrial.name} (ID: ${newTrial.id})`));
+              if (allTrials.length > 0) {
+                console.log(chalk.cyan('\nRecent trials in database:'));
+                for (const t of allTrials) {
+                  const nameTrunc = t.name ? (t.name.length > 50 ? t.name.substring(0, 50) + '...' : t.name) : 'null';
+                  console.log(chalk.gray(`  ID: ${t.id}, shortName: "${t.shortName}", case: "${t.caseNumber}", name: "${nameTrunc}"`));
                 }
               }
+              
+              throw new Error(`Trial "${trialName}" not found. The shortName in the database must match the directory name exactly.`);
             }
             
             if (newTrial) {

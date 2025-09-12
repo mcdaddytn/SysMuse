@@ -567,25 +567,58 @@ program
             
             const shortName = trialStyleConfig?.folderName || path.basename(actualInputDir);
             logger.info(`Trial shortName will be: "${shortName}" (from ${trialStyleConfig?.folderName ? 'folderName' : 'actualInputDir'})`);
+            
+            // Check if we have metadata file with trial info
+            const outputDir = config.outputDir || './output/multi-trial';
+            const metadataPath = path.join(outputDir, shortName, 'trial-metadata.json');
+            let metadataCaseNumber: string | undefined;
+            
+            if (fs.existsSync(metadataPath)) {
+              try {
+                const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+                if (metadata.Trial && metadata.Trial[0]) {
+                  metadataCaseNumber = metadata.Trial[0].caseNumber;
+                  logger.info(`Using case number from trial-metadata.json: ${metadataCaseNumber}`);
+                  // Override the extracted case number with metadata case number
+                  caseNumber = metadataCaseNumber;
+                }
+              } catch (error) {
+                logger.warn(`Error reading trial-metadata.json: ${error}`);
+              }
+            }
+            
             logger.info(`Trial search will use name: "${trialName}", caseNumber: "${caseNumber}", shortName: "${shortName}"`);
             
-            // Create or get trial - check both caseNumber and shortName
+            // Create or get trial - prioritize shortName lookup to avoid case number conflicts
             let trial = await prisma.trial.findFirst({
-              where: {
-                OR: [
-                  { caseNumber },
-                  { shortName },
-                  // Also check normalized case number
-                  { 
-                    caseNumber: {
-                      contains: normalizeCaseNumber(caseNumber)
-                    }
-                  }
-                ]
-              }
+              where: { shortName }
             });
             
+            // If not found by shortName and we don't have metadata, try by case number
+            if (!trial && !metadataCaseNumber && caseNumber) {
+              trial = await prisma.trial.findFirst({
+                where: {
+                  OR: [
+                    { caseNumber },
+                    // Also check normalized case number
+                    { 
+                      caseNumber: {
+                        contains: normalizeCaseNumber(caseNumber)
+                      }
+                    }
+                  ]
+                }
+              });
+            }
+            
             if (!trial) {
+              // If caseNumber is undefined, generate a unique one
+              if (!caseNumber) {
+                const timestamp = new Date().toISOString().split('T')[0];
+                caseNumber = `UNKNOWN-${shortName.replace(/[^a-zA-Z0-9]/g, '-')}-${timestamp}`;
+                logger.warn(`No case number found, using generated identifier: ${caseNumber}`);
+              }
+              
               trial = await prisma.trial.create({
                 data: {
                   name: trialName,

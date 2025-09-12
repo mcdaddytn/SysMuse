@@ -109,15 +109,9 @@ export class EnhancedTrialWorkflowService {
       verbose: false,
       forceRerun: false,
       skipOptional: false,
-      autoReview: {
-        overrides: false,
-        markers1: false,
-        markers2: false,
-        ...(autoReviewConfig || {})
-      },
       ...config,
-      // Ensure autoReview is properly set
-      autoReview: autoReviewConfig || config.autoReview || {
+      // Override autoReview with the merged config
+      autoReview: autoReviewConfig || {
         overrides: false,
         markers1: false,
         markers2: false

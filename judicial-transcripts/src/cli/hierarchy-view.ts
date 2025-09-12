@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { generateFileToken } from '../utils/fileTokenGenerator';
+import stripAnsi from 'strip-ansi';
 
 const prisma = new PrismaClient();
 const logger = new Logger('HierarchyView');
@@ -162,7 +163,9 @@ class HierarchyViewer {
       this.printHierarchy(hierarchy, viewType, trial.name || trial.caseNumber);
       
       console.log = originalLog;
-      fs.writeFileSync(outputFile, output.join('\n'));
+      // Strip ANSI color codes when writing to file
+      const cleanOutput = output.map(line => stripAnsi(line)).join('\n');
+      fs.writeFileSync(outputFile, cleanOutput);
     }
   }
 
@@ -214,7 +217,9 @@ class HierarchyViewer {
       }
       
       console.log = originalLog;
-      fs.writeFileSync(options.output, output.join('\n'));
+      // Strip ANSI color codes when writing to file
+      const cleanOutput = output.map(line => stripAnsi(line)).join('\n');
+      fs.writeFileSync(options.output, cleanOutput);
       logger.info(`Text output saved to ${options.output}`);
     }
   }
@@ -968,8 +973,13 @@ program
   .option('-f, --format <format>', 'Output format: text or json', 'text')
   .option('-o, --output <path>', 'Output directory or file path (default: ./output/hierview for all trials)')
   .option('--verbose', 'Show detailed information')
+  .option('--no-color', 'Disable colored output')
   .action(async (options) => {
     try {
+      // Disable chalk colors if --no-color is specified
+      if (options.noColor === false) {
+        chalk.level = 0;
+      }
       const viewer = new HierarchyViewer(prisma);
       await viewer.viewHierarchy(options);
     } catch (error) {

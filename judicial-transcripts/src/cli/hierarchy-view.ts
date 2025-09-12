@@ -5,7 +5,9 @@ import { Logger } from '../utils/logger';
 import { TranscriptRenderer } from '../services/TranscriptRenderer';
 import { program } from 'commander';
 import * as fs from 'fs';
+import * as path from 'path';
 import chalk from 'chalk';
+import { generateFileToken } from '../utils/fileTokenGenerator';
 
 const prisma = new PrismaClient();
 const logger = new Logger('HierarchyView');
@@ -25,11 +27,12 @@ interface HierarchyNode {
 }
 
 interface ViewOptions {
-  trial: number;
-  view: ViewType;
+  trial?: number;
+  view?: ViewType;
   format?: OutputFormat;
   output?: string;
   all?: boolean;
+  allTrials?: boolean;
   verbose?: boolean;
 }
 
@@ -44,25 +47,140 @@ class HierarchyViewer {
    * Main entry point for viewing hierarchies
    */
   async viewHierarchy(options: ViewOptions) {
-    const trial = await this.prisma.trial.findUnique({
-      where: { id: options.trial }
+    // If trial ID is provided, run for single trial
+    if (options.trial) {
+      const trial = await this.prisma.trial.findUnique({
+        where: { id: options.trial }
+      });
+
+      if (!trial) {
+        throw new Error(`Trial ${options.trial} not found`);
+      }
+
+      await this.processTrialHierarchy(trial, options);
+    } else {
+      // Run for all trials
+      await this.processAllTrialsHierarchy(options);
+    }
+  }
+
+  /**
+   * Process hierarchy for all trials
+   */
+  private async processAllTrialsHierarchy(options: ViewOptions) {
+    const trials = await this.prisma.trial.findMany({
+      orderBy: { id: 'asc' }
     });
 
-    if (!trial) {
-      throw new Error(`Trial ${options.trial} not found`);
+    if (trials.length === 0) {
+      logger.warn('No trials found in database');
+      return;
     }
 
+    logger.info(`Processing hierarchy views for ${trials.length} trials...`);
+
+    // Default output directory
+    const baseOutputDir = options.output || './output/hierview';
+    
+    // Ensure output directory exists
+    if (!fs.existsSync(baseOutputDir)) {
+      fs.mkdirSync(baseOutputDir, { recursive: true });
+    }
+
+    const viewTypes = ['standard', 'session', 'objections', 'interactions'] as ViewType[];
+    const formats = ['json', 'text'] as OutputFormat[];
+
+    for (const trial of trials) {
+      logger.info(`\nProcessing trial: ${trial.name || trial.caseNumber}`);
+      
+      // Calculate shortNameHandle if not stored
+      const shortNameHandle = trial.shortNameHandle || 
+        (trial.shortName ? generateFileToken(trial.shortName) : generateFileToken(trial.name));
+      
+      for (const viewType of viewTypes) {
+        for (const format of formats) {
+          const viewSuffix = this.getViewSuffix(viewType);
+          const extension = format === 'json' ? 'json' : 'txt';
+          const outputFile = path.join(baseOutputDir, `${shortNameHandle}${viewSuffix}.${extension}`);
+          
+          logger.info(`  Generating ${viewType} view in ${format} format...`);
+          
+          try {
+            await this.generateSingleView(trial, viewType, format, outputFile);
+          } catch (error) {
+            logger.error(`  Failed to generate ${viewType} view for trial ${trial.id}: ${error}`);
+          }
+        }
+      }
+    }
+
+    logger.info(`\nCompleted processing all trials. Output saved to: ${baseOutputDir}`);
+  }
+
+  /**
+   * Get suffix for view type
+   */
+  private getViewSuffix(viewType: ViewType): string {
+    switch (viewType) {
+      case 'standard': return '_std';
+      case 'session': return '_sess';
+      case 'objections': return '_obj';
+      case 'interactions': return '_int';
+      default: return '_unknown';
+    }
+  }
+
+  /**
+   * Generate a single view for a trial
+   */
+  private async generateSingleView(
+    trial: any,
+    viewType: ViewType,
+    format: OutputFormat,
+    outputFile: string
+  ) {
+    const hierarchy = await this.getHierarchyByType(trial.id, viewType);
+    
+    if (format === 'json') {
+      const output = JSON.stringify({
+        trial: {
+          id: trial.id,
+          name: trial.name,
+          shortName: trial.shortName,
+          caseNumber: trial.caseNumber
+        },
+        viewType,
+        hierarchy
+      }, null, 2);
+      fs.writeFileSync(outputFile, output);
+    } else {
+      // Text format
+      const originalLog = console.log;
+      const output: string[] = [];
+      console.log = (...args) => output.push(args.join(' '));
+      
+      this.printHierarchy(hierarchy, viewType, trial.name || trial.caseNumber);
+      
+      console.log = originalLog;
+      fs.writeFileSync(outputFile, output.join('\n'));
+    }
+  }
+
+  /**
+   * Process hierarchy for a single trial
+   */
+  private async processTrialHierarchy(trial: any, options: ViewOptions) {
     logger.info(`Viewing hierarchy for: ${trial.name || trial.caseNumber}`);
 
     const views = options.all 
       ? ['session', 'standard', 'objections', 'interactions'] as ViewType[]
-      : [options.view];
+      : [options.view || 'standard'];
 
     const results: any = {};
 
     for (const view of views) {
       logger.info(`Generating ${view} view...`);
-      const hierarchy = await this.getHierarchyByType(options.trial, view);
+      const hierarchy = await this.getHierarchyByType(trial.id, view);
       results[view] = hierarchy;
 
       if (options.format === 'json') {
@@ -844,11 +962,11 @@ class HierarchyViewer {
 program
   .name('hierarchy-view')
   .description('View MarkerSection hierarchies for trials')
-  .requiredOption('-t, --trial <id>', 'Trial ID to view', parseInt)
+  .option('-t, --trial <id>', 'Trial ID to view (if not provided, runs for all trials)', parseInt)
   .option('-v, --view <type>', 'View type: session, standard, objections, interactions', 'standard')
   .option('-a, --all', 'Show all hierarchy views')
   .option('-f, --format <format>', 'Output format: text or json', 'text')
-  .option('-o, --output <file>', 'Output to file instead of console')
+  .option('-o, --output <path>', 'Output directory or file path (default: ./output/hierview for all trials)')
   .option('--verbose', 'Show detailed information')
   .action(async (options) => {
     try {

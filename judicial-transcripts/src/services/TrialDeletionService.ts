@@ -44,172 +44,187 @@ export class TrialDeletionService {
         };
       }
 
-      // Start transaction for actual deletion
-      const result = await this.prisma.$transaction(async (tx) => {
-        // Delete in order that respects referential integrity
-        // Most relationships have CASCADE delete, but we'll be explicit for clarity and counting
-        
+      // Delete without transaction, in correct order for referential integrity
+      // Each deletion is independent and can be retried if needed
+      const deletionCounts: Record<string, number> = {};
+      
+      try {
         // Delete search and accumulator results first
-        const elasticSearchResultsDeleted = await tx.elasticSearchResult.deleteMany({
-          where: { trialId: trial.id }
-        });
+        logger.info('Deleting search and accumulator results...');
+        const elasticSearchResultsDeleted = await this.deleteWithRetry(
+          () => this.prisma.elasticSearchResult.deleteMany({ where: { trialId: trial.id } }),
+          'elasticSearchResult'
+        );
+        deletionCounts.elasticSearchResults = elasticSearchResultsDeleted.count;
         
-        const accumulatorResultsDeleted = await tx.accumulatorResult.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const accumulatorResultsDeleted = await this.deleteWithRetry(
+          () => this.prisma.accumulatorResult.deleteMany({ where: { trialId: trial.id } }),
+          'accumulatorResult'
+        );
+        deletionCounts.accumulatorResults = accumulatorResultsDeleted.count;
         
         // Delete event-specific types (they reference TrialEvent)
-        const courtDirectiveEventsDeleted = await tx.courtDirectiveEvent.deleteMany({
-          where: { event: { trialId: trial.id } }
-        });
+        logger.info('Deleting event-specific types...');
+        const courtDirectiveEventsDeleted = await this.deleteWithRetry(
+          () => this.prisma.courtDirectiveEvent.deleteMany({ where: { event: { trialId: trial.id } } }),
+          'courtDirectiveEvent'
+        );
+        deletionCounts.courtDirectiveEvents = courtDirectiveEventsDeleted.count;
         
-        const statementEventsDeleted = await tx.statementEvent.deleteMany({
-          where: { event: { trialId: trial.id } }
-        });
+        const statementEventsDeleted = await this.deleteWithRetry(
+          () => this.prisma.statementEvent.deleteMany({ where: { event: { trialId: trial.id } } }),
+          'statementEvent'
+        );
+        deletionCounts.statementEvents = statementEventsDeleted.count;
         
-        const witnessCalledEventsDeleted = await tx.witnessCalledEvent.deleteMany({
-          where: { event: { trialId: trial.id } }
-        });
+        const witnessCalledEventsDeleted = await this.deleteWithRetry(
+          () => this.prisma.witnessCalledEvent.deleteMany({ where: { event: { trialId: trial.id } } }),
+          'witnessCalledEvent'
+        );
+        deletionCounts.witnessCalledEvents = witnessCalledEventsDeleted.count;
         
         // Delete marker-related data
-        const markerTimelineDeleted = await tx.markerTimeline.deleteMany({
-          where: { trialId: trial.id }
-        });
+        logger.info('Deleting marker data...');
+        const markerTimelineDeleted = await this.deleteWithRetry(
+          () => this.prisma.markerTimeline.deleteMany({ where: { trialId: trial.id } }),
+          'markerTimeline'
+        );
+        deletionCounts.markerTimelines = markerTimelineDeleted.count;
         
-        const markerDeleted = await tx.marker.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const markerDeleted = await this.deleteWithRetry(
+          () => this.prisma.marker.deleteMany({ where: { trialId: trial.id } }),
+          'marker'
+        );
+        deletionCounts.markers = markerDeleted.count;
         
-        const markerSectionDeleted = await tx.markerSection.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const markerSectionDeleted = await this.deleteWithRetry(
+          () => this.prisma.markerSection.deleteMany({ where: { trialId: trial.id } }),
+          'markerSection'
+        );
+        deletionCounts.markerSections = markerSectionDeleted.count;
 
         // Delete trial events (after event-specific types)
-        const trialEventsDeleted = await tx.trialEvent.deleteMany({
-          where: { trialId: trial.id }
-        });
+        logger.info('Deleting trial events...');
+        const trialEventsDeleted = await this.deleteWithRetry(
+          () => this.prisma.trialEvent.deleteMany({ where: { trialId: trial.id } }),
+          'trialEvent'
+        );
+        deletionCounts.trialEvents = trialEventsDeleted.count;
         
-        // Delete lines (before pages)
-        const linesDeleted = await tx.line.deleteMany({
-          where: { page: { session: { trialId: trial.id } } }
-        });
+        // Delete lines in batches (can be very large)
+        logger.info('Deleting lines (this may take a while)...');
+        const linesDeleted = await this.deleteLinesInBatches(trial.id);
+        deletionCounts.lines = linesDeleted;
         
         // Delete pages (before sessions)
-        const pagesDeleted = await tx.page.deleteMany({
-          where: { session: { trialId: trial.id } }
-        });
+        logger.info('Deleting pages...');
+        const pagesDeleted = await this.deleteWithRetry(
+          () => this.prisma.page.deleteMany({ where: { session: { trialId: trial.id } } }),
+          'page'
+        );
+        deletionCounts.pages = pagesDeleted.count;
         
         // Delete session sections
-        const sessionSectionDeleted = await tx.sessionSection.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const sessionSectionDeleted = await this.deleteWithRetry(
+          () => this.prisma.sessionSection.deleteMany({ where: { trialId: trial.id } }),
+          'sessionSection'
+        );
+        deletionCounts.sessionSections = sessionSectionDeleted.count;
         
         // Delete sessions
-        const sessionsDeleted = await tx.session.deleteMany({
-          where: { trialId: trial.id }
-        });
+        logger.info('Deleting sessions...');
+        const sessionsDeleted = await this.deleteWithRetry(
+          () => this.prisma.session.deleteMany({ where: { trialId: trial.id } }),
+          'session'
+        );
+        deletionCounts.sessions = sessionsDeleted.count;
 
         // Delete people-related data
-        const speakersDeleted = await tx.speaker.deleteMany({
-          where: { trialId: trial.id }
-        });
+        logger.info('Deleting people data...');
+        const speakersDeleted = await this.deleteWithRetry(
+          () => this.prisma.speaker.deleteMany({ where: { trialId: trial.id } }),
+          'speaker'
+        );
+        deletionCounts.speakers = speakersDeleted.count;
         
-        const witnessesDeleted = await tx.witness.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const witnessesDeleted = await this.deleteWithRetry(
+          () => this.prisma.witness.deleteMany({ where: { trialId: trial.id } }),
+          'witness'
+        );
+        deletionCounts.witnesses = witnessesDeleted.count;
 
-        const anonymousSpeakersDeleted = await tx.anonymousSpeaker.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const anonymousSpeakersDeleted = await this.deleteWithRetry(
+          () => this.prisma.anonymousSpeaker.deleteMany({ where: { trialId: trial.id } }),
+          'anonymousSpeaker'
+        );
+        deletionCounts.anonymousSpeakers = anonymousSpeakersDeleted.count;
 
-        const trialAttorneysDeleted = await tx.trialAttorney.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const trialAttorneysDeleted = await this.deleteWithRetry(
+          () => this.prisma.trialAttorney.deleteMany({ where: { trialId: trial.id } }),
+          'trialAttorney'
+        );
+        deletionCounts.trialAttorneys = trialAttorneysDeleted.count;
         
-        const jurorsDeleted = await tx.juror.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const jurorsDeleted = await this.deleteWithRetry(
+          () => this.prisma.juror.deleteMany({ where: { trialId: trial.id } }),
+          'juror'
+        );
+        deletionCounts.jurors = jurorsDeleted.count;
 
-        const judgeDeleted = await tx.judge.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const judgeDeleted = await this.deleteWithRetry(
+          () => this.prisma.judge.deleteMany({ where: { trialId: trial.id } }),
+          'judge'
+        );
+        deletionCounts.judge = judgeDeleted.count;
 
-        const courtReporterDeleted = await tx.courtReporter.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const courtReporterDeleted = await this.deleteWithRetry(
+          () => this.prisma.courtReporter.deleteMany({ where: { trialId: trial.id } }),
+          'courtReporter'
+        );
+        deletionCounts.courtReporter = courtReporterDeleted.count;
 
         // Delete status records
-        const processingStatusDeleted = await tx.trialProcessingStatus.deleteMany({
-          where: { trialId: trial.id }
-        });
+        logger.info('Deleting status records...');
+        const processingStatusDeleted = await this.deleteWithRetry(
+          () => this.prisma.trialProcessingStatus.deleteMany({ where: { trialId: trial.id } }),
+          'trialProcessingStatus'
+        );
+        deletionCounts.processingStatus = processingStatusDeleted.count;
 
-        const workflowStateDeleted = await tx.trialWorkflowState.deleteMany({
-          where: { trialId: trial.id }
-        });
+        const workflowStateDeleted = await this.deleteWithRetry(
+          () => this.prisma.trialWorkflowState.deleteMany({ where: { trialId: trial.id } }),
+          'trialWorkflowState'
+        );
+        deletionCounts.workflowState = workflowStateDeleted.count;
 
         // Finally, delete the trial itself
-        const deletedTrial = await tx.trial.delete({
-          where: { id: trial.id }
-        });
+        logger.info('Deleting trial record...');
+        await this.deleteWithRetry(
+          () => this.prisma.trial.delete({ where: { id: trial.id } }),
+          'trial'
+        );
+        deletionCounts.trial = 1;
+        
+        logger.info(`Successfully deleted trial ${trial.name} and all associated data`);
+        logger.info('Deletion counts:', deletionCounts);
 
         return {
-          trial: deletedTrial,
-          deletionCounts: {
-            // Core trial data
-            trial: 1,
-            sessions: sessionsDeleted.count,
-            pages: pagesDeleted.count,
-            lines: linesDeleted.count,
-            
-            // Events
-            trialEvents: trialEventsDeleted.count,
-            courtDirectiveEvents: courtDirectiveEventsDeleted.count,
-            statementEvents: statementEventsDeleted.count,
-            witnessCalledEvents: witnessCalledEventsDeleted.count,
-            
-            // Markers
-            markers: markerDeleted.count,
-            markerSections: markerSectionDeleted.count,
-            markerTimelines: markerTimelineDeleted.count,
-            
-            // People
-            speakers: speakersDeleted.count,
-            witnesses: witnessesDeleted.count,
-            anonymousSpeakers: anonymousSpeakersDeleted.count,
-            trialAttorneys: trialAttorneysDeleted.count,
-            jurors: jurorsDeleted.count,
-            judge: judgeDeleted.count,
-            courtReporter: courtReporterDeleted.count,
-            
-            // Sections
-            sessionSections: sessionSectionDeleted.count,
-            
-            // Search and accumulator
-            elasticSearchResults: elasticSearchResultsDeleted.count,
-            accumulatorResults: accumulatorResultsDeleted.count,
-            
-            // Status
-            processingStatus: processingStatusDeleted.count,
-            workflowState: workflowStateDeleted.count
-          }
+          success: true,
+          dryRun: false,
+          trial: {
+            id: trial.id,
+            name: trial.name,
+            caseNumber: trial.caseNumber,
+            shortName: trial.shortName
+          },
+          statistics: deletionCounts,
+          message: `Successfully deleted trial ${trial.name} and all associated data`
         };
-      });
-
-      logger.info(`Successfully deleted trial ${trial.name} and all associated data`);
-      logger.info('Deletion counts:', result.deletionCounts);
-
-      return {
-        success: true,
-        dryRun: false,
-        trial: {
-          id: trial.id,
-          name: trial.name,
-          caseNumber: trial.caseNumber,
-          shortName: trial.shortName
-        },
-        statistics: result.deletionCounts,
-        message: `Successfully deleted trial ${trial.name} and all associated data`
-      };
+      } catch (error) {
+        logger.error('Error during deletion process:', error);
+        logger.info('Partial deletion counts:', deletionCounts);
+        throw new Error(`Deletion incomplete. Deleted counts: ${JSON.stringify(deletionCounts)}. Error: ${error}`);
+      }
 
     } catch (error) {
       logger.error('Error deleting trial:', error);
@@ -378,6 +393,94 @@ export class TrialDeletionService {
       processingStatus,
       workflowState
     };
+  }
+
+  /**
+   * Delete with retry logic
+   */
+  private async deleteWithRetry<T>(
+    deleteFunc: () => Promise<T>,
+    entityName: string,
+    maxRetries: number = 3
+  ): Promise<T> {
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await deleteFunc();
+        if (attempt > 1) {
+          logger.info(`Successfully deleted ${entityName} on attempt ${attempt}`);
+        }
+        return result;
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Attempt ${attempt}/${maxRetries} failed for ${entityName}:`, error);
+        
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          logger.info(`Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+    
+    throw new Error(`Failed to delete ${entityName} after ${maxRetries} attempts: ${lastError}`);
+  }
+
+  /**
+   * Delete lines in batches to avoid timeout
+   */
+  private async deleteLinesInBatches(trialId: number, batchSize: number = 1000): Promise<number> {
+    let totalDeleted = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      try {
+        // Get a batch of line IDs to delete
+        const linesToDelete = await this.prisma.line.findMany({
+          where: { page: { session: { trialId } } },
+          select: { id: true },
+          take: batchSize
+        });
+        
+        if (linesToDelete.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        // Delete this batch
+        const deleted = await this.prisma.line.deleteMany({
+          where: {
+            id: { in: linesToDelete.map(l => l.id) }
+          }
+        });
+        
+        totalDeleted += deleted.count;
+        logger.info(`Deleted ${deleted.count} lines (total: ${totalDeleted})`);
+        
+        // If we deleted less than batchSize, we're done
+        if (deleted.count < batchSize) {
+          hasMore = false;
+        }
+        
+        // Small delay to prevent overwhelming the database
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        logger.error(`Error deleting batch of lines: ${error}`);
+        // Try to continue with smaller batch size
+        if (batchSize > 100) {
+          batchSize = Math.floor(batchSize / 2);
+          logger.info(`Reducing batch size to ${batchSize} and retrying...`);
+        } else {
+          throw error;
+        }
+      }
+    }
+    
+    return totalDeleted;
   }
 
   /**

@@ -309,7 +309,7 @@ npx ts-node src/cli/report.ts list-trials
 #### Available Report Types
 ```bash
 # 1. SPEAKER DISTRIBUTION REPORTS (Individual speakers like Q., A., MR. SMITH)
-#    Generates BOTH CSV and TXT formats automatically
+#    Generates BOTH CSV and TXT formats automatically, all in db if omit --trial-id
 npx ts-node src/cli/phase2-report.ts speaker-distribution --trial-id 1
 
 # 2. SPEAKER TYPE DISTRIBUTION REPORTS (Aggregated by type: ATTORNEY, WITNESS, JUDGE, JUROR)
@@ -317,6 +317,10 @@ npx ts-node src/cli/phase2-report.ts speaker-distribution --trial-id 1
 #    - Session-level reports: [trial]_[date]_[session]_speaker_type_distribution.csv/.txt
 #    - Trial-level summary: [trial]_speaker_type_summary.csv/.txt (all types rolled up)
 npx ts-node src/cli/phase2-report.ts speaker-type-distribution --trial-id 1
+
+# across trials csv of speaker types
+npx ts-node src/cli/phase2-report.ts speaker-type-dist-all
+
 
 # 3. EVENT TIMELINE REPORTS (Chronological event sequence)
 npx ts-node src/cli/phase2-report.ts event-timeline --trial-id 1

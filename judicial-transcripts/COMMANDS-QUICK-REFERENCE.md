@@ -50,6 +50,52 @@ npx ts-node src/cli/workflow.ts run --phase phase2 --case-number "2:13-CV-1112-J
 # Edit config to have: "includedTrials": ["01 Genband", "02 Contentguard"]
 ```
 
+## TRIAL DELETION COMMANDS
+
+### Delete a Single Trial
+```bash
+# Delete by trial ID
+npm run delete-trial delete 3
+
+# Delete by case number  
+npm run delete-trial delete "2:14-CV-00033-JRG"
+
+# Delete by short name
+npm run delete-trial delete "35 Rembrandt V Samsung"
+
+# Preview deletion without actually deleting (dry run)
+# IMPORTANT: Options must come BEFORE the identifier when using npm run
+npm run delete-trial delete -- --dry-run "35 Rembrandt V Samsung"
+# OR use npx directly (recommended for options):
+npx ts-node src/cli/delete-trial.ts delete --dry-run "35 Rembrandt V Samsung"
+
+# Skip confirmation prompt (use with caution)
+npm run delete-trial delete -- --force "35 Rembrandt V Samsung"
+# OR use npx directly (recommended for options):
+npx ts-node src/cli/delete-trial.ts delete --force "35 Rembrandt V Samsung"
+```
+
+### List All Trials in Database
+```bash
+# Display formatted list
+npm run delete-trial list
+
+# Output as JSON
+npm run delete-trial list --json
+```
+
+### Bulk Delete Multiple Trials
+```bash
+# Delete multiple trials by ID
+npm run delete-trial bulk-delete --ids "1,2,3"
+
+# Delete trials matching a pattern in short name
+npm run delete-trial bulk-delete --pattern "Test.*"
+
+# Dry run for bulk deletion
+npm run delete-trial bulk-delete --pattern "Test.*" --dry-run
+```
+
 ### Workflow Options
 ```bash
 # Verbose output for debugging

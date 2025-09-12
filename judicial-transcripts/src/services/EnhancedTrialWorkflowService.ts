@@ -86,7 +86,7 @@ interface ConversionSummary {
 interface OverrideMetadata {
   generatedAt: string;
   llmModel?: string;
-  userReviewed: boolean;
+  userReview: boolean;
   reviewedAt?: string;
   reviewedBy?: string;
 }
@@ -383,16 +383,16 @@ export class EnhancedTrialWorkflowService {
     logger.debug(`[shouldRunLLMOverride] Metadata path: ${metadataPath}`);
     logger.debug(`[shouldRunLLMOverride] Summary path: ${summaryPath}`);
 
+    // If noRegenLLMMetadata is set and metadata exists, skip regeneration regardless of completeness
+    if (this.config.workflow?.noRegenLLMMetadata && fs.existsSync(metadataPath)) {
+      logger.info(`[shouldRunLLMOverride] noRegenLLMMetadata is set and metadata exists for ${trial.shortName || trial.name}, skipping LLM generation`);
+      return false;
+    }
+    
     // Check for metadata file first
     if (!fs.existsSync(metadataPath)) {
       logger.info(`[shouldRunLLMOverride] No metadata file found for ${trial.shortName || trial.name}, LLM override needed`);
       return true; // No metadata file, need to generate
-    }
-    
-    // If noRegenLLMMetadata is set and metadata exists, skip regeneration
-    if (this.config.workflow?.noRegenLLMMetadata) {
-      logger.info(`[shouldRunLLMOverride] noRegenLLMMetadata is set and metadata exists for ${trial.shortName || trial.name}, skipping LLM generation`);
-      return false;
     }
 
     // Check if metadata was copied during PDF conversion
@@ -416,14 +416,14 @@ export class EnhancedTrialWorkflowService {
       logger.debug(`[shouldRunLLMOverride] No conversion summary found`);
     }
 
-    // Check if metadata has userReviewed flag (indicating it's complete)
+    // Check if metadata has userReview flag (indicating it's complete)
     try {
       const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
       logger.debug(`[shouldRunLLMOverride] Metadata file exists, checking completion status`);
       
-      // If metadata exists but doesn't have the metadata section or userReviewed flag,
+      // If metadata exists but doesn't have the metadata section or userReview flag,
       // it might be incomplete
-      if (!metadata.metadata || metadata.metadata.userReviewed === undefined) {
+      if (!metadata.metadata || metadata.metadata.userReview === undefined) {
         logger.info(`[shouldRunLLMOverride] Metadata incomplete for ${trial.shortName || trial.name}, regenerating`);
         return true; // Metadata incomplete, regenerate
       }
@@ -455,7 +455,7 @@ export class EnhancedTrialWorkflowService {
         try {
           const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
           const metadata = content.metadata as OverrideMetadata;
-          if (!metadata?.userReviewed) {
+          if (!metadata?.userReview) {
             return true; // Needs review
           }
         } catch {
@@ -493,7 +493,7 @@ export class EnhancedTrialWorkflowService {
       try {
         const content = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
         const metadata = content.metadata as OverrideMetadata;
-        return !metadata?.userReviewed;
+        return !metadata?.userReview;
       } catch {
         return true;
       }
@@ -525,7 +525,7 @@ export class EnhancedTrialWorkflowService {
       try {
         const content = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
         const metadata = content.metadata as OverrideMetadata;
-        return !metadata?.userReviewed;
+        return !metadata?.userReview;
       } catch {
         return true;
       }
@@ -794,7 +794,7 @@ export class EnhancedTrialWorkflowService {
             const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
             content.metadata = {
               ...content.metadata,
-              userReviewed: true,
+              userReview: true,
               reviewedAt: new Date().toISOString(),
               reviewedBy: 'auto-review'
             };
@@ -984,7 +984,7 @@ export class EnhancedTrialWorkflowService {
         metadata: {
           generatedAt: new Date().toISOString(),
           llmModel: 'gpt-4',
-          userReviewed: this.config.autoReview?.markers1 === true,  // Ensure boolean
+          userReview: this.config.autoReview?.markers1 === true,  // Ensure boolean
           phase: 'post-phase2'
         },
         markers: []
@@ -1045,7 +1045,7 @@ export class EnhancedTrialWorkflowService {
         metadata: {
           generatedAt: new Date().toISOString(),
           llmModel: 'gpt-4',
-          userReviewed: this.config.autoReview?.markers2 === true,  // Ensure boolean
+          userReview: this.config.autoReview?.markers2 === true,  // Ensure boolean
           phase: 'post-phase3'
         },
         markers: []

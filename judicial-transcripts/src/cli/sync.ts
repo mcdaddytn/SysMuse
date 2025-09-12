@@ -135,7 +135,7 @@ program
                 if (!content.metadata) {
                   content.metadata = {};
                 }
-                content.metadata.userReviewed = true;
+                content.metadata.userReview = true;
                 content.metadata.reviewedAt = new Date().toISOString();
                 content.metadata.reviewedBy = 'sync-command';
               }

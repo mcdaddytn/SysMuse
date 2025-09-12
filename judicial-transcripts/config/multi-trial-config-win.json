@@ -226,8 +226,8 @@
     "maxBufferHuge": 419430400,
     "autoReview": {
       "overrides": true,
-      "markers1": false,
-      "markers2": false
+      "markers1": true,
+      "markers2": true
     }
   },
   "elasticsearch": {

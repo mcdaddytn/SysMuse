@@ -49,6 +49,20 @@ export interface WorkflowConfig {
   inputDir?: string;
   execTimeout?: number;  // Custom timeout for execSync operations in milliseconds
   maxBuffer?: number;  // Maximum buffer size for execSync operations in bytes
+  workflow?: {
+    enableLLMOverrides?: boolean;
+    enableLLMMarkers?: boolean;
+    noRegenLLMMetadata?: boolean;
+    cleanupPhase2After?: boolean;
+    phase2RetentionHours?: number;
+    execTimeout?: number;
+    maxBuffer?: number;
+    autoReview?: {
+      overrides?: boolean;
+      markers1?: boolean;
+      markers2?: boolean;
+    };
+  };
 }
 
 export interface StepResult {
@@ -368,6 +382,12 @@ export class EnhancedTrialWorkflowService {
     if (!fs.existsSync(metadataPath)) {
       logger.info(`[shouldRunLLMOverride] No metadata file found for ${trial.shortName || trial.name}, LLM override needed`);
       return true; // No metadata file, need to generate
+    }
+    
+    // If noRegenLLMMetadata is set and metadata exists, skip regeneration
+    if (this.config.workflow?.noRegenLLMMetadata) {
+      logger.info(`[shouldRunLLMOverride] noRegenLLMMetadata is set and metadata exists for ${trial.shortName || trial.name}, skipping LLM generation`);
+      return false;
     }
 
     // Check if metadata was copied during PDF conversion

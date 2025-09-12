@@ -61,6 +61,22 @@ export class OverrideImporter {
     };
   }
 
+  /**
+   * Reset correlation map and inserted entities tracking
+   * This should be called before each new import to avoid ID conflicts
+   */
+  public resetState(): void {
+    this.correlationMap = this.initializeCorrelationMap();
+    this.insertedEntities = {
+      attorneys: new Set(),
+      lawFirms: new Set(),
+      lawFirmOffices: new Set(),
+      addresses: new Set(),
+      courtReporters: new Set()
+    };
+    this.currentImportData = null;
+  }
+
   async loadOverrideFile(filePath: string): Promise<OverrideData> {
     const absolutePath = path.resolve(filePath);
     if (!fs.existsSync(absolutePath)) {
@@ -164,6 +180,9 @@ export class OverrideImporter {
       imported: {},
       errors: []
     };
+
+    // Reset state to ensure clean import (important for multi-trial processing)
+    this.resetState();
 
     // Store current import data for reference
     this.currentImportData = data;
@@ -1140,6 +1159,18 @@ export class OverrideImporter {
       if (ta.lawFirmOfficeId && !lawFirmOfficeId) {
         console.log(`⚠️ WARNING: LawFirmOffice ${ta.lawFirmOfficeId} not found (likely due to address conflict), proceeding without office assignment`);
         lawFirmOfficeId = undefined;
+      }
+      
+      // Additional validation: ensure the lawFirmOfficeId actually exists in the database
+      if (lawFirmOfficeId) {
+        const officeExists = await tx.lawFirmOffice.findUnique({
+          where: { id: Number(lawFirmOfficeId) }
+        });
+        
+        if (!officeExists) {
+          console.log(`⚠️ WARNING: LawFirmOffice ID ${lawFirmOfficeId} does not exist in database, clearing reference`);
+          lawFirmOfficeId = undefined;
+        }
       }
       
       // Handle ConditionalInsert

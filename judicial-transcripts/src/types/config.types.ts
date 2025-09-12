@@ -249,7 +249,7 @@ export interface Phase2Context {
 export type DocumentSection = 'SUMMARY' | 'PROCEEDINGS' | 'CERTIFICATION' | 'UNKNOWN';
 
 // Trial Style Configuration
-export type FileConvention = 'AUTO' | 'DATEAMPM' | 'DATEMORNAFT' | 'DOCID';
+export type FileConvention = 'AUTO' | 'MANUAL' | 'DATEAMPM' | 'DATEMORNAFT' | 'DOCID';
 export type FileSortingMode = 'AUTO' | 'dateAndSession' | 'documentNumber' | 'custom';
 export type StatementAppendMode = 'space' | 'newline' | 'windowsNewline' | 'unixNewline';
 export type StatementCleanMode = 'NONE' | 'REMOVEEXTRASPACE';
@@ -266,6 +266,7 @@ export interface TrialStyleConfig {
   unidentifiedFiles?: string[];
   folderName?: string;  // Feature 03C: Store original folder name
   extractedCaseNumber?: string;  // Feature 03C: Case number extracted from page header
+  llmParsePages?: number;  // Number of pages to extract for LLM metadata generation (default: 2)
   metadata?: {
     caseNumber?: string;
     plaintiff?: string;

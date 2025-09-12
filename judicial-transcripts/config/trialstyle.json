@@ -5,6 +5,7 @@
   "statementAppendMode": "space",
   "statementCleanMode": "REMOVEEXTRASPACE",
   "summaryCenterDelimiter": "AUTO",
+  "llmParsePages": 2,
   "orderedFiles": [],
   "unidentifiedFiles": [],
   "metadata": {},

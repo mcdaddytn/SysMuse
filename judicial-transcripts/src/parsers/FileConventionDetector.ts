@@ -345,14 +345,31 @@ export class FileConventionDetector {
     // Feature 03C: Extract folder name
     const folderName = path.basename(outputDir);
     
-    // Detect convention
-    const convention = defaultConfig?.fileConvention === 'AUTO' ? 
-      this.detectConvention(txtFiles) : 
-      (defaultConfig?.fileConvention || 'AUTO');
+    // Check if we're in MANUAL mode
+    const isManualMode = defaultConfig?.fileConvention === 'MANUAL';
     
-    // Sort files
-    const sortingMode = defaultConfig?.fileSortingMode || 'AUTO';
-    const { orderedFiles, unidentifiedFiles } = this.sortFiles(txtFiles, convention, sortingMode);
+    let convention: FileConvention;
+    let orderedFiles: string[];
+    let unidentifiedFiles: string[];
+    
+    if (isManualMode) {
+      // In MANUAL mode, preserve orderedFiles and unidentifiedFiles from source config
+      convention = 'MANUAL';
+      orderedFiles = defaultConfig?.orderedFiles || [];
+      unidentifiedFiles = defaultConfig?.unidentifiedFiles || [];
+      logger.info(`Using MANUAL file convention with ${orderedFiles.length} ordered files and ${unidentifiedFiles.length} unidentified files from source config`);
+    } else {
+      // Detect convention
+      convention = defaultConfig?.fileConvention === 'AUTO' ? 
+        this.detectConvention(txtFiles) : 
+        (defaultConfig?.fileConvention || 'AUTO');
+      
+      // Sort files
+      const sortingMode = defaultConfig?.fileSortingMode || 'AUTO';
+      const sorted = this.sortFiles(txtFiles, convention, sortingMode);
+      orderedFiles = sorted.orderedFiles;
+      unidentifiedFiles = sorted.unidentifiedFiles;
+    }
     
     // Extract metadata from first valid file
     let metadata: any = {};
@@ -426,8 +443,10 @@ export class FileConventionDetector {
       ...(defaultConfig || {}),
       
       // Then override ONLY the fields that are detected/generated
+      // In MANUAL mode, keep the convention as MANUAL
       fileConvention: convention === 'AUTO' ? 'DATEAMPM' : convention,
-      fileSortingMode: sortingMode === 'AUTO' ? 'dateAndSession' : sortingMode,
+      fileSortingMode: isManualMode ? (defaultConfig?.fileSortingMode || 'custom') : 
+                       ((defaultConfig?.fileSortingMode || 'AUTO') === 'AUTO' ? 'dateAndSession' : defaultConfig?.fileSortingMode),
       orderedFiles,
       unidentifiedFiles,
       folderName,  // Feature 03C: Store folder name

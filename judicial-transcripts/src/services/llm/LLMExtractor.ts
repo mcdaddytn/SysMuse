@@ -350,11 +350,32 @@ ${prompt.user}
   }
 
   async extractFromTrialFolder(trialPath: string): Promise<ExtractedEntities | null> {
-    // Find the first session transcript
-    const files = fs.readdirSync(trialPath);
-    const transcriptFiles = files
-      .filter(f => f.endsWith('.txt'))
-      .sort(); // Sort to get first session
+    // Load trialstyle.json if it exists to get orderedFiles and llmParsePages
+    const trialStylePath = path.join(trialPath, 'trialstyle.json');
+    let trialStyleConfig: any = {};
+    if (fs.existsSync(trialStylePath)) {
+      try {
+        trialStyleConfig = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
+      } catch (error) {
+        console.warn(`Failed to load trialstyle.json: ${error}`);
+      }
+    }
+
+    // Use orderedFiles if available, otherwise fall back to directory listing
+    let transcriptFiles: string[];
+    if (trialStyleConfig.orderedFiles && trialStyleConfig.orderedFiles.length > 0) {
+      // Use orderedFiles from trialstyle.json
+      transcriptFiles = trialStyleConfig.orderedFiles.filter((f: string) => {
+        const fullPath = path.join(trialPath, f);
+        return fs.existsSync(fullPath) && f.endsWith('.txt');
+      });
+    } else {
+      // Fall back to directory listing
+      const files = fs.readdirSync(trialPath);
+      transcriptFiles = files
+        .filter(f => f.endsWith('.txt'))
+        .sort(); // Sort to get first session
+    }
 
     if (transcriptFiles.length === 0) {
       console.warn(`No transcript files found in ${trialPath}`);
@@ -362,7 +383,8 @@ ${prompt.user}
     }
 
     const firstTranscript = path.join(trialPath, transcriptFiles[0]);
-    const header = await this.extractTranscriptHeader(firstTranscript);
+    const pageLimit = trialStyleConfig.llmParsePages || 2; // Default to 2 pages
+    const header = await this.extractTranscriptHeader(firstTranscript, pageLimit);
 
     return this.requestEntityExtraction({
       transcriptHeader: header,

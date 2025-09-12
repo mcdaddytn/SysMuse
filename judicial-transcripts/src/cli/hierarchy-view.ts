@@ -10,6 +10,20 @@ import chalk from 'chalk';
 import { generateFileToken } from '../utils/fileTokenGenerator';
 import stripAnsi from 'strip-ansi';
 
+// Helper function to decode HTML entities
+function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
 const prisma = new PrismaClient();
 const logger = new Logger('HierarchyView');
 
@@ -824,8 +838,8 @@ class HierarchyViewer {
       }
     });
 
-    // Get speaker count
-    const speakers = await this.prisma.trialEvent.findMany({
+    // Get speaker count and word count
+    const statements = await this.prisma.trialEvent.findMany({
       where: {
         trialId: section.trialId,
         id: {
@@ -837,22 +851,34 @@ class HierarchyViewer {
       include: {
         statement: {
           select: {
-            speakerId: true
+            speakerId: true,
+            text: true
           }
         }
       }
     });
 
     const uniqueSpeakers = new Set(
-      speakers
+      statements
         .map(s => s.statement?.speakerId)
         .filter((id): id is number => id !== null && id !== undefined)
     );
 
+    // Calculate word count from all statement texts
+    let wordCount = 0;
+    for (const event of statements) {
+      if (event.statement?.text) {
+        // Count words by splitting on whitespace and filtering empty strings
+        const words = event.statement.text.trim().split(/\s+/).filter(word => word.length > 0);
+        wordCount += words.length;
+      }
+    }
+
     return {
       eventCount,
       confidence: section.confidence,
-      speakerCount: uniqueSpeakers.size
+      speakerCount: uniqueSpeakers.size,
+      wordCount
     };
   }
 
@@ -860,7 +886,8 @@ class HierarchyViewer {
    * Print hierarchy to console
    */
   private printHierarchy(nodes: HierarchyNode[], viewType: string, trialName: string) {
-    console.log(chalk.bold.blue(`\n${viewType.toUpperCase()} HIERARCHY: ${trialName}\n`));
+    const decodedTrialName = decodeHtmlEntities(trialName);
+    console.log(chalk.bold.blue(`\n${viewType.toUpperCase()} HIERARCHY: ${decodedTrialName}\n`));
     
     for (const node of nodes) {
       this.printNode(node, 0);
@@ -879,7 +906,9 @@ class HierarchyViewer {
     const typeColor = this.getColorForType(section.markerSectionType);
     const typeName = typeColor(section.markerSectionType);
     
-    let info = `${indent}${prefix}${typeName}: ${section.name || 'Unnamed'}`;
+    // Decode HTML entities in the name
+    const sectionName = decodeHtmlEntities(section.name || 'Unnamed');
+    let info = `${indent}${prefix}${typeName}: ${sectionName}`;
     
     // Add event range
     if (section.startEventId && section.endEventId) {
@@ -898,6 +927,11 @@ class HierarchyViewer {
       if (node.stats.speakerCount) {
         statsInfo.push(`${node.stats.speakerCount} speakers`);
       }
+      if (node.stats.wordCount) {
+        // Format word count with thousands separator
+        const formattedWords = node.stats.wordCount.toLocaleString();
+        statsInfo.push(`${formattedWords} words`);
+      }
       
       if (statsInfo.length > 0) {
         info += chalk.cyan(` (${statsInfo.join(', ')})`);
@@ -908,10 +942,13 @@ class HierarchyViewer {
     
     // Add summary preview or full text based on section type
     if (section.text) {
+      // Decode HTML entities in the text
+      const decodedText = decodeHtmlEntities(section.text);
+      
       // For objections and interactions (CUSTOM sections), show more of the transcript
       if (section.markerSectionType === 'CUSTOM') {
         console.log(chalk.gray(`${indent}  --- Transcript ---`));
-        const lines = section.text.split('\n');
+        const lines = decodedText.split('\n');
         for (const line of lines.slice(0, 20)) { // Show up to 20 lines
           console.log(chalk.gray(`${indent}  ${line}`));
         }
@@ -920,7 +957,7 @@ class HierarchyViewer {
         }
       } else {
         // For regular sections, show just the preview
-        const summaryLines = section.text.split('\n');
+        const summaryLines = decodedText.split('\n');
         const preview = summaryLines[0].substring(0, 80);
         console.log(chalk.gray(`${indent}  "${preview}${preview.length >= 80 ? '...' : ''}"`));
       }

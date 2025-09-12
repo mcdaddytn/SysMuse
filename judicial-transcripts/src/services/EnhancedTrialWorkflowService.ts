@@ -97,6 +97,10 @@ export class EnhancedTrialWorkflowService {
 
   constructor(prisma: PrismaClient, config: WorkflowConfig = {}) {
     this.prisma = prisma;
+    
+    // Handle both direct config and nested workflow config
+    const autoReviewConfig = config.autoReview || config.workflow?.autoReview;
+    
     this.config = {
       enableLLMOverrides: true, // Default to enabled for enhanced workflow
       enableLLMMarkers: true,
@@ -108,9 +112,16 @@ export class EnhancedTrialWorkflowService {
       autoReview: {
         overrides: false,
         markers1: false,
-        markers2: false
+        markers2: false,
+        ...(autoReviewConfig || {})
       },
-      ...config
+      ...config,
+      // Ensure autoReview is properly set
+      autoReview: autoReviewConfig || config.autoReview || {
+        overrides: false,
+        markers1: false,
+        markers2: false
+      }
     };
   }
 

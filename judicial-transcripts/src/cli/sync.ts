@@ -372,6 +372,99 @@ program
   });
 
 /**
+ * Approve all markers across all trials
+ */
+program
+  .command('approve-all-markers')
+  .description('Approve all marker files across all trials in one operation')
+  .option('--config <path>', 'Path to multi-trial configuration')
+  .option('--phase <number>', 'Phase number (1 or 2)', '1')
+  .option('--dry-run', 'Show what would be approved without actually modifying')
+  .action(async (options) => {
+    try {
+      const config = loadMultiTrialConfig(options.config);
+      const includedTrials = getActiveTrials(config);
+      
+      if (includedTrials.length === 0) {
+        console.log('❌ No included trials found in configuration');
+        process.exit(1);
+      }
+      
+      const outputDir = config.outputDir;
+      
+      if (!outputDir) {
+        console.error('❌ Output directory must be specified in config');
+        process.exit(1);
+      }
+      
+      console.log(`\n✅ Approving all markers for ${includedTrials.length} trials...`);
+      console.log(`  Phase: ${options.phase}`);
+      console.log(`  Output directory: ${outputDir}\n`);
+      
+      const markerFiles = options.phase === '1' 
+        ? ['Marker.json']
+        : ['MarkerSection.json'];
+      
+      let totalApproved = 0;
+      let totalErrors = 0;
+      
+      for (const trialName of includedTrials) {
+        const trialDir = path.join(outputDir, trialName);
+        console.log(`\n📁 Processing: ${trialName}`);
+        
+        for (const markerFile of markerFiles) {
+          const markerPath = path.join(trialDir, markerFile);
+          
+          if (!fs.existsSync(markerPath)) {
+            console.log(`  ⏭️  Skipped: ${markerFile} (not found)`);
+            continue;
+          }
+          
+          if (options.dryRun) {
+            console.log(`  🔍 Would approve: ${markerFile}`);
+            totalApproved++;
+            continue;
+          }
+          
+          try {
+            // Read the marker file
+            let content = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
+            
+            // Add approval metadata
+            if (!content.metadata) {
+              content.metadata = {};
+            }
+            content.metadata.userReviewed = true;
+            content.metadata.reviewedAt = new Date().toISOString();
+            content.metadata.reviewedBy = 'approve-all-command';
+            
+            // Write back the approved content
+            fs.writeFileSync(markerPath, JSON.stringify(content, null, 2));
+            console.log(`  ✅ Approved: ${markerFile}`);
+            totalApproved++;
+          } catch (error) {
+            console.error(`  ❌ Error approving ${markerFile}: ${error}`);
+            totalErrors++;
+          }
+        }
+      }
+      
+      console.log(`\n✨ ${options.dryRun ? 'Would approve' : 'Approved'} ${totalApproved} marker files`);
+      if (totalErrors > 0) {
+        console.log(`⚠️  ${totalErrors} errors occurred`);
+      }
+      
+      if (!options.dryRun) {
+        console.log('\n💡 You can now resume workflows with: npx ts-node src/cli/workflow.ts resume --all');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error:', error);
+      process.exit(1);
+    }
+  });
+
+/**
  * Sync trial style configuration between directories
  */
 program

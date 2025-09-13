@@ -184,17 +184,107 @@ program
   });
 
 program
-  .command('delete-phase3 <identifier>')
-  .description('Delete only Phase 3 data (markers and marker sections) for a trial')
+  .command('delete-phase3 [identifier]')
+  .description('Delete only Phase 3 data (markers and marker sections) for a trial or all trials')
   .option('--dry-run', 'Show what would be deleted without actually deleting')
   .option('--force', 'Skip confirmation prompt')
-  .action(async (identifier: string, options: { dryRun?: boolean; force?: boolean }) => {
+  .action(async (identifier: string | undefined, options: { dryRun?: boolean; force?: boolean }) => {
     try {
       const service = new TrialDeletionService(prisma);
-      
-      // First do a dry run to get trial info
+
+      // If no identifier provided, delete Phase 3 for all trials
+      if (!identifier) {
+        // Get all trials
+        const trials = await prisma.trial.findMany({
+          orderBy: { id: 'asc' }
+        });
+
+        if (trials.length === 0) {
+          console.error(chalk.red('No trials found in database'));
+          process.exit(1);
+        }
+
+        // Display what will be deleted
+        console.log(chalk.cyan('\n════════════════════════════════════════'));
+        console.log(chalk.cyan('  Delete Phase 3 Data for ALL Trials'));
+        console.log(chalk.cyan('════════════════════════════════════════'));
+        console.log(chalk.white(`  Total trials: ${trials.length}`));
+        console.log(chalk.white('\n  Trials to process:'));
+        trials.forEach(trial => {
+          console.log(chalk.white(`    ${trial.id}: ${trial.name}`));
+        });
+
+        if (options.dryRun) {
+          // Calculate total Phase 3 data
+          const totalStats = await prisma.$transaction([
+            prisma.markerSection.count(),
+            prisma.marker.count(),
+            prisma.accumulatorResult.count()
+          ]);
+
+          console.log(chalk.cyan('\n  Total Phase 3 Data to be Deleted:'));
+          console.log(chalk.yellow(`    Marker Sections:     ${totalStats[0]}`));
+          console.log(chalk.yellow(`    Markers:             ${totalStats[1]}`));
+          console.log(chalk.yellow(`    Accumulator Results: ${totalStats[2]}`));
+
+          console.log(chalk.green('\n✓ Dry run completed. No data was deleted.'));
+          await service.close();
+          process.exit(0);
+        }
+
+        // Confirm deletion
+        if (!options.force) {
+          const answers = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'confirmDelete',
+              message: chalk.red(`\nAre you sure you want to delete Phase 3 data for ALL ${trials.length} trials? This cannot be undone.`),
+              default: false
+            }
+          ]);
+
+          if (!answers.confirmDelete) {
+            console.log(chalk.yellow('\n✗ Deletion cancelled'));
+            await service.close();
+            process.exit(0);
+          }
+        }
+
+        // Perform deletion for all trials
+        console.log(chalk.yellow('\n⚡ Deleting Phase 3 data for all trials...'));
+
+        let totalDeleted = {
+          markers: 0,
+          markerSections: 0,
+          accumulatorResults: 0
+        };
+
+        for (const trial of trials) {
+          console.log(chalk.gray(`  Processing trial ${trial.id}: ${trial.name}...`));
+          const result = await service.deletePhase3Only(trial.id.toString(), false);
+
+          if (result.success) {
+            totalDeleted.markers += result.statistics.markers || 0;
+            totalDeleted.markerSections += result.statistics.markerSections || 0;
+            totalDeleted.accumulatorResults += result.statistics.accumulatorResults || 0;
+          }
+        }
+
+        console.log(chalk.green('\n✓ Phase 3 data deleted for all trials'));
+        console.log(chalk.green('\nTotal deletion summary:'));
+        console.log(chalk.green(`  Markers:             ${totalDeleted.markers} records deleted`));
+        console.log(chalk.green(`  Marker Sections:     ${totalDeleted.markerSections} records deleted`));
+        console.log(chalk.green(`  Accumulator Results: ${totalDeleted.accumulatorResults} records deleted`));
+
+        console.log(chalk.cyan('\n✓ You can now re-run Phase 3 processing for all trials.'));
+
+        await service.close();
+        process.exit(0);
+      }
+
+      // Single trial deletion (existing code)
       const dryRunResult = await service.deletePhase3Only(identifier, true);
-      
+
       if (!dryRunResult.success) {
         console.error(chalk.red('Trial not found'));
         process.exit(1);
@@ -208,12 +298,12 @@ program
       console.log(chalk.white(`  Name:        ${dryRunResult.trial.name}`));
       console.log(chalk.white(`  Case Number: ${dryRunResult.trial.caseNumber}`));
       console.log(chalk.white(`  Short Name:  ${dryRunResult.trial.shortName || 'N/A'}`));
-      
+
       // Display what will be deleted
       console.log(chalk.cyan('\n════════════════════════════════════════'));
       console.log(chalk.cyan('  Phase 3 Data to be Deleted'));
       console.log(chalk.cyan('════════════════════════════════════════'));
-      
+
       const stats = dryRunResult.statistics;
       console.log(chalk.yellow(`    Markers                   ${stats.markers}`));
       console.log(chalk.yellow(`    Marker Sections           ${stats.markerSections}`));
@@ -248,18 +338,18 @@ program
       // Perform actual deletion
       console.log(chalk.yellow('\n⚡ Deleting Phase 3 data...'));
       const result = await service.deletePhase3Only(identifier, false);
-      
+
       console.log(chalk.green(`\n✓ ${result.message}`));
       console.log(chalk.green('\nPhase 3 deletion summary:'));
-      
+
       Object.entries(result.statistics).forEach(([key, count]) => {
         if (count > 0) {
           console.log(chalk.green(`  ${key}: ${count} records deleted`));
         }
       });
-      
+
       console.log(chalk.cyan('\n✓ You can now re-run Phase 3 processing for this trial.'));
-      
+
       await service.close();
       process.exit(0);
       

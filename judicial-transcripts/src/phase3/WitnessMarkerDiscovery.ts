@@ -1,4 +1,4 @@
-import { PrismaClient, MarkerType, MarkerSectionType, TrialEvent, WitnessCalledEvent, Witness, ExaminationType } from '@prisma/client';
+import { PrismaClient, MarkerType, MarkerSectionType, MarkerSource, TrialEvent, WitnessCalledEvent, Witness, ExaminationType } from '@prisma/client';
 import { Logger } from '../utils/logger';
 
 interface WitnessExaminationBoundary {
@@ -286,6 +286,7 @@ export class WitnessMarkerDiscovery {
         data: {
           trialId,
           markerSectionType: 'WITNESS_EXAMINATION',
+          source: MarkerSource.PHASE3_DISCOVERY,
           startMarkerId: startMarker.id,
           endMarkerId: endMarker?.id,
           startEventId: boundary.startEvent.id,
@@ -383,6 +384,7 @@ export class WitnessMarkerDiscovery {
           data: {
             trialId,
             markerSectionType: 'WITNESS_TESTIMONY',
+            source: MarkerSource.PHASE3_DISCOVERY,
             startMarkerId: startMarker.id,
             endMarkerId: endMarker.id,
             startEventId: firstBoundary.startEvent.id,
@@ -458,6 +460,7 @@ export class WitnessMarkerDiscovery {
         data: {
           trialId,
           markerSectionType: 'COMPLETE_WITNESS_TESTIMONY',
+          source: MarkerSource.PHASE3_DISCOVERY,
           startMarkerId: startMarker.id,
           endMarkerId: endMarker.id,
           startEventId: firstBoundary.startEvent.id,

@@ -84,11 +84,11 @@ export class StandardTrialHierarchyBuilder {
    */
   private async generateAutoSummaries(trialId: number): Promise<void> {
     this.logger.info(`Generating auto-summaries for trial ${trialId} sections`);
-    
+
     // Pass trial style config to renderer
     const renderer = new TranscriptRenderer(this.prisma, this.trialStyleConfig);
-    
-    // Get all sections that need summaries
+
+    // Get all sections that need summaries, ordered chronologically
     const sections = await this.prisma.markerSection.findMany({
       where: {
         trialId,
@@ -98,7 +98,11 @@ export class StandardTrialHierarchyBuilder {
         // Only sections with actual event ranges
         startEventId: { not: null },
         endEventId: { not: null }
-      }
+      },
+      orderBy: [
+        { parentSectionId: 'asc' },  // Group by parent first
+        { startEventId: 'asc' }       // Then chronologically within each group
+      ]
     });
     
     let summaryCount = 0;
@@ -539,6 +543,9 @@ export class StandardTrialHierarchyBuilder {
       openingStatements.push(section);
     }
 
+    // Sort opening statements chronologically by startEventId
+    openingStatements.sort((a, b) => (a.startEventId || 0) - (b.startEventId || 0));
+
     // Create OPENING_STATEMENTS_PERIOD
     if (openingStatements.length > 0) {
       const firstOpening = openingStatements[0];
@@ -670,6 +677,9 @@ export class StandardTrialHierarchyBuilder {
 
     // Removed plaintiff rebuttal logic - not part of standard trial sequence
 
+    // Sort closing statements chronologically by startEventId
+    closingStatements.sort((a, b) => (a.startEventId || 0) - (b.startEventId || 0));
+
     // Create CLOSING_STATEMENTS_PERIOD
     if (closingStatements.length > 0) {
       const firstClosing = closingStatements[0];
@@ -706,14 +716,35 @@ export class StandardTrialHierarchyBuilder {
       return closingPeriod;
     }
 
-    // Create zero-length section if no closings found
-    return await this.createZeroLengthSection({
-      trialId,
-      sectionType: MarkerSectionType.CLOSING_STATEMENTS_PERIOD,
-      parentSectionId: trialSectionId,
-      name: 'Closing Statements',
-      description: 'No closing statements found',
-      reason: 'Could not identify closing statements with sufficient confidence'
+    // Default: Create a period from after witness testimony to end of trial
+    // This will be adjusted if we find jury deliberation/verdict
+    const lastEvent = await this.prisma.trialEvent.findFirst({
+      where: { trialId },
+      orderBy: { id: 'desc' }
+    });
+
+    const defaultStartEvent = testimonyPeriod?.endEventId ? testimonyPeriod.endEventId + 1 :
+                              (lastEvent ? lastEvent.id - 100 : 1); // Fallback to last 100 events
+
+    return await this.prisma.markerSection.create({
+      data: {
+        trialId,
+        markerSectionType: MarkerSectionType.CLOSING_STATEMENTS_PERIOD,
+        parentSectionId: trialSectionId,
+        name: 'Closing Statements',
+        description: 'Closing statements period (default bounds)',
+        startEventId: defaultStartEvent,
+        endEventId: lastEvent?.id,
+        startTime: testimonyPeriod?.endTime,
+        endTime: lastEvent?.endTime,
+        source: MarkerSource.PHASE3_HIERARCHY,
+        confidence: 0.3, // Low confidence for default
+        metadata: {
+          isDefault: true,
+          hasPlaintiffClosing: false,
+          hasDefenseClosing: false
+        }
+      }
     });
   }
 

@@ -323,16 +323,17 @@ export class Phase2Processor {
       });
     }
     
-    // Create speaker for this trial
+    // Create speaker for this trial - check by PREFIX not handle!
     const speakerHandle = `ATTORNEY_${lastName}`;
     let speaker = await this.prisma.speaker.findFirst({
       where: {
         trialId,
-        speakerHandle
+        speakerPrefix  // Check by PREFIX to avoid duplicates!
       }
     });
     
     if (!speaker) {
+      logger.warn(`[IMPORT_ATTORNEY] Creating new speaker for attorney: prefix="${speakerPrefix}", handle="${speakerHandle}"`);
       speaker = await this.prisma.speaker.create({
         data: {
           trialId,
@@ -511,6 +512,10 @@ export class Phase2Processor {
     logger.info(`Processing session: ${session.sessionDate} - ${session.sessionType}`);
     logger.debug(`Session ID ${session.id}, Trial ID ${session.trialId}`);
     
+    // DIAGNOSTIC: Log session transition
+    logger.warn(`[SPEAKER_DIAGNOSTIC] SESSION TRANSITION - Starting session ${session.id} (${session.sessionDate} - ${session.sessionType})`);
+    logger.warn(`[SPEAKER_DIAGNOSTIC] Current witness before session: ${this.witnessJurorService.getCurrentWitness()?.name || 'NONE'}`);
+    
     // Initialize speaker services for this trial if not done yet
     if (!this.speakerRegistry) {
       this.speakerRegistry = new SpeakerRegistry(this.prisma, this.context.trialId);
@@ -564,15 +569,27 @@ export class Phase2Processor {
       currentLineIndex: 0
     };
     
-    // Log initial witness context
+    // DIAGNOSTIC: Log initial witness context
     if (state.currentWitness) {
-      logger.debug(`Starting session with witness context: ${state.currentWitness.name}`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC] Starting session ${session.id} with witness context: ${state.currentWitness.name} (ID: ${state.currentWitness.id})`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC] Witness caller: ${state.currentWitness.witnessCaller}, Speaker ID: ${state.currentWitness.speakerId}`);
+    } else {
+      logger.warn(`[SPEAKER_DIAGNOSTIC] Starting session ${session.id} with NO witness context`);
     }
     
     // Process lines sequentially
     for (let i = 0; i < allLines.length; i++) {
       state.currentLineIndex = i;
       state.previousLine = i > 0 ? allLines[i - 1] : null;
+      
+      // DIAGNOSTIC: Log critical lines
+      const line = allLines[i];
+      if (line.text?.includes('All rise') || line.text?.includes('Be seated') || 
+          line.text?.includes('verdict form') || line.text?.includes('closing statement')) {
+        logger.warn(`[SPEAKER_DIAGNOSTIC] CRITICAL LINE ${line.trialLineNumber || line.lineNumber}: "${line.text}"`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Speaker prefix: ${line.speakerPrefix || 'NONE'}, Current witness: ${state.currentWitness?.name || 'NONE'}`);
+      }
+      
       await this.processLine(session.id, allLines[i], state);
     }
     
@@ -581,10 +598,13 @@ export class Phase2Processor {
       await this.saveEvent(this.context.trialId, session.id, state.currentEvent, state.eventLines);
     }
     
-    // Persist witness state for next session
+    // DIAGNOSTIC: Log witness state persistence
+    logger.warn(`[SPEAKER_DIAGNOSTIC] SESSION END - Session ${session.id} ending`);
     if (state.currentWitness) {
+      logger.warn(`[SPEAKER_DIAGNOSTIC] PERSISTING witness context for next session: ${state.currentWitness.name} (ID: ${state.currentWitness.id})`);
       this.witnessJurorService.setCurrentWitness(state.currentWitness);
-      logger.debug(`Persisting witness context for next session: ${state.currentWitness.name}`);
+    } else {
+      logger.warn(`[SPEAKER_DIAGNOSTIC] NO witness context to persist at session end`);
     }
   }
 
@@ -603,9 +623,19 @@ export class Phase2Processor {
     
     const lineText = line.text?.trim() || '';
     
-    // Debug log for lines with speakers
+    // DIAGNOSTIC: Log lines with speaker prefixes and their handling
     if (line.speakerPrefix) {
-      logger.debug(`Line ${line.lineNumber} has speaker: ${line.speakerPrefix}, text: ${lineText.substring(0, 50)}`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC] Line ${line.trialLineNumber || line.lineNumber} (Page ${line.pageId}) has speaker prefix: "${line.speakerPrefix}"`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Text: "${lineText.substring(0, 100)}..."`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Current speaker: ${state.currentSpeaker?.speakerHandle || 'NONE'} (Prefix: ${state.currentSpeaker?.speakerPrefix || 'NONE'}, Type: ${state.currentSpeaker?.speakerType || 'NONE'})`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Current witness: ${state.currentWitness?.name || 'NONE'} (ID: ${state.currentWitness?.id || 'N/A'})`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Current event type: ${state.currentEvent?.type || 'NONE'}`);
+      
+      // Special focus on the MR. YANG case
+      if (line.trialLineNumber === 22673 || (line.speakerPrefix.includes('YANG') && lineText.includes('Pass the witness'))) {
+        logger.error(`[SPEAKER_DIAGNOSTIC] >>> CRITICAL LINE: MR. YANG should displace witness here <<<`);
+        logger.error(`[SPEAKER_DIAGNOSTIC]   Will checkSpeakerStatement be called? Let's trace...`);
+      }
     }
     
     // Check for court directive
@@ -619,12 +649,17 @@ export class Phase2Processor {
       return;
     }
     
-    // Check for "BY MR./MS." pattern in line text to set examining attorney
-    // This typically follows examination type lines
-    logger.debug(`[BY LINE DEBUG] Checking line ${line.lineNumber}: "${lineText.substring(0, 30)}..."`);
-    if (await this.checkExaminingAttorney(sessionId, line, lineText, state)) {
-      logger.debug(`BY line ${line.lineNumber} was handled`);
-      return;
+    // Check for "BY MR./MS." pattern - check BOTH speaker prefix AND text
+    // Phase1 may have parsed this as a speaker prefix
+    const isByLine = line.speakerPrefix?.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)/) || 
+                     lineText.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)/);
+    
+    if (isByLine) {
+      logger.debug(`[BY LINE DEBUG] Found BY line at ${line.lineNumber}: prefix="${line.speakerPrefix}" text="${lineText.substring(0, 30)}..."`);
+      if (await this.checkExaminingAttorney(sessionId, line, lineText, state)) {
+        logger.debug(`BY line ${line.lineNumber} was handled`);
+        return;
+      }
     }
     
     // Check for witness being called
@@ -632,13 +667,46 @@ export class Phase2Processor {
       return;
     }
     
+    // DIAGNOSTIC: Track speaker transitions - log when we have a new speaker prefix
+    // This helps identify when we're not properly switching speakers
+    if (line.speakerPrefix && state.currentSpeaker) {
+      // We have a speaker prefix and there's a current speaker - are they different?
+      if (state.currentSpeaker.speakerPrefix !== line.speakerPrefix) {
+        logger.warn(`[SPEAKER_DIAGNOSTIC] SPEAKER TRANSITION DETECTED`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Line ${line.trialLineNumber || line.lineNumber}: New speaker prefix: "${line.speakerPrefix}"`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Previous speaker: ${state.currentSpeaker.name || state.currentSpeaker.speakerHandle} (${state.currentSpeaker.speakerPrefix})`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Current witness context: ${state.currentWitness?.name || 'NONE'} (ID: ${state.currentWitness?.id || 'N/A'})`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Current examination type: ${state.currentExaminationType || 'NONE'}`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Text preview: "${lineText.substring(0, 100)}..."`);
+        
+        // TODO: After debugging, remove excessive logging but keep essential speaker transition tracking
+      }
+    }
+    
     // Check for speaker statement
-    if (await this.checkSpeakerStatement(sessionId, line, lineText, state)) {
+    const speakerStatementResult = await this.checkSpeakerStatement(sessionId, line, lineText, state);
+    if (line.speakerPrefix && (line.trialLineNumber === 22673 || line.speakerPrefix.includes('YANG'))) {
+      logger.error(`[SPEAKER_DIAGNOSTIC] checkSpeakerStatement returned: ${speakerStatementResult} for MR. YANG line`);
+    }
+    if (speakerStatementResult) {
       return;
     }
     
     // If we have a current event, add this line to it
     if (state.currentEvent) {
+      // DIAGNOSTIC: Log when appending to existing event
+      if (!line.speakerPrefix) {
+        logger.warn(`[SPEAKER_DIAGNOSTIC] APPENDING line ${line.trialLineNumber || line.lineNumber} (NO PREFIX) to existing event`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Event type: ${state.currentEvent.type}, Speaker ID: ${state.currentEvent.speakerId}`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Current speaker: ${state.currentSpeaker?.name || state.currentSpeaker?.speakerHandle || 'NONE'} (Type: ${state.currentSpeaker?.speakerType || 'UNKNOWN'})`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Text being appended: "${lineText.substring(0, 100)}..."`);
+        
+        // This is where witness statements might incorrectly get court procedural text appended
+        if (state.currentSpeaker?.speakerType === 'WITNESS') {
+          logger.warn(`[SPEAKER_DIAGNOSTIC]   >>> WARNING: Appending text to WITNESS statement <<<`);
+        }
+      }
+      
       state.eventLines.push(line);
       
       // Update end time and line number
@@ -704,19 +772,34 @@ export class Phase2Processor {
     lineText: string,
     state: ProcessingState
   ): Promise<boolean> {
-    // Check the text for BY pattern
-    // Note: BY lines DO have speakerPrefix from Phase 1, so we check the text not the prefix
-    const trimmed = lineText.trim();
+    // BY lines may come from speaker prefix OR from text
+    // Phase1 often parses "BY MR. DACUS:" as a speaker prefix
+    let attorneyPrefix: string | null = null;
     
-    // Check for "BY MR./MS./MRS./DR. LASTNAME:" or "BY MR./MS./MRS./DR. FIRSTNAME LASTNAME:" pattern
-    const byMatch = trimmed.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+(?:\s+[A-Z]+)*):?$/);
-    logger.debug(`[BY LINE DEBUG] checkExaminingAttorney: trimmed="${trimmed}", match=${byMatch ? 'YES' : 'NO'}`);
-    if (!byMatch) {
-      return false;
+    logger.warn(`[CHECK_EXAMINING_ATTORNEY] Line ${line.lineNumber}: speakerPrefix="${line.speakerPrefix}", text="${lineText.substring(0, 50)}..."`);
+    
+    // First check if the speaker prefix is a BY line
+    if (line.speakerPrefix?.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+(.+)/)) {
+      const match = line.speakerPrefix.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+(.+)/);
+      if (match) {
+        attorneyPrefix = `${match[1]} ${match[2].replace(/:$/, '').trim()}`;
+        logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Found BY in speaker prefix: "${attorneyPrefix}"`);
+      }
+    } else {
+      // Otherwise check the text
+      const trimmed = lineText.trim();
+      const byMatch = trimmed.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+(?:\s+[A-Z]+)*):?$/);
+      if (byMatch) {
+        attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
+        logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Found BY in text: "${attorneyPrefix}"`);
+      }
     }
     
-    const attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
-    logger.debug(`Found examining attorney indicator: ${trimmed}`);
+    if (!attorneyPrefix) {
+      logger.warn(`[CHECK_EXAMINING_ATTORNEY]   No BY line pattern found`);
+      return false;
+    }
+    logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Looking for attorney with prefix: "${attorneyPrefix}"`);
     
     // Find the attorney (with speaker relation through TrialAttorney)
     const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
@@ -724,10 +807,13 @@ export class Phase2Processor {
       attorneyPrefix
     );
     
+    logger.warn(`[CHECK_EXAMINING_ATTORNEY]   AttorneyService returned: ${attorney ? `Attorney ID=${attorney.id}, Name="${attorney.name}"` : 'NULL'}`);
+    
     let speaker: SpeakerInfo | null = null;
     
     try {
       if (attorney) {
+        logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Found attorney, looking for TrialAttorney association...`);
         // Get the TrialAttorney association to find the speaker
         let trialAttorney = await this.prisma.trialAttorney.findFirst({
           where: {
@@ -743,16 +829,30 @@ export class Phase2Processor {
         if (!trialAttorney) {
           logger.info(`Creating TrialAttorney association for imported attorney: ${attorney.name}`);
           
-          // Create speaker for this attorney
-          const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
-          const dbSpeaker = await this.prisma.speaker.create({
-            data: {
+          // First check if a speaker with this prefix already exists
+          let dbSpeaker = await this.prisma.speaker.findFirst({
+            where: {
               trialId: this.context.trialId,
-              speakerPrefix: attorneyPrefix,
-              speakerHandle,
-              speakerType: 'ATTORNEY'
+              speakerPrefix: attorneyPrefix
             }
           });
+          
+          if (dbSpeaker) {
+            logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Found existing speaker ID=${dbSpeaker.id} with prefix "${attorneyPrefix}" - using for TrialAttorney`);
+          } else {
+            // Create speaker for this attorney only if one doesn't exist
+            logger.warn(`[CHECK_EXAMINING_ATTORNEY]   No existing speaker found for prefix "${attorneyPrefix}" - creating new speaker`);
+            const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
+            dbSpeaker = await this.prisma.speaker.create({
+              data: {
+                trialId: this.context.trialId,
+                speakerPrefix: attorneyPrefix,
+                speakerHandle,
+                speakerType: 'ATTORNEY'
+              }
+            });
+            logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Created new speaker ID=${dbSpeaker.id}`);
+          }
           
           // Determine role based on witness context if available
           let attorneyRole: 'PLAINTIFF' | 'DEFENDANT' | 'UNKNOWN' = 'UNKNOWN';
@@ -782,19 +882,33 @@ export class Phase2Processor {
           
           logger.info(`Created TrialAttorney association for ${attorney.name} with role ${attorneyRole}`);
         } else if (!trialAttorney.speaker) {
-          // TrialAttorney exists but has no speaker (from metadata import) - create speaker and update
-          logger.info(`TrialAttorney exists but has no speaker for attorney: ${attorney.name} - creating speaker`);
+          // TrialAttorney exists but has no speaker (from metadata import)
+          logger.info(`TrialAttorney exists but has no speaker for attorney: ${attorney.name}`);
           
-          // Create speaker for this attorney
-          const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
-          const dbSpeaker = await this.prisma.speaker.create({
-            data: {
+          // First check if a speaker with this prefix already exists
+          let dbSpeaker = await this.prisma.speaker.findFirst({
+            where: {
               trialId: this.context.trialId,
-              speakerPrefix: attorneyPrefix,
-              speakerHandle,
-              speakerType: 'ATTORNEY'
+              speakerPrefix: attorneyPrefix
             }
           });
+          
+          if (dbSpeaker) {
+            logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Found existing speaker ID=${dbSpeaker.id} with prefix "${attorneyPrefix}" - updating TrialAttorney`);
+          } else {
+            // Create speaker for this attorney only if one doesn't exist
+            logger.warn(`[CHECK_EXAMINING_ATTORNEY]   No existing speaker found for prefix "${attorneyPrefix}" - creating new speaker`);
+            const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
+            dbSpeaker = await this.prisma.speaker.create({
+              data: {
+                trialId: this.context.trialId,
+                speakerPrefix: attorneyPrefix,
+                speakerHandle,
+                speakerType: 'ATTORNEY'
+              }
+            });
+            logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Created new speaker ID=${dbSpeaker.id}`);
+          }
           
           // Update the existing TrialAttorney with the speaker
           trialAttorney = await this.prisma.trialAttorney.update({
@@ -809,7 +923,7 @@ export class Phase2Processor {
             }
           });
           
-          logger.info(`Updated TrialAttorney with speaker for ${attorney.name}`);
+          logger.info(`Updated TrialAttorney with speaker ID=${dbSpeaker.id} for ${attorney.name}`);
         }
         
         if (!trialAttorney?.speaker) {
@@ -838,16 +952,17 @@ export class Phase2Processor {
         const lastName = titleMatch[2];
         const speakerHandle = `ATTORNEY_${lastName}_${title.replace(/\./g, '')}`;
         
-        // Check if speaker handle already exists
+        // Check if speaker with this prefix already exists - NEVER create duplicates!
         let dbSpeaker = await this.prisma.speaker.findFirst({
           where: {
             trialId: this.context.trialId,
-            speakerHandle
+            speakerPrefix: attorneyPrefix  // Check by PREFIX, not handle!
           }
         });
         
         // Create speaker if it doesn't exist
         if (!dbSpeaker) {
+          logger.warn(`[CHECK_EXAMINING_ATTORNEY]   Creating new speaker for dynamic attorney: "${attorneyPrefix}" with handle "${speakerHandle}"`);
           dbSpeaker = await this.prisma.speaker.create({
             data: {
               trialId: this.context.trialId,
@@ -1105,15 +1220,16 @@ export class Phase2Processor {
     // Create proper speaker prefix for witness (not "A.")
     const witnessSpeakerPrefix = `WITNESS ${witnessName.toUpperCase()}`;
     
-    // Find or create speaker
+    // Find or create speaker - check by PREFIX to avoid duplicates!
     let speaker = await this.prisma.speaker.findFirst({
       where: {
         trialId: this.context.trialId,
-        speakerHandle: speakerHandle
+        speakerPrefix: witnessSpeakerPrefix  // Check by PREFIX, not handle!
       }
     });
     
     if (!speaker) {
+      logger.warn(`[CHECK_WITNESS] Creating new speaker for witness: prefix="${witnessSpeakerPrefix}", handle="${speakerHandle}"`);
       speaker = await this.prisma.speaker.create({
         data: {
           trialId: this.context.trialId,
@@ -1391,19 +1507,21 @@ export class Phase2Processor {
         });
         
         if (!witness) {
-          // Create speaker first
+          // Create speaker first - check by PREFIX to avoid duplicates!
+          const witnessPrefix = `WITNESS ${witnessName.toUpperCase()}`;
           let speaker = await this.prisma.speaker.findFirst({
             where: {
               trialId: this.context.trialId,
-              speakerHandle: speakerHandle
+              speakerPrefix: witnessPrefix  // Check by PREFIX, not handle!
             }
           });
           
           if (!speaker) {
+            logger.warn(`[RECALL_WITNESS] Creating new speaker for witness: prefix="${witnessPrefix}", handle="${speakerHandle}"`);
             speaker = await this.prisma.speaker.create({
               data: {
                 trialId: this.context.trialId,
-                speakerPrefix: `WITNESS ${witnessName.toUpperCase()}`,
+                speakerPrefix: witnessPrefix,
                 speakerHandle: speakerHandle,
                 speakerType: 'WITNESS'
               }
@@ -1725,12 +1843,19 @@ export class Phase2Processor {
     state: ProcessingState
   ): Promise<boolean> {
     // Check if line has a speaker prefix (from Phase 1 parsing)
-    if (!line.speakerPrefix) return false;
+    if (!line.speakerPrefix) {
+      return false;
+    }
+    
+    // DIAGNOSTIC: Log speaker statement detection
+    logger.warn(`[SPEAKER_DIAGNOSTIC] checkSpeakerStatement CALLED: Line ${line.trialLineNumber || line.lineNumber} with prefix "${line.speakerPrefix}"`);
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   Current speaker is: ${state.currentSpeaker?.speakerHandle || 'NONE'} (Prefix: ${state.currentSpeaker?.speakerPrefix || 'NONE'})`);
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   Is this a different speaker? ${state.currentSpeaker?.speakerPrefix !== line.speakerPrefix ? 'YES' : 'NO'}`);
     
     // IMPORTANT: Skip "BY MR./MS." lines - these are attorney indicators, not speakers
     // They should be handled by checkExaminingAttorney, not create speaker statements
     if (line.speakerPrefix.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)/)) {
-      logger.debug(`Skipping BY MR./MS. line as speaker statement: ${line.speakerPrefix}`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC] Skipping BY MR./MS. line as speaker statement: ${line.speakerPrefix}`);
       return false;
     }
     
@@ -1738,16 +1863,29 @@ export class Phase2Processor {
     if (state.currentEvent && 
         (state.currentEvent.type !== EventType.STATEMENT || 
          state.currentSpeaker?.speakerPrefix !== line.speakerPrefix)) {
+      logger.warn(`[SPEAKER_DIAGNOSTIC] SPEAKER CHANGE - Saving previous event`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Event type: ${state.currentEvent.type}`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Previous speaker: ${state.currentSpeaker?.name || 'NONE'} (${state.currentSpeaker?.speakerPrefix || 'NONE'}) Type: ${state.currentSpeaker?.speakerType || 'UNKNOWN'}`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   New speaker prefix: "${line.speakerPrefix}"`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Line ${line.trialLineNumber || line.lineNumber}: "${lineText.substring(0, 80)}..."`);
+      
+      // CRITICAL: This is where we should be transitioning from one speaker to another
+      if (state.currentSpeaker?.speakerType === 'WITNESS' && line.speakerPrefix !== 'A.' && line.speakerPrefix !== 'THE WITNESS') {
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   >>> TRANSITIONING AWAY FROM WITNESS <<<`);
+      }
+      
       await this.saveEvent(this.context.trialId, sessionId, state.currentEvent, state.eventLines);
       state.currentEvent = null;
       state.eventLines = [];
+      // Note: state.currentSpeaker will be updated when the new statement is created
     }
     
     // Find or create speaker
+    logger.warn(`[SPEAKER_DIAGNOSTIC] Calling findOrCreateSpeaker for prefix: "${line.speakerPrefix}"`);
     const speaker = await this.findOrCreateSpeaker(line.speakerPrefix, lineText, state, line.lineNumber);
     
     if (!speaker) {
-      logger.warn(`Could not resolve speaker. Details: ${JSON.stringify({
+      logger.warn(`[SPEAKER_DIAGNOSTIC] FAILED to resolve speaker. Details: ${JSON.stringify({
         speakerPrefix: line.speakerPrefix,
         lineNumber: line.lineNumber,
         lineText: lineText.substring(0, 100),
@@ -1770,6 +1908,17 @@ export class Phase2Processor {
     
     // Start new statement event or continue existing
     if (!state.currentEvent) {
+      logger.warn(`[SPEAKER_DIAGNOSTIC] Creating new STATEMENT event`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   New speaker: ${speaker.name || speaker.speakerHandle} (ID: ${speaker.id})`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Speaker type: ${speaker.speakerType}, Prefix: ${speaker.speakerPrefix}`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Previous speaker was: ${state.currentSpeaker?.name || 'NONE'} (${state.currentSpeaker?.speakerPrefix || 'N/A'})`);
+      if (speaker.speakerType === 'WITNESS') {
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   WITNESS speaking - Witness ID: ${speaker.witnessId}`);
+      }
+      
+      // CRITICAL: Update current speaker state when creating new statement
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   UPDATING state.currentSpeaker from ${state.currentSpeaker?.speakerHandle || 'NONE'} to ${speaker.speakerHandle}`);
+      
       state.currentEvent = {
         type: EventType.STATEMENT,
         startTime: line.timestamp,
@@ -1783,8 +1932,17 @@ export class Phase2Processor {
       };
       state.eventLines = [line];
       state.currentSpeaker = speaker;
+      
+      // Critical check: Did we actually change speakers?
+      if (line.trialLineNumber === 22673 || line.speakerPrefix?.includes('YANG')) {
+        logger.error(`[SPEAKER_DIAGNOSTIC] >>> MR. YANG: state.currentSpeaker is now ${state.currentSpeaker.speakerHandle} <<<`);
+      }
     } else {
       // Continue existing statement
+      logger.warn(`[SPEAKER_DIAGNOSTIC] CONTINUING existing statement event for same speaker`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Speaker: ${state.currentSpeaker?.speakerHandle} (Prefix: ${state.currentSpeaker?.speakerPrefix})`);
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Line ${line.trialLineNumber || line.lineNumber}: "${cleanText.substring(0, 80)}..."`);
+      
       state.eventLines.push(line);
       state.currentEvent.endTime = line.timestamp;
       state.currentEvent.endLineNumber = line.lineNumber;
@@ -1808,6 +1966,10 @@ export class Phase2Processor {
   ): Promise<SpeakerInfo | null> {
     const upperPrefix = speakerPrefix.toUpperCase();
     
+    logger.warn(`[SPEAKER_DIAGNOSTIC] findOrCreateSpeaker called with prefix: "${speakerPrefix}" (upper: "${upperPrefix}")`);
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   Current witness: ${state.currentWitness?.name || 'NONE'} (ID: ${state.currentWitness?.id || 'NONE'})`);
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   Contextual speakers: ${Array.from(state.contextualSpeakers.keys()).join(', ')}`);
+    
     // First, try to resolve through the new speaker registry if available
     if (this.speakerRegistry && this.examinationContext) {
       // Update examination context with the line
@@ -1816,6 +1978,8 @@ export class Phase2Processor {
       // Try contextual resolution first (Q, A, etc.)
       const resolved = await this.examinationContext.resolveSpeaker({ text: lineText, speakerPrefix });
       if (resolved) {
+        logger.warn(`[SPEAKER_DIAGNOSTIC] Speaker resolved through ExaminationContext:`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Resolved to: ${resolved.speakerHandle} (ID: ${resolved.id}, Type: ${resolved.speakerType})`);
         return {
           id: resolved.id,
           speakerPrefix: resolved.speakerPrefix,
@@ -1831,6 +1995,8 @@ export class Phase2Processor {
       // Try direct lookup in registry
       const speaker = await this.speakerRegistry.findOrCreateSpeaker(speakerPrefix, this.inferSpeakerType(speakerPrefix));
       if (speaker) {
+        logger.warn(`[SPEAKER_DIAGNOSTIC] Speaker resolved through Registry direct lookup:`);
+        logger.warn(`[SPEAKER_DIAGNOSTIC]   Resolved to: ${speaker.speakerHandle} (ID: ${speaker.id}, Type: ${speaker.speakerType})`);
         return {
           id: speaker.id,
           speakerPrefix: speaker.speakerPrefix,

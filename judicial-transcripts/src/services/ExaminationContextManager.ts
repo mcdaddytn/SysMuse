@@ -165,38 +165,49 @@ export class ExaminationContextManager {
   }
 
   async resolveSpeaker(line: ParsedLine): Promise<SpeakerWithRelations | null> {
-    if (!line.text) return null;
+    // We should ONLY check the speaker prefix, not the text content
+    // The speaker prefix was already parsed in Phase1
+    if (!line.speakerPrefix) return null;
     
-    const text = line.text.trim();
+    const prefix = line.speakerPrefix.trim();
     this.currentLine = line;  // Store for logging context
     
-    // Check Q&A formats first
-    if (this.PATTERNS.qShort.test(text) || this.PATTERNS.questionLong.test(text)) {
+    // DIAGNOSTIC: Log what we're trying to resolve
+    logger.warn(`[SPEAKER_DIAGNOSTIC] ExaminationContext.resolveSpeaker called`);
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   Speaker prefix: "${prefix}"`);
+    
+    // Check for exact Q/A speaker prefixes - NO REGEX, just exact matches
+    if (prefix === 'Q.' || prefix === 'Q' || prefix === 'QUESTION' || prefix === 'QUESTION:') {
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Matched Q prefix - calling resolveQSpeaker`);
       return this.resolveQSpeaker();
     }
     
-    if (this.PATTERNS.aShort.test(text) || this.PATTERNS.answerLong.test(text)) {
+    if (prefix === 'A.' || prefix === 'A' || prefix === 'ANSWER' || prefix === 'ANSWER:') {
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Matched A prefix - calling resolveASpeaker`);
       return this.resolveASpeaker();
     }
     
-    // Check for THE ATTORNEY (in video depositions)
-    if (this.isVideoDeposition && this.PATTERNS.theAttorney.test(text)) {
+    // Check for THE ATTORNEY (in video depositions) - exact match
+    if (this.isVideoDeposition && prefix === 'THE ATTORNEY') {
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Matched THE ATTORNEY prefix (video deposition)`);
       return this.resolveTheAttorney();
     }
     
-    // Check for THE WITNESS or THE DEPONENT
-    if (this.PATTERNS.theWitness.test(text) || this.PATTERNS.theDeponent.test(text)) {
+    // Check for THE WITNESS or THE DEPONENT - exact matches
+    if (prefix === 'THE WITNESS' || prefix === 'THE DEPONENT') {
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Matched THE WITNESS/DEPONENT prefix - calling resolveASpeaker`);
       return this.resolveASpeaker();
     }
     
     // Check contextual speakers in registry
-    const contextualSpeaker = this.speakerRegistry.resolveContextualSpeaker(
-      line.speakerPrefix || text.split(':')[0]
-    );
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   Checking contextual speakers in registry for: "${prefix}"`);
+    const contextualSpeaker = this.speakerRegistry.resolveContextualSpeaker(prefix);
     if (contextualSpeaker) {
+      logger.warn(`[SPEAKER_DIAGNOSTIC]   Registry returned: ${contextualSpeaker.speakerHandle} (ID: ${contextualSpeaker.id}, Type: ${contextualSpeaker.speakerType})`);
       return contextualSpeaker;
     }
     
+    logger.warn(`[SPEAKER_DIAGNOSTIC]   No match found in ExaminationContext`);
     return null;
   }
 

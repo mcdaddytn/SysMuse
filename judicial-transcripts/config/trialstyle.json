@@ -39,5 +39,11 @@
   "markerAppendMode": "space",
   "markerCleanMode": "REMOVEEXTRASPACE",
   "saveMarkerSectionsToFile": true,
-  "markerSectionOutputDir": "./output/markersections"
+  "markerSectionOutputDir": "./output/markersections",
+  "longStatements": {
+    "ratioMode": "WEIGHTED_SQRT",
+    "ratioThreshold": 0.7,
+    "minWords": 500,
+    "maxInterruptionRatio": 0.15
+  }
 }

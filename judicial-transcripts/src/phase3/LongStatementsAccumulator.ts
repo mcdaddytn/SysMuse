@@ -16,6 +16,8 @@ export interface LongStatementParams {
   searchEndEvent?: number;
   minWords: number;
   maxInterruptionRatio: number;
+  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT';  // New parameter for ratio calculation mode
+  ratioThreshold?: number;  // Minimum ratio threshold for accepting a statement
 }
 
 export interface StatementResult {
@@ -258,10 +260,12 @@ export class LongStatementsAccumulator {
       }
     });
     
-    const ratio = totalWords > 0 ? speakerWords / totalWords : 0;
-    
+    const ratio = this.calculateRatioByMode(allEvents as any[], primarySpeaker, params);
+    const threshold = params.ratioThreshold || (1 - params.maxInterruptionRatio);
+
     // Only accept if speaker has sufficient dominance
-    if (ratio < (1 - params.maxInterruptionRatio)) {
+    if (ratio < threshold) {
+      this.logger.debug(`Block rejected: ratio ${ratio.toFixed(3)} < threshold ${threshold.toFixed(3)}`);
       return null;
     }
     
@@ -302,7 +306,7 @@ export class LongStatementsAccumulator {
       ...block,
       totalWords: this.countWords(block.events),
       speakerWords: this.countSpeakerWords(block.events, block.primarySpeaker),
-      ratio: this.calculateSpeakerRatio(block.events, block.primarySpeaker)
+      ratio: this.calculateRatioByMode(block.events, block.primarySpeaker, params)
     }));
     
     // Filter by minimum word threshold
@@ -352,6 +356,83 @@ export class LongStatementsAccumulator {
       },
       orderBy: { ordinal: 'asc' }
     });
+  }
+
+  /**
+   * Calculate ratio based on the configured mode
+   */
+  private calculateRatioByMode(
+    events: any[],
+    primarySpeaker: string,
+    params: LongStatementParams
+  ): number {
+    const mode = params.ratioMode || 'WEIGHTED_SQRT';
+
+    if (mode === 'TRADITIONAL') {
+      // Traditional calculation: speaker words / total words
+      return this.calculateSpeakerRatio(events, primarySpeaker);
+    } else {
+      // New weighted sqrt calculation
+      return this.calculateWeightedSqrtRatio(events, primarySpeaker);
+    }
+  }
+
+  /**
+   * Calculate weighted ratio using words/sqrt(statements) for both speaker and interruptions
+   * This gives more tolerance to short interruptions while maintaining quality
+   */
+  private calculateWeightedSqrtRatio(events: any[], primarySpeaker: string): number {
+    // Group statements by speaker
+    const speakerStats = new Map<string, { words: number; statements: number }>();
+
+    for (const event of events) {
+      if (!event.statement?.speaker?.speakerHandle || !event.statement?.text) continue;
+
+      const speaker = event.statement.speaker.speakerHandle;
+      const words = event.statement.text.split(/\s+/).length;
+
+      if (!speakerStats.has(speaker)) {
+        speakerStats.set(speaker, { words: 0, statements: 0 });
+      }
+
+      const stats = speakerStats.get(speaker)!;
+      stats.words += words;
+      stats.statements += 1;
+    }
+
+    // Calculate weighted scores
+    const primaryStats = speakerStats.get(primarySpeaker);
+    if (!primaryStats || primaryStats.statements === 0) return 0;
+
+    const primaryScore = primaryStats.words / Math.sqrt(primaryStats.statements);
+
+    // Calculate interruption score (all other speakers combined)
+    let interruptionWords = 0;
+    let interruptionStatements = 0;
+
+    for (const [speaker, stats] of speakerStats) {
+      if (speaker !== primarySpeaker) {
+        interruptionWords += stats.words;
+        interruptionStatements += stats.statements;
+      }
+    }
+
+    if (interruptionStatements === 0) {
+      // No interruptions, perfect ratio
+      return 1.0;
+    }
+
+    const interruptionScore = interruptionWords / Math.sqrt(interruptionStatements);
+
+    // Return ratio of scores (higher is better for the primary speaker)
+    // Normalize to 0-1 range similar to traditional ratio
+    const ratio = primaryScore / (primaryScore + interruptionScore);
+
+    this.logger.debug(`Weighted ratio: Primary(${primarySpeaker}): ${primaryStats.words} words / sqrt(${primaryStats.statements}) = ${primaryScore.toFixed(2)}`);
+    this.logger.debug(`Interruptions: ${interruptionWords} words / sqrt(${interruptionStatements}) = ${interruptionScore.toFixed(2)}`);
+    this.logger.debug(`Final weighted ratio: ${ratio.toFixed(3)}`);
+
+    return ratio;
   }
 
   /**
@@ -594,6 +675,14 @@ export class LongStatementsAccumulator {
   }
 
   /**
+   * Apply ratio threshold check based on configured mode
+   */
+  private meetsRatioThreshold(ratio: number, params: LongStatementParams): boolean {
+    const threshold = params.ratioThreshold || (1 - params.maxInterruptionRatio);
+    return ratio >= threshold;
+  }
+
+  /**
    * Optimize boundaries to maximize speaker ratio
    */
   private async optimizeBoundaries(
@@ -607,7 +696,7 @@ export class LongStatementsAccumulator {
 
     // Try expanding boundaries
     const expanded = await this.tryExpandBoundaries(initialBlock, params);
-    if (expanded.ratio > bestRatio && expanded.ratio > (1 - params.maxInterruptionRatio)) {
+    if (expanded.ratio > bestRatio && this.meetsRatioThreshold(expanded.ratio, params)) {
       bestStart = expanded.startEvent;
       bestEnd = expanded.endEvent;
       bestRatio = expanded.ratio;
@@ -679,7 +768,7 @@ export class LongStatementsAccumulator {
                                 testEvents.some(e => e.id === block.endEvent.id);
         if (!includesOriginal) continue;
 
-        const ratio = this.calculateSpeakerRatio(testEvents as any[], block.primarySpeaker);
+        const ratio = this.calculateRatioByMode(testEvents as any[], block.primarySpeaker, params);
         const speakerWords = this.countSpeakerWords(testEvents as any[], block.primarySpeaker);
 
         if (ratio > bestRatio && speakerWords >= params.minWords) {
@@ -726,7 +815,7 @@ export class LongStatementsAccumulator {
 
     if (startIdx < endIdx) {
       const trimmedEvents = block.events.slice(startIdx, endIdx + 1);
-      const ratio = this.calculateSpeakerRatio(trimmedEvents, block.primarySpeaker);
+      const ratio = this.calculateRatioByMode(trimmedEvents, block.primarySpeaker, params);
       const speakerWords = this.countSpeakerWords(trimmedEvents, block.primarySpeaker);
 
       if (ratio > bestRatio && speakerWords >= params.minWords) {

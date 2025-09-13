@@ -41,8 +41,8 @@
   "saveMarkerSectionsToFile": true,
   "markerSectionOutputDir": "./output/markersections",
   "longStatements": {
-    "ratioMode": "WEIGHTED_SQRT",
-    "ratioThreshold": 0.7,
+    "ratioMode": "WEIGHTED_SQRT2",
+    "ratioThreshold": 0.65,
     "minWords": 500,
     "maxInterruptionRatio": 0.15
   }

@@ -16,7 +16,7 @@ export interface LongStatementParams {
   searchEndEvent?: number;
   minWords: number;
   maxInterruptionRatio: number;
-  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT';  // New parameter for ratio calculation mode
+  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT' | 'WEIGHTED_SQRT2';  // New parameter for ratio calculation mode
   ratioThreshold?: number;  // Minimum ratio threshold for accepting a statement
 }
 
@@ -225,15 +225,74 @@ export class LongStatementsAccumulator {
   }
 
   /**
+   * Extend a block to include continuation statements from the same speaker
+   * This helps capture the final parts of closing statements after time warnings
+   */
+  private async extendBlockForContinuation(
+    trialId: number,
+    currentEndId: number,
+    primarySpeaker: string,
+    params: LongStatementParams
+  ): Promise<number> {
+    // Look ahead up to 10 events for continuation
+    const lookAheadEvents = await this.prisma.trialEvent.findMany({
+      where: {
+        trialId,
+        id: {
+          gt: currentEndId,
+          lte: currentEndId + 10
+        },
+        eventType: 'STATEMENT'
+      },
+      include: {
+        statement: {
+          include: { speaker: true }
+        }
+      },
+      orderBy: { id: 'asc' }
+    });
+
+    let newEndId = currentEndId;
+    let consecutiveOtherSpeakers = 0;
+    const maxInterruptions = 2; // Allow up to 2 interruptions
+
+    for (const event of lookAheadEvents) {
+      const speaker = event.statement?.speaker?.speakerHandle;
+
+      if (speaker === primarySpeaker) {
+        // Found continuation from primary speaker
+        newEndId = event.id;
+        consecutiveOtherSpeakers = 0; // Reset interruption counter
+        this.logger.debug(`Extended block to include event ${event.id} with ${event.wordCount} words from ${primarySpeaker}`);
+      } else {
+        // Different speaker (interruption)
+        consecutiveOtherSpeakers++;
+        if (consecutiveOtherSpeakers > maxInterruptions) {
+          // Too many consecutive interruptions, stop extending
+          break;
+        }
+      }
+    }
+
+    return newEndId;
+  }
+
+  /**
    * Create a statement result from a group of events
    */
   private async createBlockFromEvents(blockEvents: any[], params: LongStatementParams): Promise<StatementResult | null> {
     if (blockEvents.length === 0) return null;
-    
+
     // Get all events in the range to calculate ratios
     const startId = blockEvents[0].id;
-    const endId = blockEvents[blockEvents.length - 1].id;
-    
+    let endId = blockEvents[blockEvents.length - 1].id;
+    const primarySpeaker = blockEvents[0].statement?.speaker?.speakerHandle;
+
+    // Try to extend the block to include continuation statements from the same speaker
+    if (primarySpeaker) {
+      endId = await this.extendBlockForContinuation(params.trialId, endId, primarySpeaker, params);
+    }
+
     const allEvents = await this.prisma.trialEvent.findMany({
       where: {
         trialId: params.trialId,
@@ -246,11 +305,10 @@ export class LongStatementsAccumulator {
       },
       orderBy: { id: 'asc' }
     });
-    
+
     // Calculate total words and speaker words
     let totalWords = 0;
     let speakerWords = 0;
-    const primarySpeaker = blockEvents[0].statement?.speaker?.speakerHandle;
     
     allEvents.forEach(e => {
       const words = e.wordCount || 0;
@@ -371,8 +429,14 @@ export class LongStatementsAccumulator {
     if (mode === 'TRADITIONAL') {
       // Traditional calculation: speaker words / total words
       return this.calculateSpeakerRatio(events, primarySpeaker);
+    } else if (mode === 'WEIGHTED_SQRT') {
+      // Weighted sqrt calculation: words/sqrt(statements)
+      return this.calculateWeightedSqrtRatio(events, primarySpeaker);
+    } else if (mode === 'WEIGHTED_SQRT2') {
+      // Enhanced weighted calculation: words²/sqrt(statements)
+      return this.calculateWeightedSqrt2Ratio(events, primarySpeaker);
     } else {
-      // New weighted sqrt calculation
+      // Default to WEIGHTED_SQRT
       return this.calculateWeightedSqrtRatio(events, primarySpeaker);
     }
   }
@@ -431,6 +495,67 @@ export class LongStatementsAccumulator {
     this.logger.debug(`Weighted ratio: Primary(${primarySpeaker}): ${primaryStats.words} words / sqrt(${primaryStats.statements}) = ${primaryScore.toFixed(2)}`);
     this.logger.debug(`Interruptions: ${interruptionWords} words / sqrt(${interruptionStatements}) = ${interruptionScore.toFixed(2)}`);
     this.logger.debug(`Final weighted ratio: ${ratio.toFixed(3)}`);
+
+    return ratio;
+  }
+
+  /**
+   * Calculate enhanced weighted ratio using words²/sqrt(statements)
+   * This gives even more weight to the primary speaker's long statements
+   * while being more tolerant of brief interruptions
+   */
+  private calculateWeightedSqrt2Ratio(events: any[], primarySpeaker: string): number {
+    // Group statements by speaker
+    const speakerStats = new Map<string, { words: number; statements: number }>();
+
+    for (const event of events) {
+      if (!event.statement?.speaker?.speakerHandle || !event.statement?.text) continue;
+
+      const speaker = event.statement.speaker.speakerHandle;
+      const words = event.statement.text.split(/\s+/).length;
+
+      if (!speakerStats.has(speaker)) {
+        speakerStats.set(speaker, { words: 0, statements: 0 });
+      }
+
+      const stats = speakerStats.get(speaker)!;
+      stats.words += words;
+      stats.statements += 1;
+    }
+
+    // Calculate weighted scores with squared word count
+    const primaryStats = speakerStats.get(primarySpeaker);
+    if (!primaryStats || primaryStats.statements === 0) return 0;
+
+    // Square the word count in numerator for primary speaker
+    const primaryScore = (primaryStats.words * primaryStats.words) / Math.sqrt(primaryStats.statements);
+
+    // Calculate interruption score (all other speakers combined)
+    let interruptionWords = 0;
+    let interruptionStatements = 0;
+
+    for (const [speaker, stats] of speakerStats) {
+      if (speaker !== primarySpeaker) {
+        interruptionWords += stats.words;
+        interruptionStatements += stats.statements;
+      }
+    }
+
+    if (interruptionStatements === 0) {
+      // No interruptions, perfect ratio
+      return 1.0;
+    }
+
+    // Square the interruption words as well for consistency
+    const interruptionScore = (interruptionWords * interruptionWords) / Math.sqrt(interruptionStatements);
+
+    // Return ratio of scores (higher is better for the primary speaker)
+    // Normalize to 0-1 range
+    const ratio = primaryScore / (primaryScore + interruptionScore);
+
+    this.logger.debug(`WEIGHTED_SQRT2 ratio: Primary(${primarySpeaker}): ${primaryStats.words}² / sqrt(${primaryStats.statements}) = ${primaryScore.toFixed(2)}`);
+    this.logger.debug(`Interruptions: ${interruptionWords}² / sqrt(${interruptionStatements}) = ${interruptionScore.toFixed(2)}`);
+    this.logger.debug(`Final WEIGHTED_SQRT2 ratio: ${ratio.toFixed(3)}`);
 
     return ratio;
   }

@@ -16,7 +16,7 @@ export interface LongStatementParams {
   searchEndEvent?: number;
   minWords: number;
   maxInterruptionRatio: number;
-  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT' | 'WEIGHTED_SQRT2';  // New parameter for ratio calculation mode
+  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT' | 'WEIGHTED_SQRT2' | 'WEIGHTED_SQRT3' | 'SMART_EXTEND';  // New parameter for ratio calculation mode
   ratioThreshold?: number;  // Minimum ratio threshold for accepting a statement
 }
 
@@ -234,7 +234,12 @@ export class LongStatementsAccumulator {
     primarySpeaker: string,
     params: LongStatementParams
   ): Promise<number> {
-    // Look ahead up to 10 events for continuation
+    // For SMART_EXTEND mode, use intelligent ending detection
+    if (params.ratioMode === 'SMART_EXTEND') {
+      return await this.smartExtendBlock(trialId, currentEndId, primarySpeaker, params);
+    }
+
+    // Original extension logic for other modes
     const lookAheadEvents = await this.prisma.trialEvent.findMany({
       where: {
         trialId,
@@ -274,6 +279,103 @@ export class LongStatementsAccumulator {
       }
     }
 
+    return newEndId;
+  }
+
+  /**
+   * Smart extension: Continue until we hit a non-attorney, non-judge speaker
+   * This captures the complete statement including all time warnings and wrap-ups
+   */
+  private async smartExtendBlock(
+    trialId: number,
+    currentEndId: number,
+    primarySpeaker: string,
+    params: LongStatementParams
+  ): Promise<number> {
+    // Get the attorney role of the primary speaker for team detection
+    const primarySpeakerInfo = await this.prisma.speaker.findFirst({
+      where: {
+        trialId,
+        speakerHandle: primarySpeaker
+      }
+    });
+
+    // Get attorney role if available
+    let primaryAttorneyRole: string | null = null;
+    if (primarySpeakerInfo && params.attorneyRole) {
+      primaryAttorneyRole = params.attorneyRole;
+    }
+
+    // Look ahead up to 50 events (enough to cover several pages)
+    const lookAheadEvents = await this.prisma.trialEvent.findMany({
+      where: {
+        trialId,
+        id: {
+          gt: currentEndId,
+          lte: currentEndId + 50
+        },
+        eventType: 'STATEMENT'
+      },
+      include: {
+        statement: {
+          include: { speaker: true }
+        }
+      },
+      orderBy: { id: 'asc' }
+    });
+
+    let newEndId = currentEndId;
+    let lastAttorneyEventId = currentEndId;
+
+    for (const event of lookAheadEvents) {
+      const speaker = event.statement?.speaker;
+      if (!speaker) continue;
+
+      const speakerHandle = speaker.speakerHandle;
+      const speakerType = speaker.speakerType;
+
+      // Check if this is the primary speaker continuing
+      if (speakerHandle === primarySpeaker) {
+        newEndId = event.id;
+        lastAttorneyEventId = event.id;
+        this.logger.debug(`SMART_EXTEND: Including continuation from ${primarySpeaker} at event ${event.id}`);
+        continue;
+      }
+
+      // Check if this is a judge (allowed interruption)
+      if (speakerType === 'JUDGE') {
+        // Include the judge's statement but keep looking
+        newEndId = event.id;
+        this.logger.debug(`SMART_EXTEND: Including judge interruption at event ${event.id}`);
+        continue;
+      }
+
+      // Check if this is a teammate attorney (same side)
+      if (speakerType === 'ATTORNEY' && primaryAttorneyRole) {
+        // Need to check if this attorney is on the same side
+        const attorneyInfo = await this.prisma.trialAttorney.findFirst({
+          where: {
+            trialId,
+            speakerId: speaker.id
+          }
+        });
+
+        if (attorneyInfo?.role === primaryAttorneyRole) {
+          // Same team attorney, include them
+          newEndId = event.id;
+          lastAttorneyEventId = event.id;
+          this.logger.debug(`SMART_EXTEND: Including teammate attorney ${speakerHandle} at event ${event.id}`);
+          continue;
+        }
+      }
+
+      // We've hit a different type of speaker (opposing attorney, court officer, etc.)
+      // This is where the statement should end
+      this.logger.debug(`SMART_EXTEND: Stopping at event ${event.id} due to ${speakerType} speaker ${speakerHandle}`);
+      break;
+    }
+
+    // Return the last event that should be included
     return newEndId;
   }
 
@@ -429,12 +531,16 @@ export class LongStatementsAccumulator {
     if (mode === 'TRADITIONAL') {
       // Traditional calculation: speaker words / total words
       return this.calculateSpeakerRatio(events, primarySpeaker);
-    } else if (mode === 'WEIGHTED_SQRT') {
+    } else if (mode === 'WEIGHTED_SQRT' || mode === 'SMART_EXTEND') {
       // Weighted sqrt calculation: words/sqrt(statements)
+      // SMART_EXTEND uses same ratio but different ending detection
       return this.calculateWeightedSqrtRatio(events, primarySpeaker);
     } else if (mode === 'WEIGHTED_SQRT2') {
       // Enhanced weighted calculation: words²/sqrt(statements)
       return this.calculateWeightedSqrt2Ratio(events, primarySpeaker);
+    } else if (mode === 'WEIGHTED_SQRT3') {
+      // Ultra-enhanced weighted calculation: words³/sqrt(statements)
+      return this.calculateWeightedSqrt3Ratio(events, primarySpeaker);
     } else {
       // Default to WEIGHTED_SQRT
       return this.calculateWeightedSqrtRatio(events, primarySpeaker);
@@ -556,6 +662,67 @@ export class LongStatementsAccumulator {
     this.logger.debug(`WEIGHTED_SQRT2 ratio: Primary(${primarySpeaker}): ${primaryStats.words}² / sqrt(${primaryStats.statements}) = ${primaryScore.toFixed(2)}`);
     this.logger.debug(`Interruptions: ${interruptionWords}² / sqrt(${interruptionStatements}) = ${interruptionScore.toFixed(2)}`);
     this.logger.debug(`Final WEIGHTED_SQRT2 ratio: ${ratio.toFixed(3)}`);
+
+    return ratio;
+  }
+
+  /**
+   * Calculate ultra-enhanced weighted ratio using words³/sqrt(statements)
+   * This gives maximum weight to the primary speaker's long statements
+   * and is extremely tolerant of brief interruptions
+   */
+  private calculateWeightedSqrt3Ratio(events: any[], primarySpeaker: string): number {
+    // Group statements by speaker
+    const speakerStats = new Map<string, { words: number; statements: number }>();
+
+    for (const event of events) {
+      if (!event.statement?.speaker?.speakerHandle || !event.statement?.text) continue;
+
+      const speaker = event.statement.speaker.speakerHandle;
+      const words = event.statement.text.split(/\s+/).length;
+
+      if (!speakerStats.has(speaker)) {
+        speakerStats.set(speaker, { words: 0, statements: 0 });
+      }
+
+      const stats = speakerStats.get(speaker)!;
+      stats.words += words;
+      stats.statements += 1;
+    }
+
+    // Calculate weighted scores with cubed word count
+    const primaryStats = speakerStats.get(primarySpeaker);
+    if (!primaryStats || primaryStats.statements === 0) return 0;
+
+    // Cube the word count in numerator for primary speaker
+    const primaryScore = Math.pow(primaryStats.words, 3) / Math.sqrt(primaryStats.statements);
+
+    // Calculate interruption score (all other speakers combined)
+    let interruptionWords = 0;
+    let interruptionStatements = 0;
+
+    for (const [speaker, stats] of speakerStats) {
+      if (speaker !== primarySpeaker) {
+        interruptionWords += stats.words;
+        interruptionStatements += stats.statements;
+      }
+    }
+
+    if (interruptionStatements === 0) {
+      // No interruptions, perfect ratio
+      return 1.0;
+    }
+
+    // Cube the interruption words as well for consistency
+    const interruptionScore = Math.pow(interruptionWords, 3) / Math.sqrt(interruptionStatements);
+
+    // Return ratio of scores (higher is better for the primary speaker)
+    // Normalize to 0-1 range
+    const ratio = primaryScore / (primaryScore + interruptionScore);
+
+    this.logger.debug(`WEIGHTED_SQRT3 ratio: Primary(${primarySpeaker}): ${primaryStats.words}³ / sqrt(${primaryStats.statements}) = ${primaryScore.toFixed(2)}`);
+    this.logger.debug(`Interruptions: ${interruptionWords}³ / sqrt(${interruptionStatements}) = ${interruptionScore.toFixed(2)}`);
+    this.logger.debug(`Final WEIGHTED_SQRT3 ratio: ${ratio.toFixed(3)}`);
 
     return ratio;
   }

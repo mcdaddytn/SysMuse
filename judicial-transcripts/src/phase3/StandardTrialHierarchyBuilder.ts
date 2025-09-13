@@ -467,41 +467,80 @@ export class StandardTrialHierarchyBuilder {
   ): Promise<MarkerSection> {
     this.logger.info(`Finding opening statements for trial ${trialId}`);
 
-    // Search for opening statements before witness testimony
-    // But also consider they might be in a different session
-    // Expand the search range since opening statements can be very long (15-16 pages)
-    const searchEndEvent = testimonyPeriod?.startEventId || 1500; // Much wider search range
+    // Search for opening statements BEFORE witness testimony
+    // The search range is from the start of the trial up to the start of witness testimony
+    let searchEndEvent: number | undefined;
+    let searchStartEvent: number | undefined;
+
+    if (testimonyPeriod?.startEventId) {
+      // We have witness testimony, so search from trial start to witness testimony start
+      searchEndEvent = testimonyPeriod.startEventId - 1;
+
+      // Find the first event of the trial
+      const firstTrialEvent = await this.prisma.trialEvent.findFirst({
+        where: { trialId },
+        orderBy: { id: 'asc' }
+      });
+
+      if (firstTrialEvent) {
+        searchStartEvent = firstTrialEvent.id;
+      }
+    } else {
+      // No witness testimony found, search the first portion of the trial
+      // This is a fallback scenario
+      const firstTrialEvent = await this.prisma.trialEvent.findFirst({
+        where: { trialId },
+        orderBy: { id: 'asc' }
+      });
+
+      const trialEventCount = await this.prisma.trialEvent.count({
+        where: { trialId }
+      });
+
+      if (firstTrialEvent) {
+        searchStartEvent = firstTrialEvent.id;
+        // Search first third of trial if no witness testimony found
+        searchEndEvent = firstTrialEvent.id + Math.floor(trialEventCount / 3);
+      }
+    }
+
+    this.logger.info(`Searching for opening statements between events ${searchStartEvent} and ${searchEndEvent}`);
     
-    // Also set a reasonable search start (after jury selection typically)
-    // For trial 1, we know afternoon session starts at 797
-    const searchStartEvent = 797; // TODO: Make this dynamic based on session boundaries
-    
-    // Find plaintiff opening statement (reduced thresholds)
+    // Get config parameters with defaults for opening statements
+    const longStatementConfig = this.trialStyleConfig?.longStatements || {};
+    const ratioMode = longStatementConfig.ratioMode || 'WEIGHTED_SQRT2';
+    const ratioThreshold = 0.5; // Lower threshold for opening statements
+
+    // Find plaintiff opening statement (aggressive thresholds for detection)
     const plaintiffOpening = await this.longStatementsAccumulator.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'PLAINTIFF',
       searchStartEvent,
       searchEndEvent,
-      minWords: 50,  // Lower threshold for testing
-      maxInterruptionRatio: 0.4  // Allow up to 40% interruption (judge, etc.)
+      minWords: 500,  // Opening statements are typically long
+      maxInterruptionRatio: 0.4,  // Allow up to 40% interruption
+      ratioMode: ratioMode as any,
+      ratioThreshold
     });
 
     // Find defense opening statement
     const defenseOpening = await this.longStatementsAccumulator.findLongestStatement({
       trialId,
-      speakerType: 'ATTORNEY', 
+      speakerType: 'ATTORNEY',
       attorneyRole: 'DEFENDANT',
       searchStartEvent,
       searchEndEvent,
-      minWords: 100,  // Reduced from 500
-      maxInterruptionRatio: 0.3  // Increased from 0.15
+      minWords: 500,  // Opening statements are typically long
+      maxInterruptionRatio: 0.4,  // Allow up to 40% interruption
+      ratioMode: ratioMode as any,
+      ratioThreshold
     });
 
     const openingStatements: MarkerSection[] = [];
 
-    // Create plaintiff opening section
-    if (plaintiffOpening && plaintiffOpening.confidence > 0.6) {
+    // Create plaintiff opening section (lower confidence threshold for opening statements)
+    if (plaintiffOpening && plaintiffOpening.confidence > 0.4) {
       const section = await this.prisma.markerSection.create({
         data: {
           trialId,
@@ -524,8 +563,8 @@ export class StandardTrialHierarchyBuilder {
       openingStatements.push(section);
     }
 
-    // Create defense opening section
-    if (defenseOpening && defenseOpening.confidence > 0.6) {
+    // Create defense opening section (lower confidence threshold for opening statements)
+    if (defenseOpening && defenseOpening.confidence > 0.4) {
       const section = await this.prisma.markerSection.create({
         data: {
           trialId,
@@ -587,14 +626,69 @@ export class StandardTrialHierarchyBuilder {
       return openingPeriod;
     }
 
-    // Create zero-length section if no openings found
+    // Create a default opening statements period just before witness testimony
+    // This provides a reasonable placeholder until attorney roles are properly assigned
+    if (testimonyPeriod?.startEventId) {
+      // Find a reasonable range before witness testimony for the default opening period
+      const defaultStartEvent = await this.prisma.trialEvent.findFirst({
+        where: {
+          trialId,
+          id: {
+            gte: Math.max(searchStartEvent || 1, testimonyPeriod.startEventId - 100),
+            lt: testimonyPeriod.startEventId
+          }
+        },
+        orderBy: { id: 'asc' }
+      });
+
+      const defaultEndEvent = await this.prisma.trialEvent.findFirst({
+        where: {
+          trialId,
+          id: {
+            lt: testimonyPeriod.startEventId
+          }
+        },
+        orderBy: { id: 'desc' }
+      });
+
+      if (defaultStartEvent && defaultEndEvent) {
+        return await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.OPENING_STATEMENTS_PERIOD,
+            parentSectionId: trialSectionId,
+            name: 'Opening Statements',
+            description: 'Opening statements period (default placement)',
+            startEventId: defaultStartEvent.id,
+            endEventId: defaultEndEvent.id,
+            startTime: defaultStartEvent.startTime,
+            endTime: defaultEndEvent.endTime,
+            source: MarkerSource.PHASE3_HIERARCHY,
+            confidence: 0.3, // Low confidence for default placement
+            metadata: {
+              isDefault: true,
+              reason: 'No opening statements detected - attorney roles may need assignment',
+              hasPlaintiffOpening: false,
+              hasDefenseOpening: false
+            }
+          }
+        });
+      }
+    }
+
+    // Fallback: Create zero-length section if we can't determine a reasonable range
+    const placementEventId = testimonyPeriod?.startEventId ?
+      testimonyPeriod.startEventId - 1 :
+      undefined;
+
     return await this.createZeroLengthSection({
       trialId,
       sectionType: MarkerSectionType.OPENING_STATEMENTS_PERIOD,
       parentSectionId: trialSectionId,
       name: 'Opening Statements',
       description: 'No opening statements found',
-      reason: 'Could not identify opening statements with sufficient confidence'
+      reason: 'Could not identify opening statements - attorney roles may need assignment',
+      placementEventId
     });
   }
 
@@ -1335,13 +1429,25 @@ export class StandardTrialHierarchyBuilder {
     name: string;
     description: string;
     reason: string;
+    placementEventId?: number;
   }): Promise<MarkerSection> {
-    // Find an appropriate insertion point (middle of trial)
-    const midEvent = await this.prisma.trialEvent.findFirst({
-      where: { trialId: params.trialId },
-      skip: await this.prisma.trialEvent.count({ where: { trialId: params.trialId } }) / 2,
-      orderBy: { ordinal: 'asc' }
-    });
+    // Use provided placement event or find an appropriate insertion point
+    let placementEvent: any;
+
+    if (params.placementEventId) {
+      placementEvent = await this.prisma.trialEvent.findUnique({
+        where: { id: params.placementEventId }
+      });
+    }
+
+    if (!placementEvent) {
+      // Fallback: find middle of trial
+      placementEvent = await this.prisma.trialEvent.findFirst({
+        where: { trialId: params.trialId },
+        skip: await this.prisma.trialEvent.count({ where: { trialId: params.trialId } }) / 2,
+        orderBy: { ordinal: 'asc' }
+      });
+    }
 
     return await this.prisma.markerSection.create({
       data: {
@@ -1350,10 +1456,10 @@ export class StandardTrialHierarchyBuilder {
         parentSectionId: params.parentSectionId,
         name: params.name,
         description: params.description,
-        startEventId: midEvent?.id,
-        endEventId: midEvent?.id,
-        startTime: midEvent?.startTime,
-        endTime: midEvent?.startTime, // Same as start for zero-length
+        startEventId: placementEvent?.id,
+        endEventId: placementEvent?.id,
+        startTime: placementEvent?.startTime,
+        endTime: placementEvent?.startTime, // Same as start for zero-length
         source: MarkerSource.PHASE3_ZEROLENGTH,
         confidence: 0.0,
         metadata: {

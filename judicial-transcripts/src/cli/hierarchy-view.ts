@@ -155,7 +155,12 @@ class HierarchyViewer {
     outputFile: string
   ) {
     const hierarchy = await this.getHierarchyByType(trial.id, viewType);
-    
+
+    // Debug: Check if hierarchy is empty
+    if (!hierarchy || hierarchy.length === 0) {
+      logger.warn(`Empty hierarchy for trial ${trial.id} view ${viewType}`);
+    }
+
     if (format === 'json') {
       const output = JSON.stringify({
         trial: {
@@ -169,14 +174,25 @@ class HierarchyViewer {
       }, null, 2);
       fs.writeFileSync(outputFile, output);
     } else {
-      // Text format
+      // Text format - capture console output
       const originalLog = console.log;
       const output: string[] = [];
-      console.log = (...args) => output.push(args.join(' '));
-      
-      this.printHierarchy(hierarchy, viewType, trial.name || trial.caseNumber);
-      
-      console.log = originalLog;
+
+      // Override console.log to capture output
+      console.log = (...args: any[]) => {
+        const line = args.map(arg =>
+          typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+        ).join(' ');
+        output.push(line);
+      };
+
+      try {
+        this.printHierarchy(hierarchy, viewType, trial.name || trial.caseNumber);
+      } finally {
+        // Always restore console.log
+        console.log = originalLog;
+      }
+
       // Strip ANSI color codes when writing to file
       const cleanOutput = output.map(line => stripAnsi(line)).join('\n');
       fs.writeFileSync(outputFile, cleanOutput);
@@ -357,13 +373,17 @@ class HierarchyViewer {
     // Build parent-child relationships
     for (const section of allSections) {
       const node = sectionMap.get(section.id)!;
-      
+
       if (section.parentSectionId === null) {
         rootNodes.push(node);
       } else {
         const parent = sectionMap.get(section.parentSectionId);
         if (parent) {
           parent.children.push(node);
+        } else {
+          // Orphaned node - this shouldn't happen in a proper hierarchy
+          logger.warn(`Orphaned section found: ${section.name} (id: ${section.id}, parentId: ${section.parentSectionId})`);
+          // Don't add orphaned nodes to root - they should have parents
         }
       }
     }
@@ -887,8 +907,13 @@ class HierarchyViewer {
    */
   private printHierarchy(nodes: HierarchyNode[], viewType: string, trialName: string) {
     const decodedTrialName = decodeHtmlEntities(trialName);
-    console.log(chalk.bold.blue(`\n${viewType.toUpperCase()} HIERARCHY: ${decodedTrialName}\n`));
-    
+    console.log(`\n${viewType.toUpperCase()} HIERARCHY: ${decodedTrialName}\n`);
+
+    if (!nodes || nodes.length === 0) {
+      console.log('(No hierarchy data available)');
+      return;
+    }
+
     for (const node of nodes) {
       this.printNode(node, 0);
     }

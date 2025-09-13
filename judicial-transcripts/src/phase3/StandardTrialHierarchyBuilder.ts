@@ -259,15 +259,24 @@ export class StandardTrialHierarchyBuilder {
     }
 
     // Create WITNESS_TESTIMONY_PERIOD encompassing all testimony
-    const allWitnessSections = [...(plaintiffSection ? [plaintiffSection] : []), 
+    const allWitnessSections = [...(plaintiffSection ? [plaintiffSection] : []),
                                 ...(defenseSection ? [defenseSection] : [])];
-    
+
     if (allWitnessSections.length === 0) {
       return null;
     }
 
     const firstSection = allWitnessSections[0];
     const lastSection = allWitnessSections[allWitnessSections.length - 1];
+
+    // Find the true end of witness testimony by looking for the last witness statement
+    // This is critical for correct closing statement detection
+    const actualEndEventId = await this.findActualEndOfWitnessTestimony(trialId, lastSection.endEventId);
+
+    // Get the actual end event details
+    const actualEndEvent = actualEndEventId ? await this.prisma.trialEvent.findUnique({
+      where: { id: actualEndEventId }
+    }) : null;
 
     const testimonyPeriod = await this.prisma.markerSection.create({
       data: {
@@ -277,15 +286,16 @@ export class StandardTrialHierarchyBuilder {
         name: 'Witness Testimony Period',
         description: 'All witness testimony in the trial',
         startEventId: firstSection.startEventId,
-        endEventId: lastSection.endEventId,
+        endEventId: actualEndEventId || lastSection.endEventId,
         startTime: firstSection.startTime,
-        endTime: lastSection.endTime,
+        endTime: actualEndEvent?.endTime || lastSection.endTime,
         source: MarkerSource.PHASE3_HIERARCHY,
         confidence: 0.9,
         metadata: {
           totalWitnesses: witnessTestimonySections.length,
           plaintiffWitnesses: plaintiffWitnesses.length,
-          defenseWitnesses: defenseWitnesses.length
+          defenseWitnesses: defenseWitnesses.length,
+          endCorrected: actualEndEventId !== lastSection.endEventId
         }
       }
     });
@@ -343,7 +353,7 @@ export class StandardTrialHierarchyBuilder {
         trialId,
         markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
         name: {
-          startsWith: 'WitnessTestimony_WITNESS_'
+          startsWith: 'WitTest_'  // New naming convention
         }
       },
       orderBy: { startEventId: 'asc' }
@@ -385,42 +395,24 @@ export class StandardTrialHierarchyBuilder {
       orderBy: { startEventId: 'asc' }
     });
 
-    // Group examinations by witness
-    const witnessGroups = new Map<number, MarkerSection[]>();
-
     for (const exam of examinations) {
-      // Extract witness info from metadata instead of parsing the name
-      // The new format uses witness fingerprint in names (e.g., "WitExam_Direct_JOHN_DOE")
-      const metadata = exam.metadata as any;
-      let witnessId: number | undefined = metadata?.witnessId;
-      if (!witnessId) {
-        // Try to extract from the old format if present
-        const examMatch = exam.name?.match(/WITNESS_(\d+)/);
-        if (!examMatch) {
-          this.logger.warn(`Could not extract witness ID from examination: ${exam.name}`);
-          continue;
-        }
-        const witnessIdFromName = parseInt(examMatch[1]);
-        witnessGroups.set(witnessIdFromName, [...(witnessGroups.get(witnessIdFromName) || []), exam]);
+      // Extract witness handle from the examination name
+      // New format: "WitExam_Direct_BRENDON_MILLS" or "WitExam_Cross_JOHN_DOE"
+      const examNameParts = exam.name?.split('_');
+      if (!examNameParts || examNameParts.length < 3) {
+        this.logger.warn(`Could not parse examination name: ${exam.name}`);
         continue;
       }
-      
-      // Group examinations by witness
-      witnessGroups.set(witnessId, [...(witnessGroups.get(witnessId) || []), exam]);
-      
-      // Find the testimony section with matching witness ID
+
+      // Extract the witness handle (everything after the examination type)
+      const witnessHandle = examNameParts.slice(2).join('_');
+
+      // Find the matching WITNESS_TESTIMONY section by name pattern
+      // Format: "WitTest_BRENDON_MILLS"
       const parentTestimony = witnessTestimonies.find(testimony => {
-        // Check metadata first for witness ID
-        const testimonyMetadata = testimony.metadata as any;
-        const testimonyWitnessId = testimonyMetadata?.witnessId as number | undefined;
-        if (testimonyWitnessId) {
-          return testimonyWitnessId === witnessId;
-        }
-        // Fall back to parsing the name for old format
-        const testimonyMatch = testimony.name?.match(/WITNESS_(\d+)/);
-        return testimonyMatch && parseInt(testimonyMatch[1]) === witnessId;
+        return testimony.name === `WitTest_${witnessHandle}`;
       });
-      
+
       if (parentTestimony && exam.parentSectionId !== parentTestimony.id) {
         await this.prisma.markerSection.update({
           where: { id: exam.id },
@@ -428,7 +420,28 @@ export class StandardTrialHierarchyBuilder {
         });
         this.logger.debug(`Updated parent of ${exam.name} to ${parentTestimony.name}`);
       } else if (!parentTestimony) {
-        this.logger.warn(`Could not find parent testimony for ${exam.name} with witness ID ${witnessId}`);
+        // Try using metadata as fallback
+        const metadata = exam.metadata as any;
+        const witnessId = metadata?.witnessId;
+
+        if (witnessId) {
+          const parentByMetadata = witnessTestimonies.find(testimony => {
+            const testimonyMetadata = testimony.metadata as any;
+            return testimonyMetadata?.witnessId === witnessId;
+          });
+
+          if (parentByMetadata && exam.parentSectionId !== parentByMetadata.id) {
+            await this.prisma.markerSection.update({
+              where: { id: exam.id },
+              data: { parentSectionId: parentByMetadata.id }
+            });
+            this.logger.debug(`Updated parent of ${exam.name} to ${parentByMetadata.name} (by metadata)`);
+          } else {
+            this.logger.warn(`Could not find parent testimony for ${exam.name}`);
+          }
+        } else {
+          this.logger.warn(`Could not find parent testimony for ${exam.name}`);
+        }
       }
     }
 
@@ -1297,6 +1310,56 @@ export class StandardTrialHierarchyBuilder {
     };
   }
   
+  /**
+   * Find the actual end of witness testimony by looking for the last witness statement
+   * This is critical for correct closing statement detection
+   */
+  private async findActualEndOfWitnessTestimony(
+    trialId: number,
+    currentEndEventId: number | null
+  ): Promise<number | null> {
+    if (!currentEndEventId) {
+      return null;
+    }
+
+    this.logger.info('Finding actual end of witness testimony period');
+
+    // Query for the last statement by any witness in the trial
+    const lastWitnessStatement = await this.prisma.trialEvent.findFirst({
+      where: {
+        trialId,
+        eventType: 'STATEMENT',
+        statement: {
+          speaker: {
+            speakerType: 'WITNESS'
+          }
+        }
+      },
+      orderBy: {
+        id: 'desc'
+      },
+      include: {
+        statement: {
+          include: {
+            speaker: true
+          }
+        }
+      }
+    });
+
+    if (lastWitnessStatement) {
+      this.logger.info(`Found last witness statement at event ${lastWitnessStatement.id} by ${lastWitnessStatement.statement?.speaker?.speakerHandle}`);
+
+      // If the last witness statement is before the current end, use it
+      if (lastWitnessStatement.id < currentEndEventId) {
+        this.logger.info(`Correcting witness testimony end from ${currentEndEventId} to ${lastWitnessStatement.id}`);
+        return lastWitnessStatement.id;
+      }
+    }
+
+    return currentEndEventId;
+  }
+
   /**
    * Load trial style configuration from file
    */

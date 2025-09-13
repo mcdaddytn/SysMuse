@@ -166,28 +166,48 @@ export class WitnessMarkerDiscovery {
       }
     }
 
-    // For the last witness, don't extend to end of trial
-    // Look for transition to attorney speech instead
+    // For the last witness, find the last time this witness speaks
+    // This is critical for correctly identifying where witness testimony ends
     if (!endEvent && !nextWitnessEvent) {
-      // Find where attorneys start speaking continuously (likely closing arguments)
-      let attorneyBlockStart = -1;
-      let consecutiveAttorneyCount = 0;
-      
-      for (let i = startIndex + 1; i < Math.min(constraintIndex, startIndex + 500); i++) {
+      this.logger.debug('Finding end of last witness testimony - looking for last witness statement');
+
+      // Search for the last statement by ANY witness (not just this one)
+      // This helps identify the true end of witness testimony period
+      let lastWitnessStatementIndex = -1;
+
+      for (let i = startIndex + 1; i < allEvents.length; i++) {
         const event = allEvents[i];
-        if (event.statement?.speaker?.speakerType === 'ATTORNEY') {
-          consecutiveAttorneyCount++;
-          if (consecutiveAttorneyCount >= 3 && attorneyBlockStart === -1) {
-            attorneyBlockStart = i - 2; // Back up to start of attorney block
-            break;
-          }
-        } else if (event.statement?.speaker?.speakerType === 'WITNESS') {
-          consecutiveAttorneyCount = 0; // Reset if witness speaks again
+        if (
+          event.eventType === 'STATEMENT' &&
+          event.statement?.speaker?.speakerType === 'WITNESS'
+        ) {
+          lastWitnessStatementIndex = i;
         }
       }
-      
-      if (attorneyBlockStart > startIndex + 1) {
-        endEvent = allEvents[attorneyBlockStart - 1];
+
+      if (lastWitnessStatementIndex > startIndex) {
+        endEvent = allEvents[lastWitnessStatementIndex];
+        this.logger.info(`Found last witness statement at event ${endEvent?.id} for ${witnessEvent.witness?.name || 'Unknown'}`);
+      } else {
+        // If no witness statements found after this point, look for attorney block
+        let attorneyBlockStart = -1;
+        let consecutiveAttorneyCount = 0;
+
+        for (let i = startIndex + 1; i < Math.min(constraintIndex, startIndex + 500); i++) {
+          const event = allEvents[i];
+          if (event.statement?.speaker?.speakerType === 'ATTORNEY') {
+            consecutiveAttorneyCount++;
+            if (consecutiveAttorneyCount >= 3 && attorneyBlockStart === -1) {
+              attorneyBlockStart = i - 2; // Back up to start of attorney block
+              break;
+            }
+          }
+        }
+
+        if (attorneyBlockStart > startIndex + 1) {
+          endEvent = allEvents[attorneyBlockStart - 1];
+          this.logger.info(`Using attorney block boundary for last witness end at event ${endEvent?.id}`);
+        }
       }
     }
 

@@ -184,6 +184,93 @@ program
   });
 
 program
+  .command('delete-phase3 <identifier>')
+  .description('Delete only Phase 3 data (markers and marker sections) for a trial')
+  .option('--dry-run', 'Show what would be deleted without actually deleting')
+  .option('--force', 'Skip confirmation prompt')
+  .action(async (identifier: string, options: { dryRun?: boolean; force?: boolean }) => {
+    try {
+      const service = new TrialDeletionService(prisma);
+      
+      // First do a dry run to get trial info
+      const dryRunResult = await service.deletePhase3Only(identifier, true);
+      
+      if (!dryRunResult.success) {
+        console.error(chalk.red('Trial not found'));
+        process.exit(1);
+      }
+
+      // Display trial information
+      console.log(chalk.cyan('\n════════════════════════════════════════'));
+      console.log(chalk.cyan('  Trial Information'));
+      console.log(chalk.cyan('════════════════════════════════════════'));
+      console.log(chalk.white(`  ID:          ${dryRunResult.trial.id}`));
+      console.log(chalk.white(`  Name:        ${dryRunResult.trial.name}`));
+      console.log(chalk.white(`  Case Number: ${dryRunResult.trial.caseNumber}`));
+      console.log(chalk.white(`  Short Name:  ${dryRunResult.trial.shortName || 'N/A'}`));
+      
+      // Display what will be deleted
+      console.log(chalk.cyan('\n════════════════════════════════════════'));
+      console.log(chalk.cyan('  Phase 3 Data to be Deleted'));
+      console.log(chalk.cyan('════════════════════════════════════════'));
+      
+      const stats = dryRunResult.statistics;
+      console.log(chalk.yellow(`    Markers                   ${stats.markers}`));
+      console.log(chalk.yellow(`    Marker Sections           ${stats.markerSections}`));
+      console.log(chalk.yellow(`    Accumulator Results       ${stats.accumulatorResults}`));
+      console.log(chalk.yellow(`    Processing Status         ${stats.processingStatus}`));
+      console.log(chalk.yellow(`    Workflow State (Phase3)   ${stats.workflowState}`));
+
+      if (options.dryRun) {
+        console.log(chalk.green('\n✓ Dry run completed. No data was deleted.'));
+        await service.close();
+        process.exit(0);
+      }
+
+      // Confirm deletion
+      if (!options.force) {
+        const answers = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirmDelete',
+            message: chalk.red(`\nAre you sure you want to delete Phase 3 data for trial "${dryRunResult.trial.name}"? This will allow you to re-run Phase 3.`),
+            default: false
+          }
+        ]);
+
+        if (!answers.confirmDelete) {
+          console.log(chalk.yellow('\n✗ Deletion cancelled'));
+          await service.close();
+          process.exit(0);
+        }
+      }
+
+      // Perform actual deletion
+      console.log(chalk.yellow('\n⚡ Deleting Phase 3 data...'));
+      const result = await service.deletePhase3Only(identifier, false);
+      
+      console.log(chalk.green(`\n✓ ${result.message}`));
+      console.log(chalk.green('\nPhase 3 deletion summary:'));
+      
+      Object.entries(result.statistics).forEach(([key, count]) => {
+        if (count > 0) {
+          console.log(chalk.green(`  ${key}: ${count} records deleted`));
+        }
+      });
+      
+      console.log(chalk.cyan('\n✓ You can now re-run Phase 3 processing for this trial.'));
+      
+      await service.close();
+      process.exit(0);
+      
+    } catch (error) {
+      console.error(chalk.red('\n✗ Error:'), error instanceof Error ? error.message : String(error));
+      await prisma.$disconnect();
+      process.exit(1);
+    }
+  });
+
+program
   .command('bulk-delete')
   .description('Delete multiple trials using a pattern or list')
   .option('--pattern <pattern>', 'Delete trials matching a pattern in short name')

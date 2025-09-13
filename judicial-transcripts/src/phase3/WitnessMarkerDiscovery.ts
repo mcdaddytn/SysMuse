@@ -213,7 +213,9 @@ export class WitnessMarkerDiscovery {
     const witness = boundary.witnessCalledEvent.witness;
     const examinationType = boundary.witnessCalledEvent.examinationType;
     
-    const witnessHandle = 'WITNESS_' + (witness?.id || 'UNKNOWN');
+    // Use witness fingerprint instead of ID for more meaningful names
+    const witnessFingerprint = witness?.witnessFingerprint || witness?.name?.replace(/[^a-zA-Z0-9]/g, '') || `W${witness?.id || 'Unknown'}`;
+    const witnessHandle = witnessFingerprint;
     const witnessName = witness?.displayName || witness?.name || 'Unknown Witness';
 
     // Create start marker
@@ -223,7 +225,7 @@ export class WitnessMarkerDiscovery {
         markerType: 'SECTION_START',
         sectionType: 'WITNESS_EXAMINATION',
         eventId: boundary.startEvent.id,
-        name: `WitnessExamination_${examinationType}_${witnessHandle}_Start`,
+        name: `WitExam_${this.getExamAbbreviation(examinationType)}_${witnessHandle}_Start`,
         description: `Start of ${examinationType} for witness ${witnessName}`,
         source: 'AUTO_EVENT',
         metadata: {
@@ -243,7 +245,7 @@ export class WitnessMarkerDiscovery {
           markerType: 'SECTION_END',
           sectionType: 'WITNESS_EXAMINATION',
           eventId: boundary.endEvent.id,
-          name: `WitnessExamination_${examinationType}_${witnessHandle}_End`,
+          name: `WitExam_${this.getExamAbbreviation(examinationType)}_${witnessHandle}_End`,
           description: `End of ${examinationType} for witness ${witnessName}`,
           source: 'AUTO_EVENT',
           metadata: {
@@ -270,7 +272,7 @@ export class WitnessMarkerDiscovery {
           endEventId: endEventId,
           startTime: boundary.startEvent.startTime,
           endTime: endTime,
-          name: `WitnessExamination_${examinationType}_${witnessHandle}`,
+          name: `WitExam_${this.getExamAbbreviation(examinationType)}_${witnessHandle}`,
           description: `${examinationType} of witness ${witnessName}`,
           metadata: {
             witnessId: witness?.id,
@@ -311,7 +313,9 @@ export class WitnessMarkerDiscovery {
       const lastBoundary = witnessBounds[witnessBounds.length - 1];
       
       const witness = firstBoundary.witnessCalledEvent.witness;
-      const witnessHandle = 'WITNESS_' + (witness?.id || 'UNKNOWN');
+      // Use witness fingerprint instead of ID for more meaningful names
+      const witnessFingerprint = witness?.witnessFingerprint || witness?.name?.replace(/[^a-zA-Z0-9]/g, '') || `W${witness?.id || 'Unknown'}`;
+      const witnessHandle = witnessFingerprint;
       const witnessName = witness?.displayName || witness?.name || 'Unknown Witness';
 
       // Create start marker (same as first examination start)
@@ -321,7 +325,7 @@ export class WitnessMarkerDiscovery {
           markerType: 'SECTION_START',
           sectionType: 'WITNESS_TESTIMONY',
           eventId: firstBoundary.startEvent.id,
-          name: `WitnessTestimony_${witnessHandle}_Start`,
+          name: `WitTest_${witnessHandle}_Start`,
           description: `Start of testimony for witness ${witnessName}`,
           source: 'AUTO_EVENT',
           metadata: {
@@ -341,7 +345,7 @@ export class WitnessMarkerDiscovery {
             markerType: 'SECTION_END',
             sectionType: 'WITNESS_TESTIMONY',
             eventId: lastBoundary.endEvent.id,
-            name: `WitnessTestimony_${witnessHandle}_End`,
+            name: `WitTest_${witnessHandle}_End`,
             description: `End of testimony for witness ${witnessName}`,
             source: 'AUTO_EVENT',
             metadata: {
@@ -365,7 +369,7 @@ export class WitnessMarkerDiscovery {
             endEventId: lastBoundary.endEvent?.id,
             startTime: firstBoundary.startEvent.startTime,
             endTime: lastBoundary.endEvent?.endTime,
-            name: `WitnessTestimony_${witnessHandle}`,
+            name: `WitTest_${witnessHandle}`,
             description: `Complete testimony of witness ${witnessName}`,
             metadata: {
               witnessId,
@@ -398,7 +402,7 @@ export class WitnessMarkerDiscovery {
         markerType: 'SECTION_START',
         sectionType: 'COMPLETE_WITNESS_TESTIMONY',
         eventId: firstBoundary.startEvent.id,
-        name: 'CompleteWitnessTestimony_Start',
+        name: 'CompleteWitTest_Start',
         description: 'Start of all witness testimony',
         source: 'AUTO_EVENT',
         metadata: {
@@ -417,7 +421,7 @@ export class WitnessMarkerDiscovery {
           markerType: 'SECTION_END',
           sectionType: 'COMPLETE_WITNESS_TESTIMONY',
           eventId: lastBoundary.endEvent.id,
-          name: 'CompleteWitnessTestimony_End',
+          name: 'CompleteWitTest_End',
           description: 'End of all witness testimony',
           source: 'AUTO_EVENT',
           metadata: {
@@ -453,6 +457,26 @@ export class WitnessMarkerDiscovery {
           }
         }
       });
+    }
+  }
+  
+  /**
+   * Get abbreviated examination type
+   */
+  private getExamAbbreviation(examinationType: string): string {
+    switch (examinationType) {
+      case 'DIRECT_EXAMINATION':
+        return 'Direct';
+      case 'CROSS_EXAMINATION':
+        return 'Cross';
+      case 'REDIRECT_EXAMINATION':
+        return 'Redir';
+      case 'RECROSS_EXAMINATION':
+        return 'Recross';
+      case 'VIDEO_DEPOSITION':
+        return 'VideoDep';
+      default:
+        return examinationType.replace(/_EXAMINATION$/, '').replace(/_/g, '');
     }
   }
 }

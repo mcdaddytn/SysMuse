@@ -26,6 +26,7 @@ interface HierarchyStatistics {
 export class StandardTrialHierarchyBuilder {
   private logger = new Logger('StandardTrialHierarchyBuilder');
   private longStatementsAccumulator: LongStatementsAccumulator;
+  private trialStyleConfig: any = null;
 
   constructor(
     private prisma: PrismaClient
@@ -40,6 +41,8 @@ export class StandardTrialHierarchyBuilder {
     this.logger.info(`Building Standard Trial Hierarchy for trial ${trialId}`);
     
     try {
+      // Load trial style config
+      await this.loadTrialStyleConfig(trialId);
       // First, ensure we have a TRIAL root section
       const trialSection = await this.createTrialRootSection(trialId);
       
@@ -82,7 +85,8 @@ export class StandardTrialHierarchyBuilder {
   private async generateAutoSummaries(trialId: number): Promise<void> {
     this.logger.info(`Generating auto-summaries for trial ${trialId} sections`);
     
-    const renderer = new TranscriptRenderer(this.prisma);
+    // Pass trial style config to renderer
+    const renderer = new TranscriptRenderer(this.prisma, this.trialStyleConfig);
     
     // Get all sections that need summaries
     const sections = await this.prisma.markerSection.findMany({
@@ -100,7 +104,9 @@ export class StandardTrialHierarchyBuilder {
     let summaryCount = 0;
     for (const section of sections) {
       try {
-        const rendered = await renderer.renderAndSaveSummary(section.id);
+        // Check config to see if we should save to file
+        const saveToFile = this.trialStyleConfig?.saveMarkerSectionsToFile || false;
+        const rendered = await renderer.renderAndSaveSummary(section.id, saveToFile);
         if (rendered && rendered.summary) {
           summaryCount++;
         }
@@ -379,19 +385,40 @@ export class StandardTrialHierarchyBuilder {
       orderBy: { startEventId: 'asc' }
     });
 
+    // Group examinations by witness
+    const witnessGroups = new Map<number, MarkerSection[]>();
+
     for (const exam of examinations) {
-      // Extract witness ID from examination name (e.g., "WitnessExamination_DIRECT_EXAMINATION_WITNESS_54")
-      const examMatch = exam.name?.match(/WITNESS_(\d+)/);
-      if (!examMatch) {
-        this.logger.warn(`Could not extract witness ID from examination name: ${exam.name}`);
+      // Extract witness info from metadata instead of parsing the name
+      // The new format uses witness fingerprint in names (e.g., "WitExam_Direct_JOHN_DOE")
+      const metadata = exam.metadata as any;
+      let witnessId: number | undefined = metadata?.witnessId;
+      if (!witnessId) {
+        // Try to extract from the old format if present
+        const examMatch = exam.name?.match(/WITNESS_(\d+)/);
+        if (!examMatch) {
+          this.logger.warn(`Could not extract witness ID from examination: ${exam.name}`);
+          continue;
+        }
+        const witnessIdFromName = parseInt(examMatch[1]);
+        witnessGroups.set(witnessIdFromName, [...(witnessGroups.get(witnessIdFromName) || []), exam]);
         continue;
       }
-      const examWitnessId = examMatch[1];
+      
+      // Group examinations by witness
+      witnessGroups.set(witnessId, [...(witnessGroups.get(witnessId) || []), exam]);
       
       // Find the testimony section with matching witness ID
       const parentTestimony = witnessTestimonies.find(testimony => {
+        // Check metadata first for witness ID
+        const testimonyMetadata = testimony.metadata as any;
+        const testimonyWitnessId = testimonyMetadata?.witnessId as number | undefined;
+        if (testimonyWitnessId) {
+          return testimonyWitnessId === witnessId;
+        }
+        // Fall back to parsing the name for old format
         const testimonyMatch = testimony.name?.match(/WITNESS_(\d+)/);
-        return testimonyMatch && testimonyMatch[1] === examWitnessId;
+        return testimonyMatch && parseInt(testimonyMatch[1]) === witnessId;
       });
       
       if (parentTestimony && exam.parentSectionId !== parentTestimony.id) {
@@ -401,7 +428,7 @@ export class StandardTrialHierarchyBuilder {
         });
         this.logger.debug(`Updated parent of ${exam.name} to ${parentTestimony.name}`);
       } else if (!parentTestimony) {
-        this.logger.warn(`Could not find parent testimony for ${exam.name} with witness ID ${examWitnessId}`);
+        this.logger.warn(`Could not find parent testimony for ${exam.name} with witness ID ${witnessId}`);
       }
     }
 
@@ -1268,5 +1295,64 @@ export class StandardTrialHierarchyBuilder {
         percentage: totalEvents > 0 ? (coveredEventIds.size / totalEvents) * 100 : 0
       }
     };
+  }
+  
+  /**
+   * Load trial style configuration from file
+   */
+  private async loadTrialStyleConfig(trialId: number): Promise<void> {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      // Get the trial from the database
+      const trial = await this.prisma.trial.findUnique({
+        where: { id: trialId }
+      });
+      
+      // Try to find trial-specific trialstyle.json
+      let trialStylePath: string | null = null;
+      
+      if (trial && trial.shortName) {
+        // Look for trial-specific config in output directory
+        const trialOutputDir = path.join('./output/multi-trial', trial.shortName);
+        const trialSpecificPath = path.join(trialOutputDir, 'trialstyle.json');
+        
+        if (fs.existsSync(trialSpecificPath)) {
+          trialStylePath = trialSpecificPath;
+          this.logger.info(`Loading trial-specific style config from: ${trialStylePath}`);
+        }
+      }
+      
+      // Fall back to default trial style config
+      if (!trialStylePath) {
+        trialStylePath = './config/trialstyle.json';
+        this.logger.info(`Loading default trial style config from: ${trialStylePath}`);
+      }
+      
+      if (fs.existsSync(trialStylePath)) {
+        const configContent = fs.readFileSync(trialStylePath, 'utf-8');
+        this.trialStyleConfig = JSON.parse(configContent);
+        this.logger.debug(`Loaded trial style config with markerSummaryMode: ${this.trialStyleConfig.markerSummaryMode}`);
+      } else {
+        this.logger.warn(`Trial style config not found at: ${trialStylePath}`);
+        // Use defaults
+        this.trialStyleConfig = {
+          markerSummaryMode: 'SUMMARYABRIDGED2',
+          markerAppendMode: 'space',
+          markerCleanMode: 'REMOVEEXTRASPACE',
+          saveMarkerSectionsToFile: false
+        };
+      }
+    } catch (error) {
+      this.logger.error('Error loading trial style config:', error);
+      // Use defaults on error
+      this.trialStyleConfig = {
+        markerSummaryMode: 'SUMMARYABRIDGED2',
+        markerAppendMode: 'space',
+        markerCleanMode: 'REMOVEEXTRASPACE',
+        saveMarkerSectionsToFile: false
+      };
+    }
   }
 }

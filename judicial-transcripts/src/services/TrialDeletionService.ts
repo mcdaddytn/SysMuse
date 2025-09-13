@@ -429,6 +429,125 @@ export class TrialDeletionService {
   }
 
   /**
+   * Delete only Phase 3 data (markers and marker sections) for a trial
+   * @param identifier - Can be trial ID, case number, or short name
+   * @param dryRun - If true, only show what would be deleted without actually deleting
+   * @returns Deletion statistics
+   */
+  async deletePhase3Only(identifier: string | number, dryRun: boolean = false): Promise<DeletionResult> {
+    try {
+      // Find the trial
+      const trial = await this.findTrial(identifier);
+      
+      if (!trial) {
+        throw new Error(`Trial not found: ${identifier}`);
+      }
+
+      logger.info(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} Phase 3 data for trial: ${trial.name} (ID: ${trial.id})`);
+
+      // Get counts of Phase 3 data before deletion
+      const stats: Record<string, number> = {};
+      
+      stats.markers = await this.prisma.marker.count({ where: { trialId: trial.id } });
+      stats.markerSections = await this.prisma.markerSection.count({ where: { trialId: trial.id } });
+      stats.accumulatorResults = await this.prisma.accumulatorResult.count({ where: { trialId: trial.id } });
+      stats.processingStatus = await this.prisma.trialProcessingStatus.count({ where: { trialId: trial.id } });
+      stats.workflowState = await this.prisma.trialWorkflowState.count({ where: { trialId: trial.id } });
+      
+      if (dryRun) {
+        logger.info('[DRY RUN] Phase 3 deletion statistics:', stats);
+        return {
+          success: true,
+          dryRun: true,
+          trial: {
+            id: trial.id,
+            name: trial.name,
+            caseNumber: trial.caseNumber,
+            shortName: trial.shortName
+          },
+          statistics: stats,
+          message: 'Dry run completed. No Phase 3 data was deleted.'
+        };
+      }
+
+      // Delete Phase 3 data
+      const deletionCounts: Record<string, number> = {};
+      
+      try {
+        // Delete accumulator results
+        logger.info('Deleting accumulator results...');
+        const accumulatorResultsDeleted = await this.deleteWithRetry(
+          () => this.prisma.accumulatorResult.deleteMany({ where: { trialId: trial.id } }),
+          'accumulatorResult'
+        );
+        deletionCounts.accumulatorResults = accumulatorResultsDeleted.count;
+        
+        // Delete marker sections (before markers due to foreign key)
+        logger.info('Deleting marker sections...');
+        const markerSectionDeleted = await this.deleteWithRetry(
+          () => this.prisma.markerSection.deleteMany({ where: { trialId: trial.id } }),
+          'markerSection'
+        );
+        deletionCounts.markerSections = markerSectionDeleted.count;
+        
+        // Delete markers
+        logger.info('Deleting markers...');
+        const markerDeleted = await this.deleteWithRetry(
+          () => this.prisma.marker.deleteMany({ where: { trialId: trial.id } }),
+          'marker'
+        );
+        deletionCounts.markers = markerDeleted.count;
+        
+        // Update workflow state to reset Phase 3 status
+        logger.info('Resetting Phase 3 workflow state...');
+        const workflowStateUpdated = await this.prisma.trialWorkflowState.updateMany({
+          where: { trialId: trial.id },
+          data: {
+            phase3Completed: false,
+            phase3CompletedAt: null,
+            phase3IndexCompleted: false,
+            phase3IndexAt: null
+          }
+        });
+        deletionCounts.workflowState = workflowStateUpdated.count;
+        
+        // Reset processing status for Phase 3
+        const processingStatusUpdated = await this.prisma.trialProcessingStatus.updateMany({
+          where: { trialId: trial.id },
+          data: {
+            phase3StartedAt: null,
+            phase3CompletedAt: null
+          }
+        });
+        deletionCounts.processingStatus = processingStatusUpdated.count;
+        
+        logger.info('Phase 3 data deletion completed', deletionCounts);
+        
+        return {
+          success: true,
+          dryRun: false,
+          trial: {
+            id: trial.id,
+            name: trial.name,
+            caseNumber: trial.caseNumber,
+            shortName: trial.shortName
+          },
+          statistics: deletionCounts,
+          message: `Successfully deleted Phase 3 data for trial "${trial.name}"`
+        };
+        
+      } catch (error) {
+        logger.error('Error during Phase 3 deletion:', error);
+        throw new Error(`Failed to delete Phase 3 data: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+    } catch (error) {
+      logger.error('Error in deletePhase3Only:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete lines in batches to avoid timeout
    */
   private async deleteLinesInBatches(trialId: number, batchSize: number = 1000): Promise<number> {

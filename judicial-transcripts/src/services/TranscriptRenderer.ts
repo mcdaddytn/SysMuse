@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '../utils/logger';
 
+export type SummaryMode = 'SUMMARYABRIDGED1' | 'SUMMARYABRIDGED2';
+
 export interface RenderedSection {
   sectionId: number;
   sectionType: string;
@@ -18,8 +20,18 @@ export interface RenderedSection {
 export class TranscriptRenderer {
   private logger = new Logger('TranscriptRenderer');
   private defaultTemplate: string;
+  private summaryMode: SummaryMode = 'SUMMARYABRIDGED2';
+  private markerAppendMode: string = 'space';
+  private markerCleanMode: string = 'REMOVEEXTRASPACE';
 
-  constructor(private prisma: PrismaClient) {
+  constructor(private prisma: PrismaClient, config?: any) {
+    // Load configuration options
+    if (config) {
+      this.summaryMode = config.markerSummaryMode || 'SUMMARYABRIDGED2';
+      this.markerAppendMode = config.markerAppendMode || 'space';
+      this.markerCleanMode = config.markerCleanMode || 'REMOVEEXTRASPACE';
+    }
+    
     // Load default template
     const templatePath = path.join(__dirname, '../../templates/default-transcript.mustache');
     try {
@@ -27,8 +39,8 @@ export class TranscriptRenderer {
       this.logger.debug('Loaded default transcript template');
     } catch (error) {
       this.logger.warn('Could not load template file, using inline default');
-      // Fallback inline template
-      this.defaultTemplate = `{{#events}}{{#statement}}{{speaker.speakerHandle}}: {{text}}
+      // Fallback inline template with HTML entity encoding disabled
+      this.defaultTemplate = `{{#events}}{{#statement}}{{{speaker.speakerHandle}}}: {{{text}}}
 
 {{/statement}}{{/events}}`;
     }
@@ -113,11 +125,13 @@ export class TranscriptRenderer {
       }))
     };
 
-    // Render with Mustache
-    const renderedText = Mustache.render(this.defaultTemplate, templateData);
+    // Render with Mustache (disable HTML escaping)
+    const renderedText = Mustache.render(this.defaultTemplate, templateData, {}, {
+      escape: (text: string) => text // Don't escape HTML entities
+    });
     
-    // Generate auto-summary
-    const summary = this.generateAutoSummary(renderedText, eventCount);
+    // Generate auto-summary based on configured mode
+    const summary = this.generateAutoSummary(renderedText, eventCount, this.summaryMode);
 
     return {
       sectionId: section.id,
@@ -196,21 +210,60 @@ export class TranscriptRenderer {
   /**
    * Generate auto-summary from rendered text
    */
-  private generateAutoSummary(renderedText: string, eventCount: number): string {
+  private generateAutoSummary(renderedText: string, eventCount: number, mode: SummaryMode = 'SUMMARYABRIDGED1'): string {
     const lines = renderedText.split('\n').filter(l => l.trim());
     const wordCount = renderedText.split(/\s+/).filter(w => w.trim()).length;
     const charCount = renderedText.length;
+    const speakers = new Set<string>();
     
-    // Get first few meaningful lines (skip empty lines)
-    const excerptLines = lines.slice(0, 5);
-    const excerpt = excerptLines.join('\n');
+    // Extract speaker information
+    lines.forEach(line => {
+      const match = line.match(/^([A-Z][A-Z .]+?):\s/);
+      if (match) {
+        speakers.add(match[1]);
+      }
+    });
     
-    // Create summary with excerpt and statistics
-    const summary = `${excerpt}${excerptLines.length < lines.length ? '\n...' : ''}
+    if (mode === 'SUMMARYABRIDGED1') {
+      // Original mode: excerpt from beginning + summary
+      const excerptLines = lines.slice(0, 5);
+      const excerpt = this.applyTextCleaning(excerptLines.join('\n'));
+      
+      const summary = `${excerpt}${excerptLines.length < lines.length ? '\n...' : ''}
 
-[Summary: ${eventCount} events, ${lines.length} lines, ${wordCount} words, ${charCount} characters]`;
-    
-    return summary;
+[Summary: ${eventCount} events, ${lines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
+      
+      return summary;
+    } else {
+      // SUMMARYABRIDGED2: excerpt from beginning + excerpt from end + summary
+      const beginExcerptLines = lines.slice(0, 3);
+      const endExcerptLines = lines.slice(-3);
+      
+      const beginExcerpt = this.applyTextCleaning(beginExcerptLines.join('\n'));
+      const endExcerpt = this.applyTextCleaning(endExcerptLines.join('\n'));
+      
+      let summary = beginExcerpt;
+      if (lines.length > 6) {
+        summary += '\n...\n' + endExcerpt;
+      }
+      
+      summary += `\n\n[Summary: ${eventCount} events, ${lines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
+      
+      return summary;
+    }
+  }
+  
+  /**
+   * Apply text cleaning based on markerCleanMode
+   */
+  private applyTextCleaning(text: string): string {
+    if (this.markerCleanMode === 'REMOVEEXTRASPACE') {
+      // Remove extra whitespace while preserving line breaks
+      return text.split('\n')
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .join('\n');
+    }
+    return text;
   }
 
   /**
@@ -227,14 +280,78 @@ export class TranscriptRenderer {
   /**
    * Render section and save auto-summary to database
    */
-  async renderAndSaveSummary(sectionId: number): Promise<RenderedSection | null> {
+  async renderAndSaveSummary(sectionId: number, saveToFile: boolean = false): Promise<RenderedSection | null> {
     const rendered = await this.renderSection(sectionId);
     
     if (rendered && rendered.summary) {
       await this.saveAutoSummary(sectionId, rendered.summary);
+      
+      // Optionally save full text to file
+      if (saveToFile) {
+        await this.saveMarkerSectionToFile(sectionId, rendered.renderedText);
+      }
     }
     
     return rendered;
+  }
+  
+  /**
+   * Save MarkerSection full text to file
+   */
+  async saveMarkerSectionToFile(sectionId: number, text: string): Promise<void> {
+    const section = await this.prisma.markerSection.findUnique({
+      where: { id: sectionId },
+      include: {
+        trial: true
+      }
+    });
+    
+    if (!section) {
+      this.logger.warn(`Cannot save to file: Section ${sectionId} not found`);
+      return;
+    }
+    
+    // Create output directory
+    const outputDir = path.join('./output/markersections', section.trial.shortName || `trial_${section.trialId}`);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    // Generate concise filename from section name
+    const fileName = this.generateConciseFileName(section);
+    const filePath = path.join(outputDir, `${fileName}.txt`);
+    
+    // Write text to file
+    fs.writeFileSync(filePath, text);
+    this.logger.debug(`Saved MarkerSection ${sectionId} to ${filePath}`);
+  }
+  
+  /**
+   * Generate concise file name for MarkerSection
+   */
+  private generateConciseFileName(section: any): string {
+    let name = section.name || 'unnamed';
+    
+    // Apply abbreviations
+    name = name
+      .replace(/WitnessExamination/g, 'WitExam')
+      .replace(/WITNESS_EXAMINATION/g, 'WitExam')
+      .replace(/REDIRECT_EXAMINATION/g, 'Redir')
+      .replace(/RECROSS_EXAMINATION/g, 'Recross')
+      .replace(/DIRECT_EXAMINATION/g, 'Direct')
+      .replace(/CROSS_EXAMINATION/g, 'Cross')
+      .replace(/OPENING_STATEMENT/g, 'Opening')
+      .replace(/CLOSING_STATEMENT/g, 'Closing')
+      .replace(/WITNESS_TESTIMONY/g, 'WitTest')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_-]/g, '');
+    
+    // Add trial short name if available
+    if (section.trial?.shortName) {
+      name = `${section.trial.shortName}_${name}`;
+    }
+    
+    return name;
   }
 
   /**

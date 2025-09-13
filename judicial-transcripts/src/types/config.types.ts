@@ -52,6 +52,12 @@ export interface TranscriptConfig {
     courtDistrict?: string;
   };
   logging?: LoggingConfig;  // Add logging configuration
+  // MarkerSection text generation options
+  markerSummaryMode?: 'SUMMARYABRIDGED1' | 'SUMMARYABRIDGED2';
+  markerAppendMode?: 'space' | 'newline' | 'windowsNewline' | 'unixNewline';
+  markerCleanMode?: 'NONE' | 'REMOVEEXTRASPACE';
+  saveMarkerSectionsToFile?: boolean;
+  markerSectionOutputDir?: string;
 }
 
 export interface SessionInfo {
@@ -253,6 +259,8 @@ export type FileConvention = 'AUTO' | 'MANUAL' | 'DATEAMPM' | 'DATEMORNAFT' | 'D
 export type FileSortingMode = 'AUTO' | 'dateAndSession' | 'documentNumber' | 'custom';
 export type StatementAppendMode = 'space' | 'newline' | 'windowsNewline' | 'unixNewline';
 export type StatementCleanMode = 'NONE' | 'REMOVEEXTRASPACE';
+export type MarkerAppendMode = 'space' | 'newline' | 'windowsNewline' | 'unixNewline';
+export type MarkerCleanMode = 'NONE' | 'REMOVEEXTRASPACE';
 export type SummaryCenterDelimiter = 'AUTO' | ')(' | '()' | '*' | '(' | ')';
 
 export interface TrialStyleConfig {
@@ -330,6 +338,12 @@ export interface TrialStyleConfig {
       pageId?: string;
     }>;
   };
+  // MarkerSection text generation options (Feature 07G)
+  markerSummaryMode?: 'SUMMARYABRIDGED1' | 'SUMMARYABRIDGED2';
+  markerAppendMode?: MarkerAppendMode;
+  markerCleanMode?: MarkerCleanMode;
+  saveMarkerSectionsToFile?: boolean;
+  markerSectionOutputDir?: string;
 }
 
 // Database management types

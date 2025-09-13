@@ -34,5 +34,10 @@
       "CERTIFY THAT THE FOREGOING",
       "CERTIFICATE"
     ]
-  }
+  },
+  "markerSummaryMode": "SUMMARYABRIDGED2",
+  "markerAppendMode": "space",
+  "markerCleanMode": "REMOVEEXTRASPACE",
+  "saveMarkerSectionsToFile": true,
+  "markerSectionOutputDir": "./output/markersections"
 }

@@ -37,7 +37,8 @@
     "setup": "bash scripts/setup.sh",
     "workflow": "ts-node src/cli/workflow.ts",
     "workflow:kill": "bash scripts/kill-workflow-processes.sh",
-    "delete-trial": "ts-node src/cli/delete-trial.ts"
+    "delete-trial": "ts-node src/cli/delete-trial.ts",
+    "background-llm": "ts-node src/cli/background-llm.ts"
   },
   "keywords": [
     "judicial",

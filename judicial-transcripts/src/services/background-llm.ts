@@ -65,7 +65,7 @@ export class BackgroundLLMService {
             apiKeyEnv: 'OPENAI_API_KEY',
             maxTokens: 2000,
             temperature: 0.3,
-            systemPrompt: 'You are an expert legal analyst specializing in IP litigation.'
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
           },
           'chatgpt-turbo': {
             provider: 'openai',
@@ -73,7 +73,7 @@ export class BackgroundLLMService {
             apiKeyEnv: 'OPENAI_API_KEY',
             maxTokens: 1500,
             temperature: 0.3,
-            systemPrompt: 'You are an expert legal analyst specializing in IP litigation.'
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
           },
           'claude': {
             provider: 'anthropic',
@@ -81,7 +81,7 @@ export class BackgroundLLMService {
             apiKeyEnv: 'ANTHROPIC_API_KEY',
             maxTokens: 2000,
             temperature: 0.3,
-            systemPrompt: 'You are an expert legal analyst specializing in IP litigation.'
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
           },
           'claude-sonnet': {
             provider: 'anthropic',
@@ -89,7 +89,7 @@ export class BackgroundLLMService {
             apiKeyEnv: 'ANTHROPIC_API_KEY',
             maxTokens: 1500,
             temperature: 0.3,
-            systemPrompt: 'You are an expert legal analyst specializing in IP litigation.'
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
           },
           'gemini': {
             provider: 'google',
@@ -97,7 +97,7 @@ export class BackgroundLLMService {
             apiKeyEnv: 'GOOGLE_API_KEY',
             maxTokens: 2000,
             temperature: 0.3,
-            systemPrompt: 'You are an expert legal analyst specializing in IP litigation.'
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
           }
         }
       },
@@ -251,25 +251,45 @@ export class BackgroundLLMService {
       const trialNames = [...new Set(attorney.trialAttorneys.map(ta => ta.trial?.shortName).filter(Boolean))];
       const lawFirms = [...new Set(attorney.trialAttorneys.map(ta => ta.lawFirm?.name).filter(Boolean))];
 
-      const prompt = `Please provide a comprehensive one-page professional summary for the following attorney:
+      const prompt = `Please search your knowledge base and provide a comprehensive professional biography using all publicly available information about the following attorney:
 
+ATTORNEY DETAILS:
 Name: ${attorney.name}
 Law Firm(s): ${lawFirms.join(', ') || 'Unknown'}
 Bar Number: ${attorney.barNumber || 'Not provided'}
-Trials Involved: ${trialNames.join(', ') || 'No trial data available'}
+Known Trial Involvement: ${trialNames.join(', ') || 'No trial data available'}
 
-Please focus on:
-1. Professional background and education
-2. Specialization in intellectual property (IP) litigation
-3. Notable cases and achievements in IP law
-4. Any significant verdicts or settlements
-5. Professional recognitions or awards
-6. Years of experience and career progression
-7. Any published articles or speaking engagements related to IP law
+IMPORTANT: Please use ALL publicly available information from your training data about this attorney, including:
+- Information from law firm websites and attorney profiles
+- Legal directories (Martindale-Hubbell, Chambers, Super Lawyers, etc.)
+- News articles and press releases about cases they've handled
+- Court records and published opinions
+- Professional biographies and LinkedIn profiles
+- Speaking engagements and conference presentations
+- Published articles, books, or legal commentary
+- Educational background from university records
 
-If limited information is publicly available, please indicate that and provide what context you can about the law firm and typical career paths for IP litigation attorneys.
+REQUIRED INFORMATION TO INCLUDE:
+1. Educational background (law school, undergraduate, year of graduation if known)
+2. Bar admissions and years of practice
+3. Career progression and previous firms
+4. Specialization areas beyond IP (if any)
+5. Notable cases and trials (especially IP litigation)
+6. Significant verdicts, settlements, or legal victories
+7. Professional recognitions, awards, and rankings
+8. Publications, speaking engagements, and thought leadership
+9. Pro bono work or professional associations
+10. Any unique expertise or technical background
 
-Note: Please keep the response to approximately one page (500-700 words).`;
+For well-known attorneys, provide specific details about their most famous cases, including case names, parties represented, and outcomes. Include specific dollar amounts for verdicts or settlements when publicly known.
+
+If this attorney is not widely known in public records, still provide:
+- Detailed information about their law firm's IP practice
+- Typical career trajectory for IP litigators at that firm
+- The firm's notable IP cases and clients
+- Regional or practice-specific context
+
+Note: Please provide a detailed response (600-800 words) using specific, factual information from your training data rather than generic descriptions.`;
 
       await fs.writeFile(promptPath, prompt);
       promptsGenerated++;
@@ -331,28 +351,82 @@ Note: Please keep the response to approximately one page (500-700 words).`;
         .map(ta => ta.lawFirm?.name)
         .filter(Boolean))];
 
-      const prompt = `Please provide a comprehensive summary of the following intellectual property litigation case:
+      const prompt = `Please search your knowledge base and provide a comprehensive case analysis using all publicly available information about the following intellectual property litigation:
 
-Case Name: ${trial.shortName || trial.name || 'Unknown'}
-Court: ${trial.court || 'Not specified'}
-Date Range: ${dateRange}
+CASE DETAILS:
+Case Name/Title: ${trial.shortName || trial.name || 'Unknown'}
 Plaintiff: ${trial.plaintiff || 'Not specified'}
 Defendant: ${trial.defendant || 'Not specified'}
-Law Firms Involved: ${lawFirms.join(', ') || 'Not specified'}
+Case Number: ${trial.caseNumber || 'Not specified'}
+Court: ${trial.court || 'Not specified'}
+Trial Dates: ${dateRange}
+Law Firms: ${lawFirms.join(', ') || 'Not specified'}
 
-Please provide information on:
-1. Overview of the case and the intellectual property disputes involved
-2. Key patents, trademarks, or other IP at issue
-3. Main legal arguments from both sides
-4. Verdict and damages awarded (if applicable)
-5. Notable performances by attorneys or key moments in the trial
-6. Any precedential value or impact on future IP litigation
-7. Post-trial motions or appeals (if known)
-8. Industry impact or significance of the case
+IMPORTANT: Please use ALL publicly available information from your training data about this case, including:
+- Court opinions and orders (published and unpublished)
+- News coverage and legal media reports (Law360, IPWatchdog, etc.)
+- Press releases from the parties or law firms
+- Patent office records and USPTO proceedings
+- SEC filings mentioning the litigation
+- Legal blogs and commentary
+- Industry publications and trade press
+- Academic articles or case studies
 
-If this is a well-known case, please include any public reception or media coverage. If information is limited, please provide what context you can about similar cases or the typical progression of such IP disputes.
+REQUIRED COMPREHENSIVE INFORMATION:
+1. CASE BACKGROUND:
+   - Complete case history and how the dispute arose
+   - Business relationship between the parties
+   - Industry context and market implications
 
-Note: Please keep the response to approximately one page (500-700 words).`;
+2. INTELLECTUAL PROPERTY AT ISSUE:
+   - Specific patent numbers, claims, or trademark registrations
+   - Technology or products involved
+   - Prior art or validity challenges
+   - Any parallel USPTO proceedings (IPR, reexamination)
+
+3. LEGAL PROCEEDINGS:
+   - Key motions and rulings (claim construction, summary judgment)
+   - Expert witnesses and their testimony
+   - Jury selection and composition (if applicable)
+   - Trial strategies employed by each side
+
+4. VERDICT AND DAMAGES:
+   - Specific verdict details and jury findings
+   - Damage awards (exact amounts if known)
+   - Injunctive relief granted or denied
+   - Willfulness findings and enhanced damages
+
+5. POST-TRIAL ACTIVITY:
+   - JMOL motions and outcomes
+   - Appeals to Federal Circuit or other courts
+   - Settlement details (if public)
+   - Ongoing royalties or licensing arrangements
+
+6. LEGAL SIGNIFICANCE:
+   - Precedential value and cited opinions
+   - Impact on patent law or litigation strategy
+   - Industry-wide implications
+   - Changes to business practices or licensing
+
+7. KEY PLAYERS:
+   - Lead attorneys and their notable arguments
+   - Judges and their significant rulings
+   - Expert witnesses and their credentials
+   - Corporate executives who testified
+
+For high-profile cases, include:
+- Media coverage and public reaction
+- Stock price impacts
+- Competitor responses
+- Legislative or regulatory interest
+
+If this case has limited public information, provide:
+- Similar cases between these parties
+- Related litigation in the same technology area
+- Industry litigation patterns
+- Typical outcomes for similar disputes
+
+Note: Please provide a detailed response (700-900 words) with specific facts, dates, dollar amounts, and patent numbers from your training data rather than generic descriptions.`;
 
       await fs.writeFile(promptPath, prompt);
       promptsGenerated++;

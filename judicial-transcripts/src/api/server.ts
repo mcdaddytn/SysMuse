@@ -1,5 +1,6 @@
 // src/api/server.ts
 import express, { Express, Request, Response } from 'express';
+import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 //import { TranscriptParser } from '../parsers/phase1/TranscriptParser';
 //import { Phase2Processor } from '../parsers/phase2/Phase2Processor';
@@ -12,6 +13,7 @@ import { TranscriptExportService } from '../services/TranscriptExportService';
 import { CombinedSearchService } from '../services/CombinedSearchService';
 import logger from '../utils/logger';
 import reportsRouter from './routes/reports';
+import hierarchyRouter from './routes/hierarchy';
 const multer = require('multer');
 import path from 'path';
 
@@ -21,11 +23,15 @@ const searchService = new SearchService();
 const exportService = new TranscriptExportService();
 
 // Middleware
+app.use(cors()); // Enable CORS for all origins in development
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Mount report routes
 app.use('/api/reports', reportsRouter);
+
+// Mount hierarchy routes
+app.use('/api/hierarchy', hierarchyRouter);
 
 // File upload configuration
 const upload = multer({
@@ -287,7 +293,7 @@ app.get('/api/trials/:id/markers', async (req: Request, res: Response) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);

@@ -1,0 +1,37 @@
+{
+  "name": "judicial-transcripts-gui",
+  "version": "1.0.0",
+  "description": "Trial Hierarchy Viewer GUI",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint --ext .js,.ts,.vue ./src",
+    "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore"
+  },
+  "dependencies": {
+    "@quasar/extras": "^1.16.9",
+    "axios": "^1.6.5",
+    "pinia": "^2.1.7",
+    "quasar": "^2.14.2",
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@quasar/vite-plugin": "^1.6.0",
+    "@types/node": "^20.11.5",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vitejs/plugin-vue": "^5.0.3",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "@vue/eslint-config-typescript": "^12.0.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-vue": "^9.20.1",
+    "prettier": "^3.2.4",
+    "sass": "^1.70.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vue-tsc": "^1.8.27"
+  }
+}

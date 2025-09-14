@@ -60,9 +60,9 @@
               :color="getNodeColor(prop.node)"
             />
             <div class="col">
-              <div class="text-weight-medium">{{ prop.node.label }}</div>
-              <div class="text-caption text-grey-7" v-if="prop.node.stats">
-                {{ prop.node.stats }}
+              <div class="text-weight-medium">{{ prop.node.label || prop.node.name }}</div>
+              <div class="text-caption text-grey-7" v-if="prop.node.description">
+                {{ prop.node.description }}
               </div>
             </div>
           </div>

@@ -182,6 +182,8 @@ router.get('/views/:trialId/:viewType', async (req: Request, res: Response) => {
         id: node.section.id,
         type: node.section.markerSectionType,
         name: node.section.name,
+        label: node.section.name,
+        description: node.section.description,
         startEventId: node.section.startEventId,
         endEventId: node.section.endEventId
       };

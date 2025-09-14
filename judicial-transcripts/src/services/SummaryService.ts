@@ -89,10 +89,15 @@ export class SummaryService {
   }
 
   /**
-   * Get abridged summary (initial excerpt + stats)
+   * Get abridged summary (from MarkerSection.text)
    */
   private async getAbridgedSummary(section: MarkerSection): Promise<string> {
-    // First check if we have pre-generated summary
+    // First check if we have text in MarkerSection.text as requested
+    if (section.text) {
+      return section.text;
+    }
+
+    // Otherwise check if we have pre-generated summary
     const summaryPath = path.join('output', 'markersummary1', `section_${section.id}.txt`);
     if (fs.existsSync(summaryPath)) {
       return fs.readFileSync(summaryPath, 'utf-8');
@@ -125,69 +130,49 @@ export class SummaryService {
   }
 
   /**
-   * Get abridged2 summary (beginning and end excerpts + stats)
+   * Get abridged2 summary (for now, same as abridged)
    */
   private async getAbridged2Summary(section: MarkerSection): Promise<string> {
-    // First check if we have pre-generated summary
-    const summaryPath = path.join('output', 'markersummary2', `section_${section.id}.txt`);
-    if (fs.existsSync(summaryPath)) {
-      return fs.readFileSync(summaryPath, 'utf-8');
+    // For now, return the same as abridged summary (MarkerSection.text)
+    // as requested by the user
+    if (section.text) {
+      return section.text;
     }
 
-    // Generate summary on the fly if not pre-generated
-    const events = await this.getTranscriptEvents(section);
-    const stats = await this.getSectionStats(section);
-
-    let summary = '';
-
-    // Add beginning excerpt (first 3 statements)
-    const beginningEvents = events.slice(0, 3);
-    for (const event of beginningEvents) {
-      if (event.statement?.speaker && event.statement?.text) {
-        const speaker = event.statement.speaker.speakerHandle || 'UNKNOWN';
-        const text = event.statement.text;
-        summary += `${speaker}: ${text}\n`;
-      }
-    }
-
-    summary += '\n...\n\n';
-
-    // Add ending excerpt (last 3 statements)
-    const endingEvents = events.slice(-3);
-    for (const event of endingEvents) {
-      if (event.statement?.speaker && event.statement?.text) {
-        const speaker = event.statement.speaker.speakerHandle || 'UNKNOWN';
-        const text = event.statement.text;
-        summary += `${speaker}: ${text}\n`;
-      }
-    }
-
-    // Add statistics
-    summary += `\n[${stats.eventCount} events, ${stats.wordCount.toLocaleString()} words`;
-    if (stats.duration) {
-      summary += `, ${stats.duration}`;
-    }
-    summary += `]`;
-
-    return summary;
+    // Fallback to abridged summary generation
+    return this.getAbridgedSummary(section);
   }
 
   /**
    * Get full text of the section
    */
   private async getFullText(section: MarkerSection): Promise<string> {
-    // First check if we have pre-generated full text
-    const fullTextPath = path.join('output', 'markersections', `section_${section.id}.txt`);
-    if (fs.existsSync(fullTextPath)) {
-      return fs.readFileSync(fullTextPath, 'utf-8');
+    // Get the trial information to construct the file path
+    const trial = await this.prisma.trial.findUnique({
+      where: { id: section.trialId },
+      select: { shortName: true }
+    });
+
+    if (trial?.shortName && section.name) {
+      // Construct the file path based on the pattern:
+      // output/markersections/[shortName]/[shortName]_[MarkerSection.name].txt
+      const fileName = `${trial.shortName}_${section.name.replace(/\s+/g, '_')}.txt`;
+      const fullTextPath = path.join('output', 'markersections', trial.shortName, fileName);
+
+      if (fs.existsSync(fullTextPath)) {
+        logger.info(`Loading full text from file: ${fullTextPath}`);
+        return fs.readFileSync(fullTextPath, 'utf-8');
+      } else {
+        logger.warn(`Full text file not found: ${fullTextPath}`);
+      }
     }
 
-    // If we have text stored in the database, use that
+    // If we have text stored in the database, use that as fallback
     if (section.text) {
       return section.text;
     }
 
-    // Generate full text on the fly
+    // Generate full text on the fly as last resort
     const events = await this.getTranscriptEvents(section);
     let fullText = '';
 

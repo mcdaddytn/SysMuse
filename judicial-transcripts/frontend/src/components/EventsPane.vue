@@ -74,79 +74,39 @@
 
       <div v-else-if="filteredEvents.length > 0">
         <q-list separator>
-          <q-expansion-item
+          <q-item
             v-for="event in paginatedEvents"
             :key="event.id"
-            group="events"
-            :icon="getEventIcon(event)"
-            :header-class="getEventHeaderClass(event)"
+            clickable
+            @click="selectEvent(event)"
+            :class="{ 'bg-blue-1': selectedEvent?.id === event.id }"
           >
-            <template v-slot:header>
-              <q-item-section avatar>
-                <q-icon :name="getEventIcon(event)" :color="getEventColor(event)" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label>
-                  {{ event.type }}
-                  <q-badge
-                    v-if="event.ruling"
-                    :color="getRulingColor(event.ruling)"
-                    class="q-ml-sm"
-                  >
-                    {{ event.ruling }}
-                  </q-badge>
-                </q-item-label>
-                <q-item-label caption>
-                  Events: {{ event.startEventId }}-{{ event.endEventId }}
-                  <span v-if="event.confidence" class="q-ml-sm">
-                    ({{ Math.round(event.confidence * 100) }}% confidence)
-                  </span>
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-btn
-                  flat
-                  round
-                  size="sm"
-                  icon="open_in_new"
-                  @click.stop="openEvent(event)"
-                >
-                  <q-tooltip>View in context</q-tooltip>
-                </q-btn>
-              </q-item-section>
-            </template>
-
-            <q-card>
-              <q-card-section class="event-transcript">
-                <div
-                  v-for="(line, index) in event.transcriptLines"
-                  :key="index"
-                  class="transcript-line"
-                >
-                  <span v-if="line.speaker" class="speaker-name">
-                    {{ line.speaker }}:
-                  </span>
-                  {{ line.text }}
-                </div>
-              </q-card-section>
-              <q-card-actions align="right">
-                <q-btn
-                  flat
-                  size="sm"
-                  icon="content_copy"
-                  label="Copy"
-                  @click="copyEvent(event)"
-                />
-                <q-btn
-                  flat
-                  size="sm"
-                  icon="bookmark_border"
-                  label="Bookmark"
-                  @click="bookmarkEvent(event)"
-                />
-              </q-card-actions>
-            </q-card>
-          </q-expansion-item>
+            <q-item-section>
+              <q-item-label class="text-weight-medium">
+                {{ event.name || event.type }}
+              </q-item-label>
+              <q-item-label caption v-if="event.description">
+                {{ event.description }}
+              </q-item-label>
+              <div class="event-summary-text q-mt-sm" v-if="event.text">
+                {{ truncateText(event.text, 200) }}
+              </div>
+              <q-item-label caption class="q-mt-xs">
+                Events: {{ event.startEventId }}-{{ event.endEventId }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side top>
+              <q-btn
+                flat
+                round
+                size="sm"
+                icon="open_in_new"
+                @click.stop="openEvent(event)"
+              >
+                <q-tooltip>View in context</q-tooltip>
+              </q-btn>
+            </q-item-section>
+          </q-item>
         </q-list>
 
         <div v-if="hasMorePages" class="q-pa-md text-center">
@@ -194,6 +154,7 @@ const rulingFilter = ref<string[]>([])
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const currentPage = ref(1)
 const pageSize = 20
+const selectedEvent = ref<any>(null)
 
 const eventTypeLabel = computed(() => {
   const labels: Record<string, string> = {
@@ -333,11 +294,18 @@ const openEvent = (event: any) => {
   )
 }
 
-const copyEvent = (event: any) => {
-  const text = event.transcriptLines
-    .map((line: any) => `${line.speaker ? line.speaker + ': ' : ''}${line.text}`)
-    .join('\n')
+const truncateText = (text: string, maxLength: number) => {
+  if (!text) return ''
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
+}
 
+const selectEvent = (event: any) => {
+  selectedEvent.value = event
+}
+
+const copyEvent = (event: any) => {
+  const text = event.text || event.name || ''
   navigator.clipboard.writeText(text)
   $q.notify({
     type: 'positive',
@@ -389,5 +357,12 @@ watch(() => props.eventType, loadEvents)
   font-weight: bold;
   color: #1976d2;
   text-transform: uppercase;
+}
+
+.event-summary-text {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #666;
+  white-space: pre-wrap;
 }
 </style>

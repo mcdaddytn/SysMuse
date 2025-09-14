@@ -273,9 +273,8 @@ export const useTrialStore = defineStore('trials', {
     availableSummaries: (state) => {
       return [
         { label: 'Abridged', value: 'abridged' },
-        { label: 'Detailed', value: 'detailed' },
-        { label: 'Full Text', value: 'full' },
-        { label: 'Key Points', value: 'keyPoints' }
+        { label: 'Abridged 2', value: 'abridged2' },
+        { label: 'Full Text', value: 'fulltext' }
       ]
     },
 

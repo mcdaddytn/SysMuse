@@ -59,6 +59,14 @@ export class BackgroundLLMService {
       llmProfiles: {
         default: 'chatgpt',
         profiles: {
+          'chatgpt5': {
+            provider: 'openai',
+            model: 'gpt-5',
+            apiKeyEnv: 'OPENAI_API_KEY',
+            maxTokens: 2000,
+            temperature: 0.3,
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
+          },
           'chatgpt': {
             provider: 'openai',
             model: 'gpt-4',
@@ -83,9 +91,25 @@ export class BackgroundLLMService {
             temperature: 0.3,
             systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
           },
+          'claude-opus-4.1': {
+            provider: 'anthropic',
+            model: 'claude-opus-4-1-20250805',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+            maxTokens: 2000,
+            temperature: 0.3,
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
+          },
           'claude-sonnet': {
             provider: 'anthropic',
-            model: 'claude-3-sonnet-20240229',
+            model: 'claude-3-5-sonnet-20241022',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+            maxTokens: 2000,
+            temperature: 0.3,
+            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
+          },
+          'claude-haiku': {
+            provider: 'anthropic',
+            model: 'claude-3-5-haiku-20241022',
             apiKeyEnv: 'ANTHROPIC_API_KEY',
             maxTokens: 1500,
             temperature: 0.3,
@@ -248,7 +272,6 @@ export class BackgroundLLMService {
         } catch {}
       }
 
-      const trialNames = [...new Set(attorney.trialAttorneys.map(ta => ta.trial?.shortName).filter(Boolean))];
       const lawFirms = [...new Set(attorney.trialAttorneys.map(ta => ta.lawFirm?.name).filter(Boolean))];
 
       const prompt = `Please search your knowledge base and provide a comprehensive professional biography using all publicly available information about the following attorney:
@@ -257,7 +280,6 @@ ATTORNEY DETAILS:
 Name: ${attorney.name}
 Law Firm(s): ${lawFirms.join(', ') || 'Unknown'}
 Bar Number: ${attorney.barNumber || 'Not provided'}
-Known Trial Involvement: ${trialNames.join(', ') || 'No trial data available'}
 
 IMPORTANT: Please use ALL publicly available information from your training data about this attorney, including:
 - Information from law firm websites and attorney profiles
@@ -273,23 +295,39 @@ REQUIRED INFORMATION TO INCLUDE:
 1. Educational background (law school, undergraduate, year of graduation if known)
 2. Bar admissions and years of practice
 3. Career progression and previous firms
-4. Specialization areas beyond IP (if any)
-5. Notable cases and trials (especially IP litigation)
-6. Significant verdicts, settlements, or legal victories
+4. Specialization areas (especially IP litigation)
+5. Notable cases and trials with specific case names and outcomes
+6. Significant verdicts, settlements, or legal victories (with dollar amounts when known)
 7. Professional recognitions, awards, and rankings
 8. Publications, speaking engagements, and thought leadership
 9. Pro bono work or professional associations
 10. Any unique expertise or technical background
 
+IMPORTANT - PROVIDE RELEVANT LINKS:
+- Direct link to attorney's profile on law firm website (if available)
+- Link to attorney's LinkedIn profile (if known)
+- Links to notable articles or publications by the attorney
+- Links to news coverage of significant cases
+- Any other relevant professional profile links
+
+FOR ATTORNEYS WITH LIMITED PUBLIC PROFILE:
+Please provide EXTENSIVE information about their law firm including:
+- Detailed history and founding of the firm
+- Size of the firm (number of attorneys, offices)
+- Key practice areas and specializations
+- Firm's most notable IP cases and victories
+- Major clients (if publicly known)
+- Firm culture and reputation
+- Rankings and recognitions (Chambers, AmLaw, etc.)
+- Notable partners and their achievements
+- Typical career trajectory for associates and partners
+- Regional presence and influence
+- Recent significant hires or departures
+- Pro bono and community involvement
+
 For well-known attorneys, provide specific details about their most famous cases, including case names, parties represented, and outcomes. Include specific dollar amounts for verdicts or settlements when publicly known.
 
-If this attorney is not widely known in public records, still provide:
-- Detailed information about their law firm's IP practice
-- Typical career trajectory for IP litigators at that firm
-- The firm's notable IP cases and clients
-- Regional or practice-specific context
-
-Note: Please provide a detailed response (600-800 words) using specific, factual information from your training data rather than generic descriptions.`;
+Note: Please provide a detailed response (700-900 words) using specific, factual information from your training data. Include as many relevant links as possible, and provide extensive law firm context for less prominent attorneys.`;
 
       await fs.writeFile(promptPath, prompt);
       promptsGenerated++;

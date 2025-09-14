@@ -1,9 +1,9 @@
 [
   {
     "name": "judge_attorney_interaction",
-    "description": "Find interactions where judge and at least 2 attorneys speak within 10 statements",
+    "description": "Find interactions where judge and at least 2 attorneys speak within 6 statements",
     "expressionType": "BOOLEAN",
-    "windowSize": 8,
+    "windowSize": 6,
     "thresholdValue": 0.95,
     "minConfidenceLevel": "MEDIUM",
     "combinationType": "AND",
@@ -16,9 +16,9 @@
   },
   {
     "name": "opposing_counsel_interaction",
-    "description": "Find interactions between plaintiff and defense attorneys with judge within 8 statements",
+    "description": "Find interactions between plaintiff and defense attorneys with judge within 6 statements",
     "expressionType": "BOOLEAN",
-    "windowSize": 8,
+    "windowSize": 6,
     "thresholdValue": 1.0,
     "minConfidenceLevel": "HIGH",
     "combinationType": "AND",
@@ -34,17 +34,17 @@
     "name": "objection_sustained",
     "description": "Attorney objects and judge sustains within 5 statements",
     "expressionType": "CONFIDENCE",
-    "windowSize": 5,
+    "windowSize": 7,
     "thresholdValue": 0.7,
     "minConfidenceLevel": "MEDIUM",
     "combinationType": "MULTIPLY",
     "metadata": {
-      "attorneyPhrases": ["objection", "I object", "we object"],
-      "judgePhrases": ["sustained"],
+      "attorneyPhrases": ["Objection", "objection", "object"],
+      "judgePhrases": ["Sustained", "sustained"],
       "weights": {
+        "Objection": 1.0,
         "objection": 1.0,
-        "I object": 1.0,
-        "we object": 0.9,
+        "object": 0.8,
         "sustained": 1.0
       }
     },
@@ -54,19 +54,20 @@
     "name": "objection_overruled",
     "description": "Attorney objects and judge overrules within 5 statements",
     "expressionType": "CONFIDENCE",
-    "windowSize": 5,
+    "windowSize": 7,
     "thresholdValue": 0.7,
     "minConfidenceLevel": "MEDIUM",
     "combinationType": "MULTIPLY",
     "metadata": {
-      "attorneyPhrases": ["objection", "I object", "we object"],
-      "judgePhrases": ["overruled", "I'll allow it"],
+      "attorneyPhrases": ["Objection", "objection", "object"],
+      "judgePhrases": ["Overruled", "overruled", "allow it"],
       "weights": {
+        "Objection": 1.0,
         "objection": 1.0,
-        "I object": 1.0,
-        "we object": 0.9,
+        "object": 0.8,
+        "Overruled": 1.0,
         "overruled": 1.0,
-        "I'll allow it": 0.7
+        "allow it": 0.7
       }
     },
     "isActive": true

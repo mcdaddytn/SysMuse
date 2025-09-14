@@ -120,7 +120,7 @@ export class TranscriptRenderer {
         id: e.id,
         ordinal: e.ordinal,
         statement: e.statement ? {
-          text: e.statement.text,
+          text: this.applyMarkerAppendMode(e.statement.text),
           speaker: {
             speakerHandle: this.formatSpeakerHandle(e.statement.speaker?.speakerHandle),
             speakerType: e.statement.speaker?.speakerType
@@ -198,7 +198,7 @@ export class TranscriptRenderer {
    */
   private formatSpeakerHandle(handle?: string | null): string {
     if (!handle) return 'UNKNOWN';
-    
+
     // Clean up underscores and format nicely
     return handle
       .replace(/_/g, ' ')
@@ -212,47 +212,109 @@ export class TranscriptRenderer {
   }
 
   /**
+   * Apply marker append mode to statement text
+   * Converts between space-separated and newline-separated text based on configuration
+   */
+  private applyMarkerAppendMode(text: string | null | undefined): string {
+    if (!text) return '';
+
+    // If the text was originally saved with spaces but we want newlines for display
+    if (this.markerAppendMode === 'newline' || this.markerAppendMode === 'unixNewline') {
+      // Look for patterns that suggest line breaks were replaced with spaces
+      // Common patterns: sentence endings, questions, exclamations followed by capital letters
+      return text
+        .replace(/([.!?])\s+([A-Z])/g, '$1\n$2')
+        .replace(/([:])\s+([A-Z])/g, '$1\n$2')
+        .trim();
+    } else if (this.markerAppendMode === 'windowsNewline') {
+      return text
+        .replace(/([.!?])\s+([A-Z])/g, '$1\r\n$2')
+        .replace(/([:])\s+([A-Z])/g, '$1\r\n$2')
+        .trim();
+    }
+
+    // Default: return as-is (space mode)
+    return text;
+  }
+
+  /**
    * Generate auto-summary from rendered text
    */
   private generateAutoSummary(renderedText: string, eventCount: number, mode: SummaryMode = 'SUMMARYABRIDGED1'): string {
-    const lines = renderedText.split('\n').filter(l => l.trim());
+    // For statistics, split by actual newlines
+    const allLines = renderedText.split('\n');
+    const nonEmptyLines = allLines.filter(l => l.trim());
     const wordCount = renderedText.split(/\s+/).filter(w => w.trim()).length;
     const charCount = renderedText.length;
     const speakers = new Set<string>();
-    
-    // Extract speaker information
-    lines.forEach(line => {
+
+    // Extract speaker information from all lines
+    nonEmptyLines.forEach(line => {
       const match = line.match(/^([A-Z][A-Z .]+?):\s/);
       if (match) {
         speakers.add(match[1]);
       }
     });
-    
-    if (mode === 'SUMMARYABRIDGED1') {
-      // Original mode: excerpt from beginning + summary
-      const excerptLines = lines.slice(0, 5);
-      const excerpt = this.applyTextCleaning(excerptLines.join('\n'));
-      
-      const summary = `${excerpt}${excerptLines.length < lines.length ? '\n...' : ''}
 
-[Summary: ${eventCount} events, ${lines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
-      
+    if (mode === 'SUMMARYABRIDGED1') {
+      // Take excerpt from beginning preserving original formatting
+      const maxExcerptLength = 1500; // Approximate length for beginning excerpt
+      let excerpt = renderedText.substring(0, maxExcerptLength);
+
+      // Find last complete sentence or statement
+      const lastPeriod = excerpt.lastIndexOf('.');
+      const lastNewline = excerpt.lastIndexOf('\n');
+      const cutPoint = Math.max(lastPeriod, lastNewline);
+      if (cutPoint > 0) {
+        excerpt = excerpt.substring(0, cutPoint + 1);
+      }
+
+      const summary = `${excerpt}${renderedText.length > maxExcerptLength ? '\n...' : ''}
+
+[Summary: ${eventCount} events, ${nonEmptyLines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
+
       return summary;
     } else {
       // SUMMARYABRIDGED2: excerpt from beginning + excerpt from end + summary
-      const beginExcerptLines = lines.slice(0, 3);
-      const endExcerptLines = lines.slice(-3);
-      
-      const beginExcerpt = this.applyTextCleaning(beginExcerptLines.join('\n'));
-      const endExcerpt = this.applyTextCleaning(endExcerptLines.join('\n'));
-      
+      const maxBeginLength = 800;
+      const maxEndLength = 800;
+
+      // Get beginning excerpt preserving formatting
+      let beginExcerpt = renderedText.substring(0, maxBeginLength);
+      const beginLastPeriod = beginExcerpt.lastIndexOf('.');
+      const beginLastNewline = beginExcerpt.lastIndexOf('\n');
+      const beginCutPoint = Math.max(beginLastPeriod, beginLastNewline);
+      if (beginCutPoint > 0) {
+        beginExcerpt = beginExcerpt.substring(0, beginCutPoint + 1);
+      }
+
+      // Get end excerpt preserving formatting
+      let endExcerpt = renderedText.substring(Math.max(0, renderedText.length - maxEndLength));
+
+      // Find the first complete sentence start (after a period or newline)
+      const endFirstPeriod = endExcerpt.indexOf('. ');
+      const endFirstNewline = endExcerpt.indexOf('\n');
+
+      let endStartPoint = -1;
+      if (endFirstPeriod >= 0 && endFirstNewline >= 0) {
+        endStartPoint = Math.min(endFirstPeriod + 2, endFirstNewline + 1);
+      } else if (endFirstPeriod >= 0) {
+        endStartPoint = endFirstPeriod + 2;
+      } else if (endFirstNewline >= 0) {
+        endStartPoint = endFirstNewline + 1;
+      }
+
+      if (endStartPoint > 0 && endStartPoint < endExcerpt.length) {
+        endExcerpt = endExcerpt.substring(endStartPoint).trim();
+      }
+
       let summary = beginExcerpt;
-      if (lines.length > 6) {
+      if (renderedText.length > maxBeginLength + maxEndLength) {
         summary += '\n...\n' + endExcerpt;
       }
-      
-      summary += `\n\n[Summary: ${eventCount} events, ${lines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
-      
+
+      summary += `\n\n[Summary: ${eventCount} events, ${nonEmptyLines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
+
       return summary;
     }
   }

@@ -252,7 +252,7 @@ router.get('/summaries/:sectionId', async (req: Request, res: Response) => {
       return;
     }
 
-    const summaryType = req.query.summaryType as string || 'abridged';
+    const summaryType = (req.query.type || req.query.summaryType) as string || 'abridged';
     const maxLength = req.query.maxLength ? parseInt(req.query.maxLength as string) : undefined;
 
     const section = await prisma.markerSection.findUnique({

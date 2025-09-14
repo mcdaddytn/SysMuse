@@ -39,8 +39,11 @@ export class StandardTrialHierarchyBuilder {
    */
   async buildStandardHierarchy(trialId: number): Promise<void> {
     this.logger.info(`Building Standard Trial Hierarchy for trial ${trialId}`);
-    
+
     try {
+      // Clean up old hierarchy sections from previous runs
+      await this.cleanupOldHierarchySections(trialId);
+
       // Load trial style config
       await this.loadTrialStyleConfig(trialId);
       // First, ensure we have a TRIAL root section
@@ -84,6 +87,117 @@ export class StandardTrialHierarchyBuilder {
     } catch (error) {
       this.logger.error(`Error building hierarchy for trial ${trialId}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Clean up old hierarchy sections from previous phase3 runs
+   */
+  private async cleanupOldHierarchySections(trialId: number): Promise<void> {
+    this.logger.info(`Cleaning up old hierarchy sections for trial ${trialId}`);
+
+    // Delete old hierarchy sections created by phase3
+    // Keep the original witness testimony sections created by WitnessMarkerDiscovery
+    const deletedCount = await this.prisma.markerSection.deleteMany({
+      where: {
+        trialId,
+        source: MarkerSource.PHASE3_HIERARCHY,
+        markerSectionType: {
+          in: [
+            MarkerSectionType.TRIAL,
+            MarkerSectionType.WITNESS_TESTIMONY_PLAINTIFF,
+            MarkerSectionType.WITNESS_TESTIMONY_DEFENSE,
+            MarkerSectionType.WITNESS_TESTIMONY_PERIOD,
+            MarkerSectionType.OPENING_STATEMENTS_PERIOD,
+            MarkerSectionType.CLOSING_STATEMENTS_PERIOD,
+            MarkerSectionType.JURY_SELECTION,
+            MarkerSectionType.JURY_DELIBERATION,
+            MarkerSectionType.JURY_VERDICT,
+            MarkerSectionType.CASE_INTRO,
+            MarkerSectionType.CASE_WRAPUP,
+            MarkerSectionType.SESSION
+          ]
+        }
+      }
+    });
+
+    if (deletedCount.count > 0) {
+      this.logger.info(`Deleted ${deletedCount.count} old hierarchy sections`);
+    }
+
+    // Also delete duplicate WITNESS_TESTIMONY sections that don't have WitTest_ prefix
+    // These are generic sections that shouldn't exist
+    const deletedGeneric = await this.prisma.markerSection.deleteMany({
+      where: {
+        trialId,
+        markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
+        NOT: {
+          name: {
+            startsWith: 'WitTest_'
+          }
+        }
+      }
+    });
+
+    if (deletedGeneric.count > 0) {
+      this.logger.info(`Deleted ${deletedGeneric.count} generic witness testimony sections`);
+    }
+
+    // Find and remove duplicate WitTest_ sections (keep the one with the lowest ID)
+    const witTestSections = await this.prisma.markerSection.findMany({
+      where: {
+        trialId,
+        markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
+        name: {
+          startsWith: 'WitTest_'
+        }
+      },
+      orderBy: { id: 'asc' }
+    });
+
+    // Group by name to find duplicates
+    const sectionsByName = new Map<string, typeof witTestSections>();
+    for (const section of witTestSections) {
+      if (!section.name) continue;
+      if (!sectionsByName.has(section.name)) {
+        sectionsByName.set(section.name, []);
+      }
+      sectionsByName.get(section.name)!.push(section);
+    }
+
+    // Delete duplicates (keep first one)
+    let duplicatesDeleted = 0;
+    for (const [name, sections] of sectionsByName) {
+      if (sections.length > 1) {
+        this.logger.warn(`Found ${sections.length} duplicate sections for ${name}, keeping first one (id: ${sections[0].id})`);
+        const idsToDelete = sections.slice(1).map(s => s.id);
+
+        // First, update any child sections to point to the keeper
+        await this.prisma.markerSection.updateMany({
+          where: {
+            parentSectionId: {
+              in: idsToDelete
+            }
+          },
+          data: {
+            parentSectionId: sections[0].id
+          }
+        });
+
+        // Then delete the duplicates
+        const deleted = await this.prisma.markerSection.deleteMany({
+          where: {
+            id: {
+              in: idsToDelete
+            }
+          }
+        });
+        duplicatesDeleted += deleted.count;
+      }
+    }
+
+    if (duplicatesDeleted > 0) {
+      this.logger.info(`Deleted ${duplicatesDeleted} duplicate WitTest_ sections`);
     }
   }
 
@@ -306,12 +420,38 @@ export class StandardTrialHierarchyBuilder {
    * Build witness testimony hierarchy from existing witness markers
    */
   private async buildWitnessTestimonyHierarchy(
-    trialId: number, 
+    trialId: number,
     trialSectionId: number
   ): Promise<MarkerSection | null> {
     this.logger.info(`Building witness testimony hierarchy for trial ${trialId}`);
 
-    // Find existing witness examination sections (using generic WITNESS_EXAMINATION)
+    // Step 1: Find existing WitTest_ sections created by WitnessMarkerDiscovery
+    const witnessTestimonySections = await this.prisma.markerSection.findMany({
+      where: {
+        trialId,
+        markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
+        name: {
+          startsWith: 'WitTest_'
+        }
+      },
+      orderBy: { startEventId: 'asc' }
+    });
+
+    if (witnessTestimonySections.length === 0) {
+      this.logger.info('No witness testimony sections found');
+      return await this.createZeroLengthSection({
+        trialId,
+        sectionType: MarkerSectionType.WITNESS_TESTIMONY_PERIOD,
+        parentSectionId: trialSectionId,
+        name: 'Witness Testimony Period',
+        description: 'No witness testimony in this trial',
+        reason: 'No witness testimony sections found'
+      });
+    }
+
+    this.logger.info(`Found ${witnessTestimonySections.length} witness testimony sections`);
+
+    // Step 2: Link examination sections to their parent WitTest_ sections
     const examinationSections = await this.prisma.markerSection.findMany({
       where: {
         trialId,
@@ -328,31 +468,29 @@ export class StandardTrialHierarchyBuilder {
       orderBy: { startEventId: 'asc' }
     });
 
-    if (examinationSections.length === 0) {
-      this.logger.info('No witness examinations found');
-      return await this.createZeroLengthSection({
-        trialId,
-        sectionType: MarkerSectionType.WITNESS_TESTIMONY_PERIOD,
-        parentSectionId: trialSectionId,
-        name: 'Witness Testimony Period',
-        description: 'No witness testimony in this trial',
-        reason: 'No witness examinations found'
-      });
-    }
-    
-    this.logger.info(`Found ${examinationSections.length} witness examination sections`);
+    this.logger.info(`Found ${examinationSections.length} examination sections to link`);
 
-    // Group examinations by witness (based on temporal proximity)
-    const witnessGroups = await this.groupExaminationsByWitness(examinationSections);
-    
-    // Create individual WITNESS_TESTIMONY sections
-    const witnessTestimonySections: MarkerSection[] = [];
-    for (const group of witnessGroups) {
-      const witnessSection = await this.createWitnessTestimonySection(group, trialId);
-      witnessTestimonySections.push(witnessSection);
+    // Link examinations to their witness testimony sections
+    for (const exam of examinationSections) {
+      // Extract witness name from examination name
+      const nameMatch = exam.name?.match(/WitExam_(?:Direct|Cross|Redir|Recross)_(.+)/);
+      if (nameMatch) {
+        const witnessName = nameMatch[1];
+        const witTestSection = witnessTestimonySections.find(w => w.name === `WitTest_${witnessName}`);
+
+        if (witTestSection) {
+          await this.prisma.markerSection.update({
+            where: { id: exam.id },
+            data: { parentSectionId: witTestSection.id }
+          });
+          this.logger.debug(`Linked ${exam.name} to ${witTestSection.name}`);
+        } else {
+          this.logger.warn(`Could not find WitTest section for examination: ${exam.name}`);
+        }
+      }
     }
 
-    // Determine plaintiff vs defense witnesses
+    // Step 3: Determine plaintiff vs defense witnesses
     const { plaintiffWitnesses, defenseWitnesses } = await this.categorizeWitnesses(
       witnessTestimonySections
     );
@@ -1446,7 +1584,7 @@ export class StandardTrialHierarchyBuilder {
   }
 
   /**
-   * Create a witness testimony section encompassing all examinations
+   * Find or create a witness testimony section encompassing all examinations
    */
   private async createWitnessTestimonySection(
     examinations: MarkerSection[],
@@ -1454,13 +1592,67 @@ export class StandardTrialHierarchyBuilder {
   ): Promise<MarkerSection> {
     const firstExam = examinations[0];
     const lastExam = examinations[examinations.length - 1];
-    
-    return await this.prisma.markerSection.create({
+
+    // Extract witness name from examination names (e.g., "WitExam_Direct_LESLIE_D_BAYCH" -> "LESLIE_D_BAYCH")
+    let witnessName: string | null = null;
+    const nameMatch = firstExam.name?.match(/WitExam_(?:Direct|Cross|Redir|Recross)_(.+)/);
+    if (nameMatch) {
+      witnessName = nameMatch[1];
+    }
+
+    // First, try to find an existing WitTest_ section for this witness within this trial
+    // The WitnessMarkerDiscovery should have already created these with proper names
+    if (witnessName) {
+      const existingSection = await this.prisma.markerSection.findFirst({
+        where: {
+          trialId,
+          markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
+          name: `WitTest_${witnessName}`
+        }
+      });
+
+      if (existingSection) {
+        this.logger.debug(`Found existing witness testimony section: ${existingSection.name}`);
+
+        // Update the section bounds if our examinations extend beyond current bounds
+        const needsUpdate =
+          (firstExam.startEventId && existingSection.startEventId && firstExam.startEventId < existingSection.startEventId) ||
+          (lastExam.endEventId && existingSection.endEventId && lastExam.endEventId > existingSection.endEventId);
+
+        if (needsUpdate) {
+          const updated = await this.prisma.markerSection.update({
+            where: { id: existingSection.id },
+            data: {
+              startEventId: Math.min(existingSection.startEventId || firstExam.startEventId || 0, firstExam.startEventId || 0),
+              endEventId: Math.max(existingSection.endEventId || lastExam.endEventId || 0, lastExam.endEventId || 0),
+              startTime: firstExam.startTime,
+              endTime: lastExam.endTime
+            }
+          });
+        }
+
+        // Update all examination sections to be children of this witness testimony section
+        for (const exam of examinations) {
+          await this.prisma.markerSection.update({
+            where: { id: exam.id },
+            data: { parentSectionId: existingSection.id }
+          });
+        }
+
+        return existingSection;
+      }
+    }
+
+    // If no existing section found, log a warning and create a generic one
+    // This shouldn't happen if WitnessMarkerDiscovery ran properly
+    this.logger.warn(`No existing WitTest_ section found for witness ${witnessName || 'unknown'}, creating generic section`);
+
+    const newSection = await this.prisma.markerSection.create({
       data: {
         trialId,
         markerSectionType: MarkerSectionType.WITNESS_TESTIMONY,
-        name: 'Witness Testimony',
-        description: 'Complete testimony of witness',
+        name: witnessName ? `WitTest_${witnessName}` : 'Witness Testimony',
+        description: witnessName ? `All testimony by ${witnessName.replace(/_/g, ' ')}` : 'Complete testimony of witness',
         startEventId: firstExam.startEventId,
         endEventId: lastExam.endEventId,
         startTime: firstExam.startTime,
@@ -1473,6 +1665,16 @@ export class StandardTrialHierarchyBuilder {
         }
       }
     });
+
+    // Update all examination sections to be children of this witness testimony section
+    for (const exam of examinations) {
+      await this.prisma.markerSection.update({
+        where: { id: exam.id },
+        data: { parentSectionId: newSection.id }
+      });
+    }
+
+    return newSection;
   }
 
   /**
@@ -1481,13 +1683,104 @@ export class StandardTrialHierarchyBuilder {
   private async categorizeWitnesses(
     witnessSections: MarkerSection[]
   ): Promise<{ plaintiffWitnesses: MarkerSection[], defenseWitnesses: MarkerSection[] }> {
-    // Simple heuristic: first half are plaintiff, second half are defense
-    // In a real implementation, would check who called the witness
-    const midpoint = Math.floor(witnessSections.length / 2);
-    
+    const plaintiffWitnesses: MarkerSection[] = [];
+    const defenseWitnesses: MarkerSection[] = [];
+
+    // Look up actual witness caller from database
+    for (const section of witnessSections) {
+      // Extract witness ID from metadata or find witness by name
+      const metadata = section.metadata as any;
+      let witnessCaller: string | null = null;
+
+      if (metadata?.witnessId) {
+        // If we have witness ID in metadata, look it up
+        const witness = await this.prisma.witness.findUnique({
+          where: { id: metadata.witnessId }
+        });
+        witnessCaller = witness?.witnessCaller || null;
+      } else if (section.name) {
+        // Try to extract witness name from section name (e.g., "WitTest_LESLIE_D_BAYCH")
+        const nameMatch = section.name.match(/WitTest_(.+)/);
+        if (nameMatch) {
+          // Convert underscores to spaces for database lookup
+          // Section names use underscores, but database names use spaces
+          const witnessNameFromSection = nameMatch[1].replace(/_/g, ' ');
+
+          // Try exact match first
+          let witness = await this.prisma.witness.findFirst({
+            where: {
+              trialId: section.trialId,
+              name: witnessNameFromSection
+            }
+          });
+
+          // If no exact match, try with underscores as spaces (common mismatch)
+          if (!witness) {
+            // Most witness names in DB have spaces, but section names use underscores
+            // Also handle special characters like PH D vs PH_D
+            const normalizedName = witnessNameFromSection
+              .replace(/_/g, ' ')  // Replace underscores with spaces
+              .replace(/\s+/g, ' ')  // Normalize multiple spaces
+              .trim();
+
+            witness = await this.prisma.witness.findFirst({
+              where: {
+                trialId: section.trialId,
+                name: normalizedName
+              }
+            });
+          }
+
+          // If still no match, try more flexible search
+          if (!witness) {
+            const normalizedName = witnessNameFromSection.replace(/\s+/g, ' ').trim();
+            witness = await this.prisma.witness.findFirst({
+              where: {
+                trialId: section.trialId,
+                OR: [
+                  { name: { contains: normalizedName } },
+                  { displayName: { equals: normalizedName } },
+                  { displayName: { contains: normalizedName } }
+                ]
+              }
+            });
+          }
+
+          if (witness) {
+            witnessCaller = witness.witnessCaller || null;
+            metadata.witnessId = witness.id; // Store witness ID for future reference
+            this.logger.info(`Matched witness ${witness.name} (caller: ${witness.witnessCaller}) for section ${section.name}`);
+          } else {
+            this.logger.error(`Could not find witness in database for section: ${section.name} (searched for: "${witnessNameFromSection}")`);
+          }
+        }
+      }
+
+      // Categorize based on witnessCaller
+      if (witnessCaller === 'PLAINTIFF') {
+        this.logger.debug(`Assigning ${section.name} to plaintiff witnesses (caller: ${witnessCaller})`);
+        plaintiffWitnesses.push(section);
+      } else if (witnessCaller === 'DEFENDANT' || witnessCaller === 'DEFENSE') {
+        this.logger.debug(`Assigning ${section.name} to defense witnesses (caller: ${witnessCaller})`);
+        defenseWitnesses.push(section);
+      } else {
+        // If we can't determine, use position-based heuristic as fallback
+        // Typically plaintiff witnesses come first
+        this.logger.warn(`Could not determine witness caller for section ${section.name} (caller: ${witnessCaller}), using position-based heuristic`);
+        if (plaintiffWitnesses.length === 0 ||
+            (defenseWitnesses.length > 0 && plaintiffWitnesses.length > defenseWitnesses.length)) {
+          plaintiffWitnesses.push(section);
+        } else {
+          defenseWitnesses.push(section);
+        }
+      }
+    }
+
+    this.logger.info(`Categorized witnesses: ${plaintiffWitnesses.length} plaintiff, ${defenseWitnesses.length} defense`);
+
     return {
-      plaintiffWitnesses: witnessSections.slice(0, midpoint),
-      defenseWitnesses: witnessSections.slice(midpoint)
+      plaintiffWitnesses,
+      defenseWitnesses
     };
   }
 

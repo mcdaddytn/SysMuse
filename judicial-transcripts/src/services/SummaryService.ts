@@ -89,10 +89,26 @@ export class SummaryService {
   }
 
   /**
-   * Get abridged summary (from MarkerSection.text)
+   * Get abridged summary (from MarkerSection.text or Abridged1 file)
    */
   private async getAbridgedSummary(section: MarkerSection): Promise<string> {
-    // First check if we have text in MarkerSection.text as requested
+    // First try to load from Abridged1 file
+    const trial = await this.prisma.trial.findUnique({
+      where: { id: section.trialId },
+      select: { shortName: true }
+    });
+
+    if (trial?.shortName && section.name) {
+      const fileName = this.generateConciseFileName(section.name, false);
+      const abridged1Path = path.join('output', 'markersections', trial.shortName, 'Abridged1', `${fileName}.txt`);
+
+      if (fs.existsSync(abridged1Path)) {
+        logger.debug(`Loading Abridged1 from file: ${abridged1Path}`);
+        return fs.readFileSync(abridged1Path, 'utf-8');
+      }
+    }
+
+    // Fall back to MarkerSection.text if file not found
     if (section.text) {
       return section.text;
     }
@@ -130,11 +146,26 @@ export class SummaryService {
   }
 
   /**
-   * Get abridged2 summary (for now, same as abridged)
+   * Get abridged2 summary (from Abridged2 file or MarkerSection.text)
    */
   private async getAbridged2Summary(section: MarkerSection): Promise<string> {
-    // For now, return the same as abridged summary (MarkerSection.text)
-    // as requested by the user
+    // First try to load from Abridged2 file
+    const trial = await this.prisma.trial.findUnique({
+      where: { id: section.trialId },
+      select: { shortName: true }
+    });
+
+    if (trial?.shortName && section.name) {
+      const fileName = this.generateConciseFileName(section.name, false);
+      const abridged2Path = path.join('output', 'markersections', trial.shortName, 'Abridged2', `${fileName}.txt`);
+
+      if (fs.existsSync(abridged2Path)) {
+        logger.debug(`Loading Abridged2 from file: ${abridged2Path}`);
+        return fs.readFileSync(abridged2Path, 'utf-8');
+      }
+    }
+
+    // Fall back to MarkerSection.text if file not found
     if (section.text) {
       return section.text;
     }
@@ -154,16 +185,24 @@ export class SummaryService {
     });
 
     if (trial?.shortName && section.name) {
-      // Construct the file path based on the pattern:
-      // output/markersections/[shortName]/[shortName]_[MarkerSection.name].txt
-      const fileName = `${trial.shortName}_${section.name.replace(/\s+/g, '_')}.txt`;
-      const fullTextPath = path.join('output', 'markersections', trial.shortName, fileName);
+      // Try new structure first: output/markersections/[shortName]/FullText/[conciseName].txt
+      const fileName = this.generateConciseFileName(section.name, false);
+      const fullTextPath = path.join('output', 'markersections', trial.shortName, 'FullText', `${fileName}.txt`);
 
       if (fs.existsSync(fullTextPath)) {
         logger.info(`Loading full text from file: ${fullTextPath}`);
         return fs.readFileSync(fullTextPath, 'utf-8');
       } else {
-        logger.warn(`Full text file not found: ${fullTextPath}`);
+        // Try old structure as fallback
+        const oldFileName = `${trial.shortName}_${section.name.replace(/\s+/g, '_')}.txt`;
+        const oldPath = path.join('output', 'markersections', trial.shortName, oldFileName);
+
+        if (fs.existsSync(oldPath)) {
+          logger.info(`Loading full text from old path: ${oldPath}`);
+          return fs.readFileSync(oldPath, 'utf-8');
+        } else {
+          logger.warn(`Full text file not found: ${fullTextPath}`);
+        }
       }
     }
 
@@ -288,6 +327,29 @@ export class SummaryService {
       wordCount,
       duration
     };
+  }
+
+  /**
+   * Generate concise file name for MarkerSection (matching TranscriptRenderer)
+   */
+  private generateConciseFileName(name: string, includeTrialPrefix: boolean = false): string {
+    let fileName = name || 'unnamed';
+
+    // Apply abbreviations
+    fileName = fileName
+      .replace(/WitnessExamination/g, 'WitExam')
+      .replace(/WITNESS_EXAMINATION/g, 'WitExam')
+      .replace(/REDIRECT_EXAMINATION/g, 'Redir')
+      .replace(/RECROSS_EXAMINATION/g, 'Recross')
+      .replace(/DIRECT_EXAMINATION/g, 'Direct')
+      .replace(/CROSS_EXAMINATION/g, 'Cross')
+      .replace(/OPENING_STATEMENT/g, 'Opening')
+      .replace(/CLOSING_STATEMENT/g, 'Closing')
+      .replace(/WITNESS_TESTIMONY/g, 'WitTest')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_-]/g, '');
+
+    return fileName;
   }
 
   /**

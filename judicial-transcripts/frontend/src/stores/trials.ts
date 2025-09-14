@@ -74,7 +74,10 @@ export const useTrialStore = defineStore('trials', {
       this.error = null
       try {
         const response = await api.getTrials()
-        this.trials = response.data
+        // The API returns { trials: [...] } so we need to extract the trials array
+        this.trials = response.data.trials || response.data
+        // Sort trials by shortName to ensure proper alphanumeric order
+        this.trials.sort((a, b) => a.shortName.localeCompare(b.shortName))
         if (this.trials.length > 0 && !this.currentTrial) {
           this.currentTrial = this.trials[0]
         }

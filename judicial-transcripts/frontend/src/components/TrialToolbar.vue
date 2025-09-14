@@ -43,6 +43,8 @@
       dense
       outlined
       dark
+      emit-value
+      map-options
       style="min-width: 150px"
       class="q-mr-sm"
     />
@@ -54,6 +56,8 @@
       dense
       outlined
       dark
+      emit-value
+      map-options
       style="min-width: 150px"
       class="q-mr-md"
     />

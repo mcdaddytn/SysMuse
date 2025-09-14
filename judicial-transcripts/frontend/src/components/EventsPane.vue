@@ -81,6 +81,11 @@
             @click="selectEvent(event)"
             :class="{ 'bg-blue-1': selectedEvent?.id === event.id }"
           >
+            <q-tooltip v-if="event.transcript || event.text" class="bg-grey-8" max-width="600px" anchor="center middle" self="center middle">
+              <div class="event-tooltip-text">
+                {{ truncateText(event.transcript || event.text || '', 500) }}
+              </div>
+            </q-tooltip>
             <q-item-section>
               <q-item-label class="text-weight-medium">
                 {{ event.name || event.type }}
@@ -88,9 +93,6 @@
               <q-item-label caption v-if="event.description">
                 {{ event.description }}
               </q-item-label>
-              <div class="event-summary-text q-mt-sm" v-if="event.text">
-                {{ truncateText(event.text, 200) }}
-              </div>
               <q-item-label caption class="q-mt-xs">
                 Events: {{ event.startEventId }}-{{ event.endEventId }}
               </q-item-label>
@@ -364,5 +366,12 @@ watch(() => props.eventType, loadEvents)
   line-height: 1.4;
   color: #666;
   white-space: pre-wrap;
+}
+
+.event-tooltip-text {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  padding: 8px;
 }
 </style>

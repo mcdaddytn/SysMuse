@@ -191,6 +191,18 @@ watch(selectedNode, async (newNode) => {
   }
 })
 
+watch(summaryType, async (newType) => {
+  if (selectedNode.value) {
+    await trialStore.loadSummary(selectedNode.value.id, newType)
+  }
+})
+
+watch(eventType, async (newType) => {
+  if (selectedNode.value) {
+    await trialStore.loadEvents(selectedNode.value.id, newType)
+  }
+})
+
 const handleNavigation = (direction: 'prev' | 'next') => {
   trialStore.navigateTrial(direction)
   selectedTrial.value = trialStore.currentTrial?.id || null

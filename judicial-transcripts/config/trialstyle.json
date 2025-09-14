@@ -36,7 +36,7 @@
     ]
   },
   "markerSummaryMode": "SUMMARYABRIDGED2",
-  "markerAppendMode": "space",
+  "markerAppendMode": "newline",
   "markerCleanMode": "REMOVEEXTRASPACE",
   "saveMarkerSectionsToFile": true,
   "markerSectionOutputDir": "./output/markersections",

@@ -40,7 +40,7 @@
           <div v-if="paragraph.speaker" class="speaker-label text-weight-bold q-mb-xs">
             {{ paragraph.speaker }}:
           </div>
-          <div class="paragraph-text" v-html="paragraph.text"></div>
+          <div class="paragraph-text" style="white-space: pre-wrap;">{{ paragraph.text }}</div>
         </div>
 
         <div v-if="hasMore" class="text-center q-mt-lg">
@@ -101,7 +101,10 @@ const summaryContent = ref<any>(null)
 const fontSize = ref(14)
 const hasMore = ref(false)
 
-const nodeTitle = computed(() => props.node?.label || 'No Selection')
+const nodeTitle = computed(() => {
+  if (!props.node) return 'No Selection'
+  return props.node.label || props.node.name || props.node.type || 'Unnamed Node'
+})
 
 const eventRange = computed(() => {
   if (!props.node) return 'N/A'
@@ -136,11 +139,13 @@ const formattedContent = computed(() => {
         text: speakerMatch[2]
       }
     } else if (line.trim()) {
+      // Preserve newlines by adding a line break if text already exists
       if (currentParagraph.text) {
-        currentParagraph.text += ' '
+        currentParagraph.text += '\n'
       }
       currentParagraph.text += line.trim()
     } else if (currentParagraph.text) {
+      // Empty line creates a new paragraph
       paragraphs.push(currentParagraph)
       currentParagraph = { text: '' }
     }

@@ -161,6 +161,7 @@ const selectedEvent = ref<any>(null)
 const eventTypeLabel = computed(() => {
   const labels: Record<string, string> = {
     objections: 'Objections',
+    interactions: 'Interactions',
     exhibits: 'Exhibits',
     sidebar: 'Sidebar Conferences',
     all: 'All Events'

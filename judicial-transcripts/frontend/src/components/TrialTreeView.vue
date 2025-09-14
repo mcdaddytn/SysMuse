@@ -64,6 +64,9 @@
               <div class="text-caption text-grey-7" v-if="prop.node.description">
                 {{ prop.node.description }}
               </div>
+              <div class="text-caption text-grey-6" v-if="prop.node.startEventId && prop.node.endEventId">
+                Events: {{ prop.node.startEventId }}-{{ prop.node.endEventId }}
+              </div>
             </div>
           </div>
         </template>

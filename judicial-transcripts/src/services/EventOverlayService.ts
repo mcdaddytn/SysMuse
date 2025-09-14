@@ -57,7 +57,7 @@ export class EventOverlayService {
     limit: number,
     offset: number
   ): Promise<EventOverlay[]> {
-    // Get objection results from accumulators
+    // Get objection results from accumulators - get all for deduplication
     const objectionResults = await this.prisma.accumulatorResult.findMany({
       where: {
         trialId: section.trialId,
@@ -87,14 +87,26 @@ export class EventOverlayService {
         ],
         floatResult: { gte: minConfidence }
       },
-      orderBy: { startEventId: 'asc' },
-      skip: offset,
-      take: limit
+      orderBy: [
+        { startEventId: 'asc' },
+        { floatResult: 'desc' }  // Higher confidence first
+      ]
     });
 
+    // Deduplicate objections - keep only the highest confidence one for each event range
+    const seenRanges = new Set<string>();
     const events: EventOverlay[] = [];
 
     for (const result of objectionResults) {
+      // Create a unique key for this event range
+      const rangeKey = `${result.startEventId}-${result.endEventId}`;
+
+      // Skip if we've already processed this range (since we ordered by confidence desc)
+      if (seenRanges.has(rangeKey)) {
+        continue;
+      }
+      seenRanges.add(rangeKey);
+
       // Get the accumulator expression to determine ruling type
       const accumulator = await prisma.accumulatorExpression.findUnique({
         where: { id: result.accumulatorId }
@@ -139,7 +151,8 @@ export class EventOverlayService {
       });
     }
 
-    return events;
+    // Apply limit and offset after deduplication
+    return events.slice(offset, offset + limit);
   }
 
   /**

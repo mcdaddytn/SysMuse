@@ -119,10 +119,11 @@ export class AccumulatorEngineV2 {
     let windowsProcessed = 0;
 
     // Slide window through statements
-    for (let i = 0; i <= statementEvents.length - windowSize; i++) {
+    let i = 0;
+    while (i <= statementEvents.length - windowSize) {
       const windowEvents = statementEvents.slice(i, i + windowSize);
       const window = await this.createWindow(windowEvents, accumulator);
-      
+
       // Evaluate window
       const evaluation = await this.evaluateWindow(accumulator, window);
 
@@ -130,10 +131,26 @@ export class AccumulatorEngineV2 {
       if (evaluation.matched || evaluation.score > 0) {
         await this.storeResult(accumulator, window, evaluation, trialId);
         resultsStored++;
+
+        // IMPORTANT: Advance cursor to end of matched pattern to avoid overlapping matches
+        // This is particularly important for objections and interactions
+        // Check if navigation mode is configured in metadata
+        const navigationMode = accumulator.metadata?.navigationMode || 'jump_to_end';
+
+        if (navigationMode === 'jump_to_end') {
+          // Jump to the end of the current window to avoid overlapping matches
+          i += windowSize;
+        } else {
+          // Default single step advancement (for backward compatibility)
+          i++;
+        }
+      } else {
+        // No match, advance by 1
+        i++;
       }
-      
+
       windowsProcessed++;
-      
+
       // Progress logging
       if (windowsProcessed % 100 === 0) {
         this.logger.debug(`    Processed ${windowsProcessed}/${totalWindows} windows, found ${resultsStored} matches`);

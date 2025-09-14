@@ -1419,13 +1419,13 @@ export class Phase2Processor {
   ): Promise<boolean> {
     // Simple string matching for examination types
     const trimmed = lineText.trim();
-    
+
     // Check for exact examination types as specified in feature-02D.md
     let isExamination = false;
     let isVideo = false;
     let examType = '';
     let continued = false;
-    
+
     // Check for video deposition FIRST (most specific)
     if (trimmed === 'PRESENTED BY VIDEO DEPOSITION' || trimmed === 'VIDEO DEPOSITION') {
       isVideo = true;
@@ -1715,9 +1715,86 @@ export class Phase2Processor {
     const hasBufferedWitnessLine = state.eventLines.length > 0 && 
                                     !state.currentEvent;
     
-    // Get attorney ID from examination context if available
+    // Get attorney ID - first check if we need to look ahead for "BY MR./MS." lines
     let attorneyId = null;
-    if (this.examinationContext) {
+
+    // Look ahead in the next few lines for "BY MR./MS." pattern
+    // This is part of the witness block and should be processed together
+    const lookAheadLimit = 5; // Check the next 5 lines
+    let attorneyPrefix: string | null = null;
+
+    if (state.allLines && state.currentLineIndex >= 0) {
+      const startIdx = state.currentLineIndex + 1;
+      const endIdx = Math.min(startIdx + lookAheadLimit, state.allLines.length);
+
+      for (let i = startIdx; i < endIdx; i++) {
+        const nextLine = state.allLines[i];
+        const nextLineText = nextLine.text?.trim() || '';
+
+        // Check for "BY MR./MS." pattern in the line
+        const byMatch = nextLineText.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+([A-Z]+(?:\s+[A-Z]+)*):?$/);
+        if (byMatch) {
+          attorneyPrefix = `${byMatch[1]} ${byMatch[2]}`;
+          logger.info(`Found BY line in witness block look-ahead: "${attorneyPrefix}" at line ${nextLine.lineNumber}`);
+          break;
+        }
+
+        // Also check if the speaker prefix itself is a BY line
+        if (nextLine.speakerPrefix?.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+(.+)/)) {
+          const match = nextLine.speakerPrefix.match(/^BY\s+(MR\.|MS\.|MRS\.|DR\.)\s+(.+)/);
+          if (match) {
+            attorneyPrefix = `${match[1]} ${match[2].replace(/:$/, '').trim()}`;
+            logger.info(`Found BY line in witness block speaker prefix: "${attorneyPrefix}" at line ${nextLine.lineNumber}`);
+            break;
+          }
+        }
+      }
+    }
+
+    // If we found an attorney prefix in the look-ahead, find the attorney
+    if (attorneyPrefix) {
+      const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
+        this.context.trialId,
+        attorneyPrefix
+      );
+
+      if (attorney) {
+        attorneyId = attorney.id;
+        logger.info(`Found attorney for witness examination: ${attorney.name} (ID: ${attorneyId})`);
+
+        // Also update the examination context for future use
+        if (this.examinationContext) {
+          // Find or create the speaker for this attorney
+          let speaker = await this.prisma.speaker.findFirst({
+            where: {
+              trialId: this.context.trialId,
+              speakerPrefix: attorneyPrefix
+            }
+          });
+
+          if (!speaker) {
+            const speakerHandle = `ATTORNEY_${attorney.lastName?.replace(/[^A-Z0-9]/gi, '_') || attorney.name.replace(/[^A-Z0-9]/gi, '_')}`;
+            speaker = await this.prisma.speaker.create({
+              data: {
+                trialId: this.context.trialId,
+                speakerPrefix: attorneyPrefix,
+                speakerHandle,
+                speakerType: 'ATTORNEY'
+              }
+            });
+          }
+
+          // Set the examining attorney in context
+          this.examinationContext.setExaminingAttorneyFromSpeaker(speaker);
+          logger.info(`Updated examination context with attorney from witness block`);
+        }
+      } else {
+        logger.warn(`Could not find attorney for prefix: ${attorneyPrefix}`);
+      }
+    }
+
+    // If we still don't have an attorney ID, try to get it from the examination context
+    if (!attorneyId && this.examinationContext) {
       const examiningAttorney = this.examinationContext.getExaminingAttorney();
       // The attorney ID might be on the speaker object or we need to look it up
       if (examiningAttorney?.speaker) {
@@ -1752,20 +1829,21 @@ export class Phase2Processor {
       } else {
         logger.warn(`No examining attorney in context for witness examination at line ${line.lineNumber}`);
       }
-    } else {
+    } else if (!attorneyId) {
       logger.warn(`No examination context available for witness examination at line ${line.lineNumber}`);
     }
     
-    // Log warning if we couldn't find attorney ID
+    // Log error if we couldn't find attorney ID - this should not happen
     if (!attorneyId && witnessInfo) {
-      logger.warn(`Unable to find attorneyId for witness examination. Context: ${JSON.stringify({
+      logger.error(`CRITICAL: Unable to find attorneyId for WitnessCalledEvent. This should never happen! Context: ${JSON.stringify({
         witnessName: witnessInfo.name,
         witnessCaller: witnessInfo.witnessCaller,
         examinationType: examType,
         lineNumber: line.lineNumber,
         lineText: lineText.substring(0, 100),
         hasExaminationContext: !!this.examinationContext,
-        currentExaminingAttorney: this.examinationContext?.getExaminingAttorney()?.lastName || 'none'
+        currentExaminingAttorney: this.examinationContext?.getExaminingAttorney()?.lastName || 'none',
+        lookedAhead: !!attorneyPrefix
       })}`);
     }
     

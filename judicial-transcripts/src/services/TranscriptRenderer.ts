@@ -23,8 +23,12 @@ export class TranscriptRenderer {
   private summaryMode: SummaryMode = 'SUMMARYABRIDGED2';
   private markerAppendMode: string = 'space';
   private markerCleanMode: string = 'REMOVEEXTRASPACE';
+  private trialStyleConfig: any;
 
   constructor(private prisma: PrismaClient, config?: any) {
+    // Store configuration for later use
+    this.trialStyleConfig = config;
+
     // Load configuration options
     if (config) {
       this.summaryMode = config.markerSummaryMode || 'SUMMARYABRIDGED2';
@@ -288,7 +292,28 @@ export class TranscriptRenderer {
       
       // Optionally save full text to file
       if (saveToFile) {
-        await this.saveMarkerSectionToFile(sectionId, rendered.renderedText);
+        // Save full text
+        await this.saveMarkerSectionToFile(sectionId, rendered.renderedText, 'FullText');
+
+        // Save truncated summaries
+        if (rendered.summary && rendered.summary !== rendered.renderedText) {
+          // Get section for statistics
+          const section = await this.prisma.markerSection.findUnique({
+            where: { id: sectionId }
+          });
+
+          // Save Abridged1 (truncated to ~2500 chars)
+          const maxLengthAbridged1 = 2500;
+          const abridged1 = this.truncateToLength(rendered.summary, maxLengthAbridged1);
+          await this.saveMarkerSectionToFile(sectionId, abridged1, 'Abridged1');
+
+          // Generate and save Abridged2 (beginning + end with stats)
+          const maxLengthAbridged2 = 2500;
+          const alternateSummary = this.generateAlternateTruncatedSummary(rendered.renderedText, maxLengthAbridged2, section);
+          if (alternateSummary) {
+            await this.saveMarkerSectionToFile(sectionId, alternateSummary, 'Abridged2');
+          }
+        }
       }
     }
     
@@ -298,29 +323,30 @@ export class TranscriptRenderer {
   /**
    * Save MarkerSection full text to file
    */
-  async saveMarkerSectionToFile(sectionId: number, text: string): Promise<void> {
+  async saveMarkerSectionToFile(sectionId: number, text: string, summaryType: string = 'FullText'): Promise<void> {
     const section = await this.prisma.markerSection.findUnique({
       where: { id: sectionId },
       include: {
         trial: true
       }
     });
-    
+
     if (!section) {
       this.logger.warn(`Cannot save to file: Section ${sectionId} not found`);
       return;
     }
-    
-    // Create output directory
-    const outputDir = path.join('./output/markersections', section.trial.shortName || `trial_${section.trialId}`);
+
+    // Create output directory with summary type subdirectory
+    const trialDir = section.trial.shortName || `trial_${section.trialId}`;
+    const outputDir = path.join('./output/markersections', trialDir, summaryType);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    
-    // Generate concise filename from section name
-    const fileName = this.generateConciseFileName(section);
+
+    // Generate filename from section name (without trial prefix)
+    const fileName = this.generateConciseFileName(section, false);
     const filePath = path.join(outputDir, `${fileName}.txt`);
-    
+
     // Write text to file
     fs.writeFileSync(filePath, text);
     this.logger.debug(`Saved MarkerSection ${sectionId} to ${filePath}`);
@@ -329,9 +355,9 @@ export class TranscriptRenderer {
   /**
    * Generate concise file name for MarkerSection
    */
-  private generateConciseFileName(section: any): string {
+  private generateConciseFileName(section: any, includeTrialPrefix: boolean = true): string {
     let name = section.name || 'unnamed';
-    
+
     // Apply abbreviations
     name = name
       .replace(/WitnessExamination/g, 'WitExam')
@@ -345,13 +371,67 @@ export class TranscriptRenderer {
       .replace(/WITNESS_TESTIMONY/g, 'WitTest')
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z0-9_-]/g, '');
-    
-    // Add trial short name if available
-    if (section.trial?.shortName) {
+
+    // Only add trial short name if requested (for backward compatibility)
+    if (includeTrialPrefix && section.trial?.shortName) {
       name = `${section.trial.shortName}_${name}`;
     }
-    
+
     return name;
+  }
+
+  /**
+   * Generate alternate truncated summary with excerpts from beginning and end
+   */
+  private generateAlternateTruncatedSummary(fullText: string, maxLength: number, section?: any): string | null {
+    if (fullText.length <= maxLength) {
+      return null; // No need to truncate
+    }
+
+    // Calculate statistics
+    const lines = fullText.split('\n').filter(l => l.trim());
+    const wordCount = fullText.split(/\s+/).filter(w => w.trim()).length;
+    const charCount = fullText.length;
+    const speakers = new Set<string>();
+
+    // Extract speaker information
+    lines.forEach(line => {
+      const match = line.match(/^([A-Z][A-Z .]+?):\s/);
+      if (match) {
+        speakers.add(match[1]);
+      }
+    });
+
+    // Count events if section provided
+    let eventCount = 0;
+    if (section && section.startEventId && section.endEventId) {
+      eventCount = section.endEventId - section.startEventId + 1;
+    }
+
+    // Create summary statistics string
+    const summaryStats = `\n\n[Abridged2: Summary: ${eventCount} events, ${lines.length} lines, ${wordCount} words, ${speakers.size} speakers, ${charCount} characters]`;
+    const summaryStatsLength = summaryStats.length;
+
+    const ellipsis = '\n\n[... middle section omitted ...]\n\n';
+    const ellipsisLength = ellipsis.length;
+    const availableLength = maxLength - ellipsisLength - summaryStatsLength;
+    const halfLength = Math.floor(availableLength / 2);
+
+    // Get beginning and end portions
+    const beginning = fullText.substring(0, halfLength);
+    const end = fullText.substring(fullText.length - halfLength);
+
+    return beginning + ellipsis + end + summaryStats;
+  }
+
+  /**
+   * Truncate text to specified length
+   */
+  private truncateToLength(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return text.substring(0, maxLength) + '\n\n[... truncated ...]';
   }
 
   /**

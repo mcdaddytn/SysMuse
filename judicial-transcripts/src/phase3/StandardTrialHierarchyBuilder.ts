@@ -69,19 +69,133 @@ export class StandardTrialHierarchyBuilder {
 
       // Step 6: Create Session hierarchy
       await this.createSessionHierarchy(trialId, trialSection.id);
-      
-      // Step 7: Generate auto-summaries for all sections
+
+      // Step 7: Clean up redundant sections
+      await this.cleanupRedundantSections(trialId);
+
+      // Step 8: Generate auto-summaries for all sections
       await this.generateAutoSummaries(trialId);
 
-      // Step 8: Calculate and log statistics
+      // Step 9: Calculate and log statistics
       const stats = await this.calculateHierarchyStatistics(trialId);
       this.logger.info(`Hierarchy statistics for trial ${trialId}: ${JSON.stringify(stats, null, 2)}`);
-      
+
       this.logger.info(`Completed Standard Trial Hierarchy for trial ${trialId}`);
     } catch (error) {
       this.logger.error(`Error building hierarchy for trial ${trialId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Clean up redundant sections in the hierarchy
+   */
+  private async cleanupRedundantSections(trialId: number): Promise<void> {
+    this.logger.info(`Cleaning up redundant sections for trial ${trialId}`);
+
+    // 1. Remove "CompleteWitnessTestimony" if it's a child of "Witness Testimony Period" with no children
+    const completeTestimony = await this.prisma.markerSection.findFirst({
+      where: {
+        trialId,
+        name: 'CompleteWitnessTestimony'
+      }
+    });
+
+    if (completeTestimony) {
+      // Check if it has children
+      const childCount = await this.prisma.markerSection.count({
+        where: {
+          parentSectionId: completeTestimony.id
+        }
+      });
+
+      if (childCount === 0) {
+        const parent = await this.prisma.markerSection.findFirst({
+          where: {
+            id: completeTestimony.parentSectionId || -1,
+            name: 'Witness Testimony Period'
+          }
+        });
+
+        if (parent) {
+          // This is redundant - delete it
+          await this.prisma.markerSection.delete({
+            where: { id: completeTestimony.id }
+          });
+          this.logger.info(`Removed redundant CompleteWitnessTestimony section`);
+        }
+      }
+    }
+
+    // 2. Remove generic "Witness Testimony" sections that have no children when specific witness sections exist
+    const genericWitnessTestimony = await this.prisma.markerSection.findMany({
+      where: {
+        trialId,
+        name: 'Witness Testimony',
+        markerSectionType: MarkerSectionType.WITNESS_TESTIMONY
+      }
+    });
+
+    for (const section of genericWitnessTestimony) {
+      // Check if it has children
+      const childCount = await this.prisma.markerSection.count({
+        where: {
+          parentSectionId: section.id
+        }
+      });
+
+      if (childCount === 0) {
+        // Check if there are specific witness testimony sections (e.g., WitTest_MARK_STEWART)
+        const specificWitnessSection = await this.prisma.markerSection.findFirst({
+          where: {
+            trialId,
+            name: {
+              startsWith: 'WitTest_'
+            },
+            parentSectionId: section.parentSectionId
+          }
+        });
+
+        if (specificWitnessSection) {
+          // This generic section is redundant - delete it
+          await this.prisma.markerSection.delete({
+            where: { id: section.id }
+          });
+          this.logger.info(`Removed redundant generic Witness Testimony section`);
+        }
+      }
+    }
+
+    // 3. Remove any section that has the same name as its parent and no children
+    const allSections = await this.prisma.markerSection.findMany({
+      where: { trialId }
+    });
+
+    for (const section of allSections) {
+      if (section.parentSectionId) {
+        const parent = await this.prisma.markerSection.findUnique({
+          where: { id: section.parentSectionId }
+        });
+
+        if (parent && section.name === parent.name) {
+          // Check if this section has children
+          const childCount = await this.prisma.markerSection.count({
+            where: {
+              parentSectionId: section.id
+            }
+          });
+
+          if (childCount === 0) {
+            await this.prisma.markerSection.delete({
+              where: { id: section.id }
+            });
+            this.logger.info(`Removed duplicate section: ${section.name}`);
+          }
+        }
+      }
+    }
+
+    this.logger.info(`Completed cleanup of redundant sections for trial ${trialId}`);
   }
 
   /**

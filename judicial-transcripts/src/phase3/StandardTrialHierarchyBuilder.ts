@@ -620,30 +620,20 @@ export class StandardTrialHierarchyBuilder {
       orderBy: { startEventId: 'asc' }
     });
 
-    // Assign each witness testimony to plaintiff or defense section
+    // DO NOT reassign witness testimony parents based on event ranges!
+    // The parents were already correctly assigned in createWitnessGroupSection based on witness caller.
+    // The event range logic is flawed because plaintiff section encompasses ALL witnesses' event ranges.
+    this.logger.info('Skipping parent reassignment - parents were already correctly set based on witness caller');
+
+    // Just verify the parents are correct
     for (const testimony of witnessTestimonies) {
-      let parentId: number | null = null;
-      
-      if (plaintiffSection && testimony.startEventId && plaintiffSection.startEventId && plaintiffSection.endEventId) {
-        if (testimony.startEventId >= plaintiffSection.startEventId && 
-            testimony.startEventId <= plaintiffSection.endEventId) {
-          parentId = plaintiffSection.id;
-        }
-      }
-      
-      if (!parentId && defenseSection && testimony.startEventId && defenseSection.startEventId && defenseSection.endEventId) {
-        if (testimony.startEventId >= defenseSection.startEventId && 
-            testimony.startEventId <= defenseSection.endEventId) {
-          parentId = defenseSection.id;
-        }
-      }
-      
-      if (parentId && testimony.parentSectionId !== parentId) {
-        await this.prisma.markerSection.update({
-          where: { id: testimony.id },
-          data: { parentSectionId: parentId }
-        });
-        this.logger.debug(`Updated parent of ${testimony.name} to ${parentId}`);
+      const currentParentId = testimony.parentSectionId;
+      if (currentParentId === plaintiffSection?.id) {
+        this.logger.debug(`  ${testimony.name} is under Plaintiff Witnesses`);
+      } else if (currentParentId === defenseSection?.id) {
+        this.logger.debug(`  ${testimony.name} is under Defense Witnesses`);
+      } else {
+        this.logger.warn(`  ${testimony.name} has unexpected parent: ${currentParentId}`);
       }
     }
 
@@ -1758,15 +1748,15 @@ export class StandardTrialHierarchyBuilder {
 
       // Categorize based on witnessCaller
       if (witnessCaller === 'PLAINTIFF') {
-        this.logger.debug(`Assigning ${section.name} to plaintiff witnesses (caller: ${witnessCaller})`);
+        this.logger.info(`✓ Assigning ${section.name} to PLAINTIFF witnesses (witness caller: ${witnessCaller})`);
         plaintiffWitnesses.push(section);
       } else if (witnessCaller === 'DEFENDANT' || witnessCaller === 'DEFENSE') {
-        this.logger.debug(`Assigning ${section.name} to defense witnesses (caller: ${witnessCaller})`);
+        this.logger.info(`✓ Assigning ${section.name} to DEFENSE witnesses (witness caller: ${witnessCaller})`);
         defenseWitnesses.push(section);
       } else {
         // If we can't determine, use position-based heuristic as fallback
         // Typically plaintiff witnesses come first
-        this.logger.warn(`Could not determine witness caller for section ${section.name} (caller: ${witnessCaller}), using position-based heuristic`);
+        this.logger.warn(`⚠ Could not determine witness caller for section ${section.name} (caller: ${witnessCaller}), using position-based heuristic`);
         if (plaintiffWitnesses.length === 0 ||
             (defenseWitnesses.length > 0 && plaintiffWitnesses.length > defenseWitnesses.length)) {
           plaintiffWitnesses.push(section);
@@ -1816,7 +1806,9 @@ export class StandardTrialHierarchyBuilder {
     });
 
     // Update parent references for witness sections
+    this.logger.info(`Updating parent references for ${witnesses.length} witnesses to ${sectionType} section ${section.id}`);
     for (const witness of witnesses) {
+      this.logger.debug(`  - Updating ${witness.name} (id: ${witness.id}) parent to ${section.id}`);
       await this.prisma.markerSection.update({
         where: { id: witness.id },
         data: { parentSectionId: section.id }

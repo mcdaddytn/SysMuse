@@ -1,0 +1,32 @@
+Please provide a concise professional biography using publicly available information about the following attorney:
+
+ATTORNEY DETAILS:
+Name: {{attorneyName}}
+Law Firm(s): {{lawFirms}}
+Bar Number: {{barNumber}}
+
+FOCUS AREAS (2-3 paragraphs total):
+
+PRIMARY INFORMATION (First Paragraph):
+- Educational background and bar admissions
+- Years of practice and specialization areas
+- Current position and career progression
+- Most notable cases or achievements (with specific case names if known)
+- Key professional recognitions or rankings
+
+SUPPLEMENTARY INFORMATION (Second Paragraph):
+- Additional notable cases, verdicts, or settlements
+- Publications or speaking engagements if significant
+- Technical expertise relevant to IP litigation
+- Leadership roles or committee positions
+
+FIRM CONTEXT (Third Paragraph - only if attorney has limited public profile):
+- Brief firm overview: size, founding, key practice areas
+- Firm's reputation in IP litigation
+- Notable firm achievements or rankings
+
+LINKS TO INCLUDE:
+- Attorney's profile page (firm website or professional directory)
+- Most significant news article or case coverage (if available)
+
+Note: Focus on specific, verifiable facts from public sources. Aim for 2-3 concise paragraphs (200-300 words total) emphasizing the attorney's most relevant qualifications and achievements in IP litigation.

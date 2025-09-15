@@ -35,10 +35,11 @@ program
   .option('--batch-size <number>', 'Number of prompts to process in batch', '5')
   .option('--llm-profile <profile>', 'LLM profile to use')
   .option('--config <path>', 'Path to configuration file')
+  .option('--context <suffix>', 'Context template suffix (e.g., medium, long)', 'medium')
   .option('--full', 'Run full pipeline (generate prompts and execute)')
   .action(async (options) => {
     try {
-      const service = new BackgroundLLMService(options.config, options.llmProfile);
+      const service = new BackgroundLLMService(options.config, options.llmProfile, options.context);
 
       if (options.full) {
         await service.fullPipeline('attorneys', parseInt(options.batchSize));
@@ -71,10 +72,11 @@ program
   .option('--batch-size <number>', 'Number of prompts to process in batch', '5')
   .option('--llm-profile <profile>', 'LLM profile to use')
   .option('--config <path>', 'Path to configuration file')
+  .option('--context <suffix>', 'Context template suffix (e.g., medium, long)', 'long')
   .option('--full', 'Run full pipeline (generate prompts and execute)')
   .action(async (options) => {
     try {
-      const service = new BackgroundLLMService(options.config, options.llmProfile);
+      const service = new BackgroundLLMService(options.config, options.llmProfile, options.context);
 
       if (options.full) {
         await service.fullPipeline('trials', parseInt(options.batchSize));

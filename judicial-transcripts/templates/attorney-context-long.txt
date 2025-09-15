@@ -1,0 +1,54 @@
+Please search your knowledge base and provide a comprehensive professional biography using all publicly available information about the following attorney:
+
+ATTORNEY DETAILS:
+Name: {{attorneyName}}
+Law Firm(s): {{lawFirms}}
+Bar Number: {{barNumber}}
+
+IMPORTANT: Please use ALL publicly available information from your training data about this attorney, including:
+- Information from law firm websites and attorney profiles
+- Legal directories (Martindale-Hubbell, Chambers, Super Lawyers, etc.)
+- News articles and press releases about cases they've handled
+- Court records and published opinions
+- Professional biographies and LinkedIn profiles
+- Speaking engagements and conference presentations
+- Published articles, books, or legal commentary
+- Educational background from university records
+
+REQUIRED INFORMATION TO INCLUDE:
+1. Educational background (law school, undergraduate, year of graduation if known)
+2. Bar admissions and years of practice
+3. Career progression and previous firms
+4. Specialization areas (especially IP litigation)
+5. Notable cases and trials with specific case names and outcomes
+6. Significant verdicts, settlements, or legal victories (with dollar amounts when known)
+7. Professional recognitions, awards, and rankings
+8. Publications, speaking engagements, and thought leadership
+9. Pro bono work or professional associations
+10. Any unique expertise or technical background
+
+IMPORTANT - PROVIDE RELEVANT LINKS:
+- Direct link to attorney's profile on law firm website (if available)
+- Link to attorney's LinkedIn profile (if known)
+- Links to notable articles or publications by the attorney
+- Links to news coverage of significant cases
+- Any other relevant professional profile links
+
+FOR ATTORNEYS WITH LIMITED PUBLIC PROFILE:
+Please provide EXTENSIVE information about their law firm including:
+- Detailed history and founding of the firm
+- Size of the firm (number of attorneys, offices)
+- Key practice areas and specializations
+- Firm's most notable IP cases and victories
+- Major clients (if publicly known)
+- Firm culture and reputation
+- Rankings and recognitions (Chambers, AmLaw, etc.)
+- Notable partners and their achievements
+- Typical career trajectory for associates and partners
+- Regional presence and influence
+- Recent significant hires or departures
+- Pro bono and community involvement
+
+For well-known attorneys, provide specific details about their most famous cases, including case names, parties represented, and outcomes. Include specific dollar amounts for verdicts or settlements when publicly known.
+
+Note: Please provide a detailed response (700-900 words) using specific, factual information from your training data. Include as many relevant links as possible, and provide extensive law firm context for less prominent attorneys.

@@ -1,0 +1,76 @@
+Please search your knowledge base and provide a comprehensive case analysis using all publicly available information about the following intellectual property litigation:
+
+CASE DETAILS:
+Case Name/Title: {{caseName}}
+Plaintiff: {{plaintiff}}
+Defendant: {{defendant}}
+Case Number: {{caseNumber}}
+Court: {{court}}
+Trial Dates: {{trialDates}}
+Law Firms: {{lawFirms}}
+
+IMPORTANT: Please use ALL publicly available information from your training data about this case, including:
+- Court opinions and orders (published and unpublished)
+- News coverage and legal media reports (Law360, IPWatchdog, etc.)
+- Press releases from the parties or law firms
+- Patent office records and USPTO proceedings
+- SEC filings mentioning the litigation
+- Legal blogs and commentary
+- Industry publications and trade press
+- Academic articles or case studies
+
+REQUIRED COMPREHENSIVE INFORMATION:
+1. CASE BACKGROUND:
+   - Complete case history and how the dispute arose
+   - Business relationship between the parties
+   - Industry context and market implications
+
+2. INTELLECTUAL PROPERTY AT ISSUE:
+   - Specific patent numbers, claims, or trademark registrations
+   - Technology or products involved
+   - Prior art or validity challenges
+   - Any parallel USPTO proceedings (IPR, reexamination)
+
+3. LEGAL PROCEEDINGS:
+   - Key motions and rulings (claim construction, summary judgment)
+   - Expert witnesses and their testimony
+   - Jury selection and composition (if applicable)
+   - Trial strategies employed by each side
+
+4. VERDICT AND DAMAGES:
+   - Specific verdict details and jury findings
+   - Damage awards (exact amounts if known)
+   - Injunctive relief granted or denied
+   - Willfulness findings and enhanced damages
+
+5. POST-TRIAL ACTIVITY:
+   - JMOL motions and outcomes
+   - Appeals to Federal Circuit or other courts
+   - Settlement details (if public)
+   - Ongoing royalties or licensing arrangements
+
+6. LEGAL SIGNIFICANCE:
+   - Precedential value and cited opinions
+   - Impact on patent law or litigation strategy
+   - Industry-wide implications
+   - Changes to business practices or licensing
+
+7. KEY PLAYERS:
+   - Lead attorneys and their notable arguments
+   - Judges and their significant rulings
+   - Expert witnesses and their credentials
+   - Corporate executives who testified
+
+For high-profile cases, include:
+- Media coverage and public reaction
+- Stock price impacts
+- Competitor responses
+- Legislative or regulatory interest
+
+If this case has limited public information, provide:
+- Similar cases between these parties
+- Related litigation in the same technology area
+- Industry litigation patterns
+- Typical outcomes for similar disputes
+
+Note: Please provide a detailed response (700-900 words) with specific facts, dates, dollar amounts, and patent numbers from your training data rather than generic descriptions.

@@ -16,7 +16,6 @@ interface LLMProfile {
   baseUrl?: string;
   maxTokens: number;
   temperature: number;
-  systemPrompt: string;
 }
 
 interface LLMConfig {
@@ -47,109 +46,66 @@ export class BackgroundLLMService {
   private config: BackgroundLLMConfig;
   private currentProfile: string;
   private llm: any;
+  private contextSuffix: string;
+  private systemPrompt: string = '';
 
-  constructor(configPath?: string, profileOverride?: string) {
+  constructor(configPath?: string, profileOverride?: string, contextSuffix: string = 'medium') {
     this.config = this.loadConfig(configPath);
     this.currentProfile = profileOverride || this.config.llmProfiles.default;
+    this.contextSuffix = contextSuffix;
+    this.loadSystemPrompt();
     this.initializeLLM();
   }
 
-  private loadConfig(configPath?: string): BackgroundLLMConfig {
-    const defaultConfig: BackgroundLLMConfig = {
-      llmProfiles: {
-        default: 'chatgpt',
-        profiles: {
-          'chatgpt5': {
-            provider: 'openai',
-            model: 'gpt-5',
-            apiKeyEnv: 'OPENAI_API_KEY',
-            maxTokens: 2000,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'chatgpt': {
-            provider: 'openai',
-            model: 'gpt-4',
-            apiKeyEnv: 'OPENAI_API_KEY',
-            maxTokens: 2000,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'chatgpt-turbo': {
-            provider: 'openai',
-            model: 'gpt-3.5-turbo',
-            apiKeyEnv: 'OPENAI_API_KEY',
-            maxTokens: 1500,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'claude': {
-            provider: 'anthropic',
-            model: 'claude-3-opus-20240229',
-            apiKeyEnv: 'ANTHROPIC_API_KEY',
-            maxTokens: 2000,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'claude-opus-4.1': {
-            provider: 'anthropic',
-            model: 'claude-opus-4-1-20250805',
-            apiKeyEnv: 'ANTHROPIC_API_KEY',
-            maxTokens: 2000,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'claude-sonnet': {
-            provider: 'anthropic',
-            model: 'claude-3-5-sonnet-20241022',
-            apiKeyEnv: 'ANTHROPIC_API_KEY',
-            maxTokens: 2000,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'claude-haiku': {
-            provider: 'anthropic',
-            model: 'claude-3-5-haiku-20241022',
-            apiKeyEnv: 'ANTHROPIC_API_KEY',
-            maxTokens: 1500,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          },
-          'gemini': {
-            provider: 'google',
-            model: 'gemini-pro',
-            apiKeyEnv: 'GOOGLE_API_KEY',
-            maxTokens: 2000,
-            temperature: 0.3,
-            systemPrompt: 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.'
-          }
-        }
-      },
-      processing: {
-        batchSize: 5,
-        retryAttempts: 3,
-        retryDelay: 1000,
-        skipExisting: true,
-        overwritePrompts: false,
-        logSkipped: true
-      },
-      output: {
-        baseDir: 'output',
-        attorneyDir: 'attorneyProfiles',
-        trialDir: 'trialSummaries'
-      }
-    };
-
-    if (configPath) {
-      try {
-        const customConfig = require(path.resolve(configPath));
-        return { ...defaultConfig, ...customConfig };
-      } catch (error) {
-        console.warn(chalk.yellow(`Could not load config from ${configPath}, using defaults`));
-      }
+  private loadSystemPrompt() {
+    try {
+      const promptPath = path.join(__dirname, '../../templates/llm-legal-role-prompt.txt');
+      this.systemPrompt = require('fs').readFileSync(promptPath, 'utf-8');
+    } catch (error) {
+      console.warn(chalk.yellow('Could not load system prompt from templates, using default'));
+      this.systemPrompt = 'You are an expert legal researcher with access to comprehensive public information about attorneys, law firms, and legal cases. Use all available information from your training data including court records, news articles, legal directories, firm websites, and professional databases. Provide specific, factual details rather than generic descriptions.';
     }
+  }
 
-    return defaultConfig;
+  private loadConfig(configPath?: string): BackgroundLLMConfig {
+    // Try to load from config file first
+    const configFile = configPath || path.join(__dirname, '../../config/llm-models.json');
+
+    try {
+      const configData = require('fs').readFileSync(configFile, 'utf-8');
+      return JSON.parse(configData);
+    } catch (error) {
+      console.warn(chalk.yellow(`Could not load config from ${configFile}, using defaults`));
+
+      // Fallback to default config if file not found
+      return {
+        llmProfiles: {
+          default: 'claude-sonnet',
+          profiles: {
+            'claude-sonnet': {
+              provider: 'anthropic',
+              model: 'claude-3-5-sonnet-20241022',
+              apiKeyEnv: 'ANTHROPIC_API_KEY',
+              maxTokens: 2000,
+              temperature: 0.3
+            }
+          }
+        },
+        processing: {
+          batchSize: 5,
+          retryAttempts: 3,
+          retryDelay: 1000,
+          skipExisting: true,
+          overwritePrompts: false,
+          logSkipped: true
+        },
+        output: {
+          baseDir: 'output',
+          attorneyDir: 'attorneyProfiles',
+          trialDir: 'trialSummaries'
+        }
+      };
+    }
   }
 
   private initializeLLM() {
@@ -253,6 +209,17 @@ export class BackgroundLLMService {
     );
 
     console.log(chalk.cyan(`Found ${attorneysWithFirms.length} attorneys with law firm associations`));
+    console.log(chalk.cyan(`Using context template: attorney-context-${this.contextSuffix}.txt`));
+
+    // Load the attorney context template
+    let templateContent: string;
+    try {
+      const templatePath = path.join(__dirname, `../../templates/attorney-context-${this.contextSuffix}.txt`);
+      templateContent = await fs.readFile(templatePath, 'utf-8');
+    } catch (error) {
+      console.error(chalk.red(`Could not load attorney template: attorney-context-${this.contextSuffix}.txt`));
+      throw error;
+    }
 
     let promptsGenerated = 0;
     let promptsSkipped = 0;
@@ -274,60 +241,11 @@ export class BackgroundLLMService {
 
       const lawFirms = [...new Set(attorney.trialAttorneys.map(ta => ta.lawFirm?.name).filter(Boolean))];
 
-      const prompt = `Please search your knowledge base and provide a comprehensive professional biography using all publicly available information about the following attorney:
-
-ATTORNEY DETAILS:
-Name: ${attorney.name}
-Law Firm(s): ${lawFirms.join(', ') || 'Unknown'}
-Bar Number: ${attorney.barNumber || 'Not provided'}
-
-IMPORTANT: Please use ALL publicly available information from your training data about this attorney, including:
-- Information from law firm websites and attorney profiles
-- Legal directories (Martindale-Hubbell, Chambers, Super Lawyers, etc.)
-- News articles and press releases about cases they've handled
-- Court records and published opinions
-- Professional biographies and LinkedIn profiles
-- Speaking engagements and conference presentations
-- Published articles, books, or legal commentary
-- Educational background from university records
-
-REQUIRED INFORMATION TO INCLUDE:
-1. Educational background (law school, undergraduate, year of graduation if known)
-2. Bar admissions and years of practice
-3. Career progression and previous firms
-4. Specialization areas (especially IP litigation)
-5. Notable cases and trials with specific case names and outcomes
-6. Significant verdicts, settlements, or legal victories (with dollar amounts when known)
-7. Professional recognitions, awards, and rankings
-8. Publications, speaking engagements, and thought leadership
-9. Pro bono work or professional associations
-10. Any unique expertise or technical background
-
-IMPORTANT - PROVIDE RELEVANT LINKS:
-- Direct link to attorney's profile on law firm website (if available)
-- Link to attorney's LinkedIn profile (if known)
-- Links to notable articles or publications by the attorney
-- Links to news coverage of significant cases
-- Any other relevant professional profile links
-
-FOR ATTORNEYS WITH LIMITED PUBLIC PROFILE:
-Please provide EXTENSIVE information about their law firm including:
-- Detailed history and founding of the firm
-- Size of the firm (number of attorneys, offices)
-- Key practice areas and specializations
-- Firm's most notable IP cases and victories
-- Major clients (if publicly known)
-- Firm culture and reputation
-- Rankings and recognitions (Chambers, AmLaw, etc.)
-- Notable partners and their achievements
-- Typical career trajectory for associates and partners
-- Regional presence and influence
-- Recent significant hires or departures
-- Pro bono and community involvement
-
-For well-known attorneys, provide specific details about their most famous cases, including case names, parties represented, and outcomes. Include specific dollar amounts for verdicts or settlements when publicly known.
-
-Note: Please provide a detailed response (700-900 words) using specific, factual information from your training data. Include as many relevant links as possible, and provide extensive law firm context for less prominent attorneys.`;
+      // Replace template variables
+      const prompt = templateContent
+        .replace(/{{attorneyName}}/g, attorney.name || 'Unknown')
+        .replace(/{{lawFirms}}/g, lawFirms.join(', ') || 'Unknown')
+        .replace(/{{barNumber}}/g, attorney.barNumber || 'Not provided');
 
       await fs.writeFile(promptPath, prompt);
       promptsGenerated++;
@@ -361,6 +279,24 @@ Note: Please provide a detailed response (700-900 words) using specific, factual
     });
 
     console.log(chalk.cyan(`Found ${trials.length} trials`));
+    console.log(chalk.cyan(`Using context template: trial-context-${this.contextSuffix}.txt`));
+
+    // Load the trial context template - default to long if suffix doesn't exist
+    let templateContent: string;
+    const templatePath = path.join(__dirname, `../../templates/trial-context-${this.contextSuffix}.txt`);
+    const fallbackPath = path.join(__dirname, '../../templates/trial-context-long.txt');
+
+    try {
+      templateContent = await fs.readFile(templatePath, 'utf-8');
+    } catch (error) {
+      try {
+        console.warn(chalk.yellow(`Template trial-context-${this.contextSuffix}.txt not found, using trial-context-long.txt`));
+        templateContent = await fs.readFile(fallbackPath, 'utf-8');
+      } catch (fallbackError) {
+        console.error(chalk.red(`Could not load trial template`));
+        throw fallbackError;
+      }
+    }
 
     let promptsGenerated = 0;
     let promptsSkipped = 0;
@@ -389,82 +325,15 @@ Note: Please provide a detailed response (700-900 words) using specific, factual
         .map(ta => ta.lawFirm?.name)
         .filter(Boolean))];
 
-      const prompt = `Please search your knowledge base and provide a comprehensive case analysis using all publicly available information about the following intellectual property litigation:
-
-CASE DETAILS:
-Case Name/Title: ${trial.shortName || trial.name || 'Unknown'}
-Plaintiff: ${trial.plaintiff || 'Not specified'}
-Defendant: ${trial.defendant || 'Not specified'}
-Case Number: ${trial.caseNumber || 'Not specified'}
-Court: ${trial.court || 'Not specified'}
-Trial Dates: ${dateRange}
-Law Firms: ${lawFirms.join(', ') || 'Not specified'}
-
-IMPORTANT: Please use ALL publicly available information from your training data about this case, including:
-- Court opinions and orders (published and unpublished)
-- News coverage and legal media reports (Law360, IPWatchdog, etc.)
-- Press releases from the parties or law firms
-- Patent office records and USPTO proceedings
-- SEC filings mentioning the litigation
-- Legal blogs and commentary
-- Industry publications and trade press
-- Academic articles or case studies
-
-REQUIRED COMPREHENSIVE INFORMATION:
-1. CASE BACKGROUND:
-   - Complete case history and how the dispute arose
-   - Business relationship between the parties
-   - Industry context and market implications
-
-2. INTELLECTUAL PROPERTY AT ISSUE:
-   - Specific patent numbers, claims, or trademark registrations
-   - Technology or products involved
-   - Prior art or validity challenges
-   - Any parallel USPTO proceedings (IPR, reexamination)
-
-3. LEGAL PROCEEDINGS:
-   - Key motions and rulings (claim construction, summary judgment)
-   - Expert witnesses and their testimony
-   - Jury selection and composition (if applicable)
-   - Trial strategies employed by each side
-
-4. VERDICT AND DAMAGES:
-   - Specific verdict details and jury findings
-   - Damage awards (exact amounts if known)
-   - Injunctive relief granted or denied
-   - Willfulness findings and enhanced damages
-
-5. POST-TRIAL ACTIVITY:
-   - JMOL motions and outcomes
-   - Appeals to Federal Circuit or other courts
-   - Settlement details (if public)
-   - Ongoing royalties or licensing arrangements
-
-6. LEGAL SIGNIFICANCE:
-   - Precedential value and cited opinions
-   - Impact on patent law or litigation strategy
-   - Industry-wide implications
-   - Changes to business practices or licensing
-
-7. KEY PLAYERS:
-   - Lead attorneys and their notable arguments
-   - Judges and their significant rulings
-   - Expert witnesses and their credentials
-   - Corporate executives who testified
-
-For high-profile cases, include:
-- Media coverage and public reaction
-- Stock price impacts
-- Competitor responses
-- Legislative or regulatory interest
-
-If this case has limited public information, provide:
-- Similar cases between these parties
-- Related litigation in the same technology area
-- Industry litigation patterns
-- Typical outcomes for similar disputes
-
-Note: Please provide a detailed response (700-900 words) with specific facts, dates, dollar amounts, and patent numbers from your training data rather than generic descriptions.`;
+      // Replace template variables
+      const prompt = templateContent
+        .replace(/{{caseName}}/g, trial.shortName || trial.name || 'Unknown')
+        .replace(/{{plaintiff}}/g, trial.plaintiff || 'Not specified')
+        .replace(/{{defendant}}/g, trial.defendant || 'Not specified')
+        .replace(/{{caseNumber}}/g, trial.caseNumber || 'Not specified')
+        .replace(/{{court}}/g, trial.court || 'Not specified')
+        .replace(/{{trialDates}}/g, dateRange)
+        .replace(/{{lawFirms}}/g, lawFirms.join(', ') || 'Not specified');
 
       await fs.writeFile(promptPath, prompt);
       promptsGenerated++;
@@ -526,7 +395,7 @@ Note: Please provide a detailed response (700-900 words) with specific facts, da
         console.log(chalk.yellow(`Processing ${attorney.name}...`));
 
         const messages = [
-          { role: 'system', content: profile.systemPrompt },
+          { role: 'system', content: this.systemPrompt },
           { role: 'user', content: prompt }
         ];
 
@@ -589,7 +458,7 @@ Note: Please provide a detailed response (700-900 words) with specific facts, da
         console.log(chalk.yellow(`Processing ${trial.shortName}...`));
 
         const messages = [
-          { role: 'system', content: profile.systemPrompt },
+          { role: 'system', content: this.systemPrompt },
           { role: 'user', content: prompt }
         ];
 

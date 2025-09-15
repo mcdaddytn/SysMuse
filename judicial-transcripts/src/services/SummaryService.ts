@@ -12,7 +12,7 @@ export class SummaryService {
    * Get list of available summary types for a section
    */
   async getAvailableSummaries(sectionId: number): Promise<string[]> {
-    const available: string[] = ['abridged', 'abridged2', 'fulltext'];
+    const available: string[] = ['abridged', 'abridged2', 'fulltext', 'llmsummary1'];
 
     // Check if any pre-generated LLM summaries exist
     const section = await this.prisma.markerSection.findUnique({
@@ -20,7 +20,7 @@ export class SummaryService {
     });
 
     if (section) {
-      // Check for LLM summaries in the database or filesystem
+      // Check for additional LLM summaries in the database or filesystem
       const llmSummariesPath = path.join('output', 'llm-summaries', `section_${sectionId}`);
       if (fs.existsSync(llmSummariesPath)) {
         try {
@@ -69,6 +69,9 @@ export class SummaryService {
         break;
       case 'fulltext':
         content = await this.getFullText(section);
+        break;
+      case 'llmsummary1':
+        content = await this.getLLMSummary1(section);
         break;
       default:
         // Check for pre-generated LLM summary
@@ -237,6 +240,44 @@ export class SummaryService {
     }
 
     return '';
+  }
+
+  /**
+   * Get LLMSummary1 with fallback to abridged summary
+   */
+  private async getLLMSummary1(section: MarkerSection): Promise<string> {
+    // First check if LLMSummary1 exists for this section
+    const trial = await this.prisma.trial.findUnique({
+      where: { id: section.trialId },
+      select: { shortName: true }
+    });
+
+    if (trial?.shortName && section.name) {
+      // Map section type to LLMSummary1 file name format
+      let llmFileName = '';
+      if (section.markerSectionType === 'OPENING_STATEMENT_PLAINTIFF') {
+        llmFileName = 'Plaintiff_Opening_Statement.txt';
+      } else if (section.markerSectionType === 'OPENING_STATEMENT_DEFENSE') {
+        llmFileName = 'Defense_Opening_Statement.txt';
+      } else if (section.markerSectionType === 'CLOSING_STATEMENT_PLAINTIFF') {
+        llmFileName = 'Plaintiff_Closing_Statement.txt';
+      } else if (section.markerSectionType === 'CLOSING_STATEMENT_DEFENSE') {
+        llmFileName = 'Defense_Closing_Statement.txt';
+      }
+
+      if (llmFileName) {
+        const llmPath = path.join('output', 'markersections', trial.shortName, 'LLMSummary1', llmFileName);
+        if (fs.existsSync(llmPath)) {
+          logger.debug(`Loading LLMSummary1 from: ${llmPath}`);
+          return fs.readFileSync(llmPath, 'utf-8');
+        }
+      }
+    }
+
+    // If LLMSummary1 not available, return abridged with a note
+    logger.info(`LLMSummary1 not available for section ${section.id}, using fallback`);
+    const fallbackContent = await this.getAbridgedSummary(section);
+    return `[LLM Summary not available - showing Abridged summary]\n[Request generation to create LLM summary]\n\n${fallbackContent}`;
   }
 
   /**

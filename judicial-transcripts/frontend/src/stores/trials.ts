@@ -305,7 +305,8 @@ export const useTrialStore = defineStore('trials', {
       return [
         { label: 'Abridged', value: 'abridged' },
         { label: 'Abridged 2', value: 'abridged2' },
-        { label: 'Full Text', value: 'fulltext' }
+        { label: 'Full Text', value: 'fulltext' },
+        { label: 'LLM Summary', value: 'llmsummary1' }
       ]
     },
 

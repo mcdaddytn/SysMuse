@@ -32,6 +32,26 @@
       </div>
 
       <div v-else-if="summaryContent" class="summary-text">
+        <div v-if="isLLMFallback" class="llm-fallback-notice q-pa-md q-mb-md">
+          <q-banner class="bg-orange-2 text-grey-9" rounded>
+            <template v-slot:avatar>
+              <q-icon name="info" color="orange-8" />
+            </template>
+            <div class="text-weight-bold text-grey-9">LLM Summary Not Available</div>
+            <div class="text-body2 q-mt-xs text-grey-8">Showing Abridged summary as fallback</div>
+            <template v-slot:action>
+              <q-btn
+                flat
+                label="Request Generation"
+                color="black"
+                icon="auto_awesome"
+                @click="requestLLMGeneration"
+                class="text-weight-medium"
+              />
+            </template>
+          </q-banner>
+        </div>
+
         <div
           v-for="(paragraph, index) in formattedContent"
           :key="index"
@@ -100,6 +120,7 @@ const error = ref<string | null>(null)
 const summaryContent = ref<any>(null)
 const fontSize = ref(14)
 const hasMore = ref(false)
+const isLLMFallback = ref(false)
 
 const nodeTitle = computed(() => {
   if (!props.node) return 'No Selection'
@@ -184,8 +205,22 @@ const speakerCount = computed(() => {
 const formattedContent = computed(() => {
   if (!summaryContent.value?.content) return []
 
+  let content = summaryContent.value.content
+
+  // Check if this is an LLM fallback response and extract the actual content
+  isLLMFallback.value = false
+  if (props.summaryType === 'llmsummary1' && content.includes('[LLM Summary not available')) {
+    isLLMFallback.value = true
+    // Remove the fallback notice lines from the content
+    const lines = content.split('\n')
+    const contentStart = lines.findIndex(line => !line.startsWith('['))
+    if (contentStart > 0) {
+      content = lines.slice(contentStart).join('\n')
+    }
+  }
+
   const paragraphs = []
-  const lines = summaryContent.value.content.split('\n')
+  const lines = content.split('\n')
   let currentParagraph: any = { text: '' }
 
   for (const line of lines) {
@@ -299,6 +334,14 @@ const decreaseFontSize = () => {
   if (fontSize.value > 10) {
     fontSize.value -= 2
   }
+}
+
+const requestLLMGeneration = () => {
+  $q.dialog({
+    title: 'Request LLM Summary Generation',
+    message: 'This feature is not yet implemented. LLM summary generation will be available in a future update.',
+    ok: true
+  })
 }
 
 watch(() => props.node, loadSummary, { immediate: true })

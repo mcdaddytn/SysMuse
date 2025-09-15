@@ -1,4 +1,5 @@
 <template>
+  <div>
   <q-toolbar>
     <q-btn
       flat
@@ -74,12 +75,16 @@
       </q-btn>
     </q-btn-group>
   </q-toolbar>
+
+  <SettingsDialog v-model="settingsOpen" />
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useTrialStore } from '@/stores/trials'
 import { useQuasar } from 'quasar'
+import SettingsDialog from './SettingsDialog.vue'
 
 interface Props {
   selectedTrial: number | null
@@ -97,6 +102,7 @@ const emit = defineEmits<{
 
 const $q = useQuasar()
 const trialStore = useTrialStore()
+const settingsOpen = ref(false)
 
 const trial = computed({
   get: () => props.selectedTrial,
@@ -118,7 +124,8 @@ const trialOptions = computed(() => trialStore.trials)
 const summaryOptions = ref([
   { label: 'Abridged', value: 'abridged' },
   { label: 'Abridged 2', value: 'abridged2' },
-  { label: 'Full Text', value: 'fulltext' }
+  { label: 'Full Text', value: 'fulltext' },
+  { label: 'LLM Summary', value: 'llmsummary1' }
 ])
 
 const eventOptions = ref([
@@ -173,10 +180,6 @@ const refreshData = async () => {
 }
 
 const showSettings = () => {
-  $q.dialog({
-    title: 'Settings',
-    message: 'Settings panel coming soon',
-    ok: true
-  })
+  settingsOpen.value = true
 }
 </script>

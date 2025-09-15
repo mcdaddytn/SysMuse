@@ -27,6 +27,10 @@ app.use(cors()); // Enable CORS for all origins in development
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files from config and templates directories for frontend
+app.use('/config', express.static(path.join(__dirname, '../../config')));
+app.use('/templates', express.static(path.join(__dirname, '../../templates')));
+
 // Mount report routes
 app.use('/api/reports', reportsRouter);
 

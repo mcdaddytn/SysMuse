@@ -102,6 +102,7 @@ const fontSize = ref(14)
 const hasMore = ref(false)
 
 const nodeTitle = computed(() => {
+  console.log('[SummaryPane] nodeTitle computed - props.node:', props.node)
   if (!props.node) return 'No Selection'
   return props.node.label || props.node.name || props.node.type || 'Unnamed Node'
 })
@@ -112,13 +113,73 @@ const eventRange = computed(() => {
 })
 
 const duration = computed(() => {
-  if (!summaryContent.value?.duration) return 'N/A'
-  const minutes = Math.floor(summaryContent.value.duration / 60)
-  return `${minutes} minutes`
+  // Try summary metadata first (from API response)
+  if (summaryContent.value?.metadata?.startTime && summaryContent.value?.metadata?.endTime) {
+    // These are time strings like "10:30:45 AM"
+    const startTime = summaryContent.value.metadata.startTime
+    const endTime = summaryContent.value.metadata.endTime
+    return `${startTime} - ${endTime}`
+  }
+
+  // Try to calculate duration from event range if available
+  if (summaryContent.value?.duration && summaryContent.value.duration > 0) {
+    const minutes = Math.floor(summaryContent.value.duration / 60)
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    if (hours > 0) {
+      return `${hours}h ${remainingMinutes}m`
+    }
+    return `${minutes} minutes`
+  }
+
+  // Try node metadata
+  if (props.node?.metadata?.duration) {
+    const minutes = Math.floor(props.node.metadata.duration / 60)
+    return `${minutes} minutes`
+  }
+
+  // If node has time info, use it
+  if (props.node?.startTime && props.node?.endTime) {
+    const start = new Date(props.node.startTime).getTime()
+    const end = new Date(props.node.endTime).getTime()
+    const minutes = Math.floor((end - start) / 60000)
+    return `${minutes} minutes`
+  }
+
+  // If we have event count, show that instead
+  if (props.node?.stats?.eventCount) {
+    return `${props.node.stats.eventCount} events`
+  }
+
+  return 'Duration unavailable'
 })
 
 const speakerCount = computed(() => {
-  return summaryContent.value?.speakers?.length || 0
+  // First check node stats if available
+  if (props.node?.stats?.speakerCount) {
+    return props.node.stats.speakerCount
+  }
+  // Get speakers from summary metadata
+  if (summaryContent.value?.metadata?.speaker) {
+    // At least one speaker from metadata
+    return 1
+  }
+  if (summaryContent.value?.speakers?.length) {
+    return summaryContent.value.speakers.length
+  }
+  // Get speakers from node metadata if available
+  if (props.node?.metadata?.speakers?.length) {
+    return props.node.metadata.speakers.length
+  }
+  // Count unique speakers in the content if available
+  if (summaryContent.value?.content) {
+    const speakerMatches = summaryContent.value.content.match(/^([A-Z][A-Z\s.]+):/gm)
+    if (speakerMatches) {
+      const uniqueSpeakers = new Set(speakerMatches.map((m: string) => m.replace(':', '').trim()))
+      return uniqueSpeakers.size
+    }
+  }
+  return 0
 })
 
 const formattedContent = computed(() => {
@@ -159,17 +220,29 @@ const formattedContent = computed(() => {
 })
 
 const loadSummary = async () => {
-  if (!props.node) return
+  console.log('[SummaryPane] loadSummary called - props.node:', props.node)
+  if (!props.node || !props.node.id) {
+    console.log('[SummaryPane] loadSummary - no node or node.id, returning')
+    return
+  }
 
   loading.value = true
   error.value = null
 
   try {
-    summaryContent.value = await trialStore.loadSummary(
+    console.log('[SummaryPane] loadSummary - calling store with nodeId:', props.node.id)
+    const result = await trialStore.loadSummary(
       props.node.id,
       props.summaryType
     )
-    hasMore.value = summaryContent.value?.hasMore || false
+    console.log('[SummaryPane] loadSummary - result:', result)
+    // Handle the nested response structure
+    if (result) {
+      summaryContent.value = result
+      hasMore.value = result.hasMore || false
+    } else {
+      summaryContent.value = null
+    }
   } catch (err: any) {
     error.value = err.message || 'Failed to load summary'
     summaryContent.value = null
@@ -235,7 +308,10 @@ const decreaseFontSize = () => {
   }
 }
 
-watch(() => props.node, loadSummary, { immediate: true })
+watch(() => props.node, (newNode, oldNode) => {
+  console.log('[SummaryPane] watch node changed from:', oldNode, 'to:', newNode)
+  loadSummary()
+}, { immediate: true })
 watch(() => props.summaryType, loadSummary)
 </script>
 

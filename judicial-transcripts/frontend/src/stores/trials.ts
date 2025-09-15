@@ -24,6 +24,7 @@ interface Summary {
   duration: number
   speakers: string[]
   hasMore: boolean
+  metadata?: any
 }
 
 interface Event {
@@ -115,11 +116,38 @@ export const useTrialStore = defineStore('trials', {
         )
         // Extract the content from the response
         if (response.data?.content) {
+          // Calculate duration from metadata if available
+          let duration = 0
+          const metadata = response.data.content.metadata || {}
+
+          if (metadata.startTime && metadata.endTime) {
+            const start = new Date(`1970-01-01T${metadata.startTime}`).getTime()
+            const end = new Date(`1970-01-01T${metadata.endTime}`).getTime()
+            duration = (end - start) / 1000 // Convert to seconds
+          } else if (metadata.duration) {
+            duration = metadata.duration
+          }
+
+          // Extract speakers from metadata or content
+          let speakers = metadata.speakers || []
+          if (!speakers.length && metadata.speaker) {
+            speakers = [metadata.speaker]
+          }
+
+          // Also try to extract speakers from the content text
+          if (!speakers.length && response.data.content.text) {
+            const speakerMatches = response.data.content.text.match(/^([A-Z][A-Z\s.]+):/gm)
+            if (speakerMatches) {
+              speakers = Array.from(new Set(speakerMatches.map((m: string) => m.replace(':', '').trim())))
+            }
+          }
+
           this.currentSummary = {
             content: response.data.content.text || '',
-            duration: response.data.content.metadata?.duration || 0,
-            speakers: response.data.content.metadata?.speakers || [],
-            hasMore: false
+            duration,
+            speakers,
+            hasMore: false,
+            metadata
           }
         } else {
           this.currentSummary = null

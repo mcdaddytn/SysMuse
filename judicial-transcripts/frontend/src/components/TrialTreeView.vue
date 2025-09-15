@@ -225,8 +225,10 @@ const findNodeById = (node: any, id: string | number): any => {
 }
 
 const selectNode = (node: any) => {
-  selected.value = node.id
+  console.log('[TrialTreeView] selectNode called with:', node)
+  // Just emit the nodeClick event since we're not using v-model
   emit('nodeClick', node)
+  console.log('[TrialTreeView] Emitted nodeClick with node:', node)
 }
 
 const updateSelected = (value: any) => {

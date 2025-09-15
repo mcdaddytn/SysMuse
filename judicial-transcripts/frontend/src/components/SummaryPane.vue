@@ -102,7 +102,6 @@ const fontSize = ref(14)
 const hasMore = ref(false)
 
 const nodeTitle = computed(() => {
-  console.log('[SummaryPane] nodeTitle computed - props.node:', props.node)
   if (!props.node) return 'No Selection'
   return props.node.label || props.node.name || props.node.type || 'Unnamed Node'
 })
@@ -220,22 +219,16 @@ const formattedContent = computed(() => {
 })
 
 const loadSummary = async () => {
-  console.log('[SummaryPane] loadSummary called - props.node:', props.node)
-  if (!props.node || !props.node.id) {
-    console.log('[SummaryPane] loadSummary - no node or node.id, returning')
-    return
-  }
+  if (!props.node || !props.node.id) return
 
   loading.value = true
   error.value = null
 
   try {
-    console.log('[SummaryPane] loadSummary - calling store with nodeId:', props.node.id)
     const result = await trialStore.loadSummary(
       props.node.id,
       props.summaryType
     )
-    console.log('[SummaryPane] loadSummary - result:', result)
     // Handle the nested response structure
     if (result) {
       summaryContent.value = result
@@ -308,10 +301,7 @@ const decreaseFontSize = () => {
   }
 }
 
-watch(() => props.node, (newNode, oldNode) => {
-  console.log('[SummaryPane] watch node changed from:', oldNode, 'to:', newNode)
-  loadSummary()
-}, { immediate: true })
+watch(() => props.node, loadSummary, { immediate: true })
 watch(() => props.summaryType, loadSummary)
 </script>
 

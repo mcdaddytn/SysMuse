@@ -209,13 +209,10 @@ const handleNavigation = (direction: 'prev' | 'next') => {
 }
 
 const handleNodeSelection = async (node: any) => {
-  console.log('[App] handleNodeSelection called with node:', node)
   selectedNode.value = node
-  console.log('[App] selectedNode.value is now:', selectedNode.value)
 
   // Load summary and events for the selected node
   if (node && node.id) {
-    console.log('[App] Loading summary and events for nodeId:', node.id)
     await trialStore.loadSummary(node.id, summaryType.value)
     await trialStore.loadEvents(node.id, eventType.value)
   }

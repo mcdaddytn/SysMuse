@@ -131,7 +131,9 @@ export class EventOverlayService {
       // Extract metadata from the result
       const metadata: any = {
         ruling,
-        grounds: this.extractObjectionGrounds(transcript)
+        grounds: this.extractObjectionGrounds(transcript),
+        accumulatorName: accumulator.name,
+        sourceAccumulator: (result.metadata as any)?.accumulatorName || accumulator.name
       };
 
       // Try to identify the objecting attorney from the transcript

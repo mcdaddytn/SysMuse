@@ -1,0 +1,53 @@
+Analyze the following plaintiff's opening statement from an intellectual property trial. Provide a strategic analysis (1-2 pages) that examines:
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+OPENING STATEMENT TO ANALYZE:
+{{sourceText}}
+
+ANALYSIS REQUIREMENTS:
+
+1. STRATEGIC POSITIONING:
+- How does the plaintiff frame the case narrative?
+- What themes and metaphors are introduced?
+- How is the defendant characterized?
+- What emotional appeals are made to the jury?
+
+2. LEGAL FRAMEWORK:
+- Which legal elements are emphasized?
+- How are complex technical concepts simplified?
+- What burden of proof language is used?
+- Which evidence is previewed as most compelling?
+
+3. PERSUASIVE TECHNIQUES:
+- Storytelling methods and narrative structure
+- Use of rhetorical devices and repetition
+- Visual or demonstrative evidence mentioned
+- Attempts to establish credibility and trust
+
+4. KEY CASE THEORIES:
+- Primary theory of infringement or liability
+- Damages framework introduced
+- Willfulness or bad faith allegations
+- Competitive harm or market impact claims
+
+5. ANTICIPATED DEFENSES:
+- How does the plaintiff preempt defense arguments?
+- What weaknesses are acknowledged?
+- How are potential counterarguments addressed?
+
+6. JURY PSYCHOLOGY:
+- Appeals to fairness and justice
+- Simplification strategies for complex technology
+- Creation of memorable phrases or concepts
+- Emotional hooks and human interest elements
+
+SPECIAL ATTENTION FOR PLAINTIFF:
+As the party with the burden of proof, pay particular attention to:
+- How clearly the plaintiff defines what must be proven
+- The confidence level projected about meeting that burden
+- Whether the opening creates a clear roadmap for the trial
+- How the plaintiff establishes the stakes and importance of the case
+
+Provide specific quotes and examples from the statement to support your analysis. Focus on strategic choices rather than merely summarizing content. Aim for 1-2 pages of insightful analysis that would help someone understand the plaintiff's litigation strategy.

@@ -526,4 +526,181 @@ export class BackgroundLLMService {
 
     await this.getStatus(entityType);
   }
+
+  // Component Summary Methods for Feature 09D
+  private async loadComponentSummaryConfig(): Promise<any> {
+    const configPath = path.join(__dirname, '../../config/llm-summaries.json');
+    try {
+      const configData = await fs.readFile(configPath, 'utf-8');
+      return JSON.parse(configData);
+    } catch (error) {
+      console.error(chalk.red('Could not load llm-summaries.json config'));
+      throw error;
+    }
+  }
+
+  private async checkTrialSummaryDependency(trialName: string): Promise<string | null> {
+    // Generate trial handle from name - matching existing convention
+    // "01 Genband" -> "01_genband"
+    const trialHandle = trialName
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '');
+
+    const summaryPath = path.join(
+      __dirname,
+      '../../output/trialSummaries',
+      `${trialHandle}_summary_response.txt`
+    );
+
+    try {
+      const content = await fs.readFile(summaryPath, 'utf-8');
+      return content;
+    } catch (error) {
+      console.warn(chalk.yellow(`Trial summary not found for ${trialName}`));
+      return null;
+    }
+  }
+
+  public async generateComponentSummaries(
+    trialName: string,
+    components: string[],
+    summaryType: string = 'LLMSummary1'
+  ) {
+    const config = await this.loadComponentSummaryConfig();
+    const summaryConfig = config.summaryTypes[summaryType];
+
+    if (!summaryConfig) {
+      throw new Error(`Summary type ${summaryType} not found in configuration`);
+    }
+
+    console.log(chalk.cyan(`\n=== Generating ${summaryType} for ${trialName} ===`));
+
+    // Check for trial summary dependency
+    const trialSummary = await this.checkTrialSummaryDependency(trialName);
+    if (!trialSummary && summaryConfig.components.some((c: any) => c.dependencies?.includes('trialSummary'))) {
+      console.error(chalk.red(`Trial summary required but not found for ${trialName}`));
+      console.log(chalk.yellow('Please generate trial summary first using: npm run background-llm -- trials --full'));
+      return;
+    }
+
+    // Create output directory
+    const outputDir = path.join(
+      __dirname,
+      '../../output/markersections',
+      trialName,
+      summaryConfig.outputDir
+    );
+    await this.ensureDirectoryExists(outputDir);
+
+    // Process each component
+    const componentsToProcess = components[0] === 'all'
+      ? summaryConfig.components.map((c: any) => c.name)
+      : components;
+
+    for (const componentName of componentsToProcess) {
+      const componentConfig = summaryConfig.components.find((c: any) => c.name === componentName);
+      if (!componentConfig) {
+        console.warn(chalk.yellow(`Component ${componentName} not found in configuration`));
+        continue;
+      }
+
+      await this.generateSingleComponentSummary(
+        trialName,
+        componentConfig,
+        trialSummary,
+        outputDir,
+        summaryConfig.llmProfile
+      );
+    }
+
+    console.log(chalk.green(`\n✓ Completed ${summaryType} generation for ${trialName}`));
+  }
+
+  private async generateSingleComponentSummary(
+    trialName: string,
+    componentConfig: any,
+    trialSummary: string | null,
+    outputDir: string,
+    llmProfile: string
+  ) {
+    const outputPath = path.join(outputDir, componentConfig.outputFile);
+
+    // Check if already exists
+    if (this.config.processing.skipExisting) {
+      try {
+        await fs.access(outputPath);
+        console.log(chalk.gray(`Skipping existing: ${componentConfig.name}`));
+        return;
+      } catch {}
+    }
+
+    console.log(chalk.yellow(`Processing ${componentConfig.name}...`));
+
+    // Load source text
+    const sourcePath = path.join(
+      __dirname,
+      '../../output/markersections',
+      trialName,
+      componentConfig.sourceFile
+    );
+
+    let sourceText: string;
+    try {
+      sourceText = await fs.readFile(sourcePath, 'utf-8');
+    } catch (error) {
+      console.error(chalk.red(`Source file not found: ${componentConfig.sourceFile}`));
+      return;
+    }
+
+    // Load context template
+    const templatePath = path.join(
+      __dirname,
+      '../../templates',
+      componentConfig.contextTemplate
+    );
+
+    let template: string;
+    try {
+      template = await fs.readFile(templatePath, 'utf-8');
+    } catch (error) {
+      console.error(chalk.red(`Template not found: ${componentConfig.contextTemplate}`));
+      return;
+    }
+
+    // Build prompt with substitutions
+    const prompt = template
+      .replace(/{{trialSummary}}/g, trialSummary || 'Trial summary not available')
+      .replace(/{{sourceText}}/g, sourceText)
+      .replace(/{{trialName}}/g, trialName)
+      .replace(/{{componentType}}/g, componentConfig.name);
+
+    // Generate summary using LLM
+    try {
+      const messages = [
+        { role: 'system', content: this.systemPrompt },
+        { role: 'user', content: prompt }
+      ];
+
+      const response = await this.llm.invoke(messages);
+      const responseText = response.content;
+
+      await fs.writeFile(outputPath, responseText);
+      console.log(chalk.green(`✓ Generated ${componentConfig.name}`));
+    } catch (error) {
+      console.error(chalk.red(`✗ Failed to generate ${componentConfig.name}: ${error}`));
+    }
+  }
+
+  public async batchProcessTrialComponents(
+    trialNames: string[],
+    summaryType: string = 'LLMSummary1'
+  ) {
+    console.log(chalk.cyan(`\n=== Batch Processing ${trialNames.length} Trials ===`));
+
+    for (const trialName of trialNames) {
+      await this.generateComponentSummaries(trialName, ['all'], summaryType);
+    }
+
+    console.log(chalk.green(`\n✓ Batch processing complete for ${trialNames.length} trials`));
+  }
 }

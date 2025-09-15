@@ -1,0 +1,55 @@
+Analyze the following plaintiff's closing statement from an intellectual property trial. Provide a strategic analysis (1-2 pages) that examines:
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+CLOSING STATEMENT TO ANALYZE:
+{{sourceText}}
+
+ANALYSIS REQUIREMENTS:
+
+1. EVIDENCE SYNTHESIS:
+- How does the plaintiff connect evidence to legal elements?
+- Which witness testimony is emphasized?
+- What documentary evidence is highlighted?
+- How are expert opinions integrated?
+
+2. PROMISE FULFILLMENT:
+- Does the closing deliver on opening statement promises?
+- Which themes from opening are reinforced?
+- What new insights emerged during trial?
+- How are surprises or unexpected testimony handled?
+
+3. DEFENSE REBUTTAL:
+- How does the plaintiff address defense arguments?
+- Which defense witnesses are challenged?
+- What defense theories are dismantled?
+- How is reasonable doubt addressed?
+
+4. DAMAGES ARGUMENT:
+- How is the damages calculation justified?
+- What economic evidence supports the request?
+- How is willfulness argued to enhance damages?
+- What future harm arguments are made?
+
+5. JURY INSTRUCTIONS APPLICATION:
+- How are specific jury instructions referenced?
+- Which legal standards are emphasized?
+- How is the burden of proof addressed?
+- What verdict form guidance is provided?
+
+6. EMOTIONAL CRESCENDO:
+- What final emotional appeals are made?
+- How is the moral high ground claimed?
+- What call to action is presented?
+- How is jury empowerment emphasized?
+
+SPECIAL ATTENTION FOR PLAINTIFF CLOSING:
+As the party with the burden of proof, examine:
+- Whether all elements of each claim are explicitly addressed
+- The confidence vs. desperation balance in tone
+- How the plaintiff handles any weaknesses exposed at trial
+- The clarity of the ask - what specific verdict is requested
+- Whether the closing creates urgency for jury action
+
+Provide specific quotes and examples from the statement to support your analysis. Note any callbacks to opening statement themes, pivots from original strategy, and adaptation to trial developments. Focus on persuasive technique and strategic choices. Aim for 1-2 pages of analysis that reveals the plaintiff's end-game strategy.

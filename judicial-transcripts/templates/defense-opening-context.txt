@@ -1,0 +1,55 @@
+Analyze the following defense opening statement from an intellectual property trial. Provide a strategic analysis (1-2 pages) that examines:
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+OPENING STATEMENT TO ANALYZE:
+{{sourceText}}
+
+ANALYSIS REQUIREMENTS:
+
+1. DEFENSIVE POSITIONING:
+- How does the defense reframe the plaintiff's narrative?
+- What alternative story is presented?
+- How is the defendant characterized (innovator, competitor, victim)?
+- What themes counter the plaintiff's emotional appeals?
+
+2. DOUBT CREATION:
+- Where does the defense plant seeds of doubt?
+- Which plaintiff claims are directly challenged?
+- What missing evidence is highlighted?
+- How is the burden of proof weaponized?
+
+3. TECHNICAL DEFENSES:
+- How are non-infringement arguments previewed?
+- What invalidity theories are introduced?
+- How is prior art positioned?
+- What technical distinctions are emphasized?
+
+4. CREDIBILITY ATTACKS:
+- How is the plaintiff's motivation questioned?
+- What credibility issues are raised about plaintiff witnesses?
+- Are there hints about impeachment evidence?
+- How are plaintiff's damages claims challenged?
+
+5. AFFIRMATIVE DEFENSES:
+- What legitimate business justifications are offered?
+- How is independent development argued?
+- Are there licensing or exhaustion defenses?
+- What equitable defenses are previewed?
+
+6. JURY SYMPATHY:
+- How does the defense connect with jury values?
+- What David vs. Goliath narratives are inverted?
+- How is the defendant humanized?
+- What fairness arguments are made?
+
+SPECIAL ATTENTION FOR DEFENSE:
+As the responding party, pay particular attention to:
+- Whether the defense commits to an affirmative story or just attacks
+- How the defense manages the asymmetric burden of proof
+- The balance between technical and common-sense arguments
+- Whether the defense overpromises on evidence to come
+- How the defense frames what "reasonable doubt" means in a civil case
+
+Provide specific quotes and examples from the statement to support your analysis. Note how the defense distinguishes between denying liability and offering alternative explanations. Focus on strategic choices unique to the defense position. Aim for 1-2 pages of analysis that reveals the defense litigation strategy.

@@ -1,0 +1,82 @@
+{
+  "summaryTypes": {
+    "LLMSummary1": {
+      "description": "Opening and closing statement strategic analysis",
+      "outputDir": "LLMSummary1",
+      "llmProfile": "claude-sonnet",
+      "outputFormat": "1-2 pages",
+      "components": [
+        {
+          "name": "Plaintiff_Opening_Statement",
+          "sourceFile": "FullText/Plaintiff_Opening_Statement.txt",
+          "contextTemplate": "plaintiff-opening-context.txt",
+          "dependencies": ["trialSummary"],
+          "outputFile": "Plaintiff_Opening_Statement.txt"
+        },
+        {
+          "name": "Plaintiff_Closing_Statement",
+          "sourceFile": "FullText/Plaintiff_Closing_Statement.txt",
+          "contextTemplate": "plaintiff-closing-context.txt",
+          "dependencies": ["trialSummary"],
+          "outputFile": "Plaintiff_Closing_Statement.txt"
+        },
+        {
+          "name": "Defense_Opening_Statement",
+          "sourceFile": "FullText/Defense_Opening_Statement.txt",
+          "contextTemplate": "defense-opening-context.txt",
+          "dependencies": ["trialSummary"],
+          "outputFile": "Defense_Opening_Statement.txt"
+        },
+        {
+          "name": "Defense_Closing_Statement",
+          "sourceFile": "FullText/Defense_Closing_Statement.txt",
+          "contextTemplate": "defense-closing-context.txt",
+          "dependencies": ["trialSummary"],
+          "outputFile": "Defense_Closing_Statement.txt"
+        }
+      ]
+    },
+    "LLMSummary2": {
+      "description": "Witness examination analysis (future)",
+      "outputDir": "LLMSummary2",
+      "llmProfile": "claude-sonnet",
+      "outputFormat": "2-3 pages",
+      "components": []
+    },
+    "LLMSummary3": {
+      "description": "Expert testimony analysis (future)",
+      "outputDir": "LLMSummary3",
+      "llmProfile": "claude-sonnet",
+      "outputFormat": "3-4 pages",
+      "components": []
+    }
+  },
+  "dependencies": {
+    "trialSummary": {
+      "type": "file",
+      "pathPattern": "output/trialSummaries/{{trialHandle}}_summary_response.txt",
+      "required": true,
+      "generateIfMissing": true
+    },
+    "attorneyProfile": {
+      "type": "file",
+      "pathPattern": "output/attorneyProfiles/{{attorneyHandle}}_profile_response.txt",
+      "required": false,
+      "generateIfMissing": false
+    },
+    "witnessProfile": {
+      "type": "file",
+      "pathPattern": "output/witnessProfiles/{{witnessHandle}}_profile_response.txt",
+      "required": false,
+      "generateIfMissing": false
+    }
+  },
+  "settings": {
+    "maxRetries": 3,
+    "retryDelay": 2000,
+    "parallelRequests": 2,
+    "cacheTimeout": 3600000,
+    "skipExisting": true,
+    "verbose": true
+  }
+}

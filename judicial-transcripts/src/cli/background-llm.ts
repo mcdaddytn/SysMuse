@@ -121,6 +121,41 @@ program
     }
   });
 
+program
+  .command('trial-components')
+  .description('Generate LLM summaries for trial components (Feature 09D)')
+  .option('--trial <name>', 'Trial name (e.g., "04 Intellectual Ventures")')
+  .option('--components <list>', 'Comma-separated component names or "all"', 'all')
+  .option('--summary-type <type>', 'Summary type (e.g., LLMSummary1)', 'LLMSummary1')
+  .option('--batch', 'Process multiple trials')
+  .option('--trials <list>', 'Comma-separated trial names for batch processing')
+  .option('--llm-profile <profile>', 'LLM profile to use', 'claude-sonnet')
+  .option('--context <suffix>', 'Context template suffix', 'medium')
+  .action(async (options) => {
+    try {
+      const service = new BackgroundLLMService(undefined, options.llmProfile, options.context);
+
+      if (options.batch) {
+        if (!options.trials) {
+          console.error(chalk.red('--trials option required when using --batch'));
+          process.exit(1);
+        }
+        const trialNames = options.trials.split(',').map((t: string) => t.trim());
+        await service.batchProcessTrialComponents(trialNames, options.summaryType);
+      } else {
+        if (!options.trial) {
+          console.error(chalk.red('--trial option required'));
+          process.exit(1);
+        }
+        const components = options.components.split(',').map((c: string) => c.trim());
+        await service.generateComponentSummaries(options.trial, components, options.summaryType);
+      }
+    } catch (error) {
+      console.error(chalk.red('Error processing trial components:'), error);
+      process.exit(1);
+    }
+  });
+
 program.parse(process.argv);
 
 if (!process.argv.slice(2).length) {

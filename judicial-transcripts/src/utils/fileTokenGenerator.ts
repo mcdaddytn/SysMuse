@@ -13,8 +13,9 @@ export function generateFileToken(input: string): string {
   // macOS: : and /
   
   return input
+    .replace(/\./g, '_')     // Period -> underscore (for filesystem safety)
     .replace(/:/g, '_')      // Colon -> underscore
-    .replace(/\//g, '_')     // Forward slash -> underscore  
+    .replace(/\//g, '_')     // Forward slash -> underscore
     .replace(/\\/g, '_')     // Backslash -> underscore
     .replace(/\|/g, '_')     // Pipe -> underscore
     .replace(/\?/g, '_')     // Question mark -> underscore
@@ -23,7 +24,7 @@ export function generateFileToken(input: string): string {
     .replace(/</g, '_')      // Less than -> underscore
     .replace(/>/g, '_')      // Greater than -> underscore
     .replace(/\s+/g, '_')    // Spaces -> underscore
-    .replace(/[^\w\-_.]/g, '') // Remove any other non-word chars except dash, underscore, dot
+    .replace(/[^\w\-_]/g, '') // Remove any other non-word chars except dash, underscore
     .replace(/_+/g, '_')     // Collapse multiple underscores
     .replace(/^_|_$/g, '');  // Trim underscores from start/end
 }

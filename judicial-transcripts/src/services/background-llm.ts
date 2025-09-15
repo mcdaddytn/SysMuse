@@ -540,11 +540,8 @@ export class BackgroundLLMService {
   }
 
   private async checkTrialSummaryDependency(trialName: string): Promise<string | null> {
-    // Generate trial handle from name - matching existing convention
-    // "01 Genband" -> "01_genband"
-    const trialHandle = trialName
-      .replace(/\s+/g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '');
+    // Use the same file token generation for consistency
+    const trialHandle = generateFileToken(trialName);
 
     const summaryPath = path.join(
       __dirname,

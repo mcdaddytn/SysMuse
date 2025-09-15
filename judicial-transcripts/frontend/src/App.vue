@@ -179,7 +179,11 @@ watch(selectedTrial, async (newTrialId) => {
     await trialStore.loadHierarchy(newTrialId, treeViewType.value)
     // Auto-select the root node
     if (trialStore.currentHierarchy) {
-      selectedNode.value = trialStore.currentHierarchy
+      // currentHierarchy is an array, get the first element
+      const rootNode = Array.isArray(trialStore.currentHierarchy)
+        ? trialStore.currentHierarchy[0]
+        : trialStore.currentHierarchy
+      selectedNode.value = rootNode
     }
   }
 })

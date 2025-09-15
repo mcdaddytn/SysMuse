@@ -79,7 +79,6 @@
 
     <q-menu
       v-model="contextMenuVisible"
-      :target="contextMenuTarget"
       context-menu
     >
       <q-list dense style="min-width: 200px">
@@ -137,7 +136,6 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  'update:selected': [value: any]
   'nodeClick': [node: any]
   'update:viewType': [value: string]
 }>()
@@ -148,7 +146,6 @@ const trialStore = useTrialStore()
 const searchText = ref('')
 const viewMode = ref('standard')
 const contextMenuVisible = ref(false)
-const contextMenuTarget = ref(null)
 const contextMenuNode = ref<any>(null)
 
 const treeData = computed(() => trialStore.currentHierarchy)
@@ -156,8 +153,8 @@ const treeData = computed(() => trialStore.currentHierarchy)
 const selected = computed({
   get: () => props.selected?.id || null,
   set: (value) => {
-    const node = findNodeById(treeData.value, value)
-    emit('update:selected', node)
+    // Don't emit update:selected since we're not using v-model anymore
+    // Just update the local value for the tree's internal state
   }
 })
 
@@ -234,7 +231,6 @@ const updateSelected = (value: any) => {
 }
 
 const showContextMenu = (event: MouseEvent, node: any) => {
-  contextMenuTarget.value = event.target as any
   contextMenuNode.value = node
   contextMenuVisible.value = true
 }

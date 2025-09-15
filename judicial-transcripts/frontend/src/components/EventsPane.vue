@@ -292,7 +292,10 @@ const getRulingColor = (ruling: string) => {
 }
 
 const loadEvents = async () => {
-  if (!props.node) return
+  if (!props.node || !props.node.id) {
+    events.value = []
+    return
+  }
 
   loading.value = true
   error.value = null

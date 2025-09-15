@@ -881,6 +881,7 @@ enum CombinationType {
   MULTIPLY
   OR
   AND
+  WEIGHTEDAVG
 }
 
 enum LLMTaskStatus {

@@ -438,59 +438,33 @@ class HierarchyViewer {
     
     logger.info(`Filtered to ${significantObjections.length} non-overlapping objections`);
     
-    // Group objections into sequences (within 10 events gap)
+    // Show individual objections (no grouping into sequences)
     const sequences: HierarchyNode[] = [];
-    let currentSequence: typeof objectionResults = [];
-    let lastSequenceEnd = 0;
 
-    for (const objection of significantObjections) {
-      if (currentSequence.length === 0) {
-        currentSequence = [objection];
-        lastSequenceEnd = objection.endEventId;
-      } else {
-        const gap = objection.startEventId - lastSequenceEnd;
-        if (gap <= 10) {
-          // Add to current sequence
-          currentSequence.push(objection);
-          lastSequenceEnd = objection.endEventId;
-        } else {
-          // Start new sequence
-          if (currentSequence.length > 1) {
-            sequences.push(await this.createObjectionSequenceNodeFromResults(currentSequence, sequences.length + 1));
-          }
-          currentSequence = [objection];
-          lastSequenceEnd = objection.endEventId;
-        }
-      }
-    }
-
-    // Handle last sequence
-    if (currentSequence.length > 1) {
-      sequences.push(await this.createObjectionSequenceNodeFromResults(currentSequence, sequences.length + 1));
-    }
-
-    // If no sequences found, show individual objections
-    if (sequences.length === 0 && significantObjections.length > 0) {
+    if (significantObjections.length > 0) {
       logger.info(`Found ${significantObjections.length} individual objections (no sequences)`);
       
       // Show first 20 individual objections
       for (const objection of significantObjections.slice(0, 20)) {
         const type = objection.accumulator.name === 'objection_sustained' ? 'SUSTAINED' : 'OVERRULED';
-        
+        const accumulatorName = (objection.metadata as any)?.accumulatorName || objection.accumulator.name;
+
         // Get transcript excerpt for individual objection
+        // Use windowSize from metadata or default to 7
+        const windowSize = (objection.metadata as any)?.windowSize || 7;
         const transcriptExcerpt = await this.getTranscriptExcerpt(
           objection.trialId,
           objection.startEventId,
           objection.endEventId,
-          5 // Fewer lines for individual objections
+          windowSize // Use actual window size
         );
-        
+
         const pseudoSection: MarkerSection = {
           id: -objection.id,
           trialId: objection.trialId,
           markerSectionType: MarkerSectionType.CUSTOM,
           name: `Objection ${type}`,
-          description: `Events ${objection.startEventId}-${objection.endEventId}`,
+          description: `Events ${objection.startEventId}-${objection.endEventId} (via ${accumulatorName}),`,
           startEventId: objection.startEventId,
           endEventId: objection.endEventId,
           confidence: objection.floatResult,
@@ -535,12 +509,15 @@ class HierarchyViewer {
     const lastObj = objections[objections.length - 1];
 
     // Count rulings
-    const sustainedCount = objections.filter(o => 
+    const sustainedCount = objections.filter(o =>
       o.accumulator.name === 'objection_sustained'
     ).length;
-    const overruledCount = objections.filter(o => 
+    const overruledCount = objections.filter(o =>
       o.accumulator.name === 'objection_overruled'
     ).length;
+
+    // Get accumulator names
+    const accumulatorNames = [...new Set(objections.map(o => (o.metadata as any)?.accumulatorName || o.accumulator.name))];
 
     // Get transcript excerpt
     const transcriptExcerpt = await this.getTranscriptExcerpt(
@@ -555,7 +532,7 @@ class HierarchyViewer {
       trialId: firstObj.trialId,
       markerSectionType: MarkerSectionType.CUSTOM,
       name: `Objection Sequence ${sequenceNum}`,
-      description: `${objections.length} objections (SUSTAINED: ${sustainedCount}, OVERRULED: ${overruledCount})`,
+      description: `${objections.length} objections (SUSTAINED: ${sustainedCount}, OVERRULED: ${overruledCount}) via ${accumulatorNames.join(', ')}`,
       startEventId: firstObj.startEventId,
       endEventId: lastObj.endEventId,
       confidence: 0.9,
@@ -743,6 +720,7 @@ class HierarchyViewer {
       const interactionType = result.accumulator.name === 'judge_attorney_interaction'
         ? 'Judge-Attorney'
         : 'Opposing Counsel';
+      const accumulatorName = (result.metadata as any)?.accumulatorName || result.accumulator.name;
 
       // Get transcript excerpt for the interaction
       const transcriptExcerpt = await this.getTranscriptExcerpt(
@@ -757,7 +735,7 @@ class HierarchyViewer {
         trialId: result.trialId,
         markerSectionType: MarkerSectionType.CUSTOM,
         name: `${interactionType} Interaction`,
-        description: `${speakers.size} participants: ${Array.from(speakers).join(', ')}`,
+        description: `${speakers.size} participants: ${Array.from(speakers).join(', ')} (via ${accumulatorName}),`,
         startEventId: result.startEventId,
         endEventId: result.endEventId,
         confidence: result.floatResult || 0.8,
@@ -795,8 +773,8 @@ class HierarchyViewer {
    * Get transcript text for an event range
    */
   private async getTranscriptExcerpt(
-    trialId: number, 
-    startEventId: number, 
+    trialId: number,
+    startEventId: number,
     endEventId: number,
     maxLines: number = 10
   ): Promise<string> {
@@ -816,7 +794,7 @@ class HierarchyViewer {
           }
         }
       },
-      orderBy: { ordinal: 'asc' },
+      orderBy: { id: 'asc' },  // Use id for proper ordering
       take: maxLines
     });
     

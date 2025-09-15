@@ -1,24 +1,24 @@
 [
   {
     "name": "judge_attorney_interaction",
-    "description": "Find interactions where judge and at least 2 attorneys speak within 6 statements",
+    "description": "Find interactions where judge and at least 3 distinct speakers participate within 5 statements",
     "expressionType": "BOOLEAN",
-    "windowSize": 6,
+    "windowSize": 5,
     "thresholdValue": 0.95,
     "minConfidenceLevel": "MEDIUM",
     "combinationType": "AND",
     "metadata": {
       "requiredSpeakers": ["JUDGE"],
-      "minAttorneys": 2,
-      "minDistinctSpeakers": 3
+      "minDistinctSpeakers": 3,
+      "displaySize": 5
     },
     "isActive": true
   },
   {
     "name": "opposing_counsel_interaction",
-    "description": "Find interactions between plaintiff and defense attorneys with judge within 6 statements",
+    "description": "Find interactions between plaintiff and defense attorneys with judge within 5 statements",
     "expressionType": "BOOLEAN",
-    "windowSize": 6,
+    "windowSize": 5,
     "thresholdValue": 1.0,
     "minConfidenceLevel": "HIGH",
     "combinationType": "AND",
@@ -32,19 +32,25 @@
   },
   {
     "name": "objection_sustained",
-    "description": "Attorney objects and judge sustains within 5 statements",
+    "description": "Attorney objects and judge sustains within 7 statements",
     "expressionType": "CONFIDENCE",
     "windowSize": 7,
-    "thresholdValue": 0.7,
+    "thresholdValue": 0.5,
     "minConfidenceLevel": "MEDIUM",
-    "combinationType": "MULTIPLY",
+    "combinationType": "WEIGHTEDAVG",
     "metadata": {
       "attorneyPhrases": ["Objection", "objection", "object"],
       "judgePhrases": ["Sustained", "sustained"],
+      "attorneyPhraseWeight": 0.5,
+      "judgePhraseWeight": 0.5,
+      "attorneyMaxWords": 20,
+      "judgeMaxWords": 20,
+      "displaySize": 9,
       "weights": {
         "Objection": 1.0,
         "objection": 1.0,
         "object": 0.8,
+        "Sustained": 1.0,
         "sustained": 1.0
       }
     },
@@ -52,15 +58,20 @@
   },
   {
     "name": "objection_overruled",
-    "description": "Attorney objects and judge overrules within 5 statements",
+    "description": "Attorney objects and judge overrules within 7 statements",
     "expressionType": "CONFIDENCE",
     "windowSize": 7,
-    "thresholdValue": 0.7,
+    "thresholdValue": 0.5,
     "minConfidenceLevel": "MEDIUM",
-    "combinationType": "MULTIPLY",
+    "combinationType": "WEIGHTEDAVG",
     "metadata": {
       "attorneyPhrases": ["Objection", "objection", "object"],
       "judgePhrases": ["Overruled", "overruled", "allow it"],
+      "attorneyPhraseWeight": 0.5,
+      "judgePhraseWeight": 0.5,
+      "attorneyMaxWords": 20,
+      "judgeMaxWords": 20,
+      "displaySize": 9,
       "weights": {
         "Objection": 1.0,
         "objection": 1.0,

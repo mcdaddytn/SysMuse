@@ -119,12 +119,13 @@ export class EventOverlayService {
 
       const ruling = accumulator.name === 'objection_sustained' ? 'sustained' : 'overruled';
 
-      // Get transcript excerpt
+      // Get transcript excerpt - use windowSize from metadata or default to 7
+      const windowSize = (result.metadata as any)?.windowSize || 7;
       const transcript = await this.getTranscriptExcerpt(
         result.trialId,
         result.startEventId,
         result.endEventId,
-        5
+        windowSize
       );
 
       // Extract metadata from the result
@@ -232,7 +233,9 @@ export class EventOverlayService {
         interactionType,
         participants: participants.map(p => p.handle),
         participantTypes: participants.map(p => p.type),
-        speakerCount: participants.length
+        speakerCount: participants.length,
+        accumulatorName: accumulator.name,
+        sourceAccumulator: (result.metadata as any)?.accumulatorName || accumulator.name
       };
 
       events.push({

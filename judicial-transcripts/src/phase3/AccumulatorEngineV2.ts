@@ -110,6 +110,7 @@ export class AccumulatorEngineV2 {
     trialId: number
   ): Promise<number> {
     const windowSize = accumulator.windowSize;
+    const displaySize = accumulator.metadata?.displaySize || accumulator.displaySize || windowSize;
     const statementEvents = trialEvents.filter(e => e.eventType === 'STATEMENT' && e.statement);
     
     const totalWindows = Math.max(0, statementEvents.length - windowSize + 1);
@@ -129,7 +130,16 @@ export class AccumulatorEngineV2 {
 
       // Store result if matched
       if (evaluation.matched || evaluation.score > 0) {
-        await this.storeResult(accumulator, window, evaluation, trialId);
+        // Expand window for display if displaySize is larger than windowSize
+        let displayWindow = window;
+        if (displaySize > windowSize) {
+          const expansion = Math.floor((displaySize - windowSize) / 2);
+          const startIdx = Math.max(0, i - expansion);
+          const endIdx = Math.min(statementEvents.length, i + windowSize + expansion);
+          const expandedEvents = statementEvents.slice(startIdx, endIdx);
+          displayWindow = await this.createWindow(expandedEvents, accumulator);
+        }
+        await this.storeResult(accumulator, displayWindow, evaluation, trialId);
         resultsStored++;
 
         // IMPORTANT: Advance cursor to end of matched pattern to avoid overlapping matches
@@ -193,13 +203,21 @@ export class AccumulatorEngineV2 {
     const metadata = accumulator.metadata || {};
     let scores: number[] = [];
     let matchDetails: any[] = [];
+    let attorneyScore: number | undefined;
+    let judgeScore: number | undefined;
 
     // Check search results
     if (window.searchResults.size > 0) {
       // Process phrase matches
       const phraseMatches = this.evaluatePhraseMatches(window, metadata);
-      if (phraseMatches.score > 0) {
-        scores.push(phraseMatches.score);
+      if (phraseMatches.score > 0 || phraseMatches.attorneyScore || phraseMatches.judgeScore) {
+        // For WEIGHTEDAVG, we'll handle scores differently
+        if (accumulator.combinationType === 'WEIGHTEDAVG') {
+          attorneyScore = phraseMatches.attorneyScore;
+          judgeScore = phraseMatches.judgeScore;
+        } else {
+          scores.push(phraseMatches.score);
+        }
         matchDetails.push(...phraseMatches.details);
       }
     }
@@ -210,6 +228,9 @@ export class AccumulatorEngineV2 {
       if (speakerMatch.matched) {
         scores.push(1.0);
         matchDetails.push(...speakerMatch.details);
+      } else if (accumulator.combinationType === 'AND') {
+        // For AND type, if required speakers not found, fail immediately
+        scores.push(0.0);
       }
     }
 
@@ -227,6 +248,14 @@ export class AccumulatorEngineV2 {
           type: 'distinct_speakers',
           count: distinctSpeakers.size
         });
+      } else if (accumulator.combinationType === 'AND') {
+        // For AND type, if not enough distinct speakers, fail immediately
+        scores.push(0.0);
+        matchDetails.push({
+          type: 'distinct_speakers_failed',
+          count: distinctSpeakers.size,
+          required: metadata.minDistinctSpeakers
+        });
       }
     }
 
@@ -243,7 +272,36 @@ export class AccumulatorEngineV2 {
     }
 
     // Calculate final score
-    const finalScore = this.combineScores(scores, accumulator.combinationType);
+    let finalScore: number;
+    if (accumulator.combinationType === 'WEIGHTEDAVG' && metadata.attorneyPhraseWeight && metadata.judgePhraseWeight) {
+      // For WEIGHTEDAVG, require BOTH attorney and judge phrases
+      if (!attorneyScore || !judgeScore) {
+        // If either side is missing, no match
+        finalScore = 0;
+        matchDetails.push({
+          type: 'weighted_avg_incomplete',
+          attorneyFound: !!attorneyScore,
+          judgeFound: !!judgeScore
+        });
+      } else {
+        // Use weighted average for objection accumulators
+        const attorneyWeight = metadata.attorneyPhraseWeight || 0.5;
+        const judgeWeight = metadata.judgePhraseWeight || 0.5;
+        const attorneyContribution = attorneyScore * attorneyWeight;
+        const judgeContribution = judgeScore * judgeWeight;
+        finalScore = attorneyContribution + judgeContribution;
+
+        // Add accumulator name to match details
+        matchDetails.push({
+          type: 'accumulator',
+          name: accumulator.name,
+          weightedScore: finalScore
+        });
+      }
+    } else {
+      finalScore = this.combineScores(scores, accumulator.combinationType);
+    }
+
     const confidence = this.calculateConfidence(finalScore);
     const matched = this.evaluateThreshold(
       finalScore,
@@ -260,7 +318,8 @@ export class AccumulatorEngineV2 {
         windowSize: window.events.length,
         startTime: window.startEvent.startTime,
         endTime: window.endEvent.endTime,
-        matches: matchDetails
+        matches: matchDetails,
+        accumulatorName: accumulator.name
       }
     };
   }
@@ -271,39 +330,51 @@ export class AccumulatorEngineV2 {
   private evaluatePhraseMatches(
     window: AccumulatorWindow,
     metadata: any
-  ): { score: number; details: any[] } {
+  ): { score: number; details: any[]; attorneyScore?: number; judgeScore?: number } {
     const details: any[] = [];
     let totalScore = 0;
     let matchCount = 0;
+    let attorneyScore: number | undefined;
+    let judgeScore: number | undefined;
 
-    // Check attorney phrases
+    // Check attorney phrases (find only first match)
     if (metadata.attorneyPhrases) {
-      const attorneyMatches = this.countPhraseMatches(
+      const attorneyMatches = this.countPhraseMatchesWithWeights(
         window,
         metadata.attorneyPhrases,
-        'attorney'
+        metadata.weights || {},
+        'attorney',
+        metadata.attorneyMaxWords
       );
-      if (attorneyMatches > 0) {
-        matchCount += attorneyMatches;
+      if (attorneyMatches.count > 0) {
+        matchCount += attorneyMatches.count;
+        attorneyScore = attorneyMatches.weightedScore;
         details.push({
           type: 'attorney_phrase',
-          matches: attorneyMatches
+          matches: attorneyMatches.count,
+          weightedScore: attorneyMatches.weightedScore,
+          matchedPhrase: attorneyMatches.firstMatch
         });
       }
     }
 
-    // Check judge phrases
+    // Check judge phrases (find only first match)
     if (metadata.judgePhrases) {
-      const judgeMatches = this.countPhraseMatches(
+      const judgeMatches = this.countPhraseMatchesWithWeights(
         window,
         metadata.judgePhrases,
-        'judge'
+        metadata.weights || {},
+        'judge',
+        metadata.judgeMaxWords
       );
-      if (judgeMatches > 0) {
-        matchCount += judgeMatches;
+      if (judgeMatches.count > 0) {
+        matchCount += judgeMatches.count;
+        judgeScore = judgeMatches.weightedScore;
         details.push({
           type: 'judge_phrase',
-          matches: judgeMatches
+          matches: judgeMatches.count,
+          weightedScore: judgeMatches.weightedScore,
+          matchedPhrase: judgeMatches.firstMatch
         });
       }
     }
@@ -313,7 +384,7 @@ export class AccumulatorEngineV2 {
       totalScore = Math.min(1.0, matchCount / (window.statements.length / 2));
     }
 
-    return { score: totalScore, details };
+    return { score: totalScore, details, attorneyScore, judgeScore };
   }
 
   /**
@@ -325,10 +396,10 @@ export class AccumulatorEngineV2 {
     speakerType?: string
   ): number {
     let count = 0;
-    
+
     // Convert Map to array for iteration
     const searchEntries = Array.from(window.searchResults.entries());
-    
+
     for (const [statementId, results] of searchEntries) {
       for (const result of results) {
         // Check if phrase matches
@@ -340,8 +411,62 @@ export class AccumulatorEngineV2 {
         }
       }
     }
-    
+
     return count;
+  }
+
+  /**
+   * Count phrase matches with weights (find only first valid match)
+   */
+  private countPhraseMatchesWithWeights(
+    window: AccumulatorWindow,
+    phrases: string[],
+    weights: { [key: string]: number },
+    speakerType?: string,
+    maxWords?: number
+  ): { count: number; weightedScore: number; firstMatch?: string } {
+    let count = 0;
+    let firstMatchWeight = 0;
+    let firstMatch: string | undefined;
+
+    // Convert Map to array for iteration
+    const searchEntries = Array.from(window.searchResults.entries());
+
+    for (const [statementId, results] of searchEntries) {
+      // If we already found a match, stop looking
+      if (firstMatchWeight > 0) break;
+
+      // Find the statement to check word count
+      const statement = window.statements.find(s => s.id === statementId);
+
+      for (const result of results) {
+        // Check if phrase matches
+        if (phrases.includes(result.phrase)) {
+          // Check speaker type if specified
+          if (!speakerType || result.metadata?.speakerType === speakerType) {
+            // Check word count if maxWords is specified
+            if (maxWords && statement?.text) {
+              const wordCount = statement.text.split(/\s+/).length;
+              if (wordCount > maxWords) {
+                // Skip this match as statement is too long
+                continue;
+              }
+            }
+
+            count++;
+            const weight = weights[result.phrase] || 1.0;
+            // Track the first match and its weight, then stop looking
+            if (firstMatchWeight === 0) {
+              firstMatchWeight = weight;
+              firstMatch = result.phrase;
+              break; // Found our match, stop looking
+            }
+          }
+        }
+      }
+    }
+
+    return { count, weightedScore: firstMatchWeight, firstMatch };
   }
 
   /**
@@ -481,7 +606,9 @@ export class AccumulatorEngineV2 {
         floatResult: evaluation.score,
         metadata: {
           ...evaluation.metadata,
-          windowSize: window.events.length
+          windowSize: window.events.length,
+          accumulatorName: accumulator.name,
+          displaySize: window.events.length
         }
       }
     });

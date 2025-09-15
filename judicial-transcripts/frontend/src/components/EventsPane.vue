@@ -81,14 +81,14 @@
             @click="selectEvent(event)"
             :class="{ 'bg-blue-1': selectedEvent?.id === event.id }"
           >
-            <q-tooltip v-if="event.transcript || event.text" class="bg-grey-8" max-width="600px" anchor="center middle" self="center middle">
-              <div class="event-tooltip-text">
-                {{ truncateText(event.transcript || event.text || '', 500) }}
+            <q-tooltip v-if="event.transcript || event.text" class="bg-grey-8" max-width="800px" anchor="center middle" self="center middle">
+              <div class="event-tooltip-text" style="max-height: 600px; overflow-y: auto;">
+                <div v-html="formatTranscriptForTooltip(event.transcript || event.text || '')"></div>
               </div>
             </q-tooltip>
             <q-item-section>
               <q-item-label class="text-weight-medium">
-                {{ event.name || event.type }}
+                {{ getEventLabel(event) }}
               </q-item-label>
               <q-item-label caption v-if="event.description">
                 {{ event.description }}
@@ -209,14 +209,39 @@ const filteredEvents = computed(() => {
 const totalEvents = computed(() => filteredEvents.value.length)
 
 const eventStats = computed(() => {
-  if (props.eventType !== 'objections' || totalEvents.value === 0) {
-    return null
+  if (totalEvents.value === 0) return null
+
+  if (props.eventType === 'objections') {
+    // Count based on accumulator names from metadata
+    const sustained = filteredEvents.value.filter(e =>
+      e.metadata?.sourceAccumulator === 'objection_sustained' ||
+      e.metadata?.accumulatorName === 'objection_sustained'
+    ).length
+    const overruled = filteredEvents.value.filter(e =>
+      e.metadata?.sourceAccumulator === 'objection_overruled' ||
+      e.metadata?.accumulatorName === 'objection_overruled'
+    ).length
+    return `${sustained} sustained, ${overruled} overruled`
   }
 
-  const sustained = filteredEvents.value.filter(e => e.ruling === 'SUSTAINED').length
-  const overruled = filteredEvents.value.filter(e => e.ruling === 'OVERRULED').length
+  if (props.eventType === 'interactions') {
+    // Count based on interaction types
+    const judgeAttorney = filteredEvents.value.filter(e =>
+      e.metadata?.sourceAccumulator === 'judge_attorney_interaction' ||
+      e.metadata?.accumulatorName === 'judge_attorney_interaction'
+    ).length
+    const opposingCounsel = filteredEvents.value.filter(e =>
+      e.metadata?.sourceAccumulator === 'opposing_counsel_interaction' ||
+      e.metadata?.accumulatorName === 'opposing_counsel_interaction'
+    ).length
 
-  return `${sustained} sustained, ${overruled} overruled`
+    if (opposingCounsel > 0) {
+      return `${judgeAttorney} judge-attorney, ${opposingCounsel} opposing counsel`
+    }
+    return `${judgeAttorney} judge-attorney`
+  }
+
+  return null
 })
 
 const paginatedEvents = computed(() => {
@@ -301,6 +326,56 @@ const truncateText = (text: string, maxLength: number) => {
   if (!text) return ''
   if (text.length <= maxLength) return text
   return text.substring(0, maxLength) + '...'
+}
+
+const formatTranscriptForTooltip = (text: string) => {
+  if (!text) return ''
+
+  // Split by lines (statements)
+  const lines = text.split('\n')
+
+  // Process each line to limit length
+  const formattedLines = lines.map(line => {
+    // Limit each statement to approximately 3 lines worth of text (about 250 chars)
+    if (line.length > 250) {
+      // Find speaker prefix if exists (e.g., "SPEAKER_NAME: ")
+      const speakerMatch = line.match(/^([A-Z_]+:\s*)/)
+      if (speakerMatch) {
+        const speaker = speakerMatch[1]
+        const content = line.substring(speaker.length)
+        // Keep speaker and truncate content
+        return `<div style="margin-bottom: 8px;"><strong>${speaker}</strong>${content.substring(0, 250 - speaker.length)}...</div>`
+      }
+      return `<div style="margin-bottom: 8px;">${line.substring(0, 250)}...</div>`
+    }
+    return `<div style="margin-bottom: 8px;">${line}</div>`
+  })
+
+  return formattedLines.join('')
+}
+
+const getEventLabel = (event: any) => {
+  // Show accumulator name for objections and interactions
+  if (props.eventType === 'objections') {
+    const accName = event.metadata?.sourceAccumulator || event.metadata?.accumulatorName
+    if (accName === 'objection_sustained') {
+      return 'Objection (sustained)'
+    } else if (accName === 'objection_overruled') {
+      return 'Objection (overruled)'
+    }
+  }
+
+  if (props.eventType === 'interactions') {
+    const accName = event.metadata?.sourceAccumulator || event.metadata?.accumulatorName
+    if (accName === 'judge_attorney_interaction') {
+      return 'Interaction (judge_attorney)'
+    } else if (accName === 'opposing_counsel_interaction') {
+      return 'Interaction (opposing_counsel)'
+    }
+  }
+
+  // Default to original display
+  return event.name || event.type
 }
 
 const selectEvent = (event: any) => {

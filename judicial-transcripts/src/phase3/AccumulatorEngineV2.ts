@@ -132,14 +132,26 @@ export class AccumulatorEngineV2 {
       if (evaluation.matched || evaluation.score > 0) {
         // Expand window for display if displaySize is larger than windowSize
         let displayWindow = window;
+        let evaluationWindowIndices: Set<number> | undefined;
+
         if (displaySize > windowSize) {
           const expansion = Math.floor((displaySize - windowSize) / 2);
           const startIdx = Math.max(0, i - expansion);
           const endIdx = Math.min(statementEvents.length, i + windowSize + expansion);
           const expandedEvents = statementEvents.slice(startIdx, endIdx);
           displayWindow = await this.createWindow(expandedEvents, accumulator);
+
+          // Track which statements were in the evaluation window
+          evaluationWindowIndices = new Set();
+          for (let j = 0; j < windowSize; j++) {
+            const evalIdx = i - startIdx + j;
+            if (evalIdx >= 0 && evalIdx < expandedEvents.length) {
+              evaluationWindowIndices.add(evalIdx);
+            }
+          }
         }
-        await this.storeResult(accumulator, displayWindow, evaluation, trialId);
+
+        await this.storeResult(accumulator, displayWindow, evaluation, trialId, evaluationWindowIndices);
         resultsStored++;
 
         // IMPORTANT: Advance cursor to end of matched pattern to avoid overlapping matches
@@ -206,6 +218,35 @@ export class AccumulatorEngineV2 {
     let attorneyScore: number | undefined;
     let judgeScore: number | undefined;
 
+    // Check max statement words constraint
+    if (metadata.maxStatementWords) {
+      for (const statement of window.statements) {
+        if (statement.text) {
+          const wordCount = statement.text.split(/\s+/).length;
+          if (wordCount > metadata.maxStatementWords) {
+            // Statement exceeds max word count, fail immediately
+            return {
+              matched: false,
+              confidence: 'LOW' as ConfidenceLevel,
+              score: 0,
+              metadata: {
+                windowSize: window.events.length,
+                startTime: window.startEvent.startTime,
+                endTime: window.endEvent.endTime,
+                failed: 'max_statement_words',
+                exceedingStatement: {
+                  speakerHandle: statement.speaker?.speakerHandle,
+                  wordCount,
+                  maxAllowed: metadata.maxStatementWords
+                },
+                accumulatorName: accumulator.name
+              }
+            };
+          }
+        }
+      }
+    }
+
     // Check search results
     if (window.searchResults.size > 0) {
       // Process phrase matches
@@ -242,7 +283,36 @@ export class AccumulatorEngineV2 {
           .map(s => s.speakerId)
       );
 
-      if (distinctSpeakers.size >= metadata.minDistinctSpeakers) {
+      // For judge_attorney_interaction, ensure both judge and at least one attorney are present
+      if (accumulator.name === 'judge_attorney_interaction') {
+        const hasJudge = window.statements.some(s => s.speaker?.speakerType === 'JUDGE');
+        const hasAttorney = window.statements.some(s => s.speaker?.speakerType === 'ATTORNEY');
+
+        if (!hasJudge || !hasAttorney) {
+          scores.push(0.0);
+          matchDetails.push({
+            type: 'required_speaker_types_failed',
+            hasJudge,
+            hasAttorney,
+            message: 'Must have both judge and at least one attorney'
+          });
+        } else if (distinctSpeakers.size >= metadata.minDistinctSpeakers) {
+          scores.push(1.0);
+          matchDetails.push({
+            type: 'distinct_speakers',
+            count: distinctSpeakers.size,
+            hasJudge,
+            hasAttorney
+          });
+        } else {
+          scores.push(0.0);
+          matchDetails.push({
+            type: 'distinct_speakers_failed',
+            count: distinctSpeakers.size,
+            required: metadata.minDistinctSpeakers
+          });
+        }
+      } else if (distinctSpeakers.size >= metadata.minDistinctSpeakers) {
         scores.push(1.0);
         matchDetails.push({
           type: 'distinct_speakers',
@@ -267,6 +337,37 @@ export class AccumulatorEngineV2 {
         matchDetails.push({
           type: 'attorney_count',
           count: attorneyCount
+        });
+      }
+    }
+
+    // Check opposing counsel requirements
+    if (metadata.requirePlaintiffAttorney || metadata.requireDefenseAttorney) {
+      const attorneyRoles = await this.checkAttorneyRoles(window);
+
+      if (metadata.requirePlaintiffAttorney && !attorneyRoles.hasPlaintiff) {
+        scores.push(0.0);
+        matchDetails.push({
+          type: 'missing_plaintiff_attorney',
+          hasPlaintiff: false,
+          hasDefense: attorneyRoles.hasDefense
+        });
+      } else if (metadata.requireDefenseAttorney && !attorneyRoles.hasDefense) {
+        scores.push(0.0);
+        matchDetails.push({
+          type: 'missing_defense_attorney',
+          hasPlaintiff: attorneyRoles.hasPlaintiff,
+          hasDefense: false
+        });
+      } else if ((metadata.requirePlaintiffAttorney && attorneyRoles.hasPlaintiff) &&
+                 (metadata.requireDefenseAttorney && attorneyRoles.hasDefense)) {
+        scores.push(1.0);
+        matchDetails.push({
+          type: 'opposing_counsel_present',
+          hasPlaintiff: attorneyRoles.hasPlaintiff,
+          hasDefense: attorneyRoles.hasDefense,
+          plaintiffSpeakers: attorneyRoles.plaintiffSpeakers,
+          defenseSpeakers: attorneyRoles.defenseSpeakers
         });
       }
     }
@@ -515,14 +616,120 @@ export class AccumulatorEngineV2 {
    */
   private countAttorneys(window: AccumulatorWindow): number {
     const attorneys = new Set<number>();
-    
+
     for (const statement of window.statements) {
       if (statement.speaker?.speakerType === 'ATTORNEY' && statement.speakerId) {
         attorneys.add(statement.speakerId);
       }
     }
-    
+
     return attorneys.size;
+  }
+
+  /**
+   * Check if a statement contributed to the evaluation
+   */
+  private statementContributed(
+    statement: StatementEventWithSpeaker,
+    evaluation: AccumulatorEvaluation,
+    accumulator: any
+  ): boolean {
+    const metadata = accumulator.metadata || {};
+    const evalMetadata = evaluation.metadata as any;
+
+    // Check if speaker type matches required speakers
+    if (metadata.requiredSpeakers && statement.speaker) {
+      const speakerType = statement.speaker.speakerType;
+      if (metadata.requiredSpeakers.includes(speakerType)) {
+        return true;
+      }
+    }
+
+    // Check if this was a matched attorney role
+    if (evalMetadata?.matches) {
+      for (const match of evalMetadata.matches) {
+        if (match.type === 'opposing_counsel_present') {
+          const handle = statement.speaker?.speakerHandle;
+          if (handle && (
+            match.plaintiffSpeakers?.includes(handle) ||
+            match.defenseSpeakers?.includes(handle)
+          )) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // Check if this statement had phrase matches
+    if (statement.id && evaluation.metadata) {
+      const searchResults = (evaluation.metadata as any).searchResults;
+      if (searchResults && searchResults[statement.id]) {
+        return true;
+      }
+    }
+
+    // For judge_attorney_interaction, any judge or attorney contributes
+    if (accumulator.name === 'judge_attorney_interaction' && statement.speaker) {
+      if (statement.speaker.speakerType === 'JUDGE' || statement.speaker.speakerType === 'ATTORNEY') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Check attorney roles in window
+   */
+  private async checkAttorneyRoles(window: AccumulatorWindow): Promise<{
+    hasPlaintiff: boolean;
+    hasDefense: boolean;
+    plaintiffSpeakers: string[];
+    defenseSpeakers: string[];
+  }> {
+    const plaintiffSpeakers = new Set<string>();
+    const defenseSpeakers = new Set<string>();
+
+    // Get trial ID from the first event
+    const trialId = window.startEvent.trialId;
+
+    // Get all attorney-speaker associations for this trial
+    const trialAttorneys = await this.prisma.trialAttorney.findMany({
+      where: { trialId },
+      include: {
+        speaker: true,
+        attorney: true
+      }
+    });
+
+    // Create mapping of speaker IDs to roles
+    const speakerRoleMap = new Map<number, 'PLAINTIFF' | 'DEFENDANT'>();
+    for (const ta of trialAttorneys) {
+      if (ta.speakerId && (ta.role === 'PLAINTIFF' || ta.role === 'DEFENDANT')) {
+        speakerRoleMap.set(ta.speakerId, ta.role);
+      }
+    }
+
+    // Check each statement for attorney roles
+    for (const statement of window.statements) {
+      if (statement.speaker?.speakerType === 'ATTORNEY' && statement.speakerId) {
+        const role = speakerRoleMap.get(statement.speakerId);
+        const handle = statement.speaker.speakerHandle || '';
+
+        if (role === 'PLAINTIFF') {
+          plaintiffSpeakers.add(handle);
+        } else if (role === 'DEFENDANT') {
+          defenseSpeakers.add(handle);
+        }
+      }
+    }
+
+    return {
+      hasPlaintiff: plaintiffSpeakers.size > 0,
+      hasDefense: defenseSpeakers.size > 0,
+      plaintiffSpeakers: Array.from(plaintiffSpeakers),
+      defenseSpeakers: Array.from(defenseSpeakers)
+    };
   }
 
   /**
@@ -593,8 +800,47 @@ export class AccumulatorEngineV2 {
     accumulator: AccumulatorExpression,
     window: AccumulatorWindow,
     evaluation: AccumulatorEvaluation,
-    trialId: number
+    trialId: number,
+    evaluationWindowIndices?: Set<number>
   ): Promise<void> {
+    // Build statement-level metadata
+    const statements = [];
+    const metadata = accumulator.metadata as any;
+    const maxWords = metadata?.maxStatementWords || 20;
+
+    for (let idx = 0; idx < window.statements.length; idx++) {
+      const stmt = window.statements[idx];
+      if (!stmt) continue;
+
+      const isInEvalWindow = !evaluationWindowIndices || evaluationWindowIndices.has(idx);
+      let text = stmt.text || '';
+
+      // Truncate text if outside evaluation window and exceeds max words
+      if (!isInEvalWindow && text) {
+        const words = text.split(/\s+/);
+        if (words.length > maxWords) {
+          text = words.slice(0, maxWords).join(' ') + '...';
+        }
+      }
+
+      // Determine if this statement contributed to the evaluation
+      const contributedToEval = isInEvalWindow && this.statementContributed(
+        stmt,
+        evaluation,
+        accumulator
+      );
+
+      statements.push({
+        statementId: stmt.id,
+        speakerHandle: stmt.speaker?.speakerHandle || 'UNKNOWN',
+        speakerType: stmt.speaker?.speakerType || 'UNKNOWN',
+        text,
+        inEvaluationWindow: isInEvalWindow,
+        contributedToEvaluation: contributedToEval,
+        wordCount: stmt.text ? stmt.text.split(/\s+/).length : 0
+      });
+    }
+
     await this.prisma.accumulatorResult.create({
       data: {
         accumulatorId: accumulator.id,
@@ -608,7 +854,8 @@ export class AccumulatorEngineV2 {
           ...evaluation.metadata,
           windowSize: window.events.length,
           accumulatorName: accumulator.name,
-          displaySize: window.events.length
+          displaySize: window.events.length,
+          statements
         }
       }
     });

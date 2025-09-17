@@ -1,7 +1,7 @@
-import { 
-  PrismaClient, 
-  MarkerSection, 
-  MarkerSectionType, 
+import {
+  PrismaClient,
+  MarkerSection,
+  MarkerSectionType,
   TrialEvent,
   Trial,
   MarkerSource,
@@ -9,6 +9,8 @@ import {
 } from '@prisma/client';
 import { Logger } from '../utils/logger';
 import { LongStatementsAccumulator } from './LongStatementsAccumulator';
+import { LongStatementsAccumulatorV2 } from './LongStatementsAccumulatorV2';
+import { ArgumentFinder } from './ArgumentFinder';
 import { TranscriptRenderer } from '../services/TranscriptRenderer';
 
 interface HierarchyStatistics {
@@ -26,12 +28,18 @@ interface HierarchyStatistics {
 export class StandardTrialHierarchyBuilder {
   private logger = new Logger('StandardTrialHierarchyBuilder');
   private longStatementsAccumulator: LongStatementsAccumulator;
+  private longStatementsAccumulatorV2: LongStatementsAccumulatorV2;
+  private argumentFinder: ArgumentFinder;
   private trialStyleConfig: any = null;
+  private useV2Accumulator: boolean = true; // Flag to control which accumulator to use
+  private useArgumentFinder: boolean = true; // Flag to use new ArgumentFinder
 
   constructor(
     private prisma: PrismaClient
   ) {
     this.longStatementsAccumulator = new LongStatementsAccumulator(prisma);
+    this.longStatementsAccumulatorV2 = new LongStatementsAccumulatorV2(prisma);
+    this.argumentFinder = new ArgumentFinder(prisma);
   }
 
   /**
@@ -747,36 +755,161 @@ export class StandardTrialHierarchyBuilder {
     }
 
     this.logger.info(`Searching for opening statements between events ${searchStartEvent} and ${searchEndEvent}`);
-    
+
     // Get config parameters with defaults for opening statements
     const longStatementConfig = this.trialStyleConfig?.longStatements || {};
     const ratioMode = longStatementConfig.ratioMode || 'WEIGHTED_SQRT2';
-    const ratioThreshold = 0.5; // Lower threshold for opening statements
+    const ratioThreshold = 0.4; // Lower threshold for opening statements
 
-    // Find plaintiff opening statement (aggressive thresholds for detection)
-    const plaintiffOpening = await this.longStatementsAccumulator.findLongestStatement({
-      trialId,
-      speakerType: 'ATTORNEY',
-      attorneyRole: 'PLAINTIFF',
-      searchStartEvent,
-      searchEndEvent,
-      minWords: 500,  // Opening statements are typically long
-      maxInterruptionRatio: 0.4,  // Allow up to 40% interruption
-      ratioMode: ratioMode as any,
-      ratioThreshold
-    });
+    // Use ArgumentFinder if enabled
+    if (this.useArgumentFinder) {
+      const config = {
+        minWords: 400,
+        maxInterruptionRatio: 0.4,
+        ratioMode,
+        ratioThreshold
+      };
 
-    // Find defense opening statement
-    const defenseOpening = await this.longStatementsAccumulator.findLongestStatement({
+      const results = await this.argumentFinder.findOpeningStatements(
+        trialId,
+        searchStartEvent,
+        searchEndEvent,
+        config
+      );
+
+      const openingStatements: MarkerSection[] = [];
+
+      // Create plaintiff opening section
+      if (results.plaintiffOpening) {
+        const po = results.plaintiffOpening;
+        const section = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.OPENING_STATEMENT_PLAINTIFF,
+            name: 'Plaintiff Opening Statement',
+            description: 'Opening statement by plaintiff counsel',
+            startEventId: po.startEvent.id,
+            endEventId: po.endEvent.id,
+            startTime: po.startEvent.startTime,
+            endTime: po.endEvent.endTime,
+            source: MarkerSource.PHASE3_DISCOVERY,
+            confidence: po.confidence,
+            metadata: {
+              totalWords: po.totalWords,
+              speakerWords: po.speakerWords,
+              speakerRatio: po.speakerRatio,
+              validationScore: po.validationScore,
+              ...po.metadata
+            }
+          }
+        });
+        openingStatements.push(section);
+      }
+
+      // Create defense opening section
+      if (results.defenseOpening) {
+        const do_ = results.defenseOpening;
+        const section = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.OPENING_STATEMENT_DEFENSE,
+            name: 'Defense Opening Statement',
+            description: 'Opening statement by defense counsel',
+            startEventId: do_.startEvent.id,
+            endEventId: do_.endEvent.id,
+            startTime: do_.startEvent.startTime,
+            endTime: do_.endEvent.endTime,
+            source: MarkerSource.PHASE3_DISCOVERY,
+            confidence: do_.confidence,
+            metadata: {
+              totalWords: do_.totalWords,
+              speakerWords: do_.speakerWords,
+              speakerRatio: do_.speakerRatio,
+              validationScore: do_.validationScore,
+              ...do_.metadata
+            }
+          }
+        });
+        openingStatements.push(section);
+      }
+
+      // Create period section and return
+      if (openingStatements.length > 0) {
+        openingStatements.sort((a, b) => (a.startEventId || 0) - (b.startEventId || 0));
+        const firstOpening = openingStatements[0];
+        const lastOpening = openingStatements[openingStatements.length - 1];
+
+        const openingPeriod = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.OPENING_STATEMENTS_PERIOD,
+            parentSectionId: trialSectionId,
+            name: 'Opening Statements',
+            description: 'Opening statements from all parties',
+            startEventId: firstOpening.startEventId,
+            endEventId: lastOpening.endEventId,
+            startTime: firstOpening.startTime,
+            endTime: lastOpening.endTime,
+            source: MarkerSource.PHASE3_HIERARCHY,
+            confidence: 0.8,
+            metadata: {
+              hasPlaintiffOpening: !!results.plaintiffOpening,
+              hasDefenseOpening: !!results.defenseOpening
+            }
+          }
+        });
+
+        for (const opening of openingStatements) {
+          await this.prisma.markerSection.update({
+            where: { id: opening.id },
+            data: { parentSectionId: openingPeriod.id }
+          });
+        }
+
+        return openingPeriod;
+      }
+
+      // If no openings found, fall through to legacy logic
+      this.logger.info('ArgumentFinder found no opening statements, falling back to legacy logic');
+    }
+
+    // Choose which accumulator to use
+    const accumulator = this.useV2Accumulator ? this.longStatementsAccumulatorV2 : this.longStatementsAccumulator;
+
+    // STEP 1: Find defense opening statement FIRST
+    // (Usually comes second chronologically, but may be easier to detect)
+    const defenseOpening = await accumulator.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'DEFENDANT',
       searchStartEvent,
       searchEndEvent,
-      minWords: 500,  // Opening statements are typically long
-      maxInterruptionRatio: 0.4,  // Allow up to 40% interruption
+      minWords: 400,  // Slightly lower threshold
+      maxInterruptionRatio: 0.4,
       ratioMode: ratioMode as any,
-      ratioThreshold
+      ratioThreshold,
+      aggregateTeam: true  // Enable team aggregation for split arguments
+    });
+
+    // STEP 2: Find plaintiff opening statement
+    // Search in narrowed range if defense opening was found
+    let plaintiffSearchEnd = searchEndEvent;
+    if (defenseOpening && defenseOpening.confidence > 0.5) {
+      // Plaintiff opening should come BEFORE defense opening
+      plaintiffSearchEnd = defenseOpening.startEvent.id - 1;
+    }
+
+    const plaintiffOpening = await accumulator.findLongestStatement({
+      trialId,
+      speakerType: 'ATTORNEY',
+      attorneyRole: 'PLAINTIFF',
+      searchStartEvent,
+      searchEndEvent: plaintiffSearchEnd,
+      minWords: 400,
+      maxInterruptionRatio: 0.4,
+      ratioMode: ratioMode as any,
+      ratioThreshold,
+      aggregateTeam: true  // Enable team aggregation
     });
 
     const openingStatements: MarkerSection[] = [];
@@ -947,86 +1080,286 @@ export class StandardTrialHierarchyBuilder {
     // Get config parameters with defaults
     const longStatementConfig = this.trialStyleConfig?.longStatements || {};
     const ratioMode = longStatementConfig.ratioMode || 'WEIGHTED_SQRT';
-    const ratioThreshold = longStatementConfig.ratioThreshold || 0.7;
-    const minWords = longStatementConfig.minWords || 500;
-    const maxInterruptionRatio = longStatementConfig.maxInterruptionRatio || 0.15;
+    const ratioThreshold = longStatementConfig.ratioThreshold || 0.6;
+    const minWords = longStatementConfig.minWords || 400;
+    const maxInterruptionRatio = longStatementConfig.maxInterruptionRatio || 0.25;
 
     this.logger.info(`Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}, minWords: ${minWords}`);
 
     // Initial search period: from end of testimony to end of trial
-    const searchStartEvent = testimonyPeriod?.endEventId || undefined;
+    const searchStartEvent = testimonyPeriod?.endEventId ? testimonyPeriod.endEventId + 1 : undefined;
     let searchEndEvent: number | undefined = undefined;
 
-    // STEP 1: Find defense closing statement FIRST
-    // Defense typically goes first in closing arguments
-    const defenseClosing = await this.longStatementsAccumulator.findLongestStatement({
+    // Use ArgumentFinder if enabled
+    if (this.useArgumentFinder) {
+      const config = {
+        minWords,
+        maxInterruptionRatio,
+        ratioMode,
+        ratioThreshold
+      };
+
+      const results = await this.argumentFinder.findClosingStatements(
+        trialId,
+        searchStartEvent,
+        searchEndEvent,
+        config
+      );
+
+      const closingStatements: MarkerSection[] = [];
+
+      // Create plaintiff closing section
+      if (results.plaintiffClosing) {
+        const pc = results.plaintiffClosing;
+        const section = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.CLOSING_STATEMENT_PLAINTIFF,
+            name: 'Plaintiff Closing Statement',
+            description: 'Closing statement by plaintiff counsel',
+            startEventId: pc.startEvent.id,
+            endEventId: pc.endEvent.id,
+            startTime: pc.startEvent.startTime,
+            endTime: pc.endEvent.endTime,
+            source: MarkerSource.PHASE3_DISCOVERY,
+            confidence: pc.confidence,
+            metadata: {
+              totalWords: pc.totalWords,
+              speakerWords: pc.speakerWords,
+              speakerRatio: pc.speakerRatio,
+              validationScore: pc.validationScore,
+              ...pc.metadata
+            }
+          }
+        });
+        closingStatements.push(section);
+        this.logger.info(`Found plaintiff closing: events ${section.startEventId}-${section.endEventId}, confidence ${pc.confidence.toFixed(2)}`);
+      }
+
+      // Create defense closing section
+      if (results.defenseClosing) {
+        const dc = results.defenseClosing;
+        const section = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.CLOSING_STATEMENT_DEFENSE,
+            name: 'Defense Closing Statement',
+            description: 'Closing statement by defense counsel',
+            startEventId: dc.startEvent.id,
+            endEventId: dc.endEvent.id,
+            startTime: dc.startEvent.startTime,
+            endTime: dc.endEvent.endTime,
+            source: MarkerSource.PHASE3_DISCOVERY,
+            confidence: dc.confidence,
+            metadata: {
+              totalWords: dc.totalWords,
+              speakerWords: dc.speakerWords,
+              speakerRatio: dc.speakerRatio,
+              validationScore: dc.validationScore,
+              ...dc.metadata
+            }
+          }
+        });
+        closingStatements.push(section);
+        this.logger.info(`Found defense closing: events ${section.startEventId}-${section.endEventId}, confidence ${dc.confidence.toFixed(2)}`);
+      }
+
+      // Create plaintiff rebuttal section
+      if (results.plaintiffRebuttal) {
+        const pr = results.plaintiffRebuttal;
+        const section = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.CLOSING_REBUTTAL_PLAINTIFF,
+            name: 'Plaintiff Rebuttal',
+            description: 'Rebuttal closing by plaintiff counsel',
+            startEventId: pr.startEvent.id,
+            endEventId: pr.endEvent.id,
+            startTime: pr.startEvent.startTime,
+            endTime: pr.endEvent.endTime,
+            source: MarkerSource.PHASE3_DISCOVERY,
+            confidence: pr.confidence,
+            metadata: {
+              totalWords: pr.totalWords,
+              speakerWords: pr.speakerWords,
+              speakerRatio: pr.speakerRatio,
+              validationScore: pr.validationScore,
+              isRebuttal: true,
+              ...pr.metadata
+            }
+          }
+        });
+        closingStatements.push(section);
+        this.logger.info(`Found plaintiff rebuttal: events ${section.startEventId}-${section.endEventId}, confidence ${pr.confidence.toFixed(2)}`);
+      }
+
+      // Create period section and return
+      if (closingStatements.length > 0) {
+        closingStatements.sort((a, b) => (a.startEventId || 0) - (b.startEventId || 0));
+        const firstClosing = closingStatements[0];
+        const lastClosing = closingStatements[closingStatements.length - 1];
+
+        const closingPeriod = await this.prisma.markerSection.create({
+          data: {
+            trialId,
+            markerSectionType: MarkerSectionType.CLOSING_STATEMENTS_PERIOD,
+            parentSectionId: trialSectionId,
+            name: 'Closing Statements',
+            description: 'Closing statements from all parties',
+            startEventId: firstClosing.startEventId,
+            endEventId: lastClosing.endEventId,
+            startTime: firstClosing.startTime,
+            endTime: lastClosing.endTime,
+            source: MarkerSource.PHASE3_HIERARCHY,
+            confidence: 0.8,
+            metadata: {
+              hasPlaintiffClosing: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_STATEMENT_PLAINTIFF),
+              hasDefenseClosing: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_STATEMENT_DEFENSE),
+              hasPlaintiffRebuttal: closingStatements.some(s => s.markerSectionType === MarkerSectionType.CLOSING_REBUTTAL_PLAINTIFF)
+            }
+          }
+        });
+
+        for (const closing of closingStatements) {
+          await this.prisma.markerSection.update({
+            where: { id: closing.id },
+            data: { parentSectionId: closingPeriod.id }
+          });
+        }
+
+        return closingPeriod;
+      }
+
+      // If no closings found, fall through to legacy logic
+      this.logger.info('ArgumentFinder found no closing statements, falling back to legacy logic');
+    }
+
+    // Choose which accumulator to use
+    const accumulator = this.useV2Accumulator ? this.longStatementsAccumulatorV2 : this.longStatementsAccumulator;
+
+    // Search for all closing statements in the correct chronological order:
+    // 1. Plaintiff closing (first)
+    // 2. Defense closing (second)
+    // 3. Plaintiff rebuttal (optional, third)
+
+    // STEP 1: Find ALL attorney long statements after witness testimony
+    const allClosingCandidates = [];
+
+    // Find plaintiff statements
+    const plaintiffStatements = await accumulator.findLongestStatement({
+      trialId,
+      speakerType: 'ATTORNEY',
+      attorneyRole: 'PLAINTIFF',
+      searchStartEvent,
+      searchEndEvent,
+      minWords: Math.floor(minWords * 0.8), // Slightly lower to catch more candidates
+      maxInterruptionRatio: 0.3,
+      ratioMode: ratioMode as any,
+      ratioThreshold: ratioThreshold * 0.9,
+      aggregateTeam: true
+    });
+
+    if (plaintiffStatements) {
+      allClosingCandidates.push({ ...plaintiffStatements, role: 'PLAINTIFF' });
+    }
+
+    // Find defense statements
+    const defenseStatements = await accumulator.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'DEFENDANT',
       searchStartEvent,
       searchEndEvent,
-      minWords,
-      maxInterruptionRatio,
-      ratioMode: ratioMode as 'TRADITIONAL' | 'WEIGHTED_SQRT',
-      ratioThreshold
+      minWords: Math.floor(minWords * 0.8),
+      maxInterruptionRatio: 0.3,
+      ratioMode: ratioMode as any,
+      ratioThreshold: ratioThreshold * 0.9,
+      aggregateTeam: true
     });
 
-    // STEP 2: Find plaintiff closing statement
-    // Search in two periods:
-    // - Before defense closing (if found)
-    // - After defense closing (for potential rebuttal)
+    if (defenseStatements) {
+      allClosingCandidates.push({ ...defenseStatements, role: 'DEFENDANT' });
+    }
+
+    // Sort candidates by their start event to get chronological order
+    allClosingCandidates.sort((a, b) => a.startEvent.id - b.startEvent.id);
+
+    // Now identify which is which based on order and role
     let plaintiffClosing = null;
+    let defenseClosing = null;
+    let plaintiffRebuttal = null;
 
-    if (defenseClosing && defenseClosing.confidence > 0.6) {
-      // First, search BEFORE defense closing
-      plaintiffClosing = await this.longStatementsAccumulator.findLongestStatement({
-        trialId,
-        speakerType: 'ATTORNEY',
-        attorneyRole: 'PLAINTIFF',
-        searchStartEvent,
-        searchEndEvent: defenseClosing.startEvent.id - 1,
-        minWords,
-        maxInterruptionRatio,
-        ratioMode: ratioMode as 'TRADITIONAL' | 'WEIGHTED_SQRT',
-        ratioThreshold
-      });
-
-      // If not found before, search AFTER defense closing (rebuttal)
-      if (!plaintiffClosing || plaintiffClosing.confidence < 0.6) {
-        const plaintiffRebuttal = await this.longStatementsAccumulator.findLongestStatement({
-          trialId,
-          speakerType: 'ATTORNEY',
-          attorneyRole: 'PLAINTIFF',
-          searchStartEvent: defenseClosing.endEvent.id + 1,
-          minWords: Math.floor(minWords / 2), // Rebuttals can be shorter
-          maxInterruptionRatio,
-          ratioMode: ratioMode as 'TRADITIONAL' | 'WEIGHTED_SQRT',
-          ratioThreshold
-        });
-
-        if (!plaintiffClosing || (plaintiffRebuttal && plaintiffRebuttal.confidence > plaintiffClosing.confidence)) {
-          plaintiffClosing = plaintiffRebuttal;
-        }
+    for (const candidate of allClosingCandidates) {
+      if (candidate.role === 'PLAINTIFF' && !plaintiffClosing) {
+        // First plaintiff statement is the main closing
+        plaintiffClosing = candidate;
+      } else if (candidate.role === 'DEFENDANT' && !defenseClosing) {
+        // First defense statement is their closing
+        defenseClosing = candidate;
+      } else if (candidate.role === 'PLAINTIFF' && plaintiffClosing) {
+        // Second plaintiff statement is rebuttal
+        plaintiffRebuttal = candidate;
       }
-    } else {
-      // No defense closing found, search entire period for plaintiff
-      plaintiffClosing = await this.longStatementsAccumulator.findLongestStatement({
-        trialId,
-        speakerType: 'ATTORNEY',
-        attorneyRole: 'PLAINTIFF',
-        searchStartEvent,
-        searchEndEvent,
-        minWords,
-        maxInterruptionRatio,
-        ratioMode: ratioMode as 'TRADITIONAL' | 'WEIGHTED_SQRT',
-        ratioThreshold
+    }
+
+    // If we still don't have proper closings, do a more targeted search
+    if (!plaintiffClosing || !defenseClosing) {
+      // Search for specific high-word-count events in sequence
+      const highWordEvents = await this.prisma.trialEvent.findMany({
+        where: {
+          trialId,
+          id: { gte: searchStartEvent || 0 },
+          eventType: 'STATEMENT',
+          wordCount: { gte: minWords }
+        },
+        include: {
+          statement: {
+            include: { speaker: true }
+          }
+        },
+        orderBy: { id: 'asc' },
+        take: 10
       });
+
+      this.logger.info(`Found ${highWordEvents.length} high word count events after witness testimony`);
+
+      for (const event of highWordEvents) {
+        const speaker = event.statement?.speaker?.speakerHandle;
+        this.logger.debug(`  Event ${event.id}: ${speaker} - ${event.wordCount} words`);
+      }
     }
 
     const closingStatements: MarkerSection[] = [];
 
-    // Create defense closing section (typically goes first)
-    if (defenseClosing && defenseClosing.confidence > 0.6) {
+    // Create plaintiff closing section (typically goes first)
+    if (plaintiffClosing && plaintiffClosing.confidence > 0.5) {
+      const section = await this.prisma.markerSection.create({
+        data: {
+          trialId,
+          markerSectionType: MarkerSectionType.CLOSING_STATEMENT_PLAINTIFF,
+          name: 'Plaintiff Closing Statement',
+          description: 'Closing statement by plaintiff counsel',
+          startEventId: plaintiffClosing.startEvent.id,
+          endEventId: plaintiffClosing.endEvent.id,
+          startTime: plaintiffClosing.startEvent.startTime,
+          endTime: plaintiffClosing.endEvent.endTime,
+          source: MarkerSource.PHASE3_DISCOVERY,
+          confidence: plaintiffClosing.confidence,
+          metadata: {
+            totalWords: plaintiffClosing.totalWords,
+            speakerWords: plaintiffClosing.speakerWords,
+            speakerRatio: plaintiffClosing.speakerRatio,
+            ratioMode,
+            ...(plaintiffClosing as any).metadata
+          }
+        }
+      });
+      closingStatements.push(section);
+      this.logger.info(`Found plaintiff closing: events ${section.startEventId}-${section.endEventId}, confidence ${plaintiffClosing.confidence.toFixed(2)}`);
+    }
+
+    // Create defense closing section (typically goes second)
+    if (defenseClosing && defenseClosing.confidence > 0.5) {
       const section = await this.prisma.markerSection.create({
         data: {
           trialId,
@@ -1051,38 +1384,32 @@ export class StandardTrialHierarchyBuilder {
       this.logger.info(`Found defense closing: events ${section.startEventId}-${section.endEventId}, confidence ${defenseClosing.confidence.toFixed(2)}`);
     }
 
-    // Create plaintiff closing section
-    if (plaintiffClosing && plaintiffClosing.confidence > 0.6) {
-      const isRebuttal = defenseClosing && plaintiffClosing.startEvent.id > defenseClosing.endEvent.id;
-      const sectionType = isRebuttal ?
-        MarkerSectionType.CLOSING_REBUTTAL_PLAINTIFF :
-        MarkerSectionType.CLOSING_STATEMENT_PLAINTIFF;
-
+    // Create plaintiff rebuttal section
+    if (plaintiffRebuttal && plaintiffRebuttal.confidence > 0.4) {
       const section = await this.prisma.markerSection.create({
         data: {
           trialId,
-          markerSectionType: sectionType,
-          name: isRebuttal ? 'Plaintiff Rebuttal' : 'Plaintiff Closing Statement',
-          description: isRebuttal ?
-            'Rebuttal closing by plaintiff counsel' :
-            'Closing statement by plaintiff counsel',
-          startEventId: plaintiffClosing.startEvent.id,
-          endEventId: plaintiffClosing.endEvent.id,
-          startTime: plaintiffClosing.startEvent.startTime,
-          endTime: plaintiffClosing.endEvent.endTime,
+          markerSectionType: MarkerSectionType.CLOSING_REBUTTAL_PLAINTIFF,
+          name: 'Plaintiff Rebuttal',
+          description: 'Rebuttal closing by plaintiff counsel',
+          startEventId: plaintiffRebuttal.startEvent.id,
+          endEventId: plaintiffRebuttal.endEvent.id,
+          startTime: plaintiffRebuttal.startEvent.startTime,
+          endTime: plaintiffRebuttal.endEvent.endTime,
           source: MarkerSource.PHASE3_DISCOVERY,
-          confidence: plaintiffClosing.confidence,
+          confidence: plaintiffRebuttal.confidence,
           metadata: {
-            totalWords: plaintiffClosing.totalWords,
-            speakerWords: plaintiffClosing.speakerWords,
-            speakerRatio: plaintiffClosing.speakerRatio,
-            isRebuttal,
-            ratioMode
+            totalWords: plaintiffRebuttal.totalWords,
+            speakerWords: plaintiffRebuttal.speakerWords,
+            speakerRatio: plaintiffRebuttal.speakerRatio,
+            isRebuttal: true,
+            ratioMode,
+            ...(plaintiffRebuttal as any).metadata
           }
         }
       });
       closingStatements.push(section);
-      this.logger.info(`Found plaintiff ${isRebuttal ? 'rebuttal' : 'closing'}: events ${section.startEventId}-${section.endEventId}, confidence ${plaintiffClosing.confidence.toFixed(2)}`);
+      this.logger.info(`Found plaintiff rebuttal: events ${section.startEventId}-${section.endEventId}, confidence ${plaintiffRebuttal.confidence.toFixed(2)}`);
     }
 
     // Removed plaintiff rebuttal logic - not part of standard trial sequence

@@ -8,9 +8,10 @@
     "minConfidenceLevel": "MEDIUM",
     "combinationType": "AND",
     "metadata": {
-      "requiredSpeakers": ["JUDGE"],
+      "requiredSpeakers": ["JUDGE", "ATTORNEY"],
       "minDistinctSpeakers": 3,
-      "displaySize": 5
+      "maxStatementWords": 20,
+      "displaySize": 9
     },
     "isActive": true
   },
@@ -26,9 +27,11 @@
       "requiredSpeakers": ["JUDGE"],
       "requirePlaintiffAttorney": true,
       "requireDefenseAttorney": true,
-      "minDistinctSpeakers": 3
+      "minDistinctSpeakers": 3,
+      "maxStatementWords": 20,
+      "displaySize": 9
     },
-    "isActive": false
+    "isActive": true
   },
   {
     "name": "objection_sustained",

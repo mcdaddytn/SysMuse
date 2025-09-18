@@ -20,7 +20,7 @@ export interface LongStatementParamsV3 {
   searchEndEvent?: number;
   minWords: number;
   maxInterruptionRatio: number;
-  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT' | 'WEIGHTED_SQRT2' | 'WEIGHTED_SQRT3' | 'SMART_EXTEND' | 'TEAM_AGGREGATE';
+  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT' | 'WEIGHTED_SQRT2' | 'WEIGHTED_SQRT3' | 'TEAM_AGGREGATE';
   ratioThreshold?: number;
   aggregateTeam?: boolean;
 
@@ -75,6 +75,7 @@ interface WindowEvaluation {
       speaker: string;
       wordCount: number;
       meetsThreshold: boolean;
+      text?: string;
     };
     extensions: Array<{
       step: number;
@@ -86,6 +87,12 @@ interface WindowEvaluation {
       reason?: string;
       totalWords: number;
       speakerWords: number;
+      targetSpeakerWords?: number;
+      targetSpeakerStatements?: number;
+      otherSpeakerWords?: number;
+      otherSpeakerStatements?: number;
+      targetSpeakerRatio?: number;
+      otherSpeakerRatio?: number;
     }>;
     finalRatio: number;
     selected: boolean;
@@ -329,7 +336,8 @@ export class LongStatementsAccumulatorV3 {
           eventId: initialEvent.id,
           speaker: initialEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
           wordCount: initialEvent.wordCount || 0,
-          meetsThreshold: (initialEvent.wordCount || 0) >= params.minWords
+          meetsThreshold: (initialEvent.wordCount || 0) >= params.minWords,
+          text: this.truncateText(initialEvent.statement?.text || '', 50)
         },
         extensions: [],
         finalRatio: 0,
@@ -366,6 +374,7 @@ export class LongStatementsAccumulatorV3 {
       if (params.breakOnOpposingLongStatement !== false) {
         const isOpposing = await this.isOpposingLongStatement(nextEvent, params);
         if (isOpposing) {
+          const stats = await this.calculateSpeakerStatistics(currentWindow, params);
           evaluation.evaluation.extensions.push({
             step,
             addedEventId: nextEvent.id,
@@ -375,7 +384,13 @@ export class LongStatementsAccumulatorV3 {
             decision: 'stop',
             reason: 'opposing_long_statement',
             totalWords: this.countTotalWords(currentWindow),
-            speakerWords: await this.countSpeakerWords(currentWindow, params)
+            speakerWords: await this.countSpeakerWords(currentWindow, params),
+            targetSpeakerWords: stats.targetSpeakerWords,
+            targetSpeakerStatements: stats.targetSpeakerStatements,
+            otherSpeakerWords: stats.otherSpeakerWords,
+            otherSpeakerStatements: stats.otherSpeakerStatements,
+            targetSpeakerRatio: stats.targetSpeakerRatio,
+            otherSpeakerRatio: stats.otherSpeakerRatio
           });
           break;
         }
@@ -414,6 +429,7 @@ export class LongStatementsAccumulatorV3 {
         evaluation.endEventId = nextEvent.id;
         evaluation.evaluation.finalRatio = Math.max(evaluation.evaluation.finalRatio, newRatio);
 
+        const extStats = await this.calculateSpeakerStatistics(extendedWindow, params);
         evaluation.evaluation.extensions.push({
           step,
           addedEventId: nextEvent.id,
@@ -423,10 +439,17 @@ export class LongStatementsAccumulatorV3 {
           decision: 'extend',
           reason: lookaheadReason || undefined,
           totalWords: this.countTotalWords(extendedWindow),
-          speakerWords: await this.countSpeakerWords(extendedWindow, params)
+          speakerWords: await this.countSpeakerWords(extendedWindow, params),
+          targetSpeakerWords: extStats.targetSpeakerWords,
+          targetSpeakerStatements: extStats.targetSpeakerStatements,
+          otherSpeakerWords: extStats.otherSpeakerWords,
+          otherSpeakerStatements: extStats.otherSpeakerStatements,
+          targetSpeakerRatio: extStats.targetSpeakerRatio,
+          otherSpeakerRatio: extStats.otherSpeakerRatio
         });
       } else {
         // Stop extending
+        const stopStats = await this.calculateSpeakerStatistics(extendedWindow, params);
         evaluation.evaluation.extensions.push({
           step,
           addedEventId: nextEvent.id,
@@ -436,7 +459,13 @@ export class LongStatementsAccumulatorV3 {
           decision: 'stop',
           reason: 'ratio_decline',
           totalWords: this.countTotalWords(extendedWindow),
-          speakerWords: await this.countSpeakerWords(extendedWindow, params)
+          speakerWords: await this.countSpeakerWords(extendedWindow, params),
+          targetSpeakerWords: stopStats.targetSpeakerWords,
+          targetSpeakerStatements: stopStats.targetSpeakerStatements,
+          otherSpeakerWords: stopStats.otherSpeakerWords,
+          otherSpeakerStatements: stopStats.otherSpeakerStatements,
+          targetSpeakerRatio: stopStats.targetSpeakerRatio,
+          otherSpeakerRatio: stopStats.otherSpeakerRatio
         });
         break;
       }
@@ -446,28 +475,152 @@ export class LongStatementsAccumulatorV3 {
   }
 
   /**
-   * Calculate ratio for a window of events
+   * Calculate ratio for a window of events using ratio of ratios approach
    */
   private async calculateRatio(events: any[], params: LongStatementParamsV3): Promise<number> {
-    const totalWords = this.countTotalWords(events);
-    const speakerWords = await this.countSpeakerWords(events, params);
-
-    if (totalWords === 0) return 0;
+    // Get detailed speaker statistics
+    const stats = await this.calculateSpeakerStatistics(events, params);
 
     // Use WEIGHTED_SQRT by default as specified in the algorithm
     const ratioMode = params.ratioMode || 'WEIGHTED_SQRT';
 
-    switch (ratioMode) {
-      case 'WEIGHTED_SQRT':
-        return speakerWords / Math.sqrt(totalWords);
-      case 'WEIGHTED_SQRT2':
-        return Math.pow(speakerWords / totalWords, 2) * Math.sqrt(speakerWords / 100);
-      case 'WEIGHTED_SQRT3':
-        return Math.pow(speakerWords / totalWords, 3) * Math.sqrt(speakerWords / 100);
-      case 'TRADITIONAL':
-      default:
-        return speakerWords / totalWords;
+    // Calculate target speaker ratio based on mode
+    let targetSpeakerRatio = 0;
+    if (stats.targetSpeakerStatements > 0) {
+      switch (ratioMode) {
+        case 'WEIGHTED_SQRT':
+          targetSpeakerRatio = stats.targetSpeakerWords / Math.sqrt(stats.targetSpeakerStatements);
+          break;
+        case 'WEIGHTED_SQRT2':
+          targetSpeakerRatio = Math.pow(stats.targetSpeakerWords, 2) / Math.sqrt(stats.targetSpeakerStatements);
+          break;
+        case 'WEIGHTED_SQRT3':
+          targetSpeakerRatio = Math.pow(stats.targetSpeakerWords, 3) / Math.sqrt(stats.targetSpeakerStatements);
+          break;
+        case 'TRADITIONAL':
+          targetSpeakerRatio = stats.targetSpeakerWords;
+          break;
+        case 'TEAM_AGGREGATE':
+          targetSpeakerRatio = stats.targetSpeakerWords;
+          break;
+        default:
+          targetSpeakerRatio = stats.targetSpeakerWords;
+      }
     }
+
+    // Calculate other speaker ratio based on mode
+    let otherSpeakerRatio = 0;
+    if (stats.otherSpeakerStatements > 0) {
+      switch (ratioMode) {
+        case 'WEIGHTED_SQRT':
+          otherSpeakerRatio = stats.otherSpeakerWords / Math.sqrt(stats.otherSpeakerStatements);
+          break;
+        case 'WEIGHTED_SQRT2':
+          otherSpeakerRatio = Math.pow(stats.otherSpeakerWords, 2) / Math.sqrt(stats.otherSpeakerStatements);
+          break;
+        case 'WEIGHTED_SQRT3':
+          otherSpeakerRatio = Math.pow(stats.otherSpeakerWords, 3) / Math.sqrt(stats.otherSpeakerStatements);
+          break;
+        case 'TRADITIONAL':
+          otherSpeakerRatio = stats.otherSpeakerWords;
+          break;
+        case 'TEAM_AGGREGATE':
+          otherSpeakerRatio = stats.otherSpeakerWords;
+          break;
+        default:
+          otherSpeakerRatio = stats.otherSpeakerWords;
+      }
+    }
+
+    // Store ratios in stats for logging
+    stats.targetSpeakerRatio = targetSpeakerRatio;
+    stats.otherSpeakerRatio = otherSpeakerRatio;
+
+    // For TRADITIONAL and TEAM_AGGREGATE modes, use simple ratio
+    if (ratioMode === 'TRADITIONAL' || ratioMode === 'TEAM_AGGREGATE') {
+      const totalWords = stats.targetSpeakerWords + stats.otherSpeakerWords;
+      return totalWords > 0 ? stats.targetSpeakerWords / totalWords : 0;
+    }
+
+    // Calculate ratio of ratios (avoid division by zero)
+    if (otherSpeakerRatio === 0 && targetSpeakerRatio > 0) {
+      return 1; // Perfect ratio when only target speakers
+    } else if (otherSpeakerRatio === 0) {
+      return 0; // No speakers at all
+    }
+
+    return targetSpeakerRatio / otherSpeakerRatio;
+  }
+
+  /**
+   * Calculate detailed speaker statistics for a window
+   */
+  private async calculateSpeakerStatistics(events: any[], params: LongStatementParamsV3): Promise<{
+    targetSpeakerWords: number;
+    targetSpeakerStatements: number;
+    otherSpeakerWords: number;
+    otherSpeakerStatements: number;
+    targetSpeakerRatio?: number;
+    otherSpeakerRatio?: number;
+  }> {
+    let targetSpeakerWords = 0;
+    let targetSpeakerStatements = 0;
+    let otherSpeakerWords = 0;
+    let otherSpeakerStatements = 0;
+
+    for (const event of events) {
+      if (!event.statement?.speaker || !event.wordCount) continue;
+
+      const isTargetSpeaker = await this.isTargetSpeaker(event, params);
+
+      if (isTargetSpeaker) {
+        targetSpeakerWords += event.wordCount;
+        targetSpeakerStatements++;
+      } else {
+        otherSpeakerWords += event.wordCount;
+        otherSpeakerStatements++;
+      }
+    }
+
+    return {
+      targetSpeakerWords,
+      targetSpeakerStatements,
+      otherSpeakerWords,
+      otherSpeakerStatements
+    };
+  }
+
+  /**
+   * Check if an event is from a target speaker
+   */
+  private async isTargetSpeaker(event: any, params: LongStatementParamsV3): Promise<boolean> {
+    if (!event.statement?.speaker) return false;
+
+    const speaker = event.statement.speaker;
+
+    // Check speaker type
+    if (speaker.speakerType !== params.speakerType) return false;
+
+    // For attorneys, check role
+    if (params.speakerType === 'ATTORNEY' && params.attorneyRole) {
+      if (params.aggregateTeam) {
+        // Check if this attorney is on the team
+        const teamAttorneys = await this.getTeamAttorneys(params.trialId, params.attorneyRole);
+        return teamAttorneys.has(speaker.speakerHandle);
+      } else {
+        // Check individual attorney role
+        const attorneyRecord = await this.prisma.trialAttorney.findFirst({
+          where: {
+            trialId: params.trialId,
+            speakerId: speaker.id,
+            role: params.attorneyRole
+          }
+        });
+        return !!attorneyRecord;
+      }
+    }
+
+    return true; // Speaker matches type but no role check needed
   }
 
   /**
@@ -722,7 +875,7 @@ export class LongStatementsAccumulatorV3 {
     params: LongStatementParamsV3
   ): Promise<DisplayStatement[]> {
     const displayWindowSize = params.displayWindowSize || 9;
-    const maxDisplayWords = params.maxDisplayWords || 100;
+    const maxDisplayWords = 50; // Always truncate to 50 words for display
     const displayStatements: DisplayStatement[] = [];
 
     // Determine evaluation window boundaries
@@ -870,6 +1023,16 @@ export class LongStatementsAccumulatorV3 {
         windowId: evaluation.windowId
       }
     };
+  }
+
+  /**
+   * Truncate text to specified number of words
+   */
+  private truncateText(text: string, maxWords: number): string {
+    if (!text) return '';
+    const words = text.split(/\s+/);
+    if (words.length <= maxWords) return text;
+    return words.slice(0, maxWords).join(' ') + '...';
   }
 
   /**

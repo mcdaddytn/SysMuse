@@ -41,9 +41,12 @@
   "saveMarkerSectionsToFile": true,
   "markerSectionOutputDir": "./output/markersections",
   "longStatements": {
-    "ratioMode": "SMART_EXTEND",
+    "ratioMode": "WEIGHTED_SQRT",
     "ratioThreshold": 0.6,
-    "minWords": 500,
-    "maxInterruptionRatio": 0.15
+    "minWords": 400,
+    "minWordsOpening": 400,
+    "minWordsClosing": 500,
+    "maxInterruptionRatio": 0.3,
+    "aggregateTeam": true
   }
 }

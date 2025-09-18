@@ -61,21 +61,27 @@ export class StandardTrialHierarchyBuilder {
       // First, ensure we have a TRIAL root section
       const trialSection = await this.createTrialRootSection(trialId);
       
-      // Step 1: Build witness testimony hierarchy (bottom-up)
+      // Phase 1: Build witness testimony hierarchy (establishes core periods)
       const testimonyPeriod = await this.buildWitnessTestimonyHierarchy(trialId, trialSection.id);
-      
-      // Step 2: Find opening and closing statements
-      const openingPeriod = await this.findOpeningStatements(trialId, trialSection.id, testimonyPeriod);
+
+      // Phase 2: Find jury selection (refines pre-testimony period)
+      const jurySelection = await this.findJurySelection(trialId, trialSection.id, testimonyPeriod);
+
+      // Phase 3: Find case introduction (uses jury selection boundary if found)
+      const caseIntro = await this.findCaseIntro(trialId, trialSection.id, jurySelection, testimonyPeriod);
+
+      // Phase 4: Find opening statements (uses narrowed window after jury selection)
+      const openingPeriod = await this.findOpeningStatements(trialId, trialSection.id, testimonyPeriod, jurySelection);
+
+      // Phase 5: Find closing statements
       const closingPeriod = await this.findClosingStatements(trialId, trialSection.id, testimonyPeriod);
-      
-      // Step 3: Find jury-related sections
-      const jurySelection = await this.findJurySelection(trialId, trialSection.id, openingPeriod);
-      const caseIntro = await this.findCaseIntro(trialId, trialSection.id, jurySelection || openingPeriod);
-      
-      // Step 4: Find verdict and conclusion
+
+      // Phase 6: Find jury verdict first (search for FOREPERSON)
       const juryVerdict = await this.findJuryVerdict(trialId, trialSection.id, closingPeriod);
+
+      // Phase 7: Determine jury deliberation and case wrapup based on verdict
       const juryDeliberation = await this.findJuryDeliberation(trialId, trialSection.id, closingPeriod, juryVerdict);
-      const caseWrapup = await this.findCaseWrapup(trialId, trialSection.id, juryVerdict);
+      const caseWrapup = await this.findCaseWrapup(trialId, trialSection.id, juryVerdict, closingPeriod);
 
       // Step 5: Adjust closing period based on jury events if found
       if (closingPeriod && (juryDeliberation || juryVerdict)) {
@@ -717,27 +723,35 @@ export class StandardTrialHierarchyBuilder {
   private async findOpeningStatements(
     trialId: number,
     trialSectionId: number,
-    testimonyPeriod: MarkerSection | null
+    testimonyPeriod: MarkerSection | null,
+    jurySelection: MarkerSection | null
   ): Promise<MarkerSection | null> {
     this.logger.info(`Finding opening statements for trial ${trialId}`);
 
     // Search for opening statements BEFORE witness testimony
-    // The search range is from the start of the trial up to the start of witness testimony
+    // The search range depends on whether jury selection was found
     let searchEndEvent: number | undefined;
     let searchStartEvent: number | undefined;
 
     if (testimonyPeriod?.startEventId) {
-      // We have witness testimony, so search from trial start to witness testimony start
+      // We have witness testimony, so search up to witness testimony start
       searchEndEvent = testimonyPeriod.startEventId - 1;
 
-      // Find the first event of the trial
-      const firstTrialEvent = await this.prisma.trialEvent.findFirst({
-        where: { trialId },
-        orderBy: { id: 'asc' }
-      });
+      // Starting point depends on jury selection
+      if (jurySelection && jurySelection.endEventId) {
+        // Search AFTER jury selection
+        searchStartEvent = jurySelection.endEventId + 1;
+        this.logger.info('Narrowed opening statements search to after jury selection');
+      } else {
+        // No jury selection, search from trial start
+        const firstTrialEvent = await this.prisma.trialEvent.findFirst({
+          where: { trialId },
+          orderBy: { id: 'asc' }
+        });
 
-      if (firstTrialEvent) {
-        searchStartEvent = firstTrialEvent.id;
+        if (firstTrialEvent) {
+          searchStartEvent = firstTrialEvent.id;
+        }
       }
     } else {
       // No witness testimony found, search the first portion of the trial
@@ -752,7 +766,8 @@ export class StandardTrialHierarchyBuilder {
       });
 
       if (firstTrialEvent) {
-        searchStartEvent = firstTrialEvent.id;
+        // Start after jury selection if found
+        searchStartEvent = jurySelection?.endEventId ? jurySelection.endEventId + 1 : firstTrialEvent.id;
         // Search first third of trial if no witness testimony found
         searchEndEvent = firstTrialEvent.id + Math.floor(trialEventCount / 3);
       }
@@ -1839,13 +1854,13 @@ export class StandardTrialHierarchyBuilder {
   private async findJurySelection(
     trialId: number,
     trialSectionId: number,
-    openingPeriod: MarkerSection | null
+    testimonyPeriod: MarkerSection | null
   ): Promise<MarkerSection | null> {
     this.logger.info(`Finding jury selection for trial ${trialId}`);
 
-    // Look for juror speech before opening statements
-    if (!openingPeriod || !openingPeriod.startEventId) {
-      this.logger.info('No opening period to search before for jury selection');
+    // Look for juror speech before witness testimony
+    if (!testimonyPeriod || !testimonyPeriod.startEventId) {
+      this.logger.info('No testimony period to search before for jury selection');
       return null;
     }
 
@@ -1854,7 +1869,7 @@ export class StandardTrialHierarchyBuilder {
         event: {
           trialId,
           id: {
-            lt: openingPeriod.startEventId
+            lt: testimonyPeriod.startEventId
           }
         },
         speaker: {
@@ -1904,7 +1919,8 @@ export class StandardTrialHierarchyBuilder {
   private async findCaseIntro(
     trialId: number,
     trialSectionId: number,
-    beforeSection: MarkerSection | null
+    jurySelection: MarkerSection | null,
+    testimonyPeriod: MarkerSection | null
   ): Promise<MarkerSection> {
     this.logger.info(`Finding case introduction for trial ${trialId}`);
 
@@ -1914,44 +1930,70 @@ export class StandardTrialHierarchyBuilder {
       orderBy: { ordinal: 'asc' }
     });
 
-    if (!firstEvent || !beforeSection || !beforeSection.startEventId) {
+    if (!firstEvent) {
       return await this.createZeroLengthSection({
         trialId,
         sectionType: MarkerSectionType.CASE_INTRO,
         parentSectionId: trialSectionId,
         name: 'Case Introduction',
         description: 'No case introduction found',
-        reason: 'Unable to determine case introduction boundaries'
+        reason: 'Unable to determine trial boundaries'
       });
     }
 
-    // Get event just before the "before section"
-    const endEvent = await this.prisma.trialEvent.findFirst({
-      where: {
-        trialId,
-        id: {
-          lt: beforeSection?.startEventId || 0
-        }
-      },
-      orderBy: {
-        id: 'desc'
-      }
-    });
+    // Determine end boundary based on what was found
+    let endEventId: number | undefined;
+    let endEvent: any = null;
 
-    if (firstEvent.id < (endEvent?.id || beforeSection?.startEventId || 0)) {
+    if (jurySelection && jurySelection.startEventId) {
+      // If jury selection found, case intro ends before it
+      endEvent = await this.prisma.trialEvent.findFirst({
+        where: {
+          trialId,
+          id: {
+            lt: jurySelection.startEventId
+          }
+        },
+        orderBy: {
+          id: 'desc'
+        }
+      });
+      endEventId = endEvent?.id;
+    } else if (testimonyPeriod && testimonyPeriod.startEventId) {
+      // No jury selection, case intro is entire pre-witness testimony period
+      endEvent = await this.prisma.trialEvent.findFirst({
+        where: {
+          trialId,
+          id: {
+            lt: testimonyPeriod.startEventId
+          }
+        },
+        orderBy: {
+          id: 'desc'
+        }
+      });
+      endEventId = endEvent?.id;
+    }
+
+    // Create case introduction if we have valid boundaries
+    if (endEventId && firstEvent.id <= endEventId) {
       return await this.prisma.markerSection.create({
         data: {
           trialId,
           markerSectionType: MarkerSectionType.CASE_INTRO,
           parentSectionId: trialSectionId,
           name: 'Case Introduction',
-          description: 'Pre-trial proceedings and case introduction',
+          description: jurySelection ? 'Pre-trial proceedings before jury selection' : 'Pre-trial proceedings before witness testimony',
           startEventId: firstEvent.id,
-          endEventId: endEvent?.id || firstEvent.id,
+          endEventId: endEventId,
           startTime: firstEvent.startTime,
           endTime: endEvent?.endTime || firstEvent.endTime,
           source: MarkerSource.PHASE3_DISCOVERY,
-          confidence: 0.7
+          confidence: 0.7,
+          metadata: {
+            endsAtJurySelection: !!jurySelection,
+            endsAtWitnessTestimony: !jurySelection && !!testimonyPeriod
+          }
         }
       });
     }
@@ -2044,6 +2086,8 @@ export class StandardTrialHierarchyBuilder {
     closingPeriod: MarkerSection | null,
     verdictSection: MarkerSection | null
   ): Promise<MarkerSection | null> {
+    // Jury deliberation only exists if we found a jury verdict
+    // It's the period between closing statements and the verdict
     if (!verdictSection || !closingPeriod || !closingPeriod.endEventId || !verdictSection.startEventId) {
       return null;
     }
@@ -2053,7 +2097,7 @@ export class StandardTrialHierarchyBuilder {
       where: {
         trialId,
         id: {
-          gt: closingPeriod.endEventId || 0,
+          gt: closingPeriod.endEventId,
           lt: verdictSection.startEventId
         }
       }
@@ -2065,7 +2109,7 @@ export class StandardTrialHierarchyBuilder {
         where: {
           trialId,
           id: {
-            gt: closingPeriod.endEventId || 0
+            gt: closingPeriod.endEventId
           }
         },
         orderBy: { id: 'asc' }
@@ -2089,15 +2133,17 @@ export class StandardTrialHierarchyBuilder {
             markerSectionType: MarkerSectionType.JURY_DELIBERATION,
             parentSectionId: trialSectionId,
             name: 'Jury Deliberation',
-            description: 'Jury deliberation period',
+            description: 'Period between closing statements and jury verdict',
             startEventId: startEvent.id,
             endEventId: endEvent.id,
             startTime: startEvent.startTime,
             endTime: endEvent.endTime,
             source: MarkerSource.PHASE3_DISCOVERY,
-            confidence: 0.6,
+            confidence: 0.7, // Increased confidence since verdict was found
             metadata: {
-              eventCount: eventsInBetween
+              eventCount: eventsInBetween,
+              afterClosing: true,
+              beforeVerdict: true
             }
           }
         });
@@ -2113,53 +2159,91 @@ export class StandardTrialHierarchyBuilder {
   private async findCaseWrapup(
     trialId: number,
     trialSectionId: number,
-    verdictSection: MarkerSection | null
+    verdictSection: MarkerSection | null,
+    closingPeriod: MarkerSection | null
   ): Promise<MarkerSection | null> {
-    if (!verdictSection || !verdictSection.endEventId) {
-      return null;
-    }
-
     // Get last event of trial
     const lastEvent = await this.prisma.trialEvent.findFirst({
       where: { trialId },
       orderBy: { ordinal: 'desc' }
     });
 
-    if (!lastEvent || lastEvent.id <= verdictSection.endEventId) {
+    if (!lastEvent) {
       return null;
     }
 
-    // Get first event after verdict
-    const startEvent = await this.prisma.trialEvent.findFirst({
-      where: {
-        trialId,
-        id: {
-          gt: verdictSection.endEventId
-        }
-      },
-      orderBy: { id: 'asc' }
-    });
+    let startEventId: number | undefined;
+    let description: string = 'Case conclusion';
 
-    if (startEvent) {
+    if (verdictSection && verdictSection.endEventId) {
+      // If jury verdict found, case wrapup is after verdict
+      if (lastEvent.id <= verdictSection.endEventId) {
+        return null; // No events after verdict
+      }
+
+      const startEvent = await this.prisma.trialEvent.findFirst({
+        where: {
+          trialId,
+          id: {
+            gt: verdictSection.endEventId
+          }
+        },
+        orderBy: { id: 'asc' }
+      });
+
+      if (startEvent) {
+        startEventId = startEvent.id;
+        description = 'Post-verdict proceedings and case conclusion';
+      }
+    } else if (closingPeriod && closingPeriod.endEventId) {
+      // No jury verdict found, case wrapup is everything after closing statements
+      if (lastEvent.id <= closingPeriod.endEventId) {
+        return null; // No events after closing
+      }
+
+      const startEvent = await this.prisma.trialEvent.findFirst({
+        where: {
+          trialId,
+          id: {
+            gt: closingPeriod.endEventId
+          }
+        },
+        orderBy: { id: 'asc' }
+      });
+
+      if (startEvent) {
+        startEventId = startEvent.id;
+        description = 'Post-closing proceedings and case conclusion (no verdict found)';
+      }
+    } else {
+      return null; // Need at least closing statements to determine case wrapup
+    }
+
+    if (startEventId) {
+      const startEvent = await this.prisma.trialEvent.findUnique({
+        where: { id: startEventId }
+      });
+
       return await this.prisma.markerSection.create({
         data: {
           trialId,
           markerSectionType: MarkerSectionType.CASE_WRAPUP,
           parentSectionId: trialSectionId,
           name: 'Case Wrapup',
-          description: 'Post-verdict proceedings and case conclusion',
-          startEventId: startEvent.id,
+          description,
+          startEventId,
           endEventId: lastEvent.id,
-          startTime: startEvent.startTime,
+          startTime: startEvent?.startTime,
           endTime: lastEvent.endTime,
           source: MarkerSource.PHASE3_DISCOVERY,
-          confidence: 0.7,
+          confidence: verdictSection ? 0.8 : 0.6, // Higher confidence if verdict was found
           metadata: {
+            hasVerdict: !!verdictSection,
             eventCount: await this.prisma.trialEvent.count({
               where: {
                 trialId,
                 id: {
-                  gte: startEvent.id,
+                  gte: startEventId,
                   lte: lastEvent.id
                 }
               }

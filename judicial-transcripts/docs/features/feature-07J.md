@@ -80,6 +80,7 @@ If Jury Selection is found, create three subdivisions:
 1. **Before Jury Selection**
    - Start: First event of trial
    - End: Last event before Jury Selection begins
+   - **Note**: This becomes `CASE_INTRODUCTION` after Phase 6
 
 2. **Jury Selection** (already established)
    - Start: First juror statement
@@ -88,14 +89,19 @@ If Jury Selection is found, create three subdivisions:
 3. **After Jury Selection**
    - Start: First event after Jury Selection ends
    - End: Last event before Witness Testimony Period
+   - **Note**: This is the search window for Opening Statements
 
-If no Jury Selection is found, the entire Pre-Witness Testimony Period becomes the search window for subsequent sections.
+If no Jury Selection is found:
+- The entire Pre-Witness Testimony Period is used only for searching for Jury Selection
+- Case Introduction defaults to the entire Pre-Witness Testimony Period
+- Opening Statements are searched within the entire Pre-Witness Testimony Period
 
 ### Phase 3: Find Opening Statements
 
 #### 3.1 Determine Search Window
 - **If Jury Selection exists**: Search within "After Jury Selection" period
 - **If no Jury Selection**: Search entire Pre-Witness Testimony Period
+- **Note**: This search window is specifically for Opening Statements only
 
 #### 3.2 Apply Defense-First Strategy
 Using the Long Statements Accumulator V3 algorithm (Feature-07H):
@@ -141,24 +147,24 @@ Similar to opening statements:
 
 ### Phase 5: Find Post-Closing Sections
 
-#### 5.1 Search for Jury Deliberation
+#### 5.1 Find Jury Verdict
 - **Window**: After closing statements end
-- **Method**: Detect markers indicating jury retirement
-- **Output**: `JURY_DELIBERATION` marker section
-
-#### 5.2 Find Jury Verdict
-- **Window**: After Jury Deliberation (if found) or after closing statements
-- **Method**: Detect verdict reading markers
+- **Method**: Search for "THE FOREPERSON" statements
 - **Output**: `JURY_VERDICT` marker section
 
-#### 5.3 Find Case Wrap-up
-- **Window**: After Jury Verdict (if found)
-- **Method**: Detect post-verdict proceedings
-- **Output**: `CASE_WRAPUP` marker section
+#### 5.2 Determine Jury Deliberation and Case Wrap-up
+- **If Jury Verdict is found**:
+  - `JURY_DELIBERATION`: Between closing statements end and Jury Verdict start
+  - `CASE_WRAPUP`: After Jury Verdict end to trial end
+- **If no Jury Verdict found**:
+  - `CASE_WRAPUP`: Entire period after closing statements
 
 ### Phase 6: Find Case Introduction
 
-- **Window**: Before Jury Selection (if found) or start of trial
+- **Timing**: After establishing witness testimony and finding Jury Selection
+- **Window**:
+  - **If Jury Selection found**: From trial start to last event before Jury Selection
+  - **If no Jury Selection**: Entire Pre-Witness Testimony Period
 - **Method**: Detect initial court proceedings
 - **Output**: `CASE_INTRODUCTION` marker section
 

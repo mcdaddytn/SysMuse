@@ -76,6 +76,13 @@ interface WindowEvaluation {
       wordCount: number;
       meetsThreshold: boolean;
       text?: string;
+      targetSpeakerWords?: number;
+      targetSpeakerStatements?: number;
+      otherSpeakerWords?: number;
+      otherSpeakerStatements?: number;
+      targetSpeakerRatio?: number;
+      otherSpeakerRatio?: number;
+      ratio?: number;
     };
     extensions: Array<{
       step: number;
@@ -108,7 +115,6 @@ interface SearchEvaluation {
   enclosingWindow: {
     start: number;
     end: number;
-    refinedByJuror: boolean;
   };
   evaluations: WindowEvaluation[];
   finalSelection?: {
@@ -142,8 +148,7 @@ export class LongStatementsAccumulatorV3 {
         searchStrategy: 'defense-first-enhanced',
         enclosingWindow: {
           start: params.searchStartEvent || 0,
-          end: params.searchEndEvent || 999999,
-          refinedByJuror: false
+          end: params.searchEndEvent || 999999
         },
         evaluations: []
       };
@@ -215,7 +220,6 @@ export class LongStatementsAccumulatorV3 {
   private async refineEnclosingWindow(params: LongStatementParamsV3): Promise<{
     start: number;
     end: number;
-    refinedByJuror: boolean;
   } | null> {
     if (!params.searchStartEvent || !params.searchEndEvent) {
       return null;
@@ -253,7 +257,7 @@ export class LongStatementsAccumulatorV3 {
       }
     }
 
-    return { start: startEvent, end: endEvent, refinedByJuror: refined };
+    return { start: startEvent, end: endEvent };
   }
 
   /**
@@ -326,8 +330,10 @@ export class LongStatementsAccumulatorV3 {
     initialEvent: any,
     params: LongStatementParamsV3
   ): Promise<WindowEvaluation> {
+    const windowId = `${params.attorneyRole || 'unknown'}_${initialEvent.id}`;
+
     const evaluation: WindowEvaluation = {
-      windowId: `${params.attorneyRole || 'unknown'}_${initialEvent.id}`,
+      windowId,
       startEventId: initialEvent.id,
       endEventId: initialEvent.id,
       speakerRole: params.attorneyRole || 'OTHER',
@@ -353,22 +359,35 @@ export class LongStatementsAccumulatorV3 {
 
     // Build the window by extending forward
     let currentWindow = [initialEvent];
-    let bestRatio = await this.calculateRatio(currentWindow, params);
+    const initialStats = await this.calculateSpeakerStatistics(currentWindow, params);
+    let bestRatio = await this.calculateRatioWithStats(initialStats, params);
     evaluation.evaluation.finalRatio = bestRatio;
+
+    // Store initial statement calculations
+    evaluation.evaluation.initialStatement.targetSpeakerWords = initialStats.targetSpeakerWords;
+    evaluation.evaluation.initialStatement.targetSpeakerStatements = initialStats.targetSpeakerStatements;
+    evaluation.evaluation.initialStatement.otherSpeakerWords = initialStats.otherSpeakerWords;
+    evaluation.evaluation.initialStatement.otherSpeakerStatements = initialStats.otherSpeakerStatements;
+    evaluation.evaluation.initialStatement.targetSpeakerRatio = initialStats.targetSpeakerRatio;
+    evaluation.evaluation.initialStatement.otherSpeakerRatio = initialStats.otherSpeakerRatio;
+    evaluation.evaluation.initialStatement.ratio = bestRatio;
 
     const maxExtensions = params.maxExtensionAttempts || 20;
     const declineThreshold = params.declineThreshold || 0.05;
+    let lastEvaluatedId = initialEvent.id;
 
     for (let step = 1; step <= maxExtensions; step++) {
       const nextEvent = await this.getNextStatementEvent(
-        currentWindow[currentWindow.length - 1].id,
+        lastEvaluatedId,
         params.searchEndEvent
       );
 
       if (!nextEvent) {
-        this.logger.info(`No more events after ${currentWindow[currentWindow.length - 1].id}`);
+        this.logger.info(`No more events after ${lastEvaluatedId}`);
         break;
       }
+
+      lastEvaluatedId = nextEvent.id;
 
       // Check for deal-breakers
       if (params.breakOnOpposingLongStatement !== false) {
@@ -417,7 +436,8 @@ export class LongStatementsAccumulatorV3 {
 
       // Try extending the window
       const extendedWindow = [...currentWindow, nextEvent];
-      const newRatio = await this.calculateRatio(extendedWindow, params);
+      const extStats = await this.calculateSpeakerStatistics(extendedWindow, params);
+      const newRatio = this.calculateRatioWithStats(extStats, params);
 
       // Decide whether to extend
       if (shouldExtend || newRatio >= bestRatio - declineThreshold) {
@@ -429,7 +449,6 @@ export class LongStatementsAccumulatorV3 {
         evaluation.endEventId = nextEvent.id;
         evaluation.evaluation.finalRatio = Math.max(evaluation.evaluation.finalRatio, newRatio);
 
-        const extStats = await this.calculateSpeakerStatistics(extendedWindow, params);
         evaluation.evaluation.extensions.push({
           step,
           addedEventId: nextEvent.id,
@@ -448,26 +467,53 @@ export class LongStatementsAccumulatorV3 {
           otherSpeakerRatio: extStats.otherSpeakerRatio
         });
       } else {
-        // Stop extending
-        const stopStats = await this.calculateSpeakerStatistics(extendedWindow, params);
-        evaluation.evaluation.extensions.push({
-          step,
-          addedEventId: nextEvent.id,
-          addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
-          addedWords: nextEvent.wordCount || 0,
-          ratio: newRatio,
-          decision: 'stop',
-          reason: 'ratio_decline',
-          totalWords: this.countTotalWords(extendedWindow),
-          speakerWords: await this.countSpeakerWords(extendedWindow, params),
-          targetSpeakerWords: stopStats.targetSpeakerWords,
-          targetSpeakerStatements: stopStats.targetSpeakerStatements,
-          otherSpeakerWords: stopStats.otherSpeakerWords,
-          otherSpeakerStatements: stopStats.otherSpeakerStatements,
-          targetSpeakerRatio: stopStats.targetSpeakerRatio,
-          otherSpeakerRatio: stopStats.otherSpeakerRatio
-        });
-        break;
+        // Check if next event is a deal-breaker (long statement from another speaker)
+        const nextEventIsLongStatement = (nextEvent.wordCount || 0) >= params.minWords;
+        const nextEventIsFromOtherSpeaker = !(await this.isTargetSpeaker(nextEvent, params));
+
+        if (nextEventIsLongStatement && nextEventIsFromOtherSpeaker) {
+          // This is a deal-breaker - another speaker with long statement
+          const stopStats = await this.calculateSpeakerStatistics(currentWindow, params);
+          evaluation.evaluation.extensions.push({
+            step,
+            addedEventId: nextEvent.id,
+            addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
+            addedWords: nextEvent.wordCount || 0,
+            ratio: bestRatio,
+            decision: 'stop',
+            reason: 'other_speaker_long_statement',
+            totalWords: this.countTotalWords(currentWindow),
+            speakerWords: await this.countSpeakerWords(currentWindow, params),
+            targetSpeakerWords: stopStats.targetSpeakerWords,
+            targetSpeakerStatements: stopStats.targetSpeakerStatements,
+            otherSpeakerWords: stopStats.otherSpeakerWords,
+            otherSpeakerStatements: stopStats.otherSpeakerStatements,
+            targetSpeakerRatio: stopStats.targetSpeakerRatio,
+            otherSpeakerRatio: stopStats.otherSpeakerRatio
+          });
+          break;
+        } else {
+          // Not a deal-breaker, but ratio declined - log it but continue evaluation
+          // Use the extended window stats to show what the ratio would be if we added this event
+          evaluation.evaluation.extensions.push({
+            step,
+            addedEventId: nextEvent.id,
+            addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
+            addedWords: nextEvent.wordCount || 0,
+            ratio: newRatio,  // Show the new ratio that would result
+            decision: 'stop',
+            reason: 'ratio_decline',
+            totalWords: this.countTotalWords(extendedWindow),  // Extended window stats
+            speakerWords: await this.countSpeakerWords(extendedWindow, params),
+            targetSpeakerWords: extStats.targetSpeakerWords,  // Extended window stats
+            targetSpeakerStatements: extStats.targetSpeakerStatements,
+            otherSpeakerWords: extStats.otherSpeakerWords,
+            otherSpeakerStatements: extStats.otherSpeakerStatements,
+            targetSpeakerRatio: extStats.targetSpeakerRatio,
+            otherSpeakerRatio: extStats.otherSpeakerRatio
+          });
+          // Don't break - continue to evaluate more extensions
+        }
       }
     }
 
@@ -480,6 +526,13 @@ export class LongStatementsAccumulatorV3 {
   private async calculateRatio(events: any[], params: LongStatementParamsV3): Promise<number> {
     // Get detailed speaker statistics
     const stats = await this.calculateSpeakerStatistics(events, params);
+    return this.calculateRatioWithStats(stats, params);
+  }
+
+  /**
+   * Calculate ratio from pre-computed statistics
+   */
+  private calculateRatioWithStats(stats: any, params: LongStatementParamsV3): number {
 
     // Use WEIGHTED_SQRT by default as specified in the algorithm
     const ratioMode = params.ratioMode || 'WEIGHTED_SQRT';
@@ -950,11 +1003,14 @@ export class LongStatementsAccumulatorV3 {
       let text = stmt.statement.text || '';
       let wordCount = stmt.wordCount || 0;
 
-      // Truncate non-evaluation statements
-      if (!isInEvalWindow && text.split(' ').length > maxDisplayWords) {
+      // Truncate ALL text to maxDisplayWords
+      if (text.split(' ').length > maxDisplayWords) {
         const words = text.split(' ');
         text = words.slice(0, maxDisplayWords).join(' ') + '...';
-        wordCount = maxDisplayWords;
+        // Keep original word count for evaluation statements
+        if (!isInEvalWindow) {
+          wordCount = maxDisplayWords;
+        }
       }
 
       // Determine speaker role
@@ -1053,6 +1109,34 @@ export class LongStatementsAccumulatorV3 {
     // Determine filename based on statement type
     const filename = `${params.statementType || 'unknown'}-evaluation.json`;
     const filepath = path.join(trialDir, filename);
+
+    // Load existing data if file exists
+    let existingData: any = null;
+    if (fs.existsSync(filepath)) {
+      try {
+        existingData = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
+      } catch (e) {
+        // File exists but isn't valid JSON, will be overwritten
+      }
+    }
+
+    // If we have existing data, merge evaluations
+    if (existingData && existingData.evaluations) {
+      // Append new evaluations to existing ones
+      evaluation.evaluations = [...existingData.evaluations, ...evaluation.evaluations];
+
+      // Update final selection if the new one is better
+      if (evaluation.finalSelection && existingData.finalSelection) {
+        if ((evaluation.finalSelection.ratio || 0) > (existingData.finalSelection.ratio || 0)) {
+          // Keep new final selection
+        } else {
+          // Keep existing final selection
+          evaluation.finalSelection = existingData.finalSelection;
+        }
+      } else if (existingData.finalSelection) {
+        evaluation.finalSelection = existingData.finalSelection;
+      }
+    }
 
     // Write evaluation log
     fs.writeFileSync(filepath, JSON.stringify(evaluation, null, 2));

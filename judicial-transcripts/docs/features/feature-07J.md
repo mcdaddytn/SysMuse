@@ -297,6 +297,20 @@ New trial structure algorithms can be added by:
    - No jury phases
    - Focus on legal arguments
 
+### Extension Criteria for Long Statements
+
+When evaluating candidate long statements, the algorithm continues extending the window forward until one of the following conditions is met:
+
+1. **Deal-breaker encountered**: A statement from another speaker (court, opposing attorney, etc.) that meets the `minWords` threshold. This immediately stops extension as it represents a significant interruption.
+
+2. **End of enclosing window reached**: The algorithm has evaluated all available statements within the search window.
+
+3. **Maximum extension attempts reached**: A configurable limit (default: 20) to prevent infinite loops.
+
+The algorithm evaluates the ratio at each extension and tracks whether it improves or declines. However, ratio decline alone does NOT stop the extension - the algorithm continues to evaluate further possibilities. This allows it to extend through short interruptions (like judge time warnings) that temporarily reduce the ratio but are followed by more content from the target speaker.
+
+The final selected window is the one with the highest overall ratio among all evaluated possibilities.
+
 ### Machine Learning Integration
 
 - Train models on window boundaries for each trial type

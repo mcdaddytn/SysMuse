@@ -99,10 +99,12 @@ interface WindowEvaluation {
       addedEventId: number;
       addedSpeaker: string;
       addedWords: number;
+      addedText?: string;  // Truncated text of the added statement
       decision: 'extend' | 'stop';
       reason?: string;
       totalWords: number;
       speakerWords: number;
+      bestScore?: boolean;  // Marks the extension with the highest score
       // WORD_RACE specific fields
       statementIndex?: number;
       targetWords?: number;
@@ -431,8 +433,9 @@ export class LongStatementsAccumulatorV3 {
     evaluation.evaluation.initialStatement.deltaAdjWords = deltaAdjWords;
     evaluation.evaluation.initialStatement.targetWordScore = targetWordScore;
 
-    // Track best score
+    // Track best score and best window configuration
     let bestScore = targetWordScore;
+    let bestWindowEndId = initialEvent.id;
     evaluation.evaluation.finalScore = bestScore;
 
     // Build window by extending forward
@@ -475,6 +478,7 @@ export class LongStatementsAccumulatorV3 {
             addedEventId: nextEvent.id,
             addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
             addedWords: nextEvent.wordCount || 0,
+            addedText: this.truncateText(nextEvent.statement?.text || '', 50),
             decision: 'stop',
             reason: 'opposing_long_statement',
             totalWords: this.countTotalWords([...currentWindow, nextEvent]),
@@ -499,6 +503,7 @@ export class LongStatementsAccumulatorV3 {
         targetWordScore = newScore;
         if (newScore > bestScore) {
           bestScore = newScore;
+          bestWindowEndId = nextEvent.id;  // Track the best window endpoint
         }
         evaluation.endEventId = nextEvent.id;
         evaluation.evaluation.finalScore = Math.max(evaluation.evaluation.finalScore || 0, newScore);
@@ -508,6 +513,7 @@ export class LongStatementsAccumulatorV3 {
           addedEventId: nextEvent.id,
           addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
           addedWords: nextEvent.wordCount || 0,
+          addedText: this.truncateText(nextEvent.statement?.text || '', 50),
           decision: 'extend',
           totalWords: this.countTotalWords(currentWindow),
           speakerWords: await this.countSpeakerWords(currentWindow, params),
@@ -527,6 +533,7 @@ export class LongStatementsAccumulatorV3 {
           addedEventId: nextEvent.id,
           addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
           addedWords: nextEvent.wordCount || 0,
+          addedText: this.truncateText(nextEvent.statement?.text || '', 50),
           decision: 'stop',
           reason: 'score_decline',
           totalWords: this.countTotalWords([...currentWindow, nextEvent]),
@@ -541,6 +548,17 @@ export class LongStatementsAccumulatorV3 {
           targetWordScore: newScore
         });
         // Don't break - continue to evaluate more extensions
+      }
+    }
+
+    // Set the final window to the best configuration found
+    evaluation.endEventId = bestWindowEndId;
+    evaluation.evaluation.finalScore = bestScore;
+    // Mark the step where we had the best score
+    for (let i = 0; i < evaluation.evaluation.extensions.length; i++) {
+      const ext = evaluation.evaluation.extensions[i];
+      if (ext.addedEventId === bestWindowEndId && ext.decision === 'extend') {
+        ext.bestScore = true;  // Mark this as the best scoring extension
       }
     }
 

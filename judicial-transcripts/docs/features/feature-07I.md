@@ -30,7 +30,7 @@ For each statement in the evaluation window:
 For each statement at position `statementIndex`:
 
 ```
-distFactor = statementIndex ^ distFactorExponent
+distFactor = statementIndex ^ (1 / distFactorExponent)
 
 targetAdjWords = targetWords / distFactor
 
@@ -55,20 +55,20 @@ This ensures that:
 ### Mode Variations
 
 #### WORD_RACE (distFactorExponent = 1)
-- Linear distance penalty
-- Moderate sensitivity to distance
-- Example: Statement 3 has distFactor = 3
+- No distance penalty (distFactor always equals 1)
+- All statements weighted equally
+- Example: Statement 3 has distFactor = 3^(1/1) = 3
 
 #### WORD_RACE2 (distFactorExponent = 2)
-- Quadratic distance penalty
-- Higher sensitivity to distance
-- Example: Statement 3 has distFactor = 9
+- Square root distance penalty
+- Moderate sensitivity to distance
+- Example: Statement 3 has distFactor = 3^(1/2) = √3 ≈ 1.732
 
 #### WORD_RACE3 (distFactorExponent = 3) [DEFAULT]
-- Cubic distance penalty
-- Highest sensitivity to distance
-- Example: Statement 3 has distFactor = 27
-- Strongly favors compact statement windows near the baseline
+- Cube root distance penalty
+- Lower sensitivity to distance
+- Example: Statement 3 has distFactor = 3^(1/3) = ∛3 ≈ 1.442
+- Allows for longer statement windows with gradual decay
 
 ## Example Calculation
 
@@ -76,7 +76,7 @@ Consider a window with 3 statements using WORD_RACE3:
 
 **Statement 1** (baseline, statementIndex = 1):
 - targetWords = 1000, otherWords = 0
-- distFactor = 1³ = 1
+- distFactor = 1^(1/3) = 1
 - targetAdjWords = 1000/1 = 1000
 - otherAdjWords = 0*1 = 0
 - deltaAdjWords = 1000 - 0 = 1000
@@ -84,21 +84,21 @@ Consider a window with 3 statements using WORD_RACE3:
 
 **Statement 2** (statementIndex = 2):
 - targetWords = 0, otherWords = 10 (court interruption)
-- distFactor = 2³ = 8
-- targetAdjWords = 0/8 = 0
-- otherAdjWords = 10*8 = 80
-- deltaAdjWords = 0 - 80 = -80
-- Running targetWordScore = 1000 - 80 = 920
+- distFactor = 2^(1/3) ≈ 1.260
+- targetAdjWords = 0/1.260 = 0
+- otherAdjWords = 10*1.260 = 12.6
+- deltaAdjWords = 0 - 12.6 = -12.6
+- Running targetWordScore = 1000 - 12.6 = 987.4
 
 **Statement 3** (statementIndex = 3):
 - targetWords = 200, otherWords = 0 (target continues)
-- distFactor = 3³ = 27
-- targetAdjWords = 200/27 = 7.4
-- otherAdjWords = 0*27 = 0
-- deltaAdjWords = 7.4 - 0 = 7.4
-- Running targetWordScore = 920 + 7.4 = 927.4
+- distFactor = 3^(1/3) ≈ 1.442
+- targetAdjWords = 200/1.442 ≈ 138.7
+- otherAdjWords = 0*1.442 = 0
+- deltaAdjWords = 138.7 - 0 = 138.7
+- Running targetWordScore = 987.4 + 138.7 = 1126.1
 
-The final targetWordScore of 927.4 would be compared against other window configurations.
+The final targetWordScore of 1126.1 would be compared against other window configurations.
 
 ## JSON Output Structure
 
@@ -131,11 +131,11 @@ The evaluation logs include all calculation variables:
         "statementIndex": 2,
         "targetWords": 0,
         "otherWords": 23,
-        "distFactor": 8,
+        "distFactor": 1.260,
         "targetAdjWords": 0,
-        "otherAdjWords": 184,
-        "deltaAdjWords": -184,
-        "targetWordScore": 3252,
+        "otherAdjWords": 29,
+        "deltaAdjWords": -29,
+        "targetWordScore": 3407,
         "totalWords": 3459,
         "speakerWords": 3436
       }

@@ -1,231 +1,255 @@
-# Feature-07I: Corrected WEIGHTED_SQRT Ratio Calculations for Long Statement Detection
+# Feature-07I: WORD_RACE Calculations for Long Statement Detection
 
 ## Overview
 
-This feature corrects the implementation of the WEIGHTED_SQRT family of ratio calculations used in the Long Statements Accumulator V3 algorithm for detecting opening and closing statements in judicial transcripts. The previous implementation incorrectly calculated ratios against total words, rather than using the "ratio of ratios" approach that properly weights long statements from target speakers against interruptions.
+This feature introduces the WORD_RACE family of calculations for the Long Statements Accumulator V3 algorithm, replacing the previous WEIGHTED_SQRT approaches. The WORD_RACE calculations use a simpler, more intuitive "word accumulation race" model that tracks which side (target speakers vs. others) is accumulating more words as the evaluation window extends, with distance-based adjustments to diminish the impact of statements further from the baseline.
 
-## Problem Statement
+## Core Concept: Word Accumulation Race
 
-The original implementation of WEIGHTED_SQRT variants incorrectly calculated:
-- `WEIGHTED_SQRT`: `speakerWords / sqrt(totalWords)`
-- `WEIGHTED_SQRT2`: `(speakerWords/totalWords)^2 * sqrt(speakerWords/100)`
-- `WEIGHTED_SQRT3`: `(speakerWords/totalWords)^3 * sqrt(speakerWords/100)`
+The WORD_RACE approach models statement detection as a competition:
+1. Start with a strong baseline statement from target speakers (meeting minWords threshold)
+2. As we extend the window, track whether target speakers or others are "winning" the word race
+3. Apply distance factors to reduce the impact of statements further from the baseline
+4. Maximize the `targetWordScore` - the cumulative adjusted word advantage
 
-These calculations did not properly distinguish between target speakers and other speakers, and did not account for the number of statement chunks (which is crucial for detecting long uninterrupted statements).
-
-## Solution: Ratio of Ratios Approach
-
-### Core Concept
-
-The corrected algorithm uses a "ratio of ratios" approach:
-1. Calculate a ratio for target speakers: `targetSpeakerRatio`
-2. Calculate a ratio for other speakers: `otherSpeakerRatio`
-3. The final score is: `targetSpeakerRatio / otherSpeakerRatio`
-
-This approach naturally favors windows where target speakers have long continuous statements while other speakers have short interruptions.
+## Algorithm Details
 
 ### Variable Definitions
 
-For any evaluation window:
-- **targetSpeakerWords**: Total words spoken by attorneys on the target side (e.g., PLAINTIFF)
-- **targetSpeakerStatements**: Number of StatementEvent instances by target speakers
-- **otherSpeakerWords**: Total words spoken by all other speakers (judges, opposing attorneys, etc.)
-- **otherSpeakerStatements**: Number of StatementEvent instances by other speakers
+For each statement in the evaluation window:
+- **statementIndex**: Position in the window (1 for baseline statement, incrementing for each subsequent statement)
+- **targetWords**: Words spoken by target speakers in this statement
+- **otherWords**: Words spoken by other speakers in this statement
+- **distFactorExponent**: Mode-specific constant:
+  - WORD_RACE: 1
+  - WORD_RACE2: 2
+  - WORD_RACE3: 3 (default)
 
-### Ratio Calculations by Mode
+### Calculated Values
 
-#### WEIGHTED_SQRT
+For each statement at position `statementIndex`:
+
 ```
-targetSpeakerRatio = targetSpeakerWords / sqrt(targetSpeakerStatements)
-otherSpeakerRatio = otherSpeakerWords / sqrt(otherSpeakerStatements)
-finalRatio = targetSpeakerRatio / otherSpeakerRatio
-```
+distFactor = statementIndex ^ distFactorExponent
 
-**Example**: If plaintiff attorneys speak 1000 words across 2 statements (600 + 400), and the court interrupts with 10 words in 1 statement:
-- targetSpeakerRatio = 1000 / sqrt(2) = 707.1
-- otherSpeakerRatio = 10 / sqrt(1) = 10
-- finalRatio = 707.1 / 10 = 70.71
+targetAdjWords = targetWords / distFactor
 
-#### WEIGHTED_SQRT2
-```
-targetSpeakerRatio = targetSpeakerWords^2 / sqrt(targetSpeakerStatements)
-otherSpeakerRatio = otherSpeakerWords^2 / sqrt(otherSpeakerStatements)
-finalRatio = targetSpeakerRatio / otherSpeakerRatio
+otherAdjWords = otherWords * distFactor
+
+deltaAdjWords = targetAdjWords - otherAdjWords
+
+targetWordScore = Σ(deltaAdjWords) for all statements in window
 ```
 
-This squares the word counts, giving even stronger preference to long statements.
+### Distance Factor Explanation
 
-#### WEIGHTED_SQRT3
-```
-targetSpeakerRatio = targetSpeakerWords^3 / sqrt(targetSpeakerStatements)
-otherSpeakerRatio = otherSpeakerWords^3 / sqrt(otherSpeakerStatements)
-finalRatio = targetSpeakerRatio / otherSpeakerRatio
-```
+The distance factor serves two purposes:
+1. **Diminishes target speaker impact** as we move away from the baseline (dividing by distFactor)
+2. **Amplifies interruption penalty** for statements further from baseline (multiplying by distFactor)
 
-This cubes the word counts, providing the strongest preference for long statements.
+This ensures that:
+- The initial strong statement has maximum weight
+- Later target speaker additions have diminishing returns
+- Later interruptions become increasingly costly
 
-#### TRADITIONAL
-```
-finalRatio = targetSpeakerWords / (targetSpeakerWords + otherSpeakerWords)
-```
+### Mode Variations
 
-Simple ratio of target speaker words to total words (fallback mode).
+#### WORD_RACE (distFactorExponent = 1)
+- Linear distance penalty
+- Moderate sensitivity to distance
+- Example: Statement 3 has distFactor = 3
 
-## Implementation Details
+#### WORD_RACE2 (distFactorExponent = 2)
+- Quadratic distance penalty
+- Higher sensitivity to distance
+- Example: Statement 3 has distFactor = 9
 
-### 1. Speaker Classification
+#### WORD_RACE3 (distFactorExponent = 3) [DEFAULT]
+- Cubic distance penalty
+- Highest sensitivity to distance
+- Example: Statement 3 has distFactor = 27
+- Strongly favors compact statement windows near the baseline
 
-For each StatementEvent in the evaluation window:
-- Identify if the speaker is a "target speaker" based on:
-  - Speaker type (ATTORNEY, JUDGE, JUROR, etc.)
-  - Attorney role (PLAINTIFF vs DEFENDANT)
-  - Team aggregation setting (all attorneys on same side count as target)
+## Example Calculation
 
-### 2. Statistics Collection
+Consider a window with 3 statements using WORD_RACE3:
 
-The algorithm tracks:
-- Word counts for each speaker group
-- Statement counts for each speaker group
-- Individual speaker ratios
-- Overall ratio of ratios
+**Statement 1** (baseline, statementIndex = 1):
+- targetWords = 1000, otherWords = 0
+- distFactor = 1³ = 1
+- targetAdjWords = 1000/1 = 1000
+- otherAdjWords = 0*1 = 0
+- deltaAdjWords = 1000 - 0 = 1000
+- Running targetWordScore = 1000
 
-### 3. Window Extension Logic
+**Statement 2** (statementIndex = 2):
+- targetWords = 0, otherWords = 10 (court interruption)
+- distFactor = 2³ = 8
+- targetAdjWords = 0/8 = 0
+- otherAdjWords = 10*8 = 80
+- deltaAdjWords = 0 - 80 = -80
+- Running targetWordScore = 1000 - 80 = 920
 
-Starting from a candidate long statement:
-1. Calculate initial ratio using the ratio of ratios approach
-2. Attempt to extend the window by adding the next statement
-3. Recalculate the ratio with the extended window
-4. Continue extending if ratio improves or declines minimally
-5. Stop when:
-   - Ratio declines significantly (beyond threshold)
-   - Opposing attorney makes a long statement (deal-breaker)
-   - No more statements available
+**Statement 3** (statementIndex = 3):
+- targetWords = 200, otherWords = 0 (target continues)
+- distFactor = 3³ = 27
+- targetAdjWords = 200/27 = 7.4
+- otherAdjWords = 0*27 = 0
+- deltaAdjWords = 7.4 - 0 = 7.4
+- Running targetWordScore = 920 + 7.4 = 927.4
 
-### 4. Lookahead Optimization
+The final targetWordScore of 927.4 would be compared against other window configurations.
 
-When encountering short interruptions (< 50 words), the algorithm looks ahead up to 5 statements to check if there's significant same-team content coming. If found, it extends through the interruption to capture the complete statement block.
+## JSON Output Structure
 
-## Configuration
+The evaluation logs include all calculation variables:
 
-The algorithm is configured in `trialstyle.json`:
-
-```json
-{
-  "longStatements": {
-    "ratioMode": "WEIGHTED_SQRT",
-    "ratioThreshold": 0.6,
-    "minWords": 400,
-    "minWordsOpening": 400,
-    "minWordsClosing": 500,
-    "maxInterruptionRatio": 0.3,
-    "aggregateTeam": true
-  }
-}
-```
-
-### Configuration Parameters
-
-- **ratioMode**: Which calculation mode to use (WEIGHTED_SQRT recommended)
-- **ratioThreshold**: Minimum ratio to accept a window as valid
-- **minWords**: Minimum words for initial statement to be considered
-- **minWordsOpening**: Override for opening statements
-- **minWordsClosing**: Override for closing statements
-- **maxInterruptionRatio**: Maximum ratio of interruption words (deprecated)
-- **aggregateTeam**: Whether to combine all attorneys on same side
-
-## JSON Output Enhancement
-
-The evaluation logs now include detailed metrics for algorithm analysis:
-
-### Example Output Structure
 ```json
 {
   "evaluation": {
     "initialStatement": {
-      "eventId": 5672,
+      "eventId": 851,
       "speaker": "MR_DACUS",
-      "wordCount": 1362,
+      "wordCount": 3436,
       "meetsThreshold": true,
-      "text": "Thank you, Your Honor. Let me address a few things right off the bat..."
+      "statementIndex": 1,
+      "targetWords": 3436,
+      "otherWords": 0,
+      "distFactor": 1,
+      "targetAdjWords": 3436,
+      "otherAdjWords": 0,
+      "deltaAdjWords": 3436,
+      "targetWordScore": 3436
     },
     "extensions": [
       {
         "step": 1,
-        "addedEventId": 5673,
+        "addedEventId": 852,
         "addedSpeaker": "THE_COURT",
-        "addedWords": 3,
-        "ratio": 0.9978,
+        "addedWords": 23,
         "decision": "extend",
-        "totalWords": 1365,
-        "speakerWords": 1362,
-        "targetSpeakerWords": 1362,
-        "targetSpeakerStatements": 1,
-        "otherSpeakerWords": 3,
-        "otherSpeakerStatements": 1,
-        "targetSpeakerRatio": 1362,
-        "otherSpeakerRatio": 3
+        "statementIndex": 2,
+        "targetWords": 0,
+        "otherWords": 23,
+        "distFactor": 8,
+        "targetAdjWords": 0,
+        "otherAdjWords": 184,
+        "deltaAdjWords": -184,
+        "targetWordScore": 3252,
+        "totalWords": 3459,
+        "speakerWords": 3436
       }
-    ]
+    ],
+    "finalScore": 3252
   }
 }
 ```
 
 ### Key Metrics Tracked
 
-- **targetSpeakerWords**: Words by target attorneys
-- **targetSpeakerStatements**: Number of statements by target
-- **otherSpeakerWords**: Words by all other speakers
-- **otherSpeakerStatements**: Number of statements by others
-- **targetSpeakerRatio**: Calculated ratio for target speakers
-- **otherSpeakerRatio**: Calculated ratio for other speakers
-- **ratio**: Final ratio of ratios score
+For initial statement and each extension:
+- **statementIndex**: Position in evaluation sequence
+- **targetWords**: Raw words by target speakers in this statement
+- **otherWords**: Raw words by other speakers in this statement
+- **distFactor**: Distance-based adjustment factor
+- **targetAdjWords**: Distance-adjusted target words
+- **otherAdjWords**: Distance-adjusted other words
+- **deltaAdjWords**: Net word advantage for this statement
+- **targetWordScore**: Cumulative score (what we maximize)
 
-## Text Truncation
+## Configuration
 
-To improve readability of evaluation logs:
-- Initial statement text truncated to 50 words
-- Display window statements truncated to 50 words
-- Full text preserved for statements within evaluation window
+```json
+{
+  "longStatements": {
+    "ratioMode": "WORD_RACE3",
+    "minWords": 400,
+    "minWordsOpening": 400,
+    "minWordsClosing": 500,
+    "aggregateTeam": true,
+    "maxExtensionAttempts": 20
+  }
+}
+```
 
-## Benefits
+### Configuration Parameters
 
-1. **Accurate Detection**: Properly identifies long uninterrupted statements
-2. **Resistance to Interruptions**: Short court interjections don't break detection
-3. **Team Support**: Handles split statements between co-counsel
-4. **Transparent Scoring**: Detailed metrics show why windows are selected
-5. **Tunable**: Different modes (SQRT, SQRT2, SQRT3) for different sensitivities
+- **ratioMode**: Calculation mode (WORD_RACE, WORD_RACE2, WORD_RACE3)
+- **minWords**: Minimum words for baseline statement
+- **minWordsOpening**: Override for opening statements
+- **minWordsClosing**: Override for closing statements
+- **aggregateTeam**: Combine all attorneys on same side
+- **maxExtensionAttempts**: Maximum statements to evaluate beyond baseline
 
-## Migration Notes
+## Window Extension Logic
 
-### Removed Features
-- **SMART_EXTEND**: Removed as it was incorrectly implemented and WEIGHTED_SQRT provides better results
+1. **Find baseline statement**: First statement by target speakers meeting minWords threshold
+2. **Initialize score**: targetWordScore = baseline statement words
+3. **Extend forward**: For each subsequent statement:
+   - Calculate adjusted word contributions
+   - Update targetWordScore
+   - Continue if score improves or decline is minimal
+   - Stop on deal-breakers (opposing long statement) or significant score decline
+4. **Select best window**: Choose configuration with highest targetWordScore
 
-### Updated Defaults
-- Changed default ratioMode from SMART_EXTEND to WEIGHTED_SQRT
-- Updated minWords from 500 to 400 for better coverage
-- Increased maxInterruptionRatio from 0.15 to 0.3 for more flexibility
+## Advantages of WORD_RACE
 
-## Testing Results
+1. **Intuitive Model**: Easy to understand as a "race" between speakers
+2. **Distance Sensitivity**: Naturally favors compact statement blocks
+3. **Asymmetric Penalties**: Interruptions hurt more when further from baseline
+4. **Single Score**: Simple targetWordScore to maximize
+5. **Tunable Sensitivity**: Three modes for different distance penalties
 
-Testing on "01 Genband" trial shows improved detection:
-- Correctly identifies plaintiff closing split between MR_DACUS and MR_KUBEHL
-- Properly distinguishes main closing from rebuttal statements
-- Accurate ratio calculations that reflect actual speaker dominance
+## Migration from WEIGHTED_SQRT
 
-Example corrected calculation for a mixed window:
-- Plaintiff: 1000 words in 2 statements → ratio = 707.1
-- Court: 10 words in 1 statement → ratio = 10
-- Final score: 70.71 (strong plaintiff dominance)
+### Removed Calculations
+- WEIGHTED_SQRT: Complex ratio of ratios approach
+- WEIGHTED_SQRT2: Squared variant
+- WEIGHTED_SQRT3: Cubed variant
+- All "ratio of ratios" logic
+
+### Simplified Approach
+- No more separate targetSpeakerRatio and otherSpeakerRatio
+- Single targetWordScore metric
+- Clear distance-based adjustments
+- More predictable behavior
+
+## Implementation Considerations
+
+### Deal-Breakers
+The algorithm still stops immediately when encountering:
+- Long statement (≥ minWords) from opposing attorney
+- End of available statements in search window
+
+### Lookahead Optimization
+When encountering short interruptions (< 50 words):
+- Look ahead up to 5 statements
+- Check for significant same-team content
+- Extend through interruption if found
+
+### Team Aggregation
+When `aggregateTeam` is true:
+- All attorneys on same side count as target speakers
+- Enables detection of split statements between co-counsel
+
+## Testing Strategy
+
+1. **Baseline Detection**: Verify correct identification of initial statements
+2. **Extension Logic**: Test score calculations with various interruption patterns
+3. **Distance Impact**: Validate that distant statements have reduced influence
+4. **Mode Comparison**: Compare WORD_RACE vs WORD_RACE2 vs WORD_RACE3 results
+5. **Edge Cases**: Test with no interruptions, many interruptions, split statements
 
 ## Related Features
 
-- Feature-07H: Original Long Statements Accumulator V3
+- Feature-07H: Long Statements Accumulator V3 (core algorithm)
+- Feature-07J: Trial Structure Detection (uses long statements)
 - Feature-02J: Attorney metadata for role identification
 - Feature-03: Statement event parsing
 
 ## Implementation Files
 
-- `/src/phase3/LongStatementsAccumulatorV3.ts`: Core algorithm with corrected calculations
-- `/src/phase3/StandardTrialHierarchyBuilder.ts`: Integration with hierarchy builder
-- `/config/trialstyle.json`: Default configuration
-- `/output/longstatements/*/`: Evaluation logs with detailed metrics
+- `/src/phase3/LongStatementsAccumulatorV3.ts`: Core algorithm implementation
+- `/src/phase3/StandardTrialHierarchyBuilder.ts`: Integration point
+- `/config/trialstyle.json`: Configuration
+- `/output/longstatements/*/`: Evaluation logs with detailed calculations

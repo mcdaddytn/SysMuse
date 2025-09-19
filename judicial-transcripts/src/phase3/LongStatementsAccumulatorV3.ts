@@ -20,7 +20,7 @@ export interface LongStatementParamsV3 {
   searchEndEvent?: number;
   minWords: number;
   maxInterruptionRatio: number;
-  ratioMode?: 'TRADITIONAL' | 'WEIGHTED_SQRT' | 'WEIGHTED_SQRT2' | 'WEIGHTED_SQRT3' | 'TEAM_AGGREGATE';
+  ratioMode?: 'TRADITIONAL' | 'WORD_RACE' | 'WORD_RACE2' | 'WORD_RACE3' | 'TEAM_AGGREGATE';
   ratioThreshold?: number;
   aggregateTeam?: boolean;
 
@@ -76,6 +76,16 @@ interface WindowEvaluation {
       wordCount: number;
       meetsThreshold: boolean;
       text?: string;
+      // WORD_RACE specific fields
+      statementIndex?: number;
+      targetWords?: number;
+      otherWords?: number;
+      distFactor?: number;
+      targetAdjWords?: number;
+      otherAdjWords?: number;
+      deltaAdjWords?: number;
+      targetWordScore?: number;
+      // Legacy fields for backward compatibility
       targetSpeakerWords?: number;
       targetSpeakerStatements?: number;
       otherSpeakerWords?: number;
@@ -89,19 +99,30 @@ interface WindowEvaluation {
       addedEventId: number;
       addedSpeaker: string;
       addedWords: number;
-      ratio: number;
       decision: 'extend' | 'stop';
       reason?: string;
       totalWords: number;
       speakerWords: number;
+      // WORD_RACE specific fields
+      statementIndex?: number;
+      targetWords?: number;
+      otherWords?: number;
+      distFactor?: number;
+      targetAdjWords?: number;
+      otherAdjWords?: number;
+      deltaAdjWords?: number;
+      targetWordScore?: number;
+      // Legacy fields for backward compatibility
       targetSpeakerWords?: number;
       targetSpeakerStatements?: number;
       otherSpeakerWords?: number;
       otherSpeakerStatements?: number;
       targetSpeakerRatio?: number;
       otherSpeakerRatio?: number;
+      ratio?: number;
     }>;
-    finalRatio: number;
+    finalRatio?: number; // Legacy field
+    finalScore?: number; // WORD_RACE score
     selected: boolean;
     selectionReason?: string;
   };
@@ -167,7 +188,7 @@ export class LongStatementsAccumulatorV3 {
 
     // Step 3: Evaluate each candidate window
     let bestResult: StatementResultV3 | null = null;
-    let bestRatio = 0;
+    let bestScore = this.isWordRaceMode(params.ratioMode) ? -Infinity : 0;
     let bestEvaluation: WindowEvaluation | null = null;
     let bestCandidate: any = null;
 
@@ -184,15 +205,21 @@ export class LongStatementsAccumulatorV3 {
       }
 
       // Check if this is the best candidate so far
-      if (evaluation.evaluation.finalRatio > bestRatio) {
-        bestRatio = evaluation.evaluation.finalRatio;
-        bestResult = await this.createResultFromEvaluation(evaluation, candidate);
+      const currentScore = this.isWordRaceMode(params.ratioMode)
+        ? (evaluation.evaluation.finalScore || 0)
+        : (evaluation.evaluation.finalRatio || 0);
+
+      if (currentScore > bestScore) {
+        bestScore = currentScore;
+        bestResult = await this.createResultFromEvaluation(evaluation, candidate, params);
         bestEvaluation = evaluation;
         bestCandidate = candidate;
 
         // Mark as selected
         evaluation.evaluation.selected = true;
-        evaluation.evaluation.selectionReason = 'highest_ratio';
+        evaluation.evaluation.selectionReason = this.isWordRaceMode(params.ratioMode)
+          ? 'highest_score'
+          : 'highest_ratio';
       }
     }
 
@@ -324,9 +351,206 @@ export class LongStatementsAccumulatorV3 {
   }
 
   /**
+   * Check if using WORD_RACE mode
+   */
+  private isWordRaceMode(mode: string | undefined): boolean {
+    return mode === 'WORD_RACE' || mode === 'WORD_RACE2' || mode === 'WORD_RACE3';
+  }
+
+  /**
    * Evaluate a candidate window by extending it forward
    */
   private async evaluateWindow(
+    initialEvent: any,
+    params: LongStatementParamsV3
+  ): Promise<WindowEvaluation> {
+    // Use WORD_RACE evaluation if appropriate mode
+    if (this.isWordRaceMode(params.ratioMode)) {
+      return this.evaluateWindowWordRace(initialEvent, params);
+    }
+    // Otherwise use legacy evaluation
+    return this.evaluateWindowLegacy(initialEvent, params);
+  }
+
+  /**
+   * Evaluate window using WORD_RACE algorithm
+   */
+  private async evaluateWindowWordRace(
+    initialEvent: any,
+    params: LongStatementParamsV3
+  ): Promise<WindowEvaluation> {
+    const windowId = `${params.attorneyRole || 'unknown'}_${initialEvent.id}`;
+
+    const evaluation: WindowEvaluation = {
+      windowId,
+      startEventId: initialEvent.id,
+      endEventId: initialEvent.id,
+      speakerRole: params.attorneyRole || 'OTHER',
+      evaluation: {
+        initialStatement: {
+          eventId: initialEvent.id,
+          speaker: initialEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
+          wordCount: initialEvent.wordCount || 0,
+          meetsThreshold: (initialEvent.wordCount || 0) >= params.minWords,
+          text: this.truncateText(initialEvent.statement?.text || '', 50)
+        },
+        extensions: [],
+        finalScore: 0,
+        selected: false
+      }
+    };
+
+    // Only proceed if initial statement meets threshold
+    if (params.requireInitialThreshold !== false && !evaluation.evaluation.initialStatement.meetsThreshold) {
+      this.logger.info(`Initial event ${initialEvent.id} does not meet threshold (${initialEvent.wordCount} < ${params.minWords})`);
+      return evaluation;
+    }
+
+    // Get distance factor exponent based on mode
+    let distFactorExponent = 3; // Default to WORD_RACE3
+    if (params.ratioMode === 'WORD_RACE') distFactorExponent = 1;
+    else if (params.ratioMode === 'WORD_RACE2') distFactorExponent = 2;
+
+    // Initialize with baseline statement (statementIndex = 1)
+    const isTargetSpeaker = await this.isTargetSpeaker(initialEvent, params);
+    const targetWords = isTargetSpeaker ? (initialEvent.wordCount || 0) : 0;
+    const otherWords = isTargetSpeaker ? 0 : (initialEvent.wordCount || 0);
+    const distFactor = Math.pow(1, 1 / distFactorExponent); // Always 1 for baseline
+    const targetAdjWords = targetWords / distFactor;
+    const otherAdjWords = otherWords * distFactor;
+    const deltaAdjWords = targetAdjWords - otherAdjWords;
+    let targetWordScore = deltaAdjWords;
+
+    // Store initial calculations
+    evaluation.evaluation.initialStatement.statementIndex = 1;
+    evaluation.evaluation.initialStatement.targetWords = targetWords;
+    evaluation.evaluation.initialStatement.otherWords = otherWords;
+    evaluation.evaluation.initialStatement.distFactor = distFactor;
+    evaluation.evaluation.initialStatement.targetAdjWords = targetAdjWords;
+    evaluation.evaluation.initialStatement.otherAdjWords = otherAdjWords;
+    evaluation.evaluation.initialStatement.deltaAdjWords = deltaAdjWords;
+    evaluation.evaluation.initialStatement.targetWordScore = targetWordScore;
+
+    // Track best score
+    let bestScore = targetWordScore;
+    evaluation.evaluation.finalScore = bestScore;
+
+    // Build window by extending forward
+    let currentWindow = [initialEvent];
+    let statementIndex = 1;
+    const maxExtensions = params.maxExtensionAttempts || 20;
+    const declineThreshold = 50; // Allow score to decline by up to 50 points
+    let lastEvaluatedId = initialEvent.id;
+
+    for (let step = 1; step <= maxExtensions; step++) {
+      const nextEvent = await this.getNextStatementEvent(
+        lastEvaluatedId,
+        params.searchEndEvent
+      );
+
+      if (!nextEvent) {
+        this.logger.info(`No more events after ${lastEvaluatedId}`);
+        break;
+      }
+
+      lastEvaluatedId = nextEvent.id;
+      statementIndex++;
+
+      // Calculate WORD_RACE metrics for this statement
+      const isNextTarget = await this.isTargetSpeaker(nextEvent, params);
+      const nextTargetWords = isNextTarget ? (nextEvent.wordCount || 0) : 0;
+      const nextOtherWords = isNextTarget ? 0 : (nextEvent.wordCount || 0);
+      const nextDistFactor = Math.pow(statementIndex, 1 / distFactorExponent);
+      const nextTargetAdjWords = nextTargetWords / nextDistFactor;
+      const nextOtherAdjWords = nextOtherWords * nextDistFactor;
+      const nextDeltaAdjWords = nextTargetAdjWords - nextOtherAdjWords;
+      const newScore = targetWordScore + nextDeltaAdjWords;
+
+      // Check for deal-breakers (long statement from opposing attorney)
+      if (params.breakOnOpposingLongStatement !== false) {
+        const isOpposing = await this.isOpposingLongStatement(nextEvent, params);
+        if (isOpposing) {
+          evaluation.evaluation.extensions.push({
+            step,
+            addedEventId: nextEvent.id,
+            addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
+            addedWords: nextEvent.wordCount || 0,
+            decision: 'stop',
+            reason: 'opposing_long_statement',
+            totalWords: this.countTotalWords([...currentWindow, nextEvent]),
+            speakerWords: await this.countSpeakerWords([...currentWindow, nextEvent], params),
+            statementIndex,
+            targetWords: nextTargetWords,
+            otherWords: nextOtherWords,
+            distFactor: nextDistFactor,
+            targetAdjWords: nextTargetAdjWords,
+            otherAdjWords: nextOtherAdjWords,
+            deltaAdjWords: nextDeltaAdjWords,
+            targetWordScore: newScore
+          });
+          break;
+        }
+      }
+
+      // Decide whether to extend
+      if (newScore >= bestScore - declineThreshold) {
+        // Accept extension
+        currentWindow.push(nextEvent);
+        targetWordScore = newScore;
+        if (newScore > bestScore) {
+          bestScore = newScore;
+        }
+        evaluation.endEventId = nextEvent.id;
+        evaluation.evaluation.finalScore = Math.max(evaluation.evaluation.finalScore || 0, newScore);
+
+        evaluation.evaluation.extensions.push({
+          step,
+          addedEventId: nextEvent.id,
+          addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
+          addedWords: nextEvent.wordCount || 0,
+          decision: 'extend',
+          totalWords: this.countTotalWords(currentWindow),
+          speakerWords: await this.countSpeakerWords(currentWindow, params),
+          statementIndex,
+          targetWords: nextTargetWords,
+          otherWords: nextOtherWords,
+          distFactor: nextDistFactor,
+          targetAdjWords: nextTargetAdjWords,
+          otherAdjWords: nextOtherAdjWords,
+          deltaAdjWords: nextDeltaAdjWords,
+          targetWordScore: newScore
+        });
+      } else {
+        // Score declined too much - record but continue evaluation
+        evaluation.evaluation.extensions.push({
+          step,
+          addedEventId: nextEvent.id,
+          addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
+          addedWords: nextEvent.wordCount || 0,
+          decision: 'stop',
+          reason: 'score_decline',
+          totalWords: this.countTotalWords([...currentWindow, nextEvent]),
+          speakerWords: await this.countSpeakerWords([...currentWindow, nextEvent], params),
+          statementIndex,
+          targetWords: nextTargetWords,
+          otherWords: nextOtherWords,
+          distFactor: nextDistFactor,
+          targetAdjWords: nextTargetAdjWords,
+          otherAdjWords: nextOtherAdjWords,
+          deltaAdjWords: nextDeltaAdjWords,
+          targetWordScore: newScore
+        });
+        // Don't break - continue to evaluate more extensions
+      }
+    }
+
+    return evaluation;
+  }
+
+  /**
+   * Legacy evaluate window (for WEIGHTED_SQRT modes)
+   */
+  private async evaluateWindowLegacy(
     initialEvent: any,
     params: LongStatementParamsV3
   ): Promise<WindowEvaluation> {
@@ -530,60 +754,21 @@ export class LongStatementsAccumulatorV3 {
   }
 
   /**
-   * Calculate ratio from pre-computed statistics
+   * Calculate ratio from pre-computed statistics (legacy method for TRADITIONAL/TEAM_AGGREGATE)
    */
   private calculateRatioWithStats(stats: any, params: LongStatementParamsV3): number {
 
-    // Use WEIGHTED_SQRT by default as specified in the algorithm
-    const ratioMode = params.ratioMode || 'WEIGHTED_SQRT';
+    const ratioMode = params.ratioMode || 'WORD_RACE3';
 
-    // Calculate target speaker ratio based on mode
-    let targetSpeakerRatio = 0;
-    if (stats.targetSpeakerStatements > 0) {
-      switch (ratioMode) {
-        case 'WEIGHTED_SQRT':
-          targetSpeakerRatio = stats.targetSpeakerWords / Math.sqrt(stats.targetSpeakerStatements);
-          break;
-        case 'WEIGHTED_SQRT2':
-          targetSpeakerRatio = Math.pow(stats.targetSpeakerWords, 2) / Math.sqrt(stats.targetSpeakerStatements);
-          break;
-        case 'WEIGHTED_SQRT3':
-          targetSpeakerRatio = Math.pow(stats.targetSpeakerWords, 3) / Math.sqrt(stats.targetSpeakerStatements);
-          break;
-        case 'TRADITIONAL':
-          targetSpeakerRatio = stats.targetSpeakerWords;
-          break;
-        case 'TEAM_AGGREGATE':
-          targetSpeakerRatio = stats.targetSpeakerWords;
-          break;
-        default:
-          targetSpeakerRatio = stats.targetSpeakerWords;
-      }
+    // For WORD_RACE modes, this shouldn't be called
+    if (this.isWordRaceMode(ratioMode)) {
+      console.warn('calculateRatioWithStats called for WORD_RACE mode');
+      return 0;
     }
 
-    // Calculate other speaker ratio based on mode
-    let otherSpeakerRatio = 0;
-    if (stats.otherSpeakerStatements > 0) {
-      switch (ratioMode) {
-        case 'WEIGHTED_SQRT':
-          otherSpeakerRatio = stats.otherSpeakerWords / Math.sqrt(stats.otherSpeakerStatements);
-          break;
-        case 'WEIGHTED_SQRT2':
-          otherSpeakerRatio = Math.pow(stats.otherSpeakerWords, 2) / Math.sqrt(stats.otherSpeakerStatements);
-          break;
-        case 'WEIGHTED_SQRT3':
-          otherSpeakerRatio = Math.pow(stats.otherSpeakerWords, 3) / Math.sqrt(stats.otherSpeakerStatements);
-          break;
-        case 'TRADITIONAL':
-          otherSpeakerRatio = stats.otherSpeakerWords;
-          break;
-        case 'TEAM_AGGREGATE':
-          otherSpeakerRatio = stats.otherSpeakerWords;
-          break;
-        default:
-          otherSpeakerRatio = stats.otherSpeakerWords;
-      }
-    }
+    // Simple calculation for TRADITIONAL and TEAM_AGGREGATE modes
+    let targetSpeakerRatio = stats.targetSpeakerWords;
+    let otherSpeakerRatio = stats.otherSpeakerWords;
 
     // Store ratios in stats for logging
     stats.targetSpeakerRatio = targetSpeakerRatio;
@@ -1050,7 +1235,8 @@ export class LongStatementsAccumulatorV3 {
    */
   private async createResultFromEvaluation(
     evaluation: WindowEvaluation,
-    startEvent: any
+    startEvent: any,
+    params?: LongStatementParamsV3
   ): Promise<StatementResultV3> {
     const lastExtension = evaluation.evaluation.extensions[evaluation.evaluation.extensions.length - 1];
 
@@ -1067,14 +1253,24 @@ export class LongStatementsAccumulatorV3 {
       });
     }
 
+    // Use appropriate scoring for confidence
+    const scoreValue = params && this.isWordRaceMode(params.ratioMode)
+      ? (evaluation.evaluation.finalScore || 0)
+      : (evaluation.evaluation.finalRatio || 0);
+
+    // For WORD_RACE, normalize confidence (0-1 range)
+    const confidence = params && this.isWordRaceMode(params.ratioMode)
+      ? Math.min(1, scoreValue / 1000) // Normalize WORD_RACE score
+      : (scoreValue > 0.7 ? 1 : scoreValue);
+
     return {
       startEvent,
       endEvent: endEvent || startEvent,
       totalWords: lastExtension?.totalWords || (startEvent.wordCount || 0),
       speakerWords: lastExtension?.speakerWords || (startEvent.wordCount || 0),
       interruptionWords: (lastExtension?.totalWords || 0) - (lastExtension?.speakerWords || 0),
-      speakerRatio: evaluation.evaluation.finalRatio,
-      confidence: evaluation.evaluation.finalRatio > 0.7 ? 1 : evaluation.evaluation.finalRatio,
+      speakerRatio: params && this.isWordRaceMode(params.ratioMode) ? scoreValue : (evaluation.evaluation.finalRatio || 0),
+      confidence,
       metadata: {
         windowId: evaluation.windowId
       }
@@ -1151,8 +1347,8 @@ export class LongStatementsAccumulatorV3 {
       selectedWindow: evaluation.finalSelection,
       evaluationStats: {
         averageExtensions: evaluation.evaluations.reduce((sum, e) => sum + e.evaluation.extensions.length, 0) / evaluation.evaluations.length,
-        averageFinalRatio: evaluation.evaluations.reduce((sum, e) => sum + e.evaluation.finalRatio, 0) / evaluation.evaluations.length,
-        candidatesAboveThreshold: evaluation.evaluations.filter(e => e.evaluation.finalRatio > 0.6).length
+        averageFinalRatio: evaluation.evaluations.reduce((sum, e) => sum + (e.evaluation.finalRatio || e.evaluation.finalScore || 0), 0) / evaluation.evaluations.length,
+        candidatesAboveThreshold: evaluation.evaluations.filter(e => (e.evaluation.finalRatio || e.evaluation.finalScore || 0) > 0.6).length
       }
     };
 

@@ -6,7 +6,7 @@ import {
   MarkerSource
 } from '@prisma/client';
 import { Logger } from '../utils/logger';
-import { LongStatementsAccumulatorV2 } from './LongStatementsAccumulatorV2';
+import { LongStatementsAccumulatorV3 } from './LongStatementsAccumulatorV3';
 import { BoundaryOptimizer } from './BoundaryOptimizer';
 
 interface ArgumentCandidate {
@@ -30,11 +30,11 @@ interface SearchStrategy {
 
 export class ArgumentFinder {
   private logger = new Logger('ArgumentFinder');
-  private accumulator: LongStatementsAccumulatorV2;
+  private accumulator: LongStatementsAccumulatorV3;
   private boundaryOptimizer: BoundaryOptimizer;
 
   constructor(private prisma: PrismaClient) {
-    this.accumulator = new LongStatementsAccumulatorV2(prisma);
+    this.accumulator = new LongStatementsAccumulatorV3(prisma);
     this.boundaryOptimizer = new BoundaryOptimizer(prisma);
   }
 

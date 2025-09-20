@@ -2052,7 +2052,7 @@ export class Phase2Processor {
     if (this.speakerRegistry && this.examinationContext) {
       // Update examination context with the line
       await this.examinationContext.updateFromLine({ text: lineText, speakerPrefix });
-      
+
       // Try contextual resolution first (Q, A, etc.)
       const resolved = await this.examinationContext.resolveSpeaker({ text: lineText, speakerPrefix });
       if (resolved) {
@@ -2069,22 +2069,30 @@ export class Phase2Processor {
           name: resolved.trialAttorneys?.[0]?.attorney?.name || resolved.witness?.displayName || resolved.judge?.name
         };
       }
-      
-      // Try direct lookup in registry
-      const speaker = await this.speakerRegistry.findOrCreateSpeaker(speakerPrefix, this.inferSpeakerType(speakerPrefix));
-      if (speaker) {
-        logger.debug(`[SPEAKER_DIAGNOSTIC] Speaker resolved through Registry direct lookup:`);
-        logger.debug(`[SPEAKER_DIAGNOSTIC]   Resolved to: ${speaker.speakerHandle} (ID: ${speaker.id}, Type: ${speaker.speakerType})`);
-        return {
-          id: speaker.id,
-          speakerPrefix: speaker.speakerPrefix,
-          speakerHandle: speaker.speakerHandle,
-          speakerType: speaker.speakerType as SpeakerType,
-          attorneyId: speaker.trialAttorneys?.[0]?.attorney?.id,
-          witnessId: speaker.witness?.id,
-          jurorId: speaker.juror?.id,
-          name: speaker.trialAttorneys?.[0]?.attorney?.name || speaker.witness?.displayName || speaker.judge?.name
-        };
+
+      // IMPORTANT: Don't use registry for attorney prefixes yet - let attorney matching logic run first
+      // Check if this looks like an attorney prefix (MR./MS./MRS./DR. LASTNAME)
+      const attorneyPrefixPattern = /^(MR\.|MS\.|MRS\.|DR\.)\s+[A-Z]+/;
+      if (attorneyPrefixPattern.test(speakerPrefix)) {
+        logger.debug(`[SPEAKER_DIAGNOSTIC] Prefix "${speakerPrefix}" looks like attorney - skipping registry to allow attorney matching`);
+        // Fall through to attorney matching logic below
+      } else {
+        // Try direct lookup in registry for non-attorney speakers
+        const speaker = await this.speakerRegistry.findOrCreateSpeaker(speakerPrefix, this.inferSpeakerType(speakerPrefix));
+        if (speaker) {
+          logger.debug(`[SPEAKER_DIAGNOSTIC] Speaker resolved through Registry direct lookup:`);
+          logger.debug(`[SPEAKER_DIAGNOSTIC]   Resolved to: ${speaker.speakerHandle} (ID: ${speaker.id}, Type: ${speaker.speakerType})`);
+          return {
+            id: speaker.id,
+            speakerPrefix: speaker.speakerPrefix,
+            speakerHandle: speaker.speakerHandle,
+            speakerType: speaker.speakerType as SpeakerType,
+            attorneyId: speaker.trialAttorneys?.[0]?.attorney?.id,
+            witnessId: speaker.witness?.id,
+            jurorId: speaker.juror?.id,
+            name: speaker.trialAttorneys?.[0]?.attorney?.name || speaker.witness?.displayName || speaker.judge?.name
+          };
+        }
       }
     }
     
@@ -2220,6 +2228,9 @@ export class Phase2Processor {
           }
 
           attorney.speaker = newSpeaker;
+          logger.debug(`[ATTORNEY MATCH - DIRECT] Attorney speaker now set to: ${attorney.speaker.id} (${attorney.speaker.speakerPrefix})`);
+        } else {
+          logger.debug(`[ATTORNEY MATCH - DIRECT] Attorney ${attorney.name} already has speaker ${attorney.speaker.id}`);
         }
 
         const speaker: SpeakerInfo = {
@@ -2257,13 +2268,16 @@ export class Phase2Processor {
       
       logger.info(`[ATTORNEY MATCH - DIRECT] Found ${trialAttorneyCount} TrialAttorney associations for prefix ${upperPrefix}`);
       
+      logger.debug(`[ATTORNEY MATCH - DIRECT] Searching for attorney with prefix: "${upperPrefix}" in trial ${this.context.trialId}`);
+
       const attorney = await this.attorneyService.findAttorneyBySpeakerPrefix(
         this.context.trialId,
         upperPrefix
       );
-      
+
       if (attorney) {
         logger.info(`[ATTORNEY MATCH - DIRECT] Successfully matched: ${attorney.name} (id=${attorney.id}, speakerPrefix=${attorney.speakerPrefix})`);
+        logger.debug(`[ATTORNEY MATCH - DIRECT] Attorney speaker status: ${attorney.speaker ? `exists (id=${attorney.speaker.id})` : 'NULL - will need to create/link'}`);
 
         // Check if attorney has a speaker (may not if imported from metadata)
         if (!attorney.speaker) {
@@ -2329,6 +2343,9 @@ export class Phase2Processor {
           }
 
           attorney.speaker = newSpeaker;
+          logger.debug(`[ATTORNEY MATCH - DIRECT] Attorney speaker now set to: ${attorney.speaker.id} (${attorney.speaker.speakerPrefix})`);
+        } else {
+          logger.debug(`[ATTORNEY MATCH - DIRECT] Attorney ${attorney.name} already has speaker ${attorney.speaker.id}`);
         }
 
         const speaker: SpeakerInfo = {

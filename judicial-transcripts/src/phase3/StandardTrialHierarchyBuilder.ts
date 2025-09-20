@@ -773,9 +773,9 @@ export class StandardTrialHierarchyBuilder {
     const ratioMode = longStatementConfig.ratioMode || 'WORD_RACE3';  // Use WORD_RACE3 as default
     const ratioThreshold = 0.4; // Lower threshold for opening statements
 
-    this.logger.warn(`[HIERARCHY CONFIG - OPENING] Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}`);
-    this.logger.warn(`[HIERARCHY CONFIG - OPENING] longStatementConfig: ${JSON.stringify(longStatementConfig)}`);
-    this.logger.warn(`[HIERARCHY CONFIG - OPENING] useV3Accumulator: ${this.useV3Accumulator}, useArgumentFinder: ${this.useArgumentFinder}`);
+    this.logger.info(`[HIERARCHY CONFIG - OPENING] Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}`);
+    this.logger.info(`[HIERARCHY CONFIG - OPENING] longStatementConfig: ${JSON.stringify(longStatementConfig)}`);
+    this.logger.info(`[HIERARCHY CONFIG - OPENING] useV3Accumulator: ${this.useV3Accumulator}, useArgumentFinder: ${this.useArgumentFinder}`);
 
     // Get trial info for V3
     const trial = await this.prisma.trial.findUnique({
@@ -1251,8 +1251,8 @@ export class StandardTrialHierarchyBuilder {
     const minWords = longStatementConfig.minWords || 400;
     const maxInterruptionRatio = longStatementConfig.maxInterruptionRatio || 0.25;
 
-    this.logger.warn(`[HIERARCHY CONFIG] Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}, minWords: ${minWords}`);
-    this.logger.warn(`[HIERARCHY CONFIG] longStatementConfig: ${JSON.stringify(longStatementConfig)}`);
+    this.logger.info(`[HIERARCHY CONFIG] Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}, minWords: ${minWords}`);
+    this.logger.info(`[HIERARCHY CONFIG] longStatementConfig: ${JSON.stringify(longStatementConfig)}`);
 
     // Initial search period: from end of testimony to end of trial
     const searchStartEvent = testimonyPeriod?.endEventId ? testimonyPeriod.endEventId + 1 : undefined;

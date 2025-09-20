@@ -166,9 +166,9 @@ export class LongStatementsAccumulatorV3 {
 
     // Log critical parameters at WARN level for visibility
     const ratioMode = params.ratioMode || 'WORD_RACE3';
-    this.logger.warn(`[CALCULATION MODE] Using ratioMode: ${ratioMode}`);
-    this.logger.warn(`[CALCULATION PARAMS] minWords: ${params.minWords}, ratioThreshold: ${params.ratioThreshold}, searchType: ${params.searchType || params.statementType || 'unknown'}`);
-    this.logger.warn(`[CALCULATION PARAMS] breakOnOpposingLongStatement: ${params.breakOnOpposingLongStatement !== false}, maxExtensionAttempts: ${params.maxExtensionAttempts || 20}`);
+    this.logger.info(`[CALCULATION MODE] Using ratioMode: ${ratioMode}`);
+    this.logger.info(`[CALCULATION PARAMS] minWords: ${params.minWords}, ratioThreshold: ${params.ratioThreshold}, searchType: ${params.searchType || params.statementType || 'unknown'}`);
+    this.logger.info(`[CALCULATION PARAMS] breakOnOpposingLongStatement: ${params.breakOnOpposingLongStatement !== false}, maxExtensionAttempts: ${params.maxExtensionAttempts || 20}`);
 
     // Initialize search evaluation tracking
     if (params.trackEvaluations) {
@@ -1105,35 +1105,7 @@ export class LongStatementsAccumulatorV3 {
     const filename = `${params.statementType || 'unknown'}-evaluation.json`;
     const filepath = path.join(trialDir, filename);
 
-    // Load existing data if file exists
-    let existingData: any = null;
-    if (fs.existsSync(filepath)) {
-      try {
-        existingData = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
-      } catch (e) {
-        // File exists but isn't valid JSON, will be overwritten
-      }
-    }
-
-    // If we have existing data, merge evaluations
-    if (existingData && existingData.evaluations) {
-      // Append new evaluations to existing ones
-      evaluation.evaluations = [...existingData.evaluations, ...evaluation.evaluations];
-
-      // Update final selection if the new one is better
-      if (evaluation.finalSelection && existingData.finalSelection) {
-        if ((evaluation.finalSelection.ratio || 0) > (existingData.finalSelection.ratio || 0)) {
-          // Keep new final selection
-        } else {
-          // Keep existing final selection
-          evaluation.finalSelection = existingData.finalSelection;
-        }
-      } else if (existingData.finalSelection) {
-        evaluation.finalSelection = existingData.finalSelection;
-      }
-    }
-
-    // Write evaluation log
+    // Write evaluation log (always replace existing file with fresh data)
     fs.writeFileSync(filepath, JSON.stringify(evaluation, null, 2));
     this.logger.info(`Saved evaluation log to ${filepath}`);
 
@@ -1151,10 +1123,14 @@ export class LongStatementsAccumulatorV3 {
       }
     };
 
-    // Append or update summary
+    // Read existing summary to preserve other phases
     let existingSummary: any = {};
     if (fs.existsSync(summaryFile)) {
-      existingSummary = JSON.parse(fs.readFileSync(summaryFile, 'utf-8'));
+      try {
+        existingSummary = JSON.parse(fs.readFileSync(summaryFile, 'utf-8'));
+      } catch (e) {
+        // Invalid JSON, will be overwritten
+      }
     }
     existingSummary[evaluation.phase] = summary;
     fs.writeFileSync(summaryFile, JSON.stringify(existingSummary, null, 2));

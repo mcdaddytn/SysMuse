@@ -134,7 +134,7 @@ interface WindowEvaluation {
 
 interface SearchEvaluation {
   trial: string;
-  phase: 'opening' | 'closing';
+  phase: string;  // Allow any phase name for more detailed tracking
   searchStrategy: string;
   enclosingWindow: {
     start: number;
@@ -155,8 +155,99 @@ export class LongStatementsAccumulatorV3 {
   private teamAttorneyCache: Map<string, Set<string>> = new Map();
   private currentEvaluations: WindowEvaluation[] = [];
   private searchEvaluation: SearchEvaluation | null = null;
+  private allSearchEvaluations: SearchEvaluation[] = [];  // Accumulate all searches
+  private currentSearchPhase: string = '';  // Track which phase we're in
 
   constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Clear accumulated evaluations (call before starting a new opening/closing search)
+   */
+  public clearAccumulatedEvaluations(): void {
+    this.allSearchEvaluations = [];
+    this.currentSearchPhase = '';
+  }
+
+  /**
+   * Save all accumulated evaluations to a single file
+   */
+  public async saveAllAccumulatedEvaluations(
+    trialId: number,
+    trialName: string,
+    statementType: string
+  ): Promise<void> {
+    if (this.allSearchEvaluations.length === 0) {
+      return;
+    }
+
+    const outputDir = './output/longstatements';
+    const trialDir = path.join(outputDir, trialName || `trial_${trialId}`);
+
+    // Create directories if needed
+    if (!fs.existsSync(trialDir)) {
+      fs.mkdirSync(trialDir, { recursive: true });
+    }
+
+    // Create combined evaluation with all searches
+    const combinedEvaluation = {
+      trial: trialName || `trial_${trialId}`,
+      statementType: statementType,
+      searchStrategy: 'defense-first-enhanced',
+      searches: this.allSearchEvaluations,
+      searchSequence: this.allSearchEvaluations.map(s => s.phase),
+      timestamp: new Date().toISOString()
+    };
+
+    const filename = `${statementType}-evaluation.json`;
+    const filepath = path.join(trialDir, filename);
+
+    // Write combined evaluation log
+    fs.writeFileSync(filepath, JSON.stringify(combinedEvaluation, null, 2));
+    this.logger.info(`Saved combined evaluation log to ${filepath}`);
+
+    // Also save algorithm summary
+    const summaryFile = path.join(trialDir, 'algorithm-summary.json');
+
+    // Calculate statistics across all searches
+    const allEvaluations = this.allSearchEvaluations.flatMap(s => s.evaluations || []);
+    const finalSelections = this.allSearchEvaluations
+      .filter(s => s.finalSelection)
+      .map(s => s.finalSelection);
+
+    const summary = {
+      trial: trialName || `trial_${trialId}`,
+      statementType: statementType,
+      searchStrategy: 'defense-first-enhanced',
+      totalSearches: this.allSearchEvaluations.length,
+      searchesWithResults: this.allSearchEvaluations.filter(s => s.evaluations && s.evaluations.length > 0).length,
+      searchSequence: this.allSearchEvaluations.map(s => s.phase),
+      evaluationStats: {
+        totalCandidatesEvaluated: allEvaluations.length,
+        averageExtensions: allEvaluations.length > 0
+          ? allEvaluations.reduce((sum, e) => sum + (e.evaluation?.extensions?.length || 0), 0) / allEvaluations.length
+          : 0,
+        averageFinalScore: allEvaluations.length > 0
+          ? allEvaluations.reduce((sum, e) => sum + (e.evaluation?.finalScore || 0), 0) / allEvaluations.length
+          : 0,
+        candidatesAboveThreshold: allEvaluations.filter(e => (e.evaluation?.finalScore || 0) > 500).length
+      },
+      finalSelections: finalSelections,
+      timestamp: new Date().toISOString()
+    };
+
+    // Read existing summary to preserve other statement types
+    let existingSummary: any = {};
+    if (fs.existsSync(summaryFile)) {
+      try {
+        existingSummary = JSON.parse(fs.readFileSync(summaryFile, 'utf-8'));
+      } catch (e) {
+        // Invalid JSON, will be overwritten
+      }
+    }
+    existingSummary[statementType] = summary;
+    fs.writeFileSync(summaryFile, JSON.stringify(existingSummary, null, 2));
+    this.logger.info(`Saved algorithm summary to ${summaryFile}`);
+  }
 
   /**
    * Enhanced findLongestStatement with state tracking
@@ -172,9 +263,25 @@ export class LongStatementsAccumulatorV3 {
 
     // Initialize search evaluation tracking
     if (params.trackEvaluations) {
+      // Determine search phase based on attorney role
+      let searchPhase = '';
+      if (params.attorneyRole === 'DEFENDANT') {
+        searchPhase = 'defense-opening';
+      } else if (params.attorneyRole === 'PLAINTIFF') {
+        // Check if this is before or after defense (based on search window)
+        if (params.searchEndEvent && params.searchEndEvent < 999999) {
+          searchPhase = 'plaintiff-opening-before-defense';
+        } else {
+          searchPhase = 'plaintiff-opening-or-rebuttal';
+        }
+      } else {
+        searchPhase = `${params.attorneyRole || 'unknown'}-${params.statementType || 'statement'}`;
+      }
+
+      this.currentSearchPhase = searchPhase;
       this.searchEvaluation = {
         trial: params.trialName || `trial_${params.trialId}`,
-        phase: params.statementType || 'opening',
+        phase: searchPhase,
         searchStrategy: 'defense-first-enhanced',
         enclosingWindow: {
           start: params.searchStartEvent || 0,
@@ -194,6 +301,22 @@ export class LongStatementsAccumulatorV3 {
     // Step 2: Find candidate starting statements
     const candidates = await this.findCandidateStartingStatements(params);
     this.logger.info(`Found ${candidates.length} candidate starting statements`);
+
+    // Log details about why no candidates were found
+    if (candidates.length === 0) {
+      this.logger.warn(`No candidates found for ${params.statementType} statement`);
+      this.logger.warn(`Search window: ${params.searchStartEvent || 0} to ${params.searchEndEvent || 999999}`);
+      this.logger.warn(`Attorney role: ${params.attorneyRole || 'any'}`);
+
+      // Also log this to the evaluation
+      if (this.searchEvaluation) {
+        (this.searchEvaluation as any).noCandidatesReason = {
+          message: 'No candidate starting statements found',
+          searchWindow: `${params.searchStartEvent || 0} to ${params.searchEndEvent || 999999}`,
+          attorneyRole: params.attorneyRole || 'unknown'
+        };
+      }
+    }
 
     // Step 3: Evaluate each candidate window
     let bestResult: StatementResultV3 | null = null;
@@ -244,7 +367,12 @@ export class LongStatementsAccumulatorV3 {
           displayWindow: bestEvaluation.displayWindow
         };
       }
-      await this.saveEvaluationLog(params, this.searchEvaluation);
+
+      // Add this search to the accumulated evaluations
+      this.allSearchEvaluations.push({ ...this.searchEvaluation });
+
+      // Don't save individual searches - we'll save all at once at the end
+      // await this.saveEvaluationLog(params, this.searchEvaluation);
     }
 
     return bestResult;

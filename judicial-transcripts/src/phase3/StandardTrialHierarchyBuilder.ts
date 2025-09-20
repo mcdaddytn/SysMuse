@@ -8,8 +8,6 @@ import {
   Prisma
 } from '@prisma/client';
 import { Logger } from '../utils/logger';
-import { LongStatementsAccumulator } from './LongStatementsAccumulator';
-import { LongStatementsAccumulatorV2 } from './LongStatementsAccumulatorV2';
 import { LongStatementsAccumulatorV3, LongStatementParamsV3 } from './LongStatementsAccumulatorV3';
 import { ArgumentFinder } from './ArgumentFinder';
 import { TranscriptRenderer } from '../services/TranscriptRenderer';
@@ -28,20 +26,15 @@ interface HierarchyStatistics {
 
 export class StandardTrialHierarchyBuilder {
   private logger = new Logger('StandardTrialHierarchyBuilder');
-  private longStatementsAccumulator: LongStatementsAccumulator;
-  private longStatementsAccumulatorV2: LongStatementsAccumulatorV2;
   private longStatementsAccumulatorV3: LongStatementsAccumulatorV3;
   private argumentFinder: ArgumentFinder;
   private trialStyleConfig: any = null;
-  private useV3Accumulator: boolean = true; // Use V3 with state tracking
-  private useV2Accumulator: boolean = false; // Flag to control which accumulator to use
+  private useV3Accumulator: boolean = true; // Always use V3 with state tracking
   private useArgumentFinder: boolean = false; // Use V3 directly instead of ArgumentFinder
 
   constructor(
     private prisma: PrismaClient
   ) {
-    this.longStatementsAccumulator = new LongStatementsAccumulator(prisma);
-    this.longStatementsAccumulatorV2 = new LongStatementsAccumulatorV2(prisma);
     this.longStatementsAccumulatorV3 = new LongStatementsAccumulatorV3(prisma);
     this.argumentFinder = new ArgumentFinder(prisma);
   }
@@ -1044,12 +1037,10 @@ export class StandardTrialHierarchyBuilder {
       this.logger.info('ArgumentFinder found no opening statements, falling back to legacy logic');
     }
 
-    // Choose which accumulator to use
-    const accumulator = this.useV2Accumulator ? this.longStatementsAccumulatorV2 : this.longStatementsAccumulator;
 
     // STEP 1: Find defense opening statement FIRST
     // (Usually comes second chronologically, but may be easier to detect)
-    const defenseOpening = await accumulator.findLongestStatement({
+    const defenseOpening = await this.longStatementsAccumulatorV3.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'DEFENDANT',
@@ -1070,7 +1061,7 @@ export class StandardTrialHierarchyBuilder {
       plaintiffSearchEnd = defenseOpening.startEvent.id - 1;
     }
 
-    const plaintiffOpening = await accumulator.findLongestStatement({
+    const plaintiffOpening = await this.longStatementsAccumulatorV3.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'PLAINTIFF',
@@ -1600,8 +1591,6 @@ export class StandardTrialHierarchyBuilder {
       this.logger.info('ArgumentFinder found no closing statements, falling back to legacy logic');
     }
 
-    // Choose which accumulator to use
-    const accumulator = this.useV2Accumulator ? this.longStatementsAccumulatorV2 : this.longStatementsAccumulator;
 
     // Search for all closing statements in the correct chronological order:
     // 1. Plaintiff closing (first)
@@ -1612,7 +1601,7 @@ export class StandardTrialHierarchyBuilder {
     const allClosingCandidates = [];
 
     // Find plaintiff statements
-    const plaintiffStatements = await accumulator.findLongestStatement({
+    const plaintiffStatements = await this.longStatementsAccumulatorV3.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'PLAINTIFF',
@@ -1630,7 +1619,7 @@ export class StandardTrialHierarchyBuilder {
     }
 
     // Find defense statements
-    const defenseStatements = await accumulator.findLongestStatement({
+    const defenseStatements = await this.longStatementsAccumulatorV3.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
       attorneyRole: 'DEFENDANT',

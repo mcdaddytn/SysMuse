@@ -52,6 +52,9 @@ export class ArgumentFinder {
   }> {
     this.logger.info(`Finding opening statements for trial ${trialId}`);
 
+    // Clear any accumulated evaluations from previous searches
+    this.accumulator.clearAccumulatedEvaluations();
+
     const strategies: SearchStrategy[] = [
       {
         name: 'defense-first',
@@ -73,6 +76,15 @@ export class ArgumentFinder {
       this.logger.info(`Executing strategy: ${strategy.name}`);
       const candidates = await strategy.execute();
       allCandidates.push(...candidates);
+    }
+
+    // Save all accumulated evaluations if tracking is enabled
+    if (config?.trackEvaluations) {
+      await this.accumulator.saveAllAccumulatedEvaluations(
+        trialId,
+        config.trialName || `trial_${trialId}`,
+        'opening'
+      );
     }
 
     // Optimize boundaries first
@@ -135,6 +147,7 @@ export class ArgumentFinder {
 
   /**
    * Strategy: Search for defense opening first, then plaintiff in narrowed window
+   * Enhanced version also searches for plaintiff rebuttal after defense
    */
   private async searchOpeningDefenseFirst(
     trialId: number,
@@ -144,7 +157,7 @@ export class ArgumentFinder {
   ): Promise<ArgumentCandidate[]> {
     const candidates: ArgumentCandidate[] = [];
 
-    // Search for defense opening
+    // Search for defense opening first
     const defenseOpening = await this.accumulator.findLongestStatement({
       trialId,
       speakerType: 'ATTORNEY',
@@ -155,7 +168,11 @@ export class ArgumentFinder {
       maxInterruptionRatio: config?.maxInterruptionRatio || 0.4,
       ratioMode: config?.ratioMode || 'SMART_EXTEND',
       ratioThreshold: config?.ratioThreshold || 0.4,
-      aggregateTeam: true
+      aggregateTeam: true,
+      trackEvaluations: config?.trackEvaluations || false,
+      trialName: config?.trialName,
+      statementType: 'opening',
+      outputDir: config?.outputDir
     });
 
     if (defenseOpening && defenseOpening.confidence > 0.4) {
@@ -177,7 +194,11 @@ export class ArgumentFinder {
         maxInterruptionRatio: config?.maxInterruptionRatio || 0.4,
         ratioMode: config?.ratioMode || 'SMART_EXTEND',
         ratioThreshold: config?.ratioThreshold || 0.4,
-        aggregateTeam: true
+        aggregateTeam: true,
+        trackEvaluations: config?.trackEvaluations || false,
+        trialName: config?.trialName,
+        statementType: 'opening',
+        outputDir: config?.outputDir
       });
 
       if (plaintiffOpening && plaintiffOpening.confidence > 0.4) {
@@ -186,6 +207,33 @@ export class ArgumentFinder {
           role: 'PLAINTIFF',
           type: 'OPENING',
           metadata: { ...plaintiffOpening.metadata, strategy: 'defense-first' }
+        } as ArgumentCandidate);
+      }
+
+      // Search for plaintiff rebuttal AFTER defense
+      const plaintiffRebuttal = await this.accumulator.findLongestStatement({
+        trialId,
+        speakerType: 'ATTORNEY',
+        attorneyRole: 'PLAINTIFF',
+        searchStartEvent: defenseOpening.endEvent.id + 1,
+        searchEndEvent,
+        minWords: Math.floor((config?.minWords || 400) / 2), // Lower threshold for rebuttal
+        maxInterruptionRatio: 0.5, // More lenient for rebuttal
+        ratioMode: config?.ratioMode || 'SMART_EXTEND',
+        ratioThreshold: (config?.ratioThreshold || 0.4) * 0.8, // More lenient threshold
+        aggregateTeam: true,
+        trackEvaluations: config?.trackEvaluations || false,
+        trialName: config?.trialName,
+        statementType: 'opening',
+        outputDir: config?.outputDir
+      });
+
+      if (plaintiffRebuttal && plaintiffRebuttal.confidence > 0.3) { // Lower confidence threshold for rebuttal
+        candidates.push({
+          ...plaintiffRebuttal,
+          role: 'PLAINTIFF',
+          type: 'REBUTTAL',
+          metadata: { ...plaintiffRebuttal.metadata, strategy: 'defense-first' }
         } as ArgumentCandidate);
       }
     }
@@ -215,7 +263,11 @@ export class ArgumentFinder {
       maxInterruptionRatio: config?.maxInterruptionRatio || 0.4,
       ratioMode: config?.ratioMode || 'SMART_EXTEND',
       ratioThreshold: config?.ratioThreshold || 0.4,
-      aggregateTeam: true
+      aggregateTeam: true,
+      trackEvaluations: config?.trackEvaluations || false,
+      trialName: config?.trialName,
+      statementType: 'opening',
+      outputDir: config?.outputDir
     });
 
     if (plaintiffOpening && plaintiffOpening.confidence > 0.4) {
@@ -237,7 +289,11 @@ export class ArgumentFinder {
         maxInterruptionRatio: config?.maxInterruptionRatio || 0.4,
         ratioMode: config?.ratioMode || 'SMART_EXTEND',
         ratioThreshold: config?.ratioThreshold || 0.4,
-        aggregateTeam: true
+        aggregateTeam: true,
+        trackEvaluations: config?.trackEvaluations || false,
+        trialName: config?.trialName,
+        statementType: 'opening',
+        outputDir: config?.outputDir
       });
 
       if (defenseOpening && defenseOpening.confidence > 0.4) {
@@ -276,7 +332,11 @@ export class ArgumentFinder {
         maxInterruptionRatio: config?.maxInterruptionRatio || 0.4,
         ratioMode: config?.ratioMode || 'SMART_EXTEND',
         ratioThreshold: config?.ratioThreshold || 0.4,
-        aggregateTeam: true
+        aggregateTeam: true,
+        trackEvaluations: config?.trackEvaluations || false,
+        trialName: config?.trialName,
+        statementType: 'opening',
+        outputDir: config?.outputDir
       }),
       this.accumulator.findLongestStatement({
         trialId,
@@ -288,7 +348,11 @@ export class ArgumentFinder {
         maxInterruptionRatio: config?.maxInterruptionRatio || 0.4,
         ratioMode: config?.ratioMode || 'SMART_EXTEND',
         ratioThreshold: config?.ratioThreshold || 0.4,
-        aggregateTeam: true
+        aggregateTeam: true,
+        trackEvaluations: config?.trackEvaluations || false,
+        trialName: config?.trialName,
+        statementType: 'opening',
+        outputDir: config?.outputDir
       })
     ]);
 

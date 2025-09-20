@@ -787,6 +787,9 @@ export class StandardTrialHierarchyBuilder {
     if (this.useV3Accumulator) {
       this.logger.warn('[HIERARCHY STRATEGY] Using V3 Accumulator DIRECTLY with state tracking for opening statements');
 
+      // Clear any accumulated evaluations from previous searches
+      this.longStatementsAccumulatorV3.clearAccumulatedEvaluations();
+
       // Find defense first, then narrow window for plaintiff
       const defenseParams: LongStatementParamsV3 = {
         trialId,
@@ -817,14 +820,27 @@ export class StandardTrialHierarchyBuilder {
       const defenseOpening = await this.longStatementsAccumulatorV3.findLongestStatement(defenseParams);
 
       let plaintiffOpening = null;
+      let plaintiffRebuttal = null;
+
       if (defenseOpening) {
-        // Narrow window for plaintiff - should be before defense
+        // Search for plaintiff opening BEFORE defense
         const plaintiffParams: LongStatementParamsV3 = {
           ...defenseParams,
           attorneyRole: 'PLAINTIFF',
           searchEndEvent: defenseOpening.startEvent.id - 1
         };
         plaintiffOpening = await this.longStatementsAccumulatorV3.findLongestStatement(plaintiffParams);
+
+        // Search for plaintiff rebuttal AFTER defense
+        const rebuttalParams: LongStatementParamsV3 = {
+          ...defenseParams,
+          attorneyRole: 'PLAINTIFF',
+          searchStartEvent: defenseOpening.endEvent.id + 1,
+          minWords: Math.floor((longStatementConfig.minWords || 400) / 2), // Lower threshold for rebuttal
+          maxInterruptionRatio: 0.5, // More lenient for rebuttal
+          ratioThreshold: ratioThreshold * 0.8 // More lenient threshold
+        };
+        plaintiffRebuttal = await this.longStatementsAccumulatorV3.findLongestStatement(rebuttalParams);
       } else {
         // No defense found, search full window for plaintiff
         const plaintiffParams: LongStatementParamsV3 = {
@@ -832,6 +848,15 @@ export class StandardTrialHierarchyBuilder {
           attorneyRole: 'PLAINTIFF'
         };
         plaintiffOpening = await this.longStatementsAccumulatorV3.findLongestStatement(plaintiffParams);
+      }
+
+      // Save all accumulated evaluations
+      if (defenseParams.trackEvaluations) {
+        await this.longStatementsAccumulatorV3.saveAllAccumulatedEvaluations(
+          trialId,
+          trial?.shortName || `trial_${trialId}`,
+          'opening'
+        );
       }
 
       const openingStatements: MarkerSection[] = [];
@@ -932,11 +957,21 @@ export class StandardTrialHierarchyBuilder {
     // Use ArgumentFinder if enabled
     else if (this.useArgumentFinder) {
       this.logger.warn('[HIERARCHY STRATEGY] Using ArgumentFinder (LEGACY PATH) - should use V3 directly instead');
+
+      // Get trial info for ArgumentFinder
+      const trial = await this.prisma.trial.findUnique({
+        where: { id: trialId },
+        select: { shortName: true }
+      });
+
       const config = {
         minWords: 400,
         maxInterruptionRatio: 0.4,
         ratioMode,
-        ratioThreshold
+        ratioThreshold,
+        trackEvaluations: true,
+        trialName: trial?.shortName || `trial_${trialId}`,
+        outputDir: './output/longstatements'
       };
 
       const results = await this.argumentFinder.findOpeningStatements(
@@ -1268,6 +1303,9 @@ export class StandardTrialHierarchyBuilder {
     if (this.useV3Accumulator) {
       this.logger.info('Using V3 Accumulator with state tracking for closing statements');
 
+      // Clear any accumulated evaluations from previous searches
+      this.longStatementsAccumulatorV3.clearAccumulatedEvaluations();
+
       // STEP 1: Find defense closing FIRST (as anchor point)
       const defenseParams: LongStatementParamsV3 = {
         trialId,
@@ -1324,6 +1362,15 @@ export class StandardTrialHierarchyBuilder {
           attorneyRole: 'PLAINTIFF'
         };
         plaintiffClosing = await this.longStatementsAccumulatorV3.findLongestStatement(plaintiffParams);
+      }
+
+      // Save all accumulated evaluations for closing statements
+      if (defenseParams.trackEvaluations) {
+        await this.longStatementsAccumulatorV3.saveAllAccumulatedEvaluations(
+          trialId,
+          trial?.shortName || `trial_${trialId}`,
+          'closing'
+        );
       }
 
       const closingStatements: MarkerSection[] = [];

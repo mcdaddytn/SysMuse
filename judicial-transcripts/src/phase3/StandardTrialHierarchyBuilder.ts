@@ -777,7 +777,7 @@ export class StandardTrialHierarchyBuilder {
 
     // Get config parameters with defaults for opening statements
     const longStatementConfig = this.trialStyleConfig?.longStatements || {};
-    const ratioMode = longStatementConfig.ratioMode || 'WEIGHTED_SQRT';  // Use WEIGHTED_SQRT as specified
+    const ratioMode = longStatementConfig.ratioMode || 'WORD_RACE3';  // Use WORD_RACE3 as default
     const ratioThreshold = 0.4; // Lower threshold for opening statements
 
     // Get trial info for V3
@@ -796,6 +796,7 @@ export class StandardTrialHierarchyBuilder {
         trialName: trial?.shortName || `trial_${trialId}`,
         speakerType: 'ATTORNEY',
         attorneyRole: 'DEFENDANT',
+        searchType: 'opening',
         searchStartEvent,
         searchEndEvent,
         minWords: longStatementConfig.minWords || 400,
@@ -1249,7 +1250,7 @@ export class StandardTrialHierarchyBuilder {
 
     // Get config parameters with defaults
     const longStatementConfig = this.trialStyleConfig?.longStatements || {};
-    const ratioMode = longStatementConfig.ratioMode || 'WEIGHTED_SQRT';
+    const ratioMode = longStatementConfig.ratioMode || 'WORD_RACE3';
     const ratioThreshold = longStatementConfig.ratioThreshold || 0.6;
     const minWords = longStatementConfig.minWords || 400;
     const maxInterruptionRatio = longStatementConfig.maxInterruptionRatio || 0.25;
@@ -1276,6 +1277,7 @@ export class StandardTrialHierarchyBuilder {
         trialName: trial?.shortName || `trial_${trialId}`,
         speakerType: 'ATTORNEY',
         attorneyRole: 'DEFENDANT',
+        searchType: 'closing',
         searchStartEvent,
         searchEndEvent,
         minWords: longStatementConfig.minWordsClosing || minWords || 500,
@@ -1314,6 +1316,7 @@ export class StandardTrialHierarchyBuilder {
           attorneyRole: 'PLAINTIFF',
           searchStartEvent: defenseClosing.endEvent.id + 1,
           searchEndEvent: undefined,
+          searchType: 'closing-rebuttal', // Specify this is a closing rebuttal search
           minWords: Math.floor((longStatementConfig.minWordsClosing || minWords || 500) * 0.6) // Lower threshold for rebuttal
         };
         plaintiffRebuttal = await this.longStatementsAccumulatorV3.findLongestStatement(rebuttalParams);

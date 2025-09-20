@@ -20,7 +20,7 @@ export interface LongStatementParamsV3 {
   searchEndEvent?: number;
   minWords: number;
   maxInterruptionRatio: number;
-  ratioMode?: 'TRADITIONAL' | 'WORD_RACE' | 'WORD_RACE2' | 'WORD_RACE3' | 'TEAM_AGGREGATE';
+  ratioMode?: 'WORD_RACE' | 'WORD_RACE2' | 'WORD_RACE3';
   ratioThreshold?: number;
   aggregateTeam?: boolean;
 
@@ -32,6 +32,7 @@ export interface LongStatementParamsV3 {
   maxExtensionAttempts?: number;
   declineThreshold?: number;
   statementType?: 'opening' | 'closing';
+  searchType?: 'opening' | 'closing' | 'opening-rebuttal' | 'closing-rebuttal'; // Specific search type
   displayWindowSize?: number; // Number of statements to include in display window (default: 9)
   maxDisplayWords?: number; // Max words for non-evaluation statements (default: 100)
 }
@@ -353,10 +354,10 @@ export class LongStatementsAccumulatorV3 {
   }
 
   /**
-   * Check if using WORD_RACE mode
+   * Check if using WORD_RACE mode (always true now since deprecated modes removed)
    */
   private isWordRaceMode(mode: string | undefined): boolean {
-    return mode === 'WORD_RACE' || mode === 'WORD_RACE2' || mode === 'WORD_RACE3';
+    return true; // All modes are WORD_RACE variants now
   }
 
   /**
@@ -366,12 +367,8 @@ export class LongStatementsAccumulatorV3 {
     initialEvent: any,
     params: LongStatementParamsV3
   ): Promise<WindowEvaluation> {
-    // Use WORD_RACE evaluation if appropriate mode
-    if (this.isWordRaceMode(params.ratioMode)) {
-      return this.evaluateWindowWordRace(initialEvent, params);
-    }
-    // Otherwise use legacy evaluation
-    return this.evaluateWindowLegacy(initialEvent, params);
+    // Always use WORD_RACE evaluation
+    return this.evaluateWindowWordRace(initialEvent, params);
   }
 
   /**
@@ -381,7 +378,8 @@ export class LongStatementsAccumulatorV3 {
     initialEvent: any,
     params: LongStatementParamsV3
   ): Promise<WindowEvaluation> {
-    const windowId = `${params.attorneyRole || 'unknown'}_${initialEvent.id}`;
+    const searchType = params.searchType || params.statementType || 'unknown';
+    const windowId = `${params.attorneyRole || 'unknown'}_${searchType}_${initialEvent.id}`;
 
     const evaluation: WindowEvaluation = {
       windowId,
@@ -469,10 +467,10 @@ export class LongStatementsAccumulatorV3 {
       const nextDeltaAdjWords = nextTargetAdjWords - nextOtherAdjWords;
       const newScore = targetWordScore + nextDeltaAdjWords;
 
-      // Check for deal-breakers (long statement from opposing attorney)
+      // Check for deal-breakers (long statement from any non-target speaker)
       if (params.breakOnOpposingLongStatement !== false) {
-        const isOpposing = await this.isOpposingLongStatement(nextEvent, params);
-        if (isOpposing) {
+        const isDealBreaker = await this.isDealBreakerStatement(nextEvent, params);
+        if (isDealBreaker) {
           evaluation.evaluation.extensions.push({
             step,
             addedEventId: nextEvent.id,
@@ -480,7 +478,7 @@ export class LongStatementsAccumulatorV3 {
             addedWords: nextEvent.wordCount || 0,
             addedText: this.truncateText(nextEvent.statement?.text || '', 50),
             decision: 'stop',
-            reason: 'opposing_long_statement',
+            reason: `deal_breaker_${nextEvent.statement?.speaker.speakerHandle || 'OTHER'}_${nextEvent.wordCount}w`,
             totalWords: this.countTotalWords([...currentWindow, nextEvent]),
             speakerWords: await this.countSpeakerWords([...currentWindow, nextEvent], params),
             statementIndex,
@@ -565,248 +563,7 @@ export class LongStatementsAccumulatorV3 {
     return evaluation;
   }
 
-  /**
-   * Legacy evaluate window (for WEIGHTED_SQRT modes)
-   */
-  private async evaluateWindowLegacy(
-    initialEvent: any,
-    params: LongStatementParamsV3
-  ): Promise<WindowEvaluation> {
-    const windowId = `${params.attorneyRole || 'unknown'}_${initialEvent.id}`;
 
-    const evaluation: WindowEvaluation = {
-      windowId,
-      startEventId: initialEvent.id,
-      endEventId: initialEvent.id,
-      speakerRole: params.attorneyRole || 'OTHER',
-      evaluation: {
-        initialStatement: {
-          eventId: initialEvent.id,
-          speaker: initialEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
-          wordCount: initialEvent.wordCount || 0,
-          meetsThreshold: (initialEvent.wordCount || 0) >= params.minWords,
-          text: this.truncateText(initialEvent.statement?.text || '', 50)
-        },
-        extensions: [],
-        finalRatio: 0,
-        selected: false
-      }
-    };
-
-    // Only proceed if initial statement meets threshold (when required)
-    if (params.requireInitialThreshold !== false && !evaluation.evaluation.initialStatement.meetsThreshold) {
-      this.logger.info(`Initial event ${initialEvent.id} does not meet threshold (${initialEvent.wordCount} < ${params.minWords})`);
-      return evaluation;
-    }
-
-    // Build the window by extending forward
-    let currentWindow = [initialEvent];
-    const initialStats = await this.calculateSpeakerStatistics(currentWindow, params);
-    let bestRatio = await this.calculateRatioWithStats(initialStats, params);
-    evaluation.evaluation.finalRatio = bestRatio;
-
-    // Store initial statement calculations
-    evaluation.evaluation.initialStatement.targetSpeakerWords = initialStats.targetSpeakerWords;
-    evaluation.evaluation.initialStatement.targetSpeakerStatements = initialStats.targetSpeakerStatements;
-    evaluation.evaluation.initialStatement.otherSpeakerWords = initialStats.otherSpeakerWords;
-    evaluation.evaluation.initialStatement.otherSpeakerStatements = initialStats.otherSpeakerStatements;
-    evaluation.evaluation.initialStatement.targetSpeakerRatio = initialStats.targetSpeakerRatio;
-    evaluation.evaluation.initialStatement.otherSpeakerRatio = initialStats.otherSpeakerRatio;
-    evaluation.evaluation.initialStatement.ratio = bestRatio;
-
-    const maxExtensions = params.maxExtensionAttempts || 20;
-    const declineThreshold = params.declineThreshold || 0.05;
-    let lastEvaluatedId = initialEvent.id;
-
-    for (let step = 1; step <= maxExtensions; step++) {
-      const nextEvent = await this.getNextStatementEvent(
-        lastEvaluatedId,
-        params.searchEndEvent
-      );
-
-      if (!nextEvent) {
-        this.logger.info(`No more events after ${lastEvaluatedId}`);
-        break;
-      }
-
-      lastEvaluatedId = nextEvent.id;
-
-      // Check for deal-breakers
-      if (params.breakOnOpposingLongStatement !== false) {
-        const isOpposing = await this.isOpposingLongStatement(nextEvent, params);
-        if (isOpposing) {
-          const stats = await this.calculateSpeakerStatistics(currentWindow, params);
-          evaluation.evaluation.extensions.push({
-            step,
-            addedEventId: nextEvent.id,
-            addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
-            addedWords: nextEvent.wordCount || 0,
-            ratio: bestRatio,
-            decision: 'stop',
-            reason: 'opposing_long_statement',
-            totalWords: this.countTotalWords(currentWindow),
-            speakerWords: await this.countSpeakerWords(currentWindow, params),
-            targetSpeakerWords: stats.targetSpeakerWords,
-            targetSpeakerStatements: stats.targetSpeakerStatements,
-            otherSpeakerWords: stats.otherSpeakerWords,
-            otherSpeakerStatements: stats.otherSpeakerStatements,
-            targetSpeakerRatio: stats.targetSpeakerRatio,
-            otherSpeakerRatio: stats.otherSpeakerRatio
-          });
-          break;
-        }
-      }
-
-      // Look ahead for same-team content if current event is a short interruption
-      let shouldExtend = false;
-      let lookaheadReason = '';
-
-      if (nextEvent.wordCount && nextEvent.wordCount < 50) {
-        // This is a short interruption, look ahead for same-team content
-        const lookaheadEvents = await this.getLookaheadEvents(nextEvent.id, params.searchEndEvent, 5);
-        for (const futureEvent of lookaheadEvents) {
-          if (await this.isSameTeamSpeaker(futureEvent, params)) {
-            if ((futureEvent.wordCount || 0) >= params.minWords * 0.5) {
-              // Significant same-team content ahead, extend through the interruption
-              shouldExtend = true;
-              lookaheadReason = `extending_to_reach_${futureEvent.statement?.speaker?.speakerHandle}_${futureEvent.wordCount}w`;
-              break;
-            }
-          }
-        }
-      }
-
-      // Try extending the window
-      const extendedWindow = [...currentWindow, nextEvent];
-      const extStats = await this.calculateSpeakerStatistics(extendedWindow, params);
-      const newRatio = this.calculateRatioWithStats(extStats, params);
-
-      // Decide whether to extend
-      if (shouldExtend || newRatio >= bestRatio - declineThreshold) {
-        // Accept extension
-        currentWindow = extendedWindow;
-        if (newRatio > bestRatio) {
-          bestRatio = newRatio;
-        }
-        evaluation.endEventId = nextEvent.id;
-        evaluation.evaluation.finalRatio = Math.max(evaluation.evaluation.finalRatio, newRatio);
-
-        evaluation.evaluation.extensions.push({
-          step,
-          addedEventId: nextEvent.id,
-          addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
-          addedWords: nextEvent.wordCount || 0,
-          ratio: newRatio,
-          decision: 'extend',
-          reason: lookaheadReason || undefined,
-          totalWords: this.countTotalWords(extendedWindow),
-          speakerWords: await this.countSpeakerWords(extendedWindow, params),
-          targetSpeakerWords: extStats.targetSpeakerWords,
-          targetSpeakerStatements: extStats.targetSpeakerStatements,
-          otherSpeakerWords: extStats.otherSpeakerWords,
-          otherSpeakerStatements: extStats.otherSpeakerStatements,
-          targetSpeakerRatio: extStats.targetSpeakerRatio,
-          otherSpeakerRatio: extStats.otherSpeakerRatio
-        });
-      } else {
-        // Check if next event is a deal-breaker (long statement from another speaker)
-        const nextEventIsLongStatement = (nextEvent.wordCount || 0) >= params.minWords;
-        const nextEventIsFromOtherSpeaker = !(await this.isTargetSpeaker(nextEvent, params));
-
-        if (nextEventIsLongStatement && nextEventIsFromOtherSpeaker) {
-          // This is a deal-breaker - another speaker with long statement
-          const stopStats = await this.calculateSpeakerStatistics(currentWindow, params);
-          evaluation.evaluation.extensions.push({
-            step,
-            addedEventId: nextEvent.id,
-            addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
-            addedWords: nextEvent.wordCount || 0,
-            ratio: bestRatio,
-            decision: 'stop',
-            reason: 'other_speaker_long_statement',
-            totalWords: this.countTotalWords(currentWindow),
-            speakerWords: await this.countSpeakerWords(currentWindow, params),
-            targetSpeakerWords: stopStats.targetSpeakerWords,
-            targetSpeakerStatements: stopStats.targetSpeakerStatements,
-            otherSpeakerWords: stopStats.otherSpeakerWords,
-            otherSpeakerStatements: stopStats.otherSpeakerStatements,
-            targetSpeakerRatio: stopStats.targetSpeakerRatio,
-            otherSpeakerRatio: stopStats.otherSpeakerRatio
-          });
-          break;
-        } else {
-          // Not a deal-breaker, but ratio declined - log it but continue evaluation
-          // Use the extended window stats to show what the ratio would be if we added this event
-          evaluation.evaluation.extensions.push({
-            step,
-            addedEventId: nextEvent.id,
-            addedSpeaker: nextEvent.statement?.speaker.speakerHandle || 'UNKNOWN',
-            addedWords: nextEvent.wordCount || 0,
-            ratio: newRatio,  // Show the new ratio that would result
-            decision: 'stop',
-            reason: 'ratio_decline',
-            totalWords: this.countTotalWords(extendedWindow),  // Extended window stats
-            speakerWords: await this.countSpeakerWords(extendedWindow, params),
-            targetSpeakerWords: extStats.targetSpeakerWords,  // Extended window stats
-            targetSpeakerStatements: extStats.targetSpeakerStatements,
-            otherSpeakerWords: extStats.otherSpeakerWords,
-            otherSpeakerStatements: extStats.otherSpeakerStatements,
-            targetSpeakerRatio: extStats.targetSpeakerRatio,
-            otherSpeakerRatio: extStats.otherSpeakerRatio
-          });
-          // Don't break - continue to evaluate more extensions
-        }
-      }
-    }
-
-    return evaluation;
-  }
-
-  /**
-   * Calculate ratio for a window of events using ratio of ratios approach
-   */
-  private async calculateRatio(events: any[], params: LongStatementParamsV3): Promise<number> {
-    // Get detailed speaker statistics
-    const stats = await this.calculateSpeakerStatistics(events, params);
-    return this.calculateRatioWithStats(stats, params);
-  }
-
-  /**
-   * Calculate ratio from pre-computed statistics (legacy method for TRADITIONAL/TEAM_AGGREGATE)
-   */
-  private calculateRatioWithStats(stats: any, params: LongStatementParamsV3): number {
-
-    const ratioMode = params.ratioMode || 'WORD_RACE3';
-
-    // For WORD_RACE modes, this shouldn't be called
-    if (this.isWordRaceMode(ratioMode)) {
-      console.warn('calculateRatioWithStats called for WORD_RACE mode');
-      return 0;
-    }
-
-    // Simple calculation for TRADITIONAL and TEAM_AGGREGATE modes
-    let targetSpeakerRatio = stats.targetSpeakerWords;
-    let otherSpeakerRatio = stats.otherSpeakerWords;
-
-    // Store ratios in stats for logging
-    stats.targetSpeakerRatio = targetSpeakerRatio;
-    stats.otherSpeakerRatio = otherSpeakerRatio;
-
-    // For TRADITIONAL and TEAM_AGGREGATE modes, use simple ratio
-    if (ratioMode === 'TRADITIONAL' || ratioMode === 'TEAM_AGGREGATE') {
-      const totalWords = stats.targetSpeakerWords + stats.otherSpeakerWords;
-      return totalWords > 0 ? stats.targetSpeakerWords / totalWords : 0;
-    }
-
-    // Calculate ratio of ratios (avoid division by zero)
-    if (otherSpeakerRatio === 0 && targetSpeakerRatio > 0) {
-      return 1; // Perfect ratio when only target speakers
-    } else if (otherSpeakerRatio === 0) {
-      return 0; // No speakers at all
-    }
-
-    return targetSpeakerRatio / otherSpeakerRatio;
-  }
 
   /**
    * Calculate detailed speaker statistics for a window
@@ -960,7 +717,23 @@ export class LongStatementsAccumulatorV3 {
   }
 
   /**
-   * Check if an event is an opposing long statement
+   * Check if an event is a deal-breaker (long statement from non-target speaker)
+   */
+  private async isDealBreakerStatement(event: any, params: LongStatementParamsV3): Promise<boolean> {
+    if (!event.statement?.speaker || !event.wordCount) return false;
+
+    // Must meet minWords threshold to be a deal-breaker
+    if (event.wordCount < params.minWords) return false;
+
+    // Check if this is NOT a target speaker
+    const isTarget = await this.isTargetSpeaker(event, params);
+
+    // If it's not a target speaker and meets word threshold, it's a deal-breaker
+    return !isTarget;
+  }
+
+  /**
+   * Check if an event is an opposing long statement (legacy method - kept for compatibility)
    */
   private async isOpposingLongStatement(event: any, params: LongStatementParamsV3): Promise<boolean> {
     if (!event.statement?.speaker || !event.wordCount) return false;

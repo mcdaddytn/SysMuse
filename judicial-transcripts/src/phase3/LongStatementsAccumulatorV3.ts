@@ -164,6 +164,12 @@ export class LongStatementsAccumulatorV3 {
   async findLongestStatement(params: LongStatementParamsV3): Promise<StatementResultV3 | null> {
     this.logger.info(`Finding longest statement for ${params.speakerType} ${params.attorneyRole || ''} in trial ${params.trialId}`);
 
+    // Log critical parameters at WARN level for visibility
+    const ratioMode = params.ratioMode || 'WORD_RACE3';
+    this.logger.warn(`[CALCULATION MODE] Using ratioMode: ${ratioMode}`);
+    this.logger.warn(`[CALCULATION PARAMS] minWords: ${params.minWords}, ratioThreshold: ${params.ratioThreshold}, searchType: ${params.searchType || params.statementType || 'unknown'}`);
+    this.logger.warn(`[CALCULATION PARAMS] breakOnOpposingLongStatement: ${params.breakOnOpposingLongStatement !== false}, maxExtensionAttempts: ${params.maxExtensionAttempts || 20}`);
+
     // Initialize search evaluation tracking
     if (params.trackEvaluations) {
       this.searchEvaluation = {
@@ -368,6 +374,8 @@ export class LongStatementsAccumulatorV3 {
     params: LongStatementParamsV3
   ): Promise<WindowEvaluation> {
     // Always use WORD_RACE evaluation
+    const ratioMode = params.ratioMode || 'WORD_RACE3';
+    this.logger.warn(`[EVALUATION METHOD] Using evaluateWindowWordRace with mode: ${ratioMode}`);
     return this.evaluateWindowWordRace(initialEvent, params);
   }
 

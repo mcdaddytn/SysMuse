@@ -773,6 +773,10 @@ export class StandardTrialHierarchyBuilder {
     const ratioMode = longStatementConfig.ratioMode || 'WORD_RACE3';  // Use WORD_RACE3 as default
     const ratioThreshold = 0.4; // Lower threshold for opening statements
 
+    this.logger.warn(`[HIERARCHY CONFIG - OPENING] Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}`);
+    this.logger.warn(`[HIERARCHY CONFIG - OPENING] longStatementConfig: ${JSON.stringify(longStatementConfig)}`);
+    this.logger.warn(`[HIERARCHY CONFIG - OPENING] useV3Accumulator: ${this.useV3Accumulator}, useArgumentFinder: ${this.useArgumentFinder}`);
+
     // Get trial info for V3
     const trial = await this.prisma.trial.findUnique({
       where: { id: trialId },
@@ -781,7 +785,7 @@ export class StandardTrialHierarchyBuilder {
 
     // Use V3 Accumulator if enabled (with state tracking)
     if (this.useV3Accumulator) {
-      this.logger.info('Using V3 Accumulator with state tracking for opening statements');
+      this.logger.warn('[HIERARCHY STRATEGY] Using V3 Accumulator DIRECTLY with state tracking for opening statements');
 
       // Find defense first, then narrow window for plaintiff
       const defenseParams: LongStatementParamsV3 = {
@@ -927,6 +931,7 @@ export class StandardTrialHierarchyBuilder {
 
     // Use ArgumentFinder if enabled
     else if (this.useArgumentFinder) {
+      this.logger.warn('[HIERARCHY STRATEGY] Using ArgumentFinder (LEGACY PATH) - should use V3 directly instead');
       const config = {
         minWords: 400,
         maxInterruptionRatio: 0.4,
@@ -1246,7 +1251,8 @@ export class StandardTrialHierarchyBuilder {
     const minWords = longStatementConfig.minWords || 400;
     const maxInterruptionRatio = longStatementConfig.maxInterruptionRatio || 0.25;
 
-    this.logger.info(`Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}, minWords: ${minWords}`);
+    this.logger.warn(`[HIERARCHY CONFIG] Using ratio mode: ${ratioMode}, threshold: ${ratioThreshold}, minWords: ${minWords}`);
+    this.logger.warn(`[HIERARCHY CONFIG] longStatementConfig: ${JSON.stringify(longStatementConfig)}`);
 
     // Initial search period: from end of testimony to end of trial
     const searchStartEvent = testimonyPeriod?.endEventId ? testimonyPeriod.endEventId + 1 : undefined;
@@ -1449,6 +1455,7 @@ export class StandardTrialHierarchyBuilder {
 
     // Use ArgumentFinder if enabled
     else if (this.useArgumentFinder) {
+      this.logger.warn('[HIERARCHY STRATEGY] Using ArgumentFinder (LEGACY PATH) - should use V3 directly instead');
       const config = {
         minWords,
         maxInterruptionRatio,

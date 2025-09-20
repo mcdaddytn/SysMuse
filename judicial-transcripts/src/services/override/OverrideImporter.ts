@@ -1142,13 +1142,26 @@ export class OverrideImporter {
     let count = 0;
     for (const ta of trialAttorneys) {
       const action = ta.overrideAction || 'Upsert';
-      
+
       const trialId = this.correlationMap.Trial.get(ta.trialId) || ta.trialId;
       const attorneyId = this.correlationMap.Attorney.get(ta.attorneyId) || ta.attorneyId;
-      const lawFirmId = ta.lawFirmId ? 
+      const lawFirmId = ta.lawFirmId ?
         (this.correlationMap.LawFirm.get(ta.lawFirmId) || ta.lawFirmId) : undefined;
-      let lawFirmOfficeId = ta.lawFirmOfficeId ? 
+      let lawFirmOfficeId = ta.lawFirmOfficeId ?
         (this.correlationMap.LawFirmOffice.get(ta.lawFirmOfficeId) || ta.lawFirmOfficeId) : undefined;
+
+      // Convert 'side' to 'role' if present (for LLM-generated metadata compatibility)
+      let role = ta.role;
+      if (!role && (ta as any).side) {
+        const side = ((ta as any).side as string).toLowerCase();
+        if (side === 'plaintiff') {
+          role = 'PLAINTIFF';
+        } else if (side === 'defendant') {
+          role = 'DEFENDANT';
+        } else if (side === 'third_party' || side === 'third party') {
+          role = 'THIRD_PARTY';
+        }
+      }
 
       if (!trialId || !attorneyId) {
         console.log(`Skipping TrialAttorney: missing required IDs (trial=${ta.trialId}, attorney=${ta.attorneyId})`);
@@ -1198,7 +1211,7 @@ export class OverrideImporter {
             speakerId: ta.speakerId || null,
             lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
             lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
-            role: ta.role || 'UNKNOWN'
+            role: role || 'UNKNOWN'
           }
         });
         count++;
@@ -1217,13 +1230,13 @@ export class OverrideImporter {
             speakerId: ta.speakerId || null,
             lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
             lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
-            role: ta.role || 'UNKNOWN'
+            role: role || 'UNKNOWN'
           },
           update: {
             speakerId: ta.speakerId || null,
             lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
             lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
-            role: ta.role || 'UNKNOWN'
+            role: role || 'UNKNOWN'
           }
         });
         count++;
@@ -1236,7 +1249,7 @@ export class OverrideImporter {
             speakerId: ta.speakerId || null,
             lawFirmId: lawFirmId ? Number(lawFirmId) : undefined,
             lawFirmOfficeId: lawFirmOfficeId ? Number(lawFirmOfficeId) : undefined,
-            role: ta.role || 'UNKNOWN'
+            role: role || 'UNKNOWN'
           }
         });
         count++;

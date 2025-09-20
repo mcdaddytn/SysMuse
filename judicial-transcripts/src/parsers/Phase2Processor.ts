@@ -2155,6 +2155,73 @@ export class Phase2Processor {
       
       if (attorney) {
         logger.info(`[ATTORNEY MATCH - BY PATTERN] Successfully matched attorney: ${attorney.name} (id=${attorney.id})`);
+
+        // Check if attorney has a speaker (may not if imported from metadata)
+        if (!attorney.speaker) {
+          logger.warn(`[ATTORNEY MATCH - BY PATTERN] Attorney ${attorney.name} has no speaker - checking if one exists`);
+
+          // First check if a speaker already exists with this prefix
+          let existingSpeaker = await this.prisma.speaker.findFirst({
+            where: {
+              trialId: this.context.trialId,
+              speakerPrefix: attorneyPrefix,
+              speakerType: SpeakerType.ATTORNEY
+            }
+          });
+
+          // Create speaker for this attorney if it doesn't exist
+          const speakerHandle = `${attorneyPrefix.replace(/[^A-Z0-9]/g, '_')}`;
+          const newSpeaker = existingSpeaker || await this.prisma.speaker.create({
+            data: {
+              trialId: this.context.trialId,
+              speakerPrefix: attorneyPrefix,
+              speakerHandle: speakerHandle,
+              speakerType: SpeakerType.ATTORNEY
+            }
+          });
+
+          if (existingSpeaker) {
+            logger.info(`[ATTORNEY MATCH - BY PATTERN] Found existing speaker ${existingSpeaker.id} for attorney ${attorney.name}`);
+          } else {
+            logger.info(`[ATTORNEY MATCH - BY PATTERN] Created new speaker ${newSpeaker.id} for attorney ${attorney.name}`);
+          }
+
+          // Update TrialAttorney to link to this speaker
+          const trialAttorney = await this.prisma.trialAttorney.findFirst({
+            where: {
+              trialId: this.context.trialId,
+              attorneyId: attorney.id
+            }
+          });
+
+          if (trialAttorney) {
+            await this.prisma.trialAttorney.update({
+              where: { id: trialAttorney.id },
+              data: { speakerId: newSpeaker.id }
+            });
+            logger.info(`[ATTORNEY MATCH - BY PATTERN] Linked attorney ${attorney.name} to speaker ${newSpeaker.id}`);
+          } else {
+            // Attorney exists globally but not associated with this trial - create TrialAttorney
+            logger.info(`[ATTORNEY MATCH - BY PATTERN] Creating TrialAttorney association for ${attorney.name} in trial ${this.context.trialId}`);
+
+            // Try to infer role from attorney's name/context
+            let role: 'PLAINTIFF' | 'DEFENDANT' | 'THIRD_PARTY' = 'THIRD_PARTY';
+            // This is a basic heuristic - could be improved with more context
+
+            await this.prisma.trialAttorney.create({
+              data: {
+                trialId: this.context.trialId,
+                attorneyId: attorney.id,
+                speakerId: newSpeaker.id,
+                role: role
+              }
+            });
+            logger.info(`[ATTORNEY MATCH - BY PATTERN] Created TrialAttorney for ${attorney.name} with speaker ${newSpeaker.id} and role ${role}`);
+          }
+
+          attorney.speaker = newSpeaker;
+        }
+
         const speaker: SpeakerInfo = {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,
@@ -2197,6 +2264,73 @@ export class Phase2Processor {
       
       if (attorney) {
         logger.info(`[ATTORNEY MATCH - DIRECT] Successfully matched: ${attorney.name} (id=${attorney.id}, speakerPrefix=${attorney.speakerPrefix})`);
+
+        // Check if attorney has a speaker (may not if imported from metadata)
+        if (!attorney.speaker) {
+          logger.warn(`[ATTORNEY MATCH - DIRECT] Attorney ${attorney.name} has no speaker - checking if one exists`);
+
+          // First check if a speaker already exists with this prefix
+          let existingSpeaker = await this.prisma.speaker.findFirst({
+            where: {
+              trialId: this.context.trialId,
+              speakerPrefix: upperPrefix,
+              speakerType: SpeakerType.ATTORNEY
+            }
+          });
+
+          // Create speaker for this attorney if it doesn't exist
+          const speakerHandle = `${upperPrefix.replace(/[^A-Z0-9]/g, '_')}`;
+          const newSpeaker = existingSpeaker || await this.prisma.speaker.create({
+            data: {
+              trialId: this.context.trialId,
+              speakerPrefix: upperPrefix,
+              speakerHandle: speakerHandle,
+              speakerType: SpeakerType.ATTORNEY
+            }
+          });
+
+          if (existingSpeaker) {
+            logger.info(`[ATTORNEY MATCH - DIRECT] Found existing speaker ${existingSpeaker.id} for attorney ${attorney.name}`);
+          } else {
+            logger.info(`[ATTORNEY MATCH - DIRECT] Created new speaker ${newSpeaker.id} for attorney ${attorney.name}`);
+          }
+
+          // Update TrialAttorney to link to this speaker
+          const trialAttorney = await this.prisma.trialAttorney.findFirst({
+            where: {
+              trialId: this.context.trialId,
+              attorneyId: attorney.id
+            }
+          });
+
+          if (trialAttorney) {
+            await this.prisma.trialAttorney.update({
+              where: { id: trialAttorney.id },
+              data: { speakerId: newSpeaker.id }
+            });
+            logger.info(`[ATTORNEY MATCH - DIRECT] Linked attorney ${attorney.name} to speaker ${newSpeaker.id}`);
+          } else {
+            // Attorney exists globally but not associated with this trial - create TrialAttorney
+            logger.info(`[ATTORNEY MATCH - DIRECT] Creating TrialAttorney association for ${attorney.name} in trial ${this.context.trialId}`);
+
+            // Try to infer role from attorney's name/context
+            let role: 'PLAINTIFF' | 'DEFENDANT' | 'THIRD_PARTY' = 'THIRD_PARTY';
+            // This is a basic heuristic - could be improved with more context
+
+            await this.prisma.trialAttorney.create({
+              data: {
+                trialId: this.context.trialId,
+                attorneyId: attorney.id,
+                speakerId: newSpeaker.id,
+                role: role
+              }
+            });
+            logger.info(`[ATTORNEY MATCH - DIRECT] Created TrialAttorney for ${attorney.name} with speaker ${newSpeaker.id} and role ${role}`);
+          }
+
+          attorney.speaker = newSpeaker;
+        }
+
         const speaker: SpeakerInfo = {
           id: attorney.speaker.id,
           speakerPrefix: attorney.speaker.speakerPrefix,

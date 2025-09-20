@@ -45,7 +45,7 @@ export class SpeakerRegistry {
       }
     });
     
-    logger.warn(`[SPEAKER_REGISTRY_INIT] Loading ${speakers.length} speakers for trial ${this.trialId}`);
+    logger.debug(`[SPEAKER_REGISTRY_INIT] Loading ${speakers.length} speakers for trial ${this.trialId}`);
     
     // Build lookup maps
     for (const speaker of speakers) {
@@ -53,7 +53,7 @@ export class SpeakerRegistry {
       this.speakers.set(speaker.speakerPrefix, speaker);
       this.speakers.set(speaker.speakerHandle, speaker);
       
-      logger.warn(`[SPEAKER_REGISTRY_INIT]   Speaker ID=${speaker.id}: Prefix="${speaker.speakerPrefix}", Handle="${speaker.speakerHandle}", Type=${speaker.speakerType}`);
+      logger.debug(`[SPEAKER_REGISTRY_INIT]   Speaker ID=${speaker.id}: Prefix="${speaker.speakerPrefix}", Handle="${speaker.speakerHandle}", Type=${speaker.speakerType}`);
       
       // Special handling for THE COURT
       if (speaker.speakerType === 'JUDGE' || speaker.speakerPrefix === 'THE COURT') {
@@ -120,23 +120,23 @@ export class SpeakerRegistry {
   ): Promise<SpeakerWithRelations> {
     const normalizedPrefix = prefix.trim();
     
-    logger.warn(`[SPEAKER_REGISTRY] findOrCreateSpeaker called with prefix: "${prefix}" (normalized: "${normalizedPrefix}"), type: ${type}`);
+    logger.debug(`[SPEAKER_REGISTRY] findOrCreateSpeaker called with prefix: "${prefix}" (normalized: "${normalizedPrefix}"), type: ${type}`);
     
     // Check cache first
     if (this.speakers.has(normalizedPrefix)) {
       const cached = this.speakers.get(normalizedPrefix)!;
-      logger.warn(`[SPEAKER_REGISTRY]   Found in cache: ID=${cached.id}, Handle="${cached.speakerHandle}"`);
+      logger.debug(`[SPEAKER_REGISTRY]   Found in cache: ID=${cached.id}, Handle="${cached.speakerHandle}"`);
       return cached;
     }
     
     // Check contextual speakers
     if (this.contextualSpeakers.has(normalizedPrefix)) {
       const contextual = this.contextualSpeakers.get(normalizedPrefix)!;
-      logger.warn(`[SPEAKER_REGISTRY]   Found in contextual speakers: ID=${contextual.id}, Handle="${contextual.speakerHandle}"`);
+      logger.debug(`[SPEAKER_REGISTRY]   Found in contextual speakers: ID=${contextual.id}, Handle="${contextual.speakerHandle}"`);
       return contextual;
     }
     
-    logger.warn(`[SPEAKER_REGISTRY]   Not in cache, searching database for trialId=${this.trialId}, prefix="${normalizedPrefix}" OR handle="${this.normalizeHandle(normalizedPrefix)}"`);
+    logger.debug(`[SPEAKER_REGISTRY]   Not in cache, searching database for trialId=${this.trialId}, prefix="${normalizedPrefix}" OR handle="${this.normalizeHandle(normalizedPrefix)}"`);
     
     // Try to find in database
     let speaker = await this.prisma.speaker.findFirst({
@@ -160,24 +160,24 @@ export class SpeakerRegistry {
     }) as SpeakerWithRelations | null;
     
     if (speaker) {
-      logger.warn(`[SPEAKER_REGISTRY]   Found existing speaker in DB: ID=${speaker.id}, Prefix="${speaker.speakerPrefix}", Handle="${speaker.speakerHandle}", Type=${speaker.speakerType}`);
+      logger.debug(`[SPEAKER_REGISTRY]   Found existing speaker in DB: ID=${speaker.id}, Prefix="${speaker.speakerPrefix}", Handle="${speaker.speakerHandle}", Type=${speaker.speakerType}`);
     } else {
-      logger.warn(`[SPEAKER_REGISTRY]   NOT FOUND in database - will create new speaker`);
+      logger.debug(`[SPEAKER_REGISTRY]   NOT FOUND in database - will create new speaker`);
       
       // Infer type if not provided
       if (type === 'UNKNOWN') {
         type = this.inferSpeakerType(normalizedPrefix);
-        logger.warn(`[SPEAKER_REGISTRY]   Inferred type: ${type}`);
+        logger.debug(`[SPEAKER_REGISTRY]   Inferred type: ${type}`);
       }
       
       // Create new speaker
       speaker = await this.createSpeaker(normalizedPrefix, type);
-      logger.warn(`[SPEAKER_REGISTRY]   Created new speaker: ID=${speaker.id}, Handle="${speaker.speakerHandle}"`);
+      logger.debug(`[SPEAKER_REGISTRY]   Created new speaker: ID=${speaker.id}, Handle="${speaker.speakerHandle}"`);
     }
     
     // Cache the speaker
     this.speakers.set(normalizedPrefix, speaker);
-    logger.warn(`[SPEAKER_REGISTRY]   Added to cache with key: "${normalizedPrefix}"`);
+    logger.debug(`[SPEAKER_REGISTRY]   Added to cache with key: "${normalizedPrefix}"`);
     return speaker;
   }
 
@@ -248,19 +248,19 @@ export class SpeakerRegistry {
   }
 
   setCurrentWitness(witness: SpeakerWithRelations | null): void {
-    logger.warn(`[SPEAKER_DIAGNOSTIC] SpeakerRegistry.setCurrentWitness called`);
+    logger.debug(`[SPEAKER_DIAGNOSTIC] SpeakerRegistry.setCurrentWitness called`);
     if (witness) {
-      logger.warn(`[SPEAKER_DIAGNOSTIC]   Setting witness: ${witness.speakerHandle} (ID: ${witness.id})`);
-      logger.warn(`[SPEAKER_DIAGNOSTIC]   Witness details: ${witness.witness?.displayName || witness.witness?.name || 'NO_WITNESS_RECORD'}`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]   Setting witness: ${witness.speakerHandle} (ID: ${witness.id})`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]   Witness details: ${witness.witness?.displayName || witness.witness?.name || 'NO_WITNESS_RECORD'}`);
       this.currentWitness = witness;
       this.contextualSpeakers.set('THE WITNESS', witness);
       this.contextualSpeakers.set('A', witness);
       this.contextualSpeakers.set('A.', witness);
       this.contextualSpeakers.set('ANSWER', witness);
       this.contextualSpeakers.set('THE DEPONENT', witness);
-      logger.warn(`[SPEAKER_DIAGNOSTIC]   Updated contextual speakers: A, A., THE WITNESS, ANSWER, THE DEPONENT now map to witness ${witness.id}`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]   Updated contextual speakers: A, A., THE WITNESS, ANSWER, THE DEPONENT now map to witness ${witness.id}`);
     } else {
-      logger.warn(`[SPEAKER_DIAGNOSTIC]   Clearing witness context (setting to null)`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]   Clearing witness context (setting to null)`);
       this.currentWitness = null;
     }
   }
@@ -287,17 +287,17 @@ export class SpeakerRegistry {
     const normalized = prefix.trim().toUpperCase();
     
     // DIAGNOSTIC: Log what's in the contextual map
-    logger.warn(`[SPEAKER_DIAGNOSTIC] resolveContextualSpeaker called with prefix: "${prefix}" (normalized: "${normalized}")`);
-    logger.warn(`[SPEAKER_DIAGNOSTIC]   Contextual speakers map contains:`);
+    logger.debug(`[SPEAKER_DIAGNOSTIC] resolveContextualSpeaker called with prefix: "${prefix}" (normalized: "${normalized}")`);
+    logger.debug(`[SPEAKER_DIAGNOSTIC]   Contextual speakers map contains:`);
     for (const [key, value] of this.contextualSpeakers.entries()) {
-      logger.warn(`[SPEAKER_DIAGNOSTIC]     "${key}" => ${value.speakerHandle} (ID: ${value.id}, Type: ${value.speakerType})`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]     "${key}" => ${value.speakerHandle} (ID: ${value.id}, Type: ${value.speakerType})`);
     }
     
     // Check Q&A formats
     if (normalized === 'Q' || normalized === 'Q.' || normalized === 'QUESTION:' || normalized === 'QUESTION') {
       const speaker = this.contextualSpeakers.get('Q') || null;
       if (speaker) {
-        logger.warn(`[SPEAKER_DIAGNOSTIC]   Resolved Q to: ${speaker.speakerHandle} (ID: ${speaker.id})`);
+        logger.debug(`[SPEAKER_DIAGNOSTIC]   Resolved Q to: ${speaker.speakerHandle} (ID: ${speaker.id})`);
       }
       return speaker;
     }
@@ -305,7 +305,7 @@ export class SpeakerRegistry {
     if (normalized === 'A' || normalized === 'A.' || normalized === 'ANSWER:' || normalized === 'ANSWER') {
       const speaker = this.contextualSpeakers.get('A') || null;
       if (speaker) {
-        logger.warn(`[SPEAKER_DIAGNOSTIC]   Resolved A to: ${speaker.speakerHandle} (ID: ${speaker.id})`);
+        logger.debug(`[SPEAKER_DIAGNOSTIC]   Resolved A to: ${speaker.speakerHandle} (ID: ${speaker.id})`);
       }
       return speaker;
     }
@@ -313,9 +313,9 @@ export class SpeakerRegistry {
     // Check other contextual speakers
     const speaker = this.contextualSpeakers.get(normalized);
     if (speaker) {
-      logger.warn(`[SPEAKER_DIAGNOSTIC]   Found "${normalized}" in contextual map => ${speaker.speakerHandle} (ID: ${speaker.id}, Type: ${speaker.speakerType})`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]   Found "${normalized}" in contextual map => ${speaker.speakerHandle} (ID: ${speaker.id}, Type: ${speaker.speakerType})`);
     } else {
-      logger.warn(`[SPEAKER_DIAGNOSTIC]   "${normalized}" NOT found in contextual speakers map`);
+      logger.debug(`[SPEAKER_DIAGNOSTIC]   "${normalized}" NOT found in contextual speakers map`);
     }
     return speaker || null;
   }

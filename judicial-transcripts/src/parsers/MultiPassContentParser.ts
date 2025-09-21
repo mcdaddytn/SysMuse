@@ -61,6 +61,7 @@ export class ContentParser {
   private sessionLineCounter: number = 0;  // Track line number within session
   private trialLineCounter: number = 0;    // Track line number within trial
   private filteredLineCounts: Map<string, number> = new Map();  // Track filtered line counts
+  private pageLinesCount: Map<number, number> = new Map();  // Track lines per page ACROSS batches
   
   async parseContent(
     metadata: ParsedMetadata,
@@ -73,9 +74,12 @@ export class ContentParser {
     
     // Reset session line counter for this session
     this.sessionLineCounter = 0;
-    
+
     // Reset filtered line counts for this session
     this.filteredLineCounts.clear();
+
+    // Reset page line counts for this session
+    this.pageLinesCount.clear();
     
     // Get the current max trial line number to continue from
     const maxTrialLine = await this.prisma.line.aggregate({
@@ -497,10 +501,7 @@ export class ContentParser {
     });
     
     const pageMap = new Map(pages.map(p => [p.pageNumber, p.id]));
-    
-    // Track lines per page to calculate proper line number within page
-    const pageLinesCount = new Map<number, number>();
-    
+
     for (const [lineNum, line] of batch) {
       const location = metadata.fileLineMapping.get(line.fileLineNumber);
       const section = structure.sectionMapping.get(lineNum) || DocumentSection.UNKNOWN;
@@ -535,9 +536,9 @@ export class ContentParser {
       this.trialLineCounter++;
       
       // Calculate line number within page
-      const currentPageLines = pageLinesCount.get(location.pageNumber) || 0;
+      const currentPageLines = this.pageLinesCount.get(location.pageNumber) || 0;
       const pageLineNumber = currentPageLines + 1;
-      pageLinesCount.set(location.pageNumber, pageLineNumber);
+      this.pageLinesCount.set(location.pageNumber, pageLineNumber);
       
       // Phase 1: Skip examination context update
       // Phase 2 will handle examination context

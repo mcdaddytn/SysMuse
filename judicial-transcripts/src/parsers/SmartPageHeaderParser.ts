@@ -55,7 +55,7 @@ export class SmartPageHeaderParser {
     
     let headerLinesProcessed = 0;
     let foundCaseLine = false;
-    let lastContentLine = -1;  // Track last line with header content
+    let lastContentLine = 0;  // Track last line with header content (0-based index)
     
     // Check what we need to find
     const needsCase = true;
@@ -193,7 +193,9 @@ export class SmartPageHeaderParser {
     
     // Set header lines used based on actual content found
     if (lastContentLine >= 0) {
-      result.headerLinesUsed = lastContentLine + 1;
+      // Only consume lines up to the last line with header content
+      result.headerLinesUsed = Math.max(2, lastContentLine + 1);
+      result.headerLinesUsed = Math.min(result.headerLinesUsed, this.pageHeaderLines);
     } else {
       result.headerLinesUsed = 0;
     }

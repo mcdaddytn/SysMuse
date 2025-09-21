@@ -99,7 +99,7 @@ Generate a JSON object with the following structure. Use sequential IDs starting
     "name": "Full case name",
     "caseNumber": "Case number (CRITICAL: extract exactly as shown, e.g., '2:13-CV-00103-JRG')",
     "plaintiff": "Plaintiff name",
-    "defendant": "Defendant name", 
+    "defendant": "Defendant name",
     "court": "Court name",
     "courtDivision": "Division if mentioned",
     "courtDistrict": "District if mentioned"
@@ -113,7 +113,7 @@ Generate a JSON object with the following structure. Use sequential IDs starting
       "middleInitial": "Middle initial if present",
       "lastName": "Last name",
       "suffix": "Jr./III/etc if present",
-      "speakerPrefix": "How they're addressed in court (e.g., 'MR. SMITH')",
+      "speakerPrefix": "REQUIRED: Generate the speaker prefix - this is how they're addressed in court dialogue. Format as 'TITLE. LASTNAME' in all caps (e.g., 'MR. SMITH', 'MS. JONES', 'DR. BROWN'). If no title is evident, use 'MR.' for males and 'MS.' for females",
       "barNumber": null
     }
   ],
@@ -247,9 +247,12 @@ ${context.transcriptHeader}`;
       
       const entities = JSON.parse(jsonStr) as ExtractedEntities;
 
+      // Ensure all attorneys have speaker prefixes
+      this.ensureSpeakerPrefixes(entities);
+
       // Add fingerprints to entities
       this.addFingerprints(entities);
-      
+
       // Add override configuration fields (pass context for trial shortName)
       this.addOverrideFields(entities, context);
 
@@ -464,6 +467,25 @@ ${prompt.user}
     }
 
     fs.writeFileSync(outputPath, JSON.stringify(entities, null, 2));
+  }
+
+  private ensureSpeakerPrefixes(entities: ExtractedEntities): void {
+    // Ensure all attorneys have speaker prefixes
+    if (entities.Attorney) {
+      entities.Attorney.forEach((attorney: any) => {
+        if (!attorney.speakerPrefix && attorney.lastName) {
+          // Generate speaker prefix if missing
+          const title = attorney.title || 'MR.';
+          const lastName = attorney.lastName.toUpperCase();
+          attorney.speakerPrefix = `${title} ${lastName}`.toUpperCase().replace(/\.\s+/g, '. ');
+
+          console.log(`Generated speaker prefix for ${attorney.name}: ${attorney.speakerPrefix}`);
+        } else if (attorney.speakerPrefix) {
+          // Ensure existing speaker prefix is properly formatted (uppercase)
+          attorney.speakerPrefix = attorney.speakerPrefix.toUpperCase();
+        }
+      });
+    }
   }
 
   private addFingerprints(entities: ExtractedEntities): void {

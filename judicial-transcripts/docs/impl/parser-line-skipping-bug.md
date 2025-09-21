@@ -100,16 +100,135 @@ The parser completely skipped these lines from the raw text:
    - Trial line 15624 (page line 11) jumps to 15636 (should be line 12)
    - Missing trial line numbers 15625-15635
 
-## Root Cause Hypothesis
+## Root Cause Analysis
 
+### Initial Hypothesis (Incorrect)
 The parser appears to have issues when:
 1. There's a speaker change with specific formatting (MR. MUELLER: with colon)
 2. Multi-line statements that continue without line numbers on subsequent lines
 3. Possibly related to blank lines between numbered lines in the raw text
 
+### Actual Findings (2025-09-21)
+
+After implementing comprehensive logging and diagnostics, we discovered:
+
+1. **The raw text files are correct** - All lines including MR. MUELLER's closing statement are present in the converted text files
+2. **Lines are being lost during extraction/metadata phase** - Lines 1-11 are never reaching the `processLineBatch` method
+3. **The issue is systematic** - Affects multiple pages across all sessions, not just page 40
+4. **Two distinct patterns observed**:
+   - **SUMMARY section (Page 1)**: Jump from line 4 to line 23 due to blank lines 5-22 (expected behavior)
+   - **PROCEEDINGS section**: Lines 1-11 completely missing, parser starts at line 12 (BUG)
+
+### Key Diagnostic Results
+
+1. **LINE SKIP Detection**:
+   ```
+   [LINE SKIP] Page 1: Jump from line 4 to line 23 - missing lines 5 to 22
+   ```
+   This occurs in SUMMARY section where lines 5-22 are blank (only line numbers, no content)
+
+2. **Discontinuity Warnings**:
+   ```
+   Line number discontinuity on page 40: Prefix shows line 12, calculated line 1 (diff=11)
+   ```
+   This indicates the parser is receiving line 12 as the first line of the page
+
+3. **Database Storage**:
+   - Only 14 lines stored for pages that should have 25 lines
+   - Lines are correctly numbered 1-14 but contain content from lines 12-25
+
+### Where Lines Are Lost
+
+The lines are being lost somewhere between:
+1. **Text file reading** (lines exist in files ✓)
+2. **Metadata extraction** in `MultiPassMetadataExtractor`
+3. **Line mapping** in the metadata structure
+4. **Batch creation** in `createLineBatches`
+
+The `processLineBatch` method never receives lines 1-11, indicating they're filtered or skipped during extraction.
+
 ## Suggested Diagnostics and Fixes
 
-### 1. Add Line Counting Diagnostics
+### 1. Line Number Continuity Check (Immediate Implementation)
+
+During Phase 1 parsing, we can detect discontinuities by comparing:
+- **linePrefix**: The raw line number from the text (e.g., "12" from "12  MR. MUELLER:")
+- **lineNumber**: The calculated line number we assign in our Line model
+
+#### Implementation Strategy
+
+```typescript
+// In ContentParser.ts or MultiPassParser.ts during line processing
+private checkLineNumberContinuity(
+  line: ExtractedLine,
+  calculatedLineNumber: number,
+  documentSection: DocumentSection
+): void {
+  // Only check during PROCEEDINGS section where line numbers are reliable
+  if (documentSection !== DocumentSection.PROCEEDINGS) {
+    return;
+  }
+
+  // Extract numeric line number from linePrefix
+  const prefixMatch = line.linePrefix?.match(/^\s*(\d+)\s*/);
+  if (!prefixMatch) {
+    // No line number in prefix - might be continuation line
+    return;
+  }
+
+  const prefixLineNumber = parseInt(prefixMatch[1]);
+
+  // Compare with our calculated line number
+  if (prefixLineNumber !== calculatedLineNumber) {
+    this.logger.warn(
+      `Line number discontinuity detected at calculated line ${calculatedLineNumber}: ` +
+      `Prefix shows line ${prefixLineNumber}, difference of ${Math.abs(prefixLineNumber - calculatedLineNumber)}`
+    );
+
+    // Log context for debugging
+    this.logger.debug(`  Line text: ${line.text?.substring(0, 50)}...`);
+    this.logger.debug(`  Speaker: ${line.speakerPrefix || 'NO SPEAKER'}`);
+
+    // Track discontinuities for summary
+    this.discontinuities.push({
+      calculatedLine: calculatedLineNumber,
+      prefixLine: prefixLineNumber,
+      text: line.text?.substring(0, 50),
+      page: line.pageNumber
+    });
+  }
+}
+```
+
+#### Expected Behavior
+
+- **PROCEEDINGS section**: Line numbers should match exactly
+  - Prefix: "12" → Calculated: 12 ✓
+  - Prefix: "13" → Calculated: 13 ✓
+
+- **SUMMARY/CERTIFICATION sections**: May have unnumbered lines
+  - These sections often have content without line numbers
+  - Skip validation for these sections
+
+#### Warning Triggers
+
+The system should log warnings when:
+1. Prefix line number jumps (e.g., 11 → 23) but calculated continues (11 → 12)
+2. Prefix line number exists but doesn't match calculated
+3. Multiple consecutive mismatches occur (indicates systematic problem)
+
+#### Example Detection
+
+In the bug case from Trial 67:
+```
+Line 11: prefix="11", calculated=11 ✓
+Line 12: prefix="23", calculated=12 ✗ WARNING: Discontinuity (diff=11)
+Line 13: prefix="24", calculated=13 ✗ WARNING: Discontinuity (diff=11)
+```
+
+This would immediately flag that lines 12-22 from the original text were skipped.
+
+### 2. Add Line Counting Diagnostics
 ```typescript
 // In MultiPassParser.ts - Add to parseContent method
 private async parseContent(lines: ExtractedLine[], session: Session): Promise<void> {
@@ -207,6 +326,36 @@ private async compareWithRawText(
 }
 ```
 
+## Next Investigation Steps
+
+1. **Check MultiPassMetadataExtractor**:
+   - Add logging in `extractMetadata` method to track all lines being read
+   - Verify page boundaries are correctly detected
+   - Check if lines 1-11 are being read but filtered out
+
+2. **Check Line Filtering**:
+   - Review `shouldFilterLine` method in ContentParser
+   - Check if `lineFilters` in trialstyle.json are too aggressive
+   - Current filters for trial 67:
+     ```json
+     "lineFilters": {
+       "literal": [
+         "Shawn M. McRoberts, RMR, CRR",
+         "Federal Official Court Reporter"
+       ]
+     }
+     ```
+
+3. **Check Page Boundary Detection**:
+   - Verify form feed character detection
+   - Check if page header/footer detection is consuming lines
+   - Look for off-by-one errors in page line counting
+
+4. **Debug Metadata Structure**:
+   - Log the `metadata.lines` Map size vs actual lines in file
+   - Check `metadata.fileLineMapping` for missing entries
+   - Verify `metadata.pageMapping` is correct
+
 ## Testing Strategy
 
 1. **Create test case with the specific problematic text**:
@@ -244,3 +393,78 @@ Until the parser is fixed, we may need to:
 
 ## Priority
 **CRITICAL** - This bug causes data loss and prevents proper legal document analysis.
+
+## NEW FINDINGS (2025-09-21 Session)
+
+### Database Insert Failure Discovery
+- **Lines ARE being extracted correctly** - MetadataExtractor finds all 25 lines on page 4
+- **Lines are NOT being saved to database** - Page 4 jumps from line 11 to line 23
+- **Line table ID discontinuity** - IDs jump from 79 to 91, suggesting 12 records failed to insert
+- **Silent failure** - No error messages during insert, using `skipDuplicates: true` may be hiding errors
+
+### Evidence from Trial 67 Page 4
+```
+Extraction summary shows:
+- Lines extracted: 25
+- Line prefixes found: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25
+
+But database shows:
+- Lines 1-11: Present
+- Lines 12-22: MISSING
+- Line 23-25: Present
+- Line IDs: Jump from 79 to 91 (12 IDs skipped)
+```
+
+### Root Cause Hypothesis
+The `prisma.line.createMany({ skipDuplicates: true })` is silently failing for lines 12-22, possibly due to:
+1. Unique constraint violations
+2. Data validation issues
+3. Transaction problems
+
+### Next Steps
+1. Remove `skipDuplicates: true` to see actual errors
+2. Check for unique constraint violations
+3. Add error handling to catch insert failures
+4. Implement simple line-by-line insertion mode (no batching, no transactions)
+5. Add verbose logging for each insert to identify exactly which lines fail
+
+## Implementation Notes
+
+### Current Batch Insert Code (PROBLEMATIC)
+Located in `/src/parsers/MultiPassContentParser.ts`:
+```typescript
+await this.prisma.line.createMany({
+  data: lineData,
+  skipDuplicates: true  // HIDES ERRORS!
+});
+```
+
+### Proposed Simple Insert Mode
+```typescript
+// Insert one line at a time with proper error handling
+for (const line of lineData) {
+  try {
+    await this.prisma.line.create({ data: line });
+    console.log(`Inserted line ${line.lineNumber} with prefix '${line.linePrefix}'`);
+  } catch (error) {
+    console.error(`FAILED to insert line ${line.lineNumber}:`, error);
+    // Log the exact data that failed
+    console.error('Failed data:', JSON.stringify(line, null, 2));
+  }
+}
+```
+
+### Batch Processing Issues
+- Currently processing in batches of 1000 lines
+- Using `createMany` with `skipDuplicates: true`
+- No error reporting for individual line failures
+- Possible transaction rollback issues
+- Complex logic may be interfering with simple inserts
+
+### Simple Mode Requirements
+1. NO transactions
+2. NO batch inserts (at least for debugging)
+3. Insert line-by-line
+4. Log every insert attempt
+5. Catch and report every error
+6. Continue processing even if some lines fail

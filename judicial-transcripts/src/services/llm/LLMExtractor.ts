@@ -182,12 +182,25 @@ Important rules:
 5. Parse names carefully to separate title, first, middle, last, and suffix
 6. If information is not present, use null rather than empty string
 7. CRITICAL: Create TrialAttorney associations for EVERY attorney you extract:
-   - Look for "FOR THE PLAINTIFF:" or "FOR PLAINTIFF:" sections - these attorneys have side="plaintiff"
-   - Look for "FOR THE DEFENDANT:" or "FOR DEFENDANT:" or "FOR THE DEFENDANTS:" sections - these attorneys have side="defendant"
+   - The transcript header uses section headers to indicate which side attorneys represent:
+     * "FOR THE PLAINTIFF:" or "FOR THE PLAINTIFFS:" or "FOR PLAINTIFF:" - marks the start of a plaintiff attorney section
+     * "FOR THE DEFENDANT:" or "FOR THE DEFENDANTS:" or "FOR DEFENDANT:" - marks the start of a defendant attorney section
+   - IMPORTANT: There may be MULTIPLE sections for each side throughout the document
+   - Track the current section: when you see "FOR THE PLAINTIFF" (or variations), you're in a plaintiff section
+   - When you see "FOR THE DEFENDANT" (or variations), you're now in a defendant section
+   - The section can switch back and forth multiple times in the document
+   - ALL attorney names found under a "FOR THE PLAINTIFF" section MUST have side="plaintiff"
+   - ALL attorney names found under a "FOR THE DEFENDANT" section MUST have side="defendant"
+   - Continue assigning the current side until you encounter a new section header
+   - Example pattern:
+     * FOR THE PLAINTIFF: → attorneys here are plaintiff
+     * FOR THE DEFENDANT: → attorneys here are defendant
+     * FOR THE PLAINTIFFS: → attorneys here are plaintiff (can appear again)
+     * FOR THE DEFENDANTS: → attorneys here are defendant (can appear again)
    - Match attorneyId to the Attorney you extracted
    - Match lawFirmOfficeId to the office the attorney is associated with
    - Set leadCounsel to false by default
-   - If you cannot determine the side from context, use "unknown" as the side value
+   - If you cannot determine the side from context, use "unknown" as the side value (this should be rare)
 
 Return ONLY the JSON object, no additional text or explanation.`;
   }
@@ -475,14 +488,33 @@ ${prompt.user}
       entities.Attorney.forEach((attorney: any) => {
         if (!attorney.speakerPrefix && attorney.lastName) {
           // Generate speaker prefix if missing
-          const title = attorney.title || 'MR.';
+          const title = (attorney.title || 'MR.').toUpperCase().replace(/\.$/, ''); // Remove trailing dot
           const lastName = attorney.lastName.toUpperCase();
-          attorney.speakerPrefix = `${title} ${lastName}`.toUpperCase().replace(/\.\s+/g, '. ');
+          attorney.speakerPrefix = `${title}. ${lastName}`;
 
           console.log(`Generated speaker prefix for ${attorney.name}: ${attorney.speakerPrefix}`);
         } else if (attorney.speakerPrefix) {
           // Ensure existing speaker prefix is properly formatted (uppercase)
-          attorney.speakerPrefix = attorney.speakerPrefix.toUpperCase();
+          // Fix common issues: mixed case, missing dots, extra spaces
+          let prefix = attorney.speakerPrefix.toUpperCase();
+
+          // Ensure proper formatting: "TITLE. LASTNAME"
+          // Handle cases like "Mr Smith" -> "MR. SMITH" or "MR.SMITH" -> "MR. SMITH"
+          prefix = prefix.replace(/^(MR|MS|MRS|DR|JUDGE)\.?\s*/i, '$1. ');
+
+          // Remove extra spaces
+          prefix = prefix.replace(/\s+/g, ' ').trim();
+
+          // Ensure dot after title if it's missing
+          if (prefix.match(/^(MR|MS|MRS|DR|JUDGE)\s/)) {
+            prefix = prefix.replace(/^(MR|MS|MRS|DR|JUDGE)\s/, '$1. ');
+          }
+
+          if (attorney.speakerPrefix !== prefix) {
+            console.log(`Normalized speaker prefix for ${attorney.name}: ${attorney.speakerPrefix} -> ${prefix}`);
+          }
+
+          attorney.speakerPrefix = prefix;
         }
       });
     }

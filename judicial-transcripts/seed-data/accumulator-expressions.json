@@ -10,7 +10,7 @@
     "metadata": {
       "requiredSpeakers": ["JUDGE", "ATTORNEY"],
       "minDistinctSpeakers": 3,
-      "maxStatementWords": 20,
+      "maxStatementWords": 30,
       "displaySize": 9
     },
     "isActive": true
@@ -28,7 +28,7 @@
       "requirePlaintiffAttorney": true,
       "requireDefenseAttorney": true,
       "minDistinctSpeakers": 3,
-      "maxStatementWords": 20,
+      "maxStatementWords": 30,
       "displaySize": 9
     },
     "isActive": true
@@ -46,8 +46,8 @@
       "judgePhrases": ["Sustained", "sustained"],
       "attorneyPhraseWeight": 0.5,
       "judgePhraseWeight": 0.5,
-      "attorneyMaxWords": 20,
-      "judgeMaxWords": 20,
+      "attorneyMaxWords": 50,
+      "judgeMaxWords": 50,
       "displaySize": 9,
       "weights": {
         "Objection": 1.0,
@@ -72,8 +72,8 @@
       "judgePhrases": ["Overruled", "overruled", "allow it"],
       "attorneyPhraseWeight": 0.5,
       "judgePhraseWeight": 0.5,
-      "attorneyMaxWords": 20,
-      "judgeMaxWords": 20,
+      "attorneyMaxWords": 50,
+      "judgeMaxWords": 50,
       "displaySize": 9,
       "weights": {
         "Objection": 1.0,

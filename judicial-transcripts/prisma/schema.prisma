@@ -148,7 +148,6 @@ model Line {
   page              Page            @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
   @@unique([pageId, lineNumber])
-  @@index([pageId, lineNumber])
   @@index([trialLineNumber])
   @@index([sessionLineNumber])
   @@index([documentSection])

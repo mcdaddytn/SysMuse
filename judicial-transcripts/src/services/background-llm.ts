@@ -43,9 +43,9 @@ interface BackgroundLLMConfig {
 }
 
 export class BackgroundLLMService {
-  private config: BackgroundLLMConfig;
+  protected config: BackgroundLLMConfig;
   private currentProfile: string;
-  private llm: any;
+  protected llm: any;
   private contextSuffix: string;
   private systemPrompt: string = '';
 
@@ -108,8 +108,8 @@ export class BackgroundLLMService {
     }
   }
 
-  private initializeLLM() {
-    const profile = this.config.llmProfiles.profiles[this.currentProfile];
+  protected initializeLLM(profileOverride?: string) {
+    const profile = this.config.llmProfiles.profiles[profileOverride || this.currentProfile];
     if (!profile) {
       throw new Error(`LLM profile '${this.currentProfile}' not found. Available profiles: ${Object.keys(this.config.llmProfiles.profiles).join(', ')}`);
     }
@@ -158,7 +158,7 @@ export class BackgroundLLMService {
     }
   }
 
-  private async ensureDirectoryExists(dirPath: string) {
+  protected async ensureDirectoryExists(dirPath: string) {
     try {
       await fs.access(dirPath);
     } catch {
@@ -528,7 +528,7 @@ export class BackgroundLLMService {
   }
 
   // Component Summary Methods for Feature 09D
-  private async loadComponentSummaryConfig(): Promise<any> {
+  protected async loadComponentSummaryConfig(): Promise<any> {
     const configPath = path.join(__dirname, '../../config/llm-summaries.json');
     try {
       const configData = await fs.readFile(configPath, 'utf-8');
@@ -539,7 +539,7 @@ export class BackgroundLLMService {
     }
   }
 
-  private async checkTrialSummaryDependency(trialName: string): Promise<string | null> {
+  protected async checkTrialSummaryDependency(trialName: string): Promise<string | null> {
     // Use the same file token generation for consistency
     const trialHandle = generateFileToken(trialName);
 

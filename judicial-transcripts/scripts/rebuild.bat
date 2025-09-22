@@ -3,21 +3,26 @@
 REM Clean and rebuild TypeScript to dist, regenerate Prisma types
 REM Usage: scripts\rebuild.bat
 
-SETLOCAL ENABLEDELAYEDEXPANSION
-for %%I in ("%~dp0..") do set REPO_ROOT=%%~fI
+setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
+set "SCRIPT_DIR=%~dp0"
+for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
 cd /d "%REPO_ROOT%"
 
-call "%~dp0clean.bat"
+call "%SCRIPT_DIR%clean.bat"
 
-echo ==> Regenerating Prisma client (if schema present)...
+echo [rebuild] Regenerating Prisma client (if schema present)...
 IF EXIST "prisma\schema.prisma" (
   npx prisma generate
 ) ELSE (
-  echo     (No prisma\schema.prisma found; skipping prisma generate)
+  echo [rebuild] (No prisma\schema.prisma found; skipping prisma generate)
 )
 
-echo ==> TypeScript build...
-npx tsc -b || npx tsc
+echo [rebuild] TypeScript build...
+npx tsc -b
+IF ERRORLEVEL 1 (
+  echo [rebuild] Incremental build failed or not supported, doing full tsc...
+  npx tsc
+)
 
-echo ==> Rebuild complete. Output in .\dist
-ENDLOCAL
+echo [rebuild] Complete. Output in .\dist
+endlocal

@@ -11,14 +11,17 @@ cd "$REPO_ROOT"
 
 bash "$SCRIPT_DIR/clean.sh"
 
-echo "==> Regenerating Prisma client (if schema present)..."
+echo "[rebuild] Regenerating Prisma client (if schema present)..."
 if [ -f "prisma/schema.prisma" ]; then
   npx prisma generate
 else
-  echo "    (No prisma/schema.prisma found; skipping prisma generate)"
+  echo "[rebuild] (No prisma/schema.prisma found; skipping prisma generate)"
 fi
 
-echo "==> TypeScript build..."
-npx tsc -b || npx tsc
+echo "[rebuild] TypeScript build..."
+if ! npx tsc -b; then
+  echo "[rebuild] Incremental build failed or not supported, doing full tsc..."
+  npx tsc
+fi
 
-echo "==> Rebuild complete. Output in ./dist"
+echo "[rebuild] Complete. Output in ./dist"

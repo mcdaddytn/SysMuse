@@ -69,7 +69,7 @@ export class StandardTrialHierarchyBuilder {
       // Phase 5: Find closing statements
       const closingPeriod = await this.findClosingStatements(trialId, trialSection.id, testimonyPeriod);
 
-      // Phase 6: Find jury verdict first (search for FOREPERSON)
+      // Phase 6: Find jury verdict first (search for FOREPERSON or PRESIDING OFFICER)
       const juryVerdict = await this.findJuryVerdict(trialId, trialSection.id, closingPeriod);
 
       // Phase 7: Determine jury deliberation and case wrapup based on verdict
@@ -2082,7 +2082,8 @@ export class StandardTrialHierarchyBuilder {
           OR: [
             { speakerHandle: { contains: 'FOREPERSON' } },
             { speakerHandle: { contains: 'FOREMAN' } },
-            { speakerHandle: { contains: 'FOREWOMAN' } }
+            { speakerHandle: { contains: 'FOREWOMAN' } },
+            { speakerHandle: { contains: 'PRESIDING_OFFICER' } }
           ]
         }
       },

@@ -15,7 +15,17 @@ export class LineParser {
     /^\s*(COURT SECURITY OFFICER):\s*(.*)$/,
     // THE FOREPERSON: pattern
     /^\s*(THE FOREPERSON):\s*(.*)$/,
-    // MR./MS./MRS./DR. NAME: pattern  
+    // FOREPERSON: pattern (without THE)
+    /^\s*(FOREPERSON):\s*(.*)$/,
+    // THE PRESIDING OFFICER: pattern
+    /^\s*(THE PRESIDING OFFICER):\s*(.*)$/,
+    // THE PANEL MEMBER: pattern
+    /^\s*(THE PANEL MEMBER):\s*(.*)$/,
+    // VENIRE MEMBER: pattern
+    /^\s*(VENIRE MEMBER):\s*(.*)$/,
+    // PANEL MEMBER NO. X: pattern
+    /^\s*(PANEL MEMBER(?:\s+NO\.\s*\d+)?):\s*(.*)$/,
+    // MR./MS./MRS./DR. NAME: pattern
     /^\s*((?:MR\.|MS\.|MRS\.|DR\.)\s+[A-Z][A-Z\s]*?):\s*(.*)$/,
     // JUROR NAME: pattern
     /^\s*(JUROR\s+[A-Z][A-Z\s]*?):\s*(.*)$/,

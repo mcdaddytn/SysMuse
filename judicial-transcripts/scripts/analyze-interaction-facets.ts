@@ -2,7 +2,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
 import Anthropic from '@anthropic-ai/sdk';
+
+dotenv.config();
 
 interface InteractionData {
   interactionId: number;
@@ -163,10 +166,34 @@ Return as JSON with this structure:
     const content = fs.readFileSync(filePath, 'utf-8');
     const data = JSON.parse(content);
 
-    let interactions: InteractionData[] = data.interactions || data;
+    // Handle different data formats
+    let interactions: InteractionData[] = [];
 
-    if (options.minDuration) {
-      interactions = interactions.filter(i => i.duration >= options.minDuration);
+    if (data.hierarchy) {
+      // Convert hierview format to InteractionData format
+      interactions = data.hierarchy.map((item: any) => {
+        const statements = item.section?.metadata?.statements || [];
+        return {
+          interactionId: item.section?.id || 0,
+          startStatementId: statements[0]?.statementId || 0,
+          endStatementId: statements[statements.length - 1]?.statementId || 0,
+          participantCount: item.section?.metadata?.matches?.[1]?.count || 2,
+          duration: statements.length,
+          statements: statements.map((s: any) => ({
+            id: s.statementId,
+            speaker: s.speakerHandle,
+            role: s.speakerType,
+            text: s.text
+          }))
+        };
+      });
+    } else {
+      interactions = data.interactions || data;
+    }
+
+    if (options.minDuration !== undefined) {
+      const minDur = options.minDuration;
+      interactions = interactions.filter(i => i.duration >= minDur);
     }
 
     if (options.sampleSize && interactions.length > options.sampleSize) {

@@ -16,6 +16,7 @@ export interface LLMContext {
   transcriptHeader: string;
   trialName?: string;
   trialPath?: string;
+  outputPath?: string;
 }
 
 export interface ExtractedEntities extends OverrideData {
@@ -168,7 +169,7 @@ Generate a JSON object with the following structure. Use sequential IDs starting
       "trialId": 1,
       "attorneyId": 1,
       "lawFirmOfficeId": 1,
-      "side": "plaintiff or defendant",
+      "side": "PLAINTIFF or DEFENDANT",
       "leadCounsel": false
     }
   ]
@@ -188,19 +189,22 @@ Important rules:
    - IMPORTANT: There may be MULTIPLE sections for each side throughout the document
    - Track the current section: when you see "FOR THE PLAINTIFF" (or variations), you're in a plaintiff section
    - When you see "FOR THE DEFENDANT" (or variations), you're now in a defendant section
+   - CRITICAL BOUNDARY RULE: When you encounter a section header like "FOR THE DEFENDANT:", the VERY NEXT attorney name (even if on the same line) belongs to the defendant side
+     * Example: "FOR THE DEFENDANT: MR. JOHN SMITH" → John Smith is a DEFENDANT attorney, not plaintiff
+     * The section header immediately changes the context - no attorneys after it should be assigned to the previous side
    - The section can switch back and forth multiple times in the document
-   - ALL attorney names found under a "FOR THE PLAINTIFF" section MUST have side="plaintiff"
-   - ALL attorney names found under a "FOR THE DEFENDANT" section MUST have side="defendant"
+   - ALL attorney names found under a "FOR THE PLAINTIFF" section MUST have side="PLAINTIFF" (uppercase)
+   - ALL attorney names found under a "FOR THE DEFENDANT" section MUST have side="DEFENDANT" (uppercase)
    - Continue assigning the current side until you encounter a new section header
    - Example pattern:
-     * FOR THE PLAINTIFF: → attorneys here are plaintiff
-     * FOR THE DEFENDANT: → attorneys here are defendant
-     * FOR THE PLAINTIFFS: → attorneys here are plaintiff (can appear again)
-     * FOR THE DEFENDANTS: → attorneys here are defendant (can appear again)
+     * FOR THE PLAINTIFF: → attorneys here are PLAINTIFF
+     * FOR THE DEFENDANT: → attorneys here are DEFENDANT (including names on the same line)
+     * FOR THE PLAINTIFFS: → attorneys here are PLAINTIFF (can appear again)
+     * FOR THE DEFENDANTS: → attorneys here are DEFENDANT (can appear again)
    - Match attorneyId to the Attorney you extracted
    - Match lawFirmOfficeId to the office the attorney is associated with
    - Set leadCounsel to false by default
-   - If you cannot determine the side from context, use "unknown" as the side value (this should be rare)
+   - If you cannot determine the side from context, use "UNKNOWN" as the side value (this should be rare)
 
 Return ONLY the JSON object, no additional text or explanation.`;
   }
@@ -242,10 +246,17 @@ ${context.transcriptHeader}`;
       ];
 
       const response = await llm.call(messages);
-      
+
       // Parse the JSON response
       let jsonStr = response.content as string;
-      
+
+      // Log raw response for debugging
+      if (this.systemConfig.llm?.debug) {
+        console.log('Raw LLM response length:', jsonStr.length);
+        console.log('First 500 chars:', jsonStr.substring(0, 500));
+        console.log('Last 500 chars:', jsonStr.substring(Math.max(0, jsonStr.length - 500)));
+      }
+
       // Clean up the response - remove markdown code blocks if present
       jsonStr = jsonStr.trim();
       if (jsonStr.startsWith('```json')) {
@@ -257,11 +268,83 @@ ${context.transcriptHeader}`;
         jsonStr = jsonStr.slice(0, -3); // Remove trailing ```
       }
       jsonStr = jsonStr.trim();
-      
-      const entities = JSON.parse(jsonStr) as ExtractedEntities;
+
+      // Additional validation before parsing
+      if (!jsonStr) {
+        throw new Error('Empty response from LLM');
+      }
+
+      // Check for common truncation issues
+      const openBraces = (jsonStr.match(/{/g) || []).length;
+      const closeBraces = (jsonStr.match(/}/g) || []).length;
+      const openBrackets = (jsonStr.match(/\[/g) || []).length;
+      const closeBrackets = (jsonStr.match(/\]/g) || []).length;
+
+      if (openBraces !== closeBraces || openBrackets !== closeBrackets) {
+        console.error('JSON structure mismatch - likely truncated response');
+        console.error(`Braces: ${openBraces} open, ${closeBraces} close`);
+        console.error(`Brackets: ${openBrackets} open, ${closeBrackets} close`);
+
+        // Try to auto-fix common truncation patterns
+        if (openBraces > closeBraces) {
+          const missingBraces = '}}'.repeat(openBraces - closeBraces);
+          jsonStr = jsonStr + missingBraces;
+          console.log('Attempting to fix by adding closing braces:', missingBraces);
+        }
+        if (openBrackets > closeBrackets) {
+          const missingBrackets = ']'.repeat(openBrackets - closeBrackets);
+          jsonStr = jsonStr + missingBrackets;
+          console.log('Attempting to fix by adding closing brackets:', missingBrackets);
+        }
+      }
+
+      let entities: ExtractedEntities;
+      try {
+        entities = JSON.parse(jsonStr) as ExtractedEntities;
+      } catch (parseError) {
+        // Save the malformed response for manual fixing
+        const trialName = context.trialName?.replace(/[^a-zA-Z0-9]/g, '_') || 'unknown';
+        const malformedPath = context.outputPath ?
+          context.outputPath.replace('.json', '-malformed.txt') :
+          path.join(context.trialPath || '.', 'trial-metadata-malformed.txt');
+
+        // Ensure directory exists
+        const outputDir = path.dirname(malformedPath);
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        // Save the malformed JSON
+        fs.writeFileSync(malformedPath, jsonStr);
+        console.error(`\n⚠️  JSON parsing failed: ${parseError}`);
+        console.error(`📝 Malformed response saved to: ${malformedPath}`);
+        console.error(`   You can manually edit this file and rename it to .json when fixed.`);
+
+        // Also save debug info if savePrompt is enabled
+        if (savePrompt) {
+          const debugDir = this.systemConfig.llm?.output?.baseDir || 'output/llm';
+          const timestamp = format(new Date(), 'yyyy-MM-dd-HHmmss');
+          const errorFile = path.join(debugDir, 'errors', `${timestamp}-${trialName}-failed-response.txt`);
+
+          if (!fs.existsSync(path.dirname(errorFile))) {
+            fs.mkdirSync(path.dirname(errorFile), { recursive: true });
+          }
+
+          const debugInfo = `Error: ${parseError}\n\n` +
+                          `Open braces: ${openBraces}, Close braces: ${closeBraces}\n` +
+                          `Open brackets: ${openBrackets}, Close brackets: ${closeBrackets}\n\n` +
+                          `Raw response:\n${jsonStr}`;
+          fs.writeFileSync(errorFile, debugInfo);
+        }
+
+        throw new Error(`JSON parsing failed: ${parseError}. Response saved to ${malformedPath}`);
+      }
 
       // Ensure all attorneys have speaker prefixes
       this.ensureSpeakerPrefixes(entities);
+
+      // Normalize TrialAttorney side values to uppercase
+      this.normalizeTrialAttorneySides(entities);
 
       // Add fingerprints to entities
       this.addFingerprints(entities);
@@ -365,7 +448,7 @@ ${prompt.user}
     fs.writeFileSync(overrideFile, JSON.stringify(entities, null, 2));
   }
 
-  async extractFromTrialFolder(trialPath: string): Promise<ExtractedEntities | null> {
+  async extractFromTrialFolder(trialPath: string, outputPath?: string): Promise<ExtractedEntities | null> {
     // Load trialstyle.json if it exists to get orderedFiles and llmParsePages
     const trialStylePath = path.join(trialPath, 'trialstyle.json');
     let trialStyleConfig: any = {};
@@ -405,7 +488,8 @@ ${prompt.user}
     return this.requestEntityExtraction({
       transcriptHeader: header,
       trialName: path.basename(trialPath),
-      trialPath
+      trialPath,
+      outputPath
     });
   }
 
@@ -480,6 +564,23 @@ ${prompt.user}
     }
 
     fs.writeFileSync(outputPath, JSON.stringify(entities, null, 2));
+  }
+
+  private normalizeTrialAttorneySides(entities: ExtractedEntities): void {
+    // Normalize TrialAttorney side values to uppercase
+    if (entities.TrialAttorney) {
+      entities.TrialAttorney.forEach((trialAttorney: any) => {
+        if (trialAttorney.side) {
+          const normalized = trialAttorney.side.toUpperCase();
+          if (normalized === 'PLAINTIFF' || normalized === 'DEFENDANT' || normalized === 'UNKNOWN') {
+            trialAttorney.side = normalized;
+          } else {
+            console.warn(`Unknown side value "${trialAttorney.side}" for TrialAttorney ${trialAttorney.id}, normalizing to UNKNOWN`);
+            trialAttorney.side = 'UNKNOWN';
+          }
+        }
+      });
+    }
   }
 
   private ensureSpeakerPrefixes(entities: ExtractedEntities): void {

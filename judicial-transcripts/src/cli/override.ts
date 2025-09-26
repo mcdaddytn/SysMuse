@@ -123,7 +123,7 @@ program
 
       if (options.trialPath) {
         console.log(`\n🔍 Extracting entities from ${options.trialPath}...`);
-        entities = await extractor.extractFromTrialFolder(options.trialPath);
+        entities = await extractor.extractFromTrialFolder(options.trialPath, options.output);
         
         if (!entities) {
           console.error('❌ No entities extracted');

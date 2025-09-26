@@ -4,6 +4,8 @@ import { spawn } from 'child_process';
 import { logger } from '../utils/logger';
 import { FileConventionDetector } from './FileConventionDetector';
 import { TrialStyleConfig } from '../types/config.types';
+import { PostProcessor } from '../services/postprocessor/PostProcessor';
+import { PostProcessorMode } from '../services/postprocessor/types';
 
 interface PostProcessingOptions {
   fixTranscriptSpacing?: boolean;
@@ -378,6 +380,32 @@ export class PdfToTextConverter {
           }
         }
         
+        // Run post-processor if configured
+        const trialStylePath = path.join(outputSubDir, 'trialstyle.json');
+        let postProcessorMode: PostProcessorMode = 'NONE';
+
+        if (fs.existsSync(trialStylePath)) {
+          const trialStyle = JSON.parse(fs.readFileSync(trialStylePath, 'utf-8'));
+          postProcessorMode = trialStyle.postProcessorMode || 'NONE';
+
+          if (postProcessorMode !== 'NONE') {
+            logger.info(`\n  Running post-processor (mode: ${postProcessorMode})...`);
+            const postProcessor = new PostProcessor();
+            const postResult = await postProcessor.process({
+              mode: postProcessorMode,
+              trialId: subDir,
+              outputDir: outputSubDir,
+              trialMetadataPath: path.join(outputSubDir, 'trial-metadata.json')
+            });
+
+            if (postResult.success) {
+              logger.info(`    ✔ Post-processor completed: ${postResult.filesProcessed} files processed`);
+            } else {
+              logger.error(`    ✗ Post-processor failed: ${postResult.error}`);
+            }
+          }
+        }
+
         // ALWAYS generate conversion summary (even if no PDFs found)
         logger.info(`\n  Creating conversion summary...`);
         const conversionSummary = {
@@ -393,7 +421,7 @@ export class PdfToTextConverter {
           successCount: convertedFiles.length,
           complete: pdfs.length === 0 ? existingTextFiles.length > 0 : convertedFiles.length === pdfs.length
         };
-        
+
         const summaryPath = path.join(outputSubDir, 'conversion-summary.json');
         logger.info(`    Writing to: ${summaryPath}`);
         fs.writeFileSync(summaryPath, JSON.stringify(conversionSummary, null, 2));

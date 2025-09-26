@@ -86,9 +86,10 @@ export class MultiProviderLLM {
     }
 
     // Default configurations - adjusted for model capabilities
+    // Only apply defaults if model is NOT configured
     if (model.includes('gpt-4-turbo') || model.includes('gpt-4-1106')) {
       return {
-        maxTokens: 4000,
+        maxTokens: 4096,  // Maximum supported by the model
         temperature: 0.1,
         contextWindow: 128000  // 128k context for gpt-4-turbo
       };
@@ -99,7 +100,7 @@ export class MultiProviderLLM {
         contextWindow: 16384  // 16k context
       };
     }
-    
+
     // Default for standard models
     return {
       maxTokens: 4000,

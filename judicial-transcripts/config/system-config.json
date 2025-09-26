@@ -15,18 +15,19 @@
     "logs": "logs"
   },
   "llm": {
+    "debug": false,
     "defaultProvider": "openai",
-    "defaultModel": "gpt-4",
+    "defaultModel": "gpt-4-turbo",
     "providers": {
       "openai": {
         "models": {
           "gpt-4": {
-            "maxTokens": 4000,
+            "maxTokens": 4096,
             "temperature": 0.1,
             "contextWindow": 8192
           },
           "gpt-4-turbo": {
-            "maxTokens": 4000,
+            "maxTokens": 4096,
             "temperature": 0.1,
             "contextWindow": 128000
           },

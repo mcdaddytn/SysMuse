@@ -33,6 +33,13 @@
           "contextTemplate": "defense-closing-context.txt",
           "dependencies": ["trialSummary"],
           "outputFile": "Defense_Closing_Statement.txt"
+        },
+        {
+          "name": "Plaintiff_Rebuttal",
+          "sourceFile": "FullText/Plaintiff_Rebuttal.txt",
+          "contextTemplate": "plaintiff-rebuttal-context.txt",
+          "dependencies": ["trialSummary"],
+          "outputFile": "Plaintiff_Rebuttal.txt"
         }
       ]
     },

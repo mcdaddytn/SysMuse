@@ -366,23 +366,64 @@ export class SpeakerRegistry {
       let lastName: string | undefined;
       let name: string | undefined;
       let jurorNumber: number | undefined;
-      
-      // Match patterns like "JUROR BANKS" or "JUROR 40"
-      const jurorMatch = prefix.match(/^JUROR\s+(.+)$/i);
-      if (jurorMatch) {
-        const identifier = jurorMatch[1];
-        
-        // Check if it's a number
-        const numberMatch = identifier.match(/^\d+$/);
-        if (numberMatch) {
-          jurorNumber = parseInt(numberMatch[0]);
+      let alias: string | undefined;
+
+      const upperPrefix = prefix.toUpperCase();
+
+      // Handle special juror roles
+      if (upperPrefix === 'THE FOREPERSON') {
+        name = 'THE';
+        lastName = 'FOREPERSON';
+        alias = 'THE FOREPERSON';
+      } else if (upperPrefix === 'FOREPERSON') {
+        // FOREPERSON without THE - leave name null
+        name = undefined;
+        lastName = 'FOREPERSON';
+        alias = 'FOREPERSON';
+      } else if (upperPrefix === 'THE PRESIDING OFFICER') {
+        name = 'THE';
+        lastName = 'PRESIDING OFFICER';
+        alias = 'THE PRESIDING OFFICER';
+      } else if (upperPrefix === 'THE PANEL MEMBER') {
+        name = 'THE';
+        lastName = 'PANEL MEMBER';
+        alias = 'THE PANEL MEMBER';
+      } else if (upperPrefix === 'VENIRE MEMBER') {
+        name = 'VENIRE';
+        lastName = 'MEMBER';
+        alias = 'VENIRE MEMBER';
+      } else if (upperPrefix.startsWith('PANEL MEMBER')) {
+        // Handle "PANEL MEMBER NO. 19" etc
+        const panelMatch = upperPrefix.match(/^PANEL MEMBER(?:\s+NO\.\s*(\d+))?$/);
+        if (panelMatch && panelMatch[1]) {
+          name = 'PANEL';
+          lastName = `MEMBER ${panelMatch[1]}`;
+          jurorNumber = parseInt(panelMatch[1]);
+          alias = upperPrefix;
         } else {
-          // It's a name
-          lastName = identifier.toUpperCase();
-          name = identifier;
+          name = 'PANEL';
+          lastName = 'MEMBER';
+          alias = upperPrefix;
+        }
+      } else {
+        // Match patterns like "JUROR BANKS" or "JUROR 40"
+        const jurorMatch = prefix.match(/^JUROR\s+(.+)$/i);
+        if (jurorMatch) {
+          const identifier = jurorMatch[1];
+
+          // Check if it's a number
+          const numberMatch = identifier.match(/^\d+$/);
+          if (numberMatch) {
+            jurorNumber = parseInt(numberMatch[0]);
+          } else {
+            // It's a name
+            lastName = identifier.toUpperCase();
+            name = identifier;
+            alias = `MR. ${lastName}`;
+          }
         }
       }
-      
+
       // Create the Juror record
       await this.prisma.juror.create({
         data: {
@@ -391,11 +432,11 @@ export class SpeakerRegistry {
           name,
           lastName,
           jurorNumber,
-          alias: lastName ? `MR. ${lastName}` : undefined
+          alias
         }
       });
-      
-      logger.info(`Created Juror record for ${prefix} with speakerId=${speaker.id}`);
+
+      logger.info(`Created Juror record for ${prefix} with speakerId=${speaker.id}, name=${name}, lastName=${lastName}, alias=${alias}`);
     }
     
     return speaker;
@@ -411,16 +452,22 @@ export class SpeakerRegistry {
 
   private inferSpeakerType(prefix: string): SpeakerType {
     const upper = prefix.toUpperCase();
-    
+
     if (upper === 'THE COURT') return 'JUDGE';
     if (upper.includes('JUDGE')) return 'JUDGE';
     if (upper.includes('JUROR')) return 'JUROR';
+    if (upper === 'THE FOREPERSON') return 'JUROR';
+    if (upper === 'FOREPERSON') return 'JUROR';  // Handle FOREPERSON without THE
+    if (upper === 'THE PRESIDING OFFICER') return 'JUROR';
+    if (upper === 'THE PANEL MEMBER') return 'JUROR';
+    if (upper === 'VENIRE MEMBER') return 'JUROR';
+    if (upper.startsWith('PANEL MEMBER')) return 'JUROR';
     if (upper === 'THE WITNESS' || upper === 'THE DEPONENT') return 'WITNESS';
     if (upper === 'THE CLERK' || upper === 'THE BAILIFF') return 'COURT_STAFF';
     if (upper.match(/^(MR\.|MS\.|MRS\.|DR\.)/)) return 'ATTORNEY';
     if (upper === 'Q' || upper === 'Q.' || upper === 'QUESTION') return 'ATTORNEY';
     if (upper === 'A' || upper === 'A.' || upper === 'ANSWER') return 'WITNESS';
-    
+
     return 'UNKNOWN';
   }
 

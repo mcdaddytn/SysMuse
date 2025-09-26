@@ -204,17 +204,44 @@ export class WitnessJurorService {
       let lastName: string | undefined;
       let jurorNumber: number | undefined;
       
-      // Special handling for THE FOREPERSON
-      if (speakerPrefix.toUpperCase() === 'THE FOREPERSON') {
+      // Special handling for special juror roles
+      const upperSpeaker = speakerPrefix.toUpperCase();
+
+      if (upperSpeaker === 'THE FOREPERSON') {
         name = 'THE';
         lastName = 'FOREPERSON';
         // No juror number for foreperson
+      } else if (upperSpeaker === 'FOREPERSON') {
+        // FOREPERSON without THE - leave name null
+        name = undefined;
+        lastName = 'FOREPERSON';
+      } else if (upperSpeaker === 'THE PRESIDING OFFICER') {
+        name = 'THE';
+        lastName = 'PRESIDING OFFICER';
+        // No juror number for presiding officer
+      } else if (upperSpeaker === 'THE PANEL MEMBER') {
+        name = 'THE';
+        lastName = 'PANEL MEMBER';
+      } else if (upperSpeaker === 'VENIRE MEMBER') {
+        name = 'VENIRE';
+        lastName = 'MEMBER';
+      } else if (upperSpeaker.startsWith('PANEL MEMBER')) {
+        // Handle "PANEL MEMBER NO. 19" etc
+        const panelMatch = upperSpeaker.match(/^PANEL MEMBER(?:\s+NO\.\s*(\d+))?$/);
+        if (panelMatch && panelMatch[1]) {
+          name = 'PANEL';
+          lastName = `MEMBER ${panelMatch[1]}`;
+          jurorNumber = parseInt(panelMatch[1]);
+        } else {
+          name = 'PANEL';
+          lastName = 'MEMBER';
+        }
       } else {
         // Match patterns like "JUROR RAGSDALE" or "JUROR 40"
         const jurorMatch = speakerPrefix.match(/^JUROR\s+(.+)$/i);
         if (jurorMatch) {
           const identifier = jurorMatch[1];
-          
+
           // Check if it's a number
           const numberMatch = identifier.match(/^\d+$/);
           if (numberMatch) {
@@ -274,11 +301,20 @@ export class WitnessJurorService {
       }
       
       if (!juror) {
-        // Set alias based on speaker type
+        // Set alias based on speaker type - use the full original speaker prefix
         let alias: string | undefined;
-        if (speakerPrefix.toUpperCase() === 'THE FOREPERSON') {
-          alias = 'THE FOREPERSON';
+        const upperSpeaker = speakerPrefix.toUpperCase();
+
+        // For special juror roles, use the full speaker prefix as the alias
+        if (upperSpeaker === 'THE FOREPERSON' ||
+            upperSpeaker === 'FOREPERSON' ||
+            upperSpeaker === 'THE PRESIDING OFFICER' ||
+            upperSpeaker === 'THE PANEL MEMBER' ||
+            upperSpeaker === 'VENIRE MEMBER' ||
+            upperSpeaker.startsWith('PANEL MEMBER')) {
+          alias = upperSpeaker;
         } else if (lastName) {
+          // For regular jurors with names, use MR./MS. format
           alias = `MR. ${lastName}`;
         }
         

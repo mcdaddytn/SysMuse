@@ -2399,8 +2399,14 @@ export class Phase2Processor {
       }
     }
     
-    // Check for JUROR prefix or THE FOREPERSON
-    if (upperPrefix.match(/^JUROR\s+/) || upperPrefix === 'THE FOREPERSON') {
+    // Check for JUROR patterns and special juror roles
+    if (upperPrefix.match(/^JUROR\s+/) ||
+        upperPrefix === 'THE FOREPERSON' ||
+        upperPrefix === 'FOREPERSON' ||
+        upperPrefix === 'THE PRESIDING OFFICER' ||
+        upperPrefix === 'THE PANEL MEMBER' ||
+        upperPrefix === 'VENIRE MEMBER' ||
+        upperPrefix.startsWith('PANEL MEMBER')) {
       const juror = await this.witnessJurorService.createOrFindJuror(
         this.context.trialId,
         upperPrefix,
@@ -2469,7 +2475,11 @@ export class Phase2Processor {
     if (upper.includes('JUDGE')) return SpeakerType.JUDGE;
     if (upper.includes('JUROR')) return SpeakerType.JUROR;
     if (upper === 'THE FOREPERSON') return SpeakerType.JUROR;
+    if (upper === 'FOREPERSON') return SpeakerType.JUROR;
+    if (upper === 'THE PRESIDING OFFICER') return SpeakerType.JUROR;
     if (upper === 'THE PANEL MEMBER') return SpeakerType.JUROR;
+    if (upper === 'VENIRE MEMBER') return SpeakerType.JUROR;
+    if (upper.startsWith('PANEL MEMBER')) return SpeakerType.JUROR;
     if (upper === 'THE WITNESS' || upper === 'THE DEPONENT') return SpeakerType.WITNESS;
     if (upper === 'THE CLERK' || upper === 'THE BAILIFF') return SpeakerType.ANONYMOUS;
     if (upper.match(/^(MR\.|MS\.|MRS\.|DR\.)/)) return SpeakerType.ATTORNEY;

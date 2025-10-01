@@ -108,7 +108,20 @@
                   <q-card>
                     <q-card-section>
                       <div class="q-mb-md">
-                        <div class="text-weight-medium q-mb-sm">Configuration</div>
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Configuration</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Configuration', llmConfig, 'llm1')"
+                          >
+                            <q-tooltip>View full configuration</q-tooltip>
+                          </q-btn>
+                        </div>
                         <q-input
                           v-model="llmConfig"
                           type="textarea"
@@ -120,7 +133,20 @@
                       </div>
 
                       <div class="q-mb-md">
-                        <div class="text-weight-medium q-mb-sm">Plaintiff Opening Context</div>
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Plaintiff Opening Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Plaintiff Opening Statement', plaintiffOpeningContext, 'llm1')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
                         <q-input
                           v-model="plaintiffOpeningContext"
                           type="textarea"
@@ -132,7 +158,20 @@
                       </div>
 
                       <div class="q-mb-md">
-                        <div class="text-weight-medium q-mb-sm">Plaintiff Closing Context</div>
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Plaintiff Closing Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Plaintiff Closing Statement', plaintiffClosingContext, 'llm1')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
                         <q-input
                           v-model="plaintiffClosingContext"
                           type="textarea"
@@ -144,7 +183,20 @@
                       </div>
 
                       <div class="q-mb-md">
-                        <div class="text-weight-medium q-mb-sm">Defense Opening Context</div>
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Defense Opening Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Defense Opening Statement', defenseOpeningContext, 'llm1')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
                         <q-input
                           v-model="defenseOpeningContext"
                           type="textarea"
@@ -156,7 +208,20 @@
                       </div>
 
                       <div class="q-mb-md">
-                        <div class="text-weight-medium q-mb-sm">Defense Closing Context</div>
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Defense Closing Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Defense Closing Statement', defenseClosingContext, 'llm1')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
                         <q-input
                           v-model="defenseClosingContext"
                           type="textarea"
@@ -171,6 +236,152 @@
                         label="Save Changes"
                         color="primary"
                         @click="saveLLMConfig"
+                        :disable="true"
+                      >
+                        <q-tooltip>Editing will be enabled in a future update</q-tooltip>
+                      </q-btn>
+                    </q-card-section>
+                  </q-card>
+                </q-expansion-item>
+
+                <q-expansion-item
+                  expand-separator
+                  icon="description"
+                  label="LLMSummary2 Context Files"
+                  header-class="text-primary"
+                  class="q-mb-md"
+                >
+                  <q-card>
+                    <q-card-section>
+                      <div class="q-mb-md">
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Configuration</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Configuration', llm2Config, 'llm2')"
+                          >
+                            <q-tooltip>View full configuration</q-tooltip>
+                          </q-btn>
+                        </div>
+                        <q-input
+                          v-model="llm2Config"
+                          type="textarea"
+                          outlined
+                          readonly
+                          rows="10"
+                          class="code-editor"
+                        />
+                      </div>
+
+                      <div class="q-mb-md">
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Plaintiff Opening Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Plaintiff Opening Statement', llm2PlaintiffOpeningContext, 'llm2')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
+                        <q-input
+                          v-model="llm2PlaintiffOpeningContext"
+                          type="textarea"
+                          outlined
+                          readonly
+                          rows="8"
+                          class="code-editor"
+                        />
+                      </div>
+
+                      <div class="q-mb-md">
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Plaintiff Closing Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Plaintiff Closing Statement', llm2PlaintiffClosingContext, 'llm2')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
+                        <q-input
+                          v-model="llm2PlaintiffClosingContext"
+                          type="textarea"
+                          outlined
+                          readonly
+                          rows="8"
+                          class="code-editor"
+                        />
+                      </div>
+
+                      <div class="q-mb-md">
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Defense Opening Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Defense Opening Statement', llm2DefenseOpeningContext, 'llm2')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
+                        <q-input
+                          v-model="llm2DefenseOpeningContext"
+                          type="textarea"
+                          outlined
+                          readonly
+                          rows="8"
+                          class="code-editor"
+                        />
+                      </div>
+
+                      <div class="q-mb-md">
+                        <div class="row items-center q-mb-sm">
+                          <div class="text-weight-medium">Defense Closing Statement</div>
+                          <q-btn
+                            flat
+                            dense
+                            round
+                            size="sm"
+                            icon="more_horiz"
+                            class="q-ml-xs"
+                            @click="openContextModal('Defense Closing Statement', llm2DefenseClosingContext, 'llm2')"
+                          >
+                            <q-tooltip>View full context</q-tooltip>
+                          </q-btn>
+                        </div>
+                        <q-input
+                          v-model="llm2DefenseClosingContext"
+                          type="textarea"
+                          outlined
+                          readonly
+                          rows="8"
+                          class="code-editor"
+                        />
+                      </div>
+
+                      <q-btn
+                        label="Save Changes"
+                        color="primary"
+                        @click="saveLLM2Config"
                         :disable="true"
                       >
                         <q-tooltip>Editing will be enabled in a future update</q-tooltip>
@@ -350,6 +561,53 @@
       </q-card-actions>
     </q-card>
   </q-dialog>
+
+  <!-- Context View Modal -->
+  <q-dialog v-model="contextModalOpen">
+    <q-card style="width: 900px; max-width: 90vw;">
+      <q-card-section class="row items-center q-pb-none bg-primary text-white">
+        <div class="text-h6">{{ modalTitle }}</div>
+        <q-space />
+        <q-btn
+          icon="close"
+          flat
+          round
+          dense
+          @click="closeContextModal"
+        />
+      </q-card-section>
+
+      <q-separator />
+
+      <q-card-section class="q-pa-md" style="max-height: 70vh;">
+        <q-input
+          v-model="modalContent"
+          type="textarea"
+          outlined
+          readonly
+          autogrow
+          rows="20"
+          class="code-editor"
+        />
+      </q-card-section>
+
+      <q-separator />
+
+      <q-card-actions align="right" class="bg-grey-2">
+        <q-btn
+          flat
+          label="Cancel"
+          @click="closeContextModal"
+        />
+        <q-btn
+          unelevated
+          label="OK"
+          color="primary"
+          @click="closeContextModal"
+        />
+      </q-card-actions>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script setup lang="ts">
@@ -387,8 +645,20 @@ const plaintiffOpeningContext = ref('')
 const plaintiffClosingContext = ref('')
 const defenseOpeningContext = ref('')
 const defenseClosingContext = ref('')
+
+const llm2Config = ref('')
+const llm2PlaintiffOpeningContext = ref('')
+const llm2PlaintiffClosingContext = ref('')
+const llm2DefenseOpeningContext = ref('')
+const llm2DefenseClosingContext = ref('')
+
 const objectionsAccumulator = ref('')
 const interactionsAccumulator = ref('')
+
+const contextModalOpen = ref(false)
+const modalTitle = ref('')
+const modalContent = ref('')
+const modalSource = ref('')
 
 const newProfile = ref({
   name: '',
@@ -411,13 +681,15 @@ onMounted(async () => {
     if (response.ok) {
       const config = await response.json()
       llmConfig.value = JSON.stringify(config.summaryTypes.LLMSummary1, null, 2)
+      llm2Config.value = JSON.stringify(config.summaryTypes.LLMSummary2, null, 2)
     }
   } catch (error) {
     console.error('Failed to load LLM config:', error)
     llmConfig.value = '{\n  "description": "Opening and closing statement strategic analysis",\n  "outputDir": "LLMSummary1",\n  "llmProfile": "claude-sonnet",\n  "outputFormat": "1-2 pages"\n}'
+    llm2Config.value = '{\n  "description": "Opening and closing statement strategic analysis with judge context",\n  "outputDir": "LLMSummary2",\n  "llmProfile": "claude-sonnet",\n  "outputFormat": "1-2 pages"\n}'
   }
 
-  // Load actual context templates
+  // Load LLMSummary1 context templates
   try {
     const [poResponse, pcResponse, doResponse, dcResponse] = await Promise.all([
       fetch('http://localhost:3001/templates/plaintiff-opening-context.txt'),
@@ -482,6 +754,95 @@ ANALYSIS REQUIREMENTS:
 Provide specific quotes and examples. Focus on strategic advantages. Aim for 1-2 pages.`
   }
 
+  // Load LLMSummary2 context templates
+  try {
+    const [llm2PoResponse, llm2PcResponse, llm2DoResponse, llm2DcResponse] = await Promise.all([
+      fetch('http://localhost:3001/templates/llm2-plaintiff-opening-context.txt'),
+      fetch('http://localhost:3001/templates/llm2-plaintiff-closing-context.txt'),
+      fetch('http://localhost:3001/templates/llm2-defense-opening-context.txt'),
+      fetch('http://localhost:3001/templates/llm2-defense-closing-context.txt')
+    ])
+
+    if (llm2PoResponse.ok) llm2PlaintiffOpeningContext.value = await llm2PoResponse.text()
+    if (llm2PcResponse.ok) llm2PlaintiffClosingContext.value = await llm2PcResponse.text()
+    if (llm2DoResponse.ok) llm2DefenseOpeningContext.value = await llm2DoResponse.text()
+    if (llm2DcResponse.ok) llm2DefenseClosingContext.value = await llm2DcResponse.text()
+  } catch (error) {
+    console.error('Failed to load LLMSummary2 context templates:', error)
+    // Use fallback with {{judgeSummary}} added
+    llm2PlaintiffOpeningContext.value = `Analyze the plaintiff's opening statement from an intellectual property trial.
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+JUDGE PROFILE:
+{{judgeSummary}}
+
+ANALYSIS REQUIREMENTS:
+1. STRATEGIC POSITIONING: How does the plaintiff frame the case narrative?
+2. LEGAL FRAMEWORK: Which legal elements are emphasized?
+3. PERSUASIVE TECHNIQUES: Storytelling methods and narrative structure
+4. KEY CASE THEORIES: Primary theory of infringement or liability
+5. ANTICIPATED DEFENSES: How does the plaintiff preempt defense arguments?
+6. JURY PSYCHOLOGY: Appeals to fairness and justice
+
+Provide specific quotes and examples. Focus on strategic choices. Aim for 1-2 pages.`
+
+    llm2PlaintiffClosingContext.value = `Analyze the plaintiff's closing statement from an intellectual property trial.
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+JUDGE PROFILE:
+{{judgeSummary}}
+
+ANALYSIS REQUIREMENTS:
+1. EVIDENCE SYNTHESIS: How does the plaintiff connect evidence to legal elements?
+2. PROMISE FULFILLMENT: Does the closing deliver on opening statement promises?
+3. DEFENSE REBUTTAL: How does the plaintiff address defense arguments?
+4. DAMAGES ARGUMENT: How is the damages calculation justified?
+5. JURY INSTRUCTIONS APPLICATION: How are specific jury instructions referenced?
+6. EMOTIONAL CRESCENDO: What final emotional appeals are made?
+
+Provide specific quotes and examples. Focus on persuasive technique. Aim for 1-2 pages.`
+
+    llm2DefenseOpeningContext.value = `Analyze the defense opening statement from an intellectual property trial.
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+JUDGE PROFILE:
+{{judgeSummary}}
+
+ANALYSIS REQUIREMENTS:
+1. DEFENSIVE POSITIONING: How does the defense reframe the plaintiff's narrative?
+2. DOUBT CREATION: Where does the defense plant seeds of doubt?
+3. TECHNICAL DEFENSES: How are non-infringement arguments previewed?
+4. CREDIBILITY ATTACKS: How is the plaintiff's motivation questioned?
+5. AFFIRMATIVE DEFENSES: What legitimate business justifications are offered?
+6. JURY SYMPATHY: How does the defense connect with jury values?
+
+Provide specific quotes and examples. Focus on strategic choices. Aim for 1-2 pages.`
+
+    llm2DefenseClosingContext.value = `Analyze the defense closing statement from an intellectual property trial.
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+JUDGE PROFILE:
+{{judgeSummary}}
+
+ANALYSIS REQUIREMENTS:
+1. BURDEN OF PROOF EXPLOITATION: How does the defense emphasize what plaintiff failed to prove?
+2. EVIDENCE DECONSTRUCTION: Which plaintiff evidence is attacked as insufficient?
+3. ALTERNATIVE NARRATIVE: What competing story has crystallized during trial?
+4. DAMAGES DEMOLITION: How are plaintiff's damages theories attacked?
+5. JURY INSTRUCTION LEVERAGE: Which instructions favor the defense?
+6. FINAL PERSUASION: What emotional counters to plaintiff's appeals?
+
+Provide specific quotes and examples. Focus on strategic advantages. Aim for 1-2 pages.`
+  }
+
   // Mock accumulator configurations
   objectionsAccumulator.value = JSON.stringify({
     "name": "Objections Accumulator",
@@ -534,10 +895,28 @@ Provide specific quotes and examples. Focus on strategic advantages. Aim for 1-2
   }, null, 2)
 })
 
+const openContextModal = (title: string, content: string, source: string) => {
+  modalTitle.value = title
+  modalContent.value = content
+  modalSource.value = source
+  contextModalOpen.value = true
+}
+
+const closeContextModal = () => {
+  contextModalOpen.value = false
+}
+
 const saveLLMConfig = () => {
   $q.notify({
     type: 'info',
     message: 'LLM configuration editing will be available in a future update'
+  })
+}
+
+const saveLLM2Config = () => {
+  $q.notify({
+    type: 'info',
+    message: 'LLMSummary2 configuration editing will be available in a future update'
   })
 }
 

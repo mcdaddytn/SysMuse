@@ -1,0 +1,58 @@
+Analyze the following defense closing statement from an intellectual property trial. Provide a strategic analysis (1-2 pages) that examines:
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+JUDGE PROFILE:
+{{judgeSummary}}
+
+CLOSING STATEMENT TO ANALYZE:
+{{sourceText}}
+
+ANALYSIS REQUIREMENTS:
+
+1. BURDEN OF PROOF EXPLOITATION:
+- How does the defense emphasize what plaintiff failed to prove?
+- Which missing evidence is highlighted?
+- How is reasonable doubt articulated?
+- What burden-shifting language is used?
+
+2. EVIDENCE DECONSTRUCTION:
+- Which plaintiff evidence is attacked as insufficient?
+- How are plaintiff's experts challenged?
+- What inconsistencies are highlighted?
+- Which admissions or concessions are leveraged?
+
+3. ALTERNATIVE NARRATIVE:
+- What competing story has crystallized during trial?
+- How does evidence support the defense theory?
+- What defense witnesses proved most effective?
+- How are technical defenses summarized for the jury?
+
+4. DAMAGES DEMOLITION:
+- How are plaintiff's damages theories attacked?
+- What calculation errors are exposed?
+- How is causation challenged?
+- What apportionment arguments are made?
+
+5. JURY INSTRUCTION LEVERAGE:
+- Which instructions favor the defense?
+- How are presumptions and burdens emphasized?
+- What "failure to prove" language is highlighted?
+- How is the verdict form used defensively?
+
+6. FINAL PERSUASION:
+- What emotional counters to plaintiff's appeals?
+- How is sympathy redirected to the defendant?
+- What "common sense" arguments are made?
+- How is the jury asked to resist plaintiff's emotional manipulation?
+
+SPECIAL ATTENTION FOR DEFENSE CLOSING:
+As the responding party with no burden of proof, examine:
+- Whether the defense maintains discipline about the burden of proof
+- How the defense handles any weak points in their case
+- The balance between attacking plaintiff's case and supporting their own
+- Whether the defense provides a clear path to a defense verdict
+- How the defense frames the jury's role as skeptical factfinders
+
+Provide specific quotes and examples from the statement to support your analysis. Note how the defense synthesizes doubts raised throughout trial into a coherent basis for a defense verdict. Focus on how the defense exploits their strategic advantages. Aim for 1-2 pages of analysis that reveals how the defense seeks to snatch victory from a position of procedural advantage.

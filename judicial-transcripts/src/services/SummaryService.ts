@@ -263,6 +263,8 @@ export class SummaryService {
         llmFileName = 'Plaintiff_Closing_Statement.txt';
       } else if (section.markerSectionType === 'CLOSING_STATEMENT_DEFENSE') {
         llmFileName = 'Defense_Closing_Statement.txt';
+      } else if (section.markerSectionType === 'CLOSING_REBUTTAL_PLAINTIFF') {
+        llmFileName = 'Plaintiff_Rebuttal.txt';
       }
 
       if (llmFileName) {

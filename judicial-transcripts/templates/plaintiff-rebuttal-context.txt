@@ -1,0 +1,55 @@
+Analyze the following plaintiff's rebuttal statement from an intellectual property trial. Provide a strategic analysis (1-2 pages) that examines:
+
+TRIAL CONTEXT:
+{{trialSummary}}
+
+REBUTTAL STATEMENT TO ANALYZE:
+{{sourceText}}
+
+ANALYSIS REQUIREMENTS:
+
+1. DEFENSE CLOSING RESPONSE:
+- Which defense closing arguments are directly addressed?
+- What defense claims are refuted with evidence?
+- How are defense mischaracterizations corrected?
+- Which defense arguments are left unchallenged?
+
+2. LAST WORD ADVANTAGE:
+- How does the plaintiff leverage having the final word?
+- What key points are crystallized for the jury?
+- Which themes are reinforced one final time?
+- How is urgency created for jury deliberations?
+
+3. EVIDENCE CLARIFICATION:
+- What evidence is re-emphasized or clarified?
+- How are defense interpretations challenged?
+- Which expert opinions are defended?
+- What documentary evidence is highlighted again?
+
+4. LEGAL ELEMENTS REINFORCEMENT:
+- Which claim elements are restated?
+- How is the burden of proof addressed?
+- What jury instructions are emphasized?
+- How is the verdict form simplified?
+
+5. CREDIBILITY ATTACKS:
+- Which defense witnesses' credibility is challenged?
+- How are inconsistencies in defense case highlighted?
+- What admissions from defense are leveraged?
+- How is defense counsel's conduct addressed?
+
+6. FINAL PERSUASION:
+- What emotional peak is achieved?
+- How is jury duty framed?
+- What specific verdict is requested?
+- How is confidence in the case conveyed?
+
+SPECIAL ATTENTION FOR REBUTTAL:
+As the final word to the jury, examine:
+- The balance between addressing defense arguments and reinforcing plaintiff's case
+- The strategic choices of what to address vs. what to ignore
+- The tone shift from closing to rebuttal (typically more aggressive)
+- Whether new arguments are improperly introduced
+- The time management and prioritization of issues
+
+FORMAT: Provide a flowing narrative analysis that captures the strategic effectiveness of the rebuttal, not a bullet-point list.

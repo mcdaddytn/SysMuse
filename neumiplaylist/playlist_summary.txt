@@ -1,0 +1,32 @@
+Neumi Atom Playlist Summary
+============================================================
+
+Playlist1: 6 videos
+----------------------------------------
+  1. 2001.A.Space.Odyssey.1968.1080p.BluRay.x264-[YTS.AM].mp4
+  2. Gangs.Of.New.York.2002.REMASTERED.2002.1080p.BrRip.x264.BOKUTOX.YIFY.mp4
+  3. Millers.Crossing.1990.1080p.BrRip.x264.YIFY.mp4
+  4. Shutter.Island.2010.1080p.BluRay.x264.YIFY.mp4
+  5. The Abyss 1989 Special Cut 1080p BluRay HEVC x265 5.1 BONE.mkv
+  6. The.Imitation.Game.2014.1080p.BluRay.x264.YIFY.mp4
+
+Playlist2: 7 videos
+----------------------------------------
+  1. After Hours 1985 Criterion 1080p BluRay HEVC x265 BONE.mkv
+  2. Amadeus 1984 Director Cut 1080p BluRay x264 AAC - Ozlem.mp4
+  3. Arthur.1981.Dudley.Moore.avi
+  4. Glengarry.Glen.Ross.1992.REMASTERED.1080p.BluRay.H264.AAC-LAMA.mp4
+  5. Intolerable.Cruelty.2003.1080p.BluRay.DDP5.1.x265.10bit-GalaxyRG265.mkv
+  6. Millers.Crossing.1990.1080p.BrRip.x264.YIFY.mp4
+  7. Ray.2004.1080p.BluRay.x264.YIFY.mp4
+
+Playlist3: 7 videos
+----------------------------------------
+  1. Gladiator.EXTENDED.2000.1080.BrRip.264.YIFY.mp4
+  2. Raging.Bull.1980.1080p.BluRay.x264.YIFY.mp4
+  3. Raising.Arizona.1987.1080p.BluRay.H264.AAC-RARBG.mp4
+  4. Taxi.Driver.1976.REMASTERED.1080p.BluRay.6CH.2.5GB.MkvCage.mkv
+  5. The.Aviator.2004.1080p.BrRip.x264.YIFY.mp4
+  6. The.King.of.Comedy.1982.1080p.BluRay.x264.YIFY.mp4
+  7. The.Untouchables.1987.1080p.BrRip.x264.BOKUTOX.YIFY.mp4
+

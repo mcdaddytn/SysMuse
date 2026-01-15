@@ -117,6 +117,7 @@ export class BaseAPIClient {
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           ...options.headers,
         },
       });

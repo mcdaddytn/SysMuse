@@ -14,7 +14,7 @@
 
 import { BaseAPIClient, APIConfig, buildQueryString } from './base-client.js';
 
-const ODP_BASE_URL = 'https://data.uspto.gov/api/v2/patent-file-wrapper';
+const ODP_BASE_URL = 'https://api.uspto.gov/api/v1/patent';
 
 export interface FileWrapperConfig {
   apiKey: string;
@@ -33,10 +33,42 @@ export interface ApplicationSearchQuery {
 }
 
 export interface ApplicationBiblioResponse {
-  recordTotalQuantity: number;
-  pageNumber: number;
-  pageSize: number;
-  applications: ApplicationBiblio[];
+  count: number;
+  requestIdentifier?: string;
+  patentFileWrapperDataBag: PatentFileWrapperRecord[];
+}
+
+export interface PatentFileWrapperRecord {
+  applicationNumberText: string;
+  applicationMetaData: ApplicationMetaData;
+  eventDataBag?: EventData[];
+  assignmentBag?: any[];
+  parentContinuityBag?: any[];
+  foreignPriorityBag?: any[];
+  correspondenceAddressBag?: any[];
+  recordAttorney?: any;
+  lastIngestionDateTime?: string;
+}
+
+export interface ApplicationMetaData {
+  filingDate?: string;
+  applicationStatusDescriptionText?: string;
+  applicationStatusCode?: number;
+  applicationStatusDate?: string;
+  applicationTypeCode?: string;
+  applicationTypeLabelName?: string;
+  inventionTitle?: string;
+  firstInventorName?: string;
+  inventorBag?: InventorInfo[];
+  entityStatusData?: any;
+  effectiveFilingDate?: string;
+  [key: string]: any;
+}
+
+export interface EventData {
+  eventCode: string;
+  eventDescriptionText: string;
+  eventDate: string;
 }
 
 export interface ApplicationBiblio {
@@ -189,7 +221,7 @@ export class FileWrapperClient extends BaseAPIClient {
    */
   private getHeaders(): Record<string, string> {
     return {
-      'X-API-Key': this.config.apiKey,
+      'x-api-key': this.config.apiKey,
     };
   }
 
@@ -219,15 +251,24 @@ export class FileWrapperClient extends BaseAPIClient {
   /**
    * Get application bibliographic data by application number
    */
-  async getApplication(applicationNumber: string): Promise<ApplicationBiblio> {
+  async getApplication(applicationNumber: string): Promise<PatentFileWrapperRecord | null> {
     // Remove any non-numeric characters from application number
     const cleanAppNumber = applicationNumber.replace(/[^0-9]/g, '');
-    
+
     const endpoint = `/applications/${cleanAppNumber}`;
 
-    return this.retryRequest(() =>
-      this.get<ApplicationBiblio>(endpoint, this.getHeaders())
-    );
+    try {
+      const response = await this.retryRequest(() =>
+        this.get<any>(endpoint, this.getHeaders())
+      );
+      // The API may return the record directly or wrapped
+      if (response.patentFileWrapperDataBag) {
+        return response.patentFileWrapperDataBag[0] || null;
+      }
+      return response as PatentFileWrapperRecord;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -376,12 +417,12 @@ export class FileWrapperClient extends BaseAPIClient {
   /**
    * Get application by patent number
    */
-  async getApplicationByPatentNumber(patentNumber: string): Promise<ApplicationBiblio | null> {
+  async getApplicationByPatentNumber(patentNumber: string): Promise<PatentFileWrapperRecord | null> {
     const response = await this.searchApplications({
       patentNumber: patentNumber.replace(/[^0-9]/g, ''),
     });
 
-    return response.applications.length > 0 ? response.applications[0] : null;
+    return response.patentFileWrapperDataBag?.length > 0 ? response.patentFileWrapperDataBag[0] : null;
   }
 
   /**

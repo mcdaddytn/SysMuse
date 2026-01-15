@@ -11,6 +11,8 @@
     "test:all": "npm run test:patentsview && npm run test:filewrapper && npm run test:ptab",
     "example:analysis": "tsx examples/comprehensive-patent-analysis.ts",
     "example:broadcom": "tsx examples/broadcom-portfolio-builder.ts",
+    "download:streaming": "tsx examples/streaming-video-downloader.ts",
+    "download:streaming:test": "tsx examples/streaming-video-downloader.ts --limit 100",
     "build": "tsc"
   },
   "keywords": [

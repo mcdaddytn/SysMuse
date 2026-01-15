@@ -1,0 +1,130 @@
+{
+  "portfolio": "Broadcom Complete Portfolio",
+  "client": "Broadcom Inc.",
+  "asOfDate": "2026-01-14",
+  "description": "Complete patent portfolio including all acquired entities through VMware acquisition (Nov 2023)",
+  "assignees": [
+    {
+      "entity": "Broadcom Inc.",
+      "variants": [
+        "Broadcom Inc.",
+        "Broadcom Corporation",
+        "Broadcom Corp."
+      ],
+      "acquisitionDate": null,
+      "notes": "Current primary entity (post-2016 name change from Avago)",
+      "priority": 1
+    },
+    {
+      "entity": "Avago Technologies",
+      "variants": [
+        "Avago Technologies International Sales Pte. Limited",
+        "Avago Technologies General IP (Singapore) Pte. Ltd.",
+        "Avago Technologies Limited",
+        "Avago Technologies U.S. Inc.",
+        "Avago Technologies",
+        "Avago Technologies Fiber IP (Singapore) Pte. Ltd."
+      ],
+      "acquisitionDate": "2015-05-29",
+      "notes": "Acquired original Broadcom 2015, adopted Broadcom name in 2016",
+      "priority": 1
+    },
+    {
+      "entity": "LSI Corporation",
+      "variants": [
+        "LSI Corporation",
+        "LSI Logic Corporation",
+        "LSI Logic"
+      ],
+      "acquisitionDate": "2014-05-06",
+      "notes": "Acquired by Avago 2014 for $6.6B",
+      "priority": 2
+    },
+    {
+      "entity": "Brocade Communications",
+      "variants": [
+        "Brocade Communications Systems, Inc.",
+        "Brocade Communications Systems",
+        "Brocade"
+      ],
+      "acquisitionDate": "2017-11-17",
+      "notes": "Acquired 2017 for $5.5B, data center networking",
+      "priority": 2
+    },
+    {
+      "entity": "CA Technologies",
+      "variants": [
+        "CA, Inc.",
+        "CA Technologies",
+        "Computer Associates International, Inc.",
+        "Computer Associates"
+      ],
+      "acquisitionDate": "2018-11-05",
+      "notes": "Acquired 2018 for $18.9B, enterprise software",
+      "priority": 2
+    },
+    {
+      "entity": "Symantec Corporation",
+      "variants": [
+        "Symantec Corporation",
+        "Symantec Operating Corporation"
+      ],
+      "acquisitionDate": "2019-11-04",
+      "notes": "Acquired Enterprise Security division 2019 for $10.7B",
+      "priority": 2
+    },
+    {
+      "entity": "VMware",
+      "variants": [
+        "VMware, Inc.",
+        "VMware, LLC",
+        "VMware International Limited",
+        "VMware"
+      ],
+      "acquisitionDate": "2023-11-22",
+      "notes": "Largest acquisition, closed November 22, 2023 for $69B",
+      "priority": 1
+    }
+  ],
+  "technologyFocus": [
+    {
+      "area": "Semiconductor Manufacturing",
+      "cpcSections": ["H01L"],
+      "entities": ["Broadcom Inc.", "Avago Technologies", "LSI Corporation"]
+    },
+    {
+      "area": "Networking & Communications",
+      "cpcSections": ["H04L", "H04W"],
+      "entities": ["Broadcom Inc.", "Brocade Communications"]
+    },
+    {
+      "area": "Data Storage",
+      "cpcSections": ["G11B", "G11C"],
+      "entities": ["LSI Corporation", "Brocade Communications"]
+    },
+    {
+      "area": "Enterprise Software",
+      "cpcSections": ["G06F", "G06Q"],
+      "entities": ["CA Technologies", "VMware"]
+    },
+    {
+      "area": "Cybersecurity",
+      "cpcSections": ["H04L63", "G06F21"],
+      "entities": ["Symantec Corporation", "CA Technologies"]
+    },
+    {
+      "area": "Virtualization",
+      "cpcSections": ["G06F9"],
+      "entities": ["VMware"]
+    }
+  ],
+  "searchStrategy": {
+    "useOrQuery": true,
+    "normalizeNames": true,
+    "includeSubsidiaries": true,
+    "dateRange": {
+      "start": "1976-01-01",
+      "end": "2026-01-14"
+    }
+  }
+}

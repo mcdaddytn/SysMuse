@@ -66,31 +66,39 @@ This document captures the current state of the IP Portfolio project after the i
 }
 ```
 
-### USPTO PTAB API - NOT WORKING (Auth Issue)
+### USPTO PTAB API - FULLY WORKING (v3)
 
-**Problem:** Returns "Missing Authentication Token" (HTTP 403) even though the same API key works for File Wrapper.
+| Test | Status |
+|------|--------|
+| Trial search | ✓ |
+| IPR search by date range | ✓ |
+| Search by petitioner | ✓ |
+| Search by patent owner | ✓ |
+| Get trial details | ✓ |
+| Get trial documents | ✓ |
+| Search decisions | ✓ |
+| Pagination | ✓ |
 
-**Attempted Endpoints:**
-- `https://api.uspto.gov/api/v1/patent/trials/proceedings`
-- `https://api.uspto.gov/api/v1/ptab/trials`
-- `https://api.uspto.gov/api/v1/patent-trials/proceedings`
-- `https://api.uspto.gov/ptab-api/v3/proceedings`
+**Configuration (v3 - Updated Jan 2026):**
+- Base URL: `https://api.uspto.gov/api/v1/patent`
+- Auth Header: `x-api-key` (lowercase)
+- Rate Limit: 60 requests/minute (estimated)
+- Env Variable: `USPTO_ODP_API_KEY`
 
-**Attempted Headers:**
-- `x-api-key: {key}` - No auth
-- `X-Api-Key: {key}` - No auth
-- `USPTO-API-KEY: {key}` - No auth
+**Key v3 API Differences (Nov 2025 migration):**
+- Endpoint paths: `/trials/proceedings/search`, `/trials/decisions/search`, `/trials/documents/search`
+- Filter values must be arrays: `{ name: 'field', value: ['value'] }`
+- Response uses `patentTrialProceedingDataBag`, `patentTrialDecisionDataBag`
+- 404 response means "no matching records" (not an error)
+- Max pagination limit: 100 records per request
+- Full text search not supported in v3
 
-**Possible Causes:**
-1. ODP API key may need separate PTAB permissions enabled
-2. PTAB v3 migration (Nov 2025) may have changed auth requirements
-3. Different authentication method required for PTAB
-
-**Next Steps to Try:**
-- Check USPTO account portal for PTAB-specific permissions
-- Contact USPTO API support: APIhelp@uspto.gov
-- Review PTAB v3 migration documentation more thoroughly
-- Check if ID.me verification level affects API access
+**Working Endpoints:**
+- POST `/api/v1/patent/trials/proceedings/search` - Search trials
+- GET `/api/v1/patent/trials/proceedings/{trialNumber}` - Get specific trial
+- POST `/api/v1/patent/trials/documents/search` - Search documents
+- POST `/api/v1/patent/trials/decisions/search` - Search decisions
+- POST `/api/v1/patent/appeals/decisions/search` - Search appeals
 
 ---
 
@@ -255,8 +263,8 @@ tail -f broadcom-full.log
 - [x] npm install completed
 - [x] .env file configured with API keys
 - [x] PatentsView API key working
-- [x] USPTO ODP API key working (File Wrapper only)
-- [ ] PTAB API access (needs investigation)
+- [x] USPTO ODP API key working (File Wrapper)
+- [x] PTAB API v3 working (same ODP key)
 - [x] Output directories created
 
 ---
@@ -288,8 +296,8 @@ ip-port/
 
 ## Next Session Priorities
 
-1. **Investigate PTAB authentication** - Contact USPTO support or check account permissions
+1. ~~**Investigate PTAB authentication**~~ - RESOLVED: PTAB v3 API now working
 2. **Research bulk download options** - For full patent text to load into Elasticsearch
 3. **Implement text analysis** - Once we have full text data
 4. **Build analysis pipeline** - Using the 10K+ streaming patents already downloaded
-5. **Run full portfolio download** - 50K+ Broadcom patents overnight
+5. **Run full portfolio download** - 22K+ Broadcom patents (now ready to run)

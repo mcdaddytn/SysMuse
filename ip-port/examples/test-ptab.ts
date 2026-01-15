@@ -216,11 +216,11 @@ async function testPTABAPI() {
     for await (const page of client.searchPaginated(
       {
         filters: [
-          { name: 'trialType', value: 'IPR' },
+          { name: 'trialMetaData.trialTypeCode', value: 'IPR' },
         ],
         rangeFilters: [
           {
-            field: 'filingDate',
+            field: 'trialMetaData.accordedFilingDate',
             valueFrom: '2023-01-01',
             valueTo: '2023-03-31',
           },

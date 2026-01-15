@@ -86,16 +86,15 @@ async function buildPatentList(): Promise<Patent[]> {
       query,
       fields: [
         'patent_id',
-        'patent_number',
         'patent_title',
         'patent_date',
         'patent_abstract',
-        'application_number',
-        'filing_date',
+        'patent_type',
         'assignees',
         'inventors',
-        'cpc',
-        'us_patent_citations',
+        'cpc_current',
+        'patent_num_us_patents_cited',
+        'patent_num_times_cited_by_us_patents',
       ],
       sort: [{ patent_date: 'desc' }],
     },
@@ -133,14 +132,14 @@ function analyzePortfolio(patents: Patent[]): PortfolioResults {
     if (!entityPatents.has(parentEntity)) {
       entityPatents.set(parentEntity, []);
     }
-    entityPatents.get(parentEntity)!.push(patent.patent_number!);
+    entityPatents.get(parentEntity)!.push(patent.patent_id!);
   });
   
   // Group by technology (CPC section)
   const byTech = new Map<string, number>();
   
   patents.forEach(patent => {
-    const cpcSection = patent.cpc?.[0]?.cpc_section_id;
+    const cpcSection = (patent as any).cpc_current?.[0]?.cpc_section_id;
     if (cpcSection) {
       byTech.set(cpcSection, (byTech.get(cpcSection) || 0) + 1);
     }
@@ -168,7 +167,7 @@ function analyzePortfolio(patents: Patent[]): PortfolioResults {
   
   const recentTechCounts = new Map<string, number>();
   recentPatents.forEach(p => {
-    const section = p.cpc?.[0]?.cpc_section_id;
+    const section = (p as any).cpc_current?.[0]?.cpc_section_id;
     if (section) {
       recentTechCounts.set(section, (recentTechCounts.get(section) || 0) + 1);
     }
@@ -287,11 +286,11 @@ async function checkIPRChallenges(patents: Patent[], limit: number = 100): Promi
   
   for (const patent of candidatePatents) {
     try {
-      const iprs = await ptabClient.searchIPRsByPatent(patent.patent_number!);
-      
+      const iprs = await ptabClient.searchIPRsByPatent(patent.patent_id!);
+
       if (iprs.trials.length > 0) {
         challengedPatents.push({
-          patent_number: patent.patent_number,
+          patent_id: patent.patent_id,
           patent_title: patent.patent_title,
           challenges: iprs.trials.length,
           trials: iprs.trials.map(t => ({
@@ -302,7 +301,7 @@ async function checkIPRChallenges(patents: Patent[], limit: number = 100): Promi
           })),
         });
         
-        console.log(`  ⚠ ${patent.patent_number} - ${iprs.trials.length} IPR(s)`);
+        console.log(`  ⚠ ${patent.patent_id} - ${iprs.trials.length} IPR(s)`);
       }
       
       checkedCount++;
@@ -379,7 +378,7 @@ function generateReport(results: PortfolioResults, challenges: any[]): string {
     report += `Patents with IPR Challenges: ${challenges.length}\n\n`;
     
     challenges.slice(0, 10).forEach(c => {
-      report += `${c.patent_number} - ${c.challenges} IPR(s)\n`;
+      report += `${c.patent_id} - ${c.challenges} IPR(s)\n`;
       report += `  ${c.patent_title?.substring(0, 70)}...\n`;
       c.trials.forEach((t: any) => {
         report += `    ${t.trialNumber}: ${t.status} (${t.petitioner})\n`;
@@ -413,12 +412,12 @@ async function saveResults(
   );
   
   // Save patent list (CSV)
-  const csvLines = ['Patent Number,Title,Date,Assignee,CPC Section'];
+  const csvLines = ['Patent ID,Title,Date,Assignee,CPC Section'];
   results.patents.forEach(p => {
     const assignee = p.assignees?.[0]?.assignee_organization || '';
-    const cpc = p.cpc?.[0]?.cpc_section_id || '';
+    const cpc = (p as any).cpc_current?.[0]?.cpc_section_id || '';
     csvLines.push(
-      `"${p.patent_number}","${p.patent_title?.replace(/"/g, '""')}","${p.patent_date}","${assignee}","${cpc}"`
+      `"${p.patent_id}","${p.patent_title?.replace(/"/g, '""')}","${p.patent_date}","${assignee}","${cpc}"`
     );
   });
   

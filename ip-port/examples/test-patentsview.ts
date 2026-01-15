@@ -29,7 +29,7 @@ async function testPatentsViewAPI() {
     console.log('Test 1: Get specific patent by number');
     const patent = await client.getPatent('10000000', [
       'patent_id',
-      'patent_number',
+      'patent_id',
       'patent_title',
       'patent_date',
       'assignees',
@@ -37,7 +37,7 @@ async function testPatentsViewAPI() {
     ]);
     
     if (patent) {
-      console.log(`✓ Found patent: ${patent.patent_number}`);
+      console.log(`✓ Found patent: ${patent.patent_id}`);
       console.log(`  Title: ${patent.patent_title}`);
       console.log(`  Date: ${patent.patent_date}`);
       console.log(`  Assignees: ${patent.assignees?.map(a => a.assignee_organization).join(', ')}`);
@@ -52,13 +52,13 @@ async function testPatentsViewAPI() {
       '2023-01-01',
       '2023-01-31',
       undefined,
-      ['patent_id', 'patent_number', 'patent_title', 'patent_date']
+      ['patent_id', 'patent_id', 'patent_title', 'patent_date']
     );
     
     console.log(`✓ Found ${dateRangeResults.total_hits} patents in January 2023`);
     console.log(`  Retrieved ${dateRangeResults.count} patents in this batch`);
     if (dateRangeResults.patents.length > 0) {
-      console.log(`  First patent: ${dateRangeResults.patents[0].patent_number} - ${dateRangeResults.patents[0].patent_title}`);
+      console.log(`  First patent: ${dateRangeResults.patents[0].patent_id} - ${dateRangeResults.patents[0].patent_title}`);
     }
     console.log('');
 
@@ -67,13 +67,13 @@ async function testPatentsViewAPI() {
     const assigneeResults = await client.searchByAssignee(
       'Apple Inc.',
       { _gte: { patent_date: '2024-01-01' } },
-      ['patent_id', 'patent_number', 'patent_title', 'patent_date', 'assignees']
+      ['patent_id', 'patent_id', 'patent_title', 'patent_date', 'assignees']
     );
     
     console.log(`✓ Found ${assigneeResults.total_hits} Apple Inc. patents from 2024`);
     console.log(`  Retrieved ${assigneeResults.count} patents in this batch`);
     if (assigneeResults.patents.length > 0) {
-      console.log(`  Sample patent: ${assigneeResults.patents[0].patent_number} - ${assigneeResults.patents[0].patent_title?.substring(0, 60)}...`);
+      console.log(`  Sample patent: ${assigneeResults.patents[0].patent_id} - ${assigneeResults.patents[0].patent_title?.substring(0, 60)}...`);
     }
     console.log('');
 
@@ -81,34 +81,27 @@ async function testPatentsViewAPI() {
     console.log('Test 4: Full text search for "machine learning"');
     const fullTextResults = await client.searchFullText(
       'machine learning',
-      ['patent_id', 'patent_number', 'patent_title', 'patent_date'],
+      ['patent_id', 'patent_id', 'patent_title', 'patent_date'],
       'title'
     );
     
     console.log(`✓ Found ${fullTextResults.total_hits} patents with "machine learning" in title`);
     console.log(`  Retrieved ${fullTextResults.count} patents in this batch`);
     if (fullTextResults.patents.length > 0) {
-      console.log(`  Sample: ${fullTextResults.patents[0].patent_number} - ${fullTextResults.patents[0].patent_title?.substring(0, 60)}...`);
+      console.log(`  Sample: ${fullTextResults.patents[0].patent_id} - ${fullTextResults.patents[0].patent_title?.substring(0, 60)}...`);
     }
     console.log('');
 
     // Test 5: Citation analysis
     console.log('Test 5: Citation analysis for a patent');
     const citations = await client.getPatentCitations('10000000');
-    
+
     console.log(`✓ Citation analysis complete`);
-    console.log(`  Backward citations (cited by this patent): ${citations.backward.length}`);
-    console.log(`  Forward citations (citing this patent): ${citations.forward.length}`);
-    
-    if (citations.backward.length > 0) {
-      const firstCited = citations.backward[0];
-      console.log(`  Sample cited patent: ${firstCited.cited_patent_number}`);
-    }
-    
-    if (citations.forward.length > 0) {
-      const firstCiting = citations.forward[0];
-      console.log(`  Sample citing patent: ${firstCiting.patent_number} - ${firstCiting.patent_title?.substring(0, 50)}...`);
-    }
+    console.log(`  US patents cited: ${citations.counts.usPatentsCited}`);
+    console.log(`  US applications cited: ${citations.counts.usApplicationsCited}`);
+    console.log(`  Foreign documents cited: ${citations.counts.foreignDocumentsCited}`);
+    console.log(`  Total documents cited: ${citations.counts.totalCited}`);
+    console.log(`  Times cited by US patents: ${citations.counts.timesCitedByUSPatents}`);
     console.log('');
 
     // Test 6: Advanced query with multiple conditions
@@ -122,14 +115,14 @@ async function testPatentsViewAPI() {
           { _lte: { patent_date: '2023-12-31' } },
         ],
       },
-      fields: ['patent_id', 'patent_number', 'patent_title', 'patent_date', 'assignees'],
+      fields: ['patent_id', 'patent_title', 'patent_date', 'assignees'],
       options: { size: 10 },
     });
     
     console.log(`✓ Found ${advancedResults.total_hits} matching patents`);
     console.log(`  Retrieved ${advancedResults.count} patents`);
     advancedResults.patents.slice(0, 3).forEach(p => {
-      console.log(`  - ${p.patent_number}: ${p.patent_title?.substring(0, 60)}...`);
+      console.log(`  - ${p.patent_id}: ${p.patent_title?.substring(0, 60)}...`);
     });
     console.log('');
 
@@ -142,7 +135,7 @@ async function testPatentsViewAPI() {
     for await (const page of client.searchPaginated(
       {
         query: { _gte: { patent_date: '2024-01-01' } },
-        fields: ['patent_id', 'patent_number', 'patent_date'],
+        fields: ['patent_id', 'patent_date'],
         sort: [{ patent_date: 'desc' }],
       },
       25 // Small page size for testing

@@ -14,7 +14,7 @@
 
 import { BaseAPIClient, APIConfig, buildQueryString } from './base-client.js';
 
-const ODP_BASE_URL = 'https://api.data.uspto.gov/patent-file-wrapper/v1';
+const ODP_BASE_URL = 'https://data.uspto.gov/api/v2/patent-file-wrapper';
 
 export interface FileWrapperConfig {
   apiKey: string;

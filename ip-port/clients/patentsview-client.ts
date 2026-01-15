@@ -212,7 +212,6 @@ export class PatentsViewClient extends BaseAPIClient {
       query: { patent_id: patentId },
       fields: fields || [
         'patent_id',
-        'patent_number',
         'patent_title',
         'patent_abstract',
         'patent_date',
@@ -247,7 +246,7 @@ export class PatentsViewClient extends BaseAPIClient {
 
     return this.searchPatents({
       query,
-      fields: fields || ['patent_id', 'patent_number', 'patent_title', 'patent_date'],
+      fields: fields || ['patent_id', 'patent_id', 'patent_title', 'patent_date'],
     });
   }
 
@@ -260,7 +259,7 @@ export class PatentsViewClient extends BaseAPIClient {
     fields?: string[]
   ): Promise<PatentResponse> {
     const assigneeQuery: PatentQuery = {
-      assignee_organization: assigneeOrg,
+      'assignees.assignee_organization': assigneeOrg,
     };
 
     const query = additionalQuery
@@ -271,7 +270,6 @@ export class PatentsViewClient extends BaseAPIClient {
       query,
       fields: fields || [
         'patent_id',
-        'patent_number',
         'patent_title',
         'patent_date',
         'assignees',
@@ -280,40 +278,47 @@ export class PatentsViewClient extends BaseAPIClient {
   }
 
   /**
-   * Get citations for a patent (both citing and cited)
+   * Get citation counts for a patent
+   * Note: Full citation data requires using the separate citation endpoints
    */
   async getPatentCitations(patentId: string): Promise<{
     backward: Citation[];
     forward: Patent[];
+    counts: {
+      usPatentsCited: number;
+      usApplicationsCited: number;
+      foreignDocumentsCited: number;
+      totalCited: number;
+      timesCitedByUSPatents: number;
+    };
   }> {
-    // Get backward citations (patents this patent cites)
-    const backwardResponse = await this.getPatent(patentId, [
+    // Get patent with citation count fields
+    const patentResponse = await this.getPatent(patentId, [
       'patent_id',
-      'us_patent_citations',
-      'foreign_citations',
-      'other_references',
+      'patent_num_us_patents_cited',
+      'patent_num_us_applications_cited',
+      'patent_num_foreign_documents_cited',
+      'patent_num_total_documents_cited',
+      'patent_num_times_cited_by_us_patents',
     ]);
 
-    const backward = [
-      ...(backwardResponse?.us_patent_citations || []),
-      ...(backwardResponse?.foreign_citations || []),
-    ];
+    const counts = {
+      usPatentsCited: patentResponse?.patent_num_us_patents_cited || 0,
+      usApplicationsCited: patentResponse?.patent_num_us_applications_cited || 0,
+      foreignDocumentsCited: patentResponse?.patent_num_foreign_documents_cited || 0,
+      totalCited: patentResponse?.patent_num_total_documents_cited || 0,
+      timesCitedByUSPatents: patentResponse?.patent_num_times_cited_by_us_patents || 0,
+    };
 
-    // Get forward citations (patents that cite this patent)
-    const forwardResponse = await this.searchPatents({
-      query: { 'us_patent_citations.cited_patent_id': patentId },
-      fields: [
-        'patent_id',
-        'patent_number',
-        'patent_title',
-        'patent_date',
-        'assignees',
-      ],
-    });
+    // Note: To get full citation details, use the dedicated citation endpoints:
+    // - /api/v1/patent/us_patent_citation/
+    // - /api/v1/patent/us_application_citation/
+    // - /api/v1/patent/foreign_citation/
 
     return {
-      backward,
-      forward: forwardResponse.patents,
+      backward: [], // Use citation endpoints for full data
+      forward: [],  // Use citation endpoints for full data
+      counts,
     };
   }
 
@@ -337,7 +342,6 @@ export class PatentsViewClient extends BaseAPIClient {
       query,
       fields: fields || [
         'patent_id',
-        'patent_number',
         'patent_title',
         'patent_date',
         'cpc',
@@ -370,7 +374,7 @@ export class PatentsViewClient extends BaseAPIClient {
 
     return this.searchPatents({
       query,
-      fields: fields || ['patent_id', 'patent_number', 'patent_title', 'patent_abstract'],
+      fields: fields || ['patent_id', 'patent_id', 'patent_title', 'patent_abstract'],
     });
   }
 
@@ -385,17 +389,16 @@ export class PatentsViewClient extends BaseAPIClient {
     const query: PatentQuery = inventorFirstName
       ? {
           _and: [
-            { inventor_last_name: inventorLastName },
-            { inventor_first_name: inventorFirstName },
+            { 'inventors.inventor_name_last': inventorLastName },
+            { 'inventors.inventor_name_first': inventorFirstName },
           ],
         }
-      : { inventor_last_name: inventorLastName };
+      : { 'inventors.inventor_name_last': inventorLastName };
 
     return this.searchPatents({
       query,
       fields: fields || [
         'patent_id',
-        'patent_number',
         'patent_title',
         'patent_date',
         'inventors',

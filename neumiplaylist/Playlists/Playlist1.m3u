@@ -1,0 +1,21 @@
+#EXTM3U
+#PLAYLIST:Playlist1
+
+#EXTINF:-1,2001.A.Space.Odyssey.1968.1080p.BluRay.x264-[YTS.AM].mp4
+../Movies/2001.A.Space.Odyssey.1968.1080p.BluRay.x264-[YTS.AM].mp4
+
+#EXTINF:-1,Gangs.Of.New.York.2002.REMASTERED.2002.1080p.BrRip.x264.BOKUTOX.YIFY.mp4
+../Movies/Gangs.Of.New.York.2002.REMASTERED.2002.1080p.BrRip.x264.BOKUTOX.YIFY.mp4
+
+#EXTINF:-1,Millers.Crossing.1990.1080p.BrRip.x264.YIFY.mp4
+../Movies/Millers.Crossing.1990.1080p.BrRip.x264.YIFY.mp4
+
+#EXTINF:-1,Shutter.Island.2010.1080p.BluRay.x264.YIFY.mp4
+../Movies/Shutter.Island.2010.1080p.BluRay.x264.YIFY.mp4
+
+#EXTINF:-1,The Abyss 1989 Special Cut 1080p BluRay HEVC x265 5.1 BONE.mkv
+../Movies/The Abyss 1989 Special Cut 1080p BluRay HEVC x265 5.1 BONE.mkv
+
+#EXTINF:-1,The.Imitation.Game.2014.1080p.BluRay.x264.YIFY.mp4
+../Movies/The.Imitation.Game.2014.1080p.BluRay.x264.YIFY.mp4
+

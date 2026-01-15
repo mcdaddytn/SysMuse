@@ -13,6 +13,11 @@
     "example:broadcom": "tsx examples/broadcom-portfolio-builder.ts",
     "download:streaming": "tsx examples/streaming-video-downloader.ts",
     "download:streaming:test": "tsx examples/streaming-video-downloader.ts --limit 100",
+    "analyze:phase1": "tsx examples/phase1-citation-analysis.ts",
+    "analyze:overlap": "tsx examples/citation-overlap-analysis.ts",
+    "analyze:overlap:batch": "tsx examples/citation-overlap-batch.ts",
+    "analyze:overlap:highcite": "tsx examples/citation-overlap-high-cite.ts",
+    "analyze:cpc": "tsx examples/cpc-overlap-analysis.ts",
     "build": "tsc"
   },
   "keywords": [

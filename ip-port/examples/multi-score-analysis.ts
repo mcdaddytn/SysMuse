@@ -247,6 +247,7 @@ async function loadExistingData(): Promise<RawPatent[]> {
     './output/citation-overlap-1500-2000-2026-01-15.json',
     './output/citation-overlap-2000-2500-2026-01-15.json',
     './output/citation-overlap-2500-3000-2026-01-15.json',
+    './output/citation-overlap-3000-3500-2026-01-16.json',
     './output/high-cite-overlap-2026-01-15.json',
   ];
 

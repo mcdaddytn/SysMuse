@@ -89,7 +89,14 @@ function parseCSVLine(line: string): string[] {
 }
 
 function loadQuantitativeData(): Map<string, QuantitativeRecord> {
-  const csvPath = path.join(OUTPUT_DIR, 'top-250-actionable-2026-01-15.csv');
+  // Find the most recent top-250 file
+  const top250Files = fs.readdirSync(OUTPUT_DIR)
+    .filter(f => f.startsWith('top-250-actionable-') && f.endsWith('.csv'))
+    .sort()
+    .reverse();
+  if (top250Files.length === 0) throw new Error('No top-250 CSV found');
+  const csvPath = path.join(OUTPUT_DIR, top250Files[0]);
+  console.log(`  Using: ${csvPath}`);
   const content = fs.readFileSync(csvPath, 'utf-8');
   const lines = content.trim().split('\n').slice(1); // Skip header
 

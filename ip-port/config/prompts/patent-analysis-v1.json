@@ -1,0 +1,110 @@
+{
+  "version": "1.0",
+  "name": "Patent Analysis - Competitor Overlap Focus",
+  "description": "Initial prompt for analyzing patents identified through competitor citation overlap",
+  "created": "2026-01-16",
+  "lastModified": "2026-01-16",
+  "targetPatents": "Patents with competitor citations (current top-250 methodology)",
+
+  "systemPrompt": "You are a patent analysis expert with deep knowledge of patent law, prior art research, and technical analysis. Your task is to analyze patents and provide structured assessments.\n\nBe objective, thorough, and base your analysis only on the patent information provided. For rating scales, use the specific criteria given. When uncertain, lean toward moderate scores and indicate lower confidence.\n\nImportant guidelines:\n- For 101 eligibility: Focus on whether claims recite patent-eligible subject matter (not abstract ideas, laws of nature, or natural phenomena without significantly more)\n- For validity: Consider the patent's grant date when assessing prior art risk\n- For claim breadth: Assess both independent and dependent claim scope\n- For enforcement: Consider how infringement would be detected in practice\n- For design-around: Consider practical alternatives available to competitors\n\nAlways return valid JSON matching the exact schema requested.",
+
+  "userPromptTemplate": "Analyze the following patent(s) and return a JSON response.\n\nFor each patent, provide:\n1. summary: High-level summary for non-technical audience (2-3 sentences)\n2. prior_art_problem: What problem in prior art does this solve? (2-3 sentences)\n3. technical_solution: How does the technical solution work? (2-3 sentences)\n4. eligibility_score: Patent eligibility strength under 101 (1-5)\n5. validity_score: Strength against prior art invalidity (1-5)\n6. claim_breadth: Claim scope/breadth (1-5)\n7. enforcement_clarity: How easy to detect infringement (1-5)\n8. design_around_difficulty: How hard to avoid this patent (1-5)\n9. confidence: Your confidence in this analysis (1-5)\n\nRating Scales (ALL: Higher = Better for patent holder):\n- 5 = Very Strong/Very Broad/Very Clear/Very Difficult to avoid\n- 4 = Strong/Broad/Clear/Difficult to avoid\n- 3 = Moderate\n- 2 = Weak/Narrow/Unclear/Easy to avoid\n- 1 = Very Weak/Very Narrow/Very Unclear/Very Easy to avoid\n\nPatents to analyze:\n{{PATENTS_JSON}}\n\nReturn ONLY valid JSON in this exact format (no markdown, no explanation):\n{\n  \"analyses\": [\n    {\n      \"patent_id\": \"string\",\n      \"summary\": \"string\",\n      \"prior_art_problem\": \"string\",\n      \"technical_solution\": \"string\",\n      \"eligibility_score\": number,\n      \"validity_score\": number,\n      \"claim_breadth\": number,\n      \"enforcement_clarity\": number,\n      \"design_around_difficulty\": number,\n      \"confidence\": number\n    }\n  ]\n}",
+
+  "outputSchema": {
+    "textFields": [
+      {
+        "name": "summary",
+        "description": "High-level summary for non-technical audience",
+        "guidance": "2-3 sentences explaining what the patent covers in plain language"
+      },
+      {
+        "name": "prior_art_problem",
+        "description": "Problem in the prior art this patent addresses",
+        "guidance": "2-3 sentences describing what was lacking before this invention"
+      },
+      {
+        "name": "technical_solution",
+        "description": "How the technical solution works",
+        "guidance": "2-3 sentences explaining the mechanism or approach"
+      }
+    ],
+    "ratingFields": [
+      {
+        "name": "eligibility_score",
+        "description": "Patent eligibility strength under 35 USC 101",
+        "scale": {
+          "5": "Very Strong - Clearly patent-eligible, specific technical implementation",
+          "4": "Strong - Strong technical elements, minor abstract concepts",
+          "3": "Moderate - Mixed technical/abstract, outcome uncertain",
+          "2": "Weak - Significant abstract concepts, limited technical specificity",
+          "1": "Very Weak - Likely ineligible, primarily abstract idea"
+        }
+      },
+      {
+        "name": "validity_score",
+        "description": "Strength against prior art invalidity challenges",
+        "scale": {
+          "5": "Very Strong - Novel approach, minimal prior art concerns",
+          "4": "Strong - Some prior art exists but claims are differentiated",
+          "3": "Moderate - Relevant prior art exists, claims may need narrowing",
+          "2": "Weak - Significant prior art overlap, validity questionable",
+          "1": "Very Weak - Strong prior art, likely invalid"
+        }
+      },
+      {
+        "name": "claim_breadth",
+        "description": "Scope and breadth of the patent claims",
+        "scale": {
+          "5": "Very Broad - Foundational claims, wide applicability",
+          "4": "Broad - Covers multiple approaches/technologies",
+          "3": "Moderate - Covers a class of implementations",
+          "2": "Narrow - Specific to particular use case",
+          "1": "Very Narrow - Highly specific implementation details"
+        }
+      },
+      {
+        "name": "enforcement_clarity",
+        "description": "How easily infringement can be detected",
+        "scale": {
+          "5": "Very Clear - Infringement obvious from product/service",
+          "4": "Clear - Infringement readily observable",
+          "3": "Moderate - Detectable with technical analysis",
+          "2": "Difficult - Requires significant reverse engineering",
+          "1": "Very Difficult - Infringement hard to detect/prove"
+        }
+      },
+      {
+        "name": "design_around_difficulty",
+        "description": "How difficult it is to avoid infringing this patent",
+        "scale": {
+          "5": "Very Difficult - No practical alternatives, must license",
+          "4": "Difficult - Few practical alternatives",
+          "3": "Moderate - Alternatives possible with effort",
+          "2": "Easy - Known workarounds available",
+          "1": "Very Easy - Trivial alternatives exist"
+        }
+      },
+      {
+        "name": "confidence",
+        "description": "LLM confidence in this analysis",
+        "scale": {
+          "5": "Very High - High confidence in all assessments",
+          "4": "High - Confident in most assessments",
+          "3": "Moderate - Some uncertainty in assessments",
+          "2": "Low - Significant uncertainty",
+          "1": "Very Low - Limited information, low confidence"
+        }
+      }
+    ]
+  },
+
+  "scoringWeights": {
+    "llm_quality_score": {
+      "eligibility_score": 0.25,
+      "validity_score": 0.25,
+      "claim_breadth": 0.20,
+      "enforcement_clarity": 0.15,
+      "design_around_difficulty": 0.15
+    }
+  }
+}

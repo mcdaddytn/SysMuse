@@ -1,0 +1,227 @@
+{
+  "version": "2.0-draft",
+  "name": "Patent Analysis - Expanded Discovery",
+  "description": "Enhanced prompt for comprehensive patent analysis including market applicability and infringement potential",
+  "created": "2026-01-16",
+  "lastModified": "2026-01-16",
+  "status": "DRAFT - Pending attorney review",
+  "targetPatents": "All active patents (with and without competitor citations)",
+
+  "systemPrompt": "You are a patent analysis expert with deep knowledge of patent law, technology markets, and infringement analysis. Your task is to analyze patents and provide structured assessments that help identify valuable patents for licensing and litigation.\n\nBe objective, thorough, and base your analysis on the patent information provided combined with your knowledge of current technology markets and products. For rating scales, use the specific criteria given. When uncertain, lean toward moderate scores and indicate lower confidence.\n\nKey focus areas:\n- 101 eligibility and validity risk\n- Commercial applicability to real products\n- Evidence accessibility for enforcement\n- Alignment with current technology trends\n- Claim clarity and litigation viability\n\nAlways return valid JSON matching the exact schema requested.",
+
+  "userPromptTemplate": "Analyze the following patent(s) and return a comprehensive JSON response.\n\nFor each patent, provide:\n\n## CORE ASSESSMENT\n1. summary: High-level summary for non-technical audience (2-3 sentences)\n2. prior_art_problem: What problem in prior art does this solve? (2-3 sentences)\n3. technical_solution: How does the technical solution work? (2-3 sentences)\n\n## LEGAL VIABILITY RATINGS (1-5, higher = better for patent holder)\n4. eligibility_score: Patent eligibility strength under 35 USC 101\n5. validity_score: Strength against prior art invalidity challenges\n6. claim_breadth: Scope and breadth of patent claims\n7. claim_clarity_score: How clear and well-defined are claim boundaries?\n\n## ENFORCEMENT POTENTIAL RATINGS (1-5, higher = better)\n8. enforcement_clarity: How easily can infringement be detected?\n9. design_around_difficulty: How difficult to avoid this patent?\n10. evidence_accessibility_score: How accessible is infringement evidence?\n\n## MARKET APPLICABILITY\n11. technology_category: Primary technology category (e.g., \"video streaming\", \"cloud computing\", \"mobile devices\", \"cybersecurity\", \"AI/ML\", \"IoT\", \"networking\")\n12. product_types: Array of specific product types this might cover\n13. market_relevance_score (1-5): How relevant to current products in market?\n14. trend_alignment_score (1-5): Alignment with current technology trends?\n\n## INVESTIGATION GUIDANCE\n15. likely_implementers: Types of companies likely using this technology\n16. detection_method: How would you detect infringement? (\"observable\", \"technical analysis\", \"reverse engineering\", \"discovery required\")\n17. investigation_priority_score (1-5): Priority for infringement investigation\n\n18. confidence: Overall confidence in this analysis (1-5)\n\nRating Scale Reference:\n- 5 = Very Strong/Broad/Clear/High Priority\n- 4 = Strong/Good\n- 3 = Moderate\n- 2 = Weak/Limited\n- 1 = Very Weak/Low Priority\n\nPatents to analyze:\n{{PATENTS_JSON}}\n\nReturn ONLY valid JSON in this exact format:\n{\n  \"analyses\": [\n    {\n      \"patent_id\": \"string\",\n      \"summary\": \"string\",\n      \"prior_art_problem\": \"string\",\n      \"technical_solution\": \"string\",\n      \"eligibility_score\": number,\n      \"validity_score\": number,\n      \"claim_breadth\": number,\n      \"claim_clarity_score\": number,\n      \"enforcement_clarity\": number,\n      \"design_around_difficulty\": number,\n      \"evidence_accessibility_score\": number,\n      \"technology_category\": \"string\",\n      \"product_types\": [\"string\"],\n      \"market_relevance_score\": number,\n      \"trend_alignment_score\": number,\n      \"likely_implementers\": [\"string\"],\n      \"detection_method\": \"string\",\n      \"investigation_priority_score\": number,\n      \"confidence\": number\n    }\n  ]\n}",
+
+  "outputSchema": {
+    "textFields": [
+      {
+        "name": "summary",
+        "description": "High-level summary for non-technical audience"
+      },
+      {
+        "name": "prior_art_problem",
+        "description": "Problem in prior art this patent addresses"
+      },
+      {
+        "name": "technical_solution",
+        "description": "How the technical solution works"
+      },
+      {
+        "name": "technology_category",
+        "description": "Primary technology category"
+      },
+      {
+        "name": "detection_method",
+        "description": "How infringement would be detected"
+      }
+    ],
+    "arrayFields": [
+      {
+        "name": "product_types",
+        "description": "Specific product types this patent might cover"
+      },
+      {
+        "name": "likely_implementers",
+        "description": "Types of companies likely using this technology"
+      }
+    ],
+    "ratingFields": [
+      {
+        "name": "eligibility_score",
+        "description": "Patent eligibility under 35 USC 101",
+        "scale": {
+          "5": "Very Strong - Clearly patent-eligible, specific technical implementation",
+          "4": "Strong - Strong technical elements, minor abstract concepts",
+          "3": "Moderate - Mixed technical/abstract, outcome uncertain",
+          "2": "Weak - Significant abstract concepts, limited technical specificity",
+          "1": "Very Weak - Likely ineligible, primarily abstract idea"
+        }
+      },
+      {
+        "name": "validity_score",
+        "description": "Strength against prior art invalidity",
+        "scale": {
+          "5": "Very Strong - Novel approach, minimal prior art concerns",
+          "4": "Strong - Some prior art but claims differentiated",
+          "3": "Moderate - Relevant prior art exists, claims may need narrowing",
+          "2": "Weak - Significant prior art overlap",
+          "1": "Very Weak - Strong prior art, likely invalid"
+        }
+      },
+      {
+        "name": "claim_breadth",
+        "description": "Scope of patent claims",
+        "scale": {
+          "5": "Very Broad - Foundational claims, wide applicability",
+          "4": "Broad - Covers multiple approaches",
+          "3": "Moderate - Covers a class of implementations",
+          "2": "Narrow - Specific use case",
+          "1": "Very Narrow - Highly specific implementation"
+        }
+      },
+      {
+        "name": "claim_clarity_score",
+        "description": "How clear claim boundaries are",
+        "scale": {
+          "5": "Very Clear - Easy to map to products",
+          "4": "Clear - Minor ambiguities",
+          "3": "Moderate - Some ambiguous terms",
+          "2": "Unclear - Significant ambiguity",
+          "1": "Very Unclear - Difficult to interpret"
+        }
+      },
+      {
+        "name": "enforcement_clarity",
+        "description": "How easily infringement can be detected",
+        "scale": {
+          "5": "Very Clear - Infringement obvious from product",
+          "4": "Clear - Readily observable",
+          "3": "Moderate - Detectable with technical analysis",
+          "2": "Difficult - Requires reverse engineering",
+          "1": "Very Difficult - Hard to detect"
+        }
+      },
+      {
+        "name": "design_around_difficulty",
+        "description": "How difficult to avoid the patent",
+        "scale": {
+          "5": "Very Difficult - No practical alternatives",
+          "4": "Difficult - Few alternatives",
+          "3": "Moderate - Alternatives with effort",
+          "2": "Easy - Known workarounds",
+          "1": "Very Easy - Trivial alternatives"
+        }
+      },
+      {
+        "name": "evidence_accessibility_score",
+        "description": "How accessible is infringement evidence",
+        "scale": {
+          "5": "Public - Visible from marketing/product materials",
+          "4": "Documentation - From public technical docs",
+          "3": "Testing - Requires product testing",
+          "2": "Discovery - Requires internal documents",
+          "1": "Hidden - Essentially undetectable publicly"
+        }
+      },
+      {
+        "name": "market_relevance_score",
+        "description": "Relevance to current commercial products",
+        "scale": {
+          "5": "Core - Widespread use in products today",
+          "4": "Common - In many products",
+          "3": "Niche - Limited but commercial use",
+          "2": "Rare - Little commercial application",
+          "1": "Obsolete - No commercial relevance"
+        }
+      },
+      {
+        "name": "trend_alignment_score",
+        "description": "Alignment with technology trends",
+        "scale": {
+          "5": "Core Enabler - Essential to major trend",
+          "4": "Important - Supporting technology",
+          "3": "Related - Tangentially related",
+          "2": "Declining - Losing relevance",
+          "1": "None - No trend alignment"
+        }
+      },
+      {
+        "name": "investigation_priority_score",
+        "description": "Priority for infringement investigation",
+        "scale": {
+          "5": "High Priority - Clear targets and evidence path",
+          "4": "Good Priority - Likely targets identifiable",
+          "3": "Moderate - Some investigation needed",
+          "2": "Low - Targets unclear",
+          "1": "Very Low - No clear path forward"
+        }
+      },
+      {
+        "name": "confidence",
+        "description": "LLM confidence in analysis",
+        "scale": {
+          "5": "Very High - Confident in all assessments",
+          "4": "High - Confident in most",
+          "3": "Moderate - Some uncertainty",
+          "2": "Low - Significant uncertainty",
+          "1": "Very Low - Limited information"
+        }
+      }
+    ]
+  },
+
+  "scoringWeights": {
+    "legal_viability_score": {
+      "description": "Patent legal strength for enforcement",
+      "formula": "(eligibility_score * 0.30 + validity_score * 0.30 + claim_breadth * 0.20 + claim_clarity_score * 0.20) / 5 * 100",
+      "weights": {
+        "eligibility_score": 0.30,
+        "validity_score": 0.30,
+        "claim_breadth": 0.20,
+        "claim_clarity_score": 0.20
+      }
+    },
+    "enforcement_potential_score": {
+      "description": "Ability to enforce and prove infringement",
+      "formula": "(enforcement_clarity * 0.35 + evidence_accessibility_score * 0.35 + design_around_difficulty * 0.30) / 5 * 100",
+      "weights": {
+        "enforcement_clarity": 0.35,
+        "evidence_accessibility_score": 0.35,
+        "design_around_difficulty": 0.30
+      }
+    },
+    "market_value_score": {
+      "description": "Commercial relevance and future value",
+      "formula": "(market_relevance_score * 0.50 + trend_alignment_score * 0.50) / 5 * 100",
+      "weights": {
+        "market_relevance_score": 0.50,
+        "trend_alignment_score": 0.50
+      }
+    },
+    "overall_llm_score": {
+      "description": "Combined LLM assessment score",
+      "formula": "(legal_viability_score * 0.35 + enforcement_potential_score * 0.35 + market_value_score * 0.20 + investigation_priority_score * 0.10) / 5 * 100",
+      "weights": {
+        "legal_viability_score": 0.35,
+        "enforcement_potential_score": 0.35,
+        "market_value_score": 0.20,
+        "investigation_priority_score": 0.10
+      }
+    }
+  },
+
+  "notes": {
+    "attorney_review_needed": [
+      "Confirm rating scale definitions are appropriate",
+      "Validate whether LLM should suggest specific infringers or just implementer types",
+      "Review scoring weights for your use case priorities",
+      "Decide if technology_category list needs expansion",
+      "Confirm detection_method options are sufficient"
+    ],
+    "implementation_notes": [
+      "This prompt returns more fields than v1 - update data structures",
+      "May need longer output token limit due to array fields",
+      "Consider running on sample before full deployment",
+      "New fields enable filtering patents by technology category"
+    ]
+  }
+}

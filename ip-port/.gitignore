@@ -58,3 +58,9 @@ temp/
 *.key
 *.pem
 credentials.json
+
+# Prisma
+prisma/migrations/
+
+# Docker volumes (local data)
+docker-data/

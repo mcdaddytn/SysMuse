@@ -18,7 +18,30 @@
     "analyze:overlap:batch": "tsx examples/citation-overlap-batch.ts",
     "analyze:overlap:highcite": "tsx examples/citation-overlap-high-cite.ts",
     "analyze:cpc": "tsx examples/cpc-overlap-analysis.ts",
-    "build": "tsc"
+    "analyze:multiscore": "tsx examples/multi-score-analysis.ts",
+    "build": "tsc",
+    "docker:up": "docker compose up -d postgres elasticsearch",
+    "docker:up:all": "docker compose --profile dev up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "es:health": "tsx services/elasticsearch-service.ts health",
+    "es:create-index": "tsx services/elasticsearch-service.ts create-index",
+    "es:stats": "tsx services/elasticsearch-service.ts stats",
+    "es:import": "tsx services/import-to-elasticsearch.ts --all",
+    "es:import:priority": "tsx services/import-to-elasticsearch.ts --priority",
+    "es:import:portfolio": "tsx services/import-to-elasticsearch.ts --portfolio",
+    "search": "tsx services/search-cli.ts",
+    "llm:test": "tsx services/llm-patent-analysis.ts test",
+    "llm:analyze": "tsx services/llm-patent-analysis.ts analyze",
+    "llm:batch": "tsx services/llm-patent-analysis.ts batch",
+    "combine:status": "tsx services/combine-results.ts status",
+    "combine:run": "tsx services/combine-results.ts combine",
+    "combine:export": "tsx services/combine-results.ts export all",
+    "export:llm": "tsx examples/export-for-llm.ts"
   },
   "keywords": [
     "uspto",
@@ -34,11 +57,17 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@langchain/anthropic": "^1.3.10",
+    "@langchain/core": "^1.1.15",
+    "@prisma/client": "^5.7.0",
     "dotenv": "^16.3.1",
-    "node-fetch": "^3.3.2"
+    "langchain": "^1.2.10",
+    "node-fetch": "^3.3.2",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "prisma": "^5.7.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.3.3"

@@ -31,7 +31,8 @@ Private Const DATA_START_ROW As Integer = 2
 Private Const WEIGHTS_SHEET As String = "UserWeights"
 Private Const RAW_DATA_SHEET As String = "RawData"
 
-' Column mappings for RawData sheet (must match CSV export)
+' Column mappings for RawData sheet (must match CSV export - 44 columns)
+' Core patent data (A-J)
 Private Const COL_PATENT_ID As String = "A"
 Private Const COL_TITLE As String = "B"
 Private Const COL_GRANT_DATE As String = "C"
@@ -42,11 +43,29 @@ Private Const COL_COMPETITOR_CITATIONS As String = "G"
 Private Const COL_COMPETITORS_CITING As String = "H"
 Private Const COL_SECTOR As String = "I"
 Private Const COL_CPC_CODES As String = "J"
+' LLM scores (K-U)
 Private Const COL_ELIGIBILITY As String = "K"
 Private Const COL_VALIDITY As String = "L"
 Private Const COL_CLAIM_BREADTH As String = "M"
-Private Const COL_ENFORCEMENT As String = "N"
-Private Const COL_DESIGN_AROUND As String = "O"
+Private Const COL_CLAIM_CLARITY As String = "N"
+Private Const COL_ENFORCEMENT As String = "O"
+Private Const COL_DESIGN_AROUND As String = "P"
+Private Const COL_EVIDENCE_ACCESS As String = "Q"
+Private Const COL_MARKET_RELEVANCE As String = "R"
+Private Const COL_TREND_ALIGNMENT As String = "S"
+Private Const COL_INVESTIGATION_PRIORITY As String = "T"
+Private Const COL_LLM_CONFIDENCE As String = "U"
+' V3 cross-sector signals (V-AE)
+Private Const COL_IMPLEMENTATION_TYPE As String = "V"
+Private Const COL_STANDARDS_RELEVANCE As String = "W"
+' IPR risk (AF-AI)
+Private Const COL_IPR_RISK_SCORE As String = "AF"
+Private Const COL_IPR_RISK_CATEGORY As String = "AG"
+' Prosecution history (AJ-AN)
+Private Const COL_PROS_QUALITY_SCORE As String = "AJ"
+Private Const COL_PROS_QUALITY_CATEGORY As String = "AK"
+Private Const COL_OFFICE_ACTIONS As String = "AL"
+Private Const COL_RCE_COUNT As String = "AM"
 
 '===============================================================================
 ' PUBLIC ENTRY POINTS - No-Argument Wrappers
@@ -175,17 +194,19 @@ Private Sub CreateUserWeightsSheet()
     ws.Range("D3").Value = "Conservative"
     ws.Range("E3").Value = "Description"
 
-    ' Metric weights (rows 4-11)
+    ' Metric weights (rows 4-13) - 10 metrics now including IPR and Prosecution
     Dim metrics As Variant
     metrics = Array( _
-        Array("competitor_citations", 0.25, 0.2, 0.1, "Citations from tracked competitors"), _
-        Array("forward_citations", 0.05, 0.1, 0.15, "Total forward citations"), _
-        Array("years_remaining", 0.1, 0.15, 0.1, "Years until patent expiration"), _
+        Array("competitor_citations", 0.2, 0.15, 0.1, "Citations from tracked competitors"), _
+        Array("forward_citations", 0.05, 0.1, 0.1, "Total forward citations"), _
+        Array("years_remaining", 0.1, 0.1, 0.1, "Years until patent expiration"), _
         Array("eligibility_score", 0.15, 0.15, 0.1, "101 patent eligibility (LLM)"), _
-        Array("validity_score", 0.1, 0.15, 0.25, "Prior art strength (LLM)"), _
+        Array("validity_score", 0.1, 0.15, 0.2, "Prior art strength (LLM)"), _
         Array("claim_breadth", 0.05, 0.1, 0.15, "Claim scope (LLM)"), _
-        Array("enforcement_clarity", 0.2, 0.1, 0.05, "Infringement detectability (LLM)"), _
-        Array("design_around_difficulty", 0.1, 0.05, 0.1, "Difficulty to design around (LLM)") _
+        Array("enforcement_clarity", 0.15, 0.1, 0.05, "Infringement detectability (LLM)"), _
+        Array("design_around_difficulty", 0.05, 0.05, 0.1, "Difficulty to design around (LLM)"), _
+        Array("ipr_risk_score", 0.05, 0.05, 0.05, "IPR/PTAB risk (5=clean, 1=high risk)"), _
+        Array("prosecution_quality_score", 0.1, 0.05, 0.05, "Prosecution history quality (5=clean)") _
     )
 
     Dim i As Integer
@@ -197,49 +218,49 @@ Private Sub CreateUserWeightsSheet()
         ws.Range("E" & (4 + i)).Value = metrics(i)(4)
     Next i
 
-    ' Total row
-    ws.Range("A12").Value = "TOTAL"
-    ws.Range("A12").Font.Bold = True
-    ws.Range("B12").Formula = "=SUM(B4:B11)"
-    ws.Range("C12").Formula = "=SUM(C4:C11)"
-    ws.Range("D12").Formula = "=SUM(D4:D11)"
+    ' Total row (now row 14 with 10 metrics)
+    ws.Range("A14").Value = "TOTAL"
+    ws.Range("A14").Font.Bold = True
+    ws.Range("B14").Formula = "=SUM(B4:B13)"
+    ws.Range("C14").Formula = "=SUM(C4:C13)"
+    ws.Range("D14").Formula = "=SUM(D4:D13)"
 
     ' Format weights as percentages
-    ws.Range("B4:D12").NumberFormat = "0%"
+    ws.Range("B4:D14").NumberFormat = "0%"
 
     ' === Section 2: User Relative Weights ===
-    ws.Range("A15").Value = "USER RELATIVE WEIGHTS"
-    ws.Range("A15").Font.Bold = True
-    ws.Range("A15").Font.Size = 14
+    ws.Range("A17").Value = "USER RELATIVE WEIGHTS"
+    ws.Range("A17").Font.Bold = True
+    ws.Range("A17").Font.Size = 14
 
-    ws.Range("A17").Value = "User Profile"
-    ws.Range("B17").Value = "Relative Weight"
-    ws.Range("C17").Value = "Description"
+    ws.Range("A19").Value = "User Profile"
+    ws.Range("B19").Value = "Relative Weight"
+    ws.Range("C19").Value = "Description"
 
-    ws.Range("A18").Value = "Aggressive"
-    ws.Range("B18").Value = 0.33
-    ws.Range("C18").Value = "Litigation-focused strategy"
-
-    ws.Range("A19").Value = "Moderate"
-    ws.Range("B19").Value = 0.34
-    ws.Range("C19").Value = "Balanced approach"
-
-    ws.Range("A20").Value = "Conservative"
+    ws.Range("A20").Value = "Aggressive"
     ws.Range("B20").Value = 0.33
-    ws.Range("C20").Value = "Defensive posture"
+    ws.Range("C20").Value = "Litigation-focused strategy"
 
-    ws.Range("A21").Value = "TOTAL"
-    ws.Range("A21").Font.Bold = True
-    ws.Range("B21").Formula = "=SUM(B18:B20)"
+    ws.Range("A21").Value = "Moderate"
+    ws.Range("B21").Value = 0.34
+    ws.Range("C21").Value = "Balanced approach"
 
-    ws.Range("B18:B21").NumberFormat = "0%"
+    ws.Range("A22").Value = "Conservative"
+    ws.Range("B22").Value = 0.33
+    ws.Range("C22").Value = "Defensive posture"
+
+    ws.Range("A23").Value = "TOTAL"
+    ws.Range("A23").Font.Bold = True
+    ws.Range("B23").Formula = "=SUM(B20:B22)"
+
+    ws.Range("B20:B23").NumberFormat = "0%"
 
     ' === Create Named Ranges ===
     CreateNamedRanges ws
 
     ' === Format ===
     FormatHeaderRow ws, 3
-    FormatHeaderRow ws, 17
+    FormatHeaderRow ws, 19
     ws.Columns("A:E").AutoFit
 
     ' Color coding for user profiles
@@ -265,15 +286,15 @@ Private Sub CreateNamedRanges(ByVal ws As Worksheet)
     wb.Names("RelWeight_Conservative").Delete
     On Error GoTo 0
 
-    ' Metric weight ranges (for each user profile)
-    wb.Names.Add Name:="W_Aggressive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$4:$B$11"
-    wb.Names.Add Name:="W_Moderate", RefersTo:="=" & WEIGHTS_SHEET & "!$C$4:$C$11"
-    wb.Names.Add Name:="W_Conservative", RefersTo:="=" & WEIGHTS_SHEET & "!$D$4:$D$11"
+    ' Metric weight ranges (for each user profile) - now 10 metrics (rows 4-13)
+    wb.Names.Add Name:="W_Aggressive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$4:$B$13"
+    wb.Names.Add Name:="W_Moderate", RefersTo:="=" & WEIGHTS_SHEET & "!$C$4:$C$13"
+    wb.Names.Add Name:="W_Conservative", RefersTo:="=" & WEIGHTS_SHEET & "!$D$4:$D$13"
 
-    ' Relative weights for combined view
-    wb.Names.Add Name:="RelWeight_Aggressive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$18"
-    wb.Names.Add Name:="RelWeight_Moderate", RefersTo:="=" & WEIGHTS_SHEET & "!$B$19"
-    wb.Names.Add Name:="RelWeight_Conservative", RefersTo:="=" & WEIGHTS_SHEET & "!$B$20"
+    ' Relative weights for combined view (now rows 20-22)
+    wb.Names.Add Name:="RelWeight_Aggressive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$20"
+    wb.Names.Add Name:="RelWeight_Moderate", RefersTo:="=" & WEIGHTS_SHEET & "!$B$21"
+    wb.Names.Add Name:="RelWeight_Conservative", RefersTo:="=" & WEIGHTS_SHEET & "!$B$22"
 End Sub
 
 '===============================================================================
@@ -319,7 +340,7 @@ Private Sub GenerateUserScoringSheet(ByVal sheetName As String, ByVal userProfil
     Set ws = GetOrCreateSheet(sheetName)
     ws.Cells.Clear
 
-    ' Headers
+    ' Headers (expanded for 10 metrics)
     ws.Range("A1").Value = "Rank"
     ws.Range("B1").Value = "Patent ID"
     ws.Range("C1").Value = "Title"
@@ -338,6 +359,8 @@ Private Sub GenerateUserScoringSheet(ByVal sheetName As String, ByVal userProfil
     ws.Range("P1").Value = "Norm_Breadth"
     ws.Range("Q1").Value = "Norm_Enforce"
     ws.Range("R1").Value = "Norm_Design"
+    ws.Range("S1").Value = "IPR_Risk"
+    ws.Range("T1").Value = "Pros_Quality"
 
     ' Determine how many rows to generate (min of topN and available data)
     Dim rowsToGenerate As Long
@@ -373,7 +396,7 @@ Private Sub GenerateUserScoringSheet(ByVal sheetName As String, ByVal userProfil
     GenerateScoringFormulas ws, userProfile, weightCol, rowsToGenerate
 
     FormatHeaderRow ws
-    ws.Columns("A:R").AutoFit
+    ws.Columns("A:T").AutoFit
 
     ' Color the score column header based on profile
     Select Case userProfile
@@ -411,17 +434,19 @@ Private Sub GenerateScoringFormulas(ByVal ws As Worksheet, ByVal userProfile As 
         ws.Cells(r, 8).Formula = "=" & srcSheet & "!H" & srcRow  ' Competitors Citing
         ws.Cells(r, 9).Formula = "=" & srcSheet & "!I" & srcRow  ' Sector
 
-        ' Normalized values (columns K-R)
+        ' Normalized values (columns K-T for 10 metrics)
         ws.Cells(r, 11).Formula = "=MIN(1," & srcSheet & "!G" & srcRow & "/20)"  ' Norm Comp Cites
         ws.Cells(r, 12).Formula = "=MIN(1,SQRT(" & srcSheet & "!F" & srcRow & ")/30)"  ' Norm Fwd Cites
         ws.Cells(r, 13).Formula = "=MIN(1," & srcSheet & "!E" & srcRow & "/15)"  ' Norm Years
         ws.Cells(r, 14).Formula = "=IF(" & srcSheet & "!K" & srcRow & "=""""," & "0," & srcSheet & "!K" & srcRow & "/5)"  ' Norm Eligibility
         ws.Cells(r, 15).Formula = "=IF(" & srcSheet & "!L" & srcRow & "=""""," & "0," & srcSheet & "!L" & srcRow & "/5)"  ' Norm Validity
         ws.Cells(r, 16).Formula = "=IF(" & srcSheet & "!M" & srcRow & "=""""," & "0," & srcSheet & "!M" & srcRow & "/5)"  ' Norm Breadth
-        ws.Cells(r, 17).Formula = "=IF(" & srcSheet & "!N" & srcRow & "=""""," & "0," & srcSheet & "!N" & srcRow & "/5)"  ' Norm Enforcement
-        ws.Cells(r, 18).Formula = "=IF(" & srcSheet & "!O" & srcRow & "=""""," & "0," & srcSheet & "!O" & srcRow & "/5)"  ' Norm Design Around
+        ws.Cells(r, 17).Formula = "=IF(" & srcSheet & "!O" & srcRow & "=""""," & "0," & srcSheet & "!O" & srcRow & "/5)"  ' Norm Enforcement (col O)
+        ws.Cells(r, 18).Formula = "=IF(" & srcSheet & "!P" & srcRow & "=""""," & "0," & srcSheet & "!P" & srcRow & "/5)"  ' Norm Design Around (col P)
+        ws.Cells(r, 19).Formula = "=IF(" & srcSheet & "!AF" & srcRow & "=""""," & "0," & srcSheet & "!AF" & srcRow & "/5)"  ' IPR Risk Score (col AF)
+        ws.Cells(r, 20).Formula = "=IF(" & srcSheet & "!AJ" & srcRow & "=""""," & "0," & srcSheet & "!AJ" & srcRow & "/5)"  ' Prosecution Quality (col AJ)
 
-        ' Weighted Score (column J) - references UserWeights sheet
+        ' Weighted Score (column J) - references UserWeights sheet (10 metrics, rows 4-13)
         ws.Cells(r, 10).Formula = "=" & _
             "K" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$4+" & _
             "L" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$5+" & _
@@ -430,19 +455,21 @@ Private Sub GenerateScoringFormulas(ByVal ws As Worksheet, ByVal userProfile As 
             "O" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$8+" & _
             "P" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$9+" & _
             "Q" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$10+" & _
-            "R" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$11"
+            "R" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$11+" & _
+            "S" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$12+" & _
+            "T" & r & "*" & WEIGHTS_SHEET & "!$" & weightCol & "$13"
     Next r
 
     ' Format score column
     ws.Range("J2:J" & (rowCount + 1)).NumberFormat = "0.00%"
-    ws.Range("K2:R" & (rowCount + 1)).NumberFormat = "0.00"
+    ws.Range("K2:T" & (rowCount + 1)).NumberFormat = "0.00"
 
     ' Sort by score descending
     ws.Sort.SortFields.Clear
     ws.Sort.SortFields.Add2 Key:=ws.Range("J2:J" & (rowCount + 1)), _
         SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
     With ws.Sort
-        .SetRange ws.Range("A1:R" & (rowCount + 1))
+        .SetRange ws.Range("A1:T" & (rowCount + 1))
         .Header = xlYes
         .Apply
     End With
@@ -497,7 +524,7 @@ Private Sub GenerateCombinedScoringSheet(ByVal sheetName As String, ByVal topN A
         ws.Cells(r, 8).Formula = "=" & srcSheet & "!H" & srcRow
         ws.Cells(r, 9).Formula = "=" & srcSheet & "!I" & srcRow
 
-        ' Individual user scores (calculate inline)
+        ' Individual user scores (calculate inline) - 10 metrics with correct columns
         ' Aggressive Score
         ws.Cells(r, 11).Formula = "=" & _
             "MIN(1," & srcSheet & "!G" & srcRow & "/20)*" & WEIGHTS_SHEET & "!$B$4+" & _
@@ -506,8 +533,10 @@ Private Sub GenerateCombinedScoringSheet(ByVal sheetName As String, ByVal topN A
             "IF(" & srcSheet & "!K" & srcRow & "="""",0," & srcSheet & "!K" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$7+" & _
             "IF(" & srcSheet & "!L" & srcRow & "="""",0," & srcSheet & "!L" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$8+" & _
             "IF(" & srcSheet & "!M" & srcRow & "="""",0," & srcSheet & "!M" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$9+" & _
-            "IF(" & srcSheet & "!N" & srcRow & "="""",0," & srcSheet & "!N" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$10+" & _
-            "IF(" & srcSheet & "!O" & srcRow & "="""",0," & srcSheet & "!O" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$11"
+            "IF(" & srcSheet & "!O" & srcRow & "="""",0," & srcSheet & "!O" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$10+" & _
+            "IF(" & srcSheet & "!P" & srcRow & "="""",0," & srcSheet & "!P" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$11+" & _
+            "IF(" & srcSheet & "!AF" & srcRow & "="""",0," & srcSheet & "!AF" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$12+" & _
+            "IF(" & srcSheet & "!AJ" & srcRow & "="""",0," & srcSheet & "!AJ" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$B$13"
 
         ' Moderate Score
         ws.Cells(r, 12).Formula = "=" & _
@@ -517,8 +546,10 @@ Private Sub GenerateCombinedScoringSheet(ByVal sheetName As String, ByVal topN A
             "IF(" & srcSheet & "!K" & srcRow & "="""",0," & srcSheet & "!K" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$7+" & _
             "IF(" & srcSheet & "!L" & srcRow & "="""",0," & srcSheet & "!L" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$8+" & _
             "IF(" & srcSheet & "!M" & srcRow & "="""",0," & srcSheet & "!M" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$9+" & _
-            "IF(" & srcSheet & "!N" & srcRow & "="""",0," & srcSheet & "!N" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$10+" & _
-            "IF(" & srcSheet & "!O" & srcRow & "="""",0," & srcSheet & "!O" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$11"
+            "IF(" & srcSheet & "!O" & srcRow & "="""",0," & srcSheet & "!O" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$10+" & _
+            "IF(" & srcSheet & "!P" & srcRow & "="""",0," & srcSheet & "!P" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$11+" & _
+            "IF(" & srcSheet & "!AF" & srcRow & "="""",0," & srcSheet & "!AF" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$12+" & _
+            "IF(" & srcSheet & "!AJ" & srcRow & "="""",0," & srcSheet & "!AJ" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$C$13"
 
         ' Conservative Score
         ws.Cells(r, 13).Formula = "=" & _
@@ -528,14 +559,16 @@ Private Sub GenerateCombinedScoringSheet(ByVal sheetName As String, ByVal topN A
             "IF(" & srcSheet & "!K" & srcRow & "="""",0," & srcSheet & "!K" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$7+" & _
             "IF(" & srcSheet & "!L" & srcRow & "="""",0," & srcSheet & "!L" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$8+" & _
             "IF(" & srcSheet & "!M" & srcRow & "="""",0," & srcSheet & "!M" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$9+" & _
-            "IF(" & srcSheet & "!N" & srcRow & "="""",0," & srcSheet & "!N" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$10+" & _
-            "IF(" & srcSheet & "!O" & srcRow & "="""",0," & srcSheet & "!O" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$11"
+            "IF(" & srcSheet & "!O" & srcRow & "="""",0," & srcSheet & "!O" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$10+" & _
+            "IF(" & srcSheet & "!P" & srcRow & "="""",0," & srcSheet & "!P" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$11+" & _
+            "IF(" & srcSheet & "!AF" & srcRow & "="""",0," & srcSheet & "!AF" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$12+" & _
+            "IF(" & srcSheet & "!AJ" & srcRow & "="""",0," & srcSheet & "!AJ" & srcRow & "/5)*" & WEIGHTS_SHEET & "!$D$13"
 
-        ' Combined Score (weighted average)
+        ' Combined Score (weighted average) - uses relative weights from rows 20-22
         ws.Cells(r, 10).Formula = "=" & _
-            "K" & r & "*" & WEIGHTS_SHEET & "!$B$18+" & _
-            "L" & r & "*" & WEIGHTS_SHEET & "!$B$19+" & _
-            "M" & r & "*" & WEIGHTS_SHEET & "!$B$20"
+            "K" & r & "*" & WEIGHTS_SHEET & "!$B$20+" & _
+            "L" & r & "*" & WEIGHTS_SHEET & "!$B$21+" & _
+            "M" & r & "*" & WEIGHTS_SHEET & "!$B$22"
     Next r
 
     ' Format score columns

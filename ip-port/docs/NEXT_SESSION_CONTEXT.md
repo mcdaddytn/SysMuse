@@ -2112,11 +2112,115 @@ npx tsx scripts/export-raw-metrics-csv.ts
 
 ---
 
-*Document updated: 2026-01-17 (late session)*
-*Unified Top 250: CALCULATED (77% overlap with previous rankings)*
-*Enrichment Jobs: IPR + Prosecution RUNNING on 174 patents*
+### Session Update: 2026-01-17 (Continuation) - Top 250 Enrichment Complete + Video Codec Queued
+
+**Major Accomplishments:**
+
+1. **All Top 250 Enrichment Jobs Complete** ✅
+   - LLM V3 Analysis: 174/174 patents analyzed
+   - Prosecution History: 250/250 patents (242 with data, 8 no File Wrapper data)
+   - IPR Risk Check: 174/174 patents (all clean - no IPR history found)
+
+2. **Unified Top 250 Re-exported** ✅
+   - Recalculated with complete enrichment data
+   - Files: `unified-top250-2026-01-17.csv` and `.json`
+
+3. **Video Codec Sector Expansion Started** 🔄
+   - Created `scripts/expand-video-codec-sector.ts`
+   - Searches ES for 200 video codec patents (CPC filtered: H04N, G06T)
+   - Running citation overlap analysis in background
+   - Early findings: Patent 10200706 has 39 ByteDance citations!
+
+**Data Coverage (Top 250):**
+
+| Data Type | Coverage | Notes |
+|-----------|----------|-------|
+| LLM v1/v3 | 174/250 (70%) | 76 patents need enrichment |
+| IPR Risk | 174/250 (70%) | All clean - no IPR history |
+| Prosecution | 250/250 (100%) | 242 with data |
+
+**Prosecution Quality Distribution:**
+
+| Score | Count | Category |
+|-------|-------|----------|
+| 1 | 30 | Very Difficult |
+| 2 | 47 | Difficult |
+| 3 | 50 | Moderate |
+| 4 | 90 | Smooth |
+| 5 | 33 | Clean |
+
+**Video Codec Analysis (Running):**
+- 200 patents identified via ES (video codec, transcoding, HEVC, H.264, macroblock)
+- Early competitor hits: ByteDance (45), Qualcomm, Huawei, Meta, Apple
+- Output: `output/sectors/video-codec-expanded/`
+
+**New Files Created:**
+
+| File | Purpose |
+|------|---------|
+| `scripts/expand-video-codec-sector.ts` | Video codec sector expansion + citation overlap |
+| `output/sectors/video-codec-expanded/` | Video codec analysis output directory |
+| `output/unified-top250-2026-01-17.csv` | Updated with complete enrichment |
+| `output/patents-raw-metrics-2026-01-17.csv` | Full 10K patent export |
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Check Video Codec Job Status
+
+```bash
+# Check if still running
+ps aux | grep "expand-video-codec" | grep -v grep
+
+# View progress
+tail -30 output/sectors/video-codec-expanded/analysis-run.log
+
+# View results when complete
+cat output/sectors/video-codec-expanded/video-codec-analysis-2026-01-17.json | jq '.summary'
+```
+
+### If Video Codec Complete, Next Steps
+
+1. **Review Video Codec Results**
+   ```bash
+   cat output/sectors/video-codec-expanded/video-codec-analysis-*.json | jq '.topCompetitors[0:10]'
+   ```
+
+2. **Queue Additional Sector Expansions** (Priority Order)
+   - Cloud/Auth sector (43 patents, 349 competitor citations)
+   - Security/Threat sector (6 patents, 28 citations)
+   - Image/Depth sector (3 patents, 47 citations)
+
+3. **Run LLM V3 on Remaining 76 Top 250 Patents**
+   ```bash
+   npx tsx scripts/run-llm-analysis-v3.ts output/top250-needs-llm-2026-01-17.json
+   ```
+
+4. **Consider IPR Check on Remaining 76 Patents**
+   ```bash
+   npx tsx scripts/check-ipr-risk.ts output/top250-needs-ipr-2026-01-17.json
+   ```
+
+### Export Commands
+
+```bash
+# Re-export unified top 250 (after more enrichment)
+npx tsx scripts/calculate-unified-top250.ts
+
+# Export full raw metrics CSV
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# Export video codec results
+cat output/sectors/video-codec-expanded/video-codec-analysis-*.json | jq -r '.results[] | [.patent_id, .title, .competitor_citations, (.competitors_citing | join(";"))] | @csv' > output/video-codec-priority.csv
+```
+
+---
+
+*Document updated: 2026-01-17 (continuation session)*
+*Top 250 Enrichment: COMPLETE (LLM 174, IPR 174, Prosecution 250)*
+*Video Codec Analysis: RUNNING (200 patents)*
 *Sector Coverage: 22,706 patents (76 term-based, 20,757 CPC-based)*
-*Config version: 4.0 with all cluster strategies*
-*Categories: 16 | Companies: 90 | Strategies: 13*
+*Config version: 4.1 with 93 companies across 16 categories*
 *ElasticSearch: 22,706 patents indexed*
 *PostgreSQL: User preferences seeded (6 profiles, 12 sectors)*

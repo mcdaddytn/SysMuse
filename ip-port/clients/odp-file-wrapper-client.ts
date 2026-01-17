@@ -273,14 +273,31 @@ export class FileWrapperClient extends BaseAPIClient {
 
   /**
    * Get all file history documents for an application
+   * Transforms v3 API response format to our interface
    */
   async getDocuments(applicationNumber: string): Promise<DocumentsResponse> {
     const cleanAppNumber = applicationNumber.replace(/[^0-9]/g, '');
     const endpoint = `/applications/${cleanAppNumber}/documents`;
 
-    return this.retryRequest(() =>
-      this.get<DocumentsResponse>(endpoint, this.getHeaders())
+    const rawResponse = await this.retryRequest(() =>
+      this.get<any>(endpoint, this.getHeaders())
     );
+
+    // Transform v3 API response (documentBag) to our interface (documents)
+    const documents: FileHistoryDocument[] = (rawResponse.documentBag || []).map((doc: any) => ({
+      documentIdentifier: doc.documentIdentifier,
+      documentCode: doc.documentCode,
+      documentCodeDescription: doc.documentCodeDescriptionText,
+      mailDate: doc.officialDate?.split('T')[0], // Convert to YYYY-MM-DD
+      documentUrl: doc.downloadOptionBag?.[0]?.downloadUrl,
+      documentSize: doc.downloadOptionBag?.[0]?.pageTotalQuantity,
+      documentType: doc.directionCategory,
+    }));
+
+    return {
+      recordTotalQuantity: rawResponse.count || documents.length,
+      documents,
+    };
   }
 
   /**
@@ -416,13 +433,32 @@ export class FileWrapperClient extends BaseAPIClient {
 
   /**
    * Get application by patent number
+   * Uses POST with filters (GET search doesn't filter correctly)
    */
   async getApplicationByPatentNumber(patentNumber: string): Promise<PatentFileWrapperRecord | null> {
-    const response = await this.searchApplications({
-      patentNumber: patentNumber.replace(/[^0-9]/g, ''),
-    });
+    const cleanPatentNum = patentNumber.replace(/[^0-9]/g, '');
 
-    return response.patentFileWrapperDataBag?.length > 0 ? response.patentFileWrapperDataBag[0] : null;
+    // Use POST with filters - the only format that works for patent number search
+    const body = {
+      filters: [
+        { name: 'applicationMetaData.patentNumber', value: [cleanPatentNum] }
+      ],
+      pagination: { offset: 0, limit: 1 }
+    };
+
+    try {
+      const response = await this.retryRequest(() =>
+        this.post<any>('/applications/search', body, this.getHeaders())
+      );
+
+      return response.patentFileWrapperDataBag?.length > 0 ? response.patentFileWrapperDataBag[0] : null;
+    } catch (error: any) {
+      // 404 means no matching records
+      if (error.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**

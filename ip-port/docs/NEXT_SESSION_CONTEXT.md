@@ -706,5 +706,194 @@ Enhanced Score     - Combined priority score
 
 ---
 
-*Document created: 2026-01-15*
-*For questions or context, refer to: docs/SESSION_STATUS_2026-01-15.md*
+---
+
+## Session Update: 2026-01-16
+
+### Major Accomplishments
+
+1. **Expanded to 250+ Priority Patents**
+   - Ran batches through 4000 patents
+   - 250 patents now in top priority list with 100% LLM coverage
+
+2. **LLM Analysis v2 Implemented**
+   - Created configurable prompts: `config/prompts/patent-analysis-v2-draft.json`
+   - New metrics: technology_category, product_types[], likely_implementers[], detection_method
+   - New composite scores: legal_viability_score, enforcement_potential_score, market_value_score
+   - Test run completed on batch 3500-4000 (71 unique patents analyzed)
+
+3. **Metrics Documentation**
+   - Full reference guide: `docs/METRICS_REFERENCE.md`
+   - Excel formulas for custom weight recalculation
+
+4. **Competitor Expansion Strategy**
+   - Gap analysis revealed 42% of patents are cybersecurity-related with NO cybersecurity competitors tracked
+   - Planning document: `docs/COMPETITOR_EXPANSION_STRATEGY.md`
+   - Recommended additions: Palo Alto Networks, CrowdStrike, Cisco, Salesforce, etc.
+
+### Key Files Created/Modified
+
+| File | Purpose |
+|------|---------|
+| `config/prompts/patent-analysis-v1.json` | Current LLM prompt (externalized) |
+| `config/prompts/patent-analysis-v2-draft.json` | Expanded prompt for attorney review |
+| `services/llm-patent-analysis-v2.ts` | V2 analysis service |
+| `docs/METRICS_REFERENCE.md` | All metrics/formulas for Excel |
+| `docs/EXPANDED_ANALYSIS_STRATEGY.md` | Two-track analysis methodology |
+| `docs/COMPETITOR_EXPANSION_STRATEGY.md` | Plan for expanding competitor pool |
+| `scripts/analyze-citing-companies.ts` | Script to analyze all citing companies |
+
+### V2 Analysis Test Results (Batch 3500-4000)
+
+| Technology Category | Patent Count | % |
+|---------------------|--------------|---|
+| Cybersecurity | 30 | 42% |
+| Wireless Communications | 11 | 15% |
+| Video Streaming/Processing | 7 | 10% |
+| Networking | 5 | 7% |
+| Cloud Computing | 4 | 6% |
+
+Top v2 scoring patent: **8615270** (Bluetooth/Wi-Fi antenna sharing) - Overall: 77.4
+
+### Session Update: 2026-01-17 - Competitor Expansion Complete
+
+**Completed:**
+- [x] Created configurable competitor list (`config/competitors.json`)
+- [x] Created citation mining script (`scripts/mine-all-citations.ts`)
+- [x] Ran mining on 200 top patents - found 6,845 citations from 605 companies
+- [x] Added 12 new validated competitors (IBM, McAfee, Darktrace, Forcepoint, etc.)
+- [x] Updated all citation-overlap scripts to use config
+
+**Competitor Count:** 61 companies across 11 categories (up from 23)
+
+**Key Finding:** Cisco is #1 citator (392 citations), IBM was major miss (226 citations)
+
+---
+
+### Session Update: 2026-01-17 (Evening) - Full Portfolio Analysis Complete
+
+**Major Accomplishments:**
+
+1. **Full Portfolio Citation Overlap Analysis**
+   - Analyzed all 15,276 patents in portfolio
+   - Found 1,023 patents with competitor citations
+   - Total competitor citations: 4,773
+   - Qualifying actionable patents: 538
+
+2. **Downloaded 12 New Competitor Portfolios**
+   - Cisco: 19,821 patents
+   - Huawei: 25,373 patents
+   - Red Hat: 3,487 patents
+   - Citrix: 2,391 patents
+   - Palantir: 1,580 patents
+   - McAfee: 1,616 patents
+   - Plus: Forcepoint, Darktrace, Dropbox, Sophos, FireEye
+   - Samsung: Downloaded 148K patents but file too large to save
+
+3. **Updated Multi-Score Analysis**
+   - Fixed script to dynamically load all citation overlap files
+   - Added 30+ new competitor patterns to normalizer
+   - New competitors now appearing in exposure analysis:
+     - Samsung: 31 citations (22 actionable)
+     - Qualcomm: 24 citations (17 actionable)
+     - Intel: 23 citations (13 actionable)
+     - Cisco: 14 citations (13 actionable)
+
+4. **Generated Updated Rankings**
+   - `output/top-250-actionable-2026-01-17.csv`
+   - `output/tier-litigation-2026-01-17.json`
+   - `output/tier-licensing-2026-01-17.json`
+   - `output/tier-strategic-2026-01-17.json`
+
+**Top Litigation Candidates:**
+| Rank | Patent | Score | Competitors |
+|------|--------|-------|-------------|
+| 1 | 10200706 | 96.0 | ByteDance |
+| 2 | 9569605 | 95.1 | Apple (67 cites!) |
+| 3 | 8954740 | 89.6 | Google, Apple, Amazon, Sony, Microsoft |
+
+**Disk Usage:** 2.1 GB total in output/
+
+---
+
+### NEW DIRECTION: Avago Audio/Video Patent Analysis
+
+**Context:** User interested in pursuing Avago A/V patents to find niche competitors (like Avid) not captured by large-company citation overlap.
+
+**Avago A/V Corpus:**
+- Total Avago patents: 2,910
+- Audio/Video related: 445 patents
+
+**Three-Pronged Approach (see `docs/AVAGO_AV_ANALYSIS_APPROACH.md`):**
+
+1. **Internal Portfolio Search (ElasticSearch)**
+   - Extract significant terms from Avago A/V abstracts
+   - Use More-Like-This (MLT) to find related patents
+   - ElasticSearch is running with 22,706 patents indexed
+
+2. **USPTO API Competitor Discovery**
+   - Search for niche A/V companies not in current list
+   - Target companies: Avid, Dolby, Blackmagic, DTS, Harmonic, etc.
+   - Use extracted terminology for PatentsView queries
+
+3. **Product Web Search Preparation**
+   - Map patent terminology to commercial product features
+   - Generate targeted search queries
+
+---
+
+### Next Session Tasks
+
+**Phase 1: ElasticSearch Term Extraction**
+```bash
+# Start ES services if not running
+npm run docker:up
+
+# Run term extraction from Avago A/V patents
+npx tsx scripts/extract-av-terms.ts  # (to be created)
+```
+
+**Phase 2: Portfolio Clustering**
+- Run MLT queries for key Avago patents
+- Group by technology area
+- Identify cross-portfolio connections
+
+**Phase 3: Niche Competitor Discovery**
+- Query PatentsView with extracted A/V terms
+- Filter for non-Broadcom assignees in H04N, H04R, G10L CPC codes
+- Identify professional A/V companies
+
+**Phase 4: Product Search Generation**
+- Map technical terms to commercial feature descriptions
+- Create web search query templates
+
+---
+
+### Files Reference
+
+**New Files This Session:**
+| File | Purpose |
+|------|---------|
+| `docs/AVAGO_AV_ANALYSIS_APPROACH.md` | Detailed approach document |
+| `config/assignee-variants.json` | USPTO assignee name mappings |
+| `scripts/check-batch-status.sh` | Batch job monitoring script |
+| `scripts/download-competitors-sequential.sh` | Sequential download script |
+
+**Key Output Files (2026-01-17):**
+| File | Description |
+|------|-------------|
+| `output/top-250-actionable-2026-01-17.csv` | Priority patent list |
+| `output/multi-score-analysis-2026-01-17.json` | Full scoring data |
+| `output/tier-litigation-2026-01-17.json` | Top 100 litigation candidates |
+| `output/llm-analysis/combined/combined-rankings-2026-01-17.json` | With LLM scores |
+
+**ElasticSearch Status:**
+- Running: Yes (verified)
+- Index: `patents`
+- Documents: 22,706
+
+---
+
+*Document updated: 2026-01-17 evening*
+*Next session: Execute Avago A/V analysis using ElasticSearch term extraction*
+*Reference: docs/AVAGO_AV_ANALYSIS_APPROACH.md*

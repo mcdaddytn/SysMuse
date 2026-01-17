@@ -1,0 +1,256 @@
+{
+  "description": "USPTO assignee name variants for API queries. These are exact strings used in USPTO patent records.",
+  "lastUpdated": "2026-01-17",
+  "note": "Add variants as you discover them from API results. The first variant is typically the most common.",
+
+  "companies": {
+    "Netflix": {
+      "variants": ["Netflix, Inc.", "Netflix Inc.", "Netflix"],
+      "focus": "Streaming platform, video encoding, recommendation"
+    },
+    "Google": {
+      "variants": ["Google LLC", "Google Inc.", "YouTube, LLC", "YouTube LLC"],
+      "focus": "Video streaming, codecs (VP9, AV1), infrastructure"
+    },
+    "Amazon": {
+      "variants": ["Amazon Technologies, Inc.", "Amazon.com, Inc.", "Amazon Technologies Inc.", "Amazon.com Services LLC"],
+      "focus": "Prime Video, AWS streaming infrastructure"
+    },
+    "Apple": {
+      "variants": ["Apple Inc."],
+      "focus": "Apple TV+, FairPlay DRM, HLS streaming"
+    },
+    "Disney": {
+      "variants": ["Disney Enterprises, Inc.", "The Walt Disney Company", "Disney Enterprises", "Hulu, LLC", "Hulu LLC"],
+      "focus": "Disney+, Hulu, ESPN+"
+    },
+    "Roku": {
+      "variants": ["Roku, Inc.", "Roku Inc."],
+      "focus": "Streaming devices, platform"
+    },
+    "NBCUniversal": {
+      "variants": ["Comcast Cable Communications, LLC", "Comcast Corporation", "Comcast Cable Communications LLC", "NBCUniversal Media, LLC"],
+      "focus": "Peacock, Xfinity streaming"
+    },
+    "Microsoft": {
+      "variants": ["Microsoft Corporation", "Microsoft Technology Licensing, LLC"],
+      "focus": "Azure Media Services, Xbox streaming, enterprise"
+    },
+    "Meta": {
+      "variants": ["Meta Platforms, Inc.", "Meta Platforms Inc.", "Facebook, Inc.", "Facebook Inc."],
+      "focus": "Video streaming, VR, social"
+    },
+    "Sony": {
+      "variants": ["Sony Corporation", "Sony Group Corporation", "Sony Interactive Entertainment LLC"],
+      "focus": "PlayStation, entertainment"
+    },
+    "Nintendo": {
+      "variants": ["Nintendo Co., Ltd.", "Nintendo of America Inc."],
+      "focus": "Gaming platforms"
+    },
+    "ByteDance": {
+      "variants": ["ByteDance Ltd.", "ByteDance Inc."],
+      "focus": "TikTok, short-form video"
+    },
+    "Spotify": {
+      "variants": ["Spotify AB", "Spotify USA Inc."],
+      "focus": "Audio streaming"
+    },
+    "Warner": {
+      "variants": ["Warner Bros. Entertainment Inc.", "WarnerMedia, LLC", "Warner Bros. Discovery"],
+      "focus": "Max streaming, content"
+    },
+    "Paramount": {
+      "variants": ["Paramount Global", "Paramount Pictures Corporation", "ViacomCBS Inc.", "Viacom International Inc."],
+      "focus": "Paramount+ streaming"
+    },
+
+    "IBM": {
+      "variants": ["International Business Machines Corporation", "IBM Corporation"],
+      "focus": "Enterprise computing, cloud, AI"
+    },
+    "McAfee": {
+      "variants": ["McAfee, LLC", "McAfee Corp.", "McAfee, Inc."],
+      "focus": "Cybersecurity, antivirus"
+    },
+    "Darktrace": {
+      "variants": ["Darktrace Holdings Limited", "Darktrace PLC", "Darktrace, Inc."],
+      "focus": "AI cybersecurity"
+    },
+    "Forcepoint": {
+      "variants": ["Forcepoint LLC", "Forcepoint Federal LLC"],
+      "focus": "Data security, user protection"
+    },
+    "Sophos": {
+      "variants": ["Sophos Limited", "Sophos Group plc"],
+      "focus": "Endpoint security"
+    },
+    "FireEye": {
+      "variants": ["FireEye, Inc.", "Mandiant, Inc.", "Trellix Holdings, Inc."],
+      "focus": "Threat intelligence, incident response"
+    },
+    "Citrix": {
+      "variants": ["Citrix Systems, Inc.", "Citrix Technology Solutions, Inc."],
+      "focus": "Virtual desktop, enterprise"
+    },
+    "Red Hat": {
+      "variants": ["Red Hat, Inc."],
+      "focus": "Enterprise Linux, cloud"
+    },
+    "Palantir": {
+      "variants": ["Palantir Technologies Inc.", "Palantir Technologies, Inc."],
+      "focus": "Data analytics, government"
+    },
+    "Dropbox": {
+      "variants": ["Dropbox, Inc."],
+      "focus": "Cloud storage, collaboration"
+    },
+    "Huawei": {
+      "variants": ["Huawei Technologies Co., Ltd.", "Huawei Device Co., Ltd."],
+      "focus": "Telecom equipment, 5G"
+    },
+    "Samsung": {
+      "variants": ["Samsung Electronics Co., Ltd.", "Samsung Electronics America, Inc."],
+      "focus": "Consumer electronics, displays, semiconductors"
+    },
+
+    "Palo Alto Networks": {
+      "variants": ["Palo Alto Networks, Inc."],
+      "focus": "Next-gen firewall, cloud security"
+    },
+    "CrowdStrike": {
+      "variants": ["CrowdStrike, Inc.", "CrowdStrike Holdings, Inc."],
+      "focus": "Endpoint security, threat intelligence"
+    },
+    "Fortinet": {
+      "variants": ["Fortinet, Inc."],
+      "focus": "Network security"
+    },
+    "Zscaler": {
+      "variants": ["Zscaler, Inc."],
+      "focus": "Cloud security, zero trust"
+    },
+    "Cloudflare": {
+      "variants": ["Cloudflare, Inc."],
+      "focus": "CDN, security, DDoS protection"
+    },
+    "Check Point": {
+      "variants": ["Check Point Software Technologies Ltd."],
+      "focus": "Firewall, threat prevention"
+    },
+    "Symantec": {
+      "variants": ["Symantec Corporation", "NortonLifeLock Inc."],
+      "focus": "Antivirus, endpoint protection"
+    },
+
+    "Cisco": {
+      "variants": ["Cisco Technology, Inc.", "Cisco Systems, Inc."],
+      "focus": "Networking, security, collaboration"
+    },
+    "Juniper": {
+      "variants": ["Juniper Networks, Inc."],
+      "focus": "Networking infrastructure"
+    },
+    "Arista": {
+      "variants": ["Arista Networks, Inc."],
+      "focus": "Cloud networking"
+    },
+    "HPE": {
+      "variants": ["Hewlett Packard Enterprise Development LP", "Hewlett Packard Enterprise Company", "Aruba Networks, Inc."],
+      "focus": "Enterprise infrastructure, networking"
+    },
+
+    "Qualcomm": {
+      "variants": ["Qualcomm Incorporated", "Qualcomm Technologies, Inc."],
+      "focus": "Mobile chips, 5G, wireless"
+    },
+    "Intel": {
+      "variants": ["Intel Corporation"],
+      "focus": "Processors, data center"
+    },
+    "NVIDIA": {
+      "variants": ["NVIDIA Corporation"],
+      "focus": "GPUs, AI accelerators"
+    },
+    "AMD": {
+      "variants": ["Advanced Micro Devices, Inc."],
+      "focus": "CPUs, GPUs"
+    },
+    "Marvell": {
+      "variants": ["Marvell Technology Group Ltd.", "Marvell Asia Pte. Ltd."],
+      "focus": "Data infrastructure semiconductors"
+    },
+
+    "Salesforce": {
+      "variants": ["Salesforce, Inc.", "Salesforce.com, Inc."],
+      "focus": "CRM, cloud platform"
+    },
+    "ServiceNow": {
+      "variants": ["ServiceNow, Inc."],
+      "focus": "IT service management"
+    },
+    "Oracle": {
+      "variants": ["Oracle International Corporation", "Oracle America, Inc."],
+      "focus": "Database, cloud, enterprise"
+    },
+    "SAP": {
+      "variants": ["SAP SE", "SAP America, Inc."],
+      "focus": "Enterprise software, ERP"
+    },
+    "VMware": {
+      "variants": ["VMware, Inc.", "VMware LLC"],
+      "focus": "Virtualization, cloud"
+    },
+    "Splunk": {
+      "variants": ["Splunk Inc."],
+      "focus": "Data analytics, observability"
+    },
+    "Workday": {
+      "variants": ["Workday, Inc."],
+      "focus": "HR, finance cloud"
+    },
+
+    "Verizon": {
+      "variants": ["Verizon Patent and Licensing Inc.", "Verizon Communications Inc."],
+      "focus": "Telecom carrier"
+    },
+    "AT&T": {
+      "variants": ["AT&T Intellectual Property I, L.P.", "AT&T Intellectual Property II, L.P."],
+      "focus": "Telecom carrier"
+    },
+    "T-Mobile": {
+      "variants": ["T-Mobile USA, Inc.", "T-Mobile Innovations LLC"],
+      "focus": "Telecom carrier"
+    },
+    "Ericsson": {
+      "variants": ["Telefonaktiebolaget LM Ericsson", "Ericsson AB"],
+      "focus": "Telecom equipment, 5G"
+    },
+    "Nokia": {
+      "variants": ["Nokia Technologies Oy", "Nokia Corporation", "Nokia Solutions and Networks Oy"],
+      "focus": "Telecom equipment, 5G"
+    },
+
+    "Okta": {
+      "variants": ["Okta, Inc."],
+      "focus": "Identity management"
+    },
+    "Ping Identity": {
+      "variants": ["Ping Identity Corporation"],
+      "focus": "Identity authentication"
+    },
+
+    "NetApp": {
+      "variants": ["NetApp, Inc."],
+      "focus": "Storage, data management"
+    },
+    "Pure Storage": {
+      "variants": ["Pure Storage, Inc."],
+      "focus": "Flash storage"
+    },
+    "Dell EMC": {
+      "variants": ["Dell Products L.P.", "EMC Corporation", "Dell Inc."],
+      "focus": "Storage, infrastructure"
+    }
+  }
+}

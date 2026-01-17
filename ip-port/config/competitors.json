@@ -1,0 +1,158 @@
+{
+  "version": "2.1",
+  "description": "Categorized competitor list for patent citation overlap analysis - expanded based on citation mining",
+  "lastUpdated": "2026-01-17",
+
+  "categories": {
+    "streaming": {
+      "description": "Streaming video and media companies",
+      "enabled": true,
+      "companies": [
+        {"name": "Netflix", "patterns": ["Netflix"]},
+        {"name": "Hulu", "patterns": ["Hulu"]},
+        {"name": "Disney", "patterns": ["Disney"]},
+        {"name": "Warner", "patterns": ["Warner", "HBO", "WarnerMedia"]},
+        {"name": "Paramount", "patterns": ["Paramount", "ViacomCBS", "Viacom"]},
+        {"name": "Roku", "patterns": ["Roku"]},
+        {"name": "NBCUniversal", "patterns": ["NBCUniversal", "Peacock", "Comcast"]}
+      ]
+    },
+
+    "bigTech": {
+      "description": "Major technology platform companies",
+      "enabled": true,
+      "companies": [
+        {"name": "Google", "patterns": ["Google", "Alphabet", "YouTube"]},
+        {"name": "Amazon", "patterns": ["Amazon"]},
+        {"name": "Apple", "patterns": ["Apple"]},
+        {"name": "Microsoft", "patterns": ["Microsoft"]},
+        {"name": "Meta", "patterns": ["Meta", "Facebook"]}
+      ]
+    },
+
+    "gaming": {
+      "description": "Gaming and entertainment hardware/software",
+      "enabled": true,
+      "companies": [
+        {"name": "Sony", "patterns": ["Sony"]},
+        {"name": "Nintendo", "patterns": ["Nintendo"]}
+      ]
+    },
+
+    "social": {
+      "description": "Social media and short-form video",
+      "enabled": true,
+      "companies": [
+        {"name": "ByteDance", "patterns": ["ByteDance", "TikTok"]},
+        {"name": "Spotify", "patterns": ["Spotify"]}
+      ]
+    },
+
+    "cybersecurity": {
+      "description": "Cybersecurity and network security companies",
+      "enabled": true,
+      "companies": [
+        {"name": "Palo Alto Networks", "patterns": ["Palo Alto Networks"]},
+        {"name": "CrowdStrike", "patterns": ["CrowdStrike"]},
+        {"name": "Fortinet", "patterns": ["Fortinet"]},
+        {"name": "Zscaler", "patterns": ["Zscaler"]},
+        {"name": "Cloudflare", "patterns": ["Cloudflare"]},
+        {"name": "Check Point", "patterns": ["Check Point"]},
+        {"name": "Symantec", "patterns": ["Symantec", "NortonLifeLock"]},
+        {"name": "McAfee", "patterns": ["McAfee"]},
+        {"name": "Darktrace", "patterns": ["Darktrace"]},
+        {"name": "Forcepoint", "patterns": ["Forcepoint"]},
+        {"name": "Sophos", "patterns": ["Sophos"]},
+        {"name": "FireEye", "patterns": ["FireEye", "Mandiant", "Trellix"]}
+      ]
+    },
+
+    "enterprise": {
+      "description": "Enterprise software and cloud platforms",
+      "enabled": true,
+      "companies": [
+        {"name": "IBM", "patterns": ["IBM", "International Business Machines"]},
+        {"name": "Salesforce", "patterns": ["Salesforce"]},
+        {"name": "ServiceNow", "patterns": ["ServiceNow"]},
+        {"name": "Oracle", "patterns": ["Oracle"]},
+        {"name": "SAP", "patterns": ["SAP"]},
+        {"name": "VMware", "patterns": ["VMware"]},
+        {"name": "Splunk", "patterns": ["Splunk"]},
+        {"name": "Workday", "patterns": ["Workday"]},
+        {"name": "Citrix", "patterns": ["Citrix"]},
+        {"name": "Red Hat", "patterns": ["Red Hat"]},
+        {"name": "Palantir", "patterns": ["Palantir"]},
+        {"name": "Dropbox", "patterns": ["Dropbox"]}
+      ]
+    },
+
+    "networking": {
+      "description": "Network infrastructure and equipment",
+      "enabled": true,
+      "companies": [
+        {"name": "Cisco", "patterns": ["Cisco"]},
+        {"name": "Juniper", "patterns": ["Juniper Networks", "Juniper"]},
+        {"name": "Arista", "patterns": ["Arista Networks", "Arista"]},
+        {"name": "HPE", "patterns": ["Hewlett Packard Enterprise", "HPE", "Aruba"]}
+      ]
+    },
+
+    "semiconductor": {
+      "description": "Semiconductor and chip companies",
+      "enabled": true,
+      "companies": [
+        {"name": "Qualcomm", "patterns": ["Qualcomm"]},
+        {"name": "Intel", "patterns": ["Intel"]},
+        {"name": "NVIDIA", "patterns": ["NVIDIA"]},
+        {"name": "AMD", "patterns": ["AMD", "Advanced Micro Devices"]},
+        {"name": "Marvell", "patterns": ["Marvell"]}
+      ]
+    },
+
+    "telecom": {
+      "description": "Telecommunications carriers and equipment",
+      "enabled": true,
+      "companies": [
+        {"name": "Verizon", "patterns": ["Verizon"]},
+        {"name": "AT&T", "patterns": ["AT&T"]},
+        {"name": "T-Mobile", "patterns": ["T-Mobile"]},
+        {"name": "Ericsson", "patterns": ["Ericsson"]},
+        {"name": "Nokia", "patterns": ["Nokia"]},
+        {"name": "Huawei", "patterns": ["Huawei"]},
+        {"name": "Samsung", "patterns": ["Samsung"]}
+      ]
+    },
+
+    "identity": {
+      "description": "Identity and authentication providers",
+      "enabled": true,
+      "companies": [
+        {"name": "Okta", "patterns": ["Okta"]},
+        {"name": "Ping Identity", "patterns": ["Ping Identity"]}
+      ]
+    },
+
+    "storage": {
+      "description": "Storage and data infrastructure",
+      "enabled": true,
+      "companies": [
+        {"name": "NetApp", "patterns": ["NetApp"]},
+        {"name": "Pure Storage", "patterns": ["Pure Storage"]},
+        {"name": "Dell EMC", "patterns": ["Dell EMC", "Dell Technologies", "EMC"]}
+      ]
+    }
+  },
+
+  "excludePatterns": [
+    "Broadcom",
+    "LSI Logic",
+    "Avago",
+    "Symantec"
+  ],
+
+  "notes": {
+    "patternMatching": "Patterns are matched case-insensitively against assignee names",
+    "excludePatterns": "These patterns identify Broadcom-related entities to exclude from competitor analysis",
+    "enabled": "Set category 'enabled' to false to exclude from analysis"
+  }
+}

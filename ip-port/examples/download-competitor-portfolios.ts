@@ -96,6 +96,113 @@ const COMPETITORS: CompetitorConfig[] = [
     ],
     focus: 'Azure Media Services, Xbox streaming',
   },
+  // === NEW COMPETITORS (from citation mining 2026-01-17) ===
+  {
+    name: 'IBM',
+    assigneeVariants: [
+      'International Business Machines Corporation',
+      'IBM Corporation',
+    ],
+    focus: 'Enterprise computing, cloud, AI - 226 citations found',
+  },
+  {
+    name: 'Cisco',
+    assigneeVariants: [
+      'Cisco Technology, Inc.',
+      'Cisco Systems, Inc.',
+    ],
+    focus: 'Networking, security - 392 citations found (top citator)',
+  },
+  {
+    name: 'Forcepoint',
+    assigneeVariants: [
+      'Forcepoint LLC',
+      'Forcepoint Federal LLC',
+    ],
+    focus: 'Data security, user protection - 149 citations found',
+  },
+  {
+    name: 'Palantir',
+    assigneeVariants: [
+      'Palantir Technologies Inc.',
+      'Palantir Technologies, Inc.',
+    ],
+    focus: 'Data analytics - 104 citations found',
+  },
+  {
+    name: 'Darktrace',
+    assigneeVariants: [
+      'Darktrace Holdings Limited',
+      'Darktrace PLC',
+      'Darktrace, Inc.',
+    ],
+    focus: 'AI cybersecurity - 81 citations found',
+  },
+  {
+    name: 'Dropbox',
+    assigneeVariants: [
+      'Dropbox, Inc.',
+    ],
+    focus: 'Cloud storage - 59 citations found',
+  },
+  {
+    name: 'McAfee',
+    assigneeVariants: [
+      'McAfee, LLC',
+      'McAfee Corp.',
+      'McAfee, Inc.',
+    ],
+    focus: 'Cybersecurity - 49 citations found',
+  },
+  {
+    name: 'Sophos',
+    assigneeVariants: [
+      'Sophos Limited',
+      'Sophos Group plc',
+    ],
+    focus: 'Endpoint security - 33 citations found',
+  },
+  {
+    name: 'Samsung',
+    assigneeVariants: [
+      'SAMSUNG ELECTRONICS CO., LTD.',
+      'Samsung Electronics Co., Ltd.',
+      'Samsung Electronics America, Inc.',
+    ],
+    focus: 'Consumer electronics, semiconductors - 56 citations found',
+  },
+  {
+    name: 'Citrix',
+    assigneeVariants: [
+      'Citrix Systems, Inc.',
+      'Citrix Technology Solutions, Inc.',
+    ],
+    focus: 'Virtual desktop, enterprise - 19 citations found',
+  },
+  {
+    name: 'Red Hat',
+    assigneeVariants: [
+      'Red Hat, Inc.',
+    ],
+    focus: 'Enterprise Linux, cloud - 16 citations found',
+  },
+  {
+    name: 'FireEye',
+    assigneeVariants: [
+      'FireEye, Inc.',
+      'Mandiant, Inc.',
+      'Trellix Holdings, Inc.',
+    ],
+    focus: 'Threat intelligence - 15 citations found',
+  },
+  {
+    name: 'Huawei',
+    assigneeVariants: [
+      'Huawei Technologies Co., Ltd.',
+      'Huawei Device Co., Ltd.',
+    ],
+    focus: 'Telecom equipment, 5G - 11 citations found',
+  },
 ];
 
 // CPC codes relevant to streaming video

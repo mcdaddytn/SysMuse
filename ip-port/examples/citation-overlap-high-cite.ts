@@ -7,17 +7,16 @@
 
 import * as fs from 'fs/promises';
 import * as dotenv from 'dotenv';
+import { CompetitorMatcher } from '../services/competitor-config.js';
+
 dotenv.config();
 
 const PATENTSVIEW_BASE_URL = 'https://search.patentsview.org/api/v1';
 const apiKey = process.env.PATENTSVIEW_API_KEY;
 
-const COMPETITOR_PATTERNS = [
-  'Netflix', 'Google', 'YouTube', 'Alphabet', 'Amazon', 'Apple', 'Disney',
-  'Hulu', 'Roku', 'Comcast', 'NBCUniversal', 'Peacock', 'Microsoft', 'Warner',
-  'HBO', 'Paramount', 'ViacomCBS', 'Sony', 'Spotify', 'Meta', 'Facebook',
-  'TikTok', 'ByteDance',
-];
+// Load competitor config from config/competitors.json
+const competitorMatcher = new CompetitorMatcher();
+console.log(`\n${competitorMatcher.getSummary()}\n`);
 
 interface CitingPatent {
   patent_id: string;
@@ -70,17 +69,13 @@ async function rateLimitedFetch(endpoint: string, method: 'GET' | 'POST', body?:
 
 function isCompetitor(assignee: string): boolean {
   if (!assignee) return false;
-  const upper = assignee.toUpperCase();
-  return COMPETITOR_PATTERNS.some(p => upper.includes(p.toUpperCase()));
+  return competitorMatcher.matchCompetitor(assignee) !== null;
 }
 
 function getCompetitorName(assignee: string): string {
   if (!assignee) return 'Unknown';
-  const upper = assignee.toUpperCase();
-  for (const pattern of COMPETITOR_PATTERNS) {
-    if (upper.includes(pattern.toUpperCase())) return pattern;
-  }
-  return assignee;
+  const match = competitorMatcher.matchCompetitor(assignee);
+  return match?.company || assignee;
 }
 
 async function findCitingPatents(patentId: string): Promise<{ totalCiting: number; competitorCites: CitingPatent[] }> {

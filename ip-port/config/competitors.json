@@ -1,8 +1,7 @@
 {
-  "version": "4.0",
+  "version": "4.1",
   "description": "Categorized competitor list with discovery strategy provenance",
   "lastUpdated": "2026-01-17",
-
   "discoveryStrategies": {
     "manual-initial": {
       "name": "Manual Initial List",
@@ -31,7 +30,16 @@
       "parameters": {
         "sourcePortfolio": "Avago A/V Patents",
         "patentCount": 923,
-        "extractedTerms": ["acoustic", "resonator", "piezoelectric", "bulk", "baw", "fbar", "electrode", "wave"],
+        "extractedTerms": [
+          "acoustic",
+          "resonator",
+          "piezoelectric",
+          "bulk",
+          "baw",
+          "fbar",
+          "electrode",
+          "wave"
+        ],
         "termScoreThreshold": 0.2,
         "method": "ElasticSearch significant_text aggregation + USPTO API term search",
         "script": "scripts/discover-av-competitors.ts"
@@ -47,8 +55,22 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 1,
         "patentCount": 43,
-        "extractedTerms": ["user", "cloud", "authent", "comput", "access", "profil", "encrypt", "file"],
-        "dominantCPCs": ["H04L", "G06F", "H04W", "G06Q"],
+        "extractedTerms": [
+          "user",
+          "cloud",
+          "authent",
+          "comput",
+          "access",
+          "profil",
+          "encrypt",
+          "file"
+        ],
+        "dominantCPCs": [
+          "H04L",
+          "G06F",
+          "H04W",
+          "G06Q"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -62,8 +84,19 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 2,
         "patentCount": 5,
-        "extractedTerms": ["video", "sink", "audio", "transform", "transcod", "macroblock"],
-        "dominantCPCs": ["H04N", "H04W", "G06V"],
+        "extractedTerms": [
+          "video",
+          "sink",
+          "audio",
+          "transform",
+          "transcod",
+          "macroblock"
+        ],
+        "dominantCPCs": [
+          "H04N",
+          "H04W",
+          "G06V"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -77,8 +110,19 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 5,
         "patentCount": 6,
-        "extractedTerms": ["threat", "attack", "secur", "alert", "campaign", "asset"],
-        "dominantCPCs": ["H04L", "G06F", "G06N"],
+        "extractedTerms": [
+          "threat",
+          "attack",
+          "secur",
+          "alert",
+          "campaign",
+          "asset"
+        ],
+        "dominantCPCs": [
+          "H04L",
+          "G06F",
+          "G06N"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -92,8 +136,20 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 3,
         "patentCount": 3,
-        "extractedTerms": ["imag", "depth", "map", "focus", "captur", "edg", "post", "field"],
-        "dominantCPCs": ["H04N", "G06T"],
+        "extractedTerms": [
+          "imag",
+          "depth",
+          "map",
+          "focus",
+          "captur",
+          "edg",
+          "post",
+          "field"
+        ],
+        "dominantCPCs": [
+          "H04N",
+          "G06T"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -107,8 +163,23 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 4,
         "patentCount": 4,
-        "extractedTerms": ["event", "live", "url", "remind", "actor", "messag", "analysi", "notif"],
-        "dominantCPCs": ["H04N", "H04L", "G06F", "G06Q", "G11B"],
+        "extractedTerms": [
+          "event",
+          "live",
+          "url",
+          "remind",
+          "actor",
+          "messag",
+          "analysi",
+          "notif"
+        ],
+        "dominantCPCs": [
+          "H04N",
+          "H04L",
+          "G06F",
+          "G06Q",
+          "G11B"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -122,8 +193,23 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 6,
         "patentCount": 4,
-        "extractedTerms": ["random", "fenc", "geo", "tree", "forest", "geograph", "access", "iot"],
-        "dominantCPCs": ["H04W", "H04L", "G06F", "G01S", "H04M"],
+        "extractedTerms": [
+          "random",
+          "fenc",
+          "geo",
+          "tree",
+          "forest",
+          "geograph",
+          "access",
+          "iot"
+        ],
+        "dominantCPCs": [
+          "H04W",
+          "H04L",
+          "G06F",
+          "G01S",
+          "H04M"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -137,8 +223,21 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 7,
         "patentCount": 3,
-        "extractedTerms": ["pii", "breach", "set", "queri", "registri", "exposur", "person", "identifi"],
-        "dominantCPCs": ["G06F", "H04L", "H04W"],
+        "extractedTerms": [
+          "pii",
+          "breach",
+          "set",
+          "queri",
+          "registri",
+          "exposur",
+          "person",
+          "identifi"
+        ],
+        "dominantCPCs": [
+          "G06F",
+          "H04L",
+          "H04W"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -152,8 +251,20 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 8,
         "patentCount": 2,
-        "extractedTerms": ["scan", "edr", "ble", "interv", "bluetooth", "advertis", "idl", "parallel"],
-        "dominantCPCs": ["H04W", "Y02D"],
+        "extractedTerms": [
+          "scan",
+          "edr",
+          "ble",
+          "interv",
+          "bluetooth",
+          "advertis",
+          "idl",
+          "parallel"
+        ],
+        "dominantCPCs": [
+          "H04W",
+          "Y02D"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -167,8 +278,21 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 9,
         "patentCount": 4,
-        "extractedTerms": ["learn", "confid", "machin", "mld", "network", "resourc", "classifi", "train"],
-        "dominantCPCs": ["G06N", "G06F", "H04L"],
+        "extractedTerms": [
+          "learn",
+          "confid",
+          "machin",
+          "mld",
+          "network",
+          "resourc",
+          "classifi",
+          "train"
+        ],
+        "dominantCPCs": [
+          "G06N",
+          "G06F",
+          "H04L"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     },
@@ -182,379 +306,1147 @@
         "clusterMethod": "agglomerative-term-affinity",
         "clusterNumber": 10,
         "patentCount": 1,
-        "extractedTerms": ["object", "pose", "motion", "risk", "pursuit", "follow", "notif", "intellig"],
-        "dominantCPCs": ["H04W"],
+        "extractedTerms": [
+          "object",
+          "pose",
+          "motion",
+          "risk",
+          "pursuit",
+          "follow",
+          "notif",
+          "intellig"
+        ],
+        "dominantCPCs": [
+          "H04W"
+        ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
     }
   },
-
   "categories": {
     "streaming": {
       "description": "Streaming video and media companies",
       "enabled": true,
       "companies": [
-        {"name": "Netflix", "patterns": ["Netflix"], "discoveredBy": ["manual-initial"]},
-        {"name": "Hulu", "patterns": ["Hulu"], "discoveredBy": ["manual-initial"]},
-        {"name": "Disney", "patterns": ["Disney"], "discoveredBy": ["manual-initial"]},
-        {"name": "Warner", "patterns": ["Warner", "HBO", "WarnerMedia"], "discoveredBy": ["manual-initial"]},
-        {"name": "Paramount", "patterns": ["Paramount", "ViacomCBS", "Viacom"], "discoveredBy": ["manual-initial"]},
-        {"name": "Roku", "patterns": ["Roku"], "discoveredBy": ["manual-initial"]},
-        {"name": "NBCUniversal", "patterns": ["NBCUniversal", "Peacock", "Comcast"], "discoveredBy": ["manual-initial"]}
+        {
+          "name": "Netflix",
+          "patterns": [
+            "Netflix"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Hulu",
+          "patterns": [
+            "Hulu"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Disney",
+          "patterns": [
+            "Disney"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Warner",
+          "patterns": [
+            "Warner",
+            "HBO",
+            "WarnerMedia"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Paramount",
+          "patterns": [
+            "Paramount",
+            "ViacomCBS",
+            "Viacom"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Roku",
+          "patterns": [
+            "Roku"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "NBCUniversal",
+          "patterns": [
+            "NBCUniversal",
+            "Peacock",
+            "Comcast"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        }
       ]
     },
-
     "bigTech": {
       "description": "Major technology platform companies",
       "enabled": true,
       "companies": [
-        {"name": "Google", "patterns": ["Google", "Alphabet", "YouTube"], "discoveredBy": ["manual-initial"]},
-        {"name": "Amazon", "patterns": ["Amazon"], "discoveredBy": ["manual-initial"]},
-        {"name": "Apple", "patterns": ["Apple"], "discoveredBy": ["manual-initial"]},
-        {"name": "Microsoft", "patterns": ["Microsoft"], "discoveredBy": ["manual-initial"]},
-        {"name": "Meta", "patterns": ["Meta", "Facebook"], "discoveredBy": ["manual-initial"]}
+        {
+          "name": "Google",
+          "patterns": [
+            "Google",
+            "Alphabet",
+            "YouTube"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Amazon",
+          "patterns": [
+            "Amazon"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Apple",
+          "patterns": [
+            "Apple"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Microsoft",
+          "patterns": [
+            "Microsoft"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Meta",
+          "patterns": [
+            "Meta",
+            "Facebook"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        }
       ]
     },
-
     "gaming": {
       "description": "Gaming and entertainment hardware/software",
       "enabled": true,
       "companies": [
-        {"name": "Sony", "patterns": ["Sony"], "discoveredBy": ["manual-initial"]},
-        {"name": "Nintendo", "patterns": ["Nintendo"], "discoveredBy": ["manual-initial"]}
+        {
+          "name": "Sony",
+          "patterns": [
+            "Sony"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Nintendo",
+          "patterns": [
+            "Nintendo"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        }
       ]
     },
-
     "social": {
       "description": "Social media and short-form video",
       "enabled": true,
       "companies": [
-        {"name": "ByteDance", "patterns": ["ByteDance", "TikTok"], "discoveredBy": ["manual-initial"]},
-        {"name": "Spotify", "patterns": ["Spotify"], "discoveredBy": ["manual-initial"]},
+        {
+          "name": "ByteDance",
+          "patterns": [
+            "ByteDance",
+            "TikTok"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Spotify",
+          "patterns": [
+            "Spotify"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
         {
           "name": "Snap",
-          "patterns": ["Snap", "SNAP INC."],
-          "discoveredBy": ["hybrid-cluster-6-wireless-geo", "hybrid-cluster-7-pii-breach", "hybrid-cluster-10-motion-pose"],
+          "patterns": [
+            "Snap",
+            "SNAP INC."
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-6-wireless-geo",
+            "hybrid-cluster-7-pii-breach",
+            "hybrid-cluster-10-motion-pose"
+          ],
           "notes": "14+ patents across geolocation, privacy, and motion tracking",
           "patentCount": 22
         }
       ]
     },
-
     "cybersecurity": {
       "description": "Cybersecurity and network security companies",
       "enabled": true,
       "companies": [
-        {"name": "Palo Alto Networks", "patterns": ["Palo Alto Networks"], "discoveredBy": ["manual-initial"]},
-        {"name": "CrowdStrike", "patterns": ["CrowdStrike"], "discoveredBy": ["manual-initial"]},
-        {"name": "Fortinet", "patterns": ["Fortinet"], "discoveredBy": ["manual-initial"]},
-        {"name": "Zscaler", "patterns": ["Zscaler"], "discoveredBy": ["manual-initial"]},
-        {"name": "Cloudflare", "patterns": ["Cloudflare"], "discoveredBy": ["manual-initial"]},
-        {"name": "Check Point", "patterns": ["Check Point"], "discoveredBy": ["manual-initial"]},
-        {"name": "Symantec", "patterns": ["Symantec", "NortonLifeLock"], "discoveredBy": ["manual-initial"]},
-        {"name": "McAfee", "patterns": ["McAfee"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Darktrace", "patterns": ["Darktrace"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Forcepoint", "patterns": ["Forcepoint"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Sophos", "patterns": ["Sophos"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "FireEye", "patterns": ["FireEye", "Mandiant", "Trellix"], "discoveredBy": ["citation-overlap-broadcom-streaming"]}
+        {
+          "name": "Palo Alto Networks",
+          "patterns": [
+            "Palo Alto Networks"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "CrowdStrike",
+          "patterns": [
+            "CrowdStrike"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Fortinet",
+          "patterns": [
+            "Fortinet"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Zscaler",
+          "patterns": [
+            "Zscaler"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Cloudflare",
+          "patterns": [
+            "Cloudflare"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Check Point",
+          "patterns": [
+            "Check Point"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Symantec",
+          "patterns": [
+            "Symantec",
+            "NortonLifeLock"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "McAfee",
+          "patterns": [
+            "McAfee"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Darktrace",
+          "patterns": [
+            "Darktrace"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Forcepoint",
+          "patterns": [
+            "Forcepoint"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Sophos",
+          "patterns": [
+            "Sophos"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "FireEye",
+          "patterns": [
+            "FireEye",
+            "Mandiant",
+            "Trellix"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "SentinelOne",
+          "patterns": [
+            "SentinelOne",
+            "SENTINELONE"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-5-security"
+          ],
+          "notes": "EDR/XDR platform - endpoint security",
+          "primaryTechnologies": [
+            "EDR",
+            "XDR",
+            "endpoint protection"
+          ]
+        },
+        {
+          "name": "Cybereason",
+          "patterns": [
+            "Cybereason",
+            "CYBEREASON"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-5-security"
+          ],
+          "notes": "EDR platform - threat detection",
+          "primaryTechnologies": [
+            "EDR",
+            "threat detection",
+            "malware analysis"
+          ]
+        },
+        {
+          "name": "Carbon Black",
+          "patterns": [
+            "Carbon Black",
+            "VMware Carbon Black"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-5-security"
+          ],
+          "notes": "Now VMware - endpoint security",
+          "primaryTechnologies": [
+            "EDR",
+            "NGAV",
+            "threat hunting"
+          ]
+        }
       ]
     },
-
     "enterprise": {
       "description": "Enterprise software and cloud platforms",
       "enabled": true,
       "companies": [
-        {"name": "IBM", "patterns": ["IBM", "International Business Machines"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Salesforce", "patterns": ["Salesforce"], "discoveredBy": ["manual-initial"]},
-        {"name": "ServiceNow", "patterns": ["ServiceNow"], "discoveredBy": ["manual-initial"]},
-        {"name": "Oracle", "patterns": ["Oracle"], "discoveredBy": ["manual-initial"]},
-        {"name": "SAP", "patterns": ["SAP"], "discoveredBy": ["manual-initial"]},
-        {"name": "VMware", "patterns": ["VMware"], "discoveredBy": ["manual-initial"]},
-        {"name": "Splunk", "patterns": ["Splunk"], "discoveredBy": ["manual-initial"]},
-        {"name": "Workday", "patterns": ["Workday"], "discoveredBy": ["manual-initial"]},
-        {"name": "Citrix", "patterns": ["Citrix"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Red Hat", "patterns": ["Red Hat"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Palantir", "patterns": ["Palantir"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Dropbox", "patterns": ["Dropbox"], "discoveredBy": ["citation-overlap-broadcom-streaming"]}
+        {
+          "name": "IBM",
+          "patterns": [
+            "IBM",
+            "International Business Machines"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Salesforce",
+          "patterns": [
+            "Salesforce"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "ServiceNow",
+          "patterns": [
+            "ServiceNow"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Oracle",
+          "patterns": [
+            "Oracle"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "SAP",
+          "patterns": [
+            "SAP"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "VMware",
+          "patterns": [
+            "VMware"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Splunk",
+          "patterns": [
+            "Splunk"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Workday",
+          "patterns": [
+            "Workday"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Citrix",
+          "patterns": [
+            "Citrix"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Red Hat",
+          "patterns": [
+            "Red Hat"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Palantir",
+          "patterns": [
+            "Palantir"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Dropbox",
+          "patterns": [
+            "Dropbox"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        }
       ]
     },
-
     "networking": {
       "description": "Network infrastructure and equipment",
       "enabled": true,
       "companies": [
-        {"name": "Cisco", "patterns": ["Cisco"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Juniper", "patterns": ["Juniper Networks", "Juniper"], "discoveredBy": ["manual-initial"]},
-        {"name": "Arista", "patterns": ["Arista Networks", "Arista"], "discoveredBy": ["manual-initial"]},
-        {"name": "HPE", "patterns": ["Hewlett Packard Enterprise", "HPE", "Aruba"], "discoveredBy": ["manual-initial"]}
+        {
+          "name": "Cisco",
+          "patterns": [
+            "Cisco"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Juniper",
+          "patterns": [
+            "Juniper Networks",
+            "Juniper"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Arista",
+          "patterns": [
+            "Arista Networks",
+            "Arista"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "HPE",
+          "patterns": [
+            "Hewlett Packard Enterprise",
+            "HPE",
+            "Aruba"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        }
       ]
     },
-
     "semiconductor": {
       "description": "Semiconductor and chip companies",
       "enabled": true,
       "companies": [
-        {"name": "Qualcomm", "patterns": ["Qualcomm", "QUALCOMM"], "discoveredBy": ["manual-initial", "term-extraction-avago-av"]},
-        {"name": "Intel", "patterns": ["Intel"], "discoveredBy": ["manual-initial"]},
-        {"name": "NVIDIA", "patterns": ["NVIDIA"], "discoveredBy": ["manual-initial"]},
-        {"name": "AMD", "patterns": ["AMD", "Advanced Micro Devices"], "discoveredBy": ["manual-initial"]},
-        {"name": "Marvell", "patterns": ["Marvell"], "discoveredBy": ["manual-initial"]},
-        {"name": "Texas Instruments", "patterns": ["Texas Instruments", "TEXAS INSTRUMENTS"], "discoveredBy": ["term-extraction-avago-av"]},
-        {"name": "NXP", "patterns": ["NXP"], "discoveredBy": ["term-extraction-avago-av"]},
-        {"name": "MediaTek", "patterns": ["MediaTek", "MEDIATEK"], "discoveredBy": ["term-extraction-avago-av"]},
-        {"name": "Analog Devices", "patterns": ["Analog Devices"], "discoveredBy": ["term-extraction-avago-av"]},
-        {"name": "Cirrus Logic", "patterns": ["Cirrus Logic"], "discoveredBy": ["term-extraction-avago-av"]},
+        {
+          "name": "Qualcomm",
+          "patterns": [
+            "Qualcomm",
+            "QUALCOMM"
+          ],
+          "discoveredBy": [
+            "manual-initial",
+            "term-extraction-avago-av"
+          ]
+        },
+        {
+          "name": "Intel",
+          "patterns": [
+            "Intel"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "NVIDIA",
+          "patterns": [
+            "NVIDIA"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "AMD",
+          "patterns": [
+            "AMD",
+            "Advanced Micro Devices"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Marvell",
+          "patterns": [
+            "Marvell"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Texas Instruments",
+          "patterns": [
+            "Texas Instruments",
+            "TEXAS INSTRUMENTS"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ]
+        },
+        {
+          "name": "NXP",
+          "patterns": [
+            "NXP"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ]
+        },
+        {
+          "name": "MediaTek",
+          "patterns": [
+            "MediaTek",
+            "MEDIATEK"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ]
+        },
+        {
+          "name": "Analog Devices",
+          "patterns": [
+            "Analog Devices"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ]
+        },
+        {
+          "name": "Cirrus Logic",
+          "patterns": [
+            "Cirrus Logic"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ]
+        },
         {
           "name": "Realtek",
-          "patterns": ["Realtek", "REALTEK SEMICONDUCTOR"],
-          "discoveredBy": ["hybrid-cluster-8-bluetooth"],
+          "patterns": [
+            "Realtek",
+            "REALTEK SEMICONDUCTOR"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-8-bluetooth"
+          ],
           "notes": "14 patents - Bluetooth/BLE/WiFi chip maker (direct semiconductor competitor)",
           "patentCount": 14,
-          "primaryTechnologies": ["Bluetooth", "BLE", "WiFi chipset"]
+          "primaryTechnologies": [
+            "Bluetooth",
+            "BLE",
+            "WiFi chipset"
+          ]
         }
       ]
     },
-
     "rfAcoustic": {
       "description": "RF filters, acoustic resonators, and MEMS - discovered via Avago A/V term extraction",
       "enabled": true,
       "companies": [
         {
           "name": "Murata",
-          "patterns": ["Murata", "MURATA MANUFACTURING"],
-          "discoveredBy": ["term-extraction-avago-av"],
+          "patterns": [
+            "Murata",
+            "MURATA MANUFACTURING"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ],
           "notes": "73 patents found - MAJOR BAW/FBAR filter manufacturer",
           "patentCount": 73,
-          "primaryTechnologies": ["BAW filter", "SAW filter", "MEMS microphone", "RF module"]
+          "primaryTechnologies": [
+            "BAW filter",
+            "SAW filter",
+            "MEMS microphone",
+            "RF module"
+          ]
         },
         {
           "name": "Skyworks",
-          "patterns": ["Skyworks", "SKYWORKS SOLUTIONS", "SKYWORKS GLOBAL"],
-          "discoveredBy": ["term-extraction-avago-av"],
+          "patterns": [
+            "Skyworks",
+            "SKYWORKS SOLUTIONS",
+            "SKYWORKS GLOBAL"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ],
           "notes": "21 patents found - Major RF filter supplier (Apple)",
           "patentCount": 21,
-          "primaryTechnologies": ["RF filter", "BAW duplexer", "front end module"]
+          "primaryTechnologies": [
+            "RF filter",
+            "BAW duplexer",
+            "front end module"
+          ]
         },
         {
           "name": "Qorvo",
-          "patterns": ["Qorvo", "QORVO"],
-          "discoveredBy": ["term-extraction-avago-av"],
+          "patterns": [
+            "Qorvo",
+            "QORVO"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ],
           "notes": "17 patents found - Major BAW/RF filter supplier",
           "patentCount": 17,
-          "primaryTechnologies": ["BAW filter", "RF switch", "acoustic filter"]
+          "primaryTechnologies": [
+            "BAW filter",
+            "RF switch",
+            "acoustic filter"
+          ]
         },
         {
           "name": "Akoustis",
-          "patterns": ["Akoustis"],
-          "discoveredBy": ["term-extraction-avago-av"],
+          "patterns": [
+            "Akoustis"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ],
           "notes": "7 patents found - Emerging BAW filter player (XBAW technology)",
           "patentCount": 7,
-          "primaryTechnologies": ["BAW filter", "XBAW", "RF filter"]
+          "primaryTechnologies": [
+            "BAW filter",
+            "XBAW",
+            "RF filter"
+          ]
         },
         {
           "name": "QXONIX",
-          "patterns": ["QXONIX", "Qxonix"],
-          "discoveredBy": ["term-extraction-avago-av"],
+          "patterns": [
+            "QXONIX",
+            "Qxonix"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ],
           "notes": "10 patents found - BAW resonator structures",
           "patentCount": 10,
-          "primaryTechnologies": ["BAW resonator"]
+          "primaryTechnologies": [
+            "BAW resonator"
+          ]
         },
         {
           "name": "RF360",
-          "patterns": ["RF360"],
-          "discoveredBy": ["term-extraction-avago-av"],
+          "patterns": [
+            "RF360"
+          ],
+          "discoveredBy": [
+            "term-extraction-avago-av"
+          ],
           "notes": "8 patents found - Qualcomm/TDK JV for RF filters",
           "patentCount": 8,
-          "primaryTechnologies": ["RF module", "SAW filter"]
+          "primaryTechnologies": [
+            "RF module",
+            "SAW filter"
+          ]
         }
       ]
     },
-
     "telecom": {
       "description": "Telecommunications carriers, equipment, and mobile device manufacturers",
       "enabled": true,
       "companies": [
-        {"name": "Verizon", "patterns": ["Verizon"], "discoveredBy": ["manual-initial"]},
-        {"name": "AT&T", "patterns": ["AT&T"], "discoveredBy": ["manual-initial"]},
-        {"name": "T-Mobile", "patterns": ["T-Mobile"], "discoveredBy": ["manual-initial"]},
-        {"name": "Ericsson", "patterns": ["Ericsson"], "discoveredBy": ["manual-initial"]},
-        {"name": "Nokia", "patterns": ["Nokia"], "discoveredBy": ["manual-initial"]},
-        {"name": "Huawei", "patterns": ["Huawei"], "discoveredBy": ["citation-overlap-broadcom-streaming"]},
-        {"name": "Samsung", "patterns": ["Samsung"], "discoveredBy": ["manual-initial", "citation-overlap-broadcom-streaming"]},
+        {
+          "name": "Verizon",
+          "patterns": [
+            "Verizon"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "AT&T",
+          "patterns": [
+            "AT&T"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "T-Mobile",
+          "patterns": [
+            "T-Mobile"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Ericsson",
+          "patterns": [
+            "Ericsson"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Nokia",
+          "patterns": [
+            "Nokia"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Huawei",
+          "patterns": [
+            "Huawei"
+          ],
+          "discoveredBy": [
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
+        {
+          "name": "Samsung",
+          "patterns": [
+            "Samsung"
+          ],
+          "discoveredBy": [
+            "manual-initial",
+            "citation-overlap-broadcom-streaming"
+          ]
+        },
         {
           "name": "OPPO",
-          "patterns": ["OPPO", "GUANGDONG OPPO MOBILE"],
-          "discoveredBy": ["hybrid-cluster-6-wireless-geo"],
+          "patterns": [
+            "OPPO",
+            "GUANGDONG OPPO MOBILE"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-6-wireless-geo"
+          ],
           "notes": "12 patents - Major Chinese mobile device manufacturer",
           "patentCount": 12
         },
         {
           "name": "Xiaomi",
-          "patterns": ["Xiaomi", "BEIJING XIAOMI MOBILE SOFTWARE"],
-          "discoveredBy": ["hybrid-cluster-6-wireless-geo"],
+          "patterns": [
+            "Xiaomi",
+            "BEIJING XIAOMI MOBILE SOFTWARE"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-6-wireless-geo"
+          ],
           "notes": "11 patents - Major Chinese mobile device manufacturer",
           "patentCount": 11
         },
         {
           "name": "ZTE",
-          "patterns": ["ZTE", "ZTE CORPORATION"],
-          "discoveredBy": ["hybrid-cluster-6-wireless-geo"],
+          "patterns": [
+            "ZTE",
+            "ZTE CORPORATION"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-6-wireless-geo"
+          ],
           "notes": "10 patents - Chinese telecom equipment manufacturer",
           "patentCount": 10
         },
         {
           "name": "NEC",
-          "patterns": ["NEC", "NEC CORPORATION"],
-          "discoveredBy": ["hybrid-cluster-7-pii-breach", "hybrid-cluster-9-aiml"],
+          "patterns": [
+            "NEC",
+            "NEC CORPORATION"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-7-pii-breach",
+            "hybrid-cluster-9-aiml"
+          ],
           "notes": "12 patents - Japanese telecom/enterprise technology",
           "patentCount": 12
         }
       ]
     },
-
     "identity": {
       "description": "Identity and authentication providers",
       "enabled": true,
       "companies": [
-        {"name": "Okta", "patterns": ["Okta"], "discoveredBy": ["manual-initial"]},
-        {"name": "Ping Identity", "patterns": ["Ping Identity"], "discoveredBy": ["manual-initial"]}
+        {
+          "name": "Okta",
+          "patterns": [
+            "Okta"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Ping Identity",
+          "patterns": [
+            "Ping Identity"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        }
       ]
     },
-
     "storage": {
       "description": "Storage and data infrastructure",
       "enabled": true,
       "companies": [
-        {"name": "NetApp", "patterns": ["NetApp"], "discoveredBy": ["manual-initial"]},
-        {"name": "Pure Storage", "patterns": ["Pure Storage"], "discoveredBy": ["manual-initial"]},
-        {"name": "Dell EMC", "patterns": ["Dell EMC", "Dell Technologies", "EMC", "Dell Products"], "discoveredBy": ["manual-initial", "hybrid-cluster-1-cloud-auth", "hybrid-cluster-5-security"]}
+        {
+          "name": "NetApp",
+          "patterns": [
+            "NetApp"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Pure Storage",
+          "patterns": [
+            "Pure Storage"
+          ],
+          "discoveredBy": [
+            "manual-initial"
+          ]
+        },
+        {
+          "name": "Dell EMC",
+          "patterns": [
+            "Dell EMC",
+            "Dell Technologies",
+            "EMC",
+            "Dell Products"
+          ],
+          "discoveredBy": [
+            "manual-initial",
+            "hybrid-cluster-1-cloud-auth",
+            "hybrid-cluster-5-security"
+          ]
+        }
       ]
     },
-
     "videoCodec": {
       "description": "Video codec, streaming technology, and A/V processing - discovered via hybrid cluster 2",
       "enabled": true,
       "companies": [
         {
           "name": "Tencent",
-          "patterns": ["Tencent", "TENCENT AMERICA", "TENCENT TECHNOLOGY"],
-          "discoveredBy": ["hybrid-cluster-2-video-codec", "hybrid-cluster-5-security"],
+          "patterns": [
+            "Tencent",
+            "TENCENT AMERICA",
+            "TENCENT TECHNOLOGY"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-2-video-codec",
+            "hybrid-cluster-5-security"
+          ],
           "notes": "28+ patents found across video codec and security clusters",
           "patentCount": 39
         },
         {
           "name": "Dolby Laboratories",
-          "patterns": ["Dolby", "Dolby Laboratories"],
-          "discoveredBy": ["hybrid-cluster-2-video-codec"],
+          "patterns": [
+            "Dolby",
+            "Dolby Laboratories"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-2-video-codec"
+          ],
           "notes": "12 patents - audio/video codec, transform, macroblock processing",
           "patentCount": 12,
-          "primaryTechnologies": ["audio codec", "video processing", "macroblock"]
+          "primaryTechnologies": [
+            "audio codec",
+            "video processing",
+            "macroblock"
+          ]
         },
         {
           "name": "Beijing Dajia (Kuaishou)",
-          "patterns": ["Beijing Dajia", "Kuaishou", "BEIJING DAJIA INTERNET"],
-          "discoveredBy": ["hybrid-cluster-2-video-codec"],
+          "patterns": [
+            "Beijing Dajia",
+            "Kuaishou",
+            "BEIJING DAJIA INTERNET"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-2-video-codec"
+          ],
           "notes": "11 patents - video codec technology (Kuaishou parent company)",
           "patentCount": 11,
-          "primaryTechnologies": ["video codec", "video transform"]
+          "primaryTechnologies": [
+            "video codec",
+            "video transform"
+          ]
         }
       ]
     },
-
     "financial": {
       "description": "Financial services companies with significant cloud/security patent portfolios",
       "enabled": true,
       "companies": [
         {
           "name": "Bank of America",
-          "patterns": ["Bank of America", "BANK OF AMERICA CORPORATION"],
-          "discoveredBy": ["hybrid-cluster-1-cloud-auth", "hybrid-cluster-5-security"],
+          "patterns": [
+            "Bank of America",
+            "BANK OF AMERICA CORPORATION"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-1-cloud-auth",
+            "hybrid-cluster-5-security"
+          ],
           "notes": "22-34 patents across cloud authentication and security clusters",
           "patentCount": 34
         },
         {
           "name": "Capital One",
-          "patterns": ["Capital One", "CAPITAL ONE SERVICES"],
-          "discoveredBy": ["hybrid-cluster-1-cloud-auth"],
+          "patterns": [
+            "Capital One",
+            "CAPITAL ONE SERVICES"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-1-cloud-auth"
+          ],
           "notes": "16 patents - cloud, authentication, encryption",
           "patentCount": 16
         },
         {
           "name": "Mastercard",
-          "patterns": ["Mastercard", "MASTERCARD INTERNATIONAL"],
-          "discoveredBy": ["hybrid-cluster-7-pii-breach"],
+          "patterns": [
+            "Mastercard",
+            "MASTERCARD INTERNATIONAL"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-7-pii-breach"
+          ],
           "notes": "15 patents - PII/data breach security technology",
           "patentCount": 15
         },
         {
           "name": "PayPal",
-          "patterns": ["PayPal", "PAYPAL"],
-          "discoveredBy": ["hybrid-cluster-4-event-live", "hybrid-cluster-8-bluetooth"],
+          "patterns": [
+            "PayPal",
+            "PAYPAL"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-4-event-live",
+            "hybrid-cluster-8-bluetooth"
+          ],
           "notes": "8 patents - BLE payments, messaging",
           "patentCount": 8
         }
       ]
     },
-
     "automotive": {
       "description": "Automotive manufacturers with imaging, motion tracking, and autonomous driving patents",
       "enabled": true,
       "companies": [
         {
           "name": "Toyota",
-          "patterns": ["Toyota", "TOYOTA JIDOSHA KABUSHIKI KAISHA"],
-          "discoveredBy": ["hybrid-cluster-3-image-depth", "hybrid-cluster-10-motion-pose"],
+          "patterns": [
+            "Toyota",
+            "TOYOTA JIDOSHA KABUSHIKI KAISHA"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-3-image-depth",
+            "hybrid-cluster-10-motion-pose"
+          ],
           "notes": "15+ patents - Image depth mapping, object detection, autonomous driving",
           "patentCount": 15,
-          "primaryTechnologies": ["depth mapping", "object detection", "autonomous driving"]
+          "primaryTechnologies": [
+            "depth mapping",
+            "object detection",
+            "autonomous driving"
+          ]
         },
         {
           "name": "Hyundai",
-          "patterns": ["Hyundai", "HYUNDAI MOTOR COMPANY"],
-          "discoveredBy": ["hybrid-cluster-10-motion-pose"],
+          "patterns": [
+            "Hyundai",
+            "HYUNDAI MOTOR COMPANY"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-10-motion-pose"
+          ],
           "notes": "11 patents - Motion detection, risk assessment",
           "patentCount": 11
         },
         {
           "name": "Kia",
-          "patterns": ["Kia", "KIA CORPORATION"],
-          "discoveredBy": ["hybrid-cluster-10-motion-pose"],
+          "patterns": [
+            "Kia",
+            "KIA CORPORATION"
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-10-motion-pose"
+          ],
           "notes": "11 patents - Motion detection, risk assessment",
           "patentCount": 11
         },
         {
           "name": "Honda",
-          "patterns": ["Honda", "HONDA MOTOR CO."],
-          "discoveredBy": ["hybrid-cluster-10-motion-pose"],
+          "patterns": [
+            "Honda",
+            "HONDA MOTOR CO."
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-10-motion-pose"
+          ],
           "notes": "7 patents - Object tracking, pose estimation",
           "patentCount": 7
         }
       ]
     },
-
     "consumerElectronics": {
       "description": "Consumer electronics manufacturers with video/communications patents",
       "enabled": true,
       "companies": [
         {
           "name": "LG Electronics",
-          "patterns": ["LG Electronics", "LG ELECTRONICS INC."],
-          "discoveredBy": ["hybrid-cluster-1-cloud-auth", "hybrid-cluster-2-video-codec"],
+          "patterns": [
+            "LG Electronics",
+            "LG ELECTRONICS INC."
+          ],
+          "discoveredBy": [
+            "hybrid-cluster-1-cloud-auth",
+            "hybrid-cluster-2-video-codec"
+          ],
           "notes": "27 patents in video codec, 14 in cloud/auth clusters",
           "patentCount": 41,
-          "primaryTechnologies": ["video codec", "cloud computing", "encryption"]
+          "primaryTechnologies": [
+            "video codec",
+            "cloud computing",
+            "encryption"
+          ]
         }
       ]
     }
   },
-
   "excludePatterns": [
     "Broadcom",
     "LSI Logic",
     "Avago",
     "Symantec"
   ],
-
   "notes": {
     "patternMatching": "Patterns are matched case-insensitively against assignee names",
     "excludePatterns": "These patterns identify Broadcom-related entities to exclude from competitor analysis",

@@ -1662,9 +1662,128 @@ done
 
 ---
 
-*Document updated: 2026-01-17 (late night)*
+### Session Update: 2026-01-17 (Current) - Avago A/V Complete, Excel Workbook Guide
+
+**Major Accomplishments:**
+
+1. **Avago A/V Citation Overlap - COMPLETE** ✅
+   - All 923 patents analyzed (10 batches)
+   - 148 patents (16%) have competitor citations
+   - 660 total competitor citations
+   - Results exported to `output/avago-av/avago-av-priority-2026-01-17.csv`
+
+2. **Top Competitors (Avago A/V - RF/Acoustic Sector):**
+
+| Rank | Competitor | Citations | Notes |
+|------|------------|-----------|-------|
+| 1 | Murata | 140 | Major BAW/FBAR target |
+| 2 | Skyworks | 117 | RF front-end modules |
+| 3 | Samsung | 81 | Mobile RF |
+| 4 | ByteDance | 45 | Video codec |
+| 5 | Qorvo | 38 | BAW filters |
+| 6 | Qualcomm | 32 | RF/baseband |
+| 7 | Akoustis | 24 | XBAW technology |
+| 8 | Intel | 21 | SerDes, RF |
+| 9 | Texas Instruments | 17 | Analog |
+| 10 | Apple | 17 | Consumer devices |
+
+3. **Top Patent (Avago A/V):**
+   - **9093979** - "Laterally-coupled acoustic resonators" - 123 competitor citations (all from Murata!)
+
+4. **Excel Workbook Guide Created** ✅
+   - New file: `docs/EXCEL_WORKBOOK_GUIDE.md`
+   - Three-workbook system for user weight manipulation
+   - Formula templates for normalized scoring
+   - Multiple weight profile support
+
+5. **New Export Scripts:**
+   - `scripts/export-raw-metrics-csv.ts` - Raw data for Excel formulas
+   - `scripts/export-avago-av-csv.ts` - Avago A/V results export
+
+---
+
+## Database Architecture Decisions (User Confirmed)
+
+| Question | Decision |
+|----------|----------|
+| Store abstracts in PostgreSQL? | **YES** - for completeness |
+| Import claims text for search? | **DEFER** - large data volume |
+| Real-time vs batch sync? | **Either OK for now** |
+| Multiple user preferences? | **YES** - support multiple users |
+
+---
+
+## Next Promising Sectors (Prioritized)
+
+**Already Complete:**
+- ✅ RF/Acoustic (BAW/FBAR) - Avago A/V analysis done
+
+**Ready for Mining:**
+
+| Priority | Sector | Cluster | Patents | Competitor Citations | Key Targets |
+|----------|--------|---------|---------|---------------------|-------------|
+| **Tier 1** | Video Codec | 2 | 5 | 60 | ByteDance, Tencent, Dolby |
+| **Tier 1** | Cloud Auth | 1 | 43 | 349 | BofA, Capital One, fintech |
+| **Tier 2** | Security/Threat | 5 | 6 | 28 | CrowdStrike, Palo Alto |
+| **Tier 2** | Image Depth/ADAS | 3 | 3 | 47 | Toyota, Hyundai, Mobileye |
+| **Tier 3** | Bluetooth/BLE | 8 | 2 | 20 | Realtek, Nordic, Silicon Labs |
+
+**Recommended Next Actions:**
+
+1. **Video Codec Deep-Dive:**
+   - ByteDance has 45 Avago A/V citations (video codec patents)
+   - Tencent portfolio already downloaded (13,720 patents)
+   - Run citation overlap on video codec cluster patents
+
+2. **Expand Video Codec Patents:**
+   - Current cluster only has 5 patents
+   - Use ES search for H04N, "macroblock", "codec", "transcod"
+   - Build larger set for dedicated citation analysis
+
+3. **Security Sector:**
+   - Add EDR vendors: CrowdStrike, SentinelOne, Cybereason
+   - Run citation overlap on cluster 5 patents
+
+---
+
+## Quick Commands
+
+```bash
+# Export Avago A/V results (already done)
+npx tsx scripts/export-avago-av-csv.ts
+
+# Export raw metrics for Excel
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# Export enhanced CSV with calculated scores
+npx tsx scripts/export-enhanced-csv.ts
+
+# Run video codec sector search
+npm run search
+# Then: search "video codec transcod macroblock"
+
+# Check ES health
+curl -s http://localhost:9200/_cluster/health | jq
+```
+
+---
+
+## Files Reference (New This Session)
+
+| File | Purpose |
+|------|---------|
+| `docs/EXCEL_WORKBOOK_GUIDE.md` | Complete Excel setup instructions |
+| `scripts/export-raw-metrics-csv.ts` | Export for Excel formula use |
+| `scripts/export-avago-av-csv.ts` | Avago A/V results export |
+| `output/avago-av/avago-av-priority-2026-01-17.csv` | Prioritized Avago A/V patents |
+| `output/avago-av/avago-av-summary-2026-01-17.json` | Summary statistics |
+| `output/avago-av/avago-av-merged-results-2026-01-17.json` | Merged batch results |
+
+---
+
+*Document updated: 2026-01-17 (current session)*
 *Config version: 4.0 with all cluster strategies*
 *Categories: 16 | Companies: 90 | Strategies: 13*
 *ElasticSearch: 22,706 patents indexed*
 *PostgreSQL: User preferences seeded (6 profiles, 12 sectors)*
-*Avago A/V Mining: 70% complete (625/923 patents)*
+*Avago A/V Mining: COMPLETE (923 patents, 148 with citations, 660 total citations)*

@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "description": "User weight profiles for patent scoring - seeds Excel workbook and database",
+  "lastUpdated": "2026-01-17",
+
+  "metrics": {
+    "description": "Available metrics for scoring with normalization parameters",
+    "definitions": {
+      "competitor_citations": {
+        "column": "G",
+        "description": "Citations from tracked competitors",
+        "maxValue": 20,
+        "normFormula": "MIN(1, {cell}/20)"
+      },
+      "forward_citations": {
+        "column": "F",
+        "description": "Total forward citations",
+        "maxValue": 900,
+        "normFormula": "MIN(1, SQRT({cell})/30)"
+      },
+      "years_remaining": {
+        "column": "E",
+        "description": "Years until patent expiration",
+        "maxValue": 15,
+        "normFormula": "MIN(1, {cell}/15)"
+      },
+      "eligibility_score": {
+        "column": "K",
+        "description": "101 patent eligibility (LLM)",
+        "maxValue": 5,
+        "normFormula": "{cell}/5"
+      },
+      "validity_score": {
+        "column": "L",
+        "description": "Prior art strength (LLM)",
+        "maxValue": 5,
+        "normFormula": "{cell}/5"
+      },
+      "claim_breadth": {
+        "column": "M",
+        "description": "Claim scope (LLM)",
+        "maxValue": 5,
+        "normFormula": "{cell}/5"
+      },
+      "enforcement_clarity": {
+        "column": "N",
+        "description": "Infringement detectability (LLM)",
+        "maxValue": 5,
+        "normFormula": "{cell}/5"
+      },
+      "design_around_difficulty": {
+        "column": "O",
+        "description": "Difficulty to design around (LLM)",
+        "maxValue": 5,
+        "normFormula": "{cell}/5"
+      }
+    }
+  },
+
+  "userCategories": {
+    "description": "Default user category definitions",
+    "categories": {
+      "aggressive": {
+        "displayName": "Aggressive",
+        "description": "Litigation-focused, seeking larger wins with higher risk tolerance",
+        "defaultRelativeWeight": 0.33,
+        "color": "#FF6B6B",
+        "strategy": "Prioritizes enforcement clarity and competitor citations for litigation campaigns"
+      },
+      "moderate": {
+        "displayName": "Moderate",
+        "description": "Balanced approach between offense and defense",
+        "defaultRelativeWeight": 0.34,
+        "color": "#4ECDC4",
+        "strategy": "Balanced scoring across all metrics for licensing and strategic value"
+      },
+      "conservative": {
+        "displayName": "Conservative",
+        "description": "Defensive posture, favoring portfolio leverage and cross-licensing",
+        "defaultRelativeWeight": 0.33,
+        "color": "#45B7D1",
+        "strategy": "Emphasizes validity, breadth, and design-around difficulty for defensive strength"
+      }
+    }
+  },
+
+  "userProfiles": {
+    "aggressive": {
+      "category": "aggressive",
+      "displayName": "Aggressive Litigator",
+      "weights": {
+        "competitor_citations": 0.25,
+        "forward_citations": 0.05,
+        "years_remaining": 0.10,
+        "eligibility_score": 0.15,
+        "validity_score": 0.10,
+        "claim_breadth": 0.05,
+        "enforcement_clarity": 0.20,
+        "design_around_difficulty": 0.10
+      },
+      "notes": "Heavy emphasis on enforcement clarity and competitor citations - these patents are being actively used by targets"
+    },
+    "moderate": {
+      "category": "moderate",
+      "displayName": "Balanced Strategist",
+      "weights": {
+        "competitor_citations": 0.20,
+        "forward_citations": 0.10,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.15,
+        "validity_score": 0.15,
+        "claim_breadth": 0.10,
+        "enforcement_clarity": 0.10,
+        "design_around_difficulty": 0.05
+      },
+      "notes": "Even distribution across metrics - good for licensing negotiations and portfolio management"
+    },
+    "conservative": {
+      "category": "conservative",
+      "displayName": "Defensive Counsel",
+      "weights": {
+        "competitor_citations": 0.10,
+        "forward_citations": 0.15,
+        "years_remaining": 0.10,
+        "eligibility_score": 0.10,
+        "validity_score": 0.25,
+        "claim_breadth": 0.15,
+        "enforcement_clarity": 0.05,
+        "design_around_difficulty": 0.10
+      },
+      "notes": "Strong emphasis on validity - patents that will hold up under scrutiny for cross-licensing leverage"
+    }
+  },
+
+  "combinedView": {
+    "description": "Settings for the combined/consensus view",
+    "defaultUserWeights": {
+      "aggressive": 0.33,
+      "moderate": 0.34,
+      "conservative": 0.33
+    },
+    "calculationMethod": "weighted_average",
+    "notes": "Combined score = sum(user_score * user_relative_weight) for each patent"
+  },
+
+  "excelConfig": {
+    "worksheetNames": {
+      "rawData": "RawData",
+      "weights": "UserWeights",
+      "aggressive": "Score_Aggressive",
+      "moderate": "Score_Moderate",
+      "conservative": "Score_Conservative",
+      "combined": "Score_Combined"
+    },
+    "namedRanges": {
+      "weightsTable": "WeightsTable",
+      "userRelativeWeights": "UserRelativeWeights",
+      "dataStartRow": 2,
+      "topN": 250
+    },
+    "colors": {
+      "headerRow": "#1a1a2e",
+      "headerText": "#ffffff",
+      "dataAlternate1": "#f8f9fa",
+      "dataAlternate2": "#ffffff",
+      "highlightTop10": "#fff3cd",
+      "highlightTop50": "#d4edda"
+    }
+  }
+}

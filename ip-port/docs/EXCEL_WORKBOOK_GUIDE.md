@@ -1,16 +1,92 @@
 # Excel Workbook Guide for Patent Portfolio Analysis
 
-This guide explains how to set up Excel workbooks to analyze patent data with configurable user weights, enabling iterative refinement of scoring strategies without code changes.
+This guide explains how to set up macro-enabled Excel workbooks (.xlsm) to analyze patent data with configurable user weights, enabling iterative refinement of scoring strategies without code changes.
 
 ---
 
-## Overview: Three-Workbook System
+## Overview: Macro-Enabled Workbook System
 
-| Workbook | Purpose | Primary Use |
-|----------|---------|-------------|
-| **1. Analysis Workbook (.xlsx/.xlsm)** | Main workbook with user weights and calculated scores | Day-to-day analysis, weight manipulation |
-| **2. Full Metrics CSV** | Complete data export with all metrics + pre-calculated scores | Quick viewing, attorney review |
-| **3. Raw Metrics CSV** | Metrics only (no calculated scores) | Import to workbook for formula-based scoring |
+### Worksheets Generated
+
+| Worksheet | Purpose | Updates |
+|-----------|---------|---------|
+| **RawData** | Imported patent metrics from CSV | On import |
+| **UserWeights** | User weight profiles + relative weights | Manual editing |
+| **Score_Aggressive** | Top N patents scored with aggressive weights | Auto (formulas) |
+| **Score_Moderate** | Top N patents scored with moderate weights | Auto (formulas) |
+| **Score_Conservative** | Top N patents scored with conservative weights | Auto (formulas) |
+| **Score_Combined** | Top N with weighted average of all users | Auto (formulas) |
+
+### User Profiles
+
+| Profile | Strategy | Emphasis |
+|---------|----------|----------|
+| **Aggressive** | Litigation-focused, seeking larger wins | Enforcement clarity, competitor citations |
+| **Moderate** | Balanced licensing and portfolio management | Even distribution across all metrics |
+| **Conservative** | Defensive, cross-licensing leverage | Validity, claim breadth, design-around difficulty |
+
+### Key Features
+
+- **Live Dynamic Updates**: Change weights in UserWeights sheet, scores update automatically
+- **Multiple User Views**: Each user profile has its own scored worksheet
+- **Combined Consensus View**: Weighted average across all user profiles
+- **Relative User Weights**: Adjust influence of each user type on combined score
+- **Macro-Driven Setup**: Run macro to import data and generate all worksheets
+
+---
+
+## Quick Start
+
+### 1. Create New Macro-Enabled Workbook
+
+```
+1. Open Excel
+2. File -> New -> Blank Workbook
+3. File -> Save As -> PatentAnalysis.xlsm (Excel Macro-Enabled Workbook)
+```
+
+### 2. Import VBA Module
+
+```
+1. Press Alt+F11 to open VBA Editor
+2. File -> Import File
+3. Select: excel/PatentAnalysisMacros.bas
+4. Close VBA Editor (Alt+Q)
+```
+
+### 3. Run Import Macro
+
+```
+1. Press Alt+F8 to open Macro dialog
+2. Select: ImportAllData
+3. Click Run
+```
+
+The macro will:
+- Import the CSV data to RawData sheet
+- Create UserWeights sheet with default profiles
+- Generate all 4 scoring worksheets
+- Sort by score and assign ranks
+
+### 4. Manipulate Weights
+
+Edit cells in UserWeights sheet:
+- **Rows 4-11**: Metric weights per user profile
+- **Rows 18-20**: Relative weights between user profiles
+
+All scoring sheets update automatically.
+
+---
+
+## Files Reference
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `PatentAnalysisMacros.bas` | `excel/` | VBA module to import |
+| `user-weight-profiles.json` | `config/` | Seed data for weights (DB sync) |
+| `patents-raw-metrics-*.csv` | `output/` | CSV to import |
+
+---
 
 ---
 
@@ -386,5 +462,158 @@ enforcement_clarity: 0.10
 
 ---
 
+## VBA Macro Reference
+
+### Available Macros
+
+| Macro | Arguments | Description |
+|-------|-----------|-------------|
+| `ImportAllData` | None | Imports data using default prefix (edit in macro) |
+| `ImportAllDataWithPrefix` | `filePrefix` | Imports data with specified file prefix |
+| `GenerateAllWorksheets` | None | Generates scoring worksheets (default top 250) |
+| `GenerateScoringWorksheets` | `topN` | Generates scoring worksheets for top N patents |
+| `ClearAllData` | None | Clears all data sheets (keeps structure) |
+| `DeleteAllGeneratedSheets` | None | Deletes all generated sheets (use with caution) |
+| `RefreshAll` | None | Full refresh: clear, import, generate |
+
+### Configuring the Import Prefix
+
+To change the import file prefix, edit the `ImportAllData` macro:
+
+```vba
+Public Sub ImportAllData()
+    Dim prefix As String
+    prefix = "patents-raw-metrics-2026-01-17"  ' <-- Change this for new imports
+
+    ImportAllDataWithPrefix prefix
+End Sub
+```
+
+Or call `ImportAllDataWithPrefix` directly from VBA with your prefix.
+
+### UserWeights Sheet Structure
+
+**Section 1: Metric Weights (Rows 3-12)**
+```
+| Metric                    | Aggressive | Moderate | Conservative | Description |
+|---------------------------|------------|----------|--------------|-------------|
+| competitor_citations      | 25%        | 20%      | 10%          | ...         |
+| forward_citations         | 5%         | 10%      | 15%          | ...         |
+| years_remaining           | 10%        | 15%      | 10%          | ...         |
+| eligibility_score         | 15%        | 15%      | 10%          | ...         |
+| validity_score            | 10%        | 15%      | 25%          | ...         |
+| claim_breadth             | 5%         | 10%      | 15%          | ...         |
+| enforcement_clarity       | 20%        | 10%      | 5%           | ...         |
+| design_around_difficulty  | 10%        | 5%       | 10%          | ...         |
+| TOTAL                     | 100%       | 100%     | 100%         |             |
+```
+
+**Section 2: Relative User Weights (Rows 17-21)**
+```
+| User Profile   | Relative Weight | Description |
+|----------------|-----------------|-------------|
+| Aggressive     | 33%             | Litigation-focused |
+| Moderate       | 34%             | Balanced approach |
+| Conservative   | 33%             | Defensive posture |
+| TOTAL          | 100%            |             |
+```
+
+### Named Ranges Created
+
+| Name | Reference | Purpose |
+|------|-----------|---------|
+| `W_Aggressive` | UserWeights!$B$4:$B$11 | Aggressive metric weights |
+| `W_Moderate` | UserWeights!$C$4:$C$11 | Moderate metric weights |
+| `W_Conservative` | UserWeights!$D$4:$D$11 | Conservative metric weights |
+| `RelWeight_Aggressive` | UserWeights!$B$18 | Aggressive relative weight |
+| `RelWeight_Moderate` | UserWeights!$B$19 | Moderate relative weight |
+| `RelWeight_Conservative` | UserWeights!$B$20 | Conservative relative weight |
+
+---
+
+## Scoring Worksheets
+
+### Individual User Score Sheets (Score_Aggressive, etc.)
+
+| Column | Field | Formula |
+|--------|-------|---------|
+| A | Rank | Sequential after sort |
+| B | Patent ID | From RawData |
+| C | Title | From RawData |
+| D | Grant Date | From RawData |
+| E | Years Remaining | From RawData |
+| F | Forward Citations | From RawData |
+| G | Competitor Citations | From RawData |
+| H | Competitors Citing | From RawData |
+| I | Sector | From RawData |
+| J | **Score** | Weighted sum of normalized metrics |
+| K-R | Normalized Metrics | Individual normalized values |
+
+**Score Formula (references UserWeights):**
+```
+=K{row}*UserWeights!$B$4 + L{row}*UserWeights!$B$5 + ... + R{row}*UserWeights!$B$11
+```
+
+### Combined Score Sheet (Score_Combined)
+
+| Column | Field | Formula |
+|--------|-------|---------|
+| A-I | Same as individual sheets | From RawData |
+| J | **Combined Score** | Weighted average of user scores |
+| K | Aggressive Score | Calculated with aggressive weights |
+| L | Moderate Score | Calculated with moderate weights |
+| M | Conservative Score | Calculated with conservative weights |
+
+**Combined Score Formula:**
+```
+=K{row}*UserWeights!$B$18 + L{row}*UserWeights!$B$19 + M{row}*UserWeights!$B$20
+```
+
+---
+
+## Workflow: New Data Import
+
+```bash
+# 1. Generate fresh CSV export
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# 2. Copy CSV to workbook directory (or use file dialog)
+cp output/patents-raw-metrics-2026-01-17.csv /path/to/workbook/
+
+# 3. Open workbook, edit ImportAllData prefix if needed
+# 4. Run RefreshAll macro (Alt+F8 -> RefreshAll)
+```
+
+---
+
+## Tips
+
+1. **Weights Must Sum to 100%**: The TOTAL row shows if weights are valid
+2. **Sorting is Automatic**: Sheets sort by score descending after generation
+3. **Formulas Update Live**: Change a weight, all scores recalculate
+4. **Relative Weights for Consensus**: Adjust B18:B20 to favor different user types
+5. **Add Custom User Types**: Duplicate a column in the weights section, add new scoring sheet
+
+---
+
+## Troubleshooting
+
+**"Macros are disabled"**
+- File -> Options -> Trust Center -> Trust Center Settings -> Macro Settings
+- Enable "Disable all macros with notification"
+- Re-open the file and click "Enable Content"
+
+**"CSV file not found"**
+- Ensure CSV is in same directory as workbook or in `output/` subdirectory
+- Check the file prefix in the macro matches your CSV filename
+
+**"Reference error in formulas"**
+- Ensure UserWeights sheet exists with correct structure
+- Re-run `CreateUserWeightsSheet` or `RefreshAll`
+
+---
+
 *Document created: 2026-01-17*
 *For use with Patent Portfolio Analysis Platform*
+*VBA Module: excel/PatentAnalysisMacros.bas*
+*Config: config/user-weight-profiles.json*

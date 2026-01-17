@@ -42,6 +42,21 @@ const SECTORS = {
     ],
     targetCompetitors: ['CrowdStrike', 'SentinelOne', 'Palo Alto Networks', 'Fortinet', 'Symantec', 'McAfee', 'Cybereason', 'Carbon Black'],
     clusterSource: 'hybrid-cluster-5-security'
+  },
+  'cloud-auth': {
+    name: 'Cloud / Authentication',
+    description: 'Cloud computing, user authentication, encryption, and access control patents',
+    patentIds: [
+      // Cluster 1 patents - 43 total, highest priority cluster (349 competitor citations)
+      '9590872', '8566578', '9749331', '8762512', '9628471', '9800608', '10042768', '8429630',
+      '9578088', '8826443', '8826444', '8950005', '8671080', '9183384', '8312064', '10129257',
+      '8782403', '9342705', '8213602', '8954740', '10581819', '9569605', '9888377', '10182048',
+      '9780950', '8997195', '10200359', '10206099', '9483627', '9106645', '8677448', '10248797',
+      '9106687', '9166993', '9401925', '10116680', '8776168', '8863307', '10887307', '9807094',
+      '9356939', '8671455', '9160757'
+    ],
+    targetCompetitors: ['Apple', 'Amazon', 'Microsoft', 'Google', 'Meta', 'Comcast', 'Sony', 'ByteDance', 'Intel', 'Citrix', 'Sophos', 'EMC'],
+    clusterSource: 'hybrid-cluster-1-cloud-auth'
   }
 };
 

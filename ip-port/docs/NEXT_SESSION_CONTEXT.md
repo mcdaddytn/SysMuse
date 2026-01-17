@@ -894,6 +894,777 @@ npx tsx scripts/extract-av-terms.ts  # (to be created)
 
 ---
 
-*Document updated: 2026-01-17 evening*
-*Next session: Execute Avago A/V analysis using ElasticSearch term extraction*
-*Reference: docs/AVAGO_AV_ANALYSIS_APPROACH.md*
+### Session Update: 2026-01-17 (Late) - Avago A/V Analysis Complete
+
+**All 4 Phases Completed:**
+
+1. **Phase 1: Term Extraction** ✅
+   - Found 923 Avago A/V patents (more than estimated 445)
+   - Extracted 116 significant terms
+   - **Key Discovery:** Portfolio is heavy on acoustic resonators (BAW/FBAR) not traditional A/V
+
+2. **Phase 2: Portfolio Clustering** ✅
+   - Ran MLT queries on seed patents
+   - Found 273 similar patents in Broadcom portfolio
+   - Found 62 similar in LSI portfolio
+
+3. **Phase 3: Competitor Discovery** ✅
+   - Discovered major BAW/RF competitors:
+     - **Murata** - 73 patents (MAJOR target)
+     - **Skyworks** - 21 patents
+     - **Qorvo** - 17 patents
+     - **Akoustis** - 7 patents
+   - Texas Instruments, NXP, MediaTek identified as known A/V not tracked
+
+4. **Phase 4: Product Search Generation** ✅
+   - Generated 42 search queries for product research
+   - Priority targets: Murata BAW filters, Skyworks RF modules
+
+**Major Strategic Finding:**
+Avago's "A/V" portfolio is actually concentrated in **acoustic resonator technology (BAW/FBAR)**:
+- Used in RF filters for ALL 4G/5G smartphones
+- MEMS microphones for voice devices
+- $10+ billion market annually
+
+**New Scripts Created:**
+| Script | Purpose |
+|--------|---------|
+| `scripts/extract-av-terms.ts` | Phase 1 - ES term extraction |
+| `scripts/cluster-av-patents.ts` | Phase 2 - MLT clustering |
+| `scripts/discover-av-competitors.ts` | Phase 3 - USPTO competitor discovery |
+| `scripts/generate-product-searches.ts` | Phase 4 - Product search queries |
+
+**New Output Files:**
+| File | Description |
+|------|-------------|
+| `output/avago-av/avago-av-key-terms-2026-01-17.json` | Extracted terms |
+| `output/avago-av/avago-av-patents-2026-01-17.json` | 923 A/V patents |
+| `output/avago-av/av-competitor-candidates-2026-01-17.json` | New competitors |
+| `output/avago-av/av-product-search-queries-2026-01-17.json` | Product searches |
+
+**New Documentation:**
+- `docs/AVAGO_AV_ANALYSIS_RESULTS.md` - Full analysis results
+
+---
+
+### Next Session Tasks
+
+**Immediate Priority:**
+1. **Update competitors.json** - Add Murata, Skyworks, Qorvo, Akoustis, QXONIX
+2. **Run citation overlap** on 923 Avago A/V patents against new competitors
+3. **Deep-dive patent review** - Top BAW/FBAR patents for claim mapping
+
+**Research Tasks:**
+4. Execute product search queries (teardown reports, datasheets)
+5. Market research on BAW filter market players
+6. Identify specific infringing products
+
+**Scripts to Run:**
+```bash
+# After updating competitors.json:
+npx tsx examples/citation-overlap-batch.ts --portfolio avago-av
+
+# View analysis results:
+cat output/avago-av/av-competitor-candidates-2026-01-17.json | jq '.recommendations'
+```
+
+---
+
+### Session Update: 2026-01-17 (Continuation) - Strategy Provenance & Citation Overlap
+
+**Completed:**
+
+1. **Strategy Provenance System** ✅
+   - Designed and implemented `discoveryStrategies` schema in competitors.json
+   - Three strategy types tracked:
+     - `manual-initial` - Original industry knowledge
+     - `citation-overlap-broadcom-streaming` - Citation mining from Broadcom portfolio
+     - `term-extraction-avago-av` - ES term extraction from Avago A/V patents
+   - Each competitor now has `discoveredBy` array linking to strategies
+   - Config version bumped to 3.0
+
+2. **New Competitor Category: rfAcoustic** ✅
+   - Added 6 new RF/acoustic resonator competitors:
+     - **Murata** (73 patents) - Major BAW/FBAR target
+     - **Skyworks** (21 patents)
+     - **Qorvo** (17 patents)
+     - **QXONIX** (10 patents)
+     - **Akoustis** (7 patents)
+     - **RF360** (8 patents)
+   - Added 5 additional semiconductor companies:
+     - Texas Instruments, NXP, MediaTek, Analog Devices, Cirrus Logic
+
+3. **Enhanced competitor-config.ts Service** ✅
+   - New methods: `getDiscoveryStrategies()`, `getCompaniesByStrategy()`, `getStrategySummary()`
+   - Full provenance tracking per competitor
+   - **72 companies** across **12 categories** (101 patterns)
+
+4. **Citation Overlap Script for Avago A/V** ✅
+   - Created `scripts/citation-overlap-avago-av.ts`
+   - First batch (0-25) completed: 7 patents with competitor citations (28% hit rate)
+   - Background batch (25-125) running
+   - Top citators so far: Samsung, Apple, Meta, Google, Intel
+
+**Config Schema v3.0 Structure:**
+```json
+{
+  "discoveryStrategies": {
+    "strategy-id": {
+      "name": "...",
+      "type": "manual|citation-overlap|term-extraction",
+      "parameters": { "extractedTerms": [...], "script": "..." }
+    }
+  },
+  "categories": {
+    "rfAcoustic": {
+      "companies": [
+        { "name": "Murata", "discoveredBy": ["term-extraction-avago-av"], "patentCount": 73 }
+      ]
+    }
+  }
+}
+```
+
+**New Scripts Created:**
+| Script | Purpose |
+|--------|---------|
+| `scripts/citation-overlap-avago-av.ts` | Citation overlap for Avago A/V patents |
+
+---
+
+### Next Session Tasks
+
+**Continue Citation Overlap:**
+```bash
+# Check batch progress
+tail -f output/avago-av/batch-25-125.log
+
+# Run next batch
+npx tsx scripts/citation-overlap-avago-av.ts 125 225
+
+# Merge results when done
+npx tsx scripts/merge-avago-av-results.ts
+```
+
+**Strategy Expansion (Future):**
+- To add a new strategy, create entry in `discoveryStrategies`
+- Tag new competitors with the strategy ID
+- Parameters capture: source portfolio, terms used, scripts run
+
+---
+
+### Session Update: 2026-01-17 (Latest) - Hybrid Clustering Strategy Complete
+
+**Major Accomplishments:**
+
+1. **Hybrid Clustering Strategy Implemented** ✅
+   - Documented strategy: `docs/HYBRID_CLUSTERING_STRATEGY.md`
+   - Created `scripts/hybrid-cluster-analysis.ts` - Agglomerative clustering with term affinity
+   - Created `scripts/cluster-competitor-discovery.ts` - Per-cluster competitor discovery
+
+2. **10 Patent Clusters Generated** ✅
+   - Clustered 75 top litigation patents by term vectors
+   - Used ElasticSearch termvectors API + TF-IDF weighting
+   - Agglomerative clustering with cosine similarity
+
+**Cluster Summary:**
+| Rank | Cluster Name | Patents | Competitor Citations |
+|------|--------------|---------|---------------------|
+| 1 | Network/Communication: user/cloud | 43 | 349 |
+| 2 | Video/Image: video/sink | 5 | 60 |
+| 3 | Video/Image: imag/depth | 3 | 47 |
+| 4 | Video/Image: event/live | 4 | 33 |
+| 5 | Network/Communication: threat/attack | 6 | 28 |
+| 6 | Wireless: random/fenc | 4 | 25 |
+| 7 | Computing/Data: pii/breach | 3 | 24 |
+| 8 | Wireless: scan/edr | 2 | 20 |
+| 9 | AI/ML: learn/confid | 4 | 9 |
+| 10 | Wireless: object/pose | 1 | 8 |
+
+3. **Competitor Discovery on 3 Clusters** ✅
+   - Cluster 1 (Cloud/Auth), Cluster 2 (Video/Codec), Cluster 5 (Security)
+   - Discovered significant new competitors
+
+4. **competitors.json Updated to v3.0** ✅
+   - **15 categories** (up from 12)
+   - **78 companies** (up from 72)
+   - **6 discovery strategies** tracked
+
+**New Categories Added:**
+| Category | Description | Companies |
+|----------|-------------|-----------|
+| `videoCodec` | Video codec & A/V processing | Tencent, Dolby, Beijing Dajia (Kuaishou) |
+| `financial` | Financial services with cloud/security patents | Bank of America, Capital One |
+| `consumerElectronics` | Consumer electronics | LG Electronics |
+
+**New Strategies Added:**
+| Strategy ID | Cluster | Patent Count |
+|-------------|---------|--------------|
+| `hybrid-cluster-1-cloud-auth` | Cloud/Authentication | 43 |
+| `hybrid-cluster-2-video-codec` | Video/Codec | 5 |
+| `hybrid-cluster-5-security` | Threat Detection | 6 |
+
+**Key New Competitors:**
+| Company | Discovery Source | Patent Count | Notes |
+|---------|------------------|--------------|-------|
+| Tencent | Cluster 2 + 5 | 39 | Video codec + security |
+| Dolby Laboratories | Cluster 2 | 12 | Audio/video codec, macroblock |
+| Beijing Dajia (Kuaishou) | Cluster 2 | 11 | Video codec |
+| Bank of America | Cluster 1 + 5 | 34 | Cloud auth + security |
+| Capital One | Cluster 1 | 16 | Cloud authentication |
+| LG Electronics | Cluster 1 + 2 | 41 | Video codec + cloud |
+| Dell Products | Cluster 1 + 5 | 59 | Cloud + security (added to Dell EMC) |
+
+**New Scripts Created:**
+| Script | Purpose |
+|--------|---------|
+| `scripts/hybrid-cluster-analysis.ts` | Term vector clustering of top patents |
+| `scripts/cluster-competitor-discovery.ts` | Per-cluster competitor discovery |
+
+**New Output Files:**
+| File | Description |
+|------|-------------|
+| `output/clusters/cluster-definitions-2026-01-17.json` | 10 cluster definitions with patents |
+| `output/clusters/cluster-strategies-2026-01-17.json` | Strategy metadata for each cluster |
+| `output/clusters/cluster-ranked-for-discovery-2026-01-17.json` | Clusters ranked by citation count |
+| `output/clusters/cluster-1-competitors-2026-01-17.json` | Cluster 1 discovery results |
+| `output/clusters/cluster-2-competitors-2026-01-17.json` | Cluster 2 discovery results |
+| `output/clusters/cluster-5-competitors-2026-01-17.json` | Cluster 5 discovery results |
+
+**New Documentation:**
+- `docs/HYBRID_CLUSTERING_STRATEGY.md` - Full hybrid approach documentation
+
+---
+
+---
+
+### Session Update: 2026-01-17 (Continuation) - All Cluster Discovery Complete
+
+**Major Accomplishments:**
+
+1. **Completed All 10 Cluster Discovery** ✅
+   - Ran competitor discovery on remaining 7 clusters (3, 4, 6, 7, 8, 9, 10)
+   - All cluster discovery results saved to `output/clusters/`
+
+2. **Updated competitors.json to v4.0** ✅
+   - **16 categories** (added automotive)
+   - **13 discovery strategies** (added 7 new cluster strategies)
+   - **90 companies** (up from 78)
+
+3. **Downloaded 3 New Competitor Portfolios** ✅
+   - Tencent: 13,720 patents (6,362 streaming)
+   - Dolby: 3,301 patents (1,131 streaming)
+   - LG: 58,057 patents (22,681 streaming)
+
+**New Competitors Added (from clusters 3, 4, 6, 7, 8, 9, 10):**
+
+| Company | Category | Patents | Cluster Source |
+|---------|----------|---------|----------------|
+| Snap Inc | social | 22 | 6, 7, 10 |
+| OPPO | telecom | 12 | 6 |
+| Xiaomi | telecom | 11 | 6 |
+| ZTE | telecom | 10 | 6 |
+| NEC | telecom | 12 | 7, 9 |
+| Realtek | semiconductor | 14 | 8 (Bluetooth/BLE) |
+| Mastercard | financial | 15 | 7 |
+| PayPal | financial | 8 | 4, 8 |
+| Toyota | automotive | 15 | 3, 10 |
+| Hyundai | automotive | 11 | 10 |
+| Kia | automotive | 11 | 10 |
+| Honda | automotive | 7 | 10 |
+
+**New Category: Automotive**
+- Toyota, Hyundai, Kia, Honda - discovered via image depth mapping and motion tracking clusters
+
+**Cluster Discovery Summary:**
+
+| Cluster | Name | New Competitors Found |
+|---------|------|----------------------|
+| 3 | Video/Image: imag/depth | Canon (27), Toyota (15), TSMC (14) |
+| 4 | Video/Image: event/live | Aurora Ops (10), DeepMind (9) |
+| 6 | Wireless: random/fenc | Snap (14), OPPO (12), Xiaomi (11), ZTE (10) |
+| 7 | Computing/Data: pii/breach | Mastercard (15), Prudential (13), NEC (12) |
+| 8 | Wireless: scan/edr | Realtek (14), Cypress (8), Silicon Labs (6) |
+| 9 | AI/ML: learn/confid | Adobe (9), NEC (9) - mostly tracked competitors |
+| 10 | Wireless: object/pose | Toyota (15), Hyundai (11), Kia (11), Honda (7) |
+
+**New Output Files:**
+| File | Description |
+|------|-------------|
+| `output/clusters/cluster-3-competitors-2026-01-17.json` | Image/depth cluster |
+| `output/clusters/cluster-4-competitors-2026-01-17.json` | Event/live cluster |
+| `output/clusters/cluster-6-competitors-2026-01-17.json` | Wireless/geo cluster |
+| `output/clusters/cluster-7-competitors-2026-01-17.json` | PII/breach cluster |
+| `output/clusters/cluster-8-competitors-2026-01-17.json` | Bluetooth/BLE cluster |
+| `output/clusters/cluster-9-competitors-2026-01-17.json` | AI/ML cluster |
+| `output/clusters/cluster-10-competitors-2026-01-17.json` | Motion/pose cluster |
+| `output/competitors/tencent-*.json` | Tencent portfolio (13,720 patents) |
+| `output/competitors/dolby-*.json` | Dolby portfolio (3,301 patents) |
+| `output/competitors/lg-*.json` | LG portfolio (58,057 patents) |
+
+**Total Competitor Portfolios Downloaded: 23**
+
+---
+
+### Next Session Tasks
+
+**Run Citation Overlap Analysis:**
+```bash
+# Run citation overlap on newly downloaded competitors
+npx tsx examples/citation-overlap-batch.ts --competitor Tencent
+npx tsx examples/citation-overlap-batch.ts --competitor Dolby
+npx tsx examples/citation-overlap-batch.ts --competitor LG
+```
+
+**Consider:**
+- Run citation overlap on new mobile/telecom competitors (OPPO, Xiaomi, ZTE)
+- Deep-dive analysis on Realtek for Bluetooth/WiFi overlap
+- Product mapping for video codec patents (Tencent, Dolby)
+- Automotive sector analysis (Toyota, Hyundai, Kia) for imaging/ADAS
+
+**Optional Downloads:**
+- Snap Inc (social media/AR)
+- OPPO, Xiaomi (mobile devices)
+- Realtek (direct semiconductor competitor)
+
+---
+
+---
+
+### Session Update: 2026-01-17 (Continuation) - Analysis & Strategic Review
+
+**All Batch Jobs Completed Successfully:**
+- Avago A/V citation overlap: Batches 0-25 and 25-125 completed
+- All 10 cluster competitor discovery jobs completed
+- No running jobs found
+
+**Current Infrastructure Status:**
+- Docker: PostgreSQL 16 + ElasticSearch 8.11 running (healthy)
+- ElasticSearch: 22,706 patents indexed (56.7 MB)
+- Competitor config: v4.0 with 90 companies, 16 categories, 13 discovery strategies
+
+---
+
+## STRATEGIC REVIEW: Answering Key Questions
+
+### 1. Have Recent Efforts Surfaced New Competitors Effectively?
+
+**YES - Significant expansion achieved:**
+
+| Phase | Competitors | Categories | Source |
+|-------|-------------|------------|--------|
+| Initial Manual | ~23 | 8 | Industry knowledge |
+| Citation Overlap (Broadcom) | +12 | +2 | Patent citation mining |
+| Term Extraction (Avago A/V) | +6 | +1 (rfAcoustic) | ES term extraction |
+| Hybrid Clustering (10 clusters) | +49 | +3 | Combined approach |
+| **Total** | **90** | **16** | **13 strategies** |
+
+**Key New Competitors Surfaced:**
+- **RF/Acoustic**: Murata (73 patents), Skyworks, Qorvo, Akoustis - major BAW/FBAR targets
+- **Video Codec**: Tencent (39), Dolby (12), Kuaishou (11) - video compression
+- **Automotive**: Toyota, Hyundai, Kia, Honda - depth mapping/ADAS
+- **Financial**: Bank of America (34), Capital One, Mastercard - cloud/security
+- **Telecom**: OPPO, Xiaomi, ZTE, NEC - mobile devices
+
+**Multi-Strategy Validation:**
+- 10 companies discovered by multiple strategies (higher confidence)
+- Samsung: manual + citation-overlap (validates approach)
+- Dell EMC: manual + cluster-1 + cluster-5 (cross-technology validation)
+
+### 2. Is Search Term Extraction Sufficient? Semantic Search Gap Analysis
+
+**CURRENT CAPABILITIES:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| English stemming | ✅ | `english_stemmer` configured |
+| English stopwords | ✅ | `_english_` stopword list |
+| Fuzzy matching | ✅ | `fuzziness: 'AUTO'` in multi_match |
+| More-Like-This | ✅ | MLT queries for similarity |
+| Significant terms | ✅ | `significant_text` aggregation |
+| Term vectors | ✅ | Enabled for abstract field |
+| **Vector embeddings** | ❌ | NOT implemented |
+| **Semantic similarity** | ❌ | NOT implemented |
+
+**GAPS IDENTIFIED:**
+
+1. **No True Semantic Search**: Current ES uses lexical matching with stemming - finds "compress" when searching "compression" but NOT "data reduction" or "encoding efficiency"
+
+2. **Domain-Specific Stopwords Missing**: Current stopwords are English generic. Patent-specific terms like "method", "apparatus", "comprising", "plurality" should be filtered from term extraction
+
+3. **Limited Synonym Handling**: Different inventors use different terminology for same concepts (e.g., "BAW" vs "bulk acoustic wave" vs "piezoelectric resonator")
+
+**RECOMMENDATIONS:**
+
+```
+Priority 1: Add patent-specific stopwords to term extraction
+- Create config/patent-stopwords.json with domain terms
+- Integrate into extract-av-terms.ts and cluster scripts
+
+Priority 2: Implement semantic search
+- Option A: ES dense_vector with sentence-transformers (self-hosted)
+- Option B: External embedding service (OpenAI, Cohere)
+- Option C: Hybrid BM25 + dense retrieval
+
+Priority 3: Synonym expansion
+- Create technology-specific synonym mappings
+- Integrate with ES analyzer or query-time expansion
+```
+
+### 3. Current PostgreSQL & ElasticSearch Usage vs. Recommendations
+
+**CURRENT STATE:**
+
+| Component | Current Usage | Data |
+|-----------|--------------|------|
+| **PostgreSQL** | Schema defined, not populated | Prisma schema ready |
+| **ElasticSearch** | Active, well-utilized | 22,706 patents indexed |
+| **JSON files** | Primary data store | Output files, competitors.json |
+
+**ES CURRENT CAPABILITIES:**
+- Full-text search (title, abstract)
+- Filtering (tier, competitor, CPC)
+- Aggregations (CPC distribution, term extraction)
+- MLT similarity queries
+- Patent analyzer with stemming
+
+**GAPS FOR GUI/HUMAN INTERVENTION:**
+
+| Need | Current | Recommendation |
+|------|---------|----------------|
+| User weight preferences | JSON export | PostgreSQL `user_weights` table |
+| Curated search terms | Manual JSON | PostgreSQL `search_terms` with `is_user_curated` flag |
+| Sector/cluster naming | Auto-generated | PostgreSQL `sectors` table with user editing |
+| Patent notes/priority | Not persisted | PostgreSQL `patent_notes` table |
+| Analysis run history | JSON files | PostgreSQL `analysis_runs` (schema exists) |
+| Real-time search | ES CLI | ES + API layer for GUI |
+
+**RECOMMENDED DATA ARCHITECTURE:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     PostgreSQL (Source of Truth)                 │
+│  - Patents, Citations, Competitors, Analysis Results             │
+│  - User Preferences: weights, notes, priorities, curated terms  │
+│  - Sectors: emergent clusters + user-defined categorization      │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │ Sync
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     ElasticSearch (Search Index)                 │
+│  - Full-text search on abstract/title/claims                     │
+│  - Vector embeddings for semantic similarity (future)            │
+│  - Aggregations for term extraction and analytics                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 4. Expand LLM Questioning for Product-Focused Metrics
+
+**CURRENT LLM METRICS (v1):**
+- eligibility_score (101 analysis)
+- validity_score (prior art)
+- claim_breadth
+- enforcement_clarity
+- design_around_difficulty
+- confidence
+
+**V2 DRAFT ADDS (Pending Attorney Review):**
+- technology_category
+- product_types[]
+- likely_implementers[]
+- detection_method
+- market_relevance_score
+- trend_alignment_score
+- investigation_priority_score
+- evidence_accessibility_score
+
+**ADDITIONAL METRICS RECOMMENDED:**
+
+```json
+{
+  "revenue_exposure_estimate": "Qualitative revenue exposure (low/medium/high)",
+  "product_evidence_links": ["URLs to products potentially practicing"],
+  "standards_relevance": "Standard body affiliation if any",
+  "cross_license_value": "Defensive portfolio value (1-5)",
+  "geographic_enforcement": "US/EU/Asia enforcement viability"
+}
+```
+
+### 5. Spreadsheet Export with Multiple Scores & Configurable Weights
+
+**PROPOSED WEIGHT CONFIGURATION SYSTEM:**
+
+Create `config/scoring-weights.json`:
+```json
+{
+  "version": "1.0",
+  "profiles": {
+    "litigation_focused": {
+      "description": "Emphasis on enforcement and validity",
+      "weights": {
+        "competitor_citations": 0.20,
+        "eligibility_score": 0.25,
+        "validity_score": 0.20,
+        "enforcement_clarity": 0.20,
+        "years_remaining": 0.15
+      }
+    },
+    "licensing_focused": {
+      "description": "Emphasis on breadth and market presence",
+      "weights": {
+        "competitor_citations": 0.30,
+        "claim_breadth": 0.25,
+        "market_relevance": 0.20,
+        "years_remaining": 0.15,
+        "forward_citations": 0.10
+      }
+    },
+    "product_discovery": {
+      "description": "Finding infringement opportunities",
+      "weights": {
+        "market_relevance": 0.30,
+        "evidence_accessibility": 0.25,
+        "enforcement_clarity": 0.20,
+        "trend_alignment": 0.15,
+        "investigation_priority": 0.10
+      }
+    }
+  }
+}
+```
+
+**CSV EXPORT ENHANCEMENT:**
+
+Add columns:
+- `discovery_strategy` - Which strategy surfaced this patent
+- `sector` - Emergent technology sector from clustering
+- `weight_profile_litigation` - Score with litigation weights
+- `weight_profile_licensing` - Score with licensing weights
+- `weight_profile_product` - Score with product discovery weights
+
+### 6. Emergent Sectors & Custom Categorization
+
+**CURRENT CLUSTERS (as emergent sectors):**
+
+| Cluster | Sector Name | Patents | Key Terms |
+|---------|-------------|---------|-----------|
+| 1 | Cloud Authentication | 43 | user, cloud, authent, encrypt |
+| 2 | Video Codec | 5 | video, sink, transcod, macroblock |
+| 3 | Image Depth Mapping | 3 | imag, depth, map, captur |
+| 4 | Live Event Streaming | 4 | event, live, messag, notif |
+| 5 | Security/Threat | 6 | threat, attack, secur, alert |
+| 6 | Wireless Geofencing | 4 | geo, fenc, random, iot |
+| 7 | Data Privacy (PII) | 3 | pii, breach, exposur, identifi |
+| 8 | Bluetooth/BLE | 2 | scan, edr, ble, bluetooth |
+| 9 | AI/ML | 4 | learn, confid, classifi, train |
+| 10 | Motion/Pose Tracking | 1 | object, pose, motion, pursuit |
+
+**PROPOSED SECTOR MANAGEMENT:**
+
+1. **Auto-generated sectors** from clustering (as above)
+2. **USPTO-based sectors** from CPC codes (H04N, H04L, G06F, etc.)
+3. **User-curated sectors** with human naming and patent assignment
+4. Store in PostgreSQL with ability to merge/split/rename
+
+---
+
+## NEXT STEPS - PRIORITIZED
+
+### Immediate (This Session / Next)
+
+1. **Continue Avago A/V Citation Overlap**
+   ```bash
+   npx tsx scripts/citation-overlap-avago-av.ts 125 225
+   npx tsx scripts/citation-overlap-avago-av.ts 225 325
+   ```
+
+2. **Create Patent-Specific Stopwords**
+   - `config/patent-stopwords.json`
+
+3. **Create Scoring Weights Config**
+   - `config/scoring-weights.json`
+
+### Short-term
+
+4. **Enhance CSV Export with Sectors**
+   - Add discovery_strategy column
+   - Add sector column from cluster assignment
+   - Add multiple weighted scores
+
+5. **Populate PostgreSQL**
+   - Import patents from JSON to database
+   - Enable user weight preferences storage
+
+6. **Run LLM v2 on Expanded Patent Set**
+   - Test on 100 patents with new metrics
+   - Collect product_types, market_relevance data
+
+### Medium-term
+
+7. **Implement Semantic Search**
+   - Evaluate sentence-transformers for patent domain
+   - Add dense_vector field to ES index
+
+8. **Build API Layer**
+   - REST endpoints for patent search
+   - Endpoints for weight preference CRUD
+   - Sector management endpoints
+
+9. **GUI Foundation**
+   - Quasar/Vue.js scaffold
+   - Patent search interface
+   - Weight slider controls
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Check ES status
+curl -s http://localhost:9200/_cluster/health | jq
+
+# Search patents
+npm run search
+
+# Run term extraction
+npx tsx scripts/extract-av-terms.ts
+
+# Continue Avago A/V citation overlap
+npx tsx scripts/citation-overlap-avago-av.ts 125 225
+
+# Check cluster results
+cat output/clusters/cluster-ranked-for-discovery-2026-01-17.json | jq '.rankedClusters[].name'
+
+# View competitor config summary
+cat config/competitors.json | jq '{version, categories: [.categories | keys[]], company_count: [.categories[].companies[]] | length}'
+```
+
+---
+
+---
+
+### Session Update: 2026-01-17 (Night) - Short-term Goals Completed
+
+**Completed Tasks:**
+
+1. **Term Extraction Scripts Updated**
+   - Created `services/stopwords-service.ts` with 110+ patent-specific stopwords
+   - 33 technical terms preserved (video, encryption, baw, etc.)
+   - Updated `hybrid-cluster-analysis.ts` and `extract-av-terms.ts` to use shared service
+   - Test: "method" -> FILTERED, "video" -> KEPT, "baw" -> KEPT
+
+2. **Enhanced CSV Export Created**
+   - `scripts/export-enhanced-csv.ts` outputs 10,276 patents
+   - Columns: rank, patent_id, discovery_strategy, sector, sector_terms, all LLM scores
+   - 6 pre-calculated weighted scores: default, litigation, licensing, product_discovery, defensive, quick_wins
+   - Output: `output/patents-enhanced-2026-01-17.csv`
+
+3. **PostgreSQL User Preferences Seeded**
+   - Schema updated with: UserWeightProfile, UserSector, UserPatentNote, DiscoveryStrategy
+   - Prisma db push successful - all tables created
+   - Seed file: `config/user-preferences-seed.json`
+   - Seeded: 6 weight profiles, 12 sectors, 5 search terms, 3 discovery strategies
+   - Workflow: Edit JSON -> Run `npx tsx scripts/seed-user-preferences.ts`
+
+4. **Citation Overlap Mining Continued**
+   - Batch 125-225: Completed - 33% hit rate, strong BAW/FBAR results
+   - Key findings: Murata (6), Skyworks (12), Samsung (11), Akoustis (3)
+   - Batch 225-325: Running in background
+
+**New Files Created:**
+| File | Purpose |
+|------|---------|
+| `services/stopwords-service.ts` | Shared stopwords filtering |
+| `config/patent-stopwords.json` | Patent-specific stopwords config |
+| `config/scoring-weights.json` | Weight profiles for scoring |
+| `config/user-preferences-seed.json` | User preferences seed data |
+| `scripts/export-enhanced-csv.ts` | Enhanced CSV export |
+| `scripts/seed-user-preferences.ts` | PostgreSQL seeding |
+
+**PostgreSQL Tables Now Active:**
+```sql
+-- Query with: docker exec ip-port-postgres psql -U ip_admin -d ip_portfolio -c "..."
+SELECT name, is_default FROM user_weight_profiles;  -- 6 rows
+SELECT name, sector_type FROM user_sectors;         -- 12 rows
+SELECT term, category FROM search_terms;            -- 5 rows
+SELECT strategy_id, name FROM discovery_strategies; -- 3 rows
+```
+
+---
+
+### Next Session Tasks
+
+**Immediate:**
+1. Check batch 225-325 completion: `tail -20 output/avago-av/batch-225-325.log`
+2. Continue batches: 325-425, 425-525, etc. (923 total Avago A/V patents)
+3. Run LLM v2 analysis on high-priority patents
+
+**Short-term:**
+4. Create script to load patents into PostgreSQL
+5. Create script to sync PostgreSQL <-> ElasticSearch
+6. Export enhanced CSV with all LLM scores
+
+**Medium-term:**
+7. Implement semantic search (sentence-transformers)
+8. Build API layer (Express.js)
+9. Create GUI foundation (Quasar/Vue.js)
+
+---
+
+---
+
+### Session Update: 2026-01-17 (Late Night) - Mining Expansion
+
+**Avago A/V Citation Overlap Mining Progress:**
+
+| Batch | Patents | With Citations | Total Citations | Status |
+|-------|---------|----------------|-----------------|--------|
+| 0-25 | 25 | 7 (28%) | 14 | Done |
+| 25-125 | 100 | 20 (20%) | 82 | Done |
+| 125-225 | 100 | 35 (35%) | 272 | Done |
+| 225-325 | 100 | 44 (44%) | 160 | Done |
+| 325-425 | 100 | 11 (11%) | 47 | Done |
+| 425-525 | 100 | 8 (8%) | 39 | Done |
+| 525-625 | 100 | 4 (4%) | 18 | Done |
+| 625-725 | 100 | - | - | Running |
+| 725-825 | 100 | - | - | Running |
+| 825-923 | 98 | - | - | Running |
+| **Total** | **923** | **129+ (21%)** | **632+** | **70% done** |
+
+**Key Competitors Found (Avago A/V Mining):**
+- Skyworks: 26 citations (BAW/FBAR)
+- Samsung: 22 citations (RF, mobile)
+- Murata: 12 citations (piezoelectric)
+- Intel: 8 citations
+- Akoustis: 6 citations (pure-play BAW)
+- Qorvo: 4 citations (RF front-end)
+
+**New Documentation Created:**
+- `docs/DATABASE_STRATEGY.md` - PostgreSQL vs ElasticSearch architecture
+- `docs/PROMISING_SECTORS_ANALYSIS.md` - Sector rankings and expansion plan
+
+**Promising Sectors Identified:**
+
+| Priority | Sector | Patents | Signals |
+|----------|--------|---------|---------|
+| Tier 1 | RF/Acoustic (BAW/FBAR) | 100+ | Strong competitor concentration |
+| Tier 1 | Cloud Authentication | 43 | 349 competitor citations |
+| Tier 2 | Video Codec | 154 | ByteDance, Tencent, Dolby |
+| Tier 2 | Image Depth/ADAS | 3 | 15.7 citations/patent ratio |
+| Tier 2 | Security/Threat | 6 | CrowdStrike, Palo Alto targets |
+
+**To check batch completion:**
+```bash
+for log in output/avago-av/batch-*-*.log; do
+  grep -q "Analysis Complete" "$log" && echo "$(basename $log): DONE" || echo "$(basename $log): RUNNING"
+done
+```
+
+---
+
+*Document updated: 2026-01-17 (late night)*
+*Config version: 4.0 with all cluster strategies*
+*Categories: 16 | Companies: 90 | Strategies: 13*
+*ElasticSearch: 22,706 patents indexed*
+*PostgreSQL: User preferences seeded (6 profiles, 12 sectors)*
+*Avago A/V Mining: 70% complete (625/923 patents)*

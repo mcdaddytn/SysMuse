@@ -1,0 +1,224 @@
+{
+  "version": "1.0",
+  "description": "Configurable weight profiles for patent scoring - designed for Excel import and manipulation",
+  "lastUpdated": "2026-01-17",
+
+  "metrics": {
+    "description": "All available metrics that can be used in scoring",
+    "quantitative": {
+      "competitor_citations": {
+        "description": "Number of competitor patents citing this patent",
+        "source": "Citation overlap analysis",
+        "range": "0-100+",
+        "normalization": "min(1, value/20)"
+      },
+      "forward_citations": {
+        "description": "Total forward citations from all patents",
+        "source": "PatentsView API",
+        "range": "0-1000+",
+        "normalization": "min(1, sqrt(value)/30)"
+      },
+      "years_remaining": {
+        "description": "Years until patent expiration (from 20-year term)",
+        "source": "Calculated from grant date",
+        "range": "0-20",
+        "normalization": "min(1, value/15)"
+      },
+      "competitors_count": {
+        "description": "Number of distinct competitors citing this patent",
+        "source": "Citation overlap analysis",
+        "range": "0-20+",
+        "normalization": "min(1, value/5)"
+      }
+    },
+    "llm_v1": {
+      "eligibility_score": {
+        "description": "35 USC 101 patent eligibility strength",
+        "source": "LLM analysis v1",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "validity_score": {
+        "description": "Strength against prior art invalidity challenges",
+        "source": "LLM analysis v1",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "claim_breadth": {
+        "description": "Scope and breadth of patent claims",
+        "source": "LLM analysis v1",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "enforcement_clarity": {
+        "description": "How easily infringement can be detected",
+        "source": "LLM analysis v1",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "design_around_difficulty": {
+        "description": "Difficulty for competitors to avoid the patent",
+        "source": "LLM analysis v1",
+        "range": "1-5",
+        "normalization": "value/5"
+      }
+    },
+    "llm_v2": {
+      "market_relevance_score": {
+        "description": "Relevance to current commercial products",
+        "source": "LLM analysis v2 (draft)",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "trend_alignment_score": {
+        "description": "Alignment with technology trends",
+        "source": "LLM analysis v2 (draft)",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "evidence_accessibility_score": {
+        "description": "How accessible is infringement evidence",
+        "source": "LLM analysis v2 (draft)",
+        "range": "1-5",
+        "normalization": "value/5"
+      },
+      "investigation_priority_score": {
+        "description": "Priority for infringement investigation",
+        "source": "LLM analysis v2 (draft)",
+        "range": "1-5",
+        "normalization": "value/5"
+      }
+    }
+  },
+
+  "profiles": {
+    "default": {
+      "name": "Default Balanced",
+      "description": "Balanced scoring across all factors",
+      "weights": {
+        "competitor_citations": 0.25,
+        "forward_citations": 0.10,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.15,
+        "validity_score": 0.15,
+        "claim_breadth": 0.10,
+        "enforcement_clarity": 0.10
+      }
+    },
+
+    "litigation_focused": {
+      "name": "Litigation Focus",
+      "description": "Emphasis on enforcement viability and legal strength",
+      "weights": {
+        "competitor_citations": 0.15,
+        "forward_citations": 0.05,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.20,
+        "validity_score": 0.20,
+        "claim_breadth": 0.10,
+        "enforcement_clarity": 0.15
+      }
+    },
+
+    "licensing_focused": {
+      "name": "Licensing Focus",
+      "description": "Emphasis on broad coverage and market presence",
+      "weights": {
+        "competitor_citations": 0.30,
+        "forward_citations": 0.10,
+        "years_remaining": 0.20,
+        "eligibility_score": 0.10,
+        "validity_score": 0.10,
+        "claim_breadth": 0.15,
+        "enforcement_clarity": 0.05
+      }
+    },
+
+    "product_discovery": {
+      "name": "Product Discovery",
+      "description": "Finding patents likely practiced by products - requires LLM v2 metrics",
+      "weights": {
+        "competitor_citations": 0.15,
+        "market_relevance_score": 0.25,
+        "evidence_accessibility_score": 0.20,
+        "enforcement_clarity": 0.15,
+        "trend_alignment_score": 0.15,
+        "investigation_priority_score": 0.10
+      }
+    },
+
+    "defensive": {
+      "name": "Defensive Portfolio",
+      "description": "Cross-licensing and portfolio value",
+      "weights": {
+        "competitor_citations": 0.35,
+        "forward_citations": 0.20,
+        "claim_breadth": 0.25,
+        "design_around_difficulty": 0.20
+      }
+    },
+
+    "quick_wins": {
+      "name": "Quick Wins",
+      "description": "Immediate enforcement opportunities - high confidence, clear evidence",
+      "weights": {
+        "competitor_citations": 0.20,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.20,
+        "validity_score": 0.20,
+        "enforcement_clarity": 0.25
+      }
+    }
+  },
+
+  "excelFormulas": {
+    "description": "Excel formulas for recalculating scores with custom weights",
+    "setup": "Import CSV, add weight cells (e.g., Z1:Z7), reference in formulas",
+    "examples": {
+      "normalized_competitor_citations": "=MIN(1, H2/20)",
+      "normalized_forward_citations": "=MIN(1, SQRT(G2)/30)",
+      "normalized_years_remaining": "=MIN(1, F2/15)",
+      "normalized_eligibility": "=N2/5",
+      "normalized_validity": "=O2/5",
+      "normalized_claim_breadth": "=P2/5",
+      "normalized_enforcement": "=Q2/5",
+      "custom_weighted_score": "=(Z$1*MIN(1,H2/20))+(Z$2*MIN(1,SQRT(G2)/30))+(Z$3*MIN(1,F2/15))+(Z$4*N2/5)+(Z$5*O2/5)+(Z$6*P2/5)+(Z$7*Q2/5)"
+    }
+  },
+
+  "csvExportColumns": {
+    "description": "Recommended column order for spreadsheet export",
+    "columns": [
+      "rank",
+      "patent_id",
+      "title",
+      "grant_date",
+      "assignee",
+      "years_remaining",
+      "forward_citations",
+      "competitor_citations",
+      "competitors_citing",
+      "discovery_strategy",
+      "sector",
+      "cpc_codes",
+      "eligibility_score",
+      "validity_score",
+      "claim_breadth",
+      "enforcement_clarity",
+      "design_around_difficulty",
+      "market_relevance_score",
+      "trend_alignment_score",
+      "evidence_accessibility_score",
+      "score_default",
+      "score_litigation",
+      "score_licensing",
+      "score_product_discovery"
+    ]
+  },
+
+  "notes": {
+    "customization": "Copy a profile, modify weights, weights should sum to 1.0",
+    "missing_metrics": "If a metric is unavailable for a patent, skip that component and renormalize",
+    "expert_input": "Have domain experts adjust weights based on case strategy"
+  }
+}

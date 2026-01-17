@@ -1,0 +1,259 @@
+{
+  "version": "1.0",
+  "description": "Seed data for user preferences - edit this file to modify preferences before GUI is available",
+  "lastUpdated": "2026-01-17",
+
+  "weightProfiles": [
+    {
+      "name": "Default Balanced",
+      "description": "Balanced scoring across all factors",
+      "isDefault": true,
+      "weights": {
+        "competitor_citations": 0.25,
+        "forward_citations": 0.10,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.15,
+        "validity_score": 0.15,
+        "claim_breadth": 0.10,
+        "enforcement_clarity": 0.10
+      }
+    },
+    {
+      "name": "Litigation Focus",
+      "description": "Emphasis on enforcement viability and legal strength",
+      "isDefault": false,
+      "weights": {
+        "competitor_citations": 0.15,
+        "forward_citations": 0.05,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.20,
+        "validity_score": 0.20,
+        "claim_breadth": 0.10,
+        "enforcement_clarity": 0.15
+      }
+    },
+    {
+      "name": "Licensing Focus",
+      "description": "Emphasis on broad coverage and market presence",
+      "isDefault": false,
+      "weights": {
+        "competitor_citations": 0.30,
+        "forward_citations": 0.10,
+        "years_remaining": 0.20,
+        "eligibility_score": 0.10,
+        "validity_score": 0.10,
+        "claim_breadth": 0.15,
+        "enforcement_clarity": 0.05
+      }
+    },
+    {
+      "name": "Product Discovery",
+      "description": "Finding patents likely practiced by products",
+      "isDefault": false,
+      "weights": {
+        "competitor_citations": 0.15,
+        "market_relevance_score": 0.25,
+        "evidence_accessibility_score": 0.20,
+        "enforcement_clarity": 0.15,
+        "trend_alignment_score": 0.15,
+        "investigation_priority_score": 0.10
+      }
+    },
+    {
+      "name": "Defensive Portfolio",
+      "description": "Cross-licensing and portfolio value",
+      "isDefault": false,
+      "weights": {
+        "competitor_citations": 0.35,
+        "forward_citations": 0.20,
+        "claim_breadth": 0.25,
+        "design_around_difficulty": 0.20
+      }
+    },
+    {
+      "name": "Quick Wins",
+      "description": "Immediate enforcement opportunities",
+      "isDefault": false,
+      "weights": {
+        "competitor_citations": 0.20,
+        "years_remaining": 0.15,
+        "eligibility_score": 0.20,
+        "validity_score": 0.20,
+        "enforcement_clarity": 0.25
+      }
+    }
+  ],
+
+  "sectors": [
+    {
+      "name": "Cloud Authentication",
+      "description": "Cloud computing, user authentication, access control, encryption",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 1,
+      "keyTerms": ["user", "cloud", "authent", "comput", "access", "profil", "encrypt", "file"],
+      "cpcCodes": ["H04L", "G06F", "H04W", "G06Q"]
+    },
+    {
+      "name": "Video Codec",
+      "description": "Video encoding/decoding, transcoding, codec technology",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 2,
+      "keyTerms": ["video", "sink", "audio", "transform", "transcod", "macroblock"],
+      "cpcCodes": ["H04N", "H04W", "G06V"]
+    },
+    {
+      "name": "Image Depth Mapping",
+      "description": "Depth sensing, 3D imaging, LIDAR, ADAS applications",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 3,
+      "keyTerms": ["imag", "depth", "map", "focus", "captur", "edg"],
+      "cpcCodes": ["H04N", "G06T"]
+    },
+    {
+      "name": "Live Event Streaming",
+      "description": "Live video, event streaming, notifications",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 4,
+      "keyTerms": ["event", "live", "url", "messag", "notif"],
+      "cpcCodes": ["H04N", "H04L", "G06F"]
+    },
+    {
+      "name": "Security/Threat Detection",
+      "description": "Cybersecurity, threat detection, attack prevention",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 5,
+      "keyTerms": ["threat", "attack", "secur", "alert", "campaign"],
+      "cpcCodes": ["H04L", "G06F", "G06N"]
+    },
+    {
+      "name": "Wireless Geofencing",
+      "description": "Location-based services, geofencing, IoT",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 6,
+      "keyTerms": ["geo", "fenc", "random", "iot", "access"],
+      "cpcCodes": ["H04W", "H04L", "G01S"]
+    },
+    {
+      "name": "Data Privacy (PII)",
+      "description": "Personal data protection, breach detection",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 7,
+      "keyTerms": ["pii", "breach", "exposur", "identifi", "person"],
+      "cpcCodes": ["G06F", "H04L"]
+    },
+    {
+      "name": "Bluetooth/BLE",
+      "description": "Bluetooth connectivity, BLE, wireless protocols",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 8,
+      "keyTerms": ["scan", "edr", "ble", "bluetooth", "advertis"],
+      "cpcCodes": ["H04W", "Y02D"]
+    },
+    {
+      "name": "AI/ML",
+      "description": "Machine learning, classification, training",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 9,
+      "keyTerms": ["learn", "confid", "classifi", "train", "machin"],
+      "cpcCodes": ["G06N", "G06F"]
+    },
+    {
+      "name": "Motion/Pose Tracking",
+      "description": "Object tracking, pose estimation, motion detection",
+      "sectorType": "auto-cluster",
+      "sourceClusterId": 10,
+      "keyTerms": ["object", "pose", "motion", "pursuit", "follow"],
+      "cpcCodes": ["H04W"]
+    },
+    {
+      "name": "RF/Acoustic Resonators",
+      "description": "BAW/FBAR filters, acoustic resonators, RF modules",
+      "sectorType": "user-defined",
+      "keyTerms": ["acoustic", "resonator", "piezoelectric", "baw", "fbar", "electrode"],
+      "cpcCodes": ["H03H", "H04R"]
+    },
+    {
+      "name": "DRM/Content Protection",
+      "description": "Digital rights management, content encryption",
+      "sectorType": "user-defined",
+      "keyTerms": ["drm", "encrypt", "protection", "rights", "watermark"],
+      "cpcCodes": ["G06F21", "H04N21"]
+    }
+  ],
+
+  "searchTerms": [
+    {
+      "term": "adaptive bitrate",
+      "category": "boost",
+      "weight": 1.5,
+      "source": "manual",
+      "description": "Key streaming technology term"
+    },
+    {
+      "term": "bulk acoustic wave",
+      "category": "boost",
+      "weight": 1.5,
+      "source": "extracted:avago-av",
+      "description": "BAW filter technology"
+    },
+    {
+      "term": "biometric",
+      "category": "boost",
+      "weight": 1.3,
+      "source": "manual",
+      "description": "Authentication technology"
+    },
+    {
+      "term": "codec",
+      "category": "boost",
+      "weight": 1.2,
+      "source": "manual",
+      "description": "Video/audio encoding"
+    },
+    {
+      "term": "machine learning",
+      "category": "boost",
+      "weight": 1.4,
+      "source": "manual",
+      "description": "AI/ML applications"
+    }
+  ],
+
+  "discoveryStrategies": [
+    {
+      "strategyId": "manual-initial",
+      "name": "Manual Initial List",
+      "strategyType": "manual",
+      "description": "Original competitor list defined manually based on industry knowledge"
+    },
+    {
+      "strategyId": "citation-overlap-broadcom-streaming",
+      "name": "Citation Overlap - Broadcom Streaming",
+      "strategyType": "citation-overlap",
+      "description": "Competitors discovered through citation overlap analysis on Broadcom streaming portfolio",
+      "parameters": {
+        "sourcePortfolio": "Broadcom Streaming Patents",
+        "patentCount": 15276
+      }
+    },
+    {
+      "strategyId": "term-extraction-avago-av",
+      "name": "Term Extraction - Avago A/V",
+      "strategyType": "term-extraction",
+      "description": "Competitors discovered through ES term extraction on Avago audio/video patents",
+      "parameters": {
+        "sourcePortfolio": "Avago A/V Patents",
+        "patentCount": 923,
+        "extractedTerms": ["acoustic", "resonator", "piezoelectric", "bulk", "baw", "fbar"]
+      }
+    }
+  ],
+
+  "notes": {
+    "editing": "Edit this file directly to modify preferences. Changes will be applied when seed script is run.",
+    "weightProfiles": "Add or modify weight profiles. Weights should sum to ~1.0 for best results.",
+    "sectors": "Sectors can be auto-cluster (from hybrid clustering), cpc-based, or user-defined",
+    "searchTerms": "Terms with 'boost' category increase patent scores. 'exclude' filters out.",
+    "seedCommand": "Run: npx tsx scripts/seed-user-preferences.ts"
+  }
+}

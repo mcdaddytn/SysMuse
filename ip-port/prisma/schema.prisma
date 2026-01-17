@@ -323,6 +323,86 @@ model SearchTermHit {
 }
 
 // ============================================================================
+// USER PREFERENCES
+// ============================================================================
+
+model UserWeightProfile {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(100)
+  description String?   @db.Text
+  weights     Json      // { "competitor_citations": 0.25, "eligibility_score": 0.15, ... }
+  isDefault   Boolean   @default(false) @map("is_default")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by") @db.VarChar(100)
+
+  @@index([isActive])
+  @@map("user_weight_profiles")
+}
+
+model UserSector {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique @db.VarChar(100)
+  description     String?   @db.Text
+  sectorType      String    @map("sector_type") @db.VarChar(20)  // auto-cluster, cpc-based, user-defined
+  sourceClusterId Int?      @map("source_cluster_id")
+  keyTerms        String[]  @map("key_terms")
+  cpcCodes        String[]  @map("cpc_codes")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       String?   @map("created_by") @db.VarChar(100)
+
+  patentAssignments UserSectorPatent[]
+
+  @@index([sectorType])
+  @@index([isActive])
+  @@map("user_sectors")
+}
+
+model UserSectorPatent {
+  sectorId    Int       @map("sector_id")
+  patentId    String    @map("patent_id") @db.VarChar(20)
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+  assignedBy  String?   @map("assigned_by") @db.VarChar(100)
+
+  sector      UserSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([sectorId, patentId])
+  @@map("user_sector_patents")
+}
+
+model UserPatentNote {
+  id          Int       @id @default(autoincrement())
+  patentId    String    @map("patent_id") @db.VarChar(20)
+  noteType    String    @map("note_type") @db.VarChar(50)  // priority, review, claim-mapping, product-match
+  content     String    @db.Text
+  priority    Int       @default(0)  // -2 to +2
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by") @db.VarChar(100)
+
+  @@index([patentId])
+  @@index([noteType])
+  @@map("user_patent_notes")
+}
+
+model DiscoveryStrategy {
+  id              Int       @id @default(autoincrement())
+  strategyId      String    @unique @map("strategy_id") @db.VarChar(100)  // e.g., "hybrid-cluster-1-cloud-auth"
+  name            String    @db.VarChar(200)
+  strategyType    String    @map("strategy_type") @db.VarChar(50)  // manual, citation-overlap, term-extraction
+  description     String?   @db.Text
+  parameters      Json?     // { extractedTerms: [], patentCount: N, ... }
+  dateAdded       DateTime  @default(now()) @map("date_added")
+  isActive        Boolean   @default(true) @map("is_active")
+
+  @@index([strategyType])
+  @@map("discovery_strategies")
+}
+
+// ============================================================================
 // IMPORT TRACKING
 // ============================================================================
 

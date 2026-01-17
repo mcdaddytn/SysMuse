@@ -17,6 +17,18 @@ const CONFIG_PATH = path.join(__dirname, '../config/competitors.json');
 interface CompanyConfig {
   name: string;
   patterns: string[];
+  discoveredBy?: string[];
+  notes?: string;
+  patentCount?: number;
+  primaryTechnologies?: string[];
+}
+
+interface DiscoveryStrategy {
+  name: string;
+  description: string;
+  type: 'manual' | 'citation-overlap' | 'term-extraction';
+  dateAdded: string;
+  parameters: Record<string, any>;
 }
 
 interface CategoryConfig {
@@ -29,15 +41,27 @@ interface CompetitorConfig {
   version: string;
   description: string;
   lastUpdated: string;
+  discoveryStrategies?: Record<string, DiscoveryStrategy>;
   categories: Record<string, CategoryConfig>;
   excludePatterns: string[];
-  notes: Record<string, string>;
+  notes: Record<string, any>;
 }
 
 export interface CompetitorMatch {
   company: string;
   category: string;
   pattern: string;
+  discoveredBy?: string[];
+}
+
+export interface CompanyInfo {
+  name: string;
+  category: string;
+  patterns: string[];
+  discoveredBy: string[];
+  notes?: string;
+  patentCount?: number;
+  primaryTechnologies?: string[];
 }
 
 export class CompetitorMatcher {
@@ -157,6 +181,85 @@ export class CompetitorMatcher {
 
     return `Competitor Config v${this.config.version}: ${totalCompanies} companies across ${enabledCategories.length} categories (${totalPatterns} patterns)`;
   }
+
+  /**
+   * Get all discovery strategies defined in config
+   */
+  getDiscoveryStrategies(): Record<string, DiscoveryStrategy> {
+    return this.config.discoveryStrategies || {};
+  }
+
+  /**
+   * Get companies discovered by a specific strategy
+   */
+  getCompaniesByStrategy(strategyId: string): CompanyInfo[] {
+    const results: CompanyInfo[] = [];
+
+    for (const [categoryName, category] of Object.entries(this.config.categories)) {
+      if (!category.enabled) continue;
+
+      for (const company of category.companies) {
+        const discoveredBy = company.discoveredBy || ['manual-initial'];
+        if (discoveredBy.includes(strategyId)) {
+          results.push({
+            name: company.name,
+            category: categoryName,
+            patterns: company.patterns,
+            discoveredBy,
+            notes: company.notes,
+            patentCount: company.patentCount,
+            primaryTechnologies: company.primaryTechnologies,
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get all companies with full info
+   */
+  getAllCompaniesWithInfo(): CompanyInfo[] {
+    const results: CompanyInfo[] = [];
+
+    for (const [categoryName, category] of Object.entries(this.config.categories)) {
+      if (!category.enabled) continue;
+
+      for (const company of category.companies) {
+        results.push({
+          name: company.name,
+          category: categoryName,
+          patterns: company.patterns,
+          discoveredBy: company.discoveredBy || ['manual-initial'],
+          notes: company.notes,
+          patentCount: company.patentCount,
+          primaryTechnologies: company.primaryTechnologies,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get summary of companies by discovery strategy
+   */
+  getStrategySummary(): Record<string, { strategyName: string; companyCount: number; companies: string[] }> {
+    const strategies = this.getDiscoveryStrategies();
+    const result: Record<string, { strategyName: string; companyCount: number; companies: string[] }> = {};
+
+    for (const [strategyId, strategy] of Object.entries(strategies)) {
+      const companies = this.getCompaniesByStrategy(strategyId);
+      result[strategyId] = {
+        strategyName: strategy.name,
+        companyCount: companies.length,
+        companies: companies.map(c => c.name),
+      };
+    }
+
+    return result;
+  }
 }
 
 // Export a default instance
@@ -180,6 +283,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`  ${cat}: ${companies.join(', ')}`);
   }
 
+  console.log('\nDiscovery Strategies:');
+  const strategies = matcher.getDiscoveryStrategies();
+  for (const [id, strategy] of Object.entries(strategies)) {
+    console.log(`  ${id}: ${strategy.name} (${strategy.type})`);
+  }
+
+  console.log('\nCompanies by Strategy:');
+  const strategySummary = matcher.getStrategySummary();
+  for (const [id, summary] of Object.entries(strategySummary)) {
+    console.log(`  ${summary.strategyName}: ${summary.companyCount} companies`);
+    console.log(`    ${summary.companies.slice(0, 5).join(', ')}${summary.companies.length > 5 ? '...' : ''}`);
+  }
+
   console.log('\nTest matches:');
   const testCases = [
     'Microsoft Corporation',
@@ -190,6 +306,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     'Random Company Inc.',
     'CrowdStrike Holdings',
     'Qualcomm Incorporated',
+    'MURATA MANUFACTURING CO., LTD.',
+    'Skyworks Solutions, Inc.',
   ];
 
   for (const test of testCases) {

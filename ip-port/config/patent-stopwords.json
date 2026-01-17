@@ -1,0 +1,113 @@
+{
+  "version": "1.0",
+  "description": "Patent-specific stopwords to filter from term extraction and search queries",
+  "lastUpdated": "2026-01-17",
+
+  "categories": {
+    "patentBoilerplate": {
+      "description": "Standard patent language that appears in most patents",
+      "terms": [
+        "method", "apparatus", "system", "device", "comprising",
+        "configured", "includes", "including", "plurality", "portion",
+        "embodiment", "embodiments", "invention", "present",
+        "accordance", "accordance with", "aspect", "aspects",
+        "example", "examples", "exemplary", "various", "certain",
+        "one or more", "at least one", "herein", "thereof",
+        "wherein", "whereby", "therein", "therefrom"
+      ]
+    },
+
+    "positionWords": {
+      "description": "Ordinal and positional terms",
+      "terms": [
+        "first", "second", "third", "fourth", "fifth",
+        "another", "other", "each", "every", "any",
+        "respective", "respectively", "associated", "corresponding"
+      ]
+    },
+
+    "genericTechnical": {
+      "description": "Generic technical terms that don't differentiate patents",
+      "terms": [
+        "data", "signal", "signals", "unit", "module", "component",
+        "element", "elements", "circuit", "circuitry", "logic",
+        "processor", "processing", "memory", "storage", "register",
+        "input", "output", "interface", "bus", "port",
+        "controller", "control", "operation", "operations"
+      ]
+    },
+
+    "actionVerbs": {
+      "description": "Common action verbs in patent claims",
+      "terms": [
+        "based", "based on", "using", "providing", "receiving",
+        "generating", "determining", "transmitting", "storing",
+        "performing", "executing", "obtaining", "identifying",
+        "processing", "computing", "calculating", "selecting"
+      ]
+    },
+
+    "relationWords": {
+      "description": "Words describing relationships",
+      "terms": [
+        "associated", "coupled", "connected", "linked", "related",
+        "corresponding", "responsive", "according", "based upon"
+      ]
+    },
+
+    "quantifiers": {
+      "description": "Quantifying terms",
+      "terms": [
+        "plurality", "multiple", "set", "subset", "group",
+        "number", "amount", "portion", "part", "parts",
+        "sequence", "series", "array", "collection"
+      ]
+    },
+
+    "temporalWords": {
+      "description": "Time-related terms",
+      "terms": [
+        "time", "period", "interval", "duration", "during",
+        "prior", "subsequent", "before", "after", "when"
+      ]
+    }
+  },
+
+  "allStopwords": [
+    "method", "apparatus", "system", "device", "comprising", "configured",
+    "includes", "including", "plurality", "portion", "embodiment", "embodiments",
+    "invention", "present", "accordance", "aspect", "aspects", "example",
+    "examples", "exemplary", "various", "certain", "herein", "thereof",
+    "wherein", "whereby", "therein", "therefrom", "first", "second", "third",
+    "fourth", "fifth", "another", "other", "each", "every", "any", "respective",
+    "respectively", "associated", "corresponding", "data", "signal", "signals",
+    "unit", "module", "component", "element", "elements", "circuit", "circuitry",
+    "logic", "processor", "processing", "memory", "storage", "register", "input",
+    "output", "interface", "bus", "port", "controller", "control", "operation",
+    "operations", "based", "using", "providing", "receiving", "generating",
+    "determining", "transmitting", "storing", "performing", "executing",
+    "obtaining", "identifying", "computing", "calculating", "selecting",
+    "coupled", "connected", "linked", "related", "responsive", "according",
+    "multiple", "set", "subset", "group", "number", "amount", "part", "parts",
+    "sequence", "series", "array", "collection", "time", "period", "interval",
+    "duration", "during", "prior", "subsequent", "before", "after", "when"
+  ],
+
+  "preserveTerms": {
+    "description": "Technical terms that SHOULD be preserved even if they seem generic",
+    "terms": [
+      "video", "audio", "codec", "streaming", "encryption", "authentication",
+      "biometric", "wireless", "bluetooth", "wifi", "hdmi", "display",
+      "network", "cloud", "machine learning", "neural", "convolutional",
+      "transformer", "attention", "encoder", "decoder", "compression",
+      "decompression", "bitrate", "bandwidth", "latency", "throughput",
+      "resonator", "acoustic", "piezoelectric", "baw", "fbar", "mems"
+    ]
+  },
+
+  "notes": {
+    "usage": "Import this file and filter extracted terms against allStopwords array",
+    "customization": "Add domain-specific terms to appropriate category",
+    "preserveLogic": "Terms in preserveTerms should NOT be filtered even if in stopwords"
+  }
+}

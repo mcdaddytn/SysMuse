@@ -203,6 +203,36 @@ const COMPETITORS: CompetitorConfig[] = [
     ],
     focus: 'Telecom equipment, 5G - 11 citations found',
   },
+  // === NEW COMPETITORS (from hybrid cluster analysis 2026-01-17) ===
+  {
+    name: 'Tencent',
+    assigneeVariants: [
+      'Tencent Technology (Shenzhen) Company Limited',
+      'TENCENT TECHNOLOGY (SHENZHEN) COMPANY LIMITED',
+      'Tencent America LLC',
+      'TENCENT AMERICA LLC',
+      'Tencent Holdings Limited',
+    ],
+    focus: 'Video codec, streaming, security - 39 patents in cluster analysis',
+  },
+  {
+    name: 'Dolby',
+    assigneeVariants: [
+      'Dolby Laboratories Licensing Corporation',
+      'Dolby Laboratories, Inc.',
+      'Dolby International AB',
+    ],
+    focus: 'Audio/video codec, transform, macroblock processing - 12 patents',
+  },
+  {
+    name: 'LG',
+    assigneeVariants: [
+      'LG Electronics Inc.',
+      'LG ELECTRONICS INC.',
+      'LG Display Co., Ltd.',
+    ],
+    focus: 'Video codec, cloud computing, encryption - 41 patents',
+  },
 ];
 
 // CPC codes relevant to streaming video

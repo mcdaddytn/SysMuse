@@ -2217,10 +2217,159 @@ cat output/sectors/video-codec-expanded/video-codec-analysis-*.json | jq -r '.re
 
 ---
 
-*Document updated: 2026-01-17 (continuation session)*
-*Top 250 Enrichment: COMPLETE (LLM 174, IPR 174, Prosecution 250)*
-*Video Codec Analysis: RUNNING (200 patents)*
-*Sector Coverage: 22,706 patents (76 term-based, 20,757 CPC-based)*
+### Session Update: 2026-01-17 (Final) - V2 Scoring & Excel Updates
+
+**Major Issue Identified:** Expired patents (0 years remaining) were ranking high in Top 250 because additive scoring only penalized them ~10-15%, not enough to drop them out of rankings.
+
+**Solution Implemented: V2 Scoring Methodology**
+
+1. **Hard Filters Added:**
+   - Minimum 3 years remaining (excludes expired/expiring patents)
+   - Minimum eligibility score of 2 (if LLM data exists)
+
+2. **Multiplicative Year Factor:**
+   ```
+   FinalScore = BaseScore × YearMultiplier
+
+   Years    Multiplier   Effect
+   15+      1.00         Full score
+   10       0.81         -19% penalty
+   7        0.70         -30% penalty
+   5        0.55         -45% penalty
+   3        0.40         -60% penalty
+   ```
+
+3. **Non-Linear Year Normalization:**
+   - Old: `years / 15` (linear)
+   - New: `(years / 15)^1.5` (exponential, heavier low-year penalty)
+
+**V2 Results:**
+
+| Metric | V1 Top 250 | V2 Top 250 |
+|--------|------------|------------|
+| Expired (0 yrs) | 20 | 0 |
+| < 3 years | 31 | 0 |
+| Min years | 0 | 3.1 |
+| Avg years | ~8 | 12.2 |
+| Patents changed | - | 39 |
+
+**Excel VBA Macro Updated:**
+- Fixed column mappings for 44-column CSV (enforcement=O, design_around=P)
+- Added IPR risk score (col AF) and prosecution quality (col AJ) to scoring
+- Expanded from 8 to 10 weighted metrics
+- Updated UserWeights sheet layout (rows 4-13 for metrics, rows 20-22 for relative weights)
+
+**Video Codec Analysis Complete:**
+- 200 patents analyzed for citation overlap
+- Top competitor: ByteDance (39+ citations on patent 10200706)
+- Results in `output/sectors/video-codec-expanded/`
+
+**Files Created This Session:**
+
+| File | Purpose |
+|------|---------|
+| `scripts/calculate-unified-top250-v2.ts` | V2 scoring with filters & year multiplier |
+| `output/unified-top250-v2-2026-01-17.json` | V2 Top 250 results |
+| `output/unified-top250-v2-2026-01-17.csv` | V2 CSV for Excel |
+| `scripts/expand-video-codec-sector.ts` | Video codec sector expansion |
+| `output/sectors/video-codec-expanded/` | Video codec analysis results |
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Priority 1: Use V2 Scoring as Default
+
+```bash
+# V2 is ready - generates filtered top 250 without expired patents
+npx tsx scripts/calculate-unified-top250-v2.ts
+
+# To run without filters (for comparison)
+npx tsx scripts/calculate-unified-top250-v2.ts --no-filter
+```
+
+### Priority 2: Run Enrichment on V2 Top 250
+
+The V2 top 250 has 100 patents needing IPR check and 250 needing LLM enrichment:
+
+```bash
+# Check what needs enrichment
+cat output/top250-v2-needs-ipr-2026-01-17.json | jq 'length'
+cat output/top250-v2-needs-llm-2026-01-17.json | jq 'length'
+
+# Run IPR check on missing patents
+npx tsx scripts/check-ipr-risk.ts output/top250-v2-needs-ipr-2026-01-17.json
+
+# Run LLM V3 on missing patents
+npx tsx scripts/run-llm-analysis-v3.ts output/top250-v2-needs-llm-2026-01-17.json
+```
+
+### Priority 3: Review Video Codec Results
+
+```bash
+# View top competitors
+cat output/sectors/video-codec-expanded/video-codec-analysis-2026-01-17.json | jq '.topCompetitors[0:15]'
+
+# View patents with most competitor citations
+cat output/sectors/video-codec-expanded/video-codec-analysis-2026-01-17.json | jq '.results | sort_by(-.competitor_citations) | .[0:10] | .[] | {patent_id, competitor_citations, competitors_citing}'
+```
+
+### Priority 4: Export for Excel Testing
+
+```bash
+# Generate fresh CSV with all data
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# The VBA macro is updated - import into Excel .xlsm file
+# Run ImportAllData macro to populate worksheets
+```
+
+### Considerations for Future Scoring Enhancements
+
+1. **Full Multiplicative Sub-Categories:**
+   ```
+   FinalScore = DamagesScore × SuccessScore × RiskScore
+   ```
+   Where each sub-category aggregates related metrics
+
+2. **Damages Estimation via LLM:**
+   - Add questions about market size, revenue, unit sales
+   - Sector-specific damage multipliers
+
+3. **Sector-Specific Weights:**
+   - RF/Hardware: Lower 101 risk weight
+   - Software/Cloud: Higher 101 risk weight
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Start Docker services
+npm run docker:up
+
+# Check ES health
+npm run es:health
+
+# Run V2 top 250 calculation
+npx tsx scripts/calculate-unified-top250-v2.ts
+
+# Export raw metrics CSV
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# Check video codec results
+cat output/sectors/video-codec-expanded/video-codec-analysis-*.json | jq '.summary'
+
+# Monitor any running jobs
+ps aux | grep tsx | grep -v grep
+```
+
+---
+
+*Document updated: 2026-01-17 (final session)*
+*V2 Scoring: IMPLEMENTED (filters + multiplicative year factor)*
+*Top 250 V2: 0 expired patents, min 3.1 years, avg 12.2 years*
+*Video Codec Analysis: COMPLETE (200 patents)*
+*Excel Macro: UPDATED (10 metrics, 44-column CSV support)*
 *Config version: 4.1 with 93 companies across 16 categories*
 *ElasticSearch: 22,706 patents indexed*
-*PostgreSQL: User preferences seeded (6 profiles, 12 sectors)*

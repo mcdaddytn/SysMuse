@@ -57,6 +57,76 @@ const SECTORS = {
     ],
     targetCompetitors: ['Apple', 'Amazon', 'Microsoft', 'Google', 'Meta', 'Comcast', 'Sony', 'ByteDance', 'Intel', 'Citrix', 'Sophos', 'EMC'],
     clusterSource: 'hybrid-cluster-1-cloud-auth'
+  },
+  'image-depth': {
+    name: 'Image / Depth Mapping',
+    description: 'Image processing, depth mapping, capture, and edge detection patents',
+    patentIds: [
+      // Cluster 3 patents - 3 total (47 competitor citations)
+      '9294662', '8155478', '9270875'
+    ],
+    targetCompetitors: ['Apple', 'Google', 'Samsung', 'Sony', 'Microsoft', 'Meta', 'Qualcomm', 'Intel'],
+    clusterSource: 'hybrid-cluster-3-image-depth'
+  },
+  'event-live': {
+    name: 'Event / Live Streaming',
+    description: 'Live event streaming, notifications, and real-time messaging patents',
+    patentIds: [
+      // Cluster 4 patents - 4 total (33 competitor citations)
+      '9460406', '9256739', '9609373', '8862675'
+    ],
+    targetCompetitors: ['Netflix', 'Amazon', 'Google', 'Apple', 'Meta', 'Disney', 'Comcast', 'Roku'],
+    clusterSource: 'hybrid-cluster-4-event-live'
+  },
+  'wireless-iot': {
+    name: 'Wireless / IoT Geofencing',
+    description: 'Wireless access, geofencing, IoT, and location-based patents',
+    patentIds: [
+      // Cluster 6 patents - 4 total (25 competitor citations)
+      '9781602', '9961618', '9609499', '10284585'
+    ],
+    targetCompetitors: ['Apple', 'Google', 'Amazon', 'Qualcomm', 'Samsung', 'Microsoft', 'Intel', 'Cisco'],
+    clusterSource: 'hybrid-cluster-6-wireless-iot'
+  },
+  'pii-breach': {
+    name: 'PII / Data Breach Detection',
+    description: 'Personal data protection, breach detection, and privacy compliance patents',
+    patentIds: [
+      // Cluster 7 patents - 3 total (24 competitor citations)
+      '8201224', '10084762', '9977920'
+    ],
+    targetCompetitors: ['Microsoft', 'Google', 'Amazon', 'Salesforce', 'IBM', 'Oracle', 'SAP', 'Workday'],
+    clusterSource: 'hybrid-cluster-7-pii-breach'
+  },
+  'bluetooth-edr': {
+    name: 'Bluetooth / EDR Scanning',
+    description: 'Bluetooth low energy, EDR scanning, and wireless discovery patents',
+    patentIds: [
+      // Cluster 8 patents - 2 total (20 competitor citations)
+      '8737917', '9907015'
+    ],
+    targetCompetitors: ['Apple', 'Google', 'Samsung', 'Qualcomm', 'Intel', 'Microsoft', 'Amazon', 'Sony'],
+    clusterSource: 'hybrid-cluster-8-bluetooth-edr'
+  },
+  'ai-ml': {
+    name: 'AI/ML / Machine Learning',
+    description: 'Machine learning, classification, and confidence scoring patents',
+    patentIds: [
+      // Cluster 9 patents - 4 total (9 competitor citations)
+      '9762497', '9691027', '10063582', '11516311'
+    ],
+    targetCompetitors: ['Google', 'Microsoft', 'Amazon', 'Meta', 'Apple', 'IBM', 'Nvidia', 'OpenAI'],
+    clusterSource: 'hybrid-cluster-9-ai-ml'
+  },
+  'object-pose': {
+    name: 'Object / Pose Detection',
+    description: 'Object tracking, pose estimation, and motion detection patents',
+    patentIds: [
+      // Cluster 10 patents - 1 total (8 competitor citations)
+      '9503860'
+    ],
+    targetCompetitors: ['Apple', 'Google', 'Meta', 'Microsoft', 'Samsung', 'Sony', 'Qualcomm', 'Tesla'],
+    clusterSource: 'hybrid-cluster-10-object-pose'
   }
 };
 

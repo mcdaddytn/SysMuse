@@ -1781,9 +1781,342 @@ curl -s http://localhost:9200/_cluster/health | jq
 
 ---
 
-*Document updated: 2026-01-17 (current session)*
+### Session Update: 2026-01-17 (Follow-up) - Data Export Fixed, Sector Analysis Complete
+
+**Issues Diagnosed and Fixed:**
+
+1. **CSV Export Data Sparseness - RESOLVED** ✅
+   - **Root cause**: Export script looked for `data.patents` but combined-rankings uses `data.records`
+   - **Fixed**: `scripts/export-raw-metrics-csv.ts` now correctly loads from all sources
+   - Data now merged from: multi-score-analysis + combined-rankings (LLM) + sector-analysis
+
+2. **Sector Data Integration - COMPLETE** ✅
+   - New `loadSectorAnalysis()` function reads all 10 sector analysis files
+   - 76 patents now have sector assignments from sector analysis
+   - Fallback chain: sector-analysis → cluster-definitions → "General"
+
+**All 10 Sector Analyses Complete:**
+
+| Sector | Patents | Citations | Hit Rate | Top Competitor |
+|--------|---------|-----------|----------|----------------|
+| Cloud/Auth | 43 | 1,345 | 100% | Cisco (308) |
+| Security | 6 | 103 | 100% | Pure Storage (29) |
+| Event/Live | 4 | 94 | 100% | Splunk (29) |
+| Video Codec | 6 | 85 | 100% | ByteDance (45) |
+| AI/ML | 4 | 56 | 100% | HPE (38) |
+| Image/Depth | 3 | 53 | 100% | Google (45) |
+| Wireless/IoT | 4 | 46 | 100% | NBCUniversal (10) |
+| Bluetooth/EDR | 2 | 43 | 100% | Apple (17) |
+| PII/Breach | 3 | 30 | 100% | Microsoft (13) |
+| Object/Pose | 1 | 10 | 100% | Amazon (8) |
+| **TOTAL** | **76** | **1,865** | **100%** | |
+
+**Current Data Coverage:**
+
+| Source | Patents | LLM Scores | Sector | Competitors |
+|--------|---------|------------|--------|-------------|
+| multi-score-analysis | 10,276 | No | No | Yes |
+| combined-rankings | 250 | Yes (222) | No | Yes |
+| sector analysis | 76 | No | Yes | Yes |
+| **Merged CSV** | **10,276** | **222** | **76** | **10,276** |
+
+**LLM Analysis Status:**
+
+- **V1 prompts** used for all 222 LLM-analyzed patents (6 scores)
+- **V2 prompts** (`patent-analysis-v2-draft.json`) were drafted but NOT run broadly
+- V2 adds 8 new fields including technology_category, product_types[], market_relevance_score
+
+**Excel Macro System:**
+
+- VBA module: `excel/PatentAnalysisMacros.bas` - checked in and working
+- Imports CSV, creates UserWeights sheet, generates 4 scoring worksheets
+- Dynamic formula updates when weights changed
+
+**Data Files Updated:**
+
+| File | Description |
+|------|-------------|
+| `output/patents-raw-metrics-2026-01-17.csv` | Fixed export with all data merged |
+| `scripts/export-raw-metrics-csv.ts` | Updated to merge all data sources |
+| `output/sectors/*.json` | 10 sector analysis files with citation data |
+
+---
+
+### Pending Enhancement Opportunities
+
+**1. LLM Question Expansion:**
+- Run V2 prompts on expanded patent set (adds product_types, market_relevance)
+- Consider sector-specific LLM questions for deeper analysis
+
+**2. Prosecution History/IPR Integration:**
+- File Wrapper API client exists (`clients/odp-file-wrapper-client.ts`)
+- PTAB client exists (`clients/odp-ptab-client.ts`)
+- Not yet integrated into patent analysis pipeline
+
+**3. Backfill Opportunities:**
+- Run LLM analysis on remaining ~10K patents (currently 222/10,276)
+- Expand sector analysis beyond 76 litigation-tier patents
+- Consider Avago A/V patents (148 with citations) for LLM analysis
+
+**4. Sector-Specific Analysis:**
+- Each sector has different competitor landscape
+- Consider sector-specific weight profiles for Excel
+- Potential for sector-specific LLM question sets
+
+---
+
+### Session Update: 2026-01-17 (V3 Enhancement) - Scripts Created, Analysis Running
+
+**New Scripts Created:**
+
+| Script | Purpose | Data Source |
+|--------|---------|-------------|
+| `scripts/run-llm-analysis-v3.ts` | Enhanced LLM with 8 cross-sector signals | Anthropic Claude |
+| `scripts/check-ipr-risk.ts` | IPR/PTAB risk assessment | USPTO PTAB API |
+| `scripts/check-prosecution-history.ts` | Prosecution quality metrics | USPTO File Wrapper API |
+| `services/llm-patent-analysis-v3.ts` | V3 LLM service with new schema | - |
+| `config/prompts/patent-analysis-v3.json` | Enhanced prompt definition | - |
+
+**V3 LLM New Fields:**
+
+| Field | Values | Purpose |
+|-------|--------|---------|
+| implementation_type | hardware, software, firmware, hybrid | 101 risk indicator |
+| standards_relevance | none, related, likely_essential, declared_essential | SEP value |
+| standards_bodies | [3GPP, IEEE, ETSI, ITU, MPEG, etc.] | Standards mapping |
+| market_segment | consumer, enterprise, infrastructure, etc. | Licensing strategy |
+| implementation_complexity | simple, moderate, complex, highly_complex | Design-around |
+| claim_type_primary | method, system, apparatus, device | Enforcement approach |
+| geographic_scope | us_centric, global, regional | International value |
+| lifecycle_stage | emerging, growth, mature, declining | Future value |
+
+**Export Script Updated:**
+
+CSV now includes 44 columns:
+- Core: patent_id, title, dates, citations, competitors, sector
+- LLM v1/v3: 11 score columns (1-5 scale)
+- V3 signals: 10 cross-sector columns
+- IPR risk: 4 columns (score, category, petitions, petitioners)
+- Prosecution: 5 columns (score, category, OAs, RCEs, time)
+- Text: 4 columns (summary, problem, products, implementers)
+
+**Background Analysis Running:**
+
+V3 LLM analysis on all 76 sector patents is running:
+- Estimated completion: ~2 hours
+- Output: `output/llm-analysis-v3/combined-v3-2026-01-17.json`
+- Check progress: `tail -f` on output file or check batch files
+
+**To run after V3 completes (requires USPTO_ODP_API_KEY):**
+```bash
+npx tsx scripts/check-ipr-risk.ts --all-sectors
+npx tsx scripts/check-prosecution-history.ts --all-sectors
+npx tsx scripts/export-raw-metrics-csv.ts
+```
+
+---
+
+## NEXT SESSION: Resume Here
+
+### V3 LLM Analysis Status (Started 2026-01-17)
+
+**Check if complete:**
+```bash
+ls -la output/llm-analysis-v3/combined-v3-2026-01-17.json
+ls output/llm-analysis-v3/batches/ | wc -l  # Should be ~16 batches when done
+```
+
+**If NOT complete, resume:**
+```bash
+npx tsx scripts/run-llm-analysis-v3.ts --all-sectors
+```
+
+**If complete, run remaining steps:**
+```bash
+# 1. IPR risk check (requires USPTO_ODP_API_KEY)
+npx tsx scripts/check-ipr-risk.ts --all-sectors
+
+# 2. Prosecution history (requires USPTO_ODP_API_KEY)
+npx tsx scripts/check-prosecution-history.ts --all-sectors
+
+# 3. Re-export with all data
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# 4. Import into Excel (copy CSV to Excel folder, run ImportAllData macro)
+```
+
+### Current Data State
+
+| Data Source | Patents | Status |
+|-------------|---------|--------|
+| multi-score-analysis | 10,276 | ✅ Complete |
+| Sector analysis | 76 | ✅ Complete |
+| LLM v1 analysis | 222 | ✅ Complete |
+| LLM v3 analysis | 76 | 🔄 Running (started this session) |
+| IPR risk | 0 | ⏸️ Pending (run after V3) |
+| Prosecution history | 0 | ⏸️ Pending (run after V3) |
+
+### Files Created This Session
+
+```
+config/prompts/patent-analysis-v3.json     # Enhanced LLM prompt (8 new fields)
+services/llm-patent-analysis-v3.ts         # V3 LLM service
+scripts/run-llm-analysis-v3.ts             # V3 runner script
+scripts/check-ipr-risk.ts                  # IPR/PTAB check script
+scripts/check-prosecution-history.ts       # Prosecution history script
+scripts/export-raw-metrics-csv.ts          # Updated with 44 columns
+```
+
+### CSV Export Ready (44 columns)
+
+Export script updated to merge all data sources:
+- Core patent data (10 cols)
+- LLM scores 1-5 (11 cols)
+- V3 cross-sector signals (10 cols)
+- IPR risk (4 cols)
+- Prosecution history (5 cols)
+- Text outputs (4 cols)
+
+### Key Decisions Made
+
+1. **V3 prompts** add 8 cross-sector signals (implementation_type, standards_relevance, etc.)
+2. **IPR/Prosecution** run only on sector patents (76) - API-based, not LLM
+3. **Sector-specific LLM** deferred to later phase
+4. **Claims analysis** deferred - will pass to partner vendors
+
+---
+
+### Session Update: 2026-01-17 (Late Session) - Unified Top 250 & Enrichment Pipeline
+
+**Major Accomplishments:**
+
+1. **Unified Top 250 Scoring System** ✅
+   - Created unified scoring with 3 profiles: aggressive, moderate, conservative
+   - All profiles weighted equally for final score
+   - Incorporates: citation data, LLM scores, IPR risk, prosecution quality, sectors
+
+2. **Top 250 Comparison**
+   - 77% overlap with previous litigation tier rankings
+   - 23 patents new to top 100, 23 dropped
+   - Methodology validated as consistent
+
+3. **CPC-Based Sector Assignment** ✅
+   - 22,706 patents now have sector assignments
+   - 76 term-based (high precision), 20,757 CPC-based, 1,873 general
+
+4. **MLT Sector Expansion** ✅
+   - 8 additional patents got term-based sectors via similarity
+
+5. **First 76 Patents Fully Enriched** ✅
+   - All have: V3 LLM, IPR (0 history - all clean), Prosecution (all clean)
+
+**Current Enrichment Jobs Running (174 patents):**
+- IPR Risk Check: Running (~3 hours for 174 patents)
+- Prosecution History: Running (~6 hours for 174 patents)
+- LLM V3 Analysis: Needs script fix (currently re-running on sectors)
+
+**Data Coverage Status:**
+
+| Data Source | Patents | Status |
+|-------------|---------|--------|
+| multi-score-analysis | 10,276 | ✅ Complete |
+| Unified Top 250 | 250 | ✅ Complete |
+| CPC Sector assignments | 22,706 | ✅ Complete |
+| V3 LLM analysis | 76 | ✅ Complete (need 174 more) |
+| IPR risk | 76 + 174 running | 🔄 Running |
+| Prosecution history | 76 + 174 running | 🔄 Running |
+
+---
+
+## ROADMAP: Top 250 Vendor Handoff
+
+### Phase 1: Complete Top 250 Data (Current Session)
+
+**Goal:** Fill out all available data on top 250 patents for vendor handoff.
+
+| Step | Description | Status | ETA |
+|------|-------------|--------|-----|
+| 1 | Calculate unified top 250 | ✅ Complete | Done |
+| 2 | Run IPR on remaining 174 | 🔄 Running | ~3 hrs |
+| 3 | Run prosecution on remaining 174 | 🔄 Running | ~6 hrs |
+| 4 | Fix & run LLM V3 on remaining 174 | ⏸️ Pending | ~4 hrs |
+| 5 | Recalculate unified scores | ⏸️ Pending | 5 min |
+| 6 | Export comprehensive CSV | ⏸️ Pending | 5 min |
+
+**Deliverables:**
+- `output/unified-top250-FINAL.csv` - All data for vendor partners
+- `output/unified-top250-FINAL.json` - Full JSON with all metrics
+
+### Phase 2: Expanded Sector Analysis (Future)
+
+**Goal:** Extend deep analysis beyond top 250 to promising sectors.
+
+| Step | Description | Patents | Priority |
+|------|-------------|---------|----------|
+| 1 | Video Codec sector expansion | ~150 patents | High |
+| 2 | Cloud/Auth sector expansion | ~200 patents | High |
+| 3 | RF/Acoustic (Avago A/V) sector | 148 with citations | High |
+| 4 | Security/Threat sector | ~100 patents | Medium |
+| 5 | Bluetooth/Wireless sector | ~100 patents | Medium |
+
+**Note:** Avago A/V patents (148 with citations) should be integrated into sector analysis rather than treated separately. Consider subsectors if needed, but prefer grouping sectors to have significant patent counts.
+
+### Phase 3: Platform Development (Parallel)
+
+**Goal:** While running expanded analysis, build platform infrastructure.
+
+| Component | Description | Priority |
+|-----------|-------------|----------|
+| PostgreSQL data import | Load top 250 into database | High |
+| API endpoints | REST API for patent queries | Medium |
+| Search enhancement | Semantic search capabilities | Medium |
+| GUI foundation | Quasar/Vue.js scaffold | Lower |
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Check enrichment job progress
+tail -20 output/ipr/enrichment-ipr-2026-01-17.log
+tail -20 output/prosecution/enrichment-pros-2026-01-17.log
+tail -20 output/llm-analysis-v3/enrichment-llm-2026-01-17.log
+
+# Recalculate unified top 250 after enrichment completes
+npx tsx scripts/calculate-unified-top250.ts
+
+# Check current top 250 status
+cat output/unified-top250-2026-01-17.json | jq '.statistics'
+
+# Export final CSV
+npx tsx scripts/export-raw-metrics-csv.ts
+```
+
+---
+
+## New Files Created This Session
+
+| File | Purpose |
+|------|---------|
+| `scripts/calculate-unified-top250.ts` | Unified scoring across all profiles |
+| `scripts/assign-cpc-sectors.ts` | CPC-based sector assignment |
+| `scripts/expand-sectors-mlt.ts` | MLT-based sector expansion |
+| `scripts/run-top250-enrichment.ts` | Enrichment job runner |
+| `output/unified-top250-2026-01-17.json` | Top 250 with unified scores |
+| `output/unified-top250-2026-01-17.csv` | CSV export of top 250 |
+| `output/sectors/all-patents-sectors-2026-01-17.json` | All sector assignments |
+| `output/patents-with-sectors-2026-01-17.csv` | Sector CSV for all patents |
+| `output/top250-needs-llm-2026-01-17.json` | Patents needing LLM analysis |
+| `output/top250-needs-ipr-2026-01-17.json` | Patents needing IPR check |
+| `output/top250-needs-pros-2026-01-17.json` | Patents needing prosecution check |
+
+---
+
+*Document updated: 2026-01-17 (late session)*
+*Unified Top 250: CALCULATED (77% overlap with previous rankings)*
+*Enrichment Jobs: IPR + Prosecution RUNNING on 174 patents*
+*Sector Coverage: 22,706 patents (76 term-based, 20,757 CPC-based)*
 *Config version: 4.0 with all cluster strategies*
 *Categories: 16 | Companies: 90 | Strategies: 13*
 *ElasticSearch: 22,706 patents indexed*
 *PostgreSQL: User preferences seeded (6 profiles, 12 sectors)*
-*Avago A/V Mining: COMPLETE (923 patents, 148 with citations, 660 total citations)*

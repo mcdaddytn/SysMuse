@@ -2465,10 +2465,136 @@ excel/PatentAnalysisMacros.bas              # Version 2.0 (V2 scoring)
 
 ---
 
-*Document updated: 2026-01-17 (V2 enrichment complete)*
-*V2 Scoring: COMPLETE with VBA macro update*
-*Top 250 V2: 100% LLM v3, 100% IPR, 90% prosecution*
-*VBA Macro: Version 2.0 (multiplicative year factor)*
-*All 250 IPR patents: CLEAN (no IPR history)*
-*Config version: 4.1 with 93 companies across 16 categories*
-*ElasticSearch: 22,706 patents indexed*
+---
+
+### Session Update: 2026-01-17 (Design Phase) - Parallel Paths Established
+
+**Strategic Direction Established:**
+
+The project is moving toward a three-factor scoring model and GUI development:
+
+1. **V3 Scoring Methodology** - Separate metrics into:
+   - **Damages Score** - What's the patent worth? (sector damages, citations, market)
+   - **Success Score** - Will we win? (eligibility, validity, prosecution)
+   - **Risk Factor** - What reduces yield? (IPR risk, design-around, enforcement)
+
+2. **Formula:** `PatentValue = DamagesScore × SuccessScore × RiskFactor`
+
+**New Design Documents Created:**
+
+| Document | Purpose |
+|----------|---------|
+| `docs/SCORING_METHODOLOGY_V3_DESIGN.md` | Three-factor model design |
+| `docs/GUI_DESIGN_SPEC.md` | Full GUI wireframes and specs |
+
+**Parallel Development Paths:**
+
+| Path | Priority | Description |
+|------|----------|-------------|
+| **LLM Questions** | High | Add damages/market estimation questions |
+| **Scoring Refactor** | High | Implement V3 three-factor model |
+| **Sector Expansion** | Medium | Continue analysis on major sectors |
+| **GUI Foundation** | Medium | Quasar/Vue.js scaffold + API |
+
+---
+
+## PARALLEL PATHS: Next Session Options
+
+### Path A: LLM Question Expansion
+*Enhance market/damages estimation*
+
+```bash
+# Review current LLM prompts
+cat config/prompts/patent-analysis-v3.json
+
+# Draft V4 prompt with damages questions
+# New fields: market_size_estimate, licensing_rate_estimate, product_examples
+```
+
+Key additions:
+- Sector damages indicators
+- Revenue exposure estimates
+- Product evidence links
+- Comparable settlements
+
+### Path B: V3 Scoring Implementation
+*Implement three-factor multiplicative scoring*
+
+```bash
+# Create V3 scoring script
+# scripts/calculate-unified-top250-v3.ts
+
+# Create sector damages config
+# config/sector-damages.json
+```
+
+### Path C: Sector Expansion
+*Continue current analysis on new sectors*
+
+```bash
+# Cloud/Auth sector (349 citations)
+npx tsx scripts/expand-sector.ts cloud-auth
+
+# Security/Threat sector (28 citations)
+npx tsx scripts/expand-sector.ts security
+```
+
+### Path D: GUI Foundation
+*Start platform development*
+
+1. Review `docs/GUI_DESIGN_SPEC.md`
+2. Set up Quasar project scaffold
+3. Create API endpoints (Express.js)
+4. Import data to PostgreSQL
+
+---
+
+## Design Documents for Review
+
+### 1. Scoring Methodology V3
+`docs/SCORING_METHODOLOGY_V3_DESIGN.md`
+
+- Three-factor model (Damages × Success × Risk)
+- Sector damages rating scale (1-4)
+- New LLM questions for market estimation
+- Migration path from V2
+
+### 2. GUI Design Spec
+`docs/GUI_DESIGN_SPEC.md`
+
+- Dashboard with portfolio overview
+- Patent grid view with filtering
+- Sector view with damage estimates
+- Patent detail view with three-factor breakdown
+- Configuration panels (weights, sectors, terms, competitors)
+- Analysis jobs panel
+
+**Open Questions in Docs:**
+- Sector granularity for damages
+- Dark mode support
+- Multi-user profiles
+- Saved filter configurations
+
+---
+
+## Quick Reference: Current State
+
+| Component | Status |
+|-----------|--------|
+| V2 Top 250 | ✅ Complete (100% enriched) |
+| VBA Macro | ✅ V2.0 (multiplicative years) |
+| Video Codec | ✅ 200 patents analyzed |
+| V3 Design | ✅ Document created |
+| GUI Spec | ✅ Document created |
+| Sector Damages | ⏸️ Config file needed |
+| V4 LLM Prompt | ⏸️ Needs drafting |
+| API Endpoints | ⏸️ Not started |
+| GUI Scaffold | ⏸️ Not started |
+
+---
+
+*Document updated: 2026-01-17 (design phase)*
+*V2 Scoring: COMPLETE*
+*V3 Design: DOCUMENTED (pending implementation)*
+*GUI Spec: INITIAL DRAFT (pending review)*
+*Parallel paths: LLM questions, V3 scoring, sector expansion, GUI*

@@ -3121,6 +3121,115 @@ cat output/sector-analysis/<sector>/<sector>-analysis-2026-01-18.json | jq '.sum
 
 ---
 
-*Session: 2026-01-18 (late)*
-*Status: 4 sector analyses complete, network-switching running*
-*Next: Complete network-switching, potentially run additional sectors*
+### Session Update: 2026-01-18 (Continuation) - V3 Stakeholder Voting Model Complete
+
+**Major Accomplishments:**
+
+1. **V3 Stakeholder Voting Profiles Implemented** ✅
+   - Created scoring framework where different stakeholders (attorneys, executives) can weight patents differently
+   - All profiles must hit **93-99% citation coverage** as baseline actionability requirement
+   - Framework ready for sector-specific signals in future
+
+2. **6 Stakeholder Profiles Calibrated** ✅
+   All profiles pass goalposts (93-99% citation coverage, 6-14 avg years):
+
+   | Profile | Citation % | Avg Years | Description |
+   |---------|-----------|-----------|-------------|
+   | IP Litigator (Aggressive) | 98% | 8.2 | High risk tolerance, infringement-focused |
+   | IP Litigator (Balanced) | 97% | 8.2 | Standard IP litigation approach |
+   | IP Litigator (Conservative) | 94% | 8.6 | Strong validity, lower risk |
+   | Licensing Specialist | 98% | 7.5 | Portfolio value, market signals |
+   | Corporate/M&A | 96% | 7.4 | Strategic alignment, deal signals |
+   | Executive/Portfolio | 94% | 8.3 | Balanced view across all factors |
+
+3. **Hybrid Multiplicative/Additive Scoring Model** ✅
+   - **Overall Score = Factor1 × Factor2 × Factor3 × Factor4**
+   - Each factor is additive: `FactorX = weight1*metric1 + weight2*metric2 + floor`
+   - Multiplicative combination ensures weakness in any area significantly reduces score
+   - Prevents single strong factor from dominating (e.g., high citations but weak legal)
+
+4. **Key Scoring Innovations**
+   - **Tiered Continuous Normalization**: Citations normalized with tiers (0→0.005, 1-3→0.15-0.50, etc.)
+   - **Stepped Year Treatment**: 10+ yrs = 1.0, 5-7 yrs = 0.60, 3-4 yrs = 0.25
+   - **Low Floor for Zero Citations**: Patents with 0 competitor citations get near-zero market evidence score
+   - **Quality Factor**: Combines eligibility + validity scores for legal strength
+
+5. **V3 Export Script Created** ✅
+   - New script: `scripts/calculate-and-export-v3.ts`
+   - Exports 3 files:
+     - `excel/TOP250-YYYY-MM-DD.csv` - Top 250 with all profile scores + consensus
+     - `output/all-patents-scored-v3-YYYY-MM-DD.csv` - All patents raw data
+     - `output/unified-top250-v3-YYYY-MM-DD.json` - Full JSON with details
+   - Also creates `excel/TOP250-LATEST.csv` fallback
+
+**Key Patent Insight: 9569605 (67 Apple Citations)**
+- Despite 67 competitor citations (highest in portfolio), ranks lower in Conservative profile
+- Reason: Software method patent with eligibility_score=3, validity_score=3
+- The multiplicative model correctly penalizes weak legal factors
+- Ranks #2-3 in Aggressive profile but #5 in Conservative - model working as intended
+
+**New/Modified Files:**
+| File | Purpose |
+|------|---------|
+| `scripts/scoring-test-harness.ts` | V1 harness - initial testing |
+| `scripts/scoring-test-harness-v2.ts` | V2 harness - attorney configs |
+| `scripts/scoring-test-harness-v3.ts` | V3 harness - final stakeholder profiles |
+| `scripts/calculate-and-export-v3.ts` | V3 export script for Excel/raw data |
+
+**V3 Export Results (Top 10 by Consensus):**
+```
+ 1. 9609499 Consensus: 24.3 CC:10 Yrs:8.2 (Comcast)
+ 2. 9569605 Consensus: 21.1 CC:67 Yrs:8.1 (Apple)
+ 3. 9961618 Consensus: 20.9 CC:8 Yrs:9.3 (Apple)
+ 4. 10200706 Consensus: 19.8 CC:20 Yrs:10.1 (ByteDance)
+ 5. 9907015 Consensus: 19.6 CC:5 Yrs:9.1 (Microsoft, Apple)
+ 6. 9667370 Consensus: 17.7 CC:3 Yrs:8.4 (Amazon, Apple)
+ 7. 10206084 Consensus: 16.9 CC:2 Yrs:10.1 (Amazon, Apple)
+ 8. 9503860 Consensus: 16.8 CC:8 Yrs:7.9 (Amazon)
+ 9. 9781602 Consensus: 16.5 CC:5 Yrs:8.7 (Amazon, Google)
+10. 9294662 Consensus: 16.1 CC:22 Yrs:7.2 (Google)
+```
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Pending Tasks (Prioritized)
+
+1. **Abstract Prompts to Config Files** (HIGH)
+   - Create `sector-prompts/` directory structure
+   - Move LLM prompts from inline code to YAML/JSON config files
+   - Enable per-sector prompt customization
+   - Support prompt versioning for A/B testing
+
+2. **Citation Overlap Report** (HIGH)
+   - Create report showing patents grouped by common citators
+   - Purpose: Identify "patent families" for litigation packaging
+   - Output: Which patents are cited together by same competitor patents
+   - Helps identify which of our patents to assert together
+
+3. **Continue Sector Analysis** (MEDIUM)
+   - network-switching was running, verify completion
+   - Consider additional sectors: drm-content-protection, adaptive-streaming
+
+### Quick Commands
+
+```bash
+# Export V3 stakeholder scores
+npx tsx scripts/calculate-and-export-v3.ts
+
+# Run scoring test harness
+npx tsx scripts/scoring-test-harness-v3.ts
+
+# Export for Excel (legacy, now use V3)
+npx tsx scripts/export-top250-for-excel.ts
+
+# Run sector analysis
+npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
+```
+
+---
+
+*Session: 2026-01-18 (continuation)*
+*Status: V3 stakeholder voting model complete, exports working*
+*Next: Abstract prompts to config, citation overlap report*

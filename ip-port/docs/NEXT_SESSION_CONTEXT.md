@@ -2958,3 +2958,80 @@ npm run es:health
 *Session: 2026-01-18*
 *Status: Web search design complete, sector facets configured*
 *Next: Implement product discovery, test Opus model*
+
+---
+
+### Session Update: 2026-01-18 (Continuation) - Sector-Specific Analysis Implemented
+
+**Major Accomplishments:**
+
+1. **Product Discovery Script Created** ✅
+   - `scripts/discover-sector-products.ts`
+   - Uses LLM to identify specific products per patent
+   - Aggregates by company for vendor handoff
+   - Tested on video-codec: Found 27 products from 13 companies (3 patents)
+
+2. **Sector-Specific LLM Service Created** ✅
+   - `services/llm-sector-analysis.ts`
+   - **Opus model selection** for high-quality analysis
+   - Sector-specific prompts with domain expertise
+   - Product-focused output for licensing negotiations
+
+3. **Sector Prompts Configured** ✅
+   - `video-codec`: HEVC, AV1, streaming focus
+   - `cloud-auth`: OAuth, SSO, enterprise IAM
+   - `rf-acoustic`: BAW/FBAR, 5G, RF filters
+   - `network-threat-protection`: EDR, SIEM, firewalls
+
+4. **Video-Codec Analysis Running** 🔄
+   - 20 patents with Opus model
+   - Progress: `tail -f output/sector-analysis/video-codec/run-2026-01-18.log`
+   - Expected duration: ~15 minutes
+
+**New Scripts Created:**
+| Script | Purpose |
+|--------|---------|
+| `scripts/discover-sector-products.ts` | Web search → Product discovery |
+| `scripts/run-sector-analysis.ts` | Sector-specific LLM runner |
+| `services/llm-sector-analysis.ts` | Opus/Sonnet model service |
+
+**Test Results (video-codec, 3 patents, Opus):**
+- Products found: 22
+- Unique companies: 12
+- Top companies: NVIDIA (3), AWS (3), Samsung (3), Apple (2)
+- Average eligibility score: 5.0
+- Average confidence: 4.0
+
+**Sample Product Identification (Patent 10200706):**
+| Product | Company | Relevance |
+|---------|---------|-----------|
+| NVIDIA T4 Tensor Core GPU | NVIDIA | Pipelined NVDEC hardware decoder |
+| Apple TV 4K (3rd gen) | Apple | A15 Bionic with hardware decoder |
+| AWS Elemental MediaConvert | AWS | Cloud transcoding with pipelined decode |
+| Samsung QN90C Neo QLED TV | Samsung | Neural processor with AV1/HEVC decode |
+| AMD Alveo U30 | AMD | Dedicated transcoding card |
+
+---
+
+## Commands for Monitoring
+
+```bash
+# Check video-codec analysis progress
+tail -f output/sector-analysis/video-codec/run-2026-01-18.log
+
+# View completed results
+cat output/sector-analysis/video-codec/video-codec-analysis-2026-01-18.json | jq '.analyses | length'
+
+# Run on other sectors
+npx tsx scripts/run-sector-analysis.ts cloud-auth --model opus --limit 10
+npx tsx scripts/run-sector-analysis.ts rf-acoustic --model opus --limit 10
+
+# List available sectors
+npx tsx scripts/run-sector-analysis.ts --list
+```
+
+---
+
+*Session: 2026-01-18 (continued)*
+*Status: Sector-specific analysis implemented and tested*
+*Running: Video-codec full analysis (20 patents, Opus)*

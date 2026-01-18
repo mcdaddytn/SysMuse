@@ -37,6 +37,12 @@ Private Const DATA_START_ROW As Integer = 2
 Private Const WEIGHTS_SHEET As String = "UserWeights"
 Private Const RAW_DATA_SHEET As String = "RawData"
 
+' File naming convention (V3)
+' TOP250-YYYY-MM-DD.csv  - Filtered top 250 for vendor work (IMPORT THIS)
+' TOP250-LATEST.csv      - Fallback copy of most recent export
+Private Const FILE_PREFIX As String = "TOP250-"
+Private Const FILE_LATEST As String = "TOP250-LATEST.csv"
+
 ' Column mappings for RawData sheet (must match CSV export - 44 columns)
 ' Core patent data (A-J)
 Private Const COL_PATENT_ID As String = "A"
@@ -77,12 +83,132 @@ Private Const COL_RCE_COUNT As String = "AM"
 ' PUBLIC ENTRY POINTS - No-Argument Wrappers
 '===============================================================================
 
-Public Sub ImportAllData()
-    ' No-argument wrapper - modify prefix here for different imports
-    Dim prefix As String
-    prefix = "patents-raw-metrics-2026-01-17"  ' <-- Change this for new imports
+Public Sub ImportTop250()
+    '
+    ' MAIN ENTRY POINT: Import today's Top 250 for Excel analysis
+    '
+    ' File search order:
+    '   1. excel/TOP250-YYYY-MM-DD.csv (today's date)
+    '   2. excel/TOP250-LATEST.csv (fallback)
+    '   3. Manual file selection
+    '
+    ' These files contain ONLY the filtered top 250 patents with 3+ years remaining.
+    ' DO NOT import patents-raw-metrics-*.csv (contains expired patents)
+    '
+    Dim csvPath As String
+    Dim dateStr As String
 
-    ImportAllDataWithPrefix prefix
+    ' Try today's file first
+    dateStr = Format(Date, "yyyy-mm-dd")
+    csvPath = FindTop250File(dateStr)
+
+    If csvPath = "" Then
+        MsgBox "Could not find TOP250 file for today (" & dateStr & ")." & vbCrLf & vbCrLf & _
+               "Run this command first:" & vbCrLf & _
+               "npx tsx scripts/export-top250-for-excel.ts" & vbCrLf & vbCrLf & _
+               "Click OK to select a file manually.", vbExclamation
+        csvPath = SelectFile("Select Top 250 CSV (NOT raw-metrics!)", "CSV Files (*.csv),*.csv")
+    End If
+
+    If csvPath <> "" Then
+        ImportTop250FromFile csvPath
+    End If
+End Sub
+
+Private Function FindTop250File(ByVal dateStr As String) As String
+    '
+    ' Finds the Top 250 CSV file using naming convention
+    '
+    Dim basePath As String
+    Dim tryPath As String
+
+    ' Get the workbook's directory or current directory
+    If ThisWorkbook.Path <> "" Then
+        basePath = ThisWorkbook.Path & "\"
+    Else
+        basePath = CurDir & "\"
+    End If
+
+    ' Try 1: excel/TOP250-YYYY-MM-DD.csv
+    tryPath = basePath & "TOP250-" & dateStr & ".csv"
+    If FileExists(tryPath) Then
+        FindTop250File = tryPath
+        Exit Function
+    End If
+
+    ' Try 2: TOP250-YYYY-MM-DD.csv in same directory
+    tryPath = basePath & "..\excel\TOP250-" & dateStr & ".csv"
+    If FileExists(tryPath) Then
+        FindTop250File = tryPath
+        Exit Function
+    End If
+
+    ' Try 3: TOP250-LATEST.csv fallback
+    tryPath = basePath & "TOP250-LATEST.csv"
+    If FileExists(tryPath) Then
+        FindTop250File = tryPath
+        Exit Function
+    End If
+
+    tryPath = basePath & "..\excel\TOP250-LATEST.csv"
+    If FileExists(tryPath) Then
+        FindTop250File = tryPath
+        Exit Function
+    End If
+
+    FindTop250File = ""
+End Function
+
+Private Function FileExists(ByVal filePath As String) As Boolean
+    On Error Resume Next
+    FileExists = (Dir(filePath) <> "")
+    On Error GoTo 0
+End Function
+
+Private Sub ImportTop250FromFile(ByVal csvPath As String)
+    '
+    ' Imports the Top 250 CSV and sets up worksheets
+    '
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    On Error GoTo ErrorHandler
+
+    ' Clear existing data
+    ClearAllDataSheets
+
+    ' Import CSV
+    ImportCSVToSheet csvPath, RAW_DATA_SHEET
+
+    Dim rowCount As Long
+    rowCount = GetRowCount(RAW_DATA_SHEET)
+
+    ' Verify it's the filtered top 250
+    If rowCount > 260 Then
+        MsgBox "WARNING: File has " & rowCount & " patents." & vbCrLf & _
+               "Expected ~250. You may have imported the wrong file." & vbCrLf & vbCrLf & _
+               "Use TOP250-*.csv, NOT patents-raw-metrics-*.csv", vbExclamation
+    End If
+
+    ' Create weights sheet and scoring worksheets
+    CreateUserWeightsSheet
+    GenerateScoringWorksheets DEFAULT_TOP_N
+
+    MsgBox "Imported " & rowCount & " patents from:" & vbCrLf & csvPath, vbInformation
+
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    Exit Sub
+
+ErrorHandler:
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    MsgBox "Error during import: " & Err.Description, vbCritical
+End Sub
+
+Public Sub ImportAllData()
+    ' Legacy wrapper - redirects to new function
+    ImportTop250
 End Sub
 
 Public Sub GenerateAllWorksheets()

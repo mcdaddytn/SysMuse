@@ -3233,3 +3233,100 @@ npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
 *Session: 2026-01-18 (continuation)*
 *Status: V3 stakeholder voting model complete, exports working*
 *Next: Abstract prompts to config, citation overlap report*
+
+---
+
+### Session Update: 2026-01-18 (Continuation) - Excel V3.1 + Co-Citation Report
+
+**Major Accomplishments:**
+
+1. **Excel VBA Macro Updated to V3.1** ✅
+   - 6 stakeholder profiles with adjustable weights
+   - **Macro-based calculation** (not formulas) - fixes #VALUE! errors
+   - **`RecalculateAll()`** macro - recalculates and re-sorts after weight changes
+   - Auto-detects `TOP250-YYYY-MM-DD.csv` by today's date
+   - Removed `Attribute VB_Name` line that caused compile issues
+
+2. **Co-Citation Report Created** ✅
+   - New script: `scripts/generate-cocitation-report.ts`
+   - Groups patents by common citators for litigation packaging
+   - Found **37 clusters** from **97 patents**
+   - **412 competitor patents** cite 2+ Broadcom patents
+   - Output: `output/cocitation-clusters-2026-01-18.json`, `excel/COCITATION-CLUSTERS-2026-01-18.csv`
+
+**High-Value Litigation Bundles (all patents in top 250):**
+
+| Cluster | Patents | Target | Theme |
+|---------|---------|--------|-------|
+| #3 | 5 | Microsoft | Malware/ransomware detection |
+| #8 | 3 | Amazon | Access control policies |
+| #9 | 3 | Amazon | Content/backup handling |
+| #10 | 3 | Microsoft | Network security |
+
+**Example Cluster #3 (Microsoft Ransomware Bundle):**
+- Patents: 10262137, 8484737, 9189629, 9679134, 9838405
+- All 5 in top 250
+- 6 Microsoft patents cite multiple in cluster (ransomware detection, malware remediation)
+
+**Company Summary (across all clusters):**
+- Microsoft: 14 clusters, 75 citator patents
+- Amazon: 8 clusters, 143 citator patents
+- Apple: 5 clusters, 54 citator patents
+- Google: 5 clusters, 43 citator patents
+
+**New/Modified Files:**
+
+| File | Purpose |
+|------|---------|
+| `excel/PatentAnalysisMacros.bas` | V3.1 - macro-based scoring with RecalculateAll |
+| `scripts/generate-cocitation-report.ts` | Co-citation cluster analysis |
+| `output/cocitation-clusters-2026-01-18.json` | Full cluster data |
+| `excel/COCITATION-CLUSTERS-2026-01-18.csv` | Cluster summary for Excel |
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Pending Tasks (Prioritized)
+
+1. **Abstract Prompts to Config Files** (HIGH)
+   - Create `sector-prompts/` directory structure
+   - Move LLM prompts from inline code to YAML configs
+   - Enable per-sector prompt customization
+   - Support future GUI editing of prompts
+
+2. **Sector-Specific Scoring** (MEDIUM)
+   - Develop within-sector scores using sector-specific metrics
+   - Potentially normalize across sectors
+   - Could factor into overall top 250 ranking
+
+3. **Continue Sector Analysis** (MEDIUM)
+   - Additional sectors: drm-content-protection, adaptive-streaming
+
+### Quick Commands
+
+```bash
+# Export V3 stakeholder scores (for Excel)
+npx tsx scripts/calculate-and-export-v3.ts
+
+# Generate co-citation report
+npx tsx scripts/generate-cocitation-report.ts --min-overlap 2
+
+# Run sector analysis
+npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
+```
+
+### Excel Workflow
+
+1. Run: `npx tsx scripts/calculate-and-export-v3.ts`
+2. Open Excel workbook in `excel/` folder
+3. Import module from `PatentAnalysisMacros.bas`
+4. Run macro: `ImportTop250()`
+5. Adjust weights in `UserWeights` sheet
+6. Run macro: `RecalculateAll()` to update scores and re-sort
+
+---
+
+*Session: 2026-01-18*
+*Status: Excel V3.1 with RecalculateAll, Co-citation report complete*
+*Next: Prompt abstraction to config files, sector-specific scoring*

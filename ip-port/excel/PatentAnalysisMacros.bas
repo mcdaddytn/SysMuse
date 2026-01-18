@@ -1,8 +1,7 @@
-Attribute VB_Name = "PatentAnalysisMacros"
 '===============================================================================
 ' Patent Portfolio Analysis - VBA Macros
 '===============================================================================
-' Version: 3.0 (V3 Stakeholder Voting Profiles)
+' Version: 3.1 (V3 Stakeholder Voting Profiles - Macro-based Calculation)
 ' Description: Macros for importing patent data, generating scoring worksheets,
 '              and managing user weight profiles for dynamic patent scoring.
 '
@@ -15,26 +14,25 @@ Attribute VB_Name = "PatentAnalysisMacros"
 '   6. Executive/Portfolio - Balanced C-suite view
 '
 ' SCORING MODEL:
-'   - Multiplicative 4-factor model: Market × Legal × Enforcement × Timeline
-'   - Each factor has adjustable metric weights
-'   - Year multiplier applied to final score
-'   - Consensus = average of all 6 profile scores
+'   - Weighted sum of 10 normalized metrics
+'   - Year multiplier applied to final score: 0.3 + 0.7 * (years/15)^0.8
+'   - Consensus = weighted average of all 6 profile scores
+'
+' KEY MACROS:
+'   - ImportTop250(): Import today's CSV and generate all worksheets
+'   - RecalculateAll(): Recalculate all scores with current weights and re-sort
 '
 ' Worksheet Structure:
 '   - RawData: Imported patent metrics (from CSV)
 '   - UserWeights: 6 stakeholder profiles with adjustable weights
-'   - Score_IPLit_Aggressive: Scoring sheet for IP Litigator (Aggressive)
-'   - Score_IPLit_Balanced: Scoring sheet for IP Litigator (Balanced)
-'   - Score_IPLit_Conservative: Scoring sheet for IP Litigator (Conservative)
-'   - Score_Licensing: Scoring sheet for Licensing Specialist
-'   - Score_Corporate: Scoring sheet for Corporate/M&A
-'   - Score_Executive: Scoring sheet for Executive/Portfolio
+'   - Score_IPLit_Aggr, Score_IPLit_Bal, Score_IPLit_Cons: IP Litigator views
+'   - Score_Licensing, Score_Corporate, Score_Executive: Other stakeholder views
 '   - Score_Consensus: Combined view with all profiles
 '
 ' Usage:
 '   1. Run ImportTop250() - auto-finds today's TOP250-YYYY-MM-DD.csv
 '   2. Modify weights in UserWeights sheet
-'   3. Scores update automatically via formulas
+'   3. Run RecalculateAll() to update scores and re-sort
 '
 ' File Convention:
 '   - Export: npx tsx scripts/calculate-and-export-v3.ts
@@ -42,14 +40,13 @@ Attribute VB_Name = "PatentAnalysisMacros"
 '   - Fallback: excel/TOP250-LATEST.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
-' Last Updated: 2026-01-18 (V3 stakeholder profiles)
+' Last Updated: 2026-01-18 (V3.1 macro-based calculation)
 '===============================================================================
 
 Option Explicit
 
 ' Configuration Constants
 Private Const DEFAULT_TOP_N As Integer = 250
-Private Const DATA_START_ROW As Integer = 2
 Private Const WEIGHTS_SHEET As String = "UserWeights"
 Private Const RAW_DATA_SHEET As String = "RawData"
 
@@ -57,42 +54,56 @@ Private Const RAW_DATA_SHEET As String = "RawData"
 Private Const FILE_PREFIX As String = "TOP250-"
 Private Const FILE_LATEST As String = "TOP250-LATEST.csv"
 
-' V3 CSV Column mappings (must match calculate-and-export-v3.ts output)
-' Note: CSV has rank in col A, but we skip it during import relevance
-Private Const COL_RANK As String = "A"
-Private Const COL_PATENT_ID As String = "B"
-Private Const COL_TITLE As String = "C"
-Private Const COL_GRANT_DATE As String = "D"
-Private Const COL_ASSIGNEE As String = "E"
-Private Const COL_YEARS_REMAINING As String = "F"
-Private Const COL_FORWARD_CITATIONS As String = "G"
-Private Const COL_COMPETITOR_CITATIONS As String = "H"
-Private Const COL_COMPETITOR_COUNT As String = "I"
-Private Const COL_COMPETITORS As String = "J"
-Private Const COL_SECTOR As String = "K"
-Private Const COL_SECTOR_NAME As String = "L"
+' V3 CSV Column indices (1-based, matching CSV import)
+Private Const COL_RANK As Integer = 1
+Private Const COL_PATENT_ID As Integer = 2
+Private Const COL_TITLE As Integer = 3
+Private Const COL_GRANT_DATE As Integer = 4
+Private Const COL_ASSIGNEE As Integer = 5
+Private Const COL_YEARS_REMAINING As Integer = 6
+Private Const COL_FORWARD_CITATIONS As Integer = 7
+Private Const COL_COMPETITOR_CITATIONS As Integer = 8
+Private Const COL_COMPETITOR_COUNT As Integer = 9
+Private Const COL_COMPETITORS As Integer = 10
+Private Const COL_SECTOR As Integer = 11
+Private Const COL_SECTOR_NAME As Integer = 12
 ' LLM scores (1-5 scale)
-Private Const COL_ELIGIBILITY As String = "M"
-Private Const COL_VALIDITY As String = "N"
-Private Const COL_CLAIM_BREADTH As String = "O"
-Private Const COL_ENFORCEMENT As String = "P"
-Private Const COL_DESIGN_AROUND As String = "Q"
-Private Const COL_MARKET_RELEVANCE As String = "R"
-Private Const COL_IPR_RISK As String = "S"
-Private Const COL_PROSECUTION_QUALITY As String = "T"
-' V3 signals
-Private Const COL_IMPLEMENTATION_TYPE As String = "U"
-Private Const COL_STANDARDS_RELEVANCE As String = "V"
-' Pre-computed scores (for reference, we recalculate dynamically)
-Private Const COL_SCORE_CONSENSUS As String = "W"
+Private Const COL_ELIGIBILITY As Integer = 13
+Private Const COL_VALIDITY As Integer = 14
+Private Const COL_CLAIM_BREADTH As Integer = 15
+Private Const COL_ENFORCEMENT As Integer = 16
+Private Const COL_DESIGN_AROUND As Integer = 17
+Private Const COL_MARKET_RELEVANCE As Integer = 18
+Private Const COL_IPR_RISK As Integer = 19
+Private Const COL_PROSECUTION_QUALITY As Integer = 20
 
-' Profile identifiers
-Private Const PROFILE_AGGRESSIVE As String = "IPLit_Aggressive"
-Private Const PROFILE_BALANCED As String = "IPLit_Balanced"
-Private Const PROFILE_CONSERVATIVE As String = "IPLit_Conservative"
-Private Const PROFILE_LICENSING As String = "Licensing"
-Private Const PROFILE_CORPORATE As String = "Corporate"
-Private Const PROFILE_EXECUTIVE As String = "Executive"
+' Weight row indices in UserWeights (1-based)
+Private Const WEIGHT_ROW_COMP_CITES As Integer = 7
+Private Const WEIGHT_ROW_COMP_COUNT As Integer = 8
+Private Const WEIGHT_ROW_FWD_CITES As Integer = 9
+Private Const WEIGHT_ROW_ELIGIBILITY As Integer = 10
+Private Const WEIGHT_ROW_VALIDITY As Integer = 11
+Private Const WEIGHT_ROW_BREADTH As Integer = 12
+Private Const WEIGHT_ROW_ENFORCEMENT As Integer = 13
+Private Const WEIGHT_ROW_DESIGN As Integer = 14
+Private Const WEIGHT_ROW_IPR As Integer = 15
+Private Const WEIGHT_ROW_PROSECUTION As Integer = 16
+
+' Profile weight columns in UserWeights (1-based)
+Private Const WEIGHT_COL_AGGRESSIVE As Integer = 2
+Private Const WEIGHT_COL_BALANCED As Integer = 3
+Private Const WEIGHT_COL_CONSERVATIVE As Integer = 4
+Private Const WEIGHT_COL_LICENSING As Integer = 5
+Private Const WEIGHT_COL_CORPORATE As Integer = 6
+Private Const WEIGHT_COL_EXECUTIVE As Integer = 7
+
+' Profile relative weight rows
+Private Const REL_WEIGHT_ROW_AGGRESSIVE As Integer = 27
+Private Const REL_WEIGHT_ROW_BALANCED As Integer = 28
+Private Const REL_WEIGHT_ROW_CONSERVATIVE As Integer = 29
+Private Const REL_WEIGHT_ROW_LICENSING As Integer = 30
+Private Const REL_WEIGHT_ROW_CORPORATE As Integer = 31
+Private Const REL_WEIGHT_ROW_EXECUTIVE As Integer = 32
 
 '===============================================================================
 ' PUBLIC ENTRY POINTS
@@ -102,15 +113,9 @@ Public Sub ImportTop250()
     '
     ' MAIN ENTRY POINT: Import today's Top 250 for Excel analysis
     '
-    ' File search order:
-    '   1. excel/TOP250-YYYY-MM-DD.csv (today's date)
-    '   2. excel/TOP250-LATEST.csv (fallback)
-    '   3. Manual file selection
-    '
     Dim csvPath As String
     Dim dateStr As String
 
-    ' Try today's file first
     dateStr = Format(Date, "yyyy-mm-dd")
     csvPath = FindTop250File(dateStr)
 
@@ -127,42 +132,90 @@ Public Sub ImportTop250()
     End If
 End Sub
 
+Public Sub RecalculateAll()
+    '
+    ' Recalculates all scores using current weights and re-sorts all sheets
+    '
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    On Error GoTo ErrorHandler
+
+    Dim dataRows As Long
+    dataRows = GetRowCount(RAW_DATA_SHEET)
+
+    If dataRows < 2 Then
+        MsgBox "No data in RawData sheet. Run ImportTop250 first.", vbExclamation
+        GoTo Cleanup
+    End If
+
+    ' Load weights
+    Dim weights As Object
+    Set weights = LoadWeights()
+
+    ' Recalculate each profile sheet
+    RecalculateProfileSheet "Score_IPLit_Aggr", WEIGHT_COL_AGGRESSIVE, weights, dataRows
+    RecalculateProfileSheet "Score_IPLit_Bal", WEIGHT_COL_BALANCED, weights, dataRows
+    RecalculateProfileSheet "Score_IPLit_Cons", WEIGHT_COL_CONSERVATIVE, weights, dataRows
+    RecalculateProfileSheet "Score_Licensing", WEIGHT_COL_LICENSING, weights, dataRows
+    RecalculateProfileSheet "Score_Corporate", WEIGHT_COL_CORPORATE, weights, dataRows
+    RecalculateProfileSheet "Score_Executive", WEIGHT_COL_EXECUTIVE, weights, dataRows
+
+    ' Recalculate consensus sheet
+    RecalculateConsensusSheet weights, dataRows
+
+    MsgBox "Recalculated and re-sorted all scoring worksheets.", vbInformation
+
+Cleanup:
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error during recalculation: " & Err.Description, vbCritical
+    Resume Cleanup
+End Sub
+
+Public Sub ImportAllData()
+    ' Legacy wrapper
+    ImportTop250
+End Sub
+
+'===============================================================================
+' IMPORT FUNCTIONS
+'===============================================================================
+
 Private Function FindTop250File(ByVal dateStr As String) As String
-    '
-    ' Finds the Top 250 CSV file using naming convention
-    '
     Dim basePath As String
     Dim tryPath As String
 
-    ' Get the workbook's directory or current directory
     If ThisWorkbook.Path <> "" Then
         basePath = ThisWorkbook.Path & "\"
     Else
         basePath = CurDir & "\"
     End If
 
-    ' Try 1: TOP250-YYYY-MM-DD.csv in same directory (excel/)
+    ' Try: TOP250-YYYY-MM-DD.csv in same directory
     tryPath = basePath & FILE_PREFIX & dateStr & ".csv"
     If FileExists(tryPath) Then
         FindTop250File = tryPath
         Exit Function
     End If
 
-    ' Try 2: Go up and into excel/ directory
+    ' Try: go up and into excel/ directory
     tryPath = basePath & "..\excel\" & FILE_PREFIX & dateStr & ".csv"
     If FileExists(tryPath) Then
         FindTop250File = tryPath
         Exit Function
     End If
 
-    ' Try 3: TOP250-LATEST.csv fallback in same directory
+    ' Try: TOP250-LATEST.csv fallback
     tryPath = basePath & FILE_LATEST
     If FileExists(tryPath) Then
         FindTop250File = tryPath
         Exit Function
     End If
 
-    ' Try 4: TOP250-LATEST.csv in excel/ subdirectory
     tryPath = basePath & "..\excel\" & FILE_LATEST
     If FileExists(tryPath) Then
         FindTop250File = tryPath
@@ -179,35 +232,33 @@ Private Function FileExists(ByVal filePath As String) As Boolean
 End Function
 
 Private Sub ImportTop250FromFile(ByVal csvPath As String)
-    '
-    ' Imports the Top 250 CSV and sets up worksheets
-    '
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
 
     On Error GoTo ErrorHandler
 
-    ' Clear existing data
     ClearAllDataSheets
-
-    ' Import CSV
     ImportCSVToSheet csvPath, RAW_DATA_SHEET
 
     Dim rowCount As Long
     rowCount = GetRowCount(RAW_DATA_SHEET)
 
-    ' Verify it's the filtered top 250
     If rowCount > 260 Then
         MsgBox "WARNING: File has " & rowCount & " patents." & vbCrLf & _
                "Expected ~250. You may have imported the wrong file.", vbExclamation
     End If
 
-    ' Create weights sheet and scoring worksheets
     CreateUserWeightsSheet
-    GenerateAllScoringWorksheets DEFAULT_TOP_N
+
+    ' Load weights and generate all sheets
+    Dim weights As Object
+    Set weights = LoadWeights()
+
+    GenerateAllScoringWorksheets weights, DEFAULT_TOP_N
 
     MsgBox "Imported " & rowCount & " patents from:" & vbCrLf & csvPath & vbCrLf & vbCrLf & _
-           "6 stakeholder profiles created. Adjust weights in UserWeights sheet.", vbInformation
+           "6 stakeholder profiles created." & vbCrLf & _
+           "Adjust weights in UserWeights, then run RecalculateAll.", vbInformation
 
     Application.Calculation = xlCalculationAutomatic
     Application.ScreenUpdating = True
@@ -219,69 +270,77 @@ ErrorHandler:
     MsgBox "Error during import: " & Err.Description, vbCritical
 End Sub
 
-Public Sub ImportAllData()
-    ' Legacy wrapper - redirects to new function
-    ImportTop250
-End Sub
-
-Public Sub RefreshScoring()
-    ' Regenerate scoring worksheets (keeps weights)
-    Dim dataRows As Long
-    dataRows = GetRowCount(RAW_DATA_SHEET)
-    If dataRows > 1 Then
-        GenerateAllScoringWorksheets DEFAULT_TOP_N
-    Else
-        MsgBox "No data in RawData sheet. Run ImportTop250 first.", vbExclamation
-    End If
-End Sub
-
-'===============================================================================
-' IMPORT FUNCTIONS
-'===============================================================================
-
 Private Sub ImportCSVToSheet(ByVal filePath As String, ByVal sheetName As String)
-    '
-    ' Imports a CSV file into the specified worksheet
-    '
     Dim ws As Worksheet
-
-    ' Create or clear the sheet
     Set ws = GetOrCreateSheet(sheetName)
     ws.Cells.Clear
 
-    ' Import using QueryTable for better handling of quoted fields
     With ws.QueryTables.Add(Connection:="TEXT;" & filePath, Destination:=ws.Range("A1"))
         .TextFileParseType = xlDelimited
         .TextFileCommaDelimiter = True
         .TextFileTextQualifier = xlTextQualifierDoubleQuote
         .TextFileConsecutiveDelimiter = False
         .Refresh BackgroundQuery:=False
-        .Delete  ' Remove the query table after import
+        .Delete
     End With
 
-    ' Format the header row
     FormatHeaderRow ws
 End Sub
 
 '===============================================================================
-' USER WEIGHTS SHEET CREATION (V3 - 6 Profiles)
+' WEIGHTS MANAGEMENT
 '===============================================================================
 
+Private Function LoadWeights() As Object
+    ' Returns a dictionary-like object with all weights
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets(WEIGHTS_SHEET)
+
+    Dim weights As Object
+    Set weights = CreateObject("Scripting.Dictionary")
+
+    ' Metric weights for each profile (array index 0-9 for 10 metrics)
+    Dim profileCols As Variant
+    profileCols = Array(WEIGHT_COL_AGGRESSIVE, WEIGHT_COL_BALANCED, WEIGHT_COL_CONSERVATIVE, _
+                        WEIGHT_COL_LICENSING, WEIGHT_COL_CORPORATE, WEIGHT_COL_EXECUTIVE)
+
+    Dim profileNames As Variant
+    profileNames = Array("Aggressive", "Balanced", "Conservative", "Licensing", "Corporate", "Executive")
+
+    Dim i As Integer, j As Integer
+    For i = 0 To 5
+        Dim metricWeights(0 To 9) As Double
+        For j = 0 To 9
+            metricWeights(j) = Val(ws.Cells(WEIGHT_ROW_COMP_CITES + j, profileCols(i)).Value)
+        Next j
+        weights.Add profileNames(i), metricWeights
+    Next i
+
+    ' Relative weights for consensus
+    Dim relWeights(0 To 5) As Double
+    relWeights(0) = Val(ws.Cells(REL_WEIGHT_ROW_AGGRESSIVE, 2).Value)
+    relWeights(1) = Val(ws.Cells(REL_WEIGHT_ROW_BALANCED, 2).Value)
+    relWeights(2) = Val(ws.Cells(REL_WEIGHT_ROW_CONSERVATIVE, 2).Value)
+    relWeights(3) = Val(ws.Cells(REL_WEIGHT_ROW_LICENSING, 2).Value)
+    relWeights(4) = Val(ws.Cells(REL_WEIGHT_ROW_CORPORATE, 2).Value)
+    relWeights(5) = Val(ws.Cells(REL_WEIGHT_ROW_EXECUTIVE, 2).Value)
+    weights.Add "RelativeWeights", relWeights
+
+    Set LoadWeights = weights
+End Function
+
 Private Sub CreateUserWeightsSheet()
-    '
-    ' Creates the UserWeights sheet with 6 stakeholder profiles
-    '
     Dim ws As Worksheet
     Set ws = GetOrCreateSheet(WEIGHTS_SHEET)
     ws.Cells.Clear
 
-    ' === Section 1: Header ===
+    ' Header
     ws.Range("A1").Value = "V3 STAKEHOLDER VOTING PROFILES"
     ws.Range("A1").Font.Bold = True
     ws.Range("A1").Font.Size = 16
-    ws.Range("A2").Value = "Adjust weights below. Scores recalculate automatically."
+    ws.Range("A2").Value = "Adjust weights below, then run RecalculateAll macro."
 
-    ' === Section 2: Metric Weights by Profile ===
+    ' Metric Weights section
     ws.Range("A4").Value = "METRIC WEIGHTS"
     ws.Range("A4").Font.Bold = True
     ws.Range("A4").Font.Size = 14
@@ -296,19 +355,18 @@ Private Sub CreateUserWeightsSheet()
     ws.Range("G6").Value = "Executive"
     ws.Range("H6").Value = "Description"
 
-    ' Metric weights (rows 7-16) - 10 metrics
-    ' Format: Metric Name, Aggr, Bal, Cons, Lic, Corp, Exec, Description
+    ' Metric weights (rows 7-16)
     Dim metrics As Variant
     metrics = Array( _
-        Array("competitor_citations", 0.20, 0.22, 0.15, 0.18, 0.20, 0.22, "Citations from tracked competitors"), _
+        Array("competitor_citations", 0.2, 0.22, 0.15, 0.18, 0.2, 0.22, "Citations from tracked competitors"), _
         Array("competitor_count", 0.08, 0.06, 0.08, 0.12, 0.08, 0.08, "Number of competitors citing"), _
-        Array("forward_citations", 0.05, 0.04, 0.08, 0.10, 0.10, 0.08, "Total forward citations (tech leadership)"), _
-        Array("eligibility_score", 0.12, 0.10, 0.12, 0.10, 0.08, 0.10, "Section 101 eligibility (1-5)"), _
-        Array("validity_score", 0.12, 0.10, 0.14, 0.10, 0.10, 0.10, "Prior art strength (1-5)"), _
-        Array("claim_breadth", 0.06, 0.08, 0.08, 0.12, 0.12, 0.10, "Claim scope breadth (1-5)"), _
-        Array("enforcement_clarity", 0.14, 0.12, 0.10, 0.08, 0.08, 0.10, "Infringement detectability (1-5)"), _
-        Array("design_around_difficulty", 0.10, 0.10, 0.08, 0.10, 0.12, 0.10, "Design-around difficulty (1-5)"), _
-        Array("ipr_risk_score", 0.06, 0.10, 0.10, 0.05, 0.06, 0.06, "IPR/PTAB risk (5=clean, 1=high)"), _
+        Array("forward_citations", 0.05, 0.04, 0.08, 0.1, 0.1, 0.08, "Total forward citations"), _
+        Array("eligibility_score", 0.12, 0.1, 0.12, 0.1, 0.08, 0.1, "Section 101 eligibility (1-5)"), _
+        Array("validity_score", 0.12, 0.1, 0.14, 0.1, 0.1, 0.1, "Prior art strength (1-5)"), _
+        Array("claim_breadth", 0.06, 0.08, 0.08, 0.12, 0.12, 0.1, "Claim scope breadth (1-5)"), _
+        Array("enforcement_clarity", 0.14, 0.12, 0.1, 0.08, 0.08, 0.1, "Infringement detectability (1-5)"), _
+        Array("design_around_difficulty", 0.1, 0.1, 0.08, 0.1, 0.12, 0.1, "Design-around difficulty (1-5)"), _
+        Array("ipr_risk_score", 0.06, 0.1, 0.1, 0.05, 0.06, 0.06, "IPR/PTAB risk (5=clean)"), _
         Array("prosecution_quality", 0.07, 0.08, 0.07, 0.05, 0.06, 0.06, "Prosecution quality (5=clean)") _
     )
 
@@ -324,7 +382,7 @@ Private Sub CreateUserWeightsSheet()
         ws.Range("H" & (7 + i)).Value = metrics(i)(7)
     Next i
 
-    ' Total row (row 17)
+    ' Total row
     ws.Range("A17").Value = "TOTAL"
     ws.Range("A17").Font.Bold = True
     ws.Range("B17").Formula = "=SUM(B7:B16)"
@@ -334,17 +392,15 @@ Private Sub CreateUserWeightsSheet()
     ws.Range("F17").Formula = "=SUM(F7:F16)"
     ws.Range("G17").Formula = "=SUM(G7:G16)"
 
-    ' Format weights as percentages
     ws.Range("B7:G17").NumberFormat = "0%"
 
-    ' === Section 3: Year Multiplier Info ===
+    ' Year Multiplier info
     ws.Range("A19").Value = "YEAR MULTIPLIER"
     ws.Range("A19").Font.Bold = True
     ws.Range("A20").Value = "Formula: 0.3 + 0.7 * (years/15)^0.8"
     ws.Range("A21").Value = "Applied multiplicatively to base score"
-    ws.Range("A22").Value = "Years < 3 filtered out in export"
 
-    ' === Section 4: Profile Relative Weights (for Consensus) ===
+    ' Profile Relative Weights
     ws.Range("A24").Value = "PROFILE WEIGHTS (for Consensus)"
     ws.Range("A24").Font.Bold = True
     ws.Range("A24").Font.Size = 14
@@ -359,7 +415,7 @@ Private Sub CreateUserWeightsSheet()
 
     ws.Range("A28").Value = "IP Litigator (Balanced)"
     ws.Range("B28").Value = 0.167
-    ws.Range("C28").Value = "Mixed portfolio, hourly + success"
+    ws.Range("C28").Value = "Mixed portfolio"
 
     ws.Range("A29").Value = "IP Litigator (Conservative)"
     ws.Range("B29").Value = 0.167
@@ -367,15 +423,15 @@ Private Sub CreateUserWeightsSheet()
 
     ws.Range("A30").Value = "Licensing Specialist"
     ws.Range("B30").Value = 0.167
-    ws.Range("C30").Value = "Portfolio value, market signals"
+    ws.Range("C30").Value = "Portfolio value"
 
     ws.Range("A31").Value = "Corporate/M&A"
     ws.Range("B31").Value = 0.166
-    ws.Range("C31").Value = "Strategic alignment, deal signals"
+    ws.Range("C31").Value = "Strategic alignment"
 
     ws.Range("A32").Value = "Executive/Portfolio"
     ws.Range("B32").Value = 0.166
-    ws.Range("C32").Value = "C-Suite, balanced view"
+    ws.Range("C32").Value = "C-Suite view"
 
     ws.Range("A33").Value = "TOTAL"
     ws.Range("A33").Font.Bold = True
@@ -383,104 +439,111 @@ Private Sub CreateUserWeightsSheet()
 
     ws.Range("B27:B33").NumberFormat = "0.0%"
 
-    ' === Create Named Ranges ===
-    CreateNamedRangesV3 ws
-
-    ' === Format ===
+    ' Formatting
     FormatHeaderRow ws, 6
     FormatHeaderRow ws, 26
     ws.Columns("A:H").AutoFit
 
-    ' Color coding for profiles
-    ws.Range("B6").Interior.Color = RGB(255, 99, 71)   ' Aggressive - tomato
-    ws.Range("C6").Interior.Color = RGB(255, 165, 0)   ' Balanced - orange
-    ws.Range("D6").Interior.Color = RGB(100, 149, 237) ' Conservative - cornflower
-    ws.Range("E6").Interior.Color = RGB(144, 238, 144) ' Licensing - light green
-    ws.Range("F6").Interior.Color = RGB(221, 160, 221) ' Corporate - plum
-    ws.Range("G6").Interior.Color = RGB(135, 206, 235) ' Executive - sky blue
-End Sub
-
-Private Sub CreateNamedRangesV3(ByVal ws As Worksheet)
-    '
-    ' Creates named ranges for V3 formulas to reference
-    '
-    Dim wb As Workbook
-    Set wb = ThisWorkbook
-
-    ' Delete existing named ranges if they exist
-    On Error Resume Next
-    wb.Names("W_Aggressive").Delete
-    wb.Names("W_Balanced").Delete
-    wb.Names("W_Conservative").Delete
-    wb.Names("W_Licensing").Delete
-    wb.Names("W_Corporate").Delete
-    wb.Names("W_Executive").Delete
-    wb.Names("RelW_Aggressive").Delete
-    wb.Names("RelW_Balanced").Delete
-    wb.Names("RelW_Conservative").Delete
-    wb.Names("RelW_Licensing").Delete
-    wb.Names("RelW_Corporate").Delete
-    wb.Names("RelW_Executive").Delete
-    On Error GoTo 0
-
-    ' Metric weight ranges (rows 7-16, 10 metrics)
-    wb.Names.Add Name:="W_Aggressive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$7:$B$16"
-    wb.Names.Add Name:="W_Balanced", RefersTo:="=" & WEIGHTS_SHEET & "!$C$7:$C$16"
-    wb.Names.Add Name:="W_Conservative", RefersTo:="=" & WEIGHTS_SHEET & "!$D$7:$D$16"
-    wb.Names.Add Name:="W_Licensing", RefersTo:="=" & WEIGHTS_SHEET & "!$E$7:$E$16"
-    wb.Names.Add Name:="W_Corporate", RefersTo:="=" & WEIGHTS_SHEET & "!$F$7:$F$16"
-    wb.Names.Add Name:="W_Executive", RefersTo:="=" & WEIGHTS_SHEET & "!$G$7:$G$16"
-
-    ' Relative weights for consensus (rows 27-32)
-    wb.Names.Add Name:="RelW_Aggressive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$27"
-    wb.Names.Add Name:="RelW_Balanced", RefersTo:="=" & WEIGHTS_SHEET & "!$B$28"
-    wb.Names.Add Name:="RelW_Conservative", RefersTo:="=" & WEIGHTS_SHEET & "!$B$29"
-    wb.Names.Add Name:="RelW_Licensing", RefersTo:="=" & WEIGHTS_SHEET & "!$B$30"
-    wb.Names.Add Name:="RelW_Corporate", RefersTo:="=" & WEIGHTS_SHEET & "!$B$31"
-    wb.Names.Add Name:="RelW_Executive", RefersTo:="=" & WEIGHTS_SHEET & "!$B$32"
+    ' Color coding
+    ws.Range("B6").Interior.Color = RGB(255, 99, 71)
+    ws.Range("C6").Interior.Color = RGB(255, 165, 0)
+    ws.Range("D6").Interior.Color = RGB(100, 149, 237)
+    ws.Range("E6").Interior.Color = RGB(144, 238, 144)
+    ws.Range("F6").Interior.Color = RGB(221, 160, 221)
+    ws.Range("G6").Interior.Color = RGB(135, 206, 235)
 End Sub
 
 '===============================================================================
-' SCORING WORKSHEET GENERATION (V3 - 6 Profiles + Consensus)
+' SCORING CALCULATION (Macro-based, not formulas)
 '===============================================================================
 
-Public Sub GenerateAllScoringWorksheets(ByVal topN As Integer)
-    '
-    ' Generates all 7 scoring worksheets (6 profiles + consensus)
-    '
-    Application.ScreenUpdating = False
-    Application.Calculation = xlCalculationManual
+Private Function CalculateScore(ByVal rawWs As Worksheet, ByVal srcRow As Long, _
+                                 ByRef metricWeights() As Double) As Variant
+    ' Returns array: (FinalScore, BaseScore, YearMult)
+    Dim result(0 To 2) As Double
 
+    ' Get raw values
+    Dim compCites As Double, compCount As Double, fwdCites As Double
+    Dim eligibility As Double, validity As Double, breadth As Double
+    Dim enforcement As Double, designAround As Double, iprRisk As Double, prosQuality As Double
+    Dim yearsRemaining As Double
+
+    yearsRemaining = Val(rawWs.Cells(srcRow, COL_YEARS_REMAINING).Value)
+    compCites = Val(rawWs.Cells(srcRow, COL_COMPETITOR_CITATIONS).Value)
+    compCount = Val(rawWs.Cells(srcRow, COL_COMPETITOR_COUNT).Value)
+    fwdCites = Val(rawWs.Cells(srcRow, COL_FORWARD_CITATIONS).Value)
+    eligibility = Val(rawWs.Cells(srcRow, COL_ELIGIBILITY).Value)
+    validity = Val(rawWs.Cells(srcRow, COL_VALIDITY).Value)
+    breadth = Val(rawWs.Cells(srcRow, COL_CLAIM_BREADTH).Value)
+    enforcement = Val(rawWs.Cells(srcRow, COL_ENFORCEMENT).Value)
+    designAround = Val(rawWs.Cells(srcRow, COL_DESIGN_AROUND).Value)
+    iprRisk = Val(rawWs.Cells(srcRow, COL_IPR_RISK).Value)
+    prosQuality = Val(rawWs.Cells(srcRow, COL_PROSECUTION_QUALITY).Value)
+
+    ' Normalize values (0-1 scale)
+    Dim normCompCites As Double, normCompCount As Double, normFwdCites As Double
+    Dim normElig As Double, normValid As Double, normBreadth As Double
+    Dim normEnforce As Double, normDesign As Double, normIPR As Double, normPros As Double
+
+    normCompCites = Application.WorksheetFunction.Min(1, compCites / 30)
+    normCompCount = Application.WorksheetFunction.Min(1, compCount / 10)
+    normFwdCites = Application.WorksheetFunction.Min(1, Sqr(fwdCites) / 20)
+
+    ' LLM scores: default to 0.6 (3/5) if missing
+    normElig = IIf(eligibility = 0, 0.6, eligibility / 5)
+    normValid = IIf(validity = 0, 0.6, validity / 5)
+    normBreadth = IIf(breadth = 0, 0.6, breadth / 5)
+    normEnforce = IIf(enforcement = 0, 0.6, enforcement / 5)
+    normDesign = IIf(designAround = 0, 0.6, designAround / 5)
+    normIPR = IIf(iprRisk = 0, 0.8, iprRisk / 5)  ' Default higher for IPR
+    normPros = IIf(prosQuality = 0, 0.6, prosQuality / 5)
+
+    ' Calculate base score (weighted sum)
+    Dim baseScore As Double
+    baseScore = normCompCites * metricWeights(0) + _
+                normCompCount * metricWeights(1) + _
+                normFwdCites * metricWeights(2) + _
+                normElig * metricWeights(3) + _
+                normValid * metricWeights(4) + _
+                normBreadth * metricWeights(5) + _
+                normEnforce * metricWeights(6) + _
+                normDesign * metricWeights(7) + _
+                normIPR * metricWeights(8) + _
+                normPros * metricWeights(9)
+
+    ' Year multiplier: 0.3 + 0.7 * MIN(1, (years/15)^0.8)
+    Dim yearMult As Double
+    yearMult = 0.3 + 0.7 * Application.WorksheetFunction.Min(1, (Application.WorksheetFunction.Max(0, yearsRemaining) / 15) ^ 0.8)
+
+    ' Final score
+    result(0) = baseScore * yearMult  ' Final Score
+    result(1) = baseScore             ' Base Score
+    result(2) = yearMult              ' Year Multiplier
+
+    CalculateScore = result
+End Function
+
+Private Sub GenerateAllScoringWorksheets(ByRef weights As Object, ByVal topN As Integer)
     Dim dataRows As Long
     dataRows = GetRowCount(RAW_DATA_SHEET)
 
-    If dataRows < 2 Then
-        MsgBox "No data in RawData sheet. Please import data first.", vbExclamation
-        Exit Sub
-    End If
+    If dataRows < 2 Then Exit Sub
 
-    ' Generate individual profile scoring sheets
-    GenerateProfileScoringSheet "Score_IPLit_Aggr", "B", RGB(255, 99, 71), topN, dataRows
-    GenerateProfileScoringSheet "Score_IPLit_Bal", "C", RGB(255, 165, 0), topN, dataRows
-    GenerateProfileScoringSheet "Score_IPLit_Cons", "D", RGB(100, 149, 237), topN, dataRows
-    GenerateProfileScoringSheet "Score_Licensing", "E", RGB(144, 238, 144), topN, dataRows
-    GenerateProfileScoringSheet "Score_Corporate", "F", RGB(221, 160, 221), topN, dataRows
-    GenerateProfileScoringSheet "Score_Executive", "G", RGB(135, 206, 235), topN, dataRows
+    ' Generate individual profile sheets
+    GenerateProfileSheet "Score_IPLit_Aggr", "Aggressive", RGB(255, 99, 71), weights, topN, dataRows
+    GenerateProfileSheet "Score_IPLit_Bal", "Balanced", RGB(255, 165, 0), weights, topN, dataRows
+    GenerateProfileSheet "Score_IPLit_Cons", "Conservative", RGB(100, 149, 237), weights, topN, dataRows
+    GenerateProfileSheet "Score_Licensing", "Licensing", RGB(144, 238, 144), weights, topN, dataRows
+    GenerateProfileSheet "Score_Corporate", "Corporate", RGB(221, 160, 221), weights, topN, dataRows
+    GenerateProfileSheet "Score_Executive", "Executive", RGB(135, 206, 235), weights, topN, dataRows
 
-    ' Generate consensus scoring sheet
-    GenerateConsensusScoringSheet "Score_Consensus", topN, dataRows
-
-    Application.Calculation = xlCalculationAutomatic
-    Application.ScreenUpdating = True
-
-    MsgBox "Generated 7 scoring worksheets (6 profiles + consensus) for " & topN & " patents.", vbInformation
+    ' Generate consensus sheet
+    GenerateConsensusSheet weights, topN, dataRows
 End Sub
 
-Private Sub GenerateProfileScoringSheet(ByVal sheetName As String, ByVal weightCol As String, _
-                                         ByVal profileColor As Long, ByVal topN As Integer, ByVal dataRows As Long)
-    '
-    ' Generates a scoring worksheet for a specific stakeholder profile
-    '
+Private Sub GenerateProfileSheet(ByVal sheetName As String, ByVal profileName As String, _
+                                  ByVal profileColor As Long, ByRef weights As Object, _
+                                  ByVal topN As Integer, ByVal dataRows As Long)
     Dim ws As Worksheet
     Set ws = GetOrCreateSheet(sheetName)
     ws.Cells.Clear
@@ -500,41 +563,35 @@ Private Sub GenerateProfileScoringSheet(ByVal sheetName As String, ByVal weightC
     Dim rowsToGenerate As Long
     rowsToGenerate = Application.WorksheetFunction.Min(topN, dataRows - 1)
 
-    Dim r As Long
-    Dim srcSheet As String
-    srcSheet = RAW_DATA_SHEET
+    Dim rawWs As Worksheet
+    Set rawWs = ThisWorkbook.Sheets(RAW_DATA_SHEET)
 
+    ' Get weights for this profile
+    Dim metricWeights() As Double
+    metricWeights = weights(profileName)
+
+    ' Calculate scores and populate
+    Dim r As Long
     For r = 2 To rowsToGenerate + 1
         Dim srcRow As Long
         srcRow = r
 
-        ws.Cells(r, 1).Value = r - 1  ' Rank
-        ws.Cells(r, 2).Formula = "=" & srcSheet & "!" & COL_PATENT_ID & srcRow
-        ws.Cells(r, 3).Formula = "=" & srcSheet & "!" & COL_TITLE & srcRow
-        ws.Cells(r, 4).Formula = "=" & srcSheet & "!" & COL_YEARS_REMAINING & srcRow
-        ws.Cells(r, 5).Formula = "=" & srcSheet & "!" & COL_COMPETITOR_CITATIONS & srcRow
-        ws.Cells(r, 6).Formula = "=" & srcSheet & "!" & COL_COMPETITORS & srcRow
-        ws.Cells(r, 7).Formula = "=" & srcSheet & "!" & COL_SECTOR & srcRow
+        ' Copy data
+        ws.Cells(r, 1).Value = r - 1  ' Rank (will update after sort)
+        ws.Cells(r, 2).Value = rawWs.Cells(srcRow, COL_PATENT_ID).Value
+        ws.Cells(r, 3).Value = rawWs.Cells(srcRow, COL_TITLE).Value
+        ws.Cells(r, 4).Value = rawWs.Cells(srcRow, COL_YEARS_REMAINING).Value
+        ws.Cells(r, 5).Value = rawWs.Cells(srcRow, COL_COMPETITOR_CITATIONS).Value
+        ws.Cells(r, 6).Value = rawWs.Cells(srcRow, COL_COMPETITORS).Value
+        ws.Cells(r, 7).Value = rawWs.Cells(srcRow, COL_SECTOR).Value
 
-        ' Year Multiplier: 0.3 + 0.7 * MIN(1, (years/15)^0.8)
-        ws.Cells(r, 9).Formula = "=0.3+0.7*MIN(1,POWER(MAX(0," & srcSheet & "!" & COL_YEARS_REMAINING & srcRow & ")/15,0.8))"
+        ' Calculate score
+        Dim scoreResult As Variant
+        scoreResult = CalculateScore(rawWs, srcRow, metricWeights)
 
-        ' Base Score: Weighted sum of 10 normalized metrics
-        ' Metrics: comp_cites, comp_count, fwd_cites, elig, valid, breadth, enforce, design, ipr, pros
-        ws.Cells(r, 10).Formula = "=" & _
-            "MIN(1," & srcSheet & "!" & COL_COMPETITOR_CITATIONS & srcRow & "/30)*" & WEIGHTS_SHEET & "!$" & weightCol & "$7+" & _
-            "MIN(1," & srcSheet & "!" & COL_COMPETITOR_COUNT & srcRow & "/10)*" & WEIGHTS_SHEET & "!$" & weightCol & "$8+" & _
-            "MIN(1,SQRT(" & srcSheet & "!" & COL_FORWARD_CITATIONS & srcRow & ")/20)*" & WEIGHTS_SHEET & "!$" & weightCol & "$9+" & _
-            "IF(" & srcSheet & "!" & COL_ELIGIBILITY & srcRow & "="""",0.6," & srcSheet & "!" & COL_ELIGIBILITY & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$10+" & _
-            "IF(" & srcSheet & "!" & COL_VALIDITY & srcRow & "="""",0.6," & srcSheet & "!" & COL_VALIDITY & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$11+" & _
-            "IF(" & srcSheet & "!" & COL_CLAIM_BREADTH & srcRow & "="""",0.6," & srcSheet & "!" & COL_CLAIM_BREADTH & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$12+" & _
-            "IF(" & srcSheet & "!" & COL_ENFORCEMENT & srcRow & "="""",0.6," & srcSheet & "!" & COL_ENFORCEMENT & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$13+" & _
-            "IF(" & srcSheet & "!" & COL_DESIGN_AROUND & srcRow & "="""",0.6," & srcSheet & "!" & COL_DESIGN_AROUND & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$14+" & _
-            "IF(" & srcSheet & "!" & COL_IPR_RISK & srcRow & "="""",0.8," & srcSheet & "!" & COL_IPR_RISK & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$15+" & _
-            "IF(" & srcSheet & "!" & COL_PROSECUTION_QUALITY & srcRow & "="""",0.6," & srcSheet & "!" & COL_PROSECUTION_QUALITY & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$16"
-
-        ' Final Score = BaseScore * YearMult
-        ws.Cells(r, 8).Formula = "=J" & r & "*I" & r
+        ws.Cells(r, 8).Value = scoreResult(0)  ' Final Score
+        ws.Cells(r, 9).Value = scoreResult(2)  ' Year Mult
+        ws.Cells(r, 10).Value = scoreResult(1) ' Base Score
     Next r
 
     ' Format
@@ -543,31 +600,16 @@ Private Sub GenerateProfileScoringSheet(ByVal sheetName As String, ByVal weightC
     ws.Range("J2:J" & (rowsToGenerate + 1)).NumberFormat = "0.00%"
 
     ' Sort by score descending
-    ws.Sort.SortFields.Clear
-    ws.Sort.SortFields.Add2 Key:=ws.Range("H2:H" & (rowsToGenerate + 1)), _
-        SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
-    With ws.Sort
-        .SetRange ws.Range("A1:J" & (rowsToGenerate + 1))
-        .Header = xlYes
-        .Apply
-    End With
-
-    ' Update rank numbers after sort
-    For r = 2 To rowsToGenerate + 1
-        ws.Cells(r, 1).Value = r - 1
-    Next r
+    SortSheetByScore ws, rowsToGenerate
 
     FormatHeaderRow ws
     ws.Range("H1").Interior.Color = profileColor
     ws.Columns("A:J").AutoFit
 End Sub
 
-Private Sub GenerateConsensusScoringSheet(ByVal sheetName As String, ByVal topN As Integer, ByVal dataRows As Long)
-    '
-    ' Generates the consensus scoring sheet with all 6 profile scores
-    '
+Private Sub GenerateConsensusSheet(ByRef weights As Object, ByVal topN As Integer, ByVal dataRows As Long)
     Dim ws As Worksheet
-    Set ws = GetOrCreateSheet(sheetName)
+    Set ws = GetOrCreateSheet("Score_Consensus")
     ws.Cells.Clear
 
     ' Headers
@@ -590,47 +632,66 @@ Private Sub GenerateConsensusScoringSheet(ByVal sheetName As String, ByVal topN 
     Dim rowsToGenerate As Long
     rowsToGenerate = Application.WorksheetFunction.Min(topN, dataRows - 1)
 
-    Dim r As Long
-    Dim srcSheet As String
-    srcSheet = RAW_DATA_SHEET
+    Dim rawWs As Worksheet
+    Set rawWs = ThisWorkbook.Sheets(RAW_DATA_SHEET)
 
+    ' Get all profile weights
+    Dim aggrWeights() As Double, balWeights() As Double, consWeights() As Double
+    Dim licWeights() As Double, corpWeights() As Double, execWeights() As Double
+    aggrWeights = weights("Aggressive")
+    balWeights = weights("Balanced")
+    consWeights = weights("Conservative")
+    licWeights = weights("Licensing")
+    corpWeights = weights("Corporate")
+    execWeights = weights("Executive")
+
+    ' Get relative weights
+    Dim relWeights() As Double
+    relWeights = weights("RelativeWeights")
+
+    Dim r As Long
     For r = 2 To rowsToGenerate + 1
         Dim srcRow As Long
         srcRow = r
 
-        ws.Cells(r, 1).Value = r - 1  ' Rank
-        ws.Cells(r, 2).Formula = "=" & srcSheet & "!" & COL_PATENT_ID & srcRow
-        ws.Cells(r, 3).Formula = "=" & srcSheet & "!" & COL_TITLE & srcRow
-        ws.Cells(r, 4).Formula = "=" & srcSheet & "!" & COL_YEARS_REMAINING & srcRow
-        ws.Cells(r, 5).Formula = "=" & srcSheet & "!" & COL_COMPETITOR_CITATIONS & srcRow
-        ws.Cells(r, 6).Formula = "=" & srcSheet & "!" & COL_COMPETITORS & srcRow
-        ws.Cells(r, 7).Formula = "=" & srcSheet & "!" & COL_SECTOR & srcRow
+        ' Copy data
+        ws.Cells(r, 1).Value = r - 1
+        ws.Cells(r, 2).Value = rawWs.Cells(srcRow, COL_PATENT_ID).Value
+        ws.Cells(r, 3).Value = rawWs.Cells(srcRow, COL_TITLE).Value
+        ws.Cells(r, 4).Value = rawWs.Cells(srcRow, COL_YEARS_REMAINING).Value
+        ws.Cells(r, 5).Value = rawWs.Cells(srcRow, COL_COMPETITOR_CITATIONS).Value
+        ws.Cells(r, 6).Value = rawWs.Cells(srcRow, COL_COMPETITORS).Value
+        ws.Cells(r, 7).Value = rawWs.Cells(srcRow, COL_SECTOR).Value
 
-        ' Year Multiplier
-        ws.Cells(r, 9).Formula = "=0.3+0.7*MIN(1,POWER(MAX(0," & srcSheet & "!" & COL_YEARS_REMAINING & srcRow & ")/15,0.8))"
+        ' Calculate each profile score
+        Dim aggrScore As Variant, balScore As Variant, consScore As Variant
+        Dim licScore As Variant, corpScore As Variant, execScore As Variant
 
-        ' Individual profile scores (each is BaseScore * YearMult)
-        ' IPLit Aggressive (col B weights)
-        ws.Cells(r, 10).Formula = "=(" & BuildBaseScoreFormula(srcSheet, srcRow, "B") & ")*I" & r
-        ' IPLit Balanced (col C weights)
-        ws.Cells(r, 11).Formula = "=(" & BuildBaseScoreFormula(srcSheet, srcRow, "C") & ")*I" & r
-        ' IPLit Conservative (col D weights)
-        ws.Cells(r, 12).Formula = "=(" & BuildBaseScoreFormula(srcSheet, srcRow, "D") & ")*I" & r
-        ' Licensing (col E weights)
-        ws.Cells(r, 13).Formula = "=(" & BuildBaseScoreFormula(srcSheet, srcRow, "E") & ")*I" & r
-        ' Corporate (col F weights)
-        ws.Cells(r, 14).Formula = "=(" & BuildBaseScoreFormula(srcSheet, srcRow, "F") & ")*I" & r
-        ' Executive (col G weights)
-        ws.Cells(r, 15).Formula = "=(" & BuildBaseScoreFormula(srcSheet, srcRow, "G") & ")*I" & r
+        aggrScore = CalculateScore(rawWs, srcRow, aggrWeights)
+        balScore = CalculateScore(rawWs, srcRow, balWeights)
+        consScore = CalculateScore(rawWs, srcRow, consWeights)
+        licScore = CalculateScore(rawWs, srcRow, licWeights)
+        corpScore = CalculateScore(rawWs, srcRow, corpWeights)
+        execScore = CalculateScore(rawWs, srcRow, execWeights)
 
-        ' Consensus = weighted average of all 6 profiles
-        ws.Cells(r, 8).Formula = "=" & _
-            "J" & r & "*RelW_Aggressive+" & _
-            "K" & r & "*RelW_Balanced+" & _
-            "L" & r & "*RelW_Conservative+" & _
-            "M" & r & "*RelW_Licensing+" & _
-            "N" & r & "*RelW_Corporate+" & _
-            "O" & r & "*RelW_Executive"
+        ws.Cells(r, 9).Value = aggrScore(2)   ' Year Mult (same for all)
+        ws.Cells(r, 10).Value = aggrScore(0)  ' Aggressive
+        ws.Cells(r, 11).Value = balScore(0)   ' Balanced
+        ws.Cells(r, 12).Value = consScore(0)  ' Conservative
+        ws.Cells(r, 13).Value = licScore(0)   ' Licensing
+        ws.Cells(r, 14).Value = corpScore(0)  ' Corporate
+        ws.Cells(r, 15).Value = execScore(0)  ' Executive
+
+        ' Consensus = weighted average
+        Dim consensus As Double
+        consensus = aggrScore(0) * relWeights(0) + _
+                    balScore(0) * relWeights(1) + _
+                    consScore(0) * relWeights(2) + _
+                    licScore(0) * relWeights(3) + _
+                    corpScore(0) * relWeights(4) + _
+                    execScore(0) * relWeights(5)
+
+        ws.Cells(r, 8).Value = consensus
     Next r
 
     ' Format
@@ -638,61 +699,186 @@ Private Sub GenerateConsensusScoringSheet(ByVal sheetName As String, ByVal topN 
     ws.Range("I2:I" & (rowsToGenerate + 1)).NumberFormat = "0.00"
     ws.Range("J2:O" & (rowsToGenerate + 1)).NumberFormat = "0.00%"
 
-    ' Sort by consensus score descending
+    ' Sort by consensus
+    SortSheetByScore ws, rowsToGenerate
+
+    FormatHeaderRow ws
+
+    ' Color headers
+    ws.Range("H1").Interior.Color = RGB(128, 128, 128)
+    ws.Range("I1").Interior.Color = RGB(255, 215, 0)
+    ws.Range("J1").Interior.Color = RGB(255, 99, 71)
+    ws.Range("K1").Interior.Color = RGB(255, 165, 0)
+    ws.Range("L1").Interior.Color = RGB(100, 149, 237)
+    ws.Range("M1").Interior.Color = RGB(144, 238, 144)
+    ws.Range("N1").Interior.Color = RGB(221, 160, 221)
+    ws.Range("O1").Interior.Color = RGB(135, 206, 235)
+
+    ws.Columns("A:O").AutoFit
+End Sub
+
+Private Sub SortSheetByScore(ByVal ws As Worksheet, ByVal rowCount As Long)
+    ' Sort by column H (Score/Consensus) descending
     ws.Sort.SortFields.Clear
-    ws.Sort.SortFields.Add2 Key:=ws.Range("H2:H" & (rowsToGenerate + 1)), _
+    ws.Sort.SortFields.Add2 Key:=ws.Range("H2:H" & (rowCount + 1)), _
         SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
+
     With ws.Sort
-        .SetRange ws.Range("A1:O" & (rowsToGenerate + 1))
+        .SetRange ws.Range("A1:" & ws.Cells(1, ws.Columns.Count).End(xlToLeft).Address & (rowCount + 1))
         .Header = xlYes
         .Apply
     End With
 
     ' Update rank numbers
-    For r = 2 To rowsToGenerate + 1
+    Dim r As Long
+    For r = 2 To rowCount + 1
         ws.Cells(r, 1).Value = r - 1
     Next r
-
-    FormatHeaderRow ws
-
-    ' Color headers
-    ws.Range("H1").Interior.Color = RGB(128, 128, 128)   ' Consensus - gray
-    ws.Range("I1").Interior.Color = RGB(255, 215, 0)     ' YearMult - gold
-    ws.Range("J1").Interior.Color = RGB(255, 99, 71)     ' Aggressive - tomato
-    ws.Range("K1").Interior.Color = RGB(255, 165, 0)     ' Balanced - orange
-    ws.Range("L1").Interior.Color = RGB(100, 149, 237)   ' Conservative - cornflower
-    ws.Range("M1").Interior.Color = RGB(144, 238, 144)   ' Licensing - light green
-    ws.Range("N1").Interior.Color = RGB(221, 160, 221)   ' Corporate - plum
-    ws.Range("O1").Interior.Color = RGB(135, 206, 235)   ' Executive - sky blue
-
-    ws.Columns("A:O").AutoFit
 End Sub
 
-Private Function BuildBaseScoreFormula(ByVal srcSheet As String, ByVal srcRow As Long, ByVal weightCol As String) As String
-    '
-    ' Builds the base score formula for a given weight column
-    '
-    BuildBaseScoreFormula = _
-        "MIN(1," & srcSheet & "!" & COL_COMPETITOR_CITATIONS & srcRow & "/30)*" & WEIGHTS_SHEET & "!$" & weightCol & "$7+" & _
-        "MIN(1," & srcSheet & "!" & COL_COMPETITOR_COUNT & srcRow & "/10)*" & WEIGHTS_SHEET & "!$" & weightCol & "$8+" & _
-        "MIN(1,SQRT(" & srcSheet & "!" & COL_FORWARD_CITATIONS & srcRow & ")/20)*" & WEIGHTS_SHEET & "!$" & weightCol & "$9+" & _
-        "IF(" & srcSheet & "!" & COL_ELIGIBILITY & srcRow & "="""",0.6," & srcSheet & "!" & COL_ELIGIBILITY & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$10+" & _
-        "IF(" & srcSheet & "!" & COL_VALIDITY & srcRow & "="""",0.6," & srcSheet & "!" & COL_VALIDITY & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$11+" & _
-        "IF(" & srcSheet & "!" & COL_CLAIM_BREADTH & srcRow & "="""",0.6," & srcSheet & "!" & COL_CLAIM_BREADTH & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$12+" & _
-        "IF(" & srcSheet & "!" & COL_ENFORCEMENT & srcRow & "="""",0.6," & srcSheet & "!" & COL_ENFORCEMENT & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$13+" & _
-        "IF(" & srcSheet & "!" & COL_DESIGN_AROUND & srcRow & "="""",0.6," & srcSheet & "!" & COL_DESIGN_AROUND & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$14+" & _
-        "IF(" & srcSheet & "!" & COL_IPR_RISK & srcRow & "="""",0.8," & srcSheet & "!" & COL_IPR_RISK & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$15+" & _
-        "IF(" & srcSheet & "!" & COL_PROSECUTION_QUALITY & srcRow & "="""",0.6," & srcSheet & "!" & COL_PROSECUTION_QUALITY & srcRow & "/5)*" & WEIGHTS_SHEET & "!$" & weightCol & "$16"
+'===============================================================================
+' RECALCULATION (for weight changes)
+'===============================================================================
+
+Private Sub RecalculateProfileSheet(ByVal sheetName As String, ByVal weightCol As Integer, _
+                                     ByRef weights As Object, ByVal dataRows As Long)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(sheetName)
+    On Error GoTo 0
+
+    If ws Is Nothing Then Exit Sub
+
+    Dim rawWs As Worksheet
+    Set rawWs = ThisWorkbook.Sheets(RAW_DATA_SHEET)
+
+    ' Get profile name from weight column
+    Dim profileName As String
+    Select Case weightCol
+        Case WEIGHT_COL_AGGRESSIVE: profileName = "Aggressive"
+        Case WEIGHT_COL_BALANCED: profileName = "Balanced"
+        Case WEIGHT_COL_CONSERVATIVE: profileName = "Conservative"
+        Case WEIGHT_COL_LICENSING: profileName = "Licensing"
+        Case WEIGHT_COL_CORPORATE: profileName = "Corporate"
+        Case WEIGHT_COL_EXECUTIVE: profileName = "Executive"
+    End Select
+
+    Dim metricWeights() As Double
+    metricWeights = weights(profileName)
+
+    Dim rowCount As Long
+    rowCount = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row - 1  ' Exclude header
+
+    Dim r As Long
+    For r = 2 To rowCount + 1
+        ' Find corresponding row in RawData by patent ID
+        Dim patentId As String
+        patentId = ws.Cells(r, 2).Value
+
+        Dim srcRow As Long
+        srcRow = FindPatentRow(rawWs, patentId, dataRows)
+
+        If srcRow > 0 Then
+            Dim scoreResult As Variant
+            scoreResult = CalculateScore(rawWs, srcRow, metricWeights)
+
+            ws.Cells(r, 8).Value = scoreResult(0)   ' Final Score
+            ws.Cells(r, 9).Value = scoreResult(2)   ' Year Mult
+            ws.Cells(r, 10).Value = scoreResult(1)  ' Base Score
+        End If
+    Next r
+
+    ' Re-sort
+    SortSheetByScore ws, rowCount
+End Sub
+
+Private Sub RecalculateConsensusSheet(ByRef weights As Object, ByVal dataRows As Long)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("Score_Consensus")
+    On Error GoTo 0
+
+    If ws Is Nothing Then Exit Sub
+
+    Dim rawWs As Worksheet
+    Set rawWs = ThisWorkbook.Sheets(RAW_DATA_SHEET)
+
+    ' Get all profile weights
+    Dim aggrWeights() As Double, balWeights() As Double, consWeights() As Double
+    Dim licWeights() As Double, corpWeights() As Double, execWeights() As Double
+    aggrWeights = weights("Aggressive")
+    balWeights = weights("Balanced")
+    consWeights = weights("Conservative")
+    licWeights = weights("Licensing")
+    corpWeights = weights("Corporate")
+    execWeights = weights("Executive")
+
+    Dim relWeights() As Double
+    relWeights = weights("RelativeWeights")
+
+    Dim rowCount As Long
+    rowCount = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row - 1
+
+    Dim r As Long
+    For r = 2 To rowCount + 1
+        Dim patentId As String
+        patentId = ws.Cells(r, 2).Value
+
+        Dim srcRow As Long
+        srcRow = FindPatentRow(rawWs, patentId, dataRows)
+
+        If srcRow > 0 Then
+            Dim aggrScore As Variant, balScore As Variant, consScore As Variant
+            Dim licScore As Variant, corpScore As Variant, execScore As Variant
+
+            aggrScore = CalculateScore(rawWs, srcRow, aggrWeights)
+            balScore = CalculateScore(rawWs, srcRow, balWeights)
+            consScore = CalculateScore(rawWs, srcRow, consWeights)
+            licScore = CalculateScore(rawWs, srcRow, licWeights)
+            corpScore = CalculateScore(rawWs, srcRow, corpWeights)
+            execScore = CalculateScore(rawWs, srcRow, execWeights)
+
+            ws.Cells(r, 9).Value = aggrScore(2)
+            ws.Cells(r, 10).Value = aggrScore(0)
+            ws.Cells(r, 11).Value = balScore(0)
+            ws.Cells(r, 12).Value = consScore(0)
+            ws.Cells(r, 13).Value = licScore(0)
+            ws.Cells(r, 14).Value = corpScore(0)
+            ws.Cells(r, 15).Value = execScore(0)
+
+            Dim consensus As Double
+            consensus = aggrScore(0) * relWeights(0) + _
+                        balScore(0) * relWeights(1) + _
+                        consScore(0) * relWeights(2) + _
+                        licScore(0) * relWeights(3) + _
+                        corpScore(0) * relWeights(4) + _
+                        execScore(0) * relWeights(5)
+
+            ws.Cells(r, 8).Value = consensus
+        End If
+    Next r
+
+    ' Re-sort
+    SortSheetByScore ws, rowCount
+End Sub
+
+Private Function FindPatentRow(ByVal ws As Worksheet, ByVal patentId As String, ByVal maxRow As Long) As Long
+    ' Find row in RawData by patent ID (column B)
+    Dim r As Long
+    For r = 2 To maxRow + 1
+        If CStr(ws.Cells(r, COL_PATENT_ID).Value) = patentId Then
+            FindPatentRow = r
+            Exit Function
+        End If
+    Next r
+    FindPatentRow = 0
 End Function
 
 '===============================================================================
-' CLEAR/RESET FUNCTIONS
+' UTILITY FUNCTIONS
 '===============================================================================
 
 Public Sub ClearAllDataSheets()
-    '
-    ' Clears all data from worksheets
-    '
     Dim sheetNames As Variant
     sheetNames = Array(RAW_DATA_SHEET, "Score_IPLit_Aggr", "Score_IPLit_Bal", "Score_IPLit_Cons", _
                        "Score_Licensing", "Score_Corporate", "Score_Executive", "Score_Consensus")
@@ -710,36 +896,7 @@ Public Sub ClearAllDataSheets()
     Next i
 End Sub
 
-Public Sub DeleteAllGeneratedSheets()
-    '
-    ' Deletes all generated worksheets (use with caution)
-    '
-    Dim sheetNames As Variant
-    sheetNames = Array("Score_IPLit_Aggr", "Score_IPLit_Bal", "Score_IPLit_Cons", _
-                       "Score_Licensing", "Score_Corporate", "Score_Executive", "Score_Consensus")
-
-    Application.DisplayAlerts = False
-
-    Dim i As Integer
-    For i = 0 To UBound(sheetNames)
-        On Error Resume Next
-        ThisWorkbook.Sheets(sheetNames(i)).Delete
-        On Error GoTo 0
-    Next i
-
-    Application.DisplayAlerts = True
-
-    MsgBox "Generated sheets deleted.", vbInformation
-End Sub
-
-'===============================================================================
-' HELPER FUNCTIONS
-'===============================================================================
-
 Private Function GetOrCreateSheet(ByVal sheetName As String) As Worksheet
-    '
-    ' Gets existing sheet or creates new one
-    '
     On Error Resume Next
     Set GetOrCreateSheet = ThisWorkbook.Sheets(sheetName)
     On Error GoTo 0
@@ -751,9 +908,6 @@ Private Function GetOrCreateSheet(ByVal sheetName As String) As Worksheet
 End Function
 
 Private Function GetRowCount(ByVal sheetName As String) As Long
-    '
-    ' Returns the number of rows with data in a sheet
-    '
     On Error Resume Next
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Sheets(sheetName)
@@ -766,9 +920,6 @@ Private Function GetRowCount(ByVal sheetName As String) As Long
 End Function
 
 Private Function SelectFile(ByVal title As String, ByVal filter As String) As String
-    '
-    ' Opens file dialog for manual file selection
-    '
     Dim fd As FileDialog
     Set fd = Application.FileDialog(msoFileDialogFilePicker)
 
@@ -787,12 +938,9 @@ Private Function SelectFile(ByVal title As String, ByVal filter As String) As St
 End Function
 
 Private Sub FormatHeaderRow(ByVal ws As Worksheet, Optional ByVal headerRow As Integer = 1)
-    '
-    ' Formats the header row with standard styling
-    '
     With ws.Rows(headerRow)
         .Font.Bold = True
-        .Interior.Color = RGB(26, 26, 46)  ' Dark blue
-        .Font.Color = RGB(255, 255, 255)   ' White text
+        .Interior.Color = RGB(26, 26, 46)
+        .Font.Color = RGB(255, 255, 255)
     End With
 End Sub

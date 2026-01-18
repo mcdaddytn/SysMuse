@@ -1,0 +1,254 @@
+{
+  "version": "1.0",
+  "description": "Sector-based damages potential ratings calibrated to realistic IP litigation outcomes",
+  "lastUpdated": "2026-01-18",
+
+  "damagesTiers": {
+    "description": "Damage potential tiers based on typical patent litigation outcomes",
+    "source": "Analysis of 2024 patent verdicts: avg jury award ~$74M, settlements ~$8M, 37 cases >$10M, 12 cases >$100M",
+    "tiers": {
+      "1": { "label": "Low", "range": "<$10M", "notes": "Settlements, smaller infringers, niche markets" },
+      "2": { "label": "Medium", "range": "$10M - $75M", "notes": "Around average jury awards (~$74M avg in 2024)" },
+      "3": { "label": "High", "range": "$75M - $200M", "notes": "Above-average verdicts, strong cases" },
+      "4": { "label": "Very High", "range": ">$200M", "notes": "Exceptional cases, massive markets/volume" }
+    }
+  },
+
+  "sectors": {
+    "rf-acoustic": {
+      "damages_rating": 4,
+      "label": "Very High",
+      "description": "RF/Acoustic Resonators (BAW/FBAR)",
+      "rationale": "Every 4G/5G smartphone requires BAW filters. Concentrated market with Murata, Skyworks, Qorvo. High volume royalties.",
+      "annual_market_size": "$15B+ (RF front-end)",
+      "key_infringers": ["Murata", "Skyworks", "Qorvo", "Akoustis", "Samsung"],
+      "licensing_rate_estimate": "0.5-2%",
+      "typical_damages_range": ">$200M"
+    },
+
+    "video-codec": {
+      "damages_rating": 4,
+      "label": "Very High",
+      "description": "Video Codec/Compression",
+      "rationale": "All streaming platforms, video apps, smartphones. HEVC/AVC pools show high value. Chinese tech (ByteDance, Tencent) = large targets.",
+      "annual_market_size": "$200B+ (streaming/video)",
+      "key_infringers": ["ByteDance", "Tencent", "Dolby", "Kuaishou", "Netflix"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": ">$200M"
+    },
+
+    "semiconductor": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Semiconductor/Hardware",
+      "rationale": "Hardware patents across chip design. Broad but competitive space. Strong players have cross-license portfolios.",
+      "annual_market_size": "$600B+ (semiconductors)",
+      "key_infringers": ["Intel", "AMD", "NVIDIA", "Qualcomm", "Texas Instruments"],
+      "licensing_rate_estimate": "0.1-1%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "network-security": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Network Security/Cybersecurity",
+      "rationale": "Enterprise security spending is high and growing. Clear product mapping to security vendors.",
+      "annual_market_size": "$180B+ (cybersecurity)",
+      "key_infringers": ["CrowdStrike", "Palo Alto Networks", "Fortinet", "Microsoft", "Cisco"],
+      "licensing_rate_estimate": "0.25-1%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "cloud-auth": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Cloud Authentication/Identity",
+      "rationale": "Every login/MFA/SSO implementation. Financial services (well-funded defendants). Enterprise cloud.",
+      "annual_market_size": "$20B+ (IAM/auth)",
+      "key_infringers": ["Bank of America", "Capital One", "Microsoft", "Okta", "Google"],
+      "licensing_rate_estimate": "0.25-1%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "wireless": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Wireless Communications",
+      "rationale": "5G, WiFi, cellular. High-volume devices. May have FRAND obligations for SEPs.",
+      "annual_market_size": "$100B+ (wireless)",
+      "key_infringers": ["Qualcomm", "Apple", "Samsung", "Huawei", "MediaTek"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "computing": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Computing/Data Processing",
+      "rationale": "Broad category covering general computing. Large market but diffuse. Many defensive portfolios.",
+      "annual_market_size": "$500B+ (computing)",
+      "key_infringers": ["Microsoft", "Amazon", "Google", "Dell", "IBM"],
+      "licensing_rate_estimate": "0.05-0.25%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "video-image": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Video/Image Processing",
+      "rationale": "Image processing, cameras, displays. Consumer electronics space with many players.",
+      "annual_market_size": "$50B+ (imaging)",
+      "key_infringers": ["Apple", "Samsung", "Canon", "Sony", "LG"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "image-depth": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Image Depth Mapping/ADAS",
+      "rationale": "Automotive ADAS, autonomous driving. High-value automotive targets. Safety-critical = premium IP.",
+      "annual_market_size": "$30B+ (ADAS)",
+      "key_infringers": ["Toyota", "Hyundai", "Intel/Mobileye", "NVIDIA", "Tesla"],
+      "licensing_rate_estimate": "0.5-2%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "audio": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Audio Processing",
+      "rationale": "Audio codecs, speakers, signal processing. Consumer electronics with established pools.",
+      "annual_market_size": "$25B+ (audio)",
+      "key_infringers": ["Harman/Samsung", "Bose", "Sonos", "Apple", "Qualcomm"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "bluetooth-edr": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Bluetooth/BLE/EDR",
+      "rationale": "IoT, wearables, wireless audio. High volume but low per-unit royalties. Bluetooth SIG may complicate.",
+      "annual_market_size": "$10B+ (Bluetooth)",
+      "key_infringers": ["Apple", "Samsung", "Nordic", "Qualcomm", "Realtek"],
+      "licensing_rate_estimate": "0.1-0.25%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "ai-ml": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "AI/Machine Learning",
+      "rationale": "Hot market but 101 eligibility concerns. Many patents may face validity challenges.",
+      "annual_market_size": "$150B+ (AI/ML)",
+      "key_infringers": ["Google", "Microsoft", "OpenAI", "Meta", "NVIDIA"],
+      "licensing_rate_estimate": "0.05-0.25%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "optics": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Optics/Photonics",
+      "rationale": "Fiber optics, sensors, displays. Established technology with mature licensing landscape.",
+      "annual_market_size": "$20B+ (photonics)",
+      "key_infringers": ["Cisco", "Corning", "II-VI", "Lumentum", "Apple"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "event-live": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Live Event/Streaming",
+      "rationale": "Live streaming, notifications, CDN. Growing market but competitive space.",
+      "annual_market_size": "$75B+ (streaming)",
+      "key_infringers": ["Amazon/Twitch", "Google/YouTube", "Netflix", "Disney+"],
+      "licensing_rate_estimate": "0.1-0.25%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "pii-breach": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "PII/Data Privacy",
+      "rationale": "Data privacy, breach detection. Growing importance with regulations (GDPR, CCPA).",
+      "annual_market_size": "$15B+ (data privacy)",
+      "key_infringers": ["Microsoft", "IBM", "Palantir", "Snowflake"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "wireless-iot": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Wireless IoT/Geofencing",
+      "rationale": "IoT devices, location services. High volume but low per-device value.",
+      "annual_market_size": "$15B+ (IoT)",
+      "key_infringers": ["Amazon/Ring", "Google/Nest", "Apple", "Samsung"],
+      "licensing_rate_estimate": "0.05-0.25%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "object-pose": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Motion/Pose Tracking",
+      "rationale": "AR/VR, gesture control, gaming. Growing market with Apple Vision Pro, Meta Quest.",
+      "annual_market_size": "$30B+ (AR/VR)",
+      "key_infringers": ["Apple", "Meta", "Sony", "Microsoft"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
+    "general": {
+      "damages_rating": 1,
+      "label": "Low",
+      "description": "General/Unclassified",
+      "rationale": "Patents not yet categorized into specific sectors. May have value but requires analysis.",
+      "annual_market_size": "Varies",
+      "key_infringers": [],
+      "licensing_rate_estimate": "0.05-0.1%",
+      "typical_damages_range": "<$10M"
+    },
+
+    "security-crypto": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Security/Cryptography",
+      "rationale": "Encryption, cryptographic protocols. Established space with many standards.",
+      "annual_market_size": "$15B+ (crypto/security)",
+      "key_infringers": ["Microsoft", "IBM", "Intel", "ARM"],
+      "licensing_rate_estimate": "0.1-0.25%",
+      "typical_damages_range": "$10M - $50M"
+    },
+
+    "security": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Security/Threat Detection",
+      "rationale": "Threat detection, attack prevention, security operations. EDR/SIEM vendors.",
+      "annual_market_size": "$60B+ (threat intel)",
+      "key_infringers": ["CrowdStrike", "SentinelOne", "Palo Alto", "Microsoft"],
+      "licensing_rate_estimate": "0.25-1%",
+      "typical_damages_range": "$75M - $200M"
+    }
+  },
+
+  "notes": {
+    "calibration": "Based on 2024 patent litigation data: 72 jury verdicts, avg $83M, median ~$12M for successful plaintiffs",
+    "sources": [
+      "Finnegan Top Patent Damages Awards 2024",
+      "GreyB Patent Infringement Lawsuits Analysis",
+      "RPX Insight Top Damage Awards 2024",
+      "Lex Machina 2025 Litigation Damages Report"
+    ],
+    "usage": "damages_rating is used as a multiplier in V3 scoring (1=0.25x, 2=0.5x, 3=0.75x, 4=1.0x)",
+    "future_enhancements": [
+      "Per-competitor revenue weighting",
+      "Geographic enforcement adjustments",
+      "Standards-essential patent premiums"
+    ]
+  }
+}

@@ -203,17 +203,20 @@ function loadLLMAnalysisV3(): Map<string, LLMv3Analysis> {
     return llmMap;
   }
 
+  // Load ALL combined-v3 files and merge them (newest data wins for duplicates)
   const files = fs.readdirSync(llmDir)
     .filter(f => f.startsWith('combined-v3-') && f.endsWith('.json'))
-    .sort()
-    .reverse();
+    .sort(); // Oldest first, so newer data overwrites older for same patent
 
-  if (files.length > 0) {
-    const data = JSON.parse(fs.readFileSync(path.join(llmDir, files[0]), 'utf-8'));
+  for (const file of files) {
+    const data = JSON.parse(fs.readFileSync(path.join(llmDir, file), 'utf-8'));
     for (const analysis of data.analyses || []) {
       llmMap.set(analysis.patent_id, analysis);
     }
-    console.log(`Loaded LLM v3 analysis for ${llmMap.size} patents`);
+  }
+
+  if (llmMap.size > 0) {
+    console.log(`Loaded LLM v3 analysis for ${llmMap.size} patents (from ${files.length} files)`);
   }
 
   return llmMap;

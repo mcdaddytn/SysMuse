@@ -111,16 +111,19 @@ function loadLLMAnalysis(): Map<string, any> {
 function loadV3LLMAnalysis(): Map<string, any> {
   const v3Files = fs.readdirSync('./output/llm-analysis-v3')
     .filter(f => f.startsWith('combined-v3-') && f.endsWith('.json'))
-    .sort().reverse();
+    .sort(); // Oldest first, newer overwrites for same patent
 
   const map = new Map<string, any>();
 
-  if (v3Files.length > 0) {
-    const data = JSON.parse(fs.readFileSync(`./output/llm-analysis-v3/${v3Files[0]}`, 'utf-8'));
+  for (const file of v3Files) {
+    const data = JSON.parse(fs.readFileSync(`./output/llm-analysis-v3/${file}`, 'utf-8'));
     for (const analysis of data.analyses || []) {
       map.set(analysis.patent_id, analysis);
     }
-    console.log(`Loaded ${map.size} patents from LLM v3 analysis`);
+  }
+
+  if (map.size > 0) {
+    console.log(`Loaded ${map.size} patents from LLM v3 analysis (${v3Files.length} files)`);
   }
 
   return map;

@@ -2835,3 +2835,126 @@ For sector-specific analysis, consider mixed model approach:
 
 *Session ended: 2026-01-18*
 *Bubble zone job running at 55/130 (~42%) - check completion next session*
+
+---
+
+### Session Update: 2026-01-18 (Continuation) - Web Search Integration & Recalibration Design
+
+**Major Accomplishments:**
+
+1. **Bubble Zone Job Complete** ✅
+   - All 130 patents analyzed
+   - Combined with prior V3 data: 380 patents total with V3 LLM analysis
+   - Fixed export scripts to merge all combined-v3 files
+
+2. **Top 250 Recalculated with Complete Data** ✅
+   - 100% LLM v3 coverage (250/250)
+   - 99% IPR risk data (248/250)
+   - 89% prosecution data (222/250)
+   - Output: `output/unified-top250-v2-2026-01-18.csv`
+
+3. **Web Search Integration Designed** ✅
+   - Created `docs/WEB_SEARCH_RECALIBRATION_DESIGN.md`
+   - WebSearch tool confirmed working (demonstrated with video-codec sector)
+   - Pipeline: Patent → Sector LLM → Web Search → Products → Recalibration
+
+4. **Sector-Specific Facets Configuration Created** ✅
+   - Created `config/sector-facets.json`
+   - 14 sectors with custom facets
+   - Facet types: licensing_friction, standards_relevance, hardware_boost, etc.
+   - Formula: `SectorScore = BaseScore × DamagesTier × FacetMultiplier`
+
+**Web Search Capability Confirmed:**
+- WebSearch tool available in Claude Code
+- Demonstrated on video-codec sector:
+  - Market size: $2.5B (15% CAGR)
+  - Key players: AMD MA35D, NETINT, Bitmovin, AWS Elemental
+  - Insight: 61% of mid-size platforms cite licensing fees as barrier
+
+**Scripts Updated:**
+| Script | Change |
+|--------|--------|
+| `scripts/export-raw-metrics-csv.ts` | Merges ALL combined-v3 files |
+| `scripts/calculate-unified-top250-v2.ts` | Merges ALL combined-v3 files |
+
+**New Files Created:**
+| File | Purpose |
+|------|---------|
+| `docs/WEB_SEARCH_RECALIBRATION_DESIGN.md` | Full web search integration architecture |
+| `config/sector-facets.json` | Sector-specific scoring adjustments |
+
+**Current Data State:**
+| Data | Count | Coverage |
+|------|-------|----------|
+| Total patents | 10,276 | 100% |
+| V3 LLM analysis | 380 | 3.7% |
+| Top 250 V3 | 250 | 100% |
+| IPR risk (top 250) | 248 | 99% |
+| Prosecution (top 250) | 222 | 89% |
+
+**Top 5 Patents (V2 Scoring):**
+| Rank | Patent | Score | Key Competitor |
+|------|--------|-------|----------------|
+| 1 | 9569605 | 50.3% | Apple (67 cites) |
+| 2 | 10200706 | 46.0% | ByteDance (20 cites) |
+| 3 | 11516311 | 42.5% | Amazon, Comcast |
+| 4 | 11425134 | 42.4% | Microsoft |
+| 5 | 11882300 | 41.1% | Video codec (no cites) |
+
+---
+
+## Portfolio Workstation Integration Notes
+
+This project is positioned to merge into a larger portfolio workstation effort:
+
+1. **Web Search → Product Discovery**: Ready for implementation
+2. **Sector Facets**: Configurable scoring adjustments per sector
+3. **Recalibration Pipeline**: Feedback loop for damages/risk tuning
+4. **GUI Design**: Spec complete (`docs/GUI_DESIGN_SPEC.md`)
+5. **Vendor Integration**: Patlytics, claim chart partners
+
+---
+
+## Next Session Tasks
+
+### Priority 1: Implement Product Discovery Script
+
+```bash
+# Create script to discover products per sector
+npx tsx scripts/discover-sector-products.ts video-codec
+```
+
+### Priority 2: Test Opus for Sector-Specific Analysis
+
+```bash
+# Test higher-quality sector-specific prompts
+npx tsx scripts/run-sector-llm.ts --sector video-codec --model opus
+```
+
+### Priority 3: Recalibration Workflow
+
+1. Run market data collection for top sectors
+2. Compare against current damages tiers
+3. Generate recalibration recommendations
+
+### Quick Commands
+
+```bash
+# Export top 250 for Excel
+cat output/unified-top250-v2-2026-01-18.csv
+
+# Full raw metrics export
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# Start Docker services
+npm run docker:up
+
+# Check ES health
+npm run es:health
+```
+
+---
+
+*Session: 2026-01-18*
+*Status: Web search design complete, sector facets configured*
+*Next: Implement product discovery, test Opus model*

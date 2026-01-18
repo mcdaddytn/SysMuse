@@ -1,0 +1,224 @@
+{
+  "version": "1.0",
+  "description": "Sector-specific facets for adjusting scoring models. Each facet is a multiplier applied to the base score.",
+  "default_facets": {
+    "licensing_friction": 1.0,
+    "standards_relevance_weight": 1.0,
+    "hardware_implementation_boost": 1.0,
+    "design_around_difficulty_boost": 1.0,
+    "market_growth_boost": 1.0,
+    "enterprise_focus_weight": 1.0,
+    "consumer_volume_boost": 1.0
+  },
+  "sectors": {
+    "video-codec": {
+      "display_name": "Video Codec / Transcoding",
+      "damages_tier": "very_high",
+      "market_size_estimate": "$2.5B",
+      "growth_rate": "15%",
+      "facets": {
+        "licensing_friction": 1.3,
+        "standards_relevance_weight": 1.5,
+        "hardware_implementation_boost": 1.2,
+        "consumer_volume_boost": 1.4
+      },
+      "key_products": ["streaming platforms", "video conferencing", "broadcast encoders", "smart TVs"],
+      "key_companies": ["ByteDance", "Netflix", "Apple", "Bitmovin", "AWS Elemental"],
+      "notes": "61% cite licensing fees as barrier - strong licensing opportunity"
+    },
+    "rf-acoustic": {
+      "display_name": "RF Acoustic (BAW/FBAR)",
+      "damages_tier": "very_high",
+      "market_size_estimate": "$10B+",
+      "growth_rate": "12%",
+      "facets": {
+        "standards_relevance_weight": 2.0,
+        "hardware_implementation_boost": 1.8,
+        "design_around_difficulty_boost": 1.5
+      },
+      "key_products": ["5G smartphones", "RF filters", "MEMS microphones", "IoT modules"],
+      "key_companies": ["Murata", "Skyworks", "Qorvo", "Qualcomm", "Apple"],
+      "notes": "Physics constraints limit design-around. Every 5G phone uses BAW filters."
+    },
+    "video-drm": {
+      "display_name": "Video DRM / Content Protection",
+      "damages_tier": "very_high",
+      "market_size_estimate": "$4.5B",
+      "growth_rate": "10%",
+      "facets": {
+        "licensing_friction": 1.4,
+        "standards_relevance_weight": 1.3,
+        "enterprise_focus_weight": 1.2
+      },
+      "key_products": ["streaming DRM", "Widevine", "FairPlay", "PlayReady", "set-top boxes"],
+      "key_companies": ["Google", "Apple", "Microsoft", "Netflix", "Disney"],
+      "notes": "High-value content protection required for premium streaming"
+    },
+    "cloud-auth": {
+      "display_name": "Cloud / Authentication",
+      "damages_tier": "high",
+      "market_size_estimate": "$15.2B",
+      "growth_rate": "14.2%",
+      "facets": {
+        "market_growth_boost": 1.4,
+        "enterprise_focus_weight": 1.3,
+        "design_around_difficulty_boost": 0.9
+      },
+      "key_products": ["identity platforms", "SSO solutions", "MFA providers", "zero-trust"],
+      "key_companies": ["Okta", "Microsoft", "Auth0", "Ping Identity", "ForgeRock"],
+      "notes": "High growth market. Consider upgrade to very_high tier."
+    },
+    "network-switching": {
+      "display_name": "Network Switching & Routing",
+      "damages_tier": "high",
+      "market_size_estimate": "$40B",
+      "growth_rate": "8%",
+      "facets": {
+        "enterprise_focus_weight": 1.4,
+        "hardware_implementation_boost": 1.3,
+        "standards_relevance_weight": 1.2
+      },
+      "key_products": ["enterprise switches", "data center routers", "SD-WAN", "network fabric"],
+      "key_companies": ["Cisco", "Juniper", "Arista", "HPE", "Dell EMC"],
+      "notes": "Large market but competitive. Strong enterprise focus."
+    },
+    "network-threat-protection": {
+      "display_name": "Network Threat Protection",
+      "damages_tier": "high",
+      "market_size_estimate": "$25B",
+      "growth_rate": "12%",
+      "facets": {
+        "market_growth_boost": 1.3,
+        "enterprise_focus_weight": 1.4,
+        "design_around_difficulty_boost": 1.1
+      },
+      "key_products": ["firewalls", "IDS/IPS", "SIEM", "EDR", "XDR"],
+      "key_companies": ["Palo Alto", "CrowdStrike", "Fortinet", "Cisco", "SentinelOne"],
+      "notes": "High-growth security market with strong enterprise spend"
+    },
+    "semiconductor-memory": {
+      "display_name": "Semiconductor / Memory",
+      "damages_tier": "high",
+      "market_size_estimate": "$180B",
+      "growth_rate": "6%",
+      "facets": {
+        "hardware_implementation_boost": 1.5,
+        "design_around_difficulty_boost": 1.3,
+        "consumer_volume_boost": 1.2
+      },
+      "key_products": ["DRAM", "NAND flash", "SSD controllers", "memory interfaces"],
+      "key_companies": ["Samsung", "SK Hynix", "Micron", "Intel", "Western Digital"],
+      "notes": "Massive market with physics-constrained design options"
+    },
+    "ai-ml": {
+      "display_name": "AI/ML / Machine Learning",
+      "damages_tier": "high",
+      "market_size_estimate": "$200B+",
+      "growth_rate": "35%",
+      "facets": {
+        "market_growth_boost": 2.0,
+        "design_around_difficulty_boost": 0.8,
+        "enterprise_focus_weight": 1.2
+      },
+      "key_products": ["ML frameworks", "inference engines", "AI accelerators", "LLM infrastructure"],
+      "key_companies": ["NVIDIA", "Google", "Microsoft", "OpenAI", "AMD"],
+      "notes": "Explosive growth but fast-moving technology reduces lock-in"
+    },
+    "wireless-transmission": {
+      "display_name": "Wireless Transmission",
+      "damages_tier": "medium",
+      "market_size_estimate": "$80B",
+      "growth_rate": "9%",
+      "facets": {
+        "standards_relevance_weight": 1.5,
+        "hardware_implementation_boost": 1.2
+      },
+      "key_products": ["WiFi chips", "cellular modems", "Bluetooth", "5G baseband"],
+      "key_companies": ["Qualcomm", "Broadcom", "Intel", "MediaTek", "Samsung"],
+      "notes": "Standards-heavy with strong incumbent positions"
+    },
+    "bluetooth-ble": {
+      "display_name": "Bluetooth / BLE",
+      "damages_tier": "medium",
+      "market_size_estimate": "$5B",
+      "growth_rate": "10%",
+      "facets": {
+        "standards_relevance_weight": 1.6,
+        "consumer_volume_boost": 1.5,
+        "hardware_implementation_boost": 1.1
+      },
+      "key_products": ["Bluetooth audio", "BLE sensors", "earbuds", "smart home"],
+      "key_companies": ["Qualcomm", "Nordic", "Realtek", "Silicon Labs", "Apple"],
+      "notes": "High volume consumer market with standards dependency"
+    },
+    "computing-runtime": {
+      "display_name": "Computing / Runtime",
+      "damages_tier": "medium",
+      "market_size_estimate": "$50B",
+      "growth_rate": "7%",
+      "facets": {
+        "enterprise_focus_weight": 1.1,
+        "design_around_difficulty_boost": 0.9
+      },
+      "key_products": ["operating systems", "containers", "virtualization", "cloud runtime"],
+      "key_companies": ["Microsoft", "Red Hat", "VMware", "Docker", "AWS"],
+      "notes": "Large market but software often has design-around options"
+    },
+    "network-auth-access": {
+      "display_name": "Network Auth & Access Control",
+      "damages_tier": "medium",
+      "market_size_estimate": "$12B",
+      "growth_rate": "11%",
+      "facets": {
+        "enterprise_focus_weight": 1.3,
+        "market_growth_boost": 1.2
+      },
+      "key_products": ["NAC solutions", "VPN", "ZTNA", "secure access"],
+      "key_companies": ["Cisco", "Palo Alto", "Zscaler", "Fortinet", "Okta"],
+      "notes": "Growing with zero-trust adoption"
+    },
+    "image-depth-adas": {
+      "display_name": "Image Depth / ADAS",
+      "damages_tier": "high",
+      "market_size_estimate": "$35B",
+      "growth_rate": "15%",
+      "facets": {
+        "market_growth_boost": 1.5,
+        "hardware_implementation_boost": 1.3,
+        "design_around_difficulty_boost": 1.2
+      },
+      "key_products": ["ADAS systems", "LiDAR", "depth cameras", "autonomous vehicles"],
+      "key_companies": ["Tesla", "Mobileye", "NVIDIA", "Toyota", "Waymo"],
+      "notes": "High-growth automotive safety/autonomy market"
+    },
+    "general": {
+      "display_name": "General",
+      "damages_tier": "low",
+      "market_size_estimate": "N/A",
+      "growth_rate": "N/A",
+      "facets": {},
+      "key_products": [],
+      "key_companies": [],
+      "notes": "Default sector for unclassified patents"
+    }
+  },
+  "facet_descriptions": {
+    "licensing_friction": "Multiplier when market has high resistance to paying royalties (higher = more valuable)",
+    "standards_relevance_weight": "Boost for patents related to industry standards (3GPP, IEEE, HEVC, etc.)",
+    "hardware_implementation_boost": "Boost for patents that must be implemented in hardware (harder to avoid)",
+    "design_around_difficulty_boost": "Boost for patents with limited alternative implementations",
+    "market_growth_boost": "Boost for high-growth markets (higher future value)",
+    "enterprise_focus_weight": "Boost for enterprise-focused patents (higher ASPs)",
+    "consumer_volume_boost": "Boost for high-volume consumer markets (more units)"
+  },
+  "scoring_formula": {
+    "description": "SectorAdjustedScore = BaseScore × DamagesTierMultiplier × WeightedFacetProduct",
+    "damages_tier_multipliers": {
+      "very_high": 1.4,
+      "high": 1.2,
+      "medium": 1.0,
+      "low": 0.8
+    },
+    "facet_aggregation": "geometric_mean of applicable facets (non-default values only)"
+  }
+}

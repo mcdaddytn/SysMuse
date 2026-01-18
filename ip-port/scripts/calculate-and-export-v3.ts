@@ -633,11 +633,8 @@ async function main() {
   console.log(`  Avg years remaining: ${avgYears.toFixed(1)}`);
   console.log(`  Avg competitor citations: ${avgCC.toFixed(1)}`);
 
-  // Ensure directories exist
-  if (!fs.existsSync('./excel')) fs.mkdirSync('./excel', { recursive: true });
-
   // ==========================================================================
-  // Export 1: Top 250 for Excel (excel/TOP250-YYYY-MM-DD.csv)
+  // Export 1: Top 250 for Excel (output/TOP250-YYYY-MM-DD.csv)
   // ==========================================================================
   const top250Headers = [
     'rank', 'patent_id', 'title', 'grant_date', 'assignee',
@@ -695,11 +692,11 @@ async function main() {
     top250Rows.push(row.join(','));
   }
 
-  const top250Path = `./excel/TOP250-${dateStr}.csv`;
+  const top250Path = `./output/TOP250-${dateStr}.csv`;
   fs.writeFileSync(top250Path, top250Rows.join('\n'));
-  fs.writeFileSync('./excel/TOP250-LATEST.csv', top250Rows.join('\n'));
+  fs.writeFileSync('./output/TOP250-LATEST.csv', top250Rows.join('\n'));
   console.log(`\nExported: ${top250Path}`);
-  console.log(`Exported: ./excel/TOP250-LATEST.csv`);
+  console.log(`Exported: ./output/TOP250-LATEST.csv`);
 
   // ==========================================================================
   // Export 2: All Patents Raw Data (output/all-patents-scored-v3-YYYY-MM-DD.csv)

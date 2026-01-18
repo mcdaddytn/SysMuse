@@ -186,6 +186,10 @@ End Sub
 '===============================================================================
 
 Private Function FindTop250File(ByVal dateStr As String) As String
+    '
+    ' Looks for CSV in same directory as workbook
+    ' User should copy TOP250-YYYY-MM-DD.csv to workbook folder
+    '
     Dim basePath As String
     Dim tryPath As String
 
@@ -195,28 +199,15 @@ Private Function FindTop250File(ByVal dateStr As String) As String
         basePath = CurDir & "\"
     End If
 
-    ' Try: TOP250-YYYY-MM-DD.csv in same directory
+    ' Try 1: TOP250-YYYY-MM-DD.csv (today's date)
     tryPath = basePath & FILE_PREFIX & dateStr & ".csv"
     If FileExists(tryPath) Then
         FindTop250File = tryPath
         Exit Function
     End If
 
-    ' Try: go up and into excel/ directory
-    tryPath = basePath & "..\excel\" & FILE_PREFIX & dateStr & ".csv"
-    If FileExists(tryPath) Then
-        FindTop250File = tryPath
-        Exit Function
-    End If
-
-    ' Try: TOP250-LATEST.csv fallback
+    ' Try 2: TOP250-LATEST.csv fallback
     tryPath = basePath & FILE_LATEST
-    If FileExists(tryPath) Then
-        FindTop250File = tryPath
-        Exit Function
-    End If
-
-    tryPath = basePath & "..\excel\" & FILE_LATEST
     If FileExists(tryPath) Then
         FindTop250File = tryPath
         Exit Function

@@ -3032,6 +3032,95 @@ npx tsx scripts/run-sector-analysis.ts --list
 
 ---
 
-*Session: 2026-01-18 (continued)*
-*Status: Sector-specific analysis implemented and tested*
-*Running: Video-codec full analysis (20 patents, Opus)*
+### Session Update: 2026-01-18 (Late) - Sector Analyses Complete + Excel Import Fix
+
+**Major Accomplishments:**
+
+1. **Sector Analyses Completed** ✅
+   - **video-codec**: 20 patents → 152 products, 25 companies (COMPLETE)
+   - **cloud-auth**: 20 patents → 158 products, 39 companies (COMPLETE)
+   - **network-threat-protection**: 9 patents → 70 products, 32 companies (COMPLETE)
+   - **rf-acoustic**: 1 patent → 8 products (limited data in top250) (COMPLETE)
+   - **network-switching**: 15 patents → RUNNING
+
+2. **Excel Import Convention Standardized** ✅
+   - Created `scripts/export-top250-for-excel.ts`
+   - Exports to `excel/TOP250-YYYY-MM-DD.csv` with consistent naming
+   - Also creates `excel/TOP250-LATEST.csv` fallback
+   - Updated `excel/PatentAnalysisMacros.bas` with new `ImportTop250()` function
+   - VBA auto-detects today's date-based file
+
+3. **Fixed LLM V3 Data Loading** ✅
+   - Export scripts now merge ALL combined-v3 files (380 total analyses)
+   - Previously only loaded most recent file (130 analyses)
+
+4. **Fixed Sector Patent Lookup** ✅
+   - Script now looks up patents from detailed sector assignment files
+   - Maps `output/sectors/all-patents-sectors-v2-*.json` which has granular sectors
+   - Enriches with multi-score data for full patent records
+
+**Sector Analysis Results Summary:**
+
+| Sector | Patents | Products | Companies | Avg Eligibility | Avg Confidence |
+|--------|---------|----------|-----------|-----------------|----------------|
+| video-codec | 20 | 152 | 25 | 4.6 | 3.9 |
+| cloud-auth | 20 | 158 | 39 | 3.9 | 3.5 |
+| network-threat-protection | 9 | 70 | 32 | 4.3 | 3.9 |
+| rf-acoustic | 1 | 8 | 4 | 4.0 | 4.0 |
+
+**Top Companies by Sector:**
+
+- **video-codec**: NVIDIA (10), Samsung (9), AWS (8), Apple (8), Google (7)
+- **cloud-auth**: Microsoft (13), Google (9), Okta (7), AWS (7), Ping Identity (6)
+- **network-threat-protection**: Palo Alto Networks (8), Microsoft (8), CrowdStrike (6), Fortinet (4)
+- **rf-acoustic**: Qualcomm (2), Qorvo (2), Skyworks (2), Murata (2)
+
+**New/Modified Scripts:**
+| Script | Purpose |
+|--------|---------|
+| `scripts/export-top250-for-excel.ts` | Standardized Excel export |
+| `scripts/run-sector-analysis.ts` | Updated to use sector assignment files |
+| `excel/PatentAnalysisMacros.bas` | New ImportTop250() function |
+
+**Output Files Created:**
+| File | Description |
+|------|-------------|
+| `output/sector-analysis/video-codec/video-codec-analysis-2026-01-18.json` | Full analysis |
+| `output/sector-analysis/cloud-auth/cloud-auth-analysis-2026-01-18.json` | Full analysis |
+| `output/sector-analysis/network-threat-protection/network-threat-protection-analysis-2026-01-18.json` | Full analysis |
+| `output/sector-analysis/rf-acoustic/rf-acoustic-analysis-2026-01-18.json` | Full analysis |
+| `excel/TOP250-2026-01-18.csv` | Excel-ready export |
+
+**Key Insight: Sector Name Schema Differences**
+
+The unified-top250 files use **broader sector names** (e.g., "network-security" with 96 patents), while the sector assignment files (`output/sectors/all-patents-sectors-v2-*.json`) have **granular sectors** (e.g., "network-switching" with 1,071 patents). The sector analysis script now handles this by:
+1. First checking unified-top250 for the requested sector
+2. If not found, looking up patent IDs from the detailed sector assignment file
+3. Enriching those patents with data from multi-score analysis
+
+---
+
+## Quick Commands
+
+```bash
+# Export top 250 for Excel (new standardized format)
+npx tsx scripts/export-top250-for-excel.ts
+
+# Run sector analysis
+npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
+
+# List available sectors
+npx tsx scripts/run-sector-analysis.ts --list
+
+# Check analysis progress
+tail -f output/sector-analysis/<sector>/run-2026-01-18.log
+
+# View analysis results
+cat output/sector-analysis/<sector>/<sector>-analysis-2026-01-18.json | jq '.summary'
+```
+
+---
+
+*Session: 2026-01-18 (late)*
+*Status: 4 sector analyses complete, network-switching running*
+*Next: Complete network-switching, potentially run additional sectors*

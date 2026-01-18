@@ -30,36 +30,106 @@ import {
 
 // Load patents for a sector
 function loadSectorPatents(sector: string, limit: number): any[] {
-  // Try unified top 250 first
-  const top250Path = './output/unified-top250-v2-2026-01-18.json';
-  if (fs.existsSync(top250Path)) {
-    const data = JSON.parse(fs.readFileSync(top250Path, 'utf-8'));
-    const sectorPatents = data.patents.filter((p: any) =>
-      p.sector === sector ||
-      p.sector?.includes(sector) ||
-      p.sector_name?.toLowerCase().includes(sector.replace('-', ' '))
-    );
+  // Find most recent unified top 250 file
+  const outputFiles = fs.readdirSync('./output')
+    .filter(f => f.startsWith('unified-top250') && f.endsWith('.json'))
+    .sort()
+    .reverse();
 
-    if (sectorPatents.length > 0) {
-      console.log(`Found ${sectorPatents.length} patents in unified-top250 for sector: ${sector}`);
-      return sectorPatents.slice(0, limit);
+  if (outputFiles.length === 0) {
+    console.log('No unified-top250 files found');
+    return [];
+  }
+
+  const top250Path = `./output/${outputFiles[0]}`;
+  console.log(`Using: ${top250Path}`);
+
+  const data = JSON.parse(fs.readFileSync(top250Path, 'utf-8'));
+  const sectorPatents = data.patents.filter((p: any) =>
+    p.sector === sector ||
+    p.sector?.startsWith(sector) ||
+    sector.startsWith(p.sector || '') ||
+    p.sector_name?.toLowerCase().includes(sector.replace(/-/g, ' '))
+  );
+
+  if (sectorPatents.length > 0) {
+    console.log(`Found ${sectorPatents.length} patents in unified-top250 for sector: ${sector}`);
+    return sectorPatents.slice(0, limit);
+  }
+
+  // Try detailed sector assignment files (v2 has granular sectors)
+  const sectorFiles = fs.readdirSync('./output/sectors')
+    .filter(f => f.startsWith('all-patents-sectors-v2') && f.endsWith('.json'))
+    .sort()
+    .reverse();
+
+  if (sectorFiles.length > 0) {
+    const sectorAssignPath = `./output/sectors/${sectorFiles[0]}`;
+    console.log(`Looking up sector in: ${sectorAssignPath}`);
+
+    const sectorData = JSON.parse(fs.readFileSync(sectorAssignPath, 'utf-8'));
+
+    // Get patent IDs for this sector (data is in 'assignments' not 'patents')
+    const assignments = sectorData.assignments || sectorData.patents || [];
+    const patentIds = assignments
+      .filter((p: any) => p.sector === sector)
+      .map((p: any) => p.patent_id);
+
+    if (patentIds.length > 0) {
+      console.log(`Found ${patentIds.length} patent IDs in sector assignment for: ${sector}`);
+
+      // Enrich with data from multi-score analysis or raw metrics
+      const multiScoreFiles = fs.readdirSync('./output')
+        .filter(f => f.startsWith('multi-score-analysis') && f.endsWith('.json'))
+        .sort()
+        .reverse();
+
+      let enrichedPatents: any[] = [];
+
+      if (multiScoreFiles.length > 0) {
+        const multiScorePath = `./output/${multiScoreFiles[0]}`;
+        console.log(`Enriching from: ${multiScorePath}`);
+        const multiData = JSON.parse(fs.readFileSync(multiScorePath, 'utf-8'));
+        const patentMap = new Map(multiData.patents.map((p: any) => [p.patent_id, p]));
+
+        enrichedPatents = patentIds
+          .map((id: string) => patentMap.get(id))
+          .filter((p: any) => p !== undefined)
+          .sort((a: any, b: any) => (b.competitor_citations || 0) - (a.competitor_citations || 0));
+      }
+
+      if (enrichedPatents.length > 0) {
+        console.log(`Found ${enrichedPatents.length} enriched patents for sector: ${sector}`);
+        return enrichedPatents.slice(0, limit);
+      }
+
+      // If no enrichment source, return basic patent objects
+      return patentIds.slice(0, limit).map((id: string) => ({ patent_id: id, sector }));
     }
   }
 
-  // Try multi-score analysis
-  const multiScorePath = './output/multi-score-analysis-2026-01-17.json';
-  if (fs.existsSync(multiScorePath)) {
-    const data = JSON.parse(fs.readFileSync(multiScorePath, 'utf-8'));
+  // Fallback: Try CPC-based filtering on multi-score analysis
+  const multiScoreFiles = fs.readdirSync('./output')
+    .filter(f => f.startsWith('multi-score-analysis') && f.endsWith('.json'))
+    .sort()
+    .reverse();
+
+  if (multiScoreFiles.length > 0) {
+    const multiScorePath = `./output/${multiScoreFiles[0]}`;
+    const multiData = JSON.parse(fs.readFileSync(multiScorePath, 'utf-8'));
+
     // Filter by CPC codes relevant to sector
     const sectorCPCPrefixes: Record<string, string[]> = {
       'video-codec': ['H04N19', 'H04N21', 'G06T9'],
       'cloud-auth': ['H04L63', 'H04L9', 'G06F21'],
       'rf-acoustic': ['H03H9', 'H03H3', 'H04B1'],
-      'network-threat-protection': ['H04L63', 'G06F21', 'H04L12']
+      'network-threat-protection': ['H04L63', 'G06F21', 'H04L12'],
+      'network-switching': ['H04L45', 'H04L49', 'H04L12/46'],
+      'network-management': ['H04L41', 'H04L43', 'H04L12/24']
     };
 
     const prefixes = sectorCPCPrefixes[sector] || [];
-    const sectorPatents = data.patents
+    const cpcPatents = multiData.patents
       .filter((p: any) => {
         if (p.sector === sector) return true;
         if (!p.cpc_codes || p.cpc_codes.length === 0) return false;
@@ -70,8 +140,8 @@ function loadSectorPatents(sector: string, limit: number): any[] {
       .sort((a: any, b: any) => (b.competitor_citations || 0) - (a.competitor_citations || 0))
       .slice(0, limit);
 
-    console.log(`Found ${sectorPatents.length} patents via CPC filtering for sector: ${sector}`);
-    return sectorPatents;
+    console.log(`Found ${cpcPatents.length} patents via CPC filtering for sector: ${sector}`);
+    return cpcPatents;
   }
 
   return [];

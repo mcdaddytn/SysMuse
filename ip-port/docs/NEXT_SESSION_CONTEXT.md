@@ -2598,3 +2598,240 @@ npx tsx scripts/expand-sector.ts security
 *V3 Design: DOCUMENTED (pending implementation)*
 *GUI Spec: INITIAL DRAFT (pending review)*
 *Parallel paths: LLM questions, V3 scoring, sector expansion, GUI*
+
+---
+
+### Session Update: 2026-01-18 - V2 Sectors + V3 LLM Expansion + GUI Design
+
+**Major Accomplishments:**
+
+1. **V2 Sector Breakout Complete** ✅
+   - Created `config/sector-breakout-v2.json` with 41 CPC-based + 8 term-based sectors
+   - Ran `scripts/assign-sectors-v2.ts` on all 22,706 patents
+   - **54 unique sectors** (up from ~15 broad sectors)
+   - Output: `output/sectors/all-patents-sectors-v2-2026-01-18.json`
+
+   **Sector Damages Distribution:**
+   | Tier | Patents | Key Sectors |
+   |------|---------|-------------|
+   | Very High | 713 | video-codec (352), rf-acoustic (317), video-drm (44) |
+   | High | 7,127 | semiconductor, network-switching, computing-os-security |
+   | Medium | 10,791 | computing-runtime, wireless-transmission |
+   | Low | 4,075 | general, computing-ui |
+
+2. **V3 LLM Analysis - Top 250 Gaps** ✅
+   - 144 patents analyzed
+   - Cost: ~$1.32, Time: ~17 min
+   - Output: `output/llm-analysis-v3/combined-v3-2026-01-18.json`
+
+3. **V3 LLM Analysis - Bubble Zone (251-400)** 🔄 RUNNING
+   - 130 patents (ranks 251-400 lacking V3 data)
+   - Progress: ~55/130 at session end
+   - Cost: ~$1.18, Time: ~16 min
+   - Log: `output/llm-analysis-v3/bubble-zone-2026-01-18.log`
+
+4. **GUI Design Spec Updated** ✅ (`docs/GUI_DESIGN_SPEC.md`)
+   - Real-time weight sliders with impact preview
+   - Multi-user voting mechanism (attorney consensus)
+   - ElasticSearch integration with ad-hoc patent sets
+   - Set operations (union, intersection, difference)
+   - LLM context builder with chat refinement
+   - Patent detail tabs (prosecution, IPR, full patent)
+   - Patlytics product selection view
+   - Phase-prioritized feature roadmap
+
+5. **Sector-Specific LLM Planning Doc** ✅ (`docs/SECTOR_SPECIFIC_LLM_PLANNING.md`)
+   - Product-focused analysis pipeline for vendor integration
+   - Sector-specific prompt templates (video-codec, cloud-auth, rf-acoustic)
+   - Within-sector ranking methodology
+   - Litigation grouping score concept
+   - Diminishing returns analysis
+
+**Cost/Time Analysis (V3 LLM):**
+
+| Job | Patents | Time | Cost | Rate |
+|-----|---------|------|------|------|
+| Top 250 gaps | 144 | ~17 min | ~$1.32 | ~8.5 patents/min |
+| Bubble zone | 130 | ~16 min | ~$1.18 | ~8.5 patents/min |
+| **Total top 400** | **274** | **~33 min** | **~$2.50** | - |
+
+**Bubble-Up Analysis Insight:**
+- Top 250: 144 patents needed LLM (58% gap)
+- Bubble zone (251-400): 130 patents needed LLM (87% gap!)
+- Deeper zone (401-600): 186 needed (93% gap)
+- **Recommendation:** Stop broad V3 at top 400, switch to sector-specific
+
+**New Files Created:**
+
+| File | Purpose |
+|------|---------|
+| `config/sector-breakout-v2.json` | Detailed CPC → sector mappings |
+| `scripts/assign-sectors-v2.ts` | V2 sector assignment script |
+| `output/sectors/all-patents-sectors-v2-2026-01-18.json` | 22,706 patents with V2 sectors |
+| `output/patents-with-sectors-v2-2026-01-18.csv` | CSV export |
+| `output/bubble-zone-needs-llm-2026-01-18.json` | 130 patents for bubble zone |
+| `output/top250-v3-needs-llm-2026-01-18.json` | 144 patents (now analyzed) |
+| `docs/SECTOR_SPECIFIC_LLM_PLANNING.md` | Product-focused LLM strategy |
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Priority 1: Check Bubble Zone Job Completion
+
+```bash
+# Check if still running
+ps aux | grep "tsx.*run-llm" | grep -v grep
+
+# View final progress
+tail -30 output/llm-analysis-v3/bubble-zone-2026-01-18.log
+
+# Check combined output
+ls -la output/llm-analysis-v3/combined-v3-2026-01-18.json
+```
+
+### Priority 2: Recalculate Unified Top 250 with V3 Data
+
+```bash
+# Recalculate with complete V3 LLM coverage
+npx tsx scripts/calculate-unified-top250-v3.ts
+
+# Compare old vs new top 250 for bubble-up analysis
+# Look for patents that moved significantly
+```
+
+### Priority 3: Bubble-Up Pattern Analysis
+
+After recalculation, analyze:
+- Which patents from 251-400 rose into top 250?
+- Which top 250 patents dropped out?
+- What V3 metrics drove the changes?
+
+### Priority 4: Sector-Specific LLM Testing (video-codec first)
+
+**Note:** Consider using Opus model for higher quality sector-specific analysis.
+
+```bash
+# Create sector-specific prompt for video-codec
+# Target: 18 video-codec patents in current top 250 + expansion
+
+# Model flexibility needed:
+# - Standard V3: Claude Sonnet (cost-effective for bulk)
+# - Sector-specific: Claude Opus (higher quality for priority sectors)
+```
+
+**Top Sectors for Sector-Specific Analysis:**
+
+| Priority | Sector | Top 250 Count | Damages Tier | Next Step |
+|----------|--------|---------------|--------------|-----------|
+| 1 | **video-codec** | 18 | Very High | Create sector prompt, test on top 18 |
+| 2 | **cloud-auth** | 35 | High | Create sector prompt |
+| 3 | **network-switching** | 22 | High | Create sector prompt |
+| 4 | **network-threat-protection** | 12 | High | Create sector prompt |
+| 5 | **rf-acoustic** | 1 (but 317 total) | Very High | Specialized prompt |
+
+### Priority 5: Export Updated CSV
+
+```bash
+# After recalculation, export fresh CSV with V2 sectors
+npx tsx scripts/export-raw-metrics-csv.ts
+```
+
+---
+
+## Development Queue (Prioritized)
+
+### Immediate (This Week)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Bubble zone job completion | Check first | Should be done |
+| Recalculate top 250 with V3 | Ready | Run after bubble zone |
+| Bubble-up analysis | Ready | Compare old/new top 250 |
+| Export updated CSV | Ready | After recalculation |
+
+### Short-Term (Next Week)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Sector-specific prompt: video-codec | Ready to develop | Test Opus model |
+| Sector-specific prompt: cloud-auth | Queued | After video-codec |
+| Product identification pipeline | Design complete | Leverage citation data |
+| Mixed model support in LLM service | To implement | Sonnet for bulk, Opus for sector |
+
+### Medium-Term
+
+| Item | Status | Notes |
+|------|--------|-------|
+| PostgreSQL data import | Queued | Load patents + sectors |
+| API layer (Express) | Queued | REST endpoints |
+| GUI scaffold (Quasar/Vue) | Design complete | Start after API |
+| Patlytics integration prep | Planning | Product selection workflow |
+
+### Longer-Term
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Within-sector rankings | Designed | After sector-specific LLM |
+| Litigation grouping | Conceptual | Patents that work together |
+| Venn/concentric visualization | Future | User has existing code |
+| Claim chart vendor integration | Planning | Token-based cost tracking |
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Start Docker services
+npm run docker:up
+
+# Check ES health
+npm run es:health
+
+# Check job status
+ps aux | grep tsx | grep -v grep
+tail -20 output/llm-analysis-v3/bubble-zone-2026-01-18.log
+
+# Recalculate unified top 250
+npx tsx scripts/calculate-unified-top250-v3.ts
+
+# Run V2 sector assignment
+npx tsx scripts/assign-sectors-v2.ts
+
+# Export raw metrics CSV
+npx tsx scripts/export-raw-metrics-csv.ts
+
+# Run V3 LLM on specific patents
+npx tsx scripts/run-llm-analysis-v3.ts <patent-list.json>
+```
+
+---
+
+## Key Design Documents
+
+| Document | Status | Description |
+|----------|--------|-------------|
+| `docs/GUI_DESIGN_SPEC.md` | **Updated 2026-01-18** | Full GUI wireframes, ES search, multi-user |
+| `docs/SCORING_METHODOLOGY_V3_DESIGN.md` | Draft | Three-factor model |
+| `docs/SECTOR_BREAKOUT_PROPOSALS_V2.md` | **Implemented** | ~47 sector breakouts |
+| `docs/SECTOR_SPECIFIC_LLM_PLANNING.md` | **New** | Product-focused LLM strategy |
+
+---
+
+## Model Strategy Note
+
+For sector-specific analysis, consider mixed model approach:
+
+| Use Case | Model | Rationale |
+|----------|-------|-----------|
+| Bulk V3 analysis (top 400+) | Claude Sonnet | Cost-effective, ~$1/100 patents |
+| Sector-specific deep analysis | Claude Opus | Higher quality, product focus |
+| Ad-hoc attorney queries | Claude Sonnet | Quick turnaround |
+| Litigation grouping analysis | Claude Opus | Nuanced legal analysis |
+
+**Implementation:** Add `--model opus` flag to `run-llm-analysis-v3.ts` for model selection.
+
+---
+
+*Session ended: 2026-01-18*
+*Bubble zone job running at 55/130 (~42%) - check completion next session*

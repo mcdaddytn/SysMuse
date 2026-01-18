@@ -415,22 +415,319 @@ Select 2-3 patents to compare side-by-side
 
 ---
 
-## Open Design Questions
+## Design Decisions (Confirmed 2026-01-18)
 
-1. **Dark mode?** - Common in data-heavy applications
+| Feature | Decision | Notes |
+|---------|----------|-------|
+| **Multi-user support** | YES | Weight profiles per user; slider adjustments serve as confidence votes |
+| **In-system notifications** | YES | Job completion alerts within GUI (no email needed yet) |
+| **Saved views** | YES | Save filtered grid configurations |
+| **Patent notes** | NO | Not needed for MVP |
+| **Export templates** | NO | Simple CSV/Excel export sufficient |
+| **Dark mode** | LOW PRIORITY | Visual preference for late-night work; defer to later |
 
-2. **Multi-user support?** - Separate weight profiles per user?
+---
 
-3. **Notifications?** - Alert when analysis jobs complete?
+## Priority Feature: Real-Time Weight Slider Impact
 
-4. **Saved views?** - Let users save filtered grid configurations?
+**Critical Enhancement:** When attorneys adjust weight sliders, show real-time visual feedback:
 
-5. **Patent notes?** - Allow users to add notes to patents?
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SCORING WEIGHTS                                      [Save] [Reset] [Share]│
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Logged in as: John Smith (Partner)       Profile: [My Weights ▼] [New]    │
+│                                                                             │
+│  ┌─────────────────────────────────┐  ┌─────────────────────────────────┐  │
+│  │ WEIGHT SLIDERS                  │  │ REAL-TIME IMPACT PREVIEW        │  │
+│  │                                 │  │                                 │  │
+│  │ DAMAGES FACTORS                 │  │ Top 250 Changes:                │  │
+│  │ Sector Damages    ───○─── 40%   │  │ ┌─────────────────────────────┐ │  │
+│  │ Competitor Cites  ──○──── 25%   │  │ │ ↑ +5 patents enter top 250  │ │  │
+│  │ Market Relevance  ─○───── 20%   │  │ │ ↓ -5 patents exit top 250   │ │  │
+│  │ Forward Citations ○────── 15%   │  │ │                             │ │  │
+│  │                                 │  │ │ Biggest Movers:             │ │  │
+│  │ SUCCESS FACTORS                 │  │ │ 9847234: +47 ranks (↑)      │ │  │
+│  │ Eligibility Score ───○─── 30%   │  │ │ 8115667: +32 ranks (↑)      │ │  │
+│  │ Validity Score    ───○─── 30%   │  │ │ 9569605: -15 ranks (↓)      │ │  │
+│  │ Claim Breadth     ──○──── 20%   │  │ └─────────────────────────────┘ │  │
+│  │ Prosecution Qual. ──○──── 20%   │  │                                 │  │
+│  │                                 │  │ Sector Distribution Shift:      │  │
+│  │ RISK FACTORS                    │  │ [Mini donut chart showing       │  │
+│  │ IPR Risk          ───○─── 35%   │  │  before/after sector mix]       │  │
+│  │ Design-Around     ──○──── 30%   │  │                                 │  │
+│  │ Enforcement       ───○─── 35%   │  │ [View Full Comparison]          │  │
+│  └─────────────────────────────────┘  └─────────────────────────────────┘  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ TEAM WEIGHT CONSENSUS (3 attorneys have profiles)                   │   │
+│  │                                                                     │   │
+│  │ Metric          │ John  │ Sarah │ Mike  │ Team Avg │ Variance      │   │
+│  │ Eligibility     │  30%  │  35%  │  25%  │   30%    │ Low ●○○       │   │
+│  │ Competitor Cites│  25%  │  20%  │  30%  │   25%    │ Med ●●○       │   │
+│  │ IPR Risk        │  35%  │  40%  │  30%  │   35%    │ Low ●○○       │   │
+│  │                                                                     │   │
+│  │ [Apply Team Average] [View Divergence Analysis]                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-6. **Export templates?** - Pre-configured export formats?
+**Multi-User Voting Mechanism:**
+- Each attorney's weight adjustments contribute to a team consensus
+- High variance in a metric indicates disagreement → flag for discussion
+- Optional: Weight votes by attorney experience or case wins
+
+---
+
+## Priority Feature: ElasticSearch Integration & Ad-Hoc Sectors
+
+**Critical Enhancement:** Live search with patent set creation and manipulation
+
+### 7. Search & Discovery View (NEW)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SEARCH & DISCOVERY                                        [My Sets ▼] [+]  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ SEARCH QUERY                                                         │   │
+│  │ ┌───────────────────────────────────────────────────────────────┐   │   │
+│  │ │ video codec transcoding adaptive bitrate                      │   │   │
+│  │ └───────────────────────────────────────────────────────────────┘   │   │
+│  │ [Search] [+ Stopwords] [CPC Filter: H04N ▼] [Min Score: ___ ]       │   │
+│  │                                                                      │   │
+│  │ Excluded terms: method, apparatus, comprising, plurality            │   │
+│  │ [Edit Stopwords]                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────┐  ┌─────────────────────────────────┐  │
+│  │ SEARCH RESULTS (847 patents)   │  │ SAVED SETS                      │  │
+│  │                                 │  │                                 │  │
+│  │ ☑ 10200706 - Pipelined video.. │  │ ○ Video Codec Core (154)        │  │
+│  │ ☑ 8116374 - Transform size...  │  │ ○ Adaptive Streaming (89)       │  │
+│  │ ☑ 9762903 - Bitrate adapt...   │  │ ● [Current Search] (847)        │  │
+│  │ ☑ 10542287 - Transcoding...    │  │ ○ ByteDance Targets (23)        │  │
+│  │ ☐ 8954740 - Video processing.. │  │                                 │  │
+│  │ ... (842 more)                 │  │ SET OPERATIONS                  │  │
+│  │                                 │  │ [A ∩ B] [A ∪ B] [A - B]         │  │
+│  │ [Select All] [Select Top 50]   │  │                                 │  │
+│  └─────────────────────────────────┘  │ Selected: Video Codec Core      │  │
+│                                        │          + Current Search       │  │
+│  ┌─────────────────────────────────┐  │                                 │  │
+│  │ ACTIONS ON SELECTION            │  │ Intersection: 67 patents        │  │
+│  │                                 │  │ Union: 934 patents              │  │
+│  │ [Save as Set: ____________]     │  │ Difference: 780 patents         │  │
+│  │ [Run LLM Analysis ▼]            │  │                                 │  │
+│  │ [Calculate Metrics]             │  │ [Create New Set from Result]    │  │
+│  │ [View Sector Distribution]      │  └─────────────────────────────────┘  │
+│  │ [Export to CSV]                 │                                       │
+│  └─────────────────────────────────┘                                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 7a. LLM Context Builder for Ad-Hoc Analysis
+
+When user selects patents and clicks "Run LLM Analysis":
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  LLM ANALYSIS CONFIGURATION                                         [Close]│
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Target: "Video Codec Search Results" (847 patents selected)               │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ SUGGESTED CONTEXT (Auto-generated based on search terms)            │   │
+│  │                                                                     │   │
+│  │ "Analyze these video codec patents with focus on:                   │   │
+│  │  - HEVC/H.264/AV1 standards compliance                             │   │
+│  │  - Streaming platform implementation (Netflix, YouTube, etc.)       │   │
+│  │  - Hardware encoder/decoder relevance                              │   │
+│  │  - Adaptive bitrate streaming products                             │   │
+│  │  - Mobile device video processing"                                  │   │
+│  │                                                                     │   │
+│  │ [Edit Context] [Regenerate ↻] [Use Standard V3 Prompt]              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  OR SELECT PRESET CONTEXT:                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ ○ Standard V3 Analysis (broad cross-sector signals)                 │   │
+│  │ ● Sector-Specific: Video/Streaming (product-focused)                │   │
+│  │ ○ Sector-Specific: Security/Threat Detection                        │   │
+│  │ ○ Custom (edit above)                                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  💬 CHAT REFINEMENT                                                         │
+│  ┌───────────────────────────────────────────────────────────────────┐     │
+│  │ User: Add questions about DRM and content protection               │     │
+│  │ AI: Updated context to include DRM systems, Widevine, FairPlay... │     │
+│  │ User: Focus more on Chinese streaming platforms                    │     │
+│  │ AI: Added ByteDance/TikTok, Tencent Video, Bilibili context...    │     │
+│  └───────────────────────────────────────────────────────────────────┘     │
+│  [Type refinement...                                          ] [Send]     │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ ESTIMATED COST & TIME                                               │   │
+│  │ Patents: 847 | Batches: 170 | Est. Time: ~50 min | Est. Cost: ~$7   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  [Cancel] [Run Analysis]                                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Priority Feature: Patent Detail - Extended Data Access
+
+**Enhancement:** Add tabs for prosecution history, IPR data, and full patent
+
+### 4a. Patent Detail View - Enhanced
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PATENT: 9569605                                              [Back] [⋮]    │
+│  "Systems and methods for enabling biometric authentication options"        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  [Overview] [Prosecution] [IPR/PTAB] [Full Patent] [Products] [Similar]     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ══════════════════════════════════════════════════════════════════════════ │
+│  TAB: PROSECUTION HISTORY                             [Refresh from USPTO]  │
+│  ══════════════════════════════════════════════════════════════════════════ │
+│                                                                             │
+│  Application: 14/123456    Filed: 2014-08-15    Granted: 2017-02-14        │
+│  Prosecution Quality Score: 4/5 (Smooth)                                   │
+│                                                                             │
+│  TIMELINE:                                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 2014-08-15 │ Application Filed                                      │   │
+│  │ 2015-03-22 │ Non-Final Office Action (102/103 rejection)            │   │
+│  │ 2015-09-22 │ Applicant Response (Claims amended)                    │   │
+│  │ 2016-01-15 │ Final Office Action                                    │   │
+│  │ 2016-07-15 │ RCE Filed                                              │   │
+│  │ 2016-11-03 │ Notice of Allowance                                    │   │
+│  │ 2017-02-14 │ Patent Granted                                         │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  PROSECUTION CONCERNS:                                                      │
+│  ⚠ 1 RCE filed (moderate prosecution effort)                               │
+│  ⚠ Claims narrowed from original filing                                    │
+│  ✓ No file wrapper estoppel concerns identified                            │
+│                                                                             │
+│  ══════════════════════════════════════════════════════════════════════════ │
+│  TAB: IPR/PTAB HISTORY                                                     │
+│  ══════════════════════════════════════════════════════════════════════════ │
+│                                                                             │
+│  IPR Risk Score: 5/5 (Clean - No IPR History)                              │
+│                                                                             │
+│  ✓ No IPR petitions filed against this patent                              │
+│  ✓ No related family members challenged                                    │
+│  ✓ Patent holder has low IPR loss rate (2/15 = 13%)                        │
+│                                                                             │
+│  ══════════════════════════════════════════════════════════════════════════ │
+│  TAB: FULL PATENT                               [Download PDF] [USPTO Link] │
+│  ══════════════════════════════════════════════════════════════════════════ │
+│                                                                             │
+│  ⚠ Full patent text not yet loaded. [Load from USPTO Bulk Data]            │
+│                                                                             │
+│  (Future: Display claims, specification, drawings inline)                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Future Feature: Set Visualization (Venn/Concentric)
+
+**Note for Future Development:**
+
+User has existing code/design for a visualization combining:
+- **Concentric circles:** Showing broader → narrower sets (e.g., "All Wireless" contains "Bluetooth" contains "BLE Audio")
+- **Venn diagram adjacent circles:** Showing independent but overlapping searches
+
+This will be useful for:
+- Visualizing sector hierarchies
+- Showing search term overlap
+- Litigation grouping (which patents belong to multiple potential cases)
+
+**Defer detailed design** until user provides code/design from previous work.
+
+---
+
+## Vendor Integration Considerations
+
+### Patlytics Integration (Heat Maps)
+
+The system should prepare data for Patlytics submission:
+- **20 products per patent** at ~$25/patent fixed cost
+- GUI should help users select the best products to analyze
+
+**Product Selection View (Future):**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PRODUCT SELECTION FOR PATLYTICS                    Patent: 9569605         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  LLM-SUGGESTED PRODUCTS (based on patent analysis):                        │
+│  ☑ Apple Face ID / Touch ID                                                 │
+│  ☑ Samsung Knox Security Platform                                           │
+│  ☑ Google Pixel Biometric Authentication                                    │
+│  ☑ Microsoft Windows Hello                                                  │
+│  ☐ Okta Identity Cloud                                                      │
+│  ☐ ...                                                                      │
+│                                                                             │
+│  PRODUCTS FROM COMPETITOR CITATIONS:                                        │
+│  Apple (67 citations) → Face ID, Touch ID, Secure Enclave                  │
+│  Microsoft (5 citations) → Windows Hello, Azure AD                         │
+│                                                                             │
+│  ADD CUSTOM PRODUCT: [________________________] [+ Add]                     │
+│                                                                             │
+│  Selected: 12/20 products                      [Submit to Patlytics Queue]  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Claim Chart Vendor Integration (Future)
+
+Token-based on-demand cost → Need product coverage planning:
+- Track which patent/product combinations have been analyzed
+- Prioritize high-confidence matches from Patlytics heat maps
+- Budget tracking for token usage
+
+---
+
+## Updated Feature Priorities
+
+### Phase 1: MVP (Core Functionality)
+1. **Patent Grid View** - Filterable, sortable data table
+2. **Dashboard** - Key metrics and top patents
+3. **Real-Time Weight Sliders** - With impact preview
+4. **Job Management** - Start jobs, in-system notifications
+5. **Multi-User** - Separate weight profiles
+
+### Phase 2: Search & Discovery
+6. **ElasticSearch Integration** - Live search
+7. **Ad-Hoc Patent Sets** - Save searches as sets
+8. **Set Operations** - Union, intersection, difference
+9. **LLM Context Builder** - Auto-suggest with chat refinement
+
+### Phase 3: Extended Data
+10. **Prosecution History Tab** - From File Wrapper API
+11. **IPR/PTAB Tab** - From PTAB API
+12. **Full Patent Download** - On-demand from USPTO bulk
+
+### Phase 4: Vendor Integration
+13. **Product Selection for Patlytics** - Prepare 20-product lists
+14. **Claim Chart Queue** - Track vendor submissions
+15. **Venn/Concentric Visualization** - User's existing design
 
 ---
 
 *Document created: 2026-01-17*
-*Status: INITIAL DRAFT for review*
-*Feedback welcome on layout, features, and priorities*
+*Updated: 2026-01-18 with user feedback*
+*Status: UPDATED DRAFT - incorporates real-time sliders, ES search, multi-user voting, vendor integration*

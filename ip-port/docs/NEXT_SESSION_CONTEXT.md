@@ -2366,10 +2366,109 @@ ps aux | grep tsx | grep -v grep
 
 ---
 
-*Document updated: 2026-01-17 (final session)*
-*V2 Scoring: IMPLEMENTED (filters + multiplicative year factor)*
-*Top 250 V2: 0 expired patents, min 3.1 years, avg 12.2 years*
-*Video Codec Analysis: COMPLETE (200 patents)*
-*Excel Macro: UPDATED (10 metrics, 44-column CSV support)*
+---
+
+### Session Update: 2026-01-17 (Continuation) - V2 Enrichment Complete + VBA V2 Update
+
+**Major Accomplishments:**
+
+1. **V2 Top 250 Fully Enriched** ✅
+   - LLM v3: 250/250 (100%)
+   - IPR Risk: 250/250 (100%) - all clean, no IPR history
+   - Prosecution: 224/250 (90%)
+
+2. **VBA Macro Updated to V2 Scoring** ✅
+   - Version 2.0 with multiplicative year factor
+   - Year multiplier formula: `0.3 + 0.7 × (years/15)^0.8`
+   - 9 weighted metrics (years applied multiplicatively, not additively)
+   - New columns: YearMult, BaseScore in scoring sheets
+
+3. **CSV Export Updated** ✅
+   - Full 10,276 patents with all available metrics
+   - IPR data now for 250 patents (merged results)
+   - Ready for Excel import
+
+**V2 Scoring Methodology (Final):**
+
+| Feature | V1 (Old) | V2 (Current) |
+|---------|----------|--------------|
+| Year normalization | `years/15` | `(years/15)^1.5` |
+| Year impact | Additive (~10% weight) | Multiplicative (0.3-1.0) |
+| Hard filters | None | Min 3 years, min elig 2 |
+| Metrics in sum | 10 (incl years) | 9 (years separate) |
+
+**V2 Year Multiplier Table:**
+```
+Years    Multiplier   Penalty
+15+      1.00         0%
+10       0.81         -19%
+7        0.70         -30%
+5        0.55         -45%
+3        0.40         -60%
+```
+
+**Top 5 V2 Patents (Final):**
+
+| Rank | Patent | Score | Competitors |
+|------|--------|-------|-------------|
+| 1 | 9569605 | 50.3% | Apple (67 cites) |
+| 2 | 10200706 | 46.0% | ByteDance (20 cites) |
+| 3 | 11516311 | 42.5% | Amazon, Comcast |
+| 4 | 11425134 | 42.4% | Microsoft |
+| 5 | 11882300 | 41.1% | Video codec |
+
+**Files Updated:**
+
+| File | Changes |
+|------|---------|
+| `excel/PatentAnalysisMacros.bas` | V2.0 - multiplicative year factor |
+| `output/patents-raw-metrics-2026-01-17.csv` | Fresh export with 250 IPR |
+| `output/unified-top250-v2-2026-01-17.json` | Full V2 enrichment |
+| `output/ipr/ipr-risk-check-2026-01-17.json` | Merged 250 IPR results |
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Excel Import Ready
+
+```bash
+# Files ready for Excel:
+output/patents-raw-metrics-2026-01-17.csv  # Full 10K patents (44 cols)
+output/unified-top250-v2-2026-01-17.csv    # V2 top 250 only
+
+# VBA macro updated:
+excel/PatentAnalysisMacros.bas              # Version 2.0 (V2 scoring)
+```
+
+### To Import into Excel:
+1. Open new workbook
+2. Import VBA module from `excel/PatentAnalysisMacros.bas`
+3. Run `ImportAllData()` macro
+4. Adjust weights in UserWeights sheet
+5. View rankings in Score_Combined sheet
+
+### Development Queue (Next Tasks):
+
+1. **Sector Expansion** - Expand analysis to additional sectors
+   - Cloud/Auth sector (43 patents, 349 citations)
+   - Security/Threat sector (6 patents, 28 citations)
+
+2. **Product Mapping** - LLM questions for market/damages estimation
+   - Add revenue exposure estimates
+   - Add product evidence links
+
+3. **Platform Development** - API and GUI foundation
+   - PostgreSQL data import
+   - REST API endpoints
+   - Quasar/Vue.js scaffold
+
+---
+
+*Document updated: 2026-01-17 (V2 enrichment complete)*
+*V2 Scoring: COMPLETE with VBA macro update*
+*Top 250 V2: 100% LLM v3, 100% IPR, 90% prosecution*
+*VBA Macro: Version 2.0 (multiplicative year factor)*
+*All 250 IPR patents: CLEAN (no IPR history)*
 *Config version: 4.1 with 93 companies across 16 categories*
 *ElasticSearch: 22,706 patents indexed*

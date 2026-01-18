@@ -1,0 +1,313 @@
+{
+  "version": "2.0",
+  "description": "Detailed CPC subgroup to sector mappings based on SECTOR_BREAKOUT_PROPOSALS_V2.md",
+  "lastUpdated": "2026-01-18",
+
+  "sectorMappings": {
+    "network-threat-protection": {
+      "name": "Network Threat Protection",
+      "description": "Malware, intrusion detection, countermeasures",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04L63/14", "H04L63/12", "H04L63/16", "H04L63/145", "H04L63/1416", "H04L63/1425", "H04L63/1433", "H04L63/1441", "H04L63/1458", "H04L63/1466", "H04L63/1475", "H04L63/1483", "H04L63/1491"]
+    },
+    "network-auth-access": {
+      "name": "Network Auth & Access Control",
+      "description": "Auth protocols, access control, firewalls",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04L63/08", "H04L63/10", "H04L63/04", "H04L63/02", "H04L63/0815", "H04L63/0823", "H04L63/083", "H04L63/0838", "H04L63/0846", "H04L63/0853", "H04L63/0861", "H04L63/0869", "H04L63/0876", "H04L63/0884", "H04L63/101", "H04L63/102", "H04L63/104", "H04L63/105", "H04L63/0428"]
+    },
+    "network-crypto": {
+      "name": "Network Cryptography",
+      "description": "Cryptographic schemes, signatures, PKI",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04L9/", "H04L9/32", "H04L9/08", "H04L9/14", "H04L9/30", "H04L9/06", "H04L9/00"]
+    },
+    "network-secure-compute": {
+      "name": "Secure Computing & MPC",
+      "description": "Multiparty computation, crypto mechanisms",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L63/20", "H04L63/06", "H04L63/0227", "H04L63/061"]
+    },
+    "network-signal-processing": {
+      "name": "Network Signal Processing",
+      "description": "Baseband, modulation, equalization",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L25/", "H04L27/"]
+    },
+    "network-multiplexing": {
+      "name": "Network Multiplexing",
+      "description": "Frequency/time multiplexing, sync",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L5/", "H04L7/"]
+    },
+    "network-error-control": {
+      "name": "Network Error Control",
+      "description": "Error detection, FEC, ARQ",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L1/"]
+    },
+    "network-switching": {
+      "name": "Network Switching & Routing",
+      "description": "Switching, routing, QoS",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04L12/28", "H04L12/40", "H04L12/46", "H04L45/", "H04L47/", "H04L49/"]
+    },
+    "network-management": {
+      "name": "Network Management",
+      "description": "Network monitoring, configuration",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L41/", "H04L43/"]
+    },
+    "network-protocols": {
+      "name": "Network Protocols",
+      "description": "Application protocols, messaging",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L67/", "H04L69/"]
+    },
+    "streaming-multimedia": {
+      "name": "Streaming & Multimedia",
+      "description": "Real-time streaming protocols",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04L65/"]
+    },
+    "wireless-scheduling": {
+      "name": "Wireless Scheduling",
+      "description": "Resource scheduling, RACH, sync",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04W72/", "H04W74/", "H04W56/"]
+    },
+    "wireless-power-mgmt": {
+      "name": "Wireless Power Management",
+      "description": "Power control, DRX, battery optimization",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04W52/"]
+    },
+    "wireless-mimo-antenna": {
+      "name": "Wireless MIMO & Antenna",
+      "description": "MIMO, beamforming, antenna arrays",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04B7/"]
+    },
+    "wireless-transmission": {
+      "name": "Wireless Transmission",
+      "description": "TX fundamentals, near-field, optical",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04B1/", "H04B3/", "H04B5/", "H04B10/"]
+    },
+    "wireless-mobility": {
+      "name": "Wireless Mobility",
+      "description": "Handoff, connection mgmt, roaming",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04W36/", "H04W76/", "H04W8/"]
+    },
+    "wireless-infrastructure": {
+      "name": "Wireless Infrastructure",
+      "description": "Base stations, monitoring, coverage",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04W88/", "H04W24/", "H04W16/", "H04W28/"]
+    },
+    "wireless-services": {
+      "name": "Wireless Services",
+      "description": "Location services, messaging",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04W4/", "H04W64/"]
+    },
+    "wireless-security": {
+      "name": "Wireless Security",
+      "description": "Auth, encryption at wireless layer",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04W12/"]
+    },
+    "computing-os-security": {
+      "name": "Computing OS Security",
+      "description": "Kernel, OS protection, sandboxing",
+      "damages_tier": "High",
+      "cpc_patterns": ["G06F21/5", "G06F21/50", "G06F21/51", "G06F21/52", "G06F21/53", "G06F21/54", "G06F21/55", "G06F21/56", "G06F21/57"]
+    },
+    "computing-data-protection": {
+      "name": "Computing Data Protection",
+      "description": "Data at rest, DLP, storage encryption",
+      "damages_tier": "High",
+      "cpc_patterns": ["G06F21/6", "G06F21/60", "G06F21/62", "G06F21/64"]
+    },
+    "computing-auth-boot": {
+      "name": "Computing Auth & Secure Boot",
+      "description": "Secure boot, user auth, process auth",
+      "damages_tier": "High",
+      "cpc_patterns": ["G06F21/1", "G06F21/3", "G06F21/4", "G06F21/10", "G06F21/12", "G06F21/30", "G06F21/31", "G06F21/32", "G06F21/33", "G06F21/34", "G06F21/35", "G06F21/40", "G06F21/41", "G06F21/42", "G06F21/43", "G06F21/44", "G06F21/45"]
+    },
+    "computing-systems": {
+      "name": "Computing Systems",
+      "description": "Power, interconnect, memory management",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G06F1/", "G06F13/", "G06F12/"]
+    },
+    "computing-runtime": {
+      "name": "Computing Runtime",
+      "description": "VMs, scheduling, error detection",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G06F9/", "G06F11/"]
+    },
+    "computing-ui": {
+      "name": "Computing UI",
+      "description": "I/O, displays, interaction",
+      "damages_tier": "Low",
+      "cpc_patterns": ["G06F3/"]
+    },
+    "data-retrieval": {
+      "name": "Data Retrieval",
+      "description": "Database, search, information retrieval",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G06F16/"]
+    },
+    "fintech-business": {
+      "name": "FinTech & Business",
+      "description": "Payments, workflow, commerce",
+      "damages_tier": "High",
+      "cpc_patterns": ["G06Q20/", "G06Q10/", "G06Q30/", "G06Q40/", "G06Q50/"]
+    },
+    "video-client-processing": {
+      "name": "Video Client Processing",
+      "description": "Playback, buffering, adaptive bitrate",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04N21/4"]
+    },
+    "video-server-cdn": {
+      "name": "Video Server & CDN",
+      "description": "Server, CDN, delivery infrastructure",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04N21/2", "H04N21/8"]
+    },
+    "video-drm-conditional": {
+      "name": "Video DRM & Conditional Access",
+      "description": "DRM, conditional access, encryption",
+      "damages_tier": "Very High",
+      "cpc_patterns": ["H04N21/6"]
+    },
+    "video-codec": {
+      "name": "Video Codec",
+      "description": "Compression, encoding",
+      "damages_tier": "Very High",
+      "cpc_patterns": ["H04N19/"]
+    },
+    "video-broadcast": {
+      "name": "Video Broadcast",
+      "description": "TV systems, signal processing",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04N7/", "H04N5/", "H04N9/"]
+    },
+    "video-storage": {
+      "name": "Video Storage",
+      "description": "Recording, media storage",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G11B20/", "G11B5/", "G11B27/"]
+    },
+    "image-processing": {
+      "name": "Image Processing",
+      "description": "Enhancement, transforms, analysis",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G06T1/", "G06T3/", "G06T5/", "G06T7/", "G06T9/", "G06T11/"]
+    },
+    "3d-stereo-depth": {
+      "name": "3D Stereo & Depth",
+      "description": "3D imaging, depth",
+      "damages_tier": "High",
+      "cpc_patterns": ["H04N13/", "G06T15/"]
+    },
+    "cameras-sensors": {
+      "name": "Cameras & Sensors",
+      "description": "Image capture hardware",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["H04N23/", "H04N25/"]
+    },
+    "rf-acoustic": {
+      "name": "RF Acoustic Resonators",
+      "description": "BAW/FBAR filters for RF",
+      "damages_tier": "Very High",
+      "cpc_patterns": ["H03H/", "H03H9/"]
+    },
+    "ai-ml": {
+      "name": "AI/Machine Learning",
+      "description": "Neural networks, ML algorithms",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G06N/"]
+    },
+    "audio": {
+      "name": "Audio Processing",
+      "description": "Speech, audio codecs",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G10L/", "H04R/", "H04S/"]
+    },
+    "semiconductor": {
+      "name": "Semiconductor",
+      "description": "Chip design, circuits",
+      "damages_tier": "High",
+      "cpc_patterns": ["H01L/", "H03/"]
+    },
+    "optics": {
+      "name": "Optics & Photonics",
+      "description": "Optical systems, fiber",
+      "damages_tier": "Medium",
+      "cpc_patterns": ["G02/", "H04J/"]
+    }
+  },
+
+  "termBasedSectors": {
+    "cloud-auth": {
+      "name": "Cloud Authentication",
+      "description": "Cloud identity, SSO, MFA",
+      "damages_tier": "High",
+      "terms": ["authentication", "single sign-on", "SSO", "MFA", "multi-factor", "biometric", "identity"]
+    },
+    "image-depth": {
+      "name": "Image Depth Mapping",
+      "description": "Depth sensing, ADAS",
+      "damages_tier": "High",
+      "terms": ["depth map", "depth sensing", "ADAS", "autonomous driving", "LiDAR"]
+    },
+    "pii-breach": {
+      "name": "PII & Data Breach",
+      "description": "Data privacy, breach detection",
+      "damages_tier": "Medium",
+      "terms": ["PII", "personally identifiable", "data breach", "privacy", "GDPR"]
+    },
+    "event-live": {
+      "name": "Live Event Streaming",
+      "description": "Live streaming, events",
+      "damages_tier": "Medium",
+      "terms": ["live stream", "live event", "real-time video", "broadcast"]
+    },
+    "bluetooth-edr": {
+      "name": "Bluetooth & BLE",
+      "description": "Bluetooth protocols",
+      "damages_tier": "Medium",
+      "terms": ["bluetooth", "BLE", "low energy", "EDR"]
+    },
+    "wireless-iot": {
+      "name": "Wireless IoT",
+      "description": "IoT connectivity",
+      "damages_tier": "Medium",
+      "terms": ["IoT", "internet of things", "sensor network", "smart device"]
+    },
+    "object-pose": {
+      "name": "Motion & Pose Tracking",
+      "description": "Object/pose tracking",
+      "damages_tier": "Medium",
+      "terms": ["pose estimation", "motion tracking", "gesture", "skeleton tracking"]
+    },
+    "security": {
+      "name": "Security & Threat",
+      "description": "Threat detection, attacks",
+      "damages_tier": "High",
+      "terms": ["threat detection", "attack prevention", "security threat", "malware"]
+    }
+  },
+
+  "priorityOrder": [
+    "Higher specificity CPC patterns first (longer patterns)",
+    "Term-based sectors override CPC for matching patents",
+    "Fallback to broader CPC class if no subgroup match"
+  ],
+
+  "notes": "This config aligns with SECTOR_BREAKOUT_PROPOSALS_V2.md for ~47 targeted sectors"
+}

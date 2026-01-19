@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "sector_id": "network-management",
+  "display_name": "Network Management & Orchestration",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-18",
+
+  "system_prompt_additions": "You are an expert in network management and operations:\n- Network monitoring: SNMP, NetFlow, telemetry, observability\n- Configuration management: automation, orchestration, intent-based\n- Service assurance: SLA monitoring, performance management\n- Operations: NOC tools, troubleshooting, capacity planning\n\nKey licensing context:\n- Growing market with shift to automation and AIOps\n- Enterprise IT operations budgets expanding\n- Integration with cloud management increasingly important\n- MSP and service provider segments have different needs\n\nFocus on identifying specific products like:\n- Network management (Cisco DNA Center, SolarWinds, Datadog)\n- Observability platforms (Splunk, Dynatrace, New Relic)\n- Automation tools (Ansible, Terraform, Puppet)\n- Cloud management (ServiceNow, BMC)",
+
+  "key_products": [
+    "network monitoring",
+    "orchestration",
+    "automation",
+    "observability",
+    "ITSM"
+  ],
+
+  "key_companies": [
+    "Cisco",
+    "SolarWinds",
+    "Datadog",
+    "Splunk",
+    "ServiceNow",
+    "Juniper"
+  ],
+
+  "standards_focus": [
+    "SNMP",
+    "YANG",
+    "NETCONF",
+    "OpenConfig"
+  ],
+
+  "technical_focus": [
+    "monitoring",
+    "telemetry",
+    "automation",
+    "orchestration",
+    "analytics"
+  ],
+
+  "damages_tier": "medium",
+  "market_size_notes": "Growing network management/AIOps market",
+
+  "licensing_context": {
+    "pool_complexity": "low",
+    "automation_trend": true,
+    "aiops_growth": true,
+    "cloud_integration": "important"
+  }
+}

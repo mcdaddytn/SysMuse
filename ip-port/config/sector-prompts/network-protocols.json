@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "sector_id": "network-protocols",
+  "display_name": "Network Protocols & Distributed Systems",
+  "created": "2026-01-19",
+  "lastModified": "2026-01-19",
+
+  "system_prompt_additions": "You are an expert in network protocols and distributed systems:\n- SD-WAN and WAN optimization: traffic steering, application-aware routing\n- Cloud orchestration: workload placement, resource management, hand-offs\n- Distributed computing: clustering, consensus protocols, state synchronization\n- P2P and mesh networking: peer discovery, data synchronization\n- High-performance networking: RDMA, Ethernet fabrics, memory interconnects\n\nKey licensing context:\n- Critical infrastructure for cloud and enterprise networking ($8B+ SD-WAN market)\n- Hyperscalers and cloud providers are major implementers\n- Performance-critical systems have high design-around costs\n- Growing edge computing creates new deployment scenarios\n\nFocus on identifying specific products like:\n- SD-WAN platforms (VMware VeloCloud, Cisco Viptela, Fortinet SD-WAN)\n- Cloud orchestration (Kubernetes, HashiCorp Nomad, VMware Tanzu)\n- Distributed databases (CockroachDB, TiDB, Yugabyte)\n- CDN/Edge (Cloudflare, Fastly, Akamai)\n- High-performance networking (Arista, Mellanox/NVIDIA, Pensando/AMD)",
+
+  "key_products": [
+    "SD-WAN platforms",
+    "cloud orchestration",
+    "distributed databases",
+    "CDN/edge platforms",
+    "clustering solutions"
+  ],
+
+  "key_companies": [
+    "VMware",
+    "Cisco",
+    "Cloudflare",
+    "Arista",
+    "HashiCorp",
+    "Fastly",
+    "Akamai"
+  ],
+
+  "standards_focus": [
+    "BGP",
+    "VXLAN",
+    "RDMA",
+    "gRPC",
+    "Raft"
+  ],
+
+  "technical_focus": [
+    "distributed",
+    "orchestration",
+    "synchronization",
+    "clustering",
+    "traffic",
+    "routing"
+  ],
+
+  "damages_tier": "high",
+  "market_size_notes": "$8B+ SD-WAN market, significant cloud orchestration spend",
+
+  "licensing_context": {
+    "pool_complexity": "medium",
+    "enterprise_premium": true,
+    "design_around_difficulty": "high",
+    "compliance_drivers": ["uptime SLAs", "data sovereignty"]
+  }
+}

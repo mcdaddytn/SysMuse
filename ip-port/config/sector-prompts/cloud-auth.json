@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "sector_id": "cloud-auth",
+  "display_name": "Cloud / Authentication",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-18",
+
+  "system_prompt_additions": "You are an expert in cloud authentication and identity management:\n- Identity protocols: OAuth 2.0, OpenID Connect, SAML, FIDO2\n- Authentication methods: SSO, MFA, passwordless, biometrics\n- Zero-trust architecture: ZTNA, identity-aware proxies\n- Enterprise IAM: privileged access, federation, directory services\n\nKey licensing context:\n- High-growth market ($15B+, 14% CAGR)\n- Enterprise customers have high willingness to pay for security\n- Integration complexity makes design-around difficult\n- Financial services sector is particularly security-conscious\n\nFocus on identifying specific products like:\n- Identity platforms (Okta, Auth0, Microsoft Entra)\n- SSO solutions (Ping Identity, OneLogin)\n- Enterprise security (CyberArk, BeyondTrust)\n- Cloud IAM (AWS IAM, Azure AD, GCP IAM)",
+
+  "key_products": [
+    "identity platforms",
+    "SSO solutions",
+    "MFA providers",
+    "zero-trust",
+    "PAM"
+  ],
+
+  "key_companies": [
+    "Okta",
+    "Microsoft",
+    "Auth0",
+    "Ping Identity",
+    "CyberArk",
+    "AWS",
+    "Google"
+  ],
+
+  "standards_focus": [
+    "OAuth",
+    "OpenID Connect",
+    "SAML",
+    "FIDO2",
+    "WebAuthn"
+  ],
+
+  "technical_focus": [
+    "token",
+    "authentication",
+    "authorization",
+    "identity",
+    "federation"
+  ],
+
+  "damages_tier": "high",
+  "market_size_notes": "$15B+ IAM market with 14% CAGR",
+
+  "licensing_context": {
+    "pool_complexity": "low",
+    "enterprise_premium": true,
+    "design_around_difficulty": "high",
+    "compliance_drivers": ["SOC2", "PCI-DSS", "HIPAA"]
+  }
+}

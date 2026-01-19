@@ -1,0 +1,57 @@
+{
+  "version": "1.0",
+  "sector_id": "video-codec",
+  "display_name": "Video Codec / Transcoding",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-18",
+
+  "system_prompt_additions": "You are an expert in video codec technology, including:\n- Video compression standards: H.264/AVC, H.265/HEVC, AV1, VP9, VVC\n- Transcoding architectures: hardware encoders, software codecs, cloud transcoding\n- Streaming technologies: ABR streaming, DASH, HLS, low-latency streaming\n- Industry players: broadcasters, streaming platforms, video conferencing, chip vendors\n\nKey licensing context:\n- HEVC patent pool licensing is complex (MPEG LA, HEVC Advance, Velos Media)\n- AV1 is royalty-free but patent encumbrance risks exist\n- 61% of mid-size platforms cite licensing fees as barrier\n- Hardware implementation patents are particularly valuable\n\nFocus on identifying specific products like:\n- Cloud transcoding services (AWS Elemental, Azure Media Services)\n- Hardware encoders (AMD, NETINT, NVIDIA)\n- Video platforms (Netflix, YouTube, TikTok, Zoom)\n- Consumer devices (smart TVs, streaming devices, cameras)",
+
+  "key_products": [
+    "streaming platforms",
+    "video conferencing",
+    "broadcast encoders",
+    "smart TVs",
+    "transcoding services"
+  ],
+
+  "key_companies": [
+    "ByteDance",
+    "Netflix",
+    "Apple",
+    "Google",
+    "Bitmovin",
+    "AWS",
+    "NVIDIA",
+    "AMD"
+  ],
+
+  "standards_focus": [
+    "H.264",
+    "H.265",
+    "HEVC",
+    "AV1",
+    "VP9",
+    "VVC",
+    "DASH",
+    "HLS"
+  ],
+
+  "technical_focus": [
+    "macroblock",
+    "motion estimation",
+    "entropy coding",
+    "intra prediction",
+    "rate control"
+  ],
+
+  "damages_tier": "very_high",
+  "market_size_notes": "$2.5B video codec market with 15% CAGR",
+
+  "licensing_context": {
+    "pool_complexity": "high",
+    "pools": ["MPEG LA", "HEVC Advance", "Velos Media"],
+    "royalty_free_alternatives": ["AV1"],
+    "hardware_premium": true
+  }
+}

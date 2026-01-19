@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "sector_id": "computing-os-security",
+  "display_name": "OS Security & Endpoint Protection",
+  "created": "2026-01-19",
+  "lastModified": "2026-01-19",
+
+  "system_prompt_additions": "You are an expert in operating system security and endpoint protection:\n- Endpoint Detection and Response (EDR): behavioral analysis, threat hunting\n- File reputation systems: hash-based detection, cloud lookups, ML classification\n- Vulnerability management: scanning, risk assessment, prioritization\n- Malware defense: polymorphic detection, sandboxing, detonation\n- Virtual security appliances: virtualized firewalls, security functions\n\nKey licensing context:\n- Large endpoint security market ($18B+, growing 8% annually)\n- Every enterprise endpoint requires protection\n- High integration with OS creates switching costs\n- Regulatory requirements drive adoption\n\nFocus on identifying specific products like:\n- EDR/XDR platforms (CrowdStrike Falcon, Microsoft Defender, SentinelOne)\n- Antivirus/EPP (Symantec, McAfee, Trend Micro, Sophos)\n- Vulnerability management (Tenable, Qualys, Rapid7)\n- Virtual security (VMware NSX, Palo Alto VM-Series)\n- OS hardening (CIS Benchmarks tooling, STIG compliance)",
+
+  "key_products": [
+    "EDR platforms",
+    "endpoint protection",
+    "vulnerability scanners",
+    "virtual firewalls",
+    "malware analysis"
+  ],
+
+  "key_companies": [
+    "CrowdStrike",
+    "Microsoft",
+    "SentinelOne",
+    "Tenable",
+    "Qualys",
+    "Rapid7",
+    "Trend Micro"
+  ],
+
+  "standards_focus": [
+    "STIX/TAXII",
+    "CVE",
+    "CVSS",
+    "MITRE ATT&CK"
+  ],
+
+  "technical_focus": [
+    "malware",
+    "endpoint",
+    "vulnerability",
+    "reputation",
+    "behavioral",
+    "detection"
+  ],
+
+  "damages_tier": "very_high",
+  "market_size_notes": "$18B+ endpoint security market with consistent growth",
+
+  "licensing_context": {
+    "pool_complexity": "low",
+    "enterprise_premium": true,
+    "design_around_difficulty": "high",
+    "compliance_drivers": ["NIST CSF", "CIS Controls", "PCI-DSS", "HIPAA"]
+  }
+}

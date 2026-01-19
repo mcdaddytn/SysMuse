@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "sector_id": "network-threat-protection",
+  "display_name": "Network Threat Protection",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-18",
+
+  "system_prompt_additions": "You are an expert in cybersecurity and threat protection:\n- Network security: firewalls, IDS/IPS, network segmentation\n- Endpoint detection: EDR, XDR, antivirus\n- Threat intelligence: SIEM, SOAR, threat feeds\n- Cloud security: CASB, CWPP, CSPM\n\nKey licensing context:\n- High-growth market driven by increasing cyber threats\n- Enterprise security budgets are recession-resistant\n- Compliance requirements (SOC2, PCI-DSS) drive adoption\n- Patent portfolios can be defensive assets for security vendors\n\nFocus on identifying specific products like:\n- Enterprise firewalls (Palo Alto, Fortinet, Cisco)\n- EDR/XDR platforms (CrowdStrike, SentinelOne, Microsoft Defender)\n- SIEM solutions (Splunk, IBM QRadar, Microsoft Sentinel)\n- Cloud security (Zscaler, Netskope, Wiz)",
+
+  "key_products": [
+    "firewalls",
+    "EDR/XDR",
+    "SIEM",
+    "cloud security",
+    "threat intelligence"
+  ],
+
+  "key_companies": [
+    "Palo Alto Networks",
+    "CrowdStrike",
+    "Fortinet",
+    "Cisco",
+    "Microsoft",
+    "Splunk"
+  ],
+
+  "standards_focus": [
+    "MITRE ATT&CK",
+    "NIST",
+    "SOC2",
+    "ISO 27001"
+  ],
+
+  "technical_focus": [
+    "threat detection",
+    "malware",
+    "intrusion",
+    "firewall",
+    "endpoint"
+  ],
+
+  "damages_tier": "high",
+  "market_size_notes": "Rapidly growing cybersecurity market, recession-resistant",
+
+  "licensing_context": {
+    "pool_complexity": "low",
+    "enterprise_premium": true,
+    "compliance_drivers": ["SOC2", "PCI-DSS", "HIPAA", "GDPR"],
+    "defensive_value": "high"
+  }
+}

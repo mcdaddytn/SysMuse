@@ -1,7 +1,7 @@
 {
-  "version": "4.1",
-  "description": "Categorized competitor list with discovery strategy provenance",
-  "lastUpdated": "2026-01-17",
+  "version": "5.3",
+  "description": "Categorized competitor list with discovery strategy provenance - 131 companies including expanded product-based discovery from sector analysis",
+  "lastUpdated": "2026-01-19",
   "discoveryStrategies": {
     "manual-initial": {
       "name": "Manual Initial List",
@@ -321,6 +321,34 @@
         ],
         "script": "scripts/cluster-competitor-discovery.ts"
       }
+    },
+    "sector-product-analysis": {
+      "name": "Sector-Specific Product Analysis",
+      "description": "Competitors discovered through LLM sector-specific prompts that identify specific products and companies likely implementing patented technology",
+      "type": "llm-product-analysis",
+      "dateAdded": "2026-01-18",
+      "parameters": {
+        "method": "Claude Opus LLM analysis with sector-specific prompts",
+        "sectors": ["video-codec", "cloud-auth"],
+        "model": "claude-opus-4-20250514",
+        "promptConfigs": "config/sector-prompts/",
+        "totalProductsFound": 77,
+        "totalCompaniesFound": 43,
+        "script": "scripts/run-sector-analysis.ts"
+      },
+      "notes": "Unlike patent-citation-based discovery, this method identifies companies via product implementation intelligence rather than patent portfolio overlap"
+    },
+    "citation-mining-untracked": {
+      "name": "Citation Mining - Previously Untracked Citators",
+      "description": "Companies discovered through citation mining that cite Broadcom patents but were not in original competitor list",
+      "type": "citation-mining",
+      "dateAdded": "2026-01-18",
+      "parameters": {
+        "method": "Analysis of forward citations to identify non-tracked assignees",
+        "totalCitations": 3500,
+        "script": "scripts/mine-all-citations.ts"
+      },
+      "notes": "These companies cite our patents but were not discovered through the original patent-based competitor identification"
     }
   },
   "categories": {
@@ -678,6 +706,172 @@
             "NGAV",
             "threat hunting"
           ]
+        },
+        {
+          "name": "OneTrust",
+          "patterns": [
+            "OneTrust",
+            "ONETRUST LLC"
+          ],
+          "discoveredBy": [
+            "citation-mining-untracked"
+          ],
+          "notes": "Privacy and compliance platform - 334 citations to Broadcom patents, 5 Broadcom patents cited. Major gap discovery.",
+          "citationsToUs": 334,
+          "ourPatentsCited": 5,
+          "primaryTechnologies": [
+            "privacy management",
+            "consent management",
+            "compliance automation"
+          ]
+        },
+        {
+          "name": "Palantir",
+          "patterns": [
+            "Palantir",
+            "Palantir Technologies"
+          ],
+          "discoveredBy": [
+            "citation-mining-untracked"
+          ],
+          "notes": "Big data analytics platform - 104 citations to Broadcom patents, 3 Broadcom patents cited.",
+          "citationsToUs": 104,
+          "ourPatentsCited": 3,
+          "primaryTechnologies": [
+            "data analytics",
+            "data integration",
+            "security analytics"
+          ]
+        },
+        {
+          "name": "KnowBe4",
+          "patterns": [
+            "KnowBe4",
+            "KNOWBE4 INC"
+          ],
+          "discoveredBy": [
+            "citation-mining-untracked"
+          ],
+          "notes": "Security awareness training - 94 citations to Broadcom patents, 2 Broadcom patents cited.",
+          "citationsToUs": 94,
+          "ourPatentsCited": 2,
+          "primaryTechnologies": [
+            "security training",
+            "phishing simulation",
+            "security awareness"
+          ]
+        },
+        {
+          "name": "Securonix",
+          "patterns": [
+            "Securonix",
+            "SECURONIX INC"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "SIEM/security analytics - discovered via network-threat-protection sector analysis (5 products identified).",
+          "primaryTechnologies": [
+            "SIEM",
+            "security analytics",
+            "UEBA"
+          ]
+        },
+        {
+          "name": "Elastic",
+          "patterns": [
+            "Elastic",
+            "ELASTICSEARCH"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "SIEM/observability - discovered via network-threat-protection sector analysis (4 products identified).",
+          "primaryTechnologies": [
+            "SIEM",
+            "observability",
+            "search"
+          ]
+        },
+        {
+          "name": "Trend Micro",
+          "patterns": [
+            "Trend Micro",
+            "TREND MICRO"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Endpoint/cloud security - discovered via network-threat-protection sector analysis (4 products identified).",
+          "primaryTechnologies": [
+            "endpoint security",
+            "cloud security",
+            "XDR"
+          ]
+        },
+        {
+          "name": "F5 Networks",
+          "patterns": [
+            "F5 Networks",
+            "F5"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "WAF/ADC security - discovered via network-threat-protection sector analysis (3 products identified).",
+          "primaryTechnologies": [
+            "WAF",
+            "application delivery",
+            "load balancing"
+          ]
+        },
+        {
+          "name": "Netskope",
+          "patterns": [
+            "Netskope",
+            "NETSKOPE"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "SASE/cloud security - discovered via cloud-auth sector analysis (4 products identified).",
+          "primaryTechnologies": [
+            "SASE",
+            "CASB",
+            "cloud security"
+          ]
+        },
+        {
+          "name": "Qualys",
+          "patterns": [
+            "Qualys",
+            "QUALYS"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Vulnerability management - discovered via computing-os-security sector analysis (2 products).",
+          "primaryTechnologies": [
+            "vulnerability management",
+            "VMDR",
+            "cloud security"
+          ]
+        },
+        {
+          "name": "Rapid7",
+          "patterns": [
+            "Rapid7",
+            "RAPID7"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Vulnerability/detection - discovered via computing-os-security sector analysis (2 products).",
+          "primaryTechnologies": [
+            "vulnerability management",
+            "SIEM",
+            "penetration testing"
+          ]
         }
       ]
     },
@@ -793,6 +987,118 @@
           "discoveredBy": [
             "citation-overlap-broadcom-streaming"
           ]
+        },
+        {
+          "name": "SolarWinds",
+          "patterns": [
+            "SolarWinds",
+            "SOLARWINDS"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Network management - discovered via network-management sector analysis (5 products).",
+          "primaryTechnologies": [
+            "network monitoring",
+            "IT management",
+            "observability"
+          ]
+        },
+        {
+          "name": "Datadog",
+          "patterns": [
+            "Datadog",
+            "DATADOG"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Observability platform - discovered via network-management sector analysis (5 products).",
+          "primaryTechnologies": [
+            "observability",
+            "APM",
+            "monitoring"
+          ]
+        },
+        {
+          "name": "New Relic",
+          "patterns": [
+            "New Relic",
+            "NEW RELIC"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Observability platform - discovered via network-management sector analysis (2 products).",
+          "primaryTechnologies": [
+            "APM",
+            "observability",
+            "monitoring"
+          ]
+        },
+        {
+          "name": "Dynatrace",
+          "patterns": [
+            "Dynatrace",
+            "DYNATRACE"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "AIOps platform - discovered via network-management sector analysis (2 products).",
+          "primaryTechnologies": [
+            "APM",
+            "AIOps",
+            "observability"
+          ]
+        },
+        {
+          "name": "BMC Software",
+          "patterns": [
+            "BMC Software",
+            "BMC"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "IT management - discovered via network-management sector analysis (2 products).",
+          "primaryTechnologies": [
+            "ITSM",
+            "IT management",
+            "automation"
+          ]
+        },
+        {
+          "name": "Cockroach Labs",
+          "patterns": [
+            "Cockroach Labs",
+            "CockroachDB"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Distributed SQL database - discovered via network-protocols sector analysis (5 products).",
+          "primaryTechnologies": [
+            "distributed database",
+            "SQL",
+            "cloud-native"
+          ]
+        },
+        {
+          "name": "Yugabyte",
+          "patterns": [
+            "Yugabyte",
+            "YugabyteDB"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Distributed SQL database - discovered via network-protocols sector analysis (2 products).",
+          "primaryTechnologies": [
+            "distributed database",
+            "PostgreSQL",
+            "cloud-native"
+          ]
         }
       ]
     },
@@ -838,6 +1144,70 @@
           ],
           "discoveredBy": [
             "manual-initial"
+          ]
+        },
+        {
+          "name": "Forescout",
+          "patterns": [
+            "Forescout",
+            "FORESCOUT"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "NAC platform - discovered via network-auth-access sector analysis (5 products).",
+          "primaryTechnologies": [
+            "NAC",
+            "device visibility",
+            "zero trust"
+          ]
+        },
+        {
+          "name": "Extreme Networks",
+          "patterns": [
+            "Extreme Networks",
+            "EXTREME NETWORKS"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Network infrastructure - discovered via network-switching sector analysis.",
+          "primaryTechnologies": [
+            "switches",
+            "wireless",
+            "network management"
+          ]
+        },
+        {
+          "name": "Akamai",
+          "patterns": [
+            "Akamai",
+            "AKAMAI"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "CDN/edge platform - discovered via network-protocols sector analysis (2 products).",
+          "primaryTechnologies": [
+            "CDN",
+            "edge computing",
+            "web security"
+          ]
+        },
+        {
+          "name": "Fastly",
+          "patterns": [
+            "Fastly",
+            "FASTLY"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Edge cloud platform - discovered via network-protocols sector analysis (5 products).",
+          "primaryTechnologies": [
+            "CDN",
+            "edge computing",
+            "WAF"
           ]
         }
       ]
@@ -1200,10 +1570,197 @@
         {
           "name": "Ping Identity",
           "patterns": [
-            "Ping Identity"
+            "Ping Identity",
+            "ForgeRock"
           ],
           "discoveredBy": [
-            "manual-initial"
+            "manual-initial",
+            "sector-product-analysis"
+          ],
+          "notes": "ForgeRock (acquired 2022) patterns added via sector product analysis"
+        },
+        {
+          "name": "CyberArk",
+          "patterns": [
+            "CyberArk",
+            "CYBERARK SOFTWARE"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Privileged access management - identified via cloud-auth sector analysis. Products: CyberArk Identity, Privileged Access Manager.",
+          "primaryTechnologies": [
+            "privileged access",
+            "identity management",
+            "secrets management"
+          ]
+        },
+        {
+          "name": "1Password",
+          "patterns": [
+            "1Password",
+            "AgileBits"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Password management - identified via cloud-auth sector analysis.",
+          "primaryTechnologies": [
+            "password management",
+            "credential vault",
+            "SSO"
+          ]
+        },
+        {
+          "name": "LastPass",
+          "patterns": [
+            "LastPass",
+            "LogMeIn"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Password management - identified via cloud-auth sector analysis.",
+          "primaryTechnologies": [
+            "password management",
+            "credential vault"
+          ]
+        },
+        {
+          "name": "Bitwarden",
+          "patterns": [
+            "Bitwarden"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Open-source password management - identified via cloud-auth sector analysis.",
+          "primaryTechnologies": [
+            "password management",
+            "credential vault"
+          ]
+        },
+        {
+          "name": "Dashlane",
+          "patterns": [
+            "Dashlane"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Password management - identified via cloud-auth sector analysis.",
+          "primaryTechnologies": [
+            "password management",
+            "credential vault"
+          ]
+        },
+        {
+          "name": "Keeper Security",
+          "patterns": [
+            "Keeper Security",
+            "Keeper"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Password/secrets management - identified via cloud-auth sector analysis.",
+          "primaryTechnologies": [
+            "password management",
+            "secrets management"
+          ]
+        },
+        {
+          "name": "HashiCorp",
+          "patterns": [
+            "HashiCorp"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Infrastructure automation and secrets management - identified via Vault product in cloud-auth sector analysis.",
+          "primaryTechnologies": [
+            "secrets management",
+            "infrastructure automation",
+            "identity-based access"
+          ]
+        },
+        {
+          "name": "OneLogin",
+          "patterns": [
+            "OneLogin"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Identity and access management - discovered via cloud-auth sector analysis (11 products identified across 42 patents).",
+          "primaryTechnologies": [
+            "SSO",
+            "IAM",
+            "identity management"
+          ]
+        },
+        {
+          "name": "BeyondTrust",
+          "patterns": [
+            "BeyondTrust",
+            "BEYONDTRUST"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "PAM vendor - discovered via cloud-auth sector analysis (6 products identified across 42 patents).",
+          "primaryTechnologies": [
+            "PAM",
+            "privileged access",
+            "identity security"
+          ]
+        },
+        {
+          "name": "RSA Security",
+          "patterns": [
+            "RSA Security",
+            "RSA SECURITY"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Identity/MFA pioneer - discovered via cloud-auth sector analysis (6 products identified).",
+          "primaryTechnologies": [
+            "MFA",
+            "authentication",
+            "identity"
+          ]
+        },
+        {
+          "name": "ForgeRock",
+          "patterns": [
+            "ForgeRock",
+            "FORGEROCK"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Identity platform (now part of Ping Identity) - discovered via cloud-auth sector analysis (9 products identified).",
+          "primaryTechnologies": [
+            "IAM",
+            "identity platform",
+            "CIAM"
+          ]
+        },
+        {
+          "name": "SailPoint",
+          "patterns": [
+            "SailPoint",
+            "SAILPOINT"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Identity governance - discovered via cloud-auth sector analysis (3 products identified).",
+          "primaryTechnologies": [
+            "identity governance",
+            "IGA",
+            "access management"
           ]
         }
       ]
@@ -1296,6 +1853,85 @@
           "primaryTechnologies": [
             "video codec",
             "video transform"
+          ]
+        },
+        {
+          "name": "Bitmovin",
+          "patterns": [
+            "Bitmovin",
+            "BITMOVIN INC"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Video streaming infrastructure company - identified through sector-specific LLM product analysis. Products include Bitmovin Player, Bitmovin Encoder.",
+          "primaryTechnologies": [
+            "video streaming",
+            "adaptive bitrate",
+            "video encoding"
+          ]
+        },
+        {
+          "name": "NETINT Technologies",
+          "patterns": [
+            "NETINT",
+            "NETINT Technologies"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Video encoding hardware company - identified via Quadra T1U hardware transcoder implementation evidence.",
+          "primaryTechnologies": [
+            "hardware video encoding",
+            "video transcoding",
+            "ASIC"
+          ]
+        },
+        {
+          "name": "Harmonic Inc.",
+          "patterns": [
+            "Harmonic",
+            "Harmonic Inc"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Video infrastructure company - broadcast and streaming video solutions provider.",
+          "primaryTechnologies": [
+            "broadcast encoding",
+            "video streaming infrastructure"
+          ]
+        },
+        {
+          "name": "Wowza Media Systems",
+          "patterns": [
+            "Wowza",
+            "Wowza Media"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Video streaming platform - identified through sector-specific LLM product analysis.",
+          "primaryTechnologies": [
+            "video streaming",
+            "live streaming",
+            "transcoding services"
+          ]
+        },
+        {
+          "name": "Zoom Video Communications",
+          "patterns": [
+            "Zoom",
+            "Zoom Video Communications"
+          ],
+          "discoveredBy": [
+            "sector-product-analysis"
+          ],
+          "notes": "Video conferencing company - identified via video codec/transcoding product analysis. Major video codec implementer.",
+          "primaryTechnologies": [
+            "video conferencing",
+            "video codec",
+            "real-time video"
           ]
         }
       ]

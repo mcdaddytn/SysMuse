@@ -1,0 +1,34 @@
+{
+  "version": "1.1",
+  "description": "Sector-specific LLM prompt configurations for patent analysis",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-19",
+  "notes": "Extracted from inline code in services/llm-sector-analysis.ts for configurability",
+
+  "availableSectors": [
+    "video-codec",
+    "cloud-auth",
+    "rf-acoustic",
+    "network-threat-protection",
+    "network-switching",
+    "network-management",
+    "network-auth-access",
+    "network-protocols",
+    "computing-os-security"
+  ],
+
+  "configFiles": {
+    "video-codec": "video-codec.json",
+    "cloud-auth": "cloud-auth.json",
+    "rf-acoustic": "rf-acoustic.json",
+    "network-threat-protection": "network-threat-protection.json",
+    "network-switching": "network-switching.json",
+    "network-management": "network-management.json",
+    "network-auth-access": "network-auth-access.json",
+    "network-protocols": "network-protocols.json",
+    "computing-os-security": "computing-os-security.json"
+  },
+
+  "schemaVersion": "1.0",
+  "schemaDescription": "Each sector config file contains: sector_id, display_name, system_prompt_additions, key_products, key_companies, standards_focus, technical_focus"
+}

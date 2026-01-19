@@ -3330,3 +3330,313 @@ npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
 *Session: 2026-01-18*
 *Status: Excel V3.1 with RecalculateAll, Co-citation report complete*
 *Next: Prompt abstraction to config files, sector-specific scoring*
+
+---
+
+### Session Update: 2026-01-18 (Continuation) - Sector Prompts Abstracted to Config Files
+
+**Major Accomplishments:**
+
+1. **Sector-Specific Prompts Externalized to Config Files** ✅
+   - Created `config/sector-prompts/` directory structure
+   - Extracted 6 sector prompts from inline code to JSON config files
+   - Each sector has its own JSON file with comprehensive configuration
+
+2. **New Config Files Created:**
+
+   | File | Sector | Key Fields |
+   |------|--------|------------|
+   | `config/sector-prompts/index.json` | Index | Available sectors, schema version |
+   | `config/sector-prompts/video-codec.json` | Video Codec | HEVC, AV1, streaming, transcoding |
+   | `config/sector-prompts/cloud-auth.json` | Cloud Auth | OAuth, SSO, IAM, zero-trust |
+   | `config/sector-prompts/rf-acoustic.json` | RF Acoustic | BAW, FBAR, 5G filters |
+   | `config/sector-prompts/network-threat-protection.json` | Security | EDR, SIEM, firewalls |
+   | `config/sector-prompts/network-switching.json` | Networking | Switches, SD-WAN, SDN |
+   | `config/sector-prompts/network-management.json` | Management | Monitoring, automation |
+
+3. **Config File Schema:**
+   ```json
+   {
+     "version": "1.0",
+     "sector_id": "video-codec",
+     "display_name": "Video Codec / Transcoding",
+     "system_prompt_additions": "...",
+     "key_products": [...],
+     "key_companies": [...],
+     "standards_focus": [...],
+     "technical_focus": [...],
+     "damages_tier": "very_high|high|medium|low",
+     "market_size_notes": "...",
+     "licensing_context": {...}
+   }
+   ```
+
+4. **Service Updated: `services/llm-sector-analysis.ts`**
+   - Removed inline `SECTOR_PROMPTS` object (~160 lines)
+   - Added dynamic config loading from JSON files
+   - Added config caching for performance
+   - Added `clearSectorConfigCache()` and `reloadSectorConfigs()` for hot-reloading
+   - Fixed ES module compatibility (`__dirname` → `import.meta.url`)
+
+5. **Benefits of Config-Based Prompts:**
+   - **Customization**: Edit prompts without code changes
+   - **Versioning**: Track prompt versions in config files
+   - **GUI-Ready**: Configs can be edited via future GUI
+   - **A/B Testing**: Easy to test different prompt versions
+   - **Auditing**: Clear record of prompt changes
+
+**Quick Commands:**
+
+```bash
+# List available sectors (from configs)
+npx tsx scripts/run-sector-analysis.ts --list
+
+# Run sector analysis (uses config-based prompts)
+npx tsx scripts/run-sector-analysis.ts video-codec --model opus --limit 5
+
+# Programmatic access
+import { getAvailableSectors, getSectorConfig, reloadSectorConfigs } from './services/llm-sector-analysis.js';
+```
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Pending Tasks (Prioritized)
+
+1. **Citation Overlap Report Enhancements** (MEDIUM)
+   - Add co-citation clustering to identify litigation bundles
+   - Generate per-competitor patent groupings
+
+2. **Sector-Specific Scoring** (MEDIUM)
+   - Use `damages_tier` from sector configs in scoring
+   - Implement within-sector normalization
+
+3. **Continue Sector Analysis** (LOW)
+   - Additional sectors: drm-content-protection, adaptive-streaming
+   - Consider creating new sector configs as needed
+
+### Quick Commands
+
+```bash
+# Export V3 stakeholder scores
+npx tsx scripts/calculate-and-export-v3.ts
+
+# Generate co-citation report
+npx tsx scripts/generate-cocitation-report.ts --min-overlap 2
+
+# Run sector analysis with config-based prompts
+npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
+
+# List available sectors
+npx tsx scripts/run-sector-analysis.ts --list
+```
+
+---
+
+*Session: 2026-01-18 (continuation)*
+*Status: Sector prompts abstracted to config files, fully tested*
+*Next: Citation overlap enhancements, sector-specific scoring*
+
+---
+
+### Session Update: 2026-01-18 (Continuation) - Citation Gap Analysis + Sector Prompts Tested
+
+**Key Findings from Citation Gap Analysis:**
+
+1. **Patents with High Forward Citations but Low Competitor Captures:**
+
+   | Patent | Forward Cites | Competitor Cites | Years Left | Issue |
+   |--------|---------------|------------------|------------|-------|
+   | 8931041 | 506 | 0 | 6.0 | Major gap! |
+   | 9571509 | 334 | 0 | 8.1 | Major gap! |
+   | 9047582 | 317 | 0 | 6.4 | Major gap! |
+   | 8578442 | 519 | 0 | 4.8 | Major gap! |
+   | 9977920 | 127 | 1 | 9.3 | Major gap! |
+
+2. **Major Citators NOT in Our Competitor List** (from citation mining):
+
+   | Company | Citations | Broadcom Patents | Industry |
+   |---------|-----------|------------------|----------|
+   | Headwater Research LLC | 808 | 9 | Patent licensing |
+   | OneTrust, LLC | 334 | 5 | Privacy/compliance |
+   | Forcepoint LLC | 149 | 8 | Cybersecurity |
+   | Capital One | 144 | 20 | FinTech |
+   | Bank of America | 110 | 40 | FinTech |
+   | Palantir | 104 | 3 | Analytics |
+   | KnowBe4 | 94 | 2 | Security training |
+   | Wickr | 91 | 3 | Encrypted messaging |
+   | Darktrace | 81 | 2 | AI security |
+
+**Sector-Specific Prompt Testing Results:**
+
+3. **Video-Codec Sector Analysis (5 patents, Opus model):**
+   - **37 products identified from 18 companies**
+   - Companies NOT in competitor list discovered:
+     - **Bitmovin** (video streaming) - 2 products
+     - **Zoom** (video conferencing) - 2 products
+     - **NETINT Technologies** (video encoding hardware)
+     - **Harmonic Inc.** (video infrastructure)
+     - **Wowza Media Systems** (video streaming)
+   - Sector misclassification found: Patent 10206084 is Bluetooth audio, not video codec
+
+4. **Cloud-Auth Sector Analysis (5 patents, Opus model):**
+   - **40 products identified from 25 companies**
+   - Companies NOT in competitor list discovered:
+     - **CyberArk** (3 products) - Privileged access management
+     - **1Password / AgileBits** - Password management
+     - **ForgeRock** - Identity platform
+     - **LastPass** - Password management
+     - **Bitwarden, Dashlane, Keeper** - Password management
+     - **HashiCorp** - Secrets management (Vault)
+
+5. **Litigation Bundles Identified (patents targeting same companies):**
+
+   **Cloud-Auth Bundles:**
+   | Target | Patents | Count |
+   |--------|---------|-------|
+   | Okta | 10182048, 10200359, 10581819, 9569605, 9807094 | 5/5 |
+   | Microsoft | 10182048, 10581819, 9569605, 9807094 | 4/5 |
+   | CyberArk | 10200359, 9569605, 9807094 | 3/5 |
+
+   **Video-Codec Bundles:**
+   | Target | Patents | Count |
+   |--------|---------|-------|
+   | Google | 10165285, 10200706, 10206084, 10554992, 9635334 | 5/5 |
+   | NVIDIA | 10165285, 10200706, 10554992, 9635334 | 4/5 |
+   | Apple | 10165285, 10200706, 10206084, 10554992 | 4/5 |
+   | Amazon | 10165285, 10200706, 10554992, 9635334 | 4/5 |
+
+**Scripts Created:**
+- `scripts/analyze-citator-gap.ts` - Analyze forward citations vs competitor captures
+
+**Key Insights:**
+
+1. **Competitor list gaps**: Our patent-based competitor list is missing product-focused companies (Bitmovin, Zoom, password managers, etc.)
+
+2. **Sector prompts provide product intelligence**: LLM identifies specific products with evidence types (technical_specs, teardown_reports, product_features)
+
+3. **Litigation bundling**: Sector analysis naturally reveals which patents can be asserted together against a single target
+
+4. **Sector misclassification**: Sector prompts can identify patents in wrong sectors (patent 10206084 is Bluetooth, not video codec)
+
+---
+
+### Session Update: 2026-01-19 - Sector Prompt Expansion + Competitor Discovery Complete
+
+**Major Accomplishments:**
+
+1. **Created 3 New Sector Prompts:**
+   - `network-auth-access.json` - ZTNA, NAC, VPN, certificate management (25 patents)
+   - `network-protocols.json` - SD-WAN, distributed systems, cloud orchestration (11 patents)
+   - `computing-os-security.json` - EDR, endpoint protection, vulnerability mgmt (10 patents)
+
+2. **Ran Sector Analysis on 58 New Patents:**
+
+   | Sector | Patents | Products | Companies | Top Companies |
+   |--------|---------|----------|-----------|---------------|
+   | network-auth-access | 25 | 196 | 46 | Zscaler, Palo Alto, Okta |
+   | network-protocols | 11 | 84 | 27 | VMware, HashiCorp, Cloudflare |
+   | computing-os-security | 10 | 78 | 28 | CrowdStrike, Microsoft, Trend Micro |
+   | network-switching | 7 | 50 | 18 | Cisco, Juniper, Arista |
+   | network-management | 5 | 40 | 18 | SolarWinds, Datadog, Splunk |
+
+3. **Expanded Competitor List to 131 Companies:**
+
+   Added 13 new companies from sector analysis:
+   - **Enterprise/Observability**: SolarWinds, Datadog, New Relic, Dynatrace, BMC Software, Cockroach Labs, Yugabyte
+   - **Networking**: Forescout, Extreme Networks, Akamai, Fastly
+   - **Cybersecurity**: Qualys, Rapid7
+
+   Updated `config/competitors.json` to version 5.3.
+
+4. **Total Sector Analysis Coverage:**
+   - **135 patents** analyzed with sector prompts (54% of top 250)
+   - **~1,046 products** identified
+   - **~150+ unique companies** discovered
+
+5. **Recalculated Unified Top 250:**
+   - New file: `output/unified-top250-v3-2026-01-19.json`
+   - V3 scoring model weights damages heavily → video-codec dominates (121/250 patents)
+   - 86 patents (34%) have competitor citations
+
+**Key Finding - Citation Re-Mining Needed:**
+
+The new 13 competitors won't appear in citation counts until citation mining is re-run. The current unified top 250 uses pre-mined citation data from `multi-score-analysis-2026-01-17.json`.
+
+**Files Modified/Created:**
+- `config/sector-prompts/network-auth-access.json` (new)
+- `config/sector-prompts/network-protocols.json` (new)
+- `config/sector-prompts/computing-os-security.json` (new)
+- `config/sector-prompts/index.json` (updated to v1.1 with 9 sectors)
+- `config/competitors.json` (v5.3, 131 companies)
+- `output/unified-top250-v3-2026-01-19.json` (recalculated)
+- `output/sector-analysis/*/` (5 new analysis files)
+
+---
+
+## NEXT SESSION: Recommended Actions
+
+### Priority 1: Re-Run Citation Mining (if deeper competitor matching needed)
+The 13 new competitors won't show in citation counts until we re-mine:
+```bash
+# Full citation mining (multi-hour process)
+npx tsx scripts/mine-all-citations.ts
+```
+Alternative: Create incremental re-matching script to update existing data.
+
+### Priority 2: Address V3 Scoring Model Imbalance
+Video-codec patents dominate (121/250 = 48%) due to "Very High damages" rating.
+Options:
+- Adjust damages tier weights
+- Add competitor citation weight multiplier
+- Create sector-balanced view
+
+### Priority 3: Within-Sector Scoring & Clustering
+Use sector analysis output for:
+- Litigation bundling (patents targeting same companies)
+- Product coverage scoring
+- Within-sector relative rankings
+
+### Priority 4: Create Remaining Sector Prompts (Diminishing Returns)
+Lower-priority sectors not yet covered:
+- computing-data-protection (8 patents)
+- computing-auth-boot (7 patents)
+- network-secure-compute (7 patents)
+
+### Sector Prompt Coverage Summary
+| Sector | Patents | Prompt? | Products |
+|--------|---------|---------|----------|
+| cloud-auth | 42 | ✓ | 329 |
+| network-threat-protection | 27 | ✓ | 213 |
+| network-auth-access | 25 | ✓ | 196 |
+| network-protocols | 11 | ✓ | 84 |
+| computing-os-security | 10 | ✓ | 78 |
+| video-codec | 8 | ✓ | 56 |
+| network-switching | 7 | ✓ | 50 |
+| network-management | 5 | ✓ | 40 |
+| **Total Covered** | **135** | **9 prompts** | **~1,046** |
+
+### Quick Commands
+```bash
+# Run sector analysis
+npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit <N>
+
+# List available sectors (9 total)
+npx tsx scripts/run-sector-analysis.ts --list
+
+# Recalculate unified top 250
+npx tsx scripts/calculate-unified-top250-v3.ts --verbose
+
+# View sector results
+cat output/sector-analysis/<sector>/<sector>-analysis-*.json | jq '.summary'
+
+# Count competitors
+cat config/competitors.json | jq '[.categories[].companies[].name] | length'
+```
+
+---
+
+*Session: 2026-01-19*
+*Status: Sector expansion complete, 131 competitors, 1,046 products identified*
+*Next: Citation re-mining for full competitor coverage, V3 scoring rebalance*

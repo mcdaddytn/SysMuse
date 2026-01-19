@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "sector_id": "rf-acoustic",
+  "display_name": "RF Acoustic (BAW/FBAR)",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-18",
+
+  "system_prompt_additions": "You are an expert in RF acoustic wave technology:\n- BAW (Bulk Acoustic Wave) and FBAR (Film Bulk Acoustic Resonator) technology\n- RF filters for mobile devices: duplexers, multiplexers, filters\n- MEMS microphones and acoustic sensors\n- 5G infrastructure RF front-end modules\n\nKey licensing context:\n- Physics-constrained technology with limited design-around options\n- Every 4G/5G smartphone uses BAW filters - massive volume\n- Concentrated supplier market (Broadcom/Avago, Qorvo, Skyworks, Murata)\n- $10B+ annual market with strong growth from 5G\n\nFocus on identifying specific products like:\n- Smartphone RF modules (Apple iPhone, Samsung Galaxy)\n- RF filter modules from Murata, Skyworks, Qorvo\n- 5G infrastructure equipment (Ericsson, Nokia, Samsung)\n- IoT modules with RF front-ends",
+
+  "key_products": [
+    "5G smartphones",
+    "RF filters",
+    "MEMS microphones",
+    "IoT modules",
+    "base stations"
+  ],
+
+  "key_companies": [
+    "Murata",
+    "Skyworks",
+    "Qorvo",
+    "Qualcomm",
+    "Apple",
+    "Samsung"
+  ],
+
+  "standards_focus": [
+    "3GPP",
+    "5G NR",
+    "LTE",
+    "WiFi",
+    "Bluetooth"
+  ],
+
+  "technical_focus": [
+    "BAW",
+    "FBAR",
+    "piezoelectric",
+    "resonator",
+    "duplexer",
+    "filter"
+  ],
+
+  "damages_tier": "very_high",
+  "market_size_notes": "$10B+ annual RF filter market, strong 5G growth",
+
+  "licensing_context": {
+    "pool_complexity": "low",
+    "design_around_difficulty": "very_high",
+    "physics_constrained": true,
+    "unit_volume": "billions",
+    "concentrated_market": ["Broadcom/Avago", "Qorvo", "Skyworks", "Murata"]
+  }
+}

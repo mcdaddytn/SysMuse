@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "sector_id": "network-auth-access",
+  "display_name": "Network Authentication & Access Control",
+  "created": "2026-01-19",
+  "lastModified": "2026-01-19",
+
+  "system_prompt_additions": "You are an expert in network authentication and access control technologies:\n- Network Access Control (NAC): 802.1X, port-based authentication, endpoint compliance\n- Zero Trust Network Access (ZTNA): identity-aware access, microsegmentation\n- VPN and secure remote access: SSL VPN, IPsec, SASE integration\n- Certificate management: PKI, automated certificate lifecycle, TLS/SSL\n- Secure file transfer: SFTP, encrypted P2P, secure collaboration\n\nKey licensing context:\n- Critical infrastructure for enterprise security ($12B+ market)\n- Zero trust adoption driving major vendor investments\n- Hybrid work accelerated secure access requirements\n- Compliance mandates (PCI-DSS, HIPAA) require strong access controls\n\nFocus on identifying specific products like:\n- ZTNA platforms (Zscaler Private Access, Palo Alto Prisma Access)\n- NAC solutions (Cisco ISE, Aruba ClearPass, Forescout)\n- VPN/SASE (Cloudflare Access, Netskope Private Access)\n- Certificate management (DigiCert, Venafi, Sectigo)\n- Secure collaboration (Box, Dropbox Business, Citrix ShareFile)",
+
+  "key_products": [
+    "ZTNA platforms",
+    "NAC solutions",
+    "VPN gateways",
+    "SASE platforms",
+    "certificate management",
+    "secure file sharing"
+  ],
+
+  "key_companies": [
+    "Zscaler",
+    "Palo Alto Networks",
+    "Cisco",
+    "Cloudflare",
+    "Fortinet",
+    "Netskope",
+    "Forescout"
+  ],
+
+  "standards_focus": [
+    "802.1X",
+    "TLS",
+    "IPsec",
+    "X.509",
+    "RADIUS"
+  ],
+
+  "technical_focus": [
+    "access control",
+    "authentication",
+    "certificate",
+    "VPN",
+    "zero trust",
+    "network security"
+  ],
+
+  "damages_tier": "high",
+  "market_size_notes": "$12B+ secure access market, accelerated by zero trust adoption",
+
+  "licensing_context": {
+    "pool_complexity": "medium",
+    "enterprise_premium": true,
+    "design_around_difficulty": "high",
+    "compliance_drivers": ["PCI-DSS", "HIPAA", "SOX", "NIST 800-207"]
+  }
+}

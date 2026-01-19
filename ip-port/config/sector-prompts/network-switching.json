@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "sector_id": "network-switching",
+  "display_name": "Network Switching & Routing",
+  "created": "2026-01-18",
+  "lastModified": "2026-01-18",
+
+  "system_prompt_additions": "You are an expert in enterprise networking and data center infrastructure:\n- Network switching: L2/L3 switches, data center fabrics, spine-leaf architectures\n- Routing protocols: BGP, OSPF, MPLS, SD-WAN\n- Network virtualization: VxLAN, EVPN, SDN\n- Industry players: enterprise IT, cloud providers, service providers, hyperscalers\n\nKey licensing context:\n- Large enterprise market ($40B+) with high ASPs\n- Mission-critical infrastructure with long replacement cycles\n- Standards-based (IEEE, IETF) but proprietary enhancements matter\n- Data center growth driven by cloud and AI workloads\n\nFocus on identifying specific products like:\n- Enterprise switches (Cisco Catalyst, Nexus, Arista 7000 series)\n- Data center fabrics (Cisco ACI, Arista CloudVision, Juniper Apstra)\n- SD-WAN solutions (Cisco Viptela, VMware VeloCloud, Fortinet)\n- Cloud networking (AWS VPC, Azure Virtual Network, GCP)",
+
+  "key_products": [
+    "enterprise switches",
+    "data center routers",
+    "SD-WAN",
+    "network fabric",
+    "SDN controllers"
+  ],
+
+  "key_companies": [
+    "Cisco",
+    "Arista",
+    "Juniper",
+    "HPE",
+    "Dell EMC",
+    "Huawei"
+  ],
+
+  "standards_focus": [
+    "IEEE 802.1",
+    "BGP",
+    "OSPF",
+    "VxLAN",
+    "EVPN"
+  ],
+
+  "technical_focus": [
+    "switching",
+    "routing",
+    "fabric",
+    "SDN",
+    "virtualization",
+    "QoS"
+  ],
+
+  "damages_tier": "high",
+  "market_size_notes": "$40B+ enterprise networking market",
+
+  "licensing_context": {
+    "pool_complexity": "low",
+    "standards_based": true,
+    "proprietary_enhancements": true,
+    "long_replacement_cycles": true,
+    "high_asp": true
+  }
+}

@@ -6,19 +6,28 @@
  *
  * Features:
  * - Model selection: Opus (high quality) vs Sonnet (cost-effective)
- * - Sector-specific prompts with domain expertise
+ * - Sector-specific prompts loaded from config files (config/sector-prompts/)
  * - Product identification for vendor handoff
  * - Within-sector competitive ranking
+ * - Configurable prompts per sector for customization and versioning
  */
 
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 
 dotenv.config();
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Path to sector prompts directory
+const SECTOR_PROMPTS_DIR = path.join(__dirname, '../config/sector-prompts');
 
 // Model options
 export const MODELS = {
@@ -80,180 +89,90 @@ const SectorAnalysisSchema = z.object({
 
 export type SectorAnalysis = z.infer<typeof SectorAnalysisSchema>;
 
+// Interface for sector prompt configuration (loaded from JSON files)
 interface SectorPromptConfig {
+  version: string;
   sector_id: string;
   display_name: string;
+  created?: string;
+  lastModified?: string;
   system_prompt_additions: string;
   key_products: string[];
   key_companies: string[];
   standards_focus: string[];
   technical_focus: string[];
+  damages_tier?: string;
+  market_size_notes?: string;
+  licensing_context?: Record<string, any>;
 }
 
-// Sector-specific prompt configurations
-const SECTOR_PROMPTS: Record<string, SectorPromptConfig> = {
-  'video-codec': {
-    sector_id: 'video-codec',
-    display_name: 'Video Codec / Transcoding',
-    system_prompt_additions: `
-You are an expert in video codec technology, including:
-- Video compression standards: H.264/AVC, H.265/HEVC, AV1, VP9, VVC
-- Transcoding architectures: hardware encoders, software codecs, cloud transcoding
-- Streaming technologies: ABR streaming, DASH, HLS, low-latency streaming
-- Industry players: broadcasters, streaming platforms, video conferencing, chip vendors
+// Cache for loaded sector configs
+const sectorConfigCache: Map<string, SectorPromptConfig> = new Map();
 
-Key licensing context:
-- HEVC patent pool licensing is complex (MPEG LA, HEVC Advance, Velos Media)
-- AV1 is royalty-free but patent encumbrance risks exist
-- 61% of mid-size platforms cite licensing fees as barrier
-- Hardware implementation patents are particularly valuable
-
-Focus on identifying specific products like:
-- Cloud transcoding services (AWS Elemental, Azure Media Services)
-- Hardware encoders (AMD, NETINT, NVIDIA)
-- Video platforms (Netflix, YouTube, TikTok, Zoom)
-- Consumer devices (smart TVs, streaming devices, cameras)`,
-    key_products: ['streaming platforms', 'video conferencing', 'broadcast encoders', 'smart TVs', 'transcoding services'],
-    key_companies: ['ByteDance', 'Netflix', 'Apple', 'Google', 'Bitmovin', 'AWS', 'NVIDIA', 'AMD'],
-    standards_focus: ['H.264', 'H.265', 'HEVC', 'AV1', 'VP9', 'VVC', 'DASH', 'HLS'],
-    technical_focus: ['macroblock', 'motion estimation', 'entropy coding', 'intra prediction', 'rate control']
-  },
-
-  'cloud-auth': {
-    sector_id: 'cloud-auth',
-    display_name: 'Cloud / Authentication',
-    system_prompt_additions: `
-You are an expert in cloud authentication and identity management:
-- Identity protocols: OAuth 2.0, OpenID Connect, SAML, FIDO2
-- Authentication methods: SSO, MFA, passwordless, biometrics
-- Zero-trust architecture: ZTNA, identity-aware proxies
-- Enterprise IAM: privileged access, federation, directory services
-
-Key licensing context:
-- High-growth market ($15B+, 14% CAGR)
-- Enterprise customers have high willingness to pay for security
-- Integration complexity makes design-around difficult
-- Financial services sector is particularly security-conscious
-
-Focus on identifying specific products like:
-- Identity platforms (Okta, Auth0, Microsoft Entra)
-- SSO solutions (Ping Identity, OneLogin)
-- Enterprise security (CyberArk, BeyondTrust)
-- Cloud IAM (AWS IAM, Azure AD, GCP IAM)`,
-    key_products: ['identity platforms', 'SSO solutions', 'MFA providers', 'zero-trust', 'PAM'],
-    key_companies: ['Okta', 'Microsoft', 'Auth0', 'Ping Identity', 'CyberArk', 'AWS', 'Google'],
-    standards_focus: ['OAuth', 'OpenID Connect', 'SAML', 'FIDO2', 'WebAuthn'],
-    technical_focus: ['token', 'authentication', 'authorization', 'identity', 'federation']
-  },
-
-  'rf-acoustic': {
-    sector_id: 'rf-acoustic',
-    display_name: 'RF Acoustic (BAW/FBAR)',
-    system_prompt_additions: `
-You are an expert in RF acoustic wave technology:
-- BAW (Bulk Acoustic Wave) and FBAR (Film Bulk Acoustic Resonator) technology
-- RF filters for mobile devices: duplexers, multiplexers, filters
-- MEMS microphones and acoustic sensors
-- 5G infrastructure RF front-end modules
-
-Key licensing context:
-- Physics-constrained technology with limited design-around options
-- Every 4G/5G smartphone uses BAW filters - massive volume
-- Concentrated supplier market (Broadcom/Avago, Qorvo, Skyworks, Murata)
-- $10B+ annual market with strong growth from 5G
-
-Focus on identifying specific products like:
-- Smartphone RF modules (Apple iPhone, Samsung Galaxy)
-- RF filter modules from Murata, Skyworks, Qorvo
-- 5G infrastructure equipment (Ericsson, Nokia, Samsung)
-- IoT modules with RF front-ends`,
-    key_products: ['5G smartphones', 'RF filters', 'MEMS microphones', 'IoT modules', 'base stations'],
-    key_companies: ['Murata', 'Skyworks', 'Qorvo', 'Qualcomm', 'Apple', 'Samsung'],
-    standards_focus: ['3GPP', '5G NR', 'LTE', 'WiFi', 'Bluetooth'],
-    technical_focus: ['BAW', 'FBAR', 'piezoelectric', 'resonator', 'duplexer', 'filter']
-  },
-
-  'network-threat-protection': {
-    sector_id: 'network-threat-protection',
-    display_name: 'Network Threat Protection',
-    system_prompt_additions: `
-You are an expert in cybersecurity and threat protection:
-- Network security: firewalls, IDS/IPS, network segmentation
-- Endpoint detection: EDR, XDR, antivirus
-- Threat intelligence: SIEM, SOAR, threat feeds
-- Cloud security: CASB, CWPP, CSPM
-
-Key licensing context:
-- High-growth market driven by increasing cyber threats
-- Enterprise security budgets are recession-resistant
-- Compliance requirements (SOC2, PCI-DSS) drive adoption
-- Patent portfolios can be defensive assets for security vendors
-
-Focus on identifying specific products like:
-- Enterprise firewalls (Palo Alto, Fortinet, Cisco)
-- EDR/XDR platforms (CrowdStrike, SentinelOne, Microsoft Defender)
-- SIEM solutions (Splunk, IBM QRadar, Microsoft Sentinel)
-- Cloud security (Zscaler, Netskope, Wiz)`,
-    key_products: ['firewalls', 'EDR/XDR', 'SIEM', 'cloud security', 'threat intelligence'],
-    key_companies: ['Palo Alto Networks', 'CrowdStrike', 'Fortinet', 'Cisco', 'Microsoft', 'Splunk'],
-    standards_focus: ['MITRE ATT&CK', 'NIST', 'SOC2', 'ISO 27001'],
-    technical_focus: ['threat detection', 'malware', 'intrusion', 'firewall', 'endpoint']
-  },
-
-  'network-switching': {
-    sector_id: 'network-switching',
-    display_name: 'Network Switching & Routing',
-    system_prompt_additions: `
-You are an expert in enterprise networking and data center infrastructure:
-- Network switching: L2/L3 switches, data center fabrics, spine-leaf architectures
-- Routing protocols: BGP, OSPF, MPLS, SD-WAN
-- Network virtualization: VxLAN, EVPN, SDN
-- Industry players: enterprise IT, cloud providers, service providers, hyperscalers
-
-Key licensing context:
-- Large enterprise market ($40B+) with high ASPs
-- Mission-critical infrastructure with long replacement cycles
-- Standards-based (IEEE, IETF) but proprietary enhancements matter
-- Data center growth driven by cloud and AI workloads
-
-Focus on identifying specific products like:
-- Enterprise switches (Cisco Catalyst, Nexus, Arista 7000 series)
-- Data center fabrics (Cisco ACI, Arista CloudVision, Juniper Apstra)
-- SD-WAN solutions (Cisco Viptela, VMware VeloCloud, Fortinet)
-- Cloud networking (AWS VPC, Azure Virtual Network, GCP)`,
-    key_products: ['enterprise switches', 'data center routers', 'SD-WAN', 'network fabric', 'SDN controllers'],
-    key_companies: ['Cisco', 'Arista', 'Juniper', 'HPE', 'Dell EMC', 'Huawei'],
-    standards_focus: ['IEEE 802.1', 'BGP', 'OSPF', 'VxLAN', 'EVPN'],
-    technical_focus: ['switching', 'routing', 'fabric', 'SDN', 'virtualization', 'QoS']
-  },
-
-  'network-management': {
-    sector_id: 'network-management',
-    display_name: 'Network Management & Orchestration',
-    system_prompt_additions: `
-You are an expert in network management and operations:
-- Network monitoring: SNMP, NetFlow, telemetry, observability
-- Configuration management: automation, orchestration, intent-based
-- Service assurance: SLA monitoring, performance management
-- Operations: NOC tools, troubleshooting, capacity planning
-
-Key licensing context:
-- Growing market with shift to automation and AIOps
-- Enterprise IT operations budgets expanding
-- Integration with cloud management increasingly important
-- MSP and service provider segments have different needs
-
-Focus on identifying specific products like:
-- Network management (Cisco DNA Center, SolarWinds, Datadog)
-- Observability platforms (Splunk, Dynatrace, New Relic)
-- Automation tools (Ansible, Terraform, Puppet)
-- Cloud management (ServiceNow, BMC)`,
-    key_products: ['network monitoring', 'orchestration', 'automation', 'observability', 'ITSM'],
-    key_companies: ['Cisco', 'SolarWinds', 'Datadog', 'Splunk', 'ServiceNow', 'Juniper'],
-    standards_focus: ['SNMP', 'YANG', 'NETCONF', 'OpenConfig'],
-    technical_focus: ['monitoring', 'telemetry', 'automation', 'orchestration', 'analytics']
+/**
+ * Load a sector prompt configuration from its JSON file
+ */
+function loadSectorConfig(sectorId: string): SectorPromptConfig | null {
+  // Check cache first
+  if (sectorConfigCache.has(sectorId)) {
+    return sectorConfigCache.get(sectorId)!;
   }
-};
+
+  const configPath = path.join(SECTOR_PROMPTS_DIR, `${sectorId}.json`);
+
+  if (!fs.existsSync(configPath)) {
+    console.error(`Sector config not found: ${configPath}`);
+    return null;
+  }
+
+  try {
+    const configContent = fs.readFileSync(configPath, 'utf-8');
+    const config: SectorPromptConfig = JSON.parse(configContent);
+
+    // Cache the loaded config
+    sectorConfigCache.set(sectorId, config);
+
+    return config;
+  } catch (error) {
+    console.error(`Error loading sector config for ${sectorId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get all available sector IDs from the index file
+ */
+function loadAvailableSectors(): string[] {
+  const indexPath = path.join(SECTOR_PROMPTS_DIR, 'index.json');
+
+  if (!fs.existsSync(indexPath)) {
+    console.error(`Sector index not found: ${indexPath}`);
+    // Fallback: scan directory for JSON files
+    if (fs.existsSync(SECTOR_PROMPTS_DIR)) {
+      return fs.readdirSync(SECTOR_PROMPTS_DIR)
+        .filter(f => f.endsWith('.json') && f !== 'index.json')
+        .map(f => f.replace('.json', ''));
+    }
+    return [];
+  }
+
+  try {
+    const indexContent = fs.readFileSync(indexPath, 'utf-8');
+    const index = JSON.parse(indexContent);
+    return index.availableSectors || [];
+  } catch (error) {
+    console.error('Error loading sector index:', error);
+    return [];
+  }
+}
+
+/**
+ * Clear the sector config cache (useful for hot-reloading during development)
+ */
+export function clearSectorConfigCache(): void {
+  sectorConfigCache.clear();
+  console.log('Sector config cache cleared');
+}
 
 // Build sector-specific user prompt
 function buildSectorUserPrompt(patent: any, config: SectorPromptConfig): string {
@@ -346,11 +265,14 @@ export class SectorLLMAnalyzer {
     const modelName = options.model || 'sonnet';
     const modelId = MODELS[modelName];
 
-    if (!SECTOR_PROMPTS[sector]) {
-      throw new Error(`Sector "${sector}" not configured. Available: ${Object.keys(SECTOR_PROMPTS).join(', ')}`);
+    // Load sector config from JSON file
+    const config = loadSectorConfig(sector);
+    if (!config) {
+      const available = loadAvailableSectors();
+      throw new Error(`Sector "${sector}" not configured. Available: ${available.join(', ')}`);
     }
 
-    this.sectorConfig = SECTOR_PROMPTS[sector];
+    this.sectorConfig = config;
     this.outputDir = `./output/sector-analysis/${sector}`;
 
     this.model = new ChatAnthropic({
@@ -361,6 +283,7 @@ export class SectorLLMAnalyzer {
     });
 
     console.log(`Initialized ${sector} analyzer with model: ${modelName} (${modelId})`);
+    console.log(`  Config version: ${config.version}, last modified: ${config.lastModified || 'unknown'}`);
 
     // Ensure output directory exists
     if (!fs.existsSync(this.outputDir)) {
@@ -460,11 +383,20 @@ Always return valid JSON matching the requested schema.`;
   }
 }
 
-// Export available sectors
+// Export available sectors (loaded from config files)
 export function getAvailableSectors(): string[] {
-  return Object.keys(SECTOR_PROMPTS);
+  return loadAvailableSectors();
 }
 
 export function getSectorConfig(sector: string): SectorPromptConfig | undefined {
-  return SECTOR_PROMPTS[sector];
+  return loadSectorConfig(sector) || undefined;
+}
+
+/**
+ * Reload all sector configs (useful for development/testing)
+ */
+export function reloadSectorConfigs(): void {
+  clearSectorConfigCache();
+  const sectors = loadAvailableSectors();
+  console.log(`Reloaded ${sectors.length} sector configurations`);
 }

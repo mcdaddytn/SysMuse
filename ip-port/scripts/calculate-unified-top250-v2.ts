@@ -1,5 +1,5 @@
 /**
- * Calculate Unified Top 250 Patents - V2 (Improved Scoring)
+ * Calculate Unified Top 500 Patents - V2 (Improved Scoring)
  *
  * CHANGES FROM V1:
  * 1. Hard filters: Excludes expired patents (< 3 years remaining)
@@ -8,7 +8,7 @@
  * 4. Eligibility floor: Excludes patents with eligibility < 2
  * 5. Sub-category scoring option for damages/success/risk
  *
- * Usage: npx tsx scripts/calculate-unified-top250-v2.ts [--no-filter] [--verbose]
+ * Usage: npx tsx scripts/calculate-unified-top500-v2.ts [--no-filter] [--verbose]
  */
 
 import * as fs from 'fs';
@@ -574,15 +574,15 @@ async function main() {
   // Sort by unified score
   patents.sort((a, b) => (b.score_unified || 0) - (a.score_unified || 0));
 
-  // Take top 250
-  const top250 = patents.slice(0, 250);
+  // Take top 500
+  const top500 = patents.slice(0, 500);
 
   console.log(`\n${'='.repeat(60)}`);
   console.log('TOP 10 PATENTS (V2 Scoring)');
   console.log('='.repeat(60));
 
-  for (let i = 0; i < Math.min(10, top250.length); i++) {
-    const p = top250[i];
+  for (let i = 0; i < Math.min(10, top500.length); i++) {
+    const p = top500[i];
     const llmFlag = p.eligibility_score !== undefined ? '✓ LLM' : '';
     const iprFlag = p.ipr_risk_score !== undefined ? '✓ IPR' : '';
     console.log(`${i + 1}. ${p.patent_id} - ${p.score_unified?.toFixed(1)} (${llmFlag} ${iprFlag})`);
@@ -591,26 +591,26 @@ async function main() {
   }
 
   // Statistics
-  const withLLM = top250.filter(p => p.eligibility_score !== undefined).length;
-  const withV3 = top250.filter(p => p.market_relevance_score !== undefined).length;
-  const withIPR = top250.filter(p => p.ipr_risk_score !== undefined).length;
-  const withPros = top250.filter(p => p.prosecution_quality_score !== undefined).length;
-  const withTermSector = top250.filter(p => p.sector_source === 'term' || p.sector_source === 'mlt').length;
-  const withCPCSector = top250.filter(p => p.sector_source === 'cpc').length;
+  const withLLM = top500.filter(p => p.eligibility_score !== undefined).length;
+  const withV3 = top500.filter(p => p.market_relevance_score !== undefined).length;
+  const withIPR = top500.filter(p => p.ipr_risk_score !== undefined).length;
+  const withPros = top500.filter(p => p.prosecution_quality_score !== undefined).length;
+  const withTermSector = top500.filter(p => p.sector_source === 'term' || p.sector_source === 'mlt').length;
+  const withCPCSector = top500.filter(p => p.sector_source === 'cpc').length;
 
-  const avgYears = top250.reduce((sum, p) => sum + p.years_remaining, 0) / top250.length;
-  const minYears = Math.min(...top250.map(p => p.years_remaining));
-  const maxYears = Math.max(...top250.map(p => p.years_remaining));
+  const avgYears = top500.reduce((sum, p) => sum + p.years_remaining, 0) / top500.length;
+  const minYears = Math.min(...top500.map(p => p.years_remaining));
+  const maxYears = Math.max(...top500.map(p => p.years_remaining));
 
   console.log(`\n${'='.repeat(60)}`);
-  console.log('DATA COVERAGE IN TOP 250');
+  console.log('DATA COVERAGE IN TOP 500');
   console.log('='.repeat(60));
-  console.log(`LLM v1 analysis: ${withLLM}/250 (${(withLLM / 250 * 100).toFixed(0)}%)`);
-  console.log(`LLM v3 analysis: ${withV3}/250 (${(withV3 / 250 * 100).toFixed(0)}%)`);
-  console.log(`IPR risk data: ${withIPR}/250 (${(withIPR / 250 * 100).toFixed(0)}%)`);
-  console.log(`Prosecution data: ${withPros}/250 (${(withPros / 250 * 100).toFixed(0)}%)`);
-  console.log(`Term-based sectors: ${withTermSector}/250`);
-  console.log(`CPC-based sectors: ${withCPCSector}/250`);
+  console.log(`LLM v1 analysis: ${withLLM}/500 (${(withLLM / 500 * 100).toFixed(0)}%)`);
+  console.log(`LLM v3 analysis: ${withV3}/500 (${(withV3 / 500 * 100).toFixed(0)}%)`);
+  console.log(`IPR risk data: ${withIPR}/500 (${(withIPR / 500 * 100).toFixed(0)}%)`);
+  console.log(`Prosecution data: ${withPros}/500 (${(withPros / 500 * 100).toFixed(0)}%)`);
+  console.log(`Term-based sectors: ${withTermSector}/500`);
+  console.log(`CPC-based sectors: ${withCPCSector}/500`);
 
   console.log(`\nYears Remaining Distribution:`);
   console.log(`  Min: ${minYears.toFixed(1)} | Avg: ${avgYears.toFixed(1)} | Max: ${maxYears.toFixed(1)}`);
@@ -622,7 +622,7 @@ async function main() {
     '10-15 years': 0,
     '15+ years': 0,
   };
-  for (const p of top250) {
+  for (const p of top500) {
     if (p.years_remaining < 5) yearBuckets['3-5 years']++;
     else if (p.years_remaining < 10) yearBuckets['5-10 years']++;
     else if (p.years_remaining < 15) yearBuckets['10-15 years']++;
@@ -645,7 +645,7 @@ async function main() {
     statistics: {
       total_patents_analyzed: multiScore.size,
       filtered_out: filteredOut,
-      top_250_count: top250.length,
+      top_500_count: top500.length,
       patents_with_llm_v1: withLLM,
       patents_with_llm_v3: withV3,
       patents_with_ipr: withIPR,
@@ -653,11 +653,11 @@ async function main() {
       avg_years_remaining: avgYears,
       years_distribution: yearBuckets,
     },
-    patents: top250,
+    patents: top500,
   };
 
-  fs.writeFileSync(`./output/unified-top250-v2-${timestamp}.json`, JSON.stringify(outputJson, null, 2));
-  console.log(`\nSaved to: output/unified-top250-v2-${timestamp}.json`);
+  fs.writeFileSync(`./output/unified-top500-v2-${timestamp}.json`, JSON.stringify(outputJson, null, 2));
+  console.log(`\nSaved to: output/unified-top500-v2-${timestamp}.json`);
 
   // Also export CSV
   const csvHeaders = [
@@ -671,8 +671,8 @@ async function main() {
   ];
 
   const csvRows = [csvHeaders.join(',')];
-  for (let i = 0; i < top250.length; i++) {
-    const p = top250[i];
+  for (let i = 0; i < top500.length; i++) {
+    const p = top500[i];
     const row = [
       i + 1,
       p.patent_id,
@@ -707,19 +707,19 @@ async function main() {
     csvRows.push(row.join(','));
   }
 
-  fs.writeFileSync(`./output/unified-top250-v2-${timestamp}.csv`, csvRows.join('\n'));
-  console.log(`Saved to: output/unified-top250-v2-${timestamp}.csv`);
+  fs.writeFileSync(`./output/unified-top500-v2-${timestamp}.csv`, csvRows.join('\n'));
+  console.log(`Saved to: output/unified-top500-v2-${timestamp}.csv`);
 
   // Identify patents needing enrichment
-  const needsLLM = top250.filter(p => p.eligibility_score === undefined).map(p => p.patent_id);
-  const needsIPR = top250.filter(p => p.ipr_risk_score === undefined).map(p => p.patent_id);
+  const needsLLM = top500.filter(p => p.eligibility_score === undefined).map(p => p.patent_id);
+  const needsIPR = top500.filter(p => p.ipr_risk_score === undefined).map(p => p.patent_id);
 
   if (needsLLM.length > 0) {
-    fs.writeFileSync(`./output/top250-v2-needs-llm-${timestamp}.json`, JSON.stringify(needsLLM, null, 2));
+    fs.writeFileSync(`./output/top500-v2-needs-llm-${timestamp}.json`, JSON.stringify(needsLLM, null, 2));
     console.log(`\nPatents needing LLM enrichment: ${needsLLM.length}`);
   }
   if (needsIPR.length > 0) {
-    fs.writeFileSync(`./output/top250-v2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
+    fs.writeFileSync(`./output/top500-v2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
     console.log(`Patents needing IPR check: ${needsIPR.length}`);
   }
 }

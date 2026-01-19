@@ -18,8 +18,8 @@ This guide explains how to interpret the patent analysis spreadsheets generated 
 To regenerate data files:
 ```bash
 npm run export:attorney     # Full portfolio
-npm run top250:v3          # Top 250 (V3)
-npm run top250:recalc      # Top 250 (V2)
+npm run top500:v3          # Top 500 (V3)
+npm run top500:recalc      # Top 500 (V2)
 npm run export:withinsector # Within-sector
 ```
 
@@ -30,8 +30,8 @@ npm run export:withinsector # Within-sector
 | File | Purpose | Records |
 |------|---------|---------|
 | `ATTORNEY-PORTFOLIO-*.csv` | Full portfolio with all patents | ~10,000+ |
-| `TOP250-*.csv` | Top 250 patents by V3 stakeholder consensus | 250 |
-| `unified-top250-v2-*.csv` | Top 250 patents by V2 citation-weighted scoring | 250 |
+| `TOP500-*.csv` | Top 500 patents by V3 stakeholder consensus | 500 |
+| `unified-top500-v2-*.csv` | Top 500 patents by V2 citation-weighted scoring | 500 |
 | `WITHIN-SECTOR-*.csv` | Patents ranked within technology sectors | ~375 |
 | `COCITATION-CLUSTERS-*.csv` | Patents grouped by co-citation patterns | ~100 |
 
@@ -166,9 +166,9 @@ These represent the 5 key questions originally posed for patent evaluation:
 
 ---
 
-## Top 250 Spreadsheet (TOP250-*.csv)
+## Top 500 Spreadsheet (TOP500-*.csv)
 
-The Top 250 represents the highest-priority patents based on a consensus score across multiple stakeholder perspectives.
+The Top 500 represents the highest-priority patents based on a consensus score across multiple stakeholder perspectives.
 
 ### Stakeholder Profiles
 
@@ -185,7 +185,7 @@ Six different weighting profiles are used, representing different strategic appr
 
 The **Consensus Score** is the average across all profiles.
 
-### Reading the Top 250
+### Reading the Top 500
 
 - **Higher rank = More valuable** under consensus view
 - Patents at top are strong across multiple perspectives
@@ -194,7 +194,7 @@ The **Consensus Score** is the average across all profiles.
 
 ---
 
-## V2 Top 250 Spreadsheet (unified-top250-v2-*.csv)
+## V2 Top 500 Spreadsheet (unified-top500-v2-*.csv)
 
 The V2 model uses a simpler, citation-weighted scoring approach that emphasizes competitor interest over legal quality metrics.
 
@@ -210,7 +210,7 @@ Where `year_multiplier` rewards patents with more remaining term.
 
 | Column | Description |
 |--------|-------------|
-| rank | Position in V2 rankings |
+| rank | Position in V2 rankings (1-500) |
 | patent_id | USPTO patent number |
 | **affiliate** | **Normalized portfolio entity** |
 | title | Patent title |
@@ -290,7 +290,7 @@ This spreadsheet shows the top patents within each technology sector, allowing f
 
 ### Identifying Strong Patents for Litigation
 
-1. Open `TOP250-*.csv`
+1. Open `TOP500-*.csv`
 2. Filter by desired competitor in `competitors_citing`
 3. Look for:
    - `eligibility_score` >= 4
@@ -318,10 +318,10 @@ This spreadsheet shows the top patents within each technology sector, allowing f
 
 ## Data Completeness Notes
 
-- **Full analysis data** is available for the Top 250 and patents with high competitor citations
+- **Full analysis data** is available for the Top 500 and patents with high competitor citations
 - **Basic USPTO data** is available for all ~10,000 patents
 - **LLM analysis** has been run on ~380 patents (top priority subset)
-- **IPR/Prosecution data** available for ~250 patents
+- **IPR/Prosecution data** available for ~500 patents
 
 Empty cells in the LLM score columns indicate the patent has not yet been prioritized for deep analysis. These patents may still have value but require further evaluation.
 
@@ -367,6 +367,157 @@ Citations from these entities are excluded from competitor citation counts.
 
 ---
 
+---
+
+## Partner Engagement Strategy
+
+This section outlines our approach to engaging external partners (law firms, technical experts, licensing specialists) in the patent analysis process.
+
+### Overview: Collaborative Analysis Loop
+
+Our analysis system is designed to incorporate partner feedback to continuously improve ranking accuracy and product relevance. The workflow creates a feedback loop:
+
+```
+Internal Analysis → Partner Review → Feedback Integration → Improved Analysis
+        ↑                                                           │
+        └───────────────────────────────────────────────────────────┘
+```
+
+### Phase 1: Patent/Product Heat Maps
+
+**Objective**: Generate visual mappings of patent coverage across competitor products and market segments.
+
+**What We Provide to Partners**:
+1. **Sector-specific patent sets** (from WITHIN-SECTOR exports)
+2. **Competitor citation data** showing which companies cite our patents
+3. **Technology categorization** (CPC codes, sector assignments)
+4. **LLM-generated product type suggestions** (from `product_types` field)
+
+**What Partners Provide**:
+1. **Product identification**: Specific products/services that may practice the technology
+2. **Feature mapping**: Which product features relate to which patent claims
+3. **Market intelligence**: Revenue estimates, market share, product roadmaps
+4. **Infringement likelihood**: Initial assessment of evidence accessibility
+
+**Heat Map Dimensions**:
+| Row | Column | Cell Value |
+|-----|--------|------------|
+| Patent or Patent Group | Competitor Product | Coverage strength (1-5) |
+
+**Deliverable**: Excel/visualization showing patent coverage density across product landscape.
+
+### Phase 2: Claim Chart Construction
+
+**Objective**: Develop detailed claim charts mapping patent claims to specific product implementations.
+
+**Selection Process** (from current analysis):
+
+1. **Start with Top 500** patents
+2. **Filter by target criteria**:
+   - `competitor_citations` >= 5 (proven interest)
+   - `enforcement_clarity` >= 4 (detectability)
+   - `years_remaining` >= 5 (remaining value)
+3. **Select sector focus** based on business priorities
+4. **Choose 10-20 patents** for initial claim chart development
+
+**Partner Deliverables Requested**:
+1. **Element-by-element claim mapping** to product implementation
+2. **Evidence documentation** (user manuals, teardowns, whitepapers, standards docs)
+3. **Claim interpretation notes** (construction issues, narrowing amendments)
+4. **Infringement opinion** (preliminary assessment)
+
+**Claim Chart Template Structure**:
+| Claim Element | Product Feature | Evidence Source | Notes |
+|---------------|-----------------|-----------------|-------|
+| [Claim 1 preamble] | [Feature X] | [URL/Doc ref] | [Construction notes] |
+| [Element A] | [Component Y] | [Teardown photo] | [Optional narrowing] |
+
+### Phase 3: Feedback Integration
+
+**How Partner Feedback Improves Our System**:
+
+| Partner Input | System Improvement |
+|---------------|-------------------|
+| Product identifications | Updates `likely_implementers` field |
+| Feature mappings | Improves `technology_category` assignments |
+| Evidence accessibility notes | Refines `evidence_accessibility_score` |
+| Claim chart quality assessment | Validates `enforcement_clarity` scoring |
+| Market intelligence | Enhances `market_relevance_score` |
+| Infringement opinions | Calibrates overall ranking weights |
+
+**Feedback Capture Process**:
+
+1. **Structured feedback forms**: Partners complete standardized assessments
+2. **Discrepancy tracking**: Where partner assessment differs from LLM scores
+3. **Score calibration**: Adjust LLM prompts/weights based on patterns
+4. **Product database growth**: Build knowledge base of product/patent mappings
+
+### Phase 4: Enhanced Analysis Output
+
+**Partner feedback enables**:
+
+1. **Better sector assignments**: Real-world product alignment
+2. **More accurate implementer lists**: Validated company/product targeting
+3. **Improved detection methods**: Evidence strategies that work in practice
+4. **Refined market relevance**: Actual revenue exposure estimates
+5. **Claim chart templates**: Pre-built mappings for common technologies
+
+### Engagement Timeline (Suggested)
+
+| Phase | Duration | Deliverables |
+|-------|----------|--------------|
+| **Initial briefing** | Week 1 | Portfolio overview, priority sectors |
+| **Heat map development** | Weeks 2-4 | Product coverage maps for 2-3 sectors |
+| **Claim chart pilot** | Weeks 5-8 | 10-20 claim charts for top patents |
+| **Feedback review** | Week 9 | Assessment of LLM accuracy, calibration |
+| **System update** | Week 10 | Refined rankings with partner intelligence |
+
+### Data Sharing Guidelines
+
+**What We Share**:
+- Patent metadata (public USPTO data)
+- Competitor citation statistics (derived from public data)
+- LLM-generated summaries (our analysis)
+- Scoring metrics (our proprietary weights)
+
+**What Partners Should NOT Share Externally**:
+- Complete portfolio rankings
+- Scoring weights and formulas
+- Strategic prioritization decisions
+- Claim chart work product (privileged)
+
+### Success Metrics
+
+**Engagement Success = Improved Analysis Quality**:
+
+| Metric | Baseline | Target |
+|--------|----------|--------|
+| Product identification accuracy | 60% | 85% |
+| Enforcement clarity calibration | ±1.0 | ±0.5 |
+| Claim chart development time | New | -30% with templates |
+| False positive rate (bad patents) | Unknown | <10% in Top 50 |
+
+### Partner Communication Templates
+
+**Initial Engagement Email**:
+> Subject: Patent Portfolio Analysis Collaboration
+>
+> We are conducting a systematic analysis of our patent portfolio against [SECTOR] market. We would value your expertise in:
+> 1. Identifying products practicing our technology
+> 2. Developing claim charts for top candidates
+> 3. Providing market intelligence to refine our prioritization
+>
+> Attached: Sector-specific patent list with preliminary analysis.
+
+**Feedback Request**:
+> For each patent reviewed, please provide:
+> 1. Agreement/disagreement with suggested products (explain if different)
+> 2. Evidence sources you would pursue
+> 3. Any claim construction concerns
+> 4. Overall litigation/licensing viability (1-5)
+
+---
+
 ## Questions?
 
 Contact the technical team for:
@@ -377,5 +528,6 @@ Contact the technical team for:
 
 ---
 
-*Document Version: 1.0*
+*Document Version: 1.1*
 *Last Updated: 2026-01-19*
+*Added: Partner Engagement Strategy section*

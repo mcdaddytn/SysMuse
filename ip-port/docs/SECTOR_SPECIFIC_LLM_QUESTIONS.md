@@ -205,17 +205,326 @@ Consider merging with broader content protection from `network-crypto`.
 
 ---
 
-## Questions for Review
+## Super-Sectors: Portfolio-Level Categorization
 
-1. **Sector consolidation**: Should we create "super-sectors" for portfolio-level views while keeping granular sectors?
+### What Are Super-Sectors?
 
-2. **Question priority**: Which sectors should get sector-specific questions first?
+Super-sectors are a **grouping layer above sectors** for portfolio-level views. They consolidate related sectors into broader technology categories without changing the underlying sector assignments.
 
-3. **Generic vs specific**: Should all patents get generic questions + sector-specific questions, or route to sector-specific prompts only?
+**Example Structure**:
+```
+Super-Sector: SECURITY
+├── network-threat-protection (312 active)
+├── network-auth-access (360 active)
+├── network-crypto (150 active)
+├── computing-os-security (100 active)
+├── computing-data-protection (80 active)
+└── cloud-auth (43 active)
+    Total: ~1,045 active patents
+```
 
-4. **New sectors**: Should we create `automotive-adas` and `ai-ml-inference` as new sectors?
+### Purpose of Super-Sectors
 
-5. **Damage tier updates**: Should sector expansion affect damage tier assignments?
+| Use Case | Benefit |
+|----------|---------|
+| Executive summaries | "We have 1,045 security patents" vs listing 6 sectors |
+| Competitor analysis | "Samsung cites 200 of our SECURITY patents" |
+| Portfolio valuation | Aggregate value by technology domain |
+| Licensing packages | Bundle related sectors for deals |
+| Staffing/resourcing | Assign analysts to technology domains |
+
+### Proposed Super-Sector Mapping
+
+| Super-Sector | Included Sectors | Active Patents |
+|--------------|------------------|----------------|
+| **SECURITY** | network-threat-protection, network-auth-access, network-crypto, computing-os-security, computing-data-protection, cloud-auth | ~1,045 |
+| **NETWORK** | network-switching, network-management, network-protocols, network-signal-processing, network-error-control, network-multiplexing | ~2,000 |
+| **VIDEO/MEDIA** | video-codec, video-client-processing, video-server-cdn, video-drm-conditional, video-broadcast | ~300 |
+| **WIRELESS** | wireless-scheduling, wireless-power-mgmt, wireless-mimo-antenna, wireless-transmission, rf-acoustic | ~800 |
+| **CLOUD/COMPUTE** | computing-virtualization, computing-storage, computing-processors, fintech-business | ~400 |
+| **AI/ML** | ai-ml (to be expanded) | ~15 (target: 100+) |
+| **AUTOMOTIVE** | automotive-adas (to be created) | ~50 (new) |
+
+### Implementation
+
+Super-sectors would be stored as a lookup table:
+```json
+{
+  "superSectors": {
+    "SECURITY": ["network-threat-protection", "network-auth-access", ...],
+    "NETWORK": ["network-switching", "network-management", ...],
+    ...
+  }
+}
+```
+
+**No schema changes required** - super-sector is derived from sector assignment.
+
+---
+
+## Generic vs Sector-Specific Questions: Analysis
+
+### Current Generic Questions (V3)
+
+All patents currently receive these 20+ questions:
+- Core: summary, prior_art_problem, technical_solution
+- Legal: eligibility_score, validity_score, claim_breadth, claim_clarity_score
+- Enforcement: enforcement_clarity, design_around_difficulty, evidence_accessibility_score
+- Market: technology_category, product_types, market_relevance_score, trend_alignment_score
+- Investigation: likely_implementers, detection_method, investigation_priority_score
+- Cross-sector: implementation_type, standards_relevance, market_segment, etc.
+
+### Proposed Sector-Specific Questions
+
+Additional questions tailored to technology areas (5-10 per sector):
+- **Security**: attack_vector, deployment_layer, compliance_relevance, zero_trust_alignment
+- **Video**: codec_standard, streaming_protocol, pipeline_stage, drm_system
+- **Wireless/RF**: standard_generation, standard_body, chip_component, frequency_band
+- etc.
+
+### Coupling Options Analysis
+
+#### Option A: Coupled (Generic + Sector in Single LLM Call)
+
+**Implementation**:
+```
+Single prompt with all questions (generic + sector-specific)
+→ One LLM call per patent
+→ All data saved together
+```
+
+**Pros**:
+| Advantage | Explanation |
+|-----------|-------------|
+| Context efficiency | LLM sees patent once, answers all questions |
+| Consistency | Sector answers informed by generic analysis |
+| Simpler data model | All fields in one record |
+| Lower latency | Single API call vs multiple |
+
+**Cons**:
+| Disadvantage | Explanation |
+|--------------|-------------|
+| Harder to update | Changing sector questions requires re-running generic |
+| Sector misassignment risk | Wrong sector = wrong questions asked |
+| Higher per-call cost | Longer prompts = more tokens |
+| Version management | Can't selectively update sector answers |
+
+#### Option B: Decoupled (Separate LLM Calls)
+
+**Implementation**:
+```
+Step 1: Generic questions (all patents)
+Step 2: Sector-specific questions (by sector, optional)
+→ Two separate LLM calls
+→ Data joined by patent_id
+```
+
+**Pros**:
+| Advantage | Explanation |
+|-----------|-------------|
+| Flexible updates | Change sector questions without touching generic |
+| Incremental rollout | Run sector questions on priority sectors only |
+| Sector reassignment safe | Generic data preserved if sector changes |
+| A/B testing | Compare different sector question sets |
+| Cost control | Sector-specific is optional add-on |
+
+**Cons**:
+| Disadvantage | Explanation |
+|--------------|-------------|
+| Two API calls | More latency, slightly higher total cost |
+| Data joins required | Must link generic + sector records |
+| Context loss | Sector LLM doesn't see generic answers |
+| More complex pipeline | Two scripts, two output directories |
+
+### Recommendation: Decoupled Approach
+
+**Rationale**:
+1. **Sector questions are experimental** - we need to iterate on them without re-running expensive generic analysis
+2. **Sector assignments may change** - as we refine sectors, generic data should be stable
+3. **Prioritization flexibility** - run sector-specific only on high-value patents or priority sectors
+4. **Easier calibration** - can compare sector answers across different question versions
+
+**Suggested Workflow**:
+```
+1. Run generic LLM analysis on Top N patents → output/llm-analysis-v3/
+2. Assign sectors to all patents → output/sectors/
+3. Run sector-specific analysis on priority sectors → output/llm-sector-specific/
+4. Join data at export time → combined fields in CSV
+```
+
+**Data Model**:
+```
+patent_id → generic_analysis (20+ fields)
+patent_id → sector_specific_analysis (5-10 fields, nullable)
+```
+
+---
+
+## Sector Expansion: How to Grow Small Sectors
+
+### The Challenge
+
+Some high-value sectors have very few patents:
+- `video-codec`: 6 active patents (but very high damages)
+- `ai-ml`: 15 active patents (fast-growing market)
+- `rf-acoustic`: 17 active patents (very high damages)
+
+### Expansion Strategies
+
+#### Strategy 1: Term-Based Search (ElasticSearch)
+
+**Method**: Search portfolio using technology-specific terms to find patents not currently assigned to the sector.
+
+**Example: Expanding video-codec**
+
+Current assignment is likely based on narrow criteria (CPC codes or initial term list). We expand by searching for related terms:
+
+```bash
+# Search for video codec related terms in portfolio
+npm run search
+> search macroblock
+> search "intra prediction"
+> search "motion vector"
+> search "entropy coding"
+> search "transform coefficient"
+> search "quantization matrix"
+> search "loop filter"
+> search H.264 OR HEVC OR AV1 OR VP9
+```
+
+**Implementation Script**:
+```typescript
+// scripts/expand-sector.ts
+const EXPANSION_TERMS = {
+  'video-codec': [
+    'macroblock', 'intra prediction', 'inter prediction',
+    'motion vector', 'motion compensation', 'motion estimation',
+    'entropy coding', 'CABAC', 'CAVLC',
+    'transform coefficient', 'DCT', 'discrete cosine',
+    'quantization', 'quantization matrix', 'QP',
+    'loop filter', 'deblocking', 'SAO',
+    'H.264', 'AVC', 'HEVC', 'H.265', 'AV1', 'VP9', 'VVC',
+    'video encoder', 'video decoder', 'codec'
+  ],
+  'ai-ml': [
+    'neural network', 'deep learning', 'machine learning',
+    'convolutional', 'CNN', 'RNN', 'LSTM', 'transformer',
+    'inference', 'training', 'backpropagation',
+    'classifier', 'classification', 'regression',
+    'feature extraction', 'embedding', 'attention mechanism'
+  ]
+};
+```
+
+#### Strategy 2: CPC Code Mining
+
+**Method**: Find CPC codes that appear in current sector patents, then search for other patents with those codes.
+
+**Example**:
+```
+Current video-codec patents have CPC codes:
+- H04N19/00 (video coding)
+- H04N19/10 (transform coding)
+- H04N19/176 (motion estimation)
+
+Search portfolio for patents with these CPCs that aren't in video-codec sector yet.
+```
+
+#### Strategy 3: Citation Expansion
+
+**Method**: Find patents that are cited alongside current sector patents (co-citation analysis).
+
+**Example**:
+```
+Patent A (video-codec) is cited by Samsung video processor patent
+Patent B (unassigned) is also cited by the same Samsung patent
+→ Patent B is likely related to video-codec
+```
+
+#### Strategy 4: MLT (More-Like-This) Search
+
+**Method**: Use ElasticSearch MLT queries to find patents similar to existing sector members.
+
+```typescript
+// Find patents similar to known video-codec patents
+const mltResults = await es.moreLikeThis({
+  like: [
+    { _index: 'patents', _id: 'US9876543' }, // known video-codec
+    { _index: 'patents', _id: 'US8765432' }  // another known
+  ],
+  min_term_freq: 1,
+  min_doc_freq: 1
+});
+```
+
+### Video-Codec Expansion: Concrete Plan
+
+**Goal**: Expand from 6 to 50-100 patents
+
+**Step 1: Inventory Current**
+```bash
+# List current video-codec patents
+cat output/sectors/all-patents-sectors-v2-*.json | jq '.assignments[] | select(.sector == "video-codec")'
+```
+
+**Step 2: Run Expansion Searches**
+```bash
+# Term searches
+npm run search
+> search macroblock
+> search "motion vector"
+> search "entropy coding"
+> search H.264 OR HEVC
+> search "video encoder"
+```
+
+**Step 3: Filter Results**
+- Must have 3+ years remaining
+- Prefer patents with competitor citations
+- Exclude patents already strongly assigned to other sectors
+
+**Step 4: Validate Assignments**
+- Review abstracts of candidate patents
+- Confirm video codec relevance
+- Add to sector assignment file
+
+**Step 5: Run Sector-Specific LLM**
+- Apply video-codec specific questions
+- Extract codec_standard, pipeline_stage, etc.
+
+### Expected Results by Sector
+
+| Sector | Current | Target | Expansion Method |
+|--------|---------|--------|------------------|
+| video-codec | 6 | 50-100 | Term search + CPC mining |
+| ai-ml | 15 | 75-150 | Term search + MLT |
+| rf-acoustic | 17 | 30-50 | CPC mining (already specialized) |
+| automotive-adas | 0 | 50-100 | New sector from cluster discovery |
+
+### When NOT to Expand
+
+- Sector is already optimal size (400-2,000 active)
+- Expansion would dilute quality (adding low-relevance patents)
+- Technology is genuinely narrow (rf-acoustic may be inherently small)
+
+---
+
+## Questions Addressed
+
+### 1. Super-sectors
+**Clarified above**: Super-sectors are a categorization layer for portfolio-level views. They group related sectors without changing underlying assignments. Useful for executive reporting, competitor analysis, and licensing packages.
+
+### 2. Generic vs Sector-Specific Question Coupling
+**Recommendation**: Decoupled approach - run generic questions first for overall ranking, then sector-specific separately for targeted analysis. This allows iterating on sector questions without re-running expensive generic analysis.
+
+### 3. Video-Codec Expansion
+**Clarified above**: Expansion uses term-based search, CPC mining, citation expansion, and MLT queries to find portfolio patents not currently assigned to the sector. The goal is to grow from 6 to 50-100 patents by searching the full portfolio (not just Top N) for video codec related technology.
+
+### 4. New Sectors
+**Recommendation**: Create `automotive-adas` from cluster discovery results and expand `ai-ml` via term search. Both have clear market relevance and discovered competitor interest.
+
+### 5. Damage Tier Updates
+**Recommendation**: Sector expansion should trigger damage tier review only if the sector composition materially changes. Adding more patents to video-codec doesn't change its "very high" tier - it remains a high-damages technology area.
 
 ---
 

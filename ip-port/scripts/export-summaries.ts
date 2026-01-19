@@ -2,12 +2,13 @@
 /**
  * Export Summary Spreadsheets
  *
- * Generates AffiliateSummary and SectorSummary CSV files for Excel analysis.
+ * Generates AffiliateSummary, SectorSummary, and SuperSectorSummary CSV files.
  * These are similar to CompetitorSummary but grouped by different dimensions.
  *
  * Output:
  *   - output/AFFILIATE-SUMMARY-{date}.csv
  *   - output/SECTOR-SUMMARY-{date}.csv
+ *   - output/SUPERSECTOR-SUMMARY-{date}.csv
  *
  * Usage: npx tsx scripts/export-summaries.ts
  */
@@ -57,6 +58,7 @@ interface AffiliateSummaryRow {
 
 interface SectorSummaryRow {
   sector: string;
+  superSector: string;
   patentCount: number;
   activePatents: number;
   expiredPatents: number;
@@ -69,6 +71,22 @@ interface SectorSummaryRow {
   topCitedPatentCitations: number;
   topCompetitors: string;
   dominantAffiliates: string;
+  damagesTier: string;
+}
+
+interface SuperSectorSummaryRow {
+  superSector: string;
+  displayName: string;
+  sectorCount: number;
+  patentCount: number;
+  activePatents: number;
+  patentsWithCitations: number;
+  totalCompetitorCitations: number;
+  avgCompetitorCitations: number;
+  uniqueCompetitors: number;
+  topSectors: string;
+  topCitedPatent: string;
+  topCitedPatentCitations: number;
   damagesTier: string;
 }
 
@@ -120,6 +138,38 @@ function loadSectorDamages(): Map<string, string> {
   }
 
   return map;
+}
+
+// =============================================================================
+// SUPER-SECTOR MAPPING
+// =============================================================================
+
+interface SuperSectorConfig {
+  displayName: string;
+  description: string;
+  sectors: string[];
+  damagesTier: string;
+}
+
+let superSectorMap = new Map<string, string>();  // sector -> superSector
+let superSectorConfigs = new Map<string, SuperSectorConfig>();  // superSector -> config
+
+function loadSuperSectorConfig(): void {
+  const configPath = 'config/super-sectors.json';
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    for (const [superSector, ssConfig] of Object.entries(config.superSectors || {}) as [string, SuperSectorConfig][]) {
+      superSectorConfigs.set(superSector, ssConfig);
+      for (const sector of ssConfig.sectors) {
+        superSectorMap.set(sector, superSector);
+      }
+    }
+    console.log(`Loaded ${superSectorConfigs.size} super-sectors mapping ${superSectorMap.size} sectors`);
+  }
+}
+
+function getSuperSector(sector: string): string {
+  return superSectorMap.get(sector) || 'OTHER';
 }
 
 // =============================================================================
@@ -325,6 +375,7 @@ function generateSectorSummary(patents: Patent[], sectorDamages: Map<string, str
 
     rows.push({
       sector,
+      superSector: getSuperSector(sector),
       patentCount: data.patents.length,
       activePatents: activePatents.length,
       expiredPatents: expiredPatents.length,
@@ -338,6 +389,89 @@ function generateSectorSummary(patents: Patent[], sectorDamages: Map<string, str
       topCompetitors: topComps,
       dominantAffiliates: topAffiliates,
       damagesTier: sectorDamages.get(sector) || 'Medium'
+    });
+  }
+
+  // Sort by patent count descending
+  rows.sort((a, b) => b.patentCount - a.patentCount);
+
+  return rows;
+}
+
+// =============================================================================
+// SUPER-SECTOR SUMMARY
+// =============================================================================
+
+function generateSuperSectorSummary(patents: Patent[]): SuperSectorSummaryRow[] {
+  const superSectorData = new Map<string, {
+    sectors: Set<string>;
+    patents: Patent[];
+    competitors: Set<string>;
+  }>();
+
+  // Group patents by super-sector
+  for (const p of patents) {
+    const sector = p.sector || 'unassigned';
+    const superSector = getSuperSector(sector);
+
+    if (!superSectorData.has(superSector)) {
+      superSectorData.set(superSector, {
+        sectors: new Set(),
+        patents: [],
+        competitors: new Set()
+      });
+    }
+
+    const data = superSectorData.get(superSector)!;
+    data.sectors.add(sector);
+    data.patents.push(p);
+
+    for (const comp of p.competitors || []) {
+      data.competitors.add(comp);
+    }
+  }
+
+  // Build summary rows
+  const rows: SuperSectorSummaryRow[] = [];
+
+  for (const [superSector, data] of superSectorData) {
+    const config = superSectorConfigs.get(superSector);
+    const activePatents = data.patents.filter(p => (p.remaining_years || 0) >= 3);
+    const patentsWithCitations = data.patents.filter(p => (p.competitor_citations || 0) > 0);
+    const totalCites = data.patents.reduce((sum, p) => sum + (p.competitor_citations || 0), 0);
+
+    // Find top cited patent
+    const topCited = data.patents.reduce((best, p) =>
+      (p.competitor_citations || 0) > (best?.competitor_citations || 0) ? p : best,
+      data.patents[0]
+    );
+
+    // Count patents per sector for top sectors
+    const sectorCounts = new Map<string, number>();
+    for (const p of data.patents) {
+      const s = p.sector || 'unassigned';
+      sectorCounts.set(s, (sectorCounts.get(s) || 0) + 1);
+    }
+    const topSectors = [...sectorCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([s, n]) => `${s}(${n})`)
+      .join('; ');
+
+    rows.push({
+      superSector,
+      displayName: config?.displayName || superSector,
+      sectorCount: data.sectors.size,
+      patentCount: data.patents.length,
+      activePatents: activePatents.length,
+      patentsWithCitations: patentsWithCitations.length,
+      totalCompetitorCitations: totalCites,
+      avgCompetitorCitations: Math.round((totalCites / data.patents.length) * 10) / 10,
+      uniqueCompetitors: data.competitors.size,
+      topSectors,
+      topCitedPatent: topCited?.patent_id || '',
+      topCitedPatentCitations: topCited?.competitor_citations || 0,
+      damagesTier: config?.damagesTier || 'Medium'
     });
   }
 
@@ -403,6 +537,7 @@ function exportAffiliateSummaryCSV(rows: AffiliateSummaryRow[], outputPath: stri
 function exportSectorSummaryCSV(rows: SectorSummaryRow[], outputPath: string): void {
   const headers = [
     'sector',
+    'super_sector',
     'patent_count',
     'active_patents',
     'expired_patents',
@@ -423,6 +558,7 @@ function exportSectorSummaryCSV(rows: SectorSummaryRow[], outputPath: string): v
   for (const r of rows) {
     csvRows.push([
       escapeCSV(r.sector),
+      escapeCSV(r.superSector),
       r.patentCount,
       r.activePatents,
       r.expiredPatents,
@@ -435,6 +571,46 @@ function exportSectorSummaryCSV(rows: SectorSummaryRow[], outputPath: string): v
       r.topCitedPatentCitations,
       escapeCSV(r.topCompetitors),
       escapeCSV(r.dominantAffiliates),
+      escapeCSV(r.damagesTier)
+    ].join(','));
+  }
+
+  fs.writeFileSync(outputPath, csvRows.join('\n'));
+}
+
+function exportSuperSectorSummaryCSV(rows: SuperSectorSummaryRow[], outputPath: string): void {
+  const headers = [
+    'super_sector',
+    'display_name',
+    'sector_count',
+    'patent_count',
+    'active_patents',
+    'patents_with_citations',
+    'total_competitor_citations',
+    'avg_competitor_citations',
+    'unique_competitors',
+    'top_sectors',
+    'top_cited_patent',
+    'top_cited_patent_citations',
+    'damages_tier'
+  ];
+
+  const csvRows = [headers.join(',')];
+
+  for (const r of rows) {
+    csvRows.push([
+      escapeCSV(r.superSector),
+      escapeCSV(r.displayName),
+      r.sectorCount,
+      r.patentCount,
+      r.activePatents,
+      r.patentsWithCitations,
+      r.totalCompetitorCitations,
+      r.avgCompetitorCitations,
+      r.uniqueCompetitors,
+      escapeCSV(r.topSectors),
+      escapeCSV(r.topCitedPatent),
+      r.topCitedPatentCitations,
       escapeCSV(r.damagesTier)
     ].join(','));
   }
@@ -456,6 +632,7 @@ async function main() {
 
   // Load configurations
   loadAffiliateConfig();
+  loadSuperSectorConfig();
   const sectorDamages = loadSectorDamages();
 
   // Load patent data
@@ -499,17 +676,38 @@ async function main() {
     console.log(`    ${row.sector}: ${row.patentCount} patents (${row.activePatents} active, ${row.uniqueCompetitors} competitors)`);
   }
 
+  // Generate Super-Sector Summary
+  console.log('\nGenerating Super-Sector Summary...');
+  const superSectorSummary = generateSuperSectorSummary(patents);
+
+  const superSectorPath = `output/SUPERSECTOR-SUMMARY-${dateStamp}.csv`;
+  const superSectorLatest = 'output/SUPERSECTOR-SUMMARY-LATEST.csv';
+  exportSuperSectorSummaryCSV(superSectorSummary, superSectorPath);
+  exportSuperSectorSummaryCSV(superSectorSummary, superSectorLatest);
+
+  console.log(`  Exported: ${superSectorPath}`);
+  console.log(`  Exported: ${superSectorLatest}`);
+  console.log(`  Super-Sectors: ${superSectorSummary.length}`);
+
+  // Print super-sectors
+  console.log('\n  Super-Sectors by Patent Count:');
+  for (const row of superSectorSummary) {
+    console.log(`    ${row.displayName}: ${row.patentCount} patents (${row.activePatents} active, ${row.sectorCount} sectors)`);
+  }
+
   // Also generate a JSON version for programmatic use
   const jsonOutput = {
     generatedAt: new Date().toISOString(),
     affiliateSummary,
     sectorSummary,
+    superSectorSummary,
     totals: {
       totalPatents: patents.length,
       activePatents: patents.filter(p => (p.remaining_years || 0) >= 3).length,
       patentsWithCitations: patents.filter(p => (p.competitor_citations || 0) > 0).length,
       totalAffiliates: affiliateSummary.length,
-      totalSectors: sectorSummary.length
+      totalSectors: sectorSummary.length,
+      totalSuperSectors: superSectorSummary.length
     }
   };
 

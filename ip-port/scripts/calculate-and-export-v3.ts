@@ -4,9 +4,9 @@
  * This is the main export script for patent scoring using the V3 stakeholder profiles.
  *
  * Outputs:
- *   1. excel/TOP250-YYYY-MM-DD.csv - Top 250 with all profile scores (for Excel analysis)
+ *   1. output/TOP500-YYYY-MM-DD.csv - Top 500 with all profile scores (for Excel analysis)
  *   2. output/all-patents-scored-v3-YYYY-MM-DD.csv - All patents with scores (raw data)
- *   3. output/unified-top250-v3-YYYY-MM-DD.json - Top 250 JSON with full details
+ *   3. output/unified-top500-v3-YYYY-MM-DD.json - Top 500 JSON with full details
  *
  * Usage:
  *   npx tsx scripts/calculate-and-export-v3.ts
@@ -14,7 +14,7 @@
 
 import * as fs from 'fs';
 
-const TOP_N = 250;
+const TOP_N = 500;
 const MIN_YEARS = 3;
 
 // =============================================================================
@@ -656,24 +656,24 @@ async function main() {
     (consensusScores.get(b.patent_id) || 0) - (consensusScores.get(a.patent_id) || 0)
   );
 
-  const top250 = consensusRanked.slice(0, TOP_N);
+  const topN = consensusRanked.slice(0, TOP_N);
 
   console.log(`\nTop ${TOP_N} patents selected by consensus score`);
 
   // Statistics
-  const withCC = top250.filter(p => p.competitor_citations > 0).length;
-  const avgYears = top250.reduce((s, p) => s + p.years_remaining, 0) / TOP_N;
-  const avgCC = top250.reduce((s, p) => s + p.competitor_citations, 0) / TOP_N;
+  const withCC = topN.filter(p => p.competitor_citations > 0).length;
+  const avgYears = topN.reduce((s, p) => s + p.years_remaining, 0) / TOP_N;
+  const avgCC = topN.reduce((s, p) => s + p.competitor_citations, 0) / TOP_N;
 
-  console.log(`\nTop 250 Statistics:`);
+  console.log(`\nTop ${TOP_N} Statistics:`);
   console.log(`  Citation coverage: ${(withCC / TOP_N * 100).toFixed(0)}%`);
   console.log(`  Avg years remaining: ${avgYears.toFixed(1)}`);
   console.log(`  Avg competitor citations: ${avgCC.toFixed(1)}`);
 
   // ==========================================================================
-  // Export 1: Top 250 for Excel (output/TOP250-YYYY-MM-DD.csv)
+  // Export 1: Top 500 for Excel (output/TOP500-YYYY-MM-DD.csv)
   // ==========================================================================
-  const top250Headers = [
+  const topNHeaders = [
     'rank', 'patent_id', 'affiliate', 'title', 'grant_date', 'assignee',
     'years_remaining', 'forward_citations', 'competitor_citations', 'competitor_count', 'competitors',
     'sector', 'sector_name',
@@ -693,9 +693,9 @@ async function main() {
     rankMaps.set(profile.id, rm);
   }
 
-  const top250Rows = [top250Headers.join(',')];
-  for (let i = 0; i < top250.length; i++) {
-    const p = top250[i];
+  const topNRows = [topNHeaders.join(',')];
+  for (let i = 0; i < topN.length; i++) {
+    const p = topN[i];
     const row = [
       i + 1,
       p.patent_id,
@@ -727,14 +727,14 @@ async function main() {
       }),
       ...PROFILES.map(profile => rankMaps.get(profile.id)!.get(p.patent_id) || ''),
     ];
-    top250Rows.push(row.join(','));
+    topNRows.push(row.join(','));
   }
 
-  const top250Path = `./output/TOP250-${dateStr}.csv`;
-  fs.writeFileSync(top250Path, top250Rows.join('\n'));
-  fs.writeFileSync('./output/TOP250-LATEST.csv', top250Rows.join('\n'));
-  console.log(`\nExported: ${top250Path}`);
-  console.log(`Exported: ./output/TOP250-LATEST.csv`);
+  const topNPath = `./output/TOP500-${dateStr}.csv`;
+  fs.writeFileSync(topNPath, topNRows.join('\n'));
+  fs.writeFileSync('./output/TOP500-LATEST.csv', topNRows.join('\n'));
+  console.log(`\nExported: ${topNPath}`);
+  console.log(`Exported: ./output/TOP500-LATEST.csv`);
 
   // ==========================================================================
   // Export 2: All Patents Raw Data (output/all-patents-scored-v3-YYYY-MM-DD.csv)
@@ -799,7 +799,7 @@ async function main() {
   console.log(`Exported: ${rawPath}`);
 
   // ==========================================================================
-  // Export 3: Top 250 JSON (output/unified-top250-v3-YYYY-MM-DD.json)
+  // Export 3: Top 500 JSON (output/unified-top500-v3-YYYY-MM-DD.json)
   // ==========================================================================
   const jsonExport = {
     generated: new Date().toISOString(),
@@ -814,7 +814,7 @@ async function main() {
       avg_years: avgYears.toFixed(1),
       avg_competitor_citations: avgCC.toFixed(1),
     },
-    patents: top250.map((p, idx) => ({
+    patents: topN.map((p, idx) => ({
       rank: idx + 1,
       patent_id: p.patent_id,
       title: p.title,
@@ -847,7 +847,7 @@ async function main() {
     }))
   };
 
-  const jsonPath = `./output/unified-top250-v3-${dateStr}.json`;
+  const jsonPath = `./output/unified-top500-v3-${dateStr}.json`;
   fs.writeFileSync(jsonPath, JSON.stringify(jsonExport, null, 2));
   console.log(`Exported: ${jsonPath}`);
 
@@ -857,7 +857,7 @@ async function main() {
   console.log('='.repeat(70));
 
   for (let i = 0; i < 10; i++) {
-    const p = top250[i];
+    const p = topN[i];
     const consensus = consensusScores.get(p.patent_id) || 0;
     const comp = p.competitors?.slice(0, 2).join(', ') || '-';
     console.log(

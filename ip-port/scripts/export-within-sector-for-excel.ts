@@ -8,9 +8,44 @@
 
 import * as fs from 'fs';
 
+// =============================================================================
+// AFFILIATE NORMALIZATION
+// =============================================================================
+
+interface AffiliateConfig {
+  displayName: string;
+  patterns: string[];
+}
+
+let affiliatePatterns: Array<{ pattern: RegExp; affiliate: string }> = [];
+
+function loadAffiliateConfig(): void {
+  const configPath = 'config/portfolio-affiliates.json';
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    for (const [, affConfig] of Object.entries(config.affiliates) as [string, AffiliateConfig][]) {
+      for (const pattern of affConfig.patterns) {
+        affiliatePatterns.push({
+          pattern: new RegExp(pattern, 'i'),
+          affiliate: affConfig.displayName
+        });
+      }
+    }
+  }
+}
+
+function normalizeAffiliate(assignee: string): string {
+  if (!assignee) return 'Unknown';
+  for (const { pattern, affiliate } of affiliatePatterns) {
+    if (pattern.test(assignee)) return affiliate;
+  }
+  return assignee.replace(/,?\s*(Inc\.|LLC|Corporation|Ltd\.|Pte\.).*$/i, '').trim() || 'Unknown';
+}
+
 interface Patent {
   patent_id: string;
   title?: string;
+  assignee?: string;
   competitor_citations?: number;
   competitorCount?: number;
   remaining_years?: number;
@@ -27,6 +62,9 @@ interface SectorAssignment {
 
 async function exportWithinSectorForExcel() {
   console.log('=== EXPORT WITHIN-SECTOR RANKINGS FOR EXCEL ===\n');
+
+  // Load affiliate config for normalization
+  loadAffiliateConfig();
 
   // Load multi-score analysis
   const multiScore = JSON.parse(
@@ -88,6 +126,7 @@ async function exportWithinSectorForExcel() {
     'sector',
     'sector_rank',
     'patent_id',
+    'affiliate',
     'title',
     'years_remaining',
     'competitor_citations',
@@ -133,6 +172,7 @@ async function exportWithinSectorForExcel() {
         sector,
         i + 1,
         p.patent_id,
+        normalizeAffiliate(p.assignee || ''),
         `"${title}"`,
         (p.remaining_years || 0).toFixed(1),
         p.competitor_citations || 0,

@@ -52,6 +52,8 @@
     "watchlist:report": "tsx scripts/manage-citator-watchlist.ts --report",
     "watchlist:update": "tsx scripts/manage-citator-watchlist.ts --update",
     "export:attorney": "tsx scripts/export-attorney-portfolio.ts",
+    "export:summaries": "tsx scripts/export-summaries.ts",
+    "export:all": "npm run export:attorney && npm run export:summaries && npm run top250:v3 && npm run export:withinsector",
     "validate:portfolio": "tsx scripts/validate-portfolio-config.ts"
   },
   "keywords": [

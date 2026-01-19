@@ -4242,6 +4242,246 @@ Broadcom Inc. (parent)
 
 ---
 
-*Session: 2026-01-19 (portfolio fix)*
-*Status: Portfolio configuration corrected, validation script created*
-*Next: Recalculate all scores, package attorney documentation*
+### Session Update: 2026-01-19 (Continuation) - Attorney Package & Affiliate Normalization
+
+**Major Accomplishments:**
+
+1. **Portfolio Reshuffle Fix Verified & Applied** ✅
+   - Re-ran `multi-score-analysis.ts` with corrected competitor list
+   - VMware, Symantec, Carbon Black now correctly excluded (0 competitor appearances)
+   - Portfolio owners verified: Broadcom (6,425), Symantec (1,490), Avago (1,168), CA (644), LSI (549)
+
+2. **Directory Convention Established** ✅
+   - `output/` - All data files (CSV, JSON) - NOT in git
+   - `excel/` - VBA macro files (.bas) ONLY - tracked in git
+   - Moved attorney portfolio CSV from excel/ to output/
+
+3. **Affiliate Normalization System Created** ✅
+   - New config: `config/portfolio-affiliates.json`
+   - Maps raw assignee names to normalized affiliate names
+   - Based on Broadcom corporate structure (acquisitions tree)
+
+4. **Attorney Portfolio Spreadsheet Created** ✅
+   - Script: `scripts/export-attorney-portfolio.ts`
+   - Output: `output/ATTORNEY-PORTFOLIO-*.csv` (10,276 patents)
+   - Includes all 5 attorney questions + affiliate + aggregations
+   - Aggregations JSON: `output/ATTORNEY-PORTFOLIO-AGGREGATIONS-*.json`
+
+5. **Attorney Portfolio VBA Macro Created** ✅
+   - Macro: `excel/AttorneyPortfolioMacros.bas`
+   - Worksheets: RawData, Summary, ByAffiliate, BySector, ByCPC, ExpirationTimeline
+   - Auto-generates aggregate breakdowns on import
+
+6. **Affiliate Column Added to All Scoring Spreadsheets** ✅
+   - TOP250-*.csv (V3): `rank, patent_id, affiliate, title, ...`
+   - unified-top250-v2-*.csv: `rank, patent_id, affiliate, title, ...`
+   - WITHIN-SECTOR-*.csv: `sector, sector_rank, patent_id, affiliate, title, ...`
+
+7. **Attorney Spreadsheet Guide Updated** ✅
+   - `docs/ATTORNEY_SPREADSHEET_GUIDE.md`
+   - Directory convention documented
+   - Affiliate normalization explained
+   - All column references updated
+
+**New/Modified Files:**
+
+| File | Purpose |
+|------|---------|
+| `config/portfolio-affiliates.json` | **NEW** - Affiliate name mapping config |
+| `scripts/export-attorney-portfolio.ts` | **NEW** - Attorney portfolio export |
+| `excel/AttorneyPortfolioMacros.bas` | **NEW** - Attorney VBA macro |
+| `scripts/calculate-and-export-v3.ts` | Added affiliate normalization |
+| `scripts/calculate-unified-top250-v2.ts` | Added affiliate normalization |
+| `scripts/export-within-sector-for-excel.ts` | Added affiliate normalization |
+| `docs/ATTORNEY_SPREADSHEET_GUIDE.md` | Comprehensive attorney guide |
+
+**Portfolio Affiliate Breakdown:**
+
+| Affiliate | Total | Active | Expired |
+|-----------|-------|--------|---------|
+| Broadcom | 6,425 | 5,129 | 1,296 |
+| Symantec Enterprise | 1,490 | 1,394 | 96 |
+| Avago Technologies | 1,168 | 1,143 | 25 |
+| CA Technologies | 644 | 641 | 3 |
+| LSI Corporation | 549 | 6 | 543 |
+
+**NPM Scripts Added:**
+
+```bash
+npm run export:attorney      # Generate attorney portfolio
+npm run validate:portfolio   # Validate portfolio configuration
+```
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Completed This Session
+- Portfolio reshuffle fix applied and verified
+- All scoring spreadsheets recalculated with corrected competitor data
+- Attorney package created (spreadsheet + macro + guide)
+- Affiliate normalization added to all exports
+- Directory convention established and documented
+
+### Ready for Next Steps
+
+1. **Database/API Development** (deferred from this session)
+   - PostgreSQL schema design (Prisma ORM)
+   - REST API endpoints
+   - Data import pipeline
+
+2. **Additional Analysis**
+   - Sector-specific deep dives
+   - Litigation bundling recommendations
+   - Vendor integration workflows
+
+3. **Patent Claims Analysis** (when API data available)
+   - PatentsView claims endpoint (beta, 2023 data)
+   - Bulk download alternative
+
+### Quick Reference Commands
+
+```bash
+# Attorney Package
+npm run export:attorney         # Full portfolio with affiliates
+npm run validate:portfolio      # Validate portfolio config
+
+# Scoring Exports (all include affiliate column)
+npm run top250:v3              # V3 stakeholder scores
+npm run top250:recalc          # V2 citation-weighted scores
+npm run export:withinsector    # Within-sector rankings
+
+# Analysis
+npx tsx examples/multi-score-analysis.ts  # Recalculate competitor analysis
+```
+
+### Excel Workflow
+
+**Attorney Portfolio:**
+1. Run: `npm run export:attorney`
+2. Open Excel, create new .xlsm workbook
+3. Import: `excel/AttorneyPortfolioMacros.bas`
+4. Run macro: `ImportAttorneyPortfolio`
+5. Review generated worksheets (Summary, ByAffiliate, BySector, ByCPC, ExpirationTimeline)
+
+**Top 250 Analysis:**
+1. Run: `npm run top250:v3` or `npm run top250:recalc`
+2. Import appropriate macro from `excel/`
+3. CSV files are in `output/` directory
+
+---
+
+### Session Update: 2026-01-19 (Continuation) - Summary Exports & Sector Question Design
+
+**Major Accomplishments:**
+
+1. **AffiliateSummary Export Created** ✅
+   - Script: `scripts/export-summaries.ts`
+   - Output: `output/AFFILIATE-SUMMARY-*.csv`
+   - Metrics: patent count, active/expired, avg years, competitor cites, top competitors, dominant sectors
+
+2. **SectorSummary Export Created** ✅
+   - Output: `output/SECTOR-SUMMARY-*.csv`
+   - Metrics: patent count, active/expired, avg years, unique competitors, top cited patent, dominant affiliates
+
+3. **VBA Macros for Summaries Created** ✅
+   - File: `excel/SummaryMacros.bas`
+   - Macros: `GenerateAffiliateSummary()`, `GenerateSectorSummary()`, `GenerateAllSummaries()`
+   - Works with both RawData and Score_Consensus worksheets
+
+4. **Top 500 LLM Analysis Started** ✅
+   - Identified 167 patents (ranks 251-500) needing LLM analysis
+   - Background job started: `output/llm-job-251-500.log`
+   - Expected completion: ~2-3 hours
+
+5. **Sector-Specific LLM Questions Documented** ✅
+   - New doc: `docs/SECTOR_SPECIFIC_LLM_QUESTIONS.md`
+   - Covers: Security, Video/Media, Wireless/RF, Network, Cloud, Automotive sectors
+   - Includes sector consolidation/expansion proposals
+
+**New/Modified Files:**
+
+| File | Purpose |
+|------|---------|
+| `scripts/export-summaries.ts` | **NEW** - AffiliateSummary + SectorSummary export |
+| `excel/SummaryMacros.bas` | **NEW** - VBA for summary worksheets |
+| `docs/SECTOR_SPECIFIC_LLM_QUESTIONS.md` | **NEW** - Sector question design doc |
+| `output/patents-251-500-for-llm.json` | **NEW** - Patents needing LLM analysis |
+| `package.json` | Added `export:summaries` and `export:all` scripts |
+
+**NPM Scripts Added:**
+
+```bash
+npm run export:summaries   # Generate AffiliateSummary + SectorSummary
+npm run export:all         # Run all exports (attorney, summaries, top250, within-sector)
+```
+
+**Current Affiliate Breakdown (from export):**
+
+| Affiliate | Total | Active | Competitor Cites |
+|-----------|-------|--------|------------------|
+| Broadcom | 6,425 | 3,522 | 18,763 |
+| Symantec Enterprise | 1,490 | 1,141 | 13,951 |
+| Avago Technologies | 1,168 | 1,120 | 928 |
+| CA Technologies | 644 | 641 | 2,097 |
+| LSI Corporation | 549 | 0 | 5,284 |
+
+**Current Sector Breakdown (Top 10):**
+
+| Sector | Total | Active | Unique Competitors |
+|--------|-------|--------|-------------------|
+| network-switching | 1,064 | 569 | 53 |
+| network-signal-processing | 834 | 375 | 31 |
+| network-error-control | 539 | 222 | 36 |
+| network-multiplexing | 489 | 255 | 33 |
+| network-auth-access | 445 | 360 | 67 |
+
+**LLM Analysis Status:**
+
+| Range | Patents | Status |
+|-------|---------|--------|
+| 1-250 | 250 | ✅ Complete (V3) |
+| 251-380 | ~130 | ✅ Complete (V3 2026-01-18) |
+| 381-500 | ~167 | 🔄 In Progress (background job) |
+
+---
+
+## NEXT SESSION: Feature Queue
+
+### Ready to Review
+1. **Sector-Specific LLM Questions** - Review `docs/SECTOR_SPECIFIC_LLM_QUESTIONS.md`
+   - Decide on sector consolidation/expansion
+   - Prioritize which sectors get specific questions first
+   - Approve question sets for pilot
+
+2. **Summary Exports** - Test new summary CSVs and VBA macros
+
+### Background Job Running
+- LLM analysis for patents 251-500 (check `output/llm-job-251-500.log`)
+- When complete, can regenerate Top 500 export
+
+### Future Implementation (Queued)
+1. Implement sector-specific LLM prompts
+2. Create Top 500 export (after LLM job completes)
+3. Sector expansion via term search (video-codec, ai-ml)
+4. Create automotive-adas sector
+
+### Quick Reference Commands
+
+```bash
+# New summary exports
+npm run export:summaries    # AffiliateSummary + SectorSummary
+npm run export:all          # All exports in sequence
+
+# Check LLM job progress
+tail -f output/llm-job-251-500.log
+
+# After LLM job completes
+npm run top250:v3           # Regenerate with new LLM data
+```
+
+---
+
+*Session: 2026-01-19 (summary exports & sector questions)*
+*Status: Summary exports created, LLM job running, sector questions documented*
+*Next: Review sector questions, test summaries, wait for LLM job*

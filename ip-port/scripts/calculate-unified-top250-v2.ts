@@ -13,6 +13,40 @@
 
 import * as fs from 'fs';
 
+// =============================================================================
+// AFFILIATE NORMALIZATION
+// =============================================================================
+
+interface AffiliateConfig {
+  displayName: string;
+  patterns: string[];
+}
+
+let affiliatePatterns: Array<{ pattern: RegExp; affiliate: string }> = [];
+
+function loadAffiliateConfig(): void {
+  const configPath = 'config/portfolio-affiliates.json';
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    for (const [, affConfig] of Object.entries(config.affiliates) as [string, AffiliateConfig][]) {
+      for (const pattern of affConfig.patterns) {
+        affiliatePatterns.push({
+          pattern: new RegExp(pattern, 'i'),
+          affiliate: affConfig.displayName
+        });
+      }
+    }
+  }
+}
+
+function normalizeAffiliate(assignee: string): string {
+  if (!assignee) return 'Unknown';
+  for (const { pattern, affiliate } of affiliatePatterns) {
+    if (pattern.test(assignee)) return affiliate;
+  }
+  return assignee.replace(/,?\s*(Inc\.|LLC|Corporation|Ltd\.|Pte\.).*$/i, '').trim() || 'Unknown';
+}
+
 // Configuration
 const MIN_YEARS_REMAINING = 3;  // Hard filter: exclude patents with less than this
 const MIN_ELIGIBILITY_SCORE = 2;  // Hard filter: exclude if LLM says clearly ineligible
@@ -440,6 +474,9 @@ async function main() {
   console.log(`  Min eligibility score: ${MIN_ELIGIBILITY_SCORE}`);
   console.log('');
 
+  // Load affiliate config for normalization
+  loadAffiliateConfig();
+
   // Load all data sources
   const multiScore = loadMultiScoreAnalysis();
   const llmV1 = loadLLMAnalysis();
@@ -624,7 +661,7 @@ async function main() {
 
   // Also export CSV
   const csvHeaders = [
-    'rank', 'patent_id', 'title', 'grant_date', 'assignee', 'years_remaining', 'year_multiplier',
+    'rank', 'patent_id', 'affiliate', 'title', 'grant_date', 'assignee', 'years_remaining', 'year_multiplier',
     'forward_citations', 'competitor_citations', 'competitor_count', 'competitors',
     'sector', 'sector_name', 'sector_source',
     'eligibility_score', 'validity_score', 'claim_breadth', 'enforcement_clarity', 'design_around_difficulty',
@@ -639,6 +676,7 @@ async function main() {
     const row = [
       i + 1,
       p.patent_id,
+      normalizeAffiliate(p.assignee),
       `"${(p.title || '').replace(/"/g, '""')}"`,
       p.grant_date,
       `"${(p.assignee || '').replace(/"/g, '""')}"`,

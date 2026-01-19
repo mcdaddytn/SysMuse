@@ -18,6 +18,40 @@ const TOP_N = 250;
 const MIN_YEARS = 3;
 
 // =============================================================================
+// AFFILIATE NORMALIZATION
+// =============================================================================
+
+interface AffiliateConfig {
+  displayName: string;
+  patterns: string[];
+}
+
+let affiliatePatterns: Array<{ pattern: RegExp; affiliate: string }> = [];
+
+function loadAffiliateConfig(): void {
+  const configPath = 'config/portfolio-affiliates.json';
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    for (const [, affConfig] of Object.entries(config.affiliates) as [string, AffiliateConfig][]) {
+      for (const pattern of affConfig.patterns) {
+        affiliatePatterns.push({
+          pattern: new RegExp(pattern, 'i'),
+          affiliate: affConfig.displayName
+        });
+      }
+    }
+  }
+}
+
+function normalizeAffiliate(assignee: string): string {
+  if (!assignee) return 'Unknown';
+  for (const { pattern, affiliate } of affiliatePatterns) {
+    if (pattern.test(assignee)) return affiliate;
+  }
+  return assignee.replace(/,?\s*(Inc\.|LLC|Corporation|Ltd\.|Pte\.).*$/i, '').trim() || 'Unknown';
+}
+
+// =============================================================================
 // DATA STRUCTURES
 // =============================================================================
 
@@ -583,6 +617,9 @@ async function main() {
   console.log('Calculate and Export V3 - Stakeholder Voting Profiles');
   console.log('='.repeat(70));
 
+  // Load affiliate config for normalization
+  loadAffiliateConfig();
+
   // Load data
   const allPatents = loadAllData();
   console.log(`\nLoaded ${allPatents.length} total patents`);
@@ -637,7 +674,7 @@ async function main() {
   // Export 1: Top 250 for Excel (output/TOP250-YYYY-MM-DD.csv)
   // ==========================================================================
   const top250Headers = [
-    'rank', 'patent_id', 'title', 'grant_date', 'assignee',
+    'rank', 'patent_id', 'affiliate', 'title', 'grant_date', 'assignee',
     'years_remaining', 'forward_citations', 'competitor_citations', 'competitor_count', 'competitors',
     'sector', 'sector_name',
     'eligibility_score', 'validity_score', 'claim_breadth', 'enforcement_clarity', 'design_around_difficulty',
@@ -662,6 +699,7 @@ async function main() {
     const row = [
       i + 1,
       p.patent_id,
+      normalizeAffiliate(p.assignee),
       `"${(p.title || '').replace(/"/g, '""').substring(0, 100)}"`,
       p.grant_date,
       `"${(p.assignee || '').replace(/"/g, '""')}"`,
@@ -702,7 +740,7 @@ async function main() {
   // Export 2: All Patents Raw Data (output/all-patents-scored-v3-YYYY-MM-DD.csv)
   // ==========================================================================
   const rawHeaders = [
-    'patent_id', 'title', 'grant_date', 'assignee',
+    'patent_id', 'affiliate', 'title', 'grant_date', 'assignee',
     'years_remaining', 'forward_citations', 'competitor_citations', 'competitor_count', 'competitors',
     'sector', 'sector_name',
     'eligibility_score', 'validity_score', 'claim_breadth', 'enforcement_clarity', 'design_around_difficulty',
@@ -729,6 +767,7 @@ async function main() {
 
     const row = [
       p.patent_id,
+      normalizeAffiliate(p.assignee),
       `"${(p.title || '').replace(/"/g, '""').substring(0, 100)}"`,
       p.grant_date,
       `"${(p.assignee || '').replace(/"/g, '""')}"`,

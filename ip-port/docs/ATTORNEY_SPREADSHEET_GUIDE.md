@@ -212,6 +212,7 @@ Where `year_multiplier` rewards patents with more remaining term.
 |--------|-------------|
 | rank | Position in V2 rankings |
 | patent_id | USPTO patent number |
+| **affiliate** | **Normalized portfolio entity** |
 | title | Patent title |
 | score_unified | V2 combined score (0-100) |
 | competitor_citations | Citations from competitors |
@@ -257,6 +258,7 @@ This spreadsheet shows the top patents within each technology sector, allowing f
 | sector | Technology sector |
 | sector_rank | Position within the sector (1 = best) |
 | patent_id | USPTO patent number |
+| **affiliate** | **Normalized portfolio entity** |
 | title | Patent title |
 | within_sector_score | Score relative to sector (0-100) |
 | competitor_citations | Citations from competitors |

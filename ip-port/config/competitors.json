@@ -603,16 +603,6 @@
           ]
         },
         {
-          "name": "Symantec",
-          "patterns": [
-            "Symantec",
-            "NortonLifeLock"
-          ],
-          "discoveredBy": [
-            "manual-initial"
-          ]
-        },
-        {
           "name": "McAfee",
           "patterns": [
             "McAfee"
@@ -689,22 +679,6 @@
             "EDR",
             "threat detection",
             "malware analysis"
-          ]
-        },
-        {
-          "name": "Carbon Black",
-          "patterns": [
-            "Carbon Black",
-            "VMware Carbon Black"
-          ],
-          "discoveredBy": [
-            "hybrid-cluster-5-security"
-          ],
-          "notes": "Now VMware - endpoint security",
-          "primaryTechnologies": [
-            "EDR",
-            "NGAV",
-            "threat hunting"
           ]
         },
         {
@@ -920,15 +894,6 @@
           "name": "SAP",
           "patterns": [
             "SAP"
-          ],
-          "discoveredBy": [
-            "manual-initial"
-          ]
-        },
-        {
-          "name": "VMware",
-          "patterns": [
-            "VMware"
           ],
           "discoveredBy": [
             "manual-initial"
@@ -2080,12 +2045,28 @@
   "excludePatterns": [
     "Broadcom",
     "LSI Logic",
+    "LSI Corporation",
     "Avago",
-    "Symantec"
+    "Symantec",
+    "NortonLifeLock",
+    "VMware",
+    "VMWare",
+    "Brocade",
+    "CA, Inc",
+    "CA Technologies",
+    "Computer Associates",
+    "Carbon Black",
+    "Blue Coat",
+    "LifeLock",
+    "Pivotal",
+    "Tanzu",
+    "Avi Networks",
+    "Lastline",
+    "Nyansa"
   ],
   "notes": {
     "patternMatching": "Patterns are matched case-insensitively against assignee names",
-    "excludePatterns": "These patterns identify Broadcom-related entities to exclude from competitor analysis",
+    "excludePatterns": "These patterns identify Broadcom portfolio entities (including acquisitions: VMware 2023, Symantec Enterprise 2019, CA Technologies 2018, Brocade 2017, LSI 2014) to exclude from competitor analysis",
     "enabled": "Set category 'enabled' to false to exclude from analysis",
     "discoveryStrategies": "Each competitor tracks which strategy surfaced them - supports multiple strategies per competitor",
     "strategyTypes": {

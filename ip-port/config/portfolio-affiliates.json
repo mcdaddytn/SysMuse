@@ -1,0 +1,164 @@
+{
+  "version": "1.0",
+  "description": "Portfolio affiliate mapping - normalizes assignee names to parent affiliate for reporting",
+  "lastUpdated": "2026-01-19",
+
+  "portfolioTree": {
+    "description": "Broadcom corporate structure for reference",
+    "tree": [
+      "Broadcom Inc. (parent)",
+      "├── Avago Technologies (merged 2016)",
+      "├── LSI Corporation (acquired 2014)",
+      "├── Brocade Communications (acquired 2017)",
+      "├── CA Technologies (acquired 2018)",
+      "├── Symantec Enterprise (acquired 2019)",
+      "│   ├── Blue Coat Systems",
+      "│   └── LifeLock",
+      "└── VMware (acquired 2023)",
+      "    ├── Carbon Black",
+      "    ├── Pivotal Software",
+      "    ├── Avi Networks",
+      "    ├── Lastline",
+      "    └── Nyansa"
+    ]
+  },
+
+  "affiliates": {
+    "Broadcom": {
+      "displayName": "Broadcom",
+      "acquiredYear": null,
+      "patterns": [
+        "Broadcom",
+        "Broadcom Inc",
+        "Broadcom Corporation"
+      ]
+    },
+    "Avago": {
+      "displayName": "Avago Technologies",
+      "acquiredYear": 2016,
+      "patterns": [
+        "Avago",
+        "Avago Technologies",
+        "Avago Technologies General IP",
+        "Avago Technologies International",
+        "Avago Technologies Fiber IP",
+        "Avago Technologies Wireless"
+      ]
+    },
+    "LSI": {
+      "displayName": "LSI Corporation",
+      "acquiredYear": 2014,
+      "patterns": [
+        "LSI Logic",
+        "LSI Corporation",
+        "LSI"
+      ]
+    },
+    "Brocade": {
+      "displayName": "Brocade Communications",
+      "acquiredYear": 2017,
+      "patterns": [
+        "Brocade",
+        "Brocade Communications"
+      ]
+    },
+    "CA Technologies": {
+      "displayName": "CA Technologies",
+      "acquiredYear": 2018,
+      "patterns": [
+        "CA, Inc",
+        "CA Technologies",
+        "Computer Associates",
+        "Computer Associates International"
+      ]
+    },
+    "Symantec": {
+      "displayName": "Symantec Enterprise",
+      "acquiredYear": 2019,
+      "parent": null,
+      "subsidiaries": ["Blue Coat", "LifeLock"],
+      "patterns": [
+        "Symantec",
+        "Symantec Corporation",
+        "Symantec Operating Corporation",
+        "NortonLifeLock"
+      ]
+    },
+    "Blue Coat": {
+      "displayName": "Blue Coat Systems",
+      "acquiredYear": 2019,
+      "parent": "Symantec",
+      "patterns": [
+        "Blue Coat",
+        "Blue Coat Systems"
+      ]
+    },
+    "LifeLock": {
+      "displayName": "LifeLock",
+      "acquiredYear": 2019,
+      "parent": "Symantec",
+      "patterns": [
+        "LifeLock"
+      ]
+    },
+    "VMware": {
+      "displayName": "VMware",
+      "acquiredYear": 2023,
+      "subsidiaries": ["Carbon Black", "Pivotal", "Avi Networks", "Lastline", "Nyansa"],
+      "patterns": [
+        "VMware",
+        "VMWare",
+        "VMware, Inc",
+        "VMware LLC"
+      ]
+    },
+    "Carbon Black": {
+      "displayName": "Carbon Black",
+      "acquiredYear": 2023,
+      "parent": "VMware",
+      "patterns": [
+        "Carbon Black"
+      ]
+    },
+    "Pivotal": {
+      "displayName": "Pivotal Software",
+      "acquiredYear": 2023,
+      "parent": "VMware",
+      "patterns": [
+        "Pivotal",
+        "Pivotal Software",
+        "Tanzu"
+      ]
+    },
+    "Avi Networks": {
+      "displayName": "Avi Networks",
+      "acquiredYear": 2023,
+      "parent": "VMware",
+      "patterns": [
+        "Avi Networks"
+      ]
+    },
+    "Lastline": {
+      "displayName": "Lastline",
+      "acquiredYear": 2023,
+      "parent": "VMware",
+      "patterns": [
+        "Lastline"
+      ]
+    },
+    "Nyansa": {
+      "displayName": "Nyansa",
+      "acquiredYear": 2023,
+      "parent": "VMware",
+      "patterns": [
+        "Nyansa"
+      ]
+    }
+  },
+
+  "notes": {
+    "usage": "Use normalizeAffiliate(assignee) to get the affiliate name from raw assignee string",
+    "unknown": "Assignees not matching any pattern should be flagged for review",
+    "reporting": "Use affiliate field for portfolio breakdown reports"
+  }
+}

@@ -4129,3 +4129,119 @@ npx tsx scripts/calculate-aggregator-scores.ts
 *Session: 2026-01-19*
 *Status: Strategic guide + database schema complete*
 *Next: Prisma migration, data import, API endpoints*
+
+---
+
+### Session Update: 2026-01-19 - Portfolio Configuration Fix (IMPORTANT)
+
+**Issue Discovered:**
+Portfolio entities (Broadcom acquisitions) were incorrectly appearing in competitor analysis:
+- **VMware** - Acquired by Broadcom in 2023
+- **Symantec** (Enterprise division) - Acquired 2019
+- **Carbon Black** - Acquired via VMware
+
+These companies were listed as competitors in `config/competitors.json`, causing their citations to be counted as "competitor interest" when they're actually part of the Broadcom portfolio.
+
+**Root Cause:**
+The `excludePatterns` array in `competitors.json` was incomplete and didn't cover all portfolio entities and their subsidiaries/acquisitions.
+
+**Fix Applied:**
+
+1. **Removed from competitor entries:**
+   - VMware (was in streaming category)
+   - Symantec (was in cybersecurity category)
+   - Carbon Black (was in cybersecurity category)
+
+2. **Expanded excludePatterns** from 13 to 20 patterns:
+```json
+"excludePatterns": [
+  "Broadcom", "LSI Logic", "LSI Corporation", "Avago",
+  "Symantec", "NortonLifeLock", "VMware", "VMWare", "Brocade",
+  "CA, Inc", "CA Technologies", "Computer Associates", "Carbon Black",
+  "Blue Coat", "LifeLock", "Pivotal", "Tanzu",
+  "Avi Networks", "Lastline", "Nyansa"
+]
+```
+
+3. **Created validation script:** `scripts/validate-portfolio-config.ts`
+```bash
+npx tsx scripts/validate-portfolio-config.ts [--verbose]
+```
+
+**Validation Checks:**
+- CHECK 1: All portfolio variants covered by excludePatterns
+- CHECK 2: No portfolio entities in competitor list
+- CHECK 3: ExcludePatterns effectiveness (all variants covered)
+- CHECK 4: Potential portfolio entities in citation data
+
+**Impact - Recalculation Needed:**
+The following outputs may have incorrect competitor counts because VMware, Symantec, and Carbon Black citations were counted as competitor interest:
+
+| Output | Affected Fields | Action Needed |
+|--------|-----------------|---------------|
+| `output/multi-score-analysis-*.json` | `competitorCount`, `competitorCitations` | Recalculate |
+| `output/TOP250-*.csv` | Competitor counts, scores | Recalculate |
+| `output/within-sector-*.json` | Sector rankings | Recalculate |
+| `output/unknown-citators-*.json` | Citator lists | Rerun analysis |
+
+**Recommended Next Steps:**
+1. Rerun full citation analysis with corrected competitors.json
+2. Regenerate TOP250 scores
+3. Regenerate within-sector rankings
+4. Update Excel exports
+5. Document change for attorneys
+
+**Portfolio Entity Reference:**
+```
+Broadcom Inc. (parent)
+├── Avago Technologies (merged 2016)
+├── LSI Corporation (acquired 2014)
+├── Brocade Communications (acquired 2017)
+├── CA Technologies (acquired 2018)
+├── Symantec Enterprise (acquired 2019)
+│   ├── Blue Coat Systems
+│   └── LifeLock
+└── VMware (acquired 2023)
+    ├── Carbon Black
+    ├── Pivotal Software
+    ├── Avi Networks
+    ├── Lastline
+    └── Nyansa
+```
+
+**Key Files Changed:**
+- `config/competitors.json` - Removed portfolio entities, expanded excludePatterns
+- `scripts/validate-portfolio-config.ts` - New validation script
+
+---
+
+## NEXT SESSION: Recalculation & Attorney Documentation
+
+### Priority Tasks
+
+1. **Recalculate All Scores** (corrected competitor list)
+   ```bash
+   # Full recalculation needed
+   npm run analyze:citations   # Rerun citation analysis
+   npm run top250:v3          # Regenerate TOP250
+   npm run export:withinsector # Regenerate sector rankings
+   ```
+
+2. **Package Data for Attorneys**
+   - Executive summary of methodology
+   - Explanation of scoring factors
+   - Top patent recommendations with evidence
+   - Competitor exposure analysis
+   - Cluster/technology groupings
+
+3. **Documentation for Legal Team**
+   - Patent selection criteria
+   - Citation evidence interpretation
+   - Competitor classification methodology
+   - Recommendation confidence levels
+
+---
+
+*Session: 2026-01-19 (portfolio fix)*
+*Status: Portfolio configuration corrected, validation script created*
+*Next: Recalculate all scores, package attorney documentation*

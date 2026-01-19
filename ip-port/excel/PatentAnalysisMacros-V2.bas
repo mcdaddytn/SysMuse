@@ -23,7 +23,8 @@
 '
 ' File Convention:
 '   - Export: npx tsx scripts/calculate-unified-top250-v2.ts
-'   - File: output/unified-top250-v2-YYYY-MM-DD.csv
+'   - Copy CSV to same folder as this workbook
+'   - Looks for: unified-top250-v2-YYYY-MM-DD.csv or most recent unified-top250-v2-*.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
 ' Last Updated: 2026-01-19
@@ -164,10 +165,17 @@ End Sub
 '===============================================================================
 
 Private Function FindV2File() As String
+    '
+    ' Looks for CSV in same directory as workbook
+    '
     Dim basePath As String
-    Dim outputPath As String
     Dim dateStr As String
     Dim tryPath As String
+    Dim fso As Object
+    Dim folder As Object
+    Dim file As Object
+    Dim latestFile As String
+    Dim latestDate As Date
 
     If ThisWorkbook.Path <> "" Then
         basePath = ThisWorkbook.Path & "\"
@@ -175,25 +183,19 @@ Private Function FindV2File() As String
         basePath = CurDir & "\"
     End If
 
-    ' Try output folder (parent of excel folder)
-    outputPath = Left(basePath, InStrRev(basePath, "\", Len(basePath) - 1)) & "output\"
-
     dateStr = Format(Date, "yyyy-mm-dd")
 
-    ' Try 1: output/unified-top250-v2-YYYY-MM-DD.csv
-    tryPath = outputPath & "unified-top250-v2-" & dateStr & ".csv"
+    ' Try 1: unified-top250-v2-YYYY-MM-DD.csv (today's date)
+    tryPath = basePath & "unified-top250-v2-" & dateStr & ".csv"
     If FileExists(tryPath) Then
         FindV2File = tryPath
         Exit Function
     End If
 
-    ' Try 2: Look for most recent v2 file in output
-    Dim fso As Object, folder As Object, file As Object
-    Dim latestFile As String, latestDate As Date
-
+    ' Try 2: Find most recent unified-top250-v2-*.csv in same directory
     Set fso = CreateObject("Scripting.FileSystemObject")
-    If fso.FolderExists(outputPath) Then
-        Set folder = fso.GetFolder(outputPath)
+    If fso.FolderExists(basePath) Then
+        Set folder = fso.GetFolder(basePath)
         For Each file In folder.Files
             If InStr(file.Name, "unified-top250-v2-") > 0 And Right(file.Name, 4) = ".csv" Then
                 If latestFile = "" Or file.DateLastModified > latestDate Then
@@ -204,19 +206,7 @@ Private Function FindV2File() As String
         Next
     End If
 
-    If latestFile <> "" Then
-        FindV2File = latestFile
-        Exit Function
-    End If
-
-    ' Try 3: Same folder as workbook
-    tryPath = basePath & "unified-top250-v2-" & dateStr & ".csv"
-    If FileExists(tryPath) Then
-        FindV2File = tryPath
-        Exit Function
-    End If
-
-    FindV2File = ""
+    FindV2File = latestFile
 End Function
 
 Private Function FileExists(ByVal filePath As String) As Boolean

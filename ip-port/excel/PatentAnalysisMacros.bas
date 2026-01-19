@@ -37,8 +37,8 @@
 '
 ' File Convention:
 '   - Export: npx tsx scripts/calculate-and-export-v3.ts
-'   - File: excel/TOP250-YYYY-MM-DD.csv (uses today's date)
-'   - Fallback: excel/TOP250-LATEST.csv
+'   - Copy CSV to same folder as this workbook
+'   - Looks for: TOP250-YYYY-MM-DD.csv, TOP250-LATEST.csv, or most recent TOP250-*.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
 ' Last Updated: 2026-01-18 (V3.1 macro-based calculation)
@@ -189,10 +189,14 @@ End Sub
 Private Function FindTop250File(ByVal dateStr As String) As String
     '
     ' Looks for CSV in same directory as workbook
-    ' User should copy TOP250-YYYY-MM-DD.csv to workbook folder
     '
     Dim basePath As String
     Dim tryPath As String
+    Dim fso As Object
+    Dim folder As Object
+    Dim file As Object
+    Dim latestFile As String
+    Dim latestDate As Date
 
     If ThisWorkbook.Path <> "" Then
         basePath = ThisWorkbook.Path & "\"
@@ -214,7 +218,21 @@ Private Function FindTop250File(ByVal dateStr As String) As String
         Exit Function
     End If
 
-    FindTop250File = ""
+    ' Try 3: Find most recent TOP250-*.csv in same directory
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If fso.FolderExists(basePath) Then
+        Set folder = fso.GetFolder(basePath)
+        For Each file In folder.Files
+            If Left(file.Name, 7) = "TOP250-" And Right(file.Name, 4) = ".csv" Then
+                If latestFile = "" Or file.DateLastModified > latestDate Then
+                    latestFile = file.Path
+                    latestDate = file.DateLastModified
+                End If
+            End If
+        Next
+    End If
+
+    FindTop250File = latestFile
 End Function
 
 Private Function FileExists(ByVal filePath As String) As Boolean

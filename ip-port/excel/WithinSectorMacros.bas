@@ -29,8 +29,8 @@
 '
 ' File Convention:
 '   - Export: npx tsx scripts/export-within-sector-for-excel.ts
-'   - File: output/WITHIN-SECTOR-YYYY-MM-DD.csv (not excel/ to avoid source control)
-'   - Fallback: output/WITHIN-SECTOR-LATEST.csv
+'   - Copy CSV to same folder as this workbook
+'   - Looks for: WITHIN-SECTOR-YYYY-MM-DD.csv, WITHIN-SECTOR-LATEST.csv, or most recent
 '
 ' Author: Generated for IP Portfolio Analysis Platform
 ' Last Updated: 2026-01-19
@@ -503,30 +503,53 @@ End Sub
 '===============================================================================
 
 Private Function FindCSVFile() As String
+    '
+    ' Looks for CSV in same directory as workbook
+    '
     Dim basePath As String
-    Dim outputPath As String
-    Dim datePath As String
+    Dim tryPath As String
     Dim fso As Object
+    Dim folder As Object
+    Dim file As Object
+    Dim latestFile As String
+    Dim latestDate As Date
 
     Set fso = CreateObject("Scripting.FileSystemObject")
-    basePath = ThisWorkbook.Path & "\"
-    outputPath = fso.GetParentFolderName(ThisWorkbook.Path) & "\output\"
 
-    ' Try output folder with today's date first
-    datePath = outputPath & "WITHIN-SECTOR-" & Format(Date, "yyyy-mm-dd") & ".csv"
-    If fso.FileExists(datePath) Then
-        FindCSVFile = datePath
+    If ThisWorkbook.Path <> "" Then
+        basePath = ThisWorkbook.Path & "\"
+    Else
+        basePath = CurDir & "\"
+    End If
+
+    ' Try 1: WITHIN-SECTOR-YYYY-MM-DD.csv (today's date)
+    tryPath = basePath & "WITHIN-SECTOR-" & Format(Date, "yyyy-mm-dd") & ".csv"
+    If fso.FileExists(tryPath) Then
+        FindCSVFile = tryPath
         Exit Function
     End If
 
-    ' Fall back to LATEST in output folder
-    datePath = outputPath & "WITHIN-SECTOR-LATEST.csv"
-    If fso.FileExists(datePath) Then
-        FindCSVFile = datePath
+    ' Try 2: WITHIN-SECTOR-LATEST.csv fallback
+    tryPath = basePath & "WITHIN-SECTOR-LATEST.csv"
+    If fso.FileExists(tryPath) Then
+        FindCSVFile = tryPath
         Exit Function
     End If
 
-    FindCSVFile = ""
+    ' Try 3: Find most recent WITHIN-SECTOR-*.csv in same directory
+    If fso.FolderExists(basePath) Then
+        Set folder = fso.GetFolder(basePath)
+        For Each file In folder.Files
+            If Left(file.Name, 14) = "WITHIN-SECTOR-" And Right(file.Name, 4) = ".csv" Then
+                If latestFile = "" Or file.DateLastModified > latestDate Then
+                    latestFile = file.Path
+                    latestDate = file.DateLastModified
+                End If
+            End If
+        Next
+    End If
+
+    FindCSVFile = latestFile
 End Function
 
 Private Function GetOrCreateSheet(wb As Workbook, sheetName As String) As Worksheet

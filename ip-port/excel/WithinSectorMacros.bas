@@ -20,6 +20,7 @@
 ' KEY MACROS:
 '   - ImportWithinSector(): Import WITHIN-SECTOR-LATEST.csv
 '   - RecalculateWithinSector(): Recalculate with adjusted weights
+'   - GenerateSectorCompetitorSummary(): Create competitor summary by sector
 '
 ' Worksheet Structure:
 '   - RawData: Imported patent metrics
@@ -28,8 +29,8 @@
 '
 ' File Convention:
 '   - Export: npx tsx scripts/export-within-sector-for-excel.ts
-'   - File: excel/WITHIN-SECTOR-YYYY-MM-DD.csv
-'   - Fallback: excel/WITHIN-SECTOR-LATEST.csv
+'   - File: output/WITHIN-SECTOR-YYYY-MM-DD.csv (not excel/ to avoid source control)
+'   - Fallback: output/WITHIN-SECTOR-LATEST.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
 ' Last Updated: 2026-01-19
@@ -92,6 +93,375 @@ Public Sub ImportWithinSector()
 End Sub
 
 '===============================================================================
+' SECTOR COMPETITOR SUMMARY
+'===============================================================================
+
+Public Sub GenerateSectorCompetitorSummary()
+    '
+    ' Generates CompetitorBySector worksheet showing:
+    ' - Overall competitor summary (patent count, avg/min/median rank, etc.)
+    ' - Per-sector competitor breakdown
+    '
+    Dim wb As Workbook
+    Dim wsRaw As Worksheet
+    Dim wsSummary As Worksheet
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    On Error GoTo ErrorHandler
+
+    Set wb = ThisWorkbook
+
+    On Error Resume Next
+    Set wsRaw = wb.Worksheets(RAW_DATA_SHEET)
+    On Error GoTo 0
+
+    If wsRaw Is Nothing Then
+        MsgBox "RawData sheet not found. Run ImportWithinSector() first.", vbExclamation
+        GoTo Cleanup
+    End If
+
+    ' Create/clear summary worksheet
+    Set wsSummary = GetOrCreateSheet(wb, "CompetitorBySector")
+
+    Dim lastRow As Long
+    lastRow = wsRaw.Cells(wsRaw.Rows.Count, "A").End(xlUp).Row
+
+    If lastRow < 2 Then
+        MsgBox "No data in RawData. Run ImportWithinSector() first.", vbExclamation
+        GoTo Cleanup
+    End If
+
+    ' Dictionaries: overall competitor stats and per-sector competitor stats
+    Dim overallStats As Object
+    Set overallStats = CreateObject("Scripting.Dictionary")
+
+    Dim sectorCompStats As Object ' Dictionary of dictionaries: sector -> comp -> stats
+    Set sectorCompStats = CreateObject("Scripting.Dictionary")
+
+    ' Parse data
+    Dim r As Long, i As Long
+    Dim sector As String, competitors As String, sectorRank As Long, compCites As Long
+    Dim compArray() As String, compName As String
+
+    ' CSV columns (1-based): sector(1), sector_rank(2), patent_id(3), title(4), years(5),
+    ' competitor_citations(6), competitor_count(7), forward_citations(8), top_competitors(9), ...
+    For r = 2 To lastRow
+        sector = CStr(wsRaw.Cells(r, 1).Value)
+        sectorRank = Val(wsRaw.Cells(r, 2).Value)
+        compCites = Val(wsRaw.Cells(r, 6).Value)
+        competitors = CStr(wsRaw.Cells(r, 9).Value) ' top_competitors
+
+        If Len(Trim(competitors)) > 0 Then
+            compArray = Split(competitors, ";")
+            For i = LBound(compArray) To UBound(compArray)
+                compName = Trim(compArray(i))
+                If Len(compName) > 0 Then
+                    ' Update overall stats
+                    UpdateCompetitorStats overallStats, compName, sectorRank, compCites
+
+                    ' Update sector-specific stats
+                    If Not sectorCompStats.Exists(sector) Then
+                        sectorCompStats.Add sector, CreateObject("Scripting.Dictionary")
+                    End If
+                    UpdateCompetitorStats sectorCompStats(sector), compName, sectorRank, compCites
+                End If
+            Next i
+        End If
+    Next r
+
+    ' ==========================================================================
+    ' OUTPUT SECTION 1: Overall Competitor Summary
+    ' ==========================================================================
+    Dim outRow As Long
+    outRow = 1
+
+    wsSummary.Cells(outRow, 1).Value = "OVERALL COMPETITOR SUMMARY (Across All Sectors)"
+    wsSummary.Cells(outRow, 1).Font.Bold = True
+    wsSummary.Cells(outRow, 1).Font.Size = 14
+    outRow = outRow + 1
+
+    wsSummary.Cells(outRow, 1).Value = "Shows competitor presence across all sector rankings"
+    outRow = outRow + 2
+
+    ' Headers
+    wsSummary.Cells(outRow, 1).Value = "Competitor"
+    wsSummary.Cells(outRow, 2).Value = "Patent Count"
+    wsSummary.Cells(outRow, 3).Value = "Avg Rank"
+    wsSummary.Cells(outRow, 4).Value = "Min Rank"
+    wsSummary.Cells(outRow, 5).Value = "Max Rank"
+    wsSummary.Cells(outRow, 6).Value = "Median Rank"
+    wsSummary.Cells(outRow, 7).Value = "Agg Cites"
+    wsSummary.Cells(outRow, 8).Value = "Avg Cites/Entry"
+    wsSummary.Cells(outRow, 9).Value = "Sectors Present"
+    FormatCompetitorHeaderRow wsSummary, outRow
+    outRow = outRow + 1
+
+    ' Count sectors per competitor
+    Dim sectorCountPerComp As Object
+    Set sectorCountPerComp = CreateObject("Scripting.Dictionary")
+
+    Dim sectorKey As Variant, compKey As Variant
+    For Each sectorKey In sectorCompStats.Keys
+        Dim sectorDict As Object
+        Set sectorDict = sectorCompStats(sectorKey)
+        For Each compKey In sectorDict.Keys
+            If Not sectorCountPerComp.Exists(compKey) Then
+                sectorCountPerComp.Add compKey, 0
+            End If
+            sectorCountPerComp(compKey) = sectorCountPerComp(compKey) + 1
+        Next compKey
+    Next sectorKey
+
+    ' Output overall stats sorted by patent count
+    Dim sortedComps As Variant
+    sortedComps = SortCompetitorsByCount(overallStats)
+
+    Dim startDataRow As Long
+    startDataRow = outRow
+
+    For i = 0 To UBound(sortedComps)
+        compName = sortedComps(i)
+        Dim stats As Variant
+        stats = overallStats(compName)
+
+        wsSummary.Cells(outRow, 1).Value = compName
+        wsSummary.Cells(outRow, 2).Value = stats(0) ' count
+        wsSummary.Cells(outRow, 3).Value = Round(stats(1) / stats(0), 1) ' avg rank
+        wsSummary.Cells(outRow, 4).Value = stats(2) ' min rank
+        wsSummary.Cells(outRow, 5).Value = stats(3) ' max rank
+        wsSummary.Cells(outRow, 6).Value = Round(CalculateMedianFromString(stats(4)), 1) ' median
+        wsSummary.Cells(outRow, 7).Value = stats(5) ' agg cites
+        wsSummary.Cells(outRow, 8).Value = Round(stats(5) / stats(0), 1) ' avg cites/entry
+        wsSummary.Cells(outRow, 9).Value = sectorCountPerComp(compName) ' sectors present
+        outRow = outRow + 1
+    Next i
+
+    ' Format overall section
+    wsSummary.Range("C" & startDataRow & ":F" & (outRow - 1)).NumberFormat = "0.0"
+    wsSummary.Range("H" & startDataRow & ":H" & (outRow - 1)).NumberFormat = "0.0"
+
+    ' Add data bar to Patent Count column
+    Dim rngCount As Range
+    Set rngCount = wsSummary.Range("B" & startDataRow & ":B" & (outRow - 1))
+    rngCount.FormatConditions.AddDatabar
+    rngCount.FormatConditions(rngCount.FormatConditions.Count).BarColor.Color = RGB(99, 142, 198)
+
+    ' Summary totals
+    outRow = outRow + 1
+    wsSummary.Cells(outRow, 1).Value = "Total unique competitors:"
+    wsSummary.Cells(outRow, 2).Value = overallStats.Count
+    wsSummary.Cells(outRow, 1).Font.Bold = True
+    outRow = outRow + 1
+    wsSummary.Cells(outRow, 1).Value = "Total sectors:"
+    wsSummary.Cells(outRow, 2).Value = sectorCompStats.Count
+    wsSummary.Cells(outRow, 1).Font.Bold = True
+
+    ' ==========================================================================
+    ' OUTPUT SECTION 2: Per-Sector Competitor Summary
+    ' ==========================================================================
+    outRow = outRow + 3
+
+    wsSummary.Cells(outRow, 1).Value = "PER-SECTOR COMPETITOR BREAKDOWN"
+    wsSummary.Cells(outRow, 1).Font.Bold = True
+    wsSummary.Cells(outRow, 1).Font.Size = 14
+    outRow = outRow + 2
+
+    ' Sort sectors alphabetically
+    Dim sectorNames() As String
+    ReDim sectorNames(0 To sectorCompStats.Count - 1)
+    Dim sIdx As Long
+    sIdx = 0
+    For Each sectorKey In sectorCompStats.Keys
+        sectorNames(sIdx) = sectorKey
+        sIdx = sIdx + 1
+    Next sectorKey
+
+    ' Sort sector names
+    Dim tempSector As String
+    For i = 0 To UBound(sectorNames) - 1
+        For r = i + 1 To UBound(sectorNames)
+            If sectorNames(r) < sectorNames(i) Then
+                tempSector = sectorNames(i)
+                sectorNames(i) = sectorNames(r)
+                sectorNames(r) = tempSector
+            End If
+        Next r
+    Next i
+
+    ' Output each sector
+    For sIdx = 0 To UBound(sectorNames)
+        sector = sectorNames(sIdx)
+        Set sectorDict = sectorCompStats(sector)
+
+        wsSummary.Cells(outRow, 1).Value = UCase(sector)
+        wsSummary.Cells(outRow, 1).Font.Bold = True
+        wsSummary.Cells(outRow, 1).Font.Size = 12
+        wsSummary.Cells(outRow, 1).Interior.Color = RGB(220, 230, 241)
+        wsSummary.Range(wsSummary.Cells(outRow, 1), wsSummary.Cells(outRow, 7)).Interior.Color = RGB(220, 230, 241)
+        outRow = outRow + 1
+
+        ' Headers for this sector
+        wsSummary.Cells(outRow, 1).Value = "Competitor"
+        wsSummary.Cells(outRow, 2).Value = "Patents"
+        wsSummary.Cells(outRow, 3).Value = "Avg Rank"
+        wsSummary.Cells(outRow, 4).Value = "Best Rank"
+        wsSummary.Cells(outRow, 5).Value = "Agg Cites"
+        wsSummary.Cells(outRow, 6).Value = "Avg Cites"
+        FormatCompetitorHeaderRow wsSummary, outRow
+        outRow = outRow + 1
+
+        ' Sort by count for this sector
+        Dim sectorSorted As Variant
+        sectorSorted = SortCompetitorsByCount(sectorDict)
+
+        startDataRow = outRow
+        For i = 0 To Application.WorksheetFunction.Min(9, UBound(sectorSorted)) ' Top 10 per sector
+            compName = sectorSorted(i)
+            stats = sectorDict(compName)
+
+            wsSummary.Cells(outRow, 1).Value = compName
+            wsSummary.Cells(outRow, 2).Value = stats(0)
+            wsSummary.Cells(outRow, 3).Value = Round(stats(1) / stats(0), 1)
+            wsSummary.Cells(outRow, 4).Value = stats(2)
+            wsSummary.Cells(outRow, 5).Value = stats(5)
+            wsSummary.Cells(outRow, 6).Value = Round(stats(5) / stats(0), 1)
+            outRow = outRow + 1
+        Next i
+
+        wsSummary.Range("C" & startDataRow & ":C" & (outRow - 1)).NumberFormat = "0.0"
+        wsSummary.Range("F" & startDataRow & ":F" & (outRow - 1)).NumberFormat = "0.0"
+
+        outRow = outRow + 1 ' Space between sectors
+    Next sIdx
+
+    ' Auto-fit columns
+    wsSummary.Columns("A:I").AutoFit
+
+    wsSummary.Activate
+
+    MsgBox "CompetitorBySector summary generated!" & vbCrLf & _
+           overallStats.Count & " unique competitors across " & _
+           sectorCompStats.Count & " sectors.", vbInformation
+
+Cleanup:
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error generating sector competitor summary: " & Err.Description, vbCritical
+    Resume Cleanup
+End Sub
+
+Private Sub UpdateCompetitorStats(ByRef statsDict As Object, ByVal compName As String, _
+                                   ByVal rank As Long, ByVal cites As Long)
+    ' Update competitor statistics in dictionary
+    ' Stats array: (0)count, (1)sumRank, (2)minRank, (3)maxRank, (4)ranksStr, (5)totalCites
+    If Not statsDict.Exists(compName) Then
+        statsDict.Add compName, Array(0, 0, 9999, 0, "", 0)
+    End If
+
+    Dim stats As Variant
+    stats = statsDict(compName)
+    stats(0) = stats(0) + 1
+    stats(1) = stats(1) + rank
+    If rank < stats(2) Then stats(2) = rank
+    If rank > stats(3) Then stats(3) = rank
+    If Len(stats(4)) > 0 Then
+        stats(4) = stats(4) & "," & CStr(rank)
+    Else
+        stats(4) = CStr(rank)
+    End If
+    stats(5) = stats(5) + cites
+    statsDict(compName) = stats
+End Sub
+
+Private Function SortCompetitorsByCount(ByRef statsDict As Object) As Variant
+    ' Return array of competitor names sorted by count descending
+    Dim compNames() As String
+    Dim compCounts() As Long
+    ReDim compNames(0 To statsDict.Count - 1)
+    ReDim compCounts(0 To statsDict.Count - 1)
+
+    Dim i As Long, j As Long
+    Dim key As Variant
+    i = 0
+    For Each key In statsDict.Keys
+        compNames(i) = key
+        Dim stats As Variant
+        stats = statsDict(key)
+        compCounts(i) = stats(0)
+        i = i + 1
+    Next key
+
+    ' Bubble sort
+    Dim tempName As String, tempCount As Long
+    For i = 0 To UBound(compNames) - 1
+        For j = i + 1 To UBound(compNames)
+            If compCounts(j) > compCounts(i) Then
+                tempName = compNames(i)
+                tempCount = compCounts(i)
+                compNames(i) = compNames(j)
+                compCounts(i) = compCounts(j)
+                compNames(j) = tempName
+                compCounts(j) = tempCount
+            End If
+        Next j
+    Next i
+
+    SortCompetitorsByCount = compNames
+End Function
+
+Private Function CalculateMedianFromString(ByVal ranksStr As String) As Double
+    If Len(ranksStr) = 0 Then
+        CalculateMedianFromString = 0
+        Exit Function
+    End If
+
+    Dim rankArray() As String
+    rankArray = Split(ranksStr, ",")
+
+    Dim n As Long
+    n = UBound(rankArray) + 1
+
+    Dim ranks() As Long
+    ReDim ranks(0 To n - 1)
+
+    Dim i As Long
+    For i = 0 To n - 1
+        ranks(i) = CLng(rankArray(i))
+    Next i
+
+    ' Sort
+    Dim j As Long, temp As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If ranks(j) < ranks(i) Then
+                temp = ranks(i)
+                ranks(i) = ranks(j)
+                ranks(j) = temp
+            End If
+        Next j
+    Next i
+
+    If n Mod 2 = 1 Then
+        CalculateMedianFromString = ranks(n \ 2)
+    Else
+        CalculateMedianFromString = (ranks(n \ 2 - 1) + ranks(n \ 2)) / 2
+    End If
+End Function
+
+Private Sub FormatCompetitorHeaderRow(ByVal ws As Worksheet, ByVal headerRow As Integer)
+    With ws.Rows(headerRow)
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 84, 106)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+End Sub
+
+'===============================================================================
 ' RECALCULATE FUNCTION
 '===============================================================================
 
@@ -134,21 +504,23 @@ End Sub
 
 Private Function FindCSVFile() As String
     Dim basePath As String
+    Dim outputPath As String
     Dim datePath As String
     Dim fso As Object
 
     Set fso = CreateObject("Scripting.FileSystemObject")
     basePath = ThisWorkbook.Path & "\"
+    outputPath = fso.GetParentFolderName(ThisWorkbook.Path) & "\output\"
 
-    ' Try today's date first
-    datePath = basePath & "WITHIN-SECTOR-" & Format(Date, "yyyy-mm-dd") & ".csv"
+    ' Try output folder with today's date first
+    datePath = outputPath & "WITHIN-SECTOR-" & Format(Date, "yyyy-mm-dd") & ".csv"
     If fso.FileExists(datePath) Then
         FindCSVFile = datePath
         Exit Function
     End If
 
-    ' Fall back to LATEST
-    datePath = basePath & "WITHIN-SECTOR-LATEST.csv"
+    ' Fall back to LATEST in output folder
+    datePath = outputPath & "WITHIN-SECTOR-LATEST.csv"
     If fso.FileExists(datePath) Then
         FindCSVFile = datePath
         Exit Function

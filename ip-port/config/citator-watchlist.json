@@ -1,0 +1,165 @@
+{
+  "version": "1.0",
+  "description": "Companies being watched for potential promotion to full competitor status",
+  "last_updated": "2026-01-19",
+  "promotion_threshold": {
+    "citations_minimum": 50,
+    "patents_cited_minimum": 5,
+    "description": "When a company meets these thresholds, consider promoting to competitors.json"
+  },
+  "watchlist_threshold": {
+    "citations_minimum": 10,
+    "description": "Minimum citations to be added to watchlist automatically"
+  },
+  "categories": {
+    "high_priority": {
+      "description": "Companies with strong infringement signals, prioritize for promotion",
+      "companies": [
+        {
+          "name": "OneTrust, LLC",
+          "added_date": "2026-01-19",
+          "reason": "334 citations, 5 patents - Privacy/compliance software",
+          "citations_at_discovery": 334,
+          "patents_cited": 5,
+          "industry": "Privacy & Compliance",
+          "notes": "Major privacy software vendor"
+        },
+        {
+          "name": "Forcepoint LLC",
+          "added_date": "2026-01-19",
+          "reason": "149 citations, 8 patents - Cybersecurity",
+          "citations_at_discovery": 149,
+          "patents_cited": 8,
+          "industry": "Cybersecurity",
+          "notes": "Enterprise security solutions"
+        },
+        {
+          "name": "Capital One",
+          "added_date": "2026-01-19",
+          "reason": "144 citations, 20 patents - FinTech/Banking",
+          "citations_at_discovery": 144,
+          "patents_cited": 20,
+          "industry": "Financial Technology",
+          "notes": "Major bank with large patent portfolio"
+        },
+        {
+          "name": "Bank of America",
+          "added_date": "2026-01-19",
+          "reason": "110 citations, 40 patents - FinTech/Banking",
+          "citations_at_discovery": 110,
+          "patents_cited": 40,
+          "industry": "Financial Technology",
+          "notes": "Major bank with extensive tech patents"
+        }
+      ]
+    },
+    "monitoring": {
+      "description": "Companies being monitored, may promote if citations increase",
+      "companies": [
+        {
+          "name": "Palantir Technologies Inc.",
+          "added_date": "2026-01-19",
+          "reason": "104 citations - Data analytics",
+          "citations_at_discovery": 104,
+          "patents_cited": 3,
+          "industry": "Analytics & AI",
+          "notes": "Data analytics platform"
+        },
+        {
+          "name": "KnowBe4, Inc.",
+          "added_date": "2026-01-19",
+          "reason": "94 citations - Security awareness training",
+          "citations_at_discovery": 94,
+          "patents_cited": 2,
+          "industry": "Security Training",
+          "notes": "Security awareness platform"
+        },
+        {
+          "name": "Wickr LLC",
+          "added_date": "2026-01-19",
+          "reason": "91 citations - Encrypted messaging (AWS subsidiary)",
+          "citations_at_discovery": 91,
+          "patents_cited": 3,
+          "industry": "Encrypted Communications",
+          "notes": "May be covered under AWS/Amazon patterns"
+        },
+        {
+          "name": "Darktrace",
+          "added_date": "2026-01-19",
+          "reason": "81 citations - AI-based security",
+          "citations_at_discovery": 81,
+          "patents_cited": 2,
+          "industry": "AI Security",
+          "notes": "AI-powered threat detection"
+        }
+      ]
+    },
+    "patent_aggregators": {
+      "description": "Patent licensing/aggregation entities - track but different treatment",
+      "companies": [
+        {
+          "name": "Headwater Research LLC",
+          "added_date": "2026-01-19",
+          "reason": "808 citations - Patent licensing entity",
+          "citations_at_discovery": 808,
+          "patents_cited": 9,
+          "industry": "Patent Licensing",
+          "notes": "Licensing entity, may not be infringement target"
+        }
+      ]
+    },
+    "sector_specific": {
+      "description": "Companies discovered from sector analysis",
+      "companies": [
+        {
+          "name": "Bitmovin",
+          "added_date": "2026-01-19",
+          "reason": "Discovered in video-codec sector analysis",
+          "citations_at_discovery": 0,
+          "patents_cited": 0,
+          "industry": "Video Streaming",
+          "sector": "video-codec",
+          "notes": "Video encoding/streaming infrastructure"
+        },
+        {
+          "name": "Zoom Video Communications",
+          "added_date": "2026-01-19",
+          "reason": "Discovered in video-codec sector analysis",
+          "citations_at_discovery": 0,
+          "patents_cited": 0,
+          "industry": "Video Conferencing",
+          "sector": "video-codec",
+          "notes": "Major video conferencing platform"
+        },
+        {
+          "name": "CyberArk",
+          "added_date": "2026-01-19",
+          "reason": "Discovered in cloud-auth sector analysis",
+          "citations_at_discovery": 0,
+          "patents_cited": 0,
+          "industry": "Identity Security",
+          "sector": "cloud-auth",
+          "notes": "Privileged access management"
+        },
+        {
+          "name": "ForgeRock",
+          "added_date": "2026-01-19",
+          "reason": "Discovered in cloud-auth sector analysis",
+          "citations_at_discovery": 0,
+          "patents_cited": 0,
+          "industry": "Identity Management",
+          "sector": "cloud-auth",
+          "notes": "Identity platform"
+        }
+      ]
+    }
+  },
+  "promotion_history": {
+    "description": "Log of companies promoted to competitors.json",
+    "promotions": []
+  },
+  "removal_history": {
+    "description": "Log of companies removed from watchlist",
+    "removals": []
+  }
+}

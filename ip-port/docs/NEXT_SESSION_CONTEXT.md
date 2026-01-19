@@ -3785,3 +3785,246 @@ jq '[.patents[].competitor_citations] | add' output/multi-score-analysis-2026-01
 *Session: 2026-01-19*
 *Overnight job: 28/31 batches, ~1 hour remaining*
 *Key doc: docs/DESIGN_DECISIONS.md*
+
+---
+
+### Session Update: 2026-01-19 (Continuation) - Competitor Matching Fix + Analysis Complete
+
+**Overnight Job Completed:**
+- 15 hours, 34 jobs, 0 errors
+- Citations: 3,973 to 41,023 (+932%)
+- Patents with citations: 749 to 5,398 (+620%)
+
+**Critical Bug Fixed:**
+- multi-score-analysis.ts had hardcoded 35-company normalizer
+- Now uses CompetitorMatcher service (131 companies, 193 patterns)
+- Reduced mismatched patents: 608 to 384
+
+**New Scripts Created:**
+- scripts/sector-competitor-analysis.ts - Competitor breakdown by sector
+- scripts/within-sector-scoring.ts - Best patents per sector
+- scripts/export-within-sector-for-excel.ts - Excel export for sector rankings
+- scripts/analyze-unknown-citators.ts - Find citators not in competitor list
+
+**New Excel Files:**
+- excel/WithinSectorMacros.bas - Macro for sector rankings with adjustable weights
+
+**Key Outputs (2026-01-19):**
+- output/multi-score-analysis-2026-01-19.json (corrected competitor matching)
+- output/sector-competitor-distribution-2026-01-19.json
+- output/within-sector-rankings-2026-01-19.json
+- output/WITHIN-SECTOR-2026-01-19.csv
+
+**Important Note:** CSV exports go to output/ directory (not excel/) to avoid source control.
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Priority 1: Competitor Summary View in Excel
+
+**DESIRED FEATURE:** Add competitor summary worksheet to Excel macros showing:
+- Competitor name
+- Patent count in top 250
+- Average rank
+- Best rank / Worst rank
+
+Useful for both:
+- Overall Top 250 (V2 and V3)
+- Sector-specific rankings
+
+Purpose: Helps decide which competitors to target for 3rd party vendor infringement product heatmaps.
+
+### Priority 2: Citator Watchlist
+
+Create intermediate tier between raw citators and official competitors:
+- Track companies with 10+ citations
+- Show aggregated view without full competitor treatment
+- Promotion rules to official competitor status
+
+### Priority 3: V2 vs V3 Model Decision
+
+V2 (citation-heavy) vs V3 (quality-balanced) comparison done. Key findings:
+- Microsoft dominates both (75 V2, 69 V3)
+- V3 promotes Apple higher (better quality scores)
+- OneTrust high in V2 (citation count), lower in V3 (quality metrics)
+- Consider offering both views in GUI
+
+### Priority 4: Path B - Database/API
+
+After Excel analysis complete, move to:
+- PostgreSQL schema design (Prisma ORM)
+- REST API endpoints
+- Import patent data for real-time queries
+
+### Quick Commands
+
+```bash
+# Run multi-score analysis (now with correct competitor matching)
+npx tsx examples/multi-score-analysis.ts
+
+# Export V3 stakeholder scores
+npx tsx scripts/calculate-and-export-v3.ts
+
+# Export within-sector rankings
+npx tsx scripts/export-within-sector-for-excel.ts
+
+# Sector-competitor analysis
+npx tsx scripts/sector-competitor-analysis.ts
+
+# Within-sector scoring
+npx tsx scripts/within-sector-scoring.ts
+```
+
+### Competitor Summary (from this session)
+
+**V2 Top 5:** Microsoft (75), Amazon (53), Bank of America (48), Intel (48), Cisco (44)
+
+**V3 Top 5:** Microsoft (69), Bank of America (47), Amazon (46), Cisco (41), Intel (40)
+
+---
+
+*Session: 2026-01-19 (continuation)*
+*Status: Overnight job complete, competitor matching fixed, sector analysis done*
+*Next: Competitor summary Excel view, citator watchlist, Path B database*
+
+---
+
+### Session Update: 2026-01-19 (Continuation) - Competitor Summaries + Citator Watchlist
+
+**Major Accomplishments:**
+
+1. **Competitor Summary Added to Top 250 Excel Macros (V3)** ✅
+   - New `GenerateCompetitorSummary()` macro
+   - Auto-generated during import
+   - Shows: Patent Count, Avg/Min/Max/Median Rank, Aggregated Cites, Avg Cites/Entry
+   - Sorted by patent count with data bars
+   - Updated `excel/PatentAnalysisMacros.bas`
+
+2. **Competitor Summary Added to Within-Sector Excel Macros** ✅
+   - New `GenerateSectorCompetitorSummary()` macro
+   - Two sections: Overall summary + Per-sector breakdown
+   - Shows competitors across all sectors with "Sectors Present" count
+   - Top 10 competitors per sector
+   - Updated `excel/WithinSectorMacros.bas`
+
+3. **V2 Excel Macro with Simple Weights Created** ✅
+   - New file: `excel/PatentAnalysisMacros-V2.bas`
+   - Single adjustable weight profile (not 6 stakeholder profiles)
+   - Preset profile loaders: `LoadAggressiveWeights`, `LoadModerateWeights`, `LoadConservativeWeights`
+   - Includes competitor summary generation
+   - Uses V2 scoring model: base score × year multiplier
+
+4. **Citator Watchlist System Created** ✅
+   - New config: `config/citator-watchlist.json`
+   - Categories: high_priority, monitoring, patent_aggregators, sector_specific
+   - Includes promotion threshold tracking (50+ cites, 5+ patents)
+   - New script: `scripts/manage-citator-watchlist.ts`
+   - Commands: `--report`, `--update`, `--promote`
+
+**New/Modified Files:**
+
+| File | Purpose |
+|------|---------|
+| `excel/PatentAnalysisMacros.bas` | V3 macro with competitor summary |
+| `excel/WithinSectorMacros.bas` | Within-sector macro with sector competitor summary |
+| `excel/PatentAnalysisMacros-V2.bas` | V2 macro with simple adjustable weights |
+| `config/citator-watchlist.json` | Watchlist configuration with tracked companies |
+| `scripts/manage-citator-watchlist.ts` | Watchlist management script |
+
+**NPM Scripts Added:**
+```bash
+npm run top250:v3           # Export V3 stakeholder scores
+npm run export:withinsector # Export within-sector rankings
+npm run watchlist:report    # Generate watchlist report
+npm run watchlist:update    # Update watchlist with new citation data
+```
+
+**Watchlist Initial Contents:**
+
+| Category | Companies | Notes |
+|----------|-----------|-------|
+| high_priority | OneTrust, Forcepoint, Capital One, Bank of America | Ready for promotion review |
+| monitoring | Palantir, KnowBe4, Wickr, Darktrace | Watching for citation growth |
+| patent_aggregators | Headwater Research | Different treatment (licensing entity) |
+| sector_specific | Bitmovin, Zoom, CyberArk, ForgeRock | From sector analysis |
+
+**Competitor Summary Statistics (Example):**
+
+The competitor summary worksheet shows each competitor's presence in the top 250:
+- **Microsoft**: 75 patents, Avg Rank: 89.2, Best: #3, Median: 82
+- **Amazon**: 53 patents, Avg Rank: 112.4, Best: #7, Median: 105
+- **Bank of America**: 48 patents, Avg Rank: 98.6, Best: #2, Median: 92
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Path A Complete - Excel Analysis Ready
+
+All Excel-related features implemented:
+- V3 macro with 6 stakeholder profiles + competitor summary
+- V2 macro with simple adjustable weights + competitor summary
+- Within-sector macro with sector competitor summary
+- Citator watchlist system for tracking potential competitors
+
+### Ready for Path B: Database/API
+
+Can now proceed with:
+1. **PostgreSQL schema design** (Prisma ORM)
+   - Patents, Citations, Competitors, Scores tables
+   - Many-to-many relationships for citations
+
+2. **REST API endpoints**
+   - `/patents` - Patent CRUD
+   - `/scores` - Scoring calculations
+   - `/competitors` - Competitor management
+   - `/watchlist` - Watchlist management
+
+3. **Data import pipeline**
+   - Import from JSON outputs to database
+   - Incremental updates
+
+### Quick Commands
+
+```bash
+# Export V3 stakeholder scores for Excel
+npm run top250:v3
+
+# Export V2 scores
+npm run top250:recalc
+
+# Export within-sector rankings
+npm run export:withinsector
+
+# Citator watchlist management
+npm run watchlist:report   # View watchlist status
+npm run watchlist:update   # Update with latest citation data
+
+# Run sector analysis
+npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
+```
+
+### Excel Workflow (V3 - Multiple Profiles)
+
+1. Run: `npm run top250:v3`
+2. Open Excel, import `PatentAnalysisMacros.bas`
+3. Run macro: `ImportTop250()`
+4. Worksheets: RawData, UserWeights, 6 Score_* sheets, Score_Consensus, CompetitorSummary
+5. Adjust weights → Run `RecalculateAll()`
+6. View `CompetitorSummary` for competitor statistics
+
+### Excel Workflow (V2 - Simple Weights)
+
+1. Run: `npm run top250:recalc`
+2. Open Excel, import `PatentAnalysisMacros-V2.bas`
+3. Run macro: `ImportTop250V2()`
+4. Worksheets: RawData, Weights, Rankings, CompetitorSummary
+5. Adjust weights in Weights sheet → Run `RecalculateV2()`
+6. Optional: Use `LoadAggressiveWeights`, `LoadModerateWeights`, `LoadConservativeWeights`
+
+---
+
+*Session: 2026-01-19 (continuation)*
+*Status: Path A complete (Excel analysis + competitor summaries + watchlist)*
+*Next: Path B (Database schema, API, data import)*

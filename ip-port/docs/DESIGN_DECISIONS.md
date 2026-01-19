@@ -330,5 +330,56 @@ Support multiple scoring methods for comparison:
 
 ---
 
+## Desired Feature: Competitor Summary View in Excel
+
+**Purpose:** Help decide which competitors to target for 3rd party vendor infringement product heatmaps.
+
+**Requested view (for both overall Top 250 and sector-specific):**
+
+```
+Competitor      | Patents | Avg Rank | Best Rank | Worst Rank
+----------------|---------|----------|-----------|------------
+Microsoft       | 75      | 131      | 1         | 250
+Amazon          | 53      | 108      | 3         | 248
+Bank of America | 48      | 124      | 3         | 235
+...
+```
+
+**Implementation options:**
+1. Add CompetitorSummary worksheet to existing macros (PatentAnalysisMacros.bas, WithinSectorMacros.bas)
+2. Create dedicated CompetitorSummary macro
+3. Both overall and per-sector views
+
+**V2 vs V3 insights from this view:**
+- Microsoft dominates both (75 V2, 69 V3)
+- V3 promotes Apple higher (better quality scores)
+- OneTrust high in V2 (citation count), lower in V3 (quality metrics)
+
+---
+
+## Citator Hierarchy (Proposed)
+
+| Level | Description | Resources | Promotion Trigger |
+|-------|-------------|-----------|-------------------|
+| Raw Citator | Any citing company | Citation count only | Default |
+| Watchlist | 10+ citations | Aggregated view, alerts | Pattern emerges |
+| Official Competitor | Strategic target | Full analysis, LLM product discovery | Licensing/litigation potential |
+
+Currently only have Level 1 and Level 3. Watchlist would give visibility to emerging citators.
+
+---
+
+## File Location Convention
+
+**CSV exports go to output/ directory (not excel/) to avoid source control.**
+
+Scripts updated:
+- export-within-sector-for-excel.ts
+- calculate-and-export-v3.ts
+
+Macros look in output/ relative to project root.
+
+---
+
 *Document created to reduce NEXT_SESSION_CONTEXT.md size*
-*Last updated: 2026-01-19 (session continuation)*
+*Last updated: 2026-01-19 (session continuation - competitor summary feature noted)*

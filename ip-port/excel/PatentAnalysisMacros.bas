@@ -21,6 +21,7 @@
 ' KEY MACROS:
 '   - ImportTop250(): Import today's CSV and generate all worksheets
 '   - RecalculateAll(): Recalculate all scores with current weights and re-sort
+'   - GenerateCompetitorSummary(): Create competitor summary with aggregated stats
 '
 ' Worksheet Structure:
 '   - RawData: Imported patent metrics (from CSV)
@@ -247,8 +248,11 @@ Private Sub ImportTop250FromFile(ByVal csvPath As String)
 
     GenerateAllScoringWorksheets weights, DEFAULT_TOP_N
 
+    ' Generate competitor summary
+    GenerateCompetitorSummaryInternal
+
     MsgBox "Imported " & rowCount & " patents from:" & vbCrLf & csvPath & vbCrLf & vbCrLf & _
-           "6 stakeholder profiles created." & vbCrLf & _
+           "6 stakeholder profiles + CompetitorSummary created." & vbCrLf & _
            "Adjust weights in UserWeights, then run RecalculateAll.", vbInformation
 
     Application.Calculation = xlCalculationAutomatic
@@ -866,13 +870,272 @@ Private Function FindPatentRow(ByVal ws As Worksheet, ByVal patentId As String, 
 End Function
 
 '===============================================================================
+' COMPETITOR SUMMARY
+'===============================================================================
+
+Public Sub GenerateCompetitorSummary()
+    '
+    ' Generates CompetitorSummary worksheet showing:
+    ' - Competitor name
+    ' - Patent count in top 250
+    ' - Average rank, Min rank, Max rank, Median rank
+    ' - Total competitor citations across all patents
+    ' - Average competitor citations per patent
+    '
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    On Error GoTo ErrorHandler
+
+    Dim compCount As Long
+    compCount = GenerateCompetitorSummaryInternal()
+
+    If compCount >= 0 Then
+        MsgBox "CompetitorSummary worksheet generated!" & vbCrLf & _
+               compCount & " unique competitors found.", vbInformation
+    End If
+
+Cleanup:
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error generating competitor summary: " & Err.Description, vbCritical
+    Resume Cleanup
+End Sub
+
+Private Function GenerateCompetitorSummaryInternal() As Long
+    '
+    ' Internal version that returns competitor count (-1 on error)
+    ' Called from both public GenerateCompetitorSummary and ImportTop250
+    '
+    GenerateCompetitorSummaryInternal = -1
+
+    ' Get data from Score_Consensus sheet
+    Dim wsSrc As Worksheet
+    On Error Resume Next
+    Set wsSrc = ThisWorkbook.Sheets("Score_Consensus")
+    On Error GoTo 0
+
+    If wsSrc Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = wsSrc.Cells(wsSrc.Rows.Count, 2).End(xlUp).Row
+
+    If lastRow < 2 Then Exit Function
+
+    ' Dictionary to track competitor stats
+    Dim compStats As Object
+    Set compStats = CreateObject("Scripting.Dictionary")
+
+    ' Parse competitor data from each patent
+    Dim r As Long, i As Long
+    Dim competitors As String
+    Dim compArray() As String
+    Dim compName As String
+    Dim rank As Long
+    Dim compCites As Long
+
+    For r = 2 To lastRow
+        rank = wsSrc.Cells(r, 1).Value      ' Column A = Rank
+        competitors = wsSrc.Cells(r, 6).Value ' Column F = Competitors
+        compCites = Val(wsSrc.Cells(r, 5).Value) ' Column E = Comp Cites
+
+        If Len(Trim(competitors)) > 0 Then
+            ' Parse competitors (semicolon separated)
+            compArray = Split(competitors, ";")
+            For i = LBound(compArray) To UBound(compArray)
+                compName = Trim(compArray(i))
+                If Len(compName) > 0 Then
+                    If Not compStats.Exists(compName) Then
+                        ' Initialize: count, sumRank, minRank, maxRank, ranks(array as string), totalCites
+                        compStats.Add compName, Array(0, 0, 9999, 0, "", 0)
+                    End If
+
+                    Dim stats As Variant
+                    stats = compStats(compName)
+                    stats(0) = stats(0) + 1  ' count
+                    stats(1) = stats(1) + rank  ' sumRank
+                    If rank < stats(2) Then stats(2) = rank  ' minRank
+                    If rank > stats(3) Then stats(3) = rank  ' maxRank
+                    If Len(stats(4)) > 0 Then
+                        stats(4) = stats(4) & "," & CStr(rank)
+                    Else
+                        stats(4) = CStr(rank)
+                    End If
+                    stats(5) = stats(5) + compCites  ' totalCites (aggregate for this competitor)
+                    compStats(compName) = stats
+                End If
+            Next i
+        End If
+    Next r
+
+    ' Create summary worksheet
+    Dim wsSummary As Worksheet
+    Set wsSummary = GetOrCreateSheet("CompetitorSummary")
+    wsSummary.Cells.Clear
+
+    ' Title and description
+    wsSummary.Range("A1").Value = "COMPETITOR SUMMARY - TOP 250 PATENTS"
+    wsSummary.Range("A1").Font.Bold = True
+    wsSummary.Range("A1").Font.Size = 16
+    wsSummary.Range("A2").Value = "Shows how each competitor is represented in the current Top 250 ranking"
+
+    ' Headers
+    wsSummary.Range("A4").Value = "Competitor"
+    wsSummary.Range("B4").Value = "Patent Count"
+    wsSummary.Range("C4").Value = "Avg Rank"
+    wsSummary.Range("D4").Value = "Min Rank"
+    wsSummary.Range("E4").Value = "Max Rank"
+    wsSummary.Range("F4").Value = "Median Rank"
+    wsSummary.Range("G4").Value = "Aggregated Cites"
+    wsSummary.Range("H4").Value = "Avg Cites/Entry"
+    FormatHeaderRow wsSummary, 4
+
+    ' Sort competitors by patent count descending
+    Dim compNames() As String
+    Dim compCounts() As Long
+    Dim n As Long
+    ReDim compNames(0 To compStats.Count - 1)
+    ReDim compCounts(0 To compStats.Count - 1)
+
+    Dim key As Variant
+    n = 0
+    For Each key In compStats.Keys
+        compNames(n) = key
+        stats = compStats(key)
+        compCounts(n) = stats(0)
+        n = n + 1
+    Next key
+
+    ' Simple bubble sort by count descending
+    Dim j As Long
+    Dim tempName As String
+    Dim tempCount As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If compCounts(j) > compCounts(i) Then
+                tempName = compNames(i)
+                tempCount = compCounts(i)
+                compNames(i) = compNames(j)
+                compCounts(i) = compCounts(j)
+                compNames(j) = tempName
+                compCounts(j) = tempCount
+            End If
+        Next j
+    Next i
+
+    ' Output sorted data
+    Dim outRow As Long
+    outRow = 5
+
+    For i = 0 To n - 1
+        compName = compNames(i)
+        stats = compStats(compName)
+
+        Dim patentCount As Long, sumRank As Long, minRank As Long, maxRank As Long
+        Dim ranksStr As String, totalCites As Long
+
+        patentCount = stats(0)
+        sumRank = stats(1)
+        minRank = stats(2)
+        maxRank = stats(3)
+        ranksStr = stats(4)
+        totalCites = stats(5)
+
+        ' Calculate median rank
+        Dim medianRank As Double
+        medianRank = CalculateMedian(ranksStr)
+
+        wsSummary.Cells(outRow, 1).Value = compName
+        wsSummary.Cells(outRow, 2).Value = patentCount
+        wsSummary.Cells(outRow, 3).Value = Round(sumRank / patentCount, 1)
+        wsSummary.Cells(outRow, 4).Value = minRank
+        wsSummary.Cells(outRow, 5).Value = maxRank
+        wsSummary.Cells(outRow, 6).Value = Round(medianRank, 1)
+        wsSummary.Cells(outRow, 7).Value = totalCites
+        wsSummary.Cells(outRow, 8).Value = Round(totalCites / patentCount, 1)
+
+        outRow = outRow + 1
+    Next i
+
+    ' Format
+    wsSummary.Columns("A:H").AutoFit
+    wsSummary.Range("C5:F" & (outRow - 1)).NumberFormat = "0.0"
+    wsSummary.Range("H5:H" & (outRow - 1)).NumberFormat = "0.0"
+
+    ' Add conditional formatting to Patent Count column
+    Dim rngCount As Range
+    Set rngCount = wsSummary.Range("B5:B" & (outRow - 1))
+    rngCount.FormatConditions.AddDatabar
+    rngCount.FormatConditions(rngCount.FormatConditions.Count).BarColor.Color = RGB(99, 142, 198)
+
+    ' Summary stats at bottom
+    outRow = outRow + 2
+    wsSummary.Cells(outRow, 1).Value = "SUMMARY"
+    wsSummary.Cells(outRow, 1).Font.Bold = True
+    outRow = outRow + 1
+    wsSummary.Cells(outRow, 1).Value = "Total unique competitors:"
+    wsSummary.Cells(outRow, 2).Value = compStats.Count
+    outRow = outRow + 1
+    wsSummary.Cells(outRow, 1).Value = "Patents with citations:"
+    wsSummary.Cells(outRow, 2).Value = "=COUNTIF(Score_Consensus!E:E,"">0"")"
+
+    GenerateCompetitorSummaryInternal = compStats.Count
+End Function
+
+Private Function CalculateMedian(ByVal ranksStr As String) As Double
+    ' Calculate median from comma-separated rank string
+    If Len(ranksStr) = 0 Then
+        CalculateMedian = 0
+        Exit Function
+    End If
+
+    Dim rankArray() As String
+    rankArray = Split(ranksStr, ",")
+
+    Dim n As Long
+    n = UBound(rankArray) + 1
+
+    ' Convert to numbers and sort
+    Dim ranks() As Long
+    ReDim ranks(0 To n - 1)
+
+    Dim i As Long
+    For i = 0 To n - 1
+        ranks(i) = CLng(rankArray(i))
+    Next i
+
+    ' Sort
+    Dim j As Long, temp As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If ranks(j) < ranks(i) Then
+                temp = ranks(i)
+                ranks(i) = ranks(j)
+                ranks(j) = temp
+            End If
+        Next j
+    Next i
+
+    ' Calculate median
+    If n Mod 2 = 1 Then
+        CalculateMedian = ranks(n \ 2)
+    Else
+        CalculateMedian = (ranks(n \ 2 - 1) + ranks(n \ 2)) / 2
+    End If
+End Function
+
+'===============================================================================
 ' UTILITY FUNCTIONS
 '===============================================================================
 
 Public Sub ClearAllDataSheets()
     Dim sheetNames As Variant
     sheetNames = Array(RAW_DATA_SHEET, "Score_IPLit_Aggr", "Score_IPLit_Bal", "Score_IPLit_Cons", _
-                       "Score_Licensing", "Score_Corporate", "Score_Executive", "Score_Consensus")
+                       "Score_Licensing", "Score_Corporate", "Score_Executive", "Score_Consensus", _
+                       "CompetitorSummary")
 
     Dim i As Integer
     For i = 0 To UBound(sheetNames)

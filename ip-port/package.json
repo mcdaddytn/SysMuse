@@ -46,7 +46,11 @@
     "run:overnight:dry": "tsx scripts/run-overnight-analysis.ts --dry-run",
     "analyze:claims": "tsx scripts/analyze-patent-breadth.ts",
     "top250:recalc": "tsx scripts/calculate-unified-top250-v2.ts",
-    "export:csv": "tsx scripts/export-raw-metrics-csv.ts"
+    "top250:v3": "tsx scripts/calculate-and-export-v3.ts",
+    "export:csv": "tsx scripts/export-raw-metrics-csv.ts",
+    "export:withinsector": "tsx scripts/export-within-sector-for-excel.ts",
+    "watchlist:report": "tsx scripts/manage-citator-watchlist.ts --report",
+    "watchlist:update": "tsx scripts/manage-citator-watchlist.ts --update"
   },
   "keywords": [
     "uspto",

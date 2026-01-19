@@ -147,10 +147,10 @@ async function exportWithinSectorForExcel() {
     }
   }
 
-  // Write CSV
+  // Write CSV - output/ directory (not excel/) to avoid source control
   const date = new Date().toISOString().split('T')[0];
-  const csvPath = `excel/WITHIN-SECTOR-${date}.csv`;
-  const latestPath = 'excel/WITHIN-SECTOR-LATEST.csv';
+  const csvPath = `output/WITHIN-SECTOR-${date}.csv`;
+  const latestPath = 'output/WITHIN-SECTOR-LATEST.csv';
 
   fs.writeFileSync(csvPath, csvLines.join('\n'));
   fs.writeFileSync(latestPath, csvLines.join('\n'));

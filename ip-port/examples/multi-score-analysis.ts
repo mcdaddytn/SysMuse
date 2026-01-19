@@ -27,6 +27,10 @@
  */
 
 import * as fs from 'fs/promises';
+import { CompetitorMatcher } from '../services/competitor-config.js';
+
+// Global competitor matcher instance
+let competitorMatcher: CompetitorMatcher;
 
 // ============================================================================
 // INTERFACES
@@ -212,54 +216,23 @@ function calculateOverallActionable(p: RawPatent): number {
 // ANALYSIS
 // ============================================================================
 
+/**
+ * Normalize competitor name using the CompetitorMatcher service.
+ * This uses the comprehensive competitors.json config (131+ companies)
+ * instead of a hardcoded list.
+ */
 function normalizeCompetitor(assignee: string): string {
-  const a = (assignee || '').toUpperCase();
-  // Big Tech
-  if (a.includes('MICROSOFT')) return 'Microsoft';
-  if (a.includes('APPLE')) return 'Apple';
-  if (a.includes('GOOGLE') || a.includes('ALPHABET')) return 'Google';
-  if (a.includes('AMAZON')) return 'Amazon';
-  if (a.includes('META') || a.includes('FACEBOOK')) return 'Meta';
-  // Streaming
-  if (a.includes('NETFLIX')) return 'Netflix';
-  if (a.includes('SONY')) return 'Sony';
-  if (a.includes('COMCAST')) return 'Comcast';
-  if (a.includes('DISNEY')) return 'Disney';
-  if (a.includes('WARNER') || a.includes('HBO')) return 'Warner';
-  if (a.includes('ROKU')) return 'Roku';
-  if (a.includes('BYTEDANCE') || a.includes('TIKTOK')) return 'ByteDance';
-  if (a.includes('HULU')) return 'Hulu';
-  if (a.includes('NBC') || a.includes('PEACOCK')) return 'NBCUniversal';
-  if (a.includes('PARAMOUNT') || a.includes('VIACOM')) return 'Paramount';
-  if (a.includes('SPOTIFY')) return 'Spotify';
-  // Cybersecurity (NEW)
-  if (a.includes('CISCO')) return 'Cisco';
-  if (a.includes('SOPHOS')) return 'Sophos';
-  if (a.includes('FIREEYE') || a.includes('MANDIANT') || a.includes('TRELLIX')) return 'FireEye';
-  if (a.includes('MCAFEE')) return 'McAfee';
-  if (a.includes('FORCEPOINT')) return 'Forcepoint';
-  if (a.includes('DARKTRACE')) return 'Darktrace';
-  if (a.includes('PALO ALTO')) return 'Palo Alto Networks';
-  if (a.includes('CROWDSTRIKE')) return 'CrowdStrike';
-  if (a.includes('FORTINET')) return 'Fortinet';
-  if (a.includes('SYMANTEC') || a.includes('NORTONLIFELOCK')) return 'Symantec';
-  // Enterprise (NEW)
-  if (a.includes('IBM') || a.includes('INTERNATIONAL BUSINESS MACHINES')) return 'IBM';
-  if (a.includes('PALANTIR')) return 'Palantir';
-  if (a.includes('CITRIX')) return 'Citrix';
-  if (a.includes('RED HAT')) return 'Red Hat';
-  if (a.includes('DROPBOX')) return 'Dropbox';
-  if (a.includes('SALESFORCE')) return 'Salesforce';
-  if (a.includes('ORACLE')) return 'Oracle';
-  if (a.includes('VMWARE')) return 'VMware';
-  // Telecom/Semiconductor (NEW)
-  if (a.includes('SAMSUNG')) return 'Samsung';
-  if (a.includes('HUAWEI')) return 'Huawei';
-  if (a.includes('QUALCOMM')) return 'Qualcomm';
-  if (a.includes('INTEL')) return 'Intel';
-  if (a.includes('NVIDIA')) return 'NVIDIA';
-  if (a.includes('MARVELL')) return 'Marvell';
-  return assignee;
+  if (!competitorMatcher) {
+    competitorMatcher = new CompetitorMatcher();
+  }
+
+  const match = competitorMatcher.matchCompetitor(assignee);
+  if (match) {
+    return match.company;
+  }
+
+  // Return uppercase for unmatched (will be filtered out)
+  return assignee.toUpperCase();
 }
 
 async function loadExistingData(): Promise<RawPatent[]> {
@@ -306,8 +279,8 @@ async function loadExistingData(): Promise<RawPatent[]> {
         });
       }
       console.log(`  ✓ Loaded ${file}`);
-    } catch (e) {
-      console.log(`  - Skipped ${file} (not found)`);
+    } catch (e: any) {
+      console.log(`  - Skipped ${file}: ${e.message || e}`);
     }
   }
 

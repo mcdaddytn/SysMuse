@@ -148,6 +148,49 @@ All configuration should be JSON/text files for smooth GUI transition:
 
 ---
 
+## Patent Data Adapter Pattern
+
+**Problem:** Different APIs have different strengths:
+- PatentsView: Free, good for citations/metadata, claims data in beta
+- USPTO ODP: Prosecution history, IPR/PTAB data
+- The Lens (lens.org): Full patent text, claims, global coverage, scholarly links
+
+**Solution:** Adapter pattern for data sources
+
+```typescript
+interface PatentDataAdapter {
+  getPatent(id: string): Promise<Patent>;
+  getClaims(id: string): Promise<Claim[]>;
+  getFullText(id: string): Promise<string>;
+  getCitations(id: string): Promise<Citation[]>;
+}
+
+class PatentsViewAdapter implements PatentDataAdapter { ... }
+class LensAdapter implements PatentDataAdapter { ... }
+class USPTOAdapter implements PatentDataAdapter { ... }
+
+// Composite adapter with fallback chain
+class CompositePatentAdapter {
+  adapters: PatentDataAdapter[];
+
+  async getClaims(id: string): Promise<Claim[]> {
+    // Try Lens first (full data), fall back to PatentsView
+    for (const adapter of this.adapters) {
+      try {
+        return await adapter.getClaims(id);
+      } catch { continue; }
+    }
+  }
+}
+```
+
+**Future considerations:**
+- Paid API tiers may have different capabilities
+- GUI could show data source provenance
+- Cache layer to minimize redundant API calls
+
+---
+
 ## Citation Overlap Algorithm
 
 **Complexity:** O(n × m) where n = patents, m = avg citations per patent
@@ -180,4 +223,112 @@ All configuration should be JSON/text files for smooth GUI transition:
 
 ---
 
+## Sector Analysis Feedback Loop
+
+**Key insight:** Vendor integrations (claim charts, infringement analysis) generate product knowledge that should flow back into our system.
+
+```
+                    ┌─────────────────────────┐
+                    │   3rd Party Vendors     │
+                    │ (Patlytics, claim charts)│
+                    └───────────┬─────────────┘
+                                │
+                    Product mappings, infringement insights
+                                │
+                                ▼
+┌─────────────┐     ┌─────────────────────────┐     ┌─────────────┐
+│   Sector    │────▶│   Knowledge Enrichment  │────▶│   Enhanced  │
+│ Definitions │     │                         │     │   Scoring   │
+└─────────────┘     │ - New product terms     │     └─────────────┘
+                    │ - Expanded search terms │
+┌─────────────┐     │ - Sector refinements    │     ┌─────────────┐
+│    LLM      │────▶│ - LLM question updates  │────▶│   Better    │
+│  Questions  │     │                         │     │   Rankings  │
+└─────────────┘     └─────────────────────────┘     └─────────────┘
+```
+
+**Feedback channels:**
+
+| Source | Feeds Into | Example |
+|--------|-----------|---------|
+| Claim chart analysis | Search terms | "macroblock" → video-codec terms |
+| Product infringement maps | Sector definitions | New sub-sector for HEVC vs AV1 |
+| Vendor product databases | LLM questions | "Which specific codec standard?" |
+| Litigation outcomes | Damages ratings | Update sector tier based on verdicts |
+
+**Implementation:**
+- Store vendor feedback in database
+- GUI allows manual term/sector expansion
+- LLM prompt versioning with A/B testing
+- Track which insights came from which vendor
+
+---
+
+## Scoring Method Versioning
+
+Support multiple scoring methods for comparison:
+
+| Method | Script | Description |
+|--------|--------|-------------|
+| V2 | `calculate-unified-top250-v2.ts` | Additive, no sector weight |
+| V3 | `calculate-unified-top250-v3.ts` | Multiplicative, 40% sector |
+| V4 | (proposed) | Configurable, compressed tiers |
+
+**Excel integration:**
+- Separate export scripts per method
+- OR single macro with method selector dropdown
+- Compare rankings side-by-side
+
+---
+
+---
+
+## Session Update: 2026-01-19 - Competitor Matching Fix + Comprehensive Analysis
+
+### Critical Bug Fix: Multi-Score Competitor Matching
+
+**Problem identified:** The `examples/multi-score-analysis.ts` script had a hardcoded `normalizeCompetitor()` function with only ~35 company patterns, while `competitors.json` has 131 companies (193 patterns).
+
+**Impact:** 608 patents showed `competitor_citations > 0` but `competitorCount == 0` - meaning citations were being counted but not matched to tracked competitors.
+
+**Fix:** Updated multi-score script to use the `CompetitorMatcher` service from `services/competitor-config.ts`.
+
+**Result:**
+- Before fix: 608 mismatched patents
+- After fix: 384 mismatched patents (remaining are citators NOT in competitor list)
+- Patents with matched competitors: 5,014 (improved coverage)
+
+### Key Outputs Generated
+
+| Output File | Description |
+|-------------|-------------|
+| `multi-score-analysis-2026-01-19.json` | All 10,276 patents with corrected competitor matching |
+| `TOP250-2026-01-19.csv` | V3 stakeholder voting scores |
+| `sector-competitor-distribution-2026-01-19.json` | Competitor breakdown by sector |
+| `within-sector-rankings-2026-01-19.json` | Best patents per sector |
+
+### Sector-Competitor Insights
+
+**Top sectors by patent count:**
+1. network-switching (1,064) - Intel, Cisco, Marvell
+2. network-signal-processing (834) - Samsung, Intel, Qualcomm
+3. network-error-control (539) - Samsung, Qualcomm, Intel
+
+**Concentrated competitors (sector specialists):**
+- Extreme Networks: 75% in network-switching
+- FireEye: 54% in network-threat-protection
+- ByteDance: 50% in video-codec
+- Arista: 48% in network-switching
+
+### Within-Sector Top Patents
+
+**network-threat-protection:** 9800606 (99 cites, OneTrust/Rapid7/CyberArk)
+**cloud-auth:** 9888377 (99 cites, Bank of America/OneTrust/T-Mobile)
+**security:** 9948663 (99 cites, PayPal/Microsoft/OneTrust)
+**network-auth-access:** 9015467 (100 cites, Intel)
+**computing-os-security:** 8627476 (97 cites, FireEye/McAfee/Trend Micro)
+
+---
+
 *Document created to reduce NEXT_SESSION_CONTEXT.md size*
+*Last updated: 2026-01-19 (session continuation)*

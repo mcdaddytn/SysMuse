@@ -3640,3 +3640,148 @@ cat config/competitors.json | jq '[.categories[].companies[].name] | length'
 *Session: 2026-01-19*
 *Status: Sector expansion complete, 131 competitors, 1,046 products identified*
 *Next: Citation re-mining for full competitor coverage, V3 scoring rebalance*
+
+---
+
+### Session Update: 2026-01-19 - Patent Claims Analysis & Overnight Runner
+
+**Analysis Completed:**
+
+1. **Patent Claims/Breadth Data Investigation** ✅
+   - PatentsView API has a separate `/api/v1/g_claim/` endpoint (NOT embedded in /patent/)
+   - Fields available: `claim_text`, `claim_number`, `claim_dependent`, `claim_sequence`
+   - **LIMITATION:** Claims endpoint is in BETA - currently only 2023 data, being backfilled
+   - Alternative: PatentsView bulk download at https://patentsview.org/download/claims
+
+2. **Overnight Analysis Runner Created** ✅
+   - Script: `scripts/run-overnight-analysis.ts`
+   - Runs 31 citation overlap batches (15,276 patents total)
+   - Then runs multi-score recalculation and CSV export
+   - Estimated time: 12-14 hours
+   - Resume capability: `--resume-from <batch>`
+
+**New Scripts:**
+| Script | Purpose |
+|--------|---------|
+| `scripts/run-overnight-analysis.ts` | Unattended overnight job runner |
+| `scripts/analyze-patent-breadth.ts` | Claims/breadth analysis (pending API data) |
+| `scripts/test-claims-api.ts` | Claims endpoint testing |
+
+**NPM Scripts Added:**
+```bash
+npm run run:overnight      # Run full overnight analysis
+npm run run:overnight:dry  # Dry run to preview
+npm run analyze:claims     # Analyze patent claims (when API populated)
+npm run top250:recalc      # Recalculate unified top 250
+npm run export:csv         # Export raw metrics CSV
+```
+
+**Current Status:**
+- Competitors.json: v5.3 with 131 companies
+- No background jobs running
+- Bubble zone LLM: Complete (130 patents)
+- Ready for overnight citation re-mining
+
+---
+
+## TO RUN OVERNIGHT
+
+```bash
+# Start the overnight analysis (will run ~12-14 hours)
+npm run run:overnight
+
+# OR resume from specific batch if interrupted
+npm run run:overnight -- --resume-from 15
+
+# Monitor progress
+tail -f output/overnight-analysis-2026-01-19.log
+```
+
+---
+
+*Session: 2026-01-19 (continued)*
+*Next Action: Run overnight analysis with updated competitor list*
+*Patent claims data: Available via bulk download or wait for API backfill*
+
+---
+
+### Session Update: 2026-01-19 (Continuation) - Citation Re-run & Scoring Analysis
+
+**Overnight Job Running:**
+- Citation overlap with updated competitor list (v5.3 = 131 companies)
+- 31 batches, ~12-14 hours total
+- Status at session end: 28/31 complete, ~1 hour remaining
+
+**Key Findings:**
+
+1. **Patent Claims Data** - Available via PatentsView `/api/v1/g_claim/` endpoint (beta, 2023 data only). Alternative: bulk download from patentsview.org.
+
+2. **Sector Diversity is GOOD** - Current V2 scoring produces diverse top 250:
+   - network-security: 87, cloud-auth: 41, video-image: 29, wireless: 28
+   - video-codec: only 6 (2.4%) - NOT over-weighted
+   - Missing sectors: audio, general, security-crypto
+
+3. **V3 Scoring Concern Resolved** - The 48% video-codec issue was for proposed V3, not current V2. V2 works well because it doesn't weight sector_damages.
+
+4. **Excel/CSV Mismatch** - Current CSV (28 cols) vs macro (20 cols). Deferred until needed.
+
+**Design Decisions Extracted:**
+- Created `docs/DESIGN_DECISIONS.md` to reduce session context size
+- Documents scoring philosophy, within-sector approach, database schema principles
+
+**New Files:**
+| File | Purpose |
+|------|---------|
+| `scripts/run-overnight-analysis.ts` | Unattended batch runner |
+| `scripts/analyze-patent-breadth.ts` | Claims analysis (pending API data) |
+| `docs/DESIGN_DECISIONS.md` | Architecture/design notes |
+
+**Development Queue:**
+1. [In Progress] Citation overlap completion
+2. [Pending] Multi-score recalc with new data
+3. [Pending] Before/after stats comparison
+4. [Pending] config/scoring-config.json creation
+5. [Pending] Within-sector scoring implementation
+6. [Pending] Database schema design (Prisma + MTI)
+7. [Pending] Consolidate configs for GUI-readiness
+8. [Deferred] Excel/CSV alignment
+
+---
+
+## NEXT SESSION: Resume Here
+
+### Check Job Completion
+```bash
+# Verify all 31 batches complete
+ls output/citation-overlap-*-2026-01-19.json | wc -l
+
+# Check log for completion
+tail -50 output/overnight-analysis-2026-01-19.log | grep -E "COMPLETE|SUMMARY|Phase"
+
+# If complete, new files should exist:
+ls -la output/multi-score-analysis-2026-01-19.json
+ls -la output/unified-top250-v2-2026-01-19.json
+```
+
+### Compare Before/After Stats
+```bash
+# Before (v5.3 competitor list, but old citation data)
+jq '.patents | length' output/multi-score-analysis-2026-01-17.json
+jq '[.patents[].competitor_citations] | add' output/multi-score-analysis-2026-01-17.json
+
+# After (new citation run)
+jq '.patents | length' output/multi-score-analysis-2026-01-19.json
+jq '[.patents[].competitor_citations] | add' output/multi-score-analysis-2026-01-19.json
+```
+
+### Priority Tasks After Job
+1. Run comparison stats
+2. Create config/scoring-config.json
+3. Implement within-sector scoring
+4. Start database schema design (with user input)
+
+---
+
+*Session: 2026-01-19*
+*Overnight job: 28/31 batches, ~1 hour remaining*
+*Key doc: docs/DESIGN_DECISIONS.md*

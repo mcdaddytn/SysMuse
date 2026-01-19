@@ -41,7 +41,12 @@
     "combine:status": "tsx services/combine-results.ts status",
     "combine:run": "tsx services/combine-results.ts combine",
     "combine:export": "tsx services/combine-results.ts export all",
-    "export:llm": "tsx examples/export-for-llm.ts"
+    "export:llm": "tsx examples/export-for-llm.ts",
+    "run:overnight": "tsx scripts/run-overnight-analysis.ts",
+    "run:overnight:dry": "tsx scripts/run-overnight-analysis.ts --dry-run",
+    "analyze:claims": "tsx scripts/analyze-patent-breadth.ts",
+    "top250:recalc": "tsx scripts/calculate-unified-top250-v2.ts",
+    "export:csv": "tsx scripts/export-raw-metrics-csv.ts"
   },
   "keywords": [
     "uspto",

@@ -4028,3 +4028,104 @@ npx tsx scripts/run-sector-analysis.ts <sector> --model opus --limit 15
 *Session: 2026-01-19 (continuation)*
 *Status: Path A complete (Excel analysis + competitor summaries + watchlist)*
 *Next: Path B (Database schema, API, data import)*
+
+---
+
+### Session Update: 2026-01-19 - Strategic Guide & Database Design
+
+**Created Documentation:**
+
+1. **`docs/STRATEGIC_ANALYSIS_GUIDE.md`** - Comprehensive guide covering:
+   - Patent aggregator detection (citation density heuristics)
+   - Cluster utilization for vendor workflows
+   - Heat map vendor integration (single patent testing)
+   - Claim chart vendor integration (patent grouping)
+   - Data capture schemas from 3rd party vendors
+   - Future enrichment sources
+
+2. **`docs/DATABASE_SCHEMA_DESIGN.md`** - Full Prisma schema including:
+   - Core entities: Patent, Company, PatentCitation
+   - Classification: CompanyType enum (PRACTICING, AGGREGATOR, HYBRID)
+   - Clusters: Cluster, PatentCluster with champion designation
+   - Scoring: PatentScore with version/profile support
+   - Vendor integration: VendorAnalysis, ProductMatch, ClaimMapping
+   - Expert review: ExpertReview with status workflow
+   - Assertions: AssertionPackage for litigation tracking
+
+**Key Insights from Analysis:**
+
+**Aggregator Detection Signals:**
+```
+Citation Density = citations / patents_cited
+- High density (50+): Potential aggregator signal
+- Low density (<10): Likely product company
+```
+
+**Current High-Density Citators:**
+| Company | Citations | Patents | Density |
+|---------|-----------|---------|---------|
+| OneTrust | 2,392 | 19 | 126 | (practicing but heavy user)
+| FireEye | 1,440 | 45 | 32 |
+| Splunk | 517 | 33 | 16 |
+| IBM | 3,679 | 1,099 | 3 | (low = product co)
+
+**Cluster Data Available:**
+- 10 term-based clusters from litigation tier
+- 37 co-citation clusters (97 patents)
+- Ready for vendor testing workflow
+
+**Vendor Integration Workflow:**
+```
+1. Select cluster champion patent
+2. Submit to heat map vendor ($25 × 20 products)
+3. Capture ProductMatch data
+4. If promising, expand to claim chart analysis
+5. Group patents by defendant for assertion
+```
+
+---
+
+## NEXT SESSION: Ready for Implementation
+
+### Path B Implementation Queue
+
+1. **Prisma Setup** (30 min)
+   - Update prisma/schema.prisma with new schema
+   - Run migrations
+
+2. **Data Import Scripts** (2-3 hours)
+   - Import patents from multi-score-analysis
+   - Import companies from competitors.json + watchlist
+   - Import clusters from cluster-definitions
+   - Import citations (large job)
+
+3. **API Endpoints** (2-3 hours)
+   - Basic CRUD for patents, companies
+   - Cluster queries
+   - Score retrieval
+
+4. **Aggregator Scoring Script** (1 hour)
+   - Calculate aggregator_score for all companies
+   - Update company classifications
+
+### Quick Start Commands
+
+```bash
+# Database setup
+npm run docker:up
+npm run db:push
+
+# Import data
+npx tsx scripts/import-patents-to-db.ts
+npx tsx scripts/import-companies-to-db.ts
+npx tsx scripts/import-clusters-to-db.ts
+
+# Calculate aggregator scores
+npx tsx scripts/calculate-aggregator-scores.ts
+```
+
+---
+
+*Session: 2026-01-19*
+*Status: Strategic guide + database schema complete*
+*Next: Prisma migration, data import, API endpoints*

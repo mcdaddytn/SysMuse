@@ -55,28 +55,34 @@ Private Const RAW_DATA_SHEET As String = "RawData"
 Private Const FILE_PREFIX As String = "TOPRATED-"
 Private Const FILE_LATEST As String = "TOPRATED-LATEST.csv"
 
-' V3 CSV Column indices (1-based, matching CSV import)
+' V3 CSV Column indices (1-based, matching CSV import from TOPRATED-*.csv)
+' CSV order: rank, patent_id, affiliate, title, grant_date, assignee, years_remaining,
+'            forward_citations, competitor_citations, competitor_count, competitors,
+'            super_sector, super_sector_name, sector, sector_name, eligibility_score, ...
 Private Const COL_RANK As Integer = 1
 Private Const COL_PATENT_ID As Integer = 2
-Private Const COL_TITLE As Integer = 3
-Private Const COL_GRANT_DATE As Integer = 4
-Private Const COL_ASSIGNEE As Integer = 5
-Private Const COL_YEARS_REMAINING As Integer = 6
-Private Const COL_FORWARD_CITATIONS As Integer = 7
-Private Const COL_COMPETITOR_CITATIONS As Integer = 8
-Private Const COL_COMPETITOR_COUNT As Integer = 9
-Private Const COL_COMPETITORS As Integer = 10
-Private Const COL_SECTOR As Integer = 11
-Private Const COL_SECTOR_NAME As Integer = 12
+Private Const COL_AFFILIATE As Integer = 3
+Private Const COL_TITLE As Integer = 4
+Private Const COL_GRANT_DATE As Integer = 5
+Private Const COL_ASSIGNEE As Integer = 6
+Private Const COL_YEARS_REMAINING As Integer = 7
+Private Const COL_FORWARD_CITATIONS As Integer = 8
+Private Const COL_COMPETITOR_CITATIONS As Integer = 9
+Private Const COL_COMPETITOR_COUNT As Integer = 10
+Private Const COL_COMPETITORS As Integer = 11
+Private Const COL_SUPER_SECTOR As Integer = 12
+Private Const COL_SUPER_SECTOR_NAME As Integer = 13
+Private Const COL_SECTOR As Integer = 14
+Private Const COL_SECTOR_NAME As Integer = 15
 ' LLM scores (1-5 scale)
-Private Const COL_ELIGIBILITY As Integer = 13
-Private Const COL_VALIDITY As Integer = 14
-Private Const COL_CLAIM_BREADTH As Integer = 15
-Private Const COL_ENFORCEMENT As Integer = 16
-Private Const COL_DESIGN_AROUND As Integer = 17
-Private Const COL_MARKET_RELEVANCE As Integer = 18
-Private Const COL_IPR_RISK As Integer = 19
-Private Const COL_PROSECUTION_QUALITY As Integer = 20
+Private Const COL_ELIGIBILITY As Integer = 16
+Private Const COL_VALIDITY As Integer = 17
+Private Const COL_CLAIM_BREADTH As Integer = 18
+Private Const COL_ENFORCEMENT As Integer = 19
+Private Const COL_DESIGN_AROUND As Integer = 20
+Private Const COL_MARKET_RELEVANCE As Integer = 21
+Private Const COL_IPR_RISK As Integer = 22
+Private Const COL_PROSECUTION_QUALITY As Integer = 23
 
 ' Weight row indices in UserWeights (1-based)
 Private Const WEIGHT_ROW_COMP_CITES As Integer = 7
@@ -126,7 +132,7 @@ Public Sub ImportAllData()
                "Run this command first:" & vbCrLf & _
                "npx tsx scripts/calculate-and-export-v3.ts" & vbCrLf & vbCrLf & _
                "Click OK to select a file manually.", vbExclamation
-        csvPath = SelectFile("Select Top Rated CSV", "CSV Files (*.csv),*.csv")
+        csvPath = SelectFile("Select TOPRATED CSV", "CSV Files,*.csv")
     End If
 
     If csvPath <> "" Then
@@ -1145,22 +1151,33 @@ End Function
 '===============================================================================
 
 Public Sub ClearAllDataSheets()
-    Dim sheetNames As Variant
-    sheetNames = Array(RAW_DATA_SHEET, "Score_IPLit_Aggr", "Score_IPLit_Bal", "Score_IPLit_Cons", _
-                       "Score_Licensing", "Score_Corporate", "Score_Executive", "Score_Consensus", _
-                       "CompetitorSummary", "AffiliateSummary", "SectorSummary", "SuperSectorSummary")
+    ' Delete all existing worksheets to start fresh
+    ' Expects to be run from a blank workbook with just default Sheet1
+    Dim ws As Worksheet
+    Dim sheetsToDelete As Collection
+    Set sheetsToDelete = New Collection
 
-    Dim i As Integer
-    For i = 0 To UBound(sheetNames)
+    Application.DisplayAlerts = False
+
+    ' Collect all sheet names first (can't delete while iterating)
+    For Each ws In ThisWorkbook.Worksheets
+        sheetsToDelete.Add ws.Name
+    Next ws
+
+    ' Create RawData sheet first (need at least one sheet)
+    Dim wsRaw As Worksheet
+    Set wsRaw = ThisWorkbook.Worksheets.Add
+    wsRaw.Name = RAW_DATA_SHEET
+
+    ' Now delete all the old sheets
+    Dim sheetName As Variant
+    For Each sheetName In sheetsToDelete
         On Error Resume Next
-        Dim ws As Worksheet
-        Set ws = ThisWorkbook.Sheets(sheetNames(i))
-        If Not ws Is Nothing Then
-            ws.Cells.Clear
-        End If
-        Set ws = Nothing
+        ThisWorkbook.Worksheets(CStr(sheetName)).Delete
         On Error GoTo 0
-    Next i
+    Next sheetName
+
+    Application.DisplayAlerts = True
 End Sub
 
 Private Function GetOrCreateSheet(ByVal sheetName As String) As Worksheet
@@ -1187,13 +1204,28 @@ Private Function GetRowCount(ByVal sheetName As String) As Long
 End Function
 
 Private Function SelectFile(ByVal title As String, ByVal filter As String) As String
+    ' filter format: "Description,*.ext" e.g. "CSV Files,*.csv"
     Dim fd As FileDialog
+    Dim filterParts() As String
+    Dim filterDesc As String
+    Dim filterExt As String
+
+    ' Parse filter string
+    filterParts = Split(filter, ",")
+    If UBound(filterParts) >= 1 Then
+        filterDesc = Trim(filterParts(0))
+        filterExt = Trim(filterParts(1))
+    Else
+        filterDesc = "All Files"
+        filterExt = "*.*"
+    End If
+
     Set fd = Application.FileDialog(msoFileDialogFilePicker)
 
     With fd
         .title = title
         .Filters.Clear
-        .Filters.Add "Files", filter
+        .Filters.Add filterDesc, filterExt
         .AllowMultiSelect = False
 
         If .Show = -1 Then

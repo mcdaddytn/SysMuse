@@ -67,6 +67,9 @@ Public Sub ImportWithinSector()
         Exit Sub
     End If
 
+    ' Delete default Sheet1 and any other existing sheets
+    DeleteDefaultSheets wb
+
     ' Create or clear worksheets
     Set wsRaw = GetOrCreateSheet(wb, RAW_DATA_SHEET)
     Set wsWeights = GetOrCreateSheet(wb, WEIGHTS_SHEET)
@@ -552,6 +555,35 @@ Private Function FindCSVFile() As String
     FindCSVFile = latestFile
 End Function
 
+Private Sub DeleteDefaultSheets(wb As Workbook)
+    ' Delete all existing worksheets (like default Sheet1) to start fresh
+    Dim ws As Worksheet
+    Dim sheetsToDelete As Collection
+    Set sheetsToDelete = New Collection
+
+    Application.DisplayAlerts = False
+
+    ' Collect all sheet names first (can't delete while iterating)
+    For Each ws In wb.Worksheets
+        sheetsToDelete.Add ws.Name
+    Next ws
+
+    ' Create a temporary sheet first (need at least one sheet)
+    Dim wsTemp As Worksheet
+    Set wsTemp = wb.Worksheets.Add
+    wsTemp.Name = "TempSetup"
+
+    ' Now delete all the old sheets
+    Dim sheetName As Variant
+    For Each sheetName In sheetsToDelete
+        On Error Resume Next
+        wb.Worksheets(CStr(sheetName)).Delete
+        On Error GoTo 0
+    Next sheetName
+
+    Application.DisplayAlerts = True
+End Sub
+
 Private Function GetOrCreateSheet(wb As Workbook, sheetName As String) As Worksheet
     Dim ws As Worksheet
 
@@ -562,6 +594,13 @@ Private Function GetOrCreateSheet(wb As Workbook, sheetName As String) As Worksh
     If ws Is Nothing Then
         Set ws = wb.Worksheets.Add(After:=wb.Worksheets(wb.Worksheets.Count))
         ws.Name = sheetName
+
+        ' Delete TempSetup sheet if it exists (created during cleanup)
+        Application.DisplayAlerts = False
+        On Error Resume Next
+        wb.Worksheets("TempSetup").Delete
+        On Error GoTo 0
+        Application.DisplayAlerts = True
     Else
         ws.Cells.Clear
     End If

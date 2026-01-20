@@ -3,12 +3,13 @@
 ' =============================================================================
 ' Imports attorney portfolio CSV and generates aggregate analysis worksheets.
 '
-' Data source: output/ATTORNEY-PORTFOLIO-LATEST.csv (NOT in excel/ directory)
-' Note: The excel/ directory contains ONLY macro files (.bas)
-'       All data files (.csv, .json) are in output/ directory
+' File Convention:
+'   - Looks for: ATTORNEY-PORTFOLIO-YYYY-MM-DD.csv, ATTORNEY-PORTFOLIO-LATEST.csv,
+'     or most recent ATTORNEY-PORTFOLIO-*.csv in same directory as workbook
+'   - Falls back to file dialog if not found
 '
 ' Worksheets Generated:
-'   - RawData: Full patent portfolio data
+'   - RawData: Full patent portfolio data (all 17,000+ patents)
 '   - Summary: Portfolio overview statistics
 '   - ByAffiliate: Patents grouped by portfolio affiliate
 '   - BySector: Patents grouped by technology sector
@@ -16,9 +17,8 @@
 '   - ExpirationTimeline: Patents by expiration year
 '
 ' Usage:
-'   1. Open Excel, create new workbook
-'   2. Import this module (Alt+F11 -> File -> Import)
-'   3. Run ImportAttorneyPortfolio macro (Alt+F8)
+'   1. Copy ATTORNEY-PORTFOLIO-*.csv to same directory as this workbook
+'   2. Run ImportAttorneyPortfolio macro (Alt+F8)
 ' =============================================================================
 
 Option Explicit
@@ -50,16 +50,22 @@ Public Sub ImportAttorneyPortfolio()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
 
-    ' Find the CSV file - look in output/ directory (parent of excel/)
+    ' Find the CSV file in same directory as workbook
     filePath = FindDataFile("ATTORNEY-PORTFOLIO")
 
     If filePath = "" Then
-        MsgBox "Could not find ATTORNEY-PORTFOLIO-*.csv in output/ directory." & vbCrLf & _
-               "Please run: npm run export:attorney", vbExclamation, "File Not Found"
+        MsgBox "Could not find ATTORNEY-PORTFOLIO file." & vbCrLf & vbCrLf & _
+               "Expected: ATTORNEY-PORTFOLIO-YYYY-MM-DD.csv" & vbCrLf & _
+               "in the same directory as this workbook." & vbCrLf & vbCrLf & _
+               "Click OK to select a file manually.", vbExclamation, "File Not Found"
+        filePath = SelectFile("Select ATTORNEY-PORTFOLIO CSV", "CSV Files,*.csv")
+    End If
+
+    If filePath = "" Then
         GoTo Cleanup
     End If
 
-    ' Clear existing sheets except first
+    ' Clear existing sheets
     ClearWorksheets
 
     ' Import raw data
@@ -102,32 +108,43 @@ End Sub
 ' =============================================================================
 
 Private Function FindDataFile(prefix As String) As String
+    ' Look for CSV file in same directory as workbook
+    ' Tries: prefix-YYYY-MM-DD.csv (today), prefix-LATEST.csv, or most recent prefix-*.csv
     Dim fso As Object
     Dim folder As Object
     Dim file As Object
     Dim basePath As String
+    Dim tryPath As String
     Dim latestFile As String
     Dim latestDate As Date
+    Dim dateStr As String
 
     Set fso = CreateObject("Scripting.FileSystemObject")
 
-    ' Try to find output/ directory relative to workbook or current directory
-    basePath = ThisWorkbook.Path
-    If basePath = "" Then basePath = CurDir
-
-    ' Go up from excel/ to project root, then into output/
-    If InStr(basePath, "excel") > 0 Then
-        basePath = fso.GetParentFolderName(basePath)
+    ' Use workbook directory
+    If ThisWorkbook.Path <> "" Then
+        basePath = ThisWorkbook.Path & "\"
+    Else
+        basePath = CurDir & "\"
     End If
-    basePath = basePath & "\output"
 
-    ' Check for LATEST file first
-    If fso.FileExists(basePath & "\" & prefix & "-LATEST.csv") Then
-        FindDataFile = basePath & "\" & prefix & "-LATEST.csv"
+    dateStr = Format(Date, "yyyy-mm-dd")
+
+    ' Try 1: prefix-YYYY-MM-DD.csv (today's date)
+    tryPath = basePath & prefix & "-" & dateStr & ".csv"
+    If fso.FileExists(tryPath) Then
+        FindDataFile = tryPath
         Exit Function
     End If
 
-    ' Otherwise find most recent dated file
+    ' Try 2: prefix-LATEST.csv fallback
+    tryPath = basePath & prefix & "-LATEST.csv"
+    If fso.FileExists(tryPath) Then
+        FindDataFile = tryPath
+        Exit Function
+    End If
+
+    ' Try 3: Find most recent prefix-*.csv in same directory
     If fso.FolderExists(basePath) Then
         Set folder = fso.GetFolder(basePath)
         latestDate = DateSerial(1900, 1, 1)
@@ -147,6 +164,39 @@ Private Function FindDataFile(prefix As String) As String
     End If
 End Function
 
+Private Function SelectFile(ByVal title As String, ByVal filter As String) As String
+    ' filter format: "Description,*.ext" e.g. "CSV Files,*.csv"
+    Dim fd As FileDialog
+    Dim filterParts() As String
+    Dim filterDesc As String
+    Dim filterExt As String
+
+    ' Parse filter string
+    filterParts = Split(filter, ",")
+    If UBound(filterParts) >= 1 Then
+        filterDesc = Trim(filterParts(0))
+        filterExt = Trim(filterParts(1))
+    Else
+        filterDesc = "All Files"
+        filterExt = "*.*"
+    End If
+
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+
+    With fd
+        .title = title
+        .Filters.Clear
+        .Filters.Add filterDesc, filterExt
+        .AllowMultiSelect = False
+
+        If .Show = -1 Then
+            SelectFile = .SelectedItems(1)
+        Else
+            SelectFile = ""
+        End If
+    End With
+End Function
+
 ' =============================================================================
 ' CSV IMPORT
 ' =============================================================================
@@ -162,6 +212,13 @@ Private Function ImportCSV(filePath As String, sheetName As String) As Worksheet
     If ws Is Nothing Then
         Set ws = Worksheets.Add(After:=Worksheets(Worksheets.Count))
         ws.Name = sheetName
+
+        ' Delete TempSetup sheet if it exists (created during cleanup)
+        Application.DisplayAlerts = False
+        On Error Resume Next
+        Worksheets("TempSetup").Delete
+        On Error GoTo 0
+        Application.DisplayAlerts = True
     Else
         ws.Cells.Clear
     End If
@@ -221,29 +278,33 @@ Private Sub FormatRawDataSheet(ws As Worksheet)
 End Sub
 
 Private Sub ClearWorksheets()
+    ' Delete all existing worksheets (like default Sheet1) to start fresh
     Dim ws As Worksheet
     Dim sheetsToDelete As Collection
     Set sheetsToDelete = New Collection
 
-    ' Collect sheets to delete (can't delete while iterating)
+    Application.DisplayAlerts = False
+
+    ' Collect ALL sheet names first (can't delete while iterating)
     For Each ws In Worksheets
-        If ws.Index > 1 Then
-            sheetsToDelete.Add ws.Name
-        End If
+        sheetsToDelete.Add ws.Name
     Next ws
 
-    ' Delete collected sheets
-    Application.DisplayAlerts = False
+    ' Create a temporary sheet (need at least one sheet before deleting others)
+    Dim wsTemp As Worksheet
+    Set wsTemp = Worksheets.Add
+    wsTemp.Name = "TempSetup"
+
+    ' Delete all the old sheets including Sheet1
     Dim sheetName As Variant
     For Each sheetName In sheetsToDelete
         On Error Resume Next
         Worksheets(CStr(sheetName)).Delete
         On Error GoTo 0
     Next sheetName
-    Application.DisplayAlerts = True
 
-    ' Clear first sheet
-    Worksheets(1).Cells.Clear
+    Application.DisplayAlerts = True
+    ' Note: TempSetup will be deleted when RawData is created via ImportCSV
 End Sub
 
 ' =============================================================================

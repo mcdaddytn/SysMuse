@@ -1,5 +1,197 @@
 # Patent Portfolio Analysis Platform - Context for Next Session
 
+---
+
+## 🔴 CRITICAL: VMware Remediation In Progress (2026-01-20)
+
+### TWO OVERNIGHT JOBS RUNNING
+
+| Job | Purpose | Output Directory |
+|-----|---------|------------------|
+| Citation Analysis | Find competitor citations for 6,475 VMware patents | `output/vmware-chunks/` |
+| LLM Follower | Run LLM analysis on high-potential patents as found | `output/vmware-llm-analysis/` |
+
+---
+
+## 🌅 MORNING COMMANDS (Run These First!)
+
+```bash
+# 1. Check if jobs completed
+cat output/vmware-chunks/status.txt
+cat output/vmware-llm-analysis/status.txt
+
+# 2. Quick summary of results
+echo "=== Citation Results ==="
+ls output/vmware-chunks/chunk-*.json | wc -l
+echo "chunks completed"
+
+echo "=== Patents with Competitor Citations ==="
+cat output/vmware-chunks/status.txt | grep "With Competitor"
+
+echo "=== LLM Analyses Completed ==="
+ls output/vmware-llm-analysis/patent-*.json 2>/dev/null | wc -l
+
+# 3. Check for any errors in logs
+echo "=== Recent Citation Log ==="
+tail -10 vmware-job.log
+
+echo "=== Recent LLM Log ==="
+tail -10 vmware-llm-follower.log
+
+# 4. Check if processes still running (should be done)
+ps aux | grep -E "vmware-chunked|vmware-llm-follower" | grep -v grep
+```
+
+### If Jobs Completed Successfully - Next Steps
+
+```bash
+# 1. Merge citation chunks into single file
+npm run merge:vmware:chunks
+
+# 2. Check high-citation patents
+cat output/vmware-citation-results-*.json | jq '.results[0:10] | .[] | {patent_id, competitor_citations, competitors}'
+
+# 3. Check LLM results
+cat output/vmware-llm-analysis/combined-vmware-llm-*.json | jq '.total_patents'
+
+# 4. Merge everything into main analysis
+npm run merge:vmware
+
+# 5. Regenerate all exports
+npm run export:all
+```
+
+### If Jobs Were Interrupted
+
+```bash
+# Citation job - automatically resumes
+npm run analyze:vmware:chunked
+
+# LLM follower - automatically resumes
+npm run analyze:vmware:llm-follow
+```
+
+---
+
+### Background Job Details
+
+**Job 1: VMware Citation Analysis** (chunked, crash-safe)
+```bash
+cat output/vmware-chunks/status.txt    # Check progress
+tail -20 vmware-job.log                 # Check log
+```
+
+**Job 2: LLM Follower** (processes patents with ≥1 competitor citation)
+```bash
+cat output/vmware-llm-analysis/status.txt  # Check progress
+tail -20 vmware-llm-follower.log           # Check log
+```
+
+**Current Status (as of job start ~9:26 PM):**
+- Citation: Processing 6,475 patents in 100-patent chunks (~2.5 hour ETA)
+- LLM: Following behind, analyzing any patent with competitor citations
+- Both jobs save incrementally and can resume if interrupted
+
+### Issue Discovered
+
+VMware patents were **missing** from portfolio due to incorrect assignee names:
+- Config had "VMware, Inc." but USPTO uses **"VMware LLC"**
+- Nicira, Inc. (VMware SDN subsidiary, 1,029 patents) was also missing
+
+| Missing Entity | Patents |
+|---------------|---------|
+| VMware LLC | 5,427 |
+| Nicira, Inc. | 1,028 |
+| Avi Networks | 17 |
+| Lastline, Inc. | 3 |
+| Blue Coat Systems, Inc. | 87 |
+| **Total** | **6,562** |
+
+### Remediation Steps
+
+| Step | Status | Command |
+|------|--------|---------|
+| 1. Download VMware patents (6,475) | ✅ Complete | `npm run download:vmware` |
+| 2. Download Blue Coat patents (87) | ✅ Complete | `npm run download:bluecoat` |
+| 3. Citation analysis (VMware) | 🔄 Running overnight | `npm run analyze:vmware:chunked` |
+| 4. LLM analysis (following citations) | 🔄 Running in parallel | `npm run analyze:vmware:llm-follow` |
+| 5. Merge chunks | ⏳ Morning | `npm run merge:vmware:chunks` |
+| 6. Merge into multi-score-analysis | ⏳ Morning | `npm run merge:vmware` |
+| 7. Regenerate exports | ⏳ Morning | `npm run export:all` |
+
+### New Sectors Added (for VMware tech areas)
+
+| Sector | Damages | CPC Codes | Description |
+|--------|---------|-----------|-------------|
+| `virtualization` | High | G06F9/45* | VMs, hypervisors, containers |
+| `sdn-networking` | High | H04L45, H04L47, H04L49 | SDN, NFV, packet switching |
+| `cloud-orchestration` | High | H04L41, H04L43 | Cloud management, automation |
+| `storage-virtualization` | Medium | G06F3/06 | vSAN, virtual storage |
+
+Config updated: `config/sector-damages.json`, `scripts/assign-cpc-sectors.ts`
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `output/vmware-patents-2026-01-19.json` | 6,475 VMware patent metadata |
+| `output/bluecoat-patents-2026-01-20.json` | 87 Blue Coat patent metadata |
+| `output/vmware-chunks/` | Chunked citation results (crash-safe) |
+| `output/vmware-llm-analysis/` | LLM analysis results for high-potential patents |
+| `scripts/citation-overlap-vmware-chunked.ts` | Robust chunked citation analysis |
+| `scripts/vmware-llm-follower.ts` | LLM follower job (runs in parallel) |
+| `scripts/merge-vmware-chunks.ts` | Merge chunks into single file |
+| `scripts/download-vmware-patents.ts` | VMware download script |
+| `scripts/download-bluecoat-patents.ts` | Blue Coat download script |
+| `scripts/merge-vmware-data.ts` | Merge into multi-score-analysis |
+| `docs/VMWARE_REMEDIATION_PLAN.md` | Full remediation documentation |
+
+### When Citation Analysis Completes
+
+```bash
+# 1. Merge chunks into single results file
+npm run merge:vmware:chunks
+
+# 2. Check results
+cat output/vmware-citation-results-*.json | jq '.metadata'
+
+# 3. Merge into main analysis
+npm run merge:vmware
+
+# 4. Check LLM work list
+cat output/vmware-needs-llm-*.json | jq 'length'
+
+# 5. Run LLM on high-priority (optional, ~$10-20)
+npm run llm:batch output/vmware-needs-llm-*.json
+
+# 6. Regenerate all exports
+npm run export:all
+```
+
+### If Citation Analysis Gets Interrupted
+
+The chunked version automatically resumes - just restart:
+```bash
+npm run analyze:vmware:chunked
+```
+It reads `processed-ids.txt` to skip already-analyzed patents.
+
+### Config Updates Made
+
+- `config/broadcom-assignees.json` - Added VMware LLC, Nicira, Avi Networks, Lastline, Blue Coat
+- `config/portfolio-affiliates.json` - Updated patterns for normalization
+
+### Commands Renamed (top250 → topRated)
+
+```bash
+npm run topRated:v3      # Top N with V3 stakeholder scoring
+npm run topRated:recalc  # Top N with V2 citation-weighted scoring
+```
+
+Output files now: `TOPRATED-*.csv`, `unified-topRated-v3-*.json`
+
+---
+
 ## Project Overview
 
 This project provides **patent intelligence services** for analyzing IP portfolios, identifying licensing opportunities, and supporting litigation strategy. The current implementation focuses on analyzing Broadcom's streaming-related patents against major streaming competitors.

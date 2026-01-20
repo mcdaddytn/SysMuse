@@ -18,8 +18,8 @@ This guide explains how to interpret the patent analysis spreadsheets generated 
 To regenerate data files:
 ```bash
 npm run export:attorney     # Full portfolio
-npm run top500:v3          # Top 500 (V3)
-npm run top500:recalc      # Top 500 (V2)
+npm run topRated:v3          # Top Rated (V3)
+npm run topRated:recalc      # Top Rated (V2)
 npm run export:withinsector # Within-sector
 ```
 
@@ -30,8 +30,8 @@ npm run export:withinsector # Within-sector
 | File | Purpose | Records |
 |------|---------|---------|
 | `ATTORNEY-PORTFOLIO-*.csv` | Full portfolio with all patents | ~10,000+ |
-| `TOP500-*.csv` | Top 500 patents by V3 stakeholder consensus | 500 |
-| `unified-top500-v2-*.csv` | Top 500 patents by V2 citation-weighted scoring | 500 |
+| `TOPRATED-*.csv` | Top Rated patents by V3 stakeholder consensus | 500 |
+| `unified-topRated-v2-*.csv` | Top Rated patents by V2 citation-weighted scoring | 500 |
 | `WITHIN-SECTOR-*.csv` | Patents ranked within technology sectors | ~375 |
 | `COCITATION-CLUSTERS-*.csv` | Patents grouped by co-citation patterns | ~100 |
 
@@ -166,9 +166,9 @@ These represent the 5 key questions originally posed for patent evaluation:
 
 ---
 
-## Top 500 Spreadsheet (TOP500-*.csv)
+## Top Rated Spreadsheet (TOPRATED-*.csv)
 
-The Top 500 represents the highest-priority patents based on a consensus score across multiple stakeholder perspectives.
+The Top Rated represents the highest-priority patents based on a consensus score across multiple stakeholder perspectives.
 
 ### Stakeholder Profiles
 
@@ -185,7 +185,7 @@ Six different weighting profiles are used, representing different strategic appr
 
 The **Consensus Score** is the average across all profiles.
 
-### Reading the Top 500
+### Reading the Top Rated
 
 - **Higher rank = More valuable** under consensus view
 - Patents at top are strong across multiple perspectives
@@ -194,7 +194,7 @@ The **Consensus Score** is the average across all profiles.
 
 ---
 
-## V2 Top 500 Spreadsheet (unified-top500-v2-*.csv)
+## V2 Top Rated Spreadsheet (unified-topRated-v2-*.csv)
 
 The V2 model uses a simpler, citation-weighted scoring approach that emphasizes competitor interest over legal quality metrics.
 
@@ -290,7 +290,7 @@ This spreadsheet shows the top patents within each technology sector, allowing f
 
 ### Identifying Strong Patents for Litigation
 
-1. Open `TOP500-*.csv`
+1. Open `TOPRATED-*.csv`
 2. Filter by desired competitor in `competitors_citing`
 3. Look for:
    - `eligibility_score` >= 4
@@ -318,7 +318,7 @@ This spreadsheet shows the top patents within each technology sector, allowing f
 
 ## Data Completeness Notes
 
-- **Full analysis data** is available for the Top 500 and patents with high competitor citations
+- **Full analysis data** is available for the Top Rated and patents with high competitor citations
 - **Basic USPTO data** is available for all ~10,000 patents
 - **LLM analysis** has been run on ~380 patents (top priority subset)
 - **IPR/Prosecution data** available for ~500 patents
@@ -412,7 +412,7 @@ Internal Analysis → Partner Review → Feedback Integration → Improved Analy
 
 **Selection Process** (from current analysis):
 
-1. **Start with Top 500** patents
+1. **Start with Top Rated** patents
 2. **Filter by target criteria**:
    - `competitor_citations` >= 5 (proven interest)
    - `enforcement_clarity` >= 4 (detectability)

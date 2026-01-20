@@ -1,5 +1,5 @@
 /**
- * Calculate Unified Top 500 Patents - V2 (Improved Scoring)
+ * Calculate Unified Top Rated Patents - V2 (Improved Scoring)
  *
  * CHANGES FROM V1:
  * 1. Hard filters: Excludes expired patents (< 3 years remaining)
@@ -8,7 +8,7 @@
  * 4. Eligibility floor: Excludes patents with eligibility < 2
  * 5. Sub-category scoring option for damages/success/risk
  *
- * Usage: npx tsx scripts/calculate-unified-top500-v2.ts [--no-filter] [--verbose]
+ * Usage: npx tsx scripts/calculate-unified-topRated-v2.ts [--no-filter] [--verbose]
  */
 
 import * as fs from 'fs';
@@ -603,7 +603,7 @@ async function main() {
   const maxYears = Math.max(...top500.map(p => p.years_remaining));
 
   console.log(`\n${'='.repeat(60)}`);
-  console.log('DATA COVERAGE IN TOP 500');
+  console.log('DATA COVERAGE IN TOP RATED');
   console.log('='.repeat(60));
   console.log(`LLM v1 analysis: ${withLLM}/500 (${(withLLM / 500 * 100).toFixed(0)}%)`);
   console.log(`LLM v3 analysis: ${withV3}/500 (${(withV3 / 500 * 100).toFixed(0)}%)`);
@@ -645,7 +645,7 @@ async function main() {
     statistics: {
       total_patents_analyzed: multiScore.size,
       filtered_out: filteredOut,
-      top_500_count: top500.length,
+      topRated_count: top500.length,
       patents_with_llm_v1: withLLM,
       patents_with_llm_v3: withV3,
       patents_with_ipr: withIPR,
@@ -656,8 +656,8 @@ async function main() {
     patents: top500,
   };
 
-  fs.writeFileSync(`./output/unified-top500-v2-${timestamp}.json`, JSON.stringify(outputJson, null, 2));
-  console.log(`\nSaved to: output/unified-top500-v2-${timestamp}.json`);
+  fs.writeFileSync(`./output/unified-topRated-v2-${timestamp}.json`, JSON.stringify(outputJson, null, 2));
+  console.log(`\nSaved to: output/unified-topRated-v2-${timestamp}.json`);
 
   // Also export CSV
   const csvHeaders = [
@@ -707,19 +707,19 @@ async function main() {
     csvRows.push(row.join(','));
   }
 
-  fs.writeFileSync(`./output/unified-top500-v2-${timestamp}.csv`, csvRows.join('\n'));
-  console.log(`Saved to: output/unified-top500-v2-${timestamp}.csv`);
+  fs.writeFileSync(`./output/unified-topRated-v2-${timestamp}.csv`, csvRows.join('\n'));
+  console.log(`Saved to: output/unified-topRated-v2-${timestamp}.csv`);
 
   // Identify patents needing enrichment
   const needsLLM = top500.filter(p => p.eligibility_score === undefined).map(p => p.patent_id);
   const needsIPR = top500.filter(p => p.ipr_risk_score === undefined).map(p => p.patent_id);
 
   if (needsLLM.length > 0) {
-    fs.writeFileSync(`./output/top500-v2-needs-llm-${timestamp}.json`, JSON.stringify(needsLLM, null, 2));
+    fs.writeFileSync(`./output/topRated-v2-needs-llm-${timestamp}.json`, JSON.stringify(needsLLM, null, 2));
     console.log(`\nPatents needing LLM enrichment: ${needsLLM.length}`);
   }
   if (needsIPR.length > 0) {
-    fs.writeFileSync(`./output/top500-v2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
+    fs.writeFileSync(`./output/topRated-v2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
     console.log(`Patents needing IPR check: ${needsIPR.length}`);
   }
 }

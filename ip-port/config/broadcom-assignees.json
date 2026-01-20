@@ -67,7 +67,8 @@
       "entity": "Symantec Corporation",
       "variants": [
         "Symantec Corporation",
-        "Symantec Operating Corporation"
+        "Symantec Operating Corporation",
+        "Blue Coat Systems, Inc."
       ],
       "acquisitionDate": "2019-11-04",
       "notes": "Acquired Enterprise Security division 2019 for $10.7B",
@@ -76,14 +77,80 @@
     {
       "entity": "VMware",
       "variants": [
+        "VMware LLC",
         "VMware, Inc.",
         "VMware, LLC",
         "VMware International Limited",
         "VMware"
       ],
       "acquisitionDate": "2023-11-22",
-      "notes": "Largest acquisition, closed November 22, 2023 for $69B",
+      "notes": "Largest acquisition, closed November 22, 2023 for $69B. Primary USPTO assignee name is 'VMware LLC'",
       "priority": 1
+    },
+    {
+      "entity": "Nicira",
+      "variants": [
+        "Nicira, Inc.",
+        "Nicira Inc.",
+        "Nicira"
+      ],
+      "acquisitionDate": "2012-07-23",
+      "notes": "Acquired by VMware 2012 for $1.26B, foundation of NSX SDN technology. 1000+ patents.",
+      "priority": 2
+    },
+    {
+      "entity": "Avi Networks",
+      "variants": [
+        "Avi Networks",
+        "Avi Networks Inc."
+      ],
+      "acquisitionDate": "2019-06-13",
+      "notes": "Acquired by VMware 2019, load balancing and application delivery",
+      "priority": 2
+    },
+    {
+      "entity": "Lastline",
+      "variants": [
+        "Lastline, Inc.",
+        "Lastline Inc."
+      ],
+      "acquisitionDate": "2020-06-04",
+      "notes": "Acquired by VMware 2020, network security and malware detection",
+      "priority": 2
+    },
+    {
+      "entity": "Pivotal Software",
+      "variants": [
+        "PIVOTAL SOFTWARE, INC.",
+        "Pivotal Software, Inc.",
+        "Pivotal Software"
+      ],
+      "acquisitionDate": "2019-12-30",
+      "notes": "Acquired by VMware 2019 for $2.7B. Cloud Foundry, Spring Framework, Kubernetes. 211 patents.",
+      "priority": 2
+    },
+    {
+      "entity": "Carbon Black",
+      "variants": [
+        "Carbon Black, Inc.",
+        "Carbon Black Inc.",
+        "Carbon Black"
+      ],
+      "acquisitionDate": "2019-10-08",
+      "notes": "Acquired by VMware 2019 for $2.1B. Endpoint security, EDR. 35 patents.",
+      "priority": 2
+    },
+    {
+      "entity": "Nyansa",
+      "variants": [
+        "NYANSA",
+        "Nyansa",
+        "Nyansa Inc",
+        "Nyansa, Inc."
+      ],
+      "acquisitionDate": "2020-01-21",
+      "notes": "Acquired by VMware 2020. Network analytics, AI-driven insights. 7 patents.",
+      "priority": 2
     }
   ],
   "technologyFocus": [

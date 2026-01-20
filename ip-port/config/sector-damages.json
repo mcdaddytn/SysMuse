@@ -70,6 +70,54 @@
       "typical_damages_range": "$75M - $200M"
     },
 
+    "virtualization": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Virtualization/Hypervisors/Containers",
+      "rationale": "Core technology for all cloud providers. VMs, hypervisors, containers, Kubernetes. Every AWS/Azure/GCP workload uses this.",
+      "annual_market_size": "$150B+ (cloud infrastructure)",
+      "key_infringers": ["Amazon/AWS", "Microsoft/Azure", "Google/GCP", "Oracle", "Red Hat/IBM"],
+      "cpc_codes": ["G06F9/455", "G06F9/45558", "G06F9/5077"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "sdn-networking": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Software-Defined Networking/NFV",
+      "rationale": "SDN controllers, network function virtualization, programmable switches. Every data center and 5G network uses SDN.",
+      "annual_market_size": "$75B+ (SDN/NFV)",
+      "key_infringers": ["Cisco", "Juniper", "Arista", "Nokia", "HPE"],
+      "cpc_codes": ["H04L45", "H04L47", "H04L49"],
+      "licensing_rate_estimate": "0.25-1%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "cloud-orchestration": {
+      "damages_rating": 3,
+      "label": "High",
+      "description": "Cloud Management/Orchestration",
+      "rationale": "Cloud management platforms, automation, infrastructure-as-code. Critical for enterprise cloud adoption.",
+      "annual_market_size": "$50B+ (cloud management)",
+      "key_infringers": ["Amazon/AWS", "Microsoft/Azure", "Google/GCP", "HashiCorp", "ServiceNow"],
+      "cpc_codes": ["H04L41", "H04L43"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$75M - $200M"
+    },
+
+    "storage-virtualization": {
+      "damages_rating": 2,
+      "label": "Medium",
+      "description": "Storage Virtualization/vSAN",
+      "rationale": "Virtual storage, software-defined storage, distributed file systems. Important but more specialized than compute virtualization.",
+      "annual_market_size": "$30B+ (software-defined storage)",
+      "key_infringers": ["NetApp", "Dell/EMC", "Pure Storage", "Nutanix", "HPE"],
+      "cpc_codes": ["G06F3/06", "G06F3/067"],
+      "licensing_rate_estimate": "0.1-0.5%",
+      "typical_damages_range": "$10M - $75M"
+    },
+
     "wireless": {
       "damages_rating": 3,
       "label": "High",

@@ -1,7 +1,7 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "description": "Portfolio affiliate mapping - normalizes assignee names to parent affiliate for reporting",
-  "lastUpdated": "2026-01-19",
+  "lastUpdated": "2026-01-20",
 
   "portfolioTree": {
     "description": "Broadcom corporate structure for reference",
@@ -12,14 +12,17 @@
       "├── Brocade Communications (acquired 2017)",
       "├── CA Technologies (acquired 2018)",
       "├── Symantec Enterprise (acquired 2019)",
-      "│   ├── Blue Coat Systems",
-      "│   └── LifeLock",
+      "│   └── Blue Coat Systems (87 patents)",
       "└── VMware (acquired 2023)",
-      "    ├── Carbon Black",
-      "    ├── Pivotal Software",
-      "    ├── Avi Networks",
-      "    ├── Lastline",
-      "    └── Nyansa"
+      "    ├── Nicira (acquired by VMware 2012, 1028 patents)",
+      "    ├── Carbon Black (acquired by VMware 2019, 35 patents)",
+      "    ├── Pivotal Software (acquired by VMware 2019, 211 patents)",
+      "    ├── Avi Networks (acquired by VMware 2019, 17 patents)",
+      "    ├── Lastline (acquired by VMware 2020, 3 patents)",
+      "    └── Nyansa (acquired by VMware 2020, 7 patents)"
+    ],
+    "notInPortfolio": [
+      "LifeLock - stayed with consumer division (NortonLifeLock/Gen Digital), NOT part of Broadcom"
     ]
   },
 
@@ -76,40 +79,43 @@
       "displayName": "Symantec Enterprise",
       "acquiredYear": 2019,
       "parent": null,
-      "subsidiaries": ["Blue Coat", "LifeLock"],
+      "subsidiaries": ["Blue Coat"],
       "patterns": [
         "Symantec",
         "Symantec Corporation",
-        "Symantec Operating Corporation",
-        "NortonLifeLock"
-      ]
+        "Symantec Operating Corporation"
+      ],
+      "notes": "Only Enterprise Security division acquired by Broadcom. LifeLock/NortonLifeLock stayed with consumer side (now Gen Digital)"
     },
     "Blue Coat": {
       "displayName": "Blue Coat Systems",
       "acquiredYear": 2019,
       "parent": "Symantec",
       "patterns": [
-        "Blue Coat",
-        "Blue Coat Systems"
-      ]
-    },
-    "LifeLock": {
-      "displayName": "LifeLock",
-      "acquiredYear": 2019,
-      "parent": "Symantec",
-      "patterns": [
-        "LifeLock"
+        "Blue Coat Systems, Inc.",
+        "Blue Coat Systems",
+        "Blue Coat"
       ]
     },
     "VMware": {
       "displayName": "VMware",
       "acquiredYear": 2023,
-      "subsidiaries": ["Carbon Black", "Pivotal", "Avi Networks", "Lastline", "Nyansa"],
+      "subsidiaries": ["Nicira", "Carbon Black", "Pivotal", "Avi Networks", "Lastline", "Nyansa"],
       "patterns": [
+        "VMware LLC",
         "VMware",
         "VMWare",
-        "VMware, Inc",
-        "VMware LLC"
+        "VMware, Inc"
+      ]
+    },
+    "Nicira": {
+      "displayName": "Nicira (VMware SDN)",
+      "acquiredYear": 2023,
+      "parent": "VMware",
+      "patterns": [
+        "Nicira, Inc",
+        "Nicira Inc",
+        "Nicira"
       ]
     },
     "Carbon Black": {
@@ -117,7 +123,9 @@
       "acquiredYear": 2023,
       "parent": "VMware",
       "patterns": [
-        "Carbon Black"
+        "Carbon Black",
+        "Carbon Black, Inc.",
+        "Carbon Black Inc."
       ]
     },
     "Pivotal": {
@@ -127,7 +135,9 @@
       "patterns": [
         "Pivotal",
         "Pivotal Software",
-        "Tanzu"
+        "PIVOTAL SOFTWARE",
+        "PIVOTAL SOFTWARE, INC.",
+        "Pivotal Software, Inc."
       ]
     },
     "Avi Networks": {
@@ -151,7 +161,10 @@
       "acquiredYear": 2023,
       "parent": "VMware",
       "patterns": [
-        "Nyansa"
+        "Nyansa",
+        "NYANSA",
+        "Nyansa Inc",
+        "Nyansa, Inc."
       ]
     }
   },

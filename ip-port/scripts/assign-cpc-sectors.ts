@@ -14,20 +14,46 @@ const ES_URL = 'http://localhost:9200';
 const INDEX = 'patents';
 
 // CPC code prefix to sector mapping
+// Note: Longer/more specific prefixes are matched first (sorted by length descending)
 const CPC_SECTOR_MAP: Record<string, { sector: string; sectorName: string }> = {
+  // === VMware-specific sectors (more specific prefixes) ===
+
+  // Virtualization (G06F9/45* = VMs, hypervisors, containers)
+  'G06F9/455': { sector: 'virtualization', sectorName: 'Virtualization/Containers' },
+  'G06F9/45': { sector: 'virtualization', sectorName: 'Virtualization/Containers' },
+  'G06F9/5': { sector: 'virtualization', sectorName: 'Virtualization/Containers' },
+
+  // SDN/Networking (H04L45=packet switching, H04L47=traffic control, H04L49=packet switching)
+  'H04L45': { sector: 'sdn-networking', sectorName: 'SDN/Network Switching' },
+  'H04L47': { sector: 'sdn-networking', sectorName: 'SDN/Network Switching' },
+  'H04L49': { sector: 'sdn-networking', sectorName: 'SDN/Network Switching' },
+
+  // Cloud Orchestration (H04L41=network management, H04L43=network monitoring)
+  'H04L41': { sector: 'cloud-orchestration', sectorName: 'Cloud Orchestration/Management' },
+  'H04L43': { sector: 'cloud-orchestration', sectorName: 'Cloud Orchestration/Management' },
+
+  // Storage Virtualization (G06F3/06=storage I/O)
+  'G06F3/06': { sector: 'storage-virtualization', sectorName: 'Storage Virtualization' },
+
+  // Network Security (H04L63=security arrangements, H04L9=cryptographic)
+  'H04L63': { sector: 'network-security', sectorName: 'Network Security' },
+  'H04L9': { sector: 'network-security', sectorName: 'Network Security' },
+
+  // === Original broader mappings (fallbacks) ===
+
   // Video/Image processing
   'H04N': { sector: 'video-image', sectorName: 'Video/Image Processing' },
   'G06T': { sector: 'video-image', sectorName: 'Video/Image Processing' },
   'G11B': { sector: 'video-image', sectorName: 'Video/Image Processing' },
 
-  // Networking & Security
+  // Networking & Security (fallback for other H04L codes)
   'H04L': { sector: 'network-security', sectorName: 'Network/Security' },
 
   // Wireless communications
   'H04W': { sector: 'wireless', sectorName: 'Wireless Communications' },
   'H04B': { sector: 'wireless', sectorName: 'Wireless Communications' },
 
-  // Computing & Data processing
+  // Computing & Data processing (fallback for other G06F codes)
   'G06F': { sector: 'computing', sectorName: 'Computing/Data Processing' },
   'G06N': { sector: 'ai-ml', sectorName: 'AI/Machine Learning' },
   'G06Q': { sector: 'computing', sectorName: 'Computing/Data Processing' },

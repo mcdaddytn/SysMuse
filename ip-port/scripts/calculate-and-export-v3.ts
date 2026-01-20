@@ -4,9 +4,9 @@
  * This is the main export script for patent scoring using the V3 stakeholder profiles.
  *
  * Outputs:
- *   1. output/TOP500-YYYY-MM-DD.csv - Top 500 with all profile scores (for Excel analysis)
+ *   1. output/TOPRATED-YYYY-MM-DD.csv - Top Rated with all profile scores (for Excel analysis)
  *   2. output/all-patents-scored-v3-YYYY-MM-DD.csv - All patents with scores (raw data)
- *   3. output/unified-top500-v3-YYYY-MM-DD.json - Top 500 JSON with full details
+ *   3. output/unified-topRated-v3-YYYY-MM-DD.json - Top Rated JSON with full details
  *
  * Usage:
  *   npx tsx scripts/calculate-and-export-v3.ts
@@ -671,7 +671,7 @@ async function main() {
   console.log(`  Avg competitor citations: ${avgCC.toFixed(1)}`);
 
   // ==========================================================================
-  // Export 1: Top 500 for Excel (output/TOP500-YYYY-MM-DD.csv)
+  // Export 1: Top Rated for Excel (output/TOPRATED-YYYY-MM-DD.csv)
   // ==========================================================================
   const topNHeaders = [
     'rank', 'patent_id', 'affiliate', 'title', 'grant_date', 'assignee',
@@ -730,11 +730,11 @@ async function main() {
     topNRows.push(row.join(','));
   }
 
-  const topNPath = `./output/TOP500-${dateStr}.csv`;
+  const topNPath = `./output/TOPRATED-${dateStr}.csv`;
   fs.writeFileSync(topNPath, topNRows.join('\n'));
-  fs.writeFileSync('./output/TOP500-LATEST.csv', topNRows.join('\n'));
+  fs.writeFileSync('./output/TOPRATED-LATEST.csv', topNRows.join('\n'));
   console.log(`\nExported: ${topNPath}`);
-  console.log(`Exported: ./output/TOP500-LATEST.csv`);
+  console.log(`Exported: ./output/TOPRATED-LATEST.csv`);
 
   // ==========================================================================
   // Export 2: All Patents Raw Data (output/all-patents-scored-v3-YYYY-MM-DD.csv)
@@ -799,7 +799,7 @@ async function main() {
   console.log(`Exported: ${rawPath}`);
 
   // ==========================================================================
-  // Export 3: Top 500 JSON (output/unified-top500-v3-YYYY-MM-DD.json)
+  // Export 3: Top Rated JSON (output/unified-topRated-v3-YYYY-MM-DD.json)
   // ==========================================================================
   const jsonExport = {
     generated: new Date().toISOString(),
@@ -847,7 +847,7 @@ async function main() {
     }))
   };
 
-  const jsonPath = `./output/unified-top500-v3-${dateStr}.json`;
+  const jsonPath = `./output/unified-topRated-v3-${dateStr}.json`;
   fs.writeFileSync(jsonPath, JSON.stringify(jsonExport, null, 2));
   console.log(`Exported: ${jsonPath}`);
 

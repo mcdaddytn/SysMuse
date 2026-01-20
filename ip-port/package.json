@@ -56,7 +56,7 @@
     "run:overnight": "tsx scripts/run-overnight-analysis.ts",
     "run:overnight:dry": "tsx scripts/run-overnight-analysis.ts --dry-run",
     "analyze:claims": "tsx scripts/analyze-patent-breadth.ts",
-    "topRated:recalc": "tsx scripts/calculate-unified-top250-v2.ts",
+    "topRated:v2": "tsx scripts/calculate-unified-top250-v2.ts",
     "topRated:v3": "tsx scripts/calculate-and-export-v3.ts",
     "export:csv": "tsx scripts/export-raw-metrics-csv.ts",
     "export:withinsector": "tsx scripts/export-within-sector-for-excel.ts",

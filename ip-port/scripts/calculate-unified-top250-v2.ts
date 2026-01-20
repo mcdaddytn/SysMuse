@@ -1,14 +1,18 @@
 /**
- * Calculate Unified Top Rated Patents - V2 (Improved Scoring)
+ * Calculate Top Rated Patents - V2 (Citation-Weighted Scoring)
  *
- * CHANGES FROM V1:
- * 1. Hard filters: Excludes expired patents (< 3 years remaining)
- * 2. Multiplicative year factor: Heavily penalizes low-years patents
- * 3. Non-linear normalization for years_remaining
- * 4. Eligibility floor: Excludes patents with eligibility < 2
- * 5. Sub-category scoring option for damages/success/risk
+ * V2 SCORING MODEL:
+ * - Single set of adjustable weights (simpler than V3 stakeholder profiles)
+ * - Hard filters: Excludes expired patents (< 3 years remaining)
+ * - Multiplicative year factor: Penalizes low-years patents
+ * - Non-linear normalization for years_remaining
+ * - Eligibility floor: Excludes if LLM says clearly ineligible
  *
- * Usage: npx tsx scripts/calculate-unified-topRated-v2.ts [--no-filter] [--verbose]
+ * OUTPUT FILES:
+ * - TOPRATED-V2-YYYY-MM-DD.csv (for Excel import)
+ * - TOPRATED-V2-YYYY-MM-DD.json (full data)
+ *
+ * Usage: npx tsx scripts/calculate-unified-top250-v2.ts [--no-filter] [--verbose]
  */
 
 import * as fs from 'fs';
@@ -466,7 +470,7 @@ function applyFilters(patent: PatentData): FilterResult {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('Calculate Unified Top 250 - V2 (Improved Scoring)');
+  console.log('Calculate Top Rated Patents - V2 (Citation-Weighted Scoring)');
   console.log('='.repeat(60));
   console.log(`\nConfiguration:`);
   console.log(`  Filtering: ${APPLY_FILTERS ? 'ENABLED' : 'DISABLED'}`);
@@ -656,8 +660,8 @@ async function main() {
     patents: top500,
   };
 
-  fs.writeFileSync(`./output/unified-topRated-v2-${timestamp}.json`, JSON.stringify(outputJson, null, 2));
-  console.log(`\nSaved to: output/unified-topRated-v2-${timestamp}.json`);
+  fs.writeFileSync(`./output/TOPRATED-V2-${timestamp}.json`, JSON.stringify(outputJson, null, 2));
+  console.log(`\nSaved to: output/TOPRATED-V2-${timestamp}.json`);
 
   // Also export CSV
   const csvHeaders = [
@@ -707,19 +711,19 @@ async function main() {
     csvRows.push(row.join(','));
   }
 
-  fs.writeFileSync(`./output/unified-topRated-v2-${timestamp}.csv`, csvRows.join('\n'));
-  console.log(`Saved to: output/unified-topRated-v2-${timestamp}.csv`);
+  fs.writeFileSync(`./output/TOPRATED-V2-${timestamp}.csv`, csvRows.join('\n'));
+  console.log(`Saved to: output/TOPRATED-V2-${timestamp}.csv`);
 
   // Identify patents needing enrichment
   const needsLLM = top500.filter(p => p.eligibility_score === undefined).map(p => p.patent_id);
   const needsIPR = top500.filter(p => p.ipr_risk_score === undefined).map(p => p.patent_id);
 
   if (needsLLM.length > 0) {
-    fs.writeFileSync(`./output/topRated-v2-needs-llm-${timestamp}.json`, JSON.stringify(needsLLM, null, 2));
+    fs.writeFileSync(`./output/TOPRATED-V2-needs-llm-${timestamp}.json`, JSON.stringify(needsLLM, null, 2));
     console.log(`\nPatents needing LLM enrichment: ${needsLLM.length}`);
   }
   if (needsIPR.length > 0) {
-    fs.writeFileSync(`./output/topRated-v2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
+    fs.writeFileSync(`./output/TOPRATED-V2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
     console.log(`Patents needing IPR check: ${needsIPR.length}`);
   }
 }

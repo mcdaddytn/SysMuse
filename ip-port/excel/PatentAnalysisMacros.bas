@@ -1,7 +1,7 @@
 '===============================================================================
-' Patent Portfolio Analysis - VBA Macros
+' Patent Portfolio Analysis - VBA Macros (V3)
 '===============================================================================
-' Version: 3.1 (V3 Stakeholder Voting Profiles - Macro-based Calculation)
+' Version: 3.2 (V3 Stakeholder Voting Profiles - Macro-based Calculation)
 ' Description: Macros for importing patent data, generating scoring worksheets,
 '              and managing user weight profiles for dynamic patent scoring.
 '
@@ -19,9 +19,9 @@
 '   - Consensus = weighted average of all 6 profile scores
 '
 ' KEY MACROS:
-'   - ImportTop250(): Import today's CSV and generate all worksheets
+'   - ImportAllData(): Import today's CSV and generate all worksheets
 '   - RecalculateAll(): Recalculate all scores with current weights and re-sort
-'   - GenerateCompetitorSummary(): Create competitor summary with aggregated stats
+'   - GenerateAllSummaries(): Regenerate all summary tabs
 '
 ' Worksheet Structure:
 '   - RawData: Imported patent metrics (from CSV)
@@ -29,31 +29,31 @@
 '   - Score_IPLit_Aggr, Score_IPLit_Bal, Score_IPLit_Cons: IP Litigator views
 '   - Score_Licensing, Score_Corporate, Score_Executive: Other stakeholder views
 '   - Score_Consensus: Combined view with all profiles
+'   - CompetitorSummary, AffiliateSummary, SectorSummary, SuperSectorSummary
 '
 ' Usage:
-'   1. Run ImportTop250() - auto-finds today's TOP250-YYYY-MM-DD.csv
+'   1. Run ImportAllData() - auto-finds today's TOPRATED-YYYY-MM-DD.csv
 '   2. Modify weights in UserWeights sheet
 '   3. Run RecalculateAll() to update scores and re-sort
 '
 ' File Convention:
 '   - Export: npx tsx scripts/calculate-and-export-v3.ts
 '   - Copy CSV to same folder as this workbook
-'   - Looks for: TOP250-YYYY-MM-DD.csv, TOP250-LATEST.csv, or most recent TOP250-*.csv
+'   - Looks for: TOPRATED-YYYY-MM-DD.csv, TOPRATED-LATEST.csv, or most recent TOPRATED-*.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
-' Last Updated: 2026-01-18 (V3.1 macro-based calculation)
+' Last Updated: 2026-01-20 (V3.2 - removed hardcoded counts)
 '===============================================================================
 
 Option Explicit
 
 ' Configuration Constants
-Private Const DEFAULT_TOP_N As Integer = 250
 Private Const WEIGHTS_SHEET As String = "UserWeights"
 Private Const RAW_DATA_SHEET As String = "RawData"
 
-' File naming convention
-Private Const FILE_PREFIX As String = "TOP250-"
-Private Const FILE_LATEST As String = "TOP250-LATEST.csv"
+' File naming convention (matches TypeScript export: TOPRATED-YYYY-MM-DD.csv)
+Private Const FILE_PREFIX As String = "TOPRATED-"
+Private Const FILE_LATEST As String = "TOPRATED-LATEST.csv"
 
 ' V3 CSV Column indices (1-based, matching CSV import)
 Private Const COL_RANK As Integer = 1
@@ -110,26 +110,27 @@ Private Const REL_WEIGHT_ROW_EXECUTIVE As Integer = 32
 ' PUBLIC ENTRY POINTS
 '===============================================================================
 
-Public Sub ImportTop250()
+Public Sub ImportAllData()
     '
-    ' MAIN ENTRY POINT: Import today's Top 250 for Excel analysis
+    ' MAIN ENTRY POINT: Import today's top rated patents CSV for Excel analysis
+    ' Looks for TOPRATED-YYYY-MM-DD.csv in the same directory as this workbook.
     '
     Dim csvPath As String
     Dim dateStr As String
 
     dateStr = Format(Date, "yyyy-mm-dd")
-    csvPath = FindTop250File(dateStr)
+    csvPath = FindTopRatedFile(dateStr)
 
     If csvPath = "" Then
-        MsgBox "Could not find TOP250 file for today (" & dateStr & ")." & vbCrLf & vbCrLf & _
+        MsgBox "Could not find TOPRATED file for today (" & dateStr & ")." & vbCrLf & vbCrLf & _
                "Run this command first:" & vbCrLf & _
                "npx tsx scripts/calculate-and-export-v3.ts" & vbCrLf & vbCrLf & _
                "Click OK to select a file manually.", vbExclamation
-        csvPath = SelectFile("Select Top 250 CSV", "CSV Files (*.csv),*.csv")
+        csvPath = SelectFile("Select Top Rated CSV", "CSV Files (*.csv),*.csv")
     End If
 
     If csvPath <> "" Then
-        ImportTop250FromFile csvPath
+        ImportDataFromFile csvPath
     End If
 End Sub
 
@@ -146,7 +147,7 @@ Public Sub RecalculateAll()
     dataRows = GetRowCount(RAW_DATA_SHEET)
 
     If dataRows < 2 Then
-        MsgBox "No data in RawData sheet. Run ImportTop250 first.", vbExclamation
+        MsgBox "No data in RawData sheet. Run ImportAllData first.", vbExclamation
         GoTo Cleanup
     End If
 
@@ -177,18 +178,13 @@ ErrorHandler:
     Resume Cleanup
 End Sub
 
-Public Sub ImportAllData()
-    ' Legacy wrapper
-    ImportTop250
-End Sub
-
 '===============================================================================
 ' IMPORT FUNCTIONS
 '===============================================================================
 
-Private Function FindTop250File(ByVal dateStr As String) As String
+Private Function FindTopRatedFile(ByVal dateStr As String) As String
     '
-    ' Looks for CSV in same directory as workbook
+    ' Looks for TOPRATED CSV in same directory as workbook
     '
     Dim basePath As String
     Dim tryPath As String
@@ -204,26 +200,26 @@ Private Function FindTop250File(ByVal dateStr As String) As String
         basePath = CurDir & "\"
     End If
 
-    ' Try 1: TOP250-YYYY-MM-DD.csv (today's date)
+    ' Try 1: TOPRATED-YYYY-MM-DD.csv (today's date)
     tryPath = basePath & FILE_PREFIX & dateStr & ".csv"
     If FileExists(tryPath) Then
-        FindTop250File = tryPath
+        FindTopRatedFile = tryPath
         Exit Function
     End If
 
-    ' Try 2: TOP250-LATEST.csv fallback
+    ' Try 2: TOPRATED-LATEST.csv fallback
     tryPath = basePath & FILE_LATEST
     If FileExists(tryPath) Then
-        FindTop250File = tryPath
+        FindTopRatedFile = tryPath
         Exit Function
     End If
 
-    ' Try 3: Find most recent TOP250-*.csv in same directory
+    ' Try 3: Find most recent TOPRATED-*.csv in same directory
     Set fso = CreateObject("Scripting.FileSystemObject")
     If fso.FolderExists(basePath) Then
         Set folder = fso.GetFolder(basePath)
         For Each file In folder.Files
-            If Left(file.Name, 7) = "TOP250-" And Right(file.Name, 4) = ".csv" Then
+            If Left(file.Name, 9) = "TOPRATED-" And Right(file.Name, 4) = ".csv" Then
                 If latestFile = "" Or file.DateLastModified > latestDate Then
                     latestFile = file.Path
                     latestDate = file.DateLastModified
@@ -232,7 +228,7 @@ Private Function FindTop250File(ByVal dateStr As String) As String
         Next
     End If
 
-    FindTop250File = latestFile
+    FindTopRatedFile = latestFile
 End Function
 
 Private Function FileExists(ByVal filePath As String) As Boolean
@@ -241,7 +237,7 @@ Private Function FileExists(ByVal filePath As String) As Boolean
     On Error GoTo 0
 End Function
 
-Private Sub ImportTop250FromFile(ByVal csvPath As String)
+Private Sub ImportDataFromFile(ByVal csvPath As String)
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
 
@@ -253,18 +249,13 @@ Private Sub ImportTop250FromFile(ByVal csvPath As String)
     Dim rowCount As Long
     rowCount = GetRowCount(RAW_DATA_SHEET)
 
-    If rowCount > 260 Then
-        MsgBox "WARNING: File has " & rowCount & " patents." & vbCrLf & _
-               "Expected ~250. You may have imported the wrong file.", vbExclamation
-    End If
-
     CreateUserWeightsSheet
 
     ' Load weights and generate all sheets
     Dim weights As Object
     Set weights = LoadWeights()
 
-    GenerateAllScoringWorksheets weights, DEFAULT_TOP_N
+    GenerateAllScoringWorksheets weights, rowCount - 1  ' All data rows (minus header)
 
     ' Generate all summary tabs
     GenerateCompetitorSummaryInternal
@@ -272,7 +263,7 @@ Private Sub ImportTop250FromFile(ByVal csvPath As String)
     GenerateSectorSummaryInternal
     GenerateSuperSectorSummaryInternal
 
-    MsgBox "Imported " & rowCount & " patents from:" & vbCrLf & csvPath & vbCrLf & vbCrLf & _
+    MsgBox "Imported " & (rowCount - 1) & " patents from:" & vbCrLf & csvPath & vbCrLf & vbCrLf & _
            "6 stakeholder profiles + 4 summary tabs created." & vbCrLf & _
            "(CompetitorSummary, AffiliateSummary, SectorSummary, SuperSectorSummary)" & vbCrLf & _
            "Adjust weights in UserWeights, then run RecalculateAll.", vbInformation
@@ -899,7 +890,7 @@ Public Sub GenerateCompetitorSummary()
     '
     ' Generates CompetitorSummary worksheet showing:
     ' - Competitor name
-    ' - Patent count in top 250
+    ' - Patent count in top rated list
     ' - Average rank, Min rank, Max rank, Median rank
     ' - Total competitor citations across all patents
     ' - Average competitor citations per patent
@@ -930,7 +921,7 @@ End Sub
 Private Function GenerateCompetitorSummaryInternal() As Long
     '
     ' Internal version that returns competitor count (-1 on error)
-    ' Called from both public GenerateCompetitorSummary and ImportTop250
+    ' Called from both public GenerateCompetitorSummary and ImportAllData
     '
     GenerateCompetitorSummaryInternal = -1
 
@@ -999,10 +990,10 @@ Private Function GenerateCompetitorSummaryInternal() As Long
     wsSummary.Cells.Clear
 
     ' Title and description
-    wsSummary.Range("A1").Value = "COMPETITOR SUMMARY - TOP 250 PATENTS"
+    wsSummary.Range("A1").Value = "COMPETITOR SUMMARY - TOP RATED PATENTS"
     wsSummary.Range("A1").Font.Bold = True
     wsSummary.Range("A1").Font.Size = 16
-    wsSummary.Range("A2").Value = "Shows how each competitor is represented in the current Top 250 ranking"
+    wsSummary.Range("A2").Value = "Shows how each competitor is represented in the current top rated ranking"
 
     ' Headers
     wsSummary.Range("A4").Value = "Competitor"
@@ -1513,8 +1504,25 @@ Private Function GenerateSectorSummaryInternal() As Long
     '
     GenerateSectorSummaryInternal = -1
 
-    ' Get source data
+    ' Declare all variables at top of function to avoid duplicate declaration errors
     Dim wsSrc As Worksheet
+    Dim wsSummary As Worksheet
+    Dim lastRow As Long, r As Long, n As Long, i As Long, j As Long, outRow As Long
+    Dim colSector As Integer, colYears As Integer, colCompCites As Integer
+    Dim colAssignee As Integer, colCompetitors As Integer
+    Dim sector As String, competitors As String, assignee As String, patentId As String
+    Dim years As Double, compCites As Long
+    Dim sectorStats As Object
+    Dim stats As Variant
+    Dim compArr() As String
+    Dim compDict As Object
+    Dim comp As String
+    Dim secNames() As String, secCounts() As Long
+    Dim key As Variant
+    Dim tempName As String, tempCount As Long
+    Dim rngCount As Range
+
+    ' Get source data
     On Error Resume Next
     Set wsSrc = ThisWorkbook.Sheets(RAW_DATA_SHEET)
     On Error GoTo 0
@@ -1527,18 +1535,13 @@ Private Function GenerateSectorSummaryInternal() As Long
 
     If wsSrc Is Nothing Then Exit Function
 
-    Dim lastRow As Long
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, 2).End(xlUp).Row
     If lastRow < 2 Then Exit Function
 
     ' Dictionary to track sector stats
-    Dim sectorStats As Object
     Set sectorStats = CreateObject("Scripting.Dictionary")
 
     ' Find columns
-    Dim colSector As Integer, colYears As Integer, colCompCites As Integer
-    Dim colAssignee As Integer, colCompetitors As Integer
-
     colSector = FindColumnByHeader(wsSrc, "sector")
     If colSector = 0 Then colSector = COL_SECTOR
 
@@ -1554,25 +1557,18 @@ Private Function GenerateSectorSummaryInternal() As Long
     colCompetitors = FindColumnByHeader(wsSrc, "competitors")
     If colCompetitors = 0 Then colCompetitors = COL_COMPETITORS
 
-    Dim r As Long
     For r = 2 To lastRow
-        Dim sector As String
         sector = Trim(CStr(wsSrc.Cells(r, colSector).Value))
         If Len(sector) = 0 Then sector = "unassigned"
 
-        Dim years As Double
         years = Val(wsSrc.Cells(r, colYears).Value)
 
-        Dim compCites As Long
         compCites = Val(wsSrc.Cells(r, colCompCites).Value)
 
-        Dim competitors As String
         competitors = CStr(wsSrc.Cells(r, colCompetitors).Value)
 
-        Dim assignee As String
         assignee = NormalizeAffiliateName(CStr(wsSrc.Cells(r, colAssignee).Value))
 
-        Dim patentId As String
         patentId = CStr(wsSrc.Cells(r, COL_PATENT_ID).Value)
 
         If Not sectorStats.Exists(sector) Then
@@ -1580,7 +1576,6 @@ Private Function GenerateSectorSummaryInternal() As Long
             sectorStats.Add sector, Array(0, 0, 0, 0, "", 0, CreateObject("Scripting.Dictionary"), "")
         End If
 
-        Dim stats As Variant
         stats = sectorStats(sector)
 
         stats(0) = stats(0) + 1  ' count
@@ -1596,13 +1591,9 @@ Private Function GenerateSectorSummaryInternal() As Long
 
         ' Track unique competitors
         If Len(competitors) > 0 Then
-            Dim compArr() As String
             compArr = Split(competitors, ";")
-            Dim compDict As Object
             Set compDict = stats(6)
-            Dim i As Integer
             For i = LBound(compArr) To UBound(compArr)
-                Dim comp As String
                 comp = Trim(compArr(i))
                 If Len(comp) > 0 And Not compDict.Exists(comp) Then
                     compDict.Add comp, 1
@@ -1623,7 +1614,6 @@ Private Function GenerateSectorSummaryInternal() As Long
     Next r
 
     ' Create summary worksheet
-    Dim wsSummary As Worksheet
     Set wsSummary = GetOrCreateSheet("SectorSummary")
     wsSummary.Cells.Clear
 
@@ -1647,12 +1637,9 @@ Private Function GenerateSectorSummaryInternal() As Long
     FormatHeaderRow wsSummary, 4
 
     ' Sort sectors by count
-    Dim secNames() As String, secCounts() As Long
-    Dim n As Long, j As Long
     ReDim secNames(0 To sectorStats.Count - 1)
     ReDim secCounts(0 To sectorStats.Count - 1)
 
-    Dim key As Variant
     n = 0
     For Each key In sectorStats.Keys
         secNames(n) = key
@@ -1662,7 +1649,6 @@ Private Function GenerateSectorSummaryInternal() As Long
     Next key
 
     ' Bubble sort descending
-    Dim tempName As String, tempCount As Long
     For i = 0 To n - 2
         For j = i + 1 To n - 1
             If secCounts(j) > secCounts(i) Then
@@ -1674,14 +1660,12 @@ Private Function GenerateSectorSummaryInternal() As Long
     Next i
 
     ' Output data
-    Dim outRow As Long
     outRow = 5
 
     For i = 0 To n - 1
         sector = secNames(i)
         stats = sectorStats(sector)
 
-        Dim compDict As Object
         Set compDict = stats(6)
 
         wsSummary.Cells(outRow, 1).Value = sector
@@ -1702,7 +1686,6 @@ Private Function GenerateSectorSummaryInternal() As Long
     wsSummary.Columns("A:J").AutoFit
 
     ' Data bar on Patent Count
-    Dim rngCount As Range
     Set rngCount = wsSummary.Range("B5:B" & (outRow - 1))
     If rngCount.Rows.Count > 0 Then
         rngCount.FormatConditions.AddDatabar

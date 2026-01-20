@@ -1,7 +1,7 @@
 '===============================================================================
 ' Patent Portfolio Analysis - V2 Macros (Simple Weights)
 '===============================================================================
-' Version: 2.0
+' Version: 2.1
 ' Description: Simplified macro for V2 scoring with single controllable weights
 '              (not multiple stakeholder profiles like V3)
 '
@@ -11,7 +11,7 @@
 '   - Simpler than V3 (no stakeholder profiles)
 '
 ' KEY MACROS:
-'   - ImportTop250V2(): Import V2 CSV and generate worksheets
+'   - ImportAllData(): Import V2 CSV and generate worksheets
 '   - RecalculateV2(): Recalculate with adjusted weights
 '   - GenerateCompetitorSummary(): Create competitor summary
 '
@@ -22,12 +22,12 @@
 '   - CompetitorSummary: Competitor aggregated stats
 '
 ' File Convention:
-'   - Export: npx tsx scripts/calculate-unified-top250-v2.ts
+'   - Export: npm run topRated:v2
 '   - Copy CSV to same folder as this workbook
-'   - Looks for: unified-top250-v2-YYYY-MM-DD.csv or most recent unified-top250-v2-*.csv
+'   - Looks for: TOPRATED-V2-YYYY-MM-DD.csv, TOPRATED-V2-LATEST.csv, or most recent TOPRATED-V2-*.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
-' Last Updated: 2026-01-19
+' Last Updated: 2026-01-20
 '===============================================================================
 
 Option Explicit
@@ -68,20 +68,20 @@ Private Const COL_PROSECUTION_QUALITY As Integer = 24
 ' PUBLIC ENTRY POINTS
 '===============================================================================
 
-Public Sub ImportTop250V2()
+Public Sub ImportAllData()
     '
-    ' MAIN ENTRY POINT: Import V2 Top 250 CSV
+    ' MAIN ENTRY POINT: Import V2 top rated patents CSV
     '
     Dim csvPath As String
 
     csvPath = FindV2File()
 
     If csvPath = "" Then
-        MsgBox "Could not find unified-top250-v2 file." & vbCrLf & vbCrLf & _
+        MsgBox "Could not find TOPRATED-V2 file." & vbCrLf & vbCrLf & _
                "Run this command first:" & vbCrLf & _
-               "npx tsx scripts/calculate-unified-top250-v2.ts" & vbCrLf & vbCrLf & _
+               "npm run topRated:v2" & vbCrLf & vbCrLf & _
                "Click OK to select a file manually.", vbExclamation
-        csvPath = SelectFile("Select V2 Top 250 CSV", "CSV Files (*.csv),*.csv")
+        csvPath = SelectFile("Select TOPRATED-V2 CSV", "CSV Files (*.csv),*.csv")
     End If
 
     If csvPath <> "" Then
@@ -107,7 +107,7 @@ Public Sub RecalculateV2()
     lastRow = wsRaw.Cells(wsRaw.Rows.Count, 2).End(xlUp).Row
 
     If lastRow < 2 Then
-        MsgBox "No data in RawData. Run ImportTop250V2 first.", vbExclamation
+        MsgBox "No data in RawData. Run ImportAllData first.", vbExclamation
         GoTo Cleanup
     End If
 
@@ -185,19 +185,26 @@ Private Function FindV2File() As String
 
     dateStr = Format(Date, "yyyy-mm-dd")
 
-    ' Try 1: unified-top250-v2-YYYY-MM-DD.csv (today's date)
-    tryPath = basePath & "unified-top250-v2-" & dateStr & ".csv"
+    ' Try 1: TOPRATED-V2-YYYY-MM-DD.csv (today's date)
+    tryPath = basePath & "TOPRATED-V2-" & dateStr & ".csv"
     If FileExists(tryPath) Then
         FindV2File = tryPath
         Exit Function
     End If
 
-    ' Try 2: Find most recent unified-top250-v2-*.csv in same directory
+    ' Try 2: TOPRATED-V2-LATEST.csv fallback
+    tryPath = basePath & "TOPRATED-V2-LATEST.csv"
+    If FileExists(tryPath) Then
+        FindV2File = tryPath
+        Exit Function
+    End If
+
+    ' Try 3: Find most recent TOPRATED-V2-*.csv in same directory
     Set fso = CreateObject("Scripting.FileSystemObject")
     If fso.FolderExists(basePath) Then
         Set folder = fso.GetFolder(basePath)
         For Each file In folder.Files
-            If InStr(file.Name, "unified-top250-v2-") > 0 And Right(file.Name, 4) = ".csv" Then
+            If Left(file.Name, 11) = "TOPRATED-V2" And Right(file.Name, 4) = ".csv" Then
                 If latestFile = "" Or file.DateLastModified > latestDate Then
                     latestFile = file.Path
                     latestDate = file.DateLastModified
@@ -727,10 +734,10 @@ Private Function GenerateCompetitorSummaryInternal() As Long
     Set wsSummary = GetOrCreateSheet(COMPETITOR_SHEET)
     wsSummary.Cells.Clear
 
-    wsSummary.Range("A1").Value = "COMPETITOR SUMMARY - V2 TOP 250"
+    wsSummary.Range("A1").Value = "COMPETITOR SUMMARY - V2 TOP RATED"
     wsSummary.Range("A1").Font.Bold = True
     wsSummary.Range("A1").Font.Size = 16
-    wsSummary.Range("A2").Value = "Shows how each competitor is represented in V2 rankings"
+    wsSummary.Range("A2").Value = "Shows how each competitor is represented in V2 top rated rankings"
 
     ' Headers
     wsSummary.Range("A4").Value = "Competitor"

@@ -9,7 +9,7 @@
 '   - Falls back to file dialog if not found
 '
 ' Worksheets Generated:
-'   - RawData: Full patent portfolio data (all 17,000+ patents)
+'   - RawData: Full patent portfolio data (all 22,000+ patents)
 '   - Summary: Portfolio overview statistics
 '   - ByAffiliate: Patents grouped by portfolio affiliate
 '   - BySector: Patents grouped by technology sector
@@ -24,6 +24,7 @@
 Option Explicit
 
 ' Column indices for key fields (1-based, after import)
+' Updated 2026-01-20 for new CSV format with additional columns
 Private Const COL_PATENT_ID As Integer = 1
 Private Const COL_TITLE As Integer = 2
 Private Const COL_GRANT_DATE As Integer = 3
@@ -33,11 +34,15 @@ Private Const COL_YEARS_REMAINING As Integer = 6
 Private Const COL_IS_EXPIRED As Integer = 7
 Private Const COL_FORWARD_CITES As Integer = 8
 Private Const COL_COMPETITOR_CITES As Integer = 9
-Private Const COL_COMPETITORS_CITING As Integer = 10
-Private Const COL_ELIGIBILITY As Integer = 11
-Private Const COL_VALIDITY As Integer = 12
-Private Const COL_SECTOR As Integer = 20
-Private Const COL_CPC_PRIMARY As Integer = 22
+Private Const COL_NON_COMPETITOR_CITES As Integer = 10
+Private Const COL_COMPETITORS_CITING As Integer = 11
+Private Const COL_ELIGIBILITY As Integer = 12
+Private Const COL_VALIDITY As Integer = 13
+Private Const COL_SECTOR As Integer = 21
+Private Const COL_SUPER_SECTOR As Integer = 22
+Private Const COL_CPC_PRIMARY As Integer = 24
+Private Const COL_HAS_CITATION_ANALYSIS As Integer = 38
+Private Const COL_HAS_LLM_ANALYSIS As Integer = 39
 
 ' =============================================================================
 ' MAIN IMPORT FUNCTION
@@ -319,7 +324,8 @@ Private Sub GenerateSummarySheet()
     Dim totalPatents As Long
     Dim activePatents As Long
     Dim expiredPatents As Long
-    Dim withCitations As Long
+    Dim withCitationAnalysis As Long
+    Dim withCompCitations As Long
     Dim withLLM As Long
 
     Set rawWs = Worksheets("RawData")
@@ -333,10 +339,13 @@ Private Sub GenerateSummarySheet()
         Else
             expiredPatents = expiredPatents + 1
         End If
-        If Val(rawWs.Cells(row, COL_COMPETITOR_CITES).Value) > 0 Then
-            withCitations = withCitations + 1
+        If rawWs.Cells(row, COL_HAS_CITATION_ANALYSIS).Value = "Y" Then
+            withCitationAnalysis = withCitationAnalysis + 1
         End If
-        If rawWs.Cells(row, 31).Value = "Y" Then ' has_llm_analysis column
+        If Val(rawWs.Cells(row, COL_COMPETITOR_CITES).Value) > 0 Then
+            withCompCitations = withCompCitations + 1
+        End If
+        If rawWs.Cells(row, COL_HAS_LLM_ANALYSIS).Value = "Y" Then
             withLLM = withLLM + 1
         End If
     Next row
@@ -376,23 +385,31 @@ Private Sub GenerateSummarySheet()
     ws.Range("A10").Interior.Color = RGB(68, 114, 196)
     ws.Range("A10").Font.Color = RGB(255, 255, 255)
 
-    ws.Range("A11").Value = "With Competitor Citations"
-    ws.Range("B11").Value = withCitations
-    ws.Range("C11").Value = Round(withCitations / totalPatents * 100, 1) & "%"
+    ws.Range("A11").Value = "With Citation Analysis"
+    ws.Range("B11").Value = withCitationAnalysis
+    ws.Range("C11").Value = Round(withCitationAnalysis / totalPatents * 100, 1) & "%"
 
-    ws.Range("A12").Value = "With LLM Analysis"
-    ws.Range("B12").Value = withLLM
-    ws.Range("C12").Value = Round(withLLM / totalPatents * 100, 1) & "%"
+    ws.Range("A12").Value = "With Competitor Citations"
+    ws.Range("B12").Value = withCompCitations
+    ws.Range("C12").Value = Round(withCompCitations / totalPatents * 100, 1) & "%"
+
+    ws.Range("A13").Value = "With LLM Analysis"
+    ws.Range("B13").Value = withLLM
+    ws.Range("C13").Value = Round(withLLM / totalPatents * 100, 1) & "%"
+
+    ws.Range("A14").Value = "Portfolio-Only (basic data)"
+    ws.Range("B14").Value = totalPatents - withCitationAnalysis
+    ws.Range("C14").Value = Round((totalPatents - withCitationAnalysis) / totalPatents * 100, 1) & "%"
 
     ' Note about directory convention
-    ws.Range("A14").Value = "DATA FILE LOCATION"
-    ws.Range("A14").Font.Bold = True
-    ws.Range("A14").Interior.Color = RGB(192, 80, 77)
-    ws.Range("A14").Font.Color = RGB(255, 255, 255)
+    ws.Range("A16").Value = "DATA FILE LOCATION"
+    ws.Range("A16").Font.Bold = True
+    ws.Range("A16").Interior.Color = RGB(192, 80, 77)
+    ws.Range("A16").Font.Color = RGB(255, 255, 255)
 
-    ws.Range("A15").Value = "Data files (.csv, .json) are in: output/ directory"
-    ws.Range("A16").Value = "Macro files (.bas) are in: excel/ directory"
-    ws.Range("A17").Value = "To regenerate data: npm run export:attorney"
+    ws.Range("A17").Value = "Data files (.csv, .json) are in: output/ directory"
+    ws.Range("A18").Value = "Macro files (.bas) are in: excel/ directory"
+    ws.Range("A19").Value = "To regenerate data: npx tsx scripts/merge-portfolio-for-attorney.ts"
 
     ws.Columns("A:C").AutoFit
 End Sub

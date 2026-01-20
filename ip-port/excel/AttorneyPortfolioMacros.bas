@@ -11,6 +11,7 @@
 ' Worksheets Generated:
 '   - RawData: Full patent portfolio data (all 22,000+ patents)
 '   - Summary: Portfolio overview statistics
+'   - AttorneyQuestions: Top patents ranked by score with the 5 attorney analysis questions
 '   - ByAffiliate: Patents grouped by portfolio affiliate
 '   - BySector: Patents grouped by technology sector
 '   - ByCPC: Patents grouped by CPC classification
@@ -38,9 +39,13 @@ Private Const COL_NON_COMPETITOR_CITES As Integer = 10
 Private Const COL_COMPETITORS_CITING As Integer = 11
 Private Const COL_ELIGIBILITY As Integer = 12
 Private Const COL_VALIDITY As Integer = 13
+Private Const COL_SUMMARY As Integer = 14
+Private Const COL_PRIOR_ART_PROBLEM As Integer = 15
+Private Const COL_TECHNICAL_SOLUTION As Integer = 16
 Private Const COL_SECTOR As Integer = 21
 Private Const COL_SUPER_SECTOR As Integer = 22
 Private Const COL_CPC_PRIMARY As Integer = 24
+Private Const COL_OVERALL_SCORE As Integer = 37
 Private Const COL_HAS_CITATION_ANALYSIS As Integer = 38
 Private Const COL_HAS_LLM_ANALYSIS As Integer = 39
 
@@ -85,18 +90,20 @@ Public Sub ImportAttorneyPortfolio()
 
     ' Generate aggregate worksheets
     GenerateSummarySheet
+    GenerateAttorneyQuestionsSheet
     GenerateAffiliateSheet
     GenerateSectorSheet
     GenerateCPCSheet
     GenerateExpirationSheet
 
-    ' Activate Summary sheet
-    Worksheets("Summary").Activate
+    ' Activate AttorneyQuestions sheet (most useful for attorneys)
+    Worksheets("AttorneyQuestions").Activate
 
     MsgBox "Import complete!" & vbCrLf & vbCrLf & _
            "Worksheets created:" & vbCrLf & _
            "  - RawData: Full portfolio (" & (ws.UsedRange.Rows.Count - 1) & " patents)" & vbCrLf & _
            "  - Summary: Portfolio overview" & vbCrLf & _
+           "  - AttorneyQuestions: Top patents with LLM analysis" & vbCrLf & _
            "  - ByAffiliate: Grouped by affiliate" & vbCrLf & _
            "  - BySector: Grouped by technology sector" & vbCrLf & _
            "  - ByCPC: Grouped by CPC class" & vbCrLf & _
@@ -412,6 +419,222 @@ Private Sub GenerateSummarySheet()
     ws.Range("A19").Value = "To regenerate data: npx tsx scripts/merge-portfolio-for-attorney.ts"
 
     ws.Columns("A:C").AutoFit
+End Sub
+
+' =============================================================================
+' ATTORNEY QUESTIONS SHEET - Top Patents with LLM Analysis
+' =============================================================================
+' This sheet shows patents that have LLM analysis, ranked by overall score.
+' It highlights the 5 attorney questions:
+'   - 101 Eligibility Score: Patent eligibility strength (1-5, higher = stronger)
+'   - Validity Score: Strength against prior art (1-5, higher = stronger)
+'   - Summary: High-level summary for non-technical audience
+'   - Prior Art Problem: The problem in prior art the patent addresses
+'   - Technical Solution: How the technical solution works
+' =============================================================================
+
+Private Sub GenerateAttorneyQuestionsSheet()
+    Dim ws As Worksheet
+    Dim rawWs As Worksheet
+    Dim lastRow As Long
+    Dim row As Long
+    Dim outRow As Long
+    Dim patentData() As Variant
+    Dim patentCount As Long
+    Dim i As Long, j As Long
+    Dim tempData As Variant
+
+    Set rawWs = Worksheets("RawData")
+    lastRow = rawWs.Cells(rawWs.Rows.Count, 1).End(xlUp).Row
+
+    ' First pass: count patents with LLM analysis
+    patentCount = 0
+    For row = 2 To lastRow
+        If rawWs.Cells(row, COL_HAS_LLM_ANALYSIS).Value = "Y" Then
+            patentCount = patentCount + 1
+        End If
+    Next row
+
+    If patentCount = 0 Then
+        ' Create sheet with "no data" message
+        Set ws = Worksheets.Add(After:=Worksheets("Summary"))
+        ws.Name = "AttorneyQuestions"
+        ws.Range("A1").Value = "ATTORNEY PATENT ANALYSIS - TOP RANKED"
+        ws.Range("A1").Font.Size = 14
+        ws.Range("A1").Font.Bold = True
+        ws.Range("A3").Value = "No patents with LLM analysis found in this dataset."
+        Exit Sub
+    End If
+
+    ' Collect patents with LLM analysis into array for sorting
+    ' Array: (row index, overall_score)
+    ReDim patentData(1 To patentCount, 1 To 2)
+    i = 0
+    For row = 2 To lastRow
+        If rawWs.Cells(row, COL_HAS_LLM_ANALYSIS).Value = "Y" Then
+            i = i + 1
+            patentData(i, 1) = row  ' Store row index
+            patentData(i, 2) = Val(rawWs.Cells(row, COL_OVERALL_SCORE).Value)
+        End If
+    Next row
+
+    ' Sort by overall score descending (simple bubble sort)
+    For i = 1 To patentCount - 1
+        For j = i + 1 To patentCount
+            If patentData(j, 2) > patentData(i, 2) Then
+                ' Swap row index
+                tempData = patentData(i, 1)
+                patentData(i, 1) = patentData(j, 1)
+                patentData(j, 1) = tempData
+                ' Swap score
+                tempData = patentData(i, 2)
+                patentData(i, 2) = patentData(j, 2)
+                patentData(j, 2) = tempData
+            End If
+        Next j
+    Next i
+
+    ' Create sheet
+    Set ws = Worksheets.Add(After:=Worksheets("Summary"))
+    ws.Name = "AttorneyQuestions"
+
+    ' Title and description
+    ws.Range("A1").Value = "ATTORNEY PATENT ANALYSIS - TOP RANKED"
+    ws.Range("A1").Font.Size = 14
+    ws.Range("A1").Font.Bold = True
+
+    ws.Range("A2").Value = "Patents with LLM analysis, ranked by Overall Score. Shows the 5 attorney analysis questions."
+    ws.Range("A2").Font.Italic = True
+
+    ' Column headers with descriptive names
+    ws.Range("A4").Value = "Rank"
+    ws.Range("B4").Value = "Patent ID"
+    ws.Range("C4").Value = "Title"
+    ws.Range("D4").Value = "Grant Date"
+    ws.Range("E4").Value = "Affiliate"
+    ws.Range("F4").Value = "Sector"
+    ws.Range("G4").Value = "Years Remaining"
+    ws.Range("H4").Value = "Competitor Citations"
+    ws.Range("I4").Value = "Overall Score"
+
+    ' Attorney Questions with descriptive headers
+    ws.Range("J4").Value = "101 Eligibility (1-5)" & vbCrLf & "Patent Eligibility Strength"
+    ws.Range("K4").Value = "Validity Score (1-5)" & vbCrLf & "Prior Art Strength"
+    ws.Range("L4").Value = "Summary" & vbCrLf & "High-Level for Non-Technical Audience"
+    ws.Range("M4").Value = "Prior Art Problem" & vbCrLf & "Problem Addressed by Patent"
+    ws.Range("N4").Value = "Technical Solution" & vbCrLf & "How the Solution Works"
+
+    ' Format headers
+    With ws.Range("A4:N4")
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 114, 196)
+        .Font.Color = RGB(255, 255, 255)
+        .WrapText = True
+        .VerticalAlignment = xlCenter
+    End With
+
+    ' Attorney questions columns get special highlight
+    With ws.Range("J4:N4")
+        .Interior.Color = RGB(0, 112, 192)  ' Darker blue for emphasis
+    End With
+
+    ' Output data (limit to top 500 for performance)
+    Dim maxRows As Long
+    maxRows = patentCount
+    If maxRows > 500 Then maxRows = 500
+
+    outRow = 5
+    For i = 1 To maxRows
+        row = patentData(i, 1)  ' Get original row index
+
+        ws.Cells(outRow, 1).Value = i  ' Rank
+        ws.Cells(outRow, 2).Value = rawWs.Cells(row, COL_PATENT_ID).Value
+        ws.Cells(outRow, 3).Value = rawWs.Cells(row, COL_TITLE).Value
+        ws.Cells(outRow, 4).Value = rawWs.Cells(row, COL_GRANT_DATE).Value
+        ws.Cells(outRow, 5).Value = rawWs.Cells(row, COL_AFFILIATE).Value
+        ws.Cells(outRow, 6).Value = rawWs.Cells(row, COL_SECTOR).Value
+        ws.Cells(outRow, 7).Value = rawWs.Cells(row, COL_YEARS_REMAINING).Value
+        ws.Cells(outRow, 8).Value = rawWs.Cells(row, COL_COMPETITOR_CITES).Value
+        ws.Cells(outRow, 9).Value = patentData(i, 2)  ' Overall Score
+
+        ' Attorney Questions
+        ws.Cells(outRow, 10).Value = rawWs.Cells(row, COL_ELIGIBILITY).Value
+        ws.Cells(outRow, 11).Value = rawWs.Cells(row, COL_VALIDITY).Value
+        ws.Cells(outRow, 12).Value = rawWs.Cells(row, COL_SUMMARY).Value
+        ws.Cells(outRow, 13).Value = rawWs.Cells(row, COL_PRIOR_ART_PROBLEM).Value
+        ws.Cells(outRow, 14).Value = rawWs.Cells(row, COL_TECHNICAL_SOLUTION).Value
+
+        outRow = outRow + 1
+    Next i
+
+    ' Format columns
+    ws.Columns("A").ColumnWidth = 6    ' Rank
+    ws.Columns("B").ColumnWidth = 12   ' Patent ID
+    ws.Columns("C").ColumnWidth = 50   ' Title
+    ws.Columns("D").ColumnWidth = 12   ' Date
+    ws.Columns("E").ColumnWidth = 18   ' Affiliate
+    ws.Columns("F").ColumnWidth = 15   ' Sector
+    ws.Columns("G").ColumnWidth = 8    ' Years
+    ws.Columns("H").ColumnWidth = 10   ' Citations
+    ws.Columns("I").ColumnWidth = 10   ' Score
+    ws.Columns("J").ColumnWidth = 12   ' Eligibility
+    ws.Columns("K").ColumnWidth = 12   ' Validity
+    ws.Columns("L").ColumnWidth = 60   ' Summary
+    ws.Columns("M").ColumnWidth = 60   ' Prior Art
+    ws.Columns("N").ColumnWidth = 60   ' Technical
+
+    ' Wrap text for text columns
+    ws.Range("L:N").WrapText = True
+    ws.Range("C:C").WrapText = True
+
+    ' Add conditional formatting for scores
+    ' 101 Eligibility Score (green for high, red for low)
+    With ws.Range("J5:J" & (outRow - 1))
+        .FormatConditions.AddColorScale ColorScaleType:=3
+        .FormatConditions(.FormatConditions.Count).SetFirstPriority
+        With .FormatConditions(1)
+            .ColorScaleCriteria(1).Type = xlConditionValueLowestValue
+            .ColorScaleCriteria(1).FormatColor.Color = RGB(248, 105, 107)  ' Red
+            .ColorScaleCriteria(2).Type = xlConditionValuePercentile
+            .ColorScaleCriteria(2).Value = 50
+            .ColorScaleCriteria(2).FormatColor.Color = RGB(255, 235, 132)  ' Yellow
+            .ColorScaleCriteria(3).Type = xlConditionValueHighestValue
+            .ColorScaleCriteria(3).FormatColor.Color = RGB(99, 190, 123)   ' Green
+        End With
+    End With
+
+    ' Validity Score
+    With ws.Range("K5:K" & (outRow - 1))
+        .FormatConditions.AddColorScale ColorScaleType:=3
+        .FormatConditions(.FormatConditions.Count).SetFirstPriority
+        With .FormatConditions(1)
+            .ColorScaleCriteria(1).Type = xlConditionValueLowestValue
+            .ColorScaleCriteria(1).FormatColor.Color = RGB(248, 105, 107)
+            .ColorScaleCriteria(2).Type = xlConditionValuePercentile
+            .ColorScaleCriteria(2).Value = 50
+            .ColorScaleCriteria(2).FormatColor.Color = RGB(255, 235, 132)
+            .ColorScaleCriteria(3).Type = xlConditionValueHighestValue
+            .ColorScaleCriteria(3).FormatColor.Color = RGB(99, 190, 123)
+        End With
+    End With
+
+    ' Overall Score data bars
+    ws.Range("I5:I" & (outRow - 1)).FormatConditions.AddDatabar
+
+    ' Freeze header row
+    ws.Rows(5).Select
+    ActiveWindow.FreezePanes = True
+
+    ' Add filters
+    ws.Range("A4:N" & (outRow - 1)).AutoFilter
+
+    ' Add note about total count
+    If patentCount > 500 Then
+        ws.Cells(outRow + 1, 1).Value = "Note: Showing top 500 of " & patentCount & " patents with LLM analysis."
+        ws.Cells(outRow + 1, 1).Font.Italic = True
+    End If
+
+    ws.Range("A4").Select
 End Sub
 
 ' =============================================================================

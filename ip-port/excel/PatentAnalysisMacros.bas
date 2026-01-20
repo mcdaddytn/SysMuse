@@ -1791,6 +1791,56 @@ Private Function GetSuperSectorDisplayName(ByVal superSector As String) As Strin
     End Select
 End Function
 
+Private Function GetTopItems(ByRef dict As Object, ByVal topN As Integer) As String
+    '
+    ' Returns top N items from dictionary sorted by value (descending)
+    ' Returns semicolon-separated string of keys
+    '
+    If dict Is Nothing Or dict.Count = 0 Then
+        GetTopItems = ""
+        Exit Function
+    End If
+
+    ' Copy to arrays for sorting
+    Dim keys() As String, vals() As Long
+    Dim n As Long, i As Long, j As Long
+    n = dict.Count
+    ReDim keys(0 To n - 1)
+    ReDim vals(0 To n - 1)
+
+    Dim key As Variant
+    i = 0
+    For Each key In dict.keys
+        keys(i) = CStr(key)
+        vals(i) = CLng(dict(key))
+        i = i + 1
+    Next key
+
+    ' Bubble sort descending by value
+    Dim tempKey As String, tempVal As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If vals(j) > vals(i) Then
+                tempKey = keys(i): tempVal = vals(i)
+                keys(i) = keys(j): vals(i) = vals(j)
+                keys(j) = tempKey: vals(j) = tempVal
+            End If
+        Next j
+    Next i
+
+    ' Build result string (top N)
+    Dim result As String
+    Dim limit As Long
+    limit = Application.WorksheetFunction.Min(topN, n)
+
+    For i = 0 To limit - 1
+        If i > 0 Then result = result & "; "
+        result = result & keys(i)
+    Next i
+
+    GetTopItems = result
+End Function
+
 Private Function GenerateSuperSectorSummaryInternal() As Long
     GenerateSuperSectorSummaryInternal = -1
 

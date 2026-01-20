@@ -1,85 +1,201 @@
 {
   "description": "Super-sector groupings for portfolio-level views",
-  "version": "1.0",
-  "created": "2026-01-19",
+  "version": "2.0",
+  "created": "2026-01-20",
+  "notes": "Updated to include all 114 breakout sectors from CPC-based sector assignment",
+
   "superSectors": {
     "SECURITY": {
       "displayName": "Security",
-      "description": "Cybersecurity, threat protection, authentication, and data protection",
+      "description": "Cybersecurity, threat protection, authentication, malware, and data protection",
       "sectors": [
-        "network-threat-protection",
-        "network-auth-access",
-        "network-crypto",
-        "network-secure-compute",
-        "computing-os-security",
-        "computing-data-protection",
-        "computing-auth-boot",
-        "cloud-auth",
-        "security",
-        "pii-breach"
+        "sec-malware",
+        "sec-data",
+        "sec-auth",
+        "sec-policy",
+        "sec-sandbox",
+        "sec-drm",
+        "sec-hardware",
+        "sec-monitoring",
+        "cryptography",
+        "auth-ids",
+        "auth-firewall",
+        "auth-identity",
+        "auth-network",
+        "auth-access",
+        "auth-threat",
+        "network-security",
+        "security-crypto"
       ],
       "damagesTier": "High"
     },
-    "NETWORK": {
-      "displayName": "Network Infrastructure",
-      "description": "Network switching, management, protocols, and signal processing",
+
+    "VIRTUALIZATION": {
+      "displayName": "Virtualization & Cloud",
+      "description": "Virtual machines, hypervisors, containers, cloud orchestration, and configuration",
       "sectors": [
-        "network-switching",
-        "network-management",
+        "vmh-placement",
+        "vmh-migration",
+        "vmh-core",
+        "vmh-snapshot",
+        "vm-resource",
+        "vm-ipc",
+        "vm-emulation",
+        "vm-deployment",
+        "vm-scheduling",
+        "virtualization",
+        "storage-virtualization",
+        "cloud-monitoring",
+        "cloud-topology",
+        "cloud-nfv",
+        "cloud-fault",
+        "cloud-orchestration",
+        "cloud-config",
+        "cfg-automation",
+        "cfg-general",
+        "cfg-lifecycle",
+        "cfg-deploy",
+        "cfg-templates",
+        "cfg-validation",
+        "cfg-topology",
+        "cfg-scripting",
+        "cfg-provision"
+      ],
+      "damagesTier": "High"
+    },
+
+    "SDN_NETWORK": {
+      "displayName": "SDN & Network Infrastructure",
+      "description": "Software-defined networking, routing, switching, QoS, and network infrastructure",
+      "sectors": [
+        "sdn-qos",
+        "sdn-routing",
+        "sdn-switching",
+        "sdn-lan",
+        "sdn-management",
+        "sdn-monitoring",
+        "sdn-protocol",
+        "infra-bridge",
+        "infra-bus",
+        "infra-addressing",
+        "infra-powerline",
+        "infra-framing",
+        "network-infrastructure",
         "network-protocols",
-        "network-signal-processing",
-        "network-error-control",
-        "network-multiplexing",
-        "network-security"
-      ],
-      "damagesTier": "Medium"
-    },
-    "VIDEO": {
-      "displayName": "Video & Media",
-      "description": "Video coding, streaming, broadcast, and media processing",
-      "sectors": [
-        "video-codec",
-        "video-broadcast",
-        "video-client-processing",
-        "video-server-cdn",
-        "video-drm-conditional",
-        "video-storage",
-        "streaming-multimedia",
-        "event-live"
+        "proto-distributed",
+        "proto-layers",
+        "proto-services",
+        "proto-session",
+        "proto-content",
+        "proto-proxy",
+        "network-auth"
       ],
       "damagesTier": "High"
     },
+
     "WIRELESS": {
       "displayName": "Wireless & RF",
       "description": "Wireless communications, cellular, WiFi, Bluetooth, and RF components",
       "sectors": [
-        "wireless-scheduling",
-        "wireless-power-mgmt",
-        "wireless-mimo-antenna",
-        "wireless-transmission",
-        "wireless-infrastructure",
-        "wireless-mobility",
-        "wireless-services",
-        "wireless-security",
-        "wireless-iot",
         "wireless",
-        "bluetooth-edr",
+        "wireless-mobility",
+        "wireless-power",
+        "wireless-services",
+        "wireless-resource",
+        "wireless-devices",
+        "wireless-monitoring",
+        "wireless-traffic",
+        "wireless-topology",
+        "wireless-access",
+        "wireless-connection",
+        "baseband",
+        "modulation",
+        "multiplexing",
+        "synchronization",
+        "rf-transmission",
         "rf-acoustic"
       ],
       "damagesTier": "High"
     },
-    "COMPUTING": {
-      "displayName": "Computing & Cloud",
-      "description": "General computing, virtualization, runtime, and cloud services",
+
+    "VIDEO_STREAMING": {
+      "displayName": "Video & Streaming",
+      "description": "Video coding, streaming, broadcast, and media processing",
       "sectors": [
-        "computing-runtime",
-        "computing-systems",
-        "computing-ui",
-        "fintech-business",
-        "data-retrieval"
+        "video-codec",
+        "video-display",
+        "video-capture",
+        "video-image",
+        "video-streaming",
+        "stream-client",
+        "stream-server",
+        "stream-drm",
+        "stream-interactive",
+        "stream-user"
+      ],
+      "damagesTier": "High"
+    },
+
+    "COMPUTING": {
+      "displayName": "Computing & Systems",
+      "description": "General computing, memory, I/O, software engineering, and databases",
+      "sectors": [
+        "database",
+        "computing",
+        "io-interfaces",
+        "software-engineering",
+        "systems-software",
+        "memory-management"
       ],
       "damagesTier": "Medium"
     },
+
+    "FAULT_TOLERANCE": {
+      "displayName": "Fault Tolerance & Reliability",
+      "description": "Error detection, recovery, failover, and system reliability",
+      "sectors": [
+        "error-correction",
+        "ft-errordetect",
+        "ft-monitoring",
+        "ft-recovery",
+        "ft-failover",
+        "fault-tolerance",
+        "ft-redundancy",
+        "ft-diagnosis"
+      ],
+      "damagesTier": "Medium"
+    },
+
+    "STORAGE": {
+      "displayName": "Storage",
+      "description": "Storage media, systems, and data management",
+      "sectors": [
+        "storage-media"
+      ],
+      "damagesTier": "Medium"
+    },
+
+    "IMAGING": {
+      "displayName": "Imaging & Optics",
+      "description": "Image processing, cameras, optics, and signal conversion",
+      "sectors": [
+        "image-processing",
+        "optics",
+        "signal-conversion",
+        "signal-processing"
+      ],
+      "damagesTier": "Medium"
+    },
+
+    "SEMICONDUCTOR": {
+      "displayName": "Semiconductor",
+      "description": "Chip design, circuits, and hardware",
+      "sectors": [
+        "semiconductor"
+      ],
+      "damagesTier": "High"
+    },
+
     "AI_ML": {
       "displayName": "AI & Machine Learning",
       "description": "Artificial intelligence, machine learning, neural networks",
@@ -88,18 +204,29 @@
       ],
       "damagesTier": "High"
     },
-    "IMAGING": {
-      "displayName": "Imaging & 3D",
-      "description": "Image processing, 3D/stereo, depth sensing, cameras",
+
+    "AUDIO": {
+      "displayName": "Audio",
+      "description": "Audio processing, speech, codecs",
       "sectors": [
-        "image-processing",
-        "image-depth",
-        "3d-stereo-depth",
-        "cameras-sensors",
-        "object-pose"
+        "audio"
       ],
       "damagesTier": "Medium"
+    },
+
+    "OTHER": {
+      "displayName": "Other",
+      "description": "Uncategorized patents",
+      "sectors": [
+        "general"
+      ],
+      "damagesTier": "Low"
     }
   },
-  "unmappedSectorDefault": "OTHER"
+
+  "unmappedSectorDefault": "OTHER",
+
+  "sectorToSuperSector": {
+    "_comment": "Auto-generated reverse mapping for quick lookups"
+  }
 }

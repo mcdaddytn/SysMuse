@@ -1,0 +1,90 @@
+{
+  "description": "Configuration for heat map vendor batch generation",
+  "version": "1.1",
+  "created": "2026-01-21",
+  "updated": "2026-01-21",
+
+  "batchSettings": {
+    "batchSize": 25,
+    "totalBatches": 10,
+    "costPerPatent": 25
+  },
+
+  "selectionCriteria": {
+    "minYearsRemaining": 5,
+    "minOverallScore": 40,
+    "preferBroadClaims": true,
+    "claimBreadthWeight": 1.0
+  },
+
+  "batchStrategy": {
+    "mode": "interleaved",
+    "interleavedPattern": [
+      { "type": "high_value", "name": "High-Value Discovery" },
+      { "type": "sector_diversity", "name": "Sector Diversity" },
+      { "type": "high_value", "name": "High-Value Discovery" },
+      { "type": "sector_diversity", "name": "Sector Diversity" },
+      { "type": "high_value", "name": "High-Value Discovery" },
+      { "type": "sector_diversity", "name": "Sector Diversity" },
+      { "type": "sector_diversity", "name": "Sector Diversity" },
+      { "type": "strategic_fill", "name": "Strategic Fill" },
+      { "type": "strategic_fill", "name": "Strategic Fill" },
+      { "type": "strategic_fill", "name": "Strategic Fill" }
+    ],
+    "highValueBatches": {
+      "count": 3,
+      "description": "Top patents by overall score",
+      "selectionMethod": "top_by_score"
+    },
+    "sectorDiversityBatches": {
+      "count": 4,
+      "description": "Balanced sector distribution",
+      "selectionMethod": "sector_rotation",
+      "patentsPerSectorPerBatch": 3
+    },
+    "strategicFillBatches": {
+      "count": 3,
+      "description": "Fill remaining from score-sorted pool",
+      "selectionMethod": "top_by_score"
+    }
+  },
+
+  "sectorQuotas": {
+    "description": "Target distribution for sector diversity batches",
+    "SECURITY": { "target": 50, "priority": 1 },
+    "VIRTUALIZATION": { "target": 45, "priority": 2 },
+    "SDN_NETWORK": { "target": 35, "priority": 2 },
+    "WIRELESS": { "target": 40, "priority": 2 },
+    "VIDEO_STREAMING": { "target": 30, "priority": 3 },
+    "COMPUTING": { "target": 20, "priority": 3 },
+    "FAULT_TOLERANCE": { "target": 15, "priority": 3 },
+    "OTHER": { "target": 15, "priority": 4 }
+  },
+
+  "sectorRotationOrder": [
+    "SDN_NETWORK",
+    "WIRELESS",
+    "VIDEO_STREAMING",
+    "VIRTUALIZATION",
+    "COMPUTING",
+    "FAULT_TOLERANCE",
+    "SEMICONDUCTOR",
+    "IMAGING",
+    "AI_ML"
+  ],
+
+  "minorSectorsMapToOther": [
+    "SEMICONDUCTOR",
+    "IMAGING",
+    "STORAGE",
+    "AI_ML",
+    "AUDIO",
+    "unassigned"
+  ],
+
+  "output": {
+    "jsonFile": "heatmap-batches-LATEST.json",
+    "csvPrefix": "HEATMAP-BATCH-",
+    "exportAllBatchesToCsv": true
+  }
+}

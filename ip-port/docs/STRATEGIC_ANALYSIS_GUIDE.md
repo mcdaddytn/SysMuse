@@ -174,7 +174,159 @@ Total: 6 patents across related security/cloud themes
 
 ## Part 3: 3rd Party Vendor Integration
 
-### Heat Map Vendor Workflow
+### Vendor Overview
+
+We integrate with two primary 3rd party vendors:
+
+| Vendor | Service | Cost Model | Output |
+|--------|---------|------------|--------|
+| **Heat Map Vendor** | Product/infringer search | $25 per patent | 20 product matches per patent |
+| **Claim Chart Vendor** | Detailed claim mapping | Token-based (LLM usage) | Claim charts vs. specific products |
+
+**Strategic Workflow:**
+```
+Step 1: Heat Map Vendor (Discovery)
+   └── Submit top patents → Get product/competitor matches
+
+Step 2: Analyze Results
+   └── Identify promising sectors, competitors, products
+
+Step 3: Claim Chart Vendor (Deep Dive)
+   └── Group related patents → Generate claim charts vs. specific targets
+
+Step 4: Attorney Review
+   └── Litigation packages → Assertion decisions
+```
+
+---
+
+### Heat Map Vendor: Batch Strategy
+
+#### Cost Model
+- **Per Patent**: $25
+- **Output**: Heat map showing ~20 products per patent with infringement likelihood
+- **Turnaround**: Results available between batch submissions
+
+#### Batch Structure
+- **Batch Size**: 25 patents
+- **Test Run**: 10 batches (250 patents total, ~$6,250 investment)
+- **Iterative**: Analyze results from batches 1-3 before finalizing batches 8-10
+
+#### Selection Criteria
+
+**Primary Factors (in order):**
+
+1. **Overall Score** - Higher scored patents first
+2. **Competitor Citations** - Patents already cited by competitors have proven relevance
+3. **Claim Breadth** - Broader claims yield more product matches
+4. **Years Remaining** - 5+ years preferred for licensing/litigation runway
+
+**Sector Diversity Targets:**
+
+| Super-Sector | Target % | Rationale |
+|--------------|----------|-----------|
+| SECURITY | 15-20% | Strong citations, clear enterprise products |
+| VIRTUALIZATION | 15-20% | VMware portfolio, cloud infrastructure |
+| SDN_NETWORK | 12-15% | Network equipment, cloud platforms |
+| WIRELESS | 12-15% | Mobile devices, IoT products |
+| VIDEO_STREAMING | 10-12% | Consumer electronics, streaming services |
+| COMPUTING | 8-10% | Broad applicability to computing products |
+| FAULT_TOLERANCE | 6-8% | Enterprise infrastructure, reliability |
+| Others | 10-15% | Exploratory coverage, emerging areas |
+
+#### Claim Breadth Consideration
+
+**Available Data (543 patents with LLM analysis):**
+
+| Claim Breadth Score | Count | Selection Priority |
+|---------------------|-------|-------------------|
+| 4 (Broad) | 129 | **HIGH** - Prefer for heat map |
+| 3 (Moderate) | 388 | MEDIUM - Include if score/citations strong |
+| 2 (Narrow) | 26 | LOW - Only if exceptional other factors |
+
+**Hypothesis**: Broader claims → More products matched → Better ROI on $25/patent
+
+**Analysis to Perform**: Correlate claim_breadth with competitor_citations to validate. If correlated, use claim_breadth as a selection multiplier.
+
+#### Batch Allocation Strategy
+
+**Early Batches (1-3): High-Value Discovery**
+- Top 75 patents by Overall Score
+- Diverse sector representation
+- Focus on patents with highest competitor citations
+- Goal: Establish baseline product matches, identify hot sectors
+
+**Middle Batches (4-7): Sector Expansion**
+- Adjust sector mix based on batch 1-3 results
+- Increase allocation to sectors with strong product matches
+- Maintain minimum coverage in all sectors (don't zero out any sector)
+- Goal: Deep dive into promising areas while maintaining breadth
+
+**Later Batches (8-10): Strategic Fill**
+- Fill gaps identified from earlier results
+- Test under-represented sectors with strong individual patents
+- Include patents with unusual characteristics (e.g., broad claims but low citations)
+- Goal: Complete coverage, test hypotheses
+
+#### Expected Data Capture from Heat Map Vendor
+
+```json
+{
+  "batch_id": "batch-001",
+  "submission_date": "2026-01-22",
+  "patent_count": 25,
+  "total_cost": 625,
+  "results": [
+    {
+      "patent_id": "9590872",
+      "products_matched": 20,
+      "products": [
+        {
+          "product_name": "Microsoft Azure AD",
+          "company": "Microsoft",
+          "match_confidence": 0.85,
+          "market_segment": "Identity & Access Management",
+          "estimated_revenue": "$5B+",
+          "claim_elements_matched": ["1a", "1b", "3"],
+          "evidence_summary": "Azure AD implements..."
+        }
+      ],
+      "sector_performance": "STRONG",
+      "recommendation": "EXPAND_CLUSTER"
+    }
+  ],
+  "batch_summary": {
+    "avg_products_matched": 15.2,
+    "top_companies_identified": ["Microsoft", "Google", "Amazon"],
+    "top_market_segments": ["Cloud Security", "Identity Management"],
+    "sectors_performing_well": ["cloud-auth", "sec-endpoint"],
+    "sectors_underperforming": ["video-codec"]
+  }
+}
+```
+
+#### Feedback Loop: Using Results for Future Batches
+
+1. **Sector Performance Tracking**
+   - Track avg products matched per sector
+   - Increase allocation to high-performing sectors
+   - Don't eliminate poor performers (might be selection issue)
+
+2. **Competitor Discovery**
+   - New companies identified → Add to competitor watchlist
+   - Update competitor citations analysis with new targets
+
+3. **Product Intelligence**
+   - Products matched → Feed into claim chart prioritization
+   - Market segment data → Inform damages estimates
+
+4. **Claim Breadth Validation**
+   - Compare products_matched vs claim_breadth score
+   - If strong correlation, weight future selection toward broader claims
+
+---
+
+### Heat Map Vendor Workflow (Detailed)
 
 **Input Data (from our system):**
 ```json
@@ -496,23 +648,69 @@ done
 
 ## Summary: Action Items for Next Phase
 
-1. **Add aggregator_score to company tracking**
+### Immediate (Next Session)
+
+1. **Generate Heat Map Vendor Batches**
+   - Create batch generation script with sector quotas
+   - Generate first 3 batches (75 patents) for review
+   - Include claim breadth analysis in selection
+
+2. **Analyze Claim Breadth Correlation**
+   - Compare claim_breadth vs competitor_citations
+   - Determine weighting for batch selection
+
+3. **Design Batch Result Schema**
+   - JSON structure for capturing heat map results
+   - Integration points back into our scoring system
+
+### Near-Term
+
+4. **Add aggregator_score to company tracking**
    - Implement detection heuristics
    - Add to competitor summary worksheets
 
-2. **Create cluster export for vendors**
+5. **Create cluster export for vendors**
    - Package cluster patents with context
    - Include competitor citation evidence
 
-3. **Design vendor response schema**
-   - Standardize heat map capture
-   - Standardize claim chart capture
-
-4. **Build feedback loop**
+6. **Build feedback loop**
    - Track vendor analysis outcomes
    - Refine scoring based on results
+   - Adjust sector allocations based on product match rates
+
+### Strategic
+
+7. **Prepare for Claim Chart Vendor**
+   - Use heat map results to identify best patent+competitor pairings
+   - Group patents by target defendant
+   - Design input schema for multi-patent submissions
 
 ---
 
-*Last Updated: 2026-01-19*
-*Version: 1.0*
+## Appendix: Vendor Cost Analysis
+
+### Heat Map Vendor ROI Model
+
+| Scenario | Patents | Cost | Products Found | Cost per Product |
+|----------|---------|------|----------------|------------------|
+| Test Run | 250 | $6,250 | ~3,750* | $1.67 |
+| Full Tier 1 | 500 | $12,500 | ~7,500* | $1.67 |
+| Top 1000 | 1,000 | $25,000 | ~15,000* | $1.67 |
+
+*Assuming 15 products matched per patent average
+
+### Claim Chart Vendor (Token-Based)
+
+Cost depends on:
+- Number of patents in group
+- Complexity of claims
+- Number of products to chart against
+
+**Rough Estimate**: $50-200 per patent for detailed claim chart
+
+**Optimization**: Group related patents against same defendant to maximize token efficiency
+
+---
+
+*Last Updated: 2026-01-21*
+*Version: 1.1*

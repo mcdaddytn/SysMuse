@@ -1,99 +1,109 @@
-# Patent Portfolio Analysis - Session Context (2026-01-20)
+# Patent Portfolio Analysis - Session Context (2026-01-21)
 
 ## Current State Summary
 
 | Metric | Value |
 |--------|-------|
-| Total Patents | 17,040 |
+| Total Patents (Full Portfolio) | 22,589 |
+| With Citation Analysis | 10,159 |
+| With Competitor Citations | 5,333 |
+| With LLM Analysis | 543 |
 | Unique Sectors | 114 |
 | Super-Sectors | 13 |
-| Large Sectors (>500) | 1 (vmh-placement: 689) |
-| Good Sectors (50-500) | 76 |
-| Small Sectors (<50) | 37 |
 
-## Recent Accomplishments (This Session)
+## Recent Accomplishments (2026-01-20)
 
-### Sector Breakout Complete
-Broke out 16 large sectors into 114 granular sub-sectors:
+### Full Portfolio Merge Complete
+Merged ALL 22,589 patents from broadcom-portfolio into attorney export:
+- Previously: 17,040 patents (only those through citation pipeline)
+- Now: 22,589 patents (full portfolio including ~5,500 never processed)
+- Patent 8595331 (CA, Inc.) and similar missing patents now included
 
-| Original Sector | Patents | Sub-Sectors |
-|-----------------|---------|-------------|
-| network-security | 5,255 | 7 |
-| computing | 3,179 | 8 |
-| wireless | 2,024 | 11 |
-| video-image | 1,767 | 7 |
-| signal-processing | 1,467 | 8 |
-| virtualization | 1,402 | 7 |
-| network-auth | 1,373 | 7 |
-| sdn-networking | 1,266 | 7 |
-| cloud-orchestration | 1,220 | 6 |
-| network-protocols | 1,010 | 7 |
-| network-infrastructure | 955 | 6 |
-| vm-hypervisor | 871 | 4 |
-| system-security | 788 | 8 |
-| video-streaming | 616 | 5 |
-| fault-tolerance | 586 | 7 |
-| cloud-config | 562 | 9 |
+### New Attorney Questions Worksheet
+Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
+- Top patents ranked by Overall Score with LLM analysis
+- Highlights the 5 attorney analysis questions:
+  - **101 Eligibility Score** (1-5): Patent eligibility strength
+  - **Validity Score** (1-5): Prior art strength
+  - **Summary**: High-level for non-technical audience
+  - **Prior Art Problem**: Problem addressed by patent
+  - **Technical Solution**: How the solution works
+- Color-coded scores, data bars, and frozen headers
 
-### Updated Config Files
-- `config/super-sectors.json` - Updated with all 114 sectors mapped to 13 super-sectors
-- `output/patent-sector-assignments.json` - All 17,040 patents assigned to sectors
+### New Columns in Attorney Export
+- `non_competitor_citations` - Forward citations not from competitors (captures potential unknown infringers)
+- `super_sector` - Parent sector grouping
+- `has_citation_analysis` - Y/N flag for citation pipeline status
+- Scoring columns: licensing, litigation, strategic, acquisition, overall
 
----
-
-## Completed This Session
-
-### Data Merging Complete
-- LLM analyses merged into multi-score-analysis (2,289 patents)
-- Sector/super-sector assignments merged (17,040 patents)
-- Scripts: `npm run merge:llm`, `npm run merge:sectors`, `npm run merge:all`
-
-### Summary Tabs Added
-The export script now generates 4 summary CSV files alongside the main TOPRATED export:
-- **SUMMARY-SUPERSECTOR** - Aggregation by 13 super-sectors
-- **SUMMARY-SECTOR** - Aggregation by 114 sectors
-- **SUMMARY-COMPETITOR** - Top 50 competitors citing our patents
-- **SUMMARY-AFFILIATE** - Breakdown by portfolio company
-
-### Generated Files (2026-01-20)
-```
-output/
-├── TOPRATED-2026-01-20.csv         # Main top 500 patents
-├── TOPRATED-LATEST.csv             # Symlink to latest
-├── SUMMARY-SUPERSECTOR-2026-01-20.csv
-├── SUMMARY-SECTOR-2026-01-20.csv
-├── SUMMARY-COMPETITOR-2026-01-20.csv
-├── SUMMARY-AFFILIATE-2026-01-20.csv
-├── all-patents-scored-v3-2026-01-20.csv
-└── unified-topRated-v3-2026-01-20.json
-```
-
-### Regenerate Spreadsheets
-```bash
-npm run topRated:v3
-```
+### Fixed VBA Macros
+- Fixed CPC column index (ByCPC was showing "Unknown")
+- Updated all column constants for new CSV format
+- Added data coverage metrics to Summary sheet
 
 ---
 
-## Super-Sector Hierarchy
+## Next Session: Heat Map Vendor Batches
 
-| Super-Sector | Display Name | Patent Count* | Sectors |
-|--------------|--------------|---------------|---------|
-| SECURITY | Security | ~2,600 | 17 |
-| VIRTUALIZATION | Virtualization & Cloud | ~2,800 | 26 |
-| SDN_NETWORK | SDN & Network Infrastructure | ~2,600 | 21 |
-| WIRELESS | Wireless & RF | ~2,400 | 17 |
-| VIDEO_STREAMING | Video & Streaming | ~1,300 | 10 |
-| COMPUTING | Computing & Systems | ~1,700 | 6 |
-| FAULT_TOLERANCE | Fault Tolerance | ~900 | 8 |
-| STORAGE | Storage | ~240 | 1 |
-| IMAGING | Imaging & Optics | ~290 | 4 |
-| SEMICONDUCTOR | Semiconductor | ~340 | 1 |
-| AI_ML | AI & ML | ~56 | 1 |
-| AUDIO | Audio | ~23 | 1 |
-| OTHER | Other | ~34 | 1 |
+### Goal
+Prepare 10 batches of 25 patents each (250 total) for submission to patent/product heat map vendor.
 
-*Approximate - run aggregation script for exact counts
+### Vendor Details
+- **Cost**: $25 per patent
+- **Output**: Product heat map with ~20 potential infringing products per patent
+- **Strategy**: Test run with 10 batches, analyze results between batches
+
+### Batch Selection Strategy
+
+**Balancing Factors:**
+1. **Patent Strength** - Use top-rated patents with high Overall Score
+2. **Sector Diversity** - Spread across super-sectors to discover products in different markets
+3. **Sector Depth** - Don't under-represent any sector, ensure meaningful data comes back
+4. **Claim Breadth** - Prefer broader claims (vendor uses claim charts for product matching)
+
+**Proposed Distribution (10 batches × 25 = 250 patents):**
+
+| Super-Sector | Suggested Patents | Rationale |
+|--------------|-------------------|-----------|
+| SECURITY | 40-50 | Strong competitive citations, clear products |
+| VIRTUALIZATION | 40-50 | Large portfolio, enterprise products |
+| SDN_NETWORK | 30-40 | Network infrastructure products |
+| WIRELESS | 30-40 | Mobile/IoT market opportunity |
+| VIDEO_STREAMING | 25-30 | Consumer electronics targets |
+| COMPUTING | 20-25 | Broad applicability |
+| FAULT_TOLERANCE | 15-20 | Enterprise infrastructure |
+| Others | 15-20 | Exploratory coverage |
+
+### Available Data for Selection
+
+**Claim Breadth Data (543 patents):**
+| Score | Count | Meaning |
+|-------|-------|---------|
+| 4 | 129 | Broad claims - PREFER for heat map |
+| 3 | 388 | Moderate breadth |
+| 2 | 26 | Narrow claims |
+
+**Key Insight**: Claim breadth may correlate with competitor citations (broader claims = more infringers found). We can analyze this relationship to refine selection.
+
+### Tasks for Next Session
+
+1. **Analyze claim breadth correlation**
+   - Compare claim_breadth vs competitor_citations
+   - Determine if claim breadth should weight batch selection
+
+2. **Create batch generation script**
+   - Input: Selection criteria (super-sector quotas, min score, etc.)
+   - Output: 10 JSON/CSV batches of 25 patents each
+
+3. **Generate first batches for review**
+   - Batch 1-3: Focused on highest-value patents
+   - Batch 4-7: Sector diversity spread
+   - Batch 8-10: Exploratory (under-represented areas)
+
+4. **Design feedback loop**
+   - Schema for capturing heat map results
+   - How to incorporate product data into future batch selection
+   - Track which sectors yield best product matches
 
 ---
 
@@ -102,62 +112,69 @@ npm run topRated:v3
 ### Data Files
 | File | Description |
 |------|-------------|
-| `output/patent-sector-assignments.json` | Sector assignments for all 17,040 patents |
-| `output/multi-score-analysis-LATEST.json` | Main scored analysis (needs LLM merge) |
-| `output/llm-analysis-v3/combined-v3-2026-01-20.json` | LLM analyses (2,329 patents) |
-| `output/vmware-llm-analysis/combined-vmware-llm-2026-01-20.json` | VMware LLM analyses (2,162 patents) |
+| `output/ATTORNEY-PORTFOLIO-LATEST.csv` | Full portfolio (22,589 patents) |
+| `output/ATTORNEY-PORTFOLIO-AGGREGATIONS-*.json` | Pre-computed summaries |
+| `output/multi-score-analysis-LATEST.json` | Scored analysis (17,040 patents) |
+| `output/broadcom-portfolio-2026-01-15.json` | Raw USPTO data (22,589 patents) |
 
 ### Config Files
 | File | Description |
 |------|-------------|
 | `config/super-sectors.json` | 13 super-sectors with 114 sector mappings |
-| `config/sector-damages.json` | Damages tiers by sector |
+| `config/competitors.json` | 131 competitor companies with patterns |
 | `config/portfolio-affiliates.json` | Affiliate company normalization |
-| `config/broadcom-assignees.json` | Portfolio company assignees |
 
 ### Scripts
 | Script | Purpose |
 |--------|---------|
-| `scripts/calculate-and-export-v3.ts` | Main spreadsheet generation |
-| `scripts/assign-cpc-sectors.ts` | Sector assignment from CPC codes |
-| `scripts/breakout-*.ts` | Individual sector breakout scripts |
+| `scripts/merge-portfolio-for-attorney.ts` | Generate attorney CSV with full portfolio |
+| `scripts/calculate-and-export-v3.ts` | Generate V3 top-rated spreadsheets |
 
----
-
-## Spreadsheet Tabs (Planned)
-
-### Top Rated Tab (Main)
-- Top 500 patents by composite score
-- All scoring columns (LLM, citation, stakeholder profiles)
-- Sector and super-sector assignments
-
-### Summary Tabs
-1. **By Super-Sector** - 13 rows, aggregate metrics
-2. **By Sector** - 114 rows, detailed breakdown
-3. **By Competitor** - Patents citing by competitor
-4. **By Affiliate** - Patents by portfolio company
-
-### Supporting Tabs
-- Scoring methodology
-- Sector definitions
-- Data dictionary
+### VBA Macros
+| File | Purpose |
+|------|---------|
+| `excel/AttorneyPortfolioMacros.bas` | Attorney portfolio with 5 questions |
+| `excel/PatentAnalysisMacros.bas` | V3 top-rated analysis |
+| `excel/PatentAnalysisMacros-V2.bas` | V2 analysis (full scoring) |
+| `excel/WithinSectorMacros.bas` | Within-sector analysis |
 
 ---
 
 ## Commands Quick Reference
 
 ```bash
-# Regenerate sector assignments (if needed)
-npx tsx scripts/assign-cpc-sectors.ts
+# Regenerate attorney portfolio (full 22K)
+npx tsx scripts/merge-portfolio-for-attorney.ts
 
-# Generate main export
+# Regenerate V3 top-rated export
 npx tsx scripts/calculate-and-export-v3.ts
 
-# Check sector distribution
-cat output/patent-sector-assignments.json | jq 'to_entries | map(.value.sector) | group_by(.) | map({sector: .[0], count: length}) | sort_by(-.count) | .[0:20]'
+# Check claim breadth distribution
+python3 -c "
+import csv
+with open('output/ATTORNEY-PORTFOLIO-LATEST.csv') as f:
+    reader = csv.DictReader(f)
+    scores = {}
+    for row in reader:
+        cb = row.get('claim_breadth', '')
+        if cb and cb.strip():
+            try:
+                scores[int(float(cb))] = scores.get(int(float(cb)), 0) + 1
+            except: pass
+    for s, c in sorted(scores.items()): print(f'{s}: {c}')
+"
 
-# Count patents by super-sector (after aggregation)
-npx tsx scripts/aggregate-by-super-sector.ts
+# Count patents by super-sector
+python3 -c "
+import csv
+with open('output/ATTORNEY-PORTFOLIO-LATEST.csv') as f:
+    sectors = {}
+    for row in csv.DictReader(f):
+        s = row.get('super_sector') or 'unassigned'
+        sectors[s] = sectors.get(s, 0) + 1
+    for s, c in sorted(sectors.items(), key=lambda x: -x[1]):
+        print(f'{s}: {c}')
+"
 ```
 
 ---
@@ -166,8 +183,38 @@ npx tsx scripts/aggregate-by-super-sector.ts
 
 | Date | Key Activity |
 |------|--------------|
-| 2026-01-20 | Completed 16 sector breakouts, updated super-sectors config |
-| 2026-01-20 | VMware/affiliate merge complete (17,040 patents) |
-| 2026-01-19 | VMware citation analysis, LLM follower overnight |
+| 2026-01-21 | Planning heat map vendor batches, updated strategy guide |
+| 2026-01-20 | Full portfolio merge (22,589), Attorney Questions worksheet, CPC fix |
+| 2026-01-20 | Completed 16 sector breakouts, summary tabs |
+| 2026-01-19 | VMware/affiliate merge complete (17,040 patents) |
 | 2026-01-18 | Initial CPC-based sector assignment |
 | 2026-01-15 | Multi-score analysis framework |
+
+---
+
+## Vendor Integration Roadmap
+
+### Phase 1: Heat Map Vendor (Current Focus)
+- **Cost Model**: $25 per patent × 20 products
+- **Batch Size**: 25 patents per submission
+- **Test Run**: 10 batches (250 patents, ~$6,250)
+- **Output**: Product matches, market segments, potential infringers
+
+### Phase 2: Claim Chart Vendor (Future)
+- **Cost Model**: Token-based (LLM/compute usage)
+- **Input**: Multiple patents grouped by target competitor
+- **Output**: Claim charts mapping patents to products
+- **Strategy**: Use heat map data to select patents + competitors for claim charts
+
+### Data Flow
+```
+Our Portfolio → Heat Map Vendor → Product Matches → Competitor Analysis
+                                         ↓
+                          Claim Chart Vendor → Litigation Packages
+                                         ↓
+                               Attorney Review → Assertion
+```
+
+---
+
+*Last Updated: 2026-01-21*

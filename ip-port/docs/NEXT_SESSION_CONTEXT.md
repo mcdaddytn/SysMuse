@@ -4,14 +4,49 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Patents (Full Portfolio) | 22,589 |
-| With Citation Analysis | 10,159 |
-| With Competitor Citations | 5,333 |
-| With LLM Analysis | 543 |
+| Total Patents (Full Portfolio) | 29,470 |
+| With Citation Analysis | 17,040 |
+| With Competitor Citations | 7,677 |
+| With LLM Analysis | 2,669 |
 | Unique Sectors | 41 |
 | Super-Sectors | 10 |
 
+### Affiliate Breakdown
+| Affiliate | Total | Active | With Citations |
+|-----------|-------|--------|----------------|
+| Broadcom | 11,086 | 10,038 | 3,139 |
+| VMware | 5,386 | 5,386 | 1,741 |
+| LSI Corporation | 3,714 | 607 | 472 |
+| Symantec Enterprise | 3,584 | 3,503 | 1,171 |
+| Avago Technologies | 2,918 | 2,917 | 301 |
+| CA Technologies | 1,400 | 1,394 | 315 |
+| Nicira (VMware SDN) | 1,028 | 1,028 | 370 |
+| Other affiliates | 354 | 352 | 168 |
+
 ## Recent Accomplishments (2026-01-21)
+
+### VMware Patent Integration Fix
+
+Fixed missing VMware patents in batch generation and portfolio exports:
+
+**Issue Discovered:**
+- VMware patents (6,414) were missing from heatmap batches despite being dominant in TopRated rankings (327 of top 500)
+- Root cause: VMware patents stored in separate `vmware-patents-2026-01-19.json`, not merged into `broadcom-portfolio`
+- Additionally, VMware patents had citation data but no pre-calculated `overallActionableScore`
+
+**Fixes Applied:**
+1. **`merge-portfolio-for-attorney.ts`**: Now includes patents from multi-score-analysis not in broadcom-portfolio
+   - Added VMware date handling (uses `grant_date` instead of `date`)
+   - Portfolio now includes 29,470 patents (was 22,589)
+
+2. **`generate-heatmap-batches.ts`**: Added runtime score calculation for patents without pre-calculated scores
+   - Uses `calculateSimpleScore()`: citation component (0-60 pts) + years component (0-40 pts)
+   - 2,111 VMware patents got calculated scores, 978 eligible for batches
+
+**Results:**
+- 31 VMware/Nicira patents now in batches (12.6% of 246 total)
+- Top VMware patents: 10749870 (score=85.6), 10333975 (score=82.4), 10326841 (score=82.1)
+- VMware well-represented in VIRTUALIZATION and SDN_NETWORK sector diversity batches
 
 ### Sector Reference Data Enhancement
 
@@ -193,7 +228,7 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
 ### Data Files
 | File | Description |
 |------|-------------|
-| `output/ATTORNEY-PORTFOLIO-LATEST.csv` | Full portfolio (22,589 patents) |
+| `output/ATTORNEY-PORTFOLIO-LATEST.csv` | Full portfolio (29,470 patents) |
 | `output/ATTORNEY-PORTFOLIO-AGGREGATIONS-*.json` | Pre-computed summaries |
 | `output/multi-score-analysis-LATEST.json` | Scored analysis (17,040 patents) |
 | `output/broadcom-portfolio-2026-01-15.json` | Raw USPTO data (22,589 patents) |
@@ -275,7 +310,8 @@ with open('output/ATTORNEY-PORTFOLIO-LATEST.csv') as f:
 
 | Date | Key Activity |
 |------|--------------|
-| 2026-01-21 | Heat map batch generation v2: interleaved strategy, 248 patents, SECURITY reduced to 48% |
+| 2026-01-21 | VMware patent integration fix: 31 VMware patents now in batches, portfolio expanded to 29,470 |
+| 2026-01-21 | Heat map batch generation v2: interleaved strategy, 246 patents, SECURITY reduced to 48% |
 | 2026-01-21 | Created `generate-heatmap-batches.ts`, `generate-batch-summary.ts`, batch config |
 | 2026-01-20 | Full portfolio merge (22,589), Attorney Questions worksheet, CPC fix |
 | 2026-01-20 | Completed 16 sector breakouts, summary tabs |
@@ -310,4 +346,4 @@ Our Portfolio → Heat Map Vendor → Product Matches → Competitor Analysis
 
 ---
 
-*Last Updated: 2026-01-21 (Heat Map Batch v2)*
+*Last Updated: 2026-01-21 (VMware Integration Fix)*

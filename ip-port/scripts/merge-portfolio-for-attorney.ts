@@ -54,6 +54,7 @@ interface MSAPatent {
   patent_id: string;
   title: string;
   date: string;
+  grant_date?: string;  // VMware patents use grant_date instead of date
   assignee: string;
   forward_citations: number;
   remaining_years: number;
@@ -252,15 +253,23 @@ async function main() {
   }
   console.log(`Loaded LLM analysis for ${llmMap.size} patents`);
 
-  // Load sector assignments
-  const sectorFile = findLatestFile('output/sectors', 'all-patents-sectors-v2-');
+  // Load sector assignments - prefer comprehensive assignments file
   const sectorAssignments = new Map<string, any>();
-  if (sectorFile) {
-    const data = JSON.parse(fs.readFileSync(sectorFile, 'utf-8'));
-    for (const [patentId, info] of Object.entries(data.assignments || {})) {
+  const comprehensiveSectorFile = 'output/patent-sector-assignments.json';
+  const legacySectorFile = findLatestFile('output/sectors', 'all-patents-sectors-v2-');
+
+  if (fs.existsSync(comprehensiveSectorFile)) {
+    const data = JSON.parse(fs.readFileSync(comprehensiveSectorFile, 'utf-8'));
+    for (const [patentId, info] of Object.entries(data)) {
       sectorAssignments.set(patentId, info as any);
     }
     console.log(`Loaded sector assignments for ${sectorAssignments.size} patents`);
+  } else if (legacySectorFile) {
+    const data = JSON.parse(fs.readFileSync(legacySectorFile, 'utf-8'));
+    for (const [patentId, info] of Object.entries(data.assignments || {})) {
+      sectorAssignments.set(patentId, info as any);
+    }
+    console.log(`Loaded legacy sector assignments for ${sectorAssignments.size} patents`);
   }
 
   // Load IPR risk data
@@ -393,9 +402,97 @@ async function main() {
     }
   }
 
+  // Track which patents we've already processed
+  const processedPatentIds = new Set(records.map(r => r.patent_id));
+
+  // Add patents from multi-score-analysis that aren't in broadcom-portfolio
+  // (This handles VMware and other patents added after original portfolio export)
+  let fromMSAOnly = 0;
+  for (const msa of msaData.patents as MSAPatent[]) {
+    if (processedPatentIds.has(msa.patent_id)) continue;
+
+    const patentId = msa.patent_id;
+    const llm = llmMap.get(patentId) || {};
+    const sectorInfo = sectorAssignments.get(patentId) || {};
+    const ipr = iprMap.get(patentId) || {};
+    const pros = prosMap.get(patentId) || {};
+
+    const assignee = msa.assignee || 'Unknown';
+    const grantDate = msa.date || msa.grant_date || '';
+    const yearsRemaining = msa.remaining_years ?? (grantDate ? calculateYearsRemaining(grantDate) : 0);
+    const isExpired = yearsRemaining <= 0;
+
+    const cpcCodes = msa.cpc_codes || [];
+
+    const sector = sectorInfo.sector || msa.sector || '';
+    const superSector = sectorInfo.superSector || msa.superSector || '';
+
+    const record: AttorneyRecord = {
+      patent_id: patentId,
+      title: clean(msa.title || ''),
+      grant_date: grantDate,
+      assignee: clean(assignee),
+      affiliate: normalizeAffiliate(assignee),
+      years_remaining: round(yearsRemaining, 1),
+      is_expired: isExpired,
+      forward_citations: msa.forward_citations || 0,
+      competitor_citations: msa.competitor_citations || 0,
+      non_competitor_citations: Math.max(0, (msa.forward_citations || 0) - (msa.competitor_citations || 0)),
+      competitors_citing: (msa.competitors || []).join('; '),
+
+      // Attorney Questions
+      eligibility_score: llm.eligibility_score || null,
+      validity_score: llm.validity_score || null,
+      summary: clean(llm.summary || ''),
+      prior_art_problem: clean(llm.prior_art_problem || ''),
+      technical_solution: clean(llm.technical_solution || ''),
+
+      // Additional LLM
+      claim_breadth: llm.claim_breadth || null,
+      enforcement_clarity: llm.enforcement_clarity || null,
+      design_around_difficulty: llm.design_around_difficulty || null,
+      llm_confidence: llm.confidence || null,
+
+      // Classification
+      sector: sector,
+      super_sector: superSector,
+      technology_category: llm.technology_category || '',
+      cpc_primary: cpcCodes.length > 0 ? cpcCodes[0] : '',
+      cpc_codes: cpcCodes.slice(0, 5).join('; '),
+
+      // Risk/Quality
+      ipr_risk_score: ipr.ipr_risk_score || null,
+      ipr_risk_category: ipr.ipr_risk_category || '',
+      prosecution_quality_score: pros.prosecution_quality_score || null,
+      prosecution_quality_category: pros.prosecution_quality_category || '',
+
+      // Product/Market
+      product_types: (llm.product_types || []).slice(0, 5).join('; '),
+      likely_implementers: (llm.likely_implementers || []).slice(0, 5).join('; '),
+      detection_method: clean(llm.detection_method || ''),
+
+      // Scores (from MSA)
+      licensing_score: msa.licensingScore || null,
+      litigation_score: msa.litigationScore || null,
+      strategic_score: msa.strategicScore || null,
+      acquisition_score: msa.acquisitionScore || null,
+      overall_score: msa.overallActionableScore || null,
+
+      // Flags
+      has_citation_analysis: true,
+      has_llm_analysis: !!llm.eligibility_score,
+      has_ipr_data: !!ipr.ipr_risk_score,
+      has_prosecution_data: !!pros.prosecution_quality_score,
+    };
+
+    records.push(record);
+    fromMSAOnly++;
+  }
+
   console.log(`\nRecord sources:`);
   console.log(`  From multi-score-analysis: ${fromMSA}`);
   console.log(`  Portfolio-only (no citation analysis): ${fromPortfolioOnly}`);
+  console.log(`  MSA-only (e.g., VMware): ${fromMSAOnly}`);
 
   // Sort by competitor citations (descending), then forward citations
   records.sort((a, b) => {

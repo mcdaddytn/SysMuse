@@ -1,8 +1,8 @@
 {
-  "description": "Super-sector groupings for portfolio-level views",
-  "version": "3.0",
+  "description": "Super-sector groupings for portfolio-level views - comprehensive mapping",
+  "version": "4.0",
   "created": "2026-01-21",
-  "notes": "Updated to use actual sector names from sector-breakout-v2.json (41 sectors)",
+  "notes": "Comprehensive mapping covering all sector names from both v1 and v2 schemes",
 
   "superSectors": {
     "SECURITY": {
@@ -13,10 +13,28 @@
         "network-auth-access",
         "network-crypto",
         "network-secure-compute",
+        "network-security",
+        "network-auth",
         "computing-os-security",
         "computing-data-protection",
         "computing-auth-boot",
-        "wireless-security"
+        "wireless-security",
+        "auth-access",
+        "auth-firewall",
+        "auth-identity",
+        "auth-ids",
+        "auth-network",
+        "auth-threat",
+        "cryptography",
+        "sec-auth",
+        "sec-data",
+        "sec-drm",
+        "sec-hardware",
+        "sec-malware",
+        "sec-monitoring",
+        "sec-policy",
+        "sec-sandbox",
+        "security-crypto"
       ],
       "damagesTier": "High"
     },
@@ -27,7 +45,33 @@
       "sectors": [
         "computing-runtime",
         "computing-systems",
-        "computing-ui"
+        "computing-ui",
+        "virtualization",
+        "vm-deployment",
+        "vm-emulation",
+        "vm-ipc",
+        "vm-resource",
+        "vm-scheduling",
+        "vmh-core",
+        "vmh-migration",
+        "vmh-placement",
+        "vmh-snapshot",
+        "cloud-config",
+        "cloud-fault",
+        "cloud-monitoring",
+        "cloud-nfv",
+        "cloud-orchestration",
+        "cloud-topology",
+        "cfg-automation",
+        "cfg-deploy",
+        "cfg-general",
+        "cfg-lifecycle",
+        "cfg-provision",
+        "cfg-scripting",
+        "cfg-templates",
+        "cfg-topology",
+        "cfg-validation",
+        "storage-virtualization"
       ],
       "damagesTier": "High"
     },
@@ -41,7 +85,26 @@
         "network-protocols",
         "network-signal-processing",
         "network-multiplexing",
-        "network-error-control"
+        "network-error-control",
+        "network-infrastructure",
+        "sdn-lan",
+        "sdn-management",
+        "sdn-monitoring",
+        "sdn-protocol",
+        "sdn-qos",
+        "sdn-routing",
+        "sdn-switching",
+        "proto-content",
+        "proto-distributed",
+        "proto-layers",
+        "proto-proxy",
+        "proto-services",
+        "proto-session",
+        "infra-addressing",
+        "infra-bridge",
+        "infra-bus",
+        "infra-framing",
+        "infra-powerline"
       ],
       "damagesTier": "High"
     },
@@ -57,7 +120,24 @@
         "wireless-mobility",
         "wireless-infrastructure",
         "wireless-services",
-        "rf-acoustic"
+        "rf-acoustic",
+        "wireless",
+        "wireless-access",
+        "wireless-comm",
+        "wireless-connection",
+        "wireless-devices",
+        "wireless-monitoring",
+        "wireless-power",
+        "wireless-resource",
+        "wireless-topology",
+        "wireless-traffic",
+        "rf-transmission",
+        "baseband",
+        "modulation",
+        "multiplexing",
+        "synchronization",
+        "signal-processing",
+        "signal-conversion"
       ],
       "damagesTier": "High"
     },
@@ -72,17 +152,49 @@
         "video-drm-conditional",
         "video-server-cdn",
         "video-storage",
-        "streaming-multimedia"
+        "streaming-multimedia",
+        "video-capture",
+        "video-display",
+        "video-image",
+        "stream-client",
+        "stream-drm",
+        "stream-interactive",
+        "stream-server",
+        "stream-user"
       ],
       "damagesTier": "High"
     },
 
     "COMPUTING": {
       "displayName": "Computing & Data",
-      "description": "General computing, databases, and data retrieval",
+      "description": "General computing, databases, software engineering, and data retrieval",
       "sectors": [
         "data-retrieval",
-        "fintech-business"
+        "fintech-business",
+        "computing",
+        "database",
+        "software-engineering",
+        "systems-software",
+        "memory-management",
+        "io-interfaces",
+        "storage-media",
+        "general"
+      ],
+      "damagesTier": "Medium"
+    },
+
+    "FAULT_TOLERANCE": {
+      "displayName": "Fault Tolerance & Reliability",
+      "description": "Error detection, recovery, monitoring, and system reliability",
+      "sectors": [
+        "fault-tolerance",
+        "ft-diagnosis",
+        "ft-errordetect",
+        "ft-failover",
+        "ft-monitoring",
+        "ft-recovery",
+        "ft-redundancy",
+        "error-correction"
       ],
       "damagesTier": "Medium"
     },
@@ -127,9 +239,5 @@
     }
   },
 
-  "unmappedSectorDefault": "OTHER",
-
-  "sectorToSuperSector": {
-    "_comment": "Auto-generated reverse mapping for quick lookups - see script generate-sector-reference-data.ts"
-  }
+  "unmappedSectorDefault": "COMPUTING"
 }

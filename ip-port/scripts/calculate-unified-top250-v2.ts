@@ -95,6 +95,7 @@ interface PatentData {
   sector?: string;
   sector_name?: string;
   sector_source?: 'term' | 'mlt' | 'cpc' | 'none';
+  super_sector?: string;
 
   // Calculated scores
   score_aggressive?: number;
@@ -204,18 +205,30 @@ function loadProsecutionData(): Map<string, any> {
 }
 
 function loadSectorData(): Map<string, any> {
+  const map = new Map<string, any>();
+
+  // Prefer comprehensive sector assignments file
+  const comprehensivePath = './output/patent-sector-assignments.json';
+  if (fs.existsSync(comprehensivePath)) {
+    const data = JSON.parse(fs.readFileSync(comprehensivePath, 'utf-8'));
+    for (const [patentId, info] of Object.entries(data)) {
+      map.set(patentId, info);
+    }
+    console.log(`Loaded ${map.size} patents from comprehensive sector assignments`);
+    return map;
+  }
+
+  // Fall back to legacy sector files
   const sectorFiles = fs.readdirSync('./output/sectors')
     .filter(f => f.startsWith('all-patents-sectors-') && f.endsWith('.json'))
     .sort().reverse();
-
-  const map = new Map<string, any>();
 
   if (sectorFiles.length > 0) {
     const data = JSON.parse(fs.readFileSync(`./output/sectors/${sectorFiles[0]}`, 'utf-8'));
     for (const assignment of data.assignments || []) {
       map.set(assignment.patent_id, assignment);
     }
-    console.log(`Loaded ${map.size} patents from sector assignments`);
+    console.log(`Loaded ${map.size} patents from legacy sector assignments`);
   }
 
   return map;
@@ -539,8 +552,9 @@ async function main() {
 
       // Sector
       sector: sector.final_sector || sector.sector || sector.cpc_sector,
-      sector_name: sector.final_sector_name || sector.sector_name || sector.cpc_sector_name,
-      sector_source: sector.sector_source || (sector.cpc_sector ? 'cpc' : 'none'),
+      sector_name: sector.final_sector_name || sector.sectorName || sector.sector_name || sector.cpc_sector_name,
+      sector_source: sector.sector_source || sector.source || (sector.cpc_sector ? 'cpc' : 'none'),
+      super_sector: sector.superSector || sector.super_sector || '',
     };
 
     // Apply filters
@@ -667,7 +681,7 @@ async function main() {
   const csvHeaders = [
     'rank', 'patent_id', 'affiliate', 'title', 'grant_date', 'assignee', 'years_remaining', 'year_multiplier',
     'forward_citations', 'competitor_citations', 'competitor_count', 'competitors',
-    'sector', 'sector_name', 'sector_source',
+    'sector', 'sector_name', 'super_sector', 'sector_source',
     'eligibility_score', 'validity_score', 'claim_breadth', 'enforcement_clarity', 'design_around_difficulty',
     'market_relevance_score', 'evidence_accessibility_score', 'trend_alignment_score',
     'ipr_risk_score', 'prosecution_quality_score',
@@ -692,6 +706,7 @@ async function main() {
       `"${(p.competitors || []).join('; ')}"`,
       p.sector || '',
       `"${p.sector_name || ''}"`,
+      p.super_sector || '',
       p.sector_source || '',
       p.eligibility_score ?? '',
       p.validity_score ?? '',
@@ -726,6 +741,211 @@ async function main() {
     fs.writeFileSync(`./output/TOPRATED-V2-needs-ipr-${timestamp}.json`, JSON.stringify(needsIPR, null, 2));
     console.log(`Patents needing IPR check: ${needsIPR.length}`);
   }
+
+  // ==========================================================================
+  // Export Summary Sheets (matching V3 format)
+  // ==========================================================================
+
+  // Super-Sector Summary
+  const superSectorStats = new Map<string, {
+    count: number;
+    avgScore: number;
+    avgCC: number;
+    avgYears: number;
+  }>();
+
+  for (const p of top500) {
+    const ss = p.super_sector || 'UNKNOWN';
+    const existing = superSectorStats.get(ss) || { count: 0, avgScore: 0, avgCC: 0, avgYears: 0 };
+    existing.count++;
+    existing.avgScore += p.score_unified || 0;
+    existing.avgCC += p.competitor_citations;
+    existing.avgYears += p.years_remaining;
+    superSectorStats.set(ss, existing);
+  }
+
+  for (const [, stats] of superSectorStats) {
+    if (stats.count > 0) {
+      stats.avgScore /= stats.count;
+      stats.avgCC /= stats.count;
+      stats.avgYears /= stats.count;
+    }
+  }
+
+  const superSectorRows = [
+    ['super_sector', 'patent_count', 'pct_of_top', 'avg_unified_score', 'avg_competitor_citations', 'avg_years_remaining'].join(','),
+    ...[...superSectorStats.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([ss, s]) => [
+        ss,
+        s.count,
+        ((s.count / top500.length) * 100).toFixed(1),
+        s.avgScore.toFixed(2),
+        s.avgCC.toFixed(1),
+        s.avgYears.toFixed(1),
+      ].join(','))
+  ];
+
+  fs.writeFileSync(`./output/SUMMARY-V2-SUPERSECTOR-${timestamp}.csv`, superSectorRows.join('\n'));
+  console.log(`\nSaved: output/SUMMARY-V2-SUPERSECTOR-${timestamp}.csv`);
+
+  // Sector Summary
+  const sectorStats = new Map<string, {
+    name: string;
+    superSector: string;
+    count: number;
+    avgScore: number;
+    avgCC: number;
+    avgYears: number;
+  }>();
+
+  for (const p of top500) {
+    const key = p.sector || 'unknown';
+    const existing = sectorStats.get(key) || {
+      name: p.sector_name || 'Unknown',
+      superSector: p.super_sector || '',
+      count: 0,
+      avgScore: 0,
+      avgCC: 0,
+      avgYears: 0,
+    };
+    existing.count++;
+    existing.avgScore += p.score_unified || 0;
+    existing.avgCC += p.competitor_citations;
+    existing.avgYears += p.years_remaining;
+    sectorStats.set(key, existing);
+  }
+
+  for (const [, stats] of sectorStats) {
+    if (stats.count > 0) {
+      stats.avgScore /= stats.count;
+      stats.avgCC /= stats.count;
+      stats.avgYears /= stats.count;
+    }
+  }
+
+  const sectorRows = [
+    ['sector', 'sector_name', 'super_sector', 'patent_count', 'pct_of_top', 'avg_unified_score', 'avg_competitor_citations', 'avg_years_remaining'].join(','),
+    ...[...sectorStats.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([key, s]) => [
+        key,
+        `"${s.name}"`,
+        s.superSector,
+        s.count,
+        ((s.count / top500.length) * 100).toFixed(1),
+        s.avgScore.toFixed(2),
+        s.avgCC.toFixed(1),
+        s.avgYears.toFixed(1),
+      ].join(','))
+  ];
+
+  fs.writeFileSync(`./output/SUMMARY-V2-SECTOR-${timestamp}.csv`, sectorRows.join('\n'));
+  console.log(`Saved: output/SUMMARY-V2-SECTOR-${timestamp}.csv`);
+
+  // Affiliate Summary
+  const affiliateStats = new Map<string, {
+    count: number;
+    avgScore: number;
+    avgCC: number;
+    avgYears: number;
+    topSectors: Map<string, number>;
+  }>();
+
+  for (const p of top500) {
+    const affiliate = normalizeAffiliate(p.assignee);
+    const existing = affiliateStats.get(affiliate) || {
+      count: 0,
+      avgScore: 0,
+      avgCC: 0,
+      avgYears: 0,
+      topSectors: new Map(),
+    };
+    existing.count++;
+    existing.avgScore += p.score_unified || 0;
+    existing.avgCC += p.competitor_citations;
+    existing.avgYears += p.years_remaining;
+    const ss = p.super_sector || 'UNKNOWN';
+    existing.topSectors.set(ss, (existing.topSectors.get(ss) || 0) + 1);
+    affiliateStats.set(affiliate, existing);
+  }
+
+  for (const [, stats] of affiliateStats) {
+    if (stats.count > 0) {
+      stats.avgScore /= stats.count;
+      stats.avgCC /= stats.count;
+      stats.avgYears /= stats.count;
+    }
+  }
+
+  const affiliateRows = [
+    ['affiliate', 'patent_count', 'pct_of_top', 'avg_unified_score', 'avg_competitor_citations', 'avg_years_remaining', 'top_sectors'].join(','),
+    ...[...affiliateStats.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, s]) => {
+        const topSectors = [...s.topSectors.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([sec, cnt]) => `${sec}(${cnt})`)
+          .join('; ');
+        return [
+          `"${name.replace(/"/g, '""')}"`,
+          s.count,
+          ((s.count / top500.length) * 100).toFixed(1),
+          s.avgScore.toFixed(2),
+          s.avgCC.toFixed(1),
+          s.avgYears.toFixed(1),
+          `"${topSectors}"`,
+        ].join(',');
+      })
+  ];
+
+  fs.writeFileSync(`./output/SUMMARY-V2-AFFILIATE-${timestamp}.csv`, affiliateRows.join('\n'));
+  console.log(`Saved: output/SUMMARY-V2-AFFILIATE-${timestamp}.csv`);
+
+  // Competitor Summary
+  const competitorStats = new Map<string, {
+    patentsCited: number;
+    avgScore: number;
+    topPatents: { id: string; citations: number }[];
+  }>();
+
+  for (const p of top500) {
+    for (const comp of p.competitors || []) {
+      const existing = competitorStats.get(comp) || {
+        patentsCited: 0,
+        avgScore: 0,
+        topPatents: [],
+      };
+      existing.patentsCited++;
+      existing.avgScore += p.score_unified || 0;
+      existing.topPatents.push({ id: p.patent_id, citations: p.competitor_citations });
+      competitorStats.set(comp, existing);
+    }
+  }
+
+  for (const [, stats] of competitorStats) {
+    if (stats.patentsCited > 0) {
+      stats.avgScore /= stats.patentsCited;
+      stats.topPatents.sort((a, b) => b.citations - a.citations);
+    }
+  }
+
+  const competitorRows = [
+    ['competitor', 'patents_cited', 'avg_patent_score', 'top_3_patents'].join(','),
+    ...[...competitorStats.entries()]
+      .sort((a, b) => b[1].patentsCited - a[1].patentsCited)
+      .slice(0, 50)
+      .map(([comp, s]) => [
+        `"${comp.replace(/"/g, '""')}"`,
+        s.patentsCited,
+        s.avgScore.toFixed(2),
+        `"${s.topPatents.slice(0, 3).map(p => p.id).join('; ')}"`,
+      ].join(','))
+  ];
+
+  fs.writeFileSync(`./output/SUMMARY-V2-COMPETITOR-${timestamp}.csv`, competitorRows.join('\n'));
+  console.log(`Saved: output/SUMMARY-V2-COMPETITOR-${timestamp}.csv`);
 }
 
 main().catch(console.error);

@@ -75,10 +75,12 @@ interface PatentRecord {
   super_sector: string;
   claim_breadth: number | null;
   overall_score: number | null;
+  affiliate: string;
 }
 
 interface BatchPatent {
   patent_id: string;
+  us_patent_id: string;
   title: string;
   overall_score: number;
   competitor_citations: number;
@@ -87,6 +89,7 @@ interface BatchPatent {
   sector: string;
   claim_breadth: string;
   pool_rank: number;
+  affiliate: string;
 }
 
 interface Batch {
@@ -182,11 +185,30 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
+/**
+ * Calculate a simple score for patents without pre-calculated scores.
+ * Uses a weighted combination of competitor_citations and years_remaining.
+ * Formula mirrors simplified version of calculate-and-export-v3.ts scoring.
+ */
+function calculateSimpleScore(cc: number, years: number): number {
+  // Citation component (0-60 points): sqrt normalization, max at 100 citations
+  const citationScore = Math.min(60, 60 * Math.sqrt(Math.min(cc, 100) / 100));
+
+  // Years component (0-40 points): linear, 5-20 years mapped to 0-40
+  const yearsScore = Math.max(0, Math.min(40, (years - 5) / 15 * 40));
+
+  // Combined score (0-100 scale)
+  return Math.round((citationScore + yearsScore) * 10) / 10;
+}
+
 function loadPortfolioFromCsv(): PatentRecord[] {
+  // Use ATTORNEY-PORTFOLIO which has all patents including VMware
   const portfolioPath = path.resolve('output/ATTORNEY-PORTFOLIO-LATEST.csv');
   if (!fs.existsSync(portfolioPath)) {
     throw new Error(`Portfolio file not found: ${portfolioPath}`);
   }
+
+  console.log(`  Loading from: ATTORNEY-PORTFOLIO-LATEST.csv`);
 
   const csvContent = fs.readFileSync(portfolioPath, 'utf-8');
   const lines = csvContent.split('\n');
@@ -195,6 +217,8 @@ function loadPortfolioFromCsv(): PatentRecord[] {
   headers.forEach((h, i) => { headerIndex[h] = i; });
 
   const records: PatentRecord[] = [];
+  let calculatedScores = 0;
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -204,17 +228,30 @@ function loadPortfolioFromCsv(): PatentRecord[] {
       return idx !== undefined ? values[idx] || '' : '';
     };
 
+    const yearsRemaining = parseFloat(getVal('years_remaining')) || 0;
+    const competitorCitations = parseInt(getVal('competitor_citations')) || 0;
+    let overallScore = getVal('overall_score') ? parseFloat(getVal('overall_score')) : null;
+
+    // Calculate score for patents without one (e.g., VMware)
+    if (overallScore === null && competitorCitations > 0 && yearsRemaining >= 3) {
+      overallScore = calculateSimpleScore(competitorCitations, yearsRemaining);
+      calculatedScores++;
+    }
+
     records.push({
       patent_id: getVal('patent_id'),
       title: getVal('title'),
-      years_remaining: parseFloat(getVal('years_remaining')) || 0,
-      competitor_citations: parseInt(getVal('competitor_citations')) || 0,
+      years_remaining: yearsRemaining,
+      competitor_citations: competitorCitations,
       sector: getVal('sector'),
       super_sector: getVal('super_sector') || 'unassigned',
       claim_breadth: getVal('claim_breadth') ? parseFloat(getVal('claim_breadth')) : null,
-      overall_score: getVal('overall_score') ? parseFloat(getVal('overall_score')) : null,
+      overall_score: overallScore,
+      affiliate: getVal('affiliate') || '',
     });
   }
+
+  console.log(`  Calculated scores for ${calculatedScores} patents without pre-calculated scores`);
   return records;
 }
 
@@ -230,6 +267,7 @@ function filterEligiblePatents(patents: PatentRecord[], config: BatchConfig): Pa
 function patentToOutput(p: PatentRecord, poolRank: number): BatchPatent {
   return {
     patent_id: p.patent_id,
+    us_patent_id: `US${p.patent_id}`,
     title: p.title.length > 80 ? p.title.substring(0, 80) + '...' : p.title,
     overall_score: Math.round((p.overall_score || 0) * 10) / 10,
     competitor_citations: p.competitor_citations,
@@ -238,6 +276,7 @@ function patentToOutput(p: PatentRecord, poolRank: number): BatchPatent {
     sector: p.sector,
     claim_breadth: p.claim_breadth !== null ? String(p.claim_breadth) : '',
     pool_rank: poolRank,
+    affiliate: p.affiliate || '',
   };
 }
 
@@ -574,7 +613,7 @@ function printSummary(output: BatchOutput): void {
 }
 
 function saveBatchesToCsv(batches: Batch[], prefix: string): void {
-  const headers = ['patent_id', 'title', 'overall_score', 'competitor_citations', 'years_remaining', 'super_sector', 'sector', 'claim_breadth', 'pool_rank'];
+  const headers = ['patent_id', 'us_patent_id', 'title', 'affiliate', 'overall_score', 'competitor_citations', 'years_remaining', 'super_sector', 'sector', 'claim_breadth', 'pool_rank'];
 
   for (const batch of batches) {
     const batchNum = String(batch.batch_number).padStart(3, '0');
@@ -584,7 +623,9 @@ function saveBatchesToCsv(batches: Batch[], prefix: string): void {
     for (const p of batch.patents) {
       const row = [
         p.patent_id,
+        p.us_patent_id,
         csvEscape(p.title),
+        csvEscape(p.affiliate),
         String(p.overall_score),
         String(p.competitor_citations),
         String(p.years_remaining),

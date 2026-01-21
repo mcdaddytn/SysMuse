@@ -1,9 +1,10 @@
 '===============================================================================
 ' Within-Sector Patent Rankings - VBA Macros
 '===============================================================================
-' Version: 1.0
+' Version: 2.0
 ' Description: Import within-sector rankings and provide adjustable weights
 '              for citation, term, and competitor diversity scoring.
+'              Also imports sector reference data with super-sector mappings.
 '
 ' SCORING MODEL:
 '   Within-Sector Score = (Citation Weight × Citation Score)
@@ -21,6 +22,14 @@
 '   - ImportWithinSector(): Import WITHIN-SECTOR-LATEST.csv
 '   - RecalculateWithinSector(): Recalculate with adjusted weights
 '   - GenerateSectorCompetitorSummary(): Create competitor summary by sector
+'   - ImportSectorReferenceData(): Import all reference data worksheets
+'
+' REFERENCE DATA WORKSHEETS (via ImportSectorReferenceData):
+'   - SectorMapping: Sector to super-sector mapping with representation stats
+'   - SuperSectorSummary: Super-sector overview with aggregated metrics
+'   - CPCReference: CPC code descriptions
+'   - CPCSectorOverlap: CPC to sector/super-sector mapping
+'   - Top15Comparison: Top 15 per sector vs overall ranking
 '
 ' Worksheet Structure:
 '   - RawData: Imported patent metrics
@@ -28,12 +37,13 @@
 '   - SectorView: Ranked patents by sector with scores
 '
 ' File Convention:
-'   - Export: npx tsx scripts/export-within-sector-for-excel.ts
-'   - Copy CSV to same folder as this workbook
-'   - Looks for: WITHIN-SECTOR-YYYY-MM-DD.csv, WITHIN-SECTOR-LATEST.csv, or most recent
+'   - Export within-sector: npx tsx scripts/export-within-sector-for-excel.ts
+'   - Export reference data: npx tsx scripts/generate-sector-reference-data.ts
+'   - Copy CSV files to same folder as this workbook
+'   - Looks for: *-LATEST.csv files
 '
 ' Author: Generated for IP Portfolio Analysis Platform
-' Last Updated: 2026-01-19
+' Last Updated: 2026-01-21
 '===============================================================================
 
 Option Explicit
@@ -855,3 +865,300 @@ Private Sub GenerateSectorView(wsSector As Worksheet, wsRaw As Worksheet, wsWeig
     wsSector.Range("A5").Select
     ActiveWindow.FreezePanes = True
 End Sub
+
+'===============================================================================
+' REFERENCE DATA IMPORT FUNCTIONS
+'===============================================================================
+
+Public Sub ImportSectorReferenceData()
+    '
+    ' Imports all sector reference data files:
+    ' - SECTOR-MAPPING-LATEST.csv (sector to super-sector mapping)
+    ' - SUPER-SECTOR-SUMMARY-LATEST.csv (super-sector overview)
+    ' - CPC-REFERENCE-LATEST.csv (CPC code descriptions)
+    ' - CPC-SECTOR-OVERLAP-LATEST.csv (CPC to sector/super-sector overlap)
+    ' - TOP15-SECTOR-COMPARISON-LATEST.csv (top 15 per sector vs overall)
+    '
+    Dim wb As Workbook
+    Dim basePath As String
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    Set wb = ThisWorkbook
+    basePath = GetBasePath()
+
+    ' Import each reference file
+    ImportSectorMapping wb, basePath
+    ImportSuperSectorSummary wb, basePath
+    ImportCPCReference wb, basePath
+    ImportCPCSectorOverlap wb, basePath
+    ImportTop15Comparison wb, basePath
+
+    ' Activate sector mapping sheet
+    On Error Resume Next
+    wb.Worksheets("SectorMapping").Activate
+    On Error GoTo 0
+
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+
+    MsgBox "Reference data imported successfully!" & vbCrLf & _
+           "- SectorMapping: Sector to super-sector with stats" & vbCrLf & _
+           "- SuperSectorSummary: Super-sector overview" & vbCrLf & _
+           "- CPCReference: CPC code descriptions" & vbCrLf & _
+           "- CPCSectorOverlap: CPC to sector mapping" & vbCrLf & _
+           "- Top15Comparison: Top 15 per sector vs overall", vbInformation
+End Sub
+
+Private Sub ImportSectorMapping(wb As Workbook, basePath As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "SECTOR-MAPPING-LATEST.csv"
+    If Dir(csvPath) = "" Then
+        Debug.Print "File not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "SectorMapping")
+    ImportCSVToSheet ws, csvPath
+
+    ' Format the sheet
+    ws.Cells(1, 1).Value = "SECTOR TO SUPER-SECTOR MAPPING"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+
+    ' Insert row for title
+    ws.Rows(1).Insert
+    ws.Cells(1, 1).Value = "SECTOR TO SUPER-SECTOR MAPPING"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+
+    ws.Cells(2, 1).Value = "Shows all sectors mapped to super-sectors with representation in top-rated patents"
+
+    ' Format headers
+    FormatHeaderRow ws, 4
+
+    ' Add conditional formatting for top 100/250/500 columns
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    ' Data bars for patent counts
+    If lastRow > 4 Then
+        ws.Range("D5:D" & lastRow).FormatConditions.AddDatabar
+        ws.Range("D5:D" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+
+        ' Color scale for in_top_100
+        ws.Range("E5:E" & lastRow).FormatConditions.AddColorScale ColorScaleType:=3
+        ws.Range("E5:E" & lastRow).FormatConditions(1).ColorScaleCriteria(1).FormatColor.Color = RGB(255, 255, 255)
+        ws.Range("E5:E" & lastRow).FormatConditions(1).ColorScaleCriteria(2).FormatColor.Color = RGB(255, 235, 132)
+        ws.Range("E5:E" & lastRow).FormatConditions(1).ColorScaleCriteria(3).FormatColor.Color = RGB(99, 190, 123)
+    End If
+
+    ws.Columns("A:L").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportSuperSectorSummary(wb As Workbook, basePath As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "SUPER-SECTOR-SUMMARY-LATEST.csv"
+    If Dir(csvPath) = "" Then
+        Debug.Print "File not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "SuperSectorSummary")
+    ImportCSVToSheet ws, csvPath
+
+    ' Insert title rows
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+
+    ws.Cells(1, 1).Value = "SUPER-SECTOR SUMMARY"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+
+    ws.Cells(2, 1).Value = "Aggregated metrics by super-sector showing representation in top-rated patents"
+
+    ' Format headers
+    FormatHeaderRow ws, 4
+
+    ' Format data
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    If lastRow > 4 Then
+        ws.Range("F5:F" & lastRow).FormatConditions.AddDatabar
+        ws.Range("F5:F" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+
+        ws.Range("G5:G" & lastRow).FormatConditions.AddDatabar
+        ws.Range("G5:G" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 190, 123)
+    End If
+
+    ws.Columns("A:M").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportCPCReference(wb As Workbook, basePath As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "CPC-REFERENCE-LATEST.csv"
+    If Dir(csvPath) = "" Then
+        Debug.Print "File not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "CPCReference")
+    ImportCSVToSheet ws, csvPath
+
+    ' Insert title rows
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+
+    ws.Cells(1, 1).Value = "CPC CODE REFERENCE"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+
+    ws.Cells(2, 1).Value = "CPC (Cooperative Patent Classification) codes with descriptions"
+
+    ' Format headers
+    FormatHeaderRow ws, 4
+
+    ws.Columns("A:C").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportCPCSectorOverlap(wb As Workbook, basePath As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "CPC-SECTOR-OVERLAP-LATEST.csv"
+    If Dir(csvPath) = "" Then
+        Debug.Print "File not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "CPCSectorOverlap")
+    ImportCSVToSheet ws, csvPath
+
+    ' Insert title rows
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+
+    ws.Cells(1, 1).Value = "CPC TO SECTOR/SUPER-SECTOR OVERLAP"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+
+    ws.Cells(2, 1).Value = "Shows which CPC codes map to which sectors and super-sectors (top 100 CPC codes by patent count)"
+
+    ' Format headers
+    FormatHeaderRow ws, 4
+
+    ' Format data
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    If lastRow > 4 Then
+        ws.Range("C5:C" & lastRow).FormatConditions.AddDatabar
+        ws.Range("C5:C" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+    End If
+
+    ws.Columns("A:O").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportTop15Comparison(wb As Workbook, basePath As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "TOP15-SECTOR-COMPARISON-LATEST.csv"
+    If Dir(csvPath) = "" Then
+        Debug.Print "File not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "Top15Comparison")
+    ImportCSVToSheet ws, csvPath
+
+    ' Insert title rows
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+
+    ws.Cells(1, 1).Value = "TOP 15 PER SECTOR VS OVERALL RANKING"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+
+    ws.Cells(2, 1).Value = "Shows how top 15 patents in each sector compare to overall portfolio ranking"
+
+    ' Format headers
+    FormatHeaderRow ws, 4
+
+    ' Color Y/N columns for top 100/250/500
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    If lastRow > 4 Then
+        ' Highlight Y values in green for in_top columns
+        Dim rng As Range
+        Set rng = ws.Range("J5:L" & lastRow)
+
+        rng.FormatConditions.Add Type:=xlCellValue, Operator:=xlEqual, Formula1:="=""Y"""
+        rng.FormatConditions(rng.FormatConditions.Count).Interior.Color = RGB(198, 239, 206)
+    End If
+
+    ws.Columns("A:L").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportCSVToSheet(ws As Worksheet, csvPath As String)
+    Dim qt As QueryTable
+
+    ' Clear existing data
+    ws.Cells.Clear
+
+    ' Import CSV
+    Set qt = ws.QueryTables.Add( _
+        Connection:="TEXT;" & csvPath, _
+        Destination:=ws.Range("A1"))
+
+    With qt
+        .TextFileParseType = xlDelimited
+        .TextFileCommaDelimiter = True
+        .TextFileTextQualifier = xlTextQualifierDoubleQuote
+        .Refresh BackgroundQuery:=False
+        .Delete
+    End With
+End Sub
+
+Private Sub FormatHeaderRow(ws As Worksheet, headerRow As Long)
+    With ws.Rows(headerRow)
+        .Font.Bold = True
+        .Interior.Color = RGB(68, 84, 106)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+End Sub
+
+Private Function GetBasePath() As String
+    Dim basePath As String
+
+    If ThisWorkbook.Path <> "" Then
+        basePath = ThisWorkbook.Path & "\"
+    Else
+        basePath = CurDir & "\"
+    End If
+
+    GetBasePath = basePath
+End Function

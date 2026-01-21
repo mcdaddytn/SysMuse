@@ -1,31 +1,22 @@
 {
   "description": "Super-sector groupings for portfolio-level views",
-  "version": "2.0",
-  "created": "2026-01-20",
-  "notes": "Updated to include all 114 breakout sectors from CPC-based sector assignment",
+  "version": "3.0",
+  "created": "2026-01-21",
+  "notes": "Updated to use actual sector names from sector-breakout-v2.json (41 sectors)",
 
   "superSectors": {
     "SECURITY": {
       "displayName": "Security",
       "description": "Cybersecurity, threat protection, authentication, malware, and data protection",
       "sectors": [
-        "sec-malware",
-        "sec-data",
-        "sec-auth",
-        "sec-policy",
-        "sec-sandbox",
-        "sec-drm",
-        "sec-hardware",
-        "sec-monitoring",
-        "cryptography",
-        "auth-ids",
-        "auth-firewall",
-        "auth-identity",
-        "auth-network",
-        "auth-access",
-        "auth-threat",
-        "network-security",
-        "security-crypto"
+        "network-threat-protection",
+        "network-auth-access",
+        "network-crypto",
+        "network-secure-compute",
+        "computing-os-security",
+        "computing-data-protection",
+        "computing-auth-boot",
+        "wireless-security"
       ],
       "damagesTier": "High"
     },
@@ -34,32 +25,9 @@
       "displayName": "Virtualization & Cloud",
       "description": "Virtual machines, hypervisors, containers, cloud orchestration, and configuration",
       "sectors": [
-        "vmh-placement",
-        "vmh-migration",
-        "vmh-core",
-        "vmh-snapshot",
-        "vm-resource",
-        "vm-ipc",
-        "vm-emulation",
-        "vm-deployment",
-        "vm-scheduling",
-        "virtualization",
-        "storage-virtualization",
-        "cloud-monitoring",
-        "cloud-topology",
-        "cloud-nfv",
-        "cloud-fault",
-        "cloud-orchestration",
-        "cloud-config",
-        "cfg-automation",
-        "cfg-general",
-        "cfg-lifecycle",
-        "cfg-deploy",
-        "cfg-templates",
-        "cfg-validation",
-        "cfg-topology",
-        "cfg-scripting",
-        "cfg-provision"
+        "computing-runtime",
+        "computing-systems",
+        "computing-ui"
       ],
       "damagesTier": "High"
     },
@@ -68,27 +36,12 @@
       "displayName": "SDN & Network Infrastructure",
       "description": "Software-defined networking, routing, switching, QoS, and network infrastructure",
       "sectors": [
-        "sdn-qos",
-        "sdn-routing",
-        "sdn-switching",
-        "sdn-lan",
-        "sdn-management",
-        "sdn-monitoring",
-        "sdn-protocol",
-        "infra-bridge",
-        "infra-bus",
-        "infra-addressing",
-        "infra-powerline",
-        "infra-framing",
-        "network-infrastructure",
+        "network-switching",
+        "network-management",
         "network-protocols",
-        "proto-distributed",
-        "proto-layers",
-        "proto-services",
-        "proto-session",
-        "proto-content",
-        "proto-proxy",
-        "network-auth"
+        "network-signal-processing",
+        "network-multiplexing",
+        "network-error-control"
       ],
       "damagesTier": "High"
     },
@@ -97,22 +50,13 @@
       "displayName": "Wireless & RF",
       "description": "Wireless communications, cellular, WiFi, Bluetooth, and RF components",
       "sectors": [
-        "wireless",
+        "wireless-scheduling",
+        "wireless-power-mgmt",
+        "wireless-mimo-antenna",
+        "wireless-transmission",
         "wireless-mobility",
-        "wireless-power",
+        "wireless-infrastructure",
         "wireless-services",
-        "wireless-resource",
-        "wireless-devices",
-        "wireless-monitoring",
-        "wireless-traffic",
-        "wireless-topology",
-        "wireless-access",
-        "wireless-connection",
-        "baseband",
-        "modulation",
-        "multiplexing",
-        "synchronization",
-        "rf-transmission",
         "rf-acoustic"
       ],
       "damagesTier": "High"
@@ -123,66 +67,34 @@
       "description": "Video coding, streaming, broadcast, and media processing",
       "sectors": [
         "video-codec",
-        "video-display",
-        "video-capture",
-        "video-image",
-        "video-streaming",
-        "stream-client",
-        "stream-server",
-        "stream-drm",
-        "stream-interactive",
-        "stream-user"
+        "video-broadcast",
+        "video-client-processing",
+        "video-drm-conditional",
+        "video-server-cdn",
+        "video-storage",
+        "streaming-multimedia"
       ],
       "damagesTier": "High"
     },
 
     "COMPUTING": {
-      "displayName": "Computing & Systems",
-      "description": "General computing, memory, I/O, software engineering, and databases",
+      "displayName": "Computing & Data",
+      "description": "General computing, databases, and data retrieval",
       "sectors": [
-        "database",
-        "computing",
-        "io-interfaces",
-        "software-engineering",
-        "systems-software",
-        "memory-management"
-      ],
-      "damagesTier": "Medium"
-    },
-
-    "FAULT_TOLERANCE": {
-      "displayName": "Fault Tolerance & Reliability",
-      "description": "Error detection, recovery, failover, and system reliability",
-      "sectors": [
-        "error-correction",
-        "ft-errordetect",
-        "ft-monitoring",
-        "ft-recovery",
-        "ft-failover",
-        "fault-tolerance",
-        "ft-redundancy",
-        "ft-diagnosis"
-      ],
-      "damagesTier": "Medium"
-    },
-
-    "STORAGE": {
-      "displayName": "Storage",
-      "description": "Storage media, systems, and data management",
-      "sectors": [
-        "storage-media"
+        "data-retrieval",
+        "fintech-business"
       ],
       "damagesTier": "Medium"
     },
 
     "IMAGING": {
       "displayName": "Imaging & Optics",
-      "description": "Image processing, cameras, optics, and signal conversion",
+      "description": "Image processing, cameras, optics, and 3D imaging",
       "sectors": [
         "image-processing",
-        "optics",
-        "signal-conversion",
-        "signal-processing"
+        "cameras-sensors",
+        "3d-stereo-depth",
+        "optics"
       ],
       "damagesTier": "Medium"
     },
@@ -212,21 +124,12 @@
         "audio"
       ],
       "damagesTier": "Medium"
-    },
-
-    "OTHER": {
-      "displayName": "Other",
-      "description": "Uncategorized patents",
-      "sectors": [
-        "general"
-      ],
-      "damagesTier": "Low"
     }
   },
 
   "unmappedSectorDefault": "OTHER",
 
   "sectorToSuperSector": {
-    "_comment": "Auto-generated reverse mapping for quick lookups"
+    "_comment": "Auto-generated reverse mapping for quick lookups - see script generate-sector-reference-data.ts"
   }
 }

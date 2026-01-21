@@ -8,8 +8,104 @@
 | With Citation Analysis | 10,159 |
 | With Competitor Citations | 5,333 |
 | With LLM Analysis | 543 |
-| Unique Sectors | 114 |
-| Super-Sectors | 13 |
+| Unique Sectors | 41 |
+| Super-Sectors | 10 |
+
+## Recent Accomplishments (2026-01-21)
+
+### Sector Reference Data Enhancement
+
+Added comprehensive sector reference data to support heat map analysis:
+
+**New Reference Data Files:**
+| File | Description |
+|------|-------------|
+| `SECTOR-MAPPING-LATEST.csv` | 41 sectors mapped to 10 super-sectors with stats |
+| `SUPER-SECTOR-SUMMARY-LATEST.csv` | Super-sector overview (patents, top 100/250 representation) |
+| `CPC-REFERENCE-LATEST.csv` | 171 CPC code descriptions |
+| `CPC-SECTOR-OVERLAP-LATEST.csv` | Top 100 CPC codes mapped to sectors/super-sectors |
+| `TOP15-SECTOR-COMPARISON-LATEST.csv` | Top 15 per sector vs overall ranking |
+
+**New VBA Macro:**
+- `ImportSectorReferenceData()` in `WithinSectorMacros.bas` imports all reference worksheets
+
+**Config Updates:**
+- Updated `super-sectors.json` to v3.0 with actual sector names from `sector-breakout-v2.json`
+- Created `cpc-descriptions.json` with 171 CPC code descriptions
+
+**Usage:**
+```bash
+# Generate reference data
+npx tsx scripts/generate-sector-reference-data.ts
+
+# In Excel (after copying CSVs to workbook folder):
+# Run macro: ImportSectorReferenceData()
+```
+
+### Heat Map Batch Generation v2 Complete
+
+Generated 10 batches of patents (248 total, 2 duplicates removed) for vendor submission using new dual-purpose strategy:
+1. **Evaluate vendor quality** - Do heat maps provide actionable product matches?
+2. **Validate our scoring methodology** - Do top-ranked patents correlate with better heat map results?
+
+**Key Results:**
+| Metric | v1 (Sequential) | v2 (Interleaved) |
+|--------|-----------------|------------------|
+| SECURITY % | 66.4% | 48.0% |
+| Super-sectors represented | 8 | 11 (all) |
+| Strategy comparison | None | Parallel (2 batches/day) |
+
+### New Batch Strategy: Interleaved with Sampling
+
+**Batch Pattern (alternating for parallel comparison):**
+- Batches 1, 3, 5: **High-Value Sampled** - Round-robin from top 100 across sectors
+- Batches 2, 4, 6, 7: **Sector Diversity** - Top performers from each non-SECURITY super-sector
+- Batches 8, 9, 10: **Strategic Fill** - Remaining high-scoring patents
+
+**High-Value Sampled (3 batches):**
+- Pool of top 100 patents distributed via round-robin by sector
+- Ensures sector diversity even within highest-ranked patents
+- Tracks `pool_rank` to validate if rank 1-25 performs better than 75-100
+
+**Sector Diversity (4 batches):**
+- Excludes SECURITY entirely (already 48% of high-value batches)
+- Targets all 10 non-SECURITY super-sectors with quotas
+- Sample from top 500 (not just top of each sector)
+
+### New Scripts Created
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/generate-heatmap-batches.ts` | Generate batches from config with multiple strategies |
+| `scripts/generate-batch-summary.ts` | Create comprehensive strategy document with per-batch analysis |
+
+**Usage:**
+```bash
+# Generate batches (outputs JSON + CSVs)
+npx tsx scripts/generate-heatmap-batches.ts [--dry-run] [--config path]
+
+# Generate strategy summary document
+npx tsx scripts/generate-batch-summary.ts
+```
+
+### New Configuration
+
+Created `config/heatmap-batch-config.json` (v2.0) with:
+- Interleaved pattern support
+- High-value sampling parameters (poolSize, sectorSpread)
+- Sector diversity quotas by super-sector
+- SECURITY exclusion toggle
+
+### Output Files Generated
+
+| File | Description |
+|------|-------------|
+| `output/heatmap-batches-LATEST.json` | Full batch data with metadata and pool_rank |
+| `output/HEATMAP-BATCH-001.csv` - `010.csv` | Individual batch CSVs for vendor |
+| `output/HEATMAP-BATCH-STRATEGY-LATEST.md` | Comprehensive strategy document |
+| `output/HEATMAP-BATCH-STRATEGY-2026-01-21.md` | Dated backup |
+
+---
 
 ## Recent Accomplishments (2026-01-20)
 
@@ -43,67 +139,52 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
 
 ---
 
-## Next Session: Heat Map Vendor Batches
+## Next Session: Heat Map Vendor Execution
 
-### Goal
-Prepare 10 batches of 25 patents each (250 total) for submission to patent/product heat map vendor.
+### Immediate Next Steps
 
-### Vendor Details
-- **Cost**: $25 per patent
-- **Output**: Product heat map with ~20 potential infringing products per patent
-- **Strategy**: Test run with 10 batches, analyze results between batches
+1. **Submit first batches to vendor**
+   - Start with Batch 001 (High-Value Sampled) and Batch 002 (Sector Diversity)
+   - Send 2 batches per day for parallel strategy comparison
+   - Track turnaround time and quality
 
-### Batch Selection Strategy
-
-**Balancing Factors:**
-1. **Patent Strength** - Use top-rated patents with high Overall Score
-2. **Sector Diversity** - Spread across super-sectors to discover products in different markets
-3. **Sector Depth** - Don't under-represent any sector, ensure meaningful data comes back
-4. **Claim Breadth** - Prefer broader claims (vendor uses claim charts for product matching)
-
-**Proposed Distribution (10 batches × 25 = 250 patents):**
-
-| Super-Sector | Suggested Patents | Rationale |
-|--------------|-------------------|-----------|
-| SECURITY | 40-50 | Strong competitive citations, clear products |
-| VIRTUALIZATION | 40-50 | Large portfolio, enterprise products |
-| SDN_NETWORK | 30-40 | Network infrastructure products |
-| WIRELESS | 30-40 | Mobile/IoT market opportunity |
-| VIDEO_STREAMING | 25-30 | Consumer electronics targets |
-| COMPUTING | 20-25 | Broad applicability |
-| FAULT_TOLERANCE | 15-20 | Enterprise infrastructure |
-| Others | 15-20 | Exploratory coverage |
-
-### Available Data for Selection
-
-**Claim Breadth Data (543 patents):**
-| Score | Count | Meaning |
-|-------|-------|---------|
-| 4 | 129 | Broad claims - PREFER for heat map |
-| 3 | 388 | Moderate breadth |
-| 2 | 26 | Narrow claims |
-
-**Key Insight**: Claim breadth may correlate with competitor citations (broader claims = more infringers found). We can analyze this relationship to refine selection.
-
-### Tasks for Next Session
-
-1. **Analyze claim breadth correlation**
-   - Compare claim_breadth vs competitor_citations
-   - Determine if claim breadth should weight batch selection
-
-2. **Create batch generation script**
-   - Input: Selection criteria (super-sector quotas, min score, etc.)
-   - Output: 10 JSON/CSV batches of 25 patents each
-
-3. **Generate first batches for review**
-   - Batch 1-3: Focused on highest-value patents
-   - Batch 4-7: Sector diversity spread
-   - Batch 8-10: Exploratory (under-represented areas)
-
-4. **Design feedback loop**
+2. **Design feedback loop**
    - Schema for capturing heat map results
    - How to incorporate product data into future batch selection
    - Track which sectors yield best product matches
+   - Compare high-value vs sector-diversity batch results
+
+3. **Analyze results by pool_rank**
+   - Do patents ranked 1-25 yield better heat maps than 75-100?
+   - Use to validate/refine our scoring methodology
+
+### Queued Improvements
+
+| Improvement | Priority | Notes |
+|-------------|----------|-------|
+| Add `super_sector` column to TopRated rankings worksheet | Medium | User requested during batch analysis |
+| Add CPC description column to TopRated rankings | Medium | Show human-readable CPC names instead of codes |
+| Add `super_sector` column to ATTORNEY-PORTFOLIO CSV | Low | For attorney review worksheets |
+| Claim breadth correlation with heat map quality | Low | Analyze after receiving vendor results |
+
+**Note**: Sector reference data now available in sector workbook via `ImportSectorReferenceData()` macro. This provides sector-to-super-sector mapping, CPC descriptions, and CPC-to-sector overlap analysis as separate worksheets.
+
+### Current Batch Distribution (v2)
+
+| Super-Sector | Patents | % |
+|--------------|---------|---|
+| SECURITY | 119 | 48.0% |
+| WIRELESS | 30 | 12.1% |
+| SDN_NETWORK | 24 | 9.7% |
+| VIRTUALIZATION | 19 | 7.7% |
+| VIDEO_STREAMING | 17 | 6.9% |
+| COMPUTING | 13 | 5.2% |
+| FAULT_TOLERANCE | 13 | 5.2% |
+| IMAGING | 6 | 2.4% |
+| AI_ML | 4 | 1.6% |
+| SEMICONDUCTOR | 2 | 0.8% |
+| AUDIO | 1 | 0.4% |
+| **Total** | **248** | **100%** |
 
 ---
 
@@ -116,19 +197,30 @@ Prepare 10 batches of 25 patents each (250 total) for submission to patent/produ
 | `output/ATTORNEY-PORTFOLIO-AGGREGATIONS-*.json` | Pre-computed summaries |
 | `output/multi-score-analysis-LATEST.json` | Scored analysis (17,040 patents) |
 | `output/broadcom-portfolio-2026-01-15.json` | Raw USPTO data (22,589 patents) |
+| `output/SECTOR-MAPPING-LATEST.csv` | Sector to super-sector mapping with stats |
+| `output/SUPER-SECTOR-SUMMARY-LATEST.csv` | Super-sector overview with metrics |
+| `output/CPC-REFERENCE-LATEST.csv` | CPC code descriptions |
+| `output/CPC-SECTOR-OVERLAP-LATEST.csv` | CPC to sector/super-sector mapping |
+| `output/TOP15-SECTOR-COMPARISON-LATEST.csv` | Top 15 per sector vs overall ranking |
 
 ### Config Files
 | File | Description |
 |------|-------------|
-| `config/super-sectors.json` | 13 super-sectors with 114 sector mappings |
+| `config/super-sectors.json` | 10 super-sectors with 41 sector mappings (v3.0) |
+| `config/sector-breakout-v2.json` | 41 detailed sectors with CPC patterns |
+| `config/cpc-descriptions.json` | CPC code descriptions (171 codes) |
 | `config/competitors.json` | 131 competitor companies with patterns |
 | `config/portfolio-affiliates.json` | Affiliate company normalization |
+| `config/heatmap-batch-config.json` | Heat map batch generation settings (v2.0) |
 
 ### Scripts
 | Script | Purpose |
 |--------|---------|
 | `scripts/merge-portfolio-for-attorney.ts` | Generate attorney CSV with full portfolio |
+| `scripts/generate-sector-reference-data.ts` | Generate sector reference CSVs for Excel |
 | `scripts/calculate-and-export-v3.ts` | Generate V3 top-rated spreadsheets |
+| `scripts/generate-heatmap-batches.ts` | Generate heat map vendor batches |
+| `scripts/generate-batch-summary.ts` | Generate batch strategy summary document |
 
 ### VBA Macros
 | File | Purpose |
@@ -183,7 +275,8 @@ with open('output/ATTORNEY-PORTFOLIO-LATEST.csv') as f:
 
 | Date | Key Activity |
 |------|--------------|
-| 2026-01-21 | Planning heat map vendor batches, updated strategy guide |
+| 2026-01-21 | Heat map batch generation v2: interleaved strategy, 248 patents, SECURITY reduced to 48% |
+| 2026-01-21 | Created `generate-heatmap-batches.ts`, `generate-batch-summary.ts`, batch config |
 | 2026-01-20 | Full portfolio merge (22,589), Attorney Questions worksheet, CPC fix |
 | 2026-01-20 | Completed 16 sector breakouts, summary tabs |
 | 2026-01-19 | VMware/affiliate merge complete (17,040 patents) |
@@ -217,4 +310,4 @@ Our Portfolio → Heat Map Vendor → Product Matches → Competitor Analysis
 
 ---
 
-*Last Updated: 2026-01-21*
+*Last Updated: 2026-01-21 (Heat Map Batch v2)*

@@ -1,14 +1,19 @@
 /**
- * Generate Heat Map Vendor Batches
+ * Generate Heat Map Vendor Batches (v2)
  *
- * Creates batches of patents for submission to heat map vendor based on
- * configurable selection criteria and sector distribution targets.
+ * Creates batches of patents for submission to heat map vendor with two goals:
+ * 1. Evaluate vendor quality and product matching accuracy
+ * 2. Validate our scoring methodology by testing across different tiers
+ *
+ * Batch Strategies:
+ * - high_value_sampled: Sample across top 100 with sector diversity (not sequential)
+ * - sector_diversity_no_security: Top from each non-SECURITY super-sector
+ * - strategic_fill: Fill remaining from score-sorted pool
  *
  * Usage:
  *   npx tsx scripts/generate-heatmap-batches.ts
- *   npx tsx scripts/generate-heatmap-batches.ts --config config/heatmap-batch-config.json
  *   npx tsx scripts/generate-heatmap-batches.ts --dry-run
- *   npx tsx scripts/generate-heatmap-batches.ts --batch-size 30 --total-batches 5
+ *   npx tsx scripts/generate-heatmap-batches.ts --config config/alt-config.json
  *
  * Configuration: config/heatmap-batch-config.json
  */
@@ -21,7 +26,7 @@ import * as path from 'path';
 // ============================================================================
 
 interface InterleavedBatchDef {
-  type: 'high_value' | 'sector_diversity' | 'strategic_fill';
+  type: 'high_value_sampled' | 'sector_diversity_no_security' | 'strategic_fill';
   name: string;
 }
 
@@ -35,18 +40,25 @@ interface BatchConfig {
     minYearsRemaining: number;
     minOverallScore: number;
     preferBroadClaims: boolean;
-    claimBreadthWeight: number;
   };
   batchStrategy: {
-    mode?: 'sequential' | 'interleaved';
-    interleavedPattern?: InterleavedBatchDef[];
-    highValueBatches: { count: number; description: string; selectionMethod: string };
-    sectorDiversityBatches: { count: number; description: string; selectionMethod: string; patentsPerSectorPerBatch: number };
-    strategicFillBatches: { count: number; description: string; selectionMethod: string };
+    mode: 'interleaved';
+    interleavedPattern: InterleavedBatchDef[];
+    highValueSampled: {
+      poolSize: number;
+      batchCount: number;
+      sectorSpread: boolean;
+    };
+    sectorDiversityNoSecurity: {
+      poolSize: number;
+      excludeSuperSectors: string[];
+      targetPatentsPerSuperSector: Record<string, number>;
+    };
+    strategicFill: {
+      selectionMethod: string;
+    };
   };
-  sectorQuotas: Record<string, { target: number; priority: number }>;
   sectorRotationOrder: string[];
-  minorSectorsMapToOther: string[];
   output: {
     jsonFile: string;
     csvPrefix: string;
@@ -74,11 +86,13 @@ interface BatchPatent {
   super_sector: string;
   sector: string;
   claim_breadth: string;
+  pool_rank: number;
 }
 
 interface Batch {
   batch_number: number;
   batch_name: string;
+  batch_type: string;
   patents: BatchPatent[];
 }
 
@@ -103,12 +117,10 @@ interface BatchOutput {
 // HELPERS
 // ============================================================================
 
-function parseArgs(): { configPath: string; dryRun: boolean; batchSize?: number; totalBatches?: number } {
+function parseArgs(): { configPath: string; dryRun: boolean } {
   const args = process.argv.slice(2);
   let configPath = 'config/heatmap-batch-config.json';
   let dryRun = false;
-  let batchSize: number | undefined;
-  let totalBatches: number | undefined;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--config' && args[i + 1]) {
@@ -116,16 +128,10 @@ function parseArgs(): { configPath: string; dryRun: boolean; batchSize?: number;
       i++;
     } else if (args[i] === '--dry-run') {
       dryRun = true;
-    } else if (args[i] === '--batch-size' && args[i + 1]) {
-      batchSize = parseInt(args[i + 1], 10);
-      i++;
-    } else if (args[i] === '--total-batches' && args[i + 1]) {
-      totalBatches = parseInt(args[i + 1], 10);
-      i++;
     }
   }
 
-  return { configPath, dryRun, batchSize, totalBatches };
+  return { configPath, dryRun };
 }
 
 function loadConfig(configPath: string): BatchConfig {
@@ -143,50 +149,6 @@ function csvEscape(val: string): string {
   return val;
 }
 
-function loadPortfolioFromCsv(): PatentRecord[] {
-  const portfolioPath = path.resolve('output/ATTORNEY-PORTFOLIO-LATEST.csv');
-  if (!fs.existsSync(portfolioPath)) {
-    throw new Error(`Portfolio file not found: ${portfolioPath}`);
-  }
-
-  const csvContent = fs.readFileSync(portfolioPath, 'utf-8');
-  const lines = csvContent.split('\n');
-
-  // Parse header
-  const headerLine = lines[0];
-  const headers = parseCSVLine(headerLine);
-  const headerIndex: Record<string, number> = {};
-  headers.forEach((h, i) => {
-    headerIndex[h] = i;
-  });
-
-  const records: PatentRecord[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const values = parseCSVLine(line);
-
-    const getVal = (col: string): string => {
-      const idx = headerIndex[col];
-      return idx !== undefined ? values[idx] || '' : '';
-    };
-
-    records.push({
-      patent_id: getVal('patent_id'),
-      title: getVal('title'),
-      years_remaining: parseFloat(getVal('years_remaining')) || 0,
-      competitor_citations: parseInt(getVal('competitor_citations')) || 0,
-      sector: getVal('sector'),
-      super_sector: getVal('super_sector') || 'unassigned',
-      claim_breadth: getVal('claim_breadth') ? parseFloat(getVal('claim_breadth')) : null,
-      overall_score: getVal('overall_score') ? parseFloat(getVal('overall_score')) : null,
-    });
-  }
-
-  return records;
-}
-
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let current = '';
@@ -194,7 +156,6 @@ function parseCSVLine(line: string): string[] {
 
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-
     if (inQuotes) {
       if (char === '"') {
         if (line[i + 1] === '"') {
@@ -218,14 +179,46 @@ function parseCSVLine(line: string): string[] {
     }
   }
   result.push(current);
-
   return result;
 }
 
-function filterEligiblePatents(
-  patents: PatentRecord[],
-  config: BatchConfig
-): PatentRecord[] {
+function loadPortfolioFromCsv(): PatentRecord[] {
+  const portfolioPath = path.resolve('output/ATTORNEY-PORTFOLIO-LATEST.csv');
+  if (!fs.existsSync(portfolioPath)) {
+    throw new Error(`Portfolio file not found: ${portfolioPath}`);
+  }
+
+  const csvContent = fs.readFileSync(portfolioPath, 'utf-8');
+  const lines = csvContent.split('\n');
+  const headers = parseCSVLine(lines[0]);
+  const headerIndex: Record<string, number> = {};
+  headers.forEach((h, i) => { headerIndex[h] = i; });
+
+  const records: PatentRecord[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const values = parseCSVLine(line);
+    const getVal = (col: string): string => {
+      const idx = headerIndex[col];
+      return idx !== undefined ? values[idx] || '' : '';
+    };
+
+    records.push({
+      patent_id: getVal('patent_id'),
+      title: getVal('title'),
+      years_remaining: parseFloat(getVal('years_remaining')) || 0,
+      competitor_citations: parseInt(getVal('competitor_citations')) || 0,
+      sector: getVal('sector'),
+      super_sector: getVal('super_sector') || 'unassigned',
+      claim_breadth: getVal('claim_breadth') ? parseFloat(getVal('claim_breadth')) : null,
+      overall_score: getVal('overall_score') ? parseFloat(getVal('overall_score')) : null,
+    });
+  }
+  return records;
+}
+
+function filterEligiblePatents(patents: PatentRecord[], config: BatchConfig): PatentRecord[] {
   return patents.filter((p) => {
     if (p.overall_score === null) return false;
     if (p.years_remaining < config.selectionCriteria.minYearsRemaining) return false;
@@ -234,7 +227,7 @@ function filterEligiblePatents(
   });
 }
 
-function patentToOutput(p: PatentRecord): BatchPatent {
+function patentToOutput(p: PatentRecord, poolRank: number): BatchPatent {
   return {
     patent_id: p.patent_id,
     title: p.title.length > 80 ? p.title.substring(0, 80) + '...' : p.title,
@@ -244,137 +237,243 @@ function patentToOutput(p: PatentRecord): BatchPatent {
     super_sector: p.super_sector || 'unassigned',
     sector: p.sector,
     claim_breadth: p.claim_breadth !== null ? String(p.claim_breadth) : '',
+    pool_rank: poolRank,
   };
 }
 
 // ============================================================================
-// BATCH GENERATION
+// BATCH GENERATION STRATEGIES
 // ============================================================================
 
-function generateBatches(
-  patents: PatentRecord[],
+function generateHighValueSampledBatches(
+  eligible: PatentRecord[],
   config: BatchConfig,
-  overrides: { batchSize?: number; totalBatches?: number }
+  usedPatents: Set<string>,
+  batchCount: number,
+  batchSize: number
 ): Batch[] {
-  const batchSize = overrides.batchSize || config.batchSettings.batchSize;
-  const totalBatches = overrides.totalBatches || config.batchSettings.totalBatches;
+  const batches: Batch[] = [];
+  const poolSize = config.batchStrategy.highValueSampled.poolSize;
+
+  // Get top N patents (pool)
+  const pool = eligible.slice(0, poolSize).filter(p => !usedPatents.has(p.patent_id));
+
+  // Group pool by super-sector
+  const bySector: Record<string, { patent: PatentRecord; rank: number }[]> = {};
+  pool.forEach((p, idx) => {
+    const ss = p.super_sector || 'unassigned';
+    if (!bySector[ss]) bySector[ss] = [];
+    bySector[ss].push({ patent: p, rank: idx + 1 });
+  });
+
+  // Sort sectors by count (largest first for round-robin)
+  const sectorOrder = Object.keys(bySector).sort((a, b) => bySector[b].length - bySector[a].length);
+
+  // Distribute patents across batches using round-robin by sector
+  // This ensures each batch has varied sectors
+  const batchAssignments: { patent: PatentRecord; rank: number }[][] = [];
+  for (let i = 0; i < batchCount; i++) {
+    batchAssignments.push([]);
+  }
+
+  let batchIdx = 0;
+  let anyAdded = true;
+
+  while (anyAdded) {
+    anyAdded = false;
+    for (const ss of sectorOrder) {
+      if (bySector[ss].length > 0) {
+        const item = bySector[ss].shift()!;
+        if (batchAssignments[batchIdx].length < batchSize) {
+          batchAssignments[batchIdx].push(item);
+          anyAdded = true;
+        }
+        batchIdx = (batchIdx + 1) % batchCount;
+      }
+    }
+  }
+
+  // Create batch objects
+  for (let i = 0; i < batchCount; i++) {
+    const patents = batchAssignments[i]
+      .sort((a, b) => a.rank - b.rank) // Sort by original rank within batch
+      .slice(0, batchSize);
+
+    const batch: Batch = {
+      batch_number: 0, // Will be set later
+      batch_name: `High-Value Sampled ${i + 1}`,
+      batch_type: 'high_value_sampled',
+      patents: patents.map(item => {
+        usedPatents.add(item.patent.patent_id);
+        return patentToOutput(item.patent, item.rank);
+      }),
+    };
+    batches.push(batch);
+  }
+
+  return batches;
+}
+
+function generateSectorDiversityBatches(
+  eligible: PatentRecord[],
+  config: BatchConfig,
+  usedPatents: Set<string>,
+  batchCount: number,
+  batchSize: number
+): Batch[] {
+  const batches: Batch[] = [];
+  const poolSize = config.batchStrategy.sectorDiversityNoSecurity.poolSize;
+  const excludeSectors = config.batchStrategy.sectorDiversityNoSecurity.excludeSuperSectors;
+  const targets = config.batchStrategy.sectorDiversityNoSecurity.targetPatentsPerSuperSector;
+
+  // Get pool excluding SECURITY and used patents
+  const pool = eligible.slice(0, poolSize).filter(p =>
+    !usedPatents.has(p.patent_id) &&
+    !excludeSectors.includes(p.super_sector)
+  );
+
+  // Group by super-sector with ranks
+  const bySector: Record<string, { patent: PatentRecord; rank: number }[]> = {};
+  pool.forEach((p, idx) => {
+    const ss = p.super_sector || 'unassigned';
+    if (!bySector[ss]) bySector[ss] = [];
+    // Find actual rank in full eligible list
+    const fullRank = eligible.findIndex(e => e.patent_id === p.patent_id) + 1;
+    bySector[ss].push({ patent: p, rank: fullRank });
+  });
+
+  // Collect patents from each sector up to target
+  const selectedPatents: { patent: PatentRecord; rank: number }[] = [];
+  for (const ss of config.sectorRotationOrder) {
+    const target = targets[ss] || 0;
+    const available = bySector[ss] || [];
+    const toTake = available.slice(0, target);
+    selectedPatents.push(...toTake);
+  }
+
+  // Distribute across batches - round robin by sector for diversity
+  const batchAssignments: { patent: PatentRecord; rank: number }[][] = [];
+  for (let i = 0; i < batchCount; i++) {
+    batchAssignments.push([]);
+  }
+
+  // Group selected by sector for round-robin distribution
+  const selectedBySector: Record<string, { patent: PatentRecord; rank: number }[]> = {};
+  for (const item of selectedPatents) {
+    const ss = item.patent.super_sector;
+    if (!selectedBySector[ss]) selectedBySector[ss] = [];
+    selectedBySector[ss].push(item);
+  }
+
+  let batchIdx = 0;
+  let anyAdded = true;
+
+  while (anyAdded) {
+    anyAdded = false;
+    for (const ss of config.sectorRotationOrder) {
+      if (selectedBySector[ss] && selectedBySector[ss].length > 0) {
+        const item = selectedBySector[ss].shift()!;
+        if (batchAssignments[batchIdx].length < batchSize) {
+          batchAssignments[batchIdx].push(item);
+          anyAdded = true;
+        }
+        batchIdx = (batchIdx + 1) % batchCount;
+      }
+    }
+  }
+
+  // Create batch objects
+  for (let i = 0; i < batchCount; i++) {
+    const patents = batchAssignments[i].slice(0, batchSize);
+
+    const batch: Batch = {
+      batch_number: 0,
+      batch_name: `Sector Diversity ${i + 1}`,
+      batch_type: 'sector_diversity_no_security',
+      patents: patents.map(item => {
+        usedPatents.add(item.patent.patent_id);
+        return patentToOutput(item.patent, item.rank);
+      }),
+    };
+    batches.push(batch);
+  }
+
+  return batches;
+}
+
+function generateStrategicFillBatch(
+  eligible: PatentRecord[],
+  usedPatents: Set<string>,
+  batchSize: number,
+  batchIndex: number
+): Batch {
+  const available = eligible.filter(p => !usedPatents.has(p.patent_id));
+  const patents: BatchPatent[] = [];
+
+  for (let i = 0; i < Math.min(batchSize, available.length); i++) {
+    const p = available[i];
+    const rank = eligible.findIndex(e => e.patent_id === p.patent_id) + 1;
+    usedPatents.add(p.patent_id);
+    patents.push(patentToOutput(p, rank));
+  }
+
+  return {
+    batch_number: 0,
+    batch_name: `Strategic Fill ${batchIndex}`,
+    batch_type: 'strategic_fill',
+    patents,
+  };
+}
+
+// ============================================================================
+// MAIN BATCH GENERATION
+// ============================================================================
+
+function generateBatches(patents: PatentRecord[], config: BatchConfig): Batch[] {
+  const batchSize = config.batchSettings.batchSize;
+  const totalBatches = config.batchSettings.totalBatches;
 
   // Filter and sort by overall score
   const eligible = filterEligiblePatents(patents, config);
   eligible.sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0));
 
-  // Group by super sector
-  const bySector: Record<string, PatentRecord[]> = {};
-  for (const p of eligible) {
-    const ss = p.super_sector || 'unassigned';
-    if (!bySector[ss]) bySector[ss] = [];
-    bySector[ss].push(p);
-  }
-
-  const batches: Batch[] = [];
   const usedPatents = new Set<string>();
+  const pattern = config.batchStrategy.interleavedPattern;
 
-  function addToBatch(
-    sourcePatents: PatentRecord[],
-    batchNum: number,
-    batchName: string
-  ): Batch {
-    const batch: Batch = {
-      batch_number: batchNum,
-      batch_name: batchName,
-      patents: [],
-    };
-
-    for (const p of sourcePatents) {
-      if (usedPatents.has(p.patent_id)) continue;
-      batch.patents.push(patentToOutput(p));
-      usedPatents.add(p.patent_id);
-      if (batch.patents.length >= batchSize) break;
-    }
-
-    return batch;
+  // Count how many of each type we need
+  const typeCounts = { high_value_sampled: 0, sector_diversity_no_security: 0, strategic_fill: 0 };
+  for (const def of pattern.slice(0, totalBatches)) {
+    typeCounts[def.type]++;
   }
 
-  function createHighValueBatch(batchNum: number, typeIndex: number): Batch {
-    return addToBatch(eligible, batchNum, `High-Value Discovery ${typeIndex}`);
-  }
+  // Pre-generate batches for each type
+  const highValueBatches = generateHighValueSampledBatches(
+    eligible, config, usedPatents, typeCounts.high_value_sampled, batchSize
+  );
 
-  function createSectorDiversityBatch(batchNum: number, typeIndex: number): Batch {
-    const patentsPerSector = config.batchStrategy.sectorDiversityBatches.patentsPerSectorPerBatch;
-    const batchPatents: PatentRecord[] = [];
+  const sectorDiversityBatches = generateSectorDiversityBatches(
+    eligible, config, usedPatents, typeCounts.sector_diversity_no_security, batchSize
+  );
 
-    // Rotate through sectors
-    for (const ss of config.sectorRotationOrder) {
-      const available = (bySector[ss] || []).filter((p) => !usedPatents.has(p.patent_id));
-      for (let j = 0; j < patentsPerSector && j < available.length; j++) {
-        batchPatents.push(available[j]);
-      }
+  // Now assemble final batch list following interleaved pattern
+  const batches: Batch[] = [];
+  const typeIndexes = { high_value_sampled: 0, sector_diversity_no_security: 0, strategic_fill: 0 };
+
+  for (let i = 0; i < Math.min(pattern.length, totalBatches); i++) {
+    const def = pattern[i];
+    let batch: Batch;
+
+    if (def.type === 'high_value_sampled') {
+      batch = highValueBatches[typeIndexes.high_value_sampled++];
+    } else if (def.type === 'sector_diversity_no_security') {
+      batch = sectorDiversityBatches[typeIndexes.sector_diversity_no_security++];
+    } else {
+      typeIndexes.strategic_fill++;
+      batch = generateStrategicFillBatch(eligible, usedPatents, batchSize, typeIndexes.strategic_fill);
     }
 
-    // Fill remaining from SECURITY (usually deepest pool)
-    const securityAvailable = (bySector['SECURITY'] || []).filter(
-      (p) => !usedPatents.has(p.patent_id)
-    );
-    batchPatents.push(...securityAvailable);
-
-    // Sort by score and create batch
-    batchPatents.sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0));
-    return addToBatch(batchPatents, batchNum, `Sector Diversity ${typeIndex}`);
-  }
-
-  function createStrategicFillBatch(batchNum: number, typeIndex: number): Batch {
-    const remaining = eligible.filter((p) => !usedPatents.has(p.patent_id));
-    return addToBatch(remaining, batchNum, `Strategic Fill ${typeIndex}`);
-  }
-
-  // Check if using interleaved mode
-  const mode = config.batchStrategy.mode || 'sequential';
-
-  if (mode === 'interleaved' && config.batchStrategy.interleavedPattern) {
-    // Use the interleaved pattern from config
-    const pattern = config.batchStrategy.interleavedPattern;
-    const typeCounts: Record<string, number> = { high_value: 0, sector_diversity: 0, strategic_fill: 0 };
-
-    for (let i = 0; i < Math.min(pattern.length, totalBatches); i++) {
-      const def = pattern[i];
-      typeCounts[def.type]++;
-      const batchNum = i + 1;
-
-      let batch: Batch;
-      if (def.type === 'high_value') {
-        batch = createHighValueBatch(batchNum, typeCounts.high_value);
-      } else if (def.type === 'sector_diversity') {
-        batch = createSectorDiversityBatch(batchNum, typeCounts.sector_diversity);
-      } else {
-        batch = createStrategicFillBatch(batchNum, typeCounts.strategic_fill);
-      }
-      batches.push(batch);
-    }
-  } else {
-    // Sequential mode (original behavior)
-    const highValueCount = config.batchStrategy.highValueBatches.count;
-    const sectorDiversityCount = config.batchStrategy.sectorDiversityBatches.count;
-    const strategicFillCount = config.batchStrategy.strategicFillBatches.count;
-
-    let batchNum = 1;
-
-    // High-Value Batches (top by score)
-    for (let i = 0; i < highValueCount && batchNum <= totalBatches; i++) {
-      batches.push(createHighValueBatch(batchNum, i + 1));
-      batchNum++;
-    }
-
-    // Sector Diversity Batches
-    for (let i = 0; i < sectorDiversityCount && batchNum <= totalBatches; i++) {
-      batches.push(createSectorDiversityBatch(batchNum, i + 1));
-      batchNum++;
-    }
-
-    // Strategic Fill Batches
-    for (let i = 0; i < strategicFillCount && batchNum <= totalBatches; i++) {
-      batches.push(createStrategicFillBatch(batchNum, i + 1));
-      batchNum++;
-    }
+    batch.batch_number = i + 1;
+    batches.push(batch);
   }
 
   return batches;
@@ -395,70 +494,87 @@ function calculateSectorDistribution(batches: Batch[]): Record<string, number> {
 }
 
 function printSummary(output: BatchOutput): void {
-  console.log('='.repeat(80));
-  console.log('HEAT MAP VENDOR BATCH GENERATION SUMMARY');
-  console.log('='.repeat(80));
+  console.log('='.repeat(90));
+  console.log('HEAT MAP VENDOR BATCH GENERATION SUMMARY (v2)');
+  console.log('='.repeat(90));
 
   console.log(`\nGenerated: ${output.generated_date}`);
-  console.log(`Config: ${output.config_file}`);
-  console.log(`Total Batches: ${output.total_batches}`);
-  console.log(`Batch Size: ${output.batch_size}`);
-  console.log(`Total Patents: ${output.total_patents}`);
-  console.log(`Cost per Patent: $${output.cost_per_patent}`);
-  console.log(`Total Investment: $${output.total_cost.toLocaleString()}`);
+  console.log(`Total Batches: ${output.total_batches} | Total Patents: ${output.total_patents}`);
+  console.log(`Investment: $${output.total_cost.toLocaleString()} ($${output.cost_per_patent}/patent)`);
 
-  console.log('\n' + '-'.repeat(80));
-  console.log('BATCH DETAILS');
-  console.log('-'.repeat(80));
+  console.log('\n' + '-'.repeat(90));
+  console.log('BATCH SCHEDULE (Interleaved: High-Value + Sector Diversity)');
+  console.log('-'.repeat(90));
   console.log(
-    `${'Batch'.padEnd(8)}${'Name'.padEnd(25)}${'Patents'.padStart(8)}${'Score Range'.padStart(15)}${'Avg Score'.padStart(12)}`
+    `${'Day'.padEnd(5)}${'Batch'.padEnd(7)}${'Type'.padEnd(28)}${'Patents'.padStart(8)}${'Score Range'.padStart(14)}${'Sectors'.padStart(8)}`
   );
-  console.log('-'.repeat(80));
+  console.log('-'.repeat(90));
 
-  for (const batch of output.batches) {
+  let day = 1;
+  for (let i = 0; i < output.batches.length; i++) {
+    const batch = output.batches[i];
     if (batch.patents.length === 0) continue;
-    const scores = batch.patents.map((p) => p.overall_score);
-    const minS = Math.min(...scores);
-    const maxS = Math.max(...scores);
-    const avgS = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const scoreRange = `${minS.toFixed(1)}-${maxS.toFixed(1)}`;
+
+    const scores = batch.patents.map(p => p.overall_score);
+    const scoreRange = `${Math.min(...scores).toFixed(0)}-${Math.max(...scores).toFixed(0)}`;
+    const sectors = new Set(batch.patents.map(p => p.super_sector)).size;
+
     console.log(
-      `${String(batch.batch_number).padEnd(8)}${batch.batch_name.padEnd(25)}${String(batch.patents.length).padStart(8)}${scoreRange.padStart(15)}${avgS.toFixed(1).padStart(12)}`
+      `${day.toString().padEnd(5)}${batch.batch_number.toString().padEnd(7)}${batch.batch_name.padEnd(28)}${batch.patents.length.toString().padStart(8)}${scoreRange.padStart(14)}${sectors.toString().padStart(8)}`
     );
+
+    if (i % 2 === 1) day++;
   }
 
-  console.log('\n' + '-'.repeat(80));
-  console.log('SECTOR DISTRIBUTION');
-  console.log('-'.repeat(80));
+  console.log('\n' + '-'.repeat(90));
+  console.log('SECTOR DISTRIBUTION ACROSS ALL BATCHES');
+  console.log('-'.repeat(90));
 
   const totalPatents = output.total_patents;
   const sorted = Object.entries(output.sector_distribution).sort((a, b) => b[1] - a[1]);
   for (const [sector, count] of sorted) {
     const pct = (count / totalPatents) * 100;
     const bar = '█'.repeat(Math.floor(pct / 2));
-    console.log(`${sector.padEnd(20)}${String(count).padStart(4)} (${pct.toFixed(1).padStart(5)}%) ${bar}`);
+    console.log(`${sector.padEnd(20)}${count.toString().padStart(4)} (${pct.toFixed(1).padStart(5)}%) ${bar}`);
   }
 
-  console.log('\n' + '-'.repeat(80));
-  console.log('BATCH 1 PREVIEW (First 10 Patents)');
-  console.log('-'.repeat(80));
+  // Show per-batch sector breakdown
+  console.log('\n' + '-'.repeat(90));
+  console.log('PER-BATCH SECTOR BREAKDOWN');
+  console.log('-'.repeat(90));
+
+  for (const batch of output.batches) {
+    const sectorCounts: Record<string, number> = {};
+    for (const p of batch.patents) {
+      sectorCounts[p.super_sector] = (sectorCounts[p.super_sector] || 0) + 1;
+    }
+    const sectorStr = Object.entries(sectorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([s, c]) => `${s}:${c}`)
+      .join(', ');
+    console.log(`Batch ${batch.batch_number} (${batch.batch_type}): ${sectorStr}`);
+  }
+
+  console.log('\n' + '-'.repeat(90));
+  console.log('BATCH 1 PREVIEW (High-Value Sampled)');
+  console.log('-'.repeat(90));
 
   if (output.batches.length > 0 && output.batches[0].patents.length > 0) {
     console.log(
-      `${'#'.padEnd(3)}${'Patent'.padEnd(12)}${'Score'.padStart(7)}${'Cites'.padStart(7)}${'Yrs'.padStart(6)}${'Sector'.padEnd(20)}`
+      `${'#'.padEnd(3)}${'Rank'.padEnd(5)}${'Patent'.padEnd(12)}${'Score'.padStart(7)}${'Cites'.padStart(6)}${'SuperSector'.padEnd(18)}${'Sector'.padEnd(20)}`
     );
-    console.log('-'.repeat(80));
-    for (let i = 0; i < Math.min(10, output.batches[0].patents.length); i++) {
+    console.log('-'.repeat(90));
+    for (let i = 0; i < Math.min(15, output.batches[0].patents.length); i++) {
       const p = output.batches[0].patents[i];
       console.log(
-        `${String(i + 1).padEnd(3)}${p.patent_id.padEnd(12)}${p.overall_score.toFixed(1).padStart(7)}${String(p.competitor_citations).padStart(7)}${p.years_remaining.toFixed(1).padStart(6)} ${p.super_sector.padEnd(20)}`
+        `${(i + 1).toString().padEnd(3)}${p.pool_rank.toString().padEnd(5)}${p.patent_id.padEnd(12)}${p.overall_score.toFixed(1).padStart(7)}${p.competitor_citations.toString().padStart(6)} ${p.super_sector.padEnd(18)}${p.sector.padEnd(20)}`
       );
     }
   }
 }
 
 function saveBatchesToCsv(batches: Batch[], prefix: string): void {
-  const headers = ['patent_id', 'title', 'overall_score', 'competitor_citations', 'years_remaining', 'super_sector', 'sector', 'claim_breadth'];
+  const headers = ['patent_id', 'title', 'overall_score', 'competitor_citations', 'years_remaining', 'super_sector', 'sector', 'claim_breadth', 'pool_rank'];
 
   for (const batch of batches) {
     const batchNum = String(batch.batch_number).padStart(3, '0');
@@ -475,6 +591,7 @@ function saveBatchesToCsv(batches: Batch[], prefix: string): void {
         p.super_sector,
         p.sector,
         p.claim_breadth,
+        String(p.pool_rank),
       ];
       rows.push(row.join(','));
     }
@@ -498,30 +615,26 @@ async function main(): Promise<void> {
   const portfolio = loadPortfolioFromCsv();
   console.log(`  Total patents in portfolio: ${portfolio.length}`);
 
-  const eligibleCount = filterEligiblePatents(portfolio, config).length;
-  console.log(`  Eligible patents (score >= ${config.selectionCriteria.minOverallScore}, years > ${config.selectionCriteria.minYearsRemaining}): ${eligibleCount}`);
+  const eligible = filterEligiblePatents(portfolio, config);
+  console.log(`  Eligible patents: ${eligible.length}`);
 
-  console.log('Generating batches...');
-  const batches = generateBatches(portfolio, config, {
-    batchSize: args.batchSize,
-    totalBatches: args.totalBatches,
-  });
+  console.log('Generating batches (v2 strategy)...');
+  const batches = generateBatches(portfolio, config);
 
   const totalPatents = batches.reduce((sum, b) => sum + b.patents.length, 0);
-  const batchSize = args.batchSize || config.batchSettings.batchSize;
 
   const output: BatchOutput = {
     generated_date: new Date().toISOString().split('T')[0],
     config_file: args.configPath,
     total_batches: batches.length,
     total_patents: totalPatents,
-    batch_size: batchSize,
+    batch_size: config.batchSettings.batchSize,
     cost_per_patent: config.batchSettings.costPerPatent,
     total_cost: totalPatents * config.batchSettings.costPerPatent,
     selection_criteria: {
       min_years_remaining: config.selectionCriteria.minYearsRemaining,
       min_overall_score: config.selectionCriteria.minOverallScore,
-      strategy: 'High-value first, then sector diversity, then fill',
+      strategy: 'High-value sampled from top 100 + Sector diversity excluding SECURITY',
     },
     sector_distribution: calculateSectorDistribution(batches),
     batches,
@@ -534,17 +647,15 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Save JSON output
+  // Save outputs
   const jsonPath = `output/${config.output.jsonFile}`;
   fs.writeFileSync(jsonPath, JSON.stringify(output, null, 2));
   console.log(`\nSaved batch data to: ${jsonPath}`);
 
-  // Save dated copy
   const datedJsonPath = `output/heatmap-batches-${output.generated_date}.json`;
   fs.writeFileSync(datedJsonPath, JSON.stringify(output, null, 2));
   console.log(`Saved dated copy to: ${datedJsonPath}`);
 
-  // Export CSVs
   if (config.output.exportAllBatchesToCsv) {
     console.log('\nExporting batch CSVs...');
     saveBatchesToCsv(batches, config.output.csvPrefix);

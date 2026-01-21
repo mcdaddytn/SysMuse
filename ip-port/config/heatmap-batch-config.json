@@ -1,8 +1,9 @@
 {
   "description": "Configuration for heat map vendor batch generation",
-  "version": "1.1",
+  "version": "2.0",
   "created": "2026-01-21",
   "updated": "2026-01-21",
+  "notes": "Redesigned for dual-purpose: evaluate vendor AND validate our scoring methodology",
 
   "batchSettings": {
     "batchSize": 25,
@@ -12,74 +13,70 @@
 
   "selectionCriteria": {
     "minYearsRemaining": 5,
-    "minOverallScore": 40,
-    "preferBroadClaims": true,
-    "claimBreadthWeight": 1.0
+    "minOverallScore": 30,
+    "preferBroadClaims": true
   },
 
   "batchStrategy": {
     "mode": "interleaved",
     "interleavedPattern": [
-      { "type": "high_value", "name": "High-Value Discovery" },
-      { "type": "sector_diversity", "name": "Sector Diversity" },
-      { "type": "high_value", "name": "High-Value Discovery" },
-      { "type": "sector_diversity", "name": "Sector Diversity" },
-      { "type": "high_value", "name": "High-Value Discovery" },
-      { "type": "sector_diversity", "name": "Sector Diversity" },
-      { "type": "sector_diversity", "name": "Sector Diversity" },
+      { "type": "high_value_sampled", "name": "High-Value Sampled" },
+      { "type": "sector_diversity_no_security", "name": "Sector Diversity" },
+      { "type": "high_value_sampled", "name": "High-Value Sampled" },
+      { "type": "sector_diversity_no_security", "name": "Sector Diversity" },
+      { "type": "high_value_sampled", "name": "High-Value Sampled" },
+      { "type": "sector_diversity_no_security", "name": "Sector Diversity" },
+      { "type": "sector_diversity_no_security", "name": "Sector Diversity" },
       { "type": "strategic_fill", "name": "Strategic Fill" },
       { "type": "strategic_fill", "name": "Strategic Fill" },
       { "type": "strategic_fill", "name": "Strategic Fill" }
     ],
-    "highValueBatches": {
-      "count": 3,
-      "description": "Top patents by overall score",
-      "selectionMethod": "top_by_score"
+
+    "highValueSampled": {
+      "description": "Sample across top 100 with sector diversity - not sequential top 25",
+      "poolSize": 100,
+      "batchCount": 3,
+      "sectorSpread": true,
+      "notes": "Tests our scoring methodology by spreading top 100 across 3 batches with varied sectors"
     },
-    "sectorDiversityBatches": {
-      "count": 4,
-      "description": "Balanced sector distribution",
-      "selectionMethod": "sector_rotation",
-      "patentsPerSectorPerBatch": 3
+
+    "sectorDiversityNoSecurity": {
+      "description": "Top performers from each non-SECURITY super-sector",
+      "poolSize": 500,
+      "excludeSuperSectors": ["SECURITY"],
+      "targetPatentsPerSuperSector": {
+        "WIRELESS": 20,
+        "SDN_NETWORK": 20,
+        "VIRTUALIZATION": 15,
+        "VIDEO_STREAMING": 12,
+        "COMPUTING": 10,
+        "FAULT_TOLERANCE": 8,
+        "IMAGING": 5,
+        "AI_ML": 4,
+        "SEMICONDUCTOR": 4,
+        "AUDIO": 2
+      },
+      "notes": "Emphasize diversity over proximity to top rankings"
     },
-    "strategicFillBatches": {
-      "count": 3,
+
+    "strategicFill": {
       "description": "Fill remaining from score-sorted pool",
       "selectionMethod": "top_by_score"
     }
   },
 
-  "sectorQuotas": {
-    "description": "Target distribution for sector diversity batches",
-    "SECURITY": { "target": 50, "priority": 1 },
-    "VIRTUALIZATION": { "target": 45, "priority": 2 },
-    "SDN_NETWORK": { "target": 35, "priority": 2 },
-    "WIRELESS": { "target": 40, "priority": 2 },
-    "VIDEO_STREAMING": { "target": 30, "priority": 3 },
-    "COMPUTING": { "target": 20, "priority": 3 },
-    "FAULT_TOLERANCE": { "target": 15, "priority": 3 },
-    "OTHER": { "target": 15, "priority": 4 }
-  },
-
   "sectorRotationOrder": [
-    "SDN_NETWORK",
     "WIRELESS",
-    "VIDEO_STREAMING",
+    "SDN_NETWORK",
     "VIRTUALIZATION",
+    "VIDEO_STREAMING",
     "COMPUTING",
     "FAULT_TOLERANCE",
-    "SEMICONDUCTOR",
     "IMAGING",
-    "AI_ML"
-  ],
-
-  "minorSectorsMapToOther": [
-    "SEMICONDUCTOR",
-    "IMAGING",
-    "STORAGE",
     "AI_ML",
+    "SEMICONDUCTOR",
     "AUDIO",
-    "unassigned"
+    "STORAGE"
   ],
 
   "output": {

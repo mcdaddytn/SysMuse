@@ -25,6 +25,24 @@
 
 ## Recent Accomplishments (2026-01-21)
 
+### V2 Macro Summary Sheets Fix
+
+Updated `PatentAnalysisMacros-V2.bas` to calculate all 4 summary sheets internally (like V3), instead of importing separate CSV files:
+
+**Changes Made:**
+1. Added `GenerateAffiliateSummaryInternal()` - creates AffiliateSummary from RawData
+2. Added `GenerateSectorSummaryInternal()` - creates SectorSummary from RawData
+3. Added `GenerateSuperSectorSummaryInternal()` - creates SuperSectorSummary from RawData
+4. Added helper functions: `GetSuperSectorV2()`, `GetSuperSectorDisplayNameV2()`, `GetTopItemsV2()`
+5. Added `GenerateAllSummaries()` public macro to regenerate all 4 tabs
+6. Updated `ImportAllData()` to call all 4 summary generators on import
+7. Updated `RecalculateV2()` to regenerate all summaries after weight changes
+
+**Result:**
+- V2 now works like V3: single CSV import → rankings + 4 summary sheets generated internally
+- No need to import separate SUMMARY-V2-*.csv files
+- Version updated to 2.2
+
 ### VMware Patent Integration Fix
 
 Fixed missing VMware patents in batch generation and portfolio exports:
@@ -261,8 +279,8 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
 | File | Purpose |
 |------|---------|
 | `excel/AttorneyPortfolioMacros.bas` | Attorney portfolio with 5 questions |
-| `excel/PatentAnalysisMacros.bas` | V3 top-rated analysis |
-| `excel/PatentAnalysisMacros-V2.bas` | V2 analysis (full scoring) |
+| `excel/PatentAnalysisMacros.bas` | V3 top-rated analysis (6 stakeholder profiles + consensus) |
+| `excel/PatentAnalysisMacros-V2.bas` | V2 analysis (v2.2: internal summary generation like V3) |
 | `excel/WithinSectorMacros.bas` | Within-sector analysis |
 
 ---

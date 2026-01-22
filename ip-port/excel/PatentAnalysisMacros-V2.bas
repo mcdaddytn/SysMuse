@@ -1,7 +1,7 @@
 '===============================================================================
 ' Patent Portfolio Analysis - V2 Macros (Simple Weights)
 '===============================================================================
-' Version: 2.1
+' Version: 2.2 (Summary Sheets Generated Internally)
 ' Description: Simplified macro for V2 scoring with single controllable weights
 '              (not multiple stakeholder profiles like V3)
 '
@@ -11,23 +11,27 @@
 '   - Simpler than V3 (no stakeholder profiles)
 '
 ' KEY MACROS:
-'   - ImportAllData(): Import V2 CSV and generate worksheets
-'   - RecalculateV2(): Recalculate with adjusted weights
-'   - GenerateCompetitorSummary(): Create competitor summary
+'   - ImportAllData(): Import V2 CSV and generate all worksheets + summaries
+'   - RecalculateV2(): Recalculate with adjusted weights, regenerate summaries
+'   - GenerateAllSummaries(): Regenerate all 4 summary tabs
+'   - GenerateCompetitorSummary(): Create competitor summary only
 '
 ' Worksheet Structure:
-'   - RawData: Imported patent metrics
+'   - RawData: Imported patent metrics (from CSV)
 '   - Weights: User-adjustable weights (single profile)
 '   - Rankings: Scored and ranked patents
-'   - CompetitorSummary: Competitor aggregated stats
+'   - CompetitorSummary: Competitor aggregated stats (generated internally)
+'   - AffiliateSummary: Distribution by portfolio company (generated internally)
+'   - SectorSummary: Distribution by detailed sector (generated internally)
+'   - SuperSectorSummary: Distribution by super-sector (generated internally)
 '
 ' File Convention:
 '   - Export: npm run topRated:v2
 '   - Copy CSV to same folder as this workbook
-'   - Looks for: TOPRATED-V2-YYYY-MM-DD.csv, TOPRATED-V2-LATEST.csv, or most recent TOPRATED-V2-*.csv
+'   - Main data: TOPRATED-V2-YYYY-MM-DD.csv
 '
 ' Author: Generated for IP Portfolio Analysis Platform
-' Last Updated: 2026-01-20
+' Last Updated: 2026-01-21
 '===============================================================================
 
 Option Explicit
@@ -122,10 +126,14 @@ Public Sub RecalculateV2()
     ' Recalculate scores
     RecalculateRankingsSheet wsRaw, wsRank, weights, lastRow
 
-    ' Regenerate competitor summary
+    ' Regenerate all summary tabs
     GenerateCompetitorSummaryInternal
+    GenerateAffiliateSummaryInternal
+    GenerateSectorSummaryInternal
+    GenerateSuperSectorSummaryInternal
 
-    MsgBox "Recalculated V2 rankings with new weights.", vbInformation
+    MsgBox "Recalculated V2 rankings with new weights." & vbCrLf & _
+           "All 4 summary tabs regenerated.", vbInformation
 
 Cleanup:
     Application.Calculation = xlCalculationAutomatic
@@ -255,11 +263,15 @@ Private Sub ImportV2FromFile(ByVal csvPath As String)
 
     GenerateRankingsSheet wsRaw, weights, rowCount
 
-    ' Generate competitor summary
+    ' Generate all summary tabs (like V3)
     GenerateCompetitorSummaryInternal
+    GenerateAffiliateSummaryInternal
+    GenerateSectorSummaryInternal
+    GenerateSuperSectorSummaryInternal
 
     MsgBox "Imported " & (rowCount - 1) & " patents from:" & vbCrLf & csvPath & vbCrLf & vbCrLf & _
-           "V2 Rankings + CompetitorSummary created." & vbCrLf & _
+           "V2 Rankings + 4 summary tabs created." & vbCrLf & _
+           "(CompetitorSummary, AffiliateSummary, SectorSummary, SuperSectorSummary)" & vbCrLf & _
            "Adjust weights in Weights sheet, then run RecalculateV2.", vbInformation
 
     Application.Calculation = xlCalculationAutomatic
@@ -672,6 +684,42 @@ Private Function FindPatentRow(ws As Worksheet, patentId As String, maxRow As Lo
 End Function
 
 '===============================================================================
+' SUMMARY SHEETS (Calculated Internally from RawData/Rankings)
+'===============================================================================
+
+Public Sub GenerateAllSummaries()
+    '
+    ' Regenerates all four summary tabs (Competitor, Affiliate, Sector, SuperSector)
+    ' from the imported data - no external CSV imports needed
+    '
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    On Error GoTo ErrorHandler
+
+    Dim compCount As Long, affCount As Long, secCount As Long, superCount As Long
+    compCount = GenerateCompetitorSummaryInternal()
+    affCount = GenerateAffiliateSummaryInternal()
+    secCount = GenerateSectorSummaryInternal()
+    superCount = GenerateSuperSectorSummaryInternal()
+
+    MsgBox "All summaries generated from imported data:" & vbCrLf & vbCrLf & _
+           "CompetitorSummary: " & compCount & " competitors" & vbCrLf & _
+           "AffiliateSummary: " & affCount & " affiliates" & vbCrLf & _
+           "SectorSummary: " & secCount & " sectors" & vbCrLf & _
+           "SuperSectorSummary: " & superCount & " super-sectors", vbInformation
+
+Cleanup:
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error generating summaries: " & Err.Description, vbCritical
+    Resume Cleanup
+End Sub
+
+'===============================================================================
 ' COMPETITOR SUMMARY
 '===============================================================================
 
@@ -879,6 +927,613 @@ Private Function CalculateMedian(ByVal ranksStr As String) As Double
 End Function
 
 '===============================================================================
+' AFFILIATE SUMMARY
+'===============================================================================
+
+Private Function GenerateAffiliateSummaryInternal() As Long
+    '
+    ' Generates AffiliateSummary tab showing portfolio breakdown by affiliate (assignee)
+    ' Returns count of affiliates (-1 on error)
+    '
+    GenerateAffiliateSummaryInternal = -1
+
+    ' Get source data from RawData
+    Dim wsSrc As Worksheet
+    On Error Resume Next
+    Set wsSrc = ThisWorkbook.Sheets(RAW_DATA_SHEET)
+    On Error GoTo 0
+
+    If wsSrc Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = wsSrc.Cells(wsSrc.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then Exit Function
+
+    ' Dictionary to track affiliate stats
+    Dim affiliateStats As Object
+    Set affiliateStats = CreateObject("Scripting.Dictionary")
+
+    Dim r As Long
+    Dim affiliate As String, sector As String, patentId As String
+    Dim years As Double, compCites As Long
+    Dim stats As Variant
+
+    For r = 2 To lastRow
+        affiliate = Trim(CStr(wsSrc.Cells(r, COL_AFFILIATE).Value))
+        If Len(affiliate) = 0 Then affiliate = "Unknown"
+
+        years = Val(wsSrc.Cells(r, COL_YEARS_REMAINING).Value)
+        compCites = Val(wsSrc.Cells(r, COL_COMPETITOR_CITATIONS).Value)
+        sector = CStr(wsSrc.Cells(r, COL_SECTOR).Value)
+        patentId = CStr(wsSrc.Cells(r, COL_PATENT_ID).Value)
+
+        If Not affiliateStats.Exists(affiliate) Then
+            ' Structure: count, activeCount, totalYears, totalCites, topPatentId, topPatentCites, sectors(string)
+            affiliateStats.Add affiliate, Array(0, 0, 0, 0, "", 0, "")
+        End If
+
+        stats = affiliateStats(affiliate)
+
+        stats(0) = stats(0) + 1  ' count
+        If years >= 3 Then stats(1) = stats(1) + 1  ' active (3+ years)
+        stats(2) = stats(2) + years  ' totalYears
+        stats(3) = stats(3) + compCites  ' totalCites
+
+        ' Track top patent
+        If compCites > stats(5) Then
+            stats(4) = patentId
+            stats(5) = compCites
+        End If
+
+        ' Track sectors (append if not already there)
+        If Len(sector) > 0 And InStr(stats(6), sector) = 0 Then
+            If Len(stats(6)) > 0 Then
+                stats(6) = stats(6) & "; " & sector
+            Else
+                stats(6) = sector
+            End If
+        End If
+
+        affiliateStats(affiliate) = stats
+    Next r
+
+    ' Create summary worksheet
+    Dim wsSummary As Worksheet
+    Set wsSummary = GetOrCreateSheet("AffiliateSummary")
+    wsSummary.Cells.Clear
+
+    ' Title
+    wsSummary.Range("A1").Value = "AFFILIATE SUMMARY - V2 PORTFOLIO BREAKDOWN"
+    wsSummary.Range("A1").Font.Bold = True
+    wsSummary.Range("A1").Font.Size = 16
+    wsSummary.Range("A2").Value = "Shows patent distribution across portfolio affiliates"
+
+    ' Headers
+    wsSummary.Range("A4").Value = "Affiliate"
+    wsSummary.Range("B4").Value = "Patent Count"
+    wsSummary.Range("C4").Value = "Active (3+ yrs)"
+    wsSummary.Range("D4").Value = "Avg Years"
+    wsSummary.Range("E4").Value = "Total Comp Cites"
+    wsSummary.Range("F4").Value = "Avg Comp Cites"
+    wsSummary.Range("G4").Value = "Top Patent"
+    wsSummary.Range("H4").Value = "Top Cites"
+    wsSummary.Range("I4").Value = "Sectors"
+    FormatHeaderRow wsSummary, 4
+
+    ' Sort affiliates by count
+    Dim affNames() As String, affCounts() As Long
+    Dim n As Long, i As Long, j As Long
+    ReDim affNames(0 To affiliateStats.Count - 1)
+    ReDim affCounts(0 To affiliateStats.Count - 1)
+
+    Dim key As Variant
+    n = 0
+    For Each key In affiliateStats.Keys
+        affNames(n) = key
+        stats = affiliateStats(key)
+        affCounts(n) = stats(0)
+        n = n + 1
+    Next key
+
+    ' Bubble sort descending
+    Dim tempName As String, tempCount As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If affCounts(j) > affCounts(i) Then
+                tempName = affNames(i): tempCount = affCounts(i)
+                affNames(i) = affNames(j): affCounts(i) = affCounts(j)
+                affNames(j) = tempName: affCounts(j) = tempCount
+            End If
+        Next j
+    Next i
+
+    ' Output data
+    Dim outRow As Long
+    outRow = 5
+
+    For i = 0 To n - 1
+        affiliate = affNames(i)
+        stats = affiliateStats(affiliate)
+
+        wsSummary.Cells(outRow, 1).Value = affiliate
+        wsSummary.Cells(outRow, 2).Value = stats(0)  ' count
+        wsSummary.Cells(outRow, 3).Value = stats(1)  ' active
+        wsSummary.Cells(outRow, 4).Value = Round(stats(2) / stats(0), 1)  ' avg years
+        wsSummary.Cells(outRow, 5).Value = stats(3)  ' total cites
+        wsSummary.Cells(outRow, 6).Value = Round(stats(3) / stats(0), 1)  ' avg cites
+        wsSummary.Cells(outRow, 7).Value = stats(4)  ' top patent
+        wsSummary.Cells(outRow, 8).Value = stats(5)  ' top cites
+        wsSummary.Cells(outRow, 9).Value = Left(stats(6), 100)  ' sectors (truncated)
+
+        outRow = outRow + 1
+    Next i
+
+    ' Format
+    wsSummary.Columns("A:I").AutoFit
+
+    ' Data bar on Patent Count
+    Dim rngCount As Range
+    Set rngCount = wsSummary.Range("B5:B" & (outRow - 1))
+    If rngCount.Rows.Count > 0 Then
+        rngCount.FormatConditions.AddDatabar
+        rngCount.FormatConditions(rngCount.FormatConditions.Count).BarColor.Color = RGB(86, 156, 214)
+    End If
+
+    GenerateAffiliateSummaryInternal = n
+End Function
+
+'===============================================================================
+' SECTOR SUMMARY
+'===============================================================================
+
+Private Function GenerateSectorSummaryInternal() As Long
+    '
+    ' Generates SectorSummary tab showing portfolio breakdown by sector
+    ' Returns count of sectors (-1 on error)
+    '
+    GenerateSectorSummaryInternal = -1
+
+    ' Declare all variables at top
+    Dim wsSrc As Worksheet, wsSummary As Worksheet
+    Dim lastRow As Long, r As Long, n As Long, i As Long, j As Long, outRow As Long
+    Dim sector As String, competitors As String, affiliate As String, patentId As String
+    Dim years As Double, compCites As Long
+    Dim sectorStats As Object
+    Dim stats As Variant
+    Dim compArr() As String
+    Dim compDict As Object
+    Dim comp As String
+    Dim secNames() As String, secCounts() As Long
+    Dim key As Variant
+    Dim tempName As String, tempCount As Long
+    Dim rngCount As Range
+
+    ' Get source data
+    On Error Resume Next
+    Set wsSrc = ThisWorkbook.Sheets(RAW_DATA_SHEET)
+    On Error GoTo 0
+
+    If wsSrc Is Nothing Then Exit Function
+
+    lastRow = wsSrc.Cells(wsSrc.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then Exit Function
+
+    ' Dictionary to track sector stats
+    Set sectorStats = CreateObject("Scripting.Dictionary")
+
+    For r = 2 To lastRow
+        sector = Trim(CStr(wsSrc.Cells(r, COL_SECTOR).Value))
+        If Len(sector) = 0 Then sector = "unassigned"
+
+        years = Val(wsSrc.Cells(r, COL_YEARS_REMAINING).Value)
+        compCites = Val(wsSrc.Cells(r, COL_COMPETITOR_CITATIONS).Value)
+        competitors = CStr(wsSrc.Cells(r, COL_COMPETITORS).Value)
+        affiliate = CStr(wsSrc.Cells(r, COL_AFFILIATE).Value)
+        patentId = CStr(wsSrc.Cells(r, COL_PATENT_ID).Value)
+
+        If Not sectorStats.Exists(sector) Then
+            ' Structure: count, activeCount, totalYears, totalCites, topPatentId, topPatentCites, competitors(dict), affiliates(string)
+            sectorStats.Add sector, Array(0, 0, 0, 0, "", 0, CreateObject("Scripting.Dictionary"), "")
+        End If
+
+        stats = sectorStats(sector)
+
+        stats(0) = stats(0) + 1  ' count
+        If years >= 3 Then stats(1) = stats(1) + 1  ' active
+        stats(2) = stats(2) + years  ' totalYears
+        stats(3) = stats(3) + compCites  ' totalCites
+
+        ' Track top patent
+        If compCites > stats(5) Then
+            stats(4) = patentId
+            stats(5) = compCites
+        End If
+
+        ' Track unique competitors
+        If Len(competitors) > 0 Then
+            compArr = Split(competitors, ";")
+            Set compDict = stats(6)
+            For i = LBound(compArr) To UBound(compArr)
+                comp = Trim(compArr(i))
+                If Len(comp) > 0 And Not compDict.Exists(comp) Then
+                    compDict.Add comp, 1
+                End If
+            Next i
+        End If
+
+        ' Track affiliates
+        If Len(affiliate) > 0 And InStr(stats(7), affiliate) = 0 Then
+            If Len(stats(7)) > 0 Then
+                stats(7) = stats(7) & "; " & affiliate
+            Else
+                stats(7) = affiliate
+            End If
+        End If
+
+        sectorStats(sector) = stats
+    Next r
+
+    ' Create summary worksheet
+    Set wsSummary = GetOrCreateSheet("SectorSummary")
+    wsSummary.Cells.Clear
+
+    ' Title
+    wsSummary.Range("A1").Value = "SECTOR SUMMARY - V2 TECHNOLOGY BREAKDOWN"
+    wsSummary.Range("A1").Font.Bold = True
+    wsSummary.Range("A1").Font.Size = 16
+    wsSummary.Range("A2").Value = "Shows patent distribution across technology sectors"
+
+    ' Headers
+    wsSummary.Range("A4").Value = "Sector"
+    wsSummary.Range("B4").Value = "Patent Count"
+    wsSummary.Range("C4").Value = "Active (3+ yrs)"
+    wsSummary.Range("D4").Value = "Avg Years"
+    wsSummary.Range("E4").Value = "Total Comp Cites"
+    wsSummary.Range("F4").Value = "Avg Comp Cites"
+    wsSummary.Range("G4").Value = "Unique Competitors"
+    wsSummary.Range("H4").Value = "Top Patent"
+    wsSummary.Range("I4").Value = "Top Cites"
+    wsSummary.Range("J4").Value = "Affiliates"
+    FormatHeaderRow wsSummary, 4
+
+    ' Sort sectors by count
+    ReDim secNames(0 To sectorStats.Count - 1)
+    ReDim secCounts(0 To sectorStats.Count - 1)
+
+    n = 0
+    For Each key In sectorStats.Keys
+        secNames(n) = key
+        stats = sectorStats(key)
+        secCounts(n) = stats(0)
+        n = n + 1
+    Next key
+
+    ' Bubble sort descending
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If secCounts(j) > secCounts(i) Then
+                tempName = secNames(i): tempCount = secCounts(i)
+                secNames(i) = secNames(j): secCounts(i) = secCounts(j)
+                secNames(j) = tempName: secCounts(j) = tempCount
+            End If
+        Next j
+    Next i
+
+    ' Output data
+    outRow = 5
+
+    For i = 0 To n - 1
+        sector = secNames(i)
+        stats = sectorStats(sector)
+
+        Set compDict = stats(6)
+
+        wsSummary.Cells(outRow, 1).Value = sector
+        wsSummary.Cells(outRow, 2).Value = stats(0)  ' count
+        wsSummary.Cells(outRow, 3).Value = stats(1)  ' active
+        wsSummary.Cells(outRow, 4).Value = Round(stats(2) / stats(0), 1)  ' avg years
+        wsSummary.Cells(outRow, 5).Value = stats(3)  ' total cites
+        wsSummary.Cells(outRow, 6).Value = Round(stats(3) / stats(0), 1)  ' avg cites
+        wsSummary.Cells(outRow, 7).Value = compDict.Count  ' unique competitors
+        wsSummary.Cells(outRow, 8).Value = stats(4)  ' top patent
+        wsSummary.Cells(outRow, 9).Value = stats(5)  ' top cites
+        wsSummary.Cells(outRow, 10).Value = Left(stats(7), 80)  ' affiliates (truncated)
+
+        outRow = outRow + 1
+    Next i
+
+    ' Format
+    wsSummary.Columns("A:J").AutoFit
+
+    ' Data bar on Patent Count
+    Set rngCount = wsSummary.Range("B5:B" & (outRow - 1))
+    If rngCount.Rows.Count > 0 Then
+        rngCount.FormatConditions.AddDatabar
+        rngCount.FormatConditions(rngCount.FormatConditions.Count).BarColor.Color = RGB(86, 156, 214)
+    End If
+
+    GenerateSectorSummaryInternal = n
+End Function
+
+'===============================================================================
+' SUPER-SECTOR SUMMARY
+'===============================================================================
+
+' Super-sector mapping (sector -> super-sector)
+Private Function GetSuperSectorV2(ByVal sector As String) As String
+    Dim lowerSector As String
+    lowerSector = LCase(sector)
+
+    ' SECURITY
+    If InStr(lowerSector, "threat") > 0 Or InStr(lowerSector, "auth") > 0 Or _
+       InStr(lowerSector, "crypto") > 0 Or InStr(lowerSector, "security") > 0 Or _
+       InStr(lowerSector, "secure") > 0 Or InStr(lowerSector, "protection") > 0 Or _
+       InStr(lowerSector, "pii") > 0 Then
+        GetSuperSectorV2 = "SECURITY"
+    ' SDN/NETWORK
+    ElseIf InStr(lowerSector, "network-") > 0 And InStr(lowerSector, "threat") = 0 And _
+           InStr(lowerSector, "auth") = 0 And InStr(lowerSector, "crypto") = 0 And _
+           InStr(lowerSector, "secure") = 0 Then
+        GetSuperSectorV2 = "SDN_NETWORK"
+    ' VIDEO
+    ElseIf InStr(lowerSector, "video") > 0 Or InStr(lowerSector, "stream") > 0 Then
+        GetSuperSectorV2 = "VIDEO_STREAMING"
+    ' WIRELESS
+    ElseIf InStr(lowerSector, "wireless") > 0 Or InStr(lowerSector, "rf-") > 0 Then
+        GetSuperSectorV2 = "WIRELESS"
+    ' COMPUTING
+    ElseIf InStr(lowerSector, "computing") > 0 And InStr(lowerSector, "security") = 0 And _
+           InStr(lowerSector, "protection") = 0 And InStr(lowerSector, "auth") = 0 Then
+        GetSuperSectorV2 = "COMPUTING"
+    ElseIf InStr(lowerSector, "fintech") > 0 Or InStr(lowerSector, "retrieval") > 0 Or _
+           InStr(lowerSector, "data-") > 0 Then
+        GetSuperSectorV2 = "COMPUTING"
+    ' AI/ML
+    ElseIf InStr(lowerSector, "ai-ml") > 0 Then
+        GetSuperSectorV2 = "AI_ML"
+    ' IMAGING
+    ElseIf InStr(lowerSector, "image") > 0 Or InStr(lowerSector, "3d") > 0 Or _
+           InStr(lowerSector, "stereo") > 0 Or InStr(lowerSector, "camera") > 0 Then
+        GetSuperSectorV2 = "IMAGING"
+    ' VIRTUALIZATION
+    ElseIf InStr(lowerSector, "virtual") > 0 Or InStr(lowerSector, "vm-") > 0 Or _
+           InStr(lowerSector, "cloud") > 0 Then
+        GetSuperSectorV2 = "VIRTUALIZATION"
+    ' FAULT TOLERANCE
+    ElseIf InStr(lowerSector, "fault") > 0 Or InStr(lowerSector, "ft-") > 0 Or _
+           InStr(lowerSector, "error") > 0 Then
+        GetSuperSectorV2 = "FAULT_TOLERANCE"
+    Else
+        GetSuperSectorV2 = "OTHER"
+    End If
+End Function
+
+Private Function GetSuperSectorDisplayNameV2(ByVal superSector As String) As String
+    Select Case superSector
+        Case "SECURITY": GetSuperSectorDisplayNameV2 = "Security"
+        Case "SDN_NETWORK": GetSuperSectorDisplayNameV2 = "SDN & Network Infrastructure"
+        Case "VIDEO_STREAMING": GetSuperSectorDisplayNameV2 = "Video & Streaming"
+        Case "WIRELESS": GetSuperSectorDisplayNameV2 = "Wireless & RF"
+        Case "COMPUTING": GetSuperSectorDisplayNameV2 = "Computing & Data"
+        Case "AI_ML": GetSuperSectorDisplayNameV2 = "AI & Machine Learning"
+        Case "IMAGING": GetSuperSectorDisplayNameV2 = "Imaging & Optics"
+        Case "VIRTUALIZATION": GetSuperSectorDisplayNameV2 = "Virtualization & Cloud"
+        Case "FAULT_TOLERANCE": GetSuperSectorDisplayNameV2 = "Fault Tolerance & Reliability"
+        Case Else: GetSuperSectorDisplayNameV2 = "Other"
+    End Select
+End Function
+
+Private Function GetTopItemsV2(ByRef dict As Object, ByVal topN As Integer) As String
+    '
+    ' Returns top N items from dictionary sorted by value (descending)
+    '
+    If dict Is Nothing Or dict.Count = 0 Then
+        GetTopItemsV2 = ""
+        Exit Function
+    End If
+
+    ' Copy to arrays for sorting
+    Dim keys() As String, vals() As Long
+    Dim n As Long, i As Long, j As Long
+    n = dict.Count
+    ReDim keys(0 To n - 1)
+    ReDim vals(0 To n - 1)
+
+    Dim key As Variant
+    i = 0
+    For Each key In dict.keys
+        keys(i) = CStr(key)
+        vals(i) = CLng(dict(key))
+        i = i + 1
+    Next key
+
+    ' Bubble sort descending by value
+    Dim tempKey As String, tempVal As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If vals(j) > vals(i) Then
+                tempKey = keys(i): tempVal = vals(i)
+                keys(i) = keys(j): vals(i) = vals(j)
+                keys(j) = tempKey: vals(j) = tempVal
+            End If
+        Next j
+    Next i
+
+    ' Build result string (top N)
+    Dim result As String
+    Dim limit As Long
+    limit = Application.WorksheetFunction.Min(topN, n)
+
+    For i = 0 To limit - 1
+        If i > 0 Then result = result & "; "
+        result = result & keys(i)
+    Next i
+
+    GetTopItemsV2 = result
+End Function
+
+Private Function GenerateSuperSectorSummaryInternal() As Long
+    GenerateSuperSectorSummaryInternal = -1
+
+    ' Get source data
+    Dim wsSrc As Worksheet
+    On Error Resume Next
+    Set wsSrc = ThisWorkbook.Sheets(RAW_DATA_SHEET)
+    On Error GoTo 0
+
+    If wsSrc Is Nothing Then Exit Function
+
+    Dim lastRow As Long
+    lastRow = wsSrc.Cells(wsSrc.Rows.Count, 2).End(xlUp).Row
+    If lastRow < 2 Then Exit Function
+
+    ' Dictionary for super-sector stats
+    Dim superStats As Object
+    Set superStats = CreateObject("Scripting.Dictionary")
+
+    Dim r As Long
+    For r = 2 To lastRow
+        Dim sector As String
+        sector = Trim(CStr(wsSrc.Cells(r, COL_SECTOR).Value))
+        If Len(sector) = 0 Then sector = "unassigned"
+
+        Dim superSector As String
+        superSector = GetSuperSectorV2(sector)
+
+        Dim years As Double
+        years = Val(wsSrc.Cells(r, COL_YEARS_REMAINING).Value)
+
+        Dim compCites As Long
+        compCites = Val(wsSrc.Cells(r, COL_COMPETITOR_CITATIONS).Value)
+
+        Dim patentId As String
+        patentId = CStr(wsSrc.Cells(r, COL_PATENT_ID).Value)
+
+        If Not superStats.Exists(superSector) Then
+            ' count, activeCount, totalCites, sectors(dict), topPatentId, topPatentCites
+            superStats.Add superSector, Array(0, 0, 0, CreateObject("Scripting.Dictionary"), "", 0)
+        End If
+
+        Dim stats As Variant
+        stats = superStats(superSector)
+
+        stats(0) = stats(0) + 1  ' count
+        If years >= 3 Then stats(1) = stats(1) + 1  ' active
+        stats(2) = stats(2) + compCites  ' totalCites
+
+        ' Track sectors
+        Dim secDict As Object
+        Set secDict = stats(3)
+        If Not secDict.Exists(sector) Then
+            secDict.Add sector, 1
+        Else
+            secDict(sector) = secDict(sector) + 1
+        End If
+
+        ' Track top patent
+        If compCites > stats(5) Then
+            stats(4) = patentId
+            stats(5) = compCites
+        End If
+
+        superStats(superSector) = stats
+    Next r
+
+    ' Create summary worksheet
+    Dim wsSummary As Worksheet
+    Set wsSummary = GetOrCreateSheet("SuperSectorSummary")
+    wsSummary.Cells.Clear
+
+    ' Title
+    wsSummary.Range("A1").Value = "SUPER-SECTOR SUMMARY - V2 TECHNOLOGY DOMAINS"
+    wsSummary.Range("A1").Font.Bold = True
+    wsSummary.Range("A1").Font.Size = 16
+    wsSummary.Range("A2").Value = "Shows patent distribution across major technology domains"
+
+    ' Headers
+    wsSummary.Range("A4").Value = "Super-Sector"
+    wsSummary.Range("B4").Value = "Display Name"
+    wsSummary.Range("C4").Value = "Sector Count"
+    wsSummary.Range("D4").Value = "Patent Count"
+    wsSummary.Range("E4").Value = "Active (3+ yrs)"
+    wsSummary.Range("F4").Value = "Total Comp Cites"
+    wsSummary.Range("G4").Value = "Avg Comp Cites"
+    wsSummary.Range("H4").Value = "Top Sectors"
+    wsSummary.Range("I4").Value = "Top Patent"
+    wsSummary.Range("J4").Value = "Top Cites"
+    FormatHeaderRow wsSummary, 4
+
+    ' Sort by count
+    Dim ssNames() As String, ssCounts() As Long
+    Dim n As Long, i As Long, j As Long
+    ReDim ssNames(0 To superStats.Count - 1)
+    ReDim ssCounts(0 To superStats.Count - 1)
+
+    Dim key As Variant
+    n = 0
+    For Each key In superStats.Keys
+        ssNames(n) = key
+        stats = superStats(key)
+        ssCounts(n) = stats(0)
+        n = n + 1
+    Next key
+
+    ' Bubble sort descending
+    Dim tempName As String, tempCount As Long
+    For i = 0 To n - 2
+        For j = i + 1 To n - 1
+            If ssCounts(j) > ssCounts(i) Then
+                tempName = ssNames(i): tempCount = ssCounts(i)
+                ssNames(i) = ssNames(j): ssCounts(i) = ssCounts(j)
+                ssNames(j) = tempName: ssCounts(j) = tempCount
+            End If
+        Next j
+    Next i
+
+    ' Output data
+    Dim outRow As Long
+    outRow = 5
+
+    For i = 0 To n - 1
+        superSector = ssNames(i)
+        stats = superStats(superSector)
+
+        Dim secDict2 As Object
+        Set secDict2 = stats(3)
+
+        ' Get top sectors
+        Dim topSectors As String
+        topSectors = GetTopItemsV2(secDict2, 3)
+
+        wsSummary.Cells(outRow, 1).Value = superSector
+        wsSummary.Cells(outRow, 2).Value = GetSuperSectorDisplayNameV2(superSector)
+        wsSummary.Cells(outRow, 3).Value = secDict2.Count
+        wsSummary.Cells(outRow, 4).Value = stats(0)  ' count
+        wsSummary.Cells(outRow, 5).Value = stats(1)  ' active
+        wsSummary.Cells(outRow, 6).Value = stats(2)  ' total cites
+        wsSummary.Cells(outRow, 7).Value = Round(stats(2) / stats(0), 1)  ' avg cites
+        wsSummary.Cells(outRow, 8).Value = topSectors
+        wsSummary.Cells(outRow, 9).Value = stats(4)  ' top patent
+        wsSummary.Cells(outRow, 10).Value = stats(5)  ' top cites
+
+        outRow = outRow + 1
+    Next i
+
+    ' Format
+    wsSummary.Columns("A:J").AutoFit
+
+    ' Data bar
+    Dim rngCount As Range
+    Set rngCount = wsSummary.Range("D5:D" & (outRow - 1))
+    If rngCount.Rows.Count > 0 Then
+        rngCount.FormatConditions.AddDatabar
+        rngCount.FormatConditions(rngCount.FormatConditions.Count).BarColor.Color = RGB(86, 156, 214)
+    End If
+
+    GenerateSuperSectorSummaryInternal = n
+End Function
+
+'===============================================================================
 ' UTILITY FUNCTIONS
 '===============================================================================
 
@@ -963,3 +1618,251 @@ Private Sub FormatHeaderRow(ByVal ws As Worksheet, Optional ByVal headerRow As I
         .Font.Color = RGB(255, 255, 255)
     End With
 End Sub
+
+'===============================================================================
+' SUMMARY SHEET IMPORTS
+'===============================================================================
+' These functions import pre-calculated summary CSVs from the output folder
+' Run after creating the main Rankings sheet
+
+Public Sub ImportV2SummarySheets()
+    ' Import V2 summary CSV files as worksheets
+    ' Files expected in same folder as workbook:
+    ' - SUMMARY-V2-SUPERSECTOR-*.csv
+    ' - SUMMARY-V2-SECTOR-*.csv
+    ' - SUMMARY-V2-AFFILIATE-*.csv
+    ' - SUMMARY-V2-COMPETITOR-*.csv
+    '
+    Dim wb As Workbook
+    Dim basePath As String
+    Dim dateStr As String
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+
+    Set wb = ThisWorkbook
+    basePath = GetBasePath()
+    dateStr = Format(Date, "YYYY-MM-DD")
+
+    ' Import each summary file
+    ImportV2SuperSectorSummary wb, basePath, dateStr
+    ImportV2SectorSummary wb, basePath, dateStr
+    ImportV2AffiliateSummary wb, basePath, dateStr
+    ImportV2CompetitorSummaryCSV wb, basePath, dateStr
+
+    ' Activate super-sector summary sheet
+    On Error Resume Next
+    wb.Worksheets("SuperSectorSummary").Activate
+    On Error GoTo 0
+
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+
+    MsgBox "V2 Summary sheets imported successfully!" & vbCrLf & _
+           "- SuperSectorSummary: Distribution by super-sector" & vbCrLf & _
+           "- SectorSummary: Distribution by detailed sector" & vbCrLf & _
+           "- AffiliateSummary: Distribution by portfolio company" & vbCrLf & _
+           "- CompetitorSummaryCSV: Top 50 competitors citing patents", vbInformation
+End Sub
+
+Private Sub ImportV2SuperSectorSummary(wb As Workbook, basePath As String, dateStr As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    ' Try dated file first, then LATEST
+    csvPath = basePath & "SUMMARY-V2-SUPERSECTOR-" & dateStr & ".csv"
+    If Dir(csvPath) = "" Then
+        csvPath = basePath & "SUMMARY-V2-SUPERSECTOR-LATEST.csv"
+    End If
+    If Dir(csvPath) = "" Then
+        Debug.Print "Super-sector summary not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "SuperSectorSummary")
+    ImportCSVToSheetV2 ws, csvPath
+
+    ' Add title
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Cells(1, 1).Value = "SUPER-SECTOR SUMMARY - V2 TOP RATED"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+    ws.Cells(2, 1).Value = "Distribution of top 500 patents by super-sector"
+
+    ' Format headers (row 4 after insert)
+    FormatHeaderRow ws, 4
+
+    ' Add data bars
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    If lastRow > 4 Then
+        ws.Range("B5:B" & lastRow).FormatConditions.AddDatabar
+        ws.Range("B5:B" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+    End If
+
+    ws.Columns("A:F").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportV2SectorSummary(wb As Workbook, basePath As String, dateStr As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "SUMMARY-V2-SECTOR-" & dateStr & ".csv"
+    If Dir(csvPath) = "" Then
+        csvPath = basePath & "SUMMARY-V2-SECTOR-LATEST.csv"
+    End If
+    If Dir(csvPath) = "" Then
+        Debug.Print "Sector summary not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "SectorSummary")
+    ImportCSVToSheetV2 ws, csvPath
+
+    ' Add title
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Cells(1, 1).Value = "SECTOR SUMMARY - V2 TOP RATED"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+    ws.Cells(2, 1).Value = "Distribution of top 500 patents by detailed sector"
+
+    FormatHeaderRow ws, 4
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    If lastRow > 4 Then
+        ws.Range("D5:D" & lastRow).FormatConditions.AddDatabar
+        ws.Range("D5:D" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+    End If
+
+    ws.Columns("A:H").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportV2AffiliateSummary(wb As Workbook, basePath As String, dateStr As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "SUMMARY-V2-AFFILIATE-" & dateStr & ".csv"
+    If Dir(csvPath) = "" Then
+        csvPath = basePath & "SUMMARY-V2-AFFILIATE-LATEST.csv"
+    End If
+    If Dir(csvPath) = "" Then
+        Debug.Print "Affiliate summary not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "AffiliateSummary")
+    ImportCSVToSheetV2 ws, csvPath
+
+    ' Add title
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Cells(1, 1).Value = "AFFILIATE SUMMARY - V2 TOP RATED"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+    ws.Cells(2, 1).Value = "Distribution of top 500 patents by portfolio company"
+
+    FormatHeaderRow ws, 4
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    If lastRow > 4 Then
+        ws.Range("B5:B" & lastRow).FormatConditions.AddDatabar
+        ws.Range("B5:B" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+    End If
+
+    ws.Columns("A:G").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportV2CompetitorSummaryCSV(wb As Workbook, basePath As String, dateStr As String)
+    Dim ws As Worksheet
+    Dim csvPath As String
+
+    csvPath = basePath & "SUMMARY-V2-COMPETITOR-" & dateStr & ".csv"
+    If Dir(csvPath) = "" Then
+        csvPath = basePath & "SUMMARY-V2-COMPETITOR-LATEST.csv"
+    End If
+    If Dir(csvPath) = "" Then
+        Debug.Print "Competitor summary not found: " & csvPath
+        Exit Sub
+    End If
+
+    Set ws = GetOrCreateSheet(wb, "CompetitorSummaryCSV")
+    ImportCSVToSheetV2 ws, csvPath
+
+    ' Add title
+    ws.Rows(1).Insert
+    ws.Rows(1).Insert
+    ws.Cells(1, 1).Value = "COMPETITOR SUMMARY - V2 TOP RATED"
+    ws.Cells(1, 1).Font.Bold = True
+    ws.Cells(1, 1).Font.Size = 14
+    ws.Cells(2, 1).Value = "Top 50 competitors citing patents in the top 500"
+
+    FormatHeaderRow ws, 4
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    If lastRow > 4 Then
+        ws.Range("B5:B" & lastRow).FormatConditions.AddDatabar
+        ws.Range("B5:B" & lastRow).FormatConditions(1).BarColor.Color = RGB(99, 142, 198)
+    End If
+
+    ws.Columns("A:D").AutoFit
+    ws.Range("A5").Select
+    ActiveWindow.FreezePanes = True
+End Sub
+
+Private Sub ImportCSVToSheetV2(ws As Worksheet, csvPath As String)
+    Dim qt As QueryTable
+
+    ' Clear existing data
+    ws.Cells.Clear
+
+    ' Import CSV
+    Set qt = ws.QueryTables.Add( _
+        Connection:="TEXT;" & csvPath, _
+        Destination:=ws.Range("A1"))
+
+    With qt
+        .TextFileParseType = xlDelimited
+        .TextFileCommaDelimiter = True
+        .TextFileTextQualifier = xlTextQualifierDoubleQuote
+        .Refresh BackgroundQuery:=False
+        .Delete
+    End With
+End Sub
+
+Private Function GetBasePath() As String
+    Dim basePath As String
+
+    If ThisWorkbook.Path <> "" Then
+        basePath = ThisWorkbook.Path & "\"
+    Else
+        basePath = CurDir & "\"
+    End If
+
+    GetBasePath = basePath
+End Function
+
+Private Function GetOrCreateSheet(wb As Workbook, sheetName As String) As Worksheet
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = wb.Worksheets(sheetName)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        Set ws = wb.Worksheets.Add
+        ws.Name = sheetName
+    End If
+
+    Set GetOrCreateSheet = ws
+End Function

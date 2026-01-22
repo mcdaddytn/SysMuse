@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-21)
+# Patent Portfolio Analysis - Session Context (2026-01-22)
 
 ## Current State Summary
 
@@ -22,6 +22,98 @@
 | CA Technologies | 1,400 | 1,394 | 315 |
 | Nicira (VMware SDN) | 1,028 | 1,028 | 370 |
 | Other affiliates | 354 | 352 | 168 |
+
+## Recent Accomplishments (2026-01-22)
+
+### Citation Categorization Analysis
+
+Investigated how citations are counted and discovered a significant issue with within-portfolio (self) citations.
+
+**Problem Identified:**
+- Current system tracks `forward_citations` (total) and `competitor_citations` (from 131 tracked competitors)
+- Does NOT separately track `portfolio_citations` (from affiliates: VMware, Broadcom, Nicira, etc.)
+- This means patents with high self-citation rates appear more valuable than they are
+
+**Analysis Results (28 patent sample):**
+
+| Metric | VMware Patents | Non-VMware Patents | Difference |
+|--------|---------------|-------------------|------------|
+| Avg Self-Citations | **16.5%** | **1.7%** | **+14.8 pp** |
+| Patents >20% self-cite | 20% | 0% | Significant |
+
+**Worst Offenders (Nicira/VMware):**
+| Patent | Affiliate | Self-Citation % | Details |
+|--------|-----------|-----------------|---------|
+| 9747249 | Nicira | **79%** | 65 VMware + 14 Nicira citations |
+| 9762619 | Nicira | **62%** | 28 Nicira + 6 VMware |
+| 9860151 | Nicira | **39%** | 18 Nicira + 14 VMware |
+
+**Impact:** VMware/Nicira patents self-cite at **10x the rate** of other affiliates, which likely contributes to their 84% dominance in V3 Top 500.
+
+**Documentation:** `docs/CITATION_CATEGORIZATION_PROBLEM.md`
+**Analysis Script:** `scripts/estimate-portfolio-citations.ts`
+**Results:** `output/portfolio-citation-estimate-2026-01-22.json`
+
+**Recommendation:** High priority to implement citation categorization. Options:
+- Option A: Use `external_citations = forward - portfolio` in scoring
+- Option B: Discount portfolio citations (e.g., × 0.25)
+- Option C: Create separate competitive signal ratio
+
+### Heat Map Batch Generation V2 (Revised Strategy)
+
+Regenerated batches 003-010 with revised methodology while preserving already-submitted batches 001-002.
+
+**Strategy Changes:**
+| Aspect | Old (v1) | New (v2) |
+|--------|----------|----------|
+| Ranking source | V3 | **V2** |
+| Primary pool | Top 500 | **Top 250** |
+| Odd batches | Top 100 round-robin | **Top 250 with sector diversity** |
+| Even batches | Sector diversity (any rank) | **Sector diversity, favor high-ranked** |
+| Extended pool | All ranks | **251-500 only for underrepresented sectors** |
+
+**New Batch Distribution:**
+
+| Batch | Type | In Top 250 | Avg V2 Rank |
+|-------|------|------------|-------------|
+| 001 | preserved | - | - |
+| 002 | preserved | - | - |
+| 003 | High-Value Sampled | 25/25 | 52 |
+| 004 | Sector Diversity | 15/25 | 183 |
+| 005 | High-Value Sampled | 25/25 | 69 |
+| 006 | Sector Diversity | 14/25 | 188 |
+| 007 | High-Value Sampled | 25/25 | 134 |
+| 008 | Sector Diversity | 18/25 | 195 |
+| 009 | High-Value Sampled | 25/25 | 152 |
+| 010 | Sector Diversity | 9/25 | 248 |
+
+**Summary:**
+- Preserved: 49 patents (batches 001-002)
+- New: 200 patents (batches 003-010)
+- **78% from top 250**, 22% extended for sector diversity
+- 41% from top 100
+
+**Files Created:**
+| File | Description |
+|------|-------------|
+| `output/heatmap-batches-v2-LATEST.json` | Full batch data |
+| `output/HEATMAP-BATCH-003-v2.csv` through `010-v2.csv` | New batch CSVs |
+| `output/allocated-batch-patents.json` | Tracking for future batches |
+| `scripts/generate-heatmap-batches-v2.ts` | New generation script |
+
+**Sector Distribution (All 249 Patents):**
+| Sector | Count | % |
+|--------|-------|---|
+| SECURITY | 53 | 21.3% |
+| VIRTUALIZATION | 46 | 18.5% |
+| COMPUTING | 37 | 14.9% |
+| SDN_NETWORK | 34 | 13.7% |
+| WIRELESS | 26 | 10.4% |
+| VIDEO_STREAMING | 16 | 6.4% |
+| FAULT_TOLERANCE | 9 | 3.6% |
+| Others | 28 | 11.2% |
+
+---
 
 ## Recent Accomplishments (2026-01-21)
 
@@ -196,9 +288,9 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
 
 ### Immediate Next Steps
 
-1. **Submit first batches to vendor**
-   - Start with Batch 001 (High-Value Sampled) and Batch 002 (Sector Diversity)
-   - Send 2 batches per day for parallel strategy comparison
+1. **Submit remaining batches to vendor**
+   - Batches 001-002 already submitted
+   - Submit batches 003-010 using new `-v2.csv` files
    - Track turnaround time and quality
 
 2. **Design feedback loop**
@@ -207,37 +299,42 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
    - Track which sectors yield best product matches
    - Compare high-value vs sector-diversity batch results
 
-3. **Analyze results by pool_rank**
-   - Do patents ranked 1-25 yield better heat maps than 75-100?
+3. **Analyze results by V2 rank**
+   - Do patents ranked 1-100 yield better heat maps than 100-250?
    - Use to validate/refine our scoring methodology
 
 ### Queued Improvements
 
 | Improvement | Priority | Notes |
 |-------------|----------|-------|
+| **Citation categorization** | **High** | Track portfolio/competitor/third-party separately; VMware has 10x self-citation rate |
 | Add `super_sector` column to TopRated rankings worksheet | Medium | User requested during batch analysis |
 | Add CPC description column to TopRated rankings | Medium | Show human-readable CPC names instead of codes |
-| Add `super_sector` column to ATTORNEY-PORTFOLIO CSV | Low | For attorney review worksheets |
 | Claim breadth correlation with heat map quality | Low | Analyze after receiving vendor results |
 
-**Note**: Sector reference data now available in sector workbook via `ImportSectorReferenceData()` macro. This provides sector-to-super-sector mapping, CPC descriptions, and CPC-to-sector overlap analysis as separate worksheets.
+**Note**: Citation categorization analysis complete - see `docs/CITATION_CATEGORIZATION_PROBLEM.md` for full details and implementation options.
 
-### Current Batch Distribution (v2)
+### Current Batch Distribution (v2 - Revised)
 
 | Super-Sector | Patents | % |
 |--------------|---------|---|
-| SECURITY | 119 | 48.0% |
-| WIRELESS | 30 | 12.1% |
-| SDN_NETWORK | 24 | 9.7% |
-| VIRTUALIZATION | 19 | 7.7% |
-| VIDEO_STREAMING | 17 | 6.9% |
-| COMPUTING | 13 | 5.2% |
-| FAULT_TOLERANCE | 13 | 5.2% |
-| IMAGING | 6 | 2.4% |
-| AI_ML | 4 | 1.6% |
-| SEMICONDUCTOR | 2 | 0.8% |
+| SECURITY | 53 | 21.3% |
+| VIRTUALIZATION | 46 | 18.5% |
+| COMPUTING | 37 | 14.9% |
+| SDN_NETWORK | 34 | 13.7% |
+| WIRELESS | 26 | 10.4% |
+| VIDEO_STREAMING | 16 | 6.4% |
+| FAULT_TOLERANCE | 9 | 3.6% |
+| SEMICONDUCTOR | 5 | 2.0% |
+| IMAGING | 4 | 1.6% |
+| AI_ML | 2 | 0.8% |
 | AUDIO | 1 | 0.4% |
-| **Total** | **248** | **100%** |
+| **Total** | **249** | **100%** |
+
+**Rank Distribution (new batches 003-010):**
+- Top 100: 82/200 (41%)
+- Top 250: 156/200 (78%)
+- Extended (251-500): 44/200 (22%)
 
 ---
 
@@ -251,10 +348,10 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
 | `output/multi-score-analysis-LATEST.json` | Scored analysis (17,040 patents) |
 | `output/broadcom-portfolio-2026-01-15.json` | Raw USPTO data (22,589 patents) |
 | `output/SECTOR-MAPPING-LATEST.csv` | Sector to super-sector mapping with stats |
-| `output/SUPER-SECTOR-SUMMARY-LATEST.csv` | Super-sector overview with metrics |
-| `output/CPC-REFERENCE-LATEST.csv` | CPC code descriptions |
-| `output/CPC-SECTOR-OVERLAP-LATEST.csv` | CPC to sector/super-sector mapping |
-| `output/TOP15-SECTOR-COMPARISON-LATEST.csv` | Top 15 per sector vs overall ranking |
+| `output/heatmap-batches-v2-LATEST.json` | Heat map batches (V2 strategy) |
+| `output/HEATMAP-BATCH-003-v2.csv` - `010-v2.csv` | New batch CSVs for vendor |
+| `output/allocated-batch-patents.json` | Tracking file for batch allocation |
+| `output/portfolio-citation-estimate-2026-01-22.json` | Self-citation analysis results |
 
 ### Config Files
 | File | Description |
@@ -272,8 +369,10 @@ Added `AttorneyQuestions` worksheet to `AttorneyPortfolioMacros.bas`:
 | `scripts/merge-portfolio-for-attorney.ts` | Generate attorney CSV with full portfolio |
 | `scripts/generate-sector-reference-data.ts` | Generate sector reference CSVs for Excel |
 | `scripts/calculate-and-export-v3.ts` | Generate V3 top-rated spreadsheets |
-| `scripts/generate-heatmap-batches.ts` | Generate heat map vendor batches |
-| `scripts/generate-batch-summary.ts` | Generate batch strategy summary document |
+| `scripts/calculate-unified-top250-v2.ts` | Generate V2 top-rated spreadsheets |
+| `scripts/generate-heatmap-batches.ts` | Generate heat map vendor batches (original) |
+| `scripts/generate-heatmap-batches-v2.ts` | Generate heat map batches (V2 strategy) |
+| `scripts/estimate-portfolio-citations.ts` | Analyze self-citation rates by affiliate |
 
 ### VBA Macros
 | File | Purpose |
@@ -328,11 +427,12 @@ with open('output/ATTORNEY-PORTFOLIO-LATEST.csv') as f:
 
 | Date | Key Activity |
 |------|--------------|
+| 2026-01-22 | Citation categorization analysis: VMware has 10x self-citation rate (16.5% vs 1.7%) |
+| 2026-01-22 | Heat map batch generation V2: revised strategy using V2 rankings, 78% from top 250 |
+| 2026-01-22 | Created `estimate-portfolio-citations.ts`, `generate-heatmap-batches-v2.ts` |
 | 2026-01-21 | VMware patent integration fix: 31 VMware patents now in batches, portfolio expanded to 29,470 |
-| 2026-01-21 | Heat map batch generation v2: interleaved strategy, 246 patents, SECURITY reduced to 48% |
-| 2026-01-21 | Created `generate-heatmap-batches.ts`, `generate-batch-summary.ts`, batch config |
+| 2026-01-21 | Heat map batch generation: interleaved strategy, 246 patents |
 | 2026-01-20 | Full portfolio merge (22,589), Attorney Questions worksheet, CPC fix |
-| 2026-01-20 | Completed 16 sector breakouts, summary tabs |
 | 2026-01-19 | VMware/affiliate merge complete (17,040 patents) |
 | 2026-01-18 | Initial CPC-based sector assignment |
 | 2026-01-15 | Multi-score analysis framework |
@@ -364,4 +464,4 @@ Our Portfolio → Heat Map Vendor → Product Matches → Competitor Analysis
 
 ---
 
-*Last Updated: 2026-01-21 (VMware Integration Fix)*
+*Last Updated: 2026-01-22 (Citation Analysis + Batch Generation V2)*

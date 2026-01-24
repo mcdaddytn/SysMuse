@@ -17,7 +17,6 @@ import {
   FileWrapperClient,
   createFileWrapperClient,
   PatentFileWrapperRecord,
-  ApplicationBiblioResponse,
   FileHistoryDocument,
   DocumentsResponse,
 } from './odp-file-wrapper-client.js';
@@ -27,7 +26,6 @@ import {
   createPTABClient,
   PTABTrial,
   PTABTrialSearchResponse,
-  PTABDocument,
   PTABDocumentsResponse,
 } from './odp-ptab-client.js';
 
@@ -35,7 +33,11 @@ import {
   isApiCached,
   getApiCache,
   setApiCache,
+  getCachePath,
 } from '../services/cache-service.js';
+
+import * as fs from 'fs';
+import * as path from 'path';
 
 // =============================================================================
 // CACHED PATENTSVIEW CLIENT
@@ -251,6 +253,187 @@ export class CachedPatentsViewClient {
   /** Get underlying client for advanced usage */
   getRawClient(): PatentsViewClient {
     return this.client;
+  }
+
+  /**
+   * Get full portfolio of patents with caching (for overnight runs)
+   *
+   * Caches paginated results so subsequent runs are instant.
+   * On new machine: copy cache folder, run sync, then this loads from cache.
+   *
+   * @param queryName - Unique name for this query (e.g., 'broadcom-portfolio')
+   * @param assignees - List of assignee organizations to search
+   * @param options - Additional options
+   */
+  async getPortfolioPatents(
+    queryName: string,
+    assignees: string[],
+    options?: {
+      fields?: string[];
+      pageSize?: number;
+      rateLimitMs?: number;
+      onProgress?: (fetched: number, fromCache: boolean, latestDate?: string) => void;
+      forceRefresh?: boolean;
+    }
+  ): Promise<{
+    patents: Patent[];
+    fromCache: boolean;
+    pagesFromCache: number;
+    pagesFromApi: number;
+  }> {
+    const cacheDir = getCachePath('api', 'patentsview', 'portfolio-query', queryName);
+    const manifestPath = path.join(cacheDir, '_manifest.json');
+
+    // Default options
+    const fields = options?.fields || [
+      'patent_id',
+      'patent_title',
+      'patent_date',
+      'assignees.assignee_organization',
+      'patent_num_times_cited_by_us_patents',
+    ];
+    const pageSize = options?.pageSize || 500;
+    const rateLimitMs = options?.rateLimitMs || 1400;
+
+    // Check for existing manifest
+    let manifest: {
+      queryName: string;
+      assigneeCount: number;
+      complete: boolean;
+      totalPatents: number;
+      pages: number;
+      lastUpdated: string;
+    } | null = null;
+
+    if (fs.existsSync(manifestPath) && !options?.forceRefresh) {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    }
+
+    // If complete, load all from cache
+    if (manifest?.complete && !options?.forceRefresh) {
+      const patents: Patent[] = [];
+      for (let i = 1; i <= manifest.pages; i++) {
+        const pagePath = path.join(cacheDir, `page-${String(i).padStart(4, '0')}.json`);
+        if (fs.existsSync(pagePath)) {
+          const pageData = JSON.parse(fs.readFileSync(pagePath, 'utf-8'));
+          patents.push(...pageData.patents);
+        }
+      }
+      return {
+        patents,
+        fromCache: true,
+        pagesFromCache: manifest.pages,
+        pagesFromApi: 0,
+      };
+    }
+
+    // Ensure cache directory exists
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    // Find which pages we already have
+    let startPage = 1;
+    let existingPatents: Patent[] = [];
+    let lastPatentId: string | undefined;
+
+    if (manifest && !options?.forceRefresh) {
+      // Load existing pages
+      for (let i = 1; i <= manifest.pages; i++) {
+        const pagePath = path.join(cacheDir, `page-${String(i).padStart(4, '0')}.json`);
+        if (fs.existsSync(pagePath)) {
+          const pageData = JSON.parse(fs.readFileSync(pagePath, 'utf-8'));
+          existingPatents.push(...pageData.patents);
+          lastPatentId = pageData.lastPatentId;
+          startPage = i + 1;
+        } else {
+          break; // Stop at first missing page
+        }
+      }
+    }
+
+    // Build query
+    const query = {
+      _or: assignees.map(assignee => ({
+        'assignees.assignee_organization': assignee
+      }))
+    };
+
+    const allPatents: Patent[] = [...existingPatents];
+    let pageCount = startPage - 1;
+    let pagesFromCache = pageCount;
+    let pagesFromApi = 0;
+
+    options?.onProgress?.(allPatents.length, pagesFromCache > 0, undefined);
+
+    // Fetch remaining pages
+    try {
+      for await (const page of this.client.searchPaginated(
+        {
+          query,
+          fields,
+          sort: [{ patent_date: 'desc' }],
+          options: {
+            after: lastPatentId,
+          },
+        },
+        pageSize
+      )) {
+        pageCount++;
+        pagesFromApi++;
+
+        // Cache this page
+        const pagePath = path.join(cacheDir, `page-${String(pageCount).padStart(4, '0')}.json`);
+        const pageData = {
+          page: pageCount,
+          patents: page,
+          lastPatentId: page[page.length - 1]?.patent_id,
+          fetchedAt: new Date().toISOString(),
+        };
+        fs.writeFileSync(pagePath, JSON.stringify(pageData, null, 2));
+
+        allPatents.push(...page);
+
+        // Update manifest
+        const newManifest = {
+          queryName,
+          assigneeCount: assignees.length,
+          complete: false,
+          totalPatents: allPatents.length,
+          pages: pageCount,
+          lastUpdated: new Date().toISOString(),
+        };
+        fs.writeFileSync(manifestPath, JSON.stringify(newManifest, null, 2));
+
+        options?.onProgress?.(allPatents.length, false, page[page.length - 1]?.patent_date);
+
+        // Rate limit between API calls
+        await new Promise(r => setTimeout(r, rateLimitMs));
+      }
+
+      // Mark as complete
+      const finalManifest = {
+        queryName,
+        assigneeCount: assignees.length,
+        complete: true,
+        totalPatents: allPatents.length,
+        pages: pageCount,
+        lastUpdated: new Date().toISOString(),
+      };
+      fs.writeFileSync(manifestPath, JSON.stringify(finalManifest, null, 2));
+
+    } catch (err: any) {
+      // Save progress even on error
+      console.error(`\nError during portfolio fetch: ${err.message}`);
+      console.log(`Progress saved. ${allPatents.length} patents cached in ${pageCount} pages.`);
+    }
+
+    return {
+      patents: allPatents,
+      fromCache: pagesFromCache > 0 && pagesFromApi === 0,
+      pagesFromCache,
+      pagesFromApi,
+    };
   }
 }
 
@@ -597,7 +780,7 @@ export async function fetchPatentsBatch(
   }
 
   for (const chunk of chunks) {
-    const results = await Promise.all(
+    await Promise.all(
       chunk.map(async (id) => {
         try {
           // Check if cached first (without fetching)

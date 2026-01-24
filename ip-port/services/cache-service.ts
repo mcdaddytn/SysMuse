@@ -16,6 +16,13 @@ const prisma = new PrismaClient();
 // Base directory for cache files (relative to project root)
 const CACHE_BASE_DIR = path.join(process.cwd(), 'cache');
 
+/**
+ * Get the base cache directory path
+ */
+export function getCachePath(...subPaths: string[]): string {
+  return path.join(CACHE_BASE_DIR, ...subPaths);
+}
+
 // =============================================================================
 // API CACHE
 // =============================================================================

@@ -1,22 +1,28 @@
 /**
- * Download Full Portfolio
+ * Download Full Portfolio - Cached Version
  *
- * Downloads ALL Broadcom portfolio patents (all affiliates, no CPC filter).
- * Sorts by grant date (most recent first) for citation analysis.
+ * Downloads ALL Broadcom portfolio patents using cached paginated queries.
+ * Results are stored in cache/api/patentsview/portfolio-query/
+ *
+ * Key features:
+ * - Each page of results is cached to disk
+ * - Resume support: continues from last cached page on error
+ * - New machine: copy cache folder, run sync, instant portfolio access
  *
  * Usage:
- *   npx tsx scripts/download-full-portfolio.ts [--limit N] [--resume]
+ *   npx tsx scripts/download-full-portfolio.ts [--force-refresh]
  */
 
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
-import { createCachedPatentsViewClient } from '../clients/cached-clients.js';
-import { getCacheStats } from '../services/cache-service.js';
+import { createCachedPatentsViewClient, CachedPatentsViewClient } from '../clients/cached-clients.js';
+import { getCacheStats, getCachePath } from '../services/cache-service.js';
 
 dotenv.config();
 
 const OUTPUT_DIR = './output';
 const DATE_STAMP = new Date().toISOString().slice(0, 10);
+const QUERY_NAME = 'broadcom-portfolio';
 
 // All Broadcom portfolio assignees from config
 const PORTFOLIO_ASSIGNEES = [
@@ -55,21 +61,21 @@ interface PatentCandidate {
   score: number;
 }
 
-function parseArgs(): { limit: number | null; resume: boolean } {
+function parseArgs(): { forceRefresh: boolean; limit: number | null } {
   const args = process.argv.slice(2);
+  let forceRefresh = false;
   let limit: number | null = null;
-  let resume = false;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--limit' && args[i + 1]) {
+    if (args[i] === '--force-refresh') {
+      forceRefresh = true;
+    } else if (args[i] === '--limit' && args[i + 1]) {
       limit = parseInt(args[i + 1]);
       i++;
-    } else if (args[i] === '--resume') {
-      resume = true;
     }
   }
 
-  return { limit, resume };
+  return { forceRefresh, limit };
 }
 
 function calculateRemainingYears(grantDate: string): number {
@@ -84,141 +90,109 @@ function calculateRemainingYears(grantDate: string): number {
   return Math.max(0, remainingYears);
 }
 
-function calculateScore(patent: any): number {
-  const citations = patent.patent_num_times_cited_by_us_patents || 0;
-  const remainingYears = calculateRemainingYears(patent.patent_date || '2000-01-01');
-
-  // Simple score: citations * remaining years factor
-  const yearsFactor = Math.min(remainingYears / 10, 1.5); // Up to 1.5x for 15+ years remaining
+function calculateScore(citations: number, grantDate: string): number {
+  const remainingYears = calculateRemainingYears(grantDate);
+  const yearsFactor = Math.min(remainingYears / 10, 1.5);
   return citations * yearsFactor;
 }
 
 async function main() {
-  const { limit, resume } = parseArgs();
+  const { forceRefresh, limit } = parseArgs();
 
   console.log('\n' + '═'.repeat(65));
-  console.log('     FULL PORTFOLIO DOWNLOAD');
+  console.log('     FULL PORTFOLIO DOWNLOAD (CACHED)');
   console.log('═'.repeat(65));
   console.log(`\nDate: ${DATE_STAMP}`);
   console.log(`Assignees: ${PORTFOLIO_ASSIGNEES.length} variants`);
-  console.log(`Limit: ${limit || 'none'}`);
+  console.log(`Query name: ${QUERY_NAME}`);
+  console.log(`Force refresh: ${forceRefresh}`);
+
+  // Check for existing cache
+  const cacheDir = getCachePath('api', 'patentsview', 'portfolio-query', QUERY_NAME);
+  const manifestPath = `${cacheDir}/_manifest.json`;
+
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    console.log(`\nExisting cache: ${manifest.totalPatents.toLocaleString()} patents, ${manifest.pages} pages`);
+    console.log(`  Complete: ${manifest.complete}`);
+    console.log(`  Last updated: ${manifest.lastUpdated}`);
+    if (manifest.complete && !forceRefresh) {
+      console.log('\nCache is complete. Use --force-refresh to re-download.');
+    }
+  } else {
+    console.log('\nNo existing cache found. Starting fresh download.');
+  }
 
   // Create output directory
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   }
 
-  // Check for existing progress
-  const progressFile = `${OUTPUT_DIR}/portfolio-download-progress.json`;
-  let startAfter: string | null = null;
-  let existingPatents: PatentCandidate[] = [];
-
-  if (resume && fs.existsSync(progressFile)) {
-    const progress = JSON.parse(fs.readFileSync(progressFile, 'utf-8'));
-    startAfter = progress.lastPatentId;
-    existingPatents = progress.patents || [];
-    console.log(`\nResuming from: ${existingPatents.length} patents, last ID: ${startAfter}`);
-  }
-
   const client = createCachedPatentsViewClient();
-  const rawClient = client.getRawClient();
-
-  // Build query for all portfolio assignees
-  const query = {
-    _or: PORTFOLIO_ASSIGNEES.map(assignee => ({
-      'assignees.assignee_organization': assignee
-    }))
-  };
-
-  const candidates: PatentCandidate[] = [...existingPatents];
-  let fetched = 0;
-  let pageCount = 0;
   const startTime = Date.now();
 
-  console.log('\nFetching patents (sorted by date, newest first)...\n');
+  console.log('\nFetching portfolio (sorted by date, newest first)...\n');
 
-  try {
-    for await (const page of rawClient.searchPaginated(
-      {
-        query,
-        fields: [
-          'patent_id',
-          'patent_title',
-          'patent_date',
-          'assignees.assignee_organization',
-          'patent_num_times_cited_by_us_patents',
-        ],
-        sort: [{ patent_date: 'desc' }],
-        options: {
-          after: startAfter ? startAfter : undefined,
-        },
+  // Use the cached portfolio method
+  const result = await client.getPortfolioPatents(
+    QUERY_NAME,
+    PORTFOLIO_ASSIGNEES,
+    {
+      rateLimitMs: 1400,
+      forceRefresh,
+      onProgress: (fetched, fromCache, latestDate) => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const rate = fetched / Math.max(elapsed, 1);
+        const source = fromCache ? '[CACHE]' : '[API]';
+        process.stdout.write(
+          `\r  ${source} ${fetched.toLocaleString()} patents | ` +
+          `${rate.toFixed(0)} p/s | ` +
+          `Latest: ${latestDate || 'loading...'}     `
+        );
       },
-      500
-    )) {
-      pageCount++;
-
-      for (const patent of page) {
-        const assignee = patent.assignees?.[0]?.assignee_organization || 'Unknown';
-        const remainingYears = calculateRemainingYears(patent.patent_date || '2000-01-01');
-        const forwardCitations = patent.patent_num_times_cited_by_us_patents || 0;
-
-        candidates.push({
-          patent_id: patent.patent_id,
-          patent_title: patent.patent_title || '',
-          patent_date: patent.patent_date || '',
-          assignee,
-          forward_citations: forwardCitations,
-          remaining_years: Math.round(remainingYears * 10) / 10,
-          score: calculateScore(patent),
-        });
-        fetched++;
-      }
-
-      // Progress update
-      const elapsed = (Date.now() - startTime) / 1000;
-      const rate = fetched / elapsed;
-      process.stdout.write(
-        `\r  Page ${pageCount}: ${candidates.length.toLocaleString()} patents | ` +
-        `${rate.toFixed(0)} p/s | ` +
-        `Latest: ${page[page.length - 1]?.patent_date || 'N/A'}     `
-      );
-
-      // Save progress periodically
-      if (pageCount % 10 === 0) {
-        fs.writeFileSync(progressFile, JSON.stringify({
-          lastPatentId: page[page.length - 1]?.patent_id,
-          patents: candidates,
-          timestamp: new Date().toISOString(),
-        }));
-      }
-
-      // Check limit
-      if (limit && candidates.length >= limit) {
-        console.log(`\n\nReached limit of ${limit} patents`);
-        break;
-      }
-
-      // Rate limiting (1.4s between requests)
-      await new Promise(r => setTimeout(r, 1400));
     }
+  );
 
-  } catch (err: any) {
-    console.error(`\n\nError: ${err.message}`);
-    console.log('Progress saved. Run with --resume to continue.');
-
-    // Save progress on error
-    if (candidates.length > 0) {
-      fs.writeFileSync(progressFile, JSON.stringify({
-        lastPatentId: candidates[candidates.length - 1].patent_id,
-        patents: candidates,
-        timestamp: new Date().toISOString(),
-        error: err.message,
-      }));
-    }
-    process.exit(1);
+  // Apply limit if specified (for testing)
+  let patents = result.patents;
+  if (limit && patents.length > limit) {
+    patents = patents.slice(0, limit);
   }
 
-  // Sort by date (newest first) - should already be sorted but ensure it
+  // Deduplicate patents (API may return same patent multiple times for OR queries)
+  const beforeDedup = patents.length;
+  const seenIds = new Set<string>();
+  patents = patents.filter(p => {
+    if (seenIds.has(p.patent_id)) {
+      return false;
+    }
+    seenIds.add(p.patent_id);
+    return true;
+  });
+  const duplicatesRemoved = beforeDedup - patents.length;
+  if (duplicatesRemoved > 0) {
+    console.log(`  Deduplicated: removed ${duplicatesRemoved.toLocaleString()} duplicate entries`);
+  }
+
+  // Convert to candidates format
+  const candidates: PatentCandidate[] = patents.map(patent => {
+    const assignee = patent.assignees?.[0]?.assignee_organization || 'Unknown';
+    const forwardCitations = (patent as any).patent_num_times_cited_by_us_patents || 0;
+    const grantDate = patent.patent_date || '2000-01-01';
+    const remainingYears = calculateRemainingYears(grantDate);
+
+    return {
+      patent_id: patent.patent_id,
+      patent_title: patent.patent_title || '',
+      patent_date: grantDate,
+      assignee,
+      forward_citations: forwardCitations,
+      remaining_years: Math.round(remainingYears * 10) / 10,
+      score: calculateScore(forwardCitations, grantDate),
+    };
+  });
+
+  // Sort by date (newest first)
   candidates.sort((a, b) =>
     new Date(b.patent_date).getTime() - new Date(a.patent_date).getTime()
   );
@@ -230,6 +204,9 @@ async function main() {
   console.log('─'.repeat(65));
   console.log(`  Total patents: ${candidates.length.toLocaleString()}`);
   console.log(`  Time: ${elapsed.toFixed(1)} minutes`);
+  console.log(`  Pages from cache: ${result.pagesFromCache}`);
+  console.log(`  Pages from API: ${result.pagesFromApi}`);
+  console.log(`  Fully cached: ${result.fromCache}`);
 
   // Date range
   const newestDate = candidates[0]?.patent_date || 'N/A';
@@ -257,36 +234,42 @@ async function main() {
       console.log(`    ${name}: ${count.toLocaleString()}`);
     });
 
-  // Save final output
-  const outputFile = `${OUTPUT_DIR}/portfolio-candidates-${DATE_STAMP}.json`;
-  fs.writeFileSync(outputFile, JSON.stringify({
+  // Save candidates file for analysis scripts (streaming-candidates format)
+  const streamingFile = `${OUTPUT_DIR}/streaming-candidates-${DATE_STAMP}.json`;
+  fs.writeFileSync(streamingFile, JSON.stringify({
     metadata: {
       generatedDate: new Date().toISOString(),
+      source: 'cached-portfolio',
+      queryName: QUERY_NAME,
       totalPatents: candidates.length,
       activePatents: active.length,
       expiredPatents: expired.length,
       dateRange: { oldest: oldestDate, newest: newestDate },
+      cacheInfo: {
+        pagesFromCache: result.pagesFromCache,
+        pagesFromApi: result.pagesFromApi,
+        fullyCached: result.fromCache,
+      },
     },
     candidates,
   }, null, 2));
-
-  console.log(`\nSaved to: ${outputFile}`);
-
-  // Also save a streaming-candidates file for compatibility with existing scripts
-  const streamingFile = `${OUTPUT_DIR}/streaming-candidates-${DATE_STAMP}.json`;
-  fs.writeFileSync(streamingFile, JSON.stringify({
-    candidates,
-  }, null, 2));
-  console.log(`Also saved as: ${streamingFile}`);
-
-  // Clean up progress file
-  if (fs.existsSync(progressFile)) {
-    fs.unlinkSync(progressFile);
-  }
+  console.log(`\nSaved to: ${streamingFile}`);
 
   // Cache stats
   const stats = await getCacheStats();
   console.log(`\nCache: ${stats.apiCache.count} entries, ${(stats.apiCache.totalSize / 1024 / 1024).toFixed(2)} MB`);
+
+  console.log('\n' + '─'.repeat(65));
+  console.log('CACHE LOCATION');
+  console.log('─'.repeat(65));
+  console.log(`  ${cacheDir}/`);
+  console.log('  └── _manifest.json    (completion status)');
+  console.log('  └── page-0001.json    (first 500 patents)');
+  console.log('  └── page-0002.json    (etc.)');
+  console.log('\nTo use on new machine:');
+  console.log('  1. Copy cache/ folder to new machine');
+  console.log('  2. Run: npm run cache:sync');
+  console.log('  3. Run: npm run download:portfolio  (loads from cache instantly)');
 
   process.exit(0);
 }

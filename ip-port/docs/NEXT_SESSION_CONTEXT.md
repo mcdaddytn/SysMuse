@@ -2,228 +2,139 @@
 
 ## Current State Summary
 
-### System Architecture Redesign (NEW)
+### Portfolio Download Complete (CORRECTED)
 
-Redesigned the system to use a relational database with file-based caching:
+| Metric | Value |
+|--------|-------|
+| **Unique Patents** | **28,913** |
+| Active Patents | 24,668 (85.3%) |
+| Expired Patents | 4,245 |
+| Date Range | 1982-06-29 to 2025-09-30 |
+| Cache Pages | 79 |
+| Status | Complete + Deduplicated |
+
+**Discrepancy Resolved:**
+- Raw API returned: 39,413 patent rows
+- Duplicates removed: 10,500 (API returns same patent for each matching assignee variant)
+- **Unique patents: 28,913** (matches expected ~27K)
+- Fix applied: `scripts/download-full-portfolio.ts` now deduplicates by patent_id
+
+**Top Assignees (deduplicated):**
+| Assignee (Normalized) | Count | Active | Expired |
+|-----------------------|-------|--------|---------|
+| Broadcom | 10,831 | 9,867 | 964 |
+| VMware | 5,325 | 5,320 | 5 |
+| LSI | 3,674 | 581 | 3,093 |
+| Symantec | 2,973 | 2,902 | 71 |
+| Avago | 2,844 | 2,844 | 0 |
+| CA Technologies | 1,362 | 1,358 | 4 |
+| Nicira (VMware) | 1,007 | 1,007 | 0 |
+
+### Cache Status
+
+| Data Type | Cached | Location |
+|-----------|--------|----------|
+| Portfolio (28.9K unique) | Complete | `cache/api/patentsview/portfolio-query/` |
+| Forward citations | ~670 patents | `cache/api/patentsview/forward-citations/` |
+| Citing patent details | ~670 patents | `cache/api/patentsview/citing-patent-details/` |
+| Total API entries | ~1,340 | |
+
+### Citation Analysis Progress
+
+| Range | Status | Notes |
+|-------|--------|-------|
+| 0-670 | Complete (cached) | ~20 competitor cites found |
+| 670-1670 | **Running** (task bb1cb6b) | Batch of 1000 |
+| 1670+ | Pending | ~27,243 remaining |
+
+### Revised Time Estimate
+- Unique patents: 28,913
+- Already cached: ~670
+- Remaining: ~28,243
+- At 3s/patent: **~23.5 hours** for full analysis
+
+---
+
+## System Architecture
 
 | Component | Status | Description |
 |-----------|--------|-------------|
-| PostgreSQL | Running (port 5432) | Database for metadata and relationships |
-| Elasticsearch | Running (port 9200) | Full-text search for patent content |
-| Prisma Schema | Minimal (cache only) | Will expand incrementally |
-| File Cache | Implemented | API responses stored on disk, metadata in DB |
+| PostgreSQL | Running (port 5432) | Database for metadata |
+| Elasticsearch | Running (port 9200) | Full-text search |
+| File Cache | Complete | API responses on disk, metadata in DB |
 
-### Cache System Design
+### Cache Structure
 
-**File-based storage for portability:**
 ```
 cache/
 ├── api/
 │   ├── patentsview/
-│   │   ├── patent/           # Basic patent info
-│   │   ├── forward-citations/ # Who cites this patent
-│   │   └── citing-patent-details/ # Combined citation + assignee data
+│   │   ├── portfolio-query/
+│   │   │   └── broadcom-portfolio/
+│   │   │       ├── _manifest.json     # complete: true
+│   │   │       └── page-0001..0079.json
+│   │   ├── forward-citations/
+│   │   └── citing-patent-details/
 │   ├── file-wrapper/
-│   │   └── application/
 │   └── ptab/
-│       └── ipr-by-patent/
 └── llm/
-    ├── patent-analysis/
-    └── sector-classification/
 ```
 
-**Database stores metadata only:**
-- Request identification (endpoint, type, key)
-- File path reference
-- Status codes, timestamps
-- Token counts for LLM responses
-
-**Export/Import workflow:**
-1. Copy `cache/` folder to new machine
-2. Run `npm run cache:sync` to populate DB metadata
-3. Continue analysis with cached data
-
-### Current Cache Statistics
-| Metric | Value |
-|--------|-------|
-| API Cache Entries | ~200+ (growing) |
-| Cache Size | ~0.02 MB |
-| Patents Analyzed | 100 complete, 500 in progress |
-
 ---
 
-## Recent Accomplishments (2026-01-24)
-
-### Database & Infrastructure Setup
-
-1. **Docker Compose configured:**
-   - PostgreSQL 16 on port 5432
-   - Elasticsearch 8.11 on port 9200
-   - Volumes for data persistence
-
-2. **Prisma schema (cache-focused):**
-   - `ApiRequestCache` - API response metadata
-   - `LlmResponseCache` - LLM response metadata
-   - Both reference files on disk (no long text in DB)
-
-3. **Environment configured:**
-   - `.env` with PatentsView, USPTO ODP, Anthropic keys
-   - Database URL pointing to Docker postgres
-
-### Cache Service Implementation
-
-Created `services/cache-service.ts` with:
-- `setApiCache()` / `getApiCache()` / `isApiCached()`
-- `setLlmCache()` / `getLlmCache()` / `isLlmCached()`
-- `syncApiCacheFromFiles()` - Import after copying cache folder
-- `syncLlmCacheFromFiles()` - Same for LLM cache
-- `getCacheStats()` - Show statistics
-
-### Cached API Clients
-
-Created `clients/cached-clients.ts` wrapping:
-
-| Client | Cached Methods |
-|--------|---------------|
-| `CachedPatentsViewClient` | `getPatent()`, `getPatentCitations()`, `getForwardCitations()`, `getCitingPatentDetails()` |
-| `CachedFileWrapperClient` | `getApplication()`, `getApplicationByPatentNumber()`, `getDocuments()`, `getOfficeActions()` |
-| `CachedPTABClient` | `getTrial()`, `searchIPRsByPatent()`, `getTrialDocuments()` |
-
-**Key addition for overnight runs:**
-- `getForwardCitations(patentId)` - Returns citing patent IDs
-- `getCitingPatentDetails(patentId)` - Combined: forward citations + assignee details
-
-### Portfolio Download Script
-
-Created `scripts/download-full-portfolio.ts`:
-- Downloads all Broadcom portfolio patents (27K+)
-- Sorts by grant date (newest first)
-- Creates candidates file for citation analysis
-- Resume support with progress checkpoints
-
-### Citation Analysis Script (Cached)
-
-Created `scripts/citation-overlap-cached.ts`:
-- Uses cached clients to avoid redundant API calls
-- Rate limiting (3s between uncached patents)
-- Progress tracking with ETA
-- Resume capability via `--start` parameter
-
----
-
-## In Progress
-
-### Citation Analysis Batch Running
-
-Currently processing patents 100-600:
-- 500 patents at ~3s each = ~25 minutes
-- Will cache forward citations for future runs
-
-### Portfolio Status
-
-| Metric | Value |
-|--------|-------|
-| Downloaded | 1,000 patents (newest first) |
-| Citation Analysis Complete | 100 patents |
-| Citation Analysis In Progress | 500 patents |
-| Remaining to Download | ~26,000 patents |
-
----
-
-## New NPM Scripts
+## Key Commands
 
 ```bash
+# Portfolio (instant - fully cached, deduplicated)
+npm run download:portfolio           # Loads 28.9K unique patents from cache
+
+# Citation analysis (continues from cache)
+npm run analyze:cached -- --start 670 --limit 1000   # Next batch
+npm run analyze:cached:dry                           # Check cache status
+
 # Cache management
-npm run cache:stats           # Show cache statistics
-npm run cache:sync            # Sync files to DB after copying cache folder
-npm run cache:test            # Test cached clients
+npm run cache:stats                  # Show statistics
+npm run cache:sync                   # Sync after copying cache folder
 
-# Portfolio download
-npm run download:portfolio         # Download full portfolio
-npm run download:portfolio:test    # Download 100 patents (test)
-
-# Citation analysis (cached)
-npm run analyze:cached             # Run citation analysis with caching
-npm run analyze:cached:dry         # Check cache status only
+# Analysis
+npx tsx scripts/analyze-portfolio-breakdown.ts      # Affiliate/expiration breakdown
+npx tsx scripts/analyze-duplicates.ts               # Check for duplicates
 ```
 
 ---
 
-## Key Files Created
+## Files Updated This Session
 
-### New Services
-| File | Description |
-|------|-------------|
-| `services/cache-service.ts` | File cache with DB metadata |
-| `clients/cached-clients.ts` | Cached API client wrappers |
-
-### New Scripts
-| File | Description |
-|------|-------------|
-| `scripts/download-full-portfolio.ts` | Download all portfolio patents |
-| `scripts/citation-overlap-cached.ts` | Citation analysis with caching |
-| `scripts/test-cache.ts` | Test cache functionality |
-| `scripts/test-forward-citations.ts` | Test forward citations caching |
-| `scripts/test-cached-clients.ts` | Test cached client wrappers |
-
-### Schema
-| File | Description |
-|------|-------------|
-| `prisma/schema.prisma` | Minimal cache schema (ApiRequestCache, LlmResponseCache) |
-
-### Configuration
-| File | Description |
-|------|-------------|
-| `.env` | API keys, database URL |
-| `docker-compose.yml` | PostgreSQL + Elasticsearch + Kibana |
+| File | Change |
+|------|--------|
+| `scripts/download-full-portfolio.ts` | Added deduplication by patent_id |
+| `scripts/analyze-portfolio-breakdown.ts` | New: affiliate/expiration analysis |
+| `scripts/analyze-duplicates.ts` | New: duplicate detection |
+| `clients/cached-clients.ts` | Added `getPortfolioPatents()` with page caching |
+| `services/cache-service.ts` | Added `getCachePath()` export |
 
 ---
 
 ## Next Steps
 
 ### Immediate
-1. **Complete current batch** (500 patents in progress)
-2. **Download remaining portfolio** (~26K patents)
-3. **Run overnight citation analysis** on full portfolio
+1. **Continue citation analysis batches** of 1000 at a time
+2. **Monitor for rate limiting** (429 errors - script uses 3s between calls)
+3. Cache is interrupt-safe (each API response saved immediately)
 
-### Short-term
-1. **Add LLM response caching** - Same pattern as API cache
-2. **Expand Prisma schema** - Add patent tables as needed
-3. **Import existing JSON data** - Migrate to database
+### Overnight Run Strategy
+- 28,243 patents remaining
+- ~3 seconds per uncached patent
+- ~23.5 hours for full analysis
+- Run multiple sequential batches
 
-### Database Schema Evolution Plan
-
-| Phase | Schema | Purpose |
-|-------|--------|---------|
-| 1 (Current) | `ip-port-cache` | API/LLM response caching |
-| 2 | `ip-port` | Main patent data (basic info, relationships) |
-| 3 | `ip-port-llm` | LLM workflow state (multi-stage prompts) |
-| 4 | `ip-port-facet` | Dynamic attributes, scoring, metrics |
-
----
-
-## Commands Quick Reference
-
+### Machine Portability
 ```bash
-# Start infrastructure
-npm run docker:up              # Start postgres + elasticsearch
-
-# Database
-npm run db:push                # Push schema to database
-npm run db:studio              # Open Prisma Studio
-
-# Cache operations
-npm run cache:stats            # Show cache statistics
-npm run cache:sync             # Sync files after copying cache folder
-
-# Download portfolio (newest first)
-npm run download:portfolio:test    # 100 patents
-npm run download:portfolio         # Full portfolio
-
-# Citation analysis
-npm run analyze:cached -- --limit 100     # First 100
-npm run analyze:cached -- --start 100 --limit 500  # Next 500
-npm run analyze:cached:dry                # Check cache status only
+# To use on new machine:
+cp -r cache/ /new/machine/ip-port/cache/
+npm run cache:sync
+npm run download:portfolio   # Instant (from cache, deduplicated)
+npm run analyze:cached       # Continues from cached citations
 ```
 
 ---
@@ -232,33 +143,13 @@ npm run analyze:cached:dry                # Check cache status only
 
 | Date | Key Activity |
 |------|--------------|
+| 2026-01-24 | **Deduplication fix**: Removed 10,500 duplicates, true count is 28,913 |
+| 2026-01-24 | **Portfolio complete**: 79 pages cached, dedup applied |
+| 2026-01-24 | **Citation batches**: Running 1000 at a time |
 | 2026-01-24 | **System redesign**: PostgreSQL + file-based caching |
-| 2026-01-24 | Created cache service, cached API clients |
-| 2026-01-24 | Added forward citations caching for overnight runs |
-| 2026-01-24 | Started portfolio download and citation analysis |
-| 2026-01-22 | Citation categorization analysis: VMware 10x self-citation rate |
+| 2026-01-22 | Citation categorization analysis |
 | 2026-01-22 | Heat map batch generation V2 |
-| 2026-01-21 | VMware patent integration fix |
-| 2026-01-20 | Full portfolio merge (22,589 patents) |
 
 ---
 
-## Design Decisions
-
-### Why File-Based Cache?
-
-1. **Portability** - Copy folder between dev machines
-2. **Database stays small** - Only metadata, no long text
-3. **Easy inspection** - JSON files readable
-4. **Export/import** - Simple file copy + sync command
-5. **Production flexibility** - Can use cold/warm/hot storage
-
-### Why Separate Schemas?
-
-1. **Independent evolution** - Cache schema stable, patent schema evolving
-2. **Different lifecycle** - Cache can be rebuilt, patent data persists
-3. **Clear boundaries** - Each schema has single responsibility
-
----
-
-*Last Updated: 2026-01-24 (Database Redesign + Cache Implementation)*
+*Last Updated: 2026-01-24 (Deduplication Fix + Citation Batch Running)*

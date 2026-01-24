@@ -13,6 +13,9 @@ output/
 dist/
 build/
 
+# Cache directories (API responses, LLM responses)
+cache/
+
 # Logs
 *.log
 npm-debug.log*

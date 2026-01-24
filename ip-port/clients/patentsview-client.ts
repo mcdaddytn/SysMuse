@@ -323,6 +323,70 @@ export class PatentsViewClient extends BaseAPIClient {
   }
 
   /**
+   * Get forward citations - patents that cite a given patent
+   * Uses the dedicated /patent/us_patent_citation/ endpoint
+   */
+  async getForwardCitations(
+    patentId: string,
+    maxResults: number = 500
+  ): Promise<{
+    total_hits: number;
+    citing_patent_ids: string[];
+  }> {
+    const response = await this.retryRequest(() =>
+      this.post<any>('/patent/us_patent_citation/', {
+        q: { citation_patent_id: patentId },
+        f: ['patent_id'],
+        o: { size: maxResults }
+      }, this.getHeaders())
+    );
+
+    const citingIds = response.us_patent_citations
+      ? [...new Set(response.us_patent_citations.map((c: any) => c.patent_id))]
+      : [];
+
+    return {
+      total_hits: response.total_hits || 0,
+      citing_patent_ids: citingIds as string[],
+    };
+  }
+
+  /**
+   * Get details of multiple patents by ID (batch query)
+   */
+  async getPatentsBatch(
+    patentIds: string[],
+    fields?: string[]
+  ): Promise<Patent[]> {
+    if (patentIds.length === 0) return [];
+
+    // PatentsView has limits, so batch in chunks of 100
+    const batchSize = 100;
+    const allPatents: Patent[] = [];
+
+    for (let i = 0; i < patentIds.length; i += batchSize) {
+      const batch = patentIds.slice(i, i + batchSize);
+
+      const response = await this.retryRequest(() =>
+        this.post<PatentResponse>('/patent/', {
+          q: { _or: batch.map(id => ({ patent_id: id })) },
+          f: fields || [
+            'patent_id',
+            'patent_title',
+            'patent_date',
+            'assignees',
+          ],
+          o: { size: batchSize }
+        }, this.getHeaders())
+      );
+
+      allPatents.push(...response.patents);
+    }
+
+    return allPatents;
+  }
+
+  /**
    * Search patents by CPC classification
    */
   async searchByCPC(

@@ -1,5 +1,6 @@
-// Patent Portfolio Analysis Database Schema
-// Compatible with existing JSON data exports from PatentsView API
+// IP-Port Cache Schema
+// Minimal schema for API and LLM response caching
+// Actual response data stored on file system, DB holds metadata only
 
 generator client {
   provider = "prisma-client-js"
@@ -10,415 +11,60 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================================================
-// CORE PATENT DATA
-// ============================================================================
-
-model Patent {
-  id                    String    @id @map("patent_id") @db.VarChar(20)
-  title                 String    @map("patent_title") @db.Text
-  abstract              String?   @map("patent_abstract") @db.Text
-  patentType            String?   @map("patent_type") @db.VarChar(20)
-  grantDate             DateTime? @map("patent_date")
-  filingDate            DateTime? @map("filing_date")
-
-  // Citation counts (from PatentsView)
-  forwardCitations      Int       @default(0) @map("forward_citations")
-  backwardCitations     Int       @default(0) @map("backward_citations")
-
-  // Calculated fields
-  expirationDate        DateTime? @map("expiration_date")
-  remainingYears        Float?    @map("remaining_years")
-
-  // User curation fields
-  userPriority          Int       @default(0) @map("user_priority")  // -2 to +2
-  userNotes             String?   @map("user_notes") @db.Text
-  userTags              String[]  @map("user_tags")
-  reviewedAt            DateTime? @map("reviewed_at")
-  reviewedBy            String?   @map("reviewed_by") @db.VarChar(100)
-  isExcluded            Boolean   @default(false) @map("is_excluded")
-
-  // Data source tracking
-  sourceFile            String?   @map("source_file") @db.VarChar(255)
-  importedAt            DateTime  @default(now()) @map("imported_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  assignees             PatentAssignee[]
-  inventors             PatentInventor[]
-  cpcCodes              PatentCPC[]
-  citationsGiven        Citation[]  @relation("CitingPatent")
-  citationsReceived     Citation[]  @relation("CitedPatent")
-  portfolioMembers      PortfolioPatent[]
-  analysisResults       PatentAnalysisResult[]
-  competitorCitations   CompetitorCitation[]
-  searchTermHits        SearchTermHit[]
-
-  @@index([grantDate])
-  @@index([forwardCitations])
-  @@index([userPriority])
-  @@index([isExcluded])
-  @@map("patents")
-}
-
-// ============================================================================
-// ASSIGNEES & INVENTORS
-// ============================================================================
-
-model Assignee {
-  id              Int       @id @default(autoincrement())
-  assigneeId      String?   @unique @map("assignee_id") @db.VarChar(100)
-  name            String    @map("name") @db.VarChar(500)
-  normalizedName  String?   @map("normalized_name") @db.VarChar(100)
-  type            String?   @map("assignee_type") @db.VarChar(20)
-  city            String?   @db.VarChar(100)
-  state           String?   @db.VarChar(50)
-  country         String?   @db.VarChar(10)
-
-  // Classification
-  isCompetitor    Boolean   @default(false) @map("is_competitor")
-  isTargetOwner   Boolean   @default(false) @map("is_target_owner")  // Broadcom entities
-
-  patents         PatentAssignee[]
-
-  @@index([normalizedName])
-  @@index([isCompetitor])
-  @@map("assignees")
-}
-
-model PatentAssignee {
-  patentId    String   @map("patent_id") @db.VarChar(20)
-  assigneeId  Int      @map("assignee_id")
-  sequence    Int      @default(0)
-
-  patent      Patent   @relation(fields: [patentId], references: [id], onDelete: Cascade)
-  assignee    Assignee @relation(fields: [assigneeId], references: [id], onDelete: Cascade)
-
-  @@id([patentId, assigneeId])
-  @@map("patent_assignees")
-}
-
-model Inventor {
-  id              Int       @id @default(autoincrement())
-  inventorId      String?   @unique @map("inventor_id") @db.VarChar(100)
-  firstName       String?   @map("first_name") @db.VarChar(100)
-  lastName        String?   @map("last_name") @db.VarChar(100)
-  city            String?   @db.VarChar(100)
-  state           String?   @db.VarChar(50)
-  country         String?   @db.VarChar(10)
-
-  patents         PatentInventor[]
-
-  @@index([lastName])
-  @@map("inventors")
-}
-
-model PatentInventor {
-  patentId    String   @map("patent_id") @db.VarChar(20)
-  inventorId  Int      @map("inventor_id")
-  sequence    Int      @default(0)
-
-  patent      Patent   @relation(fields: [patentId], references: [id], onDelete: Cascade)
-  inventor    Inventor @relation(fields: [inventorId], references: [id], onDelete: Cascade)
-
-  @@id([patentId, inventorId])
-  @@map("patent_inventors")
-}
-
-// ============================================================================
-// CLASSIFICATIONS
-// ============================================================================
-
-model CpcCode {
-  id          Int         @id @default(autoincrement())
-  code        String      @unique @db.VarChar(30)
-  classId     String?     @map("class_id") @db.VarChar(10)
-  subclassId  String?     @map("subclass_id") @db.VarChar(10)
-  groupId     String?     @map("group_id") @db.VarChar(30)
-  description String?     @db.Text
-
-  patents     PatentCPC[]
-
-  @@index([classId])
-  @@index([subclassId])
-  @@map("cpc_codes")
-}
-
-model PatentCPC {
-  patentId  String  @map("patent_id") @db.VarChar(20)
-  cpcId     Int     @map("cpc_id")
-  sequence  Int     @default(0)
-
-  patent    Patent  @relation(fields: [patentId], references: [id], onDelete: Cascade)
-  cpcCode   CpcCode @relation(fields: [cpcId], references: [id], onDelete: Cascade)
-
-  @@id([patentId, cpcId])
-  @@map("patent_cpc")
-}
-
-// ============================================================================
-// CITATIONS
-// ============================================================================
-
-model Citation {
-  citingPatentId  String    @map("citing_patent_id") @db.VarChar(20)
-  citedPatentId   String    @map("cited_patent_id") @db.VarChar(20)
-  citationDate    DateTime? @map("citation_date")
-  category        String?   @db.VarChar(50)
-
-  citingPatent    Patent    @relation("CitingPatent", fields: [citingPatentId], references: [id], onDelete: Cascade)
-  citedPatent     Patent    @relation("CitedPatent", fields: [citedPatentId], references: [id], onDelete: Cascade)
-
-  @@id([citingPatentId, citedPatentId])
-  @@index([citedPatentId])
-  @@map("citations")
-}
-
-// ============================================================================
-// COMPETITOR ANALYSIS
-// ============================================================================
-
-model Competitor {
-  id              Int       @id @default(autoincrement())
-  name            String    @unique @db.VarChar(100)
-  aliases         String[]  // ["Netflix, Inc.", "Netflix Inc", etc.]
-  isActive        Boolean   @default(true) @map("is_active")
-  totalPatents    Int?      @map("total_patents")
-  streamingPatents Int?     @map("streaming_patents")
-
-  citations       CompetitorCitation[]
-
-  @@map("competitors")
-}
-
-model CompetitorCitation {
-  id                    Int       @id @default(autoincrement())
-  citedPatentId         String    @map("cited_patent_id") @db.VarChar(20)
-  competitorId          Int       @map("competitor_id")
-  citingPatentId        String    @map("citing_patent_id") @db.VarChar(20)
-  citingPatentTitle     String?   @map("citing_patent_title") @db.Text
-  citingPatentDate      DateTime? @map("citing_patent_date")
-  citingAssignee        String?   @map("citing_assignee") @db.VarChar(500)
-
-  citedPatent           Patent    @relation(fields: [citedPatentId], references: [id], onDelete: Cascade)
-  competitor            Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
-
-  @@unique([citedPatentId, citingPatentId])
-  @@index([citedPatentId])
-  @@index([competitorId])
-  @@map("competitor_citations")
-}
-
-// ============================================================================
-// PORTFOLIOS & ANALYSIS
-// ============================================================================
-
-model Portfolio {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique @db.VarChar(100)
-  description String?   @db.Text
-  owner       String?   @db.VarChar(100)  // "Broadcom", "Apple", etc.
-  filterCpc   String[]  @map("filter_cpc")  // CPC codes used to filter
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  patents     PortfolioPatent[]
-  analyses    AnalysisRun[]
-
-  @@map("portfolios")
-}
-
-model PortfolioPatent {
-  portfolioId Int     @map("portfolio_id")
-  patentId    String  @map("patent_id") @db.VarChar(20)
-  addedAt     DateTime @default(now()) @map("added_at")
-
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  patent      Patent    @relation(fields: [patentId], references: [id], onDelete: Cascade)
-
-  @@id([portfolioId, patentId])
-  @@map("portfolio_patents")
-}
-
-model AnalysisRun {
-  id              Int       @id @default(autoincrement())
-  analysisType    String    @map("analysis_type") @db.VarChar(50)  // citation_overlap, cpc_overlap, etc.
-  portfolioId     Int?      @map("portfolio_id")
-  status          String    @default("pending") @db.VarChar(20)  // pending, running, completed, failed
-  startedAt       DateTime  @default(now()) @map("started_at")
-  completedAt     DateTime? @map("completed_at")
-  patentsAnalyzed Int       @default(0) @map("patents_analyzed")
-  metadata        Json?     // Flexible storage for run parameters
-
-  portfolio       Portfolio? @relation(fields: [portfolioId], references: [id])
-  results         PatentAnalysisResult[]
-
-  @@index([analysisType])
-  @@index([status])
-  @@map("analysis_runs")
-}
-
-model PatentAnalysisResult {
-  id                  Int       @id @default(autoincrement())
-  patentId            String    @map("patent_id") @db.VarChar(20)
-  analysisRunId       Int       @map("analysis_run_id")
-
-  // Scoring
-  originalScore       Float?    @map("original_score")
-  enhancedScore       Float?    @map("enhanced_score")
-  competitorCitations Int       @default(0) @map("competitor_citations")
-
-  // Tier assignment
-  tier                Int?      // 1, 2, 3, 4
-  tierCriteria        String?   @map("tier_criteria") @db.VarChar(100)
-
-  // Competitors who cited this patent
-  competitorsCiting   String[]  @map("competitors_citing")
-
-  // Full analysis data
-  analysisData        Json?     @map("analysis_data")
-
-  patent              Patent    @relation(fields: [patentId], references: [id], onDelete: Cascade)
-  analysisRun         AnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
-
-  @@unique([patentId, analysisRunId])
-  @@index([tier])
-  @@index([enhancedScore])
-  @@map("patent_analysis_results")
-}
-
-// ============================================================================
-// SEARCH TERMS (User-defined for prioritization)
-// ============================================================================
-
-model SearchTerm {
-  id          Int       @id @default(autoincrement())
-  term        String    @db.VarChar(200)
-  category    String    @db.VarChar(20)  // boost, require, exclude
-  weight      Float     @default(1.0)    // Score multiplier
-  source      String?   @db.VarChar(100) // manual, extracted:patent_id
-  description String?   @db.Text
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  createdBy   String?   @map("created_by") @db.VarChar(100)
-
-  hits        SearchTermHit[]
-
-  @@unique([term, category])
-  @@index([category])
-  @@index([isActive])
-  @@map("search_terms")
-}
-
-model SearchTermHit {
-  patentId      String    @map("patent_id") @db.VarChar(20)
-  searchTermId  Int       @map("search_term_id")
-  hitCount      Int       @default(1) @map("hit_count")
-  hitLocations  String[]  @map("hit_locations")  // ["title", "abstract"]
-
-  patent        Patent    @relation(fields: [patentId], references: [id], onDelete: Cascade)
-  searchTerm    SearchTerm @relation(fields: [searchTermId], references: [id], onDelete: Cascade)
-
-  @@id([patentId, searchTermId])
-  @@map("search_term_hits")
-}
-
-// ============================================================================
-// USER PREFERENCES
-// ============================================================================
-
-model UserWeightProfile {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique @db.VarChar(100)
-  description String?   @db.Text
-  weights     Json      // { "competitor_citations": 0.25, "eligibility_score": 0.15, ... }
-  isDefault   Boolean   @default(false) @map("is_default")
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  createdBy   String?   @map("created_by") @db.VarChar(100)
-
-  @@index([isActive])
-  @@map("user_weight_profiles")
-}
-
-model UserSector {
-  id              Int       @id @default(autoincrement())
-  name            String    @unique @db.VarChar(100)
-  description     String?   @db.Text
-  sectorType      String    @map("sector_type") @db.VarChar(20)  // auto-cluster, cpc-based, user-defined
-  sourceClusterId Int?      @map("source_cluster_id")
-  keyTerms        String[]  @map("key_terms")
-  cpcCodes        String[]  @map("cpc_codes")
-  isActive        Boolean   @default(true) @map("is_active")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  createdBy       String?   @map("created_by") @db.VarChar(100)
-
-  patentAssignments UserSectorPatent[]
-
-  @@index([sectorType])
-  @@index([isActive])
-  @@map("user_sectors")
-}
-
-model UserSectorPatent {
-  sectorId    Int       @map("sector_id")
-  patentId    String    @map("patent_id") @db.VarChar(20)
-  assignedAt  DateTime  @default(now()) @map("assigned_at")
-  assignedBy  String?   @map("assigned_by") @db.VarChar(100)
-
-  sector      UserSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
-
-  @@id([sectorId, patentId])
-  @@map("user_sector_patents")
-}
-
-model UserPatentNote {
-  id          Int       @id @default(autoincrement())
-  patentId    String    @map("patent_id") @db.VarChar(20)
-  noteType    String    @map("note_type") @db.VarChar(50)  // priority, review, claim-mapping, product-match
-  content     String    @db.Text
-  priority    Int       @default(0)  // -2 to +2
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  createdBy   String?   @map("created_by") @db.VarChar(100)
-
-  @@index([patentId])
-  @@index([noteType])
-  @@map("user_patent_notes")
-}
-
-model DiscoveryStrategy {
-  id              Int       @id @default(autoincrement())
-  strategyId      String    @unique @map("strategy_id") @db.VarChar(100)  // e.g., "hybrid-cluster-1-cloud-auth"
-  name            String    @db.VarChar(200)
-  strategyType    String    @map("strategy_type") @db.VarChar(50)  // manual, citation-overlap, term-extraction
-  description     String?   @db.Text
-  parameters      Json?     // { extractedTerms: [], patentCount: N, ... }
-  dateAdded       DateTime  @default(now()) @map("date_added")
-  isActive        Boolean   @default(true) @map("is_active")
-
-  @@index([strategyType])
-  @@map("discovery_strategies")
-}
-
-// ============================================================================
-// IMPORT TRACKING
-// ============================================================================
-
-model ImportLog {
+// =============================================================================
+// API REQUEST CACHE
+// Caches responses from USPTO, PatentsView, PTAB, and other external APIs
+// =============================================================================
+
+model ApiRequestCache {
   id            Int       @id @default(autoincrement())
-  filename      String    @db.VarChar(255)
-  importType    String    @map("import_type") @db.VarChar(50)  // portfolio, competitors, analysis
-  recordsTotal  Int       @map("records_total")
-  recordsImported Int     @map("records_imported")
-  recordsSkipped Int      @default(0) @map("records_skipped")
-  status        String    @default("pending") @db.VarChar(20)
-  startedAt     DateTime  @default(now()) @map("started_at")
-  completedAt   DateTime? @map("completed_at")
-  errorMessage  String?   @map("error_message") @db.Text
 
-  @@index([importType])
-  @@index([status])
-  @@map("import_logs")
+  // Request identification (composite unique key)
+  endpoint      String    @db.VarChar(50)    // patentsview, file-wrapper, ptab
+  requestType   String    @map("request_type") @db.VarChar(50)  // patent, citations, application, ipr
+  requestKey    String    @map("request_key") @db.VarChar(100)  // patent_id, application_number, etc.
+
+  // File reference (actual data on disk)
+  filePath      String    @map("file_path") @db.VarChar(255)  // relative path from cache/
+  fileSize      Int?      @map("file_size")   // bytes
+
+  // Status
+  statusCode    Int       @default(200) @map("status_code")
+  errorMessage  String?   @map("error_message") @db.VarChar(255)
+
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([endpoint, requestType, requestKey])
+  @@index([endpoint, requestType])
+  @@map("api_request_cache")
+}
+
+// =============================================================================
+// LLM RESPONSE CACHE
+// Caches LLM analysis results (patent analysis, sector classification, etc.)
+// =============================================================================
+
+model LlmResponseCache {
+  id            Int       @id @default(autoincrement())
+
+  // Request identification (composite unique key)
+  promptType    String    @map("prompt_type") @db.VarChar(50)  // patent-analysis, sector-classification
+  entityKey     String    @map("entity_key") @db.VarChar(100)  // patent_id or other identifier
+  model         String    @db.VarChar(50)    // claude-sonnet-4-20250514, etc.
+
+  // File reference (actual data on disk)
+  filePath      String    @map("file_path") @db.VarChar(255)
+  fileSize      Int?      @map("file_size")
+
+  // Token tracking (useful for cost estimation)
+  inputTokens   Int?      @map("input_tokens")
+  outputTokens  Int?      @map("output_tokens")
+
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([promptType, entityKey, model])
+  @@index([promptType])
+  @@map("llm_response_cache")
 }

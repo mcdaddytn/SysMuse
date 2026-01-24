@@ -1,0 +1,42 @@
+sector,super_sector,super_sector_display,total_patents,in_top_100,in_top_250,in_top_500,avg_competitor_citations,total_competitor_citations,avg_years_remaining,top_patent_id,top_patent_score
+ai-ml,AI_ML,"AI & Machine Learning",4,1,2,3,14,56,10.1,9762497,77.3
+audio,AUDIO,"Audio",1,0,0,0,0,0,4.8,,0
+fintech-business,COMPUTING,"Computing & Data",95,1,4,7,5.2,494,5.8,9047582,74
+data-retrieval,COMPUTING,"Computing & Data",83,0,1,7,3.2,265,6.8,9251160,69.3
+image-processing,IMAGING,"Imaging & Optics",133,0,0,1,4.5,605,3.9,8619085,53.5
+3d-stereo-depth,IMAGING,"Imaging & Optics",70,0,0,2,2.1,144,4.4,8854531,45.4
+cameras-sensors,IMAGING,"Imaging & Optics",41,0,0,0,2.7,111,3.5,8570389,37.8
+optics,IMAGING,"Imaging & Optics",0,0,0,0,0,0,0,,0
+network-switching,SDN_NETWORK,"SDN & Network Infrastructure",1064,2,9,17,3.9,4168,3.9,10567307,80.1
+network-signal-processing,SDN_NETWORK,"SDN & Network Infrastructure",834,1,2,12,2.5,2100,3.2,9077574,71.9
+network-error-control,SDN_NETWORK,"SDN & Network Infrastructure",539,0,0,4,4.7,2526,2.9,8234551,52.2
+network-multiplexing,SDN_NETWORK,"SDN & Network Infrastructure",489,0,3,10,2.3,1132,3.9,8995321,70.5
+network-protocols,SDN_NETWORK,"SDN & Network Infrastructure",424,5,12,24,5,2129,5,10320940,91.6
+network-management,SDN_NETWORK,"SDN & Network Infrastructure",417,2,3,17,3.7,1544,6.5,8844041,77.2
+network-auth-access,SECURITY,"Security",445,15,30,54,5.7,2552,6.3,9565192,81.2
+network-threat-protection,SECURITY,"Security",418,15,44,77,8.9,3720,6.2,10284587,92.2
+network-crypto,SECURITY,"Security",204,3,11,22,4.3,886,4.3,9985786,90.6
+computing-os-security,SECURITY,"Security",172,6,21,43,8.8,1506,6.2,10438000,82.3
+network-secure-compute,SECURITY,"Security",109,3,10,16,7.7,839,6.8,9246941,82.9
+computing-data-protection,SECURITY,"Security",102,3,8,18,6.3,638,6.7,9495547,86.5
+computing-auth-boot,SECURITY,"Security",100,5,9,14,5.3,529,6.9,10331879,88.6
+wireless-security,SECURITY,"Security",88,0,1,4,2.8,249,5.9,8918901,55.3
+semiconductor,SEMICONDUCTOR,"Semiconductor",0,0,0,0,0,0,0,,0
+video-broadcast,VIDEO_STREAMING,"Video & Streaming",398,0,1,5,2.8,1127,2.4,9041766,62.3
+video-codec,VIDEO_STREAMING,"Video & Streaming",356,1,1,3,4,1411,4.5,10200706,81.3
+video-client-processing,VIDEO_STREAMING,"Video & Streaming",334,0,0,3,2.4,789,3.8,8665969,51.5
+video-storage,VIDEO_STREAMING,"Video & Streaming",274,0,0,0,1.8,485,3.7,10290325,33.6
+streaming-multimedia,VIDEO_STREAMING,"Video & Streaming",130,0,0,1,3.9,506,4.4,8104077,46.5
+video-server-cdn,VIDEO_STREAMING,"Video & Streaming",113,0,0,1,1.6,177,5.2,8363161,47.4
+video-drm-conditional,VIDEO_STREAMING,"Video & Streaming",43,0,0,0,1.5,63,4.2,8356324,33.4
+computing-systems,VIRTUALIZATION,"Virtualization & Cloud",302,2,2,4,4.1,1251,4,8850570,76.2
+computing-runtime,VIRTUALIZATION,"Virtualization & Cloud",215,3,6,16,5.3,1141,5.1,8631458,73.9
+computing-ui,VIRTUALIZATION,"Virtualization & Cloud",102,0,0,1,4.1,422,3.3,10409367,46.3
+wireless-transmission,WIRELESS,"Wireless & RF",378,3,5,10,3.3,1230,4.5,9413430,79.9
+wireless-infrastructure,WIRELESS,"Wireless & RF",331,0,6,12,2.4,807,4.7,9066368,68.2
+wireless-scheduling,WIRELESS,"Wireless & RF",313,0,1,4,1.9,606,6.4,9113483,65.1
+wireless-power-mgmt,WIRELESS,"Wireless & RF",250,2,3,7,2.8,698,4.7,8755316,72.6
+wireless-mimo-antenna,WIRELESS,"Wireless & RF",213,1,3,6,2.9,623,4.7,8599804,72
+wireless-mobility,WIRELESS,"Wireless & RF",200,1,3,4,2.1,421,6,9414422,78.5
+wireless-services,WIRELESS,"Wireless & RF",199,0,2,6,2.3,448,5.7,9297882,65.6
+rf-acoustic,WIRELESS,"Wireless & RF",0,0,0,0,0,0,0,,0

@@ -110,6 +110,22 @@ function inferSuperSector(sector: string): string {
 }
 
 /**
+ * Load abstract from PatentsView API cache
+ */
+function loadAbstract(patentId: string): string | null {
+  try {
+    const cachePath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
+    if (fs.existsSync(cachePath)) {
+      const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+      return data.patent_abstract || null;
+    }
+  } catch {
+    // Cache file unreadable
+  }
+  return null;
+}
+
+/**
  * Apply filters to patents array
  */
 function applyFilters(patents: Patent[], filters: Record<string, string | string[] | undefined>): Patent[] {
@@ -430,6 +446,7 @@ router.post('/batch-preview', (req: Request, res: Response) => {
         previews[id] = {
           patent_id: patent.patent_id,
           patent_title: patent.patent_title,
+          abstract: loadAbstract(patent.patent_id),
           patent_date: patent.patent_date,
           assignee: patent.assignee,
           affiliate: patent.affiliate,
@@ -455,6 +472,7 @@ router.post('/batch-preview', (req: Request, res: Response) => {
 interface PatentPreview {
   patent_id: string;
   patent_title: string;
+  abstract?: string | null;
   patent_date: string;
   assignee: string;
   affiliate: string;
@@ -483,6 +501,7 @@ router.get('/:id/preview', (req: Request, res: Response) => {
     const preview: PatentPreview = {
       patent_id: patent.patent_id,
       patent_title: patent.patent_title,
+      abstract: loadAbstract(patent.patent_id),
       patent_date: patent.patent_date,
       assignee: patent.assignee,
       affiliate: patent.affiliate,
@@ -515,7 +534,9 @@ router.get('/:id', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Patent not found' });
     }
 
-    res.json(patent);
+    // Enrich with abstract from cache
+    const abstract = loadAbstract(id);
+    res.json({ ...patent, abstract });
   } catch (error) {
     console.error('Error getting patent:', error);
     res.status(500).json({ error: 'Failed to get patent' });

@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { isStopWord } from '../../services/stopwords-service.js';
+import { isStopWord } from '../../../services/stopwords-service.js';
 
 export interface KeywordResult {
   term: string;

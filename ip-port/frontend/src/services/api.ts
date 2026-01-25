@@ -29,6 +29,7 @@ api.interceptors.response.use(
 export interface PatentPreview {
   patent_id: string;
   patent_title: string;
+  abstract?: string | null;
   patent_date: string;
   assignee: string;
   affiliate: string;
@@ -418,5 +419,51 @@ export interface KeywordExtractionResult {
   focusAreaId?: string;
   message?: string;
 }
+
+// Search Preview types
+export interface SearchPreviewHit {
+  patentId: string;
+  title: string;
+  score: number;
+  highlight?: string;
+}
+
+export interface SearchPreviewResult {
+  expression: string;
+  termType: string;
+  hitCounts: {
+    portfolio: number;
+    sector?: number;
+    focusArea?: number;
+  };
+  sampleHits: SearchPreviewHit[];
+  esAvailable: boolean;
+}
+
+// Search Preview API
+export const searchApi = {
+  async previewSearchTerm(
+    expression: string,
+    options?: {
+      termType?: string;
+      searchFields?: 'title' | 'abstract' | 'both';
+      focusAreaId?: string;
+      superSector?: string;
+      primarySector?: string;
+    }
+  ): Promise<SearchPreviewResult> {
+    const { data } = await api.post('/focus-areas/search-preview', {
+      expression,
+      termType: options?.termType || 'KEYWORD',
+      searchFields: options?.searchFields || 'both',
+      scopes: {
+        focusAreaId: options?.focusAreaId,
+        superSector: options?.superSector,
+        primarySector: options?.primarySector
+      }
+    });
+    return data;
+  }
+};
 
 export default api;

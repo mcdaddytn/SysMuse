@@ -7,9 +7,11 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { extractKeywords, extractKeywordsFromTitles } from '../services/keyword-extractor.js';
+import { createElasticsearchService } from '../../../services/elasticsearch-service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
+const esService = createElasticsearchService();
 
 // =============================================================================
 // FOCUS GROUPS (Exploratory/Draft)
@@ -696,6 +698,170 @@ router.post('/:id/extract-keywords', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error extracting keywords for focus area:', error);
     res.status(500).json({ error: 'Failed to extract keywords' });
+  }
+});
+
+// =============================================================================
+// SEARCH TERM PREVIEW
+// =============================================================================
+
+/**
+ * POST /api/focus-areas/search-preview
+ * Preview hit counts for a search expression across different scopes
+ *
+ * Body: {
+ *   expression: string,           // Search query (keywords, phrase, etc.)
+ *   termType?: string,            // KEYWORD, PHRASE, PROXIMITY, WILDCARD, BOOLEAN
+ *   scopes?: {
+ *     focusAreaId?: string,       // Limit to focus area patents
+ *     superSector?: string,       // Filter by super sector
+ *     primarySector?: string      // Filter by primary sector
+ *   }
+ * }
+ *
+ * Returns:
+ *   hitCounts: {
+ *     portfolio: number,          // Total hits in entire portfolio
+ *     sector: number,             // Hits in specified sector (if provided)
+ *     focusArea: number           // Hits in focus area (if provided)
+ *   },
+ *   sampleHits: [...]             // First few matching patents
+ */
+router.post('/search-preview', async (req: Request, res: Response) => {
+  try {
+    const {
+      expression,
+      termType = 'KEYWORD',
+      searchFields = 'both',
+      scopes = {}
+    } = req.body;
+
+    if (!expression || !expression.trim()) {
+      return res.status(400).json({ error: 'expression is required' });
+    }
+
+    // Check if ES is available
+    const esHealthy = await esService.healthCheck();
+    if (!esHealthy) {
+      return res.status(503).json({ error: 'Elasticsearch is not available' });
+    }
+
+    // Map searchFields to ES field names
+    let fields: string[];
+    switch (searchFields) {
+      case 'title':
+        fields = ['title'];
+        break;
+      case 'abstract':
+        fields = ['abstract'];
+        break;
+      default:
+        fields = ['title', 'abstract'];
+    }
+
+    // Build the search query based on term type
+    let searchQuery: string;
+    switch (termType) {
+      case 'PHRASE':
+        searchQuery = `"${expression}"`;
+        break;
+      case 'BOOLEAN':
+        // Pass through as-is for boolean expressions
+        searchQuery = expression;
+        break;
+      case 'WILDCARD':
+        // Add wildcards to each word
+        searchQuery = expression.split(/\s+/).map((w: string) => `${w}*`).join(' ');
+        break;
+      case 'PROXIMITY':
+        // Already in proximity format, pass through
+        searchQuery = expression;
+        break;
+      default:
+        // KEYWORD - simple OR search
+        searchQuery = expression;
+    }
+
+    // Get portfolio-wide hit count
+    const portfolioResults = await esService.search(searchQuery, {
+      fields,
+      size: 5,
+      highlight: true
+    });
+
+    const hitCounts: Record<string, number> = {
+      portfolio: portfolioResults.total
+    };
+
+    // If sector scope provided, get sector-specific count
+    if (scopes.superSector) {
+      const sectorResults = await esService.search(searchQuery, {
+        fields,
+        size: 0,
+        filters: {
+          // Note: This requires the sector to be indexed in ES
+          // For now we'll use the portfolio count as a fallback
+        }
+      });
+      // Fallback to portfolio count if sector filtering not available in ES
+      hitCounts.sector = sectorResults.total;
+    }
+
+    // If focus area scope provided, get focus area-specific count
+    if (scopes.focusAreaId) {
+      // Get patent IDs in the focus area
+      const focusAreaPatents = await prisma.focusAreaPatent.findMany({
+        where: { focusAreaId: scopes.focusAreaId },
+        select: { patentId: true }
+      });
+
+      console.log(`[search-preview] focusAreaId=${scopes.focusAreaId}, focusAreaPatent records=${focusAreaPatents.length}`);
+
+      if (focusAreaPatents.length > 0) {
+        const patentIds = focusAreaPatents.map(p => p.patentId);
+        console.log(`[search-preview] Sample DB patentIds: ${patentIds.slice(0, 3).join(', ')}`);
+
+        // Count how many of the search results are in the focus area
+        // For a simple implementation, we intersect search results with focus area patents
+        const focusAreaResults = await esService.search(searchQuery, {
+          fields,
+          size: 10000, // Get all to count overlap
+          filters: {}
+        });
+
+        console.log(`[search-preview] ES hits: ${focusAreaResults.hits.length}, sample ES patent_ids: ${focusAreaResults.hits.slice(0, 3).map(h => h.patent_id).join(', ')}`);
+
+        const focusAreaPatentSet = new Set(patentIds);
+        const matchingInFocusArea = focusAreaResults.hits.filter(
+          hit => focusAreaPatentSet.has(hit.patent_id)
+        );
+
+        console.log(`[search-preview] Intersection matches: ${matchingInFocusArea.length}`);
+        hitCounts.focusArea = matchingInFocusArea.length;
+      } else {
+        console.log(`[search-preview] No focusAreaPatent records found for ${scopes.focusAreaId}`);
+        hitCounts.focusArea = 0;
+      }
+    }
+
+    // Format sample hits for display
+    const sampleHits = portfolioResults.hits.slice(0, 5).map(hit => ({
+      patentId: hit.patent_id,
+      title: hit.title,
+      score: hit.score,
+      highlight: hit.highlights?.title?.[0] || hit.highlights?.abstract?.[0]
+    }));
+
+    res.json({
+      expression,
+      termType,
+      hitCounts,
+      sampleHits,
+      esAvailable: true
+    });
+  } catch (error) {
+    console.error('Error previewing search term:', error);
+    res.status(500).json({ error: 'Failed to preview search term' });
   }
 });
 

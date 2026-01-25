@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { focusAreaApi, patentApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview } from '@/services/api';
+import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult } from '@/services/api';
 import PatentPreviewTooltip from '@/components/PatentPreviewTooltip.vue';
 import KeywordExtractionPanel from '@/components/KeywordExtractionPanel.vue';
 
@@ -83,6 +83,37 @@ const newTerm = ref({
   termType: 'KEYWORD' as const
 });
 const addingTerm = ref(false);
+
+// Search term preview
+const termPreviewResult = ref<SearchPreviewResult | null>(null);
+const loadingTermPreview = ref(false);
+const termSearchFields = ref<'title' | 'abstract' | 'both'>('both');
+
+const searchFieldOptions = [
+  { value: 'both', label: 'Title + Abstract' },
+  { value: 'title', label: 'Title Only' },
+  { value: 'abstract', label: 'Abstract Only' }
+];
+
+// Explicit search preview trigger
+async function triggerTermPreview() {
+  const expression = newTerm.value.expression.trim();
+  if (!expression) return;
+
+  loadingTermPreview.value = true;
+  try {
+    termPreviewResult.value = await searchApi.previewSearchTerm(expression, {
+      termType: newTerm.value.termType,
+      searchFields: termSearchFields.value,
+      focusAreaId: focusAreaId.value
+    });
+  } catch (err) {
+    console.error('Failed to load term preview:', err);
+    termPreviewResult.value = null;
+  } finally {
+    loadingTermPreview.value = false;
+  }
+}
 
 // Computed
 const focusAreaId = computed(() => route.params.id as string);
@@ -672,7 +703,7 @@ onMounted(async () => {
 
     <!-- Add Search Term Dialog -->
     <q-dialog v-model="showAddTermDialog">
-      <q-card style="min-width: 450px">
+      <q-card style="min-width: 500px">
         <q-card-section class="row items-center">
           <div class="text-h6">Add Search Term</div>
           <q-space />
@@ -696,14 +727,91 @@ onMounted(async () => {
             outlined
             :placeholder="newTerm.termType === 'BOOLEAN' ? 'container AND (security OR isolation)' : 'container security'"
             :hint="newTerm.termType === 'PROXIMITY' ? 'Use W/N syntax, e.g., container W/3 security' : ''"
+            @keyup.enter="triggerTermPreview"
           />
+
+          <!-- Search Fields + Search Button -->
+          <div class="row q-gutter-sm q-mt-sm items-center">
+            <q-select
+              v-model="termSearchFields"
+              :options="searchFieldOptions"
+              label="Search In"
+              outlined
+              dense
+              emit-value
+              map-options
+              style="min-width: 170px"
+            />
+            <q-btn
+              color="primary"
+              icon="search"
+              label="Search"
+              :loading="loadingTermPreview"
+              :disable="!newTerm.expression.trim()"
+              @click="triggerTermPreview"
+            />
+          </div>
+
+          <!-- Hit Preview (always visible) -->
+          <div class="q-mt-md">
+            <div class="text-subtitle2 q-mb-sm">Hit Preview</div>
+
+            <template v-if="loadingTermPreview">
+              <div class="row items-center q-gutter-sm">
+                <q-spinner size="xs" />
+                <span class="text-caption text-grey">Searching...</span>
+              </div>
+            </template>
+
+            <template v-else-if="termPreviewResult">
+              <div class="row q-gutter-md q-mb-sm">
+                <q-chip dense color="grey-2" icon="public" size="sm">
+                  <span class="text-weight-medium">Portfolio:</span>
+                  <span class="q-ml-xs">{{ termPreviewResult.hitCounts.portfolio.toLocaleString() }}</span>
+                </q-chip>
+                <q-chip
+                  v-if="termPreviewResult.hitCounts.focusArea !== undefined"
+                  dense
+                  color="blue-2"
+                  icon="folder"
+                  size="sm"
+                >
+                  <span class="text-weight-medium">Focus Area:</span>
+                  <span class="q-ml-xs">{{ termPreviewResult.hitCounts.focusArea.toLocaleString() }}</span>
+                </q-chip>
+              </div>
+
+              <!-- Sample matches -->
+              <div v-if="termPreviewResult.sampleHits?.length" class="sample-matches">
+                <div class="text-caption text-grey-7 q-mb-xs">Sample matches:</div>
+                <div
+                  v-for="hit in termPreviewResult.sampleHits.slice(0, 3)"
+                  :key="hit.patentId"
+                  class="sample-match-row"
+                >
+                  <span class="text-weight-medium text-primary">{{ hit.patentId }}</span>
+                  <span class="text-grey-7 q-ml-sm" v-html="hit.highlight || hit.title.substring(0, 50) + '...'"></span>
+                </div>
+              </div>
+
+              <div v-else class="text-caption text-grey-6">
+                No matches found
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="text-caption text-grey-6">
+                Click Search to preview hits
+              </div>
+            </template>
+          </div>
         </q-card-section>
 
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn
             color="primary"
-            label="Add Term"
+            :label="`Add Term${termPreviewResult?.hitCounts?.portfolio ? ' (' + termPreviewResult.hitCounts.portfolio + ' hits)' : ''}`"
             :loading="addingTerm"
             :disable="!newTerm.expression.trim()"
             @click="addSearchTerm"
@@ -731,5 +839,25 @@ code {
   padding: 8px;
   background: #f5f5f5;
   border-radius: 4px;
+}
+
+.sample-matches {
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.sample-match-row {
+  font-size: 0.85em;
+  padding: 3px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sample-match-row :deep(mark) {
+  background: #fff59d;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 </style>

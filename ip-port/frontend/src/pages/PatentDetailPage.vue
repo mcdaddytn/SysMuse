@@ -145,7 +145,7 @@ function openUSPTO() {
               {{ patent.super_sector }}
             </q-chip>
           </div>
-          <div class="text-subtitle1 text-grey-7 ellipsis-2-lines">{{ patent.patent_title }}</div>
+          <div class="text-subtitle1 text-grey-7">{{ patent.patent_title }}</div>
         </div>
         <q-space />
         <q-btn outline color="primary" icon="open_in_new" label="Google Patents" class="q-mr-sm" @click="openUSPTO" />
@@ -168,6 +168,15 @@ function openUSPTO() {
       <q-tab-panels v-model="activeTab" animated>
         <!-- Overview -->
         <q-tab-panel name="overview">
+          <!-- Abstract -->
+          <q-card class="q-mb-md" flat bordered>
+            <q-card-section>
+              <div class="text-subtitle2 q-mb-sm">Abstract</div>
+              <div v-if="patent.abstract" class="text-body2" style="white-space: pre-line;">{{ patent.abstract }}</div>
+              <div v-else class="text-body2 text-grey-5 text-italic">Abstract not cached. View on Google Patents.</div>
+            </q-card-section>
+          </q-card>
+
           <div class="row q-gutter-md">
             <!-- Basic Information Card -->
             <q-card class="col-12 col-md-6">
@@ -440,10 +449,4 @@ function openUSPTO() {
 </template>
 
 <style scoped>
-.ellipsis-2-lines {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 </style>

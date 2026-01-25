@@ -2,11 +2,19 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
+import { focusAreaApi } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import type { Patent } from '@/types';
 
 const router = useRouter();
 const patentsStore = usePatentsStore();
+
+// Focus Group creation
+const showCreateFocusGroupDialog = ref(false);
+const newFocusGroupName = ref('');
+const newFocusGroupDescription = ref('');
+const creatingFocusGroup = ref(false);
+const focusGroupError = ref<string | null>(null);
 
 // Local state
 const searchText = ref('');
@@ -132,6 +140,48 @@ function onRequest(props: { pagination: typeof paginationModel.value }) {
 function exportToCSV() {
   // TODO: Implement CSV export
   console.log('Export to CSV');
+}
+
+// Create focus group from selected patents
+async function createFocusGroup() {
+  if (!newFocusGroupName.value.trim()) return;
+  if (selectedPatents.value.length === 0) return;
+
+  creatingFocusGroup.value = true;
+  focusGroupError.value = null;
+
+  try {
+    const patentIds = selectedPatents.value.map(p => p.patent_id);
+
+    const focusGroup = await focusAreaApi.createFocusGroup({
+      name: newFocusGroupName.value.trim(),
+      description: newFocusGroupDescription.value.trim() || undefined,
+      ownerId: 'default-user', // TODO: Get from auth context
+      sourceType: 'MANUAL',
+      patentIds
+    });
+
+    // Close dialog and clear state
+    showCreateFocusGroupDialog.value = false;
+    newFocusGroupName.value = '';
+    newFocusGroupDescription.value = '';
+    selectedPatents.value = [];
+
+    // Navigate to the new focus group or show success
+    router.push({ name: 'focus-areas', query: { tab: 'groups' } });
+  } catch (err) {
+    focusGroupError.value = err instanceof Error ? err.message : 'Failed to create focus group';
+    console.error('Failed to create focus group:', err);
+  } finally {
+    creatingFocusGroup.value = false;
+  }
+}
+
+function openCreateFocusGroupDialog() {
+  focusGroupError.value = null;
+  newFocusGroupName.value = '';
+  newFocusGroupDescription.value = '';
+  showCreateFocusGroupDialog.value = true;
 }
 
 // Lifecycle
@@ -461,12 +511,67 @@ onMounted(async () => {
         </template>
         {{ selectedPatents.length }} patents selected
         <template v-slot:action>
+          <q-btn flat icon="folder_special" label="Create Focus Group" @click="openCreateFocusGroupDialog" />
           <q-btn flat label="Queue Jobs" @click="console.log('Queue jobs for', selectedPatents)" />
           <q-btn flat label="Export Selected" />
           <q-btn flat label="Clear" @click="selectedPatents = []" />
         </template>
       </q-banner>
     </q-page-sticky>
+
+    <!-- Create Focus Group Dialog -->
+    <q-dialog v-model="showCreateFocusGroupDialog" persistent>
+      <q-card style="min-width: 450px">
+        <q-card-section class="row items-center">
+          <q-avatar icon="folder_special" color="primary" text-color="white" />
+          <span class="q-ml-sm text-h6">Create Focus Group</span>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-body2 text-grey-7 q-mb-md">
+            Creating a focus group with {{ selectedPatents.length }} selected patents.
+            You can later formalize this into a Focus Area with search terms.
+          </div>
+
+          <q-input
+            v-model="newFocusGroupName"
+            label="Group Name *"
+            outlined
+            autofocus
+            :rules="[val => !!val?.trim() || 'Name is required']"
+            class="q-mb-md"
+            placeholder="e.g., Container Security Patents"
+          />
+
+          <q-input
+            v-model="newFocusGroupDescription"
+            label="Description (optional)"
+            outlined
+            type="textarea"
+            rows="2"
+            placeholder="Brief description of this group..."
+          />
+
+          <q-banner v-if="focusGroupError" class="bg-negative text-white q-mt-md">
+            {{ focusGroupError }}
+          </q-banner>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            icon="add"
+            label="Create Focus Group"
+            :loading="creatingFocusGroup"
+            :disable="!newFocusGroupName.trim()"
+            @click="createFocusGroup"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Column Selector Dialog -->
     <ColumnSelector v-model="showColumnSelector" />

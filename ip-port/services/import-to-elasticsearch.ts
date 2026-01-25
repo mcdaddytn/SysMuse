@@ -11,6 +11,7 @@
  *   --portfolio     Import full Broadcom portfolio (with abstracts)
  *   --priority      Import priority analysis results
  *   --competitors   Import competitor portfolios
+ *   --candidates    Import streaming candidates (full portfolio with abstract cache lookup)
  *   --all           Import all available data
  *   --recreate      Delete and recreate index first
  */
@@ -23,6 +24,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const OUTPUT_DIR = './output';
+const CACHE_DIR = './cache/api/patentsview/patent';
 
 interface ImportStats {
   source: string;
@@ -267,6 +269,88 @@ async function importStreamingBatches(es: ElasticsearchService): Promise<ImportS
   return stats;
 }
 
+/**
+ * Try to load a patent abstract from the PatentsView API cache
+ */
+function loadAbstractFromCache(patentId: string): string | undefined {
+  const cachePath = path.join(CACHE_DIR, `${patentId}.json`);
+  try {
+    if (fs.existsSync(cachePath)) {
+      const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+      return data.patent_abstract || undefined;
+    }
+  } catch {
+    // Cache file unreadable, skip
+  }
+  return undefined;
+}
+
+async function importStreamingCandidates(es: ElasticsearchService): Promise<ImportStats> {
+  const stats: ImportStats = { source: 'streaming-candidates', total: 0, indexed: 0, skipped: 0, errors: 0 };
+
+  // Find the most recent candidates file
+  const files = fs.readdirSync(OUTPUT_DIR)
+    .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
+    .sort()
+    .reverse();
+
+  if (files.length === 0) {
+    console.log('No streaming-candidates file found');
+    return stats;
+  }
+
+  const filepath = path.join(OUTPUT_DIR, files[0]);
+  console.log(`\nImporting streaming candidates from ${files[0]}...`);
+
+  const data = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
+  const candidates = data.candidates || [];
+  stats.total = candidates.length;
+
+  let abstractsLoaded = 0;
+
+  // Process in batches
+  const batchSize = 500;
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const batch = candidates.slice(i, i + batchSize);
+
+    const docs = batch
+      .filter((p: any) => p.patent_id && p.patent_title)
+      .map((p: any) => {
+        const abstract = loadAbstractFromCache(p.patent_id);
+        if (abstract) abstractsLoaded++;
+
+        return {
+          patent_id: p.patent_id,
+          title: p.patent_title,
+          abstract,
+          grant_date: p.patent_date || undefined,
+          assignee: p.assignee || undefined,
+          assignee_normalized: p.assignee ? normalizeAssignee(p.assignee) : undefined,
+          cpc_codes: p.cpc_codes || [],
+          cpc_classes: p.cpc_codes?.map((c: string) => c.substring(0, 4)).filter(Boolean) || [],
+          forward_citations: p.forward_citations || 0,
+          remaining_years: p.remaining_years || 0,
+          enhanced_score: p.score || 0
+        };
+      });
+
+    if (docs.length > 0) {
+      const result = await es.bulkIndex(docs);
+      stats.indexed += result.indexed;
+      stats.errors += result.errors;
+    }
+
+    stats.skipped = stats.total - stats.indexed - stats.errors;
+
+    const progress = Math.min(100, Math.round((i + batch.length) / candidates.length * 100));
+    process.stdout.write(`\r  Progress: ${progress}% (${stats.indexed} indexed, ${abstractsLoaded} abstracts)`);
+  }
+
+  console.log(`\n  Completed: ${stats.indexed} indexed, ${stats.skipped} skipped, ${stats.errors} errors`);
+  console.log(`  Abstracts loaded from cache: ${abstractsLoaded}`);
+  return stats;
+}
+
 async function main() {
   const args = new Set(process.argv.slice(2));
   const es = createElasticsearchService();
@@ -322,6 +406,11 @@ async function main() {
   // Import streaming video batches
   if (importAll || args.has('--streaming')) {
     allStats.push(await importStreamingBatches(es));
+  }
+
+  // Import streaming candidates (full portfolio)
+  if (importAll || args.has('--candidates')) {
+    allStats.push(await importStreamingCandidates(es));
   }
 
   // Summary

@@ -2,6 +2,7 @@
 export interface Patent {
   patent_id: string;
   patent_title: string;
+  abstract?: string | null;
   patent_date: string;
   assignee: string;
   forward_citations: number;

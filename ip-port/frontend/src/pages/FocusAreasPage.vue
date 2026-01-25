@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { focusAreaApi, type FocusArea, type FocusGroup } from '@/services/api';
 
 const router = useRouter();
+const route = useRoute();
 
 // State
 const focusAreas = ref<FocusArea[]>([]);
 const focusGroups = ref<FocusGroup[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
-const activeTab = ref<'areas' | 'groups'>('areas');
+const activeTab = ref<'areas' | 'groups'>(
+  route.query.tab === 'groups' ? 'groups' : 'areas'
+);
 
 // Create dialog state
 const showCreateDialog = ref(false);
@@ -301,7 +304,7 @@ onMounted(loadData);
               </q-item-section>
               <q-item-section side>
                 <div class="row q-gutter-sm">
-                  <q-btn flat dense icon="check" color="positive" label="Formalize" @click="formalizeFocusGroup(group)" />
+                  <q-btn flat dense icon="gavel" color="primary" label="Formalize" @click="formalizeFocusGroup(group)" />
                   <q-btn flat dense icon="delete" color="negative" @click="deleteFocusGroup(group)" />
                 </div>
               </q-item-section>
@@ -327,7 +330,7 @@ onMounted(loadData);
               </q-item-section>
               <q-item-section side>
                 <div class="row q-gutter-sm">
-                  <q-btn flat dense icon="check" color="positive" label="Formalize" @click="formalizeFocusGroup(group)" />
+                  <q-btn flat dense icon="gavel" color="primary" label="Formalize" @click="formalizeFocusGroup(group)" />
                   <q-btn flat dense icon="delete" color="negative" @click="deleteFocusGroup(group)" />
                 </div>
               </q-item-section>

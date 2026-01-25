@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { focusAreaApi, type KeywordResult } from '@/services/api';
+import { focusAreaApi, searchApi, type KeywordResult, type SearchPreviewResult } from '@/services/api';
 
 const props = defineProps<{
   focusAreaId: string;
@@ -24,6 +24,18 @@ const minFrequency = ref(2);
 
 // Selection
 const selectedTerms = ref<Set<string>>(new Set());
+const operator = ref<'AND' | 'OR'>('AND');
+
+// Hit preview
+const previewResult = ref<SearchPreviewResult | null>(null);
+const loadingPreview = ref(false);
+const searchFields = ref<'title' | 'abstract' | 'both'>('both');
+
+const searchFieldOptions = [
+  { value: 'both', label: 'Title + Abstract' },
+  { value: 'title', label: 'Title Only' },
+  { value: 'abstract', label: 'Abstract Only' }
+];
 
 // Computed
 const canExtract = computed(() => props.patentCount >= 2);
@@ -33,8 +45,28 @@ const selectedKeywords = computed(() =>
 );
 
 const combinedExpression = computed(() =>
-  Array.from(selectedTerms.value).join(' OR ')
+  Array.from(selectedTerms.value).join(` ${operator.value} `)
 );
+
+// Explicit preview trigger
+async function triggerPreview() {
+  const expression = combinedExpression.value;
+  if (!expression || selectedTerms.value.size === 0) return;
+
+  loadingPreview.value = true;
+  try {
+    previewResult.value = await searchApi.previewSearchTerm(expression, {
+      termType: 'KEYWORD',
+      searchFields: searchFields.value,
+      focusAreaId: props.focusAreaId
+    });
+  } catch (err) {
+    console.error('Failed to load preview:', err);
+    previewResult.value = null;
+  } finally {
+    loadingPreview.value = false;
+  }
+}
 
 // Extract keywords
 async function extractKeywords() {
@@ -178,9 +210,22 @@ function getContrastColor(score: number): string {
 
         <!-- Selection Actions -->
         <div v-if="selectedTerms.size > 0" class="q-mt-md q-pa-sm bg-blue-1 rounded-borders">
-          <div class="row items-center">
+          <div class="row items-center q-mb-sm">
             <div class="col">
-              <div class="text-caption text-grey-7">Selected terms:</div>
+              <div class="row items-center q-mb-xs">
+                <div class="text-caption text-grey-7 q-mr-sm">Join with:</div>
+                <q-btn-toggle
+                  v-model="operator"
+                  :options="[
+                    { label: 'AND', value: 'AND' },
+                    { label: 'OR', value: 'OR' }
+                  ]"
+                  dense
+                  no-caps
+                  toggle-color="primary"
+                  size="sm"
+                />
+              </div>
               <code class="text-primary">{{ combinedExpression }}</code>
             </div>
             <q-btn
@@ -190,6 +235,81 @@ function getContrastColor(score: number): string {
               @click="addAsSearchTerm"
             />
           </div>
+
+          <!-- Search Controls -->
+          <div class="row q-gutter-sm items-center">
+            <q-select
+              v-model="searchFields"
+              :options="searchFieldOptions"
+              label="Search In"
+              outlined
+              dense
+              emit-value
+              map-options
+              style="min-width: 160px"
+            />
+            <q-btn
+              color="primary"
+              icon="search"
+              label="Preview Hits"
+              :loading="loadingPreview"
+              @click="triggerPreview"
+            />
+          </div>
+        </div>
+
+        <!-- Hit Preview (always visible when extracted) -->
+        <div class="q-mt-md q-pa-sm bg-grey-1 rounded-borders">
+          <div class="text-subtitle2 q-mb-sm">Hit Preview</div>
+
+          <template v-if="loadingPreview">
+            <div class="row items-center q-gutter-sm">
+              <q-spinner size="xs" />
+              <span class="text-caption text-grey">Searching...</span>
+            </div>
+          </template>
+
+          <template v-else-if="previewResult">
+            <div class="row q-gutter-md q-mb-sm">
+              <q-chip dense color="grey-3" icon="public" size="sm">
+                Portfolio: {{ previewResult.hitCounts.portfolio.toLocaleString() }}
+              </q-chip>
+              <q-chip
+                v-if="previewResult.hitCounts.focusArea !== undefined"
+                dense
+                color="blue-2"
+                icon="folder"
+                size="sm"
+              >
+                Focus Area: {{ previewResult.hitCounts.focusArea.toLocaleString() }}
+              </q-chip>
+            </div>
+
+            <!-- Sample Hits -->
+            <div v-if="previewResult.sampleHits?.length" class="q-mt-sm">
+              <div class="text-caption text-grey-7 q-mb-xs">Sample matches:</div>
+              <div class="sample-hits">
+                <div
+                  v-for="hit in previewResult.sampleHits.slice(0, 3)"
+                  :key="hit.patentId"
+                  class="sample-hit"
+                >
+                  <span class="text-weight-medium">{{ hit.patentId }}</span>
+                  <span class="text-grey-7 q-ml-xs" v-html="hit.highlight || hit.title.substring(0, 60) + '...'"></span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="text-caption text-grey-6">
+              No matches found
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="text-caption text-grey-6">
+              Select terms and click Preview Hits to see results
+            </div>
+          </template>
         </div>
       </div>
 
@@ -224,5 +344,25 @@ code {
   border-radius: 4px;
   font-family: 'Fira Code', monospace;
   font-size: 0.9em;
+}
+
+.sample-hits {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.sample-hit {
+  font-size: 0.85em;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sample-hit :deep(mark) {
+  background: #fff59d;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 </style>

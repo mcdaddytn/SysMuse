@@ -113,6 +113,9 @@ function handleClick() {
               <div class="text-caption text-grey-4 q-mt-xs">
                 US {{ preview.patent_id }} | {{ preview.patent_date }}
               </div>
+              <div v-if="preview.abstract" class="text-caption text-grey-5 q-mt-xs preview-abstract">
+                {{ preview.abstract }}
+              </div>
             </div>
             <q-badge
               :color="statusColor"
@@ -248,6 +251,16 @@ function handleClick() {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.preview-abstract {
+  line-height: 1.3;
+  max-height: 2.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-style: italic;
 }
 
 .preview-header {

@@ -274,6 +274,7 @@ model SearchTerm {
 
 enum SearchTermType {
   KEYWORD       // Simple keyword OR search
+  KEYWORD_AND   // Keywords joined with AND
   PHRASE        // Exact phrase match
   PROXIMITY     // Words within N of each other
   WILDCARD      // With wildcards/stemming

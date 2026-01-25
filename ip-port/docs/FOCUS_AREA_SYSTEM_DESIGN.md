@@ -491,6 +491,17 @@ POST   /api/llm/suggest-focus-groups        - Analyze patents, suggest groupings
   - Vote on weights (like v3 consensus scoring)
   - Conflict resolution via consensus
 
+### Search Term Selectivity (Future Enhancement)
+
+**Current state**: The hit preview shows a selectivity ratio (focus area hits / portfolio hits). Lower ratio = term is more distinctive to the focus area vs the broader portfolio.
+
+**Planned enhancements**:
+- **Persist selectivity ratio** as a saved attribute on each `SearchTerm` record (e.g., `selectivityRatio`, `portfolioHits`, `focusAreaHits`) so it doesn't need to be recomputed each time
+- **Combine selectivity across search terms** for a focus group to determine their collective efficacy at distinguishing the group from the portfolio
+- **Composite selectivity score** for a focus area: weighted combination of all its search terms' selectivity ratios
+- **Auto-suggest term removal**: flag terms with high selectivity ratios (>0.8) as non-distinctive
+- **Track selectivity over time** as portfolio composition changes
+
 ---
 
 *Last Updated: 2026-01-25*

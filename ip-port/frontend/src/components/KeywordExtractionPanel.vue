@@ -48,6 +48,12 @@ const combinedExpression = computed(() =>
   Array.from(selectedTerms.value).join(` ${operator.value} `)
 );
 
+const selectivityRatio = computed(() => {
+  if (!previewResult.value || previewResult.value.hitCounts.portfolio === 0) return 1;
+  const fa = previewResult.value.hitCounts.focusArea ?? 0;
+  return fa / previewResult.value.hitCounts.portfolio;
+});
+
 // Explicit preview trigger
 async function triggerPreview() {
   const expression = combinedExpression.value;
@@ -108,7 +114,7 @@ function toggleTerm(term: string) {
 // Add selected as search term
 function addAsSearchTerm() {
   if (selectedTerms.value.size === 0) return;
-  emit('addTerm', combinedExpression.value, 'KEYWORD');
+  emit('addTerm', combinedExpression.value, operator.value === 'AND' ? 'KEYWORD_AND' : 'KEYWORD');
   selectedTerms.value.clear();
 }
 
@@ -270,9 +276,10 @@ function getContrastColor(score: number): string {
           </template>
 
           <template v-else-if="previewResult">
-            <div class="row q-gutter-md q-mb-sm">
+            <div class="row q-gutter-md q-mb-sm items-center">
               <q-chip dense color="grey-3" icon="public" size="sm">
                 Portfolio: {{ previewResult.hitCounts.portfolio.toLocaleString() }}
+                <q-tooltip>Patents in the full portfolio matching this search term</q-tooltip>
               </q-chip>
               <q-chip
                 v-if="previewResult.hitCounts.focusArea !== undefined"
@@ -282,6 +289,20 @@ function getContrastColor(score: number): string {
                 size="sm"
               >
                 Focus Area: {{ previewResult.hitCounts.focusArea.toLocaleString() }}
+                <q-tooltip>Patents in this focus area matching this search term</q-tooltip>
+              </q-chip>
+              <q-chip
+                v-if="previewResult.hitCounts.focusArea !== undefined && previewResult.hitCounts.portfolio > 0"
+                dense
+                :color="selectivityRatio > 0.05 ? 'green-2' : selectivityRatio > 0.01 ? 'orange-2' : 'red-2'"
+                :text-color="selectivityRatio > 0.05 ? 'green-9' : selectivityRatio > 0.01 ? 'orange-9' : 'red-9'"
+                icon="tune"
+                size="sm"
+              >
+                Focus Ratio: {{ (selectivityRatio * 100).toFixed(2) }}%
+                <q-tooltip>
+                  Focus area hits / portfolio hits. Higher = search term captures more of this focus area relative to portfolio.
+                </q-tooltip>
               </q-chip>
             </div>
 

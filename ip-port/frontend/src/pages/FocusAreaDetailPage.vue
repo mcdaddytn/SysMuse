@@ -118,10 +118,17 @@ async function triggerTermPreview() {
 // Computed
 const focusAreaId = computed(() => route.params.id as string);
 
+const termSelectivityRatio = computed(() => {
+  if (!termPreviewResult.value || termPreviewResult.value.hitCounts.portfolio === 0) return 1;
+  const fa = termPreviewResult.value.hitCounts.focusArea ?? 0;
+  return fa / termPreviewResult.value.hitCounts.portfolio;
+});
+
 const searchTerms = computed(() => focusArea.value?.searchTerms || []);
 
 const termTypeOptions = [
   { value: 'KEYWORD', label: 'Keywords (OR)' },
+  { value: 'KEYWORD_AND', label: 'Keywords (AND)' },
   { value: 'PHRASE', label: 'Exact Phrase' },
   { value: 'PROXIMITY', label: 'Proximity (W/N)' },
   { value: 'WILDCARD', label: 'Wildcards' },
@@ -764,10 +771,11 @@ onMounted(async () => {
             </template>
 
             <template v-else-if="termPreviewResult">
-              <div class="row q-gutter-md q-mb-sm">
+              <div class="row q-gutter-md q-mb-sm items-center">
                 <q-chip dense color="grey-2" icon="public" size="sm">
                   <span class="text-weight-medium">Portfolio:</span>
                   <span class="q-ml-xs">{{ termPreviewResult.hitCounts.portfolio.toLocaleString() }}</span>
+                  <q-tooltip>Patents in the full portfolio matching this search term</q-tooltip>
                 </q-chip>
                 <q-chip
                   v-if="termPreviewResult.hitCounts.focusArea !== undefined"
@@ -778,6 +786,20 @@ onMounted(async () => {
                 >
                   <span class="text-weight-medium">Focus Area:</span>
                   <span class="q-ml-xs">{{ termPreviewResult.hitCounts.focusArea.toLocaleString() }}</span>
+                  <q-tooltip>Patents in this focus area matching this search term</q-tooltip>
+                </q-chip>
+                <q-chip
+                  v-if="termPreviewResult.hitCounts.focusArea !== undefined && termPreviewResult.hitCounts.portfolio > 0"
+                  dense
+                  :color="termSelectivityRatio > 0.05 ? 'green-2' : termSelectivityRatio > 0.01 ? 'orange-2' : 'red-2'"
+                  :text-color="termSelectivityRatio > 0.05 ? 'green-9' : termSelectivityRatio > 0.01 ? 'orange-9' : 'red-9'"
+                  icon="tune"
+                  size="sm"
+                >
+                  Focus Ratio: {{ (termSelectivityRatio * 100).toFixed(2) }}%
+                  <q-tooltip>
+                    Focus area hits / portfolio hits. Higher = search term captures more of this focus area relative to portfolio.
+                  </q-tooltip>
                 </q-chip>
               </div>
 
@@ -811,7 +833,7 @@ onMounted(async () => {
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn
             color="primary"
-            :label="`Add Term${termPreviewResult?.hitCounts?.portfolio ? ' (' + termPreviewResult.hitCounts.portfolio + ' hits)' : ''}`"
+            label="Add Term"
             :loading="addingTerm"
             :disable="!newTerm.expression.trim()"
             @click="addSearchTerm"

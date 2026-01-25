@@ -14,11 +14,89 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { createCachedPatentsViewClient, CachedPatentsViewClient } from '../clients/cached-clients.js';
 import { getCacheStats, getCachePath } from '../services/cache-service.js';
 
 dotenv.config();
+
+// Load sector mappings from config
+interface SectorMapping {
+  name: string;
+  cpc_patterns: string[];
+}
+
+interface SuperSector {
+  displayName: string;
+  sectors: string[];
+}
+
+let sectorMappings: Record<string, SectorMapping> | null = null;
+let superSectorMappings: Record<string, SuperSector> | null = null;
+let sectorToSuperSector: Map<string, string> | null = null;
+
+function loadSectorConfig() {
+  if (!sectorMappings) {
+    const configPath = path.join(process.cwd(), 'config/sector-breakout-v2.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    sectorMappings = config.sectorMappings;
+  }
+  return sectorMappings!;
+}
+
+function loadSuperSectorConfig() {
+  if (!superSectorMappings) {
+    const configPath = path.join(process.cwd(), 'config/super-sectors.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    superSectorMappings = config.superSectors;
+
+    // Build sector to super-sector lookup
+    sectorToSuperSector = new Map();
+    for (const [superSectorKey, data] of Object.entries(config.superSectors) as [string, SuperSector][]) {
+      for (const sector of data.sectors) {
+        sectorToSuperSector.set(sector, superSectorKey);
+      }
+    }
+  }
+  return { superSectorMappings: superSectorMappings!, sectorToSuperSector: sectorToSuperSector! };
+}
+
+function getPrimarySectorFromCpc(cpcCodes: string[]): string {
+  if (!cpcCodes || cpcCodes.length === 0) return 'general';
+
+  const mappings = loadSectorConfig();
+
+  // Build sorted list of patterns (longest first for most specific match)
+  const sortedPatterns: { sectorKey: string; pattern: string }[] = [];
+  for (const [sectorKey, sectorData] of Object.entries(mappings)) {
+    for (const pattern of sectorData.cpc_patterns) {
+      sortedPatterns.push({ sectorKey, pattern });
+    }
+  }
+  sortedPatterns.sort((a, b) => b.pattern.length - a.pattern.length);
+
+  // Find first matching sector
+  for (const cpc of cpcCodes) {
+    // Normalize CPC code (remove slashes for comparison)
+    const normalizedCpc = cpc.replace('/', '');
+    for (const { sectorKey, pattern } of sortedPatterns) {
+      const normalizedPattern = pattern.replace('/', '');
+      if (normalizedCpc.startsWith(normalizedPattern)) {
+        return sectorKey;
+      }
+    }
+  }
+
+  return 'general';
+}
+
+function getSuperSectorFromPrimary(primarySector: string): string {
+  const { superSectorMappings, sectorToSuperSector } = loadSuperSectorConfig();
+
+  const superSectorKey = sectorToSuperSector.get(primarySector) || 'COMPUTING';
+  return superSectorMappings[superSectorKey]?.displayName || 'Computing & Data';
+}
 
 const OUTPUT_DIR = './output';
 const DATE_STAMP = new Date().toISOString().slice(0, 10);
@@ -59,6 +137,9 @@ interface PatentCandidate {
   forward_citations: number;
   remaining_years: number;
   score: number;
+  cpc_codes: string[];
+  primary_sector: string;
+  super_sector: string;
 }
 
 function parseArgs(): { forceRefresh: boolean; limit: number | null } {
@@ -174,12 +255,20 @@ async function main() {
     console.log(`  Deduplicated: removed ${duplicatesRemoved.toLocaleString()} duplicate entries`);
   }
 
-  // Convert to candidates format
+  // Convert to candidates format with CPC and sector data
   const candidates: PatentCandidate[] = patents.map(patent => {
     const assignee = patent.assignees?.[0]?.assignee_organization || 'Unknown';
     const forwardCitations = (patent as any).patent_num_times_cited_by_us_patents || 0;
     const grantDate = patent.patent_date || '2000-01-01';
     const remainingYears = calculateRemainingYears(grantDate);
+
+    // Extract CPC codes
+    const cpcCurrent = (patent as any).cpc_current || [];
+    const cpcCodes: string[] = cpcCurrent.map((cpc: any) => cpc.cpc_group_id).filter(Boolean);
+
+    // Compute sectors from CPC codes
+    const primarySector = getPrimarySectorFromCpc(cpcCodes);
+    const superSector = getSuperSectorFromPrimary(primarySector);
 
     return {
       patent_id: patent.patent_id,
@@ -189,6 +278,9 @@ async function main() {
       forward_citations: forwardCitations,
       remaining_years: Math.round(remainingYears * 10) / 10,
       score: calculateScore(forwardCitations, grantDate),
+      cpc_codes: cpcCodes,
+      primary_sector: primarySector,
+      super_sector: superSector,
     };
   });
 
@@ -230,6 +322,19 @@ async function main() {
   [...assigneeCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
+    .forEach(([name, count]) => {
+      console.log(`    ${name}: ${count.toLocaleString()}`);
+    });
+
+  // Super-sector distribution
+  const superSectorCounts = new Map<string, number>();
+  candidates.forEach(p => {
+    superSectorCounts.set(p.super_sector, (superSectorCounts.get(p.super_sector) || 0) + 1);
+  });
+
+  console.log('\n  Super-Sectors:');
+  [...superSectorCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
     .forEach(([name, count]) => {
       console.log(`    ${name}: ${count.toLocaleString()}`);
     });

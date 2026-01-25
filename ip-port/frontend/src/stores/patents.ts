@@ -20,20 +20,24 @@ export const usePatentsStore = defineStore('patents', () => {
   const filters = ref<PortfolioFilters>({});
 
   // Available columns with visibility settings
+  // Per design: Affiliate and Super-Sector visible by default, Assignee hidden
   const columns = ref<GridColumn[]>([
     { name: 'patent_id', label: 'Patent ID', field: 'patent_id', sortable: true, align: 'left', visible: true },
     { name: 'patent_title', label: 'Title', field: 'patent_title', sortable: true, align: 'left', visible: true },
     { name: 'patent_date', label: 'Grant Date', field: 'patent_date', sortable: true, align: 'center', visible: true },
     { name: 'remaining_years', label: 'Years Left', field: 'remaining_years', sortable: true, align: 'center', visible: true,
       format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
-    { name: 'assignee', label: 'Assignee', field: 'assignee', sortable: true, align: 'left', visible: true },
+    { name: 'affiliate', label: 'Affiliate', field: 'affiliate', sortable: true, align: 'left', visible: true },
+    { name: 'super_sector', label: 'Super-Sector', field: 'super_sector', sortable: true, align: 'left', visible: true },
     { name: 'forward_citations', label: 'Fwd Citations', field: 'forward_citations', sortable: true, align: 'center', visible: true },
-    { name: 'competitor_citations', label: 'Competitor Cites', field: 'competitor_citations', sortable: true, align: 'center', visible: false },
     { name: 'score', label: 'Score', field: 'score', sortable: true, align: 'center', visible: true,
       format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
+    // Hidden by default
+    { name: 'assignee', label: 'Assignee (Raw)', field: 'assignee', sortable: true, align: 'left', visible: false },
+    { name: 'primary_sector', label: 'Primary Sector', field: 'primary_sector', sortable: true, align: 'left', visible: false },
+    { name: 'competitor_citations', label: 'Competitor Cites', field: 'competitor_citations', sortable: true, align: 'center', visible: false },
     { name: 'v2_score', label: 'v2 Score', field: 'v2_score', sortable: true, align: 'center', visible: false },
-    { name: 'v3_score', label: 'v3 Score', field: 'v3_score', sortable: true, align: 'center', visible: false },
-    { name: 'sector', label: 'Sector', field: 'sector', sortable: true, align: 'left', visible: false }
+    { name: 'v3_score', label: 'v3 Score', field: 'v3_score', sortable: true, align: 'center', visible: false }
   ]);
 
   // Getters

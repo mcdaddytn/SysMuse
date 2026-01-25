@@ -8,13 +8,17 @@ export interface Patent {
   remaining_years: number;
   score: number;
 
+  // Normalized entity and sector fields
+  affiliate: string;
+  super_sector: string;
+  primary_sector: string;
+  cpc_codes: string[];
+
   // Optional extended fields
   competitor_citations?: number;
   v2_score?: number;
   v3_score?: number;
   consensus_score?: number;
-  sector?: string;
-  cpc_codes?: string[];
   inventors?: string[];
 }
 
@@ -73,12 +77,15 @@ export interface Job {
 // Filter types
 export interface PortfolioFilters {
   search?: string;
+  affiliates?: string[];
+  superSectors?: string[];
   assignees?: string[];
-  sectors?: string[];
+  primarySectors?: string[];
   dateRange?: { start: string; end: string };
   scoreRange?: { min: number; max: number };
   remainingYearsRange?: { min: number; max: number };
   hasCompetitorCites?: boolean;
+  activeOnly?: boolean;
 }
 
 // Grid column definition

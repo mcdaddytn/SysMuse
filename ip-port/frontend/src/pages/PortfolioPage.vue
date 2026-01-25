@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
 import type { Patent } from '@/types';
@@ -11,6 +11,78 @@ const patentsStore = usePatentsStore();
 const searchText = ref('');
 const showColumnSelector = ref(false);
 const selectedPatents = ref<Patent[]>([]);
+const showFilters = ref(true);
+
+// Filter options (loaded from API)
+interface FilterOption {
+  name: string;
+  count: number;
+}
+const affiliateOptions = ref<FilterOption[]>([]);
+const superSectorOptions = ref<FilterOption[]>([]);
+const loadingFilters = ref(false);
+
+// Selected filter values (multi-select)
+const selectedAffiliates = ref<string[]>([]);
+const selectedSuperSectors = ref<string[]>([]);
+const activeOnlyFilter = ref(false);
+
+// Load filter options from API
+async function loadFilterOptions() {
+  loadingFilters.value = true;
+  try {
+    const [affiliatesRes, sectorsRes] = await Promise.all([
+      fetch('/api/patents/affiliates'),
+      fetch('/api/patents/super-sectors')
+    ]);
+
+    if (affiliatesRes.ok) {
+      affiliateOptions.value = await affiliatesRes.json();
+    }
+    if (sectorsRes.ok) {
+      superSectorOptions.value = await sectorsRes.json();
+    }
+  } catch (err) {
+    console.error('Failed to load filter options:', err);
+  } finally {
+    loadingFilters.value = false;
+  }
+}
+
+// Sync local filter state with store
+watch(() => patentsStore.filters, (newFilters) => {
+  selectedAffiliates.value = newFilters.affiliates || [];
+  selectedSuperSectors.value = newFilters.superSectors || [];
+  activeOnlyFilter.value = newFilters.activeOnly || false;
+}, { immediate: true });
+
+// Apply filters when dropdowns change
+function applyFilters() {
+  patentsStore.updateFilters({
+    affiliates: selectedAffiliates.value.length > 0 ? selectedAffiliates.value : undefined,
+    superSectors: selectedSuperSectors.value.length > 0 ? selectedSuperSectors.value : undefined,
+    activeOnly: activeOnlyFilter.value || undefined
+  });
+}
+
+// Super-sector color mapping
+const sectorColors: Record<string, string> = {
+  'Security': 'red-7',
+  'Virtualization & Cloud': 'purple-7',
+  'SDN & Network Infrastructure': 'blue-7',
+  'Wireless & RF': 'teal-7',
+  'Video & Streaming': 'orange-7',
+  'Computing & Data': 'grey-7',
+  'Semiconductor': 'indigo-7',
+  'Imaging & Optics': 'cyan-7',
+  'Audio': 'pink-7',
+  'AI & Machine Learning': 'green-7',
+  'Fault Tolerance & Reliability': 'amber-7'
+};
+
+function getSectorColor(sector: string): string {
+  return sectorColors[sector] || 'grey-6';
+}
 
 // Computed
 const tableColumns = computed(() =>
@@ -62,25 +134,13 @@ function exportToCSV() {
 }
 
 // Lifecycle
-onMounted(() => {
-  // Load patents with mock data for now (until backend is ready)
-  loadMockData();
+onMounted(async () => {
+  // Load filter options and patents in parallel
+  await Promise.all([
+    loadFilterOptions(),
+    patentsStore.loadPatents()
+  ]);
 });
-
-// Temporary: Load from existing candidates file
-async function loadMockData() {
-  try {
-    const response = await fetch('/api/patents');
-    if (!response.ok) {
-      // If API not available, load directly from candidates file
-      console.log('API not available, using mock data');
-      // For now, set empty - will populate from API when backend is ready
-    }
-    await patentsStore.loadPatents();
-  } catch (err) {
-    console.log('Using placeholder data until API is ready');
-  }
-}
 </script>
 
 <template>
@@ -124,31 +184,159 @@ async function loadMockData() {
         label="Export"
         @click="exportToCSV"
       />
+
+      <!-- Filter Toggle -->
+      <q-btn
+        flat
+        :icon="showFilters ? 'filter_list_off' : 'filter_list'"
+        :label="showFilters ? 'Hide Filters' : 'Filters'"
+        @click="showFilters = !showFilters"
+      />
     </div>
 
-    <!-- Filters (expandable) -->
-    <q-expansion-item
-      v-if="patentsStore.hasFilters"
-      label="Active Filters"
-      icon="filter_list"
-      class="q-mb-md"
-    >
-      <q-card>
-        <q-card-section>
-          <div class="row q-gutter-sm">
-            <q-chip
-              v-for="(value, key) in patentsStore.filters"
-              :key="key"
-              removable
-              @remove="patentsStore.updateFilters({ [key]: undefined })"
-            >
-              {{ key }}: {{ value }}
-            </q-chip>
-          </div>
-          <q-btn flat color="negative" label="Clear All" @click="patentsStore.clearFilters" />
-        </q-card-section>
-      </q-card>
-    </q-expansion-item>
+    <!-- Filter Bar -->
+    <q-slide-transition>
+      <div v-show="showFilters" class="q-mb-md">
+        <q-card flat bordered>
+          <q-card-section class="q-py-sm">
+            <div class="row q-gutter-md items-center">
+              <!-- Affiliate Multi-Select -->
+              <q-select
+                v-model="selectedAffiliates"
+                :options="affiliateOptions"
+                option-value="name"
+                option-label="name"
+                emit-value
+                map-options
+                multiple
+                use-chips
+                dense
+                outlined
+                clearable
+                :loading="loadingFilters"
+                label="Affiliate"
+                style="min-width: 200px"
+                @update:model-value="applyFilters"
+              >
+                <template v-slot:option="{ itemProps, opt }">
+                  <q-item v-bind="itemProps">
+                    <q-item-section>
+                      <q-item-label>{{ opt.name }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+
+              <!-- Super-Sector Multi-Select -->
+              <q-select
+                v-model="selectedSuperSectors"
+                :options="superSectorOptions"
+                option-value="name"
+                option-label="name"
+                emit-value
+                map-options
+                multiple
+                use-chips
+                dense
+                outlined
+                clearable
+                :loading="loadingFilters"
+                label="Super-Sector"
+                style="min-width: 220px"
+                @update:model-value="applyFilters"
+              >
+                <template v-slot:option="{ itemProps, opt }">
+                  <q-item v-bind="itemProps">
+                    <q-item-section avatar>
+                      <q-badge :color="getSectorColor(opt.name)" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>{{ opt.name }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+
+              <!-- Active Only Toggle -->
+              <q-toggle
+                v-model="activeOnlyFilter"
+                label="Active Only"
+                dense
+                @update:model-value="applyFilters"
+              />
+
+              <q-space />
+
+              <!-- Clear Filters -->
+              <q-btn
+                v-if="patentsStore.hasFilters"
+                flat
+                dense
+                color="negative"
+                icon="clear_all"
+                label="Clear All"
+                @click="patentsStore.clearFilters(); selectedAffiliates = []; selectedSuperSectors = []; activeOnlyFilter = false;"
+              />
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+    </q-slide-transition>
+
+    <!-- Active Filter Summary (shown when filters hidden) -->
+    <div v-if="!showFilters && patentsStore.hasFilters" class="q-mb-md">
+      <div class="row q-gutter-sm items-center">
+        <span class="text-caption text-grey-7">Filters:</span>
+        <q-chip
+          v-for="affiliate in (patentsStore.filters.affiliates || [])"
+          :key="'aff-' + affiliate"
+          dense
+          removable
+          color="primary"
+          text-color="white"
+          @remove="selectedAffiliates = selectedAffiliates.filter(a => a !== affiliate); applyFilters()"
+        >
+          {{ affiliate }}
+        </q-chip>
+        <q-chip
+          v-for="sector in (patentsStore.filters.superSectors || [])"
+          :key="'sec-' + sector"
+          dense
+          removable
+          :color="getSectorColor(sector)"
+          text-color="white"
+          @remove="selectedSuperSectors = selectedSuperSectors.filter(s => s !== sector); applyFilters()"
+        >
+          {{ sector }}
+        </q-chip>
+        <q-chip
+          v-if="patentsStore.filters.activeOnly"
+          dense
+          removable
+          color="green"
+          text-color="white"
+          @remove="activeOnlyFilter = false; applyFilters()"
+        >
+          Active Only
+        </q-chip>
+        <q-chip
+          v-if="patentsStore.filters.search"
+          dense
+          removable
+          color="grey-7"
+          text-color="white"
+          @remove="searchText = ''; patentsStore.updateFilters({ search: undefined })"
+        >
+          Search: {{ patentsStore.filters.search }}
+        </q-chip>
+      </div>
+    </div>
 
     <!-- Data Table -->
     <q-table
@@ -190,16 +378,52 @@ async function loadMockData() {
         </q-td>
       </template>
 
-      <!-- Assignee as link -->
-      <template v-slot:body-cell-assignee="props">
+      <!-- Affiliate as clickable filter -->
+      <template v-slot:body-cell-affiliate="props">
         <q-td :props="props">
           <a
             href="#"
             class="text-primary"
+            @click.stop.prevent="patentsStore.updateFilters({ affiliates: [props.row.affiliate] })"
+          >
+            {{ props.row.affiliate }}
+          </a>
+        </q-td>
+      </template>
+
+      <!-- Super-Sector as clickable filter with chip style -->
+      <template v-slot:body-cell-super_sector="props">
+        <q-td :props="props">
+          <q-chip
+            dense
+            clickable
+            :color="getSectorColor(props.row.super_sector)"
+            text-color="white"
+            size="sm"
+            @click.stop="patentsStore.updateFilters({ superSectors: [props.row.super_sector] })"
+          >
+            {{ props.row.super_sector }}
+          </q-chip>
+        </q-td>
+      </template>
+
+      <!-- Assignee as link (hidden by default) -->
+      <template v-slot:body-cell-assignee="props">
+        <q-td :props="props">
+          <a
+            href="#"
+            class="text-secondary text-caption"
             @click.stop.prevent="patentsStore.updateFilters({ assignees: [props.row.assignee] })"
           >
             {{ props.row.assignee }}
           </a>
+        </q-td>
+      </template>
+
+      <!-- Primary Sector (hidden by default) -->
+      <template v-slot:body-cell-primary_sector="props">
+        <q-td :props="props">
+          <span class="text-caption text-grey-7">{{ props.row.primary_sector }}</span>
         </q-td>
       </template>
 

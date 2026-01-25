@@ -7,11 +7,13 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
+import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
 
 const router = Router();
 
 // Types
-interface Patent {
+interface RawPatent {
   patent_id: string;
   patent_title: string;
   patent_date: string;
@@ -19,6 +21,14 @@ interface Patent {
   forward_citations: number;
   remaining_years: number;
   score: number;
+  cpc_codes?: string[];
+  sector?: string;
+  super_sector?: string;
+}
+
+interface Patent extends RawPatent {
+  affiliate: string;
+  super_sector: string;
 }
 
 interface CandidatesFile {
@@ -36,7 +46,7 @@ let lastLoadTime: number = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Load patents from the candidates file
+ * Load patents from the candidates file and enrich with affiliate/sector
  */
 function loadPatents(): Patent[] {
   const now = Date.now();
@@ -61,11 +71,42 @@ function loadPatents(): Patent[] {
   console.log(`[Patents] Loading from: ${filePath}`);
 
   const data: CandidatesFile = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  patentsCache = data.candidates;
+
+  // Enrich patents with affiliate and super_sector
+  patentsCache = data.candidates.map((p: RawPatent): Patent => ({
+    ...p,
+    affiliate: normalizeAffiliate(p.assignee),
+    super_sector: p.super_sector
+      ? getSuperSectorDisplayName(p.super_sector)
+      : (p.sector ? inferSuperSector(p.sector) : 'Unknown')
+  }));
+
   lastLoadTime = now;
 
-  console.log(`[Patents] Loaded ${patentsCache.length} patents`);
+  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector enrichment`);
   return patentsCache;
+}
+
+/**
+ * Infer super-sector from primary sector name
+ * This is a fallback when super_sector is not explicitly set
+ */
+function inferSuperSector(sector: string): string {
+  // Try to load from super-sectors config
+  try {
+    const configPath = path.join(process.cwd(), 'config/super-sectors.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+    for (const [superSectorKey, superSectorData] of Object.entries(config.superSectors) as [string, any][]) {
+      if (superSectorData.sectors.includes(sector)) {
+        return superSectorData.displayName;
+      }
+    }
+  } catch (e) {
+    // Config not found, return Unknown
+  }
+
+  return 'Unknown';
 }
 
 /**
@@ -74,23 +115,44 @@ function loadPatents(): Patent[] {
 function applyFilters(patents: Patent[], filters: Record<string, string | string[] | undefined>): Patent[] {
   let result = patents;
 
-  // Search filter (searches patent_id, title, assignee)
+  // Search filter (searches patent_id, title, assignee, affiliate)
   if (filters.search) {
     const searchLower = (filters.search as string).toLowerCase();
     result = result.filter(p =>
       p.patent_id.toLowerCase().includes(searchLower) ||
       p.patent_title.toLowerCase().includes(searchLower) ||
-      p.assignee.toLowerCase().includes(searchLower)
+      p.assignee.toLowerCase().includes(searchLower) ||
+      p.affiliate.toLowerCase().includes(searchLower)
     );
   }
 
-  // Assignee filter
+  // Affiliate filter (normalized entity names)
+  if (filters.affiliates) {
+    const affiliateList = Array.isArray(filters.affiliates)
+      ? filters.affiliates
+      : [filters.affiliates];
+    result = result.filter(p =>
+      affiliateList.some(a => p.affiliate.toLowerCase() === a.toLowerCase())
+    );
+  }
+
+  // Assignee filter (raw USPTO names)
   if (filters.assignees) {
     const assigneeList = Array.isArray(filters.assignees)
       ? filters.assignees
       : [filters.assignees];
     result = result.filter(p =>
       assigneeList.some(a => p.assignee.toLowerCase().includes(a.toLowerCase()))
+    );
+  }
+
+  // Super-sector filter
+  if (filters.superSectors) {
+    const sectorList = Array.isArray(filters.superSectors)
+      ? filters.superSectors
+      : [filters.superSectors];
+    result = result.filter(p =>
+      sectorList.some(s => p.super_sector.toLowerCase() === s.toLowerCase())
     );
   }
 
@@ -125,6 +187,11 @@ function applyFilters(patents: Patent[], filters: Record<string, string | string
   // Has competitor citations filter
   if (filters.hasCompetitorCites === 'true') {
     result = result.filter(p => (p as any).competitor_citations > 0);
+  }
+
+  // Active only filter (remaining_years > 0)
+  if (filters.activeOnly === 'true') {
+    result = result.filter(p => p.remaining_years > 0);
   }
 
   return result;
@@ -213,14 +280,35 @@ router.get('/stats', (_req: Request, res: Response) => {
     const active = patents.filter(p => p.remaining_years > 0);
     const expired = patents.filter(p => p.remaining_years <= 0);
 
-    // Group by assignee
+    // Group by affiliate (normalized entity)
+    const affiliateCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
+    });
+
+    // Top affiliates
+    const topAffiliates = Object.entries(affiliateCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }));
+
+    // Group by super-sector
+    const superSectorCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      superSectorCounts[p.super_sector] = (superSectorCounts[p.super_sector] || 0) + 1;
+    });
+
+    // Super-sector breakdown
+    const bySuperSector = Object.entries(superSectorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    // Legacy: top assignees for backward compatibility
     const assigneeCounts: Record<string, number> = {};
     patents.forEach(p => {
       const assignee = p.assignee.split(',')[0].trim();
       assigneeCounts[assignee] = (assigneeCounts[assignee] || 0) + 1;
     });
-
-    // Top assignees
     const topAssignees = Object.entries(assigneeCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
@@ -230,7 +318,9 @@ router.get('/stats', (_req: Request, res: Response) => {
       total: patents.length,
       active: active.length,
       expired: expired.length,
-      topAssignees,
+      topAffiliates,
+      topAssignees, // Legacy, kept for backward compatibility
+      bySuperSector,
       dateRange: {
         oldest: patents[patents.length - 1]?.patent_date,
         newest: patents[0]?.patent_date
@@ -243,8 +333,56 @@ router.get('/stats', (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/patents/affiliates
+ * Get list of affiliates (normalized entities) with patent counts
+ */
+router.get('/affiliates', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const affiliateCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
+    });
+
+    const affiliates = Object.entries(affiliateCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    res.json(affiliates);
+  } catch (error) {
+    console.error('Error getting affiliates:', error);
+    res.status(500).json({ error: 'Failed to get affiliates' });
+  }
+});
+
+/**
+ * GET /api/patents/super-sectors
+ * Get list of super-sectors with patent counts
+ */
+router.get('/super-sectors', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const sectorCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      sectorCounts[p.super_sector] = (sectorCounts[p.super_sector] || 0) + 1;
+    });
+
+    const superSectors = Object.entries(sectorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    res.json(superSectors);
+  } catch (error) {
+    console.error('Error getting super-sectors:', error);
+    res.status(500).json({ error: 'Failed to get super-sectors' });
+  }
+});
+
+/**
  * GET /api/patents/assignees
- * Get list of unique assignees for filtering
+ * Get list of unique assignees (raw USPTO names) for filtering
  */
 router.get('/assignees', (_req: Request, res: Response) => {
   try {

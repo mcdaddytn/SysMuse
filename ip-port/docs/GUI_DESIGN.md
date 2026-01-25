@@ -64,20 +64,44 @@ A web-based workstation for patent portfolio analysis, scoring, and management. 
 - Row expansion for quick patent details
 
 **Default Columns:**
-| Column | Type | Sortable | Filterable |
-|--------|------|----------|------------|
-| Patent ID | link | ✅ | ✅ |
-| Title | text | ✅ | ✅ (search) |
-| Grant Date | date | ✅ | ✅ (range) |
-| Expiration | date | ✅ | ✅ (range) |
-| Remaining Years | number | ✅ | ✅ (range) |
-| Assignee | link | ✅ | ✅ (multi-select) |
-| Sector | tag | ✅ | ✅ (multi-select) |
-| Forward Citations | number | ✅ | ✅ (range) |
-| Competitor Cites | number | ✅ | ✅ (range) |
-| v2 Score | number | ✅ | ✅ (range) |
-| v3 Score | number | ✅ | ✅ (range) |
-| Consensus Score | number | ✅ | ✅ (range) |
+| Column | Type | Default | Sortable | Filterable |
+|--------|------|---------|----------|------------|
+| Patent ID | link | visible | ✅ | ✅ |
+| Title | text | visible | ✅ | ✅ (search) |
+| Grant Date | date | visible | ✅ | ✅ (range) |
+| Expiration | date | hidden | ✅ | ✅ (range) |
+| Remaining Years | number | visible | ✅ | ✅ (range) |
+| **Affiliate** | link | **visible** | ✅ | ✅ (multi-select) |
+| Assignee (raw) | text | hidden | ✅ | ✅ (search) |
+| **Super-Sector** | tag | **visible** | ✅ | ✅ (multi-select) |
+| Primary Sector | tag | hidden | ✅ | ✅ (multi-select) |
+| Focus Areas | tags | hidden | ✅ | ✅ (multi-select) |
+| Forward Citations | number | visible | ✅ | ✅ (range) |
+| Competitor Cites | number | visible | ✅ | ✅ (range) |
+| v2 Score | number | visible | ✅ | ✅ (range) |
+| v3 Score | number | hidden | ✅ | ✅ (range) |
+| Consensus Score | number | hidden | ✅ | ✅ (range) |
+
+**Attorney Question Columns (hidden by default):**
+| Column | Type | Description |
+|--------|------|-------------|
+| Summary | text | High-level summary for non-technical audience |
+| Prior Art Problem | text | What problem in prior art does this solve? |
+| Technical Solution | text | How does the technical solution work? |
+| Eligibility Score | 1-5 | Patent eligibility strength (101) |
+| Validity Score | 1-5 | Strength against prior art invalidity |
+
+**LLM Analysis Columns (hidden by default):**
+| Column | Type | Description |
+|--------|------|-------------|
+| Claim Breadth | 1-5 | Scope of patent claims |
+| Enforcement Clarity | 1-5 | How easily infringement can be detected |
+| Design-Around Difficulty | 1-5 | How hard to avoid infringing |
+| Market Relevance | 1-5 | Current market applicability |
+| LLM Confidence | 1-5 | LLM's confidence in analysis |
+
+**Focus Area-Specific Columns:**
+When a Focus Area is selected as a filter, additional columns specific to that area become available. See `docs/FACET_SYSTEM_DESIGN.md` for details.
 
 ### 2. Scoring Views (Priority: HIGH)
 
@@ -143,26 +167,31 @@ where user_weight_factor can be:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Sector Rankings (Priority: MEDIUM)
+### 3. Sector & Focus Area Rankings (Priority: MEDIUM)
 
 **Components:**
-- `SectorRankingsPage.vue` - Main page
-- `SectorSelector.vue` - Sector filter/tabs
-- `SectorGrid.vue` - Filtered patent grid
+- `SectorRankingsPage.vue` - Main page (sector-based view)
+- `FocusAreaPage.vue` - Focus area management and view
+- `SectorSelector.vue` - Super-sector/Primary sector filter
+- `FocusAreaSelector.vue` - Focus area multi-select filter
+- `SectorGrid.vue` - Filtered patent grid with context-aware columns
 
-**Sectors (from config):**
-- Semiconductor Manufacturing
-- Networking & Communications
-- Data Storage
-- Enterprise Software
-- Cybersecurity
-- Virtualization
+**Hierarchy (see `docs/FACET_SYSTEM_DESIGN.md`):**
+- **Super-Sector** - Top-level domain (mutually exclusive)
+  - Network Technology, Computing, Wireless, Video/Image, Security, Semiconductor
+- **Primary Sector** - Actionable breakout (mutually exclusive within super-sector)
+  - network-security-core, network-switching, computing-general, etc.
+- **Focus Areas** - User-definable interest areas (non-exclusive, multi-assign)
+  - Zero Trust, 5G NR, Container Security, etc.
 
 **Features:**
 - Tab-based or dropdown sector selection
+- Multi-select Focus Area filter (non-exclusive)
 - Cross-sector comparison view
 - Sector-specific weight presets
-- Heat map visualization by sector
+- Heat map visualization by sector/focus area
+- Dynamic columns based on selected Focus Area(s)
+- Focus Area creation from search term extraction
 
 ### 4. Patent Detail View (Priority: HIGH)
 
@@ -417,11 +446,28 @@ DELETE /api/jobs/:id                 - Cancel job
 POST /api/jobs/:id/retry             - Retry failed job
 ```
 
-### Sectors
+### Sectors & Focus Areas
 ```
-GET  /api/sectors                    - List sectors
+GET  /api/sectors                    - List super-sectors and primary sectors
 GET  /api/sectors/:id/patents        - Patents in sector
 GET  /api/sectors/:id/rankings       - Sector rankings
+
+GET  /api/focus-areas                - List all focus areas
+POST /api/focus-areas                - Create focus area
+GET  /api/focus-areas/:id            - Focus area details
+PUT  /api/focus-areas/:id            - Update focus area
+DELETE /api/focus-areas/:id          - Delete focus area
+GET  /api/focus-areas/:id/patents    - Patents in focus area
+POST /api/focus-areas/:id/patents    - Add patents to focus area
+GET  /api/focus-areas/:id/columns    - Columns specific to this focus area
+```
+
+### Facets
+```
+GET  /api/facets/schema              - Available facet definitions
+GET  /api/patents/:id/facets         - All facets for patent
+PUT  /api/patents/:id/facets/:key    - Update facet value
+POST /api/facets/calculate           - Trigger facet recalculation
 ```
 
 ### Search Terms

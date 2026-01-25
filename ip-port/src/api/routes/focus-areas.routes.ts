@@ -6,6 +6,7 @@
 
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { extractKeywords, extractKeywordsFromTitles } from '../services/keyword-extractor.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -573,6 +574,128 @@ router.delete('/:id/search-terms/:termId', async (req: Request, res: Response) =
   } catch (error) {
     console.error('Error deleting search term:', error);
     res.status(500).json({ error: 'Failed to delete search term' });
+  }
+});
+
+// =============================================================================
+// KEYWORD EXTRACTION
+// =============================================================================
+
+/**
+ * POST /api/focus-areas/extract-keywords
+ * Extract keywords from selected patents for search term suggestions
+ *
+ * Body: {
+ *   patentIds: string[],      // Patents to analyze
+ *   corpusPatentIds?: string[], // Comparison corpus (optional, defaults to portfolio)
+ *   minFrequency?: number,    // Min occurrences (default: 2)
+ *   maxTerms?: number,        // Max terms to return (default: 50)
+ *   includeNgrams?: boolean,  // Include 2-grams (default: true)
+ *   titleOnly?: boolean       // Only use titles, skip abstract lookup (faster)
+ * }
+ */
+router.post('/extract-keywords', async (req: Request, res: Response) => {
+  try {
+    const {
+      patentIds,
+      corpusPatentIds,
+      minFrequency = 2,
+      maxTerms = 50,
+      includeNgrams = true,
+      titleOnly = false
+    } = req.body;
+
+    if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds array is required' });
+    }
+
+    if (patentIds.length > 500) {
+      return res.status(400).json({ error: 'Maximum 500 patents per request' });
+    }
+
+    let keywords;
+    if (titleOnly) {
+      keywords = extractKeywordsFromTitles(patentIds, {
+        corpusPatentIds,
+        minFrequency,
+        maxTerms,
+        includeNgrams
+      });
+    } else {
+      keywords = await extractKeywords(patentIds, {
+        corpusPatentIds,
+        minFrequency,
+        maxTerms,
+        includeNgrams
+      });
+    }
+
+    res.json({
+      patentCount: patentIds.length,
+      keywordCount: keywords.length,
+      keywords
+    });
+  } catch (error) {
+    console.error('Error extracting keywords:', error);
+    res.status(500).json({ error: 'Failed to extract keywords' });
+  }
+});
+
+/**
+ * POST /api/focus-areas/:id/extract-keywords
+ * Extract keywords from patents already in a focus area
+ */
+router.post('/:id/extract-keywords', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      minFrequency = 2,
+      maxTerms = 50,
+      includeNgrams = true,
+      titleOnly = false
+    } = req.body;
+
+    // Get patents in this focus area
+    const focusAreaPatents = await prisma.focusAreaPatent.findMany({
+      where: { focusAreaId: id },
+      select: { patentId: true }
+    });
+
+    if (focusAreaPatents.length === 0) {
+      return res.json({
+        patentCount: 0,
+        keywordCount: 0,
+        keywords: [],
+        message: 'No patents in this focus area'
+      });
+    }
+
+    const patentIds = focusAreaPatents.map(p => p.patentId);
+
+    let keywords;
+    if (titleOnly) {
+      keywords = extractKeywordsFromTitles(patentIds, {
+        minFrequency,
+        maxTerms,
+        includeNgrams
+      });
+    } else {
+      keywords = await extractKeywords(patentIds, {
+        minFrequency,
+        maxTerms,
+        includeNgrams
+      });
+    }
+
+    res.json({
+      focusAreaId: id,
+      patentCount: patentIds.length,
+      keywordCount: keywords.length,
+      keywords
+    });
+  } catch (error) {
+    console.error('Error extracting keywords for focus area:', error);
+    res.status(500).json({ error: 'Failed to extract keywords' });
   }
 });
 

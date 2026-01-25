@@ -405,6 +405,103 @@ router.get('/assignees', (_req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/patents/batch-preview
+ * Get preview data for multiple patents at once
+ * Body: { patentIds: string[] }
+ */
+router.post('/batch-preview', (req: Request, res: Response) => {
+  try {
+    const { patentIds } = req.body;
+
+    if (!Array.isArray(patentIds)) {
+      return res.status(400).json({ error: 'patentIds must be an array' });
+    }
+
+    // Limit to 100 patents per request
+    const limitedIds = patentIds.slice(0, 100);
+    const patents = loadPatents();
+
+    const previews: Record<string, PatentPreview | null> = {};
+    const patentMap = new Map(patents.map(p => [p.patent_id, p]));
+
+    for (const id of limitedIds) {
+      const patent = patentMap.get(id);
+      if (patent) {
+        previews[id] = {
+          patent_id: patent.patent_id,
+          patent_title: patent.patent_title,
+          patent_date: patent.patent_date,
+          assignee: patent.assignee,
+          affiliate: patent.affiliate,
+          super_sector: patent.super_sector,
+          primary_sector: (patent as any).primary_sector,
+          cpc_codes: (patent as any).cpc_codes || [],
+          forward_citations: patent.forward_citations,
+          remaining_years: patent.remaining_years,
+          score: patent.score
+        };
+      } else {
+        previews[id] = null;
+      }
+    }
+
+    res.json({ previews });
+  } catch (error) {
+    console.error('Error getting batch previews:', error);
+    res.status(500).json({ error: 'Failed to get batch previews' });
+  }
+});
+
+interface PatentPreview {
+  patent_id: string;
+  patent_title: string;
+  patent_date: string;
+  assignee: string;
+  affiliate: string;
+  super_sector: string;
+  primary_sector?: string;
+  cpc_codes: string[];
+  forward_citations: number;
+  remaining_years: number;
+  score: number;
+}
+
+/**
+ * GET /api/patents/:id/preview
+ * Get lightweight preview data for a single patent
+ */
+router.get('/:id/preview', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const patents = loadPatents();
+
+    const patent = patents.find(p => p.patent_id === id);
+    if (!patent) {
+      return res.status(404).json({ error: 'Patent not found' });
+    }
+
+    const preview: PatentPreview = {
+      patent_id: patent.patent_id,
+      patent_title: patent.patent_title,
+      patent_date: patent.patent_date,
+      assignee: patent.assignee,
+      affiliate: patent.affiliate,
+      super_sector: patent.super_sector,
+      primary_sector: (patent as any).primary_sector,
+      cpc_codes: (patent as any).cpc_codes || [],
+      forward_citations: patent.forward_citations,
+      remaining_years: patent.remaining_years,
+      score: patent.score
+    };
+
+    res.json(preview);
+  } catch (error) {
+    console.error('Error getting patent preview:', error);
+    res.status(500).json({ error: 'Failed to get patent preview' });
+  }
+});
+
+/**
  * GET /api/patents/:id
  * Get single patent details
  */

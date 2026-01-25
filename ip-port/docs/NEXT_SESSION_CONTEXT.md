@@ -10,142 +10,136 @@
 | Active Patents | 24,668 (85.3%) |
 | Expired Patents | 4,245 |
 | Date Range | 1982-06-29 to 2025-09-30 |
-| Cache Pages | 79 |
 | Status | Complete + Deduplicated |
 
-### Citation Batch Progress (Running in Background)
+### Citation Cache Progress
 
 | Batch | Range | Status |
 |-------|-------|--------|
-| Queue 1 | 1670-2670 | ✅ Complete |
-| Queue 2 | 2670-3670 | ✅ Complete |
-| Queue 3 | 3670-4670 | ✅ Running |
-| Queue 4 | 4670-5670 | Queued |
-| Gap Fill | 813-1669 | Queued (after main) |
+| Queue 1 | 1670-2670 | Complete |
+| Queue 2 | 2670-3670 | Complete |
+| Queue 3 | 3670-4670 | Complete |
+| Queue 4 | 4670-5670 | Complete |
+| Gap Fill | 813-1669 | **Complete** |
 
 **Cache Status:**
-- API entries: ~5,000+
-- Competitor citations found: 500+
+- API entries: ~11,344
+- Size: ~172 MB
 
-**Batch logs:** `logs/batch-queue.log`, `logs/gap-fill.log`
-**Queue scripts running:** `scripts/queue-citation-batches.sh`, `scripts/run-citation-batches.sh`
+**All citation batches complete through patent index 5670.**
 
 ---
 
-## GUI Development - READY FOR TESTING
+## GUI Development Status
 
 ### Backend API Server
 
-**Status:** ✅ WORKING (port 3001)
+**Status:** Port 3001
 
 ```bash
-# Start API server
 npm run api:dev    # With auto-reload
-npm run api:start  # Production
 ```
 
 **Endpoints Available:**
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/health` | Health check |
-| `GET /api/patents?page=1&limit=50&sortBy=score&descending=true` | List patents |
-| `GET /api/patents?affiliates=VMware&superSectors=Security` | Filter by affiliate/sector |
-| `GET /api/patents/stats` | Portfolio stats (with bySuperSector, topAffiliates) |
+| `GET /api/patents` | List patents with filters/pagination |
+| `GET /api/patents/:id` | Patent detail |
+| `GET /api/patents/:id/preview` | **NEW** Lightweight patent preview |
+| `POST /api/patents/batch-preview` | **NEW** Batch preview for multiple patents |
+| `GET /api/patents/:id/citations` | Citation data |
 | `GET /api/patents/affiliates` | List affiliates with counts |
 | `GET /api/patents/super-sectors` | List super-sectors with counts |
-| `GET /api/patents/assignees` | Unique assignees (raw) |
-| `GET /api/patents/:id` | Patent detail |
-| `GET /api/patents/:id/citations` | Citation data (from cache) |
-| `GET /api/scores/v2?citation=50&years=30&competitor=20` | v2 scoring |
+| `GET /api/scores/v2` | v2 scoring with custom weights |
 | `GET /api/scores/weights/presets` | Weight presets |
-| `POST /api/auth/login` | Login (demo users below) |
-| `GET /api/auth/me` | Current user |
-
-**Demo Users:**
-| Email | Password | Access Level |
-|-------|----------|--------------|
-| admin@example.com | admin123 | ADMIN |
-| manager@example.com | manager123 | MANAGER |
-| analyst@example.com | analyst123 | ANALYST |
-| demo@example.com | demo123 | VIEWER |
+| `GET/POST /api/focus-areas` | Focus area CRUD |
+| `GET/PUT/DELETE /api/focus-areas/:id` | Focus area operations |
+| `GET/POST/DELETE /api/focus-areas/:id/patents` | Patent membership |
+| `POST/DELETE /api/focus-areas/:id/search-terms` | Search terms |
+| `POST /api/focus-areas/extract-keywords` | **NEW** Keyword extraction |
+| `POST /api/focus-areas/:id/extract-keywords` | **NEW** Extract from focus area |
+| `GET/POST/PUT/DELETE /api/focus-groups/*` | Focus group CRUD |
+| `POST /api/focus-groups/:id/formalize` | Convert to focus area |
 
 ### Frontend App
 
-**Status:** ✅ WORKING
+**Status:** Port 3000
 
 ```bash
-# Install and start frontend
-cd frontend
-npm install
-npm run dev    # Starts on http://localhost:3000
+cd frontend && npm run dev
 ```
 
-**Pages Working:**
-- `PortfolioPage.vue` - Main grid with Affiliate/Super-Sector dropdowns, click-to-filter, column selector
-- `PatentDetailPage.vue` - Detail view with Overview (Basic Info, Classification, Metrics), Citations tab
+**Pages Complete:**
+| Page | Route | Description |
+|------|-------|-------------|
+| `PortfolioPage.vue` | `/` | Grid with filters, column selector |
+| `PatentDetailPage.vue` | `/patent/:id` | Detail with Overview, Citations tabs |
+| `V2ScoringPage.vue` | `/v2-scoring` | Weight sliders, presets, rank changes |
+| `FocusAreasPage.vue` | `/focus-areas` | List/create/manage focus areas |
+| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | View/edit, patents, search terms, **keyword extraction** |
 
-**Pages Created (need API connection):**
-- `V2ScoringPage.vue` - Weight sliders with real-time scoring
-- `V3ScoringPage.vue` - Consensus voting (tabs for personal/consensus/all users)
-- `SectorRankingsPage.vue` - Sector-based rankings
-- `JobQueuePage.vue` - Job management
-- `LoginPage.vue` - Authentication
+**Pages UI Only (need API wiring):**
+| Page | Route |
+|------|-------|
+| `V3ScoringPage.vue` | `/v3-scoring` |
+| `SectorRankingsPage.vue` | `/sectors` |
+| `JobQueuePage.vue` | `/jobs` |
+| `LoginPage.vue` | `/login` |
 
-**Tech Stack:**
-- Vue 3 + Composition API
-- Quasar 2.x (Material Design)
-- Pinia (state management)
-- Vite (build tool)
-- TypeScript
+**Components:**
+| Component | Description |
+|-----------|-------------|
+| `ColumnSelector.vue` | Grouped column visibility with search |
+| `PatentPreviewTooltip.vue` | **NEW** Hover preview for patent IDs |
+| `KeywordExtractionPanel.vue` | **NEW** Keyword extraction from patents |
 
 ---
 
-## Files Created This Session
+## Database Schema
 
-### Backend API
+**PostgreSQL running on localhost:5432**
+
+Tables via Prisma:
+- `api_request_cache` - API response cache metadata
+- `llm_response_cache` - LLM response cache metadata
+- `users` - User accounts with access levels
+- `focus_groups` - Exploratory patent groupings (drafts)
+- `focus_areas` - Formalized focus areas
+- `focus_area_patents` - Patent membership junction
+- `search_terms` - Search expressions for focus areas
+- `facet_definitions` - Atomic/derived facet definitions
+- `facet_values` - Facet values per patent
+
+---
+
+## Files Created/Modified This Session
+
+### New Backend Files
 | File | Description |
 |------|-------------|
-| `src/api/server.ts` | Express server with session auth |
-| `src/api/routes/patents.routes.ts` | Patent CRUD with filtering/pagination |
-| `src/api/routes/scores.routes.ts` | v2/v3 scoring with custom weights |
-| `src/api/routes/auth.routes.ts` | Session auth with demo users |
+| `src/api/services/keyword-extractor.ts` | **NEW** TF-IDF keyword extraction service |
 
-### Frontend
+### New Frontend Components
 | File | Description |
 |------|-------------|
-| `frontend/package.json` | Dependencies |
-| `frontend/vite.config.ts` | Vite + Quasar config |
-| `frontend/src/main.ts` | App entry |
-| `frontend/src/App.vue` | Root component |
-| `frontend/src/router/index.ts` | Routes |
-| `frontend/src/layouts/MainLayout.vue` | Nav layout |
-| `frontend/src/types/index.ts` | TypeScript types |
-| `frontend/src/services/api.ts` | Axios client |
-| `frontend/src/stores/patents.ts` | Pinia store |
-| `frontend/src/pages/*.vue` | All page components |
+| `frontend/src/components/PatentPreviewTooltip.vue` | **NEW** Hover tooltip for patent summaries |
+| `frontend/src/components/KeywordExtractionPanel.vue` | **NEW** Keyword extraction UI for focus areas |
 
-### Scripts & Analysis
-| File | Description |
-|------|-------------|
-| `scripts/analyze-portfolio-breakdown.ts` | Affiliate/expiration analysis |
-| `scripts/analyze-duplicates.ts` | Duplicate detection |
-| `scripts/run-citation-batches.sh` | Sequential batch runner |
-| `scripts/queue-citation-batches.sh` | Batch queue with wait |
-| `scripts/fill-gap-batch.sh` | Gap fill batch |
-
-### Documentation
-| File | Description |
-|------|-------------|
-| `docs/GUI_DESIGN.md` | Comprehensive GUI design document (updated) |
-| `docs/FACET_SYSTEM_DESIGN.md` | Facet system, Focus Areas, terminology |
+### Modified Files
+| File | Changes |
+|------|---------|
+| `src/api/routes/patents.routes.ts` | Added batch-preview and preview endpoints |
+| `src/api/routes/focus-areas.routes.ts` | Added keyword extraction endpoints |
+| `frontend/src/services/api.ts` | Added PatentPreview types, batch preview, keyword extraction |
+| `frontend/src/pages/FocusAreaDetailPage.vue` | Enhanced Add Patents dialog with previews, keyword panel |
 
 ---
 
 ## Quick Start for Next Session
 
 ```bash
-# 1. Check batch progress
-grep "Progress:" logs/batch-queue.log | tail -1
+# 1. Check cache status
 npm run cache:stats
 
 # 2. Start backend API
@@ -156,60 +150,77 @@ cd frontend && npm run dev
 
 # 4. Open browser
 open http://localhost:3000
+open http://localhost:3000/focus-areas
 ```
 
 ---
 
-## Design Updates This Session
+## Development Queue
 
-### New Design Document: `docs/FACET_SYSTEM_DESIGN.md`
+### Completed This Session
+- [x] Gap fill citation batch (813-1669) - Complete
+- [x] Patent preview API endpoint (single + batch)
+- [x] PatentPreviewTooltip component with hover summaries
+- [x] Enhanced Add Patents dialog with patent previews
+- [x] Keyword extraction service (TF-IDF based)
+- [x] Keyword extraction API endpoints
+- [x] KeywordExtractionPanel component for focus areas
 
-Defines the facet-based categorization and scoring system:
+### Short-term (Next Up)
+1. **"Create Focus Group from Selection"** - Button in Portfolio grid for selected patents
+2. **Elasticsearch Integration** - Search term preview across scopes
+3. **Export CSV** - From portfolio grid
+4. **Queue next citation batch** - Indices 5670-6670
 
-**Key Terminology:**
-| Term | Definition |
-|------|------------|
-| **Affiliate** | Normalized entity name (show by default instead of Assignee) |
-| **Super-Sector** | Top-level domain (mutually exclusive) |
-| **Primary Sector** | Actionable breakout (mutually exclusive within super-sector) |
-| **Focus Area** | User-definable interest (non-exclusive, multi-assign) |
-| **Facet** | Any computable/assignable attribute on a patent |
-
-**Key Insight:** Scoring is really just facet calculation - facet values from API, LLM, or user input feed into further calculations.
-
-### Updated: `docs/GUI_DESIGN.md`
-
-**Column Changes:**
-- Affiliate visible by default (replaces Assignee)
-- Super-Sector visible by default
-- Assignee (raw) hidden by default
-- Attorney Question columns (5) - hidden by default
-- LLM Analysis columns - hidden by default
-- Focus Area-specific columns appear when Focus Area selected
+### Medium-term
+1. Focus Area filter in portfolio grid
+2. LLM suggestion endpoint for focus groups
+3. Facet definition UI
+4. v3 Consensus scoring (multi-user weights)
 
 ---
 
-## Next Development Steps
+## Key Features Added
 
-### Completed (2026-01-25)
-1. ✅ **API Changes** - Added affiliate, super_sector, primary_sector, cpc_codes to patents
-2. ✅ **Sector Enrichment** - download-full-portfolio.ts now extracts CPC and computes sectors
-3. ✅ **Frontend Updates** - PortfolioPage shows Affiliate and Super-Sector by default
-4. ✅ **Filtering** - Click on Affiliate or Super-Sector to filter
-5. ✅ **Filter Dropdowns** - Multi-select dropdowns for Affiliate and Super-Sector with counts
-6. ✅ **Patent Detail Page** - Connected to API with Overview, Classifications, Metrics cards
+### Patent Preview Tooltips
+- Hover over any patent ID to see summary
+- Shows: title, assignee, sector, CPC codes, citations, remaining years
+- Works in Add Patents dialog and Patents table
+- Validates patents against portfolio before adding
 
-### Short-term
-1. Implement column selector with grouped facets
-2. Add Focus Area filter (multi-select, non-exclusive)
-3. Export CSV functionality
-4. v2 Scoring page - connect weight sliders to API
+### Keyword Extraction
+- TF-IDF based keyword extraction from patent titles
+- Optional: include abstracts from cache
+- Contrast scoring vs portfolio (how distinctive is term)
+- Includes bigram extraction
+- Direct "Add as Search Term" action
 
-### Medium-term
-1. Focus Area management UI (create/edit/delete)
-2. Focus Area-specific LLM questions
-3. Search term extraction → Focus Area creation
-4. v3 scoring with LLM facets
+---
+
+## Key Design Decisions
+
+### Focus Areas
+- **Focus Group** = exploratory draft, **Focus Area** = stable/formalized
+- Search terms use Elasticsearch (already integrated)
+- Single owner initially, multi-user voting later
+- Facets can be atomic (LLM) or derived (calculated)
+- Scope hierarchy: Patent -> Focus Area -> Sector -> Portfolio
+
+### Scoring
+- **v2** = weighted formula (citation, years, competitor)
+- **v3** = personal weights per user + consensus aggregation
+- Facets from any source can drive scoring
+
+---
+
+## Design Documents
+
+| Document | Purpose |
+|----------|---------|
+| `docs/FOCUS_AREA_SYSTEM_DESIGN.md` | Focus Group/Area lifecycle, search terms, facets |
+| `docs/FACET_SYSTEM_DESIGN.md` | Facet terminology, scoring concepts |
+| `docs/GUI_DESIGN.md` | Overall GUI architecture |
+| `docs/DATABASE_SCHEMA_DESIGN.md` | Full schema design |
 
 ---
 
@@ -222,4 +233,4 @@ Defines the facet-based categorization and scoring system:
 
 ---
 
-*Last Updated: 2026-01-25 (Portfolio Grid + Patent Detail Page Working)*
+*Last Updated: 2026-01-25 (Patent Previews + Keyword Extraction)*

@@ -80,10 +80,48 @@ export const authApi = {
   }
 };
 
+// Scoring types
+export interface ScoreWeights {
+  citation: number;
+  years: number;
+  competitor: number;
+}
+
+export interface WeightPreset {
+  name: string;
+  weights: ScoreWeights;
+}
+
+export interface ScoredPatent extends Patent {
+  v2_score: number;
+  rank: number;
+  rank_change?: number;
+}
+
+export interface V2ScoresResponse {
+  weights: ScoreWeights;
+  data: ScoredPatent[];
+  total: number;
+  page: number;
+  rowsPerPage: number;
+}
+
 // Scoring API
 export const scoringApi = {
-  async getV2Scores(weights?: { citation: number; years: number; competitor: number }) {
-    const { data } = await api.get('/scores/v2', { params: weights });
+  async getV2Scores(
+    weights?: ScoreWeights,
+    pagination?: { page: number; limit: number }
+  ): Promise<V2ScoresResponse> {
+    const params = {
+      ...weights,
+      ...pagination
+    };
+    const { data } = await api.get('/scores/v2', { params });
+    return data;
+  },
+
+  async getWeightPresets(): Promise<WeightPreset[]> {
+    const { data } = await api.get('/scores/weights/presets');
     return data;
   },
 
@@ -97,7 +135,7 @@ export const scoringApi = {
     return data;
   },
 
-  async updateWeights(weights: { citation: number; years: number; competitor: number }) {
+  async updateWeights(weights: ScoreWeights) {
     const { data } = await api.post('/weights', weights);
     return data;
   }

@@ -12,6 +12,7 @@ import * as dotenv from 'dotenv';
 import patentsRouter from './routes/patents.routes.js';
 import scoresRouter from './routes/scores.routes.js';
 import authRouter from './routes/auth.routes.js';
+import focusAreasRouter from './routes/focus-areas.routes.js';
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/patents', patentsRouter);
 app.use('/api/scores', scoresRouter);
+app.use('/api/focus-areas', focusAreasRouter);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

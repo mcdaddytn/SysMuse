@@ -68,3 +68,326 @@ model LlmResponseCache {
   @@index([promptType])
   @@map("llm_response_cache")
 }
+
+// =============================================================================
+// USER & AUTH
+// =============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String?   @map("password_hash")
+  accessLevel   AccessLevel @default(ANALYST) @map("access_level")
+  isActive      Boolean   @default(true) @map("is_active")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  // Relations
+  focusGroups   FocusGroup[]
+  focusAreas    FocusArea[]
+
+  @@map("users")
+}
+
+enum AccessLevel {
+  VIEWER
+  ANALYST
+  MANAGER
+  ADMIN
+}
+
+// =============================================================================
+// FOCUS GROUPS & FOCUS AREAS
+// =============================================================================
+
+// Focus Group: Exploratory working set (mutable, draft)
+model FocusGroup {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+
+  // Owner
+  ownerId       String    @map("owner_id")
+  owner         User      @relation(fields: [ownerId], references: [id])
+
+  // Status
+  status        FocusGroupStatus @default(DRAFT)
+
+  // Source: how this group was created
+  sourceType    FocusGroupSource @default(MANUAL) @map("source_type")
+  sourceFilters Json?     @map("source_filters")  // Captured filter state if from grid
+
+  // Hierarchy (for exclusion/refinement)
+  parentId      String?   @map("parent_id")
+  parent        FocusGroup? @relation("FocusGroupHierarchy", fields: [parentId], references: [id])
+  children      FocusGroup[] @relation("FocusGroupHierarchy")
+
+  // Patent membership (explicit list for working groups)
+  patentIds     String[]  @map("patent_ids")
+
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  formalizedAs  FocusArea?
+
+  @@map("focus_groups")
+  @@index([ownerId])
+  @@index([status])
+}
+
+enum FocusGroupStatus {
+  DRAFT           // Working/exploratory
+  NEEDS_REVIEW    // Sibling/runt that needs triage
+  FORMALIZED      // Converted to FocusArea
+  ARCHIVED        // No longer active
+}
+
+enum FocusGroupSource {
+  MANUAL          // User manually selected patents
+  GRID_FILTER     // Created from grid filter state
+  LLM_SUGGESTION  // Suggested by LLM analysis
+  SEARCH_TERM     // Created from search term extraction
+}
+
+// Focus Area: Formalized grouping with search terms and facets (stable)
+model FocusArea {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+
+  // Owner
+  ownerId       String    @map("owner_id")
+  owner         User      @relation(fields: [ownerId], references: [id])
+
+  // Status
+  status        FocusAreaStatus @default(ACTIVE)
+
+  // Origin (optional link to source focus group)
+  sourceGroupId String?   @unique @map("source_group_id")
+  sourceGroup   FocusGroup? @relation(fields: [sourceGroupId], references: [id])
+
+  // Hierarchy
+  parentId      String?   @map("parent_id")
+  parent        FocusArea? @relation("FocusAreaHierarchy", fields: [parentId], references: [id])
+  children      FocusArea[] @relation("FocusAreaHierarchy")
+
+  // Scope context (optional - limits where this focus area applies)
+  superSector   String?   @map("super_sector")
+  primarySector String?   @map("primary_sector")
+
+  // Cached stats
+  patentCount   Int       @default(0) @map("patent_count")
+  lastCalculatedAt DateTime? @map("last_calculated_at")
+
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  searchTerms   SearchTerm[]
+  patents       FocusAreaPatent[]
+  facetDefs     FacetDefinition[]
+
+  @@map("focus_areas")
+  @@index([ownerId])
+  @@index([status])
+  @@index([superSector])
+}
+
+enum FocusAreaStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+// Junction table: Focus Area to Patent (many-to-many)
+model FocusAreaPatent {
+  id            String    @id @default(cuid())
+
+  focusAreaId   String    @map("focus_area_id")
+  focusArea     FocusArea @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+
+  patentId      String    @map("patent_id")  // References patent_id from JSON/external
+
+  // How this patent became a member
+  membershipType MembershipType @default(SEARCH_MATCH) @map("membership_type")
+
+  // Match details (for search-based membership)
+  matchedTermIds String[] @map("matched_term_ids")
+  matchScore    Float?    @map("match_score")
+
+  // Manual override
+  manualInclude Boolean?  @map("manual_include")  // true = force include, false = force exclude
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([focusAreaId, patentId])
+  @@map("focus_area_patents")
+  @@index([focusAreaId])
+  @@index([patentId])
+}
+
+enum MembershipType {
+  SEARCH_MATCH    // Matched via search term
+  MANUAL          // Manually added
+  LLM_SUGGESTED   // LLM suggested inclusion
+  INHERITED       // Inherited from parent focus area
+}
+
+// =============================================================================
+// SEARCH TERMS
+// =============================================================================
+
+model SearchTerm {
+  id            String    @id @default(cuid())
+
+  focusAreaId   String    @map("focus_area_id")
+  focusArea     FocusArea @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+
+  // The search expression
+  termType      SearchTermType @default(KEYWORD) @map("term_type")
+  expression    String         // The actual search query
+
+  // Source tracking
+  sourceType    SearchTermSource @default(MANUAL) @map("source_type")
+  sourcePatentIds String[]  @map("source_patent_ids")  // Patents it was derived from
+
+  // Hit analysis (cached)
+  hitCountPortfolio Int?    @map("hit_count_portfolio")
+  hitCountSector    Int?    @map("hit_count_sector")
+  hitCountFocusArea Int?    @map("hit_count_focus_area")
+  hitCountsJson     Json?   @map("hit_counts_json")  // Detailed breakdown
+
+  // Status
+  isActive      Boolean   @default(true) @map("is_active")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("search_terms")
+  @@index([focusAreaId])
+}
+
+enum SearchTermType {
+  KEYWORD       // Simple keyword OR search
+  PHRASE        // Exact phrase match
+  PROXIMITY     // Words within N of each other
+  WILDCARD      // With wildcards/stemming
+  BOOLEAN       // Complex boolean expression
+}
+
+enum SearchTermSource {
+  MANUAL              // User typed it
+  FREQUENCY_ANALYSIS  // From keyword frequency analysis
+  PHRASE_HIGHLIGHT    // From interactive text selection
+  LLM_SUGGESTION      // LLM generated
+}
+
+// =============================================================================
+// FACET DEFINITIONS
+// =============================================================================
+
+model FacetDefinition {
+  id            String    @id @default(cuid())
+
+  focusAreaId   String    @map("focus_area_id")
+  focusArea     FocusArea @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+
+  // Facet metadata
+  name          String
+  description   String?
+  facetType     FacetType @default(ATOMIC) @map("facet_type")
+  dataType      FacetDataType @default(NUMERIC) @map("data_type")
+
+  // For numeric facets
+  rangeMin      Float?    @map("range_min")
+  rangeMax      Float?    @map("range_max")
+
+  // For categorical facets
+  options       String[]
+
+  // Atomic facet: LLM configuration
+  llmPrompt     String?   @map("llm_prompt")
+  llmContextFields String[] @map("llm_context_fields")  // title, abstract, claims
+  llmModel      String?   @map("llm_model")
+
+  // Derived facet: calculation formula
+  formula       String?   // e.g., "0.4 * claim_breadth + 0.6 * market_relevance"
+  inputFacetIds String[]  @map("input_facet_ids")
+  normalization NormalizationType? @default(NONE)
+  normalizeScope String?  @map("normalize_scope")  // focus_area, sector, portfolio
+
+  // Execution status
+  status        FacetExecutionStatus @default(PENDING)
+  completedCount Int      @default(0) @map("completed_count")
+  totalCount    Int       @default(0) @map("total_count")
+  lastRunAt     DateTime? @map("last_run_at")
+  errorMessage  String?   @map("error_message")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  values        FacetValue[]
+
+  @@map("facet_definitions")
+  @@index([focusAreaId])
+  @@index([facetType])
+}
+
+enum FacetType {
+  ATOMIC        // Single value from LLM or user
+  DERIVED       // Calculated from other facets
+}
+
+enum FacetDataType {
+  NUMERIC       // Float value
+  CATEGORICAL   // One of predefined options
+  TEXT          // Free text
+  BOOLEAN       // True/false
+}
+
+enum NormalizationType {
+  NONE
+  MINMAX        // Scale to 0-1
+  ZSCORE        // Standard score
+  PERCENTILE    // Percentile rank
+}
+
+enum FacetExecutionStatus {
+  PENDING       // Not started
+  RUNNING       // In progress
+  COMPLETE      // All patents processed
+  ERROR         // Failed
+}
+
+// Facet values for individual patents
+model FacetValue {
+  id            String    @id @default(cuid())
+
+  facetDefId    String    @map("facet_def_id")
+  facetDef      FacetDefinition @relation(fields: [facetDefId], references: [id], onDelete: Cascade)
+
+  patentId      String    @map("patent_id")  // References patent_id
+
+  // The value (one of these will be populated based on dataType)
+  numericValue  Float?    @map("numeric_value")
+  textValue     String?   @map("text_value")
+  booleanValue  Boolean?  @map("boolean_value")
+
+  // Confidence/source tracking
+  confidence    Float?    // 0-1 confidence score
+  source        String?   // llm, user, calculated
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([facetDefId, patentId])
+  @@map("facet_values")
+  @@index([facetDefId])
+  @@index([patentId])
+}

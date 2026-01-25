@@ -2,6 +2,7 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
+import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import type { Patent } from '@/types';
 
 const router = useRouter();
@@ -468,33 +469,7 @@ onMounted(async () => {
     </q-page-sticky>
 
     <!-- Column Selector Dialog -->
-    <q-dialog v-model="showColumnSelector">
-      <q-card style="min-width: 300px">
-        <q-card-section class="row items-center">
-          <div class="text-h6">Show/Hide Columns</div>
-          <q-space />
-          <q-btn icon="close" flat round dense v-close-popup />
-        </q-card-section>
-
-        <q-card-section>
-          <q-list>
-            <q-item
-              v-for="column in patentsStore.columns"
-              :key="column.name"
-              tag="label"
-            >
-              <q-item-section avatar>
-                <q-checkbox
-                  :model-value="column.visible"
-                  @update:model-value="patentsStore.toggleColumn(column.name)"
-                />
-              </q-item-section>
-              <q-item-section>{{ column.label }}</q-item-section>
-            </q-item>
-          </q-list>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
+    <ColumnSelector v-model="showColumnSelector" />
   </q-page>
 </template>
 

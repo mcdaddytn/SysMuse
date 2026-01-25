@@ -88,6 +88,23 @@ export interface PortfolioFilters {
   activeOnly?: boolean;
 }
 
+// Column group for organized column selector
+export type ColumnGroup =
+  | 'core'
+  | 'entity'
+  | 'citations'
+  | 'attorney'
+  | 'llm'
+  | 'focusArea';
+
+export interface ColumnGroupInfo {
+  id: ColumnGroup;
+  label: string;
+  description?: string;
+  icon: string;
+  defaultExpanded: boolean;
+}
+
 // Grid column definition
 export interface GridColumn {
   name: string;
@@ -97,6 +114,8 @@ export interface GridColumn {
   align?: 'left' | 'center' | 'right';
   format?: (val: unknown) => string;
   visible?: boolean;
+  group: ColumnGroup;
+  description?: string;
 }
 
 // Pagination

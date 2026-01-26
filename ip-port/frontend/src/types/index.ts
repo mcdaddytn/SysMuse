@@ -31,18 +31,36 @@ export interface Patent {
 
   // LLM data (from enrichment pipeline)
   has_llm_data?: boolean;
+  // Attorney text fields
   llm_summary?: string;
+  llm_prior_art_problem?: string;
+  llm_technical_solution?: string;
+  // Classification
   llm_technology_category?: string;
   llm_implementation_type?: string;
   llm_standards_relevance?: string;
   llm_market_segment?: string;
+  llm_detection_method?: string;
+  llm_implementation_complexity?: string;
+  llm_claim_type_primary?: string;
+  llm_geographic_scope?: string;
+  llm_lifecycle_stage?: string;
+  // Numeric scores
   eligibility_score?: number;
   validity_score?: number;
   claim_breadth?: number;
+  claim_clarity_score?: number;
   enforcement_clarity?: number;
   design_around_difficulty?: number;
-  llm_confidence?: number;
+  evidence_accessibility_score?: number;
   market_relevance_score?: number;
+  trend_alignment_score?: number;
+  investigation_priority_score?: number;
+  llm_confidence?: number;
+  // Computed sub-scores
+  legal_viability_score?: number;
+  enforcement_potential_score?: number;
+  market_value_score?: number;
 }
 
 // User and auth types

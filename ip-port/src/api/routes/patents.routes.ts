@@ -19,19 +19,45 @@ const router = Router();
 
 interface FullLlmData {
   patent_id: string;
+  // V1 attorney text fields
+  summary?: string;
+  prior_art_problem?: string;
+  technical_solution?: string;
+  // Legal viability scores
   eligibility_score?: number;
   validity_score?: number;
   claim_breadth?: number;
+  claim_clarity_score?: number;
+  // Enforcement scores
   enforcement_clarity?: number;
   design_around_difficulty?: number;
-  confidence?: number;
-  summary?: string;
+  evidence_accessibility_score?: number;
+  // Market scores
+  market_relevance_score?: number;
+  trend_alignment_score?: number;
+  // Investigation
+  investigation_priority_score?: number;
+  detection_method?: string;
+  // Classification
   technology_category?: string;
   implementation_type?: string;
   standards_relevance?: string;
   market_segment?: string;
-  market_relevance_score?: number;
+  implementation_complexity?: string;
+  claim_type_primary?: string;
+  geographic_scope?: string;
+  lifecycle_stage?: string;
+  // Arrays
+  product_types?: string[];
+  likely_implementers?: string[];
+  standards_bodies?: string[];
+  // Meta
+  confidence?: number;
   source?: string;
+  // Computed sub-scores
+  legal_viability_score?: number;
+  enforcement_potential_score?: number;
+  market_value_score?: number;
 }
 
 let fullLlmCache: Map<string, FullLlmData> | null = null;
@@ -126,18 +152,36 @@ interface Patent extends RawPatent {
   has_citation_data?: boolean;
   // LLM data
   has_llm_data?: boolean;
+  // Attorney text fields
   llm_summary?: string;
+  llm_prior_art_problem?: string;
+  llm_technical_solution?: string;
+  // Classification
   llm_technology_category?: string;
   llm_implementation_type?: string;
   llm_standards_relevance?: string;
   llm_market_segment?: string;
+  llm_detection_method?: string;
+  llm_implementation_complexity?: string;
+  llm_claim_type_primary?: string;
+  llm_geographic_scope?: string;
+  llm_lifecycle_stage?: string;
+  // Numeric scores
   eligibility_score?: number;
   validity_score?: number;
   claim_breadth?: number;
+  claim_clarity_score?: number;
   enforcement_clarity?: number;
   design_around_difficulty?: number;
-  llm_confidence?: number;
+  evidence_accessibility_score?: number;
   market_relevance_score?: number;
+  trend_alignment_score?: number;
+  investigation_priority_score?: number;
+  llm_confidence?: number;
+  // Computed sub-scores
+  legal_viability_score?: number;
+  enforcement_potential_score?: number;
+  market_value_score?: number;
 }
 
 interface CandidatesFile {
@@ -218,18 +262,36 @@ function loadPatents(): Patent[] {
       has_citation_data: classification?.has_citation_data ?? false,
       // LLM data
       has_llm_data: !!llm,
+      // Attorney text fields
       llm_summary: llm?.summary,
+      llm_prior_art_problem: llm?.prior_art_problem,
+      llm_technical_solution: llm?.technical_solution,
+      // Classification
       llm_technology_category: llm?.technology_category,
       llm_implementation_type: llm?.implementation_type,
       llm_standards_relevance: llm?.standards_relevance,
       llm_market_segment: llm?.market_segment,
+      llm_detection_method: llm?.detection_method,
+      llm_implementation_complexity: llm?.implementation_complexity,
+      llm_claim_type_primary: llm?.claim_type_primary,
+      llm_geographic_scope: llm?.geographic_scope,
+      llm_lifecycle_stage: llm?.lifecycle_stage,
+      // Numeric scores
       eligibility_score: llm?.eligibility_score,
       validity_score: llm?.validity_score,
       claim_breadth: llm?.claim_breadth,
+      claim_clarity_score: llm?.claim_clarity_score,
       enforcement_clarity: llm?.enforcement_clarity,
       design_around_difficulty: llm?.design_around_difficulty,
-      llm_confidence: llm?.confidence,
+      evidence_accessibility_score: llm?.evidence_accessibility_score,
       market_relevance_score: llm?.market_relevance_score,
+      trend_alignment_score: llm?.trend_alignment_score,
+      investigation_priority_score: llm?.investigation_priority_score,
+      llm_confidence: llm?.confidence,
+      // Computed sub-scores
+      legal_viability_score: llm?.legal_viability_score,
+      enforcement_potential_score: llm?.enforcement_potential_score,
+      market_value_score: llm?.market_value_score,
     };
   });
 

@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-26, Session 11)
+# Patent Portfolio Analysis - Session Context (2026-01-26, Session 12)
 
 ## Current State Summary
 
@@ -13,23 +13,24 @@
 | Date Range | 1982-06-29 to 2025-09-30 |
 | Status | Complete + Deduplicated |
 
-### Enrichment Coverage (as of Session 11)
+### Enrichment Coverage (as of Session 12)
 
 | Data Source | Count | Coverage (3yr+ active) | Selection |
 |-------------|-------|----------------------|-----------|
-| **LLM core scores** | **7,669** | 35% | Top by quantitative score |
+| **LLM full V3 analysis** | **5,000** | 23% | All 26 fields (text + scores + classification) |
+| **LLM scores only** | **2,669** | 12% | 5 numeric scores (older pipeline) |
+| **LLM total** | **7,669** | 35% | Combined |
 | **IPR risk scores** | **5,000** | 23% | Top by forward citations (target reached) |
 | **Prosecution scores** | **2,475** | 11% | Top by forward citations (still growing) |
-| **Market relevance** | 5,000 | 23% | From LLM analysis |
 | **Citation classification** | 28,913 | 100% | All patents |
 | **Forward citations** | 28,014 | 97% | All patents |
 | **Backward citations (parents)** | 2,000 | 9% | From patent families pipeline |
 | **Parent details** | 11,706 | — | Enriched parent patent info |
 
 ### Background Jobs Status
-- **LLM analysis**: 7,669 cached (unchanged from session 10 — 2,000 patent job may have stalled; needs investigation)
+- **LLM analysis**: 7,669 cached; 5,000 now have full V3 fields (all 26 fields restored from combined output)
 - **IPR enrichment**: **5,000 done** (target reached)
-- **Prosecution enrichment**: 2,475 done (was 2,252, progressed but not at 5,000 target)
+- **Prosecution enrichment**: 2,475 done (target was 5,000)
 
 ### Elasticsearch Index
 
@@ -41,7 +42,47 @@
 
 ---
 
-## Changes Completed This Session (Session 11)
+## Changes Completed This Session (Session 12)
+
+### LLM Data Pipeline Fix — Recovered 14 Dropped Fields
+
+**Root Cause**: `saveLlmScore()` in `run-llm-top-patents.ts` and the `LlmScoreRecord` interface in `import-llm-scores.ts` were cherry-picking only 12 of 26 V3 fields when writing to `cache/llm-scores/`. The LLM prompt generates all 26 fields, and they were present in batch/combined output files, but got stripped at the cache-write layer.
+
+**Dropped fields included**: `prior_art_problem`, `technical_solution` (the 2 key attorney text fields), plus `claim_clarity_score`, `evidence_accessibility_score`, `market_relevance_score`, `trend_alignment_score`, `investigation_priority_score`, `product_types`, `likely_implementers`, `detection_method`, `standards_bodies`, `implementation_complexity`, `claim_type_primary`, `geographic_scope`, `lifecycle_stage`.
+
+#### Fixes Applied
+
+1. **`scripts/run-llm-top-patents.ts`** — `saveLlmScore()` now spreads full analysis object instead of cherry-picking fields
+2. **`scripts/import-llm-scores.ts`** — `LlmScoreRecord` interface expanded to all V3 fields; `extractPatentRecords()` preserves all score, string, array, and computed fields
+3. **Re-import**: Ran `import-llm-scores.ts` with `--force` on `combined-v3-2026-01-26.json` — 5,000 patents now have all 26+ fields in cache
+4. **Backend** (`src/api/routes/patents.routes.ts`):
+   - `FullLlmData` interface expanded to all V3 fields
+   - `Patent` interface now includes: `llm_prior_art_problem`, `llm_technical_solution`, `claim_clarity_score`, `evidence_accessibility_score`, `trend_alignment_score`, `investigation_priority_score`, `legal_viability_score`, `enforcement_potential_score`, `market_value_score`, plus enum fields (`llm_detection_method`, `llm_implementation_complexity`, `llm_claim_type_primary`, `llm_geographic_scope`, `llm_lifecycle_stage`)
+   - Patent list enrichment maps all new fields
+   - LLM detail endpoint (`GET /api/patents/:id/llm`) automatically returns all fields (spreads cache data)
+5. **Frontend types** (`frontend/src/types/index.ts`): Patent interface expanded with all recovered fields
+6. **Frontend store** (`frontend/src/stores/patents.ts`):
+   - Scores group: Added `claim_clarity_score`, `evidence_accessibility_score`, `trend_alignment_score`, `investigation_priority_score`, `legal_viability_score`, `enforcement_potential_score`, `market_value_score`
+   - LLM Text group: Added `llm_prior_art_problem`, `llm_technical_solution`, `llm_detection_method`, `llm_implementation_complexity`, `llm_claim_type_primary`, `llm_geographic_scope`, `llm_lifecycle_stage`
+7. **Frontend PatentDetailPage.vue**:
+   - LLM tab: Added Prior Art Problem and Technical Solution text sections alongside AI Summary
+   - Quality Scores card: Added Claim Clarity, Evidence Accessibility, Trend Alignment, Investigation Priority
+   - Classification card: Added Detection Method, Implementation Complexity, Claim Type, Geographic Scope, Lifecycle Stage, Product Types (chips), Likely Implementers (chips), Standards Bodies (chips)
+8. **Frontend PortfolioPage.vue**: Cell templates for all new score columns (1-5 badge) and text columns (truncation + tooltip), composite scores (0-100 badge)
+
+### LLM Question Taxonomy Documentation
+
+Updated `docs/LLM_PATENT_ANALYSIS.md` with comprehensive:
+- 5-tier question taxonomy (Attorney Core → Enforcement → Market → Cross-Sector → Sector-Specific)
+- All 26 V3 fields inventoried with types and descriptions
+- Computed sub-score formulas
+- Complete data pipeline documentation (services, scripts, cache structure, data flow)
+- Design notes for future question tiering, batching optimization, and UI queuing
+- Current coverage breakdown (5,000 full V3 + 2,669 scores-only)
+
+---
+
+## Changes Completed Session 11 (Previous)
 
 ### GUI Enhancements — LLM Data Integration
 
@@ -172,18 +213,20 @@ cd frontend && npm run dev
 
 ## Known Issues / Next Session TODO
 
-### Immediate (Session 12)
+### Immediate (Session 13)
 - [ ] Investigate stalled LLM 2,000 patent job (count unchanged at 7,669 from session 10)
+- [ ] Backfill 2,669 older patents with full V3 analysis (they only have 5 numeric scores, no text fields)
 - [ ] Resume prosecution enrichment to reach 5,000 target (currently 2,475)
 - [ ] Confirm batches 3-4 vendor submission status
 - [ ] Generate batches 5-10 with affiliate diversity cap (max 40% VMware per top-ranked batch)
-- [ ] Column group design: continue iterating on groupings as dynamic sector-based columns are added
 
 ### Medium Priority
 - [ ] Incremental ES Indexing
 - [ ] Search Term Selectivity Tracking
-- [ ] LLM prompt enhancement: Add `prior_art_problem` and `technical_solution` fields to analysis prompt
+- [x] ~~LLM prompt enhancement: Add `prior_art_problem` and `technical_solution` fields to analysis prompt~~ — DONE (fields were always in V3 prompt, fixed cache pipeline in Session 12)
 - [ ] Dynamic columns based on sector (sector-specific scoring facets)
+- [ ] Integrate sector-specific LLM analysis (`services/llm-sector-analysis.ts`) into cache pipeline
+- [ ] Add `claim_clarity_score`, `evidence_accessibility_score`, `trend_alignment_score`, `investigation_priority_score` to V3 scoring profile weights
 
 ### Design Backlog
 - [ ] **Bulk LLM Analysis Queuing**: Request or queue LLM analysis from UI when not present. Multi-select patents and trigger batch LLM analysis. Design needed: queue management, progress tracking, cost estimation
@@ -222,12 +265,15 @@ open http://localhost:3000
 ### Test Patents for New Features
 | Feature | Patent ID | What to see |
 |---------|-----------|-------------|
-| LLM tab (full data) | 10003303 | Summary, all scores, classification |
-| LLM tab (scores only) | 8429630 | Numeric scores, no summary |
+| **Prior Art + Technical Solution** | 10003303 | Full attorney text fields in LLM tab + grid columns |
+| **All V3 scores** | 10003303 | Claim Clarity, Evidence Access, Trend Alignment, Investigation Priority |
+| **Product types + Implementers** | 10003303 | Chips in LLM detail (RF amplifiers, semiconductor companies) |
+| **Composite sub-scores** | 10003303 | Legal Viability (66), Enforcement Potential, Market Value |
+| LLM tab (scores only, no text) | 8429630 | Numeric scores only — older pipeline, no text fields |
 | Backward citations | 10749870 | 8 parents, most in portfolio |
 | Forward citations (rich) | 10749870 | 169 fwd citations, breakdown |
 | CPC tooltips | Any | Hover CPC chips for descriptions |
-| LLM columns in grid | Enable in Column Selector > Scores / LLM Text | Score badges, summary text |
+| LLM columns in grid | Enable in Column Selector > Scores / LLM Text | All score badges, text columns |
 | Prosecution (smooth) | 10042628 | Score 4/5, 2 OA, timeline |
 | PTAB with IPR history | 7203959 | 2 Zscaler petitions |
 
@@ -247,4 +293,4 @@ open http://localhost:3000
 
 ---
 
-*Last Updated: 2026-01-26 (Session 11 — GUI enhancements: LLM data integrated into patent list API and portfolio grid (7,669 patents with scores, summary, tech classification). LLM Analysis tab implemented with scores, summary, classification. Backward citations added to citations tab with in-portfolio linking (2,000 parents, 11,706 parent details). CPC code tooltips with 150+ descriptions. Column groups reorganized: Citations/Scores/LLM Text replaces Attorney Questions/LLM Analysis. Removed non-existent prior_art_problem and technical_solution fields. IPR reached 5,000 target. Prosecution at 2,475. LLM count unchanged at 7,669 — 2K job needs investigation. Feature request logged: bulk LLM analysis queuing from UI.)*
+*Last Updated: 2026-01-26 (Session 12 — Fixed LLM data pipeline: 14 of 26 V3 fields were being dropped during cache write. Root cause: saveLlmScore() and import-llm-scores.ts cherry-picked fields instead of preserving full analysis. Fixed both scripts, re-imported 5,000 patents from combined-v3 output. Recovered attorney text fields (prior_art_problem, technical_solution) and 12 additional scores/classification fields. Updated backend API, frontend types/store/pages to expose all recovered fields. Comprehensive LLM question taxonomy documented in docs/LLM_PATENT_ANALYSIS.md with 5-tier structure and future batching/queuing design.)*

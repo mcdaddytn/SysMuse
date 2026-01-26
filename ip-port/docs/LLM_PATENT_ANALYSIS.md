@@ -2,292 +2,302 @@
 
 ## Overview
 
-This document describes the approach for integrating LLM-based patent analysis into our portfolio evaluation pipeline. The system uses Claude (via Anthropic API) to perform qualitative analysis that complements our quantitative citation and term-based scoring.
+The system uses Claude (Anthropic API) to perform qualitative patent analysis that complements quantitative citation-based scoring. LLM analysis generates text summaries, numeric quality ratings (1-5), and classification metadata used in multi-metric scoring profiles.
 
-## Architecture
+## Question Taxonomy
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     PATENT ANALYSIS PIPELINE                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────┐ │
-│  │ Quantitative     │    │ LLM Analysis     │    │ Combined     │ │
-│  │ Analysis         │    │ (Batch Jobs)     │    │ Scoring      │ │
-│  │                  │    │                  │    │              │ │
-│  │ • Citation count │    │ • 101 Risk       │    │ • Weighted   │ │
-│  │ • Competitor     │    │ • Invalidity     │    │   averages   │ │
-│  │   citations      │    │ • Claim scope    │    │ • Final      │ │
-│  │ • Forward cites  │    │ • Enforceability │    │   rankings   │ │
-│  │ • Remaining term │    │ • Market fit     │    │              │ │
-│  └────────┬─────────┘    └────────┬─────────┘    └──────┬───────┘ │
-│           │                       │                      │         │
-│           └───────────────────────┴──────────────────────┘         │
-│                                   │                                 │
-│                          ┌────────▼────────┐                       │
-│                          │ Export Options  │                       │
-│                          │ • CSV           │                       │
-│                          │ • JSON          │                       │
-│                          │ • Text files    │                       │
-│                          └─────────────────┘                       │
-└─────────────────────────────────────────────────────────────────────┘
-```
+### Tier 1: Attorney Core Questions (V1)
 
-## LLM Analysis Questions
+The original 5 questions from attorneys — generated for all patents promoted to prominence. These provide a quick human-readable assessment superior to raw patent titles/abstracts.
 
-### Qualitative Responses (Text)
+| # | Field | Type | Description |
+|---|-------|------|-------------|
+| 1 | `summary` | Text | High-level summary for non-technical audience (2-3 sentences) |
+| 2 | `prior_art_problem` | Text | What problem in prior art does this patent solve? (2-3 sentences) |
+| 3 | `technical_solution` | Text | How does the technical solution work? (2-3 sentences) |
+| 4 | `eligibility_score` | 1-5 | Patent eligibility strength under 35 USC 101 |
+| 5 | `validity_score` | 1-5 | Strength against prior art invalidity challenges |
 
-1. **Summary** - High-level summary tailored to non-technical audience
-2. **Prior Art Problem** - The problem in the prior art the patent addresses
-3. **Technical Solution** - How the technical solution works
+### Tier 2: Enforcement & Quality Scores (V1+)
 
-### Quantitative Ratings (1-5 Scale)
+Additional numeric ratings used in scoring profiles. Generated alongside Tier 1.
 
-**All ratings use consistent scale: Higher = Better for patent holder**
+| # | Field | Type | Description |
+|---|-------|------|-------------|
+| 6 | `claim_breadth` | 1-5 | Scope and breadth of patent claims |
+| 7 | `claim_clarity_score` | 1-5 | How clear and well-defined claim boundaries are |
+| 8 | `enforcement_clarity` | 1-5 | How easily infringement can be detected |
+| 9 | `design_around_difficulty` | 1-5 | How difficult to avoid infringing |
+| 10 | `evidence_accessibility_score` | 1-5 | How accessible is infringement evidence |
+| 11 | `confidence` | 1-5 | LLM confidence in this analysis |
 
-4. **101 Eligibility Score** (Patent Eligibility Strength)
-   - 5 = Very Strong - Clearly patent-eligible, specific technical implementation
-   - 4 = Strong - Strong technical elements, minor abstract concepts
-   - 3 = Moderate - Mixed technical/abstract, outcome uncertain
-   - 2 = Weak - Significant abstract concepts, limited technical specificity
-   - 1 = Very Weak - Likely ineligible, primarily abstract idea
+### Tier 3: Market & Investigation (V2+)
 
-5. **Validity Score** (Prior Art Strength)
-   - 5 = Very Strong - Novel approach, minimal prior art concerns
-   - 4 = Strong - Some prior art exists but claims are differentiated
-   - 3 = Moderate - Relevant prior art exists, claims may need narrowing
-   - 2 = Weak - Significant prior art overlap, validity questionable
-   - 1 = Very Weak - Strong prior art, likely invalid
+Market applicability and investigation guidance — used for licensing strategy.
 
-6. **Claim Breadth Score**
-   - 5 = Very Broad - Foundational claims, wide applicability
-   - 4 = Broad - Covers multiple approaches/technologies
-   - 3 = Moderate - Covers a class of implementations
-   - 2 = Narrow - Specific to particular use case
-   - 1 = Very Narrow - Highly specific implementation details
+| # | Field | Type | Description |
+|---|-------|------|-------------|
+| 12 | `technology_category` | Enum | Primary technology domain (networking, cybersecurity, etc.) |
+| 13 | `product_types` | Array | Specific product types this patent might cover |
+| 14 | `market_relevance_score` | 1-5 | Relevance to current commercial products |
+| 15 | `trend_alignment_score` | 1-5 | Alignment with current technology trends |
+| 16 | `likely_implementers` | Array | Types of companies likely using this technology |
+| 17 | `detection_method` | Enum | How infringement would be detected (observable/technical_analysis/reverse_engineering/discovery_required) |
+| 18 | `investigation_priority_score` | 1-5 | Priority for infringement investigation |
 
-7. **Enforcement Clarity Score**
-   - 5 = Very Clear - Infringement obvious from product/service
-   - 4 = Clear - Infringement readily observable
-   - 3 = Moderate - Detectable with technical analysis
-   - 2 = Difficult - Requires significant reverse engineering
-   - 1 = Very Difficult - Infringement hard to detect/prove
+### Tier 4: Cross-Sector Signals (V3)
 
-8. **Design-Around Difficulty Score**
-   - 5 = Very Difficult - No practical alternatives, must license
-   - 4 = Difficult - Few practical alternatives
-   - 3 = Moderate - Alternatives possible with effort
-   - 2 = Easy - Known workarounds available
-   - 1 = Very Easy - Trivial alternatives exist
+Broadly applicable classification used for portfolio segmentation and 101-risk assessment.
 
-## Prompt Design
+| # | Field | Type | Description |
+|---|-------|------|-------------|
+| 19 | `implementation_type` | Enum | hardware/software/firmware/system/method/hybrid |
+| 20 | `standards_relevance` | Enum | none/related/likely_essential/declared_essential |
+| 21 | `standards_bodies` | Array | Relevant standards (3GPP, IEEE, ETSI, IETF, etc.) |
+| 22 | `market_segment` | Enum | consumer/enterprise/infrastructure/industrial/automotive/medical/mixed |
+| 23 | `implementation_complexity` | Enum | simple/moderate/complex/highly_complex |
+| 24 | `claim_type_primary` | Enum | method/system/apparatus/device/computer_readable_medium/composition |
+| 25 | `geographic_scope` | Enum | us_centric/global/regional |
+| 26 | `lifecycle_stage` | Enum | emerging/growth/mature/declining |
 
-### System Prompt
+### Computed Sub-Scores (derived from individual ratings)
 
-```
-You are a patent analysis expert. Analyze patents and provide structured assessments
-in JSON format. Be objective and thorough. For rating scales, use the specific
-criteria provided. Base your analysis only on the patent information given.
-```
+| Field | Formula |
+|-------|---------|
+| `legal_viability_score` | `(eligibility × 0.30 + validity × 0.30 + claim_breadth × 0.20 + claim_clarity × 0.20) / 5 × 100` |
+| `enforcement_potential_score` | `(enforcement_clarity × 0.35 + evidence_accessibility × 0.35 + design_around × 0.30) / 5 × 100` |
+| `market_value_score` | `(market_relevance × 0.50 + trend_alignment × 0.50) / 5 × 100` |
 
-### User Prompt Template
+### Future: Sector-Specific Questions (Tier 5)
+
+Sector-specific prompts exist in `config/sector-prompts/` (9 sectors) and generate additional fields via `services/llm-sector-analysis.ts`:
+
+- `specific_products` — Product objects with (product_name, company, relevance, evidence_type)
+- `product_evidence_sources` — Sources for product information
+- `revenue_model`, `unit_volume_tier`, `price_point_tier`, `revenue_per_unit_estimate`
+- `licensing_leverage_factors`, `negotiation_strengths`, `potential_objections`
+- `within_sector_rank_rationale`, `litigation_grouping_candidates`
+
+These are not yet integrated into the main cache pipeline.
+
+---
+
+## Prompt Configuration Files
+
+All prompts are stored as JSON config files (not hard-coded):
 
 ```
-Analyze the following patent(s) and return a JSON response.
+config/prompts/
+├── patent-analysis-v1.json          # 9 fields (attorney core)
+├── patent-analysis-v2-draft.json    # 17 fields (+ market/investigation) — DRAFT
+└── patent-analysis-v3.json          # 26 fields (+ cross-sector) — ACTIVE
 
-For each patent, provide:
-1. summary: High-level summary for non-technical audience (2-3 sentences)
-2. prior_art_problem: What problem in prior art does this solve? (2-3 sentences)
-3. technical_solution: How does the technical solution work? (2-3 sentences)
-4. eligibility_score: Patent eligibility strength under 101 (1-5, see scale)
-5. validity_score: Strength against prior art invalidity (1-5, see scale)
-6. claim_breadth: Claim scope/breadth (1-5, see scale)
-7. enforcement_clarity: How easy to detect infringement (1-5, see scale)
-8. design_around_difficulty: How hard to avoid this patent (1-5, see scale)
-
-Rating Scales (ALL: Higher = Better for patent holder):
-- 5 = Very Strong/Very Broad/Very Clear/Very Difficult to avoid
-- 4 = Strong/Broad/Clear/Difficult to avoid
-- 3 = Moderate
-- 2 = Weak/Narrow/Unclear/Easy to avoid
-- 1 = Very Weak/Very Narrow/Very Unclear/Very Easy to avoid
-
-Patents to analyze:
-{patents_json}
-
-Return JSON in this exact format:
-{
-  "analyses": [
-    {
-      "patent_id": "string",
-      "summary": "string",
-      "prior_art_problem": "string",
-      "technical_solution": "string",
-      "eligibility_score": number,
-      "validity_score": number,
-      "claim_breadth": number,
-      "enforcement_clarity": number,
-      "design_around_difficulty": number,
-      "confidence": number (1-5, your confidence in this analysis)
-    }
-  ]
-}
+config/sector-prompts/
+├── cloud-auth.json
+├── network-switching.json
+├── network-protocols.json
+├── network-auth-access.json
+├── network-management.json
+├── network-threat-protection.json
+├── computing-os-security.json
+├── video-codec.json
+└── rf-acoustic.json
 ```
 
-## Batch Processing Strategy
+Each prompt config contains: `systemPrompt`, `userPromptTemplate`, `outputSchema` (with scale definitions), `scoringWeights`.
 
-### Batch Size
-- **Recommended**: 5-10 patents per batch
-- **Rationale**: Balances API efficiency with response quality
-- **Context**: Each patent needs ~500 tokens input, ~300 tokens output
-- **Total per batch**: ~4,000-8,000 tokens (well within limits)
+---
 
-### Batch Job Structure
+## Data Pipeline
 
-```typescript
-interface BatchJob {
-  batchId: string;
-  patents: string[];      // Patent IDs
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  createdAt: Date;
-  completedAt?: Date;
-  results?: LLMAnalysis[];
-  error?: string;
-}
-```
+### Analysis Services
 
-### Execution Flow
+| Service | Prompt | Model | Output |
+|---------|--------|-------|--------|
+| `services/llm-patent-analysis.ts` | V1 (9 fields) | Claude Sonnet 4 | `output/llm-analysis/` |
+| `services/llm-patent-analysis-v2.ts` | V2 (17 fields) | Claude Sonnet 4 | `output/llm-analysis-v2/` |
+| `services/llm-patent-analysis-v3.ts` | V3 (26 fields) | Claude Sonnet 4 | `output/llm-analysis-v3/` |
+| `services/llm-sector-analysis.ts` | Sector-specific | Claude Opus 4 | Per-sector output |
 
-1. **Create Batches** - Split patent list into batches of N
-2. **Queue Processing** - Submit batches with rate limiting
-3. **Store Results** - Save individual analyses to JSON
-4. **Combine** - Merge with quantitative scores
-5. **Export** - Generate CSV/reports
+### Runner Scripts
 
-## Combined Scoring Formula
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `scripts/run-llm-top-patents.ts` | Score all patents, analyze top N without LLM data | `npx tsx scripts/run-llm-top-patents.ts --count 100` |
+| `scripts/run-llm-analysis-v3.ts` | Run V3 analysis by sector or top N | `npx tsx scripts/run-llm-analysis-v3.ts --sector cloud-auth` |
+| `scripts/import-llm-scores.ts` | Import from JSON/CSV into per-patent cache | `npx tsx scripts/import-llm-scores.ts <file> [--force]` |
+| `scripts/merge-llm-into-analysis.ts` | Merge LLM into multi-score-analysis | |
 
-### LLM Quality Score
-
-All ratings are now on same scale (higher = better), simplifying the formula:
+### Cache Structure
 
 ```
-llm_quality_score = (
-  eligibility_score * 0.25 +        // 101 strength
-  validity_score * 0.25 +           // Prior art strength
-  claim_breadth * 0.20 +            // Scope
-  enforcement_clarity * 0.15 +      // Detectability
-  design_around_difficulty * 0.15   // Lock-in
-) / 5 * 100
+cache/llm-scores/
+├── 10003303.json    # Per-patent: all 26+ fields from V3 pipeline
+├── 8429630.json     # Older: 5 scores only (from V1-era pipeline)
+└── ... (7,669 files)
+
+output/llm-analysis-v3/
+├── combined-v3-2026-01-26.json    # 5,000 patents, all fields + computed sub-scores
+└── batches/
+    ├── batch-v3-001-2026-01-26.json
+    └── ... (999 batch files)
 ```
 
-### Final Combined Score
+### Data Flow
 
 ```
-final_score = (
-  quantitative_score * 0.50 +    // Citation-based scoring
-  llm_quality_score * 0.30 +     // LLM analysis
-  remaining_term_factor * 0.20   // Time value
-)
+Patent data (cache/api/) ──> Runner script ──> Anthropic API ──> Batch JSON
+                                                                    │
+                            ┌───────────────────────────────────────┘
+                            ▼
+                    Combined JSON ──> Import script ──> Per-patent cache
+                                                            │
+                                                            ▼
+                                    Scoring service ◄── cache/llm-scores/
+                                    Patents API     ◄──      │
+                                                            ▼
+                                                    GUI (grid + detail)
 ```
 
-## File Structure
+### Important: All Fields Preserved
+
+As of Session 12, both `saveLlmScore()` (in `run-llm-top-patents.ts`) and `import-llm-scores.ts` preserve **all** fields from the V3 analysis. Previously, 14 of 26 fields were being dropped during the save/import step — including the two key attorney text fields (`prior_art_problem`, `technical_solution`). This was fixed by spreading the full analysis object rather than cherry-picking fields.
+
+---
+
+## Current Coverage
+
+| Source | Count | Fields | Pipeline |
+|--------|-------|--------|----------|
+| V3 full analysis (`llm-top-patents`) | 5,000 | All 26 + computed | `run-llm-top-patents.ts` |
+| V1 scores only (`all-patents-scored-v3`) | 2,669 | 5 numeric scores | Older bulk import |
+| **Total with LLM data** | **7,669** | — | 35% of active 3yr+ patents |
+| Active patents (3+ years) | 21,870 | — | — |
+
+---
+
+## Scoring Integration
+
+### Scoring Profiles (V3)
+
+The scoring service (`src/api/services/scoring-service.ts`) uses LLM metrics with configurable weight profiles:
+
+| Profile | Key LLM Weights |
+|---------|----------------|
+| **Executive** | eligibility (0.05), validity (0.05), claim_breadth (0.04), enforcement (0.04), design_around (0.04), market_relevance (0.05) |
+| **Litigation** | eligibility (0.18), validity (0.18), enforcement (0.04) |
+| **Licensing** | claim_breadth (0.08), market_relevance (0.08) |
+| **Quick Wins** | eligibility (0.15), validity (0.14), enforcement (0.17) |
+| **Quality Focus** | validity (0.18), claim_breadth (0.13) |
+
+When LLM metrics are unavailable (65% of scored patents), weights are redistributed proportionally among available quantitative metrics.
+
+### Rating Scale Reference
+
+All scores use consistent 1-5 scale (higher = better for patent holder):
+
+| Score | Meaning |
+|-------|---------|
+| 5 | Very Strong / Very Broad / Very Clear / Very Difficult to avoid |
+| 4 | Strong / Broad / Clear / Difficult |
+| 3 | Moderate |
+| 2 | Weak / Narrow / Unclear / Easy to avoid |
+| 1 | Very Weak / Very Narrow / Very Unclear / Very Easy |
+
+---
+
+## Design: Question Tiering and Batching Strategy
+
+### Promotion-Based Question Execution
+
+Questions should be executed in tiers as patents gain prominence:
 
 ```
-output/
-├── llm-analysis/
-│   ├── batches/
-│   │   ├── batch-001-2026-01-16.json
-│   │   ├── batch-002-2026-01-16.json
-│   │   └── ...
-│   ├── combined/
-│   │   └── all-analyses-2026-01-16.json
-│   └── exports/
-│       ├── patent-rankings-2026-01-16.csv
-│       └── patent-summaries/
-│           ├── US10200706.txt
-│           └── ...
-├── export/                       # Existing export directory
-└── ...                           # Existing output files
+Discovery ──> Tier 1-2 (attorney core + scores) ──> Tier 3 (market) ──> Tier 4 (classification)
+                                                                              │
+                                                                    Tier 5 (sector-specific)
 ```
+
+**Tier 1-2 (First Order)**: Run when a patent is first identified as high-potential (top N by quantitative score). Provides the 5 attorney questions plus enforcement/quality scores.
+
+**Tier 3-4 (Second Order)**: Run on patents that pass initial screening. Adds market applicability, investigation guidance, and cross-sector classification.
+
+**Tier 5 (Higher Order)**: Run when a patent is assigned to a specific sector or focus area. Uses sector-specific prompts with domain expertise, product identification, and licensing context.
+
+### Batching Efficiency
+
+Currently: All tiers run in a single V3 prompt (26 fields per patent, 5 patents per batch).
+
+Future optimization for large-scale runs:
+- **Question grouping**: Combine patents that need the same question tier into batches
+- **Sector batching**: Group same-sector patents for sector-specific prompts
+- **Incremental enrichment**: Track which tiers each patent has completed; only request missing tiers
+- **Cost optimization**: Use Sonnet for Tier 1-3, Opus for Tier 5 (sector-specific requiring deeper reasoning)
+
+### Queuing Design (Future)
+
+The UI should support:
+1. **Single patent**: "Request LLM Analysis" button on patent detail page
+2. **Bulk selection**: Multi-select patents in grid, "Queue for LLM Analysis"
+3. **Automatic**: Queue top-ranked patents without LLM data when scores are recalculated
+4. **Progress tracking**: Job queue with status, cost estimation, completion percentage
+
+### Field Assignment
+
+LLM results map to patent fields via the cache pipeline:
+- Numeric scores (1-5) → Used directly in scoring profiles
+- Text fields → Displayed in grid columns and detail pages
+- Enum/classification fields → Used for filtering, grouping, and sector assignment
+- Array fields → Displayed in detail page chips
+
+---
 
 ## Configuration
 
 ### Environment Variables
 
 ```bash
-# .env
 ANTHROPIC_API_KEY=sk-ant-...
-LLM_MODEL=claude-sonnet-4-20250514
-LLM_BATCH_SIZE=5
-LLM_RATE_LIMIT_MS=1000
+LLM_MODEL=claude-sonnet-4-20250514     # Default model
+LLM_BATCH_SIZE=5                        # Patents per API call
+LLM_RATE_LIMIT_MS=2000                  # Delay between batches
+LLM_MAX_RETRIES=3                       # Retry count on failure
 ```
 
-## Implementation Phases
+### Cost Estimation (Claude Sonnet 4)
 
-### Phase 1: Core Infrastructure
-- [ ] Set up LangChain with Anthropic
-- [ ] Create structured prompt template
-- [ ] Implement single-patent analysis
-- [ ] Add JSON response parsing
+| Scope | Patents | Est. Cost |
+|-------|---------|-----------|
+| Per patent | 1 | ~$0.01 |
+| Small batch | 100 | ~$1 |
+| Medium batch | 1,000 | ~$10 |
+| Full V3 run | 5,000 | ~$50 |
+| Full portfolio | 21,870 | ~$220 |
 
-### Phase 2: Batch Processing
-- [ ] Implement batch job manager
-- [ ] Add rate limiting
-- [ ] Create progress tracking
-- [ ] Handle errors/retries
+---
 
-### Phase 3: Integration
-- [ ] Combine LLM results with quantitative scores
-- [ ] Implement weighted scoring formula
-- [ ] Generate combined rankings
+## Usage
 
-### Phase 4: Export & Reporting
-- [ ] CSV export with all fields
-- [ ] Individual patent summaries
-- [ ] Dashboard-ready JSON
-
-## Usage Examples
-
-### Run Single Patent Analysis
 ```bash
-npx tsx services/llm-patent-analysis.ts analyze US10200706
+# Run V3 analysis on top 100 patents without LLM data
+npx tsx scripts/run-llm-top-patents.ts --count 100
+
+# Run by sector
+npx tsx scripts/run-llm-top-patents.ts --sector cloud-computing --count 50
+
+# Dry run (preview without API calls)
+npx tsx scripts/run-llm-top-patents.ts --count 500 --dry-run
+
+# Import from external file (overwrite existing)
+npx tsx scripts/import-llm-scores.ts output/llm-analysis-v3/combined-v3-2026-01-26.json --force
+
+# Import all files from directory
+npx tsx scripts/import-llm-scores.ts ./exports/ --all
+
+# Reload caches after import
+curl -X POST http://localhost:3001/api/scores/reload
 ```
 
-### Run Batch Analysis
-```bash
-npx tsx services/llm-patent-analysis.ts batch --start 0 --count 50
-```
+---
 
-### Combine Results
-```bash
-npx tsx services/llm-patent-analysis.ts combine
-```
-
-### Export Rankings
-```bash
-npx tsx services/llm-patent-analysis.ts export --format csv
-```
-
-## Cost Estimation
-
-Using Claude Sonnet:
-- Input: ~$3/M tokens
-- Output: ~$15/M tokens
-
-Per patent (estimated):
-- Input: ~800 tokens = $0.0024
-- Output: ~400 tokens = $0.006
-- **Total per patent: ~$0.0084**
-
-For 250 patents:
-- Estimated cost: ~$2.10
-
-For 3,000 patents:
-- Estimated cost: ~$25.20
-
-## Notes
-
-- LLM analysis is subjective and should be treated as one input among many
-- Confidence scores help identify patents needing human review
-- Batch processing allows parallel execution with other analysis jobs
-- Results should be cached to avoid re-running expensive analyses
+*Last Updated: 2026-01-26 (Session 12 — Fixed data pipeline to preserve all 26 V3 fields. Re-imported 5,000 patents from combined output. Documented question taxonomy with tiering strategy.)*

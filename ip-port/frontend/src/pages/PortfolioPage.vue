@@ -644,6 +644,30 @@ onMounted(async () => {
         </q-td>
       </template>
 
+      <template v-slot:body-cell-llm_prior_art_problem="props">
+        <q-td :props="props">
+          <div v-if="props.row.llm_prior_art_problem" class="ellipsis" style="max-width: 300px">
+            {{ props.row.llm_prior_art_problem }}
+            <q-tooltip max-width="400px" :delay="300">
+              {{ props.row.llm_prior_art_problem }}
+            </q-tooltip>
+          </div>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-llm_technical_solution="props">
+        <q-td :props="props">
+          <div v-if="props.row.llm_technical_solution" class="ellipsis" style="max-width: 300px">
+            {{ props.row.llm_technical_solution }}
+            <q-tooltip max-width="400px" :delay="300">
+              {{ props.row.llm_technical_solution }}
+            </q-tooltip>
+          </div>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
       <!-- LLM Score columns (1-5 with color badge) -->
       <template v-slot:body-cell-eligibility_score="props">
         <q-td :props="props">
@@ -703,6 +727,70 @@ onMounted(async () => {
         <q-td :props="props">
           <q-badge v-if="props.row.market_relevance_score" :color="props.row.market_relevance_score >= 4 ? 'positive' : props.row.market_relevance_score >= 3 ? 'warning' : 'negative'">
             {{ props.row.market_relevance_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-claim_clarity_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.claim_clarity_score" :color="props.row.claim_clarity_score >= 4 ? 'positive' : props.row.claim_clarity_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.claim_clarity_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-evidence_accessibility_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.evidence_accessibility_score" :color="props.row.evidence_accessibility_score >= 4 ? 'positive' : props.row.evidence_accessibility_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.evidence_accessibility_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-trend_alignment_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.trend_alignment_score" :color="props.row.trend_alignment_score >= 4 ? 'positive' : props.row.trend_alignment_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.trend_alignment_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-investigation_priority_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.investigation_priority_score" :color="props.row.investigation_priority_score >= 4 ? 'positive' : props.row.investigation_priority_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.investigation_priority_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <!-- Composite scores (0-100 scale) -->
+      <template v-slot:body-cell-legal_viability_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.legal_viability_score" :color="props.row.legal_viability_score >= 70 ? 'positive' : props.row.legal_viability_score >= 50 ? 'warning' : 'negative'">
+            {{ Math.round(props.row.legal_viability_score) }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-enforcement_potential_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.enforcement_potential_score" :color="props.row.enforcement_potential_score >= 70 ? 'positive' : props.row.enforcement_potential_score >= 50 ? 'warning' : 'negative'">
+            {{ Math.round(props.row.enforcement_potential_score) }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-market_value_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.market_value_score" :color="props.row.market_value_score >= 70 ? 'positive' : props.row.market_value_score >= 50 ? 'warning' : 'negative'">
+            {{ Math.round(props.row.market_value_score) }}
           </q-badge>
           <span v-else class="text-grey-4">--</span>
         </q-td>

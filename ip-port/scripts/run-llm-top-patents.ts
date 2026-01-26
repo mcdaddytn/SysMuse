@@ -120,19 +120,9 @@ function loadPatentFromCache(patentId: string): PatentInput | null {
 }
 
 function saveLlmScore(analysis: PatentAnalysisV3): void {
+  // Preserve ALL V3 fields — spread the full analysis and add metadata
   const record = {
-    patent_id: analysis.patent_id,
-    eligibility_score: analysis.eligibility_score,
-    validity_score: analysis.validity_score,
-    claim_breadth: analysis.claim_breadth,
-    enforcement_clarity: analysis.enforcement_clarity,
-    design_around_difficulty: analysis.design_around_difficulty,
-    confidence: analysis.confidence,
-    summary: analysis.summary,
-    technology_category: analysis.technology_category,
-    implementation_type: analysis.implementation_type,
-    standards_relevance: analysis.standards_relevance,
-    market_segment: analysis.market_segment,
+    ...analysis,
     source: 'llm-top-patents',
     imported_at: new Date().toISOString(),
   };

@@ -25,6 +25,7 @@ const LLM_SCORES_DIR = path.join(process.cwd(), 'cache/llm-scores');
 
 interface LlmScoreRecord {
   patent_id: string;
+  // Core scores (required — at least one must be present)
   eligibility_score: number;
   validity_score: number;
   claim_breadth: number;
@@ -32,13 +33,40 @@ interface LlmScoreRecord {
   design_around_difficulty: number;
   source: string;
   imported_at: string;
-  // Optional extra fields preserved from source
-  confidence?: number;
+  // V1 text fields (attorney questions)
   summary?: string;
+  prior_art_problem?: string;
+  technical_solution?: string;
+  // V1 meta
+  confidence?: number;
+  // V3 legal viability
+  claim_clarity_score?: number;
+  // V3 enforcement
+  evidence_accessibility_score?: number;
+  // V3 market applicability
   technology_category?: string;
+  product_types?: string[];
+  market_relevance_score?: number;
+  trend_alignment_score?: number;
+  // V3 investigation guidance
+  likely_implementers?: string[];
+  detection_method?: string;
+  investigation_priority_score?: number;
+  // V3 cross-sector signals
   implementation_type?: string;
   standards_relevance?: string;
+  standards_bodies?: string[];
   market_segment?: string;
+  implementation_complexity?: string;
+  claim_type_primary?: string;
+  geographic_scope?: string;
+  lifecycle_stage?: string;
+  // Computed sub-scores (from combined files)
+  legal_viability_score?: number;
+  enforcement_potential_score?: number;
+  market_value_score?: number;
+  // Any additional fields from future prompt versions
+  [key: string]: unknown;
 }
 
 const LLM_SCORE_FIELDS = [
@@ -87,6 +115,31 @@ function extractPatentRecords(data: unknown, sourcePath: string): LlmScoreRecord
   const ext = path.extname(sourcePath).toLowerCase();
   const source = path.basename(sourcePath, ext);
 
+  // All known V3 score fields (1-5 numeric)
+  const ALL_SCORE_FIELDS = [
+    ...LLM_SCORE_FIELDS,
+    'confidence', 'claim_clarity_score', 'evidence_accessibility_score',
+    'market_relevance_score', 'trend_alignment_score', 'investigation_priority_score',
+  ];
+
+  // All known V3 string fields
+  const ALL_STRING_FIELDS = [
+    'summary', 'prior_art_problem', 'technical_solution',
+    'technology_category', 'implementation_type', 'standards_relevance',
+    'market_segment', 'detection_method', 'implementation_complexity',
+    'claim_type_primary', 'geographic_scope', 'lifecycle_stage',
+  ];
+
+  // All known V3 array fields
+  const ALL_ARRAY_FIELDS = [
+    'product_types', 'likely_implementers', 'standards_bodies',
+  ];
+
+  // Computed sub-score fields (preserved from combined files)
+  const COMPUTED_FIELDS = [
+    'legal_viability_score', 'enforcement_potential_score', 'market_value_score',
+  ];
+
   function tryExtract(items: any[]): void {
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -96,7 +149,8 @@ function extractPatentRecords(data: unknown, sourcePath: string): LlmScoreRecord
       const hasScores = LLM_SCORE_FIELDS.some(f => getScoreField(item, f) !== undefined);
       if (!hasScores) continue;
 
-      records.push({
+      // Build record preserving ALL available fields
+      const record: LlmScoreRecord = {
         patent_id: String(item.patent_id),
         eligibility_score: getScoreField(item, 'eligibility_score') ?? 0,
         validity_score: getScoreField(item, 'validity_score') ?? 0,
@@ -105,13 +159,33 @@ function extractPatentRecords(data: unknown, sourcePath: string): LlmScoreRecord
         design_around_difficulty: getScoreField(item, 'design_around_difficulty') ?? 0,
         source,
         imported_at: new Date().toISOString(),
-        confidence: getScoreField(item, 'confidence'),
-        summary: getStringField(item, 'summary'),
-        technology_category: getStringField(item, 'technology_category'),
-        implementation_type: getStringField(item, 'implementation_type'),
-        standards_relevance: getStringField(item, 'standards_relevance'),
-        market_segment: getStringField(item, 'market_segment'),
-      });
+      };
+
+      // Preserve all score fields
+      for (const field of ALL_SCORE_FIELDS) {
+        const val = getScoreField(item, field);
+        if (val !== undefined) (record as any)[field] = val;
+      }
+
+      // Preserve all string fields
+      for (const field of ALL_STRING_FIELDS) {
+        const val = getStringField(item, field);
+        if (val !== undefined) (record as any)[field] = val;
+      }
+
+      // Preserve array fields
+      for (const field of ALL_ARRAY_FIELDS) {
+        const arr = item[field] ?? item.metrics?.[field];
+        if (Array.isArray(arr) && arr.length > 0) (record as any)[field] = arr;
+      }
+
+      // Preserve computed sub-scores if present
+      for (const field of COMPUTED_FIELDS) {
+        const val = item[field] ?? item.metrics?.[field];
+        if (typeof val === 'number') (record as any)[field] = val;
+      }
+
+      records.push(record);
     }
   }
 

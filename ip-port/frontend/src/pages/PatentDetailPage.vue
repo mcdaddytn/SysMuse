@@ -923,11 +923,21 @@ function openUSPTO() {
 
         <!-- Has LLM Data -->
         <template v-else>
-          <!-- Summary -->
-          <q-card v-if="llmData.summary" class="q-mb-md" flat bordered>
+          <!-- Attorney Text Fields -->
+          <q-card v-if="llmData.summary || llmData.prior_art_problem || llmData.technical_solution" class="q-mb-md" flat bordered>
             <q-card-section>
               <div class="text-subtitle2 q-mb-sm">AI Summary</div>
-              <div class="text-body2" style="white-space: pre-line;">{{ llmData.summary }}</div>
+              <div v-if="llmData.summary" class="text-body2 q-mb-md" style="white-space: pre-line;">{{ llmData.summary }}</div>
+            </q-card-section>
+            <q-separator v-if="llmData.prior_art_problem" />
+            <q-card-section v-if="llmData.prior_art_problem">
+              <div class="text-subtitle2 q-mb-sm">Prior Art Problem</div>
+              <div class="text-body2" style="white-space: pre-line;">{{ llmData.prior_art_problem }}</div>
+            </q-card-section>
+            <q-separator v-if="llmData.technical_solution" />
+            <q-card-section v-if="llmData.technical_solution">
+              <div class="text-subtitle2 q-mb-sm">Technical Solution</div>
+              <div class="text-body2" style="white-space: pre-line;">{{ llmData.technical_solution }}</div>
             </q-card-section>
           </q-card>
 
@@ -997,6 +1007,54 @@ function openUSPTO() {
                       </q-badge>
                     </q-item-section>
                   </q-item>
+                  <q-item v-if="llmData.claim_clarity_score">
+                    <q-item-section>
+                      <q-item-label caption>Claim Clarity</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.claim_clarity_score >= 4 ? 'positive' : llmData.claim_clarity_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.claim_clarity_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.evidence_accessibility_score">
+                    <q-item-section>
+                      <q-item-label caption>Evidence Accessibility</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.evidence_accessibility_score >= 4 ? 'positive' : llmData.evidence_accessibility_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.evidence_accessibility_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.trend_alignment_score">
+                    <q-item-section>
+                      <q-item-label caption>Trend Alignment</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.trend_alignment_score >= 4 ? 'positive' : llmData.trend_alignment_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.trend_alignment_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.investigation_priority_score">
+                    <q-item-section>
+                      <q-item-label caption>Investigation Priority</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.investigation_priority_score >= 4 ? 'positive' : llmData.investigation_priority_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.investigation_priority_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
                   <q-separator spaced v-if="llmData.confidence" />
                   <q-item v-if="llmData.confidence">
                     <q-item-section>
@@ -1049,6 +1107,61 @@ function openUSPTO() {
                       >
                         {{ llmData.market_relevance_score }} / 5
                       </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.detection_method">
+                    <q-item-section>
+                      <q-item-label caption>Detection Method</q-item-label>
+                      <q-item-label>{{ llmData.detection_method }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.implementation_complexity">
+                    <q-item-section>
+                      <q-item-label caption>Implementation Complexity</q-item-label>
+                      <q-item-label>{{ llmData.implementation_complexity }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.claim_type_primary">
+                    <q-item-section>
+                      <q-item-label caption>Primary Claim Type</q-item-label>
+                      <q-item-label>{{ llmData.claim_type_primary }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.geographic_scope">
+                    <q-item-section>
+                      <q-item-label caption>Geographic Scope</q-item-label>
+                      <q-item-label>{{ llmData.geographic_scope }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.lifecycle_stage">
+                    <q-item-section>
+                      <q-item-label caption>Lifecycle Stage</q-item-label>
+                      <q-item-label>{{ llmData.lifecycle_stage }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-separator spaced v-if="llmData.product_types?.length || llmData.likely_implementers?.length || llmData.standards_bodies?.length" />
+                  <q-item v-if="llmData.product_types?.length">
+                    <q-item-section>
+                      <q-item-label caption>Product Types</q-item-label>
+                      <div class="q-gutter-xs q-mt-xs">
+                        <q-chip v-for="pt in llmData.product_types" :key="pt" size="sm" dense color="blue-1" text-color="blue-9">{{ pt }}</q-chip>
+                      </div>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.likely_implementers?.length">
+                    <q-item-section>
+                      <q-item-label caption>Likely Implementers</q-item-label>
+                      <div class="q-gutter-xs q-mt-xs">
+                        <q-chip v-for="li in llmData.likely_implementers" :key="li" size="sm" dense color="orange-1" text-color="orange-9">{{ li }}</q-chip>
+                      </div>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.standards_bodies?.length">
+                    <q-item-section>
+                      <q-item-label caption>Standards Bodies</q-item-label>
+                      <div class="q-gutter-xs q-mt-xs">
+                        <q-chip v-for="sb in llmData.standards_bodies" :key="sb" size="sm" dense color="teal-1" text-color="teal-9">{{ sb }}</q-chip>
+                      </div>
                     </q-item-section>
                   </q-item>
                 </q-list>

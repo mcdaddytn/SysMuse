@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-25, Session 3)
+# Patent Portfolio Analysis - Session Context (2026-01-25, Session 5)
 
 ## Current State Summary
 
@@ -17,9 +17,9 @@
 | Metric | Value |
 |--------|-------|
 | **Documents Indexed** | **28,913** |
-| Index Size | 10.15 MB |
-| Abstracts Indexed | ~0 (only 1 patent cache file exists) |
-| Status | Fully populated from streaming-candidates |
+| Index Size | 41 MB |
+| Abstracts Indexed | **28,869 (99.8%)** |
+| Status | Fully populated with abstracts from patent cache |
 | Fuzziness | Disabled for KEYWORD/KEYWORD_AND types; AUTO for others |
 
 ### Citation Batch Progress
@@ -30,11 +30,13 @@
 | Gap Fill | 813-1669 | Complete |
 | Overnight 1-12 | 5670-17670 | Complete |
 | Final batch (part 1) | 17670-26610 | Complete |
-| **Final batch (part 2)** | **26610-28913** | **Running (~1050/2303 at session end)** |
+| Final batch (part 2) | 26610-28913 | **~97% (28,014 / 28,913 files cached)** |
 
 **Cache Statistics:**
-- API entries: ~53,224+
-- Size: ~1,825 MB
+- Forward citation files: 28,014
+- Citing patent detail files: 28,013
+- Cache size: ~2.5 GB
+- Remaining: ~900 patents still need citation fetching
 
 ---
 
@@ -99,6 +101,39 @@
 #### Design Doc Updates
 - `FOCUS_AREA_SYSTEM_DESIGN.md` — Added "Search Term Selectivity" future enhancement section
 
+### Session 4
+
+#### Design Document Synthesis (DONE)
+Synthesized detailed design considerations for focus area workflow, search scopes, patent families, citation counting, sector management, LLM jobs, and word count extraction into design documents and development queue.
+
+#### Abstract Batch Fetch COMPLETE (I-1 DONE)
+- **28,913 / 28,913 patent records cached (100%)**
+- **28,669 with abstracts (99.8%)**
+- ES re-imported with abstracts: 41 MB index, full-text search includes abstracts
+
+### Session 5 (Current)
+
+#### P-0a: Citation Classification Pipeline ✓ COMPLETE
+- Created `scripts/classify-citations.ts` — three-way classification from citing-patent-details cache
+- Classification order: affiliate (via `excludePatterns`) → competitor (via `CompetitorMatcher`) → neutral
+- **28,913 patents processed**, 313,256 total citations:
+  - Competitor: 120,432 (38.4%), Affiliate: 35,090 (11.2%), Neutral: 157,734 (50.4%)
+- Output: per-patent files in `cache/citation-classification/` + summary in `output/citation-classification-2026-01-26.json`
+- **100% validation match** against existing citation-overlap output (26,957 patents, 0 mismatches)
+- Run: `npx tsx scripts/classify-citations.ts` (supports `--dry-run`, `--force`, `--validate`)
+
+#### P-0b: Scoring Engine ✓ COMPLETE
+- Created `src/api/services/scoring-service.ts` — V3 scoring with 6 configurable profiles
+- Profiles: executive (default), aggressive, moderate, conservative, licensing, quick_wins
+- Formula: `score = Σ(normalized × adjusted_weight) × yearMultiplier × 100`
+- Missing LLM metrics (~95% of patents) have weights redistributed proportionally
+- Updated `src/api/routes/scores.routes.ts` with V3 endpoints
+- Updated `src/api/routes/patents.routes.ts` — enriched with citation classification data
+- Test results: Executive avg=16.84, max=85.37, 388 patents ≥50
+
+#### P-0c: Portfolio Grid Expansion — IN PROGRESS
+- Frontend types, store columns, and cell templates being expanded for all spreadsheet fields
+
 ---
 
 ## Known Issues / Next Session TODO
@@ -112,20 +147,11 @@
 - [x] ~~Focus Ratio display~~ — DONE
 - [x] ~~Fuzziness disabled for keyword searches~~ — DONE
 
-### 1. Abstract Cache Coverage (HIGH PRIORITY)
-**Problem:** Only 1 patent abstract is cached. Most patents show "Abstract not cached." Abstracts are critical for search quality and analysis.
-
-**Current state:**
-- `cache/api/patentsview/patent/` — 1 file
-- `streaming-candidates-*.json` — no abstracts (title, date, assignee, CPC, scores only)
-- ES index has abstracts only where cache file existed at import time (~0)
-
-**Strategy (decided):**
-- **Option A (preferred long-term):** Batch-fetch individual patent records from PatentsView API, caching full records to `cache/api/patentsview/patent/{id}.json`. Use batch queries (up to 100 IDs per request) to minimize API calls (~290 requests for 28,913 patents). This builds a rich cache that can be expanded with additional fields later. Evaluate all available PatentsView fields to get maximum data per request — avoid rate limit waste by being thorough about what we download.
-- **Option B (expedient patch):** Re-download portfolio pages with `patent_abstract` added to the field list in `download-full-portfolio.ts` (currently only fetches title, date, assignee, citations). ~79 page requests. Fast but produces a different cache structure than Option A.
-- **Decision:** Evaluate after current citation batch completes. Option A is the right architecture going forward. Option B may be useful as an interim fix.
-
-**After caching:** Re-run `npx tsx services/import-to-elasticsearch.ts --recreate --candidates` to populate ES abstracts.
+### ~~1. Abstract Cache Coverage~~ — COMPLETED (Session 4)
+- **28,913 / 28,913 patent records cached** with abstracts (99.8% have abstract text)
+- ES re-imported with abstracts — 41 MB index, full-text search now includes abstracts
+- Script: `npx tsx scripts/batch-fetch-patents.ts`
+- Re-import: `npx tsx services/import-to-elasticsearch.ts --recreate --candidates`
 
 ### 2. CPC Code Description Tooltips (MEDIUM PRIORITY)
 **Problem:** CPC codes appear throughout the UI (patent detail, portfolio grid, focus area patents) with no human-readable descriptions. Users need mouseover tooltips showing what each code means.
@@ -163,17 +189,19 @@
 | Gap Fill | 813-1669 | Complete |
 | Overnight 1-12 | 5670-17670 | Complete |
 | Final batch (part 1) | 17670-26610 | Complete |
-| **Final batch (part 2)** | **26610-28913** | **In progress (~1050/2303 at session end)** |
-| **Total Coverage** | **~27,660 / 28,913** | **~96%** |
+| Final batch (part 2) | 26610-28913 | ~97% complete |
+| **Total Coverage** | **28,014 / 28,913** | **~96.9%** |
 
 **Cache Statistics:**
-- API entries: ~53,224+
-- Size: ~1,825 MB
+- Forward citation files: 28,014
+- Citing patent detail files: 28,013
+- Cache size: ~2.5 GB
+- No background jobs currently running
 
-### On Completion
-When the final batch finishes (~1,250 remaining):
-- Citation coverage will be 100% (28,913 / 28,913)
-- Next priority: abstract caching (see TODO #1 above)
+### Remaining Work
+- ~900 patents still need citation fetching
+- API bandwidth is now available — can proceed with abstract caching (see TODO #1)
+- Remaining citation gaps can be filled incrementally or as part of patent family construction
 
 ---
 
@@ -188,11 +216,16 @@ npm run api:dev
 **Endpoints:**
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/patents` | List with filters/pagination |
+| `GET /api/patents` | List with filters/pagination (enriched with citation classification) |
 | `GET /api/patents/:id` | Full patent details (+ abstract from cache) |
-| `GET /api/patents/:id/preview` | Lightweight preview (+ abstract) |
-| `POST /api/patents/batch-preview` | Batch preview (+ abstracts) |
-| `GET /api/scores/v2` | v2 scoring |
+| `GET /api/patents/:id/preview` | Lightweight preview (+ abstract + citation data) |
+| `POST /api/patents/batch-preview` | Batch preview (+ abstracts + citation data) |
+| `GET /api/patents/:id/citations` | Forward citations + classification breakdown |
+| `GET /api/scores/v2` | v2 scoring (legacy 3-weight) |
+| `GET /api/scores/v3` | V3 scored rankings (profile, page, limit, sector, minScore) |
+| `GET /api/scores/profiles` | List 6 scoring profiles with weights |
+| `GET /api/scores/sectors` | Sector rankings with damages tiers (profile, topN) |
+| `POST /api/scores/reload` | Clear scoring caches |
 | `GET/POST /api/focus-areas` | Focus area CRUD |
 | `POST /api/focus-areas/extract-keywords` | Keyword extraction |
 | `POST /api/focus-areas/search-preview` | Search term hit preview (+ searchFields param) |
@@ -251,28 +284,29 @@ open http://localhost:3000/focus-areas
 
 ## Next Session Priorities
 
-### 1. Abstract Cache (HIGH — blocks search quality)
-- [ ] Verify citation batch completed (should be done by next session)
-- [ ] Evaluate PatentsView API fields available for batch download (maximize data per request)
-- [ ] Write batch abstract fetch script (Option A: 100 IDs per request, ~290 calls)
-- [ ] Run abstract batch
-- [ ] Re-import to ES with abstracts: `npx tsx services/import-to-elasticsearch.ts --recreate --candidates`
+**Full roadmap**: See `docs/DEVELOPMENT_QUEUE.md` for the complete prioritized development queue with dependencies.
 
-### 2. CPC Code Descriptions (MEDIUM — UX quality)
-- [ ] Download complete CPC classification scheme (USPTO/WIPO source)
-- [ ] Build/update `config/cpc-descriptions.json` with full hierarchy
-- [ ] Create script to refresh CPC mapping from authoritative source
-- [ ] Add `q-tooltip` with descriptions on all CPC code displays across UI
+### ~~P-0a: Citation Classification~~ ✓ COMPLETE (Session 5)
+### ~~P-0b: Scoring Engine~~ ✓ COMPLETE (Session 5)
 
-### 3. Incremental ES Indexing (MEDIUM)
-- [ ] Add ES indexing to patent import workflows
-- [ ] Consider on-demand indexing when patents are added
+### P-0c: Portfolio Grid Expansion — IN PROGRESS
+- [ ] Frontend columns for all citation metrics (competitor, affiliate, neutral, competitor count)
+- [ ] V3 score column with profile selector
+- [ ] Primary sector filter, sector drill-down
+- [ ] Column visibility defaults updated
 
-### 4. Additional Features (LOW)
-- Export CSV from portfolio grid
-- Focus Area filter in portfolio grid
-- LLM suggestion endpoint for focus groups
-- Facet definition UI
+### P-0d: Sector Ranking View
+- [ ] Rewrite SectorRankingsPage from stub to functional
+- [ ] Profile selector, sector cards, top patents per sector
+
+### P-0e: CSV Export
+- [ ] Export button on portfolio grid
+- [ ] Respects current filters and sort
+
+### P-1: Focus Area & Search Scope (after P-0)
+- [ ] Search scope detection and selector
+- [ ] Search term testing fix
+- [ ] Word count extraction grid
 
 ---
 
@@ -288,10 +322,13 @@ Tables: `api_request_cache`, `llm_response_cache`, `users`, `focus_groups`, `foc
 
 | Document | Purpose |
 |----------|---------|
-| `docs/FOCUS_AREA_SYSTEM_DESIGN.md` | Focus Group/Area lifecycle |
-| `docs/FACET_SYSTEM_DESIGN.md` | Facet terminology |
-| `docs/GUI_DESIGN.md` | GUI architecture |
+| `docs/FOCUS_AREA_SYSTEM_DESIGN.md` | Focus Group/Area lifecycle, search scope, word count grid, LLM jobs, sector design |
+| `docs/PATENT_FAMILIES_DESIGN.md` | Patent families, generational citation trees, citation counting dimensions, assignee classification |
+| `docs/FACET_SYSTEM_DESIGN.md` | Facet terminology, scoring as facets, focus area-specific facets |
+| `docs/GUI_DESIGN.md` | GUI architecture, portfolio grid, scoring views, sector rankings |
+| `docs/DEVELOPMENT_QUEUE.md` | Consolidated prioritized roadmap with dependencies |
+| `docs/CITATION_CATEGORIZATION_PROBLEM.md` | Self-citation inflation analysis |
 
 ---
 
-*Last Updated: 2026-01-25 (Session 3)*
+*Last Updated: 2026-01-25 (Session 5 — P-0a, P-0b complete; P-0c in progress)*

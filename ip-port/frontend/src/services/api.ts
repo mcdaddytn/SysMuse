@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams } from '@/types';
+import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking } from '@/types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -39,6 +39,11 @@ export interface PatentPreview {
   forward_citations: number;
   remaining_years: number;
   score: number;
+  competitor_citations?: number;
+  affiliate_citations?: number;
+  neutral_citations?: number;
+  competitor_count?: number;
+  competitor_names?: string[];
 }
 
 // Patent API
@@ -151,8 +156,43 @@ export const scoringApi = {
     return data;
   },
 
-  async getV3Scores() {
-    const { data } = await api.get('/scores/v3');
+  async getV3Scores(options?: {
+    profile?: string;
+    page?: number;
+    limit?: number;
+    sector?: string;
+    minScore?: number;
+  }): Promise<{
+    profile: { id: string; displayName: string; description: string; weights: Record<string, number> };
+    data: V3ScoredPatent[];
+    total: number;
+    page: number;
+    rowsPerPage: number;
+  }> {
+    const { data } = await api.get('/scores/v3', { params: options });
+    return data;
+  },
+
+  async getProfiles(): Promise<ScoringProfile[]> {
+    const { data } = await api.get('/scores/profiles');
+    return data;
+  },
+
+  async getSectorRankings(options?: {
+    profile?: string;
+    topN?: number;
+  }): Promise<{
+    profile: { id: string; displayName: string };
+    topN: number;
+    sectors: SectorRanking[];
+    total_sectors: number;
+  }> {
+    const { data } = await api.get('/scores/sectors', { params: options });
+    return data;
+  },
+
+  async reloadScores(): Promise<{ message: string }> {
+    const { data } = await api.post('/scores/reload');
     return data;
   },
 

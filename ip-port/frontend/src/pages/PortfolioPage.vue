@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
 import { focusAreaApi } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import type { Patent } from '@/types';
 
 const router = useRouter();
+const route = useRoute();
 const patentsStore = usePatentsStore();
 
 // Focus Group creation
@@ -29,20 +30,24 @@ interface FilterOption {
 }
 const affiliateOptions = ref<FilterOption[]>([]);
 const superSectorOptions = ref<FilterOption[]>([]);
+const primarySectorOptions = ref<FilterOption[]>([]);
 const loadingFilters = ref(false);
 
 // Selected filter values (multi-select)
 const selectedAffiliates = ref<string[]>([]);
 const selectedSuperSectors = ref<string[]>([]);
+const selectedPrimarySectors = ref<string[]>([]);
 const activeOnlyFilter = ref(false);
+const hasCompetitorCitesFilter = ref(false);
 
 // Load filter options from API
 async function loadFilterOptions() {
   loadingFilters.value = true;
   try {
-    const [affiliatesRes, sectorsRes] = await Promise.all([
+    const [affiliatesRes, sectorsRes, primarySectorsRes] = await Promise.all([
       fetch('/api/patents/affiliates'),
-      fetch('/api/patents/super-sectors')
+      fetch('/api/patents/super-sectors'),
+      fetch('/api/patents/primary-sectors')
     ]);
 
     if (affiliatesRes.ok) {
@@ -50,6 +55,9 @@ async function loadFilterOptions() {
     }
     if (sectorsRes.ok) {
       superSectorOptions.value = await sectorsRes.json();
+    }
+    if (primarySectorsRes.ok) {
+      primarySectorOptions.value = await primarySectorsRes.json();
     }
   } catch (err) {
     console.error('Failed to load filter options:', err);
@@ -62,7 +70,9 @@ async function loadFilterOptions() {
 watch(() => patentsStore.filters, (newFilters) => {
   selectedAffiliates.value = newFilters.affiliates || [];
   selectedSuperSectors.value = newFilters.superSectors || [];
+  selectedPrimarySectors.value = newFilters.primarySectors || [];
   activeOnlyFilter.value = newFilters.activeOnly || false;
+  hasCompetitorCitesFilter.value = newFilters.hasCompetitorCites || false;
 }, { immediate: true });
 
 // Apply filters when dropdowns change
@@ -70,7 +80,9 @@ function applyFilters() {
   patentsStore.updateFilters({
     affiliates: selectedAffiliates.value.length > 0 ? selectedAffiliates.value : undefined,
     superSectors: selectedSuperSectors.value.length > 0 ? selectedSuperSectors.value : undefined,
-    activeOnly: activeOnlyFilter.value || undefined
+    primarySectors: selectedPrimarySectors.value.length > 0 ? selectedPrimarySectors.value : undefined,
+    activeOnly: activeOnlyFilter.value || undefined,
+    hasCompetitorCites: hasCompetitorCitesFilter.value || undefined
   });
 }
 
@@ -138,8 +150,32 @@ function onRequest(props: { pagination: typeof paginationModel.value }) {
 }
 
 function exportToCSV() {
-  // TODO: Implement CSV export
-  console.log('Export to CSV');
+  const patents = patentsStore.patents;
+  if (patents.length === 0) return;
+
+  // Use visible columns for export
+  const exportCols = patentsStore.visibleColumns;
+  const headers = exportCols.map(c => c.label);
+
+  const rows = patents.map(patent => {
+    return exportCols.map(col => {
+      const fieldName = typeof col.field === 'string' ? col.field : col.name;
+      const value = (patent as Record<string, unknown>)[fieldName];
+      if (value === null || value === undefined) return '';
+      if (Array.isArray(value)) return value.join('; ');
+      if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
+      return String(value);
+    }).join(',');
+  });
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `patent-portfolio-${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 // Create focus group from selected patents
@@ -186,6 +222,34 @@ function openCreateFocusGroupDialog() {
 
 // Lifecycle
 onMounted(async () => {
+  // Apply filters from query params (e.g., from sector drill-down)
+  const queryFilters: Record<string, unknown> = {};
+  if (route.query.primarySectors) {
+    const sectors = Array.isArray(route.query.primarySectors)
+      ? route.query.primarySectors as string[]
+      : [route.query.primarySectors as string];
+    queryFilters.primarySectors = sectors;
+    selectedPrimarySectors.value = sectors;
+  }
+  if (route.query.superSectors) {
+    const sectors = Array.isArray(route.query.superSectors)
+      ? route.query.superSectors as string[]
+      : [route.query.superSectors as string];
+    queryFilters.superSectors = sectors;
+    selectedSuperSectors.value = sectors;
+  }
+  if (route.query.affiliates) {
+    const affs = Array.isArray(route.query.affiliates)
+      ? route.query.affiliates as string[]
+      : [route.query.affiliates as string];
+    queryFilters.affiliates = affs;
+    selectedAffiliates.value = affs;
+  }
+
+  if (Object.keys(queryFilters).length > 0) {
+    patentsStore.updateFilters(queryFilters);
+  }
+
   // Load filter options and patents in parallel
   await Promise.all([
     loadFilterOptions(),
@@ -314,10 +378,46 @@ onMounted(async () => {
                 </template>
               </q-select>
 
-              <!-- Active Only Toggle -->
+              <!-- Primary Sector Multi-Select -->
+              <q-select
+                v-model="selectedPrimarySectors"
+                :options="primarySectorOptions"
+                option-value="name"
+                option-label="name"
+                emit-value
+                map-options
+                multiple
+                use-chips
+                dense
+                outlined
+                clearable
+                :loading="loadingFilters"
+                label="Primary Sector"
+                style="min-width: 220px"
+                @update:model-value="applyFilters"
+              >
+                <template v-slot:option="{ itemProps, opt }">
+                  <q-item v-bind="itemProps">
+                    <q-item-section>
+                      <q-item-label>{{ opt.name }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+
+              <!-- Toggles -->
               <q-toggle
                 v-model="activeOnlyFilter"
                 label="Active Only"
+                dense
+                @update:model-value="applyFilters"
+              />
+              <q-toggle
+                v-model="hasCompetitorCitesFilter"
+                label="Has Competitor Cites"
                 dense
                 @update:model-value="applyFilters"
               />
@@ -332,7 +432,7 @@ onMounted(async () => {
                 color="negative"
                 icon="clear_all"
                 label="Clear All"
-                @click="patentsStore.clearFilters(); selectedAffiliates = []; selectedSuperSectors = []; activeOnlyFilter = false;"
+                @click="patentsStore.clearFilters(); selectedAffiliates = []; selectedSuperSectors = []; selectedPrimarySectors = []; activeOnlyFilter = false; hasCompetitorCitesFilter = false;"
               />
             </div>
           </q-card-section>
@@ -367,6 +467,17 @@ onMounted(async () => {
           {{ sector }}
         </q-chip>
         <q-chip
+          v-for="sector in (patentsStore.filters.primarySectors || [])"
+          :key="'psec-' + sector"
+          dense
+          removable
+          color="deep-purple"
+          text-color="white"
+          @remove="selectedPrimarySectors = selectedPrimarySectors.filter(s => s !== sector); applyFilters()"
+        >
+          {{ sector }}
+        </q-chip>
+        <q-chip
           v-if="patentsStore.filters.activeOnly"
           dense
           removable
@@ -375,6 +486,16 @@ onMounted(async () => {
           @remove="activeOnlyFilter = false; applyFilters()"
         >
           Active Only
+        </q-chip>
+        <q-chip
+          v-if="patentsStore.filters.hasCompetitorCites"
+          dense
+          removable
+          color="orange"
+          text-color="white"
+          @remove="hasCompetitorCitesFilter = false; applyFilters()"
+        >
+          Has Competitor Cites
         </q-chip>
         <q-chip
           v-if="patentsStore.filters.search"
@@ -486,6 +607,27 @@ onMounted(async () => {
           >
             {{ props.row.score?.toFixed(1) || '-' }}
           </q-badge>
+        </q-td>
+      </template>
+
+      <!-- Competitor citations with color intensity -->
+      <template v-slot:body-cell-competitor_citations="props">
+        <q-td :props="props">
+          <span :class="props.row.competitor_citations > 10 ? 'text-bold text-negative' : props.row.competitor_citations > 3 ? 'text-bold text-warning' : ''">
+            {{ props.row.competitor_citations ?? 0 }}
+          </span>
+        </q-td>
+      </template>
+
+      <!-- Competitor count with tooltip showing names -->
+      <template v-slot:body-cell-competitor_count="props">
+        <q-td :props="props">
+          <span :class="props.row.competitor_count > 3 ? 'text-bold text-negative' : props.row.competitor_count > 1 ? 'text-bold' : ''">
+            {{ props.row.competitor_count ?? 0 }}
+          </span>
+          <q-tooltip v-if="props.row.competitor_names?.length > 0">
+            {{ props.row.competitor_names.join(', ') }}
+          </q-tooltip>
         </q-td>
       </template>
 

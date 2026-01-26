@@ -15,8 +15,15 @@ export interface Patent {
   primary_sector: string;
   cpc_codes: string[];
 
-  // Optional extended fields
-  competitor_citations?: number;
+  // Citation classification (from P-0a pipeline)
+  competitor_citations: number;
+  affiliate_citations: number;
+  neutral_citations: number;
+  competitor_count: number;
+  competitor_names: string[];
+  has_citation_data: boolean;
+
+  // Optional scoring fields
   v2_score?: number;
   v3_score?: number;
   consensus_score?: number;
@@ -49,6 +56,62 @@ export interface ScoreResult {
   consensus_score: number;
   rank: number;
   rank_change?: number; // Delta from previous
+}
+
+// V3 Scoring Profile
+export interface ScoringProfile {
+  id: string;
+  displayName: string;
+  description: string;
+  category: string;
+  weights: Record<string, number>;
+  isDefault?: boolean;
+}
+
+// V3 Scored Patent (from /api/scores/v3)
+export interface V3ScoredPatent {
+  patent_id: string;
+  score: number;
+  rank: number;
+  normalized_metrics: Record<string, number>;
+  year_multiplier: number;
+  base_score: number;
+  metrics_used: string[];
+  profile_id: string;
+  // Enriched fields
+  patent_title: string;
+  patent_date: string;
+  assignee: string;
+  forward_citations: number;
+  remaining_years: number;
+  primary_sector: string;
+  super_sector: string;
+  cpc_codes: string[];
+  competitor_citations: number;
+  affiliate_citations: number;
+  neutral_citations: number;
+  competitor_count: number;
+  competitor_names: string[];
+}
+
+// Sector ranking (from /api/scores/sectors)
+export interface SectorRanking {
+  sector: string;
+  sector_name: string;
+  super_sector: string;
+  patent_count: number;
+  avg_score: number;
+  max_score: number;
+  damages_rating: number;
+  damages_label: string;
+  top_patents: Array<{
+    patent_id: string;
+    score: number;
+    rank: number;
+    title: string;
+    assignee: string;
+    remaining_years: number;
+  }>;
 }
 
 // Job types

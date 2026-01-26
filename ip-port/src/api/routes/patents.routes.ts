@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
+import { loadAllClassifications } from '../services/scoring-service.js';
 
 const router = Router();
 
@@ -29,6 +30,13 @@ interface RawPatent {
 interface Patent extends RawPatent {
   affiliate: string;
   super_sector: string;
+  primary_sector?: string;
+  competitor_citations?: number;
+  affiliate_citations?: number;
+  neutral_citations?: number;
+  competitor_count?: number;
+  competitor_names?: string[];
+  has_citation_data?: boolean;
 }
 
 interface CandidatesFile {
@@ -72,18 +80,31 @@ function loadPatents(): Patent[] {
 
   const data: CandidatesFile = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-  // Enrich patents with affiliate and super_sector
-  patentsCache = data.candidates.map((p: RawPatent): Patent => ({
-    ...p,
-    affiliate: normalizeAffiliate(p.assignee),
-    super_sector: p.super_sector
-      ? getSuperSectorDisplayName(p.super_sector)
-      : (p.sector ? inferSuperSector(p.sector) : 'Unknown')
-  }));
+  // Load citation classifications
+  const classifications = loadAllClassifications();
+
+  // Enrich patents with affiliate, super_sector, and citation classification
+  patentsCache = data.candidates.map((p: RawPatent): Patent => {
+    const classification = classifications.get(p.patent_id);
+    return {
+      ...p,
+      affiliate: normalizeAffiliate(p.assignee),
+      super_sector: p.super_sector
+        ? getSuperSectorDisplayName(p.super_sector)
+        : (p.sector ? inferSuperSector(p.sector) : 'Unknown'),
+      primary_sector: (p as any).primary_sector,
+      competitor_citations: classification?.competitor_citations ?? 0,
+      affiliate_citations: classification?.affiliate_citations ?? 0,
+      neutral_citations: classification?.neutral_citations ?? 0,
+      competitor_count: classification?.competitor_count ?? 0,
+      competitor_names: classification?.competitor_names ?? [],
+      has_citation_data: classification?.has_citation_data ?? false,
+    };
+  });
 
   lastLoadTime = now;
 
-  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector enrichment`);
+  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation enrichment`);
   return patentsCache;
 }
 
@@ -200,9 +221,22 @@ function applyFilters(patents: Patent[], filters: Record<string, string | string
     result = result.filter(p => p.remaining_years <= max);
   }
 
+  // Primary sector filter (single or array)
+  if (filters.primarySectors) {
+    const sectorList = Array.isArray(filters.primarySectors)
+      ? filters.primarySectors
+      : [filters.primarySectors];
+    result = result.filter(p =>
+      sectorList.some(s => p.primary_sector === s)
+    );
+  } else if (filters.sector) {
+    const sectorFilter = filters.sector as string;
+    result = result.filter(p => p.primary_sector === sectorFilter);
+  }
+
   // Has competitor citations filter
   if (filters.hasCompetitorCites === 'true') {
-    result = result.filter(p => (p as any).competitor_citations > 0);
+    result = result.filter(p => (p.competitor_citations ?? 0) > 0);
   }
 
   // Active only filter (remaining_years > 0)
@@ -397,6 +431,31 @@ router.get('/super-sectors', (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/patents/primary-sectors
+ * Get list of primary sectors with patent counts
+ */
+router.get('/primary-sectors', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const sectorCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      const sector = p.primary_sector || 'unknown';
+      sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
+    });
+
+    const sectors = Object.entries(sectorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    res.json(sectors);
+  } catch (error) {
+    console.error('Error getting primary sectors:', error);
+    res.status(500).json({ error: 'Failed to get primary sectors' });
+  }
+});
+
+/**
  * GET /api/patents/assignees
  * Get list of unique assignees (raw USPTO names) for filtering
  */
@@ -451,11 +510,16 @@ router.post('/batch-preview', (req: Request, res: Response) => {
           assignee: patent.assignee,
           affiliate: patent.affiliate,
           super_sector: patent.super_sector,
-          primary_sector: (patent as any).primary_sector,
+          primary_sector: patent.primary_sector,
           cpc_codes: (patent as any).cpc_codes || [],
           forward_citations: patent.forward_citations,
           remaining_years: patent.remaining_years,
-          score: patent.score
+          score: patent.score,
+          competitor_citations: patent.competitor_citations,
+          affiliate_citations: patent.affiliate_citations,
+          neutral_citations: patent.neutral_citations,
+          competitor_count: patent.competitor_count,
+          competitor_names: patent.competitor_names,
         };
       } else {
         previews[id] = null;
@@ -482,6 +546,11 @@ interface PatentPreview {
   forward_citations: number;
   remaining_years: number;
   score: number;
+  competitor_citations?: number;
+  affiliate_citations?: number;
+  neutral_citations?: number;
+  competitor_count?: number;
+  competitor_names?: string[];
 }
 
 /**
@@ -506,11 +575,16 @@ router.get('/:id/preview', (req: Request, res: Response) => {
       assignee: patent.assignee,
       affiliate: patent.affiliate,
       super_sector: patent.super_sector,
-      primary_sector: (patent as any).primary_sector,
+      primary_sector: patent.primary_sector,
       cpc_codes: (patent as any).cpc_codes || [],
       forward_citations: patent.forward_citations,
       remaining_years: patent.remaining_years,
-      score: patent.score
+      score: patent.score,
+      competitor_citations: patent.competitor_citations,
+      affiliate_citations: patent.affiliate_citations,
+      neutral_citations: patent.neutral_citations,
+      competitor_count: patent.competitor_count,
+      competitor_names: patent.competitor_names,
     };
 
     res.json(preview);
@@ -551,18 +625,23 @@ router.get('/:id/citations', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Try to load from citation cache
-    const cachePath = `./cache/api/patentsview/forward-citations/${id}.json`;
+    // Load forward citations from cache
+    const fwdCachePath = `./cache/api/patentsview/forward-citations/${id}.json`;
+    const classificationPath = `./cache/citation-classification/${id}.json`;
 
-    if (fs.existsSync(cachePath)) {
-      const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-      return res.json(data);
-    }
+    const forwardCitations = fs.existsSync(fwdCachePath)
+      ? JSON.parse(fs.readFileSync(fwdCachePath, 'utf-8'))
+      : null;
+
+    const classification = fs.existsSync(classificationPath)
+      ? JSON.parse(fs.readFileSync(classificationPath, 'utf-8'))
+      : null;
 
     res.json({
       patent_id: id,
-      cached: false,
-      message: 'Citation data not yet cached. Queue a citation analysis job.'
+      cached: !!forwardCitations,
+      forward_citations: forwardCitations,
+      classification,
     });
   } catch (error) {
     console.error('Error getting citations:', error);

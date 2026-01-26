@@ -49,14 +49,20 @@ export const usePatentsStore = defineStore('patents', () => {
 
     // Citations & Scores group
     { name: 'forward_citations', label: 'Fwd Citations', field: 'forward_citations', sortable: true, align: 'center', visible: true, group: 'citations' },
-    { name: 'competitor_citations', label: 'Competitor Cites', field: 'competitor_citations', sortable: true, align: 'center', visible: false, group: 'citations',
+    { name: 'competitor_citations', label: 'Competitor Cites', field: 'competitor_citations', sortable: true, align: 'center', visible: true, group: 'citations',
       description: 'Citations from competitor patents' },
+    { name: 'affiliate_citations', label: 'Affiliate Cites', field: 'affiliate_citations', sortable: true, align: 'center', visible: false, group: 'citations',
+      description: 'Citations from portfolio affiliate patents' },
+    { name: 'neutral_citations', label: 'Neutral Cites', field: 'neutral_citations', sortable: true, align: 'center', visible: false, group: 'citations',
+      description: 'Citations from non-competitor, non-affiliate patents' },
+    { name: 'competitor_count', label: 'Competitors', field: 'competitor_count', sortable: true, align: 'center', visible: true, group: 'citations',
+      description: 'Distinct competitor companies citing this patent' },
     { name: 'score', label: 'Score', field: 'score', sortable: true, align: 'center', visible: true, group: 'citations',
       format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
     { name: 'v2_score', label: 'v2 Score', field: 'v2_score', sortable: true, align: 'center', visible: false, group: 'citations',
-      description: 'Weighted formula score' },
+      description: 'Legacy 3-weight formula score' },
     { name: 'v3_score', label: 'v3 Score', field: 'v3_score', sortable: true, align: 'center', visible: false, group: 'citations',
-      description: 'Personal weighted score' },
+      description: 'V3 multi-metric weighted score' },
     { name: 'consensus_score', label: 'Consensus', field: 'consensus_score', sortable: true, align: 'center', visible: false, group: 'citations',
       description: 'Team consensus score' },
 
@@ -174,7 +180,8 @@ export const usePatentsStore = defineStore('patents', () => {
     // Reset to default visibility based on original definitions
     const defaults: Record<string, boolean> = {
       patent_id: true, patent_title: true, patent_date: true, remaining_years: true,
-      affiliate: true, super_sector: true, forward_citations: true, score: true
+      affiliate: true, super_sector: true,
+      forward_citations: true, competitor_citations: true, competitor_count: true, score: true
     };
     columns.value.forEach(col => {
       col.visible = defaults[col.name] ?? false;

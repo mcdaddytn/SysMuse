@@ -637,15 +637,117 @@ router.get('/:id/citations', (req: Request, res: Response) => {
       ? JSON.parse(fs.readFileSync(classificationPath, 'utf-8'))
       : null;
 
+    if (!forwardCitations) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        total_hits: 0,
+        citing_patent_ids: [],
+        citing_patents: [],
+        message: 'Forward citations not yet cached for this patent.',
+        classification,
+      });
+      return;
+    }
+
+    // Look up patent details for citing patent IDs from the candidates cache
+    const allPatents = loadPatents();
+    const patentMap = new Map(allPatents.map(p => [p.patent_id, p]));
+
+    const citingPatentIds: string[] = forwardCitations.citing_patent_ids || [];
+    const citingPatents = citingPatentIds.map(citingId => {
+      const p = patentMap.get(citingId);
+      return {
+        patent_id: citingId,
+        patent_title: p?.patent_title || '',
+        assignee: p?.assignee || '',
+        patent_date: p?.patent_date || '',
+        affiliate: p ? normalizeAffiliate(p.assignee) : '',
+        in_portfolio: !!p,
+      };
+    });
+
+    // Classify citing patents using classification data
+    const competitorDetails = classification?.competitor_details || [];
+
     res.json({
       patent_id: id,
-      cached: !!forwardCitations,
-      forward_citations: forwardCitations,
-      classification,
+      cached: true,
+      total_hits: forwardCitations.total_hits || citingPatentIds.length,
+      citing_patent_ids: citingPatentIds,
+      citing_patents: citingPatents,
+      classification: classification ? {
+        competitor_citations: classification.competitor_citations || 0,
+        affiliate_citations: classification.affiliate_citations || 0,
+        neutral_citations: classification.neutral_citations || 0,
+        competitor_count: classification.competitor_count || 0,
+        competitor_names: classification.competitor_names || [],
+        competitor_details: competitorDetails,
+      } : null,
     });
   } catch (error) {
     console.error('Error getting citations:', error);
     res.status(500).json({ error: 'Failed to get citations' });
+  }
+});
+
+/**
+ * GET /api/patents/:id/prosecution
+ * Get prosecution history data for a patent (from cache)
+ */
+router.get('/:id/prosecution', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const cachePath = `./cache/prosecution-scores/${id}.json`;
+
+    if (!fs.existsSync(cachePath)) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        message: 'Prosecution history not yet retrieved for this patent.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+    res.json({
+      patent_id: id,
+      cached: true,
+      ...data,
+    });
+  } catch (error) {
+    console.error('Error getting prosecution data:', error);
+    res.status(500).json({ error: 'Failed to get prosecution data' });
+  }
+});
+
+/**
+ * GET /api/patents/:id/ptab
+ * Get PTAB/IPR data for a patent (from cache)
+ */
+router.get('/:id/ptab', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const cachePath = `./cache/ipr-scores/${id}.json`;
+
+    if (!fs.existsSync(cachePath)) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        message: 'IPR/PTAB data not yet retrieved for this patent.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+    res.json({
+      patent_id: id,
+      cached: true,
+      ...data,
+    });
+  } catch (error) {
+    console.error('Error getting PTAB data:', error);
+    res.status(500).json({ error: 'Failed to get PTAB data' });
   }
 });
 

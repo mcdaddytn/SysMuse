@@ -22,6 +22,7 @@ import {
   clearScoringCache,
   getLlmStats,
 } from '../services/scoring-service.js';
+import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
 
 const router = Router();
 
@@ -127,9 +128,22 @@ router.get('/v2', (req: Request, res: Response) => {
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
 
-    // Load and score patents
+    // Load and score patents, enriched with classification and affiliate data
     const patents = loadPatents();
-    const scored = patents.map(p => ({
+    const classifications = loadAllClassifications();
+
+    const enriched = patents.map(p => {
+      const cls = classifications.get(p.patent_id);
+      return {
+        ...p,
+        affiliate: normalizeAffiliate(p.assignee),
+        competitor_citations: cls?.competitor_citations ?? (p as any).competitor_citations ?? 0,
+        affiliate_citations: cls?.affiliate_citations ?? 0,
+        competitor_count: cls?.competitor_count ?? 0,
+      };
+    });
+
+    const scored = enriched.map(p => ({
       ...p,
       v2_score: calculateV2Score(p, weights)
     }));

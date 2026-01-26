@@ -22,11 +22,28 @@ const citations = ref<{
     patent_title: string;
     assignee: string;
     patent_date: string;
+    affiliate?: string;
+    in_portfolio?: boolean;
   }>;
   cached: boolean;
   message?: string;
+  classification?: {
+    competitor_citations: number;
+    affiliate_citations: number;
+    neutral_citations: number;
+    competitor_count: number;
+    competitor_names: string[];
+  };
 } | null>(null);
 const loadingCitations = ref(false);
+
+// Prosecution data
+const prosecution = ref<any>(null);
+const loadingProsecution = ref(false);
+
+// PTAB/IPR data
+const ptab = ref<any>(null);
+const loadingPtab = ref(false);
 
 // Computed
 const isExpired = computed(() => patent.value && patent.value.remaining_years <= 0);
@@ -92,11 +109,43 @@ async function loadCitations() {
   }
 }
 
+// Load prosecution data
+async function loadProsecution() {
+  if (prosecution.value || loadingProsecution.value) return;
+  loadingProsecution.value = true;
+  try {
+    const response = await fetch(`/api/patents/${patentId.value}/prosecution`);
+    if (response.ok) {
+      prosecution.value = await response.json();
+    }
+  } catch (err) {
+    console.error('Failed to load prosecution:', err);
+  } finally {
+    loadingProsecution.value = false;
+  }
+}
+
+// Load PTAB/IPR data
+async function loadPtab() {
+  if (ptab.value || loadingPtab.value) return;
+  loadingPtab.value = true;
+  try {
+    const response = await fetch(`/api/patents/${patentId.value}/ptab`);
+    if (response.ok) {
+      ptab.value = await response.json();
+    }
+  } catch (err) {
+    console.error('Failed to load PTAB data:', err);
+  } finally {
+    loadingPtab.value = false;
+  }
+}
+
 // Watch for tab changes to lazy-load data
 function onTabChange(tab: string) {
-  if (tab === 'citations') {
-    loadCitations();
-  }
+  if (tab === 'citations') loadCitations();
+  if (tab === 'prosecution') loadProsecution();
+  if (tab === 'ptab') loadPtab();
 }
 
 onMounted(() => {
@@ -315,6 +364,42 @@ function openUSPTO() {
 
       <!-- Citations -->
       <q-tab-panel name="citations">
+        <!-- Classification Summary -->
+        <q-card v-if="citations?.classification" class="q-mb-md" flat bordered>
+          <q-card-section>
+            <div class="text-subtitle2 q-mb-sm">Citation Breakdown</div>
+            <div class="row q-gutter-md">
+              <div class="text-center">
+                <div class="text-h5 text-primary">{{ citations.classification.competitor_citations }}</div>
+                <div class="text-caption">Competitor</div>
+              </div>
+              <div class="text-center">
+                <div class="text-h5 text-orange">{{ citations.classification.affiliate_citations }}</div>
+                <div class="text-caption">Affiliate</div>
+              </div>
+              <div class="text-center">
+                <div class="text-h5 text-grey">{{ citations.classification.neutral_citations }}</div>
+                <div class="text-caption">Neutral</div>
+              </div>
+              <div class="text-center">
+                <div class="text-h5">{{ citations.total_hits }}</div>
+                <div class="text-caption">Total</div>
+              </div>
+            </div>
+            <div v-if="citations.classification.competitor_names?.length" class="q-mt-sm">
+              <span class="text-caption text-grey-7">Competitors: </span>
+              <q-chip
+                v-for="name in citations.classification.competitor_names"
+                :key="name"
+                dense
+                outline
+                size="sm"
+                class="q-mr-xs"
+              >{{ name }}</q-chip>
+            </div>
+          </q-card-section>
+        </q-card>
+
         <q-card>
           <q-card-section>
             <div class="row items-center q-mb-md">
@@ -335,13 +420,6 @@ function openUSPTO() {
             <div v-else-if="citations?.cached === false" class="text-center q-pa-lg">
               <q-icon name="hourglass_empty" color="warning" size="3em" class="q-mb-md" />
               <div class="text-body1 text-grey-7">{{ citations.message }}</div>
-              <q-btn
-                color="primary"
-                label="Queue Citation Analysis"
-                icon="queue"
-                class="q-mt-md"
-                @click="console.log('Queue citation job for', patentId)"
-              />
             </div>
 
             <!-- No Citations -->
@@ -355,38 +433,30 @@ function openUSPTO() {
               <q-item
                 v-for="citing in (citations.citing_patents || [])"
                 :key="citing.patent_id"
-                clickable
-                @click="router.push({ name: 'patent-detail', params: { id: citing.patent_id } })"
+                :clickable="citing.in_portfolio"
+                @click="citing.in_portfolio && router.push({ name: 'patent-detail', params: { id: citing.patent_id } })"
               >
+                <q-item-section avatar>
+                  <q-icon
+                    :name="citing.in_portfolio ? 'link' : 'link_off'"
+                    :color="citing.in_portfolio ? 'primary' : 'grey-4'"
+                    size="sm"
+                  />
+                </q-item-section>
                 <q-item-section>
-                  <q-item-label>US{{ citing.patent_id }}</q-item-label>
-                  <q-item-label caption class="ellipsis">{{ citing.patent_title }}</q-item-label>
+                  <q-item-label :class="citing.in_portfolio ? 'text-primary cursor-pointer' : 'text-grey-7'">
+                    US{{ citing.patent_id }}
+                  </q-item-label>
+                  <q-item-label v-if="citing.patent_title" caption class="ellipsis">{{ citing.patent_title }}</q-item-label>
                 </q-item-section>
                 <q-item-section side top>
                   <q-item-label caption>{{ citing.patent_date }}</q-item-label>
-                  <q-item-label caption class="text-grey-6">{{ citing.assignee }}</q-item-label>
+                  <q-item-label caption class="text-grey-6">{{ citing.affiliate || citing.assignee }}</q-item-label>
                 </q-item-section>
-                <q-item-section side>
+                <q-item-section v-if="citing.in_portfolio" side>
                   <q-icon name="chevron_right" />
                 </q-item-section>
               </q-item>
-
-              <!-- Show IDs if no detailed data -->
-              <template v-if="!citations.citing_patents?.length && citations.citing_patent_ids?.length">
-                <q-item
-                  v-for="citingId in citations.citing_patent_ids"
-                  :key="citingId"
-                  clickable
-                  @click="router.push({ name: 'patent-detail', params: { id: citingId } })"
-                >
-                  <q-item-section>
-                    <q-item-label>US{{ citingId }}</q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-icon name="chevron_right" />
-                  </q-item-section>
-                </q-item>
-              </template>
             </q-list>
           </q-card-section>
         </q-card>
@@ -394,26 +464,284 @@ function openUSPTO() {
 
       <!-- Prosecution -->
       <q-tab-panel name="prosecution">
-        <q-card>
-          <q-card-section>
-            <div class="text-h6">Prosecution History</div>
-            <div class="text-grey q-pa-xl text-center">
-              File wrapper data will be loaded from USPTO ODP API.
+        <!-- Loading -->
+        <div v-if="loadingProsecution" class="flex flex-center q-pa-lg">
+          <q-spinner color="primary" size="2em" />
+          <span class="q-ml-sm text-grey">Loading prosecution history...</span>
+        </div>
+
+        <!-- Not Cached -->
+        <q-card v-else-if="!prosecution?.cached">
+          <q-card-section class="text-center q-pa-xl">
+            <q-icon name="gavel" color="grey-4" size="3em" class="q-mb-md" />
+            <div class="text-body1 text-grey-7">
+              {{ prosecution?.message || 'Prosecution history not yet retrieved for this patent.' }}
             </div>
           </q-card-section>
         </q-card>
+
+        <!-- Has Data -->
+        <template v-else>
+          <!-- Score Summary -->
+          <q-card class="q-mb-md" flat bordered>
+            <q-card-section>
+              <div class="row items-center q-gutter-md">
+                <div class="text-center">
+                  <q-circular-progress
+                    :value="(prosecution.prosecution_quality_score / 5) * 100"
+                    size="60px"
+                    :thickness="0.2"
+                    :color="prosecution.prosecution_quality_score >= 4 ? 'positive' : prosecution.prosecution_quality_score >= 3 ? 'warning' : 'negative'"
+                    track-color="grey-3"
+                  >
+                    {{ prosecution.prosecution_quality_score }}
+                  </q-circular-progress>
+                  <div class="text-caption q-mt-xs">Quality Score</div>
+                </div>
+                <div>
+                  <q-badge :color="prosecution.prosecution_quality_score >= 4 ? 'positive' : prosecution.prosecution_quality_score >= 3 ? 'warning' : 'negative'">
+                    {{ prosecution.prosecution_quality_category }}
+                  </q-badge>
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <!-- Details -->
+          <div class="row q-gutter-md">
+            <q-card class="col-12 col-md-5">
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Filing Details</div>
+                <q-list dense>
+                  <q-item v-if="prosecution.application_number">
+                    <q-item-section>
+                      <q-item-label caption>Application Number</q-item-label>
+                      <q-item-label>{{ prosecution.application_number }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="prosecution.filing_date">
+                    <q-item-section>
+                      <q-item-label caption>Filing Date</q-item-label>
+                      <q-item-label>{{ prosecution.filing_date }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="prosecution.grant_date">
+                    <q-item-section>
+                      <q-item-label caption>Grant Date</q-item-label>
+                      <q-item-label>{{ prosecution.grant_date }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="prosecution.time_to_grant_months">
+                    <q-item-section>
+                      <q-item-label caption>Time to Grant</q-item-label>
+                      <q-item-label>{{ prosecution.time_to_grant_months }} months</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card-section>
+            </q-card>
+
+            <q-card class="col-12 col-md-5">
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Prosecution Metrics</div>
+                <q-list dense>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Office Actions</q-item-label>
+                      <q-item-label>{{ prosecution.office_actions_count }} ({{ prosecution.non_final_rejections }} non-final, {{ prosecution.final_rejections }} final)</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>RCEs Filed</q-item-label>
+                      <q-item-label>{{ prosecution.rce_count }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Continuations / Divisionals</q-item-label>
+                      <q-item-label>{{ prosecution.continuation_count }} / {{ prosecution.divisional_count }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Total Documents</q-item-label>
+                      <q-item-label>{{ prosecution.total_documents }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <!-- Key Events Timeline -->
+          <q-card v-if="prosecution.key_events?.length" class="q-mt-md">
+            <q-card-section>
+              <div class="text-subtitle2 q-mb-sm">Key Events</div>
+              <q-timeline color="primary" layout="dense">
+                <q-timeline-entry
+                  v-for="(event, i) in prosecution.key_events"
+                  :key="i"
+                  :subtitle="event.date || 'No date'"
+                  :color="event.type === 'rejection' ? 'negative' : event.type === 'allowance' ? 'positive' : event.type === 'response' ? 'info' : 'grey'"
+                  :icon="event.type === 'rejection' ? 'cancel' : event.type === 'allowance' ? 'check_circle' : event.type === 'response' ? 'reply' : 'description'"
+                >
+                  {{ event.description }}
+                </q-timeline-entry>
+              </q-timeline>
+            </q-card-section>
+          </q-card>
+        </template>
       </q-tab-panel>
 
       <!-- PTAB -->
       <q-tab-panel name="ptab">
-        <q-card>
-          <q-card-section>
-            <div class="text-h6">PTAB/IPR Proceedings</div>
-            <div class="text-grey q-pa-xl text-center">
-              PTAB data will be loaded from USPTO ODP API.
+        <!-- Loading -->
+        <div v-if="loadingPtab" class="flex flex-center q-pa-lg">
+          <q-spinner color="primary" size="2em" />
+          <span class="q-ml-sm text-grey">Loading PTAB/IPR data...</span>
+        </div>
+
+        <!-- Not Cached -->
+        <q-card v-else-if="!ptab?.cached">
+          <q-card-section class="text-center q-pa-xl">
+            <q-icon name="balance" color="grey-4" size="3em" class="q-mb-md" />
+            <div class="text-body1 text-grey-7">
+              {{ ptab?.message || 'IPR/PTAB data not yet retrieved for this patent.' }}
             </div>
           </q-card-section>
         </q-card>
+
+        <!-- Has Data -->
+        <template v-else>
+          <!-- Risk Summary -->
+          <q-card class="q-mb-md" flat bordered>
+            <q-card-section>
+              <div class="row items-center q-gutter-md">
+                <div class="text-center">
+                  <q-circular-progress
+                    :value="(ptab.ipr_risk_score / 5) * 100"
+                    size="60px"
+                    :thickness="0.2"
+                    :color="ptab.ipr_risk_score >= 4 ? 'positive' : ptab.ipr_risk_score >= 3 ? 'warning' : 'negative'"
+                    track-color="grey-3"
+                  >
+                    {{ ptab.ipr_risk_score }}
+                  </q-circular-progress>
+                  <div class="text-caption q-mt-xs">IPR Risk Score</div>
+                </div>
+                <div>
+                  <q-badge :color="ptab.ipr_risk_score >= 4 ? 'positive' : ptab.ipr_risk_score >= 3 ? 'warning' : 'negative'">
+                    {{ ptab.ipr_risk_category }}
+                  </q-badge>
+                  <div class="q-mt-xs text-caption text-grey-7">
+                    (5 = no IPR history, 1 = claims invalidated)
+                  </div>
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <!-- No IPR History -->
+          <q-card v-if="!ptab.has_ipr_history">
+            <q-card-section class="text-center q-pa-lg">
+              <q-icon name="verified" color="positive" size="3em" class="q-mb-md" />
+              <div class="text-h6 text-positive">No IPR Proceedings</div>
+              <div class="text-body2 text-grey-7">This patent has no Inter Partes Review history at the PTAB.</div>
+            </q-card-section>
+          </q-card>
+
+          <!-- Has IPR History -->
+          <template v-else>
+            <div class="row q-gutter-md q-mb-md">
+              <q-card class="col-12 col-md-5">
+                <q-card-section>
+                  <div class="text-subtitle2 q-mb-sm">Petition Summary</div>
+                  <q-list dense>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Petitions Filed</q-item-label>
+                        <q-item-label class="text-h6">{{ ptab.petitions_filed }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Instituted</q-item-label>
+                        <q-item-label>{{ ptab.petitions_instituted }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Denied</q-item-label>
+                        <q-item-label>{{ ptab.petitions_denied }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Settled</q-item-label>
+                        <q-item-label>{{ ptab.petitions_settled }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-card-section>
+              </q-card>
+
+              <q-card class="col-12 col-md-5">
+                <q-card-section>
+                  <div class="text-subtitle2 q-mb-sm">Claims</div>
+                  <q-list dense>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Claims Challenged</q-item-label>
+                        <q-item-label>{{ ptab.claims_challenged }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Claims Invalidated</q-item-label>
+                        <q-item-label :class="ptab.claims_invalidated > 0 ? 'text-negative' : ''">{{ ptab.claims_invalidated }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                    <q-item>
+                      <q-item-section>
+                        <q-item-label caption>Claims Upheld</q-item-label>
+                        <q-item-label :class="ptab.claims_upheld > 0 ? 'text-positive' : ''">{{ ptab.claims_upheld }}</q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-card-section>
+              </q-card>
+            </div>
+
+            <!-- Petitioners -->
+            <q-card v-if="ptab.petitioner_names?.length" class="q-mb-md">
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Petitioners</div>
+                <q-chip v-for="name in ptab.petitioner_names" :key="name" outline dense>{{ name }}</q-chip>
+              </q-card-section>
+            </q-card>
+
+            <!-- Trial Details -->
+            <q-card v-if="ptab.details?.length">
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Trial Details</div>
+                <q-list separator>
+                  <q-item v-for="trial in ptab.details" :key="trial.trial_number">
+                    <q-item-section>
+                      <q-item-label class="text-weight-bold">{{ trial.trial_number }}</q-item-label>
+                      <q-item-label caption>{{ trial.petitioner }} &middot; {{ trial.trial_type }}</q-item-label>
+                      <q-item-label caption>Status: {{ trial.status }}</q-item-label>
+                    </q-item-section>
+                    <q-item-section side top>
+                      <q-item-label caption>Filed: {{ trial.filing_date || 'N/A' }}</q-item-label>
+                      <q-item-label v-if="trial.outcome" caption>{{ trial.outcome }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card-section>
+            </q-card>
+          </template>
+        </template>
       </q-tab-panel>
 
       <!-- LLM Analysis -->

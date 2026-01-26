@@ -17,6 +17,8 @@ import {
   getDefaultProfileId,
   loadAllClassifications,
   loadAllLlmScores,
+  loadAllIprScores,
+  loadAllProsecutionScores,
   clearScoringCache,
   getLlmStats,
 } from '../services/scoring-service.js';
@@ -221,11 +223,15 @@ router.get('/v3', (req: Request, res: Response) => {
     // Enrich with candidate metadata
     const classifications = loadAllClassifications();
     const llmScores = loadAllLlmScores();
+    const iprScores = loadAllIprScores();
+    const prosecutionScores = loadAllProsecutionScores();
 
     const enriched = paginated.map(s => {
       const c = candidates.get(s.patent_id);
       const classification = classifications.get(s.patent_id);
       const llm = llmScores.get(s.patent_id);
+      const ipr = iprScores.get(s.patent_id);
+      const pros = prosecutionScores.get(s.patent_id);
       return {
         ...s,
         patent_title: c?.patent_title || '',
@@ -248,7 +254,14 @@ router.get('/v3', (req: Request, res: Response) => {
           claim_breadth: llm.claim_breadth,
           enforcement_clarity: llm.enforcement_clarity,
           design_around_difficulty: llm.design_around_difficulty,
+          market_relevance_score: llm.market_relevance_score,
         } : null,
+        has_ipr_data: !!ipr,
+        ipr_risk_score: ipr?.ipr_risk_score ?? null,
+        ipr_risk_category: ipr?.ipr_risk_category ?? null,
+        has_prosecution_data: !!pros,
+        prosecution_quality_score: pros?.prosecution_quality_score ?? null,
+        prosecution_quality_category: pros?.prosecution_quality_category ?? null,
       };
     });
 
@@ -394,9 +407,25 @@ router.post('/reload', (_req: Request, res: Response) => {
  */
 router.get('/stats', (_req: Request, res: Response) => {
   try {
-    const llmStats = getLlmStats();
+    const stats = getLlmStats();
     res.json({
-      llm_coverage: llmStats,
+      llm_coverage: {
+        total_patents: stats.total_patents,
+        patents_with_llm: stats.patents_with_llm,
+        coverage_pct: stats.coverage_pct,
+      },
+      market_relevance_coverage: {
+        patents_with_data: stats.patents_with_market_relevance,
+        coverage_pct: stats.market_relevance_coverage_pct,
+      },
+      ipr_coverage: {
+        patents_with_data: stats.patents_with_ipr,
+        coverage_pct: stats.ipr_coverage_pct,
+      },
+      prosecution_coverage: {
+        patents_with_data: stats.patents_with_prosecution,
+        coverage_pct: stats.prosecution_coverage_pct,
+      },
       profiles_count: getProfiles().length,
     });
   } catch (error) {

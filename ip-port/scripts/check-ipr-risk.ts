@@ -13,9 +13,9 @@
  * - IPR risk score (1-5: 5=no IPR, 1=claims invalidated)
  *
  * Usage:
- *   npx tsx scripts/check-ipr-risk.ts [patent-ids-file] [--top N]
+ *   npx tsx scripts/check-ipr-risk.ts [patent-ids-file] [--top N] [--skip-existing]
  *   npx tsx scripts/check-ipr-risk.ts --sector cloud-auth
- *   npx tsx scripts/check-ipr-risk.ts --top 50
+ *   npx tsx scripts/check-ipr-risk.ts --top 50 --skip-existing
  */
 
 import * as fs from 'fs';
@@ -26,6 +26,7 @@ import { PTABClient, PTABTrial } from '../clients/odp-ptab-client.js';
 dotenv.config();
 
 const apiKey = process.env.USPTO_ODP_API_KEY;
+const IPR_CACHE_DIR = path.join(process.cwd(), 'cache/ipr-scores');
 
 interface IPRRiskData {
   patent_id: string;
@@ -224,6 +225,23 @@ function loadPatentIds(args: string[]): string[] {
       console.log(`Loaded top ${patents.length} litigation candidates`);
       return patents;
     }
+
+    // Fallback: use streaming-candidates sorted by forward citations
+    const candidateFiles = fs.readdirSync('./output')
+      .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+
+    if (candidateFiles.length > 0) {
+      const data = JSON.parse(fs.readFileSync(`./output/${candidateFiles[0]}`, 'utf-8'));
+      const sorted = (data.candidates || [])
+        .filter((c: any) => (c.remaining_years || 0) > 0)
+        .sort((a: any, b: any) => (b.forward_citations || 0) - (a.forward_citations || 0))
+        .slice(0, topN);
+      const patents = sorted.map((c: any) => c.patent_id);
+      console.log(`Loaded top ${patents.length} active patents by forward citations`);
+      return patents;
+    }
   }
 
   // Check for file argument
@@ -265,37 +283,54 @@ async function main() {
   }
 
   const args = process.argv.slice(2);
+  const skipExisting = args.includes('--skip-existing');
   const patentIds = loadPatentIds(args);
 
   if (patentIds.length === 0) {
     console.error('No patent IDs found. Usage:');
     console.error('  npx tsx scripts/check-ipr-risk.ts --sector cloud-auth');
-    console.error('  npx tsx scripts/check-ipr-risk.ts --top 50');
+    console.error('  npx tsx scripts/check-ipr-risk.ts --top 50 --skip-existing');
     console.error('  npx tsx scripts/check-ipr-risk.ts patent-ids.txt');
     process.exit(1);
+  }
+
+  // Ensure per-patent cache directory exists
+  if (!fs.existsSync(IPR_CACHE_DIR)) {
+    fs.mkdirSync(IPR_CACHE_DIR, { recursive: true });
+  }
+
+  // Filter out already-cached patents if --skip-existing
+  let idsToProcess = patentIds;
+  if (skipExisting) {
+    idsToProcess = patentIds.filter(id => !fs.existsSync(path.join(IPR_CACHE_DIR, `${id}.json`)));
+    console.log(`Skipping ${patentIds.length - idsToProcess.length} patents with existing cache data`);
   }
 
   console.log('='.repeat(60));
   console.log('IPR Risk Check');
   console.log('='.repeat(60));
-  console.log(`Patents to check: ${patentIds.length}`);
+  console.log(`Patents to check: ${idsToProcess.length}${skipExisting ? ` (${patentIds.length - idsToProcess.length} skipped)` : ''}`);
   console.log('');
 
   const client = new PTABClient({ apiKey });
   const results: IPRRiskData[] = [];
   const summary = {
-    total: patentIds.length,
+    total: idsToProcess.length,
     with_ipr: 0,
     no_ipr: 0,
     by_risk_score: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
   };
 
-  for (let i = 0; i < patentIds.length; i++) {
-    const patentId = patentIds[i];
-    console.log(`[${i + 1}/${patentIds.length}] Checking ${patentId}...`);
+  for (let i = 0; i < idsToProcess.length; i++) {
+    const patentId = idsToProcess[i];
+    console.log(`[${i + 1}/${idsToProcess.length}] Checking ${patentId}...`);
 
     const result = await checkPatentIPR(client, patentId);
     results.push(result);
+
+    // Save per-patent cache file
+    const cacheFile = path.join(IPR_CACHE_DIR, `${patentId}.json`);
+    fs.writeFileSync(cacheFile, JSON.stringify(result, null, 2));
 
     if (result.has_ipr_history) {
       summary.with_ipr++;

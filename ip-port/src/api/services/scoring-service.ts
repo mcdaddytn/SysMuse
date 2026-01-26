@@ -48,12 +48,16 @@ export interface PatentMetrics {
   neutral_citations: number;
   total_forward_citations: number;
   has_citation_data: boolean;
-  // LLM scores (sparse — only ~5% of patents)
+  // LLM scores (sparse — only ~27% of patents)
   eligibility_score?: number;
   validity_score?: number;
   claim_breadth?: number;
   enforcement_clarity?: number;
   design_around_difficulty?: number;
+  market_relevance_score?: number;
+  // API-derived scores (from PTAB and File Wrapper)
+  ipr_risk_score?: number;
+  prosecution_quality_score?: number;
 }
 
 export interface ScoredPatent {
@@ -92,6 +96,10 @@ const NORMALIZERS: Record<string, (value: number) => number> = {
   claim_breadth: (v) => Math.max(0, (v - 1) / 4),
   enforcement_clarity: (v) => Math.max(0, (v - 1) / 4),
   design_around_difficulty: (v) => Math.max(0, (v - 1) / 4),
+  market_relevance_score: (v) => Math.max(0, (v - 1) / 4),
+  // API-derived scores: 1-5 → 0-1 (same scale as LLM)
+  ipr_risk_score: (v) => Math.max(0, (v - 1) / 4),
+  prosecution_quality_score: (v) => Math.max(0, (v - 1) / 4),
 };
 
 const LLM_METRICS = new Set([
@@ -100,6 +108,13 @@ const LLM_METRICS = new Set([
   'claim_breadth',
   'enforcement_clarity',
   'design_around_difficulty',
+  'market_relevance_score',
+]);
+
+// API-derived metrics (from PTAB and File Wrapper — sparse like LLM)
+const API_METRICS = new Set([
+  'ipr_risk_score',
+  'prosecution_quality_score',
 ]);
 
 const QUANTITATIVE_METRICS = new Set([
@@ -120,15 +135,18 @@ const PROFILES: ScoringProfile[] = [
     description: 'Balanced scoring for executive-level portfolio overview',
     category: 'balanced',
     weights: {
-      competitor_citations: 0.30,
-      forward_citations: 0.15,
-      years_remaining: 0.20,
-      competitor_count: 0.10,
+      competitor_citations: 0.25,
+      forward_citations: 0.13,
+      years_remaining: 0.17,
+      competitor_count: 0.08,
       eligibility_score: 0.05,
       validity_score: 0.05,
-      claim_breadth: 0.05,
-      enforcement_clarity: 0.05,
-      design_around_difficulty: 0.05,
+      claim_breadth: 0.04,
+      enforcement_clarity: 0.04,
+      design_around_difficulty: 0.04,
+      market_relevance_score: 0.05,
+      ipr_risk_score: 0.05,
+      prosecution_quality_score: 0.05,
     },
   },
   {
@@ -137,15 +155,18 @@ const PROFILES: ScoringProfile[] = [
     description: 'Litigation-focused, prioritizes enforcement and competitor citations',
     category: 'aggressive',
     weights: {
-      competitor_citations: 0.25,
-      forward_citations: 0.05,
-      years_remaining: 0.10,
-      competitor_count: 0.05,
-      eligibility_score: 0.12,
-      validity_score: 0.08,
-      claim_breadth: 0.05,
-      enforcement_clarity: 0.20,
-      design_around_difficulty: 0.10,
+      competitor_citations: 0.22,
+      forward_citations: 0.04,
+      years_remaining: 0.08,
+      competitor_count: 0.04,
+      eligibility_score: 0.10,
+      validity_score: 0.07,
+      claim_breadth: 0.04,
+      enforcement_clarity: 0.17,
+      design_around_difficulty: 0.09,
+      market_relevance_score: 0.03,
+      ipr_risk_score: 0.07,
+      prosecution_quality_score: 0.05,
     },
   },
   {
@@ -154,15 +175,18 @@ const PROFILES: ScoringProfile[] = [
     description: 'Even distribution for licensing negotiations and portfolio management',
     category: 'moderate',
     weights: {
-      competitor_citations: 0.20,
-      forward_citations: 0.10,
-      years_remaining: 0.15,
-      competitor_count: 0.05,
-      eligibility_score: 0.12,
-      validity_score: 0.12,
-      claim_breadth: 0.08,
-      enforcement_clarity: 0.10,
-      design_around_difficulty: 0.08,
+      competitor_citations: 0.17,
+      forward_citations: 0.08,
+      years_remaining: 0.13,
+      competitor_count: 0.04,
+      eligibility_score: 0.10,
+      validity_score: 0.10,
+      claim_breadth: 0.07,
+      enforcement_clarity: 0.08,
+      design_around_difficulty: 0.07,
+      market_relevance_score: 0.05,
+      ipr_risk_score: 0.05,
+      prosecution_quality_score: 0.06,
     },
   },
   {
@@ -171,15 +195,18 @@ const PROFILES: ScoringProfile[] = [
     description: 'Emphasizes validity and breadth for cross-licensing leverage',
     category: 'conservative',
     weights: {
-      competitor_citations: 0.10,
-      forward_citations: 0.15,
-      years_remaining: 0.10,
-      competitor_count: 0.05,
-      eligibility_score: 0.08,
-      validity_score: 0.22,
-      claim_breadth: 0.15,
-      enforcement_clarity: 0.05,
-      design_around_difficulty: 0.10,
+      competitor_citations: 0.08,
+      forward_citations: 0.12,
+      years_remaining: 0.08,
+      competitor_count: 0.04,
+      eligibility_score: 0.07,
+      validity_score: 0.18,
+      claim_breadth: 0.13,
+      enforcement_clarity: 0.04,
+      design_around_difficulty: 0.08,
+      market_relevance_score: 0.03,
+      ipr_risk_score: 0.07,
+      prosecution_quality_score: 0.08,
     },
   },
   {
@@ -188,15 +215,18 @@ const PROFILES: ScoringProfile[] = [
     description: 'Broad coverage and market presence for licensing campaigns',
     category: 'licensing',
     weights: {
-      competitor_citations: 0.30,
-      forward_citations: 0.10,
-      years_remaining: 0.20,
-      competitor_count: 0.10,
-      eligibility_score: 0.08,
-      validity_score: 0.07,
-      claim_breadth: 0.10,
-      enforcement_clarity: 0.05,
+      competitor_citations: 0.25,
+      forward_citations: 0.08,
+      years_remaining: 0.17,
+      competitor_count: 0.08,
+      eligibility_score: 0.07,
+      validity_score: 0.06,
+      claim_breadth: 0.08,
+      enforcement_clarity: 0.04,
       design_around_difficulty: 0.00,
+      market_relevance_score: 0.08,
+      ipr_risk_score: 0.05,
+      prosecution_quality_score: 0.04,
     },
   },
   {
@@ -205,15 +235,18 @@ const PROFILES: ScoringProfile[] = [
     description: 'High-confidence, clear enforcement opportunities',
     category: 'quick_wins',
     weights: {
-      competitor_citations: 0.20,
-      forward_citations: 0.05,
-      years_remaining: 0.10,
-      competitor_count: 0.05,
-      eligibility_score: 0.18,
-      validity_score: 0.17,
-      claim_breadth: 0.05,
-      enforcement_clarity: 0.20,
+      competitor_citations: 0.17,
+      forward_citations: 0.04,
+      years_remaining: 0.08,
+      competitor_count: 0.04,
+      eligibility_score: 0.15,
+      validity_score: 0.14,
+      claim_breadth: 0.04,
+      enforcement_clarity: 0.17,
       design_around_difficulty: 0.00,
+      market_relevance_score: 0.03,
+      ipr_risk_score: 0.07,
+      prosecution_quality_score: 0.07,
     },
   },
 ];
@@ -244,12 +277,28 @@ interface LlmScores {
   claim_breadth: number;
   enforcement_clarity: number;
   design_around_difficulty: number;
+  market_relevance_score?: number;
   source?: string; // e.g. 'v3', 'v2', 'import'
+}
+
+interface IprRiskData {
+  patent_id: string;
+  ipr_risk_score: number;
+  ipr_risk_category: string;
+  has_ipr_history: boolean;
+}
+
+interface ProsecutionData {
+  patent_id: string;
+  prosecution_quality_score: number;
+  prosecution_quality_category: string;
 }
 
 // In-memory caches
 let classificationCache: Map<string, CitationClassification> | null = null;
 let llmScoresCache: Map<string, LlmScores> | null = null;
+let iprScoresCache: Map<string, IprRiskData> | null = null;
+let prosecutionScoresCache: Map<string, ProsecutionData> | null = null;
 let candidatesCache: any[] | null = null;
 
 /**
@@ -325,6 +374,7 @@ export function loadAllLlmScores(): Map<string, LlmScores> {
               claim_breadth: analysis.claim_breadth,
               enforcement_clarity: analysis.enforcement_clarity,
               design_around_difficulty: analysis.design_around_difficulty,
+              market_relevance_score: analysis.market_relevance_score,
               source: 'v3-analysis',
             });
           }
@@ -357,6 +407,7 @@ export function loadAllLlmScores(): Map<string, LlmScores> {
               claim_breadth: analysis.claim_breadth,
               enforcement_clarity: analysis.enforcement_clarity,
               design_around_difficulty: analysis.design_around_difficulty,
+              market_relevance_score: analysis.market_relevance_score,
               source: subdir,
             });
           }
@@ -381,6 +432,7 @@ export function loadAllLlmScores(): Map<string, LlmScores> {
           claim_breadth: data.claim_breadth,
           enforcement_clarity: data.enforcement_clarity,
           design_around_difficulty: data.design_around_difficulty,
+          market_relevance_score: data.market_relevance_score,
           source: data.source || 'cache',
         });
       } catch (e) {
@@ -391,6 +443,128 @@ export function loadAllLlmScores(): Map<string, LlmScores> {
 
   console.log(`[Scoring] Loaded LLM scores for ${llmScoresCache.size} patents`);
   return llmScoresCache;
+}
+
+/**
+ * Load all IPR risk scores from batch output files and per-patent cache.
+ * Sources (later entries override earlier):
+ *   1. output/ipr/ipr-risk-check-*.json (batch output)
+ *   2. cache/ipr-scores/<patent_id>.json (per-patent cache, overrides batch)
+ */
+export function loadAllIprScores(): Map<string, IprRiskData> {
+  if (iprScoresCache) return iprScoresCache;
+
+  iprScoresCache = new Map();
+
+  // 1. Load from batch output files
+  const iprDir = path.join(process.cwd(), 'output/ipr');
+  if (fs.existsSync(iprDir)) {
+    const files = fs.readdirSync(iprDir)
+      .filter(f => f.startsWith('ipr-risk-check-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(iprDir, file), 'utf-8'));
+        for (const result of data.results || []) {
+          if (!iprScoresCache.has(result.patent_id)) {
+            iprScoresCache.set(result.patent_id, {
+              patent_id: result.patent_id,
+              ipr_risk_score: result.ipr_risk_score,
+              ipr_risk_category: result.ipr_risk_category,
+              has_ipr_history: result.has_ipr_history,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to load IPR file ${file}:`, e);
+      }
+    }
+  }
+
+  // 2. Load per-patent cache files (override batch)
+  const iprCacheDir = path.join(process.cwd(), 'cache/ipr-scores');
+  if (fs.existsSync(iprCacheDir)) {
+    const files = fs.readdirSync(iprCacheDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(iprCacheDir, file), 'utf-8'));
+        iprScoresCache.set(data.patent_id, {
+          patent_id: data.patent_id,
+          ipr_risk_score: data.ipr_risk_score,
+          ipr_risk_category: data.ipr_risk_category,
+          has_ipr_history: data.has_ipr_history,
+        });
+      } catch (e) {
+        // skip invalid files
+      }
+    }
+  }
+
+  console.log(`[Scoring] Loaded IPR risk scores for ${iprScoresCache.size} patents`);
+  return iprScoresCache;
+}
+
+/**
+ * Load all prosecution quality scores from batch output files and per-patent cache.
+ * Sources (later entries override earlier):
+ *   1. output/prosecution/prosecution-history-*.json (batch output)
+ *   2. cache/prosecution-scores/<patent_id>.json (per-patent cache, overrides batch)
+ */
+export function loadAllProsecutionScores(): Map<string, ProsecutionData> {
+  if (prosecutionScoresCache) return prosecutionScoresCache;
+
+  prosecutionScoresCache = new Map();
+
+  // 1. Load from batch output files
+  const prosDir = path.join(process.cwd(), 'output/prosecution');
+  if (fs.existsSync(prosDir)) {
+    const files = fs.readdirSync(prosDir)
+      .filter(f => f.startsWith('prosecution-history-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(prosDir, file), 'utf-8'));
+        for (const result of data.results || []) {
+          if (!prosecutionScoresCache.has(result.patent_id) && !result.error) {
+            prosecutionScoresCache.set(result.patent_id, {
+              patent_id: result.patent_id,
+              prosecution_quality_score: result.prosecution_quality_score,
+              prosecution_quality_category: result.prosecution_quality_category,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to load prosecution file ${file}:`, e);
+      }
+    }
+  }
+
+  // 2. Load per-patent cache files (override batch)
+  const prosCacheDir = path.join(process.cwd(), 'cache/prosecution-scores');
+  if (fs.existsSync(prosCacheDir)) {
+    const files = fs.readdirSync(prosCacheDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(prosCacheDir, file), 'utf-8'));
+        if (!data.error) {
+          prosecutionScoresCache.set(data.patent_id, {
+            patent_id: data.patent_id,
+            prosecution_quality_score: data.prosecution_quality_score,
+            prosecution_quality_category: data.prosecution_quality_category,
+          });
+        }
+      } catch (e) {
+        // skip invalid files
+      }
+    }
+  }
+
+  console.log(`[Scoring] Loaded prosecution quality scores for ${prosecutionScoresCache.size} patents`);
+  return prosecutionScoresCache;
 }
 
 /**
@@ -419,6 +593,8 @@ function loadCandidates(): any[] {
 export function clearScoringCache(): void {
   classificationCache = null;
   llmScoresCache = null;
+  iprScoresCache = null;
+  prosecutionScoresCache = null;
   candidatesCache = null;
 }
 
@@ -427,9 +603,15 @@ export function clearScoringCache(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Build PatentMetrics from candidate + classification data
+ * Build PatentMetrics from candidate + classification + LLM + API data
  */
-function buildMetrics(candidate: any, classification: CitationClassification | null, llmScores: LlmScores | null): PatentMetrics {
+function buildMetrics(
+  candidate: any,
+  classification: CitationClassification | null,
+  llmScores: LlmScores | null,
+  iprData: IprRiskData | null,
+  prosecutionData: ProsecutionData | null,
+): PatentMetrics {
   return {
     patent_id: candidate.patent_id,
     competitor_citations: classification?.competitor_citations ?? 0,
@@ -446,6 +628,10 @@ function buildMetrics(candidate: any, classification: CitationClassification | n
     claim_breadth: llmScores?.claim_breadth,
     enforcement_clarity: llmScores?.enforcement_clarity,
     design_around_difficulty: llmScores?.design_around_difficulty,
+    market_relevance_score: llmScores?.market_relevance_score,
+    // API-derived scores (when available)
+    ipr_risk_score: iprData?.ipr_risk_score,
+    prosecution_quality_score: prosecutionData?.prosecution_quality_score,
   };
 }
 
@@ -475,10 +661,10 @@ export function scorePatent(metrics: PatentMetrics, profile: ScoringProfile): Sc
     totalWeight += weight;
 
     const value = (metrics as any)[metricName];
-    const isLlm = LLM_METRICS.has(metricName);
+    const isSparse = LLM_METRICS.has(metricName) || API_METRICS.has(metricName);
 
-    if (isLlm && (value === undefined || value === null)) {
-      // LLM metric missing — will redistribute weight
+    if (isSparse && (value === undefined || value === null)) {
+      // LLM/API metric missing — will redistribute weight
       continue;
     }
 
@@ -526,13 +712,17 @@ export function scoreAllPatents(profileId: string): ScoredPatent[] {
   const candidates = loadCandidates();
   const classifications = loadAllClassifications();
   const llmScores = loadAllLlmScores();
+  const iprScores = loadAllIprScores();
+  const prosecutionScores = loadAllProsecutionScores();
 
   const scored: ScoredPatent[] = [];
 
   for (const candidate of candidates) {
     const classification = classifications.get(candidate.patent_id) ?? null;
     const llm = llmScores.get(candidate.patent_id) ?? null;
-    const metrics = buildMetrics(candidate, classification, llm);
+    const ipr = iprScores.get(candidate.patent_id) ?? null;
+    const pros = prosecutionScores.get(candidate.patent_id) ?? null;
+    const metrics = buildMetrics(candidate, classification, llm, ipr, pros);
     scored.push(scorePatent(metrics, profile));
   }
 
@@ -559,13 +749,17 @@ export function scorePatentsBySector(profileId: string): Map<string, ScoredPaten
   const candidates = loadCandidates();
   const classifications = loadAllClassifications();
   const llmScores = loadAllLlmScores();
+  const iprScores = loadAllIprScores();
+  const prosecutionScores = loadAllProsecutionScores();
   const bySector = new Map<string, ScoredPatent[]>();
 
   for (const candidate of candidates) {
     const sector = candidate.primary_sector || 'general';
     const classification = classifications.get(candidate.patent_id) ?? null;
     const llm = llmScores.get(candidate.patent_id) ?? null;
-    const metrics = buildMetrics(candidate, classification, llm);
+    const ipr = iprScores.get(candidate.patent_id) ?? null;
+    const pros = prosecutionScores.get(candidate.patent_id) ?? null;
+    const metrics = buildMetrics(candidate, classification, llm, ipr, pros);
     const scored = scorePatent(metrics, profile);
 
     if (!bySector.has(sector)) {
@@ -613,12 +807,40 @@ export function getDefaultProfileId(): string {
 /**
  * Get LLM coverage statistics
  */
-export function getLlmStats(): { total_patents: number; patents_with_llm: number; coverage_pct: number } {
+export function getLlmStats(): {
+  total_patents: number;
+  patents_with_llm: number;
+  coverage_pct: number;
+  patents_with_ipr: number;
+  ipr_coverage_pct: number;
+  patents_with_prosecution: number;
+  prosecution_coverage_pct: number;
+  patents_with_market_relevance: number;
+  market_relevance_coverage_pct: number;
+} {
   const candidates = loadCandidates();
   const llmScores = loadAllLlmScores();
+  const iprScores = loadAllIprScores();
+  const prosecutionScores = loadAllProsecutionScores();
+  const total = candidates.length;
+
+  // Count market_relevance separately (subset of LLM)
+  let withMarketRelevance = 0;
+  for (const [_, scores] of llmScores) {
+    if (scores.market_relevance_score !== undefined && scores.market_relevance_score !== null) {
+      withMarketRelevance++;
+    }
+  }
+
   return {
-    total_patents: candidates.length,
+    total_patents: total,
     patents_with_llm: llmScores.size,
-    coverage_pct: candidates.length > 0 ? Math.round(llmScores.size / candidates.length * 1000) / 10 : 0,
+    coverage_pct: total > 0 ? Math.round(llmScores.size / total * 1000) / 10 : 0,
+    patents_with_ipr: iprScores.size,
+    ipr_coverage_pct: total > 0 ? Math.round(iprScores.size / total * 1000) / 10 : 0,
+    patents_with_prosecution: prosecutionScores.size,
+    prosecution_coverage_pct: total > 0 ? Math.round(prosecutionScores.size / total * 1000) / 10 : 0,
+    patents_with_market_relevance: withMarketRelevance,
+    market_relevance_coverage_pct: total > 0 ? Math.round(withMarketRelevance / total * 1000) / 10 : 0,
   };
 }

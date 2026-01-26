@@ -73,6 +73,13 @@
     "export:summaries": "tsx scripts/export-summaries.ts",
     "export:all": "npm run export:attorney && npm run export:summaries && npm run topRated:v3 && npm run export:withinsector",
     "validate:portfolio": "tsx scripts/validate-portfolio-config.ts",
+    "enrich:ipr": "tsx scripts/check-ipr-risk.ts",
+    "enrich:ipr:top500": "tsx scripts/check-ipr-risk.ts --top 500 --skip-existing",
+    "enrich:prosecution": "tsx scripts/check-prosecution-history.ts",
+    "enrich:prosecution:top500": "tsx scripts/check-prosecution-history.ts --top 500 --skip-existing",
+    "enrich:citations": "tsx scripts/enrich-citations.ts",
+    "enrich:classify": "tsx scripts/classify-citations.ts",
+    "enrich:llm": "tsx scripts/run-llm-top-patents.ts",
     "api:dev": "tsx watch src/api/server.ts",
     "api:start": "tsx src/api/server.ts"
   },

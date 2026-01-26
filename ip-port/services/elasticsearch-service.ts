@@ -257,6 +257,7 @@ export class ElasticsearchService {
       from?: number;
       filters?: Record<string, any>;
       highlight?: boolean;
+      fuzziness?: string;
     } = {}
   ): Promise<SearchResponse> {
     const {
@@ -264,7 +265,8 @@ export class ElasticsearchService {
       size = 20,
       from = 0,
       filters = {},
-      highlight = true
+      highlight = true,
+      fuzziness = 'AUTO'
     } = options;
 
     const esQuery: any = {
@@ -275,7 +277,7 @@ export class ElasticsearchService {
               query,
               fields: fields.map(f => f === 'title' ? 'title^2' : f),
               type: 'best_fields',
-              fuzziness: 'AUTO'
+              fuzziness
             }
           }
         ],

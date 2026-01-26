@@ -778,15 +778,19 @@ router.post('/search-preview', async (req: Request, res: Response) => {
         searchQuery = expression;
         break;
       default:
-        // KEYWORD - simple OR search
+        // KEYWORD / KEYWORD_AND - simple search
         searchQuery = expression;
     }
+
+    // Disable fuzziness for keyword types (exact term matching)
+    const fuzziness = (termType === 'KEYWORD' || termType === 'KEYWORD_AND') ? '0' : 'AUTO';
 
     // Get portfolio-wide hit count
     const portfolioResults = await esService.search(searchQuery, {
       fields,
       size: 5,
-      highlight: true
+      highlight: true,
+      fuzziness
     });
 
     const hitCounts: Record<string, number> = {
@@ -798,6 +802,7 @@ router.post('/search-preview', async (req: Request, res: Response) => {
       const sectorResults = await esService.search(searchQuery, {
         fields,
         size: 0,
+        fuzziness,
         filters: {
           // Note: This requires the sector to be indexed in ES
           // For now we'll use the portfolio count as a fallback
@@ -826,6 +831,7 @@ router.post('/search-preview', async (req: Request, res: Response) => {
         const focusAreaResults = await esService.search(searchQuery, {
           fields,
           size: 10000, // Get all to count overlap
+          fuzziness,
           filters: {}
         });
 

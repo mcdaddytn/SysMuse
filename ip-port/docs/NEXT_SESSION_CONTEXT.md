@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-25, Session 2)
+# Patent Portfolio Analysis - Session Context (2026-01-25, Session 3)
 
 ## Current State Summary
 
@@ -18,103 +18,138 @@
 |--------|-------|
 | **Documents Indexed** | **28,913** |
 | Index Size | 10.15 MB |
-| Abstracts Indexed | 0 (cache only has 1 patent file so far) |
+| Abstracts Indexed | ~0 (only 1 patent cache file exists) |
 | Status | Fully populated from streaming-candidates |
+| Fuzziness | Disabled for KEYWORD/KEYWORD_AND types; AUTO for others |
+
+### Citation Batch Progress
+
+| Batch | Range | Status |
+|-------|-------|--------|
+| Queue 1-4 | 0-5670 | Complete |
+| Gap Fill | 813-1669 | Complete |
+| Overnight 1-12 | 5670-17670 | Complete |
+| Final batch (part 1) | 17670-26610 | Complete |
+| **Final batch (part 2)** | **26610-28913** | **Running (~1050/2303 at session end)** |
+
+**Cache Statistics:**
+- API entries: ~53,224+
+- Size: ~1,825 MB
 
 ---
 
-## Changes Completed This Session
+## Changes Completed This Session (Session 3)
 
-### Part A: Elasticsearch Populated with Full Portfolio
-- **File:** `services/import-to-elasticsearch.ts`
-- Added `importStreamingCandidates()` function that reads `output/streaming-candidates-*.json`
-- Maps `patent_title` -> `title`, loads abstracts from `cache/api/patentsview/patent/<id>.json`
-- Added `--candidates` CLI flag
-- **Run:** `npx tsx services/import-to-elasticsearch.ts --recreate --candidates`
-- **Result:** 28,913 patents indexed, search returns results (e.g., "container security" = 1,252 hits)
+### Session 2 (Prior)
 
-### Part B: Abstracts Exposed Where Available
-- **File:** `src/api/routes/patents.routes.ts`
-  - Added `loadAbstract(patentId)` helper reading from `cache/api/patentsview/patent/<id>.json`
-  - `GET /api/patents/:id` returns abstract from cache
-  - `GET /api/patents/:id/preview` returns abstract in preview
-  - `POST /api/patents/batch-preview` returns abstract per patent
-- **File:** `frontend/src/types/index.ts` - Added `abstract?: string | null` to `Patent`
-- **File:** `frontend/src/services/api.ts` - Added `abstract?: string | null` to `PatentPreview`
-- **File:** `frontend/src/pages/PatentDetailPage.vue`
-  - Full (non-truncated) title display
-  - Abstract card in Overview tab ("Abstract not cached" fallback)
-- **File:** `frontend/src/components/PatentPreviewTooltip.vue`
-  - 2-line truncated abstract shown in hover tooltip
+#### Part A: Elasticsearch Populated with Full Portfolio
+- 28,913 patents indexed, search returns results
+- `services/import-to-elasticsearch.ts` with `--candidates` flag
 
-### Part C: Search Preview Fixed + UX Improvements
-- **File:** `src/api/routes/focus-areas.routes.ts`
-  - Added `searchFields` parameter to `/search-preview` (`'title'` | `'abstract'` | `'both'`)
-  - Maps to `fields` array passed to `esService.search()`
-- **File:** `frontend/src/services/api.ts`
-  - Added `searchFields` to `searchApi.previewSearchTerm()`
-- **File:** `frontend/src/pages/FocusAreaDetailPage.vue`
-  - Removed auto-trigger watch on expression/termType
-  - Added Search Fields dropdown (Title + Abstract / Title Only / Abstract Only)
-  - Added explicit Search button (+ Enter key support)
-  - Hit Preview always visible ("Click Search to preview hits" placeholder)
-- **File:** `frontend/src/components/KeywordExtractionPanel.vue`
-  - Removed auto-trigger watch on combinedExpression
-  - Added Search Fields dropdown + "Preview Hits" button
-  - Hit Preview section always visible below selected terms
+#### Part B: Abstracts Exposed Where Available
+- `loadAbstract()` reads from `cache/api/patentsview/patent/<id>.json`
+- Patent detail page, preview tooltip, batch preview all return abstract when cached
+
+#### Part C: Search Preview + UX Improvements
+- Search fields parameter (title/abstract/both), explicit Search button
+
+### Session 3 (Current)
+
+#### Fix 1: Draft Groups Tab Redirect (DONE)
+- `PortfolioPage.vue` — Navigation now includes `query: { tab: 'groups' }`
+- `FocusAreasPage.vue` — Imports `useRoute`, initializes `activeTab` from `route.query.tab`
+
+#### Fix 2: Formalize Button Styling (DONE)
+- Both Formalize buttons changed from `icon="check" color="positive"` to `icon="gavel" color="primary"`
+
+#### Fix 3: AND/OR Keyword Toggle (DONE)
+- Added `operator` ref (AND/OR) with `q-btn-toggle` in KeywordExtractionPanel
+- `combinedExpression` uses selected operator
+- "Add as Search Term" emits `KEYWORD_AND` or `KEYWORD` based on toggle
+
+#### Fix 4: KEYWORD_AND Term Type (DONE)
+- Added `KEYWORD_AND` to Prisma `SearchTermType` enum + pushed schema
+- Added to `termTypeOptions` dropdown in FocusAreaDetailPage
+- Backend handles via default case (pass-through)
+
+#### Fix 5: Focus Ratio Display (DONE)
+- Added "Focus Ratio" chip (focus area hits / portfolio hits) to both:
+  - `KeywordExtractionPanel.vue` hit preview
+  - `FocusAreaDetailPage.vue` Add Search Term dialog hit preview
+- Color-coded: green (>5%), orange (>1%), red (<=1%) — higher is better
+- Shows 2 decimal places (e.g., `0.10%`)
+- Added tooltips on Portfolio and Focus Area hit chips explaining what they measure
+
+#### Fix 6: Fuzziness Disabled for Keyword Searches (DONE)
+- `elasticsearch-service.ts` — `search()` now accepts optional `fuzziness` parameter (default `'AUTO'`)
+- `focus-areas.routes.ts` — Sets `fuzziness: '0'` for KEYWORD and KEYWORD_AND types
+- All 3 ES search calls in preview endpoint pass the fuzziness setting
+- Other search types (Phrase, Boolean, Wildcard, Proximity) keep `fuzziness: 'AUTO'`
+- English stemmer still active (monitor→monitoring OK, but appliances≠applications now)
+
+#### Fix 7: Debug Logging for Focus Area Hits (DONE)
+- Added 4 `console.log` statements to search-preview endpoint
+- Confirmed focus area hit counts work correctly — small counts (0-1) are expected with 3-patent focus areas
+- Logs show DB patent IDs, ES patent IDs, and intersection count
+
+#### Citation Batch Restarted
+- Running: `npm run analyze:cached -- --start 26610 --limit 2303`
+- Progress at ~1050/2303 when session ended
+
+#### Design Doc Updates
+- `FOCUS_AREA_SYSTEM_DESIGN.md` — Added "Search Term Selectivity" future enhancement section
 
 ---
 
 ## Known Issues / Next Session TODO
 
-### 1. Incremental ES Indexing (Architecture Gap)
-**Problem:** Patents are only indexed via bulk CLI command (`npx tsx services/import-to-elasticsearch.ts --candidates`). When patents are incrementally added to the system (e.g., new portfolio downloads, individual patent additions), they are NOT auto-indexed in Elasticsearch.
-**Fix needed:** Add ES indexing calls in:
-- Patent import/download workflows
-- Optionally in `POST /api/focus-areas/:id/patents` (or keep manual via CLI)
-- Consider an `esService.indexPatent()` call whenever a new patent appears in the candidates file
-- **Priority:** Medium - needed for ongoing operation
+### COMPLETED (Session 3)
+- [x] ~~Draft Groups tab redirect~~ — DONE
+- [x] ~~Formalize button styling~~ — DONE
+- [x] ~~AND/OR keyword toggle~~ — DONE
+- [x] ~~Focus Area hit count investigation~~ — DONE (working correctly, small counts expected with small focus areas)
+- [x] ~~KEYWORD_AND term type~~ — DONE
+- [x] ~~Focus Ratio display~~ — DONE
+- [x] ~~Fuzziness disabled for keyword searches~~ — DONE
 
-### 2. Draft Groups Redirect Default Tab
-**Problem:** After creating a Focus Group from PortfolioPage, the app navigates to `/focus-areas` which defaults to the "Focus Areas" tab. The new draft group is in the "Draft Groups" tab, so the user doesn't see it.
-**Fix:** In `FocusAreasPage.vue`, either:
-- Accept a query param (e.g., `?tab=groups`) and set `activeTab` accordingly
-- Or in `PortfolioPage.vue`, navigate to `/focus-areas?tab=groups` after creation
-- **File:** `frontend/src/pages/FocusAreasPage.vue` line 13: `const activeTab = ref<'areas' | 'groups'>('areas');`
-- **Priority:** High - basic UX issue
+### 1. Abstract Cache Coverage (HIGH PRIORITY)
+**Problem:** Only 1 patent abstract is cached. Most patents show "Abstract not cached." Abstracts are critical for search quality and analysis.
 
-### 3. Formalize Button Styling
-**Problem:** The "Formalize" button on Draft Groups appears green with a checkmark even before the group has been formalized, implying it's already done.
-**Fix:** Change the button to a neutral style (e.g., outline, no check icon). After formalization, the group is removed from the list anyway so the post-formalization state doesn't need a button change.
-- **File:** `frontend/src/pages/FocusAreasPage.vue` - find the Formalize button in the draft groups list
-- **Priority:** High - confusing UX
+**Current state:**
+- `cache/api/patentsview/patent/` — 1 file
+- `streaming-candidates-*.json` — no abstracts (title, date, assignee, CPC, scores only)
+- ES index has abstracts only where cache file existed at import time (~0)
 
-### 4. Focus Area Hit Count Shows 0
-**Problem:** Hit Preview shows portfolio count but Focus Area count is always 0.
-**Root cause analysis:** The backend queries `prisma.focusAreaPatent.findMany()` to get patents in the focus area, then intersects with ES search results. This can legitimately be 0 if:
-- The focus area has few patents and none match the search term
-- The user is viewing from a Focus Group context (draft groups store patents in `focusGroup.patentIds` JSON array, NOT in `focusAreaPatent` table)
-**Fix:** Verify which scenario applies. If viewing formalized focus areas, the count should work when the focus area's patents match the search. If viewing draft groups, need to also support loading patent IDs from `focusGroup.patentIds`.
-- **File:** `src/api/routes/focus-areas.routes.ts` lines 810-838
-- **Priority:** Medium - investigate actual scenario
+**Strategy (decided):**
+- **Option A (preferred long-term):** Batch-fetch individual patent records from PatentsView API, caching full records to `cache/api/patentsview/patent/{id}.json`. Use batch queries (up to 100 IDs per request) to minimize API calls (~290 requests for 28,913 patents). This builds a rich cache that can be expanded with additional fields later. Evaluate all available PatentsView fields to get maximum data per request — avoid rate limit waste by being thorough about what we download.
+- **Option B (expedient patch):** Re-download portfolio pages with `patent_abstract` added to the field list in `download-full-portfolio.ts` (currently only fetches title, date, assignee, citations). ~79 page requests. Fast but produces a different cache structure than Option A.
+- **Decision:** Evaluate after current citation batch completes. Option A is the right architecture going forward. Option B may be useful as an interim fix.
 
-### 5. Keyword Extraction: AND vs OR Logic
-**Problem:** `KeywordExtractionPanel.vue` combines selected keywords with ` OR ` only. Users expect AND logic (like Google search where all terms must match).
-**Fix options:**
-- Add an operator toggle (AND / OR) next to the selected terms
-- Change `combinedExpression` to use configurable join: `Array.from(selectedTerms.value).join(operator)`
-- Consider making AND the default (more intuitive for narrowing results)
-- The BOOLEAN term type already supports AND expressions, so the backend is ready
-- **File:** `frontend/src/components/KeywordExtractionPanel.vue` line ~41: `combinedExpression` computed
-- **Priority:** High - affects search utility
+**After caching:** Re-run `npx tsx services/import-to-elasticsearch.ts --recreate --candidates` to populate ES abstracts.
 
-### 6. Abstract Cache Coverage
-**Problem:** Only 1 patent abstract is cached (`cache/api/patentsview/patent/10000000.json`). Most patents show "Abstract not cached."
-**Fix:** Need to populate the patent abstract cache. Options:
-- Batch download abstracts from PatentsView API for all 28,913 patents
-- Download on-demand when a patent detail page is viewed
-- The portfolio-query cache files (`cache/api/patentsview/portfolio-query/`) may contain abstracts - check if those can be used as an alternative source
-- **Priority:** Medium - abstracts are valuable for search but system works without them
+### 2. CPC Code Description Tooltips (MEDIUM PRIORITY)
+**Problem:** CPC codes appear throughout the UI (patent detail, portfolio grid, focus area patents) with no human-readable descriptions. Users need mouseover tooltips showing what each code means.
+
+**Current state:**
+- `config/cpc-descriptions.json` exists with ~100 codes mapped
+- This is insufficient — individual patents can have dozens of CPC codes, many beyond the current mapping
+- The CPC classification hierarchy has thousands of codes (class → subclass → group → subgroup)
+
+**Needed:**
+1. **Systematic CPC mapping:** Download the complete CPC classification scheme from USPTO or WIPO. The hierarchy is: Section (e.g., H) → Class (H04) → Subclass (H04L) → Group (H04L47) → Subgroup (H04L47/781). Need at least class and subclass level descriptions.
+2. **Keep mapping updated:** CPC codes are revised periodically. Need a script to fetch/refresh the mapping from an authoritative source (USPTO bulk data or CPC scheme XML).
+3. **Frontend integration:** Add `q-tooltip` on every CPC code chip/badge across all pages.
+4. **Files to update:** PatentDetailPage.vue, PortfolioPage.vue, FocusAreaDetailPage.vue, any component showing CPC codes.
+
+### 3. Incremental ES Indexing (MEDIUM PRIORITY)
+**Problem:** Patents are only indexed via bulk CLI command. New patents added via the UI are not auto-indexed in Elasticsearch.
+**Fix needed:** Add ES indexing calls in patent import/download workflows.
+
+### 4. Search Term Selectivity Tracking (LOW PRIORITY — future)
+**Documented in:** `docs/FOCUS_AREA_SYSTEM_DESIGN.md` under "Search Term Selectivity"
+- Persist selectivity ratio as saved attribute on SearchTerm records
+- Combine selectivity across search terms for collective efficacy scoring
+- Track selectivity over time as portfolio changes
 
 ---
 
@@ -127,18 +162,18 @@
 | Queue 1-4 | 0-5670 | Complete |
 | Gap Fill | 813-1669 | Complete |
 | Overnight 1-12 | 5670-17670 | Complete |
-| **Total Cached** | **0-17670** | **61% of portfolio** |
+| Final batch (part 1) | 17670-26610 | Complete |
+| **Final batch (part 2)** | **26610-28913** | **In progress (~1050/2303 at session end)** |
+| **Total Coverage** | **~27,660 / 28,913** | **~96%** |
 
 **Cache Statistics:**
-- API entries: ~35,342
-- Size: ~910 MB
+- API entries: ~53,224+
+- Size: ~1,825 MB
 
-### Next Batch to Queue (Final)
-```bash
-# Queue final batch - will complete 100% portfolio coverage
-# Will process remaining 11,243 patents (~10 hours)
-./scripts/final-citation-batches.sh
-```
+### On Completion
+When the final batch finishes (~1,250 remaining):
+- Citation coverage will be 100% (28,913 / 28,913)
+- Next priority: abstract caching (see TODO #1 above)
 
 ---
 
@@ -176,14 +211,14 @@ cd frontend && npm run dev
 | `PortfolioPage.vue` | `/` | Complete (+ focus group creation) |
 | `PatentDetailPage.vue` | `/patent/:id` | Complete (+ abstract display) |
 | `V2ScoringPage.vue` | `/v2-scoring` | Complete |
-| `FocusAreasPage.vue` | `/focus-areas` | Complete (needs tab redirect fix) |
-| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | Complete (+ search button, field select) |
+| `FocusAreasPage.vue` | `/focus-areas` | Complete (+ tab query param, formalize button fix) |
+| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | Complete (+ KEYWORD_AND, Focus Ratio, fuzziness fix) |
 
 **Components:**
 | Component | Description |
 |-----------|-------------|
 | `PatentPreviewTooltip.vue` | Hover preview (+ abstract) |
-| `KeywordExtractionPanel.vue` | Keyword extraction + explicit search (needs AND/OR toggle) |
+| `KeywordExtractionPanel.vue` | Keyword extraction + AND/OR toggle, Focus Ratio, fuzziness-free search |
 | `ColumnSelector.vue` | Column visibility |
 
 ---
@@ -216,29 +251,28 @@ open http://localhost:3000/focus-areas
 
 ## Next Session Priorities
 
-### 1. Fix UX Issues (from this session's findings)
-- [ ] **Draft Groups tab redirect** - Navigate to Draft Groups tab after creating a focus group
-- [ ] **Formalize button styling** - Remove green/check from un-formalized groups
-- [ ] **AND/OR keyword toggle** - Add operator selection in KeywordExtractionPanel
-- [ ] **Focus Area hit count** - Investigate/fix 0-count issue
+### 1. Abstract Cache (HIGH — blocks search quality)
+- [ ] Verify citation batch completed (should be done by next session)
+- [ ] Evaluate PatentsView API fields available for batch download (maximize data per request)
+- [ ] Write batch abstract fetch script (Option A: 100 IDs per request, ~290 calls)
+- [ ] Run abstract batch
+- [ ] Re-import to ES with abstracts: `npx tsx services/import-to-elasticsearch.ts --recreate --candidates`
 
-### 2. Incremental ES Indexing
+### 2. CPC Code Descriptions (MEDIUM — UX quality)
+- [ ] Download complete CPC classification scheme (USPTO/WIPO source)
+- [ ] Build/update `config/cpc-descriptions.json` with full hierarchy
+- [ ] Create script to refresh CPC mapping from authoritative source
+- [ ] Add `q-tooltip` with descriptions on all CPC code displays across UI
+
+### 3. Incremental ES Indexing (MEDIUM)
 - [ ] Add ES indexing to patent import workflows
 - [ ] Consider on-demand indexing when patents are added
 
-### 3. Abstract Cache Expansion
-- [ ] Batch-download abstracts from PatentsView API
-- [ ] Or extract from existing portfolio-query cache files
-
-### 4. Additional Features
+### 4. Additional Features (LOW)
 - Export CSV from portfolio grid
 - Focus Area filter in portfolio grid
 - LLM suggestion endpoint for focus groups
 - Facet definition UI
-
-### 5. Data Tasks
-- Queue final citation batch: 17670-28913 (~11,243 patents)
-- Complete full portfolio citation analysis (100% coverage)
 
 ---
 
@@ -260,4 +294,4 @@ Tables: `api_request_cache`, `llm_response_cache`, `users`, `focus_groups`, `foc
 
 ---
 
-*Last Updated: 2026-01-25 (Session 2)*
+*Last Updated: 2026-01-25 (Session 3)*

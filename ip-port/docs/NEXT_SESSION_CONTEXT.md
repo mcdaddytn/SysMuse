@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-26, Session 9)
+# Patent Portfolio Analysis - Session Context (2026-01-26, Session 11)
 
 ## Current State Summary
 
@@ -8,425 +8,109 @@
 |--------|-------|
 | **Unique Patents** | **28,913** |
 | Active Patents | 24,668 (85.3%) |
+| Active (3+ years) | 21,870 |
 | Expired Patents | 4,245 |
 | Date Range | 1982-06-29 to 2025-09-30 |
 | Status | Complete + Deduplicated |
+
+### Enrichment Coverage (as of Session 11)
+
+| Data Source | Count | Coverage (3yr+ active) | Selection |
+|-------------|-------|----------------------|-----------|
+| **LLM core scores** | **7,669** | 35% | Top by quantitative score |
+| **IPR risk scores** | **5,000** | 23% | Top by forward citations (target reached) |
+| **Prosecution scores** | **2,475** | 11% | Top by forward citations (still growing) |
+| **Market relevance** | 5,000 | 23% | From LLM analysis |
+| **Citation classification** | 28,913 | 100% | All patents |
+| **Forward citations** | 28,014 | 97% | All patents |
+| **Backward citations (parents)** | 2,000 | 9% | From patent families pipeline |
+| **Parent details** | 11,706 | — | Enriched parent patent info |
+
+### Background Jobs Status
+- **LLM analysis**: 7,669 cached (unchanged from session 10 — 2,000 patent job may have stalled; needs investigation)
+- **IPR enrichment**: **5,000 done** (target reached)
+- **Prosecution enrichment**: 2,475 done (was 2,252, progressed but not at 5,000 target)
 
 ### Elasticsearch Index
 
 | Metric | Value |
 |--------|-------|
 | **Documents Indexed** | **28,913** |
-| Index Size | 41 MB |
+| Index Size | 42 MB |
 | Abstracts Indexed | **28,869 (99.8%)** |
-| Status | Fully populated with abstracts from patent cache |
-| Fuzziness | Disabled for KEYWORD/KEYWORD_AND types; AUTO for others |
-
-### Citation Batch Progress
-
-| Batch | Range | Status |
-|-------|-------|--------|
-| Queue 1-4 | 0-5670 | Complete |
-| Gap Fill | 813-1669 | Complete |
-| Overnight 1-12 | 5670-17670 | Complete |
-| Final batch (part 1) | 17670-26610 | Complete |
-| Final batch (part 2) | 26610-28913 | **~97% (28,014 / 28,913 files cached)** |
-
-**Cache Statistics:**
-- Forward citation files: 28,014
-- Citing patent detail files: 28,013
-- Cache size: ~2.5 GB
-- Remaining: ~900 patents still need citation fetching
 
 ---
 
-## Changes Completed This Session (Session 3)
-
-### Session 2 (Prior)
-
-#### Part A: Elasticsearch Populated with Full Portfolio
-- 28,913 patents indexed, search returns results
-- `services/import-to-elasticsearch.ts` with `--candidates` flag
-
-#### Part B: Abstracts Exposed Where Available
-- `loadAbstract()` reads from `cache/api/patentsview/patent/<id>.json`
-- Patent detail page, preview tooltip, batch preview all return abstract when cached
-
-#### Part C: Search Preview + UX Improvements
-- Search fields parameter (title/abstract/both), explicit Search button
-
-### Session 3 (Current)
-
-#### Fix 1: Draft Groups Tab Redirect (DONE)
-- `PortfolioPage.vue` — Navigation now includes `query: { tab: 'groups' }`
-- `FocusAreasPage.vue` — Imports `useRoute`, initializes `activeTab` from `route.query.tab`
-
-#### Fix 2: Formalize Button Styling (DONE)
-- Both Formalize buttons changed from `icon="check" color="positive"` to `icon="gavel" color="primary"`
-
-#### Fix 3: AND/OR Keyword Toggle (DONE)
-- Added `operator` ref (AND/OR) with `q-btn-toggle` in KeywordExtractionPanel
-- `combinedExpression` uses selected operator
-- "Add as Search Term" emits `KEYWORD_AND` or `KEYWORD` based on toggle
-
-#### Fix 4: KEYWORD_AND Term Type (DONE)
-- Added `KEYWORD_AND` to Prisma `SearchTermType` enum + pushed schema
-- Added to `termTypeOptions` dropdown in FocusAreaDetailPage
-- Backend handles via default case (pass-through)
-
-#### Fix 5: Focus Ratio Display (DONE)
-- Added "Focus Ratio" chip (focus area hits / portfolio hits) to both:
-  - `KeywordExtractionPanel.vue` hit preview
-  - `FocusAreaDetailPage.vue` Add Search Term dialog hit preview
-- Color-coded: green (>5%), orange (>1%), red (<=1%) — higher is better
-- Shows 2 decimal places (e.g., `0.10%`)
-- Added tooltips on Portfolio and Focus Area hit chips explaining what they measure
-
-#### Fix 6: Fuzziness Disabled for Keyword Searches (DONE)
-- `elasticsearch-service.ts` — `search()` now accepts optional `fuzziness` parameter (default `'AUTO'`)
-- `focus-areas.routes.ts` — Sets `fuzziness: '0'` for KEYWORD and KEYWORD_AND types
-- All 3 ES search calls in preview endpoint pass the fuzziness setting
-- Other search types (Phrase, Boolean, Wildcard, Proximity) keep `fuzziness: 'AUTO'`
-- English stemmer still active (monitor→monitoring OK, but appliances≠applications now)
-
-#### Fix 7: Debug Logging for Focus Area Hits (DONE)
-- Added 4 `console.log` statements to search-preview endpoint
-- Confirmed focus area hit counts work correctly — small counts (0-1) are expected with 3-patent focus areas
-- Logs show DB patent IDs, ES patent IDs, and intersection count
-
-#### Citation Batch Restarted
-- Running: `npm run analyze:cached -- --start 26610 --limit 2303`
-- Progress at ~1050/2303 when session ended
-
-#### Design Doc Updates
-- `FOCUS_AREA_SYSTEM_DESIGN.md` — Added "Search Term Selectivity" future enhancement section
-
-### Session 4
-
-#### Design Document Synthesis (DONE)
-Synthesized detailed design considerations for focus area workflow, search scopes, patent families, citation counting, sector management, LLM jobs, and word count extraction into design documents and development queue.
-
-#### Abstract Batch Fetch COMPLETE (I-1 DONE)
-- **28,913 / 28,913 patent records cached (100%)**
-- **28,669 with abstracts (99.8%)**
-- ES re-imported with abstracts: 41 MB index, full-text search includes abstracts
-
-### Session 5 (Current)
-
-#### P-0a: Citation Classification Pipeline ✓ COMPLETE
-- Created `scripts/classify-citations.ts` — three-way classification from citing-patent-details cache
-- Classification order: affiliate (via `excludePatterns`) → competitor (via `CompetitorMatcher`) → neutral
-- **28,913 patents processed**, 313,256 total citations:
-  - Competitor: 120,432 (38.4%), Affiliate: 35,090 (11.2%), Neutral: 157,734 (50.4%)
-- Output: per-patent files in `cache/citation-classification/` + summary in `output/citation-classification-2026-01-26.json`
-- **100% validation match** against existing citation-overlap output (26,957 patents, 0 mismatches)
-- Run: `npx tsx scripts/classify-citations.ts` (supports `--dry-run`, `--force`, `--validate`)
-
-#### P-0b: Scoring Engine ✓ COMPLETE
-- Created `src/api/services/scoring-service.ts` — V3 scoring with 6 configurable profiles
-- Profiles: executive (default), aggressive, moderate, conservative, licensing, quick_wins
-- Formula: `score = Σ(normalized × adjusted_weight) × yearMultiplier × 100`
-- Missing LLM metrics (~95% of patents) have weights redistributed proportionally
-- Updated `src/api/routes/scores.routes.ts` with V3 endpoints
-- Updated `src/api/routes/patents.routes.ts` — enriched with citation classification data
-- Test results: Executive avg=16.84, max=85.37, 388 patents ≥50
-
-#### P-0c: Portfolio Grid Expansion ✓ COMPLETE
-- **Frontend types** (`frontend/src/types/index.ts`): Added `affiliate_citations`, `neutral_citations`, `competitor_count`, `competitor_names`, `has_citation_data` to Patent interface. Added `ScoringProfile`, `V3ScoredPatent`, `SectorRanking` types.
-- **API service** (`frontend/src/services/api.ts`): Added V3 scoring methods (`getV3Scores`, `getProfiles`, `getSectorRankings`, `reloadScores`). Updated `PatentPreview` with citation fields.
-- **Store** (`frontend/src/stores/patents.ts`): Added `affiliate_citations`, `neutral_citations`, `competitor_count` columns. Made `competitor_citations` and `competitor_count` visible by default.
-- **PortfolioPage.vue**: Added Primary Sector filter dropdown, "Has Competitor Cites" toggle, color-coded competitor_citations cell, competitor_count cell with tooltip showing competitor names, query param handling for sector drill-down, CSV export.
-- **Backend**: Added `GET /api/patents/primary-sectors` endpoint (42 sectors). Added `primarySectors` array filter support.
-
-#### P-0d: Sector Rankings Page ✓ COMPLETE
-- Rewrote `SectorRankingsPage.vue` from stub to full page
-- Profile selector dropdown with 6 profiles, sort by damages/avg score/max score/patent count
-- Expandable sector cards: name, super-sector chip, damages badge (color-coded), patent count, avg/max scores
-- Top patents table per sector (rank, patent ID, title, assignee, score, years left)
-- Drill-down button → navigates to portfolio page filtered by sector
-
-#### P-0e: CSV Export (basic) ✓ COMPLETE
-- Export button on portfolio grid downloads visible columns as CSV
-- Filename includes current date
-
-#### V3 Scoring Page — NOT YET DONE (Session 5)
-- Completed in Session 6 — see below
-
-### Session 6
-
-#### V3 Scoring Page ✓ COMPLETE
-- Rewrote `V3ScoringPage.vue` from stub to full functional page
-- Profile selector dropdown (6 profiles with descriptions)
-- Weight visualization panel (horizontal bars, color-coded: blue=quantitative, purple=LLM)
-- Scored patent rankings table (paginated, server-side, 100/page)
-- Expandable score breakdown per patent: normalized metrics, contribution points, formula display
-- LLM indicator column (psychology icon when LLM scores available)
-- LLM score badges in expanded view (1-5 scale, color-coded)
-- Sector filter dropdown, Min Score filter
-- Competitor names chips in expanded view
-- CSV export with profile name in filename
-- Reload button (clears server caches)
-- LLM coverage badge in header (shows X/28913 patents with LLM data)
-
-#### LLM Scores Wired into Scoring Engine ✓ COMPLETE
-- `scoring-service.ts` — Added `LlmScores` interface and `loadAllLlmScores()` function
-- Loads LLM scores from 3 sources (priority order):
-  1. `output/llm-analysis-v3/combined-v3-*.json` (V3 analysis runs)
-  2. `output/llm-analysis-v2/`, `output/llm-analysis/`, `output/vmware-llm-analysis/` (V2/V1)
-  3. `cache/llm-scores/*.json` (per-patent cache, overrides combined files)
-- `buildMetrics()` now includes LLM scores when available
-- `clearScoringCache()` clears LLM cache too
-- `getLlmStats()` — returns coverage statistics
-- V3 API response includes `has_llm_scores`, `llm_scores` per patent, `llm_coverage` summary
-- New endpoint: `GET /api/scores/stats` — LLM coverage and profile count
-
-#### LLM Import Script ✓ COMPLETE
-- Created `scripts/import-llm-scores.ts`
-- Imports from multiple JSON formats: combined-v3, multi-score-analysis, arrays, objects
-- Saves per-patent JSON to `cache/llm-scores/`
-- Supports `--dry-run`, `--force`, `--all` (directory import)
-- Run: `npx tsx scripts/import-llm-scores.ts <file-or-dir> [--dry-run] [--force] [--all]`
-
-#### LLM Top Patents Job ✓ COMPLETE
-- Created `scripts/run-llm-top-patents.ts`
-- Scores all patents, selects top N without existing LLM data
-- Loads patent details from local cache (no API calls for details)
-- Runs V3 LLM analysis via Anthropic API
-- Saves results to both `cache/llm-scores/` and `output/llm-analysis-v3/`
-- Supports `--count N`, `--sector X`, `--batch-size N`, `--dry-run`, `--force`
-- Run: `npx tsx scripts/run-llm-top-patents.ts --count 100 --dry-run`
-
-#### Citation Enrichment Script ✓ COMPLETE
-- Created `scripts/enrich-citations.ts`
-- Fetches 1-generation parent citations (backward citations) for top-ranked patents
-- Saves to `cache/patent-families/parents/<patent_id>.json`
-- Optionally fetches parent patent details to `cache/patent-families/parent-details/`
-- Supports `--count N`, `--patent-ids`, `--skip-existing`, `--no-details`, `--dry-run`
-- Run: `npx tsx scripts/enrich-citations.ts --count 500 --skip-existing`
-
-### Session 7 (Current)
-
-#### LLM Import Script Enhanced — CSV + Nested Metrics ✓ COMPLETE
-- Extended `scripts/import-llm-scores.ts` with CSV file support and nested `metrics` object handling
-- Added `parseCsvToObjects()` and `parseCsvLine()` for RFC-compliant CSV parsing
-- Added `getScoreField()` helper resolving scores from `item.field` or `item.metrics.field`
-- Directory scanning now picks up both `.json` and `.csv` files with `--all`
-
-#### LLM Scores Imported from Export ✓ COMPLETE
-- Imported **2,669 patents** with all 5 LLM scores from `all-patents-scored-v3-2026-01-21.csv`
-- Source: Previous V3 analysis export (17,040 patents total, 2,669 with LLM data)
-- Saved to `cache/llm-scores/` — one JSON file per patent
-
-#### Patent Partitioning Verified ✓ CONFIRMED
-- Citation enrichment writes ONLY to `cache/patent-families/` — does NOT touch DB or ES index
-- Scoring service loads ONLY from `output/streaming-candidates-*.json` — isolated from family cache
-- `excludePatterns` in `competitors.json` covers all 20 Broadcom entities
-- Parent patents discovered via enrichment will never be treated as portfolio patents
-
-#### Overnight Jobs ✓ COMPLETE
-1. **LLM Analysis Pass 1**: 5,000 patents analyzed, 0 failures → **7,669 total in cache** (~27% coverage)
-2. ~~**LLM Analysis Pass 2**~~: CANCELLED — budget better spent on sector/focus-group-specific LLM questions
-3. **Citation Enrichment**: 2,000 patents → 31,403 parent citations, 13,272 unique parents, 11,706 parent details fetched, 0 errors
-
-### Session 8 (Current)
-
-#### Old V2 & V3 Formula Reproduction ✓ COMPLETE
-- Rewrote `scripts/compare-v3-rankings.py` with faithful Python implementations of:
-  - **Old V2 additive formula** — 3 profiles (aggressive/moderate/conservative), unified=avg, sqrt normalization, year multiplier, weight exclusion for missing LLM
-  - **Old V3 stakeholder multiplicative formula** — 6 profiles (ip-lit-aggressive/balanced/conservative, licensing, corporate-ma, executive), consensus=avg, tiered continuous citation normalization, stepped years, score5 normalization (v-1)/4, factor floors
-  - **New engine formula** — additive weighted-sum from scoring-service.ts
-- Supports `--cap-cc=100` option (competitor citation cap)
-
-#### Formula Verification Results — PERFECT REPRODUCTION
-- **V2**: 500/500 match within 0.5 for all profiles (aggressive, moderate, conservative, unified)
-- **V3**: 500/500 match within 0.5 for all profiles and consensus
-- Python implementations match TypeScript originals exactly
-
-#### Key Comparison Findings
-See Session 9 for updated comparison results with all 12 metrics.
-**Data gap (RESOLVED)**: See "Missing Metric Resolution" below — all three metrics now have data pipelines.
-
-#### Missing Metric Resolution ✓ COMPLETE
-- Investigated why `market_relevance_score`, `ipr_risk_score`, `prosecution_quality_score` had 0% coverage
-- **Root cause**: `ipr_risk_score` and `prosecution_quality_score` were never asked for in LLM prompts — they require API data from PTAB and File Wrapper respectively. The scripts existed (`scripts/check-ipr-risk.ts`, `scripts/check-prosecution-history.ts`) but had never been run at scale. `market_relevance_score` was being generated by LLM (5,000 in combined V3 output) but dropped during import/loading.
-
-#### IPR Risk Scoring ✓ COMPLETE (500→1000 patents)
-- Initial run: top 500 active patents by forward citations
-- **Results (500)**: 495/500 (99%) no IPR history (score=5), 5 patents settled IPR (score=3)
-- Output: `output/ipr/ipr-risk-check-2026-01-26.json`
-- **Expanding to 1000** — running in background (Session 9), per-patent cache files to `cache/ipr-scores/`
-
-#### Prosecution Quality Scoring ✓ COMPLETE (500→1000 patents)
-- Initial run: top 500 patents
-- **Results (500)**: 483 with data. Distribution: 36 clean(5), 168 smooth(4), 117 moderate(3), 102 difficult(2), 77 very difficult(1)
-- Output: `output/prosecution/prosecution-history-2026-01-26.json`
-- **Expanding to 1000** — running in background (Session 9), per-patent cache files to `cache/prosecution-scores/`
-
-#### Scoring Engine Updated ✓ COMPLETE
-- **`scoring-service.ts`** — Added 3 new metrics to scoring engine:
-  - `market_relevance_score` (from LLM, added to LLM_METRICS set)
-  - `ipr_risk_score` (from PTAB API, new API_METRICS set)
-  - `prosecution_quality_score` (from File Wrapper API, new API_METRICS set)
-- All three use same 1-5 → 0-1 normalization: `(v-1)/4`
-- New `API_METRICS` set handles weight redistribution when missing (same as LLM_METRICS)
-- All 6 profiles updated with weights for new metrics (totals verified = 1.00):
-  - Executive: market=0.05, ipr=0.05, prosecution=0.05
-  - Aggressive: market=0.03, ipr=0.07, prosecution=0.05
-  - Moderate: market=0.05, ipr=0.05, prosecution=0.06
-  - Conservative: market=0.03, ipr=0.07, prosecution=0.08
-  - Licensing: market=0.08, ipr=0.05, prosecution=0.04
-  - Quick Wins: market=0.03, ipr=0.07, prosecution=0.07
-- New data loaders: `loadAllIprScores()`, `loadAllProsecutionScores()`
-  - Read from both batch output (`output/ipr/`, `output/prosecution/`) and per-patent cache (`cache/ipr-scores/`, `cache/prosecution-scores/`)
-  - Per-patent cache overrides batch output (for incremental enrichment)
-- `getLlmStats()` expanded: reports IPR, prosecution, and market_relevance coverage
-- `buildMetrics()` updated to include all three new fields
-- `clearScoringCache()` clears all five data caches
-
-#### API Routes Updated ✓ COMPLETE
-- **`scores.routes.ts`** — V3 endpoint enriches response with:
-  - `ipr_risk_score`, `ipr_risk_category`, `has_ipr_data`
-  - `prosecution_quality_score`, `prosecution_quality_category`, `has_prosecution_data`
-  - `market_relevance_score` in `llm_scores` object
-- Stats endpoint reports coverage for LLM, market_relevance, IPR, and prosecution separately
-
-#### Enrichment Pipeline ✓ COMPLETE
-- Both scripts now write per-patent cache files (like LLM scores)
-- Both support `--skip-existing` for incremental enrichment
-- Both support `--top N` with streaming-candidates fallback when tier-litigation files don't exist
-- npm scripts added:
-  - `npm run enrich:ipr` / `enrich:ipr:top500`
-  - `npm run enrich:prosecution` / `enrich:prosecution:top500`
-  - `npm run enrich:citations`, `enrich:classify`, `enrich:llm`
-
-### Session 9 (Current)
-
-#### Compare Script Updated with All 12 Metrics ✓ COMPLETE
-- `scripts/compare-v3-rankings.py` now loads IPR, prosecution, and market_relevance data
-- Added `load_ipr_scores()`, `load_prosecution_scores()`, `load_market_relevance_scores()` functions
-- `compute_new_executive()` updated to match current `scoring-service.ts` with all 12 metrics
-- Data sources: `output/ipr/`, `output/prosecution/`, `output/llm-analysis-v3/combined-v3-*.json`, `cache/ipr-scores/`, `cache/prosecution-scores/`
-- Part 7 coverage analysis now shows IPR/prosecution/market_relevance coverage at each top-N cutoff
-
-#### Comparison Results (Baseline — 2026-01-26)
-Saved to `output/comparison-results-2026-01-26.txt`
-
-**Data loaded:**
-- IPR scores: 500 patents (top 500 by forward citations)
-- Prosecution scores: 500 patents
-- Market relevance: 5,000 patents (from combined V3 LLM analysis)
-- LLM core (5 metrics): 7,669 patents
-
-**Old V3 Export vs Old V3 Formula on Current Data:**
-- Top 25: 84%, Top 50: 88%, Top 100: 87%, Top 250: 89%
-- V3 multiplicative formula is very stable across data updates
-
-**Old V2 Export vs Old V2 Formula on Current Data:**
-- Top 25: 44%, Top 50: 56%, Top 100: 55%, Top 250: 69%
-- Lower stability, but NOT from CC cap — see note below
-
-**Old V2 (current data) vs New Engine (12 metrics):**
-- Top 25: 52%, Top 50: 62%, Top 100: 54%, Top 250: 49%
-
-**Old V3 (current data) vs New Engine (12 metrics):**
-- Top 25: 32%, Top 50: 40%, Top 100: 42%, Top 250: 53%
-
-**New Engine Top-500 coverage (of the 12 metrics):**
-- LLM: 500/500, IPR: 114/500, Prosecution: 114/500, MarketRel: 254/500
-
-#### Competitor Citation Cap Analysis
-- Tested `--cap-cc=100` — **no effect on any ranking**
-- Reason: All normalization schemes saturate well below 100:
-  - V2: `sqrt(cc)/sqrt(50)` saturates at cc=50
-  - V3: Tiered continuous maxes out at cc=100
-  - New Engine: `cc/20` saturates at cc=20
-- The raw CC value differences (e.g., 99→482) don't affect computed scores
-- The V2 export-vs-current divergence comes from **years_remaining changes** (62 patents differ) and the larger candidate pool (28,913 vs 17,040)
-- **Future consideration**: May want `capped_comp_cites` metric alongside uncapped for visibility, and investigate whether affiliates were included in old competitor counts
-
-#### IPR/Prosecution Enrichment Expanded to Top 1000 — IN PROGRESS
-- Running `scripts/check-ipr-risk.ts --top 1000` (per-patent cache files, ~1000 API calls at 1/sec)
-- Running `scripts/check-prosecution-history.ts --top 1000` (per-patent cache files)
-- Will provide ~2x coverage for new engine's top 500 rankings
-- Previous 500 patents will be re-fetched (per-patent cache was empty)
-
-#### Staged Scoring Workflow — DESIGN NOTE
-- Current approach is already effectively staged:
-  1. **Preliminary scoring** (quantitative only) — rank all 28,913 patents
-  2. **Enrichment** — run LLM, IPR, prosecution on top N candidates
-  3. **Re-ranking** — recompute scores with sparse metrics for enriched patents
-- IPR and prosecution are cheap enough to run on all patents as a normal process (not requiring special enrichment jobs)
-- Going forward: IPR/prosecution should be part of standard download/cache workflow for every patent
-- Market relevance comes from LLM analysis — only available when LLM job runs
-
----
-
-## Known Issues / Next Session TODO
-
-### COMPLETED (Session 3)
-- [x] ~~Draft Groups tab redirect~~ — DONE
-- [x] ~~Formalize button styling~~ — DONE
-- [x] ~~AND/OR keyword toggle~~ — DONE
-- [x] ~~Focus Area hit count investigation~~ — DONE (working correctly, small counts expected with small focus areas)
-- [x] ~~KEYWORD_AND term type~~ — DONE
-- [x] ~~Focus Ratio display~~ — DONE
-- [x] ~~Fuzziness disabled for keyword searches~~ — DONE
-
-### ~~1. Abstract Cache Coverage~~ — COMPLETED (Session 4)
-- **28,913 / 28,913 patent records cached** with abstracts (99.8% have abstract text)
-- ES re-imported with abstracts — 41 MB index, full-text search now includes abstracts
-- Script: `npx tsx scripts/batch-fetch-patents.ts`
-- Re-import: `npx tsx services/import-to-elasticsearch.ts --recreate --candidates`
-
-### 2. CPC Code Description Tooltips (MEDIUM PRIORITY)
-**Problem:** CPC codes appear throughout the UI (patent detail, portfolio grid, focus area patents) with no human-readable descriptions. Users need mouseover tooltips showing what each code means.
-
-**Current state:**
-- `config/cpc-descriptions.json` exists with ~100 codes mapped
-- This is insufficient — individual patents can have dozens of CPC codes, many beyond the current mapping
-- The CPC classification hierarchy has thousands of codes (class → subclass → group → subgroup)
-
-**Needed:**
-1. **Systematic CPC mapping:** Download the complete CPC classification scheme from USPTO or WIPO. The hierarchy is: Section (e.g., H) → Class (H04) → Subclass (H04L) → Group (H04L47) → Subgroup (H04L47/781). Need at least class and subclass level descriptions.
-2. **Keep mapping updated:** CPC codes are revised periodically. Need a script to fetch/refresh the mapping from an authoritative source (USPTO bulk data or CPC scheme XML).
-3. **Frontend integration:** Add `q-tooltip` on every CPC code chip/badge across all pages.
-4. **Files to update:** PatentDetailPage.vue, PortfolioPage.vue, FocusAreaDetailPage.vue, any component showing CPC codes.
-
-### 3. Incremental ES Indexing (MEDIUM PRIORITY)
-**Problem:** Patents are only indexed via bulk CLI command. New patents added via the UI are not auto-indexed in Elasticsearch.
-**Fix needed:** Add ES indexing calls in patent import/download workflows.
-
-### 4. Search Term Selectivity Tracking (LOW PRIORITY — future)
-**Documented in:** `docs/FOCUS_AREA_SYSTEM_DESIGN.md` under "Search Term Selectivity"
-- Persist selectivity ratio as saved attribute on SearchTerm records
-- Combine selectivity across search terms for collective efficacy scoring
-- Track selectivity over time as portfolio changes
-
----
-
-## Citation Cache Progress
-
-### Current Status
-
-| Batch | Range | Status |
-|-------|-------|--------|
-| Queue 1-4 | 0-5670 | Complete |
-| Gap Fill | 813-1669 | Complete |
-| Overnight 1-12 | 5670-17670 | Complete |
-| Final batch (part 1) | 17670-26610 | Complete |
-| Final batch (part 2) | 26610-28913 | ~97% complete |
-| **Total Coverage** | **28,014 / 28,913** | **~96.9%** |
-
-**Cache Statistics:**
-- Forward citation files: 28,014
-- Citing patent detail files: 28,013
-- Cache size: ~2.5 GB
-- No background jobs currently running
-
-### Remaining Work
-- ~900 patents still need citation fetching
-- API bandwidth is now available — can proceed with abstract caching (see TODO #1)
-- Remaining citation gaps can be filled incrementally or as part of patent family construction
+## Changes Completed This Session (Session 11)
+
+### GUI Enhancements — LLM Data Integration
+
+#### 1. LLM Data in Patent List API (patents.routes.ts)
+- Patent list endpoint (`GET /api/patents`) now enriches every patent with LLM data from `cache/llm-scores/`
+- New fields in response: `has_llm_data`, `llm_summary`, `llm_technology_category`, `llm_implementation_type`, `llm_standards_relevance`, `llm_market_segment`, `eligibility_score`, `validity_score`, `claim_breadth`, `enforcement_clarity`, `design_around_difficulty`, `llm_confidence`, `market_relevance_score`
+- Full LLM cache loaded into memory with 5-minute TTL (7,669 patents)
+
+#### 2. LLM Detail Endpoint (NEW)
+- **`GET /api/patents/:id/llm`** — Returns full LLM analysis from cache including summary, all scores, classification fields
+- Used by the LLM Analysis tab in patent detail page
+- Returns `{ cached: false }` when no LLM data exists
+
+#### 3. LLM Analysis Tab — Full Implementation (PatentDetailPage.vue)
+- Replaced placeholder with actual data display
+- **AI Summary** card — Shows `summary` text
+- **Quality Scores** card — All 5 LLM scores + confidence with color-coded badges (green >=4, yellow >=3, red <3)
+- **Classification** card — Technology category, implementation type, standards relevance, market segment, market relevance score
+- **Source info** footer — Shows data source and import date
+- "Not yet available" state for patents without LLM data
+- **Test patents**: 10003303 (full data with summary), 8429630 (scores only, older format)
+
+#### 4. Backward Citations Endpoint (NEW)
+- **`GET /api/patents/:id/backward-citations`** — Returns parent patents from `cache/patent-families/parents/` and `cache/patent-families/parent-details/`
+- Enriches parent patents with: title, assignee, patent_date, affiliate, in_portfolio flag
+- 2,000 patents have parent data, 11,706 parent details available
+
+#### 5. Citations Tab — Forward + Backward Citations (PatentDetailPage.vue)
+- **Forward Citations** section (existing, enhanced): Now labeled with arrow icon and "(patents that cite this patent)" subtitle
+- **Backward Citations** section (NEW): Shows parent patents with:
+  - In-portfolio parents are clickable links (deep-purple color)
+  - External parents have Google Patents link button
+  - Shows patent title, assignee/affiliate, date
+- **Citation Breakdown** card updated: Now includes backward citation count alongside forward breakdown
+- Backward citations loaded lazily when Citations tab is opened
+- **Test patent**: 10749870 — 169 forward citations + 8 backward parents (mostly in portfolio)
+
+#### 6. CPC Code Tooltips (PatentDetailPage.vue)
+- CPC code chips in patent detail overview now show description on mouseover
+- **`GET /api/patents/cpc-descriptions`** endpoint — Serves CPC code descriptions from `config/cpc-descriptions.json`
+- Supports `?codes=G06F21,H04L63` query param for specific codes
+- Progressive prefix matching: if exact code not found, tries shorter prefixes (e.g., `G06F21/10` → `G06F21` → `G06F`)
+- Descriptions loaded on patent page mount
+- 150+ CPC codes mapped
+
+#### 7. Column Group Reorganization (stores/patents.ts, types/index.ts)
+- **Old groups**: Core Info, Entity & Sector, Citations & Scores, Attorney Questions, LLM Analysis, Focus Area
+- **New groups**: Core Info, Entity & Sector, **Citations**, **Scores**, **LLM Text**, Focus Area
+- **Citations group**: Forward citations, competitor/affiliate/neutral citations, competitor count (factual data)
+- **Scores group**: Base score, v2, v3, consensus, AND all LLM numeric scores (eligibility, validity, claim_breadth, enforcement_clarity, design_around_difficulty, market_relevance, confidence)
+- **LLM Text group**: Summary, technology category, implementation type, standards relevance, market segment
+- Removed non-existent columns: `prior_art_problem`, `technical_solution`, `attorney_summary` (these fields were never generated by the LLM pipeline)
+- Fixed field name mappings: `design_around` → `design_around_difficulty`, `market_relevance` → `market_relevance_score`
+
+#### 8. Portfolio Grid LLM Score Cell Templates (PortfolioPage.vue)
+- All LLM score columns (eligibility, validity, claim_breadth, enforcement_clarity, design_around_difficulty, confidence, market_relevance) show color-coded badges
+- LLM summary column has truncation with tooltip
+- Shows `--` placeholder for patents without LLM data
+
+#### 9. Cache Reload Enhancement (scores.routes.ts)
+- `POST /api/scores/reload` now clears ALL caches: scoring service, patent list, LLM data, CPC descriptions
+- Exported `clearPatentsCache()` from patents.routes.ts
+
+### Key Finding: "Prior Art Problem" and "Technical Solution" Fields
+- These columns were defined in the UI but **no LLM analysis pipeline ever generated these fields**
+- The LLM analysis generates: eligibility_score, validity_score, claim_breadth, enforcement_clarity, design_around_difficulty, confidence, summary, technology_category, implementation_type, standards_relevance, market_segment
+- The `summary` field is the closest analog — it describes the patent's technology
+- To add prior_art_problem and technical_solution, we would need to update the LLM analysis prompt and re-run analysis
+- Columns removed from UI; logged as design consideration for future LLM prompt enhancement
 
 ---
 
@@ -441,24 +125,29 @@ npm run api:dev
 **Endpoints:**
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/patents` | List with filters/pagination (enriched with citation classification) |
-| `GET /api/patents/:id` | Full patent details (+ abstract from cache) |
+| `GET /api/patents` | List with filters/pagination (enriched with citation + **LLM data**) |
+| `GET /api/patents/:id` | Full patent details (+ abstract + LLM data from cache) |
 | `GET /api/patents/:id/preview` | Lightweight preview (+ abstract + citation data) |
 | `POST /api/patents/batch-preview` | Batch preview (+ abstracts + citation data) |
-| `GET /api/patents/:id/citations` | Forward citations + classification breakdown |
+| `GET /api/patents/:id/citations` | Forward citations + classification breakdown + in_portfolio flag |
+| `GET /api/patents/:id/backward-citations` | **NEW** Parent patents from cache + in_portfolio flag |
+| `GET /api/patents/:id/prosecution` | Prosecution history from cache |
+| `GET /api/patents/:id/ptab` | PTAB/IPR data from cache |
+| `GET /api/patents/:id/llm` | **NEW** Full LLM analysis (scores + text + classification) |
+| `GET /api/patents/cpc-descriptions` | **NEW** CPC code descriptions (optional `?codes=` filter) |
 | `GET /api/patents/affiliates` | List affiliates with counts |
 | `GET /api/patents/super-sectors` | List super-sectors with counts |
 | `GET /api/patents/primary-sectors` | List 42 primary sectors with counts |
 | `GET /api/patents/assignees` | List raw assignees with counts |
-| `GET /api/scores/v2` | v2 scoring (legacy 3-weight) |
+| `GET /api/scores/v2` | v2 scoring (includes affiliate + competitor_citations) |
 | `GET /api/scores/v3` | V3 scored rankings (profile, page, limit, sector, minScore) |
 | `GET /api/scores/profiles` | List 6 scoring profiles with weights |
 | `GET /api/scores/sectors` | Sector rankings with damages tiers (profile, topN) |
-| `POST /api/scores/reload` | Clear scoring caches (includes LLM scores) |
-| `GET /api/scores/stats` | LLM coverage statistics + profile count |
+| `POST /api/scores/reload` | **Updated** Clear ALL caches (scoring + patent + LLM + CPC) |
+| `GET /api/scores/stats` | LLM/IPR/prosecution coverage statistics |
 | `GET/POST /api/focus-areas` | Focus area CRUD |
 | `POST /api/focus-areas/extract-keywords` | Keyword extraction |
-| `POST /api/focus-areas/search-preview` | Search term hit preview (+ searchFields param) |
+| `POST /api/focus-areas/search-preview` | Search term hit preview |
 | `GET/POST /api/focus-groups` | Focus group CRUD |
 | `POST /api/focus-groups/:id/formalize` | Convert to focus area |
 
@@ -471,103 +160,76 @@ cd frontend && npm run dev
 **Pages:**
 | Page | Route | Status |
 |------|-------|--------|
-| `PortfolioPage.vue` | `/` | Complete (citations, filters, CSV export, query param drill-down) |
-| `PatentDetailPage.vue` | `/patent/:id` | Complete (+ abstract display) |
+| `PortfolioPage.vue` | `/` | **Updated** — LLM scores + text columns, reorganized column groups |
+| `PatentDetailPage.vue` | `/patent/:id` | **Updated** — LLM tab, backward citations, CPC tooltips |
 | `V2ScoringPage.vue` | `/v2-scoring` | Complete |
-| `V3ScoringPage.vue` | `/v3-scoring` | Complete (profile selector, weight viz, rankings, score breakdown, LLM indicators) |
-| `SectorRankingsPage.vue` | `/sectors` | Complete (profile selector, expandable sectors, top patents) |
-| `FocusAreasPage.vue` | `/focus-areas` | Complete (+ tab query param, formalize button fix) |
-| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | Complete (+ KEYWORD_AND, Focus Ratio, fuzziness fix) |
+| `V3ScoringPage.vue` | `/v3-scoring` | Complete |
+| `SectorRankingsPage.vue` | `/sectors` | Complete |
+| `FocusAreasPage.vue` | `/focus-areas` | Complete |
+| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | Complete |
 
-**Components:**
-| Component | Description |
-|-----------|-------------|
-| `PatentPreviewTooltip.vue` | Hover preview (+ abstract) |
-| `KeywordExtractionPanel.vue` | Keyword extraction + AND/OR toggle, Focus Ratio, fuzziness-free search |
-| `ColumnSelector.vue` | Column visibility |
+---
+
+## Known Issues / Next Session TODO
+
+### Immediate (Session 12)
+- [ ] Investigate stalled LLM 2,000 patent job (count unchanged at 7,669 from session 10)
+- [ ] Resume prosecution enrichment to reach 5,000 target (currently 2,475)
+- [ ] Confirm batches 3-4 vendor submission status
+- [ ] Generate batches 5-10 with affiliate diversity cap (max 40% VMware per top-ranked batch)
+- [ ] Column group design: continue iterating on groupings as dynamic sector-based columns are added
+
+### Medium Priority
+- [ ] Incremental ES Indexing
+- [ ] Search Term Selectivity Tracking
+- [ ] LLM prompt enhancement: Add `prior_art_problem` and `technical_solution` fields to analysis prompt
+- [ ] Dynamic columns based on sector (sector-specific scoring facets)
+
+### Design Backlog
+- [ ] **Bulk LLM Analysis Queuing**: Request or queue LLM analysis from UI when not present. Multi-select patents and trigger batch LLM analysis. Design needed: queue management, progress tracking, cost estimation
+- [ ] Citation tab: "Request Data" button to queue uncached patents for citation fetching
+- [ ] Vendor Data tab integration (Patlytics batch results)
+- [ ] Batch allocation tracking in the GUI
 
 ---
 
 ## Quick Start for Next Session
 
 ```bash
-# 1. Start Elasticsearch (if not running)
+# 1. Start infrastructure
 docker compose up -d
 
-# 2. Verify ES has data
+# 2. Verify ES data
 npx tsx services/elasticsearch-service.ts stats
-# Should show: Documents: 28913, Size: ~10 MB
+# Should show: Documents: 28913
 
-# 3. If ES empty, re-import
-npx tsx services/import-to-elasticsearch.ts --recreate --candidates
+# 3. Check enrichment completion
+echo "LLM: $(ls cache/llm-scores/*.json | wc -l)"
+echo "IPR: $(ls cache/ipr-scores/*.json | wc -l)"
+echo "Prosecution: $(ls cache/prosecution-scores/*.json | wc -l)"
 
-# 4. Start backend API
+# 4. Start backend + frontend
 npm run api:dev
-
-# 5. Start frontend (new terminal)
 cd frontend && npm run dev
+
+# 5. Reload scores (picks up new enrichment data)
+curl -X POST http://localhost:3001/api/scores/reload
 
 # 6. Open browser
 open http://localhost:3000
-open http://localhost:3000/focus-areas
 ```
 
----
-
-## Next Session Priorities
-
-**Full roadmap**: See `docs/DEVELOPMENT_QUEUE.md` for the complete prioritized development queue with dependencies.
-
-### ~~P-0a: Citation Classification~~ ✓ COMPLETE (Session 5)
-### ~~P-0b: Scoring Engine~~ ✓ COMPLETE (Session 5)
-### ~~P-0c: Portfolio Grid Expansion~~ ✓ COMPLETE (Session 5)
-### ~~P-0d: Sector Ranking View~~ ✓ COMPLETE (Session 5)
-### ~~P-0e: CSV Export~~ ✓ COMPLETE (basic, Session 5)
-
-### ~~V3 Scoring Page~~ ✓ COMPLETE (Session 6)
-
-### LLM Data Import ✓ COMPLETE (Session 7)
-- 2,669 patents imported from CSV export into `cache/llm-scores/`
-- Import script enhanced with CSV support and nested metrics handling
-
-### Overnight Jobs ✓ COMPLETE (Session 7→8)
-- **LLM Pass 1**: 5,000 patents analyzed, 0 failures → **7,669 total in cache** (~27%)
-- **Citation Enrichment**: 2,000 patents → 31,403 parent citations, 13,272 unique parents
-- Refresh scoring: `POST /api/scores/reload`
-
-### Scoring Formula Comparison ✓ COMPLETE (Session 8-9)
-- Old V2 and V3 formulas reproduced in Python — 500/500 verified match
-- Script: `python3 scripts/compare-v3-rankings.py [--cap-cc=100]`
-- V3 reproduction: 84-89% overlap with old export rankings (stable)
-- V2 reproduction: 44-69% overlap (years_remaining changes + larger candidate pool)
-- CC cap at 100 has no effect (normalization saturates)
-- All 12 metrics now flowing through comparison
-
-### Ranking Baseline Established ✓ COMPLETE (Session 9)
-- Baseline results saved to `output/comparison-results-2026-01-26.txt`
-- Batches 2-4 of 10 (25 each) have been given out based on old V2 rankings
-- Need to stabilize V2 baseline before continuing batch distribution
-
-### NEXT: Re-run Comparison After Enrichment (Session 10)
-- [ ] IPR/prosecution enrichment for top 1000 is running (check completion)
-- [ ] Re-run `python3 scripts/compare-v3-rankings.py` with expanded data
-- [ ] Compare new results to baseline saved in `output/comparison-results-2026-01-26.txt`
-- [ ] Investigate affiliate filtering in old competitor counts vs new
-- [ ] Consider adding `capped_comp_cites` metric alongside uncapped for old-system compatibility
-- [ ] Decide on scoring formula for continuing batch distribution (batches 5-10 of 25)
-
-### P-1: Focus Area & Search Scope (after P-0)
-- [ ] Search scope detection and selector
-- [ ] Search term testing fix
-- [ ] Word count extraction grid
-
----
-
-## Database Schema
-
-**PostgreSQL on localhost:5432**
-
-Tables: `api_request_cache`, `llm_response_cache`, `users`, `focus_groups`, `focus_areas`, `focus_area_patents`, `search_terms`, `facet_definitions`, `facet_values`
+### Test Patents for New Features
+| Feature | Patent ID | What to see |
+|---------|-----------|-------------|
+| LLM tab (full data) | 10003303 | Summary, all scores, classification |
+| LLM tab (scores only) | 8429630 | Numeric scores, no summary |
+| Backward citations | 10749870 | 8 parents, most in portfolio |
+| Forward citations (rich) | 10749870 | 169 fwd citations, breakdown |
+| CPC tooltips | Any | Hover CPC chips for descriptions |
+| LLM columns in grid | Enable in Column Selector > Scores / LLM Text | Score badges, summary text |
+| Prosecution (smooth) | 10042628 | Score 4/5, 2 OA, timeline |
+| PTAB with IPR history | 7203959 | 2 Zscaler petitions |
 
 ---
 
@@ -581,7 +243,8 @@ Tables: `api_request_cache`, `llm_response_cache`, `users`, `focus_groups`, `foc
 | `docs/GUI_DESIGN.md` | GUI architecture, portfolio grid, scoring views, sector rankings |
 | `docs/DEVELOPMENT_QUEUE.md` | Consolidated prioritized roadmap with dependencies |
 | `docs/CITATION_CATEGORIZATION_PROBLEM.md` | Self-citation inflation analysis |
+| `docs/DESIGN_CONSIDERATIONS.md` | Vendor integration, batch strategies |
 
 ---
 
-*Last Updated: 2026-01-26 (Session 9 — Comparison script updated with all 12 metrics (IPR, prosecution, market_relevance). Baseline results saved. IPR/prosecution enrichment expanding from 500→1000 patents. CC cap at 100 confirmed to have no effect on any scoring formula. V2 divergence is from years_remaining changes and larger candidate pool, not CC cap. Batches 2-4 of 10 given out based on old V2 rankings; need stable baseline before continuing.)*
+*Last Updated: 2026-01-26 (Session 11 — GUI enhancements: LLM data integrated into patent list API and portfolio grid (7,669 patents with scores, summary, tech classification). LLM Analysis tab implemented with scores, summary, classification. Backward citations added to citations tab with in-portfolio linking (2,000 parents, 11,706 parent details). CPC code tooltips with 150+ descriptions. Column groups reorganized: Citations/Scores/LLM Text replaces Attorney Questions/LLM Analysis. Removed non-existent prior_art_problem and technical_solution fields. IPR reached 5,000 target. Prosecution at 2,475. LLM count unchanged at 7,669 — 2K job needs investigation. Feature request logged: bulk LLM analysis queuing from UI.)*

@@ -28,6 +28,21 @@ export interface Patent {
   v3_score?: number;
   consensus_score?: number;
   inventors?: string[];
+
+  // LLM data (from enrichment pipeline)
+  has_llm_data?: boolean;
+  llm_summary?: string;
+  llm_technology_category?: string;
+  llm_implementation_type?: string;
+  llm_standards_relevance?: string;
+  llm_market_segment?: string;
+  eligibility_score?: number;
+  validity_score?: number;
+  claim_breadth?: number;
+  enforcement_clarity?: number;
+  design_around_difficulty?: number;
+  llm_confidence?: number;
+  market_relevance_score?: number;
 }
 
 // User and auth types
@@ -173,8 +188,8 @@ export type ColumnGroup =
   | 'core'
   | 'entity'
   | 'citations'
-  | 'attorney'
-  | 'llm'
+  | 'scores'
+  | 'llmText'
   | 'focusArea';
 
 export interface ColumnGroupInfo {

@@ -13,6 +13,93 @@ import { loadAllClassifications } from '../services/scoring-service.js';
 
 const router = Router();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Full LLM data loader (includes text fields beyond just numeric scores)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FullLlmData {
+  patent_id: string;
+  eligibility_score?: number;
+  validity_score?: number;
+  claim_breadth?: number;
+  enforcement_clarity?: number;
+  design_around_difficulty?: number;
+  confidence?: number;
+  summary?: string;
+  technology_category?: string;
+  implementation_type?: string;
+  standards_relevance?: string;
+  market_segment?: string;
+  market_relevance_score?: number;
+  source?: string;
+}
+
+let fullLlmCache: Map<string, FullLlmData> | null = null;
+let fullLlmCacheLoadTime = 0;
+const LLM_CACHE_TTL = 5 * 60 * 1000;
+
+function loadAllFullLlmData(): Map<string, FullLlmData> {
+  const now = Date.now();
+  if (fullLlmCache && (now - fullLlmCacheLoadTime) < LLM_CACHE_TTL) {
+    return fullLlmCache;
+  }
+
+  fullLlmCache = new Map();
+  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
+
+  if (fs.existsSync(llmDir)) {
+    const files = fs.readdirSync(llmDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(llmDir, file), 'utf-8'));
+        fullLlmCache.set(data.patent_id, data);
+      } catch {
+        // skip invalid files
+      }
+    }
+  }
+
+  fullLlmCacheLoadTime = now;
+  console.log(`[Patents] Loaded full LLM data for ${fullLlmCache.size} patents`);
+  return fullLlmCache;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CPC descriptions loader
+// ─────────────────────────────────────────────────────────────────────────────
+
+let cpcDescriptionsCache: Record<string, string> | null = null;
+
+function loadCpcDescriptions(): Record<string, string> {
+  if (cpcDescriptionsCache) return cpcDescriptionsCache;
+
+  try {
+    const configPath = path.join(process.cwd(), 'config/cpc-descriptions.json');
+    const data = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    cpcDescriptionsCache = data.codes || {};
+  } catch {
+    cpcDescriptionsCache = {};
+  }
+
+  return cpcDescriptionsCache!;
+}
+
+/**
+ * Resolve CPC code to its description, trying progressively shorter prefixes
+ */
+function resolveCpcDescription(code: string): string | null {
+  const descriptions = loadCpcDescriptions();
+
+  // Try exact match first, then progressively shorter prefixes
+  let lookup = code;
+  while (lookup.length >= 3) {
+    if (descriptions[lookup]) return descriptions[lookup];
+    lookup = lookup.slice(0, -1);
+  }
+
+  return null;
+}
+
 // Types
 interface RawPatent {
   patent_id: string;
@@ -37,6 +124,20 @@ interface Patent extends RawPatent {
   competitor_count?: number;
   competitor_names?: string[];
   has_citation_data?: boolean;
+  // LLM data
+  has_llm_data?: boolean;
+  llm_summary?: string;
+  llm_technology_category?: string;
+  llm_implementation_type?: string;
+  llm_standards_relevance?: string;
+  llm_market_segment?: string;
+  eligibility_score?: number;
+  validity_score?: number;
+  claim_breadth?: number;
+  enforcement_clarity?: number;
+  design_around_difficulty?: number;
+  llm_confidence?: number;
+  market_relevance_score?: number;
 }
 
 interface CandidatesFile {
@@ -52,6 +153,18 @@ interface CandidatesFile {
 let patentsCache: Patent[] | null = null;
 let lastLoadTime: number = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Clear all patent-related caches (called from reload endpoint)
+ */
+export function clearPatentsCache(): void {
+  patentsCache = null;
+  lastLoadTime = 0;
+  fullLlmCache = null;
+  fullLlmCacheLoadTime = 0;
+  cpcDescriptionsCache = null;
+  console.log('[Patents] Caches cleared');
+}
 
 /**
  * Load patents from the candidates file and enrich with affiliate/sector
@@ -83,9 +196,13 @@ function loadPatents(): Patent[] {
   // Load citation classifications
   const classifications = loadAllClassifications();
 
-  // Enrich patents with affiliate, super_sector, and citation classification
+  // Load enrichment data
+  const llmData = loadAllFullLlmData();
+
+  // Enrich patents with affiliate, super_sector, citation classification, and LLM data
   patentsCache = data.candidates.map((p: RawPatent): Patent => {
     const classification = classifications.get(p.patent_id);
+    const llm = llmData.get(p.patent_id);
     return {
       ...p,
       affiliate: normalizeAffiliate(p.assignee),
@@ -99,6 +216,20 @@ function loadPatents(): Patent[] {
       competitor_count: classification?.competitor_count ?? 0,
       competitor_names: classification?.competitor_names ?? [],
       has_citation_data: classification?.has_citation_data ?? false,
+      // LLM data
+      has_llm_data: !!llm,
+      llm_summary: llm?.summary,
+      llm_technology_category: llm?.technology_category,
+      llm_implementation_type: llm?.implementation_type,
+      llm_standards_relevance: llm?.standards_relevance,
+      llm_market_segment: llm?.market_segment,
+      eligibility_score: llm?.eligibility_score,
+      validity_score: llm?.validity_score,
+      claim_breadth: llm?.claim_breadth,
+      enforcement_clarity: llm?.enforcement_clarity,
+      design_around_difficulty: llm?.design_around_difficulty,
+      llm_confidence: llm?.confidence,
+      market_relevance_score: llm?.market_relevance_score,
     };
   });
 
@@ -480,6 +611,33 @@ router.get('/assignees', (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/patents/cpc-descriptions
+ * Get CPC code descriptions mapping
+ * Optional query param: codes=G06F,H04L (comma-separated) for specific codes
+ */
+router.get('/cpc-descriptions', (req: Request, res: Response) => {
+  try {
+    const descriptions = loadCpcDescriptions();
+    const { codes } = req.query;
+
+    if (codes) {
+      // Return only requested codes with resolved descriptions
+      const codeList = (codes as string).split(',').map(c => c.trim());
+      const resolved: Record<string, string | null> = {};
+      for (const code of codeList) {
+        resolved[code] = resolveCpcDescription(code);
+      }
+      res.json(resolved);
+    } else {
+      res.json(descriptions);
+    }
+  } catch (error) {
+    console.error('Error getting CPC descriptions:', error);
+    res.status(500).json({ error: 'Failed to get CPC descriptions' });
+  }
+});
+
+/**
  * POST /api/patents/batch-preview
  * Get preview data for multiple patents at once
  * Body: { patentIds: string[] }
@@ -748,6 +906,101 @@ router.get('/:id/ptab', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting PTAB data:', error);
     res.status(500).json({ error: 'Failed to get PTAB data' });
+  }
+});
+
+/**
+ * GET /api/patents/:id/llm
+ * Get full LLM analysis data for a patent (from cache)
+ */
+router.get('/:id/llm', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const cachePath = path.join(process.cwd(), 'cache/llm-scores', `${id}.json`);
+
+    if (!fs.existsSync(cachePath)) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        message: 'LLM analysis not yet available for this patent.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+    res.json({
+      patent_id: id,
+      cached: true,
+      ...data,
+    });
+  } catch (error) {
+    console.error('Error getting LLM data:', error);
+    res.status(500).json({ error: 'Failed to get LLM data' });
+  }
+});
+
+/**
+ * GET /api/patents/:id/backward-citations
+ * Get backward citations (parent patents) for a patent
+ * Sources: cache/patent-families/parents/ and cache/patent-families/parent-details/
+ */
+router.get('/:id/backward-citations', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Load parent patent IDs
+    const parentsPath = path.join(process.cwd(), 'cache/patent-families/parents', `${id}.json`);
+    if (!fs.existsSync(parentsPath)) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        parent_count: 0,
+        parent_patents: [],
+        message: 'Backward citation data not yet cached for this patent.',
+      });
+      return;
+    }
+
+    const parentsData = JSON.parse(fs.readFileSync(parentsPath, 'utf-8'));
+    const parentIds: string[] = parentsData.parent_patent_ids || [];
+
+    // Load portfolio data for in_portfolio checking
+    const allPatents = loadPatents();
+    const patentMap = new Map(allPatents.map(p => [p.patent_id, p]));
+
+    // Enrich parent patents with details
+    const parentPatents = parentIds.map(parentId => {
+      // Check if parent is in portfolio
+      const portfolioPatent = patentMap.get(parentId);
+
+      // Try to load parent details from cache
+      const detailPath = path.join(process.cwd(), 'cache/patent-families/parent-details', `${parentId}.json`);
+      let details: any = null;
+      if (fs.existsSync(detailPath)) {
+        try {
+          details = JSON.parse(fs.readFileSync(detailPath, 'utf-8'));
+        } catch { /* skip */ }
+      }
+
+      return {
+        patent_id: parentId,
+        patent_title: portfolioPatent?.patent_title || details?.patent_title || '',
+        assignee: portfolioPatent?.assignee || details?.assignee || '',
+        patent_date: portfolioPatent?.patent_date || details?.patent_date || '',
+        affiliate: portfolioPatent ? normalizeAffiliate(portfolioPatent.assignee) : '',
+        in_portfolio: !!portfolioPatent,
+      };
+    });
+
+    res.json({
+      patent_id: id,
+      cached: true,
+      parent_count: parentIds.length,
+      parent_patents: parentPatents,
+    });
+  } catch (error) {
+    console.error('Error getting backward citations:', error);
+    res.status(500).json({ error: 'Failed to get backward citations' });
   }
 });
 

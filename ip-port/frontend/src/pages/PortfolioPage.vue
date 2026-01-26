@@ -631,6 +631,83 @@ onMounted(async () => {
         </q-td>
       </template>
 
+      <!-- LLM Summary with truncation -->
+      <template v-slot:body-cell-llm_summary="props">
+        <q-td :props="props">
+          <div v-if="props.row.llm_summary" class="ellipsis" style="max-width: 300px">
+            {{ props.row.llm_summary }}
+            <q-tooltip max-width="400px" :delay="300">
+              {{ props.row.llm_summary }}
+            </q-tooltip>
+          </div>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <!-- LLM Score columns (1-5 with color badge) -->
+      <template v-slot:body-cell-eligibility_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.eligibility_score" :color="props.row.eligibility_score >= 4 ? 'positive' : props.row.eligibility_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.eligibility_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-validity_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.validity_score" :color="props.row.validity_score >= 4 ? 'positive' : props.row.validity_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.validity_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-claim_breadth="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.claim_breadth" :color="props.row.claim_breadth >= 4 ? 'positive' : props.row.claim_breadth >= 3 ? 'warning' : 'negative'">
+            {{ props.row.claim_breadth }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-enforcement_clarity="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.enforcement_clarity" :color="props.row.enforcement_clarity >= 4 ? 'positive' : props.row.enforcement_clarity >= 3 ? 'warning' : 'negative'">
+            {{ props.row.enforcement_clarity }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-design_around_difficulty="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.design_around_difficulty" :color="props.row.design_around_difficulty >= 4 ? 'positive' : props.row.design_around_difficulty >= 3 ? 'warning' : 'negative'">
+            {{ props.row.design_around_difficulty }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-llm_confidence="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.llm_confidence" color="grey-7">
+            {{ props.row.llm_confidence }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-market_relevance_score="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.market_relevance_score" :color="props.row.market_relevance_score >= 4 ? 'positive' : props.row.market_relevance_score >= 3 ? 'warning' : 'negative'">
+            {{ props.row.market_relevance_score }}
+          </q-badge>
+          <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
       <!-- No data -->
       <template v-slot:no-data>
         <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">

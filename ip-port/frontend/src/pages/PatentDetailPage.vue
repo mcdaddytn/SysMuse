@@ -45,6 +45,17 @@ const loadingProsecution = ref(false);
 const ptab = ref<any>(null);
 const loadingPtab = ref(false);
 
+// LLM analysis data
+const llmData = ref<any>(null);
+const loadingLlm = ref(false);
+
+// Backward citations data
+const backwardCitations = ref<any>(null);
+const loadingBackward = ref(false);
+
+// CPC descriptions
+const cpcDescriptions = ref<Record<string, string | null>>({});
+
 // Computed
 const isExpired = computed(() => patent.value && patent.value.remaining_years <= 0);
 const expirationDate = computed(() => {
@@ -141,15 +152,66 @@ async function loadPtab() {
   }
 }
 
-// Watch for tab changes to lazy-load data
-function onTabChange(tab: string) {
-  if (tab === 'citations') loadCitations();
-  if (tab === 'prosecution') loadProsecution();
-  if (tab === 'ptab') loadPtab();
+// Load LLM analysis data
+async function loadLlm() {
+  if (llmData.value || loadingLlm.value) return;
+  loadingLlm.value = true;
+  try {
+    const response = await fetch(`/api/patents/${patentId.value}/llm`);
+    if (response.ok) {
+      llmData.value = await response.json();
+    }
+  } catch (err) {
+    console.error('Failed to load LLM data:', err);
+  } finally {
+    loadingLlm.value = false;
+  }
 }
 
-onMounted(() => {
-  loadPatent();
+// Load backward citations
+async function loadBackwardCitations() {
+  if (backwardCitations.value || loadingBackward.value) return;
+  loadingBackward.value = true;
+  try {
+    const response = await fetch(`/api/patents/${patentId.value}/backward-citations`);
+    if (response.ok) {
+      backwardCitations.value = await response.json();
+    }
+  } catch (err) {
+    console.error('Failed to load backward citations:', err);
+  } finally {
+    loadingBackward.value = false;
+  }
+}
+
+// Load CPC descriptions for the patent's codes
+async function loadCpcDescriptions() {
+  if (!patent.value?.cpc_codes?.length) return;
+  try {
+    const codes = patent.value.cpc_codes.join(',');
+    const response = await fetch(`/api/patents/cpc-descriptions?codes=${encodeURIComponent(codes)}`);
+    if (response.ok) {
+      cpcDescriptions.value = await response.json();
+    }
+  } catch (err) {
+    console.error('Failed to load CPC descriptions:', err);
+  }
+}
+
+// Watch for tab changes to lazy-load data
+function onTabChange(tab: string) {
+  if (tab === 'citations') {
+    loadCitations();
+    loadBackwardCitations();
+  }
+  if (tab === 'prosecution') loadProsecution();
+  if (tab === 'ptab') loadPtab();
+  if (tab === 'llm') loadLlm();
+}
+
+onMounted(async () => {
+  await loadPatent();
+  loadCpcDescriptions();
 });
 
 function goBack() {
@@ -317,6 +379,13 @@ function openUSPTO() {
                           size="sm"
                         >
                           {{ cpc }}
+                          <q-tooltip v-if="cpcDescriptions[cpc]" :delay="300" max-width="300px">
+                            <strong>{{ cpc }}</strong><br />
+                            {{ cpcDescriptions[cpc] }}
+                          </q-tooltip>
+                          <q-tooltip v-else :delay="300">
+                            {{ cpc }}
+                          </q-tooltip>
                         </q-chip>
                       </div>
                     </q-item-section>
@@ -367,7 +436,7 @@ function openUSPTO() {
         <!-- Classification Summary -->
         <q-card v-if="citations?.classification" class="q-mb-md" flat bordered>
           <q-card-section>
-            <div class="text-subtitle2 q-mb-sm">Citation Breakdown</div>
+            <div class="text-subtitle2 q-mb-sm">Forward Citation Breakdown</div>
             <div class="row q-gutter-md">
               <div class="text-center">
                 <div class="text-h5 text-primary">{{ citations.classification.competitor_citations }}</div>
@@ -383,7 +452,12 @@ function openUSPTO() {
               </div>
               <div class="text-center">
                 <div class="text-h5">{{ citations.total_hits }}</div>
-                <div class="text-caption">Total</div>
+                <div class="text-caption">Total Forward</div>
+              </div>
+              <q-separator vertical class="q-mx-sm" />
+              <div class="text-center">
+                <div class="text-h5 text-deep-purple">{{ backwardCitations?.parent_count ?? '...' }}</div>
+                <div class="text-caption">Backward (Parents)</div>
               </div>
             </div>
             <div v-if="citations.classification.competitor_names?.length" class="q-mt-sm">
@@ -400,10 +474,13 @@ function openUSPTO() {
           </q-card-section>
         </q-card>
 
-        <q-card>
+        <!-- Forward Citations -->
+        <q-card class="q-mb-md">
           <q-card-section>
             <div class="row items-center q-mb-md">
+              <q-icon name="arrow_forward" color="primary" size="sm" class="q-mr-sm" />
               <div class="text-h6">Forward Citations</div>
+              <div class="text-caption text-grey-6 q-ml-sm">(patents that cite this patent)</div>
               <q-space />
               <q-badge color="primary" class="q-ml-sm">
                 {{ citations?.total_hits ?? patent.forward_citations }} total
@@ -455,6 +532,85 @@ function openUSPTO() {
                 </q-item-section>
                 <q-item-section v-if="citing.in_portfolio" side>
                   <q-icon name="chevron_right" />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-card-section>
+        </q-card>
+
+        <!-- Backward Citations (Parents) -->
+        <q-card>
+          <q-card-section>
+            <div class="row items-center q-mb-md">
+              <q-icon name="arrow_back" color="deep-purple" size="sm" class="q-mr-sm" />
+              <div class="text-h6">Backward Citations</div>
+              <div class="text-caption text-grey-6 q-ml-sm">(patents cited by this patent)</div>
+              <q-space />
+              <q-badge v-if="backwardCitations?.cached" color="deep-purple" class="q-ml-sm">
+                {{ backwardCitations.parent_count }} parents
+              </q-badge>
+            </div>
+
+            <!-- Loading -->
+            <div v-if="loadingBackward" class="flex flex-center q-pa-lg">
+              <q-spinner color="deep-purple" size="2em" />
+              <span class="q-ml-sm text-grey">Loading backward citations...</span>
+            </div>
+
+            <!-- Not Cached -->
+            <div v-else-if="!backwardCitations?.cached" class="text-center q-pa-lg">
+              <q-icon name="hourglass_empty" color="warning" size="3em" class="q-mb-md" />
+              <div class="text-body1 text-grey-7">
+                {{ backwardCitations?.message || 'Backward citation data not yet cached for this patent.' }}
+              </div>
+            </div>
+
+            <!-- No Parents -->
+            <div v-else-if="backwardCitations.parent_count === 0" class="text-center q-pa-lg">
+              <q-icon name="source" color="grey-4" size="3em" class="q-mb-md" />
+              <div class="text-body1 text-grey-7">No parent patents found.</div>
+            </div>
+
+            <!-- Parent Patent List -->
+            <q-list v-else separator>
+              <q-item
+                v-for="parent in backwardCitations.parent_patents"
+                :key="parent.patent_id"
+                :clickable="parent.in_portfolio"
+                @click="parent.in_portfolio && router.push({ name: 'patent-detail', params: { id: parent.patent_id } })"
+              >
+                <q-item-section avatar>
+                  <q-icon
+                    :name="parent.in_portfolio ? 'link' : 'open_in_new'"
+                    :color="parent.in_portfolio ? 'deep-purple' : 'grey-4'"
+                    size="sm"
+                  />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label :class="parent.in_portfolio ? 'text-deep-purple cursor-pointer' : 'text-grey-7'">
+                    US{{ parent.patent_id }}
+                  </q-item-label>
+                  <q-item-label v-if="parent.patent_title" caption class="ellipsis">{{ parent.patent_title }}</q-item-label>
+                </q-item-section>
+                <q-item-section side top>
+                  <q-item-label caption>{{ parent.patent_date }}</q-item-label>
+                  <q-item-label caption class="text-grey-6">{{ parent.affiliate || parent.assignee }}</q-item-label>
+                </q-item-section>
+                <q-item-section v-if="parent.in_portfolio" side>
+                  <q-icon name="chevron_right" />
+                </q-item-section>
+                <q-item-section v-else-if="parent.patent_id" side>
+                  <q-btn
+                    flat
+                    dense
+                    icon="open_in_new"
+                    size="sm"
+                    color="grey-6"
+                    tag="a"
+                    :href="`https://patents.google.com/patent/US${parent.patent_id}`"
+                    target="_blank"
+                    @click.stop
+                  />
                 </q-item-section>
               </q-item>
             </q-list>
@@ -746,16 +902,171 @@ function openUSPTO() {
 
       <!-- LLM Analysis -->
       <q-tab-panel name="llm">
-        <q-card>
-          <q-card-section>
-            <div class="text-h6">LLM Analysis Results</div>
-            <div class="text-grey q-pa-xl text-center">
-              LLM analysis results will appear here.
-              <br /><br />
-              <q-btn color="primary" label="Run New Analysis" icon="psychology" />
+        <!-- Loading -->
+        <div v-if="loadingLlm" class="flex flex-center q-pa-lg">
+          <q-spinner color="primary" size="2em" />
+          <span class="q-ml-sm text-grey">Loading LLM analysis...</span>
+        </div>
+
+        <!-- Not Cached -->
+        <q-card v-else-if="!llmData?.cached">
+          <q-card-section class="text-center q-pa-xl">
+            <q-icon name="psychology" color="grey-4" size="3em" class="q-mb-md" />
+            <div class="text-body1 text-grey-7">
+              {{ llmData?.message || 'LLM analysis not yet available for this patent.' }}
+            </div>
+            <div class="text-caption text-grey-5 q-mt-sm">
+              Analysis is generated in batch. This patent may not yet have been processed.
             </div>
           </q-card-section>
         </q-card>
+
+        <!-- Has LLM Data -->
+        <template v-else>
+          <!-- Summary -->
+          <q-card v-if="llmData.summary" class="q-mb-md" flat bordered>
+            <q-card-section>
+              <div class="text-subtitle2 q-mb-sm">AI Summary</div>
+              <div class="text-body2" style="white-space: pre-line;">{{ llmData.summary }}</div>
+            </q-card-section>
+          </q-card>
+
+          <div class="row q-gutter-md q-mb-md">
+            <!-- Scores Card -->
+            <q-card class="col-12 col-md-5">
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Quality Scores</div>
+                <q-list dense>
+                  <q-item v-if="llmData.eligibility_score">
+                    <q-item-section>
+                      <q-item-label caption>Eligibility (101)</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.eligibility_score >= 4 ? 'positive' : llmData.eligibility_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.eligibility_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.validity_score">
+                    <q-item-section>
+                      <q-item-label caption>Validity</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.validity_score >= 4 ? 'positive' : llmData.validity_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.validity_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.claim_breadth">
+                    <q-item-section>
+                      <q-item-label caption>Claim Breadth</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.claim_breadth >= 4 ? 'positive' : llmData.claim_breadth >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.claim_breadth }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.enforcement_clarity">
+                    <q-item-section>
+                      <q-item-label caption>Enforcement Clarity</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.enforcement_clarity >= 4 ? 'positive' : llmData.enforcement_clarity >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.enforcement_clarity }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.design_around_difficulty">
+                    <q-item-section>
+                      <q-item-label caption>Design-Around Difficulty</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.design_around_difficulty >= 4 ? 'positive' : llmData.design_around_difficulty >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.design_around_difficulty }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                  <q-separator spaced v-if="llmData.confidence" />
+                  <q-item v-if="llmData.confidence">
+                    <q-item-section>
+                      <q-item-label caption>AI Confidence</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge color="grey-7">{{ llmData.confidence }} / 5</q-badge>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card-section>
+            </q-card>
+
+            <!-- Classification Card -->
+            <q-card class="col-12 col-md-5">
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Classification</div>
+                <q-list dense>
+                  <q-item v-if="llmData.technology_category">
+                    <q-item-section>
+                      <q-item-label caption>Technology Category</q-item-label>
+                      <q-item-label>{{ llmData.technology_category }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.implementation_type">
+                    <q-item-section>
+                      <q-item-label caption>Implementation Type</q-item-label>
+                      <q-item-label>{{ llmData.implementation_type }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.standards_relevance">
+                    <q-item-section>
+                      <q-item-label caption>Standards Relevance</q-item-label>
+                      <q-item-label>{{ llmData.standards_relevance }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.market_segment">
+                    <q-item-section>
+                      <q-item-label caption>Market Segment</q-item-label>
+                      <q-item-label>{{ llmData.market_segment }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item v-if="llmData.market_relevance_score">
+                    <q-item-section>
+                      <q-item-label caption>Market Relevance Score</q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <q-badge
+                        :color="llmData.market_relevance_score >= 4 ? 'positive' : llmData.market_relevance_score >= 3 ? 'warning' : 'negative'"
+                      >
+                        {{ llmData.market_relevance_score }} / 5
+                      </q-badge>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <!-- Source Info -->
+          <q-card v-if="llmData.source || llmData.imported_at" flat bordered>
+            <q-card-section class="q-py-sm">
+              <div class="text-caption text-grey-6">
+                <span v-if="llmData.source">Source: {{ llmData.source }}</span>
+                <span v-if="llmData.source && llmData.imported_at"> &middot; </span>
+                <span v-if="llmData.imported_at">Imported: {{ new Date(llmData.imported_at).toLocaleDateString() }}</span>
+              </div>
+            </q-card-section>
+          </q-card>
+        </template>
       </q-tab-panel>
 
       <!-- Vendor Data -->

@@ -20,12 +20,14 @@ export const usePatentsStore = defineStore('patents', () => {
   const filters = ref<PortfolioFilters>({});
 
   // Column group definitions
+  // Reorganized: Citations (factual data) and Scores (numeric metrics) are separate.
+  // "Attorney Questions" and "LLM Analysis" merged into "LLM Text" (text) and scores go to "Scores".
   const columnGroups: ColumnGroupInfo[] = [
     { id: 'core', label: 'Core Info', icon: 'info', defaultExpanded: true },
     { id: 'entity', label: 'Entity & Sector', icon: 'business', defaultExpanded: true },
-    { id: 'citations', label: 'Citations & Scores', icon: 'analytics', defaultExpanded: true },
-    { id: 'attorney', label: 'Attorney Questions', icon: 'gavel', defaultExpanded: false, description: 'Structured attorney review fields' },
-    { id: 'llm', label: 'LLM Analysis', icon: 'psychology', defaultExpanded: false, description: 'AI-generated patent analysis' },
+    { id: 'citations', label: 'Citations', icon: 'format_quote', defaultExpanded: true, description: 'Forward citation counts and competitor breakdown' },
+    { id: 'scores', label: 'Scores', icon: 'analytics', defaultExpanded: true, description: 'Numeric scores used in ranking metrics' },
+    { id: 'llmText', label: 'LLM Text', icon: 'psychology', defaultExpanded: false, description: 'AI-generated text analysis and classification' },
     { id: 'focusArea', label: 'Focus Area', icon: 'filter_center_focus', defaultExpanded: false, description: 'Context-specific columns' }
   ];
 
@@ -47,7 +49,7 @@ export const usePatentsStore = defineStore('patents', () => {
     { name: 'assignee', label: 'Assignee (Raw)', field: 'assignee', sortable: true, align: 'left', visible: false, group: 'entity',
       description: 'Original assignee name from USPTO' },
 
-    // Citations & Scores group
+    // Citations group (factual citation data)
     { name: 'forward_citations', label: 'Fwd Citations', field: 'forward_citations', sortable: true, align: 'center', visible: true, group: 'citations' },
     { name: 'competitor_citations', label: 'Competitor Cites', field: 'competitor_citations', sortable: true, align: 'center', visible: true, group: 'citations',
       description: 'Citations from competitor patents' },
@@ -57,38 +59,42 @@ export const usePatentsStore = defineStore('patents', () => {
       description: 'Citations from non-competitor, non-affiliate patents' },
     { name: 'competitor_count', label: 'Competitors', field: 'competitor_count', sortable: true, align: 'center', visible: true, group: 'citations',
       description: 'Distinct competitor companies citing this patent' },
-    { name: 'score', label: 'Score', field: 'score', sortable: true, align: 'center', visible: true, group: 'citations',
+
+    // Scores group (all numeric metrics used in rankings)
+    { name: 'score', label: 'Base Score', field: 'score', sortable: true, align: 'center', visible: true, group: 'scores',
       format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
-    { name: 'v2_score', label: 'v2 Score', field: 'v2_score', sortable: true, align: 'center', visible: false, group: 'citations',
+    { name: 'v2_score', label: 'v2 Score', field: 'v2_score', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'Legacy 3-weight formula score' },
-    { name: 'v3_score', label: 'v3 Score', field: 'v3_score', sortable: true, align: 'center', visible: false, group: 'citations',
+    { name: 'v3_score', label: 'v3 Score', field: 'v3_score', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'V3 multi-metric weighted score' },
-    { name: 'consensus_score', label: 'Consensus', field: 'consensus_score', sortable: true, align: 'center', visible: false, group: 'citations',
+    { name: 'consensus_score', label: 'Consensus', field: 'consensus_score', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'Team consensus score' },
-
-    // Attorney Questions group (all hidden by default)
-    { name: 'attorney_summary', label: 'Summary', field: 'attorney_summary', sortable: false, align: 'left', visible: false, group: 'attorney',
-      description: 'High-level summary for non-technical audience' },
-    { name: 'prior_art_problem', label: 'Prior Art Problem', field: 'prior_art_problem', sortable: false, align: 'left', visible: false, group: 'attorney',
-      description: 'What problem in prior art does this solve?' },
-    { name: 'technical_solution', label: 'Technical Solution', field: 'technical_solution', sortable: false, align: 'left', visible: false, group: 'attorney',
-      description: 'How does the technical solution work?' },
-    { name: 'eligibility_score', label: 'Eligibility (101)', field: 'eligibility_score', sortable: true, align: 'center', visible: false, group: 'attorney',
+    { name: 'eligibility_score', label: 'Eligibility (101)', field: 'eligibility_score', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'Patent eligibility strength (1-5)' },
-    { name: 'validity_score', label: 'Validity Score', field: 'validity_score', sortable: true, align: 'center', visible: false, group: 'attorney',
+    { name: 'validity_score', label: 'Validity Score', field: 'validity_score', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'Strength against prior art invalidity (1-5)' },
-
-    // LLM Analysis group (all hidden by default)
-    { name: 'claim_breadth', label: 'Claim Breadth', field: 'claim_breadth', sortable: true, align: 'center', visible: false, group: 'llm',
+    { name: 'claim_breadth', label: 'Claim Breadth', field: 'claim_breadth', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'Scope of patent claims (1-5)' },
-    { name: 'enforcement_clarity', label: 'Enforcement Clarity', field: 'enforcement_clarity', sortable: true, align: 'center', visible: false, group: 'llm',
+    { name: 'enforcement_clarity', label: 'Enforcement Clarity', field: 'enforcement_clarity', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'How easily infringement can be detected (1-5)' },
-    { name: 'design_around', label: 'Design-Around Difficulty', field: 'design_around', sortable: true, align: 'center', visible: false, group: 'llm',
+    { name: 'design_around_difficulty', label: 'Design-Around', field: 'design_around_difficulty', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'How hard to avoid infringing (1-5)' },
-    { name: 'market_relevance', label: 'Market Relevance', field: 'market_relevance', sortable: true, align: 'center', visible: false, group: 'llm',
+    { name: 'market_relevance_score', label: 'Market Relevance', field: 'market_relevance_score', sortable: true, align: 'center', visible: false, group: 'scores',
       description: 'Current market applicability (1-5)' },
-    { name: 'llm_confidence', label: 'LLM Confidence', field: 'llm_confidence', sortable: true, align: 'center', visible: false, group: 'llm',
-      description: 'AI confidence in analysis (1-5)' }
+    { name: 'llm_confidence', label: 'LLM Confidence', field: 'llm_confidence', sortable: true, align: 'center', visible: false, group: 'scores',
+      description: 'AI confidence in analysis (1-5)' },
+
+    // LLM Text group (AI-generated text and classifications)
+    { name: 'llm_summary', label: 'LLM Summary', field: 'llm_summary', sortable: false, align: 'left', visible: false, group: 'llmText',
+      description: 'AI-generated technology summary' },
+    { name: 'llm_technology_category', label: 'Tech Category', field: 'llm_technology_category', sortable: true, align: 'left', visible: false, group: 'llmText',
+      description: 'Technology domain classification' },
+    { name: 'llm_implementation_type', label: 'Implementation', field: 'llm_implementation_type', sortable: true, align: 'left', visible: false, group: 'llmText',
+      description: 'Hardware, software, method, etc.' },
+    { name: 'llm_standards_relevance', label: 'Standards', field: 'llm_standards_relevance', sortable: true, align: 'left', visible: false, group: 'llmText',
+      description: 'Relevance to industry standards' },
+    { name: 'llm_market_segment', label: 'Market Segment', field: 'llm_market_segment', sortable: true, align: 'left', visible: false, group: 'llmText',
+      description: 'Target market segment' },
   ]);
 
   // Getters

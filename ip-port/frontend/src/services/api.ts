@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking } from '@/types';
+import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking, LlmCoverage } from '@/types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -168,6 +168,7 @@ export const scoringApi = {
     total: number;
     page: number;
     rowsPerPage: number;
+    llm_coverage: LlmCoverage;
   }> {
     const { data } = await api.get('/scores/v3', { params: options });
     return data;

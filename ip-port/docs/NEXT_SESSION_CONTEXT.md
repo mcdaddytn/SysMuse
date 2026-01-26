@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-25, Session 5)
+# Patent Portfolio Analysis - Session Context (2026-01-25, Session 7)
 
 ## Current State Summary
 
@@ -131,8 +131,110 @@ Synthesized detailed design considerations for focus area workflow, search scope
 - Updated `src/api/routes/patents.routes.ts` — enriched with citation classification data
 - Test results: Executive avg=16.84, max=85.37, 388 patents ≥50
 
-#### P-0c: Portfolio Grid Expansion — IN PROGRESS
-- Frontend types, store columns, and cell templates being expanded for all spreadsheet fields
+#### P-0c: Portfolio Grid Expansion ✓ COMPLETE
+- **Frontend types** (`frontend/src/types/index.ts`): Added `affiliate_citations`, `neutral_citations`, `competitor_count`, `competitor_names`, `has_citation_data` to Patent interface. Added `ScoringProfile`, `V3ScoredPatent`, `SectorRanking` types.
+- **API service** (`frontend/src/services/api.ts`): Added V3 scoring methods (`getV3Scores`, `getProfiles`, `getSectorRankings`, `reloadScores`). Updated `PatentPreview` with citation fields.
+- **Store** (`frontend/src/stores/patents.ts`): Added `affiliate_citations`, `neutral_citations`, `competitor_count` columns. Made `competitor_citations` and `competitor_count` visible by default.
+- **PortfolioPage.vue**: Added Primary Sector filter dropdown, "Has Competitor Cites" toggle, color-coded competitor_citations cell, competitor_count cell with tooltip showing competitor names, query param handling for sector drill-down, CSV export.
+- **Backend**: Added `GET /api/patents/primary-sectors` endpoint (42 sectors). Added `primarySectors` array filter support.
+
+#### P-0d: Sector Rankings Page ✓ COMPLETE
+- Rewrote `SectorRankingsPage.vue` from stub to full page
+- Profile selector dropdown with 6 profiles, sort by damages/avg score/max score/patent count
+- Expandable sector cards: name, super-sector chip, damages badge (color-coded), patent count, avg/max scores
+- Top patents table per sector (rank, patent ID, title, assignee, score, years left)
+- Drill-down button → navigates to portfolio page filtered by sector
+
+#### P-0e: CSV Export (basic) ✓ COMPLETE
+- Export button on portfolio grid downloads visible columns as CSV
+- Filename includes current date
+
+#### V3 Scoring Page — NOT YET DONE (Session 5)
+- Completed in Session 6 — see below
+
+### Session 6
+
+#### V3 Scoring Page ✓ COMPLETE
+- Rewrote `V3ScoringPage.vue` from stub to full functional page
+- Profile selector dropdown (6 profiles with descriptions)
+- Weight visualization panel (horizontal bars, color-coded: blue=quantitative, purple=LLM)
+- Scored patent rankings table (paginated, server-side, 100/page)
+- Expandable score breakdown per patent: normalized metrics, contribution points, formula display
+- LLM indicator column (psychology icon when LLM scores available)
+- LLM score badges in expanded view (1-5 scale, color-coded)
+- Sector filter dropdown, Min Score filter
+- Competitor names chips in expanded view
+- CSV export with profile name in filename
+- Reload button (clears server caches)
+- LLM coverage badge in header (shows X/28913 patents with LLM data)
+
+#### LLM Scores Wired into Scoring Engine ✓ COMPLETE
+- `scoring-service.ts` — Added `LlmScores` interface and `loadAllLlmScores()` function
+- Loads LLM scores from 3 sources (priority order):
+  1. `output/llm-analysis-v3/combined-v3-*.json` (V3 analysis runs)
+  2. `output/llm-analysis-v2/`, `output/llm-analysis/`, `output/vmware-llm-analysis/` (V2/V1)
+  3. `cache/llm-scores/*.json` (per-patent cache, overrides combined files)
+- `buildMetrics()` now includes LLM scores when available
+- `clearScoringCache()` clears LLM cache too
+- `getLlmStats()` — returns coverage statistics
+- V3 API response includes `has_llm_scores`, `llm_scores` per patent, `llm_coverage` summary
+- New endpoint: `GET /api/scores/stats` — LLM coverage and profile count
+
+#### LLM Import Script ✓ COMPLETE
+- Created `scripts/import-llm-scores.ts`
+- Imports from multiple JSON formats: combined-v3, multi-score-analysis, arrays, objects
+- Saves per-patent JSON to `cache/llm-scores/`
+- Supports `--dry-run`, `--force`, `--all` (directory import)
+- Run: `npx tsx scripts/import-llm-scores.ts <file-or-dir> [--dry-run] [--force] [--all]`
+
+#### LLM Top Patents Job ✓ COMPLETE
+- Created `scripts/run-llm-top-patents.ts`
+- Scores all patents, selects top N without existing LLM data
+- Loads patent details from local cache (no API calls for details)
+- Runs V3 LLM analysis via Anthropic API
+- Saves results to both `cache/llm-scores/` and `output/llm-analysis-v3/`
+- Supports `--count N`, `--sector X`, `--batch-size N`, `--dry-run`, `--force`
+- Run: `npx tsx scripts/run-llm-top-patents.ts --count 100 --dry-run`
+
+#### Citation Enrichment Script ✓ COMPLETE
+- Created `scripts/enrich-citations.ts`
+- Fetches 1-generation parent citations (backward citations) for top-ranked patents
+- Saves to `cache/patent-families/parents/<patent_id>.json`
+- Optionally fetches parent patent details to `cache/patent-families/parent-details/`
+- Supports `--count N`, `--patent-ids`, `--skip-existing`, `--no-details`, `--dry-run`
+- Run: `npx tsx scripts/enrich-citations.ts --count 500 --skip-existing`
+
+### Session 7 (Current)
+
+#### LLM Import Script Enhanced — CSV + Nested Metrics ✓ COMPLETE
+- Extended `scripts/import-llm-scores.ts` with CSV file support and nested `metrics` object handling
+- Added `parseCsvToObjects()` and `parseCsvLine()` for RFC-compliant CSV parsing
+- Added `getScoreField()` helper resolving scores from `item.field` or `item.metrics.field`
+- Directory scanning now picks up both `.json` and `.csv` files with `--all`
+
+#### LLM Scores Imported from Export ✓ COMPLETE
+- Imported **2,669 patents** with all 5 LLM scores from `all-patents-scored-v3-2026-01-21.csv`
+- Source: Previous V3 analysis export (17,040 patents total, 2,669 with LLM data)
+- Saved to `cache/llm-scores/` — one JSON file per patent
+
+#### Patent Partitioning Verified ✓ CONFIRMED
+- Citation enrichment writes ONLY to `cache/patent-families/` — does NOT touch DB or ES index
+- Scoring service loads ONLY from `output/streaming-candidates-*.json` — isolated from family cache
+- `excludePatterns` in `competitors.json` covers all 20 Broadcom entities
+- Parent patents discovered via enrichment will never be treated as portfolio patents
+
+#### Overnight Jobs Queued — RUNNING
+1. **LLM Analysis Pass 1**: `run-llm-top-patents.ts --count 5000` (~4 hours)
+   - 1,000 batches of 5 patents each via Anthropic API (Claude Sonnet)
+   - Saves to `cache/llm-scores/` + `output/llm-analysis-v3/batches/`
+2. **LLM Analysis Pass 2**: `run-llm-top-patents.ts --count 3000` (~2.5 hours, after pass 1)
+3. **Citation Enrichment**: `enrich-citations.ts --count 2000 --skip-existing` (~2 hours, parallel)
+   - Backward citations for top 2,000 patents → `cache/patent-families/parents/`
+   - Parent patent details → `cache/patent-families/parent-details/`
+
+**Expected by morning:**
+- LLM scores: 2,669 (imported) + 5,000 (pass 1) + 3,000 (pass 2) = **~10,669 patents** (~37% coverage)
+- Patent family data: **2,000 patents** with backward citation trees
 
 ---
 
@@ -221,11 +323,16 @@ npm run api:dev
 | `GET /api/patents/:id/preview` | Lightweight preview (+ abstract + citation data) |
 | `POST /api/patents/batch-preview` | Batch preview (+ abstracts + citation data) |
 | `GET /api/patents/:id/citations` | Forward citations + classification breakdown |
+| `GET /api/patents/affiliates` | List affiliates with counts |
+| `GET /api/patents/super-sectors` | List super-sectors with counts |
+| `GET /api/patents/primary-sectors` | List 42 primary sectors with counts |
+| `GET /api/patents/assignees` | List raw assignees with counts |
 | `GET /api/scores/v2` | v2 scoring (legacy 3-weight) |
 | `GET /api/scores/v3` | V3 scored rankings (profile, page, limit, sector, minScore) |
 | `GET /api/scores/profiles` | List 6 scoring profiles with weights |
 | `GET /api/scores/sectors` | Sector rankings with damages tiers (profile, topN) |
-| `POST /api/scores/reload` | Clear scoring caches |
+| `POST /api/scores/reload` | Clear scoring caches (includes LLM scores) |
+| `GET /api/scores/stats` | LLM coverage statistics + profile count |
 | `GET/POST /api/focus-areas` | Focus area CRUD |
 | `POST /api/focus-areas/extract-keywords` | Keyword extraction |
 | `POST /api/focus-areas/search-preview` | Search term hit preview (+ searchFields param) |
@@ -241,9 +348,11 @@ cd frontend && npm run dev
 **Pages:**
 | Page | Route | Status |
 |------|-------|--------|
-| `PortfolioPage.vue` | `/` | Complete (+ focus group creation) |
+| `PortfolioPage.vue` | `/` | Complete (citations, filters, CSV export, query param drill-down) |
 | `PatentDetailPage.vue` | `/patent/:id` | Complete (+ abstract display) |
 | `V2ScoringPage.vue` | `/v2-scoring` | Complete |
+| `V3ScoringPage.vue` | `/v3-scoring` | Complete (profile selector, weight viz, rankings, score breakdown, LLM indicators) |
+| `SectorRankingsPage.vue` | `/sectors` | Complete (profile selector, expandable sectors, top patents) |
 | `FocusAreasPage.vue` | `/focus-areas` | Complete (+ tab query param, formalize button fix) |
 | `FocusAreaDetailPage.vue` | `/focus-areas/:id` | Complete (+ KEYWORD_AND, Focus Ratio, fuzziness fix) |
 
@@ -288,20 +397,23 @@ open http://localhost:3000/focus-areas
 
 ### ~~P-0a: Citation Classification~~ ✓ COMPLETE (Session 5)
 ### ~~P-0b: Scoring Engine~~ ✓ COMPLETE (Session 5)
+### ~~P-0c: Portfolio Grid Expansion~~ ✓ COMPLETE (Session 5)
+### ~~P-0d: Sector Ranking View~~ ✓ COMPLETE (Session 5)
+### ~~P-0e: CSV Export~~ ✓ COMPLETE (basic, Session 5)
 
-### P-0c: Portfolio Grid Expansion — IN PROGRESS
-- [ ] Frontend columns for all citation metrics (competitor, affiliate, neutral, competitor count)
-- [ ] V3 score column with profile selector
-- [ ] Primary sector filter, sector drill-down
-- [ ] Column visibility defaults updated
+### ~~V3 Scoring Page~~ ✓ COMPLETE (Session 6)
 
-### P-0d: Sector Ranking View
-- [ ] Rewrite SectorRankingsPage from stub to functional
-- [ ] Profile selector, sector cards, top patents per sector
+### LLM Data Import ✓ COMPLETE (Session 7)
+- 2,669 patents imported from CSV export into `cache/llm-scores/`
+- Import script enhanced with CSV support and nested metrics handling
 
-### P-0e: CSV Export
-- [ ] Export button on portfolio grid
-- [ ] Respects current filters and sort
+### Overnight Jobs ✓ QUEUED (Session 7)
+- **LLM Pass 1**: 5,000 patents (~4 hr) — RUNNING
+- **LLM Pass 2**: 3,000 patents (~2.5 hr) — queued after pass 1
+- **Citation Enrichment**: 2,000 patents (~2 hr) — RUNNING in parallel
+- After completion: `POST /api/scores/reload` to refresh scoring engine
+- Check results: `ls cache/llm-scores/ | wc -l` (expect ~10,669)
+- Check families: `ls cache/patent-families/parents/ | wc -l` (expect ~2,000)
 
 ### P-1: Focus Area & Search Scope (after P-0)
 - [ ] Search scope detection and selector
@@ -331,4 +443,4 @@ Tables: `api_request_cache`, `llm_response_cache`, `users`, `focus_groups`, `foc
 
 ---
 
-*Last Updated: 2026-01-25 (Session 5 — P-0a, P-0b complete; P-0c in progress)*
+*Last Updated: 2026-01-25 (Session 7 — LLM scores imported from CSV export (2,669), overnight jobs queued: LLM 8,000 patents + citation enrichment 2,000 patents)*

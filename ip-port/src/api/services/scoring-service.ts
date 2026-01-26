@@ -223,6 +223,7 @@ const PROFILES: ScoringProfile[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CLASSIFICATION_CACHE_DIR = path.join(process.cwd(), 'cache/citation-classification');
+const LLM_SCORES_DIR = path.join(process.cwd(), 'cache/llm-scores');
 const CANDIDATES_DIR = path.join(process.cwd(), 'output');
 
 interface CitationClassification {
@@ -236,8 +237,19 @@ interface CitationClassification {
   has_citation_data: boolean;
 }
 
+interface LlmScores {
+  patent_id: string;
+  eligibility_score: number;
+  validity_score: number;
+  claim_breadth: number;
+  enforcement_clarity: number;
+  design_around_difficulty: number;
+  source?: string; // e.g. 'v3', 'v2', 'import'
+}
+
 // In-memory caches
 let classificationCache: Map<string, CitationClassification> | null = null;
+let llmScoresCache: Map<string, LlmScores> | null = null;
 let candidatesCache: any[] | null = null;
 
 /**
@@ -284,6 +296,104 @@ export function loadAllClassifications(): Map<string, CitationClassification> {
 }
 
 /**
+ * Load all LLM scores into memory (for batch scoring)
+ * Reads from cache/llm-scores/ directory (individual per-patent JSON files)
+ * Also checks output/llm-analysis-v3/ for combined output files
+ */
+export function loadAllLlmScores(): Map<string, LlmScores> {
+  if (llmScoresCache) return llmScoresCache;
+
+  llmScoresCache = new Map();
+
+  // Try combined output files first (from LLM analysis runs)
+  const llmOutputDir = path.join(process.cwd(), 'output/llm-analysis-v3');
+  if (fs.existsSync(llmOutputDir)) {
+    const combinedFiles = fs.readdirSync(llmOutputDir)
+      .filter(f => f.startsWith('combined-v3-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+
+    for (const file of combinedFiles) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(llmOutputDir, file), 'utf-8'));
+        for (const analysis of data.analyses || []) {
+          if (!llmScoresCache.has(analysis.patent_id)) {
+            llmScoresCache.set(analysis.patent_id, {
+              patent_id: analysis.patent_id,
+              eligibility_score: analysis.eligibility_score,
+              validity_score: analysis.validity_score,
+              claim_breadth: analysis.claim_breadth,
+              enforcement_clarity: analysis.enforcement_clarity,
+              design_around_difficulty: analysis.design_around_difficulty,
+              source: 'v3-analysis',
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to load LLM combined file ${file}:`, e);
+      }
+    }
+  }
+
+  // Also check v2 and v1 output directories
+  for (const subdir of ['llm-analysis-v2', 'llm-analysis', 'vmware-llm-analysis']) {
+    const dir = path.join(process.cwd(), 'output', subdir);
+    if (!fs.existsSync(dir)) continue;
+
+    const files = fs.readdirSync(dir)
+      .filter(f => f.startsWith('combined-') && f.endsWith('.json'))
+      .sort()
+      .reverse();
+
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
+        for (const analysis of data.analyses || []) {
+          if (!llmScoresCache.has(analysis.patent_id)) {
+            llmScoresCache.set(analysis.patent_id, {
+              patent_id: analysis.patent_id,
+              eligibility_score: analysis.eligibility_score,
+              validity_score: analysis.validity_score,
+              claim_breadth: analysis.claim_breadth,
+              enforcement_clarity: analysis.enforcement_clarity,
+              design_around_difficulty: analysis.design_around_difficulty,
+              source: subdir,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to load LLM file ${file} from ${subdir}:`, e);
+      }
+    }
+  }
+
+  // Load per-patent cache files (from import script or on-demand analysis)
+  if (fs.existsSync(LLM_SCORES_DIR)) {
+    const files = fs.readdirSync(LLM_SCORES_DIR).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(LLM_SCORES_DIR, file), 'utf-8'));
+        // Per-patent files override combined files (they may be more recent)
+        llmScoresCache.set(data.patent_id, {
+          patent_id: data.patent_id,
+          eligibility_score: data.eligibility_score,
+          validity_score: data.validity_score,
+          claim_breadth: data.claim_breadth,
+          enforcement_clarity: data.enforcement_clarity,
+          design_around_difficulty: data.design_around_difficulty,
+          source: data.source || 'cache',
+        });
+      } catch (e) {
+        // skip invalid files
+      }
+    }
+  }
+
+  console.log(`[Scoring] Loaded LLM scores for ${llmScoresCache.size} patents`);
+  return llmScoresCache;
+}
+
+/**
  * Load portfolio candidates
  */
 function loadCandidates(): any[] {
@@ -308,6 +418,7 @@ function loadCandidates(): any[] {
  */
 export function clearScoringCache(): void {
   classificationCache = null;
+  llmScoresCache = null;
   candidatesCache = null;
 }
 
@@ -318,7 +429,7 @@ export function clearScoringCache(): void {
 /**
  * Build PatentMetrics from candidate + classification data
  */
-function buildMetrics(candidate: any, classification: CitationClassification | null): PatentMetrics {
+function buildMetrics(candidate: any, classification: CitationClassification | null, llmScores: LlmScores | null): PatentMetrics {
   return {
     patent_id: candidate.patent_id,
     competitor_citations: classification?.competitor_citations ?? 0,
@@ -329,8 +440,12 @@ function buildMetrics(candidate: any, classification: CitationClassification | n
     neutral_citations: classification?.neutral_citations ?? 0,
     total_forward_citations: classification?.total_forward_citations ?? candidate.forward_citations ?? 0,
     has_citation_data: classification?.has_citation_data ?? false,
-    // LLM scores — currently not loaded (placeholder for future)
-    // These would come from a facet_values table or LLM cache
+    // LLM scores (when available)
+    eligibility_score: llmScores?.eligibility_score,
+    validity_score: llmScores?.validity_score,
+    claim_breadth: llmScores?.claim_breadth,
+    enforcement_clarity: llmScores?.enforcement_clarity,
+    design_around_difficulty: llmScores?.design_around_difficulty,
   };
 }
 
@@ -410,12 +525,14 @@ export function scoreAllPatents(profileId: string): ScoredPatent[] {
 
   const candidates = loadCandidates();
   const classifications = loadAllClassifications();
+  const llmScores = loadAllLlmScores();
 
   const scored: ScoredPatent[] = [];
 
   for (const candidate of candidates) {
     const classification = classifications.get(candidate.patent_id) ?? null;
-    const metrics = buildMetrics(candidate, classification);
+    const llm = llmScores.get(candidate.patent_id) ?? null;
+    const metrics = buildMetrics(candidate, classification, llm);
     scored.push(scorePatent(metrics, profile));
   }
 
@@ -441,12 +558,14 @@ export function scorePatentsBySector(profileId: string): Map<string, ScoredPaten
 
   const candidates = loadCandidates();
   const classifications = loadAllClassifications();
+  const llmScores = loadAllLlmScores();
   const bySector = new Map<string, ScoredPatent[]>();
 
   for (const candidate of candidates) {
     const sector = candidate.primary_sector || 'general';
     const classification = classifications.get(candidate.patent_id) ?? null;
-    const metrics = buildMetrics(candidate, classification);
+    const llm = llmScores.get(candidate.patent_id) ?? null;
+    const metrics = buildMetrics(candidate, classification, llm);
     const scored = scorePatent(metrics, profile);
 
     if (!bySector.has(sector)) {
@@ -489,4 +608,17 @@ export function getProfile(profileId: string): ScoringProfile | undefined {
  */
 export function getDefaultProfileId(): string {
   return 'executive';
+}
+
+/**
+ * Get LLM coverage statistics
+ */
+export function getLlmStats(): { total_patents: number; patents_with_llm: number; coverage_pct: number } {
+  const candidates = loadCandidates();
+  const llmScores = loadAllLlmScores();
+  return {
+    total_patents: candidates.length,
+    patents_with_llm: llmScores.size,
+    coverage_pct: candidates.length > 0 ? Math.round(llmScores.size / candidates.length * 1000) / 10 : 0,
+  };
 }

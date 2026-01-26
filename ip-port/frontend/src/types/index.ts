@@ -92,6 +92,22 @@ export interface V3ScoredPatent {
   neutral_citations: number;
   competitor_count: number;
   competitor_names: string[];
+  // LLM data
+  has_llm_scores: boolean;
+  llm_scores: {
+    eligibility_score: number;
+    validity_score: number;
+    claim_breadth: number;
+    enforcement_clarity: number;
+    design_around_difficulty: number;
+  } | null;
+}
+
+// LLM coverage stats
+export interface LlmCoverage {
+  total_patents: number;
+  patents_with_llm: number;
+  coverage_pct: number;
 }
 
 // Sector ranking (from /api/scores/sectors)

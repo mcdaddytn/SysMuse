@@ -16,7 +16,9 @@ import {
   getProfile,
   getDefaultProfileId,
   loadAllClassifications,
+  loadAllLlmScores,
   clearScoringCache,
+  getLlmStats,
 } from '../services/scoring-service.js';
 
 const router = Router();
@@ -217,9 +219,13 @@ router.get('/v3', (req: Request, res: Response) => {
     const paginated = scored.slice(startIndex, startIndex + limitNum);
 
     // Enrich with candidate metadata
+    const classifications = loadAllClassifications();
+    const llmScores = loadAllLlmScores();
+
     const enriched = paginated.map(s => {
       const c = candidates.get(s.patent_id);
-      const classification = loadAllClassifications().get(s.patent_id);
+      const classification = classifications.get(s.patent_id);
+      const llm = llmScores.get(s.patent_id);
       return {
         ...s,
         patent_title: c?.patent_title || '',
@@ -235,8 +241,18 @@ router.get('/v3', (req: Request, res: Response) => {
         neutral_citations: classification?.neutral_citations || 0,
         competitor_count: classification?.competitor_count || 0,
         competitor_names: classification?.competitor_names || [],
+        has_llm_scores: !!llm,
+        llm_scores: llm ? {
+          eligibility_score: llm.eligibility_score,
+          validity_score: llm.validity_score,
+          claim_breadth: llm.claim_breadth,
+          enforcement_clarity: llm.enforcement_clarity,
+          design_around_difficulty: llm.design_around_difficulty,
+        } : null,
       };
     });
+
+    const llmStats = getLlmStats();
 
     res.json({
       profile: {
@@ -249,6 +265,7 @@ router.get('/v3', (req: Request, res: Response) => {
       total,
       page: pageNum,
       rowsPerPage: limitNum,
+      llm_coverage: llmStats,
     });
   } catch (error) {
     console.error('Error calculating v3 scores:', error);
@@ -367,7 +384,25 @@ router.get('/sectors', (req: Request, res: Response) => {
  */
 router.post('/reload', (_req: Request, res: Response) => {
   clearScoringCache();
+  patentsMap = null;
   res.json({ message: 'Scoring caches cleared' });
+});
+
+/**
+ * GET /api/scores/stats
+ * Get scoring statistics including LLM coverage
+ */
+router.get('/stats', (_req: Request, res: Response) => {
+  try {
+    const llmStats = getLlmStats();
+    res.json({
+      llm_coverage: llmStats,
+      profiles_count: getProfiles().length,
+    });
+  } catch (error) {
+    console.error('Error getting scoring stats:', error);
+    res.status(500).json({ error: 'Failed to get scoring stats' });
+  }
 });
 
 /**

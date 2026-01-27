@@ -268,6 +268,37 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/focus-areas/scope-options
+ * Get available scope options (sectors, super-sectors) with patent counts
+ */
+router.get('/scope-options', async (req: Request, res: Response) => {
+  try {
+    const esHealthy = await esService.healthCheck();
+    if (!esHealthy) {
+      return res.status(503).json({ error: 'Elasticsearch is not available' });
+    }
+
+    // Get sector and super-sector counts from ES aggregation
+    const [sectorCounts, superSectorCounts] = await Promise.all([
+      esService.getTermFrequencies({}, { field: 'primary_sector', size: 100 }),
+      esService.getTermFrequencies({}, { field: 'super_sector', size: 50 })
+    ]);
+
+    res.json({
+      sectors: sectorCounts
+        .filter(s => s.term !== 'general')
+        .sort((a, b) => b.count - a.count),
+      superSectors: superSectorCounts
+        .filter(s => s.term && s.term !== 'UNKNOWN')
+        .sort((a, b) => b.count - a.count)
+    });
+  } catch (error) {
+    console.error('Error fetching scope options:', error);
+    res.status(500).json({ error: 'Failed to fetch scope options' });
+  }
+});
+
+/**
  * GET /api/focus-areas/:id
  * Get a specific focus area with full details
  */
@@ -316,6 +347,8 @@ router.post('/', async (req: Request, res: Response) => {
       superSector,
       primarySector,
       parentId,
+      searchScopeType,
+      searchScopeConfig,
       patentIds = []
     } = req.body;
 
@@ -332,6 +365,8 @@ router.post('/', async (req: Request, res: Response) => {
           superSector,
           primarySector,
           parentId,
+          searchScopeType: searchScopeType || 'PORTFOLIO',
+          searchScopeConfig: searchScopeConfig || undefined,
           status: 'ACTIVE',
           patentCount: patentIds.length
         }
@@ -365,7 +400,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, status, superSector, primarySector, parentId } = req.body;
+    const { name, description, status, superSector, primarySector, parentId, searchScopeType, searchScopeConfig } = req.body;
 
     const focusArea = await prisma.focusArea.update({
       where: { id },
@@ -375,7 +410,9 @@ router.put('/:id', async (req: Request, res: Response) => {
         ...(status && { status }),
         ...(superSector !== undefined && { superSector }),
         ...(primarySector !== undefined && { primarySector }),
-        ...(parentId !== undefined && { parentId })
+        ...(parentId !== undefined && { parentId }),
+        ...(searchScopeType && { searchScopeType }),
+        ...(searchScopeConfig !== undefined && { searchScopeConfig })
       }
     });
 
@@ -712,19 +749,23 @@ router.post('/:id/extract-keywords', async (req: Request, res: Response) => {
  * Body: {
  *   expression: string,           // Search query (keywords, phrase, etc.)
  *   termType?: string,            // KEYWORD, PHRASE, PROXIMITY, WILDCARD, BOOLEAN
+ *   searchFields?: string,        // 'title' | 'abstract' | 'both'
  *   scopes?: {
- *     focusAreaId?: string,       // Limit to focus area patents
- *     superSector?: string,       // Filter by super sector
- *     primarySector?: string      // Filter by primary sector
+ *     focusAreaId?: string,       // Focus area (for focus area hit count)
+ *     superSector?: string,       // Super-sector scope (single)
+ *     primarySector?: string,     // Primary sector scope (single)
+ *     sectors?: string[],         // Multiple sectors (OR)
+ *     superSectors?: string[]     // Multiple super-sectors (OR)
  *   }
  * }
  *
  * Returns:
  *   hitCounts: {
  *     portfolio: number,          // Total hits in entire portfolio
- *     sector: number,             // Hits in specified sector (if provided)
- *     focusArea: number           // Hits in focus area (if provided)
+ *     scope: number,              // Hits within active search scope
+ *     focusArea: number           // Hits in focus area patents
  *   },
+ *   scopeTotal: number,           // Total patents in scope (for selectivity)
  *   sampleHits: [...]             // First few matching patents
  */
 router.post('/search-preview', async (req: Request, res: Response) => {
@@ -766,26 +807,39 @@ router.post('/search-preview', async (req: Request, res: Response) => {
         searchQuery = `"${expression}"`;
         break;
       case 'BOOLEAN':
-        // Pass through as-is for boolean expressions
         searchQuery = expression;
         break;
       case 'WILDCARD':
-        // Add wildcards to each word
         searchQuery = expression.split(/\s+/).map((w: string) => `${w}*`).join(' ');
         break;
       case 'PROXIMITY':
-        // Already in proximity format, pass through
         searchQuery = expression;
         break;
       default:
-        // KEYWORD / KEYWORD_AND - simple search
         searchQuery = expression;
     }
 
     // Disable fuzziness for keyword types (exact term matching)
     const fuzziness = (termType === 'KEYWORD' || termType === 'KEYWORD_AND') ? '0' : 'AUTO';
 
-    // Get portfolio-wide hit count
+    // Build scope filters for ES
+    const scopeFilters: Record<string, any> = {};
+    const hasScopeFilter =
+      scopes.primarySector || scopes.superSector ||
+      scopes.sectors?.length || scopes.superSectors?.length;
+
+    if (scopes.sectors?.length) {
+      scopeFilters.primary_sector = scopes.sectors;
+    } else if (scopes.primarySector) {
+      scopeFilters.primary_sector = scopes.primarySector;
+    }
+    if (scopes.superSectors?.length) {
+      scopeFilters.super_sector = scopes.superSectors;
+    } else if (scopes.superSector) {
+      scopeFilters.super_sector = scopes.superSector;
+    }
+
+    // Get portfolio-wide hit count (no scope filter)
     const portfolioResults = await esService.search(searchQuery, {
       fields,
       size: 5,
@@ -797,61 +851,64 @@ router.post('/search-preview', async (req: Request, res: Response) => {
       portfolio: portfolioResults.total
     };
 
-    // If sector scope provided, get sector-specific count
-    if (scopes.superSector) {
-      const sectorResults = await esService.search(searchQuery, {
+    let scopeTotal: number | undefined;
+
+    // Get scope-filtered hit count if scope is defined
+    if (hasScopeFilter) {
+      const scopeResults = await esService.search(searchQuery, {
         fields,
         size: 0,
         fuzziness,
-        filters: {
-          // Note: This requires the sector to be indexed in ES
-          // For now we'll use the portfolio count as a fallback
+        filters: scopeFilters
+      });
+      hitCounts.scope = scopeResults.total;
+
+      // Get total patents in scope (for selectivity denominator)
+      const scopeTotalResults = await esService.count({
+        bool: {
+          filter: Object.entries(scopeFilters).map(([key, val]) =>
+            Array.isArray(val) ? { terms: { [key]: val } } : { term: { [key]: val } }
+          )
         }
       });
-      // Fallback to portfolio count if sector filtering not available in ES
-      hitCounts.sector = sectorResults.total;
+      scopeTotal = scopeTotalResults;
     }
 
-    // If focus area scope provided, get focus area-specific count
+    // Get focus area hit count
     if (scopes.focusAreaId) {
-      // Get patent IDs in the focus area
       const focusAreaPatents = await prisma.focusAreaPatent.findMany({
         where: { focusAreaId: scopes.focusAreaId },
         select: { patentId: true }
       });
 
-      console.log(`[search-preview] focusAreaId=${scopes.focusAreaId}, focusAreaPatent records=${focusAreaPatents.length}`);
-
       if (focusAreaPatents.length > 0) {
         const patentIds = focusAreaPatents.map(p => p.patentId);
-        console.log(`[search-preview] Sample DB patentIds: ${patentIds.slice(0, 3).join(', ')}`);
 
-        // Count how many of the search results are in the focus area
-        // For a simple implementation, we intersect search results with focus area patents
+        // Use ES ids filter for efficient focus area intersection
         const focusAreaResults = await esService.search(searchQuery, {
           fields,
-          size: 10000, // Get all to count overlap
+          size: 0,
           fuzziness,
-          filters: {}
+          filters: { patent_ids: patentIds }
         });
-
-        console.log(`[search-preview] ES hits: ${focusAreaResults.hits.length}, sample ES patent_ids: ${focusAreaResults.hits.slice(0, 3).map(h => h.patent_id).join(', ')}`);
-
-        const focusAreaPatentSet = new Set(patentIds);
-        const matchingInFocusArea = focusAreaResults.hits.filter(
-          hit => focusAreaPatentSet.has(hit.patent_id)
-        );
-
-        console.log(`[search-preview] Intersection matches: ${matchingInFocusArea.length}`);
-        hitCounts.focusArea = matchingInFocusArea.length;
+        hitCounts.focusArea = focusAreaResults.total;
       } else {
-        console.log(`[search-preview] No focusAreaPatent records found for ${scopes.focusAreaId}`);
         hitCounts.focusArea = 0;
       }
     }
 
-    // Format sample hits for display
-    const sampleHits = portfolioResults.hits.slice(0, 5).map(hit => ({
+    // Format sample hits — use scope-filtered results if available, otherwise portfolio
+    const sampleSource = hasScopeFilter
+      ? await esService.search(searchQuery, {
+          fields,
+          size: 5,
+          highlight: true,
+          fuzziness,
+          filters: scopeFilters
+        })
+      : portfolioResults;
+
+    const sampleHits = sampleSource.hits.slice(0, 5).map(hit => ({
       patentId: hit.patent_id,
       title: hit.title,
       score: hit.score,
@@ -862,6 +919,7 @@ router.post('/search-preview', async (req: Request, res: Response) => {
       expression,
       termType,
       hitCounts,
+      scopeTotal,
       sampleHits,
       esAvailable: true
     });

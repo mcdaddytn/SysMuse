@@ -262,6 +262,16 @@ router.get('/v3', (req: Request, res: Response) => {
         neutral_citations: classification?.neutral_citations || 0,
         competitor_count: classification?.competitor_count || 0,
         competitor_names: classification?.competitor_names || [],
+        // Citation-aware scoring (Session 13): weighted citations discounting affiliates
+        adjusted_forward_citations: Math.round((
+          (classification?.competitor_citations || 0) * 1.5 +
+          (classification?.neutral_citations || 0) * 1.0 +
+          (classification?.affiliate_citations || 0) * 0.25
+        ) * 100) / 100,
+        competitor_density: (() => {
+          const ext = (classification?.competitor_citations || 0) + (classification?.neutral_citations || 0);
+          return ext > 0 ? Math.round((classification?.competitor_citations || 0) / ext * 1000) / 1000 : 0;
+        })(),
         has_llm_scores: !!llm,
         llm_scores: llm ? {
           eligibility_score: llm.eligibility_score,

@@ -59,6 +59,12 @@ export const usePatentsStore = defineStore('patents', () => {
       description: 'Citations from non-competitor, non-affiliate patents' },
     { name: 'competitor_count', label: 'Competitors', field: 'competitor_count', sortable: true, align: 'center', visible: true, group: 'citations',
       description: 'Distinct competitor companies citing this patent' },
+    { name: 'adjusted_forward_citations', label: 'Adj. Fwd Cites', field: 'adjusted_forward_citations', sortable: true, align: 'center', visible: false, group: 'citations',
+      description: 'Forward citations weighted by source: competitor ×1.5, neutral ×1.0, affiliate ×0.25',
+      format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
+    { name: 'competitor_density', label: 'Comp. Density', field: 'competitor_density', sortable: true, align: 'center', visible: false, group: 'citations',
+      description: 'Fraction of external citations from competitors (0-1)',
+      format: (val: unknown) => typeof val === 'number' ? (val * 100).toFixed(0) + '%' : String(val) },
 
     // Scores group (all numeric metrics used in rankings)
     { name: 'score', label: 'Base Score', field: 'score', sortable: true, align: 'center', visible: true, group: 'scores',

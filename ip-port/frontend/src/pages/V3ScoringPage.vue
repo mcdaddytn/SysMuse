@@ -36,26 +36,36 @@ const currentProfile = computed(() => {
 // Weight metric labels
 const METRIC_LABELS: Record<string, string> = {
   competitor_citations: 'Competitor Citations',
-  forward_citations: 'Forward Citations',
+  forward_citations: 'Forward Citations (Raw)',
+  adjusted_forward_citations: 'Forward Citations (Adjusted)',
   years_remaining: 'Years Remaining',
   competitor_count: 'Competitor Count',
+  competitor_density: 'Competitor Density',
   eligibility_score: 'Eligibility (LLM)',
   validity_score: 'Validity (LLM)',
   claim_breadth: 'Claim Breadth (LLM)',
   enforcement_clarity: 'Enforcement Clarity (LLM)',
   design_around_difficulty: 'Design-Around Difficulty (LLM)',
+  market_relevance_score: 'Market Relevance (LLM)',
+  ipr_risk_score: 'IPR Risk (API)',
+  prosecution_quality_score: 'Prosecution Quality (API)',
 };
 
 const METRIC_COLORS: Record<string, string> = {
   competitor_citations: '#e53935',
   forward_citations: '#1e88e5',
+  adjusted_forward_citations: '#1565c0',
   years_remaining: '#43a047',
   competitor_count: '#f4511e',
+  competitor_density: '#d84315',
   eligibility_score: '#8e24aa',
   validity_score: '#5e35b1',
   claim_breadth: '#3949ab',
   enforcement_clarity: '#7b1fa2',
   design_around_difficulty: '#6a1b9a',
+  market_relevance_score: '#00838f',
+  ipr_risk_score: '#bf360c',
+  prosecution_quality_score: '#4e342e',
 };
 
 // Sorted weights for the current profile
@@ -632,16 +642,24 @@ onMounted(async () => {
                             <div class="text-body2">{{ props.row.forward_citations }}</div>
                           </div>
                           <div>
+                            <div class="text-caption text-blue-9">Adj. Fwd Cites</div>
+                            <div class="text-body2 text-blue-8">{{ props.row.adjusted_forward_citations?.toFixed(1) || '-' }}</div>
+                          </div>
+                          <div>
                             <div class="text-caption text-grey-6">Competitor Cites</div>
                             <div class="text-body2 text-red-7">{{ props.row.competitor_citations }}</div>
                           </div>
                           <div>
                             <div class="text-caption text-grey-6">Affiliate Cites</div>
-                            <div class="text-body2">{{ props.row.affiliate_citations }}</div>
+                            <div class="text-body2 text-orange">{{ props.row.affiliate_citations }}</div>
                           </div>
                           <div>
                             <div class="text-caption text-grey-6">Neutral Cites</div>
                             <div class="text-body2">{{ props.row.neutral_citations }}</div>
+                          </div>
+                          <div>
+                            <div class="text-caption text-deep-orange-9">Comp. Density</div>
+                            <div class="text-body2">{{ props.row.competitor_density != null ? (props.row.competitor_density * 100).toFixed(0) + '%' : '-' }}</div>
                           </div>
                           <div>
                             <div class="text-caption text-grey-6">Competitors</div>

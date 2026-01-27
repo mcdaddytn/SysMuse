@@ -19,6 +19,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createElasticsearchService, ElasticsearchService } from './elasticsearch-service.js';
+import { getPrimarySector, getSuperSector } from '../src/api/utils/sector-mapper.js';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -319,6 +320,10 @@ async function importStreamingCandidates(es: ElasticsearchService): Promise<Impo
         const abstract = loadAbstractFromCache(p.patent_id);
         if (abstract) abstractsLoaded++;
 
+        const cpcCodes = p.cpc_codes || [];
+        const primarySector = p.primary_sector || getPrimarySector(cpcCodes);
+        const superSector = p.super_sector || getSuperSector(primarySector);
+
         return {
           patent_id: p.patent_id,
           title: p.patent_title,
@@ -326,11 +331,13 @@ async function importStreamingCandidates(es: ElasticsearchService): Promise<Impo
           grant_date: p.patent_date || undefined,
           assignee: p.assignee || undefined,
           assignee_normalized: p.assignee ? normalizeAssignee(p.assignee) : undefined,
-          cpc_codes: p.cpc_codes || [],
-          cpc_classes: p.cpc_codes?.map((c: string) => c.substring(0, 4)).filter(Boolean) || [],
+          cpc_codes: cpcCodes,
+          cpc_classes: cpcCodes.map((c: string) => c.substring(0, 4)).filter(Boolean),
           forward_citations: p.forward_citations || 0,
           remaining_years: p.remaining_years || 0,
-          enhanced_score: p.score || 0
+          enhanced_score: p.score || 0,
+          primary_sector: primarySector,
+          super_sector: superSector
         };
       });
 

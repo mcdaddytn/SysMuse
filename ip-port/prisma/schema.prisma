@@ -179,6 +179,10 @@ model FocusArea {
   superSector   String?   @map("super_sector")
   primarySector String?   @map("primary_sector")
 
+  // Search scope — the categorical boundary for search term evaluation
+  searchScopeType SearchScopeType @default(PORTFOLIO) @map("search_scope_type")
+  searchScopeConfig Json?  @map("search_scope_config")  // { sectors?: string[], superSectors?: string[], cpcCodes?: string[] }
+
   // Cached stats
   patentCount   Int       @default(0) @map("patent_count")
   lastCalculatedAt DateTime? @map("last_calculated_at")
@@ -202,6 +206,14 @@ enum FocusAreaStatus {
   ACTIVE
   DRAFT
   ARCHIVED
+}
+
+enum SearchScopeType {
+  PORTFOLIO        // All patents in portfolio (default)
+  SECTOR           // One or more primary sectors
+  SUPER_SECTOR     // One or more super-sectors
+  COMPOUND         // Boolean combination of sectors/scopes
+  PATENT_FAMILY    // Citation-based family
 }
 
 // Junction table: Focus Area to Patent (many-to-many)
@@ -258,6 +270,7 @@ model SearchTerm {
 
   // Hit analysis (cached)
   hitCountPortfolio Int?    @map("hit_count_portfolio")
+  hitCountScope     Int?    @map("hit_count_scope")     // Hits within active search scope
   hitCountSector    Int?    @map("hit_count_sector")
   hitCountFocusArea Int?    @map("hit_count_focus_area")
   hitCountsJson     Json?   @map("hit_counts_json")  // Detailed breakdown

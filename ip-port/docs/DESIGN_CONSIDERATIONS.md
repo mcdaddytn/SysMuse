@@ -138,3 +138,417 @@ TOPRATED-2026-01-21.csv
 TOPRATED-V2-2026-01-21.csv
 
 </baseline results>
+
+
+<Competitor Classification — Formal Criteria>
+
+Updated: 2026-01-26 (Session 13)
+
+The system classifies every company (assignee) into exactly one of three categories:
+Affiliate, Competitor, or Neutral. This classification drives citation weighting in scoring,
+portfolio overlap analysis, and strategic targeting.
+
+## Definitions
+
+### Affiliate
+An entity within the portfolio owner's corporate family. For the Broadcom portfolio:
+- Direct subsidiaries: VMware, Avago, LSI, Symantec, CA Technologies
+- Acquired entities: Nicira, Carbon Black, Pivotal, Brocade, Blue Coat, Avi Networks, Lastline, Nyansa
+- Defined via `excludePatterns` in `config/competitors.json`
+- Assignment is **deterministic** — based on known corporate structure
+- Affiliates do NOT change based on analysis; they change with M&A events
+
+### Competitor
+An entity with demonstrated interest in the portfolio's technology, evidenced by citation
+activity. A company becomes a competitor through any of these paths:
+
+1. **Citation Threshold** (Primary): The company's assignee(s) cite portfolio patents
+   N or more times across the portfolio. Current threshold: defined per discovery strategy
+   in `config/competitors.json` (131 companies).
+
+2. **Discovery Strategies** (how competitors were found):
+   - `manual-initial`: Industry knowledge — direct market competitors (Cisco, Intel, Samsung, etc.)
+   - `citation-overlap-broadcom-streaming`: Forward citation overlap on 15,276 Broadcom streaming patents
+   - `term-extraction-avago-av`: ES term extraction on 923 Avago A/V patents
+   - `hybrid-cluster-*`: Agglomerative clustering of top litigation patents by CPC + term affinity
+   - `product-discovery-*`: Sector-specific product research identifying implementers
+
+3. **Manual Promotion**: User designates a company as competitor based on strategic analysis
+
+### Neutral
+All other assignees — below the citation threshold, no manual designation, and not an
+affiliate. The neutral pool includes:
+- Small companies with incidental citations
+- Academic/research institutions
+- Government entities
+- Individuals
+
+## When Does a Company Become a Competitor?
+
+The formal criteria should combine:
+
+### Quantitative Signals
+- **Forward citation count**: >=N citations of portfolio patents (portfolio-wide)
+  - Proposed threshold: >=10 citations across portfolio, OR >=3 in any single sector
+- **Sector citation density**: High citation rate within a specific sector even if
+  portfolio-wide count is below threshold
+- **Citation reciprocity**: We cite them AND they cite us (mutual awareness)
+
+### Qualitative Signals
+- **Market overlap**: Companies operating in the same product markets
+- **Litigation history**: Prior patent disputes with portfolio owner
+- **Industry reports**: Named as competitor in market analysis
+- **LLM-identified implementers**: `likely_implementers` field from V3 analysis
+
+### Sector-Specific Competitors
+Future: A company may be a competitor in one sector but neutral in others.
+- Intel may be a competitor in `network-switching` but neutral in `rf-acoustic`
+- This requires per-sector competitor lists or sector-tagged competitor records
+- Design: Add optional `sectors[]` to competitor definition, empty = all sectors
+
+### Competitor Confidence Levels
+Future: Rather than binary competitor/neutral, assign a confidence score:
+- 1.0 = Definite competitor (litigation target, top citator)
+- 0.7 = Likely competitor (moderate citation overlap, same market)
+- 0.4 = Possible competitor (some citations, adjacent market)
+- 0.0 = Neutral (below threshold, no market overlap)
+
+This enables continuous weighting rather than hard cutoffs in scoring.
+
+## Current Implementation
+- `config/competitors.json` — 131 companies with discovery strategy provenance
+- `config/competitors.json` `excludePatterns` — affiliate patterns
+- `scripts/classify-citations.ts` — three-way classification using these lists
+- Output: `cache/citation-classification/` + `output/citation-classification-*.json`
+
+## Open Questions
+- Should the citation threshold be portfolio-wide or per-sector?
+- Should we auto-promote companies above a threshold in the GUI?
+- Should competitor status be revocable (company acquired, exits market)?
+- How to handle companies that are both affiliates AND competitors in M&A scenarios?
+
+</Competitor Classification — Formal Criteria>
+
+
+<Citation-Aware Scoring Design>
+
+Updated: 2026-01-26 (Session 13)
+
+## Problem Statement
+
+The current scoring system uses `forward_citations` (total) and `competitor_citations`
+as two separate scoring inputs. This fails to account for:
+1. **Self-citation inflation**: VMware patents cite each other at 16.5% vs 1.7% for non-VMware
+   (documented in CITATION_CATEGORIZATION_PROBLEM.md)
+2. **Backward citation signals**: Patents that cite many competitor patents indicate
+   the technology is rooted in competitive space
+3. **Citation quality**: Not all citations carry equal strategic weight
+
+## Current Citation Data Available
+
+| Metric | Direction | Coverage | Source |
+|--------|-----------|----------|--------|
+| `total_forward_citations` | Forward | 100% | PatentsView API |
+| `competitor_citations` | Forward | 100% | classify-citations.ts |
+| `affiliate_citations` | Forward | 100% | classify-citations.ts |
+| `neutral_citations` | Forward | 100% | classify-citations.ts |
+| `competitor_count` | Forward | 100% | Distinct competitor companies citing |
+| `backward_citations` (parents) | Backward | 9% (2,000 patents) | enrich-citations.ts |
+| `parent_details` | Backward | 11,706 parent records | enrich-citations.ts |
+
+## Proposed Citation Scoring Model
+
+### Forward Citations (External Validation)
+
+Forward citations measure external interest in a patent's technology. Different
+sources of citations carry different strategic weight:
+
+```
+adjusted_forward = (
+  competitor_forward × W_competitor +     // High value: competitors use this tech
+  neutral_forward × W_neutral +           // Moderate: general interest
+  affiliate_forward × W_affiliate         // Low: self-interest
+)
+
+Proposed weights:
+  W_competitor = 1.5   (competitor citations are 50% more valuable)
+  W_neutral = 1.0      (baseline)
+  W_affiliate = 0.25   (deeply discounted — self-citation)
+```
+
+**Rationale**:
+- Competitor citations signal that competitors are building on or around this technology —
+  strong indicator of licensing/litigation potential
+- Affiliate citations primarily reflect internal R&D continuity, not external market validation
+- The 0.25 weight for affiliates is conservative; could go to 0.0 for pure external scoring
+
+### Competitor Citation Density (Strategic Signal)
+
+Beyond raw count, the **concentration** of competitor interest matters:
+
+```
+competitor_density = competitor_forward / (competitor_forward + neutral_forward)
+```
+
+High density = technology is squarely in competitive space.
+Low density = broad but non-competitive interest.
+
+This could be a standalone scoring input (0-1 normalized).
+
+### Backward Citations (Technology Foundation)
+
+Backward citations show what technology a patent builds upon. For scoring:
+
+```
+backward_competitive_signal = competitor_backward / total_backward
+```
+
+If a patent cites many competitor patents, it means:
+- The technology area has heavy competitor activity
+- The patent may be "sandwiched" between competitor prior art (risk factor)
+- OR the patent improves on competitor technology (enforcement opportunity)
+
+**Scoring impact**: Backward citations should primarily be a **risk/opportunity** signal
+rather than a direct score component. Suggested use:
+
+- `backward_competitor_ratio > 0.5`: Flag as "deep in competitive space" — high enforcement
+  opportunity but also higher invalidity risk
+- `backward_competitor_ratio < 0.1`: Technology is relatively unchallenged — potentially
+  stronger validity but less clear infringement targets
+
+### Combined Citation Score Proposal
+
+```
+citation_score = (
+  // Primary: adjusted forward citations (external validation)
+  normalized(adjusted_forward) × 0.50 +
+
+  // Secondary: competitor count breadth (# distinct competitors citing)
+  normalized(competitor_count) × 0.25 +
+
+  // Tertiary: competitor density (how competitive is the space)
+  competitor_density × 0.15 +
+
+  // Quaternary: backward competitive signal (optional, when data available)
+  backward_competitive_signal × 0.10
+)
+```
+
+### Impact on VMware Dominance
+
+The key intervention is the affiliate citation discount. With current data:
+- VMware patents average 16.5% self-citation rate
+- Some Nicira patents have 60-80% self-citations
+- At W_affiliate = 0.25, a patent with 100 forward citations where 50 are affiliate:
+  - Old: citation_input = 100
+  - New: citation_input = (20 × 1.5) + (30 × 1.0) + (50 × 0.25) = 30 + 30 + 12.5 = 72.5
+  - A 27.5% reduction — proportional to the self-citation inflation
+
+### Implementation Phases
+
+Phase 1 (Immediate):
+- Use `adjusted_forward` in existing scoring service — replace raw `forward_citations`
+- Add W_competitor, W_neutral, W_affiliate as configurable weights per scoring profile
+- Recompute rankings and compare with current
+
+Phase 2 (With Patent Family Data):
+- Incorporate backward citation metrics as data coverage grows (currently 9%)
+- Add competitor_density as a new scoring dimension
+- Consider multi-generational citation metrics
+
+Phase 3 (Advanced):
+- Competitor confidence weighting (see Competitor Classification section)
+- Sector-specific citation weights (competitor citations worth more in high-damages sectors)
+- Time-decay on citations (recent citations more valuable than older ones)
+
+</Citation-Aware Scoring Design>
+
+
+<Conditional Facets — Sector-Specific LLM Questions via Facet System>
+
+Updated: 2026-01-26 (Session 13)
+
+## Design Goal
+
+Enable sector or focus-group specific LLM questions that produce new facets.
+These facets should:
+1. Only appear as columns when viewing patents in the relevant sector/focus context
+2. Be stored via the generic facet system (not hard-coded schema fields)
+3. Support conditions that dictate when facets are expected to exist
+4. Integrate with the existing V3 analysis pipeline via a decoupled second-pass approach
+
+## Facet Condition Model
+
+Each facet can have an optional `condition` that specifies when it is expected:
+
+```typescript
+interface FacetDefinition {
+  key: string;                    // e.g., "sec_attack_vector"
+  label: string;                  // "Attack Vector"
+  type: 'string' | 'int' | 'float' | 'enum' | 'multi-enum' | 'bool';
+  options?: string[];             // For enum/multi-enum types
+  source: 'llm' | 'api' | 'user' | 'calculated';
+
+  // Condition: when is this facet expected to be populated?
+  condition?: FacetCondition;
+
+  // Display
+  group: string;                  // Column group in UI
+  defaultVisible: boolean;        // Show by default when condition is met
+}
+
+interface FacetCondition {
+  type: 'sector' | 'super_sector' | 'focus_area' | 'focus_group' | 'always';
+
+  // Which sectors/groups activate this facet
+  sectors?: string[];             // e.g., ["network-threat-protection", "network-auth-access"]
+  superSectors?: string[];        // e.g., ["SECURITY"]
+  focusAreaIds?: string[];        // Specific focus areas
+  focusGroupIds?: string[];       // Specific focus groups
+
+  // Display behavior
+  showWhenFiltered: boolean;      // Show column only when filter matches condition
+  showInDetail: boolean;          // Always show in patent detail (within relevant tab)
+}
+```
+
+## Examples
+
+### Security Sector Facets
+
+```json
+[
+  {
+    "key": "sec_attack_vector",
+    "label": "Attack Vector",
+    "type": "multi-enum",
+    "options": ["network_intrusion", "malware", "phishing", "insider_threat",
+                "data_exfiltration", "ddos", "credential_theft"],
+    "source": "llm",
+    "condition": {
+      "type": "super_sector",
+      "superSectors": ["SECURITY"],
+      "showWhenFiltered": true,
+      "showInDetail": true
+    },
+    "group": "Sector Analysis",
+    "defaultVisible": true
+  },
+  {
+    "key": "sec_zero_trust_alignment",
+    "label": "Zero Trust Alignment",
+    "type": "enum",
+    "options": ["core_component", "compatible", "neutral", "contradictory"],
+    "source": "llm",
+    "condition": {
+      "type": "super_sector",
+      "superSectors": ["SECURITY"],
+      "showWhenFiltered": true,
+      "showInDetail": true
+    },
+    "group": "Sector Analysis",
+    "defaultVisible": false
+  }
+]
+```
+
+### Video Codec Facets
+
+```json
+[
+  {
+    "key": "vid_codec_standard",
+    "label": "Codec Standard",
+    "type": "multi-enum",
+    "options": ["h264_avc", "h265_hevc", "av1", "vp9", "vvc_h266", "none"],
+    "source": "llm",
+    "condition": {
+      "type": "sector",
+      "sectors": ["video-codec", "video-client-processing", "video-server-cdn"],
+      "showWhenFiltered": true,
+      "showInDetail": true
+    },
+    "group": "Sector Analysis",
+    "defaultVisible": true
+  }
+]
+```
+
+## Column Visibility Rules
+
+The GUI column selector should respect conditions:
+
+```
+1. User is viewing "All Patents" (no sector filter)
+   → Show only unconditional columns (Core Info, Scores, LLM Text, Citations)
+   → Sector-specific columns hidden from selector
+
+2. User filters by sector = "network-threat-protection"
+   → Show unconditional columns
+   → ALSO show SECURITY super-sector facets in Column Selector
+   → Facets with defaultVisible=true auto-appear
+
+3. User selects a Focus Area with custom facets
+   → Show unconditional columns
+   → ALSO show focus-area-specific facets
+
+4. Patent Detail page, LLM Analysis tab
+   → Show all facets that have data for this patent, regardless of current grid filter
+   → Group sector-specific facets under "Sector Analysis" sub-section
+```
+
+## LLM Execution Pipeline
+
+Sector-specific LLM questions are executed as a **separate pass** from the generic V3
+analysis (decoupled approach — see SECTOR_SPECIFIC_LLM_QUESTIONS.md):
+
+```
+Pass 1: Generic V3 (26 fields) — already running, 7,669 patents analyzed
+Pass 2: Sector-specific (5-10 fields per sector) — separate LLM call per sector
+
+Storage:
+  cache/llm-scores/{patent_id}.json         → Generic V3 fields
+  cache/llm-sector/{sector}/{patent_id}.json → Sector-specific fields
+```
+
+The API and GUI join these at read time. Patent detail page shows both.
+The portfolio grid conditionally shows sector columns based on active filter.
+
+## Facet Configuration Storage
+
+Facet definitions are stored in JSON config (not code):
+
+```
+config/facet-definitions/
+├── core-facets.json              # Always-available facets (from V3 analysis)
+├── security-sector-facets.json   # SECURITY super-sector facets
+├── video-sector-facets.json      # VIDEO super-sector facets
+├── wireless-sector-facets.json   # WIRELESS super-sector facets
+├── cloud-sector-facets.json      # CLOUD super-sector facets
+└── custom/                       # User-created focus area facets
+    └── {focus-area-id}.json
+```
+
+## Relationship to Existing Systems
+
+- **Facet System** (FACET_SYSTEM_DESIGN.md): This extends the facet system with conditions.
+  The PatentFacet table stores sector-specific facet values with source="llm" and
+  sourceDetail pointing to the sector prompt version.
+
+- **Sector-Specific LLM** (SECTOR_SPECIFIC_LLM_QUESTIONS.md): Defines the actual questions
+  per sector. This design adds the UI/storage framework to make those results visible.
+
+- **Focus Areas** (FOCUS_AREA_SYSTEM_DESIGN.md): Focus areas can define custom facets that
+  follow the same conditional visibility pattern. Focus-area facets appear when viewing
+  that focus area's patents.
+
+## Implementation Priority
+
+1. **Config-driven facet definitions** — JSON files defining available facets with conditions
+2. **Backend facet API** — `GET /api/facets/schema` returns available facets for current context
+3. **Frontend column resolver** — Column selector queries facet schema, shows conditional columns
+4. **Sector LLM pipeline** — Run sector-specific prompts, store results in sector cache
+5. **Join at read time** — Patent list/detail endpoints merge generic + sector facet data
+
+</Conditional Facets — Sector-Specific LLM Questions via Facet System>
+

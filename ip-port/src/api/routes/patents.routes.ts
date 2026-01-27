@@ -149,6 +149,9 @@ interface Patent extends RawPatent {
   neutral_citations?: number;
   competitor_count?: number;
   competitor_names?: string[];
+  // Citation-aware scoring (Session 13)
+  adjusted_forward_citations?: number;
+  competitor_density?: number;
   has_citation_data?: boolean;
   // LLM data
   has_llm_data?: boolean;
@@ -259,6 +262,17 @@ function loadPatents(): Patent[] {
       neutral_citations: classification?.neutral_citations ?? 0,
       competitor_count: classification?.competitor_count ?? 0,
       competitor_names: classification?.competitor_names ?? [],
+      // Citation-aware scoring (Session 13)
+      adjusted_forward_citations: Math.round((
+        (classification?.competitor_citations ?? 0) * 1.5 +
+        (classification?.neutral_citations ?? 0) * 1.0 +
+        (classification?.affiliate_citations ?? 0) * 0.25
+      ) * 100) / 100,
+      competitor_density: (() => {
+        const cc = classification?.competitor_citations ?? 0;
+        const nc = classification?.neutral_citations ?? 0;
+        return (cc + nc) > 0 ? Math.round(cc / (cc + nc) * 1000) / 1000 : 0;
+      })(),
       has_citation_data: classification?.has_citation_data ?? false,
       // LLM data
       has_llm_data: !!llm,
@@ -740,6 +754,8 @@ router.post('/batch-preview', (req: Request, res: Response) => {
           neutral_citations: patent.neutral_citations,
           competitor_count: patent.competitor_count,
           competitor_names: patent.competitor_names,
+          adjusted_forward_citations: patent.adjusted_forward_citations,
+          competitor_density: patent.competitor_density,
         };
       } else {
         previews[id] = null;
@@ -771,6 +787,8 @@ interface PatentPreview {
   neutral_citations?: number;
   competitor_count?: number;
   competitor_names?: string[];
+  adjusted_forward_citations?: number;
+  competitor_density?: number;
 }
 
 /**
@@ -805,6 +823,8 @@ router.get('/:id/preview', (req: Request, res: Response) => {
       neutral_citations: patent.neutral_citations,
       competitor_count: patent.competitor_count,
       competitor_names: patent.competitor_names,
+      adjusted_forward_citations: patent.adjusted_forward_citations,
+      competitor_density: patent.competitor_density,
     };
 
     res.json(preview);

@@ -776,4 +776,144 @@ interface SearchScope {
 
 ---
 
-*Last Updated: 2026-01-25 (Session 4 — added Search Scope, Word Count Grid, LLM Jobs, Sector, Patent View sections)*
+## Focus Area as Reconciliation Point
+
+Updated: 2026-01-26 (Session 14)
+
+A Focus Area is not just a list of patents — it is a **reconciliation point** between multiple, overlapping ways of grouping patents. Each grouping method produces a different patent set, and these sets naturally diverge. The Focus Area provides the binary "selected / not-selected" state that reconciles them, while preserving the richer relationships underneath.
+
+### Grouping Methods That Feed a Focus Area
+
+| Method | What It Produces | Example |
+|--------|-----------------|---------|
+| **Explicit selection** | A hand-picked patent set (the "focused" patents) | User selects 15 patents from portfolio grid |
+| **Search scope** | A categorical boundary (a superset) | All patents in the `network-security` sector |
+| **Search terms** | A query-defined set within a scope | Patents matching "authentication AND token" within that sector |
+| **Patent family** | A citation-based set centered on seed patents | All parents, children, and siblings of patent US10123456 |
+| **Category overlay** | Intersection of scope with another grouping | Patents in both `network-security` sector AND a "Zero Trust" focus area |
+
+### The Tension Between Groupings
+
+These methods produce different sets, but they are all attempts to delineate the same underlying technology cluster. The tension manifests in specific ways:
+
+```
+Search Scope (sector):     ████████████████████████████████ (2,341 patents)
+Search Term hits:          ░░░░████████░░░░░░░░░░░░░░░░░░░░ (127 patents)
+Explicit selection:        ░░░░░░██████░█░░░░░░░░░░░░░░░░░░ (15 patents)
+Patent family:             ░░░░░░░████████░░░░░████░░░░░░░░░ (89 patents)
+                                 ↑                ↑
+                           overlap zone      family-only
+                                              (adjacent)
+```
+
+**Key observations:**
+- Patents in the search scope but NOT selected are **adjacent** — potentially relevant, discovered by broadening
+- Patents selected but NOT in search results are **targeted** — relevant by human judgment but missed by current terms
+- Patents in the family but outside the scope are **citation-adjacent** — related by technology lineage, possibly in a different sector
+- The intersection of all methods is the **high-confidence core**
+
+### Focused vs. Adjacent Patents
+
+Within any search scope, patents fall into two categories relative to a focus area:
+
+| Category | Definition | Signal |
+|----------|-----------|--------|
+| **Focused** | Explicitly selected OR matched by search terms AND confirmed | Strong relevance — these define the focus area |
+| **Adjacent** | In the search scope but not focused | Weaker relevance — contextual, may be promoted to focused |
+
+The "adjacent" set is valuable because:
+1. It provides contrast for search term selectivity (focus ratio = focused / scope)
+2. It contains candidates for focus area expansion
+3. It reveals gaps in search term coverage (adjacent patents that "should" be focused)
+
+### Patent Set Operations
+
+Because different grouping methods produce different sets, the Focus Area needs **set operations** to manage the binary selected/not-selected state:
+
+| Operation | Description | Use Case |
+|-----------|-------------|----------|
+| **Diff** | Patents in set A but not set B | "Which explicitly selected patents did our search terms miss?" |
+| **Intersect** | Patents in both A and B | "Which patents are both in the family AND matched by search terms?" |
+| **Union** | Patents in A or B or both | "Combine family members with search term hits into one focus area" |
+| **Complement** | Patents in scope but not in set A | "Which sector patents are NOT in our focus area?" (the adjacent set) |
+
+#### Workflow: Reconciling Patent Sets
+
+```
+1. Start: Explicit selection of 15 patents
+2. Define search scope: Portfolio/Sector (network-security) → 2,341 patents
+3. Run search terms: "authentication AND token" → 127 hits in scope
+4. Diff: Selected \ SearchHits → 3 patents selected but not found by terms
+   → Action: Examine these 3 — do terms need refinement, or are they outliers?
+5. Diff: SearchHits \ Selected → 112 patents found by terms but not selected
+   → Action: Review these — some should be added to selection
+6. Build family from selected patents → 89 patents in family
+7. Diff: Family \ (SearchHits ∪ Selected) → 22 family-only patents
+   → Action: Review these — citation-adjacent patents, potentially relevant
+8. Union: Selected ∪ SearchHits ∪ (Family ∩ Scope) → Updated focus area
+```
+
+#### Set Operation API Design
+
+```typescript
+interface PatentSetOperation {
+  operation: 'DIFF' | 'INTERSECT' | 'UNION' | 'COMPLEMENT';
+  setA: PatentSetReference;    // Source set A
+  setB: PatentSetReference;    // Source set B (or scope for COMPLEMENT)
+  preview: boolean;            // If true, return patent IDs without modifying
+}
+
+interface PatentSetReference {
+  type: 'FOCUS_AREA' | 'SEARCH_RESULTS' | 'FAMILY' | 'SCOPE' | 'INLINE';
+  focusAreaId?: string;        // For FOCUS_AREA type
+  searchTermIds?: string[];    // For SEARCH_RESULTS type — run these terms
+  familyId?: string;           // For FAMILY type
+  scopeId?: string;            // For SCOPE type
+  patentIds?: string[];        // For INLINE type — explicit list
+}
+
+// Result
+interface PatentSetResult {
+  patentIds: string[];
+  count: number;
+  sourceBreakdown: {
+    fromA: number;
+    fromB: number;
+    intersection: number;
+  };
+}
+```
+
+#### Applying Set Operations to Focus Area
+
+The active patent set of a focus area can always be updated from combinations of other sets:
+
+```
+POST /api/focus-areas/:id/apply-set-operation
+{
+  operation: "UNION",
+  setA: { type: "FOCUS_AREA", focusAreaId: "current" },
+  setB: { type: "SEARCH_RESULTS", searchTermIds: ["term-1", "term-2"] },
+  preview: true  // Show what would change before committing
+}
+```
+
+Preview response shows:
+- Patents that would be **added** (in B but not A)
+- Patents that would be **removed** (for INTERSECT/DIFF)
+- Net change to focus area membership
+
+### Search Scope as Focus Area Context
+
+The search scope is not just a performance optimization — it provides **semantic context** for the focus area:
+
+1. **Selectivity signal**: A search term that hits 5% of a narrow scope is more meaningful than one hitting 5% of the full portfolio
+2. **Adjacent patent pool**: The scope minus the focus area is the "adjacent" set — candidates for inclusion
+3. **Cross-scope portability**: Testing the same search terms in different scopes reveals whether the focus area concept is sector-specific or universal
+4. **Family constraint**: When expanding a patent family, the scope limits expansion to relevant territory
+
+A focus area should always have an **active search scope**, defaulting to Portfolio but typically narrowed to a sector or compound scope.
+
+---
+
+*Last Updated: 2026-01-26 (Session 14 — added Focus Area as Reconciliation Point: grouping methods, focused vs adjacent patents, patent set operations, search scope as context)*

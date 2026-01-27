@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult } from '@/services/api';
+import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult, type ScopeOptions, type SearchScopeType, type SearchScopeConfig } from '@/services/api';
 import PatentPreviewTooltip from '@/components/PatentPreviewTooltip.vue';
 import KeywordExtractionPanel from '@/components/KeywordExtractionPanel.vue';
 
@@ -76,6 +76,107 @@ const previewStats = computed(() => {
   return { total, found, notFound };
 });
 
+// Search scope
+const showScopeDialog = ref(false);
+const scopeOptions = ref<ScopeOptions | null>(null);
+const loadingScopeOptions = ref(false);
+const pendingScopeType = ref<SearchScopeType>('PORTFOLIO');
+const pendingScopeConfig = ref<SearchScopeConfig>({});
+
+const activeScopeLabel = computed(() => {
+  if (!focusArea.value) return 'Portfolio';
+  const st = focusArea.value.searchScopeType;
+  const sc = focusArea.value.searchScopeConfig;
+  if (st === 'PORTFOLIO') return 'Portfolio';
+  if (st === 'SUPER_SECTOR' && sc?.superSectors?.length) {
+    return sc.superSectors.length === 1
+      ? formatScopeLabel(sc.superSectors[0])
+      : `${sc.superSectors.length} super-sectors`;
+  }
+  if (st === 'SECTOR' && sc?.sectors?.length) {
+    return sc.sectors.length === 1
+      ? formatScopeLabel(sc.sectors[0])
+      : `${sc.sectors.length} sectors`;
+  }
+  return st.toLowerCase().replace('_', '-');
+});
+
+function formatScopeLabel(key: string): string {
+  return key.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+async function loadScopeOptions() {
+  loadingScopeOptions.value = true;
+  try {
+    scopeOptions.value = await searchApi.getScopeOptions();
+  } catch (err) {
+    console.error('Failed to load scope options:', err);
+  } finally {
+    loadingScopeOptions.value = false;
+  }
+}
+
+function openScopeDialog() {
+  if (focusArea.value) {
+    pendingScopeType.value = focusArea.value.searchScopeType || 'PORTFOLIO';
+    pendingScopeConfig.value = { ...(focusArea.value.searchScopeConfig || {}) };
+  }
+  loadScopeOptions();
+  showScopeDialog.value = true;
+}
+
+async function saveScope() {
+  if (!focusArea.value) return;
+  try {
+    const config = pendingScopeType.value === 'PORTFOLIO' ? null : pendingScopeConfig.value;
+    await focusAreaApi.updateFocusArea(focusAreaId.value, {
+      searchScopeType: pendingScopeType.value,
+      searchScopeConfig: config
+    } as Partial<FocusArea>);
+    focusArea.value.searchScopeType = pendingScopeType.value;
+    focusArea.value.searchScopeConfig = config || undefined;
+    showScopeDialog.value = false;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to save scope';
+  }
+}
+
+function toggleScopeSector(sector: string) {
+  const sectors = pendingScopeConfig.value.sectors || [];
+  const idx = sectors.indexOf(sector);
+  if (idx >= 0) {
+    sectors.splice(idx, 1);
+  } else {
+    sectors.push(sector);
+  }
+  pendingScopeConfig.value = { ...pendingScopeConfig.value, sectors };
+}
+
+function toggleScopeSuperSector(ss: string) {
+  const superSectors = pendingScopeConfig.value.superSectors || [];
+  const idx = superSectors.indexOf(ss);
+  if (idx >= 0) {
+    superSectors.splice(idx, 1);
+  } else {
+    superSectors.push(ss);
+  }
+  pendingScopeConfig.value = { ...pendingScopeConfig.value, superSectors };
+}
+
+// Build scope params for search preview based on active focus area scope
+function getScopeParams() {
+  if (!focusArea.value) return {};
+  const st = focusArea.value.searchScopeType;
+  const sc = focusArea.value.searchScopeConfig;
+  if (st === 'SECTOR' && sc?.sectors?.length) {
+    return { sectors: sc.sectors };
+  }
+  if (st === 'SUPER_SECTOR' && sc?.superSectors?.length) {
+    return { superSectors: sc.superSectors };
+  }
+  return {};
+}
+
 // Add search term dialog
 const showAddTermDialog = ref(false);
 const newTerm = ref({
@@ -105,7 +206,8 @@ async function triggerTermPreview() {
     termPreviewResult.value = await searchApi.previewSearchTerm(expression, {
       termType: newTerm.value.termType,
       searchFields: termSearchFields.value,
-      focusAreaId: focusAreaId.value
+      focusAreaId: focusAreaId.value,
+      ...getScopeParams()
     });
   } catch (err) {
     console.error('Failed to load term preview:', err);
@@ -119,9 +221,12 @@ async function triggerTermPreview() {
 const focusAreaId = computed(() => route.params.id as string);
 
 const termSelectivityRatio = computed(() => {
-  if (!termPreviewResult.value || termPreviewResult.value.hitCounts.portfolio === 0) return 1;
+  if (!termPreviewResult.value) return 1;
+  const denominator = termPreviewResult.value.hitCounts.scope
+    ?? termPreviewResult.value.hitCounts.portfolio;
+  if (denominator === 0) return 1;
   const fa = termPreviewResult.value.hitCounts.focusArea ?? 0;
-  return fa / termPreviewResult.value.hitCounts.portfolio;
+  return fa / denominator;
 });
 
 const searchTerms = computed(() => focusArea.value?.searchTerms || []);
@@ -412,6 +517,16 @@ onMounted(async () => {
             </q-chip>
             <q-chip dense :color="focusArea.status === 'ACTIVE' ? 'green-2' : 'grey-3'">
               {{ focusArea.status }}
+            </q-chip>
+            <q-chip
+              dense
+              clickable
+              :color="focusArea.searchScopeType === 'PORTFOLIO' ? 'grey-3' : 'purple-2'"
+              @click="openScopeDialog"
+            >
+              <q-icon name="filter_alt" class="q-mr-xs" size="xs" />
+              Scope: {{ activeScopeLabel }}
+              <q-tooltip>Search scope — click to change</q-tooltip>
             </q-chip>
           </div>
         </q-card-section>
@@ -708,6 +823,104 @@ onMounted(async () => {
       </q-card>
     </q-dialog>
 
+    <!-- Search Scope Dialog -->
+    <q-dialog v-model="showScopeDialog">
+      <q-card style="min-width: 500px; max-width: 600px">
+        <q-card-section class="row items-center">
+          <div class="text-h6">Search Scope</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <div class="text-caption text-grey-7 q-mb-md">
+            The search scope limits which patents are considered when evaluating search terms.
+            A narrower scope produces more meaningful selectivity ratios.
+          </div>
+
+          <q-select
+            v-model="pendingScopeType"
+            :options="[
+              { value: 'PORTFOLIO', label: 'Full Portfolio' },
+              { value: 'SUPER_SECTOR', label: 'Super-Sector(s)' },
+              { value: 'SECTOR', label: 'Sector(s)' }
+            ]"
+            label="Scope Type"
+            outlined
+            emit-value
+            map-options
+            class="q-mb-md"
+          />
+
+          <!-- Super-sector selection -->
+          <template v-if="pendingScopeType === 'SUPER_SECTOR'">
+            <div class="text-subtitle2 q-mb-sm">Select Super-Sectors</div>
+            <div v-if="loadingScopeOptions" class="q-pa-sm">
+              <q-spinner size="sm" /> Loading...
+            </div>
+            <div v-else-if="scopeOptions?.superSectors" class="scope-chips-container">
+              <q-chip
+                v-for="ss in scopeOptions.superSectors"
+                :key="ss.term"
+                dense
+                clickable
+                :color="(pendingScopeConfig.superSectors || []).includes(ss.term) ? 'purple-3' : 'grey-3'"
+                @click="toggleScopeSuperSector(ss.term)"
+              >
+                {{ formatScopeLabel(ss.term) }}
+                <q-badge floating color="grey-6" text-color="white">{{ ss.count }}</q-badge>
+              </q-chip>
+            </div>
+          </template>
+
+          <!-- Sector selection -->
+          <template v-if="pendingScopeType === 'SECTOR'">
+            <div class="text-subtitle2 q-mb-sm">Select Sectors</div>
+            <div v-if="loadingScopeOptions" class="q-pa-sm">
+              <q-spinner size="sm" /> Loading...
+            </div>
+            <div v-else-if="scopeOptions?.sectors" class="scope-chips-container">
+              <q-chip
+                v-for="s in scopeOptions.sectors"
+                :key="s.term"
+                dense
+                clickable
+                :color="(pendingScopeConfig.sectors || []).includes(s.term) ? 'purple-3' : 'grey-3'"
+                @click="toggleScopeSector(s.term)"
+              >
+                {{ formatScopeLabel(s.term) }}
+                <q-badge floating color="grey-6" text-color="white">{{ s.count }}</q-badge>
+              </q-chip>
+            </div>
+          </template>
+
+          <!-- Selected summary -->
+          <div v-if="pendingScopeType !== 'PORTFOLIO'" class="q-mt-md text-caption">
+            <template v-if="pendingScopeType === 'SUPER_SECTOR' && pendingScopeConfig.superSectors?.length">
+              Selected: {{ pendingScopeConfig.superSectors.map(formatScopeLabel).join(', ') }}
+            </template>
+            <template v-else-if="pendingScopeType === 'SECTOR' && pendingScopeConfig.sectors?.length">
+              Selected: {{ pendingScopeConfig.sectors.map(formatScopeLabel).join(', ') }}
+            </template>
+            <template v-else>
+              <span class="text-orange">No selections — will use full portfolio</span>
+            </template>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save Scope"
+            @click="saveScope"
+            :disable="pendingScopeType !== 'PORTFOLIO' &&
+              !(pendingScopeConfig.sectors?.length || pendingScopeConfig.superSectors?.length)"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Add Search Term Dialog -->
     <q-dialog v-model="showAddTermDialog">
       <q-card style="min-width: 500px">
@@ -778,6 +991,22 @@ onMounted(async () => {
                   <q-tooltip>Patents in the full portfolio matching this search term</q-tooltip>
                 </q-chip>
                 <q-chip
+                  v-if="termPreviewResult.hitCounts.scope !== undefined"
+                  dense
+                  color="purple-2"
+                  icon="filter_alt"
+                  size="sm"
+                >
+                  <span class="text-weight-medium">Scope:</span>
+                  <span class="q-ml-xs">{{ termPreviewResult.hitCounts.scope.toLocaleString() }}</span>
+                  <span v-if="termPreviewResult.scopeTotal" class="text-grey-7 q-ml-xs">
+                    / {{ termPreviewResult.scopeTotal.toLocaleString() }}
+                  </span>
+                  <q-tooltip>
+                    Hits within search scope ({{ activeScopeLabel }}){{ termPreviewResult.scopeTotal ? ` out of ${termPreviewResult.scopeTotal.toLocaleString()} patents in scope` : '' }}
+                  </q-tooltip>
+                </q-chip>
+                <q-chip
                   v-if="termPreviewResult.hitCounts.focusArea !== undefined"
                   dense
                   color="blue-2"
@@ -789,7 +1018,7 @@ onMounted(async () => {
                   <q-tooltip>Patents in this focus area matching this search term</q-tooltip>
                 </q-chip>
                 <q-chip
-                  v-if="termPreviewResult.hitCounts.focusArea !== undefined && termPreviewResult.hitCounts.portfolio > 0"
+                  v-if="termPreviewResult.hitCounts.focusArea !== undefined && (termPreviewResult.hitCounts.scope ?? termPreviewResult.hitCounts.portfolio) > 0"
                   dense
                   :color="termSelectivityRatio > 0.05 ? 'green-2' : termSelectivityRatio > 0.01 ? 'orange-2' : 'red-2'"
                   :text-color="termSelectivityRatio > 0.05 ? 'green-9' : termSelectivityRatio > 0.01 ? 'orange-9' : 'red-9'"
@@ -798,7 +1027,7 @@ onMounted(async () => {
                 >
                   Focus Ratio: {{ (termSelectivityRatio * 100).toFixed(2) }}%
                   <q-tooltip>
-                    Focus area hits / portfolio hits. Higher = search term captures more of this focus area relative to portfolio.
+                    Focus area hits / {{ termPreviewResult.hitCounts.scope !== undefined ? 'scope' : 'portfolio' }} hits. Higher = search term captures more of this focus area.
                   </q-tooltip>
                 </q-chip>
               </div>
@@ -881,5 +1110,16 @@ code {
   background: #fff59d;
   padding: 0 2px;
   border-radius: 2px;
+}
+
+.scope-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
 }
 </style>

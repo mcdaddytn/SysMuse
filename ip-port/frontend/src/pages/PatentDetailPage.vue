@@ -65,6 +65,23 @@ const expirationDate = computed(() => {
   return grant.toISOString().slice(0, 10);
 });
 
+// Citation-aware scoring (Session 13)
+const computedAdjustedForward = computed(() => {
+  const c = citations.value?.classification;
+  if (!c) return '-';
+  const adj = (c.competitor_citations || 0) * 1.5 +
+    (c.neutral_citations || 0) * 1.0 +
+    (c.affiliate_citations || 0) * 0.25;
+  return adj.toFixed(1);
+});
+const computedCompetitorDensity = computed(() => {
+  const c = citations.value?.classification;
+  if (!c) return '-';
+  const ext = (c.competitor_citations || 0) + (c.neutral_citations || 0);
+  if (ext === 0) return '0%';
+  return ((c.competitor_citations || 0) / ext * 100).toFixed(0) + '%';
+});
+
 // Super-sector color mapping
 const sectorColors: Record<string, string> = {
   'Security': 'red-7',
@@ -453,6 +470,15 @@ function openUSPTO() {
               <div class="text-center">
                 <div class="text-h5">{{ citations.total_hits }}</div>
                 <div class="text-caption">Total Forward</div>
+              </div>
+              <q-separator vertical class="q-mx-sm" />
+              <div class="text-center">
+                <div class="text-h5 text-blue-8">{{ computedAdjustedForward }}</div>
+                <div class="text-caption">Adjusted Fwd</div>
+              </div>
+              <div class="text-center">
+                <div class="text-h5 text-deep-orange-8">{{ computedCompetitorDensity }}</div>
+                <div class="text-caption">Comp. Density</div>
               </div>
               <q-separator vertical class="q-mx-sm" />
               <div class="text-center">

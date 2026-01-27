@@ -1,23 +1,32 @@
 /**
  * Scoring Service (P-0b)
  *
- * Implements V3 patent scoring with configurable weight profiles.
+ * Implements V3 patent scoring with configurable weight profiles and
+ * citation-aware weighting (Session 13).
  *
  * Formula:
  *   score = Σ(normalized_metric × adjusted_weight) × year_multiplier × 100
  *
  * Normalization:
- *   competitor_citations:    min(1, cc / 20)
- *   forward_citations:       min(1, sqrt(fc) / 30)
- *   years_remaining:         min(1, years / 15)
- *   competitor_count:        min(1, count / 5)
- *   LLM scores (1-5):       (score - 1) / 4
+ *   competitor_citations:         min(1, cc / 20)
+ *   adjusted_forward_citations:   min(1, sqrt(adj_fc) / 30)
+ *     where adj_fc = competitor×1.5 + neutral×1.0 + affiliate×0.25
+ *   competitor_density:           competitor / (competitor + neutral)  [0-1]
+ *   years_remaining:              min(1, years / 15)
+ *   competitor_count:             min(1, count / 5)
+ *   LLM scores (1-5):            (score - 1) / 4
+ *
+ * Citation-aware weighting (addresses VMware self-citation inflation):
+ *   Competitor citations boosted 1.5× (strong external validation)
+ *   Neutral citations baseline 1.0×
+ *   Affiliate citations discounted to 0.25× (self-citation)
+ *   See docs/CITATION_CATEGORIZATION_PROBLEM.md
  *
  * Year multiplier:
  *   0.3 + 0.7 × (yearsFactor ^ 0.8)
  *   where yearsFactor = min(1, years / 15)
  *
- * When LLM metrics are unavailable (95% of patents), their weights
+ * When LLM metrics are unavailable (~65% of patents), their weights
  * are redistributed proportionally among available metrics.
  */
 
@@ -41,8 +50,10 @@ export interface PatentMetrics {
   // Quantitative (always available for patents with citation data)
   competitor_citations: number;
   forward_citations: number;
+  adjusted_forward_citations: number; // Weighted: competitor×1.5 + neutral×1.0 + affiliate×0.25
   years_remaining: number;
   competitor_count: number;
+  competitor_density: number; // competitor / (competitor + neutral), 0-1
   // Citation breakdown (from classification pipeline)
   affiliate_citations: number;
   neutral_citations: number;
@@ -82,14 +93,38 @@ export interface SectorSummary {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Citation weighting — adjusts forward citations by source type
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Citation source weights for adjusted_forward_citations.
+ * Competitor citations are boosted (strong external validation signal).
+ * Affiliate citations are deeply discounted (self-citation / internal R&D).
+ * Neutral citations are baseline.
+ *
+ * Addresses VMware self-citation inflation: VMware patents average 16.5%
+ * self-citation rate vs 1.7% for non-VMware (see CITATION_CATEGORIZATION_PROBLEM.md).
+ */
+export const CITATION_WEIGHTS = {
+  competitor: 1.5,   // 50% boost — competitors building on/around this tech
+  neutral: 1.0,      // Baseline — general external interest
+  affiliate: 0.25,   // 75% discount — self-citation / internal continuity
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Normalization functions
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NORMALIZERS: Record<string, (value: number) => number> = {
   competitor_citations: (v) => Math.min(1, v / 20),
   forward_citations: (v) => Math.min(1, Math.sqrt(v) / 30),
+  // Adjusted forward citations: same shape as forward_citations but accounts
+  // for potentially higher values from competitor boost (max 1.5× raw total)
+  adjusted_forward_citations: (v) => Math.min(1, Math.sqrt(v) / 30),
   years_remaining: (v) => Math.min(1, v / 15),
   competitor_count: (v) => Math.min(1, v / 5),
+  // Competitor density: already 0-1 (ratio of competitor to external citations)
+  competitor_density: (v) => Math.min(1, v),
   // LLM scores: 1-5 → 0-1 (1 is worst, 5 is best)
   eligibility_score: (v) => Math.max(0, (v - 1) / 4),
   validity_score: (v) => Math.max(0, (v - 1) / 4),
@@ -120,8 +155,10 @@ const API_METRICS = new Set([
 const QUANTITATIVE_METRICS = new Set([
   'competitor_citations',
   'forward_citations',
+  'adjusted_forward_citations',
   'years_remaining',
   'competitor_count',
+  'competitor_density',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,13 +169,14 @@ const PROFILES: ScoringProfile[] = [
   {
     id: 'executive',
     displayName: 'Executive',
-    description: 'Balanced scoring for executive-level portfolio overview',
+    description: 'Balanced scoring for executive-level portfolio overview. Uses adjusted citations (affiliate-discounted).',
     category: 'balanced',
     weights: {
       competitor_citations: 0.25,
-      forward_citations: 0.13,
+      adjusted_forward_citations: 0.11, // was forward_citations: 0.13
       years_remaining: 0.17,
-      competitor_count: 0.08,
+      competitor_count: 0.05,           // was 0.08, gave 0.03 to competitor_density
+      competitor_density: 0.05,         // NEW: measures competitive concentration
       eligibility_score: 0.05,
       validity_score: 0.05,
       claim_breadth: 0.04,
@@ -152,13 +190,14 @@ const PROFILES: ScoringProfile[] = [
   {
     id: 'aggressive',
     displayName: 'Aggressive Litigator',
-    description: 'Litigation-focused, prioritizes enforcement and competitor citations',
+    description: 'Litigation-focused, prioritizes enforcement and competitor citations. Uses adjusted citations.',
     category: 'aggressive',
     weights: {
       competitor_citations: 0.22,
-      forward_citations: 0.04,
+      adjusted_forward_citations: 0.02, // was forward_citations: 0.04
       years_remaining: 0.08,
-      competitor_count: 0.04,
+      competitor_count: 0.02,           // was 0.04
+      competitor_density: 0.04,         // NEW: strong signal for litigation targeting
       eligibility_score: 0.10,
       validity_score: 0.07,
       claim_breadth: 0.04,
@@ -172,13 +211,14 @@ const PROFILES: ScoringProfile[] = [
   {
     id: 'moderate',
     displayName: 'Balanced Strategist',
-    description: 'Even distribution for licensing negotiations and portfolio management',
+    description: 'Even distribution for licensing negotiations and portfolio management. Uses adjusted citations.',
     category: 'moderate',
     weights: {
       competitor_citations: 0.17,
-      forward_citations: 0.08,
+      adjusted_forward_citations: 0.06, // was forward_citations: 0.08
       years_remaining: 0.13,
-      competitor_count: 0.04,
+      competitor_count: 0.02,           // was 0.04
+      competitor_density: 0.04,         // NEW
       eligibility_score: 0.10,
       validity_score: 0.10,
       claim_breadth: 0.07,
@@ -192,13 +232,14 @@ const PROFILES: ScoringProfile[] = [
   {
     id: 'conservative',
     displayName: 'Defensive Counsel',
-    description: 'Emphasizes validity and breadth for cross-licensing leverage',
+    description: 'Emphasizes validity and breadth for cross-licensing leverage. Uses adjusted citations.',
     category: 'conservative',
     weights: {
       competitor_citations: 0.08,
-      forward_citations: 0.12,
+      adjusted_forward_citations: 0.10, // was forward_citations: 0.12
       years_remaining: 0.08,
-      competitor_count: 0.04,
+      competitor_count: 0.02,           // was 0.04
+      competitor_density: 0.04,         // NEW
       eligibility_score: 0.07,
       validity_score: 0.18,
       claim_breadth: 0.13,
@@ -212,13 +253,14 @@ const PROFILES: ScoringProfile[] = [
   {
     id: 'licensing',
     displayName: 'Licensing Focus',
-    description: 'Broad coverage and market presence for licensing campaigns',
+    description: 'Broad coverage and market presence for licensing campaigns. Uses adjusted citations.',
     category: 'licensing',
     weights: {
       competitor_citations: 0.25,
-      forward_citations: 0.08,
+      adjusted_forward_citations: 0.06, // was forward_citations: 0.08
       years_remaining: 0.17,
-      competitor_count: 0.08,
+      competitor_count: 0.05,           // was 0.08
+      competitor_density: 0.05,         // NEW: which tech spaces have competitor interest
       eligibility_score: 0.07,
       validity_score: 0.06,
       claim_breadth: 0.08,
@@ -232,13 +274,14 @@ const PROFILES: ScoringProfile[] = [
   {
     id: 'quick_wins',
     displayName: 'Quick Wins',
-    description: 'High-confidence, clear enforcement opportunities',
+    description: 'High-confidence, clear enforcement opportunities. Uses adjusted citations.',
     category: 'quick_wins',
     weights: {
       competitor_citations: 0.17,
-      forward_citations: 0.04,
+      adjusted_forward_citations: 0.02, // was forward_citations: 0.04
       years_remaining: 0.08,
-      competitor_count: 0.04,
+      competitor_count: 0.02,           // was 0.04
+      competitor_density: 0.04,         // NEW
       eligibility_score: 0.15,
       validity_score: 0.14,
       claim_breadth: 0.04,
@@ -612,15 +655,37 @@ function buildMetrics(
   iprData: IprRiskData | null,
   prosecutionData: ProsecutionData | null,
 ): PatentMetrics {
+  const competitorCitations = classification?.competitor_citations ?? 0;
+  const affiliateCitations = classification?.affiliate_citations ?? 0;
+  const neutralCitations = classification?.neutral_citations ?? 0;
+  const forwardCitations = candidate.forward_citations ?? classification?.total_forward_citations ?? 0;
+
+  // Adjusted forward citations: weight by source type to discount self-citations
+  // and boost competitor citations (see CITATION_CATEGORIZATION_PROBLEM.md)
+  const adjustedForward = (
+    competitorCitations * CITATION_WEIGHTS.competitor +
+    neutralCitations * CITATION_WEIGHTS.neutral +
+    affiliateCitations * CITATION_WEIGHTS.affiliate
+  );
+
+  // Competitor density: proportion of external (non-affiliate) citations from competitors
+  // High density = technology squarely in competitive space
+  const externalCitations = competitorCitations + neutralCitations;
+  const competitorDensity = externalCitations > 0
+    ? competitorCitations / externalCitations
+    : 0;
+
   return {
     patent_id: candidate.patent_id,
-    competitor_citations: classification?.competitor_citations ?? 0,
-    forward_citations: candidate.forward_citations ?? classification?.total_forward_citations ?? 0,
+    competitor_citations: competitorCitations,
+    forward_citations: forwardCitations,
+    adjusted_forward_citations: adjustedForward,
     years_remaining: candidate.remaining_years ?? 0,
     competitor_count: classification?.competitor_count ?? 0,
-    affiliate_citations: classification?.affiliate_citations ?? 0,
-    neutral_citations: classification?.neutral_citations ?? 0,
-    total_forward_citations: classification?.total_forward_citations ?? candidate.forward_citations ?? 0,
+    competitor_density: competitorDensity,
+    affiliate_citations: affiliateCitations,
+    neutral_citations: neutralCitations,
+    total_forward_citations: classification?.total_forward_citations ?? forwardCitations,
     has_citation_data: classification?.has_citation_data ?? false,
     // LLM scores (when available)
     eligibility_score: llmScores?.eligibility_score,

@@ -21,6 +21,9 @@ export interface Patent {
   neutral_citations: number;
   competitor_count: number;
   competitor_names: string[];
+  // Citation-aware scoring (Session 13)
+  adjusted_forward_citations: number;
+  competitor_density: number;
   has_citation_data: boolean;
 
   // Optional scoring fields
@@ -125,6 +128,9 @@ export interface V3ScoredPatent {
   neutral_citations: number;
   competitor_count: number;
   competitor_names: string[];
+  // Citation-aware scoring (Session 13)
+  adjusted_forward_citations: number;
+  competitor_density: number;
   // LLM data
   has_llm_scores: boolean;
   llm_scores: {

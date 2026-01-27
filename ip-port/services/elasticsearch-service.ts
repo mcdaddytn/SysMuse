@@ -28,6 +28,8 @@ interface PatentDocument {
   backward_citations?: number;
   competitor_citations?: number;
   competitors_citing?: string[];
+  primary_sector?: string;
+  super_sector?: string;
   tier?: number;
   enhanced_score?: number;
   user_priority?: number;
@@ -105,6 +107,8 @@ const PATENT_INDEX_MAPPING = {
       backward_citations: { type: 'integer' },
       competitor_citations: { type: 'integer' },
       competitors_citing: { type: 'keyword' },
+      primary_sector: { type: 'keyword' },
+      super_sector: { type: 'keyword' },
       tier: { type: 'integer' },
       enhanced_score: { type: 'float' },
       user_priority: { type: 'integer' },
@@ -300,6 +304,23 @@ export class ElasticsearchService {
     }
     if (filters.has_competitor_citations) {
       esQuery.bool.filter.push({ range: { competitor_citations: { gt: 0 } } });
+    }
+    if (filters.primary_sector) {
+      if (Array.isArray(filters.primary_sector)) {
+        esQuery.bool.filter.push({ terms: { primary_sector: filters.primary_sector } });
+      } else {
+        esQuery.bool.filter.push({ term: { primary_sector: filters.primary_sector } });
+      }
+    }
+    if (filters.super_sector) {
+      if (Array.isArray(filters.super_sector)) {
+        esQuery.bool.filter.push({ terms: { super_sector: filters.super_sector } });
+      } else {
+        esQuery.bool.filter.push({ term: { super_sector: filters.super_sector } });
+      }
+    }
+    if (filters.patent_ids) {
+      esQuery.bool.filter.push({ ids: { values: filters.patent_ids } });
     }
 
     const body: any = {

@@ -44,6 +44,8 @@ export interface PatentPreview {
   neutral_citations?: number;
   competitor_count?: number;
   competitor_names?: string[];
+  adjusted_forward_citations?: number;
+  competitor_density?: number;
 }
 
 // Patent API
@@ -262,11 +264,20 @@ export interface SearchTerm {
   sourceType: 'MANUAL' | 'FREQUENCY_ANALYSIS' | 'PHRASE_HIGHLIGHT' | 'LLM_SUGGESTION';
   sourcePatentIds: string[];
   hitCountPortfolio?: number;
+  hitCountScope?: number;
   hitCountSector?: number;
   hitCountFocusArea?: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type SearchScopeType = 'PORTFOLIO' | 'SECTOR' | 'SUPER_SECTOR' | 'COMPOUND' | 'PATENT_FAMILY';
+
+export interface SearchScopeConfig {
+  sectors?: string[];
+  superSectors?: string[];
+  cpcCodes?: string[];
 }
 
 export interface FocusArea {
@@ -283,12 +294,24 @@ export interface FocusArea {
   children?: { id: string; name: string }[];
   superSector?: string;
   primarySector?: string;
+  searchScopeType: SearchScopeType;
+  searchScopeConfig?: SearchScopeConfig;
   patentCount: number;
   lastCalculatedAt?: string;
   searchTerms?: SearchTerm[];
   _count?: { patents: number; facetDefs: number };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ScopeOption {
+  term: string;
+  count: number;
+}
+
+export interface ScopeOptions {
+  sectors: ScopeOption[];
+  superSectors: ScopeOption[];
 }
 
 export interface FocusAreaPatent {
@@ -361,6 +384,8 @@ export const focusAreaApi = {
     primarySector?: string;
     parentId?: string;
     patentIds?: string[];
+    searchScopeType?: SearchScopeType;
+    searchScopeConfig?: SearchScopeConfig;
   }): Promise<FocusArea> {
     const { data } = await api.post('/focus-areas', area);
     return data;
@@ -474,9 +499,10 @@ export interface SearchPreviewResult {
   termType: string;
   hitCounts: {
     portfolio: number;
-    sector?: number;
+    scope?: number;
     focusArea?: number;
   };
+  scopeTotal?: number;
   sampleHits: SearchPreviewHit[];
   esAvailable: boolean;
 }
@@ -491,6 +517,8 @@ export const searchApi = {
       focusAreaId?: string;
       superSector?: string;
       primarySector?: string;
+      sectors?: string[];
+      superSectors?: string[];
     }
   ): Promise<SearchPreviewResult> {
     const { data } = await api.post('/focus-areas/search-preview', {
@@ -500,9 +528,16 @@ export const searchApi = {
       scopes: {
         focusAreaId: options?.focusAreaId,
         superSector: options?.superSector,
-        primarySector: options?.primarySector
+        primarySector: options?.primarySector,
+        sectors: options?.sectors,
+        superSectors: options?.superSectors
       }
     });
+    return data;
+  },
+
+  async getScopeOptions(): Promise<ScopeOptions> {
+    const { data } = await api.get('/focus-areas/scope-options');
     return data;
   }
 };

@@ -342,6 +342,174 @@ interface AssigneeClassification {
 
 ---
 
+## Extended Family Model — Category-Constrained Expansion
+
+Updated: 2026-01-26 (Session 14)
+
+The basic patent family model (parents, children) produces a single-generation view. Expanding to include the patent of interest's own parents and children creates a **three-generation unit** — the patent connects two nuclear families (its parent's family where it is a child, and its own family where it is a parent). This is analogous to a diatomic molecule: two nuclei (parent generation and child generation) bonded through the patent of interest. We refer to this three-generation unit as the **diatomic family**.
+
+### Diatomic Family (Three Generations)
+
+The diatomic family is the tightest meaningful citation group:
+
+| Relationship | Definition | Generation |
+|-------------|-----------|------------|
+| **Parents** | Patents cited by the PoI (prior art) — can be N parents, not limited to 2 | -1 |
+| **Self** | The patent of interest | 0 |
+| **Children** | Patents that cite the PoI | +1 |
+| **Siblings** | Other patents that share the same parents (cited by the same prior art) | 0 (lateral) |
+
+Adding siblings to this unit gives us lateral breadth at the middle generation. From here we can selectively extend outward.
+
+### Extended Family (Generation 2+)
+
+Expanding beyond the diatomic family by adding or removing relatives at any generation:
+
+| Relationship | Definition | How Discovered |
+|-------------|-----------|----------------|
+| **Grandparents** | Parents of parents | 2 levels backward |
+| **Grandchildren** | Children of children | 2 levels forward |
+| **Uncles/Aunts** | Siblings of parents | Lateral from parent level |
+| **Cousins** | Children of siblings (share grandparent) | 1 forward from sibling |
+| **2nd Cousins** | Children of cousins (share great-grandparent) | Another level out |
+
+**Generational preference**: We typically favor newer generations when selecting a discrete patent set — younger patents represent more current technology and have more remaining life. However, older patents (including uncles and even expired patents) are valuable **as connectors**. An uncle may not end up in the final focus area, but the uncle's role in the citation graph reveals cousins and younger relatives that are highly relevant. The uncle is a bridge, not necessarily a destination.
+
+**Expired patents as connectors**: Even expired patents in the family tree are useful. They establish the citation lineage that connects active patents. When expressing the family as a discrete set for a focus area, expired patents may be excluded from the selection but retained in the family graph for navigation and discovery.
+
+### Category-Constrained Expansion
+
+Unconstrained family expansion quickly produces thousands of patents. The solution is to use **category overlays as expansion filters** — applying categorical constraints at each generation to keep the family finite and meaningful.
+
+#### Category Types for Constraining Expansion
+
+Categories can take various forms, and boolean combinations of any of them:
+
+| Category Type | Nature | Example |
+|--------------|--------|---------|
+| **Sectors** | Two-level hierarchy (super-sector → sector) | `SECURITY / network-threat-protection` |
+| **Focus groups** | Free-form categories (can be hierarchical or flat) | "Zero Trust Authentication" |
+| **CPC codes** | Natural patent classification hierarchy | `H04L63` (network security) |
+| **Portfolio membership** | Binary: in-portfolio or external | Broadcom portfolio |
+| **Focus areas** | Formalized groupings (can themselves be search scopes) | "Wireless Payment Security" |
+| **Boolean combinations** | AND/OR/NOT of any of the above | `(SECURITY OR WIRELESS) AND in-portfolio` |
+
+The superposition of these category structures for the purpose of limiting generational expansion is a key capability. A narrow category combination produces a tighter family; a broad one lets more patents in.
+
+#### Recursive Focus Area Scoping
+
+Focus areas can participate recursively in this system: a focus area can be part of a search scope that defines a new focus area. This starts to resemble a hierarchy when sibling focus areas are filled out to make each level exhaustive (MECE). This recursive relationship between focus areas and search scopes is discussed in the Search Scope and Hierarchical Placement sections of `FOCUS_AREA_SYSTEM_DESIGN.md`.
+
+#### Expansion Configuration
+
+```typescript
+interface FamilyExpansionConfig {
+  seedPatentIds: string[];
+
+  // Generation limits
+  maxBackwardGenerations: number;    // Typically 1-2
+  maxForwardGenerations: number;     // Typically 1-3
+  maxLateralGenerations: number;     // Cousin depth (1 = first cousins, 2 = second cousins)
+
+  // Category constraints (narrow the family at each expansion step)
+  constraints: {
+    sectors?: string[];              // Only include patents in these sectors
+    superSectors?: string[];         // Or broader sector groups
+    cpcCodes?: string[];             // Natural classification filter
+    focusAreaIds?: string[];         // Only include patents in these focus areas
+    focusGroupIds?: string[];        // Free-form category filter
+    inPortfolio?: boolean;           // Only in-portfolio patents
+    excludeExpired?: boolean;        // Skip expired patents (but still traverse through them)
+    booleanExpression?: string;      // Compound: "(SECURITY OR WIRELESS) AND in-portfolio"
+  };
+
+  // Expansion preference
+  preferDirection: 'forward' | 'balanced' | 'lateral';
+  // forward: favor children/grandchildren (newer tech)
+  // balanced: equal backward/forward
+  // lateral: favor siblings/cousins (parallel tech)
+
+  // Connector behavior
+  retainConnectors: boolean;         // Keep older/expired patents as graph connectors
+                                     // even if they don't pass constraints for selection
+
+  maxFamilySize: number;             // Hard cap
+}
+```
+
+#### Lateral Expansion (Sibling-First Strategy)
+
+The most interesting family pattern favors **lateral expansion** — siblings and cousins represent parallel inventions in the same technology space:
+
+```
+Generation -1:  Parent A          Parent B          Parent C
+                  │                  │                  │
+Generation  0:  PoI     Sib1     Sib2     Sib3      Sib4
+                  │       │        │
+Generation +1:  Ch1    Cousin1  Cousin2    ← First cousins (children of siblings)
+                  │       │
+Generation +2:  GCh1   2ndCous1            ← Second cousins
+```
+
+This lateral tree is bounded by the constraint categories. At each expansion step:
+1. Discover candidate patents (all children of current-level siblings)
+2. Filter by constraints (sector, CPC, focus area, boolean combinations)
+3. Keep patents passing constraints; retain others as connectors if configured
+4. Continue to next level if under maxFamilySize
+
+### Cross-Category Family Example
+
+A compelling use case: building a family that spans technology categories.
+
+**Scenario**: A patent covering secure wireless financial transactions sits at the intersection of three sectors:
+- Financial transactions
+- Wireless protocol stack
+- Security
+
+```
+Seed: US10XXXXXX (secure wireless payment)
+
+Parents (prior art):
+  ├── US9AAAAA (NFC payment protocol) — Financial
+  ├── US9BBBBB (wireless encryption) — Wireless + Security
+  └── US9CCCCC (tokenized transactions) — Financial + Security
+
+Siblings (share parents):
+  ├── US10DDDDD (mobile wallet auth) — Financial + Security
+  ├── US10EEEEE (BLE payment channel) — Wireless + Financial
+  └── US10FFFFF (encrypted NFC handshake) — Wireless + Security
+
+Cousins (children of siblings):
+  ├── US11GGGGG (biometric payment on wearable) — All three
+  ├── US11HHHHH (5G payment gateway) — Wireless + Financial
+  └── US11IIIII (hardware security for payments) — Security + Financial
+```
+
+These patents come from different sectors but end up close in the citation tree. The family **reveals technology convergence** that sector-only analysis would miss.
+
+### Family-to-Focus-Area Conversion with Scope Overlay
+
+A patent family can seed a focus area in two ways:
+
+1. **Family AS focus area**: Convert the entire family (or filtered subset) directly into a focus area
+2. **Family × Scope → focus area**: Overlay the family with a search scope (e.g., a sector) and create a focus area from the intersection
+
+```
+Patent Family (89 patents, including connectors)
+    ×
+Search Scope: Portfolio / network-security (2,341 patents)
+    =
+Focus Area candidate: 34 patents (family members in network-security)
+    +
+Adjacent set: 2,307 patents (in scope but not in family — context)
+    +
+Connector-only: 12 patents (in family graph but not selected — bridges)
+```
+
+This gives a focused starting set (34) with a well-defined adjacent set (2,307) for search term testing, plus the connector patents visible in the family graph for understanding the citation lineage.
+
+---
+
 ## Integration with Focus Areas and Search Scopes
 
 Patent families serve as both:
@@ -387,4 +555,4 @@ This enables rich analysis: e.g., "In the patent family around US10123456, 40% o
 
 ---
 
-*Created: 2026-01-25 (Session 4)*
+*Last Updated: 2026-01-26 (Session 14 — added Extended Family Model: diatomic family concept, category-constrained expansion with boolean combinations, recursive focus area scoping, cross-category families, connector patent retention)*

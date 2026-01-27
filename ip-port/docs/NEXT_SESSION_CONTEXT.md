@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-26, Session 12)
+# Patent Portfolio Analysis - Session Context (2026-01-26, Session 14)
 
 ## Current State Summary
 
@@ -13,145 +13,143 @@
 | Date Range | 1982-06-29 to 2025-09-30 |
 | Status | Complete + Deduplicated |
 
-### Enrichment Coverage (as of Session 12)
+### Enrichment Coverage (as of Session 14)
 
-| Data Source | Count | Coverage (3yr+ active) | Selection |
-|-------------|-------|----------------------|-----------|
-| **LLM full V3 analysis** | **5,000** | 23% | All 26 fields (text + scores + classification) |
-| **LLM scores only** | **2,669** | 12% | 5 numeric scores (older pipeline) |
-| **LLM total** | **7,669** | 35% | Combined |
-| **IPR risk scores** | **5,000** | 23% | Top by forward citations (target reached) |
-| **Prosecution scores** | **2,475** | 11% | Top by forward citations (still growing) |
-| **Citation classification** | 28,913 | 100% | All patents |
-| **Forward citations** | 28,014 | 97% | All patents |
-| **Backward citations (parents)** | 2,000 | 9% | From patent families pipeline |
-| **Parent details** | 11,706 | — | Enriched parent patent info |
+| Data Source | Count | Coverage (3yr+ active) | Change |
+|-------------|-------|----------------------|--------|
+| **LLM total** | **8,269** | 38% | +500 (batch complete) |
+| **IPR risk scores** | **5,000** | 23% | Target reached |
+| **Prosecution scores** | **4,052** | 19% | +1,575 from Session 13 |
+| **Citation classification** | 28,913 | 100% | — |
+| **Forward citations** | 28,014 | 97% | — |
+| **Backward citations (parents)** | **4,852** | 22% | +2,773 from Session 13 |
 
-### Background Jobs Status
-- **LLM analysis**: 7,669 cached; 5,000 now have full V3 fields (all 26 fields restored from combined output)
+### Background Jobs Status (Session 13 — Complete)
+- **LLM analysis**: 8,269 cached (500 batch from Session 13 **complete**)
 - **IPR enrichment**: **5,000 done** (target reached)
-- **Prosecution enrichment**: 2,475 done (target was 5,000)
+- **Prosecution enrichment**: 4,052 done (progressing, was 2,477)
+- **Patent family enrichment**: 4,852 parents cached (progressing, was 2,079)
 
 ### Elasticsearch Index
 
 | Metric | Value |
 |--------|-------|
 | **Documents Indexed** | **28,913** |
-| Index Size | 42 MB |
+| Index Size | ~25 MB |
 | Abstracts Indexed | **28,869 (99.8%)** |
+| **Sector Fields** | **NEW — primary_sector + super_sector indexed** |
+| Super-Sector Distribution | Virtualization 6,946 / SDN 5,627 / Semiconductor 3,748 / Computing 3,498 / Wireless 3,323 / Security 3,182 / Video 1,584 / Imaging 718 / Audio 193 / AI 94 |
 
 ---
 
-## Changes Completed This Session (Session 12)
+## Changes Completed This Session (Session 14)
 
-### LLM Data Pipeline Fix — Recovered 14 Dropped Fields
+### Search Scope for Focus Areas — Full Stack Implementation
 
-**Root Cause**: `saveLlmScore()` in `run-llm-top-patents.ts` and the `LlmScoreRecord` interface in `import-llm-scores.ts` were cherry-picking only 12 of 26 V3 fields when writing to `cache/llm-scores/`. The LLM prompt generates all 26 fields, and they were present in batch/combined output files, but got stripped at the cache-write layer.
+Implemented search scope as a first-class concept on focus areas, enabling sector-constrained search term evaluation with meaningful selectivity ratios.
 
-**Dropped fields included**: `prior_art_problem`, `technical_solution` (the 2 key attorney text fields), plus `claim_clarity_score`, `evidence_accessibility_score`, `market_relevance_score`, `trend_alignment_score`, `investigation_priority_score`, `product_types`, `likely_implementers`, `detection_method`, `standards_bodies`, `implementation_complexity`, `claim_type_primary`, `geographic_scope`, `lifecycle_stage`.
+#### Elasticsearch — Sector Fields Added
 
-#### Fixes Applied
+**Index Mapping** (`services/elasticsearch-service.ts`):
+- Added `primary_sector` and `super_sector` as keyword fields in `PatentDocument` interface and index mapping
+- Added filter support: `primary_sector`, `super_sector` (single or array), `patent_ids` (for focus area intersection)
+- All filters work natively in ES bool queries
 
-1. **`scripts/run-llm-top-patents.ts`** — `saveLlmScore()` now spreads full analysis object instead of cherry-picking fields
-2. **`scripts/import-llm-scores.ts`** — `LlmScoreRecord` interface expanded to all V3 fields; `extractPatentRecords()` preserves all score, string, array, and computed fields
-3. **Re-import**: Ran `import-llm-scores.ts` with `--force` on `combined-v3-2026-01-26.json` — 5,000 patents now have all 26+ fields in cache
-4. **Backend** (`src/api/routes/patents.routes.ts`):
-   - `FullLlmData` interface expanded to all V3 fields
-   - `Patent` interface now includes: `llm_prior_art_problem`, `llm_technical_solution`, `claim_clarity_score`, `evidence_accessibility_score`, `trend_alignment_score`, `investigation_priority_score`, `legal_viability_score`, `enforcement_potential_score`, `market_value_score`, plus enum fields (`llm_detection_method`, `llm_implementation_complexity`, `llm_claim_type_primary`, `llm_geographic_scope`, `llm_lifecycle_stage`)
-   - Patent list enrichment maps all new fields
-   - LLM detail endpoint (`GET /api/patents/:id/llm`) automatically returns all fields (spreads cache data)
-5. **Frontend types** (`frontend/src/types/index.ts`): Patent interface expanded with all recovered fields
-6. **Frontend store** (`frontend/src/stores/patents.ts`):
-   - Scores group: Added `claim_clarity_score`, `evidence_accessibility_score`, `trend_alignment_score`, `investigation_priority_score`, `legal_viability_score`, `enforcement_potential_score`, `market_value_score`
-   - LLM Text group: Added `llm_prior_art_problem`, `llm_technical_solution`, `llm_detection_method`, `llm_implementation_complexity`, `llm_claim_type_primary`, `llm_geographic_scope`, `llm_lifecycle_stage`
-7. **Frontend PatentDetailPage.vue**:
-   - LLM tab: Added Prior Art Problem and Technical Solution text sections alongside AI Summary
-   - Quality Scores card: Added Claim Clarity, Evidence Accessibility, Trend Alignment, Investigation Priority
-   - Classification card: Added Detection Method, Implementation Complexity, Claim Type, Geographic Scope, Lifecycle Stage, Product Types (chips), Likely Implementers (chips), Standards Bodies (chips)
-8. **Frontend PortfolioPage.vue**: Cell templates for all new score columns (1-5 badge) and text columns (truncation + tooltip), composite scores (0-100 badge)
+**Import Script** (`services/import-to-elasticsearch.ts`):
+- Added `sector-mapper` import for `getPrimarySector()` and `getSuperSector()`
+- Each patent now indexed with computed `primary_sector` and `super_sector` from CPC codes
+- Re-indexed full portfolio: 28,913 patents with sector data
 
-### LLM Question Taxonomy Documentation
+#### Database Schema — Search Scope Fields
 
-Updated `docs/LLM_PATENT_ANALYSIS.md` with comprehensive:
-- 5-tier question taxonomy (Attorney Core → Enforcement → Market → Cross-Sector → Sector-Specific)
-- All 26 V3 fields inventoried with types and descriptions
-- Computed sub-score formulas
-- Complete data pipeline documentation (services, scripts, cache structure, data flow)
-- Design notes for future question tiering, batching optimization, and UI queuing
-- Current coverage breakdown (5,000 full V3 + 2,669 scores-only)
+**Prisma Schema** (`prisma/schema.prisma`):
+- Added `SearchScopeType` enum: `PORTFOLIO`, `SECTOR`, `SUPER_SECTOR`, `COMPOUND`, `PATENT_FAMILY`
+- Added `searchScopeType` and `searchScopeConfig` (JSON) to `FocusArea` model
+- Added `hitCountScope` to `SearchTerm` model
+- Migration applied via `prisma db push`
+
+#### Backend API — Scoped Search Preview
+
+**Focus Area Routes** (`src/api/routes/focus-areas.routes.ts`):
+
+New endpoint:
+- `GET /api/focus-areas/scope-options` — Returns available sectors and super-sectors with patent counts from ES aggregation
+
+Updated endpoints:
+- `POST /api/focus-areas/search-preview` — Now supports full scope filtering:
+  - `scopes.sectors[]` — Filter by one or more primary sectors
+  - `scopes.superSectors[]` — Filter by one or more super-sectors
+  - `scopes.focusAreaId` — Intersect with focus area patents (uses ES `ids` filter, no more 10,000-hit memory scan)
+  - Returns `hitCounts.scope` (hits in scope) and `scopeTotal` (total patents in scope)
+  - Sample hits now drawn from scoped results when scope is active
+- `POST /api/focus-areas` — Accepts `searchScopeType` and `searchScopeConfig`
+- `PUT /api/focus-areas/:id` — Accepts `searchScopeType` and `searchScopeConfig`
+
+Route ordering fix: `/scope-options` moved before `/:id` to prevent Express parameterized route capture.
+
+#### Frontend — Scope Selector UI
+
+**API Types** (`frontend/src/services/api.ts`):
+- Added `SearchScopeType`, `SearchScopeConfig`, `ScopeOption`, `ScopeOptions` types
+- Updated `FocusArea` interface with `searchScopeType` and `searchScopeConfig`
+- Updated `SearchTerm` with `hitCountScope`
+- Updated `SearchPreviewResult` with `hitCounts.scope` and `scopeTotal`
+- Updated `searchApi.previewSearchTerm()` to accept `sectors[]` and `superSectors[]`
+- Added `searchApi.getScopeOptions()` method
+
+**Focus Area Detail Page** (`frontend/src/pages/FocusAreaDetailPage.vue`):
+- **Scope chip** in header metadata: Shows active scope (e.g., "Scope: Security"), clickable to configure
+- **Scope configuration dialog**: Select scope type (Portfolio / Super-Sector / Sector), toggle sectors/super-sectors from ES aggregation with patent counts
+- **Scope-aware search preview**: Search terms evaluated against scope, showing Portfolio / Scope / Focus Area hit counts
+- **Selectivity ratio uses scope**: Focus ratio now computes `focusArea / scope` when scope is active (instead of `focusArea / portfolio`)
+- **Scoped sample hits**: Preview shows hits from within scope when active
+
+**Verified Results** (manual testing):
+- "authentication" KEYWORD: Portfolio 648 / Security scope 495 (out of 3,182) — 15.6% of security patents
+- "authentication token" KEYWORD_AND: Portfolio 752 / (network-auth-access + network-crypto) scope 333 (out of 1,087) — 30.6%
+- Scope options endpoint returns all ~40 sectors and ~10 super-sectors with counts
+
+### Design Documentation — Focus Area Reconciliation and Extended Families
+
+#### FOCUS_AREA_SYSTEM_DESIGN.md — New Section: "Focus Area as Reconciliation Point"
+- Focus area as reconciliation between grouping methods (explicit selection, search scope, search terms, patent family, category overlay)
+- Focused vs adjacent patents: focused = selected/matched, adjacent = in scope but not focused
+- Patent set operations: DIFF, INTERSECT, UNION, COMPLEMENT with API design
+- Workflow for reconciling patent sets across different qualifiers
+- Search scope as semantic context (selectivity signal, adjacent pool, cross-scope portability, family constraint)
+
+#### PATENT_FAMILIES_DESIGN.md — New Section: "Extended Family Model"
+- Diatomic family concept: three-generation unit (parents → self → children) analogous to two bonded nuclei
+- Extended family (cousins, 2nd cousins) via lateral expansion from siblings
+- Generational preference: favor newer patents for selection, retain older/expired as connectors
+- Category-constrained expansion using sectors, focus groups, CPC codes, boolean combinations
+- Recursive focus area scoping (focus areas as search scopes for new focus areas)
+- Cross-category family example: financial transactions + wireless + security convergence
+- Family-to-focus-area conversion with scope overlay
 
 ---
 
-## Changes Completed Session 11 (Previous)
+## Changes Completed Session 13 (Previous)
 
-### GUI Enhancements — LLM Data Integration
+### Background Enrichment Jobs Queued
 
-#### 1. LLM Data in Patent List API (patents.routes.ts)
-- Patent list endpoint (`GET /api/patents`) now enriches every patent with LLM data from `cache/llm-scores/`
-- New fields in response: `has_llm_data`, `llm_summary`, `llm_technology_category`, `llm_implementation_type`, `llm_standards_relevance`, `llm_market_segment`, `eligibility_score`, `validity_score`, `claim_breadth`, `enforcement_clarity`, `design_around_difficulty`, `llm_confidence`, `market_relevance_score`
-- Full LLM cache loaded into memory with 5-minute TTL (7,669 patents)
+Kicked off three long-running enrichment jobs to fill in portfolio data:
+1. **LLM V3 Analysis**: 500 additional patents (top-ranked without LLM data) — **COMPLETE**
+2. **Prosecution History**: 2,525 remaining patents to reach 5,000 target — **4,052 done (progressing)**
+3. **Patent Family Parents**: ~3,000 additional backward citations — **4,852 done (progressing)**
 
-#### 2. LLM Detail Endpoint (NEW)
-- **`GET /api/patents/:id/llm`** — Returns full LLM analysis from cache including summary, all scores, classification fields
-- Used by the LLM Analysis tab in patent detail page
-- Returns `{ cached: false }` when no LLM data exists
+### Citation-Aware Scoring — Implemented
 
-#### 3. LLM Analysis Tab — Full Implementation (PatentDetailPage.vue)
-- Replaced placeholder with actual data display
-- **AI Summary** card — Shows `summary` text
-- **Quality Scores** card — All 5 LLM scores + confidence with color-coded badges (green >=4, yellow >=3, red <3)
-- **Classification** card — Technology category, implementation type, standards relevance, market segment, market relevance score
-- **Source info** footer — Shows data source and import date
-- "Not yet available" state for patents without LLM data
-- **Test patents**: 10003303 (full data with summary), 8429630 (scores only, older format)
+Implemented weighted citation scoring across the full stack:
+- `adjusted_forward_citations`: competitor×1.5, neutral×1.0, affiliate×0.25
+- `competitor_density`: competitor/(competitor+neutral) ratio
+- All 6 scoring profiles updated
+- VMware self-citation inflation addressed (16.5% → weighted down)
 
-#### 4. Backward Citations Endpoint (NEW)
-- **`GET /api/patents/:id/backward-citations`** — Returns parent patents from `cache/patent-families/parents/` and `cache/patent-families/parent-details/`
-- Enriches parent patents with: title, assignee, patent_date, affiliate, in_portfolio flag
-- 2,000 patents have parent data, 11,706 parent details available
-
-#### 5. Citations Tab — Forward + Backward Citations (PatentDetailPage.vue)
-- **Forward Citations** section (existing, enhanced): Now labeled with arrow icon and "(patents that cite this patent)" subtitle
-- **Backward Citations** section (NEW): Shows parent patents with:
-  - In-portfolio parents are clickable links (deep-purple color)
-  - External parents have Google Patents link button
-  - Shows patent title, assignee/affiliate, date
-- **Citation Breakdown** card updated: Now includes backward citation count alongside forward breakdown
-- Backward citations loaded lazily when Citations tab is opened
-- **Test patent**: 10749870 — 169 forward citations + 8 backward parents (mostly in portfolio)
-
-#### 6. CPC Code Tooltips (PatentDetailPage.vue)
-- CPC code chips in patent detail overview now show description on mouseover
-- **`GET /api/patents/cpc-descriptions`** endpoint — Serves CPC code descriptions from `config/cpc-descriptions.json`
-- Supports `?codes=G06F21,H04L63` query param for specific codes
-- Progressive prefix matching: if exact code not found, tries shorter prefixes (e.g., `G06F21/10` → `G06F21` → `G06F`)
-- Descriptions loaded on patent page mount
-- 150+ CPC codes mapped
-
-#### 7. Column Group Reorganization (stores/patents.ts, types/index.ts)
-- **Old groups**: Core Info, Entity & Sector, Citations & Scores, Attorney Questions, LLM Analysis, Focus Area
-- **New groups**: Core Info, Entity & Sector, **Citations**, **Scores**, **LLM Text**, Focus Area
-- **Citations group**: Forward citations, competitor/affiliate/neutral citations, competitor count (factual data)
-- **Scores group**: Base score, v2, v3, consensus, AND all LLM numeric scores (eligibility, validity, claim_breadth, enforcement_clarity, design_around_difficulty, market_relevance, confidence)
-- **LLM Text group**: Summary, technology category, implementation type, standards relevance, market segment
-- Removed non-existent columns: `prior_art_problem`, `technical_solution`, `attorney_summary` (these fields were never generated by the LLM pipeline)
-- Fixed field name mappings: `design_around` → `design_around_difficulty`, `market_relevance` → `market_relevance_score`
-
-#### 8. Portfolio Grid LLM Score Cell Templates (PortfolioPage.vue)
-- All LLM score columns (eligibility, validity, claim_breadth, enforcement_clarity, design_around_difficulty, confidence, market_relevance) show color-coded badges
-- LLM summary column has truncation with tooltip
-- Shows `--` placeholder for patents without LLM data
-
-#### 9. Cache Reload Enhancement (scores.routes.ts)
-- `POST /api/scores/reload` now clears ALL caches: scoring service, patent list, LLM data, CPC descriptions
-- Exported `clearPatentsCache()` from patents.routes.ts
-
-### Key Finding: "Prior Art Problem" and "Technical Solution" Fields
-- These columns were defined in the UI but **no LLM analysis pipeline ever generated these fields**
-- The LLM analysis generates: eligibility_score, validity_score, claim_breadth, enforcement_clarity, design_around_difficulty, confidence, summary, technology_category, implementation_type, standards_relevance, market_segment
-- The `summary` field is the closest analog — it describes the patent's technology
-- To add prior_art_problem and technical_solution, we would need to update the LLM analysis prompt and re-run analysis
-- Columns removed from UI; logged as design consideration for future LLM prompt enhancement
+### Design Documentation — Three New Sections in DESIGN_CONSIDERATIONS.md
+1. Competitor Classification — Formal Criteria
+2. Citation-Aware Scoring Design
+3. Conditional Facets — Sector-Specific LLM Questions via Facet System
 
 ---
 
@@ -166,16 +164,16 @@ npm run api:dev
 **Endpoints:**
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/patents` | List with filters/pagination (enriched with citation + **LLM data**) |
+| `GET /api/patents` | List with filters/pagination (enriched with citation + LLM data) |
 | `GET /api/patents/:id` | Full patent details (+ abstract + LLM data from cache) |
 | `GET /api/patents/:id/preview` | Lightweight preview (+ abstract + citation data) |
 | `POST /api/patents/batch-preview` | Batch preview (+ abstracts + citation data) |
 | `GET /api/patents/:id/citations` | Forward citations + classification breakdown + in_portfolio flag |
-| `GET /api/patents/:id/backward-citations` | **NEW** Parent patents from cache + in_portfolio flag |
+| `GET /api/patents/:id/backward-citations` | Parent patents from cache + in_portfolio flag |
 | `GET /api/patents/:id/prosecution` | Prosecution history from cache |
 | `GET /api/patents/:id/ptab` | PTAB/IPR data from cache |
-| `GET /api/patents/:id/llm` | **NEW** Full LLM analysis (scores + text + classification) |
-| `GET /api/patents/cpc-descriptions` | **NEW** CPC code descriptions (optional `?codes=` filter) |
+| `GET /api/patents/:id/llm` | Full LLM analysis (scores + text + classification) |
+| `GET /api/patents/cpc-descriptions` | CPC code descriptions (optional `?codes=` filter) |
 | `GET /api/patents/affiliates` | List affiliates with counts |
 | `GET /api/patents/super-sectors` | List super-sectors with counts |
 | `GET /api/patents/primary-sectors` | List 42 primary sectors with counts |
@@ -184,11 +182,12 @@ npm run api:dev
 | `GET /api/scores/v3` | V3 scored rankings (profile, page, limit, sector, minScore) |
 | `GET /api/scores/profiles` | List 6 scoring profiles with weights |
 | `GET /api/scores/sectors` | Sector rankings with damages tiers (profile, topN) |
-| `POST /api/scores/reload` | **Updated** Clear ALL caches (scoring + patent + LLM + CPC) |
+| `POST /api/scores/reload` | Clear ALL caches (scoring + patent + LLM + CPC) |
 | `GET /api/scores/stats` | LLM/IPR/prosecution coverage statistics |
 | `GET/POST /api/focus-areas` | Focus area CRUD |
+| `GET /api/focus-areas/scope-options` | **NEW** Available sectors/super-sectors with patent counts |
+| `POST /api/focus-areas/search-preview` | **Updated** Search term hit preview with scope filtering |
 | `POST /api/focus-areas/extract-keywords` | Keyword extraction |
-| `POST /api/focus-areas/search-preview` | Search term hit preview |
 | `GET/POST /api/focus-groups` | Focus group CRUD |
 | `POST /api/focus-groups/:id/formalize` | Convert to focus area |
 
@@ -201,38 +200,40 @@ cd frontend && npm run dev
 **Pages:**
 | Page | Route | Status |
 |------|-------|--------|
-| `PortfolioPage.vue` | `/` | **Updated** — LLM scores + text columns, reorganized column groups |
-| `PatentDetailPage.vue` | `/patent/:id` | **Updated** — LLM tab, backward citations, CPC tooltips |
+| `PortfolioPage.vue` | `/` | Complete — LLM scores + text columns |
+| `PatentDetailPage.vue` | `/patent/:id` | Complete — LLM tab, backward citations, CPC tooltips |
 | `V2ScoringPage.vue` | `/v2-scoring` | Complete |
 | `V3ScoringPage.vue` | `/v3-scoring` | Complete |
 | `SectorRankingsPage.vue` | `/sectors` | Complete |
 | `FocusAreasPage.vue` | `/focus-areas` | Complete |
-| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | Complete |
+| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | **Updated** — Scope selector, scoped search preview |
 
 ---
 
 ## Known Issues / Next Session TODO
 
-### Immediate (Session 13)
-- [ ] Investigate stalled LLM 2,000 patent job (count unchanged at 7,669 from session 10)
+### Immediate (Session 15)
+- [ ] Check prosecution and patent family enrichment completion (may be done by now)
 - [ ] Backfill 2,669 older patents with full V3 analysis (they only have 5 numeric scores, no text fields)
-- [ ] Resume prosecution enrichment to reach 5,000 target (currently 2,475)
+- [ ] **Patent set operations** — Implement DIFF/INTERSECT/UNION between focus area, search results, and family sets (design complete in FOCUS_AREA_SYSTEM_DESIGN.md)
+- [ ] **Search term selectivity tracking** — Persist hit counts (portfolio, scope, focusArea) on SearchTerm records
 - [ ] Confirm batches 3-4 vendor submission status
-- [ ] Generate batches 5-10 with affiliate diversity cap (max 40% VMware per top-ranked batch)
+- [ ] Generate batches 5-10 with affiliate diversity cap
 
 ### Medium Priority
-- [ ] Incremental ES Indexing
-- [ ] Search Term Selectivity Tracking
-- [x] ~~LLM prompt enhancement: Add `prior_art_problem` and `technical_solution` fields to analysis prompt~~ — DONE (fields were always in V3 prompt, fixed cache pipeline in Session 12)
-- [ ] Dynamic columns based on sector (sector-specific scoring facets)
-- [ ] Integrate sector-specific LLM analysis (`services/llm-sector-analysis.ts`) into cache pipeline
-- [ ] Add `claim_clarity_score`, `evidence_accessibility_score`, `trend_alignment_score`, `investigation_priority_score` to V3 scoring profile weights
+- [ ] **Patent family builder** — Basic construction from cached backward citation data (see PATENT_FAMILIES_DESIGN.md extended family section)
+- [ ] **Dynamic columns based on sector** — conditional facet visibility (designed Session 13)
+- [ ] Integrate sector-specific LLM analysis into cache pipeline
+- [ ] **Formalize competitor promotion in GUI** — auto-suggest + manual promote
+- [ ] Add remaining LLM scores to V3 scoring profile weights
 
 ### Design Backlog
-- [ ] **Bulk LLM Analysis Queuing**: Request or queue LLM analysis from UI when not present. Multi-select patents and trigger batch LLM analysis. Design needed: queue management, progress tracking, cost estimation
-- [ ] Citation tab: "Request Data" button to queue uncached patents for citation fetching
+- [ ] **Patent family expansion UI** — Category-constrained expansion with diatomic family visualization
+- [ ] **Focus area set operations UI** — Diff/merge/union dialogs with preview
+- [ ] **Bulk LLM Analysis Queuing** — Request from UI, queue management, cost estimation
 - [ ] Vendor Data tab integration (Patlytics batch results)
-- [ ] Batch allocation tracking in the GUI
+- [ ] **Sector-specific LLM pipeline** — Decoupled second-pass for sector questions
+- [ ] **Competitor confidence levels** — Continuous 0-1 scoring
 
 ---
 
@@ -242,7 +243,7 @@ cd frontend && npm run dev
 # 1. Start infrastructure
 docker compose up -d
 
-# 2. Verify ES data
+# 2. Verify ES data (should include sector fields)
 npx tsx services/elasticsearch-service.ts stats
 # Should show: Documents: 28913
 
@@ -250,6 +251,7 @@ npx tsx services/elasticsearch-service.ts stats
 echo "LLM: $(ls cache/llm-scores/*.json | wc -l)"
 echo "IPR: $(ls cache/ipr-scores/*.json | wc -l)"
 echo "Prosecution: $(ls cache/prosecution-scores/*.json | wc -l)"
+echo "Patent Family Parents: $(ls cache/patent-families/parents/*.json | wc -l)"
 
 # 4. Start backend + frontend
 npm run api:dev
@@ -262,20 +264,12 @@ curl -X POST http://localhost:3001/api/scores/reload
 open http://localhost:3000
 ```
 
-### Test Patents for New Features
-| Feature | Patent ID | What to see |
-|---------|-----------|-------------|
-| **Prior Art + Technical Solution** | 10003303 | Full attorney text fields in LLM tab + grid columns |
-| **All V3 scores** | 10003303 | Claim Clarity, Evidence Access, Trend Alignment, Investigation Priority |
-| **Product types + Implementers** | 10003303 | Chips in LLM detail (RF amplifiers, semiconductor companies) |
-| **Composite sub-scores** | 10003303 | Legal Viability (66), Enforcement Potential, Market Value |
-| LLM tab (scores only, no text) | 8429630 | Numeric scores only — older pipeline, no text fields |
-| Backward citations | 10749870 | 8 parents, most in portfolio |
-| Forward citations (rich) | 10749870 | 169 fwd citations, breakdown |
-| CPC tooltips | Any | Hover CPC chips for descriptions |
-| LLM columns in grid | Enable in Column Selector > Scores / LLM Text | All score badges, text columns |
-| Prosecution (smooth) | 10042628 | Score 4/5, 2 OA, timeline |
-| PTAB with IPR history | 7203959 | 2 Zscaler petitions |
+### Test Features
+| Feature | How to Test |
+|---------|-------------|
+| **Search scope** | Open any Focus Area → click "Scope: Portfolio" chip → select super-sector/sectors → save → search terms now filtered |
+| **Scoped preview** | Focus Area → Search Terms tab → Add Term → type query → click Search → see Portfolio/Scope/Focus Area counts |
+| **Scope options** | `curl http://localhost:3001/api/focus-areas/scope-options` — returns sectors with counts |
 
 ---
 
@@ -283,14 +277,14 @@ open http://localhost:3000
 
 | Document | Purpose |
 |----------|---------|
-| `docs/FOCUS_AREA_SYSTEM_DESIGN.md` | Focus Group/Area lifecycle, search scope, word count grid, LLM jobs, sector design |
-| `docs/PATENT_FAMILIES_DESIGN.md` | Patent families, generational citation trees, citation counting dimensions, assignee classification |
+| `docs/FOCUS_AREA_SYSTEM_DESIGN.md` | Focus Area lifecycle, search scope, reconciliation point, set operations, word count grid, LLM jobs |
+| `docs/PATENT_FAMILIES_DESIGN.md` | Patent families, diatomic family, extended family with category-constrained expansion, citation counting |
 | `docs/FACET_SYSTEM_DESIGN.md` | Facet terminology, scoring as facets, focus area-specific facets |
 | `docs/GUI_DESIGN.md` | GUI architecture, portfolio grid, scoring views, sector rankings |
 | `docs/DEVELOPMENT_QUEUE.md` | Consolidated prioritized roadmap with dependencies |
 | `docs/CITATION_CATEGORIZATION_PROBLEM.md` | Self-citation inflation analysis |
-| `docs/DESIGN_CONSIDERATIONS.md` | Vendor integration, batch strategies |
+| `docs/DESIGN_CONSIDERATIONS.md` | Vendor integration, batch strategies, citation-aware scoring, conditional facets |
 
 ---
 
-*Last Updated: 2026-01-26 (Session 12 — Fixed LLM data pipeline: 14 of 26 V3 fields were being dropped during cache write. Root cause: saveLlmScore() and import-llm-scores.ts cherry-picked fields instead of preserving full analysis. Fixed both scripts, re-imported 5,000 patents from combined-v3 output. Recovered attorney text fields (prior_art_problem, technical_solution) and 12 additional scores/classification fields. Updated backend API, frontend types/store/pages to expose all recovered fields. Comprehensive LLM question taxonomy documented in docs/LLM_PATENT_ANALYSIS.md with 5-tier structure and future batching/queuing design.)*
+*Last Updated: 2026-01-26 (Session 14 — Implemented search scope for focus areas: added primary_sector/super_sector to ES index (28,913 patents re-indexed), SearchScopeType enum and fields in Prisma schema, scoped search preview with sector filtering (native ES filters), scope-options endpoint, scope selector UI in FocusAreaDetailPage with scope-aware selectivity ratios. Added design sections: Focus Area as Reconciliation Point (set operations, focused vs adjacent patents) in FOCUS_AREA_SYSTEM_DESIGN.md; Extended Family Model (diatomic family, category-constrained expansion) in PATENT_FAMILIES_DESIGN.md.)*

@@ -7,9 +7,12 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
 import { loadAllClassifications } from '../services/scoring-service.js';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 
@@ -441,12 +444,32 @@ function applyFilters(patents: Patent[], filters: Record<string, string | string
     result = result.filter(p => p.primary_sector === sectorFilter);
   }
 
-  // Has competitor citations filter
+  // Competitor citations range filter
+  if (filters.competitorCitesMin) {
+    const min = parseFloat(filters.competitorCitesMin as string);
+    result = result.filter(p => (p.competitor_citations ?? 0) >= min);
+  }
+  if (filters.competitorCitesMax) {
+    const max = parseFloat(filters.competitorCitesMax as string);
+    result = result.filter(p => (p.competitor_citations ?? 0) <= max);
+  }
+
+  // Forward citations range filter
+  if (filters.forwardCitesMin) {
+    const min = parseFloat(filters.forwardCitesMin as string);
+    result = result.filter(p => p.forward_citations >= min);
+  }
+  if (filters.forwardCitesMax) {
+    const max = parseFloat(filters.forwardCitesMax as string);
+    result = result.filter(p => p.forward_citations <= max);
+  }
+
+  // Has competitor citations filter (legacy, subsumed by competitorCitesMin)
   if (filters.hasCompetitorCites === 'true') {
     result = result.filter(p => (p.competitor_citations ?? 0) > 0);
   }
 
-  // Active only filter (remaining_years > 0)
+  // Active only filter (remaining_years > 0, legacy, subsumed by yearsMin)
   if (filters.activeOnly === 'true') {
     result = result.filter(p => p.remaining_years > 0);
   }
@@ -481,16 +504,180 @@ function applySorting(patents: Patent[], sortBy: string, descending: boolean): P
 }
 
 /**
+ * GET /api/patents/enrichment-summary
+ * Portfolio enrichment coverage broken down by tier
+ */
+router.get('/enrichment-summary', (_req: Request, res: Response) => {
+  try {
+    const tierSize = Math.min(10000, Math.max(500, parseInt(_req.query.tierSize as string) || 5000));
+
+    const patents = loadPatents();
+
+    // Sort by score descending (same as the CLI script)
+    const sorted = [...patents].sort((a, b) => b.score - a.score);
+
+    // Load enrichment cache sets
+    const llmDir = path.join(process.cwd(), 'cache/llm-scores');
+    const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
+    const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
+    const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
+
+    function getCacheSet(dir: string): Set<string> {
+      if (!fs.existsSync(dir)) return new Set();
+      return new Set(
+        fs.readdirSync(dir)
+          .filter(f => f.endsWith('.json'))
+          .map(f => f.replace('.json', ''))
+      );
+    }
+
+    const llmSet = getCacheSet(llmDir);
+    const prosSet = getCacheSet(prosDir);
+    const iprSet = getCacheSet(iprDir);
+    const familySet = getCacheSet(familyDir);
+
+    // Helper functions
+    function median(values: number[]): number {
+      if (values.length === 0) return 0;
+      const s = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(s.length / 2);
+      return s.length % 2 !== 0 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    }
+    function avg(values: number[]): number {
+      return values.length ? values.reduce((s, v) => s + v, 0) / values.length : 0;
+    }
+    function sum(values: number[]): number {
+      return values.reduce((s, v) => s + v, 0);
+    }
+
+    // Build tiers
+    const tiers: Array<{
+      tierLabel: string;
+      count: number;
+      scoreRange: string;
+      expired: number;
+      active3yr: number;
+      yearsRemaining: { avg: number; median: number };
+      forwardCitations: { avg: number; total: number };
+      competitorCitations: { avg: number; total: number };
+      enrichment: {
+        llm: number; llmPct: number;
+        prosecution: number; prosecutionPct: number;
+        ipr: number; iprPct: number;
+        family: number; familyPct: number;
+      };
+      topAffiliates: Array<{ name: string; count: number; pct: number }>;
+      topSuperSectors: Array<{ name: string; count: number; pct: number }>;
+    }> = [];
+
+    for (let i = 0; i < sorted.length; i += tierSize) {
+      const tierPatents = sorted.slice(i, i + tierSize);
+      const tierNum = Math.floor(i / tierSize) + 1;
+      const start = i + 1;
+      const end = Math.min(i + tierSize, sorted.length);
+
+      const ids = tierPatents.map(p => p.patent_id);
+      const years = tierPatents.map(p => p.remaining_years ?? 0);
+      const fc = tierPatents.map(p => p.forward_citations ?? 0);
+      const cc = tierPatents.map(p => p.competitor_citations ?? 0);
+
+      const llmCount = ids.filter(id => llmSet.has(id)).length;
+      const prosCount = ids.filter(id => prosSet.has(id)).length;
+      const iprCount = ids.filter(id => iprSet.has(id)).length;
+      const familyCount = ids.filter(id => familySet.has(id)).length;
+
+      // Affiliate breakdown
+      const affCounts: Record<string, number> = {};
+      for (const p of tierPatents) {
+        affCounts[p.affiliate] = (affCounts[p.affiliate] || 0) + 1;
+      }
+      const topAffiliates = Object.entries(affCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({
+          name, count,
+          pct: Math.round(count / tierPatents.length * 1000) / 10
+        }));
+
+      // Super-sector breakdown
+      const ssCounts: Record<string, number> = {};
+      for (const p of tierPatents) {
+        ssCounts[p.super_sector] = (ssCounts[p.super_sector] || 0) + 1;
+      }
+      const topSuperSectors = Object.entries(ssCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({
+          name, count,
+          pct: Math.round(count / tierPatents.length * 1000) / 10
+        }));
+
+      const scores = tierPatents.map(p => p.score);
+
+      tiers.push({
+        tierLabel: `Tier ${tierNum} (${start.toLocaleString()}–${end.toLocaleString()})`,
+        count: tierPatents.length,
+        scoreRange: `${scores[scores.length - 1]?.toFixed(1) ?? '?'} – ${scores[0]?.toFixed(1) ?? '?'}`,
+        expired: tierPatents.filter(p => (p.remaining_years ?? 0) <= 0).length,
+        active3yr: tierPatents.filter(p => (p.remaining_years ?? 0) >= 3).length,
+        yearsRemaining: {
+          avg: Math.round(avg(years) * 10) / 10,
+          median: Math.round(median(years) * 10) / 10,
+        },
+        forwardCitations: {
+          avg: Math.round(avg(fc) * 10) / 10,
+          total: sum(fc),
+        },
+        competitorCitations: {
+          avg: Math.round(avg(cc) * 10) / 10,
+          total: sum(cc),
+        },
+        enrichment: {
+          llm: llmCount,
+          llmPct: Math.round(llmCount / tierPatents.length * 1000) / 10,
+          prosecution: prosCount,
+          prosecutionPct: Math.round(prosCount / tierPatents.length * 1000) / 10,
+          ipr: iprCount,
+          iprPct: Math.round(iprCount / tierPatents.length * 1000) / 10,
+          family: familyCount,
+          familyPct: Math.round(familyCount / tierPatents.length * 1000) / 10,
+        },
+        topAffiliates,
+        topSuperSectors,
+      });
+    }
+
+    res.json({
+      totalPatents: sorted.length,
+      tierSize,
+      enrichmentTotals: {
+        llm: llmSet.size,
+        prosecution: prosSet.size,
+        ipr: iprSet.size,
+        family: familySet.size,
+      },
+      tiers,
+    });
+  } catch (error) {
+    console.error('Error computing enrichment summary:', error);
+    res.status(500).json({ error: 'Failed to compute enrichment summary' });
+  }
+});
+
+/**
  * GET /api/patents
  * List patents with pagination, filtering, and sorting
+ * Optional: focusAreaId query param to filter to a focus area's patents
+ *   and merge membership metadata (fa_membership_type, fa_match_score)
  */
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const {
       page = '1',
       limit = '50',
       sortBy = 'score',
       descending = 'true',
+      focusAreaId,
       ...filters
     } = req.query;
 
@@ -500,6 +687,21 @@ router.get('/', (req: Request, res: Response) => {
 
     // Load and filter patents
     let patents = loadPatents();
+
+    // Focus-area scoping: restrict to patents in the focus area
+    let faMetadata: Map<string, { membershipType: string; matchScore: number | null }> | null = null;
+    if (focusAreaId && typeof focusAreaId === 'string') {
+      const faPatents = await prisma.focusAreaPatent.findMany({
+        where: { focusAreaId: focusAreaId },
+        select: { patentId: true, membershipType: true, matchScore: true }
+      });
+      faMetadata = new Map(
+        faPatents.map(fp => [fp.patentId, { membershipType: fp.membershipType, matchScore: fp.matchScore }])
+      );
+      const faPatentIds = new Set(faPatents.map(fp => fp.patentId));
+      patents = patents.filter(p => faPatentIds.has(p.patent_id));
+    }
+
     patents = applyFilters(patents, filters as Record<string, string>);
 
     // Get total before pagination
@@ -512,8 +714,20 @@ router.get('/', (req: Request, res: Response) => {
     const startIndex = (pageNum - 1) * limitNum;
     const paginatedPatents = patents.slice(startIndex, startIndex + limitNum);
 
+    // Merge focus-area metadata if present
+    const data = faMetadata
+      ? paginatedPatents.map(p => {
+          const meta = faMetadata!.get(p.patent_id);
+          return {
+            ...p,
+            fa_membership_type: meta?.membershipType ?? null,
+            fa_match_score: meta?.matchScore ?? null
+          };
+        })
+      : paginatedPatents;
+
     res.json({
-      data: paginatedPatents,
+      data,
       total,
       page: pageNum,
       rowsPerPage: limitNum,

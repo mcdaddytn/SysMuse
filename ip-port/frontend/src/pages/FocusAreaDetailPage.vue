@@ -4,23 +4,57 @@ import { useRoute, useRouter } from 'vue-router';
 import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult, type ScopeOptions, type SearchScopeType, type SearchScopeConfig } from '@/services/api';
 import PatentPreviewTooltip from '@/components/PatentPreviewTooltip.vue';
 import KeywordExtractionPanel from '@/components/KeywordExtractionPanel.vue';
+import { usePatentsStore } from '@/stores/patents';
+import ColumnSelector from '@/components/grid/ColumnSelector.vue';
+import type { Patent } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
+const patentsStore = usePatentsStore();
 
 // State
 const focusArea = ref<FocusArea | null>(null);
-const patents = ref<FocusAreaPatent[]>([]);
+const faPatents = ref<Patent[]>([]);
+const faPatentsTotal = ref(0);
+const faPatentsLoading = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const activeTab = ref('overview');
 
-// Pagination for patents
-const patentPagination = ref({
+// Rich grid state
+const showColumnSelector = ref(false);
+const searchText = ref('');
+const showFilters = ref(true);
+const selectedPatents = ref<Patent[]>([]);
+
+// Filter options (loaded from API)
+interface FilterOption { name: string; count: number }
+const affiliateOptions = ref<FilterOption[]>([]);
+const superSectorOptions = ref<FilterOption[]>([]);
+const loadingFilters = ref(false);
+const selectedAffiliates = ref<string[]>([]);
+const selectedSuperSectors = ref<string[]>([]);
+// Numeric range filters
+const scoreMin = ref<number | null>(null);
+const scoreMax = ref<number | null>(null);
+const yearsMin = ref<number | null>(null);
+const yearsMax = ref<number | null>(null);
+const competitorCitesMin = ref<number | null>(null);
+const competitorCitesMax = ref<number | null>(null);
+const forwardCitesMin = ref<number | null>(null);
+const forwardCitesMax = ref<number | null>(null);
+
+// Pagination for patents (server-side)
+const faPagination = ref({
   page: 1,
-  rowsPerPage: 25,
-  rowsNumber: 0
+  rowsPerPage: 50,
+  rowsNumber: 0,
+  sortBy: 'score',
+  descending: true
 });
+
+// Local filter state for the focus-area patents API call
+const faFilters = ref<Record<string, unknown>>({});
 
 // Edit mode
 const editing = ref(false);
@@ -255,18 +289,139 @@ async function loadFocusArea() {
   }
 }
 
-// Load patents
+// Load patents via the enriched /api/patents endpoint with focusAreaId filter
 async function loadPatents() {
+  faPatentsLoading.value = true;
   try {
-    const response = await focusAreaApi.getFocusAreaPatents(focusAreaId.value, {
-      page: patentPagination.value.page,
-      limit: patentPagination.value.rowsPerPage
-    });
-    patents.value = response.data;
-    patentPagination.value.rowsNumber = response.total;
+    const response = await patentApi.getPatents(
+      {
+        page: faPagination.value.page,
+        rowsPerPage: faPagination.value.rowsPerPage,
+        sortBy: faPagination.value.sortBy,
+        descending: faPagination.value.descending
+      },
+      {
+        focusAreaId: focusAreaId.value,
+        search: searchText.value || undefined,
+        affiliates: selectedAffiliates.value.length > 0 ? selectedAffiliates.value : undefined,
+        superSectors: selectedSuperSectors.value.length > 0 ? selectedSuperSectors.value : undefined,
+        scoreMin: scoreMin.value ?? undefined,
+        scoreMax: scoreMax.value ?? undefined,
+        yearsMin: yearsMin.value ?? undefined,
+        yearsMax: yearsMax.value ?? undefined,
+        competitorCitesMin: competitorCitesMin.value ?? undefined,
+        competitorCitesMax: competitorCitesMax.value ?? undefined,
+        forwardCitesMin: forwardCitesMin.value ?? undefined,
+        forwardCitesMax: forwardCitesMax.value ?? undefined,
+      }
+    );
+    faPatents.value = response.data as Patent[];
+    faPatentsTotal.value = response.total;
+    faPagination.value.rowsNumber = response.total;
   } catch (err) {
     console.error('Failed to load patents:', err);
+  } finally {
+    faPatentsLoading.value = false;
   }
+}
+
+// Load filter options from API
+async function loadFilterOptions() {
+  loadingFilters.value = true;
+  try {
+    const [affiliatesRes, sectorsRes] = await Promise.all([
+      fetch('/api/patents/affiliates'),
+      fetch('/api/patents/super-sectors')
+    ]);
+    if (affiliatesRes.ok) affiliateOptions.value = await affiliatesRes.json();
+    if (sectorsRes.ok) superSectorOptions.value = await sectorsRes.json();
+  } catch (err) {
+    console.error('Failed to load filter options:', err);
+  } finally {
+    loadingFilters.value = false;
+  }
+}
+
+// Apply filters and reload
+function applyFaFilters() {
+  faPagination.value.page = 1;
+  loadPatents();
+}
+
+function onFaSearch() {
+  faPagination.value.page = 1;
+  loadPatents();
+}
+
+function clearFaFilters() {
+  searchText.value = '';
+  selectedAffiliates.value = [];
+  selectedSuperSectors.value = [];
+  scoreMin.value = null;
+  scoreMax.value = null;
+  yearsMin.value = null;
+  yearsMax.value = null;
+  competitorCitesMin.value = null;
+  competitorCitesMax.value = null;
+  forwardCitesMin.value = null;
+  forwardCitesMax.value = null;
+  faPagination.value.page = 1;
+  loadPatents();
+}
+
+const hasFaFilters = computed(() =>
+  !!searchText.value ||
+  selectedAffiliates.value.length > 0 ||
+  selectedSuperSectors.value.length > 0 ||
+  scoreMin.value != null || scoreMax.value != null ||
+  yearsMin.value != null || yearsMax.value != null ||
+  competitorCitesMin.value != null || competitorCitesMax.value != null ||
+  forwardCitesMin.value != null || forwardCitesMax.value != null
+);
+
+// Table columns from the patents store
+const tableColumns = computed(() =>
+  patentsStore.visibleColumns.map(col => ({
+    ...col,
+    field: typeof col.field === 'function' ? col.field : (row: Patent) => (row as Record<string, unknown>)[col.field as string]
+  }))
+);
+
+// Pagination model for q-table
+const paginationModel = computed({
+  get: () => ({
+    page: faPagination.value.page,
+    rowsPerPage: faPagination.value.rowsPerPage,
+    rowsNumber: faPatentsTotal.value,
+    sortBy: faPagination.value.sortBy,
+    descending: faPagination.value.descending
+  }),
+  set: (val) => {
+    faPagination.value.page = val.page;
+    faPagination.value.rowsPerPage = val.rowsPerPage;
+    faPagination.value.sortBy = val.sortBy;
+    faPagination.value.descending = val.descending;
+    loadPatents();
+  }
+});
+
+// Super-sector color mapping (same as PortfolioPage)
+const sectorColors: Record<string, string> = {
+  'Security': 'red-7',
+  'Virtualization & Cloud': 'purple-7',
+  'SDN & Network Infrastructure': 'blue-7',
+  'Wireless & RF': 'teal-7',
+  'Video & Streaming': 'orange-7',
+  'Computing & Data': 'grey-7',
+  'Semiconductor': 'indigo-7',
+  'Imaging & Optics': 'cyan-7',
+  'Audio': 'pink-7',
+  'AI & Machine Learning': 'green-7',
+  'Fault Tolerance & Reliability': 'amber-7'
+};
+
+function getSectorColor(sector: string): string {
+  return sectorColors[sector] || 'grey-6';
 }
 
 // Start editing
@@ -331,7 +486,8 @@ async function removePatent(patentId: string) {
 
   try {
     await focusAreaApi.removePatentsFromFocusArea(focusAreaId.value, [patentId]);
-    patents.value = patents.value.filter(p => p.patentId !== patentId);
+    faPatents.value = faPatents.value.filter(p => p.patent_id !== patentId);
+    faPatentsTotal.value = Math.max(0, faPatentsTotal.value - 1);
     if (focusArea.value) {
       focusArea.value.patentCount--;
     }
@@ -399,6 +555,64 @@ async function addTermFromExtraction(expression: string, termType: string) {
   }
 }
 
+// Bulk actions
+const removingPatents = ref(false);
+const showNewFocusAreaDialog = ref(false);
+const newFocusAreaName = ref('');
+const newFocusAreaDescription = ref('');
+const creatingFocusArea = ref(false);
+const newFocusAreaError = ref<string | null>(null);
+const newFocusAreaRemoveFromCurrent = ref(false);
+
+async function removeSelectedPatents() {
+  if (selectedPatents.value.length === 0) return;
+  const ids = selectedPatents.value.map(p => p.patent_id);
+  removingPatents.value = true;
+  try {
+    await focusAreaApi.removePatentsFromFocusArea(focusAreaId.value, ids);
+    selectedPatents.value = [];
+    await Promise.all([loadFocusArea(), loadPatents()]);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to remove patents';
+  } finally {
+    removingPatents.value = false;
+  }
+}
+
+function openNewFocusAreaDialog(removeFromCurrent: boolean) {
+  newFocusAreaError.value = null;
+  newFocusAreaName.value = '';
+  newFocusAreaDescription.value = '';
+  newFocusAreaRemoveFromCurrent.value = removeFromCurrent;
+  showNewFocusAreaDialog.value = true;
+}
+
+async function createNewFocusArea() {
+  if (!newFocusAreaName.value.trim() || selectedPatents.value.length === 0) return;
+  creatingFocusArea.value = true;
+  newFocusAreaError.value = null;
+  try {
+    const patentIds = selectedPatents.value.map(p => p.patent_id);
+    await focusAreaApi.createFocusArea({
+      name: newFocusAreaName.value.trim(),
+      description: newFocusAreaDescription.value.trim() || undefined,
+      ownerId: 'default-user',
+      patentIds,
+    });
+    // Optionally remove from current focus area
+    if (newFocusAreaRemoveFromCurrent.value) {
+      await focusAreaApi.removePatentsFromFocusArea(focusAreaId.value, patentIds);
+      await Promise.all([loadFocusArea(), loadPatents()]);
+    }
+    showNewFocusAreaDialog.value = false;
+    selectedPatents.value = [];
+  } catch (err) {
+    newFocusAreaError.value = err instanceof Error ? err.message : 'Failed to create focus area';
+  } finally {
+    creatingFocusArea.value = false;
+  }
+}
+
 // Navigate to patent detail
 function goToPatent(patentId: string) {
   router.push({ name: 'patent-detail', params: { id: patentId } });
@@ -412,16 +626,22 @@ function removePatentFromInput(patentId: string) {
 }
 
 // Pagination handler
-function onPatentRequest(props: { pagination: typeof patentPagination.value }) {
-  patentPagination.value.page = props.pagination.page;
-  patentPagination.value.rowsPerPage = props.pagination.rowsPerPage;
+function onPatentRequest(props: { pagination: typeof paginationModel.value }) {
+  faPagination.value.page = props.pagination.page;
+  faPagination.value.rowsPerPage = props.pagination.rowsPerPage;
+  faPagination.value.sortBy = props.pagination.sortBy;
+  faPagination.value.descending = props.pagination.descending;
   loadPatents();
 }
 
 // Initialize
 onMounted(async () => {
+  // Auto-show focus area columns
+  patentsStore.setColumnVisibility('fa_membership_type', true);
+  patentsStore.setColumnVisibility('fa_match_score', true);
+
   await loadFocusArea();
-  await loadPatents();
+  await Promise.all([loadPatents(), loadFilterOptions()]);
 });
 </script>
 
@@ -607,67 +827,467 @@ onMounted(async () => {
 
         <!-- Patents Tab -->
         <q-tab-panel name="patents" class="q-pa-none">
-          <q-card flat bordered>
-            <q-card-section class="q-pb-none">
-              <div class="row items-center">
-                <div class="text-subtitle2">Member Patents</div>
-                <q-space />
-                <q-btn flat dense icon="add" label="Add" @click="showAddPatentDialog = true" />
-              </div>
-            </q-card-section>
+          <!-- Toolbar -->
+          <div class="row items-center q-mb-md">
+            <div class="text-subtitle1 q-mr-md">Member Patents</div>
+            <q-badge color="primary" class="q-mr-md">
+              {{ faPatentsTotal.toLocaleString() }} patents
+            </q-badge>
+            <q-space />
 
-            <q-card-section>
-              <q-table
-                :rows="patents"
-                :columns="[
-                  { name: 'patentId', label: 'Patent ID', field: 'patentId', align: 'left' },
-                  { name: 'membershipType', label: 'Type', field: 'membershipType', align: 'center' },
-                  { name: 'matchScore', label: 'Score', field: 'matchScore', align: 'center', format: (v: number) => v?.toFixed(2) || '-' },
-                  { name: 'actions', label: '', field: 'actions', align: 'right' }
-                ]"
-                row-key="id"
-                v-model:pagination="patentPagination"
-                flat
-                bordered
-                @request="onPatentRequest"
-              >
-                <template v-slot:body-cell-patentId="props">
-                  <q-td :props="props">
-                    <PatentPreviewTooltip
-                      :patent-id="props.row.patentId"
-                      show-link
-                      @click="goToPatent"
-                    />
-                  </q-td>
-                </template>
+            <!-- Search -->
+            <q-input
+              v-model="searchText"
+              dense
+              outlined
+              placeholder="Search patents..."
+              class="q-mr-sm"
+              style="width: 250px"
+              @keyup.enter="onFaSearch"
+            >
+              <template v-slot:append>
+                <q-icon name="search" class="cursor-pointer" @click="onFaSearch" />
+              </template>
+            </q-input>
 
-                <template v-slot:body-cell-membershipType="props">
-                  <q-td :props="props">
-                    <q-chip
+            <!-- Column Selector -->
+            <q-btn flat icon="view_column" label="Columns" class="q-mr-sm" @click="showColumnSelector = true" />
+
+            <!-- Add Patents -->
+            <q-btn flat icon="add" label="Add" @click="showAddPatentDialog = true" />
+
+            <!-- Filter Toggle -->
+            <q-btn
+              flat
+              :icon="showFilters ? 'filter_list_off' : 'filter_list'"
+              :label="showFilters ? 'Hide Filters' : 'Filters'"
+              @click="showFilters = !showFilters"
+            />
+          </div>
+
+          <!-- Filter Bar -->
+          <q-slide-transition>
+            <div v-show="showFilters" class="q-mb-md">
+              <q-card flat bordered>
+                <q-card-section class="q-py-sm">
+                  <div class="row q-gutter-md items-center">
+                    <q-select
+                      v-model="selectedAffiliates"
+                      :options="affiliateOptions"
+                      option-value="name"
+                      option-label="name"
+                      emit-value
+                      map-options
+                      multiple
+                      use-chips
                       dense
-                      size="sm"
-                      :color="props.row.membershipType === 'MANUAL' ? 'grey-4' : 'blue-2'"
+                      outlined
+                      clearable
+                      :loading="loadingFilters"
+                      label="Affiliate"
+                      style="min-width: 200px"
+                      @update:model-value="applyFaFilters"
                     >
-                      {{ props.row.membershipType.toLowerCase() }}
-                    </q-chip>
-                  </q-td>
-                </template>
+                      <template v-slot:option="{ itemProps, opt }">
+                        <q-item v-bind="itemProps">
+                          <q-item-section>
+                            <q-item-label>{{ opt.name }}</q-item-label>
+                          </q-item-section>
+                          <q-item-section side>
+                            <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
+                          </q-item-section>
+                        </q-item>
+                      </template>
+                    </q-select>
 
-                <template v-slot:body-cell-actions="props">
-                  <q-td :props="props">
-                    <q-btn flat dense icon="delete" color="negative" @click="removePatent(props.row.patentId)" />
-                  </q-td>
-                </template>
+                    <q-select
+                      v-model="selectedSuperSectors"
+                      :options="superSectorOptions"
+                      option-value="name"
+                      option-label="name"
+                      emit-value
+                      map-options
+                      multiple
+                      use-chips
+                      dense
+                      outlined
+                      clearable
+                      :loading="loadingFilters"
+                      label="Super-Sector"
+                      style="min-width: 220px"
+                      @update:model-value="applyFaFilters"
+                    >
+                      <template v-slot:option="{ itemProps, opt }">
+                        <q-item v-bind="itemProps">
+                          <q-item-section avatar>
+                            <q-badge :color="getSectorColor(opt.name)" />
+                          </q-item-section>
+                          <q-item-section>
+                            <q-item-label>{{ opt.name }}</q-item-label>
+                          </q-item-section>
+                          <q-item-section side>
+                            <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
+                          </q-item-section>
+                        </q-item>
+                      </template>
+                    </q-select>
 
-                <template v-slot:no-data>
-                  <div class="full-width row flex-center text-grey q-pa-xl">
-                    <q-icon name="folder_open" size="2em" class="q-mr-sm" />
-                    No patents in this focus area yet
+                    <!-- Numeric Range Filters -->
+                    <div class="row items-center q-gutter-xs">
+                      <span class="text-caption text-grey-7">Score:</span>
+                      <q-input v-model.number="scoreMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFaFilters" />
+                      <q-input v-model.number="scoreMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFaFilters" />
+                    </div>
+                    <div class="row items-center q-gutter-xs">
+                      <span class="text-caption text-grey-7">Years Left:</span>
+                      <q-input v-model.number="yearsMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFaFilters" />
+                      <q-input v-model.number="yearsMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFaFilters" />
+                    </div>
+                    <div class="row items-center q-gutter-xs">
+                      <span class="text-caption text-grey-7">Comp. Cites:</span>
+                      <q-input v-model.number="competitorCitesMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFaFilters" />
+                      <q-input v-model.number="competitorCitesMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFaFilters" />
+                    </div>
+                    <div class="row items-center q-gutter-xs">
+                      <span class="text-caption text-grey-7">Fwd Cites:</span>
+                      <q-input v-model.number="forwardCitesMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFaFilters" />
+                      <q-input v-model.number="forwardCitesMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFaFilters" />
+                    </div>
+
+                    <q-space />
+
+                    <q-btn
+                      v-if="hasFaFilters"
+                      flat
+                      dense
+                      color="negative"
+                      icon="clear_all"
+                      label="Clear All"
+                      @click="clearFaFilters"
+                    />
                   </div>
-                </template>
-              </q-table>
-            </q-card-section>
-          </q-card>
+                </q-card-section>
+              </q-card>
+            </div>
+          </q-slide-transition>
+
+          <!-- Data Table -->
+          <div class="table-scroll-container">
+          <q-table
+            :rows="faPatents"
+            :columns="tableColumns"
+            row-key="patent_id"
+            v-model:pagination="paginationModel"
+            v-model:selected="selectedPatents"
+            :loading="faPatentsLoading"
+            selection="multiple"
+            flat
+            bordered
+            binary-state-sort
+            @row-click="(_evt: Event, row: Patent) => goToPatent(row.patent_id)"
+            @request="onPatentRequest"
+          >
+            <!-- Patent ID as link -->
+            <template v-slot:body-cell-patent_id="props">
+              <q-td :props="props">
+                <router-link
+                  :to="{ name: 'patent-detail', params: { id: props.row.patent_id } }"
+                  class="text-primary"
+                  @click.stop
+                >
+                  {{ props.row.patent_id }}
+                </router-link>
+              </q-td>
+            </template>
+
+            <!-- Title with truncation -->
+            <template v-slot:body-cell-patent_title="props">
+              <q-td :props="props">
+                <div class="ellipsis" style="max-width: 400px">
+                  {{ props.row.patent_title }}
+                  <q-tooltip v-if="props.row.patent_title?.length > 60">
+                    {{ props.row.patent_title }}
+                  </q-tooltip>
+                </div>
+              </q-td>
+            </template>
+
+            <!-- Affiliate -->
+            <template v-slot:body-cell-affiliate="props">
+              <q-td :props="props">
+                <a href="#" class="text-primary" @click.stop.prevent="selectedAffiliates = [props.row.affiliate]; applyFaFilters()">
+                  {{ props.row.affiliate }}
+                </a>
+              </q-td>
+            </template>
+
+            <!-- Super-Sector -->
+            <template v-slot:body-cell-super_sector="props">
+              <q-td :props="props">
+                <q-chip
+                  dense
+                  clickable
+                  :color="getSectorColor(props.row.super_sector)"
+                  text-color="white"
+                  size="sm"
+                  @click.stop="selectedSuperSectors = [props.row.super_sector]; applyFaFilters()"
+                >
+                  {{ props.row.super_sector }}
+                </q-chip>
+              </q-td>
+            </template>
+
+            <!-- Assignee -->
+            <template v-slot:body-cell-assignee="props">
+              <q-td :props="props">
+                <span class="text-secondary text-caption">{{ props.row.assignee }}</span>
+              </q-td>
+            </template>
+
+            <!-- Primary Sector -->
+            <template v-slot:body-cell-primary_sector="props">
+              <q-td :props="props">
+                <span class="text-caption text-grey-7">{{ props.row.primary_sector }}</span>
+              </q-td>
+            </template>
+
+            <!-- Score with color coding -->
+            <template v-slot:body-cell-score="props">
+              <q-td :props="props">
+                <q-badge :color="props.row.score > 100 ? 'positive' : props.row.score > 50 ? 'warning' : 'grey'">
+                  {{ props.row.score?.toFixed(1) || '-' }}
+                </q-badge>
+              </q-td>
+            </template>
+
+            <!-- Competitor citations -->
+            <template v-slot:body-cell-competitor_citations="props">
+              <q-td :props="props">
+                <span :class="props.row.competitor_citations > 10 ? 'text-bold text-negative' : props.row.competitor_citations > 3 ? 'text-bold text-warning' : ''">
+                  {{ props.row.competitor_citations ?? 0 }}
+                </span>
+              </q-td>
+            </template>
+
+            <!-- Competitor count -->
+            <template v-slot:body-cell-competitor_count="props">
+              <q-td :props="props">
+                <span :class="props.row.competitor_count > 3 ? 'text-bold text-negative' : props.row.competitor_count > 1 ? 'text-bold' : ''">
+                  {{ props.row.competitor_count ?? 0 }}
+                </span>
+                <q-tooltip v-if="props.row.competitor_names?.length > 0">
+                  {{ props.row.competitor_names.join(', ') }}
+                </q-tooltip>
+              </q-td>
+            </template>
+
+            <!-- LLM Text fields -->
+            <template v-slot:body-cell-llm_summary="props">
+              <q-td :props="props">
+                <div v-if="props.row.llm_summary" class="ellipsis" style="max-width: 300px">
+                  {{ props.row.llm_summary }}
+                  <q-tooltip max-width="400px" :delay="300">{{ props.row.llm_summary }}</q-tooltip>
+                </div>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-llm_prior_art_problem="props">
+              <q-td :props="props">
+                <div v-if="props.row.llm_prior_art_problem" class="ellipsis" style="max-width: 300px">
+                  {{ props.row.llm_prior_art_problem }}
+                  <q-tooltip max-width="400px" :delay="300">{{ props.row.llm_prior_art_problem }}</q-tooltip>
+                </div>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-llm_technical_solution="props">
+              <q-td :props="props">
+                <div v-if="props.row.llm_technical_solution" class="ellipsis" style="max-width: 300px">
+                  {{ props.row.llm_technical_solution }}
+                  <q-tooltip max-width="400px" :delay="300">{{ props.row.llm_technical_solution }}</q-tooltip>
+                </div>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <!-- LLM Score columns (1-5 scale) -->
+            <template v-slot:body-cell-eligibility_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.eligibility_score" :color="props.row.eligibility_score >= 4 ? 'positive' : props.row.eligibility_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.eligibility_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-validity_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.validity_score" :color="props.row.validity_score >= 4 ? 'positive' : props.row.validity_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.validity_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-claim_breadth="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.claim_breadth" :color="props.row.claim_breadth >= 4 ? 'positive' : props.row.claim_breadth >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.claim_breadth }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-enforcement_clarity="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.enforcement_clarity" :color="props.row.enforcement_clarity >= 4 ? 'positive' : props.row.enforcement_clarity >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.enforcement_clarity }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-design_around_difficulty="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.design_around_difficulty" :color="props.row.design_around_difficulty >= 4 ? 'positive' : props.row.design_around_difficulty >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.design_around_difficulty }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-claim_clarity_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.claim_clarity_score" :color="props.row.claim_clarity_score >= 4 ? 'positive' : props.row.claim_clarity_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.claim_clarity_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-evidence_accessibility_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.evidence_accessibility_score" :color="props.row.evidence_accessibility_score >= 4 ? 'positive' : props.row.evidence_accessibility_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.evidence_accessibility_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-market_relevance_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.market_relevance_score" :color="props.row.market_relevance_score >= 4 ? 'positive' : props.row.market_relevance_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.market_relevance_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-trend_alignment_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.trend_alignment_score" :color="props.row.trend_alignment_score >= 4 ? 'positive' : props.row.trend_alignment_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.trend_alignment_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-investigation_priority_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.investigation_priority_score" :color="props.row.investigation_priority_score >= 4 ? 'positive' : props.row.investigation_priority_score >= 3 ? 'warning' : 'negative'">
+                  {{ props.row.investigation_priority_score }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-llm_confidence="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.llm_confidence" color="grey-7">
+                  {{ props.row.llm_confidence }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <!-- Composite scores (0-100 scale) -->
+            <template v-slot:body-cell-legal_viability_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.legal_viability_score" :color="props.row.legal_viability_score >= 70 ? 'positive' : props.row.legal_viability_score >= 50 ? 'warning' : 'negative'">
+                  {{ Math.round(props.row.legal_viability_score) }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-enforcement_potential_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.enforcement_potential_score" :color="props.row.enforcement_potential_score >= 70 ? 'positive' : props.row.enforcement_potential_score >= 50 ? 'warning' : 'negative'">
+                  {{ Math.round(props.row.enforcement_potential_score) }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-market_value_score="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.market_value_score" :color="props.row.market_value_score >= 70 ? 'positive' : props.row.market_value_score >= 50 ? 'warning' : 'negative'">
+                  {{ Math.round(props.row.market_value_score) }}
+                </q-badge>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <!-- Focus Area columns -->
+            <template v-slot:body-cell-fa_membership_type="props">
+              <q-td :props="props">
+                <q-chip
+                  v-if="props.row.fa_membership_type"
+                  dense
+                  size="sm"
+                  :color="props.row.fa_membership_type === 'MANUAL' ? 'grey-4' : 'blue-2'"
+                >
+                  {{ props.row.fa_membership_type.toLowerCase().replace('_', ' ') }}
+                </q-chip>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-fa_match_score="props">
+              <q-td :props="props">
+                <span v-if="props.row.fa_match_score != null">
+                  {{ props.row.fa_match_score.toFixed(2) }}
+                </span>
+                <span v-else class="text-grey-4">--</span>
+              </q-td>
+            </template>
+
+            <!-- Actions column (remove button) -->
+            <template v-slot:body-cell-actions="props">
+              <q-td :props="props">
+                <q-btn flat dense icon="delete" color="negative" @click.stop="removePatent(props.row.patent_id)" />
+              </q-td>
+            </template>
+
+            <!-- No data -->
+            <template v-slot:no-data>
+              <div class="full-width row flex-center text-grey q-pa-xl">
+                <q-icon name="folder_open" size="2em" class="q-mr-sm" />
+                No patents in this focus area yet
+              </div>
+            </template>
+
+            <!-- Loading -->
+            <template v-slot:loading>
+              <q-inner-loading showing color="primary" />
+            </template>
+          </q-table>
+          </div>
+
+          <!-- Column Selector Dialog -->
+          <ColumnSelector v-model="showColumnSelector" />
         </q-tab-panel>
 
         <!-- Search Terms Tab -->
@@ -727,6 +1347,78 @@ onMounted(async () => {
         </q-tab-panel>
       </q-tab-panels>
     </template>
+
+    <!-- Bulk Actions (when items selected) -->
+    <q-page-sticky v-if="selectedPatents.length > 0" position="bottom" :offset="[0, 18]">
+      <q-banner class="bg-primary text-white">
+        <template v-slot:avatar>
+          <q-icon name="check_circle" />
+        </template>
+        {{ selectedPatents.length }} patents selected
+        <template v-slot:action>
+          <q-btn flat icon="delete" label="Remove from Focus Area" :loading="removingPatents" @click="removeSelectedPatents" />
+          <q-btn flat icon="drive_file_move" label="Move to New Focus Area" @click="openNewFocusAreaDialog(true)" />
+          <q-btn flat icon="content_copy" label="Copy to New Focus Area" @click="openNewFocusAreaDialog(false)" />
+          <q-btn flat label="Clear" @click="selectedPatents = []" />
+        </template>
+      </q-banner>
+    </q-page-sticky>
+
+    <!-- Create New Focus Area Dialog -->
+    <q-dialog v-model="showNewFocusAreaDialog" persistent>
+      <q-card style="min-width: 450px">
+        <q-card-section class="row items-center">
+          <q-avatar :icon="newFocusAreaRemoveFromCurrent ? 'drive_file_move' : 'content_copy'" color="primary" text-color="white" />
+          <span class="q-ml-sm text-h6">{{ newFocusAreaRemoveFromCurrent ? 'Move' : 'Copy' }} to New Focus Area</span>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-body2 text-grey-7 q-mb-md">
+            {{ newFocusAreaRemoveFromCurrent
+              ? `Moving ${selectedPatents.length} patents out of "${focusArea?.name}" into a new focus area.`
+              : `Copying ${selectedPatents.length} patents into a new focus area (they will remain in "${focusArea?.name}").`
+            }}
+          </div>
+
+          <q-input
+            v-model="newFocusAreaName"
+            label="Focus Area Name *"
+            outlined
+            autofocus
+            :rules="[val => !!val?.trim() || 'Name is required']"
+            class="q-mb-md"
+            placeholder="e.g., High-Score Container Patents"
+          />
+
+          <q-input
+            v-model="newFocusAreaDescription"
+            label="Description (optional)"
+            outlined
+            type="textarea"
+            rows="2"
+            placeholder="Brief description of this focus area..."
+          />
+
+          <q-banner v-if="newFocusAreaError" class="bg-negative text-white q-mt-md">
+            {{ newFocusAreaError }}
+          </q-banner>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            :icon="newFocusAreaRemoveFromCurrent ? 'drive_file_move' : 'content_copy'"
+            :label="newFocusAreaRemoveFromCurrent ? 'Move to New Focus Area' : 'Copy to New Focus Area'"
+            :loading="creatingFocusArea"
+            :disable="!newFocusAreaName.trim()"
+            @click="createNewFocusArea"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- Add Patent Dialog -->
     <q-dialog v-model="showAddPatentDialog" persistent>
@@ -868,7 +1560,7 @@ onMounted(async () => {
                 @click="toggleScopeSuperSector(ss.term)"
               >
                 {{ formatScopeLabel(ss.term) }}
-                <q-badge floating color="grey-6" text-color="white">{{ ss.count }}</q-badge>
+                <q-badge color="grey-6" text-color="white" class="q-ml-xs">{{ ss.count.toLocaleString() }}</q-badge>
               </q-chip>
             </div>
           </template>
@@ -889,7 +1581,7 @@ onMounted(async () => {
                 @click="toggleScopeSector(s.term)"
               >
                 {{ formatScopeLabel(s.term) }}
-                <q-badge floating color="grey-6" text-color="white">{{ s.count }}</q-badge>
+                <q-badge color="grey-6" text-color="white" class="q-ml-xs">{{ s.count.toLocaleString() }}</q-badge>
               </q-chip>
             </div>
           </template>
@@ -1079,6 +1771,58 @@ code {
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'Fira Code', monospace;
+}
+
+.ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-scroll-container {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+}
+
+/* Pin selection checkbox column */
+:deep(.q-table td:first-child),
+:deep(.q-table th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+/* Pin patent_id column */
+:deep(.q-table td:nth-child(2)),
+:deep(.q-table th:nth-child(2)) {
+  position: sticky;
+  left: 48px;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Header row stays pinned */
+:deep(.q-table thead th) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+/* Corner cells get highest z-index */
+:deep(.q-table thead th:first-child),
+:deep(.q-table thead th:nth-child(2)) {
+  z-index: 3;
+}
+
+:deep(.q-table tbody tr) {
+  cursor: pointer;
+}
+
+:deep(.q-table tbody tr:hover) {
+  background-color: rgba(0, 0, 0, 0.03);
 }
 
 .patent-chips-container {

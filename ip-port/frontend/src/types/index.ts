@@ -200,11 +200,16 @@ export interface PortfolioFilters {
   superSectors?: string[];
   assignees?: string[];
   primarySectors?: string[];
-  dateRange?: { start: string; end: string };
-  scoreRange?: { min: number; max: number };
-  remainingYearsRange?: { min: number; max: number };
-  hasCompetitorCites?: boolean;
-  activeOnly?: boolean;
+  focusAreaId?: string;
+  // Flat numeric ranges (match backend query params)
+  scoreMin?: number;
+  scoreMax?: number;
+  yearsMin?: number;
+  yearsMax?: number;
+  competitorCitesMin?: number;
+  competitorCitesMax?: number;
+  forwardCitesMin?: number;
+  forwardCitesMax?: number;
 }
 
 // Column group for organized column selector

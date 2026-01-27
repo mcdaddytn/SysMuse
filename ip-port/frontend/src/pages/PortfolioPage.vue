@@ -2,7 +2,7 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
-import { focusAreaApi } from '@/services/api';
+import { focusAreaApi, jobsApi } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import type { Patent } from '@/types';
 
@@ -37,8 +37,16 @@ const loadingFilters = ref(false);
 const selectedAffiliates = ref<string[]>([]);
 const selectedSuperSectors = ref<string[]>([]);
 const selectedPrimarySectors = ref<string[]>([]);
-const activeOnlyFilter = ref(false);
-const hasCompetitorCitesFilter = ref(false);
+
+// Numeric range filters
+const scoreMin = ref<number | null>(null);
+const scoreMax = ref<number | null>(null);
+const yearsMin = ref<number | null>(null);
+const yearsMax = ref<number | null>(null);
+const competitorCitesMin = ref<number | null>(null);
+const competitorCitesMax = ref<number | null>(null);
+const forwardCitesMin = ref<number | null>(null);
+const forwardCitesMax = ref<number | null>(null);
 
 // Load filter options from API
 async function loadFilterOptions() {
@@ -71,8 +79,14 @@ watch(() => patentsStore.filters, (newFilters) => {
   selectedAffiliates.value = newFilters.affiliates || [];
   selectedSuperSectors.value = newFilters.superSectors || [];
   selectedPrimarySectors.value = newFilters.primarySectors || [];
-  activeOnlyFilter.value = newFilters.activeOnly || false;
-  hasCompetitorCitesFilter.value = newFilters.hasCompetitorCites || false;
+  scoreMin.value = newFilters.scoreMin ?? null;
+  scoreMax.value = newFilters.scoreMax ?? null;
+  yearsMin.value = newFilters.yearsMin ?? null;
+  yearsMax.value = newFilters.yearsMax ?? null;
+  competitorCitesMin.value = newFilters.competitorCitesMin ?? null;
+  competitorCitesMax.value = newFilters.competitorCitesMax ?? null;
+  forwardCitesMin.value = newFilters.forwardCitesMin ?? null;
+  forwardCitesMax.value = newFilters.forwardCitesMax ?? null;
 }, { immediate: true });
 
 // Apply filters when dropdowns change
@@ -81,8 +95,14 @@ function applyFilters() {
     affiliates: selectedAffiliates.value.length > 0 ? selectedAffiliates.value : undefined,
     superSectors: selectedSuperSectors.value.length > 0 ? selectedSuperSectors.value : undefined,
     primarySectors: selectedPrimarySectors.value.length > 0 ? selectedPrimarySectors.value : undefined,
-    activeOnly: activeOnlyFilter.value || undefined,
-    hasCompetitorCites: hasCompetitorCitesFilter.value || undefined
+    scoreMin: scoreMin.value ?? undefined,
+    scoreMax: scoreMax.value ?? undefined,
+    yearsMin: yearsMin.value ?? undefined,
+    yearsMax: yearsMax.value ?? undefined,
+    competitorCitesMin: competitorCitesMin.value ?? undefined,
+    competitorCitesMax: competitorCitesMax.value ?? undefined,
+    forwardCitesMin: forwardCitesMin.value ?? undefined,
+    forwardCitesMax: forwardCitesMax.value ?? undefined,
   });
 }
 
@@ -218,6 +238,42 @@ function openCreateFocusGroupDialog() {
   newFocusGroupName.value = '';
   newFocusGroupDescription.value = '';
   showCreateFocusGroupDialog.value = true;
+}
+
+// Queue Enrichment
+const showEnrichmentDialog = ref(false);
+const enrichmentJobTypes = ref<string[]>([]);
+const queueingEnrichment = ref(false);
+const enrichmentError = ref<string | null>(null);
+const enrichmentJobTypeOptions = [
+  { value: 'LLM_ANALYSIS', label: 'LLM Analysis' },
+  { value: 'PROSECUTION_HISTORY', label: 'Prosecution History' },
+  { value: 'PTAB_CHECK', label: 'IPR / PTAB' },
+  { value: 'CITATION_ANALYSIS', label: 'Patent Families' }
+];
+
+function openEnrichmentDialog() {
+  enrichmentError.value = null;
+  enrichmentJobTypes.value = [];
+  showEnrichmentDialog.value = true;
+}
+
+async function queueEnrichment() {
+  if (enrichmentJobTypes.value.length === 0 || selectedPatents.value.length === 0) return;
+  queueingEnrichment.value = true;
+  enrichmentError.value = null;
+  try {
+    const patentIds = selectedPatents.value.map(p => p.patent_id);
+    for (const jobType of enrichmentJobTypes.value) {
+      await jobsApi.createBulkJobs(jobType, patentIds);
+    }
+    showEnrichmentDialog.value = false;
+    selectedPatents.value = [];
+  } catch (err) {
+    enrichmentError.value = err instanceof Error ? err.message : 'Failed to queue enrichment jobs';
+  } finally {
+    queueingEnrichment.value = false;
+  }
 }
 
 // Lifecycle
@@ -408,19 +464,27 @@ onMounted(async () => {
                 </template>
               </q-select>
 
-              <!-- Toggles -->
-              <q-toggle
-                v-model="activeOnlyFilter"
-                label="Active Only"
-                dense
-                @update:model-value="applyFilters"
-              />
-              <q-toggle
-                v-model="hasCompetitorCitesFilter"
-                label="Has Competitor Cites"
-                dense
-                @update:model-value="applyFilters"
-              />
+              <!-- Numeric Range Filters -->
+              <div class="row items-center q-gutter-xs">
+                <span class="text-caption text-grey-7">Score:</span>
+                <q-input v-model.number="scoreMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
+                <q-input v-model.number="scoreMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
+              </div>
+              <div class="row items-center q-gutter-xs">
+                <span class="text-caption text-grey-7">Years Left:</span>
+                <q-input v-model.number="yearsMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
+                <q-input v-model.number="yearsMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
+              </div>
+              <div class="row items-center q-gutter-xs">
+                <span class="text-caption text-grey-7">Competitor Cites:</span>
+                <q-input v-model.number="competitorCitesMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
+                <q-input v-model.number="competitorCitesMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
+              </div>
+              <div class="row items-center q-gutter-xs">
+                <span class="text-caption text-grey-7">Forward Cites:</span>
+                <q-input v-model.number="forwardCitesMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
+                <q-input v-model.number="forwardCitesMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
+              </div>
 
               <q-space />
 
@@ -432,7 +496,7 @@ onMounted(async () => {
                 color="negative"
                 icon="clear_all"
                 label="Clear All"
-                @click="patentsStore.clearFilters(); selectedAffiliates = []; selectedSuperSectors = []; selectedPrimarySectors = []; activeOnlyFilter = false; hasCompetitorCitesFilter = false;"
+                @click="patentsStore.clearFilters(); selectedAffiliates = []; selectedSuperSectors = []; selectedPrimarySectors = []; scoreMin = null; scoreMax = null; yearsMin = null; yearsMax = null; competitorCitesMin = null; competitorCitesMax = null; forwardCitesMin = null; forwardCitesMax = null;"
               />
             </div>
           </q-card-section>
@@ -478,24 +542,44 @@ onMounted(async () => {
           {{ sector }}
         </q-chip>
         <q-chip
-          v-if="patentsStore.filters.activeOnly"
+          v-if="patentsStore.filters.scoreMin != null || patentsStore.filters.scoreMax != null"
           dense
           removable
           color="green"
           text-color="white"
-          @remove="activeOnlyFilter = false; applyFilters()"
+          @remove="scoreMin = null; scoreMax = null; applyFilters()"
         >
-          Active Only
+          Score: {{ patentsStore.filters.scoreMin ?? '*' }}–{{ patentsStore.filters.scoreMax ?? '*' }}
         </q-chip>
         <q-chip
-          v-if="patentsStore.filters.hasCompetitorCites"
+          v-if="patentsStore.filters.yearsMin != null || patentsStore.filters.yearsMax != null"
+          dense
+          removable
+          color="teal"
+          text-color="white"
+          @remove="yearsMin = null; yearsMax = null; applyFilters()"
+        >
+          Years: {{ patentsStore.filters.yearsMin ?? '*' }}–{{ patentsStore.filters.yearsMax ?? '*' }}
+        </q-chip>
+        <q-chip
+          v-if="patentsStore.filters.competitorCitesMin != null || patentsStore.filters.competitorCitesMax != null"
           dense
           removable
           color="orange"
           text-color="white"
-          @remove="hasCompetitorCitesFilter = false; applyFilters()"
+          @remove="competitorCitesMin = null; competitorCitesMax = null; applyFilters()"
         >
-          Has Competitor Cites
+          Comp. Cites: {{ patentsStore.filters.competitorCitesMin ?? '*' }}–{{ patentsStore.filters.competitorCitesMax ?? '*' }}
+        </q-chip>
+        <q-chip
+          v-if="patentsStore.filters.forwardCitesMin != null || patentsStore.filters.forwardCitesMax != null"
+          dense
+          removable
+          color="blue"
+          text-color="white"
+          @remove="forwardCitesMin = null; forwardCitesMax = null; applyFilters()"
+        >
+          Fwd Cites: {{ patentsStore.filters.forwardCitesMin ?? '*' }}–{{ patentsStore.filters.forwardCitesMax ?? '*' }}
         </q-chip>
         <q-chip
           v-if="patentsStore.filters.search"
@@ -511,6 +595,7 @@ onMounted(async () => {
     </div>
 
     <!-- Data Table -->
+    <div class="table-scroll-container">
     <q-table
       :rows="patentsStore.patents"
       :columns="tableColumns"
@@ -809,6 +894,7 @@ onMounted(async () => {
         <q-inner-loading showing color="primary" />
       </template>
     </q-table>
+    </div>
 
     <!-- Bulk Actions (when items selected) -->
     <q-page-sticky v-if="selectedPatents.length > 0" position="bottom" :offset="[0, 18]">
@@ -819,8 +905,8 @@ onMounted(async () => {
         {{ selectedPatents.length }} patents selected
         <template v-slot:action>
           <q-btn flat icon="folder_special" label="Create Focus Group" @click="openCreateFocusGroupDialog" />
-          <q-btn flat label="Queue Jobs" @click="console.log('Queue jobs for', selectedPatents)" />
-          <q-btn flat label="Export Selected" />
+          <q-btn flat icon="science" label="Queue Enrichment" @click="openEnrichmentDialog" />
+          <q-btn flat icon="download" label="Export Selected" @click="exportToCSV" />
           <q-btn flat label="Clear" @click="selectedPatents = []" />
         </template>
       </q-banner>
@@ -880,6 +966,50 @@ onMounted(async () => {
       </q-card>
     </q-dialog>
 
+    <!-- Queue Enrichment Dialog -->
+    <q-dialog v-model="showEnrichmentDialog" persistent>
+      <q-card style="min-width: 450px">
+        <q-card-section class="row items-center">
+          <q-avatar icon="science" color="primary" text-color="white" />
+          <span class="q-ml-sm text-h6">Queue Enrichment</span>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-body2 text-grey-7 q-mb-md">
+            Queue enrichment jobs for {{ selectedPatents.length }} selected patents.
+          </div>
+
+          <div class="column q-gutter-sm">
+            <q-checkbox
+              v-for="opt in enrichmentJobTypeOptions"
+              :key="opt.value"
+              v-model="enrichmentJobTypes"
+              :val="opt.value"
+              :label="opt.label"
+            />
+          </div>
+
+          <q-banner v-if="enrichmentError" class="bg-negative text-white q-mt-md">
+            {{ enrichmentError }}
+          </q-banner>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            icon="play_arrow"
+            :label="`Queue ${enrichmentJobTypes.length} Job Type(s)`"
+            :loading="queueingEnrichment"
+            :disable="enrichmentJobTypes.length === 0"
+            @click="queueEnrichment"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Column Selector Dialog -->
     <ColumnSelector v-model="showColumnSelector" />
   </q-page>
@@ -890,6 +1020,44 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.table-scroll-container {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+}
+
+/* Pin selection checkbox column */
+:deep(.q-table td:first-child),
+:deep(.q-table th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+/* Pin patent_id column */
+:deep(.q-table td:nth-child(2)),
+:deep(.q-table th:nth-child(2)) {
+  position: sticky;
+  left: 48px;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Header row stays pinned */
+:deep(.q-table thead th) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+/* Corner cells get highest z-index */
+:deep(.q-table thead th:first-child),
+:deep(.q-table thead th:nth-child(2)) {
+  z-index: 3;
 }
 
 :deep(.q-table tbody tr) {

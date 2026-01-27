@@ -93,8 +93,40 @@ export const patentApi = {
   async getPatentPTAB(id: string) {
     const { data } = await api.get(`/patents/${id}/ptab`);
     return data;
+  },
+
+  async getEnrichmentSummary(tierSize = 5000): Promise<EnrichmentSummary> {
+    const { data } = await api.get('/patents/enrichment-summary', { params: { tierSize } });
+    return data;
   }
 };
+
+// Enrichment Summary types
+export interface EnrichmentTierData {
+  tierLabel: string;
+  count: number;
+  scoreRange: string;
+  expired: number;
+  active3yr: number;
+  yearsRemaining: { avg: number; median: number };
+  forwardCitations: { avg: number; total: number };
+  competitorCitations: { avg: number; total: number };
+  enrichment: {
+    llm: number; llmPct: number;
+    prosecution: number; prosecutionPct: number;
+    ipr: number; iprPct: number;
+    family: number; familyPct: number;
+  };
+  topAffiliates: Array<{ name: string; count: number; pct: number }>;
+  topSuperSectors: Array<{ name: string; count: number; pct: number }>;
+}
+
+export interface EnrichmentSummary {
+  totalPatents: number;
+  tierSize: number;
+  enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number };
+  tiers: EnrichmentTierData[];
+}
 
 // Auth API
 export const authApi = {

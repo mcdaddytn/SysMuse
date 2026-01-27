@@ -202,7 +202,8 @@ export class BaseAPIClient {
       const apiError = error as APIError;
       
       // Don't retry 4xx errors (client errors) - only retry 5xx (server errors) or network errors
-      if (apiError.statusCode && apiError.statusCode >= 400 && apiError.statusCode < 500) {
+      // Exception: 429 Too Many Requests IS retryable (rate limit hit)
+      if (apiError.statusCode && apiError.statusCode >= 400 && apiError.statusCode < 500 && apiError.statusCode !== 429) {
         throw error;
       }
 

@@ -129,6 +129,13 @@ export const usePatentsStore = defineStore('patents', () => {
       description: 'Geographic deployment scope' },
     { name: 'llm_lifecycle_stage', label: 'Lifecycle Stage', field: 'llm_lifecycle_stage', sortable: true, align: 'left', visible: false, group: 'llmText',
       description: 'Technology lifecycle stage' },
+
+    // Focus Area group (visible only when viewing a focus area)
+    { name: 'fa_membership_type', label: 'Membership', field: 'fa_membership_type', sortable: true, align: 'center', visible: false, group: 'focusArea',
+      description: 'How the patent was added to the focus area (MANUAL, SEARCH_MATCH, etc.)' },
+    { name: 'fa_match_score', label: 'Match Score', field: 'fa_match_score', sortable: true, align: 'center', visible: false, group: 'focusArea',
+      description: 'Search-term match score within the focus area',
+      format: (val: unknown) => typeof val === 'number' ? val.toFixed(2) : '--' },
   ]);
 
   // Getters

@@ -1006,6 +1006,114 @@ interface PatentPreview {
 }
 
 /**
+ * GET /api/patents/export
+ * Export filtered patents as CSV.
+ * Accepts same filter params as GET /api/patents.
+ * Additionally accepts `columns` (comma-separated field names) to control output.
+ * Returns all matching patents (no pagination).
+ */
+router.get('/export', (req: Request, res: Response) => {
+  try {
+    const {
+      sortBy = 'score',
+      descending = 'true',
+      columns: columnParam,
+      ...filters
+    } = req.query;
+
+    const isDescending = descending === 'true';
+
+    // Load, filter, sort
+    let patents = loadPatents();
+    patents = applyFilters(patents, filters as Record<string, string>);
+    patents = applySorting(patents, sortBy as string, isDescending);
+
+    // Determine columns to export
+    const allColumns = [
+      { field: 'patent_id', label: 'Patent ID' },
+      { field: 'patent_title', label: 'Title' },
+      { field: 'patent_date', label: 'Grant Date' },
+      { field: 'remaining_years', label: 'Years Left' },
+      { field: 'affiliate', label: 'Affiliate' },
+      { field: 'super_sector', label: 'Super-Sector' },
+      { field: 'primary_sector', label: 'Primary Sector' },
+      { field: 'assignee', label: 'Assignee (Raw)' },
+      { field: 'forward_citations', label: 'Fwd Citations' },
+      { field: 'competitor_citations', label: 'Competitor Cites' },
+      { field: 'affiliate_citations', label: 'Affiliate Cites' },
+      { field: 'neutral_citations', label: 'Neutral Cites' },
+      { field: 'competitor_count', label: 'Competitors' },
+      { field: 'competitor_names', label: 'Competitor Names' },
+      { field: 'adjusted_forward_citations', label: 'Adj. Fwd Cites' },
+      { field: 'competitor_density', label: 'Comp. Density' },
+      { field: 'score', label: 'Base Score' },
+      { field: 'v2_score', label: 'v2 Score' },
+      { field: 'v3_score', label: 'v3 Score' },
+      { field: 'consensus_score', label: 'Consensus' },
+      { field: 'cpc_codes', label: 'CPC Codes' },
+      { field: 'eligibility_score', label: 'Eligibility' },
+      { field: 'validity_score', label: 'Validity' },
+      { field: 'claim_breadth', label: 'Claim Breadth' },
+      { field: 'enforcement_clarity', label: 'Enforcement Clarity' },
+      { field: 'design_around_difficulty', label: 'Design-Around' },
+      { field: 'claim_clarity_score', label: 'Claim Clarity' },
+      { field: 'evidence_accessibility_score', label: 'Evidence Access' },
+      { field: 'market_relevance_score', label: 'Market Relevance' },
+      { field: 'trend_alignment_score', label: 'Trend Alignment' },
+      { field: 'investigation_priority_score', label: 'Investigation Priority' },
+      { field: 'llm_confidence', label: 'LLM Confidence' },
+      { field: 'legal_viability_score', label: 'Legal Viability' },
+      { field: 'enforcement_potential_score', label: 'Enforcement Potential' },
+      { field: 'market_value_score', label: 'Market Value' },
+      { field: 'has_llm_data', label: 'Has LLM Data' },
+      { field: 'llm_summary', label: 'LLM Summary' },
+      { field: 'llm_technology_category', label: 'Tech Category' },
+      { field: 'llm_implementation_type', label: 'Implementation' },
+      { field: 'llm_standards_relevance', label: 'Standards' },
+      { field: 'llm_market_segment', label: 'Market Segment' },
+      { field: 'llm_detection_method', label: 'Detection Method' },
+    ];
+
+    let exportColumns = allColumns;
+    if (columnParam && typeof columnParam === 'string') {
+      const requestedFields = columnParam.split(',').map(s => s.trim());
+      exportColumns = requestedFields.map(field => {
+        const known = allColumns.find(c => c.field === field);
+        return known || { field, label: field };
+      });
+    }
+
+    // Build CSV
+    function escapeCSV(val: unknown): string {
+      if (val === null || val === undefined) return '';
+      if (Array.isArray(val)) return `"${val.join('; ')}"`;
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }
+
+    const header = exportColumns.map(c => escapeCSV(c.label)).join(',');
+    const rows = patents.map(patent => {
+      return exportColumns.map(col => {
+        const value = (patent as Record<string, unknown>)[col.field];
+        return escapeCSV(value);
+      }).join(',');
+    });
+
+    const csv = [header, ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="patent-export-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting patents:', error);
+    res.status(500).json({ error: 'Failed to export patents' });
+  }
+});
+
+/**
  * GET /api/patents/:id/preview
  * Get lightweight preview data for a single patent
  */

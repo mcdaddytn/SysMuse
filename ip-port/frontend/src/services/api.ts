@@ -98,6 +98,40 @@ export const patentApi = {
   async getEnrichmentSummary(tierSize = 5000): Promise<EnrichmentSummary> {
     const { data } = await api.get('/patents/enrichment-summary', { params: { tierSize } });
     return data;
+  },
+
+  async exportCSV(
+    filters?: PortfolioFilters,
+    columns?: string[],
+    sortBy?: string,
+    descending?: boolean
+  ): Promise<void> {
+    const params: Record<string, unknown> = {
+      ...filters,
+      sortBy: sortBy || 'score',
+      descending: descending ?? true,
+    };
+    if (columns && columns.length > 0) {
+      params.columns = columns.join(',');
+    }
+
+    const response = await api.get('/patents/export', {
+      params,
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    // Extract filename from Content-Disposition header, or use default
+    const disposition = response.headers['content-disposition'];
+    const match = disposition?.match(/filename="?([^"]+)"?/);
+    link.download = match?.[1] || `patent-export-${new Date().toISOString().split('T')[0]}.csv`;
+
+    link.click();
+    URL.revokeObjectURL(url);
   }
 };
 

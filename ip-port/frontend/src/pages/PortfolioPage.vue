@@ -2,7 +2,7 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
-import { focusAreaApi, jobsApi } from '@/services/api';
+import { focusAreaApi, jobsApi, patentApi } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import type { Patent } from '@/types';
 
@@ -169,33 +169,28 @@ function onRequest(props: { pagination: typeof paginationModel.value }) {
   });
 }
 
-function exportToCSV() {
-  const patents = patentsStore.patents;
-  if (patents.length === 0) return;
+const exporting = ref(false);
 
-  // Use visible columns for export
-  const exportCols = patentsStore.visibleColumns;
-  const headers = exportCols.map(c => c.label);
+async function exportToCSV() {
+  if (patentsStore.totalCount === 0) return;
+  exporting.value = true;
+  try {
+    // Send visible column field names to backend
+    const columnFields = patentsStore.visibleColumns.map(col =>
+      typeof col.field === 'string' ? col.field : col.name
+    );
 
-  const rows = patents.map(patent => {
-    return exportCols.map(col => {
-      const fieldName = typeof col.field === 'string' ? col.field : col.name;
-      const value = (patent as Record<string, unknown>)[fieldName];
-      if (value === null || value === undefined) return '';
-      if (Array.isArray(value)) return value.join('; ');
-      if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
-      return String(value);
-    }).join(',');
-  });
-
-  const csv = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `patent-portfolio-${new Date().toISOString().split('T')[0]}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+    await patentApi.exportCSV(
+      patentsStore.filters,
+      columnFields,
+      patentsStore.pagination.sortBy,
+      patentsStore.pagination.descending
+    );
+  } catch (err) {
+    console.error('Export failed:', err);
+  } finally {
+    exporting.value = false;
+  }
 }
 
 // Create focus group from selected patents
@@ -353,8 +348,11 @@ onMounted(async () => {
         flat
         icon="download"
         label="Export"
+        :loading="exporting"
         @click="exportToCSV"
-      />
+      >
+        <q-tooltip>Export all {{ patentsStore.totalCount.toLocaleString() }} filtered patents as CSV</q-tooltip>
+      </q-btn>
 
       <!-- Filter Toggle -->
       <q-btn

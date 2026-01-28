@@ -174,3 +174,60 @@ export function clearCache(): void {
   superSectorConfig = null;
   sectorToSuperSector = null;
 }
+
+// =============================================================================
+// Async DB-backed alternatives (with config fallback)
+// =============================================================================
+
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+/**
+ * Get primary sector using DB rules, falling back to config if DB is empty.
+ */
+export async function getPrimarySectorAsync(
+  cpcCodes: string[],
+  title?: string,
+  abstract?: string
+): Promise<string> {
+  try {
+    const ruleCount = await prisma.sectorRule.count({ where: { isActive: true } });
+    if (ruleCount === 0) {
+      // DB not populated — fall back to config
+      return getPrimarySector(cpcCodes);
+    }
+
+    const { assignSector } = await import('../services/sector-assignment-service.js');
+    const result = await assignSector({
+      patent_id: '',
+      cpc_codes: cpcCodes,
+      patent_title: title,
+      abstract: abstract,
+    });
+    return result.primarySector;
+  } catch {
+    // On any error, fall back to config
+    return getPrimarySector(cpcCodes);
+  }
+}
+
+/**
+ * Get super-sector using DB lookup, falling back to config.
+ */
+export async function getSuperSectorAsync(primarySector: string): Promise<string> {
+  try {
+    const sector = await prisma.sector.findUnique({
+      where: { name: primarySector },
+      include: { superSector: { select: { name: true } } },
+    });
+
+    if (sector?.superSector?.name) {
+      return sector.superSector.name;
+    }
+  } catch {
+    // Fall through to config
+  }
+
+  return getSuperSector(primarySector);
+}

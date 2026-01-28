@@ -32,6 +32,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Sector Rankings' }
       },
       {
+        path: 'sector-management',
+        name: 'sector-management',
+        component: () => import('@/pages/SectorManagementPage.vue'),
+        meta: { title: 'Sector Management' }
+      },
+      {
+        path: 'sector-management/:id',
+        name: 'sector-management-detail',
+        component: () => import('@/pages/SectorManagementPage.vue'),
+        meta: { title: 'Sector Management' }
+      },
+      {
         path: 'focus-areas',
         name: 'focus-areas',
         component: () => import('@/pages/FocusAreasPage.vue'),

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking, LlmCoverage } from '@/types';
+import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking, LlmCoverage, SectorDetail, SuperSectorDetail, SectorRule, SectorRuleType, RulePreviewResult, SeedSummary } from '@/types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -1123,6 +1123,124 @@ export const patentFamilyApi = {
 
   async getCacheStatus(patentId: string): Promise<FamilyCacheStatus> {
     const { data } = await api.get(`/patent-families/cache-status/${patentId}`);
+    return data;
+  },
+};
+
+// =============================================================================
+// Sector Management API
+// =============================================================================
+
+export const sectorApi = {
+  // Sectors
+  async getSectors(superSectorId?: string): Promise<SectorDetail[]> {
+    const params = superSectorId ? { superSectorId } : {};
+    const { data } = await api.get('/sectors', { params });
+    return data;
+  },
+
+  async getSector(id: string): Promise<SectorDetail> {
+    const { data } = await api.get(`/sectors/${id}`);
+    return data;
+  },
+
+  async createSector(sector: {
+    name: string;
+    displayName: string;
+    description?: string;
+    superSectorId?: string;
+    cpcPrefixes?: string[];
+    damagesTier?: string;
+    damagesRating?: number;
+  }): Promise<SectorDetail> {
+    const { data } = await api.post('/sectors', sector);
+    return data;
+  },
+
+  async updateSector(id: string, updates: Partial<SectorDetail>): Promise<SectorDetail> {
+    const { data } = await api.put(`/sectors/${id}`, updates);
+    return data;
+  },
+
+  async deleteSector(id: string): Promise<void> {
+    await api.delete(`/sectors/${id}`);
+  },
+
+  // Rules
+  async getRules(sectorId: string): Promise<SectorRule[]> {
+    const { data } = await api.get(`/sectors/${sectorId}/rules`);
+    return data;
+  },
+
+  async addRule(sectorId: string, rule: {
+    ruleType: SectorRuleType;
+    expression: string;
+    priority?: number;
+    isExclusion?: boolean;
+    scope?: string;
+    portfolioId?: string;
+    description?: string;
+  }): Promise<SectorRule> {
+    const { data } = await api.post(`/sectors/${sectorId}/rules`, rule);
+    return data;
+  },
+
+  async updateRule(sectorId: string, ruleId: string, updates: Partial<SectorRule>): Promise<SectorRule> {
+    const { data } = await api.put(`/sectors/${sectorId}/rules/${ruleId}`, updates);
+    return data;
+  },
+
+  async deleteRule(sectorId: string, ruleId: string): Promise<void> {
+    await api.delete(`/sectors/${sectorId}/rules/${ruleId}`);
+  },
+
+  async previewRule(rule: {
+    ruleType: SectorRuleType;
+    expression: string;
+    sectorId: string;
+  }): Promise<RulePreviewResult> {
+    const { data } = await api.post('/sectors/preview-rule', rule);
+    return data;
+  },
+
+  async promoteRule(ruleId: string): Promise<SectorRule> {
+    const { data } = await api.post(`/sectors/rules/${ruleId}/promote`);
+    return data;
+  },
+
+  // Actions
+  async recalculateSector(sectorId: string): Promise<{ sectorId: string; patentCount: number }> {
+    const { data } = await api.post(`/sectors/${sectorId}/recalculate`);
+    return data;
+  },
+
+  async reassignAll(): Promise<{ message: string; sectorCounts: Record<string, number> }> {
+    const { data } = await api.post('/sectors/reassign-all');
+    return data;
+  },
+
+  async seed(): Promise<SeedSummary> {
+    const { data } = await api.post('/sectors/seed');
+    return data;
+  },
+
+  // Super-Sectors
+  async getSuperSectors(): Promise<SuperSectorDetail[]> {
+    const { data } = await api.get('/sectors/super-sectors');
+    return data;
+  },
+
+  async createSuperSector(superSector: {
+    name: string;
+    displayName: string;
+    description?: string;
+  }): Promise<SuperSectorDetail> {
+    const { data } = await api.post('/sectors/super-sectors', superSector);
+    return data;
+  },
+
+  async updateSuperSector(id: string, updates: Partial<SuperSectorDetail>): Promise<SuperSectorDetail> {
+    const { data } = await api.put(`/sectors/super-sectors/${id}`, updates);
     return data;
   },
 };

@@ -16,6 +16,7 @@ import focusAreasRouter from './routes/focus-areas.routes.js';
 import promptTemplatesRouter from './routes/prompt-templates.routes.js';
 import workflowsRouter from './routes/workflows.routes.js';
 import patentFamiliesRouter from './routes/patent-families.routes.js';
+import sectorsRouter from './routes/sectors.routes.js';
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ app.use('/api/focus-areas', focusAreasRouter);
 app.use('/api/prompt-templates', promptTemplatesRouter);
 app.use('/api/workflows', workflowsRouter);
 app.use('/api/patent-families', patentFamiliesRouter);
+app.use('/api/sectors', sectorsRouter);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

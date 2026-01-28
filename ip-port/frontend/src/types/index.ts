@@ -256,3 +256,92 @@ export interface PaginatedResponse<T> {
   page: number;
   rowsPerPage: number;
 }
+
+// =============================================================================
+// Sector Management Types
+// =============================================================================
+
+export type SectorRuleType =
+  | 'CPC_PREFIX'
+  | 'CPC_SUBGROUP'
+  | 'KEYWORD'
+  | 'PHRASE'
+  | 'KEYWORD_AND'
+  | 'BOOLEAN';
+
+export type SectorRuleScope = 'LIBRARY' | 'PORTFOLIO';
+
+export interface SectorRule {
+  id: string;
+  sectorId: string;
+  ruleType: SectorRuleType;
+  expression: string;
+  priority: number;
+  isExclusion: boolean;
+  scope: SectorRuleScope;
+  portfolioId?: string | null;
+  description?: string | null;
+  isActive: boolean;
+  matchCount: number;
+  promotedFrom?: string | null;
+  promotedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SectorDetail {
+  id: string;
+  name: string;
+  displayName: string;
+  description?: string | null;
+  superSectorId?: string | null;
+  superSector?: { id: string; name: string; displayName: string } | null;
+  cpcPrefixes: string[];
+  damagesTier?: string | null;
+  damagesRating?: number | null;
+  facets?: Record<string, number> | null;
+  patentCount: number;
+  targetMinSize?: number | null;
+  targetMaxSize?: number | null;
+  rules: SectorRule[];
+  _count?: { rules: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SectorSummary {
+  id: string;
+  name: string;
+  displayName: string;
+  patentCount: number;
+  damagesTier?: string | null;
+  damagesRating?: number | null;
+  _count?: { rules: number };
+}
+
+export interface SuperSectorDetail {
+  id: string;
+  name: string;
+  displayName: string;
+  description?: string | null;
+  sectors: SectorSummary[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RulePreviewResult {
+  matchCount: number;
+  samplePatentIds: string[];
+  overlapWithCurrentSector: number;
+  newToSector: number;
+}
+
+export interface SeedSummary {
+  message: string;
+  superSectors: number;
+  sectors: number;
+  cpcRules: number;
+  keywordRules: number;
+  damagesUpdated: number;
+  facetsUpdated: number;
+}

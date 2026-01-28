@@ -21,6 +21,7 @@ const navItems = computed(() => [
   { label: 'v2 Scoring', icon: 'score', to: '/v2-scoring', show: true },
   { label: 'v3 Scoring', icon: 'how_to_vote', to: '/v3-scoring', show: true },
   { label: 'Sectors', icon: 'category', to: '/sectors', show: true },
+  { label: 'Sector Management', icon: 'build', to: '/sector-management', show: true },
   { label: 'Prompt Templates', icon: 'auto_awesome', to: '/prompt-templates', show: true },
   { label: 'Job Queue', icon: 'queue', to: '/jobs', show: true },
   { divider: true, show: isAdmin.value },

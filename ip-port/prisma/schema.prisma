@@ -510,6 +510,8 @@ model Sector {
 
   // Metadata
   damagesTier     String?  @map("damages_tier")   // "Very High", "High", "Medium", "Low"
+  damagesRating   Int?     @map("damages_rating")  // Numeric 1-4 (Low=1, Medium=2, High=3, Very High=4)
+  facets          Json?                            // Scoring multipliers from sector-facets.json
   patentCount     Int      @default(0) @map("patent_count")  // Cached count
 
   // Sector management — targets for refactoring
@@ -519,8 +521,60 @@ model Sector {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  // Relations
+  rules           SectorRule[]
+
   @@map("sectors")
   @@index([superSectorId])
+}
+
+// =============================================================================
+// SECTOR RULES
+// DB-driven rule model for sector assignment (replaces config-only approach)
+// =============================================================================
+
+model SectorRule {
+  id            String   @id @default(cuid())
+  sectorId      String   @map("sector_id")
+  sector        Sector   @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  ruleType      SectorRuleType @default(CPC_PREFIX) @map("rule_type")
+  expression    String         // CPC prefix, keyword, phrase, boolean expr
+
+  priority      Int      @default(0)     // Higher = evaluated first
+  isExclusion   Boolean  @default(false) @map("is_exclusion")
+
+  scope         SectorRuleScope @default(LIBRARY)
+  portfolioId   String?  @map("portfolio_id")  // Non-null for portfolio overrides
+
+  description   String?
+  isActive      Boolean  @default(true) @map("is_active")
+  matchCount    Int      @default(0) @map("match_count")
+
+  promotedFrom  String?  @map("promoted_from")
+  promotedAt    DateTime? @map("promoted_at")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("sector_rules")
+  @@index([sectorId])
+  @@index([ruleType])
+  @@index([scope, portfolioId])
+}
+
+enum SectorRuleType {
+  CPC_PREFIX      // CPC code starts with expression
+  CPC_SUBGROUP    // Exact CPC subgroup match
+  KEYWORD         // Title/abstract contains keyword
+  PHRASE          // Exact phrase match
+  KEYWORD_AND     // All space-separated keywords must appear
+  BOOLEAN         // Complex boolean expression
+}
+
+enum SectorRuleScope {
+  LIBRARY         // Universal rule (all portfolios)
+  PORTFOLIO       // Portfolio-specific override
 }
 
 // =============================================================================

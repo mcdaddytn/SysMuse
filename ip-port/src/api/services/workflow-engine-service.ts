@@ -13,6 +13,8 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   callLlm,
   loadEnrichedPatents,
@@ -24,10 +26,42 @@ import {
   DEFAULT_DELIMITER_END,
 } from './prompt-template-service.js';
 import type { PatentData, StructuredQuestion } from './prompt-template-service.js';
+import { scoreAllPatents } from './scoring-service.js';
 
 const prisma = new PrismaClient();
 
 const RATE_LIMIT_MS = 2000;
+const CANDIDATES_DIR = path.join(process.cwd(), 'output');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Candidate Loading (for sector/super-sector scoped workflows)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CandidatePatent {
+  patent_id: string;
+  primary_sector?: string;
+  super_sector?: string;
+  [key: string]: unknown;
+}
+
+let candidatesCache: CandidatePatent[] | null = null;
+
+function loadAllCandidates(): CandidatePatent[] {
+  if (candidatesCache) return candidatesCache;
+
+  const files = fs.readdirSync(CANDIDATES_DIR)
+    .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
+    .sort()
+    .reverse();
+
+  if (files.length === 0) {
+    throw new Error('No streaming-candidates file found in output/');
+  }
+
+  const data = JSON.parse(fs.readFileSync(path.join(CANDIDATES_DIR, files[0]), 'utf-8'));
+  candidatesCache = data.candidates;
+  return candidatesCache!;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -57,6 +91,7 @@ export interface TournamentConfig {
   initialClusterStrategy: 'score' | 'sector' | 'random';
   clusterSizeTarget?: number;  // Per-cluster patent count (auto-calculated if absent)
   synthesisTemplateId?: string; // Optional final synthesis template
+  maxPatents?: number;          // Limit patent count (uses top-scored if truncated)
 }
 
 export interface JobSpec {
@@ -401,6 +436,15 @@ export async function executeJob(jobId: string): Promise<void> {
             name: targetData.focusAreaName as string,
             description: targetData.focusAreaDescription as string | null,
           };
+        }
+
+        // Fallback: provide synthetic context so <<focusArea.*>> placeholders resolve
+        // This enables sector-scoped and standalone workflows to use patent data placeholders
+        if (!focusArea) {
+          const scopeLabel = workflow
+            ? `${workflow.scopeType}: ${workflow.scopeId || workflow.name}`
+            : 'Patent Group';
+          focusArea = { name: scopeLabel, description: null };
         }
 
         resolvedPrompt = buildPromptForTemplate(
@@ -770,19 +814,92 @@ export function calculateClusterSize(
 
 /**
  * Form clusters of patent IDs based on strategy.
+ *
+ * Strategies:
+ * - 'score': Sort by patent score (executive profile) then chunk.
+ *    This distributes high/low scoring patents across clusters.
+ * - 'sector': Group by primary_sector, then chunk within sectors.
+ *    Ensures clusters are topically coherent.
+ * - 'random': Fisher-Yates shuffle before chunking.
+ *    Provides unbiased distribution for baseline comparison.
+ * - 'sequential' (default): Chunk in provided order.
  */
 export function formClusters(
   patentIds: string[],
-  _strategy: string,
-  clusterSize: number,
-  _patents?: Map<string, PatentData>
+  strategy: string,
+  clusterSize: number
 ): string[][] {
-  // For now, simple sequential chunking.
-  // TODO: Implement score-based, sector-based, and random strategies
-  // The patents should arrive pre-sorted by score (default strategy).
+  let orderedIds: string[];
+
+  switch (strategy) {
+    case 'score': {
+      // Sort patents by score descending using the executive scoring profile.
+      // This means each cluster gets a mix of high and low scoring patents
+      // when chunked sequentially (interleaved distribution).
+      try {
+        const scored = scoreAllPatents('executive');
+        const scoreMap = new Map(scored.map(s => [s.patent_id, s.score]));
+        const patentIdSet = new Set(patentIds);
+        orderedIds = scored
+          .filter(s => patentIdSet.has(s.patent_id))
+          .map(s => s.patent_id);
+
+        // Add any IDs not found in scoring data
+        for (const pid of patentIds) {
+          if (!scoreMap.has(pid)) orderedIds.push(pid);
+        }
+      } catch {
+        console.warn('[Cluster] Score-based clustering failed, falling back to sequential');
+        orderedIds = [...patentIds];
+      }
+      break;
+    }
+
+    case 'sector': {
+      // Group patents by primary_sector, then interleave sectors across clusters.
+      // This ensures each cluster has topically similar patents.
+      const candidates = loadAllCandidates();
+      const sectorMap = new Map(candidates.map(c => [c.patent_id, c.primary_sector || 'unknown']));
+      const patentIdSet = new Set(patentIds);
+
+      // Group by sector
+      const bySector = new Map<string, string[]>();
+      for (const pid of patentIds) {
+        const sector = sectorMap.get(pid) || 'unknown';
+        if (!bySector.has(sector)) bySector.set(sector, []);
+        bySector.get(sector)!.push(pid);
+      }
+
+      // Build clusters by filling each cluster with patents from the same sector.
+      // When a sector runs out, move to next sector.
+      const clusters: string[][] = [];
+      for (const [, sectorPatents] of [...bySector.entries()].sort((a, b) => b[1].length - a[1].length)) {
+        for (let i = 0; i < sectorPatents.length; i += clusterSize) {
+          clusters.push(sectorPatents.slice(i, i + clusterSize));
+        }
+      }
+      return clusters;
+    }
+
+    case 'random': {
+      // Fisher-Yates shuffle
+      orderedIds = [...patentIds];
+      for (let i = orderedIds.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [orderedIds[i], orderedIds[j]] = [orderedIds[j], orderedIds[i]];
+      }
+      break;
+    }
+
+    default:
+      // Sequential — use provided order
+      orderedIds = [...patentIds];
+  }
+
+  // Chunk into clusters
   const clusters: string[][] = [];
-  for (let i = 0; i < patentIds.length; i += clusterSize) {
-    clusters.push(patentIds.slice(i, i + clusterSize));
+  for (let i = 0; i < orderedIds.length; i += clusterSize) {
+    clusters.push(orderedIds.slice(i, i + clusterSize));
   }
   return clusters;
 }
@@ -806,10 +923,16 @@ export async function planTournament(
     where: { id: workflowId },
   });
 
-  // Load patent IDs from scope
-  const patentIds = await loadPatentIdsFromScope(workflow.scopeType, workflow.scopeId);
+  // Load patent IDs from scope (already sorted by score for sector/super-sector scopes)
+  let patentIds = await loadPatentIdsFromScope(workflow.scopeType, workflow.scopeId);
   if (patentIds.length === 0) {
     throw new Error('No patents found for workflow scope');
+  }
+
+  // Truncate to maxPatents if specified (keeps top-scored since list is pre-sorted)
+  if (config.maxPatents && config.maxPatents > 0 && patentIds.length > config.maxPatents) {
+    console.log(`[Tournament] Limiting from ${patentIds.length} to ${config.maxPatents} patents (top by score)`);
+    patentIds = patentIds.slice(0, config.maxPatents);
   }
 
   const clusterSize = calculateClusterSize(patentIds.length, config.clusterSizeTarget);
@@ -926,7 +1049,9 @@ export async function planTournament(
 }
 
 /**
- * Load patent IDs from a workflow scope (focus area, sector, etc.).
+ * Load patent IDs from a workflow scope (focus area, sector, super-sector).
+ * For sector/super-sector scopes, scopeId is the sector/super-sector name.
+ * Returns patent IDs sorted by score (highest first) for optimal tournament seeding.
  */
 async function loadPatentIdsFromScope(
   scopeType: string,
@@ -942,17 +1067,49 @@ async function loadPatentIdsFromScope(
       });
       return faPatents.map(p => p.patentId);
     }
+
     case 'sector': {
-      // Load patents by sector classification from the enriched data
-      // For now, return an empty array — sector-based patent loading
-      // will be implemented when we have sector-patent mapping in DB
-      console.warn(`[Workflow] Sector-scoped workflows not yet implemented`);
-      return [];
+      // Load patents from streaming-candidates filtered by primary_sector
+      const candidates = loadAllCandidates();
+      const sectorPatents = candidates
+        .filter(c => c.primary_sector === scopeId)
+        .map(c => c.patent_id);
+
+      console.log(`[Workflow] Loaded ${sectorPatents.length} patents for sector "${scopeId}"`);
+
+      // Sort by score for better tournament seeding
+      try {
+        const scored = scoreAllPatents('executive');
+        const scoreMap = new Map(scored.map(s => [s.patent_id, s.score]));
+        sectorPatents.sort((a, b) => (scoreMap.get(b) || 0) - (scoreMap.get(a) || 0));
+      } catch {
+        // If scoring fails, return in original order
+      }
+
+      return sectorPatents;
     }
+
     case 'super_sector': {
-      console.warn(`[Workflow] SuperSector-scoped workflows not yet implemented`);
-      return [];
+      // Load patents from streaming-candidates filtered by super_sector
+      const candidates = loadAllCandidates();
+      const ssPatents = candidates
+        .filter(c => c.super_sector === scopeId)
+        .map(c => c.patent_id);
+
+      console.log(`[Workflow] Loaded ${ssPatents.length} patents for super-sector "${scopeId}"`);
+
+      // Sort by score
+      try {
+        const scored = scoreAllPatents('executive');
+        const scoreMap = new Map(scored.map(s => [s.patent_id, s.score]));
+        ssPatents.sort((a, b) => (scoreMap.get(b) || 0) - (scoreMap.get(a) || 0));
+      } catch {
+        // If scoring fails, return in original order
+      }
+
+      return ssPatents;
     }
+
     default:
       return [];
   }

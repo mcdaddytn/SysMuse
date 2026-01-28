@@ -2,7 +2,9 @@
  * Prompt Template Service
  *
  * Handles template variable substitution and LLM execution for
- * user-defined prompt templates on focus area patents.
+ * both free-form and structured (typed question) prompt templates.
+ * Templates are object-type-agnostic — they bind to patents, focus areas,
+ * or future object types via placeholder substitution.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -16,9 +18,50 @@ const prisma = new PrismaClient();
 const CACHE_BASE_DIR = path.join(process.cwd(), 'cache/focus-area-prompts');
 const RATE_LIMIT_MS = 2000;
 
-const SYSTEM_MESSAGE = `You are a patent analysis assistant. Analyze the provided patent information and respond with valid JSON. If you cannot produce valid JSON, respond with your analysis as plain text.`;
+const SYSTEM_MESSAGE_FREE_FORM = `You are a patent analysis assistant. Analyze the provided information and respond with valid JSON. If you cannot produce valid JSON, respond with your analysis as plain text.`;
 
-// Available patent fields for variable substitution
+const SYSTEM_MESSAGE_STRUCTURED = `You are a patent analysis assistant. You will be given a set of questions about patent information. Answer each question precisely in the requested format. Return ONLY valid JSON matching the exact schema specified. Do not include markdown formatting or explanation outside the JSON.`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A single question in a structured prompt template
+ */
+export interface StructuredQuestion {
+  fieldName: string;
+  question: string;
+  answerType: 'INTEGER' | 'FLOAT' | 'BOOLEAN' | 'TEXT' | 'ENUM' | 'TEXT_ARRAY';
+  constraints?: {
+    min?: number;
+    max?: number;
+    maxSentences?: number;
+    maxItems?: number;
+    options?: string[];
+  };
+  description?: string;
+}
+
+/**
+ * Result file structure stored on disk
+ */
+export interface PromptResult {
+  templateId: string;
+  templateType: 'FREE_FORM' | 'STRUCTURED';
+  patentId: string | null;
+  model: string;
+  promptSent: string;
+  response: Record<string, unknown> | null;
+  /** Typed fields extracted from structured response */
+  fields?: Record<string, unknown>;
+  rawText?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  executedAt: string;
+}
+
+// Available fields per object type for variable substitution
 const PATENT_FIELDS = [
   'patent_id', 'patent_title', 'abstract', 'patent_date', 'assignee',
   'affiliate', 'super_sector', 'primary_sector',
@@ -36,21 +79,180 @@ const PATENT_FIELDS = [
 
 const FOCUS_AREA_FIELDS = ['name', 'description', 'patentIDs', 'patentCount', 'patentData'];
 
+export function getFieldsForObjectType(objectType: string): { patentFields: string[]; focusAreaFields: string[] } {
+  return { patentFields: PATENT_FIELDS, focusAreaFields: FOCUS_AREA_FIELDS };
+}
+
 export { PATENT_FIELDS, FOCUS_AREA_FIELDS };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Structured Question → Prompt Assembly
+// ─────────────────────────────────────────────────────────────────────────────
+
+function formatAnswerTypeInstruction(q: StructuredQuestion): string {
+  switch (q.answerType) {
+    case 'INTEGER': {
+      const range = q.constraints?.min !== undefined && q.constraints?.max !== undefined
+        ? ` (${q.constraints.min}-${q.constraints.max})`
+        : '';
+      return `integer${range}`;
+    }
+    case 'FLOAT': {
+      const range = q.constraints?.min !== undefined && q.constraints?.max !== undefined
+        ? ` (${q.constraints.min}-${q.constraints.max})`
+        : '';
+      return `number${range}`;
+    }
+    case 'BOOLEAN':
+      return 'boolean (true/false)';
+    case 'TEXT': {
+      const limit = q.constraints?.maxSentences
+        ? ` (max ${q.constraints.maxSentences} sentences)`
+        : '';
+      return `string${limit}`;
+    }
+    case 'ENUM': {
+      const opts = q.constraints?.options?.map(o => `"${o}"`).join(', ') || '';
+      return `one of: [${opts}]`;
+    }
+    case 'TEXT_ARRAY': {
+      const limit = q.constraints?.maxItems ? ` (max ${q.constraints.maxItems} items)` : '';
+      return `array of strings${limit}`;
+    }
+    default:
+      return 'string';
+  }
+}
+
+function formatJsonType(q: StructuredQuestion): string {
+  switch (q.answerType) {
+    case 'INTEGER':
+    case 'FLOAT':
+      return 'number';
+    case 'BOOLEAN':
+      return 'boolean';
+    case 'TEXT':
+    case 'ENUM':
+      return '"string"';
+    case 'TEXT_ARRAY':
+      return '["string"]';
+    default:
+      return '"string"';
+  }
+}
+
 /**
- * Result file structure stored on disk
+ * Build an LLM prompt from structured questions and input data.
+ * Substitutes placeholders in each question's text and assembles
+ * a prompt that instructs the LLM to return typed JSON.
  */
-export interface PromptResult {
-  templateId: string;
-  patentId: string | null;
-  model: string;
-  promptSent: string;
-  response: Record<string, unknown> | null;
-  rawText?: string;
-  inputTokens?: number;
-  outputTokens?: number;
-  executedAt: string;
+export function buildStructuredPrompt(
+  questions: StructuredQuestion[],
+  patent: PatentData | null,
+  focusArea: { name: string; description?: string | null } | null,
+  patentIds: string[],
+  patents: Map<string, PatentData>,
+  contextFields: string[]
+): string {
+  const lines: string[] = [];
+
+  // Provide context data
+  if (patent) {
+    lines.push('Analyze the following patent:\n');
+    lines.push(`Patent ID: ${patent.patent_id}`);
+    if (patent.patent_title) lines.push(`Title: ${patent.patent_title}`);
+    if (patent.abstract) lines.push(`Abstract: ${patent.abstract}`);
+    if (patent.patent_date) lines.push(`Grant Date: ${patent.patent_date}`);
+    if (patent.cpc_codes) {
+      const codes = Array.isArray(patent.cpc_codes) ? patent.cpc_codes.join(', ') : patent.cpc_codes;
+      lines.push(`CPC Codes: ${codes}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('Answer each of the following questions:\n');
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    // Substitute any placeholders in the question text
+    let questionText = q.question;
+    if (patent) {
+      questionText = questionText.replace(/\{patent\.(\w+)\}/g, (_m, field) =>
+        getPatentFieldValue(patent, field)
+      );
+    }
+    if (focusArea) {
+      questionText = questionText.replace(/\{focusArea\.(\w+)\}/g, (_m, field) =>
+        getFocusAreaFieldValue(focusArea, field, patentIds, patents, contextFields)
+      );
+    }
+
+    const typeStr = formatAnswerTypeInstruction(q);
+    const desc = q.description ? ` — ${q.description}` : '';
+    lines.push(`${i + 1}. "${q.fieldName}" (${typeStr}): ${questionText}${desc}`);
+  }
+
+  // JSON schema instruction
+  lines.push('\nReturn ONLY valid JSON in this exact format:');
+  lines.push('{');
+  for (const q of questions) {
+    lines.push(`  "${q.fieldName}": ${formatJsonType(q)},`);
+  }
+  lines.push('}');
+
+  return lines.join('\n');
+}
+
+/**
+ * Parse and validate typed fields from an LLM JSON response against the question schema.
+ */
+export function parseStructuredResponse(
+  response: Record<string, unknown>,
+  questions: StructuredQuestion[]
+): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+
+  for (const q of questions) {
+    const raw = response[q.fieldName];
+    if (raw === undefined || raw === null) {
+      fields[q.fieldName] = null;
+      continue;
+    }
+
+    switch (q.answerType) {
+      case 'INTEGER': {
+        const n = typeof raw === 'number' ? Math.round(raw) : parseInt(String(raw));
+        if (!isNaN(n)) {
+          const clamped = q.constraints?.min !== undefined && q.constraints?.max !== undefined
+            ? Math.max(q.constraints.min, Math.min(q.constraints.max, n))
+            : n;
+          fields[q.fieldName] = clamped;
+        } else {
+          fields[q.fieldName] = null;
+        }
+        break;
+      }
+      case 'FLOAT': {
+        const n = typeof raw === 'number' ? raw : parseFloat(String(raw));
+        fields[q.fieldName] = isNaN(n) ? null : n;
+        break;
+      }
+      case 'BOOLEAN':
+        fields[q.fieldName] = typeof raw === 'boolean' ? raw : raw === 'true';
+        break;
+      case 'TEXT':
+      case 'ENUM':
+        fields[q.fieldName] = String(raw);
+        break;
+      case 'TEXT_ARRAY':
+        fields[q.fieldName] = Array.isArray(raw) ? raw.map(String) : [String(raw)];
+        break;
+      default:
+        fields[q.fieldName] = raw;
+    }
+  }
+
+  return fields;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +266,6 @@ interface PatentData {
 
 /**
  * Load enriched patent data from the candidates file and LLM cache.
- * Mirrors the loadPatents() logic in patents.routes.ts.
  */
 function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData> {
   const result = new Map<string, PatentData>();
@@ -95,7 +296,6 @@ function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData> {
         try {
           const llmData = JSON.parse(fs.readFileSync(llmPath, 'utf-8'));
           const existing = result.get(pid) || { patent_id: pid };
-          // Merge LLM fields into patent data
           result.set(pid, {
             ...existing,
             summary: llmData.summary,
@@ -181,25 +381,51 @@ function getFocusAreaFieldValue(
 export function substituteVariables(
   promptText: string,
   patent: PatentData | null,
-  focusArea: { name: string; description?: string | null },
+  focusArea: { name: string; description?: string | null } | null,
   patentIds: string[],
   patents: Map<string, PatentData>,
   contextFields: string[]
 ): string {
   let result = promptText;
 
-  // Replace {patent.fieldName} placeholders
   result = result.replace(/\{patent\.(\w+)\}/g, (_match, field) => {
     if (!patent) return `{patent.${field}}`;
     return getPatentFieldValue(patent, field);
   });
 
-  // Replace {focusArea.fieldName} placeholders
   result = result.replace(/\{focusArea\.(\w+)\}/g, (_match, field) => {
+    if (!focusArea) return `{focusArea.${field}}`;
     return getFocusAreaFieldValue(focusArea, field, patentIds, patents, contextFields);
   });
 
   return result;
+}
+
+/**
+ * Build the final prompt text for a template, handling both free-form and structured modes.
+ */
+function buildPromptForTemplate(
+  template: { templateType: string; promptText: string | null; questions: unknown },
+  patent: PatentData | null,
+  focusArea: { name: string; description?: string | null } | null,
+  patentIds: string[],
+  patents: Map<string, PatentData>,
+  contextFields: string[]
+): string {
+  if (template.templateType === 'STRUCTURED' && template.questions) {
+    const questions = template.questions as StructuredQuestion[];
+    return buildStructuredPrompt(questions, patent, focusArea, patentIds, patents, contextFields);
+  }
+
+  // Free-form mode
+  return substituteVariables(
+    template.promptText || '',
+    patent,
+    focusArea,
+    patentIds,
+    patents,
+    contextFields
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,7 +502,8 @@ function sleep(ms: number): Promise<void> {
 
 async function callLlm(
   promptText: string,
-  modelName: string
+  modelName: string,
+  systemMessage: string
 ): Promise<{ response: Record<string, unknown> | null; rawText: string; inputTokens?: number; outputTokens?: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -291,7 +518,7 @@ async function callLlm(
   });
 
   const messages = [
-    new SystemMessage(SYSTEM_MESSAGE),
+    new SystemMessage(systemMessage),
     new HumanMessage(promptText),
   ];
 
@@ -336,26 +563,26 @@ async function callLlm(
  */
 export async function executeTemplate(templateId: string, focusAreaId: string): Promise<void> {
   try {
-    // Load template
     const template = await prisma.promptTemplate.findUnique({
       where: { id: templateId },
     });
     if (!template) throw new Error(`Template ${templateId} not found`);
 
-    // Load focus area
     const focusArea = await prisma.focusArea.findUnique({
       where: { id: focusAreaId },
     });
     if (!focusArea) throw new Error(`Focus area ${focusAreaId} not found`);
 
-    // Load patent IDs
     const faPatents = await prisma.focusAreaPatent.findMany({
       where: { focusAreaId },
       select: { patentId: true },
     });
     const patentIds = faPatents.map(p => p.patentId);
 
-    // Set status to RUNNING
+    const isStructured = template.templateType === 'STRUCTURED';
+    const questions = isStructured ? (template.questions as StructuredQuestion[] || []) : [];
+    const systemMsg = isStructured ? SYSTEM_MESSAGE_STRUCTURED : SYSTEM_MESSAGE_FREE_FORM;
+
     await prisma.promptTemplate.update({
       where: { id: templateId },
       data: {
@@ -366,33 +593,34 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
       },
     });
 
-    // Load enriched patent data
     const patents = loadEnrichedPatents(patentIds);
 
     if (template.executionMode === 'PER_PATENT') {
-      // Per-patent execution
       let completed = 0;
 
       for (const pid of patentIds) {
         const patent = patents.get(pid) || { patent_id: pid };
-        const resolvedPrompt = substituteVariables(
-          template.promptText,
-          patent,
-          focusArea,
-          patentIds,
-          patents,
-          template.contextFields
+        const resolvedPrompt = buildPromptForTemplate(
+          template, patent, focusArea, patentIds, patents, template.contextFields
         );
 
         try {
-          const llmResult = await callLlm(resolvedPrompt, template.llmModel);
+          const llmResult = await callLlm(resolvedPrompt, template.llmModel, systemMsg);
+
+          // For structured templates, parse typed fields
+          let fields: Record<string, unknown> | undefined;
+          if (isStructured && llmResult.response && questions.length > 0) {
+            fields = parseStructuredResponse(llmResult.response, questions);
+          }
 
           const promptResult: PromptResult = {
             templateId,
+            templateType: template.templateType as 'FREE_FORM' | 'STRUCTURED',
             patentId: pid,
             model: template.llmModel,
             promptSent: resolvedPrompt,
             response: llmResult.response,
+            fields,
             rawText: llmResult.response ? undefined : llmResult.rawText,
             inputTokens: llmResult.inputTokens,
             outputTokens: llmResult.outputTokens,
@@ -401,9 +629,9 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
 
           saveResult(focusAreaId, templateId, promptResult);
         } catch (err) {
-          // Save error result for this patent
           const promptResult: PromptResult = {
             templateId,
+            templateType: template.templateType as 'FREE_FORM' | 'STRUCTURED',
             patentId: pid,
             model: template.llmModel,
             promptSent: resolvedPrompt,
@@ -420,31 +648,32 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
           data: { completedCount: completed },
         });
 
-        // Rate limit between calls
         if (completed < patentIds.length) {
           await sleep(RATE_LIMIT_MS);
         }
       }
     } else {
       // Collective execution
-      const resolvedPrompt = substituteVariables(
-        template.promptText,
-        null,
-        focusArea,
-        patentIds,
-        patents,
-        template.contextFields
+      const resolvedPrompt = buildPromptForTemplate(
+        template, null, focusArea, patentIds, patents, template.contextFields
       );
 
       try {
-        const llmResult = await callLlm(resolvedPrompt, template.llmModel);
+        const llmResult = await callLlm(resolvedPrompt, template.llmModel, systemMsg);
+
+        let fields: Record<string, unknown> | undefined;
+        if (isStructured && llmResult.response && questions.length > 0) {
+          fields = parseStructuredResponse(llmResult.response, questions);
+        }
 
         const promptResult: PromptResult = {
           templateId,
+          templateType: template.templateType as 'FREE_FORM' | 'STRUCTURED',
           patentId: null,
           model: template.llmModel,
           promptSent: resolvedPrompt,
           response: llmResult.response,
+          fields,
           rawText: llmResult.response ? undefined : llmResult.rawText,
           inputTokens: llmResult.inputTokens,
           outputTokens: llmResult.outputTokens,
@@ -455,6 +684,7 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
       } catch (err) {
         const promptResult: PromptResult = {
           templateId,
+          templateType: template.templateType as 'FREE_FORM' | 'STRUCTURED',
           patentId: null,
           model: template.llmModel,
           promptSent: resolvedPrompt,
@@ -471,7 +701,6 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
       });
     }
 
-    // Mark complete
     await prisma.promptTemplate.update({
       where: { id: templateId },
       data: {
@@ -490,7 +719,7 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
         },
       });
     } catch {
-      // DB update failed — nothing more we can do
+      // DB update failed
     }
   }
 }
@@ -499,10 +728,10 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
  * Preview a resolved prompt for a single patent without calling the LLM.
  */
 export function previewTemplate(
-  promptText: string,
+  template: { templateType: string; promptText: string | null; questions: unknown },
   executionMode: string,
   contextFields: string[],
-  focusArea: { name: string; description?: string | null },
+  focusArea: { name: string; description?: string | null } | null,
   patentIds: string[],
   previewPatentId?: string
 ): string {
@@ -510,10 +739,10 @@ export function previewTemplate(
 
   if (executionMode === 'PER_PATENT') {
     const pid = previewPatentId || patentIds[0];
-    if (!pid) return promptText;
+    if (!pid) return template.promptText || '';
     const patent = patents.get(pid) || { patent_id: pid };
-    return substituteVariables(promptText, patent, focusArea, patentIds, patents, contextFields);
+    return buildPromptForTemplate(template, patent, focusArea, patentIds, patents, contextFields);
   } else {
-    return substituteVariables(promptText, null, focusArea, patentIds, patents, contextFields);
+    return buildPromptForTemplate(template, null, focusArea, patentIds, patents, contextFields);
   }
 }

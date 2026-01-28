@@ -508,7 +508,10 @@ export const focusAreaApi = {
   async createPromptTemplate(focusAreaId: string, template: {
     name: string;
     description?: string;
-    promptText: string;
+    templateType?: 'FREE_FORM' | 'STRUCTURED';
+    objectType?: string;
+    promptText?: string;
+    questions?: StructuredQuestion[];
     executionMode?: 'PER_PATENT' | 'COLLECTIVE';
     contextFields?: string[];
     llmModel?: string;
@@ -565,15 +568,33 @@ export const focusAreaApi = {
 };
 
 // Prompt Template types
+export interface StructuredQuestion {
+  fieldName: string;
+  question: string;
+  answerType: 'INTEGER' | 'FLOAT' | 'BOOLEAN' | 'TEXT' | 'ENUM' | 'TEXT_ARRAY';
+  constraints?: {
+    min?: number;
+    max?: number;
+    maxSentences?: number;
+    maxItems?: number;
+    options?: string[];
+  };
+  description?: string;
+}
+
 export interface PromptTemplate {
   id: string;
-  focusAreaId: string;
   name: string;
   description?: string;
-  promptText: string;
+  templateType: 'FREE_FORM' | 'STRUCTURED';
+  objectType: string;
+  promptText?: string | null;
+  questions?: StructuredQuestion[] | null;
   executionMode: 'PER_PATENT' | 'COLLECTIVE';
   contextFields: string[];
   llmModel: string;
+  focusAreaId?: string | null;
+  focusArea?: { id: string; name: string } | null;
   status: 'DRAFT' | 'RUNNING' | 'COMPLETE' | 'ERROR';
   completedCount: number;
   totalCount: number;
@@ -585,10 +606,12 @@ export interface PromptTemplate {
 
 export interface PromptResult {
   templateId: string;
+  templateType: 'FREE_FORM' | 'STRUCTURED';
   patentId?: string;
   model: string;
   promptSent: string;
   response: Record<string, unknown> | null;
+  fields?: Record<string, unknown>;
   rawText?: string;
   inputTokens?: number;
   outputTokens?: number;
@@ -601,6 +624,66 @@ export interface PromptPreviewResponse {
   executionMode: string;
   patentCount: number;
 }
+
+export interface AnswerTypeOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+export interface FieldOption {
+  field: string;
+  placeholder: string;
+  description: string;
+}
+
+// Standalone Prompt Template API (library-level CRUD)
+export const promptTemplateApi = {
+  async getTemplates(filters?: { objectType?: string; focusAreaId?: string }): Promise<PromptTemplate[]> {
+    const { data } = await api.get('/prompt-templates', { params: filters });
+    return data;
+  },
+
+  async getTemplate(id: string): Promise<PromptTemplate> {
+    const { data } = await api.get(`/prompt-templates/${id}`);
+    return data;
+  },
+
+  async createTemplate(template: {
+    name: string;
+    description?: string;
+    templateType?: 'FREE_FORM' | 'STRUCTURED';
+    objectType?: string;
+    promptText?: string;
+    questions?: StructuredQuestion[];
+    executionMode?: 'PER_PATENT' | 'COLLECTIVE';
+    contextFields?: string[];
+    llmModel?: string;
+    focusAreaId?: string;
+  }): Promise<PromptTemplate> {
+    const { data } = await api.post('/prompt-templates', template);
+    return data;
+  },
+
+  async updateTemplate(id: string, updates: Partial<PromptTemplate>): Promise<PromptTemplate> {
+    const { data } = await api.put(`/prompt-templates/${id}`, updates);
+    return data;
+  },
+
+  async deleteTemplate(id: string): Promise<void> {
+    await api.delete(`/prompt-templates/${id}`);
+  },
+
+  async getFields(objectType?: string): Promise<FieldOption[]> {
+    const { data } = await api.get('/prompt-templates/meta/fields', { params: { objectType } });
+    return data;
+  },
+
+  async getAnswerTypes(): Promise<AnswerTypeOption[]> {
+    const { data } = await api.get('/prompt-templates/meta/answer-types');
+    return data;
+  }
+};
 
 // Keyword Extraction types
 export interface KeywordResult {

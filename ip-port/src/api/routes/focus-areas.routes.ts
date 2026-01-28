@@ -14,8 +14,7 @@ import {
   loadResult,
   loadAllResults,
   deleteResults,
-  PATENT_FIELDS,
-  FOCUS_AREA_FIELDS
+  getFieldsForObjectType,
 } from '../services/prompt-template-service.js';
 
 const router = Router();
@@ -972,14 +971,23 @@ router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
     const {
       name,
       description,
+      templateType = 'FREE_FORM',
+      objectType = 'patent',
       promptText,
+      questions,
       executionMode = 'PER_PATENT',
       contextFields = [],
       llmModel = 'claude-sonnet-4-20250514'
     } = req.body;
 
-    if (!name || !promptText) {
-      return res.status(400).json({ error: 'name and promptText are required' });
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    if (templateType === 'FREE_FORM' && !promptText) {
+      return res.status(400).json({ error: 'promptText is required for free-form templates' });
+    }
+    if (templateType === 'STRUCTURED' && (!questions || !Array.isArray(questions) || questions.length === 0)) {
+      return res.status(400).json({ error: 'questions array is required for structured templates' });
     }
 
     const template = await prisma.promptTemplate.create({
@@ -987,7 +995,10 @@ router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
         focusAreaId: id,
         name,
         description,
-        promptText,
+        templateType,
+        objectType,
+        promptText: promptText || null,
+        questions: questions || null,
         executionMode,
         contextFields,
         llmModel,
@@ -1009,14 +1020,17 @@ router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
 router.put('/:id/prompt-templates/:tid', async (req: Request, res: Response) => {
   try {
     const { tid } = req.params;
-    const { name, description, promptText, executionMode, contextFields, llmModel } = req.body;
+    const { name, description, templateType, objectType, promptText, questions, executionMode, contextFields, llmModel } = req.body;
 
     const template = await prisma.promptTemplate.update({
       where: { id: tid },
       data: {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
+        ...(templateType !== undefined && { templateType }),
+        ...(objectType !== undefined && { objectType }),
         ...(promptText !== undefined && { promptText }),
+        ...(questions !== undefined && { questions }),
         ...(executionMode !== undefined && { executionMode }),
         ...(contextFields !== undefined && { contextFields }),
         ...(llmModel !== undefined && { llmModel })
@@ -1192,7 +1206,7 @@ router.post('/:id/prompt-templates/:tid/preview', async (req: Request, res: Resp
     const patentIds = faPatents.map(p => p.patentId);
 
     const resolvedPrompt = previewTemplate(
-      template.promptText,
+      template,
       template.executionMode,
       template.contextFields,
       focusArea,
@@ -1218,10 +1232,8 @@ router.post('/:id/prompt-templates/:tid/preview', async (req: Request, res: Resp
  */
 router.get('/:id/prompt-templates-fields', async (_req: Request, res: Response) => {
   try {
-    res.json({
-      patentFields: PATENT_FIELDS,
-      focusAreaFields: FOCUS_AREA_FIELDS
-    });
+    const fields = getFieldsForObjectType('patent');
+    res.json(fields);
   } catch (error) {
     console.error('Error fetching available fields:', error);
     res.status(500).json({ error: 'Failed to fetch fields' });

@@ -195,7 +195,7 @@ model FocusArea {
   searchTerms     SearchTerm[]
   patents         FocusAreaPatent[]
   facetDefs       FacetDefinition[]
-  promptTemplates PromptTemplate[]
+  promptTemplates PromptTemplate[]  // Templates optionally bound to this focus area
 
   @@map("focus_areas")
   @@index([ownerId])
@@ -409,24 +409,35 @@ model FacetValue {
 
 // =============================================================================
 // PROMPT TEMPLATES
-// User-defined LLM prompt templates for focus area patent analysis
+// Generic LLM prompt templates — reusable across object types
 // =============================================================================
 
 model PromptTemplate {
   id            String    @id @default(cuid())
 
-  focusAreaId   String    @map("focus_area_id")
-  focusArea     FocusArea @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
-
+  // Template identity
   name          String
   description   String?
-  promptText    String    @map("prompt_text")
+  templateType  PromptTemplateType @default(FREE_FORM) @map("template_type")
+  objectType    String    @default("patent") @map("object_type")  // "patent", "focus_area", "product", etc.
 
+  // Free-form mode: raw prompt text with placeholders
+  promptText    String?   @map("prompt_text")
+
+  // Structured mode: array of question definitions
+  // Each: { fieldName, question, answerType, constraints?, description? }
+  questions     Json?     // StructuredQuestion[]
+
+  // Execution config
   executionMode PromptExecutionMode @default(PER_PATENT) @map("execution_mode")
   contextFields String[]  @map("context_fields")
   llmModel      String    @default("claude-sonnet-4-20250514") @map("llm_model")
 
-  // Execution status
+  // Optional focus area binding (for contextual use)
+  focusAreaId   String?   @map("focus_area_id")
+  focusArea     FocusArea? @relation(fields: [focusAreaId], references: [id], onDelete: SetNull)
+
+  // Execution status (per most recent run)
   status        PromptTemplateStatus @default(DRAFT)
   completedCount Int      @default(0) @map("completed_count")
   totalCount    Int       @default(0) @map("total_count")
@@ -438,11 +449,17 @@ model PromptTemplate {
 
   @@map("prompt_templates")
   @@index([focusAreaId])
+  @@index([objectType])
+}
+
+enum PromptTemplateType {
+  FREE_FORM     // User writes full prompt, gets text/JSON response
+  STRUCTURED    // System assembles prompt from typed questions
 }
 
 enum PromptExecutionMode {
-  PER_PATENT
-  COLLECTIVE
+  PER_PATENT    // Run once per patent with {patent.*} substitution
+  COLLECTIVE    // Run once with all patent IDs/data aggregated
 }
 
 enum PromptTemplateStatus {

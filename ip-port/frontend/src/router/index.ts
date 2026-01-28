@@ -50,6 +50,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Patent Detail' }
       },
       {
+        path: 'prompt-templates',
+        name: 'prompt-templates',
+        component: () => import('@/pages/PromptTemplatesPage.vue'),
+        meta: { title: 'Prompt Templates' }
+      },
+      {
         path: 'jobs',
         name: 'jobs',
         component: () => import('@/pages/JobQueuePage.vue'),

@@ -732,7 +732,7 @@ function startEditTemplate() {
   templateForm.value = {
     name: selectedTemplate.value.name,
     description: selectedTemplate.value.description || '',
-    promptText: selectedTemplate.value.promptText,
+    promptText: selectedTemplate.value.promptText || '',
     executionMode: selectedTemplate.value.executionMode,
     contextFields: [...selectedTemplate.value.contextFields],
     llmModel: selectedTemplate.value.llmModel
@@ -749,7 +749,7 @@ function cancelEditTemplate() {
 
 // Save template (create or update)
 async function saveTemplate() {
-  if (!templateForm.value.name.trim() || !templateForm.value.promptText.trim()) return;
+  if (!templateForm.value.name.trim() || !templateForm.value.promptText?.trim()) return;
   savingTemplate.value = true;
   try {
     if (selectedTemplate.value) {
@@ -1846,7 +1846,7 @@ onMounted(async () => {
                       icon="save"
                       label="Save"
                       :loading="savingTemplate"
-                      :disable="!templateForm.name.trim() || !templateForm.promptText.trim()"
+                      :disable="!templateForm.name.trim() || !templateForm.promptText?.trim()"
                       @click="saveTemplate"
                     />
                   </div>
@@ -1878,7 +1878,7 @@ onMounted(async () => {
                     </q-chip>
                   </div>
                   <div class="prompt-display q-mb-md">
-                    <pre class="prompt-text">{{ selectedTemplate.promptText }}</pre>
+                    <pre class="prompt-text">{{ selectedTemplate.promptText || '(Structured template — view in Prompt Templates page)' }}</pre>
                   </div>
                   <div class="row q-gutter-sm">
                     <q-btn

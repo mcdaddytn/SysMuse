@@ -192,9 +192,10 @@ model FocusArea {
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  searchTerms   SearchTerm[]
-  patents       FocusAreaPatent[]
-  facetDefs     FacetDefinition[]
+  searchTerms     SearchTerm[]
+  patents         FocusAreaPatent[]
+  facetDefs       FacetDefinition[]
+  promptTemplates PromptTemplate[]
 
   @@map("focus_areas")
   @@index([ownerId])
@@ -404,4 +405,49 @@ model FacetValue {
   @@map("facet_values")
   @@index([facetDefId])
   @@index([patentId])
+}
+
+// =============================================================================
+// PROMPT TEMPLATES
+// User-defined LLM prompt templates for focus area patent analysis
+// =============================================================================
+
+model PromptTemplate {
+  id            String    @id @default(cuid())
+
+  focusAreaId   String    @map("focus_area_id")
+  focusArea     FocusArea @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+
+  name          String
+  description   String?
+  promptText    String    @map("prompt_text")
+
+  executionMode PromptExecutionMode @default(PER_PATENT) @map("execution_mode")
+  contextFields String[]  @map("context_fields")
+  llmModel      String    @default("claude-sonnet-4-20250514") @map("llm_model")
+
+  // Execution status
+  status        PromptTemplateStatus @default(DRAFT)
+  completedCount Int      @default(0) @map("completed_count")
+  totalCount    Int       @default(0) @map("total_count")
+  lastRunAt     DateTime? @map("last_run_at")
+  errorMessage  String?   @map("error_message")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("prompt_templates")
+  @@index([focusAreaId])
+}
+
+enum PromptExecutionMode {
+  PER_PATENT
+  COLLECTIVE
+}
+
+enum PromptTemplateStatus {
+  DRAFT
+  RUNNING
+  COMPLETE
+  ERROR
 }

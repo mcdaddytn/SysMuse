@@ -8,6 +8,15 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { extractKeywords, extractKeywordsFromTitles } from '../services/keyword-extractor.js';
 import { createElasticsearchService } from '../../../services/elasticsearch-service.js';
+import {
+  executeTemplate,
+  previewTemplate,
+  loadResult,
+  loadAllResults,
+  deleteResults,
+  PATENT_FIELDS,
+  FOCUS_AREA_FIELDS
+} from '../services/prompt-template-service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -926,6 +935,296 @@ router.post('/search-preview', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error previewing search term:', error);
     res.status(500).json({ error: 'Failed to preview search term' });
+  }
+});
+
+// =============================================================================
+// PROMPT TEMPLATES
+// =============================================================================
+
+/**
+ * GET /api/focus-areas/:id/prompt-templates
+ * List prompt templates for a focus area
+ */
+router.get('/:id/prompt-templates', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const templates = await prisma.promptTemplate.findMany({
+      where: { focusAreaId: id },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    res.json(templates);
+  } catch (error) {
+    console.error('Error fetching prompt templates:', error);
+    res.status(500).json({ error: 'Failed to fetch prompt templates' });
+  }
+});
+
+/**
+ * POST /api/focus-areas/:id/prompt-templates
+ * Create a prompt template
+ */
+router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      promptText,
+      executionMode = 'PER_PATENT',
+      contextFields = [],
+      llmModel = 'claude-sonnet-4-20250514'
+    } = req.body;
+
+    if (!name || !promptText) {
+      return res.status(400).json({ error: 'name and promptText are required' });
+    }
+
+    const template = await prisma.promptTemplate.create({
+      data: {
+        focusAreaId: id,
+        name,
+        description,
+        promptText,
+        executionMode,
+        contextFields,
+        llmModel,
+        status: 'DRAFT'
+      }
+    });
+
+    res.status(201).json(template);
+  } catch (error) {
+    console.error('Error creating prompt template:', error);
+    res.status(500).json({ error: 'Failed to create prompt template' });
+  }
+});
+
+/**
+ * PUT /api/focus-areas/:id/prompt-templates/:tid
+ * Update a prompt template
+ */
+router.put('/:id/prompt-templates/:tid', async (req: Request, res: Response) => {
+  try {
+    const { tid } = req.params;
+    const { name, description, promptText, executionMode, contextFields, llmModel } = req.body;
+
+    const template = await prisma.promptTemplate.update({
+      where: { id: tid },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(promptText !== undefined && { promptText }),
+        ...(executionMode !== undefined && { executionMode }),
+        ...(contextFields !== undefined && { contextFields }),
+        ...(llmModel !== undefined && { llmModel })
+      }
+    });
+
+    res.json(template);
+  } catch (error) {
+    console.error('Error updating prompt template:', error);
+    res.status(500).json({ error: 'Failed to update prompt template' });
+  }
+});
+
+/**
+ * DELETE /api/focus-areas/:id/prompt-templates/:tid
+ * Delete a prompt template and its cached results
+ */
+router.delete('/:id/prompt-templates/:tid', async (req: Request, res: Response) => {
+  try {
+    const { id, tid } = req.params;
+
+    await prisma.promptTemplate.delete({ where: { id: tid } });
+
+    // Clean up cached results
+    deleteResults(id, tid);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting prompt template:', error);
+    res.status(500).json({ error: 'Failed to delete prompt template' });
+  }
+});
+
+/**
+ * POST /api/focus-areas/:id/prompt-templates/:tid/execute
+ * Start template execution (async, returns immediately)
+ */
+router.post('/:id/prompt-templates/:tid/execute', async (req: Request, res: Response) => {
+  try {
+    const { id, tid } = req.params;
+
+    // Verify template exists and is not already running
+    const template = await prisma.promptTemplate.findUnique({
+      where: { id: tid }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    if (template.status === 'RUNNING') {
+      return res.status(409).json({ error: 'Template is already running' });
+    }
+
+    // Fire and forget — execution runs in background
+    executeTemplate(tid, id).catch(err => {
+      console.error(`[PromptTemplate] Background execution failed for ${tid}:`, err);
+    });
+
+    res.json({ status: 'RUNNING', message: 'Execution started' });
+  } catch (error) {
+    console.error('Error starting template execution:', error);
+    res.status(500).json({ error: 'Failed to start execution' });
+  }
+});
+
+/**
+ * GET /api/focus-areas/:id/prompt-templates/:tid/status
+ * Poll execution status
+ */
+router.get('/:id/prompt-templates/:tid/status', async (req: Request, res: Response) => {
+  try {
+    const { tid } = req.params;
+
+    const template = await prisma.promptTemplate.findUnique({
+      where: { id: tid },
+      select: {
+        id: true,
+        status: true,
+        completedCount: true,
+        totalCount: true,
+        lastRunAt: true,
+        errorMessage: true
+      }
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    res.json(template);
+  } catch (error) {
+    console.error('Error fetching template status:', error);
+    res.status(500).json({ error: 'Failed to fetch status' });
+  }
+});
+
+/**
+ * GET /api/focus-areas/:id/prompt-templates/:tid/results
+ * Get all results (supports pagination for per-patent mode)
+ */
+router.get('/:id/prompt-templates/:tid/results', async (req: Request, res: Response) => {
+  try {
+    const { id, tid } = req.params;
+    const { page = '1', limit = '50' } = req.query;
+
+    const allResults = loadAllResults(id, tid);
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const start = (pageNum - 1) * limitNum;
+    const paged = allResults.slice(start, start + limitNum);
+
+    res.json({
+      data: paged,
+      total: allResults.length,
+      page: pageNum,
+      rowsPerPage: limitNum
+    });
+  } catch (error) {
+    console.error('Error fetching results:', error);
+    res.status(500).json({ error: 'Failed to fetch results' });
+  }
+});
+
+/**
+ * GET /api/focus-areas/:id/prompt-templates/:tid/results/:patentId
+ * Get single patent result
+ */
+router.get('/:id/prompt-templates/:tid/results/:patentId', async (req: Request, res: Response) => {
+  try {
+    const { id, tid, patentId } = req.params;
+
+    const result = loadResult(id, tid, patentId);
+    if (!result) {
+      return res.status(404).json({ error: 'Result not found' });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching result:', error);
+    res.status(500).json({ error: 'Failed to fetch result' });
+  }
+});
+
+/**
+ * POST /api/focus-areas/:id/prompt-templates/:tid/preview
+ * Dry-run: resolve template for one patent, return prompt text
+ */
+router.post('/:id/prompt-templates/:tid/preview', async (req: Request, res: Response) => {
+  try {
+    const { id, tid } = req.params;
+    const { patentId } = req.body;
+
+    const template = await prisma.promptTemplate.findUnique({
+      where: { id: tid }
+    });
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    const focusArea = await prisma.focusArea.findUnique({
+      where: { id }
+    });
+    if (!focusArea) {
+      return res.status(404).json({ error: 'Focus area not found' });
+    }
+
+    // Get patent IDs
+    const faPatents = await prisma.focusAreaPatent.findMany({
+      where: { focusAreaId: id },
+      select: { patentId: true }
+    });
+    const patentIds = faPatents.map(p => p.patentId);
+
+    const resolvedPrompt = previewTemplate(
+      template.promptText,
+      template.executionMode,
+      template.contextFields,
+      focusArea,
+      patentIds,
+      patentId
+    );
+
+    res.json({
+      resolvedPrompt,
+      patentId: patentId || patentIds[0] || null,
+      executionMode: template.executionMode,
+      patentCount: patentIds.length
+    });
+  } catch (error) {
+    console.error('Error previewing template:', error);
+    res.status(500).json({ error: 'Failed to preview template' });
+  }
+});
+
+/**
+ * GET /api/focus-areas/:id/prompt-templates/available-fields
+ * Get available template variable fields
+ */
+router.get('/:id/prompt-templates-fields', async (_req: Request, res: Response) => {
+  try {
+    res.json({
+      patentFields: PATENT_FIELDS,
+      focusAreaFields: FOCUS_AREA_FIELDS
+    });
+  } catch (error) {
+    console.error('Error fetching available fields:', error);
+    res.status(500).json({ error: 'Failed to fetch fields' });
   }
 });
 

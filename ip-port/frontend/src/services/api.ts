@@ -497,8 +497,110 @@ export const focusAreaApi = {
   ): Promise<KeywordExtractionResult> {
     const { data } = await api.post(`/focus-areas/${focusAreaId}/extract-keywords`, options);
     return data;
+  },
+
+  // Prompt Templates
+  async getPromptTemplates(focusAreaId: string): Promise<PromptTemplate[]> {
+    const { data } = await api.get(`/focus-areas/${focusAreaId}/prompt-templates`);
+    return data;
+  },
+
+  async createPromptTemplate(focusAreaId: string, template: {
+    name: string;
+    description?: string;
+    promptText: string;
+    executionMode?: 'PER_PATENT' | 'COLLECTIVE';
+    contextFields?: string[];
+    llmModel?: string;
+  }): Promise<PromptTemplate> {
+    const { data } = await api.post(`/focus-areas/${focusAreaId}/prompt-templates`, template);
+    return data;
+  },
+
+  async updatePromptTemplate(focusAreaId: string, templateId: string, updates: Partial<PromptTemplate>): Promise<PromptTemplate> {
+    const { data } = await api.put(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}`, updates);
+    return data;
+  },
+
+  async deletePromptTemplate(focusAreaId: string, templateId: string): Promise<void> {
+    await api.delete(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}`);
+  },
+
+  async executePromptTemplate(focusAreaId: string, templateId: string): Promise<{ status: string; message: string }> {
+    const { data } = await api.post(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}/execute`);
+    return data;
+  },
+
+  async getPromptTemplateStatus(focusAreaId: string, templateId: string): Promise<{
+    id: string;
+    status: string;
+    completedCount: number;
+    totalCount: number;
+    lastRunAt?: string;
+    errorMessage?: string;
+  }> {
+    const { data } = await api.get(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}/status`);
+    return data;
+  },
+
+  async getPromptResults(focusAreaId: string, templateId: string, pagination?: { page: number; limit: number }): Promise<{
+    data: PromptResult[];
+    total: number;
+    page: number;
+    rowsPerPage: number;
+  }> {
+    const { data } = await api.get(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}/results`, { params: pagination });
+    return data;
+  },
+
+  async getPromptResult(focusAreaId: string, templateId: string, patentId: string): Promise<PromptResult> {
+    const { data } = await api.get(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}/results/${patentId}`);
+    return data;
+  },
+
+  async previewPromptTemplate(focusAreaId: string, templateId: string, patentId?: string): Promise<PromptPreviewResponse> {
+    const { data } = await api.post(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}/preview`, { patentId });
+    return data;
   }
 };
+
+// Prompt Template types
+export interface PromptTemplate {
+  id: string;
+  focusAreaId: string;
+  name: string;
+  description?: string;
+  promptText: string;
+  executionMode: 'PER_PATENT' | 'COLLECTIVE';
+  contextFields: string[];
+  llmModel: string;
+  status: 'DRAFT' | 'RUNNING' | 'COMPLETE' | 'ERROR';
+  completedCount: number;
+  totalCount: number;
+  lastRunAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptResult {
+  templateId: string;
+  patentId?: string;
+  model: string;
+  promptSent: string;
+  response: Record<string, unknown> | null;
+  rawText?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  executedAt: string;
+}
+
+export interface PromptPreviewResponse {
+  resolvedPrompt: string;
+  patentId: string | null;
+  executionMode: string;
+  patentCount: number;
+}
 
 // Keyword Extraction types
 export interface KeywordResult {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult, type ScopeOptions, type SearchScopeType, type SearchScopeConfig } from '@/services/api';
+import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult, type ScopeOptions, type SearchScopeType, type SearchScopeConfig, type PromptTemplate, type PromptResult, type PromptPreviewResponse } from '@/services/api';
 import PatentPreviewTooltip from '@/components/PatentPreviewTooltip.vue';
 import KeywordExtractionPanel from '@/components/KeywordExtractionPanel.vue';
 import { usePatentsStore } from '@/stores/patents';
@@ -613,6 +613,317 @@ async function createNewFocusArea() {
   }
 }
 
+// =============================================================================
+// PROMPT TEMPLATES
+// =============================================================================
+
+const promptTemplates = ref<PromptTemplate[]>([]);
+const promptTemplatesLoading = ref(false);
+const selectedTemplate = ref<PromptTemplate | null>(null);
+const editingTemplate = ref(false);
+
+// Template editor form
+const templateForm = ref({
+  name: '',
+  description: '',
+  promptText: '',
+  executionMode: 'PER_PATENT' as 'PER_PATENT' | 'COLLECTIVE',
+  contextFields: [] as string[],
+  llmModel: 'claude-sonnet-4-20250514'
+});
+
+const savingTemplate = ref(false);
+
+// Execution
+const executingTemplate = ref(false);
+let statusPollTimer: ReturnType<typeof setInterval> | null = null;
+
+// Preview
+const previewResult = ref<PromptPreviewResponse | null>(null);
+const loadingPreview = ref(false);
+
+// Results
+const promptResults = ref<PromptResult[]>([]);
+const promptResultsTotal = ref(0);
+const promptResultsLoading = ref(false);
+const expandedResultId = ref<string | null>(null);
+const showVariableRef = ref(false);
+
+// Available models
+const llmModelOptions = [
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+  { value: 'claude-haiku-3-5-20241022', label: 'Claude Haiku 3.5' }
+];
+
+const executionModeOptions = [
+  { value: 'PER_PATENT', label: 'Per Patent' },
+  { value: 'COLLECTIVE', label: 'Collective' }
+];
+
+const contextFieldOptions = [
+  'patent_title', 'abstract', 'patent_date', 'assignee', 'affiliate',
+  'super_sector', 'primary_sector', 'cpc_codes', 'forward_citations',
+  'remaining_years', 'score', 'competitor_citations', 'competitor_names',
+  'summary', 'technology_category', 'prior_art_problem', 'technical_solution'
+];
+
+const patentVariables = [
+  'patent_id', 'patent_title', 'abstract', 'patent_date', 'assignee',
+  'affiliate', 'super_sector', 'primary_sector', 'cpc_codes',
+  'forward_citations', 'remaining_years', 'score',
+  'competitor_citations', 'competitor_names',
+  'summary', 'technology_category', 'prior_art_problem', 'technical_solution',
+  'implementation_type', 'standards_relevance', 'market_segment',
+  'eligibility_score', 'validity_score', 'claim_breadth',
+  'enforcement_clarity', 'market_relevance_score'
+];
+
+const focusAreaVariables = [
+  'name', 'description', 'patentIDs', 'patentCount', 'patentData'
+];
+
+// Load prompt templates
+async function loadPromptTemplates() {
+  promptTemplatesLoading.value = true;
+  try {
+    promptTemplates.value = await focusAreaApi.getPromptTemplates(focusAreaId.value);
+  } catch (err) {
+    console.error('Failed to load prompt templates:', err);
+  } finally {
+    promptTemplatesLoading.value = false;
+  }
+}
+
+// Select template
+function selectTemplate(template: PromptTemplate) {
+  selectedTemplate.value = template;
+  editingTemplate.value = false;
+  previewResult.value = null;
+  expandedResultId.value = null;
+
+  // Load results for this template
+  loadPromptResults(template.id);
+
+  // If running, start polling
+  if (template.status === 'RUNNING') {
+    startStatusPolling(template.id);
+  }
+}
+
+// New template
+function startNewTemplate() {
+  selectedTemplate.value = null;
+  editingTemplate.value = true;
+  templateForm.value = {
+    name: '',
+    description: '',
+    promptText: '',
+    executionMode: 'PER_PATENT',
+    contextFields: [],
+    llmModel: 'claude-sonnet-4-20250514'
+  };
+  previewResult.value = null;
+  promptResults.value = [];
+}
+
+// Edit existing template
+function startEditTemplate() {
+  if (!selectedTemplate.value) return;
+  templateForm.value = {
+    name: selectedTemplate.value.name,
+    description: selectedTemplate.value.description || '',
+    promptText: selectedTemplate.value.promptText,
+    executionMode: selectedTemplate.value.executionMode,
+    contextFields: [...selectedTemplate.value.contextFields],
+    llmModel: selectedTemplate.value.llmModel
+  };
+  editingTemplate.value = true;
+}
+
+function cancelEditTemplate() {
+  editingTemplate.value = false;
+  if (!selectedTemplate.value) {
+    // Was creating new — deselect
+  }
+}
+
+// Save template (create or update)
+async function saveTemplate() {
+  if (!templateForm.value.name.trim() || !templateForm.value.promptText.trim()) return;
+  savingTemplate.value = true;
+  try {
+    if (selectedTemplate.value) {
+      // Update
+      const updated = await focusAreaApi.updatePromptTemplate(
+        focusAreaId.value,
+        selectedTemplate.value.id,
+        {
+          name: templateForm.value.name,
+          description: templateForm.value.description || undefined,
+          promptText: templateForm.value.promptText,
+          executionMode: templateForm.value.executionMode,
+          contextFields: templateForm.value.contextFields,
+          llmModel: templateForm.value.llmModel
+        }
+      );
+      selectedTemplate.value = updated;
+      // Update in list
+      const idx = promptTemplates.value.findIndex(t => t.id === updated.id);
+      if (idx >= 0) promptTemplates.value[idx] = updated;
+    } else {
+      // Create
+      const created = await focusAreaApi.createPromptTemplate(focusAreaId.value, {
+        name: templateForm.value.name,
+        description: templateForm.value.description || undefined,
+        promptText: templateForm.value.promptText,
+        executionMode: templateForm.value.executionMode,
+        contextFields: templateForm.value.contextFields,
+        llmModel: templateForm.value.llmModel
+      });
+      promptTemplates.value.unshift(created);
+      selectedTemplate.value = created;
+    }
+    editingTemplate.value = false;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to save template';
+  } finally {
+    savingTemplate.value = false;
+  }
+}
+
+// Delete template
+async function deleteTemplate() {
+  if (!selectedTemplate.value) return;
+  if (!confirm(`Delete template "${selectedTemplate.value.name}"?`)) return;
+  try {
+    await focusAreaApi.deletePromptTemplate(focusAreaId.value, selectedTemplate.value.id);
+    promptTemplates.value = promptTemplates.value.filter(t => t.id !== selectedTemplate.value!.id);
+    selectedTemplate.value = null;
+    editingTemplate.value = false;
+    promptResults.value = [];
+    previewResult.value = null;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to delete template';
+  }
+}
+
+// Execute template
+async function executeSelectedTemplate() {
+  if (!selectedTemplate.value) return;
+  executingTemplate.value = true;
+  try {
+    await focusAreaApi.executePromptTemplate(focusAreaId.value, selectedTemplate.value.id);
+    selectedTemplate.value = { ...selectedTemplate.value, status: 'RUNNING', completedCount: 0 };
+    // Update in list
+    const idx = promptTemplates.value.findIndex(t => t.id === selectedTemplate.value!.id);
+    if (idx >= 0) promptTemplates.value[idx] = { ...promptTemplates.value[idx], status: 'RUNNING', completedCount: 0 };
+    startStatusPolling(selectedTemplate.value.id);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to execute template';
+  } finally {
+    executingTemplate.value = false;
+  }
+}
+
+// Poll status
+function startStatusPolling(templateId: string) {
+  stopStatusPolling();
+  statusPollTimer = setInterval(async () => {
+    try {
+      const status = await focusAreaApi.getPromptTemplateStatus(focusAreaId.value, templateId);
+      if (selectedTemplate.value && selectedTemplate.value.id === templateId) {
+        selectedTemplate.value = {
+          ...selectedTemplate.value,
+          status: status.status as PromptTemplate['status'],
+          completedCount: status.completedCount,
+          totalCount: status.totalCount,
+          lastRunAt: status.lastRunAt,
+          errorMessage: status.errorMessage
+        };
+      }
+      // Update in list
+      const idx = promptTemplates.value.findIndex(t => t.id === templateId);
+      if (idx >= 0) {
+        promptTemplates.value[idx] = {
+          ...promptTemplates.value[idx],
+          status: status.status as PromptTemplate['status'],
+          completedCount: status.completedCount,
+          totalCount: status.totalCount
+        };
+      }
+      // Stop polling when done
+      if (status.status !== 'RUNNING') {
+        stopStatusPolling();
+        // Reload results
+        loadPromptResults(templateId);
+      }
+    } catch (err) {
+      console.error('Status poll error:', err);
+    }
+  }, 3000);
+}
+
+function stopStatusPolling() {
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer);
+    statusPollTimer = null;
+  }
+}
+
+// Preview
+async function previewSelectedTemplate() {
+  const tid = selectedTemplate.value?.id;
+  if (!tid) return;
+  loadingPreview.value = true;
+  try {
+    previewResult.value = await focusAreaApi.previewPromptTemplate(focusAreaId.value, tid);
+  } catch (err) {
+    console.error('Preview failed:', err);
+  } finally {
+    loadingPreview.value = false;
+  }
+}
+
+// Load results
+async function loadPromptResults(templateId: string) {
+  promptResultsLoading.value = true;
+  try {
+    const res = await focusAreaApi.getPromptResults(focusAreaId.value, templateId, { page: 1, limit: 200 });
+    promptResults.value = res.data;
+    promptResultsTotal.value = res.total;
+  } catch (err) {
+    console.error('Failed to load results:', err);
+  } finally {
+    promptResultsLoading.value = false;
+  }
+}
+
+function toggleResultExpand(patentId: string) {
+  expandedResultId.value = expandedResultId.value === patentId ? null : patentId;
+}
+
+function insertVariable(variable: string) {
+  templateForm.value.promptText += variable;
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'DRAFT': return 'grey';
+    case 'RUNNING': return 'blue';
+    case 'COMPLETE': return 'green';
+    case 'ERROR': return 'red';
+    default: return 'grey';
+  }
+}
+
+function formatJson(obj: unknown): string {
+  try {
+    return JSON.stringify(obj, null, 2);
+  } catch {
+    return String(obj);
+  }
+}
+
 // Navigate to patent detail
 function goToPatent(patentId: string) {
   router.push({ name: 'patent-detail', params: { id: patentId } });
@@ -633,6 +944,17 @@ function onPatentRequest(props: { pagination: typeof paginationModel.value }) {
   faPagination.value.descending = props.pagination.descending;
   loadPatents();
 }
+
+// Watch tab changes to load data lazily
+watch(activeTab, (tab) => {
+  if (tab === 'llm-prompts' && promptTemplates.value.length === 0 && !promptTemplatesLoading.value) {
+    loadPromptTemplates();
+  }
+  // Clean up polling when leaving LLM tab
+  if (tab !== 'llm-prompts') {
+    stopStatusPolling();
+  }
+});
 
 // Initialize
 onMounted(async () => {
@@ -765,6 +1087,7 @@ onMounted(async () => {
         <q-tab name="overview" label="Overview" />
         <q-tab name="patents" label="Patents" :badge="focusArea.patentCount || undefined" />
         <q-tab name="search-terms" label="Search Terms" :badge="searchTerms.length || undefined" />
+        <q-tab name="llm-prompts" label="LLM Prompts" :badge="promptTemplates.length || undefined" />
       </q-tabs>
 
       <q-tab-panels v-model="activeTab" animated>
@@ -1345,6 +1668,408 @@ onMounted(async () => {
             </q-card-section>
           </q-card>
         </q-tab-panel>
+
+        <!-- LLM Prompts Tab -->
+        <q-tab-panel name="llm-prompts" class="q-pa-none">
+          <div class="row q-col-gutter-md" style="min-height: 500px">
+            <!-- Left Panel: Template List + Editor -->
+            <div class="col-12 col-md-5">
+              <!-- Template List -->
+              <q-card flat bordered class="q-mb-md">
+                <q-card-section class="q-pb-none">
+                  <div class="row items-center">
+                    <div class="text-subtitle2">Prompt Templates</div>
+                    <q-space />
+                    <q-btn flat dense icon="add" label="New" @click="startNewTemplate" />
+                  </div>
+                </q-card-section>
+                <q-card-section>
+                  <div v-if="promptTemplatesLoading" class="text-center q-pa-md">
+                    <q-spinner size="sm" />
+                  </div>
+                  <div v-else-if="promptTemplates.length === 0 && !editingTemplate" class="text-center q-pa-lg text-grey-6">
+                    <q-icon name="auto_awesome" size="2em" />
+                    <div class="q-mt-sm">No prompt templates yet</div>
+                    <q-btn flat color="primary" label="Create First Template" class="q-mt-sm" @click="startNewTemplate" />
+                  </div>
+                  <q-list v-else separator>
+                    <q-item
+                      v-for="tmpl in promptTemplates"
+                      :key="tmpl.id"
+                      clickable
+                      :active="selectedTemplate?.id === tmpl.id"
+                      active-class="bg-blue-1"
+                      @click="selectTemplate(tmpl)"
+                    >
+                      <q-item-section>
+                        <q-item-label class="text-weight-medium">{{ tmpl.name }}</q-item-label>
+                        <q-item-label caption>
+                          {{ tmpl.executionMode === 'PER_PATENT' ? 'Per Patent' : 'Collective' }}
+                          <span v-if="tmpl.lastRunAt"> | Last run: {{ new Date(tmpl.lastRunAt).toLocaleDateString() }}</span>
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-badge
+                          :color="getStatusColor(tmpl.status)"
+                          :label="tmpl.status === 'RUNNING' ? `${tmpl.completedCount}/${tmpl.totalCount}` : tmpl.status"
+                        />
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-card-section>
+              </q-card>
+
+              <!-- Template Editor -->
+              <q-card v-if="editingTemplate" flat bordered>
+                <q-card-section class="q-pb-sm">
+                  <div class="text-subtitle2">{{ selectedTemplate ? 'Edit Template' : 'New Template' }}</div>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                  <q-input
+                    v-model="templateForm.name"
+                    label="Name *"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                    placeholder="e.g., POS Relevance Analysis"
+                  />
+                  <q-input
+                    v-model="templateForm.description"
+                    label="Description"
+                    outlined
+                    dense
+                    class="q-mb-sm"
+                    placeholder="Brief description..."
+                  />
+                  <div class="row q-gutter-sm q-mb-sm">
+                    <q-select
+                      v-model="templateForm.executionMode"
+                      :options="executionModeOptions"
+                      label="Execution Mode"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="col"
+                    />
+                    <q-select
+                      v-model="templateForm.llmModel"
+                      :options="llmModelOptions"
+                      label="Model"
+                      outlined
+                      dense
+                      emit-value
+                      map-options
+                      class="col"
+                    />
+                  </div>
+                  <q-select
+                    v-model="templateForm.contextFields"
+                    :options="contextFieldOptions"
+                    label="Context Fields (for collective mode)"
+                    outlined
+                    dense
+                    multiple
+                    use-chips
+                    class="q-mb-sm"
+                  />
+
+                  <!-- Variable Reference Toggle -->
+                  <q-btn
+                    flat
+                    dense
+                    size="sm"
+                    :icon="showVariableRef ? 'expand_less' : 'expand_more'"
+                    :label="showVariableRef ? 'Hide Variables' : 'Show Available Variables'"
+                    class="q-mb-xs"
+                    @click="showVariableRef = !showVariableRef"
+                  />
+
+                  <q-slide-transition>
+                    <div v-show="showVariableRef" class="variable-ref q-mb-sm">
+                      <div class="text-caption text-weight-medium q-mb-xs">Patent fields:</div>
+                      <div class="variable-chips">
+                        <q-chip
+                          v-for="v in patentVariables"
+                          :key="v"
+                          dense
+                          clickable
+                          size="sm"
+                          color="blue-1"
+                          text-color="blue-9"
+                          @click="insertVariable(`{patent.${v}}`)"
+                        >
+                          {patent.{{ v }}}
+                        </q-chip>
+                      </div>
+                      <div class="text-caption text-weight-medium q-mt-sm q-mb-xs">Focus Area fields (collective mode):</div>
+                      <div class="variable-chips">
+                        <q-chip
+                          v-for="v in focusAreaVariables"
+                          :key="v"
+                          dense
+                          clickable
+                          size="sm"
+                          color="purple-1"
+                          text-color="purple-9"
+                          @click="insertVariable(`{focusArea.${v}}`)"
+                        >
+                          {focusArea.{{ v }}}
+                        </q-chip>
+                      </div>
+                    </div>
+                  </q-slide-transition>
+
+                  <q-input
+                    v-model="templateForm.promptText"
+                    label="Prompt Text *"
+                    outlined
+                    type="textarea"
+                    rows="10"
+                    class="prompt-textarea"
+                    placeholder="Analyze this patent for relevance...&#10;&#10;Patent: {patent.patent_id} - {patent.patent_title}&#10;Abstract: {patent.abstract}&#10;&#10;Return JSON: { &quot;relevance_score&quot;: 1-5, ... }"
+                  />
+
+                  <div class="row q-mt-sm q-gutter-sm">
+                    <q-btn outline label="Cancel" @click="cancelEditTemplate" />
+                    <q-space />
+                    <q-btn
+                      v-if="selectedTemplate"
+                      flat
+                      color="negative"
+                      icon="delete"
+                      label="Delete"
+                      @click="deleteTemplate"
+                    />
+                    <q-btn
+                      color="primary"
+                      icon="save"
+                      label="Save"
+                      :loading="savingTemplate"
+                      :disable="!templateForm.name.trim() || !templateForm.promptText.trim()"
+                      @click="saveTemplate"
+                    />
+                  </div>
+                </q-card-section>
+              </q-card>
+
+              <!-- Template Detail (view mode) -->
+              <q-card v-else-if="selectedTemplate" flat bordered>
+                <q-card-section class="q-pb-sm">
+                  <div class="row items-center">
+                    <div class="text-subtitle2">{{ selectedTemplate.name }}</div>
+                    <q-space />
+                    <q-btn flat dense icon="edit" @click="startEditTemplate" />
+                  </div>
+                  <div v-if="selectedTemplate.description" class="text-caption text-grey-7">
+                    {{ selectedTemplate.description }}
+                  </div>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                  <div class="row q-gutter-sm q-mb-sm">
+                    <q-chip dense size="sm" :color="selectedTemplate.executionMode === 'PER_PATENT' ? 'blue-2' : 'purple-2'">
+                      {{ selectedTemplate.executionMode === 'PER_PATENT' ? 'Per Patent' : 'Collective' }}
+                    </q-chip>
+                    <q-chip dense size="sm" color="grey-3">
+                      {{ selectedTemplate.llmModel }}
+                    </q-chip>
+                    <q-chip v-if="selectedTemplate.contextFields.length > 0" dense size="sm" color="grey-3">
+                      {{ selectedTemplate.contextFields.length }} context fields
+                    </q-chip>
+                  </div>
+                  <div class="prompt-display q-mb-md">
+                    <pre class="prompt-text">{{ selectedTemplate.promptText }}</pre>
+                  </div>
+                  <div class="row q-gutter-sm">
+                    <q-btn
+                      outline
+                      icon="visibility"
+                      label="Preview"
+                      :loading="loadingPreview"
+                      @click="previewSelectedTemplate"
+                    />
+                    <q-btn
+                      color="primary"
+                      icon="play_arrow"
+                      label="Execute"
+                      :loading="executingTemplate"
+                      :disable="selectedTemplate.status === 'RUNNING'"
+                      @click="executeSelectedTemplate"
+                    />
+                    <q-btn
+                      flat
+                      color="negative"
+                      icon="delete"
+                      label="Delete"
+                      @click="deleteTemplate"
+                    />
+                  </div>
+                </q-card-section>
+              </q-card>
+            </div>
+
+            <!-- Right Panel: Results -->
+            <div class="col-12 col-md-7">
+              <!-- Preview Card -->
+              <q-card v-if="previewResult" flat bordered class="q-mb-md">
+                <q-card-section class="q-pb-sm">
+                  <div class="row items-center">
+                    <div class="text-subtitle2">Preview</div>
+                    <q-chip v-if="previewResult.patentId" dense size="sm" color="blue-2" class="q-ml-sm">
+                      Patent: {{ previewResult.patentId }}
+                    </q-chip>
+                    <q-chip dense size="sm" color="grey-3" class="q-ml-sm">
+                      {{ previewResult.patentCount }} patents in focus area
+                    </q-chip>
+                    <q-space />
+                    <q-btn flat dense icon="close" @click="previewResult = null" />
+                  </div>
+                </q-card-section>
+                <q-card-section class="q-pt-none">
+                  <div class="prompt-display">
+                    <pre class="prompt-text">{{ previewResult.resolvedPrompt }}</pre>
+                  </div>
+                </q-card-section>
+              </q-card>
+
+              <!-- Status Bar -->
+              <q-card v-if="selectedTemplate" flat bordered class="q-mb-md">
+                <q-card-section class="q-py-sm">
+                  <div class="row items-center q-gutter-sm">
+                    <q-badge :color="getStatusColor(selectedTemplate.status)" :label="selectedTemplate.status" />
+                    <template v-if="selectedTemplate.status === 'RUNNING'">
+                      <q-spinner size="xs" color="blue" />
+                      <span class="text-caption">
+                        {{ selectedTemplate.completedCount }} / {{ selectedTemplate.totalCount }} patents
+                      </span>
+                      <q-linear-progress
+                        :value="selectedTemplate.totalCount > 0 ? selectedTemplate.completedCount / selectedTemplate.totalCount : 0"
+                        color="primary"
+                        class="col"
+                        rounded
+                        size="8px"
+                      />
+                    </template>
+                    <template v-else-if="selectedTemplate.status === 'COMPLETE'">
+                      <span class="text-caption text-green">
+                        {{ selectedTemplate.completedCount }} / {{ selectedTemplate.totalCount }} complete
+                      </span>
+                      <span v-if="selectedTemplate.lastRunAt" class="text-caption text-grey">
+                        | {{ new Date(selectedTemplate.lastRunAt).toLocaleString() }}
+                      </span>
+                    </template>
+                    <template v-else-if="selectedTemplate.status === 'ERROR'">
+                      <span class="text-caption text-red">{{ selectedTemplate.errorMessage }}</span>
+                    </template>
+                    <q-space />
+                    <span class="text-caption text-grey">{{ promptResultsTotal }} results</span>
+                  </div>
+                </q-card-section>
+              </q-card>
+
+              <!-- Results -->
+              <q-card v-if="selectedTemplate && promptResults.length > 0" flat bordered>
+                <q-card-section class="q-pb-none">
+                  <div class="text-subtitle2">Results</div>
+                </q-card-section>
+                <q-card-section>
+                  <div v-if="promptResultsLoading" class="text-center q-pa-md">
+                    <q-spinner size="sm" />
+                  </div>
+
+                  <!-- Per-Patent Results -->
+                  <template v-else-if="selectedTemplate.executionMode === 'PER_PATENT'">
+                    <q-list separator class="results-list">
+                      <q-item
+                        v-for="result in promptResults"
+                        :key="result.patentId || 'collective'"
+                        clickable
+                        @click="toggleResultExpand(result.patentId || '_collective')"
+                      >
+                        <q-item-section avatar>
+                          <q-icon
+                            :name="result.response ? 'check_circle' : 'error'"
+                            :color="result.response ? 'green' : 'orange'"
+                            size="sm"
+                          />
+                        </q-item-section>
+                        <q-item-section>
+                          <q-item-label class="text-weight-medium">
+                            {{ result.patentId || 'Collective Result' }}
+                          </q-item-label>
+                          <q-item-label caption>
+                            {{ new Date(result.executedAt).toLocaleString() }}
+                            <span v-if="result.inputTokens">
+                              | {{ result.inputTokens }} in / {{ result.outputTokens }} out tokens
+                            </span>
+                          </q-item-label>
+                        </q-item-section>
+                        <q-item-section side>
+                          <q-icon
+                            :name="expandedResultId === (result.patentId || '_collective') ? 'expand_less' : 'expand_more'"
+                          />
+                        </q-item-section>
+                      </q-item>
+
+                      <!-- Expanded result detail -->
+                      <template v-for="result in promptResults" :key="'detail-' + (result.patentId || '_collective')">
+                        <q-slide-transition>
+                          <div v-show="expandedResultId === (result.patentId || '_collective')" class="result-detail">
+                            <div class="result-json-container">
+                              <pre class="result-json">{{ result.response ? formatJson(result.response) : (result.rawText || 'No response') }}</pre>
+                            </div>
+                            <q-expansion-item dense label="Show sent prompt" class="q-mt-xs">
+                              <div class="prompt-display q-pa-sm">
+                                <pre class="prompt-text" style="font-size: 0.75em">{{ result.promptSent }}</pre>
+                              </div>
+                            </q-expansion-item>
+                          </div>
+                        </q-slide-transition>
+                      </template>
+                    </q-list>
+                  </template>
+
+                  <!-- Collective Result -->
+                  <template v-else>
+                    <div v-for="result in promptResults" :key="'coll-' + result.templateId" class="result-detail">
+                      <div class="text-caption text-grey q-mb-xs">
+                        {{ new Date(result.executedAt).toLocaleString() }}
+                        <span v-if="result.inputTokens">
+                          | {{ result.inputTokens }} in / {{ result.outputTokens }} out tokens
+                        </span>
+                      </div>
+                      <div class="result-json-container">
+                        <pre class="result-json">{{ result.response ? formatJson(result.response) : (result.rawText || 'No response') }}</pre>
+                      </div>
+                      <q-expansion-item dense label="Show sent prompt" class="q-mt-sm">
+                        <div class="prompt-display q-pa-sm">
+                          <pre class="prompt-text" style="font-size: 0.75em">{{ result.promptSent }}</pre>
+                        </div>
+                      </q-expansion-item>
+                    </div>
+                  </template>
+                </q-card-section>
+              </q-card>
+
+              <!-- Empty state for results -->
+              <q-card v-else-if="selectedTemplate && !promptResultsLoading" flat bordered>
+                <q-card-section class="text-center q-pa-xl text-grey-6">
+                  <q-icon name="science" size="3em" />
+                  <div class="q-mt-md">No results yet</div>
+                  <div class="text-caption">Click "Execute" to run this template against focus area patents</div>
+                </q-card-section>
+              </q-card>
+
+              <!-- No template selected -->
+              <q-card v-else-if="!editingTemplate" flat bordered>
+                <q-card-section class="text-center q-pa-xl text-grey-5">
+                  <q-icon name="arrow_back" size="2em" />
+                  <div class="q-mt-md">Select or create a template to view results</div>
+                </q-card-section>
+              </q-card>
+            </div>
+          </div>
+        </q-tab-panel>
       </q-tab-panels>
     </template>
 
@@ -1865,5 +2590,71 @@ code {
   padding: 8px;
   background: #f5f5f5;
   border-radius: 4px;
+}
+
+/* LLM Prompts Tab Styles */
+.prompt-textarea :deep(textarea) {
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+.prompt-display {
+  background: #f5f5f5;
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.prompt-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8em;
+  line-height: 1.6;
+}
+
+.variable-ref {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.variable-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.results-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.result-detail {
+  padding: 12px 16px;
+  background: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.result-json-container {
+  background: #1e1e1e;
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 400px;
+  overflow: auto;
+}
+
+.result-json {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8em;
+  line-height: 1.5;
+  color: #d4d4d4;
 }
 </style>

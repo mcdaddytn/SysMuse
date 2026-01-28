@@ -765,4 +765,238 @@ export const searchApi = {
   }
 };
 
+// =============================================================================
+// LLM Workflow Types
+// =============================================================================
+
+export type WorkflowStatus = 'PENDING' | 'RUNNING' | 'COMPLETE' | 'ERROR' | 'CANCELLED';
+
+export interface LlmWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  workflowType: string;
+  scopeType: string;
+  scopeId?: string;
+  config?: Record<string, unknown>;
+  status: WorkflowStatus;
+  finalResult?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { jobs: number };
+}
+
+export interface WorkflowDetail extends LlmWorkflow {
+  jobs: LlmJobSummary[];
+  progress: WorkflowProgress;
+}
+
+export interface WorkflowProgress {
+  total: number;
+  pending: number;
+  running: number;
+  complete: number;
+  error: number;
+}
+
+export interface WorkflowStatusResponse {
+  id: string;
+  name: string;
+  status: WorkflowStatus;
+  workflowType: string;
+  progress: WorkflowProgress & Record<string, number>;
+  completionPct: number;
+  tokensUsed: number;
+  updatedAt: string;
+}
+
+export interface LlmJobSummary {
+  id: string;
+  templateId: string;
+  templateName?: string;
+  templateType?: string;
+  targetType: string;
+  targetIds: string[];
+  status: WorkflowStatus;
+  roundNumber?: number;
+  clusterIndex?: number;
+  sortScore?: number;
+  tokensUsed?: number;
+  errorMessage?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  dependsOnIds: string[];
+  dependedByIds: string[];
+}
+
+export interface LlmJobDetail extends LlmJobSummary {
+  workflowId: string;
+  targetData?: Record<string, unknown>;
+  priority: number;
+  retryCount: number;
+  maxRetries: number;
+  result?: Record<string, unknown>;
+  dependencies: {
+    upstream: Array<{ jobId: string; status: string; roundNumber?: number; clusterIndex?: number }>;
+    downstream: Array<{ jobId: string; status: string; roundNumber?: number; clusterIndex?: number }>;
+  };
+}
+
+export interface TournamentRoundConfig {
+  templateId: string;
+  topN: number;
+  sortScoreField: string;
+}
+
+export interface TournamentConfig {
+  rounds: TournamentRoundConfig[];
+  initialClusterStrategy: 'score' | 'sector' | 'random';
+  clusterSizeTarget?: number;
+  synthesisTemplateId?: string;
+}
+
+export interface TwoStageConfig {
+  perPatentTemplateId: string;
+  synthesisTemplateId: string;
+  sortScoreField?: string;
+}
+
+export interface EntityAnalysisResult {
+  id: string;
+  entityType: string;
+  entityId: string;
+  templateId?: string;
+  jobId?: string;
+  objectType?: string;
+  objectId?: string;
+  result: Record<string, unknown>;
+  resultType: string;
+  fieldValues?: Record<string, unknown>;
+  model?: string;
+  tokensUsed?: number;
+  promptSent?: string;
+  executedAt: string;
+  createdAt: string;
+}
+
+// Workflow API
+export const workflowApi = {
+  // CRUD
+  async listWorkflows(filters?: {
+    scopeType?: string;
+    scopeId?: string;
+    workflowType?: string;
+    status?: string;
+  }): Promise<LlmWorkflow[]> {
+    const { data } = await api.get('/workflows', { params: filters });
+    return data;
+  },
+
+  async getWorkflow(id: string): Promise<WorkflowDetail> {
+    const { data } = await api.get(`/workflows/${id}`);
+    return data;
+  },
+
+  async createWorkflow(config: {
+    name: string;
+    description?: string;
+    workflowType: string;
+    scopeType: string;
+    scopeId?: string;
+    config?: Record<string, unknown>;
+  }): Promise<LlmWorkflow> {
+    const { data } = await api.post('/workflows', config);
+    return data;
+  },
+
+  async deleteWorkflow(id: string): Promise<void> {
+    await api.delete(`/workflows/${id}`);
+  },
+
+  // Execution
+  async executeWorkflow(id: string): Promise<{ status: string; message: string }> {
+    const { data } = await api.post(`/workflows/${id}/execute`);
+    return data;
+  },
+
+  async cancelWorkflow(id: string): Promise<{ status: string; message: string }> {
+    const { data } = await api.post(`/workflows/${id}/cancel`);
+    return data;
+  },
+
+  async getWorkflowStatus(id: string): Promise<WorkflowStatusResponse> {
+    const { data } = await api.get(`/workflows/${id}/status`);
+    return data;
+  },
+
+  // Planning
+  async planCustomWorkflow(id: string, jobs: Array<{
+    templateId: string;
+    targetType: string;
+    targetIds: string[];
+    targetData?: Record<string, unknown>;
+    roundNumber?: number;
+    clusterIndex?: number;
+    priority?: number;
+    dependsOnJobIndices?: number[];
+  }>): Promise<{ message: string; jobIds: string[] }> {
+    const { data } = await api.post(`/workflows/${id}/plan/custom`, { jobs });
+    return data;
+  },
+
+  async planTournament(id: string, config: TournamentConfig): Promise<{
+    message: string;
+    jobIds: string[];
+    progress: WorkflowProgress;
+    config: Record<string, unknown>;
+  }> {
+    const { data } = await api.post(`/workflows/${id}/plan/tournament`, config);
+    return data;
+  },
+
+  async planTwoStage(id: string, config: TwoStageConfig): Promise<{
+    message: string;
+    jobIds: string[];
+    progress: WorkflowProgress;
+  }> {
+    const { data } = await api.post(`/workflows/${id}/plan/two-stage`, config);
+    return data;
+  },
+
+  // Jobs
+  async listJobs(workflowId: string, filters?: {
+    status?: string;
+    round?: number;
+  }): Promise<LlmJobSummary[]> {
+    const { data } = await api.get(`/workflows/${workflowId}/jobs`, { params: filters });
+    return data;
+  },
+
+  async getJob(workflowId: string, jobId: string): Promise<LlmJobDetail> {
+    const { data } = await api.get(`/workflows/${workflowId}/jobs/${jobId}`);
+    return data;
+  },
+
+  async retryJob(workflowId: string, jobId: string): Promise<{ message: string }> {
+    const { data } = await api.post(`/workflows/${workflowId}/jobs/${jobId}/retry`);
+    return data;
+  },
+
+  async getReadyJobs(workflowId: string): Promise<LlmJobSummary[]> {
+    const { data } = await api.get(`/workflows/${workflowId}/ready-jobs`);
+    return data;
+  },
+
+  // Entity Analysis Results
+  async getEntityResults(entityType: string, entityId: string, filters?: {
+    templateId?: string;
+    objectType?: string;
+    objectId?: string;
+  }): Promise<EntityAnalysisResult[]> {
+    const { data } = await api.get(`/workflows/results/${entityType}/${entityId}`, { params: filters });
+    return data;
+  },
+};
+
 export default api;

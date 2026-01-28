@@ -18,9 +18,9 @@ const prisma = new PrismaClient();
 const CACHE_BASE_DIR = path.join(process.cwd(), 'cache/focus-area-prompts');
 const RATE_LIMIT_MS = 2000;
 
-const SYSTEM_MESSAGE_FREE_FORM = `You are a patent analysis assistant. Analyze the provided information and respond with valid JSON. If you cannot produce valid JSON, respond with your analysis as plain text.`;
+export const SYSTEM_MESSAGE_FREE_FORM = `You are a patent analysis assistant. Analyze the provided information and respond with valid JSON. If you cannot produce valid JSON, respond with your analysis as plain text.`;
 
-const SYSTEM_MESSAGE_STRUCTURED = `You are a patent analysis assistant. You will be given a set of questions about patent information. Answer each question precisely in the requested format. Return ONLY valid JSON matching the exact schema specified. Do not include markdown formatting or explanation outside the JSON.`;
+export const SYSTEM_MESSAGE_STRUCTURED = `You are a patent analysis assistant. You will be given a set of questions about patent information. Answer each question precisely in the requested format. Return ONLY valid JSON matching the exact schema specified. Do not include markdown formatting or explanation outside the JSON.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -294,7 +294,7 @@ export function parseStructuredResponse(
 // Patent Data Loading
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface PatentData {
+export interface PatentData {
   patent_id: string;
   [key: string]: unknown;
 }
@@ -302,7 +302,7 @@ interface PatentData {
 /**
  * Load enriched patent data from the candidates file and LLM cache.
  */
-function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData> {
+export function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData> {
   const result = new Map<string, PatentData>();
   const idSet = new Set(patentIds);
 
@@ -454,7 +454,7 @@ export function substituteVariables(
 /**
  * Build the final prompt text for a template, handling both free-form and structured modes.
  */
-function buildPromptForTemplate(
+export function buildPromptForTemplate(
   template: {
     templateType: string;
     promptText: string | null;
@@ -561,7 +561,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function callLlm(
+export async function callLlm(
   promptText: string,
   modelName: string,
   systemMessage: string

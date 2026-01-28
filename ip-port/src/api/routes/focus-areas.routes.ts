@@ -977,7 +977,9 @@ router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
       questions,
       executionMode = 'PER_PATENT',
       contextFields = [],
-      llmModel = 'claude-sonnet-4-20250514'
+      llmModel = 'claude-sonnet-4-20250514',
+      delimiterStart,
+      delimiterEnd
     } = req.body;
 
     if (!name) {
@@ -1002,6 +1004,8 @@ router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
         executionMode,
         contextFields,
         llmModel,
+        delimiterStart: delimiterStart || '<<',
+        delimiterEnd: delimiterEnd || '>>',
         status: 'DRAFT'
       }
     });
@@ -1020,7 +1024,7 @@ router.post('/:id/prompt-templates', async (req: Request, res: Response) => {
 router.put('/:id/prompt-templates/:tid', async (req: Request, res: Response) => {
   try {
     const { tid } = req.params;
-    const { name, description, templateType, objectType, promptText, questions, executionMode, contextFields, llmModel } = req.body;
+    const { name, description, templateType, objectType, promptText, questions, executionMode, contextFields, llmModel, delimiterStart, delimiterEnd } = req.body;
 
     const template = await prisma.promptTemplate.update({
       where: { id: tid },
@@ -1033,7 +1037,9 @@ router.put('/:id/prompt-templates/:tid', async (req: Request, res: Response) => 
         ...(questions !== undefined && { questions }),
         ...(executionMode !== undefined && { executionMode }),
         ...(contextFields !== undefined && { contextFields }),
-        ...(llmModel !== undefined && { llmModel })
+        ...(llmModel !== undefined && { llmModel }),
+        ...(delimiterStart !== undefined && { delimiterStart }),
+        ...(delimiterEnd !== undefined && { delimiterEnd })
       }
     });
 

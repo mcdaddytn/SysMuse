@@ -79,8 +79,42 @@ const PATENT_FIELDS = [
 
 const FOCUS_AREA_FIELDS = ['name', 'description', 'patentIDs', 'patentCount', 'patentData'];
 
-export function getFieldsForObjectType(objectType: string): { patentFields: string[]; focusAreaFields: string[] } {
-  return { patentFields: PATENT_FIELDS, focusAreaFields: FOCUS_AREA_FIELDS };
+// Default delimiters (avoids conflicts with JSON braces and code)
+export const DEFAULT_DELIMITER_START = '<<';
+export const DEFAULT_DELIMITER_END = '>>';
+
+export interface FieldInfo {
+  field: string;
+  placeholder: string;
+  description: string;
+}
+
+export function getFieldsForObjectType(
+  objectType: string,
+  delimiterStart = DEFAULT_DELIMITER_START,
+  delimiterEnd = DEFAULT_DELIMITER_END
+): FieldInfo[] {
+  const fields: FieldInfo[] = [];
+
+  // Patent fields
+  for (const f of PATENT_FIELDS) {
+    fields.push({
+      field: f,
+      placeholder: `${delimiterStart}patent.${f}${delimiterEnd}`,
+      description: `Patent ${f.replace(/_/g, ' ')}`
+    });
+  }
+
+  // Focus area fields (for collective mode)
+  for (const f of FOCUS_AREA_FIELDS) {
+    fields.push({
+      field: f,
+      placeholder: `${delimiterStart}focusArea.${f}${delimiterEnd}`,
+      description: `Focus area ${f}`
+    });
+  }
+
+  return fields;
 }
 
 export { PATENT_FIELDS, FOCUS_AREA_FIELDS };
@@ -152,7 +186,9 @@ export function buildStructuredPrompt(
   focusArea: { name: string; description?: string | null } | null,
   patentIds: string[],
   patents: Map<string, PatentData>,
-  contextFields: string[]
+  contextFields: string[],
+  delimiterStart = DEFAULT_DELIMITER_START,
+  delimiterEnd = DEFAULT_DELIMITER_END
 ): string {
   const lines: string[] = [];
 
@@ -174,18 +210,17 @@ export function buildStructuredPrompt(
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
-    // Substitute any placeholders in the question text
-    let questionText = q.question;
-    if (patent) {
-      questionText = questionText.replace(/\{patent\.(\w+)\}/g, (_m, field) =>
-        getPatentFieldValue(patent, field)
-      );
-    }
-    if (focusArea) {
-      questionText = questionText.replace(/\{focusArea\.(\w+)\}/g, (_m, field) =>
-        getFocusAreaFieldValue(focusArea, field, patentIds, patents, contextFields)
-      );
-    }
+    // Substitute any placeholders in the question text using configured delimiters
+    const questionText = substituteVariables(
+      q.question,
+      patent,
+      focusArea,
+      patentIds,
+      patents,
+      contextFields,
+      delimiterStart,
+      delimiterEnd
+    );
 
     const typeStr = formatAnswerTypeInstruction(q);
     const desc = q.description ? ` — ${q.description}` : '';
@@ -376,7 +411,15 @@ function getFocusAreaFieldValue(
 }
 
 /**
- * Substitute {patent.*} and {focusArea.*} placeholders in prompt text.
+ * Escape special regex characters in a string.
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Substitute <<patent.*>> and <<focusArea.*>> placeholders in prompt text.
+ * Delimiters are configurable to avoid collisions with JSON or code in prompts.
  */
 export function substituteVariables(
   promptText: string,
@@ -384,17 +427,24 @@ export function substituteVariables(
   focusArea: { name: string; description?: string | null } | null,
   patentIds: string[],
   patents: Map<string, PatentData>,
-  contextFields: string[]
+  contextFields: string[],
+  delimiterStart = DEFAULT_DELIMITER_START,
+  delimiterEnd = DEFAULT_DELIMITER_END
 ): string {
   let result = promptText;
 
-  result = result.replace(/\{patent\.(\w+)\}/g, (_match, field) => {
-    if (!patent) return `{patent.${field}}`;
+  const startEsc = escapeRegex(delimiterStart);
+  const endEsc = escapeRegex(delimiterEnd);
+
+  const patentPattern = new RegExp(`${startEsc}patent\\.(\\w+)${endEsc}`, 'g');
+  result = result.replace(patentPattern, (_match, field) => {
+    if (!patent) return `${delimiterStart}patent.${field}${delimiterEnd}`;
     return getPatentFieldValue(patent, field);
   });
 
-  result = result.replace(/\{focusArea\.(\w+)\}/g, (_match, field) => {
-    if (!focusArea) return `{focusArea.${field}}`;
+  const focusAreaPattern = new RegExp(`${startEsc}focusArea\\.(\\w+)${endEsc}`, 'g');
+  result = result.replace(focusAreaPattern, (_match, field) => {
+    if (!focusArea) return `${delimiterStart}focusArea.${field}${delimiterEnd}`;
     return getFocusAreaFieldValue(focusArea, field, patentIds, patents, contextFields);
   });
 
@@ -405,16 +455,25 @@ export function substituteVariables(
  * Build the final prompt text for a template, handling both free-form and structured modes.
  */
 function buildPromptForTemplate(
-  template: { templateType: string; promptText: string | null; questions: unknown },
+  template: {
+    templateType: string;
+    promptText: string | null;
+    questions: unknown;
+    delimiterStart?: string;
+    delimiterEnd?: string;
+  },
   patent: PatentData | null,
   focusArea: { name: string; description?: string | null } | null,
   patentIds: string[],
   patents: Map<string, PatentData>,
   contextFields: string[]
 ): string {
+  const delimStart = template.delimiterStart || DEFAULT_DELIMITER_START;
+  const delimEnd = template.delimiterEnd || DEFAULT_DELIMITER_END;
+
   if (template.templateType === 'STRUCTURED' && template.questions) {
     const questions = template.questions as StructuredQuestion[];
-    return buildStructuredPrompt(questions, patent, focusArea, patentIds, patents, contextFields);
+    return buildStructuredPrompt(questions, patent, focusArea, patentIds, patents, contextFields, delimStart, delimEnd);
   }
 
   // Free-form mode
@@ -424,7 +483,9 @@ function buildPromptForTemplate(
     focusArea,
     patentIds,
     patents,
-    contextFields
+    contextFields,
+    delimStart,
+    delimEnd
   );
 }
 
@@ -601,7 +662,12 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
       for (const pid of patentIds) {
         const patent = patents.get(pid) || { patent_id: pid };
         const resolvedPrompt = buildPromptForTemplate(
-          template, patent, focusArea, patentIds, patents, template.contextFields
+          {
+            ...template,
+            delimiterStart: template.delimiterStart,
+            delimiterEnd: template.delimiterEnd
+          },
+          patent, focusArea, patentIds, patents, template.contextFields
         );
 
         try {
@@ -655,7 +721,12 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
     } else {
       // Collective execution
       const resolvedPrompt = buildPromptForTemplate(
-        template, null, focusArea, patentIds, patents, template.contextFields
+        {
+          ...template,
+          delimiterStart: template.delimiterStart,
+          delimiterEnd: template.delimiterEnd
+        },
+        null, focusArea, patentIds, patents, template.contextFields
       );
 
       try {
@@ -728,7 +799,13 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
  * Preview a resolved prompt for a single patent without calling the LLM.
  */
 export function previewTemplate(
-  template: { templateType: string; promptText: string | null; questions: unknown },
+  template: {
+    templateType: string;
+    promptText: string | null;
+    questions: unknown;
+    delimiterStart?: string;
+    delimiterEnd?: string;
+  },
   executionMode: string,
   contextFields: string[],
   focusArea: { name: string; description?: string | null } | null,

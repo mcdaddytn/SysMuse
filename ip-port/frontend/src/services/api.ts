@@ -593,6 +593,8 @@ export interface PromptTemplate {
   executionMode: 'PER_PATENT' | 'COLLECTIVE';
   contextFields: string[];
   llmModel: string;
+  delimiterStart: string;
+  delimiterEnd: string;
   focusAreaId?: string | null;
   focusArea?: { id: string; name: string } | null;
   status: 'DRAFT' | 'RUNNING' | 'COMPLETE' | 'ERROR';
@@ -659,6 +661,8 @@ export const promptTemplateApi = {
     executionMode?: 'PER_PATENT' | 'COLLECTIVE';
     contextFields?: string[];
     llmModel?: string;
+    delimiterStart?: string;
+    delimiterEnd?: string;
     focusAreaId?: string;
   }): Promise<PromptTemplate> {
     const { data } = await api.post('/prompt-templates', template);
@@ -674,8 +678,10 @@ export const promptTemplateApi = {
     await api.delete(`/prompt-templates/${id}`);
   },
 
-  async getFields(objectType?: string): Promise<FieldOption[]> {
-    const { data } = await api.get('/prompt-templates/meta/fields', { params: { objectType } });
+  async getFields(objectType?: string, delimiterStart?: string, delimiterEnd?: string): Promise<FieldOption[]> {
+    const { data } = await api.get('/prompt-templates/meta/fields', {
+      params: { objectType, delimiterStart, delimiterEnd }
+    });
     return data;
   },
 

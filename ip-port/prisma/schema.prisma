@@ -433,6 +433,10 @@ model PromptTemplate {
   contextFields String[]  @map("context_fields")
   llmModel      String    @default("claude-sonnet-4-20250514") @map("llm_model")
 
+  // Placeholder delimiters (default: << and >> to avoid JSON/code conflicts)
+  delimiterStart String   @default("<<") @map("delimiter_start")
+  delimiterEnd   String   @default(">>") @map("delimiter_end")
+
   // Optional focus area binding (for contextual use)
   focusAreaId   String?   @map("focus_area_id")
   focusArea     FocusArea? @relation(fields: [focusAreaId], references: [id], onDelete: SetNull)
@@ -458,7 +462,7 @@ enum PromptTemplateType {
 }
 
 enum PromptExecutionMode {
-  PER_PATENT    // Run once per patent with {patent.*} substitution
+  PER_PATENT    // Run once per patent with <<patent.*>> substitution
   COLLECTIVE    // Run once with all patent IDs/data aggregated
 }
 

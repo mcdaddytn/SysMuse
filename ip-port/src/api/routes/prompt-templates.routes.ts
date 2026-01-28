@@ -45,6 +45,38 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/prompt-templates/meta/fields
+ * Get available placeholder fields for an object type
+ */
+router.get('/meta/fields', async (req: Request, res: Response) => {
+  try {
+    const objectType = (req.query.objectType as string) || 'patent';
+    const delimiterStart = (req.query.delimiterStart as string) || undefined;
+    const delimiterEnd = (req.query.delimiterEnd as string) || undefined;
+    const fields = getFieldsForObjectType(objectType, delimiterStart, delimiterEnd);
+    res.json(fields);
+  } catch (error) {
+    console.error('Error fetching fields:', error);
+    res.status(500).json({ error: 'Failed to fetch fields' });
+  }
+});
+
+/**
+ * GET /api/prompt-templates/meta/answer-types
+ * Get available answer types for structured questions
+ */
+router.get('/meta/answer-types', async (_req: Request, res: Response) => {
+  res.json([
+    { value: 'INTEGER', label: 'Integer', description: 'Whole number, optionally with min/max range' },
+    { value: 'FLOAT', label: 'Float', description: 'Decimal number' },
+    { value: 'BOOLEAN', label: 'Boolean', description: 'True or false' },
+    { value: 'TEXT', label: 'Text', description: 'Free text response, optionally limited by sentence count' },
+    { value: 'ENUM', label: 'Enum', description: 'One of a predefined set of options' },
+    { value: 'TEXT_ARRAY', label: 'Text Array', description: 'List of text values' },
+  ]);
+});
+
+/**
  * GET /api/prompt-templates/:id
  * Get a single template
  */
@@ -84,7 +116,9 @@ router.post('/', async (req: Request, res: Response) => {
       executionMode = 'PER_PATENT',
       contextFields = [],
       llmModel = 'claude-sonnet-4-20250514',
-      focusAreaId
+      focusAreaId,
+      delimiterStart,
+      delimiterEnd
     } = req.body;
 
     if (!name) {
@@ -103,6 +137,8 @@ router.post('/', async (req: Request, res: Response) => {
         contextFields,
         llmModel,
         focusAreaId: focusAreaId || null,
+        delimiterStart: delimiterStart || '<<',
+        delimiterEnd: delimiterEnd || '>>',
         status: 'DRAFT'
       }
     });
@@ -120,7 +156,7 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { name, description, templateType, objectType, promptText, questions, executionMode, contextFields, llmModel, focusAreaId } = req.body;
+    const { name, description, templateType, objectType, promptText, questions, executionMode, contextFields, llmModel, focusAreaId, delimiterStart, delimiterEnd } = req.body;
 
     const template = await prisma.promptTemplate.update({
       where: { id: req.params.id },
@@ -135,6 +171,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         ...(contextFields !== undefined && { contextFields }),
         ...(llmModel !== undefined && { llmModel }),
         ...(focusAreaId !== undefined && { focusAreaId: focusAreaId || null }),
+        ...(delimiterStart !== undefined && { delimiterStart }),
+        ...(delimiterEnd !== undefined && { delimiterEnd }),
       }
     });
 
@@ -156,36 +194,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     console.error('Error deleting prompt template:', error);
     res.status(500).json({ error: 'Failed to delete prompt template' });
   }
-});
-
-/**
- * GET /api/prompt-templates/meta/fields
- * Get available placeholder fields for an object type
- */
-router.get('/meta/fields', async (req: Request, res: Response) => {
-  try {
-    const objectType = (req.query.objectType as string) || 'patent';
-    const fields = getFieldsForObjectType(objectType);
-    res.json(fields);
-  } catch (error) {
-    console.error('Error fetching fields:', error);
-    res.status(500).json({ error: 'Failed to fetch fields' });
-  }
-});
-
-/**
- * GET /api/prompt-templates/meta/answer-types
- * Get available answer types for structured questions
- */
-router.get('/meta/answer-types', async (_req: Request, res: Response) => {
-  res.json([
-    { value: 'INTEGER', label: 'Integer', description: 'Whole number, optionally with min/max range' },
-    { value: 'FLOAT', label: 'Float', description: 'Decimal number' },
-    { value: 'BOOLEAN', label: 'Boolean', description: 'True or false' },
-    { value: 'TEXT', label: 'Text', description: 'Free text response, optionally limited by sentence count' },
-    { value: 'ENUM', label: 'Enum', description: 'One of a predefined set of options' },
-    { value: 'TEXT_ARRAY', label: 'Text Array', description: 'List of text values' },
-  ]);
 });
 
 export default router;

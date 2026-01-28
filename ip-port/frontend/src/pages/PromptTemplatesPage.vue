@@ -43,8 +43,12 @@ const form = ref({
   executionMode: 'PER_PATENT' as 'PER_PATENT' | 'COLLECTIVE',
   contextFields: [] as string[],
   llmModel: 'claude-sonnet-4-20250514',
+  delimiterStart: '<<',
+  delimiterEnd: '>>',
   focusAreaId: null as string | null
 });
+
+const showAdvanced = ref(false);
 
 const llmModelOptions = [
   { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
@@ -104,18 +108,38 @@ async function loadTemplates() {
 
 async function loadMeta() {
   try {
-    const [areas, types, fields] = await Promise.all([
+    const [areas, types] = await Promise.all([
       focusAreaApi.getFocusAreas(),
-      promptTemplateApi.getAnswerTypes(),
-      promptTemplateApi.getFields('patent')
+      promptTemplateApi.getAnswerTypes()
     ]);
     focusAreas.value = areas;
     answerTypes.value = types;
-    fieldOptions.value = fields;
+    // Load fields with default delimiters
+    fieldOptions.value = await promptTemplateApi.getFields('patent', '<<', '>>');
   } catch (err) {
     console.error('Failed to load metadata:', err);
   }
 }
+
+// Reload fields when delimiters change
+async function reloadFieldOptions() {
+  try {
+    fieldOptions.value = await promptTemplateApi.getFields(
+      form.value.objectType,
+      form.value.delimiterStart,
+      form.value.delimiterEnd
+    );
+  } catch (err) {
+    console.error('Failed to reload fields:', err);
+  }
+}
+
+// Computed placeholder example
+const placeholderExample = computed(() => {
+  const s = form.value.delimiterStart;
+  const e = form.value.delimiterEnd;
+  return `${s}patent.patent_title${e}`;
+});
 
 // CRUD
 function selectTemplate(t: PromptTemplate) {
@@ -126,6 +150,7 @@ function selectTemplate(t: PromptTemplate) {
 function startNew() {
   selectedTemplate.value = null;
   editing.value = true;
+  showAdvanced.value = false;
   form.value = {
     name: '',
     description: '',
@@ -136,8 +161,11 @@ function startNew() {
     executionMode: 'PER_PATENT',
     contextFields: [],
     llmModel: 'claude-sonnet-4-20250514',
+    delimiterStart: '<<',
+    delimiterEnd: '>>',
     focusAreaId: null
   };
+  reloadFieldOptions();
 }
 
 function startEdit() {
@@ -153,9 +181,13 @@ function startEdit() {
     executionMode: t.executionMode,
     contextFields: [...t.contextFields],
     llmModel: t.llmModel,
+    delimiterStart: t.delimiterStart || '<<',
+    delimiterEnd: t.delimiterEnd || '>>',
     focusAreaId: t.focusAreaId || null
   };
   editing.value = true;
+  showAdvanced.value = false;
+  reloadFieldOptions();
 }
 
 async function save() {
@@ -173,6 +205,8 @@ async function save() {
       executionMode: form.value.executionMode,
       contextFields: form.value.contextFields,
       llmModel: form.value.llmModel,
+      delimiterStart: form.value.delimiterStart,
+      delimiterEnd: form.value.delimiterEnd,
       focusAreaId: form.value.focusAreaId || undefined
     };
 
@@ -423,8 +457,47 @@ onMounted(() => {
               dense
               multiple
               use-chips
-              class="q-mb-md"
+              class="q-mb-sm"
             />
+
+            <!-- Advanced Settings (delimiters) -->
+            <q-expansion-item
+              v-model="showAdvanced"
+              dense
+              label="Advanced Settings"
+              class="q-mb-md bg-grey-1 rounded-borders"
+              header-class="text-caption"
+            >
+              <q-card flat class="q-pa-sm">
+                <div class="text-caption text-grey-7 q-mb-sm">
+                  Placeholder delimiters control how variables are marked in prompt text.
+                  Default (<code>&lt;&lt; &gt;&gt;</code>) avoids conflicts with JSON braces.
+                </div>
+                <div class="row q-gutter-sm">
+                  <q-input
+                    v-model="form.delimiterStart"
+                    label="Start Delimiter"
+                    outlined
+                    dense
+                    class="col"
+                    hint="e.g., <<, {{, [["
+                    @update:model-value="reloadFieldOptions"
+                  />
+                  <q-input
+                    v-model="form.delimiterEnd"
+                    label="End Delimiter"
+                    outlined
+                    dense
+                    class="col"
+                    hint="e.g., >>, }}, ]]"
+                    @update:model-value="reloadFieldOptions"
+                  />
+                </div>
+                <div class="text-caption text-grey-6 q-mt-xs">
+                  Example: {{ placeholderExample }}
+                </div>
+              </q-card>
+            </q-expansion-item>
 
             <!-- FREE_FORM: Prompt Text -->
             <template v-if="form.templateType === 'FREE_FORM'">
@@ -457,7 +530,7 @@ onMounted(() => {
                 type="textarea"
                 rows="12"
                 class="prompt-textarea"
-                placeholder="Analyze this patent...&#10;&#10;Patent: {patent.patent_id} - {patent.patent_title}&#10;Abstract: {patent.abstract}&#10;&#10;Return JSON: { ... }"
+                :placeholder="`Analyze this patent...\n\nPatent: ${form.delimiterStart}patent.patent_id${form.delimiterEnd} - ${form.delimiterStart}patent.patent_title${form.delimiterEnd}\nAbstract: ${form.delimiterStart}patent.abstract${form.delimiterEnd}\n\nReturn JSON: { ... }`"
               />
             </template>
 

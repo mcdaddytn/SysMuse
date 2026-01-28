@@ -451,6 +451,9 @@ model PromptTemplate {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  // Relations
+  jobs          LlmJob[]
+
   @@map("prompt_templates")
   @@index([focusAreaId])
   @@index([objectType])
@@ -471,4 +474,269 @@ enum PromptTemplateStatus {
   RUNNING
   COMPLETE
   ERROR
+}
+
+// =============================================================================
+// SECTOR & SUPER-SECTOR (DB entities — replaces config-only approach)
+// =============================================================================
+
+model SuperSector {
+  id            String   @id @default(cuid())
+
+  name          String   @unique                // e.g., "SECURITY"
+  displayName   String   @map("display_name")   // e.g., "Security"
+  description   String?
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  sectors       Sector[]
+
+  @@map("super_sectors")
+}
+
+model Sector {
+  id              String   @id @default(cuid())
+
+  name            String   @unique                // e.g., "video-codec"
+  displayName     String   @map("display_name")   // e.g., "Video Codec"
+  description     String?
+
+  superSectorId   String?  @map("super_sector_id")
+  superSector     SuperSector? @relation(fields: [superSectorId], references: [id])
+
+  // CPC mapping (from sectorMappings config)
+  cpcPrefixes     String[] @map("cpc_prefixes")
+
+  // Metadata
+  damagesTier     String?  @map("damages_tier")   // "Very High", "High", "Medium", "Low"
+  patentCount     Int      @default(0) @map("patent_count")  // Cached count
+
+  // Sector management — targets for refactoring
+  targetMinSize   Int?     @map("target_min_size")
+  targetMaxSize   Int?     @map("target_max_size")   // Default guidance: 500
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("sectors")
+  @@index([superSectorId])
+}
+
+// =============================================================================
+// LLM WORKFLOW ENGINE
+// Generalized dependency framework for multi-stage LLM jobs.
+// Supports tournament, two-stage, chained extraction, and custom patterns.
+// =============================================================================
+
+model LlmWorkflow {
+  id              String   @id @default(cuid())
+
+  name            String
+  description     String?
+
+  // Pattern type — workflow factories create these
+  workflowType    String   @default("custom") @map("workflow_type")
+                           // "tournament", "two_stage", "chained", "custom"
+
+  // Scope — polymorphic: what entity collection this operates on
+  scopeType       String   @map("scope_type")     // "focus_area", "sector", "super_sector", "portfolio"
+  scopeId         String?  @map("scope_id")       // Entity ID (null for portfolio-wide)
+
+  // Workflow-specific configuration (cluster size, strategy, topN, etc.)
+  config          Json?
+
+  // Execution state
+  status          WorkflowStatus @default(PENDING)
+
+  // Results
+  finalResult     Json?    @map("final_result")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  jobs            LlmJob[]
+
+  @@map("llm_workflows")
+  @@index([scopeType, scopeId])
+  @@index([status])
+}
+
+model LlmJob {
+  id              String   @id @default(cuid())
+
+  // Workflow membership (null for standalone jobs)
+  workflowId      String?  @map("workflow_id")
+  workflow        LlmWorkflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  // What template to run
+  templateId      String   @map("template_id")
+  template        PromptTemplate @relation(fields: [templateId], references: [id])
+
+  // What to run it against
+  targetType      String   @map("target_type")     // "patent", "patent_group", "summary_group"
+  targetIds       String[] @map("target_ids")      // Patent IDs or upstream job IDs
+  targetData      Json?    @map("target_data")     // Pre-computed or upstream-injected input data
+
+  // Execution state
+  status          WorkflowStatus @default(PENDING)
+  priority        Int      @default(0)
+  retryCount      Int      @default(0) @map("retry_count")
+  maxRetries      Int      @default(3) @map("max_retries")
+
+  // Tournament/multi-round metadata
+  roundNumber     Int?     @map("round_number")
+  clusterIndex    Int?     @map("cluster_index")
+  sortScore       Float?   @map("sort_score")      // Tournament-relevant score for ordering in this round
+
+  // Results
+  result          Json?
+  tokensUsed      Int?     @map("tokens_used")
+  errorMessage    String?  @map("error_message")
+
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Dependencies
+  dependsOn       LlmJobDependency[] @relation("downstream")
+  dependedBy      LlmJobDependency[] @relation("upstream")
+
+  @@map("llm_jobs")
+  @@index([workflowId])
+  @@index([status])
+  @@index([templateId])
+}
+
+model LlmJobDependency {
+  id              String   @id @default(cuid())
+
+  // Upstream job must complete before downstream can start
+  upstreamJobId   String   @map("upstream_job_id")
+  upstreamJob     LlmJob   @relation("upstream", fields: [upstreamJobId], references: [id], onDelete: Cascade)
+
+  downstreamJobId String   @map("downstream_job_id")
+  downstreamJob   LlmJob   @relation("downstream", fields: [downstreamJobId], references: [id], onDelete: Cascade)
+
+  // How to map upstream output → downstream input
+  outputField     String?  @map("output_field")    // Which field from upstream result
+  inputField      String?  @map("input_field")     // Which template parameter to populate
+
+  @@unique([upstreamJobId, downstreamJobId])
+  @@map("llm_job_dependencies")
+  @@index([upstreamJobId])
+  @@index([downstreamJobId])
+}
+
+enum WorkflowStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  ERROR
+  CANCELLED
+}
+
+// =============================================================================
+// ENTITY ANALYSIS RESULTS
+// Generalized storage for LLM analysis results against any entity type.
+// Replaces file-based cache/focus-area-prompts/ storage.
+// =============================================================================
+
+model EntityAnalysisResult {
+  id              String   @id @default(cuid())
+
+  // Polymorphic entity reference
+  entityType      String   @map("entity_type")     // "focus_area", "sector", "super_sector",
+                                                     // "competitor", "affiliate"
+  entityId        String   @map("entity_id")
+
+  // What produced this result
+  templateId      String?  @map("template_id")
+  jobId           String?  @map("job_id")
+
+  // What object within the entity this result is for (null for collective/summary)
+  objectType      String?  @map("object_type")      // "patent", null for collective
+  objectId        String?  @map("object_id")        // Patent ID, null for collective
+
+  // Result data
+  result          Json                              // The LLM response
+  resultType      String   @map("result_type")      // "structured", "free_form", "tournament_summary"
+  fieldValues     Json?    @map("field_values")     // Extracted typed fields for queries
+
+  // Metadata
+  model           String?
+  tokensUsed      Int?     @map("tokens_used")
+  promptSent      String?  @map("prompt_sent") @db.Text
+
+  executedAt      DateTime @map("executed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("entity_analysis_results")
+  @@index([entityType, entityId])
+  @@index([entityType, entityId, objectId])
+  @@index([templateId])
+  @@index([jobId])
+}
+
+// =============================================================================
+// PATENT FAMILY EXPLORATION
+// On-demand family exploration from a seed patent.
+// Not bulk-imported; user-initiated with depth/breadth/filter parameters.
+// =============================================================================
+
+model PatentFamilyExploration {
+  id                  String   @id @default(cuid())
+
+  // Seed patent
+  seedPatentId        String   @map("seed_patent_id")
+
+  name                String?                        // User-provided or auto-generated
+  description         String?
+
+  // Exploration parameters — depth/breadth
+  maxAncestorDepth    Int      @default(2) @map("max_ancestor_depth")
+  maxDescendantDepth  Int      @default(2) @map("max_descendant_depth")
+  includeSiblings     Boolean  @default(true) @map("include_siblings")
+  includeCousins      Boolean  @default(false) @map("include_cousins")
+
+  // Limiting filters — constrain which patents are included
+  limitToSectors      String[] @map("limit_to_sectors")
+  limitToCpcPrefixes  String[] @map("limit_to_cpc_prefixes")
+  limitToFocusAreas   String[] @map("limit_to_focus_areas")
+  requireInPortfolio  Boolean  @default(false) @map("require_in_portfolio")
+
+  // Execution state
+  status              WorkflowStatus @default(PENDING)
+  discoveredCount     Int      @default(0) @map("discovered_count")
+  errorMessage        String?  @map("error_message")
+
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  members             PatentFamilyMember[]
+
+  @@map("patent_family_explorations")
+  @@index([seedPatentId])
+}
+
+model PatentFamilyMember {
+  id              String   @id @default(cuid())
+
+  explorationId   String   @map("exploration_id")
+  exploration     PatentFamilyExploration @relation(fields: [explorationId], references: [id], onDelete: Cascade)
+
+  patentId        String   @map("patent_id")
+
+  // Relationship to seed
+  relationToSeed  String   @map("relation_to_seed")  // "seed", "parent", "grandparent",
+                                                       // "child", "grandchild", "sibling", "cousin"
+  generationDepth Int      @map("generation_depth")   // 0=seed, 1=parent/child, 2=grandparent, etc.
+  inPortfolio     Boolean  @default(false) @map("in_portfolio")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([explorationId, patentId])
+  @@map("patent_family_members")
+  @@index([explorationId])
+  @@index([patentId])
 }

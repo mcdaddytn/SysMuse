@@ -999,4 +999,132 @@ export const workflowApi = {
   },
 };
 
+// =============================================================================
+// Patent Family Exploration Types
+// =============================================================================
+
+export interface PatentFamilyExploration {
+  id: string;
+  seedPatentId: string;
+  name?: string;
+  description?: string;
+  maxAncestorDepth: number;
+  maxDescendantDepth: number;
+  includeSiblings: boolean;
+  includeCousins: boolean;
+  limitToSectors: string[];
+  limitToCpcPrefixes: string[];
+  limitToFocusAreas: string[];
+  requireInPortfolio: boolean;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETE' | 'ERROR';
+  discoveredCount: number;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt?: string;
+  _count?: { members: number };
+}
+
+export interface PatentFamilyMember {
+  id: string;
+  patentId: string;
+  relationToSeed: string;
+  generationDepth: number;
+  inPortfolio: boolean;
+  patentTitle?: string;
+  assignee?: string;
+  patentDate?: string;
+  primarySector?: string;
+  superSector?: string;
+  forwardCitations?: number;
+  score?: number;
+}
+
+export interface FamilyExplorationResult {
+  exploration: PatentFamilyExploration;
+  members: PatentFamilyMember[];
+  generations: Record<string, { label: string; count: number }>;
+}
+
+export interface FamilyCacheStatus {
+  patentId: string;
+  inPortfolio: boolean;
+  hasForwardCitations: boolean;
+  hasBackwardCitations: boolean;
+  hasParentDetails: boolean;
+}
+
+// Patent Family API
+export const patentFamilyApi = {
+  async createExploration(params: {
+    seedPatentId: string;
+    name?: string;
+    description?: string;
+    maxAncestorDepth?: number;
+    maxDescendantDepth?: number;
+    includeSiblings?: boolean;
+    includeCousins?: boolean;
+    limitToSectors?: string[];
+    limitToCpcPrefixes?: string[];
+    limitToFocusAreas?: string[];
+    requireInPortfolio?: boolean;
+  }): Promise<PatentFamilyExploration> {
+    const { data } = await api.post('/patent-families/explorations', params);
+    return data;
+  },
+
+  async listExplorations(seedPatentId?: string): Promise<PatentFamilyExploration[]> {
+    const { data } = await api.get('/patent-families/explorations', {
+      params: seedPatentId ? { seedPatentId } : {},
+    });
+    return data;
+  },
+
+  async getExploration(id: string): Promise<FamilyExplorationResult> {
+    const { data } = await api.get(`/patent-families/explorations/${id}`);
+    return data;
+  },
+
+  async deleteExploration(id: string): Promise<void> {
+    await api.delete(`/patent-families/explorations/${id}`);
+  },
+
+  async executeExploration(id: string): Promise<{ status: string; message: string; explorationId: string }> {
+    const { data } = await api.post(`/patent-families/explorations/${id}/execute`);
+    return data;
+  },
+
+  async getStatus(id: string): Promise<{
+    id: string;
+    status: string;
+    discoveredCount: number;
+    errorMessage?: string;
+    updatedAt: string;
+  }> {
+    const { data } = await api.get(`/patent-families/explorations/${id}/status`);
+    return data;
+  },
+
+  async getMembers(id: string): Promise<{
+    members: PatentFamilyMember[];
+    generations: Record<string, { label: string; count: number }>;
+    total: number;
+  }> {
+    const { data } = await api.get(`/patent-families/explorations/${id}/members`);
+    return data;
+  },
+
+  async addToFocusArea(explorationId: string, focusAreaId: string, patentIds: string[]): Promise<{ added: number; total: number }> {
+    const { data } = await api.post(`/patent-families/explorations/${explorationId}/add-to-focus-area`, {
+      focusAreaId,
+      patentIds,
+    });
+    return data;
+  },
+
+  async getCacheStatus(patentId: string): Promise<FamilyCacheStatus> {
+    const { data } = await api.get(`/patent-families/cache-status/${patentId}`);
+    return data;
+  },
+};
+
 export default api;

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Patent } from '@/types';
+import PatentFamilyPanel from '@/components/patent/PatentFamilyPanel.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -290,6 +291,7 @@ function openUSPTO() {
         <q-tab name="prosecution" label="Prosecution" icon="gavel" />
         <q-tab name="ptab" label="PTAB/IPR" icon="balance" />
         <q-tab name="llm" label="LLM Analysis" icon="psychology" />
+        <q-tab name="family" label="Family" icon="account_tree" />
         <q-tab name="vendor" label="Vendor Data" icon="integration_instructions" />
       </q-tabs>
 
@@ -1206,6 +1208,11 @@ function openUSPTO() {
             </q-card-section>
           </q-card>
         </template>
+      </q-tab-panel>
+
+      <!-- Family -->
+      <q-tab-panel name="family">
+        <PatentFamilyPanel :patent-id="patentId" />
       </q-tab-panel>
 
       <!-- Vendor Data -->

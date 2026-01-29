@@ -43,12 +43,16 @@
     {
       "entity": "Brocade Communications",
       "variants": [
+        "Brocade Communications Systems LLC",
         "Brocade Communications Systems, Inc.",
         "Brocade Communications Systems",
+        "Brocade Communications, Inc.",
+        "BROCADE COMMUNICATIONS, INC.",
+        "BROCADE COMMUNIACTIONS SYSTEMS, INC.",
         "Brocade"
       ],
       "acquisitionDate": "2017-11-17",
-      "notes": "Acquired 2017 for $5.5B, data center networking",
+      "notes": "Acquired 2017 for $5.5B, data center networking. Key variant is 'Brocade Communications Systems LLC'",
       "priority": 2
     },
     {

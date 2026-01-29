@@ -11,6 +11,8 @@
  *   npx tsx scripts/run-llm-top-patents.ts --count 500 --profile executive
  *   npx tsx scripts/run-llm-top-patents.ts --count 50 --batch-size 3 --dry-run
  *   npx tsx scripts/run-llm-top-patents.ts --sector cloud-computing --count 50
+ *   npx tsx scripts/run-llm-top-patents.ts --super-sector "Video & Streaming" --count 200
+ *   npx tsx scripts/run-llm-top-patents.ts --affiliate "Brocade Communications" --count 100
  */
 
 import * as fs from 'fs';
@@ -143,6 +145,12 @@ async function main() {
   const sectorIdx = args.indexOf('--sector');
   const sectorFilter = sectorIdx !== -1 ? args[sectorIdx + 1] : null;
 
+  const superSectorIdx = args.indexOf('--super-sector');
+  const superSectorFilter = superSectorIdx !== -1 ? args[superSectorIdx + 1] : null;
+
+  const affiliateIdx = args.indexOf('--affiliate');
+  const affiliateFilter = affiliateIdx !== -1 ? args[affiliateIdx + 1] : null;
+
   const batchSizeIdx = args.indexOf('--batch-size');
   const batchSize = batchSizeIdx !== -1 ? parseInt(args[batchSizeIdx + 1] || '5') : 5;
 
@@ -157,6 +165,8 @@ async function main() {
   console.log(`Target count:  ${count}`);
   console.log(`Batch size:    ${batchSize}`);
   if (sectorFilter) console.log(`Sector filter: ${sectorFilter}`);
+  if (superSectorFilter) console.log(`Super-sector filter: ${superSectorFilter}`);
+  if (affiliateFilter) console.log(`Affiliate filter: ${affiliateFilter}`);
   if (dryRun) console.log('DRY RUN — no LLM calls will be made');
   if (force) console.log('FORCE — will re-analyze patents with existing scores');
   console.log('');
@@ -181,6 +191,22 @@ async function main() {
   if (sectorFilter) {
     scored = scored.filter(s => s.candidate.primary_sector === sectorFilter);
     console.log(`  ${scored.length} patents in sector "${sectorFilter}"`);
+  }
+
+  // Apply super-sector filter
+  if (superSectorFilter) {
+    scored = scored.filter(s =>
+      s.candidate.super_sector?.toLowerCase() === superSectorFilter.toLowerCase()
+    );
+    console.log(`  ${scored.length} patents in super-sector "${superSectorFilter}"`);
+  }
+
+  // Apply affiliate filter
+  if (affiliateFilter) {
+    scored = scored.filter(s =>
+      s.candidate.affiliate?.toLowerCase() === affiliateFilter.toLowerCase()
+    );
+    console.log(`  ${scored.length} patents for affiliate "${affiliateFilter}"`);
   }
 
   // Filter to those without LLM scores

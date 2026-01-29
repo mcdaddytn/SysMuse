@@ -61,8 +61,13 @@
       "displayName": "Brocade Communications",
       "acquiredYear": 2017,
       "patterns": [
-        "Brocade",
-        "Brocade Communications"
+        "Brocade Communications Systems LLC",
+        "Brocade Communications Systems",
+        "Brocade Communications, Inc.",
+        "BROCADE COMMUNICATIONS, INC.",
+        "BROCADE COMMUNIACTIONS SYSTEMS, INC.",
+        "Brocade Communications",
+        "Brocade"
       ]
     },
     "CA Technologies": {

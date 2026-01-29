@@ -158,7 +158,8 @@ router.get('/v2', (req: Request, res: Response) => {
       years = DEFAULT_WEIGHTS.years.toString(),
       competitor = DEFAULT_WEIGHTS.competitor.toString(),
       page = '1',
-      limit = '100'
+      limit = '100',
+      minScore,
     } = req.query;
 
     const weights: ScoreWeights = {
@@ -185,10 +186,16 @@ router.get('/v2', (req: Request, res: Response) => {
       };
     });
 
-    const scored = enriched.map(p => ({
+    let scored = enriched.map(p => ({
       ...p,
       v2_score: calculateV2Score(p, weights)
     }));
+
+    // Apply minScore filter if provided
+    if (minScore) {
+      const min = parseFloat(minScore as string);
+      scored = scored.filter(p => p.v2_score >= min);
+    }
 
     // Sort by v2_score descending
     scored.sort((a, b) => b.v2_score - a.v2_score);

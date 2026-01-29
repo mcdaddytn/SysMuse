@@ -201,9 +201,11 @@ export interface PortfolioFilters {
   assignees?: string[];
   primarySectors?: string[];
   focusAreaId?: string;
-  // Flat numeric ranges (match backend query params)
+  // Score filtering - can filter by different score types
+  scoreField?: 'score' | 'v2_score' | 'v3_score';
   scoreMin?: number;
   scoreMax?: number;
+  // Other numeric ranges
   yearsMin?: number;
   yearsMax?: number;
   competitorCitesMin?: number;
@@ -218,8 +220,7 @@ export type ColumnGroup =
   | 'entity'
   | 'citations'
   | 'scores'
-  | 'llmText'
-  | 'focusArea';
+  | 'llmText';
 
 export interface ColumnGroupInfo {
   id: ColumnGroup;

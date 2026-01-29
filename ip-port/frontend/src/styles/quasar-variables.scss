@@ -12,3 +12,10 @@ $warning: #F2C037;
 
 $dark: #1D1D1D;
 $dark-page: #121212;
+
+// Global tooltip styling - larger font for better readability
+.q-tooltip {
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  padding: 8px 12px !important;
+}

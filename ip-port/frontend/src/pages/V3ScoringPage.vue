@@ -16,7 +16,7 @@ const total = ref(0);
 const llmCoverage = ref<LlmCoverage | null>(null);
 const expandedRow = ref<string | null>(null);
 const sectorFilter = ref<string | null>(null);
-const minScoreFilter = ref<number | null>(null);
+const minScoreFilter = ref<number | null>(1); // Default to score >= 1 to exclude zero-score patents
 const sectors = ref<{ label: string; value: string }[]>([]);
 
 // Pagination

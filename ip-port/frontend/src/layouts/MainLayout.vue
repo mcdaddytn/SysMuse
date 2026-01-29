@@ -18,8 +18,11 @@ const isAdmin = computed(() => currentUser.value?.accessLevel === 'ADMIN');
 const navItems = computed(() => [
   { label: 'Portfolio', icon: 'folder', to: '/', show: true },
   { label: 'Focus Areas', icon: 'filter_center_focus', to: '/focus-areas', show: true },
+  { divider: true, show: true },
+  { label: 'Base Score', icon: 'leaderboard', to: '/base-scoring', show: true },
   { label: 'v2 Scoring', icon: 'score', to: '/v2-scoring', show: true },
   { label: 'v3 Scoring', icon: 'how_to_vote', to: '/v3-scoring', show: true },
+  { divider: true, show: true },
   { label: 'Sectors', icon: 'category', to: '/sectors', show: true },
   { label: 'Sector Management', icon: 'build', to: '/sector-management', show: true },
   { label: 'Prompt Templates', icon: 'auto_awesome', to: '/prompt-templates', show: true },

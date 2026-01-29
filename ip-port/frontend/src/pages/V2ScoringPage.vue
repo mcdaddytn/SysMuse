@@ -62,16 +62,20 @@ const columns = [
     format: (val: number) => val?.toFixed(2) }
 ];
 
-// Fetch scores from API
+// Fetch scores from API (only patents with score > 0)
 async function fetchScores() {
   loading.value = true;
   error.value = null;
 
   try {
-    const response = await scoringApi.getV2Scores(currentWeights.value, {
-      page: pagination.value.page,
-      limit: pagination.value.rowsPerPage
-    });
+    const response = await scoringApi.getV2Scores(
+      currentWeights.value,
+      {
+        page: pagination.value.page,
+        limit: pagination.value.rowsPerPage
+      },
+      0.01  // minScore: filter out patents with effectively zero score
+    );
 
     // Calculate rank changes compared to previous
     const newPatents = response.data.map(p => {

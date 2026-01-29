@@ -209,11 +209,13 @@ export interface V2ScoresResponse {
 export const scoringApi = {
   async getV2Scores(
     weights?: ScoreWeights,
-    pagination?: { page: number; limit: number }
+    pagination?: { page: number; limit: number },
+    minScore?: number
   ): Promise<V2ScoresResponse> {
     const params = {
       ...weights,
-      ...pagination
+      ...pagination,
+      minScore
     };
     const { data } = await api.get('/scores/v2', { params });
     return data;

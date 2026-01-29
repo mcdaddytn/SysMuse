@@ -14,6 +14,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Portfolio' }
       },
       {
+        path: 'base-scoring',
+        name: 'base-scoring',
+        component: () => import('@/pages/BaseScoringPage.vue'),
+        meta: { title: 'Base Score Rankings' }
+      },
+      {
         path: 'v2-scoring',
         name: 'v2-scoring',
         component: () => import('@/pages/V2ScoringPage.vue'),

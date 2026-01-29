@@ -10,7 +10,7 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
-import { loadAllClassifications } from '../services/scoring-service.js';
+import { loadAllClassifications, scoreAllPatents, getDefaultProfileId } from '../services/scoring-service.js';
 
 const prisma = new PrismaClient();
 
@@ -156,6 +156,9 @@ interface Patent extends RawPatent {
   adjusted_forward_citations?: number;
   competitor_density?: number;
   has_citation_data?: boolean;
+  // Computed scores
+  v2_score?: number;
+  v3_score?: number;
   // LLM data
   has_llm_data?: boolean;
   // Attorney text fields
@@ -197,6 +200,25 @@ interface CandidatesFile {
     expiredPatents: number;
   };
   candidates: Patent[];
+}
+
+// V2 scoring defaults (same as scores.routes.ts)
+const DEFAULT_V2_WEIGHTS = { citation: 50, years: 30, competitor: 20 };
+
+/**
+ * Calculate v2 score with default weights (same formula as scores.routes.ts)
+ */
+function calculateV2Score(forwardCitations: number, remainingYears: number, competitorCites: number): number {
+  const totalWeight = DEFAULT_V2_WEIGHTS.citation + DEFAULT_V2_WEIGHTS.years + DEFAULT_V2_WEIGHTS.competitor;
+  const citationNorm = DEFAULT_V2_WEIGHTS.citation / totalWeight;
+  const yearsNorm = DEFAULT_V2_WEIGHTS.years / totalWeight;
+  const competitorNorm = DEFAULT_V2_WEIGHTS.competitor / totalWeight;
+
+  const citationScore = Math.log10(forwardCitations + 1) * 30 * citationNorm;
+  const yearsScore = Math.min(remainingYears / 20, 1) * 100 * yearsNorm;
+  const competitorScore = competitorCites * 15 * competitorNorm;
+
+  return Math.round((citationScore + yearsScore + competitorScore) * 100) / 100;
 }
 
 // Cache the loaded data
@@ -249,10 +271,27 @@ function loadPatents(): Patent[] {
   // Load enrichment data
   const llmData = loadAllFullLlmData();
 
-  // Enrich patents with affiliate, super_sector, citation classification, and LLM data
+  // Load V3 scores (uses default profile)
+  let v3ScoresMap: Map<string, number> = new Map();
+  try {
+    const v3Scored = scoreAllPatents(getDefaultProfileId());
+    v3ScoresMap = new Map(v3Scored.map(s => [s.patent_id, s.score]));
+  } catch (e) {
+    console.warn('[Patents] Could not load v3 scores:', e);
+  }
+
+  // Enrich patents with affiliate, super_sector, citation classification, LLM data, and computed scores
   patentsCache = data.candidates.map((p: RawPatent): Patent => {
     const classification = classifications.get(p.patent_id);
     const llm = llmData.get(p.patent_id);
+    const competitorCites = classification?.competitor_citations ?? 0;
+
+    // Compute v2 score with default weights
+    const v2Score = calculateV2Score(p.forward_citations, p.remaining_years, competitorCites);
+
+    // Get pre-computed v3 score
+    const v3Score = v3ScoresMap.get(p.patent_id) ?? 0;
+
     return {
       ...p,
       affiliate: normalizeAffiliate(p.assignee),
@@ -260,23 +299,26 @@ function loadPatents(): Patent[] {
         ? getSuperSectorDisplayName(p.super_sector)
         : (p.sector ? inferSuperSector(p.sector) : 'Unknown'),
       primary_sector: (p as any).primary_sector,
-      competitor_citations: classification?.competitor_citations ?? 0,
+      competitor_citations: competitorCites,
       affiliate_citations: classification?.affiliate_citations ?? 0,
       neutral_citations: classification?.neutral_citations ?? 0,
       competitor_count: classification?.competitor_count ?? 0,
       competitor_names: classification?.competitor_names ?? [],
       // Citation-aware scoring (Session 13)
       adjusted_forward_citations: Math.round((
-        (classification?.competitor_citations ?? 0) * 1.5 +
+        competitorCites * 1.5 +
         (classification?.neutral_citations ?? 0) * 1.0 +
         (classification?.affiliate_citations ?? 0) * 0.25
       ) * 100) / 100,
       competitor_density: (() => {
-        const cc = classification?.competitor_citations ?? 0;
+        const cc = competitorCites;
         const nc = classification?.neutral_citations ?? 0;
         return (cc + nc) > 0 ? Math.round(cc / (cc + nc) * 1000) / 1000 : 0;
       })(),
       has_citation_data: classification?.has_citation_data ?? false,
+      // Computed scores
+      v2_score: v2Score,
+      v3_score: v3Score,
       // LLM data
       has_llm_data: !!llm,
       // Attorney text fields
@@ -314,7 +356,7 @@ function loadPatents(): Patent[] {
 
   lastLoadTime = now;
 
-  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation enrichment`);
+  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation/v2/v3 enrichment`);
   return patentsCache;
 }
 
@@ -411,14 +453,21 @@ function applyFilters(patents: Patent[], filters: Record<string, string | string
     result = result.filter(p => p.patent_date <= filters.dateEnd!);
   }
 
-  // Score range filter
+  // Score range filter (supports different score fields: score, v2_score, v3_score)
+  const scoreField = (filters.scoreField as string) || 'score';
   if (filters.scoreMin) {
     const min = parseFloat(filters.scoreMin as string);
-    result = result.filter(p => p.score >= min);
+    result = result.filter(p => {
+      const val = (p as any)[scoreField];
+      return val !== undefined && val !== null && val >= min;
+    });
   }
   if (filters.scoreMax) {
     const max = parseFloat(filters.scoreMax as string);
-    result = result.filter(p => p.score <= max);
+    result = result.filter(p => {
+      const val = (p as any)[scoreField];
+      return val !== undefined && val !== null && val <= max;
+    });
   }
 
   // Remaining years filter

@@ -39,6 +39,12 @@ const selectedSuperSectors = ref<string[]>([]);
 const selectedPrimarySectors = ref<string[]>([]);
 
 // Numeric range filters
+const scoreFilterType = ref<'score' | 'v2_score' | 'v3_score'>('score');
+const scoreFilterOptions = [
+  { value: 'score', label: 'Base Score' },
+  { value: 'v2_score', label: 'v2 Score' },
+  { value: 'v3_score', label: 'v3 Score' }
+];
 const scoreMin = ref<number | null>(null);
 const scoreMax = ref<number | null>(null);
 const yearsMin = ref<number | null>(null);
@@ -95,6 +101,7 @@ function applyFilters() {
     affiliates: selectedAffiliates.value.length > 0 ? selectedAffiliates.value : undefined,
     superSectors: selectedSuperSectors.value.length > 0 ? selectedSuperSectors.value : undefined,
     primarySectors: selectedPrimarySectors.value.length > 0 ? selectedPrimarySectors.value : undefined,
+    scoreField: scoreFilterType.value,
     scoreMin: scoreMin.value ?? undefined,
     scoreMax: scoreMax.value ?? undefined,
     yearsMin: yearsMin.value ?? undefined,
@@ -104,6 +111,12 @@ function applyFilters() {
     forwardCitesMin: forwardCitesMin.value ?? undefined,
     forwardCitesMax: forwardCitesMax.value ?? undefined,
   });
+}
+
+// Get score filter label for display
+function getScoreFilterLabel(): string {
+  const opt = scoreFilterOptions.find(o => o.value === scoreFilterType.value);
+  return opt?.label || 'Base Score';
 }
 
 // Super-sector color mapping
@@ -464,7 +477,18 @@ onMounted(async () => {
 
               <!-- Numeric Range Filters -->
               <div class="row items-center q-gutter-xs">
-                <span class="text-caption text-grey-7">Score:</span>
+                <q-select
+                  v-model="scoreFilterType"
+                  :options="scoreFilterOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  dense
+                  outlined
+                  style="width: 120px"
+                  @update:model-value="applyFilters"
+                />
                 <q-input v-model.number="scoreMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
                 <q-input v-model.number="scoreMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
               </div>
@@ -547,7 +571,7 @@ onMounted(async () => {
           text-color="white"
           @remove="scoreMin = null; scoreMax = null; applyFilters()"
         >
-          Score: {{ patentsStore.filters.scoreMin ?? '*' }}–{{ patentsStore.filters.scoreMax ?? '*' }}
+          {{ getScoreFilterLabel() }}: {{ patentsStore.filters.scoreMin ?? '*' }}–{{ patentsStore.filters.scoreMax ?? '*' }}
         </q-chip>
         <q-chip
           v-if="patentsStore.filters.yearsMin != null || patentsStore.filters.yearsMax != null"

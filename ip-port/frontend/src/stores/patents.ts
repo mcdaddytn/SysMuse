@@ -27,8 +27,7 @@ export const usePatentsStore = defineStore('patents', () => {
     { id: 'entity', label: 'Entity & Sector', icon: 'business', defaultExpanded: true },
     { id: 'citations', label: 'Citations', icon: 'format_quote', defaultExpanded: true, description: 'Forward citation counts and competitor breakdown' },
     { id: 'scores', label: 'Scores', icon: 'analytics', defaultExpanded: true, description: 'Numeric scores used in ranking metrics' },
-    { id: 'llmText', label: 'LLM Text', icon: 'psychology', defaultExpanded: false, description: 'AI-generated text analysis and classification' },
-    { id: 'focusArea', label: 'Focus Area', icon: 'filter_center_focus', defaultExpanded: false, description: 'Context-specific columns' }
+    { id: 'llmText', label: 'LLM Text', icon: 'psychology', defaultExpanded: false, description: 'AI-generated text analysis and classification' }
   ];
 
   // Available columns with visibility settings and group assignments
@@ -130,12 +129,6 @@ export const usePatentsStore = defineStore('patents', () => {
     { name: 'llm_lifecycle_stage', label: 'Lifecycle Stage', field: 'llm_lifecycle_stage', sortable: true, align: 'left', visible: false, group: 'llmText',
       description: 'Technology lifecycle stage' },
 
-    // Focus Area group (visible only when viewing a focus area)
-    { name: 'fa_membership_type', label: 'Membership', field: 'fa_membership_type', sortable: true, align: 'center', visible: false, group: 'focusArea',
-      description: 'How the patent was added to the focus area (MANUAL, SEARCH_MATCH, etc.)' },
-    { name: 'fa_match_score', label: 'Match Score', field: 'fa_match_score', sortable: true, align: 'center', visible: false, group: 'focusArea',
-      description: 'Search-term match score within the focus area',
-      format: (val: unknown) => typeof val === 'number' ? val.toFixed(2) : '--' },
   ]);
 
   // Getters

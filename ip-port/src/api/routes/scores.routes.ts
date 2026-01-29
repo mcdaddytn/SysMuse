@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
 import {
   scoreAllPatents,
   scorePatentsBySector,
@@ -26,6 +27,46 @@ import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
 import { clearPatentsCache } from './patents.routes.js';
 
 const router = Router();
+const prisma = new PrismaClient();
+
+// Cached sector lookup map (name -> {displayName, damagesRating, damagesLabel})
+let sectorCache: Map<string, { displayName: string; damagesRating: number; damagesLabel: string }> | null = null;
+let sectorCacheExpiry = 0;
+const SECTOR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getSectorLookup(): Promise<Map<string, { displayName: string; damagesRating: number; damagesLabel: string }>> {
+  const now = Date.now();
+  if (sectorCache && now < sectorCacheExpiry) {
+    return sectorCache;
+  }
+
+  const sectors = await prisma.sector.findMany({
+    select: {
+      name: true,
+      displayName: true,
+      damagesRating: true,
+      damagesTier: true,
+    },
+  });
+
+  sectorCache = new Map();
+  for (const s of sectors) {
+    sectorCache.set(s.name, {
+      displayName: s.displayName,
+      damagesRating: s.damagesRating ?? 1,
+      damagesLabel: s.damagesTier ?? 'Low',
+    });
+  }
+
+  sectorCacheExpiry = now + SECTOR_CACHE_TTL;
+  return sectorCache;
+}
+
+// Clear sector cache (called when sectors are modified)
+export function clearSectorCache(): void {
+  sectorCache = null;
+  sectorCacheExpiry = 0;
+}
 
 interface Patent {
   patent_id: string;
@@ -335,7 +376,7 @@ router.get('/profiles', (_req: Request, res: Response) => {
  *   profile - Profile ID (default: 'executive')
  *   topN    - Number of top patents per sector (default: 15)
  */
-router.get('/sectors', (req: Request, res: Response) => {
+router.get('/sectors', async (req: Request, res: Response) => {
   try {
     const {
       profile: profileId = getDefaultProfileId(),
@@ -352,23 +393,15 @@ router.get('/sectors', (req: Request, res: Response) => {
     const bySector = scorePatentsBySector(profileId as string);
     const candidates = loadPatentsMap();
 
-    // Load sector damages config
-    const damagesConfig = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'config/sector-damages.json'), 'utf-8')
-    );
-
-    // Load sector names from breakout config
-    const sectorConfig = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'config/sector-breakout-v2.json'), 'utf-8')
-    );
+    // Load sector info from DB (cached)
+    const sectorLookup = await getSectorLookup();
 
     const sectors: any[] = [];
 
     for (const [sectorKey, patents] of bySector) {
       const scores = patents.map(p => p.score);
       const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-      const damagesInfo = damagesConfig.sectors[sectorKey];
-      const sectorInfo = sectorConfig.sectorMappings[sectorKey];
+      const sectorInfo = sectorLookup.get(sectorKey);
 
       const topPatents = patents.slice(0, topNNum).map(p => {
         const c = candidates.get(p.patent_id);
@@ -384,13 +417,13 @@ router.get('/sectors', (req: Request, res: Response) => {
 
       sectors.push({
         sector: sectorKey,
-        sector_name: sectorInfo?.name || sectorKey,
+        sector_name: sectorInfo?.displayName || sectorKey,
         super_sector: candidates.get(patents[0]?.patent_id)?.super_sector || '',
         patent_count: patents.length,
         avg_score: Math.round(avgScore * 100) / 100,
         max_score: Math.round(Math.max(...scores) * 100) / 100,
-        damages_rating: damagesInfo?.damages_rating || 1,
-        damages_label: damagesInfo?.label || 'Low',
+        damages_rating: sectorInfo?.damagesRating || 1,
+        damages_label: sectorInfo?.damagesLabel || 'Low',
         top_patents: topPatents,
       });
     }

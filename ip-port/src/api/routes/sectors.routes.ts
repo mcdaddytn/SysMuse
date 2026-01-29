@@ -18,6 +18,7 @@ import {
   recalculateSectorPatentCount,
   clearRuleCache,
 } from '../services/sector-assignment-service.js';
+import { clearSectorCache } from './scores.routes.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -193,6 +194,7 @@ router.post('/seed', async (_req: Request, res: Response) => {
   try {
     const summary = await seedSectorsFromConfig();
     clearRuleCache();
+    clearSectorCache();
     res.json({
       message: 'Sectors seeded from config files',
       ...summary,
@@ -261,6 +263,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
     });
 
+    clearSectorCache();
     res.status(201).json(sector);
   } catch (err: unknown) {
     console.error('[Sectors] Create error:', err);
@@ -320,6 +323,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       },
     });
 
+    clearSectorCache();
     res.json(sector);
   } catch (err: unknown) {
     console.error('[Sectors] Update error:', err);
@@ -335,6 +339,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     await prisma.sector.delete({ where: { id: req.params.id } });
     clearRuleCache();
+    clearSectorCache();
     res.json({ deleted: true });
   } catch (err: unknown) {
     console.error('[Sectors] Delete error:', err);

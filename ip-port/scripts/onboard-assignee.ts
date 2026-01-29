@@ -28,6 +28,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { PortfolioEnrichmentService } from '../src/api/services/portfolio-enrichment-service.js';
 
 dotenv.config();
 
@@ -548,6 +549,7 @@ async function stepCitations(status: OnboardingStatus): Promise<void> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 5: MINE - Fetch citing patent details
+// Uses PortfolioEnrichmentService which wraps the established PatentsViewClient
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function stepMine(status: OnboardingStatus): Promise<void> {
@@ -581,43 +583,25 @@ async function stepMine(status: OnboardingStatus): Promise<void> {
     return;
   }
 
+  // Use the centralized PortfolioEnrichmentService which properly uses PatentsViewClient
+  const enrichmentService = new PortfolioEnrichmentService(getApiKey());
+
   let mined = 0;
+  let errors = 0;
   for (let i = 0; i < toMine.length; i++) {
     const patent = toMine[i];
     const patentId = patent.patent_id;
 
     try {
-      // Fetch citing patents
-      const result = await patentsviewRequest('/patent/', {
-        method: 'POST',
-        body: JSON.stringify({
-          q: { _contains: { us_patent_citations: { citation_patent_id: patentId } } },
-          f: ['patent_id', 'patent_title', 'patent_date', 'assignees'],
-          o: { per_page: 1000 },
-        }),
-      });
-
-      const citingPatents = (result.patents || []).map((p: any) => ({
-        patent_id: p.patent_id,
-        patent_title: p.patent_title,
-        patent_date: p.patent_date,
-        assignee: p.assignees?.[0]?.assignee_organization || 'Unknown',
-      }));
-
-      // Cache the result
-      const cachePath = path.join(citingDetailsDir, `${patentId}.json`);
-      fs.writeFileSync(cachePath, JSON.stringify({
-        cited_patent_id: patentId,
-        citing_patents: citingPatents,
-        fetched_at: new Date().toISOString(),
-      }, null, 2));
-
+      // Use the enrichment service - it correctly uses /patent/us_patent_citation/ endpoint
+      await enrichmentService.fetchCitingPatentDetails(patentId);
       mined++;
 
       if ((i + 1) % 20 === 0) {
-        log(`  Progress: ${i + 1}/${toMine.length} (${mined} mined)`);
+        log(`  Progress: ${i + 1}/${toMine.length} (${mined} mined, ${errors} errors)`);
       }
     } catch (err) {
+      errors++;
       log(`  Error mining ${patentId}: ${(err as Error).message}`);
     }
   }
@@ -629,60 +613,40 @@ async function stepMine(status: OnboardingStatus): Promise<void> {
     total: toMine.length,
   });
 
-  log(`  Mined citing details for ${mined} patents`);
+  log(`  Mined citing details for ${mined} patents (${errors} errors)`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 6: CLASSIFY - Categorize citations
+// Uses PortfolioEnrichmentService for consistent classification logic
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function stepClassify(status: OnboardingStatus): Promise<void> {
   log('Step 6: CLASSIFY - Categorizing citations as competitor/affiliate/neutral...');
   updateStep(status, 'classify', { status: 'running', startedAt: new Date().toISOString() });
 
-  // Load competitor config
-  const competitorConfig = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'config/competitors.json'), 'utf-8')
-  );
-
-  const excludePatterns = competitorConfig.excludePatterns.map((p: string) => new RegExp(p, 'i'));
-  const competitorPatterns: Array<{ pattern: RegExp; company: string }> = [];
-
-  for (const [, category] of Object.entries(competitorConfig.categories) as any) {
-    if (!category.enabled) continue;
-    for (const company of category.companies) {
-      for (const pattern of company.patterns) {
-        competitorPatterns.push({
-          pattern: new RegExp(pattern, 'i'),
-          company: company.name,
-        });
-      }
-    }
-  }
-
-  // Classify function
-  function classify(assignee: string): { type: 'affiliate' | 'competitor' | 'neutral'; company?: string } {
-    if (!assignee) return { type: 'neutral' };
-    for (const p of excludePatterns) {
-      if (p.test(assignee)) return { type: 'affiliate' };
-    }
-    for (const { pattern, company } of competitorPatterns) {
-      if (pattern.test(assignee)) return { type: 'competitor', company };
-    }
-    return { type: 'neutral' };
-  }
-
-  // Process citing details
   const citingDetailsDir = path.join(CACHE_DIR, 'api/patentsview/citing-patent-details');
   const classificationDir = path.join(CACHE_DIR, 'citation-classification');
   ensureDir(classificationDir);
 
   const { candidates } = loadPortfolio();
+
+  // Use the centralized enrichment service for classification
+  const enrichmentService = new PortfolioEnrichmentService(getApiKey());
+
   const results: any[] = [];
   let classified = 0;
+  let skipped = 0;
 
   for (const [id, p] of candidates) {
     if (p.affiliate !== status.assignee) continue;
+
+    // Check if already classified
+    const classPath = path.join(classificationDir, `${id}.json`);
+    if (fs.existsSync(classPath)) {
+      skipped++;
+      continue;
+    }
 
     const citingPath = path.join(citingDetailsDir, `${id}.json`);
     if (!fs.existsSync(citingPath)) continue;
@@ -690,37 +654,8 @@ async function stepClassify(status: OnboardingStatus): Promise<void> {
     const citing = JSON.parse(fs.readFileSync(citingPath, 'utf-8'));
     const citingPatents = citing.citing_patents || [];
 
-    let competitor = 0, affiliate = 0, neutral = 0;
-    const competitorNames = new Set<string>();
-
-    for (const cp of citingPatents) {
-      const result = classify(cp.assignee);
-      if (result.type === 'competitor') {
-        competitor++;
-        if (result.company) competitorNames.add(result.company);
-      } else if (result.type === 'affiliate') {
-        affiliate++;
-      } else {
-        neutral++;
-      }
-    }
-
-    const classification = {
-      patent_id: id,
-      competitor_citations: competitor,
-      affiliate_citations: affiliate,
-      neutral_citations: neutral,
-      competitor_count: competitorNames.size,
-      competitor_names: Array.from(competitorNames),
-      classified_at: new Date().toISOString(),
-    };
-
-    // Cache per-patent classification
-    fs.writeFileSync(
-      path.join(classificationDir, `${id}.json`),
-      JSON.stringify(classification, null, 2)
-    );
-
+    // Use the enrichment service's classification logic
+    const classification = enrichmentService.classifyCitations(id, citingPatents);
     results.push(classification);
     classified++;
   }
@@ -754,10 +689,10 @@ async function stepClassify(status: OnboardingStatus): Promise<void> {
     status: 'complete',
     completedAt: new Date().toISOString(),
     processed: classified,
-    total: classified,
+    total: classified + skipped,
   });
 
-  log(`  Classified ${classified} patents`);
+  log(`  Classified ${classified} patents (${skipped} already done)`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

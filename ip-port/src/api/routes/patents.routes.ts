@@ -17,6 +17,69 @@ const prisma = new PrismaClient();
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Enrichment cache set cache (avoids re-reading directories on every request)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface EnrichmentCacheData {
+  llmSet: Set<string>;
+  prosSet: Set<string>;
+  iprSet: Set<string>;
+  familySet: Set<string>;
+  lastUpdated: number;
+}
+
+let enrichmentCacheData: EnrichmentCacheData | null = null;
+const ENRICHMENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCacheSetFromDir(dir: string): Set<string> {
+  if (!fs.existsSync(dir)) return new Set();
+  return new Set(
+    fs.readdirSync(dir)
+      .filter(f => f.endsWith('.json'))
+      .map(f => f.replace('.json', ''))
+  );
+}
+
+function getEnrichmentCacheSets(forceRefresh = false): EnrichmentCacheData {
+  const now = Date.now();
+
+  if (
+    !forceRefresh &&
+    enrichmentCacheData &&
+    now - enrichmentCacheData.lastUpdated < ENRICHMENT_CACHE_TTL_MS
+  ) {
+    return enrichmentCacheData;
+  }
+
+  console.log('[Patents] Loading enrichment cache sets...');
+  const startTime = Date.now();
+
+  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
+  const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
+  const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
+  const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
+
+  enrichmentCacheData = {
+    llmSet: getCacheSetFromDir(llmDir),
+    prosSet: getCacheSetFromDir(prosDir),
+    iprSet: getCacheSetFromDir(iprDir),
+    familySet: getCacheSetFromDir(familyDir),
+    lastUpdated: now,
+  };
+
+  const elapsed = Date.now() - startTime;
+  console.log(`[Patents] Enrichment cache sets loaded in ${elapsed}ms (llm: ${enrichmentCacheData.llmSet.size}, pros: ${enrichmentCacheData.prosSet.size}, ipr: ${enrichmentCacheData.iprSet.size}, family: ${enrichmentCacheData.familySet.size})`);
+
+  return enrichmentCacheData;
+}
+
+// Export for cache invalidation from other routes
+export function invalidateEnrichmentCache(): void {
+  enrichmentCacheData = null;
+  console.log('[Patents] Enrichment cache invalidated');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Full LLM data loader (includes text fields beyond just numeric scores)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -565,25 +628,8 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
     // Sort by score descending (same as the CLI script)
     const sorted = [...patents].sort((a, b) => b.score - a.score);
 
-    // Load enrichment cache sets
-    const llmDir = path.join(process.cwd(), 'cache/llm-scores');
-    const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
-    const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
-    const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
-
-    function getCacheSet(dir: string): Set<string> {
-      if (!fs.existsSync(dir)) return new Set();
-      return new Set(
-        fs.readdirSync(dir)
-          .filter(f => f.endsWith('.json'))
-          .map(f => f.replace('.json', ''))
-      );
-    }
-
-    const llmSet = getCacheSet(llmDir);
-    const prosSet = getCacheSet(prosDir);
-    const iprSet = getCacheSet(iprDir);
-    const familySet = getCacheSet(familyDir);
+    // Load enrichment cache sets (uses TTL-based cache)
+    const { llmSet, prosSet, iprSet, familySet } = getEnrichmentCacheSets();
 
     // Helper functions
     function median(values: number[]): number {

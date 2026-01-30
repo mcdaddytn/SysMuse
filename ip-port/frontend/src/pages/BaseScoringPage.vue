@@ -103,21 +103,16 @@ onMounted(async () => {
           <div class="text-h6 q-mb-md">Base Score Formula</div>
 
           <div class="text-body2 q-mb-md">
-            The base score is a simple citation-weighted metric calculated when patents
-            are loaded into the portfolio.
+            Multi-factor score calculated when patents are loaded. Uses citation count,
+            remaining life, citation velocity, and sector value.
           </div>
 
           <q-separator class="q-my-md" />
 
           <div class="text-subtitle2 q-mb-sm">Formula</div>
           <code class="text-caption">
-            base_score = forward_citations × 1.5
+            base_score = (citation + time + velocity) × sector
           </code>
-
-          <div class="q-mt-md text-caption text-grey-7">
-            Only active patents (remaining years > 0) receive a score.
-            Expired patents have a score of 0.
-          </div>
 
           <q-separator class="q-my-md" />
 
@@ -125,11 +120,31 @@ onMounted(async () => {
           <div class="q-gutter-sm">
             <div class="row items-center">
               <q-icon name="format_quote" color="primary" class="q-mr-sm" />
-              <span class="text-caption">Forward Citations - Patents that cite this one</span>
+              <div>
+                <span class="text-caption text-weight-medium">Citation Score</span>
+                <div class="text-caption text-grey-7">log10(citations + 1) × 40</div>
+              </div>
             </div>
             <div class="row items-center">
               <q-icon name="schedule" color="secondary" class="q-mr-sm" />
-              <span class="text-caption">Remaining Years - Time until expiration</span>
+              <div>
+                <span class="text-caption text-weight-medium">Time Score</span>
+                <div class="text-caption text-grey-7">remaining_years / 20 × 25 (expired get penalty, not zero)</div>
+              </div>
+            </div>
+            <div class="row items-center">
+              <q-icon name="speed" color="accent" class="q-mr-sm" />
+              <div>
+                <span class="text-caption text-weight-medium">Velocity Score</span>
+                <div class="text-caption text-grey-7">log10(citations/year + 1) × 20</div>
+              </div>
+            </div>
+            <div class="row items-center">
+              <q-icon name="category" color="positive" class="q-mr-sm" />
+              <div>
+                <span class="text-caption text-weight-medium">Sector Multiplier</span>
+                <div class="text-caption text-grey-7">0.8× (Low) to 1.5× (Very High damages)</div>
+              </div>
             </div>
           </div>
         </q-card-section>

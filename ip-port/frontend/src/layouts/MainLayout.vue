@@ -1,10 +1,31 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { patentApi } from '@/services/api';
 
 const router = useRouter();
 const route = useRoute();
 const leftDrawerOpen = ref(false);
+
+// Cache stats for sidebar
+const cacheStats = ref<{ llm: number; prosecution: number; ipr: number; family: number } | null>(null);
+const cacheLoading = ref(false);
+
+async function loadCacheStats() {
+  cacheLoading.value = true;
+  try {
+    const summary = await patentApi.getEnrichmentSummary(5000);
+    cacheStats.value = summary.enrichmentTotals;
+  } catch (err) {
+    console.error('Failed to load cache stats:', err);
+  } finally {
+    cacheLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  loadCacheStats();
+});
 
 // TODO: Replace with actual auth store
 const currentUser = ref({
@@ -117,8 +138,16 @@ function logout() {
 
       <!-- Cache Stats Footer -->
       <div class="absolute-bottom q-pa-md text-grey-6 text-caption">
-        <div>Portfolio: 28,913 patents</div>
-        <div>Cache: loading...</div>
+        <template v-if="cacheLoading">
+          <div>Loading cache stats...</div>
+        </template>
+        <template v-else-if="cacheStats">
+          <div>LLM: {{ cacheStats.llm.toLocaleString() }}</div>
+          <div>Pros: {{ cacheStats.prosecution.toLocaleString() }} | IPR: {{ cacheStats.ipr.toLocaleString() }}</div>
+        </template>
+        <template v-else>
+          <div>Cache stats unavailable</div>
+        </template>
       </div>
     </q-drawer>
 

@@ -73,6 +73,83 @@ function ensureDir(dir: string): void {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Base Score Calculation
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SectorDamagesConfig {
+  sectors: Record<string, { damages_rating: number }>;
+}
+
+let sectorDamagesCache: Map<string, number> | null = null;
+
+function loadSectorDamages(): Map<string, number> {
+  if (sectorDamagesCache) return sectorDamagesCache;
+
+  sectorDamagesCache = new Map();
+  try {
+    const configPath = path.join(process.cwd(), 'config/sector-damages.json');
+    const config: SectorDamagesConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    for (const [sectorKey, data] of Object.entries(config.sectors)) {
+      sectorDamagesCache.set(sectorKey, data.damages_rating || 1);
+    }
+  } catch {
+    // Use defaults if config not found
+  }
+  return sectorDamagesCache;
+}
+
+function getSectorMultiplier(primarySector: string | undefined): number {
+  if (!primarySector) return 1.0;
+  const damages = loadSectorDamages();
+  const rating = damages.get(primarySector) || 1;
+  return 0.8 + (rating - 1) * 0.233;
+}
+
+function getYearsSinceGrant(patentDate: string | undefined): number {
+  if (!patentDate) return 10;
+  const grantDate = new Date(patentDate);
+  const now = new Date();
+  const years = (now.getTime() - grantDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  return Math.max(years, 0.5);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Calculate base score using multi-factor formula:
+ * base_score = (citation_score + time_score + velocity_score) × sector_multiplier
+ */
+function calculateBaseScore(patent: {
+  forward_citations?: number;
+  remaining_years?: number;
+  patent_date?: string;
+  primary_sector?: string;
+}): number {
+  const forwardCitations = patent.forward_citations || 0;
+  const remainingYears = patent.remaining_years || 0;
+  const yearsSinceGrant = getYearsSinceGrant(patent.patent_date);
+
+  // Citation Score: log10(forward_citations + 1) × 40
+  const citationScore = Math.log10(forwardCitations + 1) * 40;
+
+  // Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
+  const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
+  const timeScore = timeFactor * 25;
+
+  // Velocity Score: log10(citations_per_year + 1) × 20
+  const citationsPerYear = forwardCitations / yearsSinceGrant;
+  const velocityScore = Math.log10(citationsPerYear + 1) * 20;
+
+  // Sector Multiplier: 0.8x to 1.5x
+  const sectorMultiplier = getSectorMultiplier(patent.primary_sector);
+
+  const rawScore = citationScore + timeScore + velocityScore;
+  return Math.round(rawScore * sectorMultiplier * 100) / 100;
+}
+
 function loadCompetitorConfig(): {
   excludePatterns: RegExp[];
   competitorPatterns: Array<{ pattern: RegExp; company: string }>;
@@ -339,10 +416,8 @@ export class PortfolioEnrichmentService {
         const count = await this.fetchForwardCitationCount(patentId);
         if (count > 0) {
           patent.forward_citations = count;
-          // Recalculate V1 score
-          if ((patent.remaining_years || 0) > 0) {
-            patent.score = count * 1.5;
-          }
+          // Recalculate base score with multi-factor formula
+          patent.score = calculateBaseScore(patent);
           updated = true;
         }
       }

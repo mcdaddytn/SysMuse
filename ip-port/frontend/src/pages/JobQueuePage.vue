@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { patentApi, type EnrichmentSummary, type EnrichmentTierData } from '@/services/api';
 
 const activeTab = ref('enrichment');
@@ -8,7 +8,17 @@ const activeTab = ref('enrichment');
 const enrichmentData = ref<EnrichmentSummary | null>(null);
 const enrichmentLoading = ref(false);
 const enrichmentError = ref<string | null>(null);
-const selectedTierSize = ref(5000);
+
+// Persist tier size in localStorage
+const TIER_SIZE_KEY = 'enrichment-tier-size';
+const savedTierSize = localStorage.getItem(TIER_SIZE_KEY);
+const selectedTierSize = ref(savedTierSize ? parseInt(savedTierSize) : 1000);
+
+// Save tier size when changed
+watch(selectedTierSize, (newVal) => {
+  localStorage.setItem(TIER_SIZE_KEY, String(newVal));
+});
+
 const tierSizeOptions = [
   { value: 1000, label: '1,000' },
   { value: 2000, label: '2,000' },
@@ -42,7 +52,7 @@ function coverageColor(pct: number): string {
 // Metric descriptions for tooltips
 const metricDescriptions: Record<string, string> = {
   'Patents': 'Number of patents in this tier',
-  'v1 Score Range': 'Pre-screening score (v1): weighted combination of competitor citations (40%), forward citations (20%), remaining years (27%), and competitor count (13%), multiplied by a year-remaining decay factor. Range 0-100.',
+  'Base Score Range': 'Multi-factor base score: citation score (log-scaled) + time score (remaining years) + velocity score (citations per year), multiplied by sector damages potential (0.8x-1.5x). Range 0-200.',
   'Expired': 'Patents with 0 or fewer years of remaining term',
   'Active 3yr+': 'Patents with at least 3 years of remaining term',
   'Avg Years Left': 'Average remaining patent term in years across the tier',
@@ -252,8 +262,8 @@ onMounted(() => {
                     </tr>
                     <tr>
                       <td class="metric-col text-weight-medium metric-label">
-                        v1 Score Range
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['v1 Score Range'] }}</q-tooltip>
+                        Base Score Range
+                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['Base Score Range'] }}</q-tooltip>
                       </td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-score'">{{ tier.scoreRange }}</td>
                     </tr>

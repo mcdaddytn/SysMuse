@@ -1,13 +1,21 @@
 /**
  * Recalculate Base Scores
  *
- * Updates the base score (V1) for patents in the portfolio.
- * V1 formula: forward_citations * 1.5 (0 if expired)
+ * Updates the base score for patents in the portfolio using a multi-factor formula.
+ *
+ * Formula:
+ *   base_score = (citation_score + time_score + velocity_score) × sector_multiplier
+ *
+ * Components:
+ *   - Citation Score: log10(forward_citations + 1) × 40
+ *   - Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
+ *   - Velocity Score: log10(citations_per_year + 1) × 20
+ *   - Sector Multiplier: 0.8 + (damages_rating - 1) × 0.233
  *
  * Usage:
+ *   npx tsx scripts/recalculate-base-scores.ts --all
  *   npx tsx scripts/recalculate-base-scores.ts --affiliate "Brocade Communications"
  *   npx tsx scripts/recalculate-base-scores.ts --zero-scores-only
- *   npx tsx scripts/recalculate-base-scores.ts --all
  *   npx tsx scripts/recalculate-base-scores.ts --dry-run
  */
 
@@ -15,25 +23,116 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const OUTPUT_DIR = path.join(process.cwd(), 'output');
+const CONFIG_DIR = path.join(process.cwd(), 'config');
 
 interface Patent {
   patent_id: string;
+  patent_date: string;
   forward_citations: number;
   remaining_years: number;
   score: number;
+  primary_sector?: string;
+  super_sector?: string;
   affiliate?: string;
   [key: string]: any;
 }
 
+interface SectorDamages {
+  sectors: Record<string, { damages_rating: number }>;
+}
+
+// Sector damages lookup (cached)
+let sectorDamagesCache: Map<string, number> | null = null;
+
 /**
- * Calculate V1 base score
+ * Load sector damages ratings from config
+ */
+function loadSectorDamages(): Map<string, number> {
+  if (sectorDamagesCache) return sectorDamagesCache;
+
+  sectorDamagesCache = new Map();
+
+  try {
+    const configPath = path.join(CONFIG_DIR, 'sector-damages.json');
+    const config: SectorDamages = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+
+    for (const [sectorKey, data] of Object.entries(config.sectors)) {
+      sectorDamagesCache.set(sectorKey, data.damages_rating || 1);
+    }
+
+    console.log(`Loaded damages ratings for ${sectorDamagesCache.size} sectors`);
+  } catch (e) {
+    console.warn('Could not load sector-damages.json, using default multiplier');
+  }
+
+  return sectorDamagesCache;
+}
+
+/**
+ * Get sector multiplier based on damages rating (1-4)
+ * Rating 1 (Low) → 0.80x
+ * Rating 2 (Medium) → 1.03x
+ * Rating 3 (High) → 1.27x
+ * Rating 4 (Very High) → 1.50x
+ */
+function getSectorMultiplier(primarySector: string | undefined): number {
+  if (!primarySector) return 1.0; // Default for unknown sector
+
+  const damages = loadSectorDamages();
+  const rating = damages.get(primarySector) || 1;
+
+  return 0.8 + (rating - 1) * 0.233;
+}
+
+/**
+ * Calculate years since patent grant
+ */
+function getYearsSinceGrant(patentDate: string): number {
+  if (!patentDate) return 10; // Default assumption
+
+  const grantDate = new Date(patentDate);
+  const now = new Date();
+  const years = (now.getTime() - grantDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+
+  return Math.max(years, 0.5); // Minimum 0.5 years to avoid division issues
+}
+
+/**
+ * Clamp a value between min and max
+ */
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Calculate base score using multi-factor formula
  */
 function calculateBaseScore(patent: Patent): number {
-  // V1 formula: forward_citations * 1.5, 0 if expired
-  if (patent.remaining_years <= 0) {
-    return 0;
-  }
-  return (patent.forward_citations || 0) * 1.5;
+  const forwardCitations = patent.forward_citations || 0;
+  const remainingYears = patent.remaining_years || 0;
+  const yearsSinceGrant = getYearsSinceGrant(patent.patent_date);
+
+  // Component 1: Citation Score (log-scaled, 0-120 range for 0-1000 citations)
+  const citationScore = Math.log10(forwardCitations + 1) * 40;
+
+  // Component 2: Time Score (remaining years factor, -12.5 to +25)
+  // Expired patents get negative but not zeroed out
+  const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
+  const timeScore = timeFactor * 25;
+
+  // Component 3: Velocity Score (citations per year, rewards newer high-cited patents)
+  const citationsPerYear = forwardCitations / yearsSinceGrant;
+  const velocityScore = Math.log10(citationsPerYear + 1) * 20;
+
+  // Component 4: Sector Multiplier (0.8x to 1.5x based on damages potential)
+  const sectorMultiplier = getSectorMultiplier(patent.primary_sector);
+
+  // Combine components
+  const rawScore = citationScore + timeScore + velocityScore;
+  const finalScore = rawScore * sectorMultiplier;
+
+  // Round to 2 decimal places
+  return Math.round(finalScore * 100) / 100;
 }
 
 /**
@@ -67,15 +166,22 @@ async function main() {
 
   if (!affiliateFilter && !zeroOnly && !all) {
     console.log(`
-Recalculate Base Scores - Update V1 scores in portfolio
+Recalculate Base Scores - Multi-factor scoring formula
+
+Formula:
+  base_score = (citation_score + time_score + velocity_score) × sector_multiplier
+
+Components:
+  - Citation Score: log10(forward_citations + 1) × 40
+  - Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
+  - Velocity Score: log10(citations_per_year + 1) × 20
+  - Sector Multiplier: 0.8x (Low) to 1.5x (Very High) based on damages potential
 
 Usage:
+  npx tsx scripts/recalculate-base-scores.ts --all
   npx tsx scripts/recalculate-base-scores.ts --affiliate "Brocade Communications"
   npx tsx scripts/recalculate-base-scores.ts --zero-scores-only
-  npx tsx scripts/recalculate-base-scores.ts --all
   npx tsx scripts/recalculate-base-scores.ts --dry-run
-
-V1 Formula: forward_citations * 1.5 (0 if expired)
 `);
     process.exit(1);
   }
@@ -117,7 +223,14 @@ V1 Formula: forward_citations * 1.5 (0 if expired)
   // Calculate new scores
   let updated = 0;
   let unchanged = 0;
-  const changes: Array<{ id: string; oldScore: number; newScore: number; fwd: number }> = [];
+  const changes: Array<{
+    id: string;
+    oldScore: number;
+    newScore: number;
+    fwd: number;
+    years: number;
+    sector: string;
+  }> = [];
 
   for (const patent of toProcess) {
     const newScore = calculateBaseScore(patent);
@@ -130,7 +243,9 @@ V1 Formula: forward_citations * 1.5 (0 if expired)
         id: patent.patent_id,
         oldScore,
         newScore,
-        fwd: patent.forward_citations || 0
+        fwd: patent.forward_citations || 0,
+        years: patent.remaining_years || 0,
+        sector: patent.primary_sector || 'unknown'
       });
     } else {
       unchanged++;
@@ -142,10 +257,31 @@ V1 Formula: forward_citations * 1.5 (0 if expired)
   console.log(`  Unchanged: ${unchanged}`);
 
   if (changes.length > 0) {
-    console.log(`\nSample changes (top 10 by new score):`);
+    // Show distribution of score changes
+    const increases = changes.filter(c => c.newScore > c.oldScore).length;
+    const decreases = changes.filter(c => c.newScore < c.oldScore).length;
+    console.log(`\nScore changes: ${increases} increased, ${decreases} decreased`);
+
+    // Show expired patents that now have non-zero scores
+    const expiredWithScores = changes.filter(c => c.years <= 0 && c.newScore > 0);
+    if (expiredWithScores.length > 0) {
+      console.log(`\nExpired patents now with scores: ${expiredWithScores.length}`);
+      const topExpired = expiredWithScores.sort((a, b) => b.newScore - a.newScore).slice(0, 5);
+      for (const c of topExpired) {
+        console.log(`  ${c.id} | score=${c.newScore.toFixed(1)} (fwd=${c.fwd}, years=${c.years.toFixed(1)})`);
+      }
+    }
+
+    console.log(`\nTop 10 by new score:`);
     const topChanges = changes.sort((a, b) => b.newScore - a.newScore).slice(0, 10);
     for (const c of topChanges) {
-      console.log(`  ${c.id} | ${c.oldScore.toFixed(1)} → ${c.newScore.toFixed(1)} (fwd=${c.fwd})`);
+      console.log(`  ${c.id} | ${c.oldScore.toFixed(1)} → ${c.newScore.toFixed(1)} (fwd=${c.fwd}, yrs=${c.years.toFixed(1)}, ${c.sector})`);
+    }
+
+    console.log(`\nBottom 10 by new score:`);
+    const bottomChanges = changes.sort((a, b) => a.newScore - b.newScore).slice(0, 10);
+    for (const c of bottomChanges) {
+      console.log(`  ${c.id} | ${c.oldScore.toFixed(1)} → ${c.newScore.toFixed(1)} (fwd=${c.fwd}, yrs=${c.years.toFixed(1)}, ${c.sector})`);
     }
   }
 
@@ -159,6 +295,7 @@ V1 Formula: forward_citations * 1.5 (0 if expired)
     data.metadata = data.metadata || {};
     data.metadata.lastScoreRecalc = new Date().toISOString();
     data.metadata.scoreRecalcCount = updated;
+    data.metadata.scoreFormula = 'v2: (citation + time + velocity) × sector_multiplier';
 
     const outputPath = path.join(OUTPUT_DIR, filename);
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));

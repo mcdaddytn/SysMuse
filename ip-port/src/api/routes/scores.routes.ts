@@ -24,7 +24,7 @@ import {
   getLlmStats,
 } from '../services/scoring-service.js';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
-import { clearPatentsCache } from './patents.routes.js';
+import { clearPatentsCache, invalidateEnrichmentCache } from './patents.routes.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -463,8 +463,9 @@ router.get('/sectors', async (req: Request, res: Response) => {
 router.post('/reload', (_req: Request, res: Response) => {
   clearScoringCache();
   clearPatentsCache();
+  invalidateEnrichmentCache();
   patentsMap = null;
-  res.json({ message: 'All caches cleared (scoring + patent data + LLM)' });
+  res.json({ message: 'All caches cleared (scoring + patent data + LLM + enrichment)' });
 });
 
 /**

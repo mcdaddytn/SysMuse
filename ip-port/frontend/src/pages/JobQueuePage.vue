@@ -22,9 +22,11 @@ watch(selectedTierSize, (newVal) => {
 });
 
 const tierSizeOptions = [
+  { value: 250, label: '250' },
+  { value: 500, label: '500' },
   { value: 1000, label: '1,000' },
   { value: 2000, label: '2,000' },
-  { value: 3000, label: '3,000' },
+  { value: 3500, label: '3,500' },
   { value: 5000, label: '5,000' }
 ];
 
@@ -47,18 +49,28 @@ const sectorEnrichmentError = ref<string | null>(null);
 
 const TOP_PER_SECTOR_KEY = 'enrichment-top-per-sector';
 const savedTopPerSector = localStorage.getItem(TOP_PER_SECTOR_KEY);
-const selectedTopPerSector = ref(savedTopPerSector ? parseInt(savedTopPerSector) : 500);
+// Default to 0 (all patents) for accurate coverage view
+const selectedTopPerSector = ref(savedTopPerSector !== null ? parseInt(savedTopPerSector) : 0);
 
 watch(selectedTopPerSector, (newVal) => {
   localStorage.setItem(TOP_PER_SECTOR_KEY, String(newVal));
 });
 
 const topPerSectorOptions = [
-  { value: 100, label: '100' },
-  { value: 250, label: '250' },
-  { value: 500, label: '500' },
-  { value: 1000, label: '1,000' }
+  { value: 0, label: 'All (Full Coverage)' },
+  { value: 100, label: 'Top 100' },
+  { value: 250, label: 'Top 250' },
+  { value: 500, label: 'Top 500' },
+  { value: 1000, label: 'Top 1,000' }
 ];
+
+const sectorScopeTooltip = `Controls how many patents are evaluated per sector.
+
+• "All (Full Coverage)" shows true enrichment coverage across all patents in each sector.
+
+• "Top N" options show coverage for only the highest-scoring N patents within each sector. This is useful for prioritizing enrichment of high-value patents, but can be misleading since those patents often overlap with the top tiers in the Enrichment Overview.
+
+For accurate portfolio-wide coverage, use "All (Full Coverage)" or the tier-based Enrichment Overview tab.`;
 
 async function loadSectorEnrichment() {
   sectorEnrichmentLoading.value = true;
@@ -307,6 +319,27 @@ function getStatusColor(status: string) {
   }
 }
 
+// Format tier range for display (e.g., tierIndex=4, tierSize=1000 → "3,001-4,000")
+function formatTierRange(tierIndex: number, tierSize: number): string {
+  const end = tierIndex * tierSize;
+  const start = end - tierSize + 1;
+  return `${start.toLocaleString()}-${end.toLocaleString()}`;
+}
+
+// Format job target for display
+function formatJobTarget(job: BatchJob): string {
+  if (job.targetType === 'tier') {
+    // targetValue could be "5000" (legacy) or "4001-5000" (new format)
+    const val = job.targetValue;
+    if (val.includes('-')) {
+      return `Tier ${val.replace('-', '-').split('-').map(n => parseInt(n).toLocaleString()).join('-')}`;
+    }
+    // Legacy format: just show "Top N"
+    return `Top ${parseInt(val).toLocaleString()}`;
+  }
+  return job.targetValue;
+}
+
 function getCoverageColor(type: CoverageType): string {
   const opt = coverageTypeOptions.find(o => o.value === type);
   return opt?.color || 'grey';
@@ -355,16 +388,31 @@ const metricDescriptions: Record<string, string> = {
   'Families': 'Patents with backward citation data from patent families pipeline',
 };
 
+// Watch for tab changes to refresh data
+watch(activeTab, (newTab) => {
+  if (newTab === 'sectors') {
+    loadSectorEnrichment();
+  } else if (newTab === 'enrichment') {
+    loadEnrichmentSummary();
+  } else if (newTab === 'jobs') {
+    loadBatchJobs();
+  }
+});
+
 // Lifecycle
 onMounted(() => {
   loadEnrichmentSummary();
   loadSectorEnrichment();
   loadBatchJobs();
 
-  // Auto-refresh jobs every 15 seconds
+  // Auto-refresh every 15 seconds based on active tab
   jobsRefreshInterval = setInterval(() => {
     if (activeTab.value === 'jobs') {
       loadBatchJobs();
+    } else if (activeTab.value === 'sectors') {
+      loadSectorEnrichment();
+    } else if (activeTab.value === 'enrichment') {
+      loadEnrichmentSummary();
     }
   }, 15000);
 
@@ -522,7 +570,7 @@ onUnmounted(() => {
                           color="primary"
                           icon="play_arrow"
                           label="Enrich"
-                          @click="openEnrichDialog('tier', String((idx + 1) * selectedTierSize))"
+                          @click="openEnrichDialog('tier', formatTierRange(idx + 1, selectedTierSize))"
                         />
                         <q-icon v-else name="check_circle" color="positive" size="sm" />
                       </td>
@@ -538,7 +586,7 @@ onUnmounted(() => {
       <!-- ═══ Sector Enrichment Tab ═══ -->
       <q-tab-panel name="sectors" class="q-pa-none">
         <div class="row items-center q-mb-md q-gutter-md">
-          <span class="text-subtitle2">Top patents per sector:</span>
+          <span class="text-subtitle2">Coverage Scope:</span>
           <q-select
             v-model="selectedTopPerSector"
             :options="topPerSectorOptions"
@@ -546,9 +594,14 @@ onUnmounted(() => {
             map-options
             outlined
             dense
-            style="min-width: 120px"
+            style="min-width: 180px"
             @update:model-value="loadSectorEnrichment"
           />
+          <q-icon name="help_outline" color="grey-6" size="sm" class="cursor-pointer">
+            <q-tooltip max-width="400px" class="text-body2" style="white-space: pre-line;">
+              {{ sectorScopeTooltip }}
+            </q-tooltip>
+          </q-icon>
           <q-btn flat icon="refresh" label="Refresh" :loading="sectorEnrichmentLoading" @click="loadSectorEnrichment" />
         </div>
 
@@ -685,7 +738,7 @@ onUnmounted(() => {
                 </q-item-section>
                 <q-item-section>
                   <q-item-label class="text-weight-medium">
-                    {{ item.jobs[0]?.targetType }}: {{ item.jobs[0]?.targetValue }}
+                    {{ item.jobs[0]?.targetType === 'tier' ? formatJobTarget(item.jobs[0]) : `${item.jobs[0]?.targetType}: ${item.jobs[0]?.targetValue}` }}
                   </q-item-label>
                   <q-item-label caption>
                     {{ item.jobs.length }} jobs | Started {{ formatDate(item.jobs[0]?.startedAt) }}
@@ -723,7 +776,7 @@ onUnmounted(() => {
                     </q-badge>
                     <q-spinner v-if="job.status === 'running'" size="xs" color="blue" class="q-ml-xs" />
                     <span v-if="!item.isGroup" class="text-grey-7">
-                      {{ job.targetType }}: {{ job.targetValue }}
+                      {{ job.targetType === 'tier' ? formatJobTarget(job) : `${job.targetType}: ${job.targetValue}` }}
                     </span>
                   </q-item-label>
                   <q-item-label caption>

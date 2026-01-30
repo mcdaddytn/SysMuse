@@ -38,6 +38,51 @@ interface PatentDetails {
   cpc_codes?: string[];
 }
 
+// Retry helper for rate-limited requests
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  baseDelayMs = 5000
+): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.status === 429) {
+      if (attempt < maxRetries) {
+        // Exponential backoff: 5s, 10s, 20s
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.log(`  Rate limited (429). Waiting ${delay / 1000}s before retry ${attempt + 1}/${maxRetries}...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+    }
+
+    return response;
+  }
+
+  throw lastError || new Error('Max retries exceeded');
+}
+
+// Invalidate server cache after job completion
+async function invalidateServerCache(): Promise<void> {
+  try {
+    const response = await fetch('http://localhost:3001/api/patents/invalidate-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (response.ok) {
+      console.log('\n[Cache] Server enrichment cache invalidated');
+    } else {
+      console.log('\n[Cache] Failed to invalidate cache (server may not be running)');
+    }
+  } catch (error) {
+    console.log('\n[Cache] Could not contact server to invalidate cache');
+  }
+}
+
 async function fetchPatentDetails(patentIds: string[]): Promise<PatentDetails[]> {
   const results: PatentDetails[] = [];
   const apiKey = getApiKey();
@@ -56,15 +101,20 @@ async function fetchPatentDetails(patentIds: string[]): Promise<PatentDetails[]>
         o: { size: 1 }
       };
 
-      const response = await fetch(`${PATENTSVIEW_BASE_URL}/patent/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Api-Key': apiKey,
+      const response = await fetchWithRetry(
+        `${PATENTSVIEW_BASE_URL}/patent/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Api-Key': apiKey,
+          },
+          body: JSON.stringify(requestBody),
         },
-        body: JSON.stringify(requestBody),
-      });
+        3,  // maxRetries
+        5000 // baseDelayMs (5s, then 10s, then 20s)
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -260,6 +310,9 @@ async function main() {
   for (const [type, count] of [...marketSegments.entries()].sort((a, b) => b[1] - a[1])) {
     console.log(`    ${type}: ${count}`);
   }
+
+  // Invalidate server cache so new results are visible immediately
+  await invalidateServerCache();
 }
 
 main().catch(console.error);

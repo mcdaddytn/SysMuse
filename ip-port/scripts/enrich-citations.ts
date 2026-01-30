@@ -30,6 +30,49 @@ const CANDIDATES_DIR = path.join(process.cwd(), 'output');
 const RATE_LIMIT_MS = 1500; // 1.5 seconds between API calls (45/min limit)
 const BATCH_DETAIL_SIZE = 100; // Max patents per detail fetch
 
+// Retry helper for rate-limited requests
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  baseDelayMs = 5000
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.status === 429) {
+      if (attempt < maxRetries) {
+        // Exponential backoff: 5s, 10s, 20s
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.log(`  Rate limited (429). Waiting ${delay / 1000}s before retry ${attempt + 1}/${maxRetries}...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+    }
+
+    return response;
+  }
+
+  throw new Error('Max retries exceeded');
+}
+
+// Invalidate server cache after job completion
+async function invalidateServerCache(): Promise<void> {
+  try {
+    const response = await fetch('http://localhost:3001/api/patents/invalidate-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (response.ok) {
+      console.log('\n[Cache] Server enrichment cache invalidated');
+    } else {
+      console.log('\n[Cache] Failed to invalidate cache (server may not be running)');
+    }
+  } catch (error) {
+    console.log('\n[Cache] Could not contact server to invalidate cache');
+  }
+}
+
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -101,19 +144,24 @@ function simpleScore(candidate: any, classification: any): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchBackwardCitations(patentId: string, apiKey: string): Promise<string[]> {
-  const response = await fetch(`${PATENTSVIEW_BASE_URL}/patent/us_patent_citation/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Api-Key': apiKey,
+  const response = await fetchWithRetry(
+    `${PATENTSVIEW_BASE_URL}/patent/us_patent_citation/`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Api-Key': apiKey,
+      },
+      body: JSON.stringify({
+        q: { patent_id: patentId },
+        f: ['citation_patent_id'],
+        o: { size: 500 },
+      }),
     },
-    body: JSON.stringify({
-      q: { patent_id: patentId },
-      f: ['citation_patent_id'],
-      o: { size: 500 },
-    }),
-  });
+    3,  // maxRetries
+    5000 // baseDelayMs
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -143,19 +191,24 @@ async function fetchPatentDetails(
     const batch = patentIds.slice(i, i + BATCH_DETAIL_SIZE);
 
     try {
-      const response = await fetch(`${PATENTSVIEW_BASE_URL}/patent/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Api-Key': apiKey,
+      const response = await fetchWithRetry(
+        `${PATENTSVIEW_BASE_URL}/patent/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Api-Key': apiKey,
+          },
+          body: JSON.stringify({
+            q: { _or: batch.map(id => ({ patent_id: id })) },
+            f: ['patent_id', 'patent_title', 'patent_date', 'patent_abstract', 'assignees'],
+            o: { size: BATCH_DETAIL_SIZE },
+          }),
         },
-        body: JSON.stringify({
-          q: { _or: batch.map(id => ({ patent_id: id })) },
-          f: ['patent_id', 'patent_title', 'patent_date', 'patent_abstract', 'assignees'],
-          o: { size: BATCH_DETAIL_SIZE },
-        }),
-      });
+        3,  // maxRetries
+        5000 // baseDelayMs
+      );
 
       if (!response.ok) {
         console.warn(`    Detail fetch error ${response.status} for batch starting ${batch[0]}`);
@@ -368,6 +421,9 @@ async function main() {
   console.log(`Errors:                  ${errors}`);
   console.log(`Parent cache:            ${PARENT_CITATIONS_DIR}`);
   console.log(`Summary:                 ${summaryPath}`);
+
+  // Invalidate server cache so new results are visible immediately
+  await invalidateServerCache();
 }
 
 main().catch(console.error);

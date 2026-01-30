@@ -37,7 +37,7 @@ let batchJobs: BatchJob[] = [];
 
 // Default rate estimates (patents per hour) - will be refined over time
 const DEFAULT_RATES: Record<CoverageType, number> = {
-  llm: 500,
+  llm: 150, // ~5 patents per batch, ~20 sec/batch = 150/hour (conservative)
   prosecution: 600,
   ipr: 600,
   family: 500,
@@ -46,9 +46,11 @@ const DEFAULT_RATES: Record<CoverageType, number> = {
 function loadJobs(): void {
   try {
     if (fs.existsSync(JOBS_FILE)) {
-      batchJobs = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
+      let loaded = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
+      // Filter out legacy jobs without coverageType
+      loaded = loaded.filter((j: BatchJob) => j.coverageType);
       // Mark any "running" jobs as "completed" since we lost track on restart
-      batchJobs = batchJobs.map(j => ({
+      batchJobs = loaded.map((j: BatchJob) => ({
         ...j,
         status: j.status === 'running' ? 'completed' : j.status
       }));
@@ -68,9 +70,45 @@ function saveJobs(): void {
   }
 }
 
+// Parse tier value - handles both "5000" (legacy) and "4001-5000" (range) formats
+function parseTierValue(targetValue: string): number {
+  if (targetValue.includes('-')) {
+    // Range format: "4001-5000" → use end value (5000)
+    const parts = targetValue.split('-').map(s => parseInt(s.replace(/,/g, '')));
+    return parts[1] || parts[0] || 6000;
+  }
+  return parseInt(targetValue.replace(/,/g, '')) || 6000;
+}
+
 // Analyze gaps for a given target
 function analyzeGaps(targetType: TargetType, targetValue: string): Record<CoverageType, { total: number; gap: number; ids: string[] }> {
   try {
+    const tierTopN = targetType === 'tier' ? parseTierValue(targetValue) : 6000;
+
+    // Build sector matching condition that handles legacy uppercase names
+    let sectorCondition = `p.super_sector === '${targetValue}'`;
+    if (targetValue === 'Video & Streaming') {
+      sectorCondition = `(p.super_sector === 'Video & Streaming' || p.super_sector === 'VIDEO_STREAMING')`;
+    } else if (targetValue === 'SDN & Network Infrastructure') {
+      sectorCondition = `(p.super_sector === 'SDN & Network Infrastructure' || p.super_sector === 'SDN_NETWORK')`;
+    } else if (targetValue === 'Computing & Data') {
+      sectorCondition = `(p.super_sector === 'Computing & Data' || p.super_sector === 'COMPUTING')`;
+    } else if (targetValue === 'Virtualization & Cloud') {
+      sectorCondition = `(p.super_sector === 'Virtualization & Cloud' || p.super_sector === 'VIRTUALIZATION')`;
+    } else if (targetValue === 'Imaging & Optics') {
+      sectorCondition = `(p.super_sector === 'Imaging & Optics' || p.super_sector === 'IMAGING')`;
+    } else if (targetValue === 'Wireless & RF') {
+      sectorCondition = `(p.super_sector === 'Wireless & RF' || p.super_sector === 'WIRELESS')`;
+    } else if (targetValue === 'Semiconductor') {
+      sectorCondition = `(p.super_sector === 'Semiconductor' || p.super_sector === 'SEMICONDUCTOR')`;
+    } else if (targetValue === 'Security') {
+      sectorCondition = `(p.super_sector === 'Security' || p.super_sector === 'SECURITY')`;
+    } else if (targetValue === 'Audio') {
+      sectorCondition = `(p.super_sector === 'Audio' || p.super_sector === 'AUDIO')`;
+    } else if (targetValue === 'AI & Machine Learning') {
+      sectorCondition = `(p.super_sector === 'AI & Machine Learning' || p.super_sector === 'AI_ML')`;
+    }
+
     const script = `
       const fs = require('fs');
       const candidatesFile = fs.readdirSync('output')
@@ -80,9 +118,9 @@ function analyzeGaps(targetType: TargetType, targetValue: string): Record<Covera
 
       let patents;
       if ('${targetType}' === 'tier') {
-        patents = data.candidates.sort((a, b) => b.score - a.score).slice(0, ${parseInt(targetValue) || 6000});
+        patents = data.candidates.sort((a, b) => b.score - a.score).slice(0, ${tierTopN});
       } else if ('${targetType}' === 'super-sector') {
-        patents = data.candidates.filter(p => p.super_sector === '${targetValue}');
+        patents = data.candidates.filter(p => ${sectorCondition});
       } else {
         patents = data.candidates.filter(p => p.primary_sector === '${targetValue}');
       }

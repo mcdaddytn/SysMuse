@@ -765,7 +765,9 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
  */
 router.get('/sector-enrichment', (_req: Request, res: Response) => {
   try {
-    const topPerSector = Math.min(1000, Math.max(100, parseInt(_req.query.topPerSector as string) || 500));
+    // topPerSector: 0 = all patents, otherwise limit to that number
+    const rawTopPerSector = parseInt(_req.query.topPerSector as string);
+    const topPerSector = rawTopPerSector === 0 ? Infinity : Math.max(100, rawTopPerSector || 500);
 
     const patents = loadPatents();
     const { llmSet, prosSet, iprSet, familySet } = getEnrichmentCacheSets();
@@ -781,9 +783,9 @@ router.get('/sector-enrichment', (_req: Request, res: Response) => {
     // Build sector summaries
     const sectors = Object.entries(bySector)
       .map(([name, sectorPatents]) => {
-        // Sort by score descending, take top N
+        // Sort by score descending, take top N (or all if topPerSector is Infinity)
         const sorted = [...sectorPatents].sort((a, b) => b.score - a.score);
-        const top = sorted.slice(0, topPerSector);
+        const top = topPerSector === Infinity ? sorted : sorted.slice(0, topPerSector);
         const ids = top.map(p => p.patent_id);
 
         const llmCount = ids.filter(id => llmSet.has(id)).length;
@@ -1581,6 +1583,20 @@ router.get('/:id/backward-citations', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting backward citations:', error);
     res.status(500).json({ error: 'Failed to get backward citations' });
+  }
+});
+
+/**
+ * POST /api/patents/invalidate-cache
+ * Invalidate the enrichment cache (call after jobs complete)
+ */
+router.post('/invalidate-cache', (_req: Request, res: Response) => {
+  try {
+    invalidateEnrichmentCache();
+    res.json({ success: true, message: 'Enrichment cache invalidated' });
+  } catch (error) {
+    console.error('Error invalidating cache:', error);
+    res.status(500).json({ error: 'Failed to invalidate cache' });
   }
 });
 

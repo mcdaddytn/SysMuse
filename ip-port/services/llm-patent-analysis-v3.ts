@@ -28,6 +28,7 @@ const LLM_MAX_RETRIES = parseInt(process.env.LLM_MAX_RETRIES || '3');
 
 const LLM_OUTPUT_DIR = './output/llm-analysis-v3';
 const BATCHES_DIR = './output/llm-analysis-v3/batches';
+const LLM_CACHE_DIR = './cache/llm-scores';
 
 // V3 schema with cross-sector signals
 const PatentAnalysisV3Schema = z.object({
@@ -340,24 +341,44 @@ export class LLMPatentAnalyzerV3 {
     ) / 5 * 100;
   }
 
-  // Aggregate all results and save combined output
+  // Aggregate all results and save combined output + per-patent cache files
   async saveResults(results: PatentAnalysisV3[]): Promise<string> {
     const outputPath = path.join(LLM_OUTPUT_DIR, `combined-v3-${this.getDateString()}.json`);
 
+    // Ensure cache directory exists
+    if (!fs.existsSync(LLM_CACHE_DIR)) {
+      fs.mkdirSync(LLM_CACHE_DIR, { recursive: true });
+    }
+
+    const enrichedResults = results.map(r => ({
+      ...r,
+      legal_viability_score: this.calculateLegalViabilityScore(r),
+      enforcement_potential_score: this.calculateEnforcementPotentialScore(r),
+      market_value_score: this.calculateMarketValueScore(r),
+    }));
+
+    // Save combined output
     const output = {
       generated_at: new Date().toISOString(),
       version: 'v3',
       total_patents: results.length,
-      analyses: results.map(r => ({
-        ...r,
-        legal_viability_score: this.calculateLegalViabilityScore(r),
-        enforcement_potential_score: this.calculateEnforcementPotentialScore(r),
-        market_value_score: this.calculateMarketValueScore(r),
-      })),
+      analyses: enrichedResults,
     };
 
     fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
     console.log(`\nCombined results saved to: ${outputPath}`);
+
+    // Save per-patent cache files for enrichment tracking
+    for (const result of enrichedResults) {
+      const cacheFile = path.join(LLM_CACHE_DIR, `${result.patent_id}.json`);
+      const cacheRecord = {
+        ...result,
+        source: 'v3',
+        cached_at: new Date().toISOString(),
+      };
+      fs.writeFileSync(cacheFile, JSON.stringify(cacheRecord, null, 2));
+    }
+    console.log(`Per-patent cache files saved to: ${LLM_CACHE_DIR} (${results.length} files)`);
 
     return outputPath;
   }

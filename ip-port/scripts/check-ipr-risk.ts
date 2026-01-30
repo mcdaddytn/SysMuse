@@ -26,6 +26,23 @@ import { PTABClient, PTABTrial } from '../clients/odp-ptab-client.js';
 dotenv.config();
 
 const apiKey = process.env.USPTO_ODP_API_KEY;
+
+// Invalidate server cache after job completion
+async function invalidateServerCache(): Promise<void> {
+  try {
+    const response = await fetch('http://localhost:3001/api/patents/invalidate-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (response.ok) {
+      console.log('\n[Cache] Server enrichment cache invalidated');
+    } else {
+      console.log('\n[Cache] Failed to invalidate cache (server may not be running)');
+    }
+  } catch (error) {
+    console.log('\n[Cache] Could not contact server to invalidate cache');
+  }
+}
 const IPR_CACHE_DIR = path.join(process.cwd(), 'cache/ipr-scores');
 
 interface IPRRiskData {
@@ -388,6 +405,9 @@ async function main() {
       console.log(`  ... and ${withIPR.length - 10} more`);
     }
   }
+
+  // Invalidate server cache so new results are visible immediately
+  await invalidateServerCache();
 }
 
 main().catch(console.error);

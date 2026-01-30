@@ -1308,16 +1308,28 @@ export interface SectorEnrichmentSummary {
 }
 
 // Batch Job types
+export type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
+export type TargetType = 'tier' | 'super-sector' | 'sector';
+
 export interface BatchJob {
   id: string;
-  type: 'tier' | 'super-sector' | 'sector' | 'queue';
-  target: string;
+  groupId?: string;
+  targetType: TargetType;
+  targetValue: string;
+  coverageType: CoverageType;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   pid?: number;
   startedAt?: string;
   completedAt?: string;
   logFile?: string;
   error?: string;
+  progress?: {
+    total: number;
+    completed: number;
+  };
+  estimatedRate?: number;
+  actualRate?: number;
+  estimatedCompletion?: string;
 }
 
 export interface BatchJobsResponse {
@@ -1328,6 +1340,19 @@ export interface BatchJobsResponse {
     completed: number;
     failed: number;
   };
+}
+
+export interface GapsResponse {
+  targetType: TargetType;
+  targetValue: string;
+  gaps: Record<CoverageType, { total: number; gap: number }>;
+  estimatedRates: Record<CoverageType, number>;
+}
+
+export interface StartJobsResponse {
+  groupId: string;
+  jobs: BatchJob[];
+  gaps: Record<CoverageType, { total: number; gap: number }>;
 }
 
 // Sector Enrichment API (extension of patentApi)
@@ -1345,12 +1370,18 @@ export const batchJobsApi = {
     return data;
   },
 
-  async startJob(job: {
-    type: 'tier' | 'super-sector' | 'sector';
-    target: string;
+  async getGaps(targetType: TargetType, targetValue: string): Promise<GapsResponse> {
+    const { data } = await api.get('/batch-jobs/gaps', { params: { targetType, targetValue } });
+    return data;
+  },
+
+  async startJobs(params: {
+    targetType: TargetType;
+    targetValue: string;
+    coverageTypes: CoverageType[];
     maxHours?: number;
-  }): Promise<{ job: BatchJob }> {
-    const { data } = await api.post('/batch-jobs', job);
+  }): Promise<StartJobsResponse> {
+    const { data } = await api.post('/batch-jobs', params);
     return data;
   },
 
@@ -1359,17 +1390,13 @@ export const batchJobsApi = {
     return data;
   },
 
-  async getJobLog(jobId: string, lines = 50): Promise<{ log: string }> {
-    const { data } = await api.get(`/batch-jobs/${jobId}/log`, { params: { lines } });
+  async cancelJobGroup(groupId: string): Promise<{ cancelled: number }> {
+    const { data } = await api.delete(`/batch-jobs/group/${groupId}`);
     return data;
   },
 
-  async queueJobs(jobs: Array<{
-    type: 'tier' | 'super-sector' | 'sector';
-    target: string;
-    maxHours?: number;
-  }>): Promise<{ job: BatchJob; queueFile: string }> {
-    const { data } = await api.post('/batch-jobs/queue', { jobs });
+  async getJobLog(jobId: string, lines = 50): Promise<{ log: string }> {
+    const { data } = await api.get(`/batch-jobs/${jobId}/log`, { params: { lines } });
     return data;
   },
 };

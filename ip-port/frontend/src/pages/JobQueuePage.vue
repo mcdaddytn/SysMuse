@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted } from 'vue';
-import { patentApi, enrichmentApi, batchJobsApi, type EnrichmentSummary, type SectorEnrichmentSummary, type BatchJob, type BatchJobsResponse } from '@/services/api';
+import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
+import {
+  patentApi, enrichmentApi, batchJobsApi,
+  type EnrichmentSummary, type SectorEnrichmentSummary,
+  type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse
+} from '@/services/api';
 
 const activeTab = ref('enrichment');
 
@@ -73,6 +77,10 @@ const batchJobsData = ref<BatchJobsResponse | null>(null);
 const jobsLoading = ref(false);
 const jobsError = ref<string | null>(null);
 let jobsRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let etaUpdateInterval: ReturnType<typeof setInterval> | null = null;
+
+// Reactive timestamp to force ETA recalculation
+const currentTime = ref(Date.now());
 
 async function loadBatchJobs() {
   jobsLoading.value = true;
@@ -86,17 +94,59 @@ async function loadBatchJobs() {
   }
 }
 
-// New Job Dialog
+// Group jobs by groupId for display
+const groupedJobs = computed(() => {
+  if (!batchJobsData.value) return [];
+
+  const groups: Map<string, BatchJob[]> = new Map();
+  const ungrouped: BatchJob[] = [];
+
+  for (const job of batchJobsData.value.jobs) {
+    if (job.groupId) {
+      if (!groups.has(job.groupId)) {
+        groups.set(job.groupId, []);
+      }
+      groups.get(job.groupId)!.push(job);
+    } else {
+      ungrouped.push(job);
+    }
+  }
+
+  // Convert to array format for display
+  const result: Array<{ isGroup: boolean; groupId?: string; jobs: BatchJob[]; job?: BatchJob }> = [];
+
+  for (const [groupId, jobs] of groups) {
+    result.push({ isGroup: true, groupId, jobs });
+  }
+
+  for (const job of ungrouped) {
+    result.push({ isGroup: false, job, jobs: [] });
+  }
+
+  return result;
+});
+
+// ─── Start Job Dialog ────────────────────────────────────────────────────────
 const showNewJobDialog = ref(false);
-const newJobType = ref<'tier' | 'super-sector' | 'sector'>('tier');
-const newJobTarget = ref('6000');
+const newJobTargetType = ref<TargetType>('tier');
+const newJobTargetValue = ref('6000');
+const newJobCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family']);
 const newJobMaxHours = ref(4);
 const startingJob = ref(false);
+const gapsData = ref<GapsResponse | null>(null);
+const loadingGaps = ref(false);
 
-const jobTypeOptions = [
+const targetTypeOptions = [
   { value: 'tier', label: 'Tier (Top N patents)' },
   { value: 'super-sector', label: 'Super-Sector' },
   { value: 'sector', label: 'Sector' }
+];
+
+const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: string }> = [
+  { value: 'llm', label: 'LLM Analysis', color: 'blue' },
+  { value: 'prosecution', label: 'Prosecution History', color: 'purple' },
+  { value: 'ipr', label: 'IPR / PTAB', color: 'orange' },
+  { value: 'family', label: 'Patent Families', color: 'teal' }
 ];
 
 const superSectorOptions = [
@@ -105,24 +155,99 @@ const superSectorOptions = [
   'Imaging & Optics', 'Audio', 'AI & Machine Learning'
 ];
 
+// Load gaps when dialog opens or target changes
+async function loadGaps() {
+  if (!newJobTargetValue.value) return;
+  loadingGaps.value = true;
+  try {
+    gapsData.value = await batchJobsApi.getGaps(newJobTargetType.value, newJobTargetValue.value);
+  } catch (err) {
+    console.error('Failed to load gaps:', err);
+    gapsData.value = null;
+  } finally {
+    loadingGaps.value = false;
+  }
+}
+
+watch([newJobTargetType, newJobTargetValue], () => {
+  if (showNewJobDialog.value) {
+    loadGaps();
+  }
+});
+
+watch(showNewJobDialog, (open) => {
+  if (open) {
+    loadGaps();
+  }
+});
+
 async function startNewJob() {
   startingJob.value = true;
   try {
-    await batchJobsApi.startJob({
-      type: newJobType.value,
-      target: newJobTarget.value,
+    await batchJobsApi.startJobs({
+      targetType: newJobTargetType.value,
+      targetValue: newJobTargetValue.value,
+      coverageTypes: newJobCoverageTypes.value,
       maxHours: newJobMaxHours.value
     });
     showNewJobDialog.value = false;
     await loadBatchJobs();
   } catch (err: unknown) {
     const error = err as { response?: { data?: { error?: string } } };
-    alert(error.response?.data?.error || 'Failed to start job');
+    alert(error.response?.data?.error || 'Failed to start jobs');
   } finally {
     startingJob.value = false;
   }
 }
 
+// ─── Contextual Enrich Dialogs ───────────────────────────────────────────────
+const showEnrichDialog = ref(false);
+const enrichDialogTargetType = ref<TargetType>('tier');
+const enrichDialogTargetValue = ref('');
+const enrichDialogCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family']);
+const enrichDialogGaps = ref<GapsResponse | null>(null);
+const enrichDialogLoading = ref(false);
+const enrichDialogStarting = ref(false);
+
+async function openEnrichDialog(targetType: TargetType, targetValue: string) {
+  enrichDialogTargetType.value = targetType;
+  enrichDialogTargetValue.value = targetValue;
+  enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'ipr', 'family'];
+  enrichDialogGaps.value = null;
+  showEnrichDialog.value = true;
+
+  // Load gaps
+  enrichDialogLoading.value = true;
+  try {
+    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue);
+  } catch (err) {
+    console.error('Failed to load gaps:', err);
+  } finally {
+    enrichDialogLoading.value = false;
+  }
+}
+
+async function startEnrichFromDialog() {
+  enrichDialogStarting.value = true;
+  try {
+    await batchJobsApi.startJobs({
+      targetType: enrichDialogTargetType.value,
+      targetValue: enrichDialogTargetValue.value,
+      coverageTypes: enrichDialogCoverageTypes.value,
+      maxHours: 4
+    });
+    showEnrichDialog.value = false;
+    activeTab.value = 'jobs';
+    await loadBatchJobs();
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { error?: string } } };
+    alert(error.response?.data?.error || 'Failed to start enrichment');
+  } finally {
+    enrichDialogStarting.value = false;
+  }
+}
+
+// ─── Job Actions ─────────────────────────────────────────────────────────────
 async function cancelJob(jobId: string) {
   if (!confirm('Cancel this job?')) return;
   try {
@@ -133,20 +258,13 @@ async function cancelJob(jobId: string) {
   }
 }
 
-// Quick Start from Sector table
-async function quickStartSectorJob(sectorName: string) {
-  if (!confirm(`Start enrichment job for "${sectorName}"?`)) return;
+async function cancelJobGroup(groupId: string) {
+  if (!confirm('Cancel all jobs in this group?')) return;
   try {
-    await batchJobsApi.startJob({
-      type: 'super-sector',
-      target: sectorName,
-      maxHours: 4
-    });
-    activeTab.value = 'jobs';
+    await batchJobsApi.cancelJobGroup(groupId);
     await loadBatchJobs();
-  } catch (err: unknown) {
-    const error = err as { response?: { data?: { error?: string } } };
-    alert(error.response?.data?.error || 'Failed to start job');
+  } catch (err) {
+    console.error('Failed to cancel job group:', err);
   }
 }
 
@@ -166,7 +284,7 @@ async function viewJobLog(jobId: string) {
   }
 }
 
-// Helpers
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function enrichmentPct(count: number, total: number): number {
   return total > 0 ? Math.round(count / total * 1000) / 10 : 0;
 }
@@ -189,9 +307,14 @@ function getStatusColor(status: string) {
   }
 }
 
+function getCoverageColor(type: CoverageType): string {
+  const opt = coverageTypeOptions.find(o => o.value === type);
+  return opt?.color || 'grey';
+}
+
 function formatDate(dateStr?: string): string {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString();
+  return new Date(dateStr).toLocaleTimeString();
 }
 
 function formatDuration(startedAt?: string, completedAt?: string): string {
@@ -203,20 +326,33 @@ function formatDuration(startedAt?: string, completedAt?: string): string {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+function formatETA(dateStr?: string): string {
+  if (!dateStr) return '-';
+  const eta = new Date(dateStr);
+  // Use reactive currentTime to force recalculation
+  const diff = eta.getTime() - currentTime.value;
+  if (diff <= 0) return 'Soon';
+  const mins = Math.round(diff / 60000);
+  if (mins < 60) return `~${mins}m`;
+  return `~${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function getGroupStatus(jobs: BatchJob[]): string {
+  if (jobs.some(j => j.status === 'running')) return 'running';
+  if (jobs.every(j => j.status === 'completed')) return 'completed';
+  if (jobs.some(j => j.status === 'failed')) return 'failed';
+  if (jobs.some(j => j.status === 'cancelled')) return 'cancelled';
+  return 'pending';
+}
+
 // Metric descriptions
 const metricDescriptions: Record<string, string> = {
   'Patents': 'Number of patents in this tier',
-  'Base Score Range': 'Multi-factor base score: citation score (log-scaled) + time score (remaining years) + velocity score (citations per year), multiplied by sector damages potential (0.8x-1.5x). Range 0-200.',
-  'Expired': 'Patents with 0 or fewer years of remaining term',
-  'Active 3yr+': 'Patents with at least 3 years of remaining term',
-  'Avg Years Left': 'Average remaining patent term in years across the tier',
-  'Median Years Left': 'Median remaining patent term in years across the tier',
-  'Avg Forward Cites': 'Average number of forward citations (patents that cite this patent) from the PatentsView database',
-  'Avg Competitor Cites': 'Average number of forward citations originating from known competitor companies',
-  'LLM Coverage': 'Patents with AI-generated analysis (summary, legal scores, classification) from the LLM enrichment pipeline',
-  'Prosecution': 'Patents with prosecution history data retrieved from the USPTO File Wrapper API',
-  'IPR / PTAB': 'Patents checked for inter partes review (IPR) and Patent Trial & Appeal Board (PTAB) proceedings',
-  'Families': 'Patents with backward citation (parent patent) data from the patent families pipeline',
+  'Base Score Range': 'Multi-factor base score including citations, time, and sector factors.',
+  'LLM Coverage': 'Patents with AI-generated analysis from the LLM enrichment pipeline',
+  'Prosecution': 'Patents with prosecution history data from USPTO',
+  'IPR / PTAB': 'Patents checked for inter partes review proceedings',
+  'Families': 'Patents with backward citation data from patent families pipeline',
 };
 
 // Lifecycle
@@ -225,17 +361,25 @@ onMounted(() => {
   loadSectorEnrichment();
   loadBatchJobs();
 
-  // Auto-refresh jobs every 30 seconds
+  // Auto-refresh jobs every 15 seconds
   jobsRefreshInterval = setInterval(() => {
     if (activeTab.value === 'jobs') {
       loadBatchJobs();
     }
-  }, 30000);
+  }, 15000);
+
+  // Update ETA display every 10 seconds
+  etaUpdateInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 10000);
 });
 
 onUnmounted(() => {
   if (jobsRefreshInterval) {
     clearInterval(jobsRefreshInterval);
+  }
+  if (etaUpdateInterval) {
+    clearInterval(etaUpdateInterval);
   }
 });
 </script>
@@ -246,7 +390,6 @@ onUnmounted(() => {
       <div class="text-h5 q-mr-md">Jobs &amp; Enrichment</div>
     </div>
 
-    <!-- Tab Navigation -->
     <q-tabs v-model="activeTab" class="q-mb-md" align="left" active-color="primary">
       <q-tab name="enrichment" label="Enrichment Overview" icon="analytics" />
       <q-tab name="sectors" label="Sector Enrichment" icon="category" />
@@ -256,7 +399,6 @@ onUnmounted(() => {
     <q-tab-panels v-model="activeTab" animated>
       <!-- ═══ Enrichment Overview Tab (Tier-based) ═══ -->
       <q-tab-panel name="enrichment" class="q-pa-none">
-        <!-- Tier size selector -->
         <div class="row items-center q-mb-md q-gutter-md">
           <span class="text-subtitle2">Tier Size:</span>
           <q-select
@@ -272,20 +414,14 @@ onUnmounted(() => {
           <q-btn flat icon="refresh" label="Refresh" :loading="enrichmentLoading" @click="loadEnrichmentSummary" />
         </div>
 
-        <!-- Loading -->
         <div v-if="enrichmentLoading && !enrichmentData" class="row justify-center q-pa-xl">
           <q-spinner size="lg" color="primary" />
         </div>
 
-        <!-- Error -->
         <q-banner v-else-if="enrichmentError" class="bg-negative text-white q-mb-md">
           {{ enrichmentError }}
-          <template v-slot:action>
-            <q-btn flat label="Retry" @click="loadEnrichmentSummary" />
-          </template>
         </q-banner>
 
-        <!-- Data -->
         <template v-else-if="enrichmentData">
           <!-- Overall Summary Cards -->
           <div class="row q-gutter-md q-mb-lg">
@@ -295,74 +431,20 @@ onUnmounted(() => {
                 <div class="text-grey-6">Total Patents</div>
               </q-card-section>
             </q-card>
-            <q-card class="col">
+            <q-card v-for="(label, key) in { llm: 'LLM', prosecution: 'Prosecution', ipr: 'IPR', family: 'Families' }" :key="key" class="col">
               <q-card-section>
                 <div class="row items-center justify-between q-mb-xs">
-                  <span class="text-weight-medium">LLM Analysis</span>
-                  <span class="text-caption">{{ enrichmentData.enrichmentTotals.llm.toLocaleString() }} / {{ enrichmentData.totalPatents.toLocaleString() }}</span>
+                  <span class="text-weight-medium">{{ label }}</span>
+                  <span class="text-caption">{{ enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals].toLocaleString() }}</span>
                 </div>
                 <q-linear-progress
-                  :value="enrichmentData.enrichmentTotals.llm / enrichmentData.totalPatents"
-                  :color="coverageColor(enrichmentPct(enrichmentData.enrichmentTotals.llm, enrichmentData.totalPatents))"
+                  :value="enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals] / enrichmentData.totalPatents"
+                  :color="coverageColor(enrichmentPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], enrichmentData.totalPatents))"
                   size="20px"
                   rounded
                 >
                   <div class="absolute-full flex flex-center">
-                    <span class="text-caption text-white text-weight-bold">{{ enrichmentPct(enrichmentData.enrichmentTotals.llm, enrichmentData.totalPatents) }}%</span>
-                  </div>
-                </q-linear-progress>
-              </q-card-section>
-            </q-card>
-            <q-card class="col">
-              <q-card-section>
-                <div class="row items-center justify-between q-mb-xs">
-                  <span class="text-weight-medium">Prosecution</span>
-                  <span class="text-caption">{{ enrichmentData.enrichmentTotals.prosecution.toLocaleString() }} / {{ enrichmentData.totalPatents.toLocaleString() }}</span>
-                </div>
-                <q-linear-progress
-                  :value="enrichmentData.enrichmentTotals.prosecution / enrichmentData.totalPatents"
-                  :color="coverageColor(enrichmentPct(enrichmentData.enrichmentTotals.prosecution, enrichmentData.totalPatents))"
-                  size="20px"
-                  rounded
-                >
-                  <div class="absolute-full flex flex-center">
-                    <span class="text-caption text-white text-weight-bold">{{ enrichmentPct(enrichmentData.enrichmentTotals.prosecution, enrichmentData.totalPatents) }}%</span>
-                  </div>
-                </q-linear-progress>
-              </q-card-section>
-            </q-card>
-            <q-card class="col">
-              <q-card-section>
-                <div class="row items-center justify-between q-mb-xs">
-                  <span class="text-weight-medium">IPR / PTAB</span>
-                  <span class="text-caption">{{ enrichmentData.enrichmentTotals.ipr.toLocaleString() }} / {{ enrichmentData.totalPatents.toLocaleString() }}</span>
-                </div>
-                <q-linear-progress
-                  :value="enrichmentData.enrichmentTotals.ipr / enrichmentData.totalPatents"
-                  :color="coverageColor(enrichmentPct(enrichmentData.enrichmentTotals.ipr, enrichmentData.totalPatents))"
-                  size="20px"
-                  rounded
-                >
-                  <div class="absolute-full flex flex-center">
-                    <span class="text-caption text-white text-weight-bold">{{ enrichmentPct(enrichmentData.enrichmentTotals.ipr, enrichmentData.totalPatents) }}%</span>
-                  </div>
-                </q-linear-progress>
-              </q-card-section>
-            </q-card>
-            <q-card class="col">
-              <q-card-section>
-                <div class="row items-center justify-between q-mb-xs">
-                  <span class="text-weight-medium">Families</span>
-                  <span class="text-caption">{{ enrichmentData.enrichmentTotals.family.toLocaleString() }} / {{ enrichmentData.totalPatents.toLocaleString() }}</span>
-                </div>
-                <q-linear-progress
-                  :value="enrichmentData.enrichmentTotals.family / enrichmentData.totalPatents"
-                  :color="coverageColor(enrichmentPct(enrichmentData.enrichmentTotals.family, enrichmentData.totalPatents))"
-                  size="20px"
-                  rounded
-                >
-                  <div class="absolute-full flex flex-center">
-                    <span class="text-caption text-white text-weight-bold">{{ enrichmentPct(enrichmentData.enrichmentTotals.family, enrichmentData.totalPatents) }}%</span>
+                    <span class="text-caption text-white text-weight-bold">{{ enrichmentPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], enrichmentData.totalPatents) }}%</span>
                   </div>
                 </q-linear-progress>
               </q-card-section>
@@ -373,7 +455,7 @@ onUnmounted(() => {
           <q-card flat bordered class="q-mb-md">
             <q-card-section class="q-pb-none">
               <div class="text-subtitle1">Tier Comparison</div>
-              <div class="text-caption text-grey-7">Patents ranked by v1 pre-screening score, broken into tiers of {{ selectedTierSize.toLocaleString() }}. Hover metric names for definitions.</div>
+              <div class="text-caption text-grey-7">Click "Enrich" to fill gaps for a tier</div>
             </q-card-section>
             <q-card-section>
               <div class="tier-table-scroll">
@@ -386,109 +468,63 @@ onUnmounted(() => {
                   </thead>
                   <tbody>
                     <tr>
-                      <td class="metric-col text-weight-medium metric-label">
-                        Patents
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{ metricDescriptions['Patents'] }}</q-tooltip>
-                      </td>
+                      <td class="metric-col text-weight-medium">Patents</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-count'">{{ tier.count.toLocaleString() }}</td>
                     </tr>
                     <tr>
-                      <td class="metric-col text-weight-medium metric-label">
-                        Base Score Range
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['Base Score Range'] }}</q-tooltip>
-                      </td>
+                      <td class="metric-col text-weight-medium">Score Range</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-score'">{{ tier.scoreRange }}</td>
                     </tr>
                     <tr class="section-separator">
-                      <td class="metric-col text-weight-medium metric-label">
-                        Expired
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{ metricDescriptions['Expired'] }}</q-tooltip>
-                      </td>
-                      <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-expired'">
-                        {{ tier.expired.toLocaleString() }}
-                        <span class="text-grey-6">({{ Math.round(tier.expired / tier.count * 100) }}%)</span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td class="metric-col text-weight-medium metric-label">
-                        Active 3yr+
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]">{{ metricDescriptions['Active 3yr+'] }}</q-tooltip>
-                      </td>
-                      <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-active'">
-                        {{ tier.active3yr.toLocaleString() }}
-                        <span class="text-grey-6">({{ Math.round(tier.active3yr / tier.count * 100) }}%)</span>
-                      </td>
-                    </tr>
-                    <tr class="section-separator">
-                      <td class="metric-col text-weight-bold metric-label">
-                        LLM Coverage
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['LLM Coverage'] }}</q-tooltip>
-                      </td>
+                      <td class="metric-col text-weight-bold">LLM</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-llm'">
                         <div class="enrichment-cell">
-                          <q-linear-progress
-                            :value="tier.enrichment.llmPct / 100"
-                            :color="coverageColor(tier.enrichment.llmPct)"
-                            size="16px"
-                            rounded
-                            class="q-mb-xs"
-                          />
-                          <span class="text-caption">{{ tier.enrichment.llm.toLocaleString() }} ({{ tier.enrichment.llmPct }}%)</span>
+                          <q-linear-progress :value="tier.enrichment.llmPct / 100" :color="coverageColor(tier.enrichment.llmPct)" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ tier.enrichment.llmPct }}%</span>
                         </div>
                       </td>
                     </tr>
                     <tr>
-                      <td class="metric-col text-weight-bold metric-label">
-                        Prosecution
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['Prosecution'] }}</q-tooltip>
-                      </td>
+                      <td class="metric-col text-weight-bold">Prosecution</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-pros'">
                         <div class="enrichment-cell">
-                          <q-linear-progress
-                            :value="tier.enrichment.prosecutionPct / 100"
-                            :color="coverageColor(tier.enrichment.prosecutionPct)"
-                            size="16px"
-                            rounded
-                            class="q-mb-xs"
-                          />
-                          <span class="text-caption">{{ tier.enrichment.prosecution.toLocaleString() }} ({{ tier.enrichment.prosecutionPct }}%)</span>
+                          <q-linear-progress :value="tier.enrichment.prosecutionPct / 100" :color="coverageColor(tier.enrichment.prosecutionPct)" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ tier.enrichment.prosecutionPct }}%</span>
                         </div>
                       </td>
                     </tr>
                     <tr>
-                      <td class="metric-col text-weight-bold metric-label">
-                        IPR / PTAB
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['IPR / PTAB'] }}</q-tooltip>
-                      </td>
+                      <td class="metric-col text-weight-bold">IPR / PTAB</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-ipr'">
                         <div class="enrichment-cell">
-                          <q-linear-progress
-                            :value="tier.enrichment.iprPct / 100"
-                            :color="coverageColor(tier.enrichment.iprPct)"
-                            size="16px"
-                            rounded
-                            class="q-mb-xs"
-                          />
-                          <span class="text-caption">{{ tier.enrichment.ipr.toLocaleString() }} ({{ tier.enrichment.iprPct }}%)</span>
+                          <q-linear-progress :value="tier.enrichment.iprPct / 100" :color="coverageColor(tier.enrichment.iprPct)" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ tier.enrichment.iprPct }}%</span>
                         </div>
                       </td>
                     </tr>
                     <tr>
-                      <td class="metric-col text-weight-bold metric-label">
-                        Families
-                        <q-tooltip anchor="center right" self="center left" :offset="[8, 0]" max-width="350px">{{ metricDescriptions['Families'] }}</q-tooltip>
-                      </td>
+                      <td class="metric-col text-weight-bold">Families</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-fam'">
                         <div class="enrichment-cell">
-                          <q-linear-progress
-                            :value="tier.enrichment.familyPct / 100"
-                            :color="coverageColor(tier.enrichment.familyPct)"
-                            size="16px"
-                            rounded
-                            class="q-mb-xs"
-                          />
-                          <span class="text-caption">{{ tier.enrichment.family.toLocaleString() }} ({{ tier.enrichment.familyPct }}%)</span>
+                          <q-linear-progress :value="tier.enrichment.familyPct / 100" :color="coverageColor(tier.enrichment.familyPct)" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ tier.enrichment.familyPct }}%</span>
                         </div>
+                      </td>
+                    </tr>
+                    <!-- Enrich Actions Row -->
+                    <tr class="section-separator">
+                      <td class="metric-col text-weight-bold">Actions</td>
+                      <td v-for="(tier, idx) in enrichmentData.tiers" :key="tier.tierLabel + '-actions'">
+                        <q-btn
+                          v-if="tier.enrichment.llmPct < 100 || tier.enrichment.prosecutionPct < 100"
+                          flat
+                          dense
+                          color="primary"
+                          icon="play_arrow"
+                          label="Enrich"
+                          @click="openEnrichDialog('tier', String((idx + 1) * selectedTierSize))"
+                        />
+                        <q-icon v-else name="check_circle" color="positive" size="sm" />
                       </td>
                     </tr>
                   </tbody>
@@ -522,19 +558,13 @@ onUnmounted(() => {
 
         <q-banner v-else-if="sectorEnrichmentError" class="bg-negative text-white q-mb-md">
           {{ sectorEnrichmentError }}
-          <template v-slot:action>
-            <q-btn flat label="Retry" @click="loadSectorEnrichment" />
-          </template>
         </q-banner>
 
         <template v-else-if="sectorEnrichmentData">
           <q-card flat bordered>
             <q-card-section class="q-pb-none">
               <div class="text-subtitle1">Sector Enrichment Overview</div>
-              <div class="text-caption text-grey-7">
-                Enrichment coverage for top {{ selectedTopPerSector.toLocaleString() }} patents in each super-sector (by base score).
-                Click "Enrich" to start a batch job for that sector.
-              </div>
+              <div class="text-caption text-grey-7">Click "Enrich" to fill gaps for a super-sector</div>
             </q-card-section>
             <q-card-section>
               <q-table
@@ -542,12 +572,10 @@ onUnmounted(() => {
                 :columns="[
                   { name: 'name', label: 'Super-Sector', field: 'name', align: 'left', sortable: true },
                   { name: 'total', label: 'Total', field: 'totalPatents', align: 'right', sortable: true },
-                  { name: 'checked', label: 'Checked', field: 'checkedPatents', align: 'right' },
                   { name: 'llm', label: 'LLM', field: (row: any) => row.enrichment.llmPct, align: 'center', sortable: true },
                   { name: 'pros', label: 'Prosecution', field: (row: any) => row.enrichment.prosecutionPct, align: 'center', sortable: true },
                   { name: 'ipr', label: 'IPR', field: (row: any) => row.enrichment.iprPct, align: 'center', sortable: true },
                   { name: 'family', label: 'Families', field: (row: any) => row.enrichment.familyPct, align: 'center', sortable: true },
-                  { name: 'gaps', label: 'Total Gaps', field: (row: any) => row.gaps.llm + row.gaps.prosecution + row.gaps.ipr + row.gaps.family, align: 'right', sortable: true },
                   { name: 'actions', label: '', field: 'actions', align: 'center' }
                 ]"
                 row-key="name"
@@ -559,12 +587,7 @@ onUnmounted(() => {
                 <template v-slot:body-cell-llm="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress
-                        :value="props.row.enrichment.llmPct / 100"
-                        :color="coverageColor(props.row.enrichment.llmPct)"
-                        size="12px"
-                        rounded
-                      />
+                      <q-linear-progress :value="props.row.enrichment.llmPct / 100" :color="coverageColor(props.row.enrichment.llmPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.llmPct }}%</span>
                     </div>
                   </q-td>
@@ -572,12 +595,7 @@ onUnmounted(() => {
                 <template v-slot:body-cell-pros="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress
-                        :value="props.row.enrichment.prosecutionPct / 100"
-                        :color="coverageColor(props.row.enrichment.prosecutionPct)"
-                        size="12px"
-                        rounded
-                      />
+                      <q-linear-progress :value="props.row.enrichment.prosecutionPct / 100" :color="coverageColor(props.row.enrichment.prosecutionPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.prosecutionPct }}%</span>
                     </div>
                   </q-td>
@@ -585,12 +603,7 @@ onUnmounted(() => {
                 <template v-slot:body-cell-ipr="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress
-                        :value="props.row.enrichment.iprPct / 100"
-                        :color="coverageColor(props.row.enrichment.iprPct)"
-                        size="12px"
-                        rounded
-                      />
+                      <q-linear-progress :value="props.row.enrichment.iprPct / 100" :color="coverageColor(props.row.enrichment.iprPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.iprPct }}%</span>
                     </div>
                   </q-td>
@@ -598,23 +611,9 @@ onUnmounted(() => {
                 <template v-slot:body-cell-family="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress
-                        :value="props.row.enrichment.familyPct / 100"
-                        :color="coverageColor(props.row.enrichment.familyPct)"
-                        size="12px"
-                        rounded
-                      />
+                      <q-linear-progress :value="props.row.enrichment.familyPct / 100" :color="coverageColor(props.row.enrichment.familyPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.familyPct }}%</span>
                     </div>
-                  </q-td>
-                </template>
-                <template v-slot:body-cell-gaps="props">
-                  <q-td :props="props">
-                    <q-badge
-                      :color="props.value > 500 ? 'negative' : props.value > 100 ? 'warning' : 'positive'"
-                    >
-                      {{ props.value.toLocaleString() }}
-                    </q-badge>
                   </q-td>
                 </template>
                 <template v-slot:body-cell-actions="props">
@@ -626,14 +625,9 @@ onUnmounted(() => {
                       color="primary"
                       icon="play_arrow"
                       label="Enrich"
-                      @click="quickStartSectorJob(props.row.name)"
+                      @click="openEnrichDialog('super-sector', props.row.name)"
                     />
-                    <q-icon
-                      v-else
-                      name="check_circle"
-                      color="positive"
-                      size="sm"
-                    />
+                    <q-icon v-else name="check_circle" color="positive" size="sm" />
                   </q-td>
                 </template>
               </q-table>
@@ -667,7 +661,7 @@ onUnmounted(() => {
           <q-card class="col">
             <q-card-section class="text-center">
               <div class="text-h4 text-positive">{{ batchJobsData.stats.completed }}</div>
-              <div class="text-grey-6">Completed (7d)</div>
+              <div class="text-grey-6">Completed</div>
             </q-card-section>
           </q-card>
           <q-card class="col">
@@ -679,105 +673,122 @@ onUnmounted(() => {
         </div>
 
         <!-- Jobs Table -->
-        <q-table
-          v-if="batchJobsData"
-          :rows="batchJobsData.jobs"
-          :columns="[
-            { name: 'status', label: 'Status', field: 'status', align: 'center' },
-            { name: 'type', label: 'Type', field: 'type', align: 'left' },
-            { name: 'target', label: 'Target', field: 'target', align: 'left' },
-            { name: 'started', label: 'Started', field: 'startedAt', align: 'center' },
-            { name: 'duration', label: 'Duration', field: 'startedAt', align: 'center' },
-            { name: 'actions', label: 'Actions', field: 'actions', align: 'center' }
-          ]"
-          row-key="id"
-          flat
-          bordered
-          :pagination="{ rowsPerPage: 20 }"
-        >
-          <template v-slot:body-cell-status="props">
-            <q-td :props="props">
-              <q-badge :color="getStatusColor(props.row.status)">
-                {{ props.row.status }}
-              </q-badge>
-              <q-spinner v-if="props.row.status === 'running'" size="xs" color="blue" class="q-ml-xs" />
-            </q-td>
-          </template>
+        <q-card flat bordered v-if="batchJobsData">
+          <q-list separator>
+            <template v-for="item in groupedJobs" :key="item.groupId || item.job?.id">
+              <!-- Group Header -->
+              <q-item v-if="item.isGroup" class="bg-grey-2">
+                <q-item-section avatar>
+                  <q-badge :color="getStatusColor(getGroupStatus(item.jobs))">
+                    {{ getGroupStatus(item.jobs) }}
+                  </q-badge>
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label class="text-weight-medium">
+                    {{ item.jobs[0]?.targetType }}: {{ item.jobs[0]?.targetValue }}
+                  </q-item-label>
+                  <q-item-label caption>
+                    {{ item.jobs.length }} jobs | Started {{ formatDate(item.jobs[0]?.startedAt) }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn
+                    v-if="getGroupStatus(item.jobs) === 'running'"
+                    flat
+                    dense
+                    icon="stop"
+                    color="negative"
+                    @click="cancelJobGroup(item.groupId!)"
+                  >
+                    <q-tooltip>Cancel All</q-tooltip>
+                  </q-btn>
+                </q-item-section>
+              </q-item>
 
-          <template v-slot:body-cell-type="props">
-            <q-td :props="props">
-              <q-chip dense :color="props.row.type === 'tier' ? 'blue-2' : props.row.type === 'super-sector' ? 'purple-2' : 'teal-2'">
-                {{ props.row.type }}
-              </q-chip>
-            </q-td>
-          </template>
-
-          <template v-slot:body-cell-started="props">
-            <q-td :props="props">
-              {{ formatDate(props.row.startedAt) }}
-            </q-td>
-          </template>
-
-          <template v-slot:body-cell-duration="props">
-            <q-td :props="props">
-              {{ formatDuration(props.row.startedAt, props.row.completedAt) }}
-            </q-td>
-          </template>
-
-          <template v-slot:body-cell-actions="props">
-            <q-td :props="props">
-              <q-btn
-                flat
-                dense
-                icon="article"
-                color="grey"
-                @click="viewJobLog(props.row.id)"
+              <!-- Individual Jobs (within group or standalone) -->
+              <q-item
+                v-for="job in (item.isGroup ? item.jobs : [item.job!])"
+                :key="job.id"
+                :class="item.isGroup ? 'q-pl-xl' : ''"
               >
-                <q-tooltip>View Log</q-tooltip>
-              </q-btn>
-              <q-btn
-                v-if="props.row.status === 'running'"
-                flat
-                dense
-                icon="stop"
-                color="negative"
-                @click="cancelJob(props.row.id)"
-              >
-                <q-tooltip>Cancel</q-tooltip>
-              </q-btn>
-            </q-td>
-          </template>
+                <q-item-section avatar>
+                  <q-chip dense :color="getCoverageColor(job.coverageType)" text-color="white" size="sm">
+                    {{ job.coverageType }}
+                  </q-chip>
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>
+                    <q-badge :color="getStatusColor(job.status)" class="q-mr-sm">
+                      {{ job.status }}
+                    </q-badge>
+                    <q-spinner v-if="job.status === 'running'" size="xs" color="blue" class="q-ml-xs" />
+                    <span v-if="!item.isGroup" class="text-grey-7">
+                      {{ job.targetType }}: {{ job.targetValue }}
+                    </span>
+                  </q-item-label>
+                  <q-item-label caption>
+                    <span v-if="job.progress">{{ job.progress.total.toLocaleString() }} patents</span>
+                    <span v-if="job.estimatedRate" class="q-ml-sm">| Est: {{ job.estimatedRate }}/hr</span>
+                    <span v-if="job.actualRate" class="q-ml-sm">| Actual: {{ job.actualRate }}/hr</span>
+                    <span v-if="job.status === 'running' && job.estimatedCompletion" class="q-ml-sm">
+                      | ETA: {{ formatETA(job.estimatedCompletion) }}
+                    </span>
+                    <span v-if="job.completedAt" class="q-ml-sm">
+                      | Duration: {{ formatDuration(job.startedAt, job.completedAt) }}
+                    </span>
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-xs">
+                    <q-btn flat dense icon="article" color="grey" @click="viewJobLog(job.id)">
+                      <q-tooltip>View Log</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="job.status === 'running'"
+                      flat
+                      dense
+                      icon="stop"
+                      color="negative"
+                      @click="cancelJob(job.id)"
+                    >
+                      <q-tooltip>Cancel</q-tooltip>
+                    </q-btn>
+                  </div>
+                </q-item-section>
+              </q-item>
+            </template>
 
-          <template v-slot:no-data>
-            <div class="full-width row flex-center text-grey q-pa-xl">
-              <q-icon size="2em" name="inbox" class="q-mr-sm" />
-              No batch jobs found
-            </div>
-          </template>
-        </q-table>
+            <q-item v-if="groupedJobs.length === 0">
+              <q-item-section class="text-center text-grey q-pa-xl">
+                <q-icon size="2em" name="inbox" class="q-mb-sm" />
+                No batch jobs found
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card>
       </q-tab-panel>
     </q-tab-panels>
 
-    <!-- New Job Dialog -->
+    <!-- ═══ New Job Dialog ═══ -->
     <q-dialog v-model="showNewJobDialog">
-      <q-card style="min-width: 400px">
+      <q-card style="min-width: 450px">
         <q-card-section>
-          <div class="text-h6">Start Enrichment Job</div>
+          <div class="text-h6">Start Enrichment Jobs</div>
         </q-card-section>
 
         <q-card-section class="q-gutter-md">
           <q-select
-            v-model="newJobType"
-            :options="jobTypeOptions"
+            v-model="newJobTargetType"
+            :options="targetTypeOptions"
             emit-value
             map-options
-            label="Job Type"
+            label="Target Type"
             outlined
           />
 
           <q-input
-            v-if="newJobType === 'tier'"
-            v-model="newJobTarget"
+            v-if="newJobTargetType === 'tier'"
+            v-model="newJobTargetValue"
             label="Top N Patents"
             outlined
             type="number"
@@ -786,34 +797,98 @@ onUnmounted(() => {
 
           <q-select
             v-else
-            v-model="newJobTarget"
+            v-model="newJobTargetValue"
             :options="superSectorOptions"
             label="Super-Sector"
             outlined
           />
 
-          <q-input
-            v-model.number="newJobMaxHours"
-            label="Max Hours"
-            outlined
-            type="number"
-            hint="Maximum runtime before job stops"
-          />
+          <div>
+            <div class="text-subtitle2 q-mb-sm">Coverage Types</div>
+            <div class="row q-gutter-sm">
+              <q-checkbox
+                v-for="opt in coverageTypeOptions"
+                :key="opt.value"
+                v-model="newJobCoverageTypes"
+                :val="opt.value"
+                :label="opt.label"
+                :color="opt.color"
+              />
+            </div>
+          </div>
+
+          <!-- Gap Preview -->
+          <q-card v-if="gapsData" flat bordered class="q-mt-md">
+            <q-card-section class="q-pa-sm">
+              <div class="text-caption text-grey-7 q-mb-sm">Gaps to fill:</div>
+              <div class="row q-gutter-sm">
+                <q-chip v-for="(info, type) in gapsData.gaps" :key="type" dense :color="info.gap > 0 ? 'orange' : 'positive'" text-color="white">
+                  {{ type }}: {{ info.gap.toLocaleString() }}
+                </q-chip>
+              </div>
+            </q-card-section>
+          </q-card>
+          <div v-else-if="loadingGaps" class="text-center">
+            <q-spinner size="sm" /> Loading gaps...
+          </div>
         </q-card-section>
 
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn
             color="primary"
-            label="Start Job"
+            label="Start Jobs"
             :loading="startingJob"
+            :disable="newJobCoverageTypes.length === 0"
             @click="startNewJob"
           />
         </q-card-actions>
       </q-card>
     </q-dialog>
 
-    <!-- Log Viewer Dialog -->
+    <!-- ═══ Contextual Enrich Dialog ═══ -->
+    <q-dialog v-model="showEnrichDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6">Enrich: {{ enrichDialogTargetType }} "{{ enrichDialogTargetValue }}"</div>
+        </q-card-section>
+
+        <q-card-section>
+          <div class="text-subtitle2 q-mb-sm">Select Coverage Types</div>
+          <div class="column q-gutter-sm">
+            <q-checkbox
+              v-for="opt in coverageTypeOptions"
+              :key="opt.value"
+              v-model="enrichDialogCoverageTypes"
+              :val="opt.value"
+              :color="opt.color"
+            >
+              <span>{{ opt.label }}</span>
+              <span v-if="enrichDialogGaps" class="text-grey-6 q-ml-sm">
+                ({{ enrichDialogGaps.gaps[opt.value]?.gap.toLocaleString() || 0 }} gaps)
+              </span>
+            </q-checkbox>
+          </div>
+
+          <div v-if="enrichDialogLoading" class="text-center q-mt-md">
+            <q-spinner size="sm" /> Analyzing gaps...
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Start Enrichment"
+            :loading="enrichDialogStarting"
+            :disable="enrichDialogCoverageTypes.length === 0"
+            @click="startEnrichFromDialog"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ═══ Log Viewer Dialog ═══ -->
     <q-dialog v-model="showLogDialog" maximized>
       <q-card>
         <q-card-section class="row items-center">
@@ -821,7 +896,6 @@ onUnmounted(() => {
           <q-space />
           <q-btn flat round icon="close" v-close-popup />
         </q-card-section>
-
         <q-card-section class="log-viewer">
           <pre>{{ logContent }}</pre>
         </q-card-section>
@@ -831,79 +905,15 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.tier-table-scroll {
-  overflow-x: auto;
-}
-
-.tier-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.tier-table th,
-.tier-table td {
-  padding: 8px 12px;
-  text-align: center;
-  border-bottom: 1px solid #e0e0e0;
-  white-space: nowrap;
-}
-
-.tier-table th {
-  background: #f5f5f5;
-  font-weight: 600;
-  position: sticky;
-  top: 0;
-}
-
-.tier-table .metric-col {
-  text-align: left;
-  min-width: 160px;
-  position: sticky;
-  left: 0;
-  background: #fff;
-  z-index: 1;
-}
-
-.tier-table th.metric-col {
-  background: #f5f5f5;
-  z-index: 2;
-}
-
-.tier-table tr.section-separator td {
-  border-top: 2px solid #bdbdbd;
-}
-
-.metric-label {
-  cursor: help;
-  border-bottom: 1px dotted #9e9e9e;
-}
-
-.enrichment-cell {
-  position: relative;
-  min-width: 140px;
-}
-
-.enrichment-cell-small {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 80px;
-}
-
-.log-viewer {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  font-family: 'Fira Code', 'Consolas', monospace;
-  font-size: 12px;
-  max-height: calc(100vh - 100px);
-  overflow: auto;
-}
-
-.log-viewer pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
+.tier-table-scroll { overflow-x: auto; }
+.tier-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.tier-table th, .tier-table td { padding: 8px 12px; text-align: center; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+.tier-table th { background: #f5f5f5; font-weight: 600; }
+.tier-table .metric-col { text-align: left; min-width: 120px; position: sticky; left: 0; background: #fff; z-index: 1; }
+.tier-table th.metric-col { background: #f5f5f5; z-index: 2; }
+.tier-table tr.section-separator td { border-top: 2px solid #bdbdbd; }
+.enrichment-cell { min-width: 100px; }
+.enrichment-cell-small { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 70px; }
+.log-viewer { background: #1e1e1e; color: #d4d4d4; font-family: 'Fira Code', monospace; font-size: 12px; max-height: calc(100vh - 100px); overflow: auto; }
+.log-viewer pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
 </style>

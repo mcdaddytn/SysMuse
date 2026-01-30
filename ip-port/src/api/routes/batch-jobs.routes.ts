@@ -1,39 +1,53 @@
 import { Router, Request, Response } from 'express';
-import { exec, spawn } from 'child_process';
+import { exec, spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const router = Router();
 
-// Track running jobs in memory (would be better in Redis/DB for production)
+// Coverage types that can be run independently
+type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
+type TargetType = 'tier' | 'super-sector' | 'sector';
+
 interface BatchJob {
   id: string;
-  type: 'tier' | 'super-sector' | 'sector' | 'queue';
-  target: string; // tier topN, sector name, or queue file
+  groupId?: string; // Links related jobs together
+  targetType: TargetType;
+  targetValue: string; // tier topN, sector name
+  coverageType: CoverageType;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   pid?: number;
   startedAt?: string;
   completedAt?: string;
-  progress?: {
-    llmGap: number;
-    prosGap: number;
-    iprGap: number;
-    familyGap: number;
-  };
-  error?: string;
   logFile?: string;
+  error?: string;
+  // Progress & rate tracking
+  progress?: {
+    total: number;
+    completed: number;
+  };
+  estimatedRate?: number; // patents per hour (set when queued)
+  actualRate?: number; // patents per hour (set when completed)
+  estimatedCompletion?: string;
 }
 
-// In-memory job store (persisted to file for durability across restarts)
+// In-memory job store (persisted to file for durability)
 const JOBS_FILE = 'logs/batch-jobs.json';
 let batchJobs: BatchJob[] = [];
 
-// Load jobs from file on startup
+// Default rate estimates (patents per hour) - will be refined over time
+const DEFAULT_RATES: Record<CoverageType, number> = {
+  llm: 500,
+  prosecution: 600,
+  ipr: 600,
+  family: 500,
+};
+
 function loadJobs(): void {
   try {
     if (fs.existsSync(JOBS_FILE)) {
       batchJobs = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
-      // Mark any "running" jobs as "unknown" since we lost track
+      // Mark any "running" jobs as "completed" since we lost track on restart
       batchJobs = batchJobs.map(j => ({
         ...j,
         status: j.status === 'running' ? 'completed' : j.status
@@ -54,57 +68,99 @@ function saveJobs(): void {
   }
 }
 
-// Check for running enrichment processes
-function detectRunningJobs(): BatchJob | null {
+// Analyze gaps for a given target
+function analyzeGaps(targetType: TargetType, targetValue: string): Record<CoverageType, { total: number; gap: number; ids: string[] }> {
   try {
-    const result = require('child_process').execSync(
-      'ps aux | grep -E "run-auto-enrichment|run-llm-analysis" | grep -v grep',
+    const script = `
+      const fs = require('fs');
+      const candidatesFile = fs.readdirSync('output')
+        .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
+        .sort().pop();
+      const data = JSON.parse(fs.readFileSync('output/' + candidatesFile, 'utf-8'));
+
+      let patents;
+      if ('${targetType}' === 'tier') {
+        patents = data.candidates.sort((a, b) => b.score - a.score).slice(0, ${parseInt(targetValue) || 6000});
+      } else if ('${targetType}' === 'super-sector') {
+        patents = data.candidates.filter(p => p.super_sector === '${targetValue}');
+      } else {
+        patents = data.candidates.filter(p => p.primary_sector === '${targetValue}');
+      }
+
+      function getCacheSet(dir) {
+        if (!fs.existsSync(dir)) return new Set();
+        return new Set(fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')));
+      }
+
+      const llmSet = getCacheSet('cache/llm-scores');
+      const prosSet = getCacheSet('cache/prosecution-scores');
+      const iprSet = getCacheSet('cache/ipr-scores');
+      const familySet = getCacheSet('cache/patent-families/parents');
+
+      const ids = patents.map(p => p.patent_id);
+      const result = {
+        llm: { total: ids.length, gap: ids.filter(id => !llmSet.has(id)).length, ids: ids.filter(id => !llmSet.has(id)) },
+        prosecution: { total: ids.length, gap: ids.filter(id => !prosSet.has(id)).length, ids: ids.filter(id => !prosSet.has(id)) },
+        ipr: { total: ids.length, gap: ids.filter(id => !iprSet.has(id)).length, ids: ids.filter(id => !iprSet.has(id)) },
+        family: { total: ids.length, gap: ids.filter(id => !familySet.has(id)).length, ids: ids.filter(id => !familySet.has(id)) },
+      };
+      console.log(JSON.stringify(result));
+    `;
+
+    const result = execSync(`node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
+      encoding: 'utf-8',
+      cwd: process.cwd(),
+    });
+
+    return JSON.parse(result.trim());
+  } catch (e) {
+    console.error('Failed to analyze gaps:', e);
+    return {
+      llm: { total: 0, gap: 0, ids: [] },
+      prosecution: { total: 0, gap: 0, ids: [] },
+      ipr: { total: 0, gap: 0, ids: [] },
+      family: { total: 0, gap: 0, ids: [] },
+    };
+  }
+}
+
+// Get script command for a coverage type
+function getEnrichmentCommand(coverageType: CoverageType, batchFile: string, logFile: string): string {
+  switch (coverageType) {
+    case 'llm':
+      return `npx tsx scripts/run-llm-analysis-v3.ts ${batchFile} > ${logFile} 2>&1`;
+    case 'prosecution':
+      return `npx tsx scripts/check-prosecution-history.ts ${batchFile} > ${logFile} 2>&1`;
+    case 'ipr':
+      return `npx tsx scripts/check-ipr-risk.ts ${batchFile} > ${logFile} 2>&1`;
+    case 'family':
+      // Family script uses comma-separated IDs
+      return `npx tsx scripts/enrich-citations.ts --patent-ids "$(cat ${batchFile} | jq -r '.[]' | tr '\\n' ',' | sed 's/,$//')" > ${logFile} 2>&1`;
+    default:
+      throw new Error(`Unknown coverage type: ${coverageType}`);
+  }
+}
+
+// Detect running enrichment processes
+function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: string }> {
+  try {
+    const result = execSync(
+      'ps aux | grep -E "run-llm-analysis|check-prosecution|check-ipr|enrich-citations" | grep -v grep',
       { encoding: 'utf-8' }
     );
 
-    if (result.trim()) {
-      const lines = result.trim().split('\n');
-      // Parse the first line for PID and command
-      for (const line of lines) {
-        if (line.includes('run-auto-enrichment.sh')) {
-          const parts = line.split(/\s+/);
-          const pid = parseInt(parts[1]);
-
-          // Detect job type from command line
-          let type: BatchJob['type'] = 'tier';
-          let target = '6000';
-
-          if (line.includes('--super-sector')) {
-            type = 'super-sector';
-            const match = line.match(/--super-sector\s+"?([^"]+)"?/);
-            target = match?.[1] || 'Unknown';
-          } else if (line.includes('--sector')) {
-            type = 'sector';
-            const match = line.match(/--sector\s+"?([^"]+)"?/);
-            target = match?.[1] || 'Unknown';
-          } else if (line.includes('--queue')) {
-            type = 'queue';
-            target = 'queue file';
-          } else {
-            // Tier-based: extract topN from args
-            const match = line.match(/run-auto-enrichment\.sh\s+(\d+)/);
-            target = match?.[1] || '6000';
-          }
-
-          return {
-            id: `running-${pid}`,
-            type,
-            target,
-            status: 'running',
-            pid,
-            startedAt: new Date().toISOString(),
-          };
-        }
-      }
-    }
-    return null;
-  } catch (e) {
-    return null;
+    return result.trim().split('\n').filter(Boolean).map(line => {
+      const parts = line.split(/\s+/);
+      const pid = parseInt(parts[1]);
+      let type = 'unknown';
+      if (line.includes('run-llm-analysis')) type = 'llm';
+      else if (line.includes('check-prosecution')) type = 'prosecution';
+      else if (line.includes('check-ipr')) type = 'ipr';
+      else if (line.includes('enrich-citations')) type = 'family';
+      return { pid, type, cmd: parts.slice(10).join(' ') };
+    });
+  } catch {
+    return [];
   }
 }
 
@@ -117,32 +173,42 @@ loadJobs();
  */
 router.get('/', (_req: Request, res: Response) => {
   try {
-    // Check for any running jobs not in our list
-    const runningDetected = detectRunningJobs();
-
     // Get jobs from last 7 days
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     let recentJobs = batchJobs.filter(j =>
       (j.startedAt && j.startedAt > cutoff) || j.status === 'running' || j.status === 'pending'
     );
 
-    // If we detected a running job not in our list, add it
-    if (runningDetected && !recentJobs.find(j => j.pid === runningDetected.pid)) {
-      recentJobs = [runningDetected, ...recentJobs];
-    }
-
-    // Update status of jobs that claim to be running but aren't
+    // Update status of jobs that claim to be running
+    const runningProcesses = detectRunningProcesses();
     recentJobs = recentJobs.map(j => {
       if (j.status === 'running' && j.pid) {
-        try {
-          process.kill(j.pid, 0); // Check if process exists
-          return j;
-        } catch {
-          return { ...j, status: 'completed' as const, completedAt: new Date().toISOString() };
+        const stillRunning = runningProcesses.some(p => p.pid === j.pid);
+        if (!stillRunning) {
+          // Job finished - calculate actual rate
+          const startTime = j.startedAt ? new Date(j.startedAt).getTime() : Date.now();
+          const endTime = Date.now();
+          const hours = (endTime - startTime) / 3600000;
+          const completed = j.progress?.completed || j.progress?.total || 0;
+          const actualRate = hours > 0 ? Math.round(completed / hours) : 0;
+
+          return {
+            ...j,
+            status: 'completed' as const,
+            completedAt: new Date().toISOString(),
+            actualRate,
+          };
         }
       }
       return j;
     });
+
+    // Save any status updates
+    batchJobs = batchJobs.map(j => {
+      const updated = recentJobs.find(r => r.id === j.id);
+      return updated || j;
+    });
+    saveJobs();
 
     // Stats
     const stats = {
@@ -153,7 +219,7 @@ router.get('/', (_req: Request, res: Response) => {
     };
 
     res.json({
-      jobs: recentJobs.slice(0, 50), // Last 50
+      jobs: recentJobs.slice(0, 100),
       stats,
     });
   } catch (error) {
@@ -164,69 +230,112 @@ router.get('/', (_req: Request, res: Response) => {
 
 /**
  * POST /api/batch-jobs
- * Start a new batch enrichment job
+ * Start enrichment jobs for selected coverage types
  */
 router.post('/', (req: Request, res: Response) => {
   try {
-    const { type, target, maxHours = 4 } = req.body;
+    const {
+      targetType,
+      targetValue,
+      coverageTypes = ['llm', 'prosecution', 'ipr', 'family'],
+      maxHours = 4
+    } = req.body;
 
-    if (!type || !['tier', 'super-sector', 'sector'].includes(type)) {
-      return res.status(400).json({ error: 'Invalid job type. Must be tier, super-sector, or sector' });
+    if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
+      return res.status(400).json({ error: 'Invalid targetType. Must be tier, super-sector, or sector' });
     }
 
-    // Check if another job is already running
-    const running = detectRunningJobs();
-    if (running) {
-      return res.status(409).json({
-        error: 'Another batch job is already running',
-        runningJob: running
+    if (!targetValue) {
+      return res.status(400).json({ error: 'targetValue is required' });
+    }
+
+    // Validate coverage types
+    const validTypes: CoverageType[] = ['llm', 'prosecution', 'ipr', 'family'];
+    const selectedTypes = coverageTypes.filter((t: string) => validTypes.includes(t as CoverageType)) as CoverageType[];
+
+    if (selectedTypes.length === 0) {
+      return res.status(400).json({ error: 'At least one valid coverageType is required' });
+    }
+
+    // Analyze gaps to determine what needs to be done
+    const gaps = analyzeGaps(targetType, targetValue);
+
+    // Create a group ID to link related jobs
+    const groupId = `group-${Date.now()}`;
+    const createdJobs: BatchJob[] = [];
+
+    for (const coverageType of selectedTypes) {
+      const gapInfo = gaps[coverageType];
+
+      if (gapInfo.gap === 0) {
+        // No gap for this type, skip
+        continue;
+      }
+
+      const jobId = `${coverageType}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      const batchFile = `/tmp/batch-${jobId}.json`;
+      const logsDir = path.join(process.cwd(), 'logs');
+      fs.mkdirSync(logsDir, { recursive: true });
+      const logFile = path.join(logsDir, `job-${jobId}.log`);
+
+      // Write batch file with patent IDs
+      const batchIds = gapInfo.ids.slice(0, 500); // Process up to 500 at a time
+      fs.writeFileSync(batchFile, JSON.stringify(batchIds));
+
+      // Calculate estimated completion
+      const rate = DEFAULT_RATES[coverageType];
+      const estimatedHours = gapInfo.gap / rate;
+      const estimatedCompletion = new Date(Date.now() + estimatedHours * 3600000).toISOString();
+
+      // Start the job
+      const cmd = getEnrichmentCommand(coverageType, batchFile, logFile);
+      const child = spawn('bash', ['-c', cmd], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: process.cwd(),
       });
+      child.unref();
+
+      const job: BatchJob = {
+        id: jobId,
+        groupId,
+        targetType,
+        targetValue,
+        coverageType,
+        status: 'running',
+        pid: child.pid,
+        startedAt: new Date().toISOString(),
+        logFile,
+        progress: {
+          total: gapInfo.gap,
+          completed: 0,
+        },
+        estimatedRate: rate,
+        estimatedCompletion,
+      };
+
+      batchJobs.unshift(job);
+      createdJobs.push(job);
     }
 
-    const jobId = `job-${Date.now()}`;
-    const logFile = `logs/batch-${jobId}.log`;
-
-    // Build command
-    let cmd: string;
-    if (type === 'tier') {
-      cmd = `./scripts/run-auto-enrichment.sh ${target || 6000} ${maxHours}`;
-    } else if (type === 'super-sector') {
-      cmd = `./scripts/run-auto-enrichment.sh --super-sector "${target}" ${maxHours}`;
-    } else {
-      cmd = `./scripts/run-auto-enrichment.sh --sector "${target}" ${maxHours}`;
-    }
-
-    // Start the job
-    const child = spawn('bash', ['-c', `${cmd} > ${logFile} 2>&1`], {
-      detached: true,
-      stdio: 'ignore',
-      cwd: process.cwd(),
-    });
-    child.unref();
-
-    const job: BatchJob = {
-      id: jobId,
-      type,
-      target: target || '6000',
-      status: 'running',
-      pid: child.pid,
-      startedAt: new Date().toISOString(),
-      logFile,
-    };
-
-    batchJobs.unshift(job);
     saveJobs();
 
-    res.status(201).json({ job });
+    res.status(201).json({
+      groupId,
+      jobs: createdJobs,
+      gaps: Object.fromEntries(
+        Object.entries(gaps).map(([k, v]) => [k, { total: v.total, gap: v.gap }])
+      ),
+    });
   } catch (error) {
-    console.error('Error starting batch job:', error);
-    res.status(500).json({ error: 'Failed to start batch job' });
+    console.error('Error starting batch jobs:', error);
+    res.status(500).json({ error: 'Failed to start batch jobs' });
   }
 });
 
 /**
  * DELETE /api/batch-jobs/:id
- * Cancel/stop a running batch job
+ * Cancel a running job
  */
 router.delete('/:id', (req: Request, res: Response) => {
   try {
@@ -241,10 +350,8 @@ router.delete('/:id', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Job is not running' });
     }
 
-    // Kill the process tree
     if (job.pid) {
       try {
-        // Kill process group
         exec(`pkill -P ${job.pid}; kill ${job.pid}`, (err) => {
           if (err) console.log('Kill process warning:', err.message);
         });
@@ -259,8 +366,39 @@ router.delete('/:id', (req: Request, res: Response) => {
 
     res.json({ job });
   } catch (error) {
-    console.error('Error cancelling batch job:', error);
-    res.status(500).json({ error: 'Failed to cancel batch job' });
+    console.error('Error cancelling job:', error);
+    res.status(500).json({ error: 'Failed to cancel job' });
+  }
+});
+
+/**
+ * DELETE /api/batch-jobs/group/:groupId
+ * Cancel all jobs in a group
+ */
+router.delete('/group/:groupId', (req: Request, res: Response) => {
+  try {
+    const { groupId } = req.params;
+
+    const groupJobs = batchJobs.filter(j => j.groupId === groupId && j.status === 'running');
+
+    for (const job of groupJobs) {
+      if (job.pid) {
+        try {
+          exec(`pkill -P ${job.pid}; kill ${job.pid}`);
+        } catch (e) {
+          console.error('Failed to kill process:', e);
+        }
+      }
+      job.status = 'cancelled';
+      job.completedAt = new Date().toISOString();
+    }
+
+    saveJobs();
+
+    res.json({ cancelled: groupJobs.length });
+  } catch (error) {
+    console.error('Error cancelling job group:', error);
+    res.status(500).json({ error: 'Failed to cancel job group' });
   }
 });
 
@@ -278,12 +416,17 @@ router.get('/:id/log', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (!job.logFile || !fs.existsSync(job.logFile)) {
+    // Handle both absolute and relative log paths (legacy jobs)
+    let logPath = job.logFile;
+    if (logPath && !path.isAbsolute(logPath)) {
+      logPath = path.join(process.cwd(), logPath);
+    }
+
+    if (!logPath || !fs.existsSync(logPath)) {
       return res.json({ log: 'Log file not available' });
     }
 
-    // Read last N lines
-    const content = fs.readFileSync(job.logFile, 'utf-8');
+    const content = fs.readFileSync(logPath, 'utf-8');
     const allLines = content.split('\n');
     const lastLines = allLines.slice(-lines).join('\n');
 
@@ -295,65 +438,31 @@ router.get('/:id/log', (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/batch-jobs/queue
- * Queue multiple jobs to run in sequence
+ * GET /api/batch-jobs/gaps
+ * Analyze enrichment gaps for a target
  */
-router.post('/queue', (req: Request, res: Response) => {
+router.get('/gaps', (req: Request, res: Response) => {
   try {
-    const { jobs: queuedJobs } = req.body;
+    const targetType = req.query.targetType as TargetType;
+    const targetValue = req.query.targetValue as string;
 
-    if (!Array.isArray(queuedJobs) || queuedJobs.length === 0) {
-      return res.status(400).json({ error: 'Must provide an array of jobs to queue' });
+    if (!targetType || !targetValue) {
+      return res.status(400).json({ error: 'targetType and targetValue are required' });
     }
 
-    // Check if another job is already running
-    const running = detectRunningJobs();
-    if (running) {
-      return res.status(409).json({
-        error: 'Another batch job is already running',
-        runningJob: running
-      });
-    }
+    const gaps = analyzeGaps(targetType, targetValue);
 
-    // Write queue file
-    const queueFile = `config/enrichment-queue-${Date.now()}.json`;
-    const queueConfig = queuedJobs.map(j => ({
-      mode: j.type,
-      name: j.type !== 'tier' ? j.target : undefined,
-      topN: j.type === 'tier' ? parseInt(j.target) || 6000 : undefined,
-      maxHours: j.maxHours || 2,
-    }));
-    fs.writeFileSync(queueFile, JSON.stringify(queueConfig, null, 2));
-
-    const jobId = `queue-${Date.now()}`;
-    const logFile = `logs/batch-${jobId}.log`;
-
-    // Start queue job
-    const cmd = `./scripts/run-auto-enrichment.sh --queue ${queueFile}`;
-    const child = spawn('bash', ['-c', `${cmd} > ${logFile} 2>&1`], {
-      detached: true,
-      stdio: 'ignore',
-      cwd: process.cwd(),
+    res.json({
+      targetType,
+      targetValue,
+      gaps: Object.fromEntries(
+        Object.entries(gaps).map(([k, v]) => [k, { total: v.total, gap: v.gap }])
+      ),
+      estimatedRates: DEFAULT_RATES,
     });
-    child.unref();
-
-    const job: BatchJob = {
-      id: jobId,
-      type: 'queue',
-      target: `${queuedJobs.length} jobs`,
-      status: 'running',
-      pid: child.pid,
-      startedAt: new Date().toISOString(),
-      logFile,
-    };
-
-    batchJobs.unshift(job);
-    saveJobs();
-
-    res.status(201).json({ job, queueFile });
   } catch (error) {
-    console.error('Error starting queue:', error);
-    res.status(500).json({ error: 'Failed to start job queue' });
+    console.error('Error analyzing gaps:', error);
+    res.status(500).json({ error: 'Failed to analyze gaps' });
   }
 });
 

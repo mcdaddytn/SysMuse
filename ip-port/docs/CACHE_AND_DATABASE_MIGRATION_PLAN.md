@@ -10,215 +10,66 @@ The current file-based cache system has caused significant operational issues:
 
 This document outlines a three-phase approach to address these issues.
 
+**Current Stack**: PostgreSQL (via Docker) with Prisma ORM, file-based caching
+
 ---
 
-## Phase 1: Short-Term Fixes (Today)
+## Phase 1: Short-Term Fixes (Today) ✓ COMPLETED
 
-### 1.1 Fix "Cache loading..." UI Issue
-
-**Problem**: When pressing refresh on Jobs & Enrichment page, the "Cache loading..." message appears and doesn't clear. The tier size selection resets.
-
-**Root Cause Investigation Needed**:
-- Check if `POST /api/scores/reload` is completing but not signaling UI
-- Check if enrichment cache TTL-based refresh is causing issues
-- Verify the loading state is being properly cleared in Vue component
-
-**Files to Check**:
-- `frontend/src/pages/JobQueuePage.vue` - reload button handler
-- `src/api/routes/scores.routes.ts` - reload endpoint
-- `src/api/routes/patents.routes.ts` - enrichment cache invalidation
-
-**Fix Approach**:
-1. Ensure reload endpoint returns after all caches are cleared
-2. Make UI wait for response before clearing loading state
-3. Preserve tier size in localStorage or component state across reloads
+### 1.1 Fix "Cache loading..." UI Issue ✓
+- Fixed static "Cache: loading..." text in sidebar - now shows actual cache stats
+- Tier size now persists in localStorage (defaults to 1000)
 
 ### 1.2 Backup Cache Files
-
 **Immediate Action**: Archive all cache directories to external storage.
 
 ```bash
-# Create timestamped backup
-BACKUP_DIR="/Volumes/ExternalDrive/ip-port-backup-$(date +%Y%m%d)"
-mkdir -p "$BACKUP_DIR"
-
-# Copy cache directories
-cp -r cache/llm-scores "$BACKUP_DIR/"
-cp -r cache/prosecution-scores "$BACKUP_DIR/"
-cp -r cache/ipr-scores "$BACKUP_DIR/"
-cp -r cache/patent-families "$BACKUP_DIR/"
-cp -r cache/api "$BACKUP_DIR/"
-
-# Copy database
-cp prisma/dev.db "$BACKUP_DIR/"
-
-# Copy output files
-cp -r output "$BACKUP_DIR/"
-
-# Create manifest
-echo "Backup created: $(date)" > "$BACKUP_DIR/manifest.txt"
-echo "LLM scores: $(ls cache/llm-scores/*.json | wc -l)" >> "$BACKUP_DIR/manifest.txt"
-echo "Prosecution: $(ls cache/prosecution-scores/*.json | wc -l)" >> "$BACKUP_DIR/manifest.txt"
-echo "IPR: $(ls cache/ipr-scores/*.json | wc -l)" >> "$BACKUP_DIR/manifest.txt"
-echo "Families: $(ls cache/patent-families/parents/*.json | wc -l)" >> "$BACKUP_DIR/manifest.txt"
+# Use the export script
+./scripts/export-system.sh /Volumes/ExternalDrive/ip-port-backup
 ```
 
 ---
 
 ## Phase 2: Medium-Term Migration (This Week)
 
-### 2.1 Machine Migration Package
+### 2.1 Machine Migration Package ✓ COMPLETED
 
-Create a complete export/import system for moving to another machine.
+Export/import scripts created:
+- `scripts/export-system.sh` - Creates complete backup package
+- `scripts/import-system.sh` - Restores system on new machine
 
-#### Export Script (`scripts/export-system.sh`)
-
+#### Export Process
 ```bash
-#!/bin/bash
-# Export entire system state for migration
+./scripts/export-system.sh /path/to/export
 
-EXPORT_DIR="${1:-./export-$(date +%Y%m%d-%H%M%S)}"
-mkdir -p "$EXPORT_DIR"
-
-echo "Exporting system to $EXPORT_DIR..."
-
-# 1. Database export
-echo "Exporting database..."
-cp prisma/dev.db "$EXPORT_DIR/database.db"
-
-# Also export as SQL for portability
-sqlite3 prisma/dev.db .dump > "$EXPORT_DIR/database.sql"
-
-# 2. Cache directories (compress for transfer)
-echo "Compressing cache directories..."
-tar -czf "$EXPORT_DIR/cache-llm-scores.tar.gz" -C cache llm-scores
-tar -czf "$EXPORT_DIR/cache-prosecution-scores.tar.gz" -C cache prosecution-scores
-tar -czf "$EXPORT_DIR/cache-ipr-scores.tar.gz" -C cache ipr-scores
-tar -czf "$EXPORT_DIR/cache-patent-families.tar.gz" -C cache patent-families
-tar -czf "$EXPORT_DIR/cache-api.tar.gz" -C cache api
-
-# 3. Output files
-echo "Compressing output files..."
-tar -czf "$EXPORT_DIR/output.tar.gz" output
-
-# 4. Configuration
-echo "Copying configuration..."
-cp -r config "$EXPORT_DIR/"
-cp .env "$EXPORT_DIR/env.txt"  # Rename to avoid auto-loading
-
-# 5. Create manifest
-echo "Creating manifest..."
-cat > "$EXPORT_DIR/manifest.json" << EOF
-{
-  "export_date": "$(date -Iseconds)",
-  "source_machine": "$(hostname)",
-  "database_size": "$(du -h prisma/dev.db | cut -f1)",
-  "cache_counts": {
-    "llm_scores": $(ls cache/llm-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "prosecution_scores": $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "ipr_scores": $(ls cache/ipr-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "patent_families": $(ls cache/patent-families/parents/*.json 2>/dev/null | wc -l | tr -d ' ')
-  },
-  "git_commit": "$(git rev-parse HEAD)",
-  "git_branch": "$(git branch --show-current)"
-}
-EOF
-
-echo ""
-echo "Export complete: $EXPORT_DIR"
-echo "Total size: $(du -sh "$EXPORT_DIR" | cut -f1)"
+# Creates:
+# - database.sql (PostgreSQL dump)
+# - cache-*.tar.gz (compressed cache directories)
+# - output.tar.gz (analysis results)
+# - config/ (configuration files)
+# - manifest.json (metadata)
 ```
 
-#### Import Script (`scripts/import-system.sh`)
-
+#### Import Process
 ```bash
-#!/bin/bash
-# Import system state from export package
+./scripts/import-system.sh /path/to/export
 
-IMPORT_DIR="${1:?Usage: import-system.sh <export-dir>}"
-
-if [ ! -f "$IMPORT_DIR/manifest.json" ]; then
-  echo "Error: Not a valid export directory (missing manifest.json)"
-  exit 1
-fi
-
-echo "Importing system from $IMPORT_DIR..."
-cat "$IMPORT_DIR/manifest.json" | jq .
-
-read -p "Continue with import? (y/n) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-  exit 1
-fi
-
-# 1. Database
-echo "Importing database..."
-cp "$IMPORT_DIR/database.db" prisma/dev.db
-
-# 2. Cache directories
-echo "Extracting cache directories..."
-mkdir -p cache
-tar -xzf "$IMPORT_DIR/cache-llm-scores.tar.gz" -C cache
-tar -xzf "$IMPORT_DIR/cache-prosecution-scores.tar.gz" -C cache
-tar -xzf "$IMPORT_DIR/cache-ipr-scores.tar.gz" -C cache
-tar -xzf "$IMPORT_DIR/cache-patent-families.tar.gz" -C cache
-tar -xzf "$IMPORT_DIR/cache-api.tar.gz" -C cache
-
-# 3. Output files
-echo "Extracting output files..."
-tar -xzf "$IMPORT_DIR/output.tar.gz"
-
-# 4. Configuration
-echo "Copying configuration..."
-cp -r "$IMPORT_DIR/config" .
-echo "NOTE: Review $IMPORT_DIR/env.txt and update .env manually"
-
-# 5. Verify
-echo ""
-echo "Import complete. Verifying..."
-echo "Database: $(du -h prisma/dev.db | cut -f1)"
-echo "LLM scores: $(ls cache/llm-scores/*.json 2>/dev/null | wc -l)"
-echo "Prosecution: $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l)"
-echo "IPR: $(ls cache/ipr-scores/*.json 2>/dev/null | wc -l)"
-echo "Families: $(ls cache/patent-families/parents/*.json 2>/dev/null | wc -l)"
-
-echo ""
-echo "Next steps:"
-echo "1. Review and update .env file"
-echo "2. Run: npm install"
-echo "3. Run: npx prisma generate"
-echo "4. Run: npm run dev"
+# Then:
+npm install
+npx prisma generate
+npm run dev
 ```
 
-### 2.2 Database Recreation from Import
+### 2.2 Update Export Script for PostgreSQL
 
-For cases where we need to rebuild the database from scratch:
+The export script needs to use `pg_dump` instead of file copy:
 
 ```bash
-# scripts/rebuild-database.sh
+# PostgreSQL export
+pg_dump $DATABASE_URL > "$EXPORT_DIR/database.sql"
 
-#!/bin/bash
-# Rebuild database from cache files and configuration
-
-echo "This will rebuild the database from cache files."
-echo "Existing database will be backed up."
-
-# Backup existing
-mv prisma/dev.db "prisma/dev.db.backup-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
-
-# Reset database
-npx prisma db push --force-reset
-
-# Re-seed sectors
-npx tsx scripts/seed-sectors.ts
-
-# Import scoring profiles
-npx tsx scripts/seed-scoring-profiles.ts
-
-# Import LLM scores to database (new script needed)
-npx tsx scripts/sync-cache-to-db.ts
-
-echo "Database rebuilt."
+# PostgreSQL import
+psql $DATABASE_URL < "$IMPORT_DIR/database.sql"
 ```
 
 ---
@@ -240,11 +91,11 @@ Current State:
 └─────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                   SQLite (Prisma)                           │
+│                   PostgreSQL (Prisma)                        │
 ├─────────────────────────────────────────────────────────────┤
 │  ScoringProfile, ScoringWeight                              │
 │  Sector, SuperSector                                        │
-│  (Patent table exists but not primary data store)           │
+│  ApiRequestCache (metadata only)                            │
 └─────────────────────────────────────────────────────────────┘
 
 Problems:
@@ -259,9 +110,9 @@ Problems:
 ### 3.2 Proposed Heterogeneous Database Architecture
 
 ```
-Proposed Architecture:
+Proposed Architecture (Azure-First):
 ┌─────────────────────────────────────────────────────────────┐
-│                    PostgreSQL (Primary)                      │
+│           Azure Database for PostgreSQL (Primary)            │
 ├─────────────────────────────────────────────────────────────┤
 │  Patents         - Core patent data, ownership, dates       │
 │  PatentScores    - All computed scores (LLM, IPR, etc.)     │
@@ -272,197 +123,329 @@ Proposed Architecture:
 │  AuditLog        - Change tracking                          │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              ├──────────────────────────────┐
-                              ↓                              ↓
-┌─────────────────────────────────────┐  ┌───────────────────────────────┐
-│         Redis (Cache Layer)          │  │    Elasticsearch (Search)     │
-├─────────────────────────────────────┤  ├───────────────────────────────┤
-│  Session data                        │  │  Full-text patent search      │
-│  API response caching                │  │  Claim text search            │
-│  Enrichment job queue                │  │  Prior art similarity         │
-│  Rate limiting counters              │  │  Faceted filtering            │
-│  Real-time computation cache         │  │  Aggregations                 │
-└─────────────────────────────────────┘  └───────────────────────────────┘
+          ┌───────────────────┼───────────────────┐
+          ↓                   ↓                   ↓
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  Azure Cache    │  │  Azure Cosmos   │  │  Azure Blob     │
+│  for Redis      │  │  DB (Graph API) │  │  Storage        │
+├─────────────────┤  ├─────────────────┤  ├─────────────────┤
+│ Session data    │  │ Patent families │  │ Raw API resp.   │
+│ API caching     │  │ Citation graphs │  │ LLM full text   │
+│ Job queues      │  │ Ownership trees │  │ Prosecution doc │
+│ Rate limiting   │  │ Competitor nets │  │ Export archives │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
                               │
                               ↓
-┌─────────────────────────────────────────────────────────────┐
-│              S3/MinIO (Document Storage)                     │
-├─────────────────────────────────────────────────────────────┤
-│  Raw API responses (PatentsView, USPTO)                     │
-│  LLM analysis full text                                     │
-│  Prosecution documents                                      │
-│  Export archives                                            │
-└─────────────────────────────────────────────────────────────┘
+                   ┌─────────────────────┐
+                   │  Azure AI Search    │
+                   │  (+ Vector Search)  │
+                   ├─────────────────────┤
+                   │ Full-text patent    │
+                   │ Claim similarity    │
+                   │ Prior art search    │
+                   │ Semantic queries    │
+                   └─────────────────────┘
 ```
 
 ### 3.3 Database Selection Rationale
 
-| Database | Use Case | Why |
-|----------|----------|-----|
-| **PostgreSQL** | Primary data store | ACID compliance, JSON support, mature ecosystem, excellent for relational data with complex queries |
-| **Redis** | Caching & queuing | Sub-millisecond reads, pub/sub for real-time updates, built-in TTL, job queue support (BullMQ) |
-| **Elasticsearch** | Search & analytics | Full-text search across patent claims, aggregations for dashboards, scales horizontally |
-| **S3/MinIO** | Document storage | Cost-effective for large blobs, versioning, lifecycle policies |
+| Database | Azure Service | Use Case | Why |
+|----------|---------------|----------|-----|
+| **PostgreSQL** | Azure Database for PostgreSQL | Primary data store | ACID compliance, JSON support, mature ecosystem, pgvector extension for embeddings |
+| **Redis** | Azure Cache for Redis | Caching & queuing | Sub-millisecond reads, pub/sub for real-time, job queue support (BullMQ) |
+| **Graph DB** | Azure Cosmos DB (Gremlin API) | Relationship traversal | Patent families, citation networks, ownership hierarchies |
+| **Vector DB** | Azure AI Search or PostgreSQL pgvector | Semantic search | Claim similarity, prior art, semantic patent search |
+| **Blob Storage** | Azure Blob Storage | Document storage | Cost-effective for large files, lifecycle policies |
 
-### 3.4 Migration Strategy
+---
 
-**Phase 3A: PostgreSQL Migration**
-1. Update Prisma schema to use PostgreSQL
-2. Create migration scripts for existing SQLite data
-3. Add PatentEnrichment table to store all enrichment data
-4. Migrate file-based cache to database rows
-5. Update API services to read from database
+## 3.4 Supabase vs. Azure-Hosted PostgreSQL
 
-**Phase 3B: Redis Integration**
-1. Add Redis for API response caching
-2. Implement job queue with BullMQ
-3. Add cache invalidation on data updates
-4. Real-time dashboard updates via pub/sub
+### Supabase Benefits
+| Feature | Benefit |
+|---------|---------|
+| Built-in auth | JWT auth, row-level security out of box |
+| Real-time subscriptions | WebSocket-based live queries |
+| Auto-generated APIs | REST and GraphQL from schema |
+| pgvector built-in | Vector similarity search included |
+| Edge functions | Serverless compute at edge |
+| Dashboard | Visual database management |
+| Rapid prototyping | Faster development cycle |
 
-**Phase 3C: Elasticsearch (Optional)**
-1. Index patent titles, abstracts, claims
-2. Add full-text search API
-3. Power advanced filtering in UI
+### Supabase Concerns for Enterprise
+| Concern | Issue |
+|---------|-------|
+| Data residency | Limited region control (not all Azure regions) |
+| Compliance | May not meet all enterprise security requirements |
+| Vendor lock-in | Proprietary features beyond standard PostgreSQL |
+| Network control | Less control over VNet integration |
+| Audit logging | Enterprise audit trails may be limited |
 
-### 3.5 Simplified Schema for PatentEnrichment
+### Azure Database for PostgreSQL Benefits
+| Feature | Benefit |
+|---------|---------|
+| **Data sovereignty** | Full control over data residency (US regions only) |
+| **Compliance** | SOC 2, HIPAA, FedRAMP, etc. certifications |
+| **VNet integration** | Private endpoints, no public exposure |
+| **Azure AD auth** | Enterprise SSO integration |
+| **Managed backups** | Point-in-time restore, geo-redundant |
+| **Flexible Server** | Right-size compute, burstable options |
+| **pgvector support** | Vector search via extension |
 
-```prisma
-model Patent {
-  id                String   @id  // Patent number
-  title             String
-  abstract          String?
-  patentDate        DateTime
-  expirationDate    DateTime?
-  assignee          String
-  cpcCodes          String[]
+### Recommendation
 
-  // Relationships
-  portfolios        PortfolioPatent[]
-  enrichment        PatentEnrichment?
-  familyRelations   PatentFamily[]
+**For this use case (private data, legal requirements, US-only deployment):**
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-}
+→ **Use Azure Database for PostgreSQL Flexible Server**
 
-model PatentEnrichment {
-  id                String   @id @default(cuid())
-  patentId          String   @unique
-  patent            Patent   @relation(fields: [patentId], references: [id])
+Reasons:
+1. Data must stay within controlled US regions (SF, Austin, NYC, DC)
+2. Legal/compliance requirements favor single-vendor cloud
+3. Private networking (VNet) essential for sensitive patent data
+4. Azure AD integration for enterprise SSO
+5. pgvector extension provides vector search without additional service
 
-  // LLM Scores (nullable until enriched)
-  llmEnrichedAt     DateTime?
-  eligibilityScore  Int?
-  validityScore     Int?
-  claimBreadth      Int?
-  enforcementClarity Int?
-  designAroundDifficulty Int?
-  llmSummary        String?
-  llmTechSolution   String?
+**Use Supabase for:**
+- Rapid prototyping / proof of concepts
+- Non-sensitive data applications
+- Smaller teams without dedicated DevOps
 
-  // Prosecution Scores
-  prosEnrichedAt    DateTime?
-  prosecutionScore  Int?
-  officeActionCount Int?
-  rceCount          Int?
-  timeToGrantMonths Int?
+---
 
-  // IPR Scores
-  iprEnrichedAt     DateTime?
-  iprRiskScore      Int?
-  hasIprHistory     Boolean?
-  petitionsCount    Int?
-  claimsInvalidated Int?
+## 3.5 Graph Database Considerations
 
-  // Citations
-  citationsEnrichedAt DateTime?
-  forwardCitations  Int?
-  backwardCitations Int?
-  competitorCitations Int?
+### Why Graph DB for Patent Data?
 
-  // Computed composite scores
-  baseScore         Float?
-  compositeScore    Float?
+Patent data has inherently graph-like relationships:
 
-  // Metadata
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([llmEnrichedAt])
-  @@index([baseScore])
-  @@index([compositeScore])
-}
-
-model Portfolio {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-
-  patents     PortfolioPatent[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-model PortfolioPatent {
-  portfolioId String
-  patentId    String
-  addedAt     DateTime @default(now())
-
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
-  patent      Patent    @relation(fields: [patentId], references: [id])
-
-  @@id([portfolioId, patentId])
-}
+```
+Patent Relationships (Graph Structure):
+                    ┌─────────────┐
+                    │  Patent A   │
+                    └──────┬──────┘
+           ┌───────────────┼───────────────┐
+           ↓               ↓               ↓
+    ┌────────────┐  ┌────────────┐  ┌────────────┐
+    │ Parent B   │  │ Parent C   │  │ Sibling D  │
+    │ (cited by) │  │ (cited by) │  │ (same fam) │
+    └────────────┘  └────────────┘  └────────────┘
+           │               │
+           ↓               ↓
+    ┌────────────┐  ┌────────────┐
+    │ Grandparent│  │ Competitor │
+    │     E      │  │  Patent F  │
+    └────────────┘  └────────────┘
 ```
 
-### 3.6 Benefits of New Architecture
+### Graph Queries That Are Hard in SQL
 
-| Benefit | Current | Proposed |
-|---------|---------|----------|
-| Query speed | O(n) file reads | O(1) indexed lookup |
-| Data consistency | Manual sync | ACID transactions |
-| Cache invalidation | Error-prone | Automatic via triggers |
-| Multi-portfolio | Not supported | Native support |
-| Backup/restore | Manual file copy | pg_dump/restore |
-| Scalability | Single machine | Horizontal scaling |
-| Search | Basic filtering | Full-text search |
+```gremlin
+// Find all patents within 2 citation hops of a target
+g.V('patent-123')
+  .repeat(both('cites', 'cited_by').simplePath())
+  .times(2)
+  .dedup()
+
+// Find common ancestors between two patent families
+g.V('patent-A').repeat(out('cites')).emit().as('a')
+  .V('patent-B').repeat(out('cites')).emit().as('b')
+  .where('a', eq('b'))
+  .select('a').dedup()
+
+// Find competitor patents that cite our portfolio
+g.V().hasLabel('portfolio').out('contains')
+  .in('cites').has('assignee', within(competitors))
+  .groupCount().by('assignee')
+```
+
+### Azure Cosmos DB (Gremlin API) vs. Neo4j
+
+| Feature | Cosmos DB Gremlin | Neo4j |
+|---------|-------------------|-------|
+| Azure integration | Native | Requires VM or AKS |
+| Scaling | Automatic, global | Manual sharding |
+| Query language | Gremlin (TinkerPop) | Cypher |
+| Cost model | RU-based (pay per query) | Instance-based |
+| Visualization | Limited | Neo4j Browser (excellent) |
+
+**Recommendation**: Start with PostgreSQL recursive CTEs for simple traversals, add Cosmos DB Gremlin when:
+- Citation chains exceed 3-4 hops regularly
+- Need real-time graph analytics
+- Complex relationship queries become performance bottlenecks
+
+---
+
+## 3.6 Vector Database for Semantic Search
+
+### Use Cases for Vector Search
+
+1. **Claim Similarity** - Find patents with similar claim language
+2. **Prior Art Search** - Semantic search across patent corpus
+3. **Technology Clustering** - Group patents by technical similarity
+4. **Infringement Detection** - Find patents similar to a product description
+
+### Options
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **pgvector (PostgreSQL extension)** | Single database, simple ops, good for <1M vectors | Limited to single node, slower for very large datasets |
+| **Azure AI Search** | Managed, hybrid search (keyword + vector), filtering | Separate service, additional cost |
+| **Pinecone** | Purpose-built, fast, scalable | Another vendor, data residency concerns |
+| **Qdrant** | Open source, self-hosted option | Operational overhead |
+
+**Recommendation**:
+
+**Phase 1**: Use pgvector in Azure PostgreSQL
+- Sufficient for patent corpus <500K
+- Single database simplifies architecture
+- Can store embeddings alongside patent data
+
+**Phase 2**: Add Azure AI Search if needed
+- When vector queries need sub-100ms latency
+- When combining vector + keyword + filters
+- When corpus exceeds 1M patents
+
+---
+
+## 3.7 Deployment Architecture (US Multi-Region)
+
+```
+Azure Deployment (US Continental):
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure Front Door                          │
+│              (Global load balancing, WAF)                   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        ↓                     ↓                     ↓
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│  West US 2    │    │  Central US   │    │  East US 2    │
+│  (SF office)  │    │  (Austin)     │    │  (NYC/DC)     │
+├───────────────┤    ├───────────────┤    ├───────────────┤
+│ App Service   │    │ App Service   │    │ App Service   │
+│ (API + Web)   │    │ (API + Web)   │    │ (API + Web)   │
+└───────┬───────┘    └───────┬───────┘    └───────┬───────┘
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             ↓
+              ┌─────────────────────────────┐
+              │  Azure Database PostgreSQL   │
+              │  (Primary: Central US)       │
+              │  (Read replicas: West/East)  │
+              └─────────────────────────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        ↓                    ↓                    ↓
+┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+│ Azure Cache   │    │ Azure Blob    │    │ Azure Key     │
+│ for Redis     │    │ Storage       │    │ Vault         │
+│ (per region)  │    │ (GRS)         │    │ (secrets)     │
+└───────────────┘    └───────────────┘    └───────────────┘
+```
+
+### Security Architecture
+
+```
+Security Layers:
+┌─────────────────────────────────────────────────────────────┐
+│                      Azure AD B2C                            │
+│                   (Identity Provider)                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure API Management                      │
+│        (Rate limiting, API keys, request validation)        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Virtual Network                           │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ App Subnet  │  │ Data Subnet │  │ Integration │         │
+│  │ (Frontend)  │  │ (Databases) │  │   Subnet    │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                             │
+│  Private Endpoints for all data services                   │
+│  No public IPs on databases                                │
+│  NSG rules restrict traffic                                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure Key Vault                           │
+│          (API keys, connection strings, secrets)            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3.8 Migration Path
+
+### Phase 3A: Consolidate to PostgreSQL (2-3 weeks)
+1. Add PatentEnrichment table to existing PostgreSQL
+2. Create migration scripts from file cache → database
+3. Update services to read from database
+4. Keep file cache as fallback during transition
+5. Remove file cache dependency
+
+### Phase 3B: Add Redis Caching (1 week)
+1. Deploy Azure Cache for Redis
+2. Implement API response caching
+3. Add job queue with BullMQ
+4. Real-time cache invalidation
+
+### Phase 3C: Multi-Region Deployment (2-3 weeks)
+1. Set up Azure infrastructure (IaC with Terraform/Bicep)
+2. Configure VNet peering and private endpoints
+3. Deploy read replicas
+4. Configure Azure Front Door
+5. Implement health checks and failover
+
+### Phase 3D: Advanced Features (As Needed)
+- Graph database for citation networks
+- Vector search for semantic queries
+- Azure AI Search for full-text
 
 ---
 
 ## Implementation Priority
 
-### This Week
-1. [ ] Fix "Cache loading..." UI bug
-2. [ ] Create export/import scripts
+### This Week ✓
+1. [x] Fix "Cache loading..." UI bug
+2. [x] Create export/import scripts
 3. [ ] Test migration on second laptop
 4. [ ] Backup all cache files to external drive
+5. [ ] Update export script for PostgreSQL (pg_dump)
 
-### Next 2 Weeks
-5. [ ] Design PostgreSQL schema in detail
-6. [ ] Create migration scripts
-7. [ ] Implement PatentEnrichment table
+### Next 2-3 Weeks
+6. [ ] Design PatentEnrichment table schema
+7. [ ] Create file-cache → database migration scripts
 8. [ ] Update enrichment services to write to DB
-9. [ ] Add Redis for caching (optional)
+9. [ ] Test with dual-write (file + DB)
+10. [ ] Remove file cache dependency
 
 ### Future
-10. [ ] Elasticsearch for search (if needed)
-11. [ ] Multi-portfolio support
-12. [ ] S3 for document storage (if needed)
+11. [ ] Azure infrastructure setup
+12. [ ] Redis caching layer
+13. [ ] Multi-region deployment
+14. [ ] Graph DB for citations (if needed)
+15. [ ] Vector search (if needed)
 
 ---
 
 ## Questions for Discussion
 
-1. **PostgreSQL hosting**: Local PostgreSQL, Docker, or cloud (Supabase/Neon)?
-2. **Redis necessity**: Is Redis needed immediately, or can we start with just PostgreSQL?
-3. **Migration approach**: Big bang migration or gradual (dual-write for transition)?
-4. **Multi-portfolio**: What's the priority timeline for supporting multiple portfolios?
-5. **Search requirements**: How important is full-text search across patent claims?
+1. **Timeline**: When do we need multi-region deployment operational?
+2. **Graph DB Priority**: How important is deep citation traversal now vs. later?
+3. **Vector Search**: Is semantic patent search a near-term requirement?
+4. **Compliance**: Any specific certifications required (FedRAMP, ITAR, etc.)?
+5. **AWS Fallback**: Should we design for cloud portability from the start?
 
 ---
 
-## Appendix: Current Cache Statistics
+## Appendix: Current Statistics
 
 ```
 Cache Directory Sizes (as of 2026-01-30):
@@ -472,8 +455,9 @@ Cache Directory Sizes (as of 2026-01-30):
 - cache/patent-families/: 10,787 files (~100MB)
 - Total: ~42,000 files, ~400MB
 
-Database:
-- prisma/dev.db: ~5MB
+Database (PostgreSQL):
+- Scoring profiles, sectors, API cache metadata
+- ~5MB current size
 
 Output:
 - streaming-candidates-*.json: ~50MB each

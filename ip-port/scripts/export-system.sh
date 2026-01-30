@@ -16,12 +16,38 @@ echo "════════════════════════�
 echo "Exporting to: $EXPORT_DIR"
 echo ""
 
-# 1. Database export
+# 1. Database export (PostgreSQL via Docker)
 echo "1. Exporting database..."
-cp prisma/dev.db "$EXPORT_DIR/database.db"
-# Also export as SQL for portability
-sqlite3 prisma/dev.db .dump > "$EXPORT_DIR/database.sql"
-echo "   Database: $(du -h "$EXPORT_DIR/database.db" | cut -f1)"
+
+# Check if Docker postgres container is running
+POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
+
+if [ -n "$POSTGRES_CONTAINER" ]; then
+  echo "   Using Docker container: $POSTGRES_CONTAINER"
+  docker exec "$POSTGRES_CONTAINER" pg_dump -U ip_admin ip_portfolio > "$EXPORT_DIR/database.sql" 2>/dev/null
+  if [ $? -eq 0 ] && [ -s "$EXPORT_DIR/database.sql" ]; then
+    echo "   Database exported: $(du -h "$EXPORT_DIR/database.sql" | cut -f1)"
+  else
+    echo "   WARNING: pg_dump via Docker failed."
+  fi
+else
+  # Fallback to local pg_dump if no Docker container
+  if [ -f ".env" ]; then
+    export $(grep -E "^DATABASE_URL=" .env | xargs)
+  fi
+
+  if [ -z "$DATABASE_URL" ]; then
+    echo "   WARNING: DATABASE_URL not set and no Docker container found."
+    echo "   Skipping database export."
+  else
+    pg_dump "$DATABASE_URL" > "$EXPORT_DIR/database.sql" 2>/dev/null
+    if [ $? -eq 0 ]; then
+      echo "   Database exported: $(du -h "$EXPORT_DIR/database.sql" | cut -f1)"
+    else
+      echo "   WARNING: pg_dump failed. Database may not be accessible."
+    fi
+  fi
+fi
 
 # 2. Cache directories (compress for transfer)
 echo ""
@@ -61,12 +87,18 @@ fi
 # 6. Create manifest
 echo ""
 echo "6. Creating manifest..."
+DB_SIZE="unknown"
+if [ -f "$EXPORT_DIR/database.sql" ]; then
+  DB_SIZE=$(du -h "$EXPORT_DIR/database.sql" | cut -f1)
+fi
+
 cat > "$EXPORT_DIR/manifest.json" << EOF
 {
   "export_date": "$(date -Iseconds)",
   "source_machine": "$(hostname)",
   "export_version": "1.0",
-  "database_size": "$(du -h prisma/dev.db | cut -f1)",
+  "database_type": "postgresql",
+  "database_export_size": "$DB_SIZE",
   "cache_counts": {
     "llm_scores": $(ls cache/llm-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
     "prosecution_scores": $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l | tr -d ' '),

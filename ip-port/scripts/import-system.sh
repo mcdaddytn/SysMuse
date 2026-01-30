@@ -33,15 +33,45 @@ fi
 
 echo ""
 
-# 1. Database
+# 1. Database (PostgreSQL via Docker)
 echo "1. Importing database..."
-if [ -f "prisma/dev.db" ]; then
-  BACKUP="prisma/dev.db.backup-$(date +%Y%m%d-%H%M%S)"
-  mv prisma/dev.db "$BACKUP"
-  echo "   Backed up existing database to: $BACKUP"
+
+# Check if Docker postgres container is running
+POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
+
+if [ -f "$IMPORT_DIR/database.sql" ]; then
+  if [ -n "$POSTGRES_CONTAINER" ]; then
+    echo "   Using Docker container: $POSTGRES_CONTAINER"
+    echo "   NOTE: This will add to existing data. For clean import, reset DB first."
+    docker exec -i "$POSTGRES_CONTAINER" psql -U ip_admin ip_portfolio < "$IMPORT_DIR/database.sql" 2>/dev/null
+    if [ $? -eq 0 ]; then
+      echo "   Database imported successfully"
+    else
+      echo "   WARNING: psql import via Docker had issues. Check database manually."
+    fi
+  else
+    # Fallback to local psql if no Docker container
+    if [ -f ".env" ]; then
+      export $(grep -E "^DATABASE_URL=" .env | xargs)
+    fi
+
+    if [ -z "$DATABASE_URL" ]; then
+      echo "   WARNING: DATABASE_URL not set and no Docker container found."
+      echo "   Run manually: psql \$DATABASE_URL < $IMPORT_DIR/database.sql"
+    else
+      echo "   Importing database from SQL dump..."
+      echo "   NOTE: This will add to existing data. For clean import, reset DB first."
+      psql "$DATABASE_URL" < "$IMPORT_DIR/database.sql" 2>/dev/null
+      if [ $? -eq 0 ]; then
+        echo "   Database imported successfully"
+      else
+        echo "   WARNING: psql import had issues. Check database manually."
+      fi
+    fi
+  fi
+else
+  echo "   No database.sql found in export. Skipping."
 fi
-cp "$IMPORT_DIR/database.db" prisma/dev.db
-echo "   Database imported: $(du -h prisma/dev.db | cut -f1)"
 
 # 2. Cache directories
 echo ""

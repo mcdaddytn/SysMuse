@@ -760,6 +760,87 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/patents/sector-enrichment
+ * Enrichment coverage broken down by super-sector (for top N patents per sector)
+ */
+router.get('/sector-enrichment', (_req: Request, res: Response) => {
+  try {
+    const topPerSector = Math.min(1000, Math.max(100, parseInt(_req.query.topPerSector as string) || 500));
+
+    const patents = loadPatents();
+    const { llmSet, prosSet, iprSet, familySet } = getEnrichmentCacheSets();
+
+    // Group by super_sector
+    const bySector: Record<string, typeof patents> = {};
+    for (const p of patents) {
+      const ss = p.super_sector || 'Unknown';
+      if (!bySector[ss]) bySector[ss] = [];
+      bySector[ss].push(p);
+    }
+
+    // Build sector summaries
+    const sectors = Object.entries(bySector)
+      .map(([name, sectorPatents]) => {
+        // Sort by score descending, take top N
+        const sorted = [...sectorPatents].sort((a, b) => b.score - a.score);
+        const top = sorted.slice(0, topPerSector);
+        const ids = top.map(p => p.patent_id);
+
+        const llmCount = ids.filter(id => llmSet.has(id)).length;
+        const prosCount = ids.filter(id => prosSet.has(id)).length;
+        const iprCount = ids.filter(id => iprSet.has(id)).length;
+        const familyCount = ids.filter(id => familySet.has(id)).length;
+
+        const checked = top.length;
+        const scoreMin = top[top.length - 1]?.score ?? 0;
+        const scoreMax = top[0]?.score ?? 0;
+
+        // Gaps (patents needing enrichment)
+        const llmGap = ids.filter(id => !llmSet.has(id));
+        const prosGap = ids.filter(id => !prosSet.has(id));
+        const iprGap = ids.filter(id => !iprSet.has(id));
+        const familyGap = ids.filter(id => !familySet.has(id));
+
+        return {
+          name,
+          totalPatents: sectorPatents.length,
+          checkedPatents: checked,
+          scoreRange: `${scoreMin.toFixed(1)} – ${scoreMax.toFixed(1)}`,
+          enrichment: {
+            llm: llmCount,
+            llmPct: Math.round(llmCount / checked * 1000) / 10,
+            prosecution: prosCount,
+            prosecutionPct: Math.round(prosCount / checked * 1000) / 10,
+            ipr: iprCount,
+            iprPct: Math.round(iprCount / checked * 1000) / 10,
+            family: familyCount,
+            familyPct: Math.round(familyCount / checked * 1000) / 10,
+          },
+          gaps: {
+            llm: llmGap.length,
+            prosecution: prosGap.length,
+            ipr: iprGap.length,
+            family: familyGap.length,
+          },
+        };
+      })
+      .sort((a, b) => b.totalPatents - a.totalPatents);
+
+    // Overall totals
+    const totalPatents = patents.length;
+
+    res.json({
+      totalPatents,
+      topPerSector,
+      sectors,
+    });
+  } catch (error) {
+    console.error('Error computing sector enrichment:', error);
+    res.status(500).json({ error: 'Failed to compute sector enrichment' });
+  }
+});
+
+/**
  * GET /api/patents
  * List patents with pagination, filtering, and sorting
  * Optional: focusAreaId query param to filter to a focus area's patents

@@ -1281,4 +1281,97 @@ export const sectorApi = {
   },
 };
 
+// Sector Enrichment types
+export interface SectorEnrichmentData {
+  name: string;
+  totalPatents: number;
+  checkedPatents: number;
+  scoreRange: string;
+  enrichment: {
+    llm: number; llmPct: number;
+    prosecution: number; prosecutionPct: number;
+    ipr: number; iprPct: number;
+    family: number; familyPct: number;
+  };
+  gaps: {
+    llm: number;
+    prosecution: number;
+    ipr: number;
+    family: number;
+  };
+}
+
+export interface SectorEnrichmentSummary {
+  totalPatents: number;
+  topPerSector: number;
+  sectors: SectorEnrichmentData[];
+}
+
+// Batch Job types
+export interface BatchJob {
+  id: string;
+  type: 'tier' | 'super-sector' | 'sector' | 'queue';
+  target: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  pid?: number;
+  startedAt?: string;
+  completedAt?: string;
+  logFile?: string;
+  error?: string;
+}
+
+export interface BatchJobsResponse {
+  jobs: BatchJob[];
+  stats: {
+    pending: number;
+    running: number;
+    completed: number;
+    failed: number;
+  };
+}
+
+// Sector Enrichment API (extension of patentApi)
+export const enrichmentApi = {
+  async getSectorEnrichment(topPerSector = 500): Promise<SectorEnrichmentSummary> {
+    const { data } = await api.get('/patents/sector-enrichment', { params: { topPerSector } });
+    return data;
+  },
+};
+
+// Batch Jobs API
+export const batchJobsApi = {
+  async getJobs(): Promise<BatchJobsResponse> {
+    const { data } = await api.get('/batch-jobs');
+    return data;
+  },
+
+  async startJob(job: {
+    type: 'tier' | 'super-sector' | 'sector';
+    target: string;
+    maxHours?: number;
+  }): Promise<{ job: BatchJob }> {
+    const { data } = await api.post('/batch-jobs', job);
+    return data;
+  },
+
+  async cancelJob(jobId: string): Promise<{ job: BatchJob }> {
+    const { data } = await api.delete(`/batch-jobs/${jobId}`);
+    return data;
+  },
+
+  async getJobLog(jobId: string, lines = 50): Promise<{ log: string }> {
+    const { data } = await api.get(`/batch-jobs/${jobId}/log`, { params: { lines } });
+    return data;
+  },
+
+  async queueJobs(jobs: Array<{
+    type: 'tier' | 'super-sector' | 'sector';
+    target: string;
+    maxHours?: number;
+  }>): Promise<{ job: BatchJob; queueFile: string }> {
+    const { data } = await api.post('/batch-jobs/queue', { jobs });
+    return data;
+  },
+};
+
 export default api;

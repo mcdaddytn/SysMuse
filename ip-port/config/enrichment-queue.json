@@ -1,0 +1,44 @@
+[
+  {
+    "mode": "super-sector",
+    "name": "Video & Streaming",
+    "maxHours": 3,
+    "description": "Complete all Video & Streaming patents (est: 2.5h)"
+  },
+  {
+    "mode": "tier",
+    "topN": 1000,
+    "maxHours": 1,
+    "description": "Tier batch: top 1000"
+  },
+  {
+    "mode": "tier",
+    "topN": 2000,
+    "maxHours": 1,
+    "description": "Tier batch: top 2000"
+  },
+  {
+    "mode": "tier",
+    "topN": 3000,
+    "maxHours": 1,
+    "description": "Tier batch: top 3000"
+  },
+  {
+    "mode": "tier",
+    "topN": 4000,
+    "maxHours": 1,
+    "description": "Tier batch: top 4000"
+  },
+  {
+    "mode": "tier",
+    "topN": 5000,
+    "maxHours": 1,
+    "description": "Tier batch: top 5000"
+  },
+  {
+    "mode": "tier",
+    "topN": 6000,
+    "maxHours": 2,
+    "description": "Tier batch: top 6000 (finish remaining)"
+  }
+]

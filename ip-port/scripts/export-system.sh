@@ -19,7 +19,6 @@ echo ""
 # 1. Database export (PostgreSQL via Docker)
 echo "1. Exporting database..."
 
-# Check if Docker postgres container is running
 POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
 
 if [ -n "$POSTGRES_CONTAINER" ]; then
@@ -31,7 +30,6 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     echo "   WARNING: pg_dump via Docker failed."
   fi
 else
-  # Fallback to local pg_dump if no Docker container
   if [ -f ".env" ]; then
     export $(grep -E "^DATABASE_URL=" .env | xargs)
   fi
@@ -63,30 +61,41 @@ tar -czf "$EXPORT_DIR/cache-patent-families.tar.gz" -C cache patent-families 2>/
 echo "   API cache..."
 tar -czf "$EXPORT_DIR/cache-api.tar.gz" -C cache api 2>/dev/null || echo "   (no api cache)"
 
-# 3. Output files
+# 3. Output files (excludes llm-analysis-v3 which is exported separately)
 echo ""
 echo "3. Compressing output files..."
-tar -czf "$EXPORT_DIR/output.tar.gz" output 2>/dev/null || echo "   (no output)"
+tar -czf "$EXPORT_DIR/output.tar.gz" --exclude='output/llm-analysis-v3' output 2>/dev/null || echo "   (no output)"
 
-# 4. LLM analysis results
+# 4. LLM analysis results (separate for clarity)
 echo ""
 echo "4. Compressing LLM analysis results..."
 if [ -d "output/llm-analysis-v3" ]; then
   tar -czf "$EXPORT_DIR/llm-analysis-v3.tar.gz" -C output llm-analysis-v3
+  echo "   LLM V3 analysis exported"
 fi
 
-# 5. Configuration
+# 5. Job queue state and logs
 echo ""
-echo "5. Copying configuration..."
+echo "5. Exporting job queue state..."
+if [ -f "logs/batch-jobs.json" ]; then
+  cp logs/batch-jobs.json "$EXPORT_DIR/"
+  echo "   batch-jobs.json copied"
+else
+  echo "   (no batch-jobs.json)"
+fi
+
+# 6. Configuration
+echo ""
+echo "6. Copying configuration..."
 cp -r config "$EXPORT_DIR/" 2>/dev/null || mkdir -p "$EXPORT_DIR/config"
 if [ -f ".env" ]; then
   cp .env "$EXPORT_DIR/env.txt"  # Rename to avoid auto-loading on import
   echo "   NOTE: .env copied as env.txt - review and rename on target machine"
 fi
 
-# 6. Create manifest
+# 7. Create manifest
 echo ""
-echo "6. Creating manifest..."
+echo "7. Creating manifest..."
 DB_SIZE="unknown"
 if [ -f "$EXPORT_DIR/database.sql" ]; then
   DB_SIZE=$(du -h "$EXPORT_DIR/database.sql" | cut -f1)
@@ -96,7 +105,7 @@ cat > "$EXPORT_DIR/manifest.json" << EOF
 {
   "export_date": "$(date -Iseconds)",
   "source_machine": "$(hostname)",
-  "export_version": "1.0",
+  "export_version": "2.0",
   "database_type": "postgresql",
   "database_export_size": "$DB_SIZE",
   "cache_counts": {
@@ -113,7 +122,7 @@ cat > "$EXPORT_DIR/manifest.json" << EOF
 }
 EOF
 
-# 7. Summary
+# 8. Summary
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "EXPORT COMPLETE"

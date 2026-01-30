@@ -36,7 +36,6 @@ echo ""
 # 1. Database (PostgreSQL via Docker)
 echo "1. Importing database..."
 
-# Check if Docker postgres container is running
 POSTGRES_CONTAINER=$(docker ps --filter "name=postgres" --format "{{.Names}}" | head -1)
 
 if [ -f "$IMPORT_DIR/database.sql" ]; then
@@ -50,7 +49,6 @@ if [ -f "$IMPORT_DIR/database.sql" ]; then
       echo "   WARNING: psql import via Docker had issues. Check database manually."
     fi
   else
-    # Fallback to local psql if no Docker container
     if [ -f ".env" ]; then
       export $(grep -E "^DATABASE_URL=" .env | xargs)
     fi
@@ -125,37 +123,65 @@ if [ -f "$IMPORT_DIR/llm-analysis-v3.tar.gz" ]; then
   tar -xzf "$IMPORT_DIR/llm-analysis-v3.tar.gz" -C output
 fi
 
-# 5. Configuration
+# 5. Job queue state
 echo ""
-echo "5. Copying configuration..."
+echo "5. Importing job queue state..."
+if [ -f "$IMPORT_DIR/batch-jobs.json" ]; then
+  mkdir -p logs
+  cp "$IMPORT_DIR/batch-jobs.json" logs/
+  echo "   batch-jobs.json copied to logs/"
+else
+  echo "   (no batch-jobs.json in export)"
+fi
+
+# 6. Configuration
+echo ""
+echo "6. Copying configuration..."
 if [ -d "$IMPORT_DIR/config" ]; then
   cp -r "$IMPORT_DIR/config" .
 fi
 
-# 6. Verify
+# 7. Verify
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "IMPORT COMPLETE - VERIFICATION"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
-echo "Database: $(du -h prisma/dev.db | cut -f1)"
-echo "LLM scores: $(ls cache/llm-scores/*.json 2>/dev/null | wc -l | tr -d ' ') files"
-echo "Prosecution: $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l | tr -d ' ') files"
-echo "IPR: $(ls cache/ipr-scores/*.json 2>/dev/null | wc -l | tr -d ' ') files"
-echo "Families: $(ls cache/patent-families/parents/*.json 2>/dev/null | wc -l | tr -d ' ') files"
+echo "Cache counts:"
+echo "  LLM scores:    $(ls cache/llm-scores/*.json 2>/dev/null | wc -l | tr -d ' ') files"
+echo "  Prosecution:   $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l | tr -d ' ') files"
+echo "  IPR:           $(ls cache/ipr-scores/*.json 2>/dev/null | wc -l | tr -d ' ') files"
+echo "  Families:      $(ls cache/patent-families/parents/*.json 2>/dev/null | wc -l | tr -d ' ') files"
 echo ""
 
 if [ -f "$IMPORT_DIR/env.txt" ]; then
   echo "NOTE: Environment file saved as $IMPORT_DIR/env.txt"
   echo "      Review and copy to .env, updating any machine-specific values:"
-  echo "      - API keys"
-  echo "      - Database paths"
-  echo "      - Port numbers"
+  echo "      - API keys (ANTHROPIC_API_KEY, PATENTSVIEW_API_KEY, USPTO_ODP_API_KEY)"
+  echo "      - Database URL (if using different container/host)"
   echo ""
 fi
 
 echo "Next steps:"
-echo "  1. Review and update .env file if needed"
-echo "  2. Run: npm install"
-echo "  3. Run: npx prisma generate"
-echo "  4. Run: npm run dev"
+echo "  1. Review and update .env file:"
+echo "     cp $IMPORT_DIR/env.txt .env"
+echo "     # Edit .env and verify/update API keys"
+echo ""
+echo "  2. Install dependencies:"
+echo "     npm install"
+echo "     cd frontend && npm install && cd .."
+echo ""
+echo "  3. Start Docker (PostgreSQL):"
+echo "     npm run docker:up"
+echo ""
+echo "  4. Generate Prisma client:"
+echo "     npx prisma generate"
+echo ""
+echo "  5. Build frontend:"
+echo "     cd frontend && npm run build && cd .."
+echo ""
+echo "  6. Start API server:"
+echo "     npm run api:start"
+echo ""
+echo "  7. Open browser:"
+echo "     http://localhost:3001"

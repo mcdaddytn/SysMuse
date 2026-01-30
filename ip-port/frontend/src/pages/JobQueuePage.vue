@@ -58,6 +58,8 @@ watch(selectedTopPerSector, (newVal) => {
 
 const topPerSectorOptions = [
   { value: 0, label: 'All (Full Coverage)' },
+  { value: 25, label: 'Top 25' },
+  { value: 50, label: 'Top 50' },
   { value: 100, label: 'Top 100' },
   { value: 250, label: 'Top 250' },
   { value: 500, label: 'Top 500' },

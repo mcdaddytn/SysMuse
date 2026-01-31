@@ -67,3 +67,9 @@ prisma/migrations/
 
 # Docker volumes (local data)
 docker-data/
+
+# Export/sync tracking (machine-specific)
+.last-export-timestamp
+
+# Job logs and state (machine-specific)
+logs/

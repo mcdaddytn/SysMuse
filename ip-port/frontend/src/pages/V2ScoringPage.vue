@@ -38,7 +38,7 @@ interface RankSnapshot {
   timestamp: string;
   topN: number;
   config: V2EnhancedConfig;
-  rankings: Array<{ patent_id: string; rank: number; score: number }>;
+  rankings: Array<{ patent_id: string; rank: number; score: number; rank_change?: number }>;
 }
 
 // State
@@ -66,6 +66,8 @@ const showSaveSnapshotDialog = ref(false);
 const newPresetName = ref('');
 const newPresetDescription = ref('');
 const newSnapshotName = ref('');
+const resetAfterSnapshot = ref(true);
+const autoRecalcOnPreset = ref(true);
 
 // Top N and filter options
 const topNOptions = [60, 100, 250, 500, 1000];
@@ -200,31 +202,31 @@ function initDefaultMetrics() {
       name: 'Quantitative',
       color: 'primary',
       metrics: [
-        { key: 'competitor_citations', label: 'Competitor Citations', description: 'Citations from competitors', weight: 20, scaling: 'linear', invert: false },
-        { key: 'adjusted_forward_citations', label: 'Adj. Fwd Citations', description: 'Weighted citation count', weight: 10, scaling: 'sqrt', invert: false },
-        { key: 'years_remaining', label: 'Years Remaining', description: 'Patent life left', weight: 15, scaling: 'linear', invert: false },
-        { key: 'competitor_count', label: 'Competitor Count', description: 'Number of citing competitors', weight: 5, scaling: 'linear', invert: false },
-        { key: 'competitor_density', label: 'Competitor Density', description: 'Ratio of competitor cites', weight: 5, scaling: 'linear', invert: false },
+        { key: 'competitor_citations', label: 'Competitor Citations', description: 'Number of forward citations from tracked competitors. Higher values indicate the patent covers technology competitors are actively building upon or around.', weight: 20, scaling: 'linear', invert: false },
+        { key: 'adjusted_forward_citations', label: 'Adj. Fwd Citations', description: 'Forward citations weighted by source: competitor 1.5x, neutral 1.0x, affiliate (self) 0.25x. Reduces inflation from internal R&D.', weight: 10, scaling: 'sqrt', invert: false },
+        { key: 'years_remaining', label: 'Years Remaining', description: 'Years until patent expiration. Longer life increases licensing value and litigation leverage.', weight: 15, scaling: 'linear', invert: false },
+        { key: 'competitor_count', label: 'Competitor Count', description: 'Number of distinct competitors who have cited this patent. Broader interest suggests relevance across multiple players.', weight: 5, scaling: 'linear', invert: false },
+        { key: 'competitor_density', label: 'Competitor Density', description: 'Ratio of competitor citations to total external citations. High density = technology sits in competitive space.', weight: 5, scaling: 'linear', invert: false },
       ],
     },
     {
       name: 'LLM Metrics',
       color: 'teal',
       metrics: [
-        { key: 'eligibility_score', label: 'Eligibility', description: '101 eligibility strength', weight: 5, scaling: 'linear', invert: false },
-        { key: 'validity_score', label: 'Validity', description: '102/103 validity strength', weight: 5, scaling: 'linear', invert: false },
-        { key: 'claim_breadth', label: 'Claim Breadth', description: 'Scope of claims', weight: 4, scaling: 'linear', invert: false },
-        { key: 'enforcement_clarity', label: 'Enforcement Clarity', description: 'Detectability of infringement', weight: 6, scaling: 'linear', invert: false },
-        { key: 'design_around_difficulty', label: 'Design Around', description: 'Difficulty to avoid', weight: 5, scaling: 'linear', invert: false },
-        { key: 'market_relevance_score', label: 'Market Relevance', description: 'Commercial value', weight: 5, scaling: 'linear', invert: false },
+        { key: 'eligibility_score', label: 'Eligibility', description: '35 USC 101 strength (1-5). Higher = less vulnerable to Alice/Mayo abstract idea challenges. 5=clearly technical.', weight: 5, scaling: 'linear', invert: false },
+        { key: 'validity_score', label: 'Validity', description: 'Prior art defensibility under 102/103 (1-5). Higher = stronger novelty. 5=clearly novel, 1=prior art concerns.', weight: 5, scaling: 'linear', invert: false },
+        { key: 'claim_breadth', label: 'Claim Breadth', description: 'Scope of patent claims (1-5). Broader claims cover more infringement scenarios. 5=very broad, 1=narrow.', weight: 4, scaling: 'linear', invert: false },
+        { key: 'enforcement_clarity', label: 'Enforcement Clarity', description: 'Ease of detecting infringement (1-5). 5=easily observable in products, 1=hidden implementation.', weight: 6, scaling: 'linear', invert: false },
+        { key: 'design_around_difficulty', label: 'Design Around', description: 'How hard to avoid the patent (1-5). Higher = more licensing leverage. 5=no alternatives, 1=easy substitutes.', weight: 5, scaling: 'linear', invert: false },
+        { key: 'market_relevance_score', label: 'Market Relevance', description: 'Commercial applicability (1-5). 5=core to major products/markets, 1=niche/obsolete technology.', weight: 5, scaling: 'linear', invert: false },
       ],
     },
     {
       name: 'API Metrics',
       color: 'deep-purple',
       metrics: [
-        { key: 'ipr_risk_score', label: 'IPR Risk', description: 'PTAB challenge history (5=safe)', weight: 5, scaling: 'linear', invert: false },
-        { key: 'prosecution_quality_score', label: 'Prosecution Quality', description: 'Clean prosecution (5=best)', weight: 5, scaling: 'linear', invert: false },
+        { key: 'ipr_risk_score', label: 'IPR Risk', description: 'PTAB risk from USPTO history (1-5). 5=no IPR history (safe), 4=survived IPR, 2=pending, 1=invalidated.', weight: 5, scaling: 'linear', invert: false },
+        { key: 'prosecution_quality_score', label: 'Prosecution Quality', description: 'File wrapper quality (1-5). 5=minimal rejections, 1=extensive amendments during prosecution.', weight: 5, scaling: 'linear', invert: false },
       ],
     },
   ];
@@ -272,7 +274,7 @@ function saveSnapshots() {
 }
 
 // Apply a preset
-function applyPreset(preset: V2EnhancedPreset) {
+async function applyPreset(preset: V2EnhancedPreset) {
   selectedPresetId.value = preset.id;
 
   for (const cat of categories.value) {
@@ -283,7 +285,11 @@ function applyPreset(preset: V2EnhancedPreset) {
     }
   }
 
-  hasUnsavedChanges.value = true;
+  if (autoRecalcOnPreset.value) {
+    await recalculate();
+  } else {
+    hasUnsavedChanges.value = true;
+  }
 }
 
 // Save current settings as a new preset
@@ -316,10 +322,25 @@ function deletePreset(presetId: string) {
   }
 }
 
+// Reset rank movements (clear previous rankings baseline)
+function resetRankMovements() {
+  // Set current rankings as the new baseline
+  previousRankings.value = patents.value.map(p => ({
+    patent_id: p.patent_id,
+    rank: p.rank,
+  }));
+  // Clear the rank_change on displayed patents
+  patents.value = patents.value.map(p => ({
+    ...p,
+    rank_change: undefined,
+  }));
+}
+
 // Save current rankings as a snapshot
 function saveSnapshot() {
   if (!newSnapshotName.value.trim()) return;
 
+  // Include current rank_change in snapshot before potentially resetting
   const snapshot: RankSnapshot = {
     id: `snap-${Date.now()}`,
     name: newSnapshotName.value.trim(),
@@ -330,6 +351,7 @@ function saveSnapshot() {
       patent_id: p.patent_id,
       rank: p.rank,
       score: p.score,
+      rank_change: p.rank_change,
     })),
   };
 
@@ -339,6 +361,11 @@ function saveSnapshot() {
     snapshots.value = snapshots.value.slice(0, 10);
   }
   saveSnapshots();
+
+  // Reset rank movements if checkbox is checked
+  if (resetAfterSnapshot.value) {
+    resetRankMovements();
+  }
 
   showSaveSnapshotDialog.value = false;
   newSnapshotName.value = '';
@@ -548,6 +575,15 @@ onMounted(async () => {
             <div class="row items-center q-mb-sm">
               <span class="text-subtitle2">Presets</span>
               <q-space />
+              <span class="text-caption text-grey-7 q-mr-xs">Auto-Recalc</span>
+              <q-toggle
+                v-model="autoRecalcOnPreset"
+                size="xs"
+                dense
+                class="q-mr-sm"
+              >
+                <q-tooltip>Auto-recalculate when preset is selected</q-tooltip>
+              </q-toggle>
               <q-btn
                 flat
                 dense
@@ -714,6 +750,17 @@ onMounted(async () => {
             <div class="row items-center">
               <div class="text-h6">Patent Rankings</div>
               <q-space />
+              <q-btn
+                flat
+                dense
+                icon="restart_alt"
+                label="Reset +/-"
+                :disable="patents.length === 0"
+                class="q-mr-sm"
+                @click="resetRankMovements"
+              >
+                <q-tooltip>Clear rank movements and set current rankings as new baseline</q-tooltip>
+              </q-btn>
               <q-btn
                 flat
                 dense
@@ -910,8 +957,15 @@ onMounted(async () => {
             :placeholder="`Snapshot ${new Date().toLocaleDateString()}`"
             @keyup.enter="saveSnapshot"
           />
+          <q-toggle
+            v-model="resetAfterSnapshot"
+            label="Reset rank movements after save"
+            dense
+            class="q-mt-md"
+          />
           <div class="text-caption text-grey q-mt-sm">
-            Saves current rankings ({{ patents.length }} patents) for comparison.
+            Saves current rankings ({{ patents.length }} patents) with their +/- movements.
+            If reset is checked, current rankings become the new baseline.
             Limit: 10 snapshots.
           </div>
         </q-card-section>
@@ -935,5 +989,14 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+</style>
+
+<style>
+/* Larger font for metric description tooltips */
+.q-tooltip {
+  font-size: 14px !important;
+  line-height: 1.4;
+  max-width: 350px;
 }
 </style>

@@ -1250,21 +1250,86 @@ export function getV2EnhancedMetrics() {
 
   const metrics = [
     // Quantitative metrics
-    { key: 'competitor_citations', label: 'Competitor Citations', category: 'quantitative' as const, description: 'Citations from tracked competitors' },
-    { key: 'adjusted_forward_citations', label: 'Adj. Forward Citations', category: 'quantitative' as const, description: 'Forward citations weighted by source (competitor > neutral > affiliate)' },
-    { key: 'years_remaining', label: 'Years Remaining', category: 'quantitative' as const, description: 'Patent life remaining' },
-    { key: 'competitor_count', label: 'Competitor Count', category: 'quantitative' as const, description: 'Number of distinct competitors citing' },
-    { key: 'competitor_density', label: 'Competitor Density', category: 'quantitative' as const, description: 'Ratio of competitor to external citations' },
+    {
+      key: 'competitor_citations',
+      label: 'Competitor Citations',
+      category: 'quantitative' as const,
+      description: 'Number of forward citations from tracked competitors. Higher values indicate the patent covers technology competitors are actively building upon or around. Strong signal for licensing/litigation value.',
+    },
+    {
+      key: 'adjusted_forward_citations',
+      label: 'Adj. Forward Citations',
+      category: 'quantitative' as const,
+      description: 'Forward citations weighted by source type: competitor citations boosted 1.5x, neutral 1.0x, affiliate (self-citations) discounted to 0.25x. Reduces inflation from internal R&D continuity.',
+    },
+    {
+      key: 'years_remaining',
+      label: 'Years Remaining',
+      category: 'quantitative' as const,
+      description: 'Years until patent expiration. Longer remaining life increases licensing value and litigation leverage. Applied as a multiplier to the overall score.',
+    },
+    {
+      key: 'competitor_count',
+      label: 'Competitor Count',
+      category: 'quantitative' as const,
+      description: 'Number of distinct competitors who have cited this patent. Broader competitor interest suggests the technology is relevant across multiple market players.',
+    },
+    {
+      key: 'competitor_density',
+      label: 'Competitor Density',
+      category: 'quantitative' as const,
+      description: 'Ratio of competitor citations to total external citations (excludes affiliates). High density indicates the technology sits squarely in competitive space.',
+    },
     // LLM metrics
-    { key: 'eligibility_score', label: 'Eligibility', category: 'llm' as const, description: '35 USC 101 strength (1-5)' },
-    { key: 'validity_score', label: 'Validity', category: 'llm' as const, description: 'Prior art defensibility (1-5)' },
-    { key: 'claim_breadth', label: 'Claim Breadth', category: 'llm' as const, description: 'Scope of claims (1-5)' },
-    { key: 'enforcement_clarity', label: 'Enforcement Clarity', category: 'llm' as const, description: 'Detectability of infringement (1-5)' },
-    { key: 'design_around_difficulty', label: 'Design-Around Difficulty', category: 'llm' as const, description: 'Difficulty to design around (1-5)' },
-    { key: 'market_relevance_score', label: 'Market Relevance', category: 'llm' as const, description: 'Commercial applicability (1-5)' },
+    {
+      key: 'eligibility_score',
+      label: 'Eligibility',
+      category: 'llm' as const,
+      description: '35 USC 101 patent eligibility strength (1-5). Higher scores indicate claims are less vulnerable to Alice/Mayo abstract idea challenges. 5=clearly technical, 1=abstract/method of organizing.',
+    },
+    {
+      key: 'validity_score',
+      label: 'Validity',
+      category: 'llm' as const,
+      description: 'Prior art defensibility under 35 USC 102/103 (1-5). Higher scores indicate stronger novelty and non-obviousness. 5=clearly novel, 1=significant prior art concerns.',
+    },
+    {
+      key: 'claim_breadth',
+      label: 'Claim Breadth',
+      category: 'llm' as const,
+      description: 'Scope and coverage of patent claims (1-5). Broader claims cover more potential infringement scenarios. 5=very broad independent claims, 1=narrow/specific claims.',
+    },
+    {
+      key: 'enforcement_clarity',
+      label: 'Enforcement Clarity',
+      category: 'llm' as const,
+      description: 'Ease of detecting and proving infringement (1-5). Higher scores mean infringement is visible/detectable. 5=easily observable in products, 1=internal/hidden implementation.',
+    },
+    {
+      key: 'design_around_difficulty',
+      label: 'Design-Around Difficulty',
+      category: 'llm' as const,
+      description: 'How hard is it for competitors to avoid the patent (1-5). Higher difficulty increases licensing leverage. 5=no practical alternatives, 1=easy substitutes exist.',
+    },
+    {
+      key: 'market_relevance_score',
+      label: 'Market Relevance',
+      category: 'llm' as const,
+      description: 'Commercial applicability and market value (1-5). Considers whether the technology addresses active market needs. 5=core to major products/markets, 1=niche/obsolete.',
+    },
     // API metrics
-    { key: 'ipr_risk_score', label: 'IPR Risk', category: 'api' as const, description: 'PTAB challenge risk (5=safe, 1=risky)' },
-    { key: 'prosecution_quality_score', label: 'Prosecution Quality', category: 'api' as const, description: 'File wrapper quality (1-5)' },
+    {
+      key: 'ipr_risk_score',
+      label: 'IPR Risk',
+      category: 'api' as const,
+      description: 'PTAB inter partes review risk based on USPTO history (1-5). Higher is safer. 5=no IPR history, 4=IPR denied/survived, 3=no data, 2=IPR pending, 1=claims invalidated.',
+    },
+    {
+      key: 'prosecution_quality_score',
+      label: 'Prosecution Quality',
+      category: 'api' as const,
+      description: 'File wrapper quality from USPTO prosecution history (1-5). Higher indicates cleaner prosecution. 5=minimal rejections, 1=extensive amendments/narrowing during prosecution.',
+    },
   ];
 
   return metrics.map(m => ({

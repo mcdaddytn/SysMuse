@@ -1,145 +1,472 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { scoringApi, type ScoreWeights, type WeightPreset, type ScoredPatent } from '@/services/api';
-import { useDebounceFn } from '@vueuse/core';
+import {
+  v2EnhancedApi,
+  type V2EnhancedConfig,
+  type V2EnhancedScoredPatent,
+  type V2EnhancedPreset,
+  type ScalingType,
+} from '@/services/api';
 
 const router = useRouter();
 
-// Weight sliders
-const citationWeight = ref(50);
-const yearsWeight = ref(30);
-const competitorWeight = ref(20);
+// LocalStorage keys
+const PRESETS_KEY = 'v2-enhanced-custom-presets';
+const SNAPSHOTS_KEY = 'v2-enhanced-snapshots';
+
+// Metrics organized by category
+interface MetricControl {
+  key: string;
+  label: string;
+  description: string;
+  weight: number;
+  scaling: ScalingType;
+  invert: boolean;
+}
+
+interface MetricCategory {
+  name: string;
+  color: string;
+  metrics: MetricControl[];
+}
+
+// Snapshot interface
+interface RankSnapshot {
+  id: string;
+  name: string;
+  timestamp: string;
+  topN: number;
+  config: V2EnhancedConfig;
+  rankings: Array<{ patent_id: string; rank: number; score: number }>;
+}
 
 // State
-const patents = ref<ScoredPatent[]>([]);
-const previousRanks = ref<Map<string, number>>(new Map());
-const presets = ref<WeightPreset[]>([]);
-const selectedPreset = ref<string | null>(null);
+const categories = ref<MetricCategory[]>([]);
+const patents = ref<V2EnhancedScoredPatent[]>([]);
+const previousRankings = ref<Array<{ patent_id: string; rank: number }>>([]);
+const builtInPresets = ref<V2EnhancedPreset[]>([]);
+const customPresets = ref<V2EnhancedPreset[]>([]);
+const selectedPresetId = ref<string | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const total = ref(0);
+const hasUnsavedChanges = ref(false);
+const lastConfig = ref<V2EnhancedConfig | null>(null);
 
-// Pagination
-const pagination = ref({
-  page: 1,
-  rowsPerPage: 50,
-  rowsNumber: 0,
-  sortBy: 'rank',
-  descending: false
+// Snapshots state
+const snapshots = ref<RankSnapshot[]>([]);
+const selectedSnapshotId = ref<string | null>(null);
+const compareToSnapshot = ref(false);
+const snapshotRankMap = ref<Map<string, number>>(new Map());
+
+// Dialogs
+const showSavePresetDialog = ref(false);
+const showSaveSnapshotDialog = ref(false);
+const newPresetName = ref('');
+const newPresetDescription = ref('');
+const newSnapshotName = ref('');
+
+// Top N and filter options
+const topNOptions = [60, 100, 250, 500, 1000];
+const topN = ref(100);
+const llmEnhancedOnly = ref(true);
+
+// Scaling options for dropdown
+const scalingOptions = [
+  { label: 'Linear', value: 'linear' as ScalingType },
+  { label: 'Log', value: 'log' as ScalingType },
+  { label: 'Sqrt', value: 'sqrt' as ScalingType },
+];
+
+// All presets combined
+const allPresets = computed(() => [...builtInPresets.value, ...customPresets.value]);
+
+// Table columns - dynamic based on snapshot comparison
+const columns = computed(() => {
+  const baseCols = [
+    { name: 'rank', label: 'Rank', field: 'rank', align: 'center' as const, sortable: true, style: 'width: 60px' },
+    { name: 'change', label: '+/-', field: 'rank_change', align: 'center' as const, style: 'width: 50px' },
+  ];
+
+  if (compareToSnapshot.value && selectedSnapshotId.value) {
+    baseCols.push({
+      name: 'snapshot_change',
+      label: 'vs Snap',
+      field: 'snapshot_rank_change',
+      align: 'center' as const,
+      style: 'width: 60px',
+    });
+  }
+
+  return [
+    ...baseCols,
+    { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const },
+    { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const },
+    { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left' as const },
+    { name: 'super_sector', label: 'Super-Sector', field: 'super_sector', align: 'left' as const },
+    { name: 'years_remaining', label: 'Years', field: 'years_remaining', align: 'center' as const, sortable: true,
+      format: (val: number) => val?.toFixed(1) },
+    { name: 'has_llm', label: 'LLM', field: 'has_llm_data', align: 'center' as const, style: 'width: 50px' },
+    { name: 'score', label: 'Score', field: 'score', align: 'center' as const, sortable: true,
+      format: (val: number) => val?.toFixed(2) },
+  ];
 });
 
-// Normalize weights to 100%
-const normalizedWeights = computed(() => {
-  const total = citationWeight.value + yearsWeight.value + competitorWeight.value;
-  if (total === 0) return { citation: 33.3, years: 33.3, competitor: 33.4 };
+// Computed: build config from current state
+const currentConfig = computed<V2EnhancedConfig>(() => {
+  const weights: Record<string, number> = {};
+  const scaling: Record<string, ScalingType> = {};
+  const invert: Record<string, boolean> = {};
+
+  for (const cat of categories.value) {
+    for (const metric of cat.metrics) {
+      weights[metric.key] = metric.weight;
+      scaling[metric.key] = metric.scaling;
+      invert[metric.key] = metric.invert;
+    }
+  }
+
   return {
-    citation: (citationWeight.value / total) * 100,
-    years: (yearsWeight.value / total) * 100,
-    competitor: (competitorWeight.value / total) * 100
+    weights,
+    scaling,
+    invert,
+    topN: topN.value,
+    llmEnhancedOnly: llmEnhancedOnly.value,
   };
 });
 
-// Current weights object
-const currentWeights = computed<ScoreWeights>(() => ({
-  citation: citationWeight.value,
-  years: yearsWeight.value,
-  competitor: competitorWeight.value
-}));
+// Computed: total weight percentage
+const totalWeight = computed(() => {
+  let sum = 0;
+  for (const cat of categories.value) {
+    for (const metric of cat.metrics) {
+      sum += metric.weight;
+    }
+  }
+  return sum;
+});
 
-// Table columns
-const columns = [
-  { name: 'rank', label: 'Rank', field: 'rank', align: 'center' as const, sortable: true },
-  { name: 'change', label: '', field: 'rank_change', align: 'center' as const, style: 'width: 50px' },
-  { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const },
-  { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const },
-  { name: 'affiliate', label: 'Affiliate', field: 'affiliate', align: 'left' as const },
-  { name: 'forward_citations', label: 'Fwd Cites', field: 'forward_citations', align: 'center' as const, sortable: true },
-  { name: 'remaining_years', label: 'Years Left', field: 'remaining_years', align: 'center' as const, sortable: true,
-    format: (val: number) => val?.toFixed(1) },
-  { name: 'competitor_citations', label: 'Comp Cites', field: 'competitor_citations', align: 'center' as const, sortable: true },
-  { name: 'v2_score', label: 'v2 Score', field: 'v2_score', align: 'center' as const, sortable: true,
-    format: (val: number) => val?.toFixed(2) }
-];
+// Patents with snapshot comparison
+const patentsWithSnapshotChange = computed(() => {
+  if (!compareToSnapshot.value || !selectedSnapshotId.value) {
+    return patents.value;
+  }
 
-// Fetch scores from API (only patents with score > 0)
-async function fetchScores() {
+  return patents.value.map(p => ({
+    ...p,
+    snapshot_rank_change: snapshotRankMap.value.has(p.patent_id)
+      ? snapshotRankMap.value.get(p.patent_id)! - p.rank
+      : undefined,
+  }));
+});
+
+// Initialize metrics from API
+async function loadMetrics() {
+  try {
+    const metrics = await v2EnhancedApi.getMetrics();
+
+    const categoryMap: Record<string, MetricControl[]> = {
+      quantitative: [],
+      llm: [],
+      api: [],
+    };
+
+    for (const m of metrics) {
+      categoryMap[m.category]?.push({
+        key: m.key,
+        label: m.label,
+        description: m.description,
+        weight: m.defaultWeight,
+        scaling: m.defaultScaling,
+        invert: false,
+      });
+    }
+
+    categories.value = [
+      { name: 'Quantitative', color: 'primary', metrics: categoryMap.quantitative },
+      { name: 'LLM Metrics', color: 'teal', metrics: categoryMap.llm },
+      { name: 'API Metrics', color: 'deep-purple', metrics: categoryMap.api },
+    ];
+  } catch (err) {
+    console.error('Failed to load metrics:', err);
+    initDefaultMetrics();
+  }
+}
+
+function initDefaultMetrics() {
+  categories.value = [
+    {
+      name: 'Quantitative',
+      color: 'primary',
+      metrics: [
+        { key: 'competitor_citations', label: 'Competitor Citations', description: 'Citations from competitors', weight: 20, scaling: 'linear', invert: false },
+        { key: 'adjusted_forward_citations', label: 'Adj. Fwd Citations', description: 'Weighted citation count', weight: 10, scaling: 'sqrt', invert: false },
+        { key: 'years_remaining', label: 'Years Remaining', description: 'Patent life left', weight: 15, scaling: 'linear', invert: false },
+        { key: 'competitor_count', label: 'Competitor Count', description: 'Number of citing competitors', weight: 5, scaling: 'linear', invert: false },
+        { key: 'competitor_density', label: 'Competitor Density', description: 'Ratio of competitor cites', weight: 5, scaling: 'linear', invert: false },
+      ],
+    },
+    {
+      name: 'LLM Metrics',
+      color: 'teal',
+      metrics: [
+        { key: 'eligibility_score', label: 'Eligibility', description: '101 eligibility strength', weight: 5, scaling: 'linear', invert: false },
+        { key: 'validity_score', label: 'Validity', description: '102/103 validity strength', weight: 5, scaling: 'linear', invert: false },
+        { key: 'claim_breadth', label: 'Claim Breadth', description: 'Scope of claims', weight: 4, scaling: 'linear', invert: false },
+        { key: 'enforcement_clarity', label: 'Enforcement Clarity', description: 'Detectability of infringement', weight: 6, scaling: 'linear', invert: false },
+        { key: 'design_around_difficulty', label: 'Design Around', description: 'Difficulty to avoid', weight: 5, scaling: 'linear', invert: false },
+        { key: 'market_relevance_score', label: 'Market Relevance', description: 'Commercial value', weight: 5, scaling: 'linear', invert: false },
+      ],
+    },
+    {
+      name: 'API Metrics',
+      color: 'deep-purple',
+      metrics: [
+        { key: 'ipr_risk_score', label: 'IPR Risk', description: 'PTAB challenge history (5=safe)', weight: 5, scaling: 'linear', invert: false },
+        { key: 'prosecution_quality_score', label: 'Prosecution Quality', description: 'Clean prosecution (5=best)', weight: 5, scaling: 'linear', invert: false },
+      ],
+    },
+  ];
+}
+
+// Load presets from API and localStorage
+async function loadPresets() {
+  try {
+    builtInPresets.value = await v2EnhancedApi.getPresets();
+  } catch (err) {
+    console.error('Failed to load presets:', err);
+  }
+
+  // Load custom presets from localStorage
+  try {
+    const stored = localStorage.getItem(PRESETS_KEY);
+    if (stored) {
+      customPresets.value = JSON.parse(stored);
+    }
+  } catch (err) {
+    console.error('Failed to load custom presets:', err);
+  }
+}
+
+// Load snapshots from localStorage
+function loadSnapshots() {
+  try {
+    const stored = localStorage.getItem(SNAPSHOTS_KEY);
+    if (stored) {
+      snapshots.value = JSON.parse(stored);
+    }
+  } catch (err) {
+    console.error('Failed to load snapshots:', err);
+  }
+}
+
+// Save custom presets to localStorage
+function saveCustomPresets() {
+  localStorage.setItem(PRESETS_KEY, JSON.stringify(customPresets.value));
+}
+
+// Save snapshots to localStorage
+function saveSnapshots() {
+  localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(snapshots.value));
+}
+
+// Apply a preset
+function applyPreset(preset: V2EnhancedPreset) {
+  selectedPresetId.value = preset.id;
+
+  for (const cat of categories.value) {
+    for (const metric of cat.metrics) {
+      metric.weight = preset.config.weights[metric.key] ?? 0;
+      metric.scaling = preset.config.scaling[metric.key] ?? 'linear';
+      metric.invert = preset.config.invert[metric.key] ?? false;
+    }
+  }
+
+  hasUnsavedChanges.value = true;
+}
+
+// Save current settings as a new preset
+function saveAsPreset() {
+  if (!newPresetName.value.trim()) return;
+
+  const newPreset: V2EnhancedPreset = {
+    id: `custom-${Date.now()}`,
+    name: newPresetName.value.trim(),
+    description: newPresetDescription.value.trim() || 'Custom preset',
+    isBuiltIn: false,
+    config: { ...currentConfig.value },
+  };
+
+  customPresets.value.push(newPreset);
+  saveCustomPresets();
+  selectedPresetId.value = newPreset.id;
+
+  showSavePresetDialog.value = false;
+  newPresetName.value = '';
+  newPresetDescription.value = '';
+}
+
+// Delete a custom preset
+function deletePreset(presetId: string) {
+  customPresets.value = customPresets.value.filter(p => p.id !== presetId);
+  saveCustomPresets();
+  if (selectedPresetId.value === presetId) {
+    selectedPresetId.value = null;
+  }
+}
+
+// Save current rankings as a snapshot
+function saveSnapshot() {
+  if (!newSnapshotName.value.trim()) return;
+
+  const snapshot: RankSnapshot = {
+    id: `snap-${Date.now()}`,
+    name: newSnapshotName.value.trim(),
+    timestamp: new Date().toISOString(),
+    topN: topN.value,
+    config: { ...currentConfig.value },
+    rankings: patents.value.map(p => ({
+      patent_id: p.patent_id,
+      rank: p.rank,
+      score: p.score,
+    })),
+  };
+
+  snapshots.value.unshift(snapshot);
+  // Limit to 10 snapshots
+  if (snapshots.value.length > 10) {
+    snapshots.value = snapshots.value.slice(0, 10);
+  }
+  saveSnapshots();
+
+  showSaveSnapshotDialog.value = false;
+  newSnapshotName.value = '';
+}
+
+// Delete a snapshot
+function deleteSnapshot(snapshotId: string) {
+  snapshots.value = snapshots.value.filter(s => s.id !== snapshotId);
+  saveSnapshots();
+  if (selectedSnapshotId.value === snapshotId) {
+    selectedSnapshotId.value = null;
+    compareToSnapshot.value = false;
+  }
+}
+
+// Select snapshot for comparison
+function onSnapshotSelect(snapshotId: string | null) {
+  selectedSnapshotId.value = snapshotId;
+  if (snapshotId) {
+    const snapshot = snapshots.value.find(s => s.id === snapshotId);
+    if (snapshot) {
+      snapshotRankMap.value = new Map(snapshot.rankings.map(r => [r.patent_id, r.rank]));
+    }
+  } else {
+    snapshotRankMap.value.clear();
+    compareToSnapshot.value = false;
+  }
+}
+
+// Export to CSV
+function exportCSV() {
+  // Warn if there are unsaved changes (data may not match displayed config)
+  if (hasUnsavedChanges.value) {
+    const proceed = confirm(
+      'You have unsaved changes. The exported data reflects the last recalculation, ' +
+      'not the current slider settings. Click Recalculate first if you want the export to match current settings.\n\n' +
+      'Export anyway?'
+    );
+    if (!proceed) return;
+  }
+
+  const config = lastConfig.value || currentConfig.value;
+  const date = new Date().toISOString().split('T')[0];
+
+  // Find preset name if one is selected
+  const presetName = selectedPresetId.value
+    ? allPresets.value.find(p => p.id === selectedPresetId.value)?.name || 'Custom'
+    : 'Custom';
+
+  // Build header comments
+  const comments = [
+    `# V2 Enhanced Scoring Export`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# Preset: ${presetName}`,
+    `# Top N: ${config.topN}`,
+    `# Complete Data Only: ${config.llmEnhancedOnly}`,
+    `# Weights: ${Object.entries(config.weights).map(([k, v]) => `${k}=${v}`).join(',')}`,
+    `# Scaling: ${Object.entries(config.scaling).map(([k, v]) => `${k}=${v}`).join(',')}`,
+  ];
+
+  // Build CSV headers
+  const headers = [
+    'rank',
+    'rank_change',
+    ...(compareToSnapshot.value && selectedSnapshotId.value ? ['snapshot_rank_change'] : []),
+    'patent_id',
+    'title',
+    'assignee',
+    'super_sector',
+    'primary_sector',
+    'years_remaining',
+    'has_llm_data',
+    'score',
+  ];
+
+  // Build rows
+  const rows = patentsWithSnapshotChange.value.map(p => {
+    const row = [
+      p.rank,
+      p.rank_change ?? '',
+      ...(compareToSnapshot.value && selectedSnapshotId.value ? [(p as any).snapshot_rank_change ?? 'NEW'] : []),
+      p.patent_id,
+      `"${(p.patent_title || '').replace(/"/g, '""')}"`,
+      `"${(p.assignee || '').replace(/"/g, '""')}"`,
+      p.super_sector || '',
+      p.primary_sector || '',
+      p.years_remaining?.toFixed(1) || '',
+      p.has_llm_data ? 'Y' : 'N',
+      p.score?.toFixed(2) || '',
+    ];
+    return row.join(',');
+  });
+
+  const csvContent = [...comments, '', headers.join(','), ...rows].join('\n');
+
+  // Download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `v2-scoring-top${topN.value}-${date}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// Recalculate scores
+async function recalculate() {
   loading.value = true;
   error.value = null;
 
   try {
-    const response = await scoringApi.getV2Scores(
-      currentWeights.value,
-      {
-        page: pagination.value.page,
-        limit: pagination.value.rowsPerPage
-      },
-      0.01  // minScore: filter out patents with effectively zero score
-    );
+    const response = await v2EnhancedApi.getScores(currentConfig.value, previousRankings.value);
 
-    // Calculate rank changes compared to previous
-    const newPatents = response.data.map(p => {
-      const prevRank = previousRanks.value.get(p.patent_id);
-      return {
-        ...p,
-        rank_change: prevRank !== undefined ? prevRank - p.rank : undefined
-      };
-    });
-
-    // Store current ranks for next comparison
-    const newRanks = new Map<string, number>();
-    response.data.forEach(p => newRanks.set(p.patent_id, p.rank));
-    previousRanks.value = newRanks;
-
-    patents.value = newPatents;
+    patents.value = response.data;
     total.value = response.total;
-    pagination.value.rowsNumber = response.total;
+    lastConfig.value = response.config;
+    hasUnsavedChanges.value = false;
+
+    previousRankings.value = response.data.map(p => ({
+      patent_id: p.patent_id,
+      rank: p.rank,
+    }));
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load scores';
+    error.value = err instanceof Error ? err.message : 'Failed to calculate scores';
     console.error('Failed to fetch scores:', err);
   } finally {
     loading.value = false;
   }
-}
-
-// Debounced fetch for slider changes
-const debouncedFetch = useDebounceFn(fetchScores, 300);
-
-// Load presets
-async function loadPresets() {
-  try {
-    presets.value = await scoringApi.getWeightPresets();
-  } catch (err) {
-    console.error('Failed to load presets:', err);
-  }
-}
-
-// Apply a preset
-function applyPreset(preset: WeightPreset) {
-  citationWeight.value = preset.weights.citation;
-  yearsWeight.value = preset.weights.years;
-  competitorWeight.value = preset.weights.competitor;
-  selectedPreset.value = preset.name;
-}
-
-// Reset to default
-function resetToDefault() {
-  const defaultPreset = presets.value.find(p => p.name === 'Default');
-  if (defaultPreset) {
-    applyPreset(defaultPreset);
-  } else {
-    citationWeight.value = 50;
-    yearsWeight.value = 30;
-    competitorWeight.value = 20;
-    selectedPreset.value = null;
-  }
-}
-
-// Handle pagination request
-function onRequest(props: { pagination: typeof pagination.value }) {
-  pagination.value.page = props.pagination.page;
-  pagination.value.rowsPerPage = props.pagination.rowsPerPage;
-  fetchScores();
 }
 
 // Navigate to patent detail
@@ -147,239 +474,459 @@ function goToPatent(patentId: string) {
   router.push({ name: 'patent-detail', params: { id: patentId } });
 }
 
-// Watch for weight changes
-watch([citationWeight, yearsWeight, competitorWeight], () => {
-  selectedPreset.value = null; // Clear preset selection when manually adjusting
-  debouncedFetch();
+// Mark changes when metrics are modified
+function onMetricChange() {
+  selectedPresetId.value = null;
+  hasUnsavedChanges.value = true;
+}
+
+// Watch for filter changes
+watch([topN, llmEnhancedOnly], () => {
+  hasUnsavedChanges.value = true;
 });
 
 // Initialize
 onMounted(async () => {
-  await loadPresets();
-  await fetchScores();
+  await Promise.all([loadMetrics(), loadPresets()]);
+  loadSnapshots();
+  await recalculate();
 });
 </script>
 
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <div class="text-h5">v2 Scoring - Weighted Rankings</div>
+      <div class="text-h5">V2 Enhanced Scoring</div>
       <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>
+      <q-space />
+      <q-badge v-if="hasUnsavedChanges" color="warning" outline class="q-mr-md">
+        Unsaved changes
+      </q-badge>
     </div>
 
-    <div class="row q-gutter-lg">
-      <!-- Weight Controls -->
-      <q-card class="col-3">
-        <q-card-section>
-          <div class="text-h6 q-mb-md">Weight Controls</div>
-
-          <!-- Citation Weight -->
-          <div class="q-mb-lg">
-            <div class="row justify-between items-center">
-              <span>Citation Weight</span>
-              <q-badge color="primary">{{ normalizedWeights.citation.toFixed(1) }}%</q-badge>
+    <div class="row q-gutter-md">
+      <!-- Left Sidebar: Controls -->
+      <div class="col-3" style="min-width: 320px; max-width: 380px">
+        <!-- Top Controls -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-sm">
+            <div class="row items-center q-gutter-sm">
+              <q-select
+                v-model="topN"
+                :options="topNOptions"
+                label="Top N"
+                dense
+                outlined
+                style="width: 100px"
+                @update:model-value="onMetricChange"
+              />
+              <q-toggle
+                v-model="llmEnhancedOnly"
+                label="Complete Data"
+                dense
+                @update:model-value="onMetricChange"
+              >
+                <q-tooltip>Only show patents with LLM enrichment data</q-tooltip>
+              </q-toggle>
+              <q-space />
+              <q-btn
+                color="primary"
+                label="Recalculate"
+                icon="refresh"
+                :loading="loading"
+                @click="recalculate"
+              />
             </div>
-            <q-slider
-              v-model="citationWeight"
-              :min="0"
-              :max="100"
-              :step="1"
-              label
-              color="primary"
+          </q-card-section>
+        </q-card>
+
+        <!-- Presets -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-sm">
+            <div class="row items-center q-mb-sm">
+              <span class="text-subtitle2">Presets</span>
+              <q-space />
+              <q-btn
+                flat
+                dense
+                size="sm"
+                icon="add"
+                label="Save"
+                @click="showSavePresetDialog = true"
+              />
+            </div>
+            <div class="row q-gutter-xs">
+              <q-chip
+                v-for="preset in allPresets"
+                :key="preset.id"
+                clickable
+                :removable="!preset.isBuiltIn"
+                :color="selectedPresetId === preset.id ? 'primary' : 'grey-4'"
+                :text-color="selectedPresetId === preset.id ? 'white' : 'black'"
+                size="sm"
+                @click="applyPreset(preset)"
+                @remove="deletePreset(preset.id)"
+              >
+                {{ preset.name }}
+                <q-tooltip>{{ preset.description }}</q-tooltip>
+              </q-chip>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Snapshots -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-sm">
+            <div class="row items-center q-mb-sm">
+              <span class="text-subtitle2">Snapshots</span>
+              <q-space />
+              <q-btn
+                flat
+                dense
+                size="sm"
+                icon="camera_alt"
+                label="Save"
+                :disable="patents.length === 0"
+                @click="showSaveSnapshotDialog = true"
+              />
+            </div>
+            <q-select
+              v-model="selectedSnapshotId"
+              :options="[{ label: '(None)', value: null }, ...snapshots.map(s => ({ label: `${s.name} (${new Date(s.timestamp).toLocaleDateString()})`, value: s.id }))]"
+              option-value="value"
+              option-label="label"
+              emit-value
+              map-options
+              dense
+              outlined
+              clearable
+              placeholder="Select snapshot..."
+              @update:model-value="onSnapshotSelect"
+            />
+            <q-toggle
+              v-if="selectedSnapshotId"
+              v-model="compareToSnapshot"
+              label="Compare to snapshot"
+              dense
               class="q-mt-sm"
             />
-            <div class="text-caption text-grey-6">
-              Forward citations (log scale)
-            </div>
-          </div>
-
-          <!-- Years Weight -->
-          <div class="q-mb-lg">
-            <div class="row justify-between items-center">
-              <span>Years Remaining</span>
-              <q-badge color="secondary">{{ normalizedWeights.years.toFixed(1) }}%</q-badge>
-            </div>
-            <q-slider
-              v-model="yearsWeight"
-              :min="0"
-              :max="100"
-              :step="1"
-              label
-              color="secondary"
-              class="q-mt-sm"
-            />
-            <div class="text-caption text-grey-6">
-              Patent life remaining (linear)
-            </div>
-          </div>
-
-          <!-- Competitor Weight -->
-          <div class="q-mb-lg">
-            <div class="row justify-between items-center">
-              <span>Competitor Citations</span>
-              <q-badge color="accent">{{ normalizedWeights.competitor.toFixed(1) }}%</q-badge>
-            </div>
-            <q-slider
-              v-model="competitorWeight"
-              :min="0"
-              :max="100"
-              :step="1"
-              label
-              color="accent"
-              class="q-mt-sm"
-            />
-            <div class="text-caption text-grey-6">
-              Citations from competitors
-            </div>
-          </div>
-
-          <q-separator class="q-my-md" />
-
-          <!-- Presets -->
-          <div class="text-subtitle2 q-mb-sm">Presets</div>
-          <div class="row q-gutter-sm q-mb-md">
-            <q-chip
-              v-for="preset in presets"
-              :key="preset.name"
-              clickable
-              :color="selectedPreset === preset.name ? 'primary' : 'grey-4'"
-              :text-color="selectedPreset === preset.name ? 'white' : 'black'"
+            <q-btn
+              v-if="selectedSnapshotId"
+              flat
+              dense
               size="sm"
-              @click="applyPreset(preset)"
-            >
-              {{ preset.name }}
-            </q-chip>
-          </div>
+              color="negative"
+              icon="delete"
+              label="Delete snapshot"
+              class="q-mt-sm"
+              @click="deleteSnapshot(selectedSnapshotId)"
+            />
+          </q-card-section>
+        </q-card>
 
-          <q-btn
-            outline
-            color="grey"
-            label="Reset to Default"
-            icon="restart_alt"
-            class="full-width"
-            @click="resetToDefault"
+        <!-- Weight Summary -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-py-sm">
+            <div class="row items-center">
+              <span class="text-subtitle2">Total Weight:</span>
+              <q-space />
+              <q-badge
+                :color="Math.abs(totalWeight - 100) < 1 ? 'positive' : 'warning'"
+              >
+                {{ totalWeight.toFixed(0) }}%
+              </q-badge>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Metric Controls by Category -->
+        <q-card
+          v-for="category in categories"
+          :key="category.name"
+          class="q-mb-md"
+        >
+          <q-card-section class="q-pb-none">
+            <div class="text-subtitle1" :class="`text-${category.color}`">
+              {{ category.name }}
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-sm">
+            <div
+              v-for="metric in category.metrics"
+              :key="metric.key"
+              class="q-mb-md"
+            >
+              <div class="row items-center q-mb-xs">
+                <span class="text-body2">{{ metric.label }}</span>
+                <q-icon name="info" size="xs" class="q-ml-xs text-grey-6">
+                  <q-tooltip>{{ metric.description }}</q-tooltip>
+                </q-icon>
+                <q-space />
+                <q-badge :color="category.color" outline>
+                  {{ metric.weight }}%
+                </q-badge>
+              </div>
+
+              <q-slider
+                v-model="metric.weight"
+                :min="0"
+                :max="50"
+                :step="1"
+                :color="category.color"
+                dense
+                @update:model-value="onMetricChange"
+              />
+
+              <div class="row items-center q-gutter-sm">
+                <q-select
+                  v-model="metric.scaling"
+                  :options="scalingOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  dense
+                  outlined
+                  class="col"
+                  style="max-width: 100px"
+                  @update:model-value="onMetricChange"
+                />
+                <q-toggle
+                  v-model="metric.invert"
+                  label="Invert"
+                  dense
+                  size="sm"
+                  @update:model-value="onMetricChange"
+                />
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <!-- Right Side: Rankings Table -->
+      <div class="col">
+        <q-card>
+          <q-card-section class="q-pb-none">
+            <div class="row items-center">
+              <div class="text-h6">Patent Rankings</div>
+              <q-space />
+              <q-btn
+                flat
+                dense
+                icon="download"
+                label="Export CSV"
+                :disable="patents.length === 0"
+                class="q-mr-sm"
+                @click="exportCSV"
+              />
+              <q-spinner v-if="loading" color="primary" size="sm" />
+            </div>
+          </q-card-section>
+
+          <q-card-section>
+            <q-banner v-if="error" class="bg-negative text-white q-mb-md">
+              {{ error }}
+              <template v-slot:action>
+                <q-btn flat label="Retry" @click="recalculate" />
+              </template>
+            </q-banner>
+
+            <q-table
+              :rows="patentsWithSnapshotChange"
+              :columns="columns"
+              row-key="patent_id"
+              :loading="loading"
+              flat
+              bordered
+              dense
+              :rows-per-page-options="[0]"
+              hide-pagination
+            >
+              <template v-slot:body-cell-rank="props">
+                <q-td :props="props">
+                  <span class="text-weight-bold">{{ props.row.rank }}</span>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-change="props">
+                <q-td :props="props">
+                  <template v-if="props.row.rank_change !== undefined && props.row.rank_change !== 0">
+                    <q-icon
+                      :name="props.row.rank_change > 0 ? 'arrow_upward' : 'arrow_downward'"
+                      :color="props.row.rank_change > 0 ? 'positive' : 'negative'"
+                      size="xs"
+                    />
+                    <span
+                      :class="props.row.rank_change > 0 ? 'text-positive' : 'text-negative'"
+                      class="text-caption"
+                    >
+                      {{ Math.abs(props.row.rank_change) }}
+                    </span>
+                  </template>
+                  <span v-else class="text-grey-5">-</span>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-snapshot_change="props">
+                <q-td :props="props">
+                  <template v-if="props.row.snapshot_rank_change !== undefined">
+                    <template v-if="props.row.snapshot_rank_change !== 0">
+                      <q-icon
+                        :name="props.row.snapshot_rank_change > 0 ? 'arrow_upward' : 'arrow_downward'"
+                        :color="props.row.snapshot_rank_change > 0 ? 'positive' : 'negative'"
+                        size="xs"
+                      />
+                      <span
+                        :class="props.row.snapshot_rank_change > 0 ? 'text-positive' : 'text-negative'"
+                        class="text-caption"
+                      >
+                        {{ Math.abs(props.row.snapshot_rank_change) }}
+                      </span>
+                    </template>
+                    <span v-else class="text-grey-5">-</span>
+                  </template>
+                  <q-badge v-else color="info" outline size="xs">NEW</q-badge>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-patent_id="props">
+                <q-td :props="props">
+                  <a
+                    href="#"
+                    class="text-primary"
+                    @click.prevent="goToPatent(props.row.patent_id)"
+                  >
+                    {{ props.row.patent_id }}
+                  </a>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-patent_title="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 250px">
+                    {{ props.row.patent_title }}
+                    <q-tooltip v-if="props.row.patent_title?.length > 40">
+                      {{ props.row.patent_title }}
+                    </q-tooltip>
+                  </div>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-assignee="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 150px">
+                    {{ props.row.assignee }}
+                    <q-tooltip v-if="props.row.assignee?.length > 20">
+                      {{ props.row.assignee }}
+                    </q-tooltip>
+                  </div>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-has_llm="props">
+                <q-td :props="props">
+                  <q-icon
+                    :name="props.row.has_llm_data ? 'check_circle' : 'remove_circle_outline'"
+                    :color="props.row.has_llm_data ? 'positive' : 'grey-4'"
+                    size="sm"
+                  />
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-score="props">
+                <q-td :props="props">
+                  <q-badge
+                    :color="props.row.score > 70 ? 'positive' : props.row.score > 50 ? 'warning' : 'grey'"
+                  >
+                    {{ props.row.score?.toFixed(2) }}
+                  </q-badge>
+                </q-td>
+              </template>
+
+              <template v-slot:no-data>
+                <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">
+                  <q-icon size="2em" name="sentiment_dissatisfied" />
+                  <span>No patents found. Try adjusting filters or click Recalculate.</span>
+                </div>
+              </template>
+            </q-table>
+          </q-card-section>
+        </q-card>
+      </div>
+    </div>
+
+    <!-- Save Preset Dialog -->
+    <q-dialog v-model="showSavePresetDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Save as Preset</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-input
+            v-model="newPresetName"
+            label="Preset Name"
+            dense
+            autofocus
+            @keyup.enter="saveAsPreset"
+          />
+          <q-input
+            v-model="newPresetDescription"
+            label="Description (optional)"
+            dense
+            class="q-mt-md"
           />
         </q-card-section>
 
-        <!-- Formula Display -->
-        <q-card-section class="bg-grey-2">
-          <div class="text-subtitle2 q-mb-sm">Current Formula</div>
-          <code class="text-caption">
-            score = log10(fwd_cites + 1) × {{ normalizedWeights.citation.toFixed(0) }}%
-            <br />+ years_left/20 × {{ normalizedWeights.years.toFixed(0) }}%
-            <br />+ comp_cites × {{ normalizedWeights.competitor.toFixed(0) }}%
-          </code>
-        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save"
+            :disable="!newPresetName.trim()"
+            @click="saveAsPreset"
+          />
+        </q-card-actions>
       </q-card>
+    </q-dialog>
 
-      <!-- Rankings Grid -->
-      <q-card class="col">
-        <q-card-section class="q-pb-none">
-          <div class="row items-center">
-            <div class="text-h6">Patent Rankings</div>
-            <q-space />
-            <q-spinner v-if="loading" color="primary" size="sm" class="q-mr-sm" />
-            <span v-if="loading" class="text-grey-6 text-caption">Recalculating...</span>
+    <!-- Save Snapshot Dialog -->
+    <q-dialog v-model="showSaveSnapshotDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Save Snapshot</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-input
+            v-model="newSnapshotName"
+            label="Snapshot Name"
+            dense
+            autofocus
+            :placeholder="`Snapshot ${new Date().toLocaleDateString()}`"
+            @keyup.enter="saveSnapshot"
+          />
+          <div class="text-caption text-grey q-mt-sm">
+            Saves current rankings ({{ patents.length }} patents) for comparison.
+            Limit: 10 snapshots.
           </div>
         </q-card-section>
 
-        <q-card-section>
-          <!-- Error State -->
-          <q-banner v-if="error" class="bg-negative text-white q-mb-md">
-            {{ error }}
-            <template v-slot:action>
-              <q-btn flat label="Retry" @click="fetchScores" />
-            </template>
-          </q-banner>
-
-          <!-- Rankings Table -->
-          <q-table
-            :rows="patents"
-            :columns="columns"
-            row-key="patent_id"
-            v-model:pagination="pagination"
-            :loading="loading"
-            flat
-            bordered
-            binary-state-sort
-            @request="onRequest"
-          >
-            <!-- Rank column -->
-            <template v-slot:body-cell-rank="props">
-              <q-td :props="props">
-                <span class="text-weight-bold">{{ props.row.rank }}</span>
-              </q-td>
-            </template>
-
-            <!-- Rank change indicator -->
-            <template v-slot:body-cell-change="props">
-              <q-td :props="props">
-                <template v-if="props.row.rank_change !== undefined && props.row.rank_change !== 0">
-                  <q-icon
-                    :name="props.row.rank_change > 0 ? 'arrow_upward' : 'arrow_downward'"
-                    :color="props.row.rank_change > 0 ? 'positive' : 'negative'"
-                    size="xs"
-                  />
-                  <span
-                    :class="props.row.rank_change > 0 ? 'text-positive' : 'text-negative'"
-                    class="text-caption"
-                  >
-                    {{ Math.abs(props.row.rank_change) }}
-                  </span>
-                </template>
-                <span v-else-if="props.row.rank_change === 0" class="text-grey-5">-</span>
-              </q-td>
-            </template>
-
-            <!-- Patent ID as link -->
-            <template v-slot:body-cell-patent_id="props">
-              <q-td :props="props">
-                <a
-                  href="#"
-                  class="text-primary"
-                  @click.prevent="goToPatent(props.row.patent_id)"
-                >
-                  {{ props.row.patent_id }}
-                </a>
-              </q-td>
-            </template>
-
-            <!-- Title with truncation -->
-            <template v-slot:body-cell-patent_title="props">
-              <q-td :props="props">
-                <div class="ellipsis" style="max-width: 300px">
-                  {{ props.row.patent_title }}
-                  <q-tooltip v-if="props.row.patent_title?.length > 50">
-                    {{ props.row.patent_title }}
-                  </q-tooltip>
-                </div>
-              </q-td>
-            </template>
-
-            <!-- Score with color coding -->
-            <template v-slot:body-cell-v2_score="props">
-              <q-td :props="props">
-                <q-badge
-                  :color="props.row.v2_score > 50 ? 'positive' : props.row.v2_score > 25 ? 'warning' : 'grey'"
-                >
-                  {{ props.row.v2_score?.toFixed(2) }}
-                </q-badge>
-              </q-td>
-            </template>
-
-            <!-- No data -->
-            <template v-slot:no-data>
-              <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">
-                <q-icon size="2em" name="sentiment_dissatisfied" />
-                <span>No patents found</span>
-              </div>
-            </template>
-          </q-table>
-        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save"
+            :disable="!newSnapshotName.trim()"
+            @click="saveSnapshot"
+          />
+        </q-card-actions>
       </q-card>
-    </div>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -388,11 +935,5 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-code {
-  font-family: 'Fira Code', 'Consolas', monospace;
-  font-size: 0.85em;
-  line-height: 1.6;
 }
 </style>

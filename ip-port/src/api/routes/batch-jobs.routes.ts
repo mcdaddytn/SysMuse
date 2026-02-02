@@ -2,8 +2,13 @@ import { Router, Request, Response } from 'express';
 import { exec, spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { invalidateEnrichmentCache } from './patents.routes.js';
+import { clearScoringCache } from '../services/scoring-service.js';
 
 const router = Router();
+
+// Track if we've invalidated caches since last job completion detection
+let lastCacheInvalidation = 0;
 
 // Coverage types that can be run independently
 type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
@@ -81,7 +86,8 @@ function parseTierValue(targetValue: string): number {
 }
 
 // Analyze gaps for a given target
-function analyzeGaps(targetType: TargetType, targetValue: string): Record<CoverageType, { total: number; gap: number; ids: string[] }> {
+// topN: for super-sector/sector, only analyze top N patents by score (0 = all)
+function analyzeGaps(targetType: TargetType, targetValue: string, topN: number = 0): Record<CoverageType, { total: number; gap: number; ids: string[] }> {
   try {
     const tierTopN = targetType === 'tier' ? parseTierValue(targetValue) : 6000;
 
@@ -109,6 +115,9 @@ function analyzeGaps(targetType: TargetType, targetValue: string): Record<Covera
       sectorCondition = `(p.super_sector === 'AI & Machine Learning' || p.super_sector === 'AI_ML')`;
     }
 
+    // For super-sector/sector, optionally limit to top N by score
+    const sectorTopN = topN > 0 ? topN : 999999;
+
     const script = `
       const fs = require('fs');
       const candidatesFile = fs.readdirSync('output')
@@ -120,9 +129,15 @@ function analyzeGaps(targetType: TargetType, targetValue: string): Record<Covera
       if ('${targetType}' === 'tier') {
         patents = data.candidates.sort((a, b) => b.score - a.score).slice(0, ${tierTopN});
       } else if ('${targetType}' === 'super-sector') {
-        patents = data.candidates.filter(p => ${sectorCondition});
+        patents = data.candidates
+          .filter(p => ${sectorCondition})
+          .sort((a, b) => b.score - a.score)
+          .slice(0, ${sectorTopN});
       } else {
-        patents = data.candidates.filter(p => p.primary_sector === '${targetValue}');
+        patents = data.candidates
+          .filter(p => p.primary_sector === '${targetValue}')
+          .sort((a, b) => b.score - a.score)
+          .slice(0, ${sectorTopN});
       }
 
       function getCacheSet(dir) {
@@ -219,6 +234,7 @@ router.get('/', (_req: Request, res: Response) => {
 
     // Update status of jobs that claim to be running
     const runningProcesses = detectRunningProcesses();
+    let jobsJustCompleted = false;
     recentJobs = recentJobs.map(j => {
       if (j.status === 'running' && j.pid) {
         const stillRunning = runningProcesses.some(p => p.pid === j.pid);
@@ -230,6 +246,8 @@ router.get('/', (_req: Request, res: Response) => {
           const completed = j.progress?.completed || j.progress?.total || 0;
           const actualRate = hours > 0 ? Math.round(completed / hours) : 0;
 
+          jobsJustCompleted = true;
+
           return {
             ...j,
             status: 'completed' as const,
@@ -240,6 +258,15 @@ router.get('/', (_req: Request, res: Response) => {
       }
       return j;
     });
+
+    // Invalidate caches when jobs complete (throttled to once per 10 seconds)
+    const now = Date.now();
+    if (jobsJustCompleted && now - lastCacheInvalidation > 10000) {
+      console.log('[BatchJobs] Jobs completed - invalidating enrichment and scoring caches');
+      invalidateEnrichmentCache();
+      clearScoringCache();
+      lastCacheInvalidation = now;
+    }
 
     // Save any status updates
     batchJobs = batchJobs.map(j => {
@@ -276,7 +303,8 @@ router.post('/', (req: Request, res: Response) => {
       targetType,
       targetValue,
       coverageTypes = ['llm', 'prosecution', 'ipr', 'family'],
-      maxHours = 4
+      maxHours = 4,
+      topN = 0  // For super-sector/sector: limit to top N patents by score (0 = all)
     } = req.body;
 
     if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
@@ -296,7 +324,8 @@ router.post('/', (req: Request, res: Response) => {
     }
 
     // Analyze gaps to determine what needs to be done
-    const gaps = analyzeGaps(targetType, targetValue);
+    // For super-sector/sector, topN limits analysis to top N patents by score
+    const gaps = analyzeGaps(targetType, targetValue, topN);
 
     // Create a group ID to link related jobs
     const groupId = `group-${Date.now()}`;
@@ -316,13 +345,15 @@ router.post('/', (req: Request, res: Response) => {
       fs.mkdirSync(logsDir, { recursive: true });
       const logFile = path.join(logsDir, `job-${jobId}.log`);
 
-      // Write batch file with patent IDs
-      const batchIds = gapInfo.ids.slice(0, 500); // Process up to 500 at a time
+      // Write batch file with patent IDs (process up to 500 at a time)
+      const MAX_BATCH_SIZE = 500;
+      const batchIds = gapInfo.ids.slice(0, MAX_BATCH_SIZE);
+      const actualBatchSize = batchIds.length;
       fs.writeFileSync(batchFile, JSON.stringify(batchIds));
 
-      // Calculate estimated completion
+      // Calculate estimated completion based on actual batch size, not full gap
       const rate = DEFAULT_RATES[coverageType];
-      const estimatedHours = gapInfo.gap / rate;
+      const estimatedHours = actualBatchSize / rate;
       const estimatedCompletion = new Date(Date.now() + estimatedHours * 3600000).toISOString();
 
       // Start the job
@@ -345,7 +376,7 @@ router.post('/', (req: Request, res: Response) => {
         startedAt: new Date().toISOString(),
         logFile,
         progress: {
-          total: gapInfo.gap,
+          total: actualBatchSize,  // Actual patents being processed, not full gap
           completed: 0,
         },
         estimatedRate: rate,
@@ -483,16 +514,18 @@ router.get('/gaps', (req: Request, res: Response) => {
   try {
     const targetType = req.query.targetType as TargetType;
     const targetValue = req.query.targetValue as string;
+    const topN = parseInt(req.query.topN as string) || 0;
 
     if (!targetType || !targetValue) {
       return res.status(400).json({ error: 'targetType and targetValue are required' });
     }
 
-    const gaps = analyzeGaps(targetType, targetValue);
+    const gaps = analyzeGaps(targetType, targetValue, topN);
 
     res.json({
       targetType,
       targetValue,
+      topN,
       gaps: Object.fromEntries(
         Object.entries(gaps).map(([k, v]) => [k, { total: v.total, gap: v.gap }])
       ),

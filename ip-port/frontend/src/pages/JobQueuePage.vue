@@ -218,22 +218,24 @@ async function startNewJob() {
 const showEnrichDialog = ref(false);
 const enrichDialogTargetType = ref<TargetType>('tier');
 const enrichDialogTargetValue = ref('');
+const enrichDialogTopN = ref<number>(0);  // 0 = all patents in sector
 const enrichDialogCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family']);
 const enrichDialogGaps = ref<GapsResponse | null>(null);
 const enrichDialogLoading = ref(false);
 const enrichDialogStarting = ref(false);
 
-async function openEnrichDialog(targetType: TargetType, targetValue: string) {
+async function openEnrichDialog(targetType: TargetType, targetValue: string, topN: number = 0) {
   enrichDialogTargetType.value = targetType;
   enrichDialogTargetValue.value = targetValue;
+  enrichDialogTopN.value = topN;
   enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'ipr', 'family'];
   enrichDialogGaps.value = null;
   showEnrichDialog.value = true;
 
-  // Load gaps
+  // Load gaps (pass topN for super-sector/sector to limit to top N patents)
   enrichDialogLoading.value = true;
   try {
-    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue);
+    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue, topN > 0 ? topN : undefined);
   } catch (err) {
     console.error('Failed to load gaps:', err);
   } finally {
@@ -248,7 +250,8 @@ async function startEnrichFromDialog() {
       targetType: enrichDialogTargetType.value,
       targetValue: enrichDialogTargetValue.value,
       coverageTypes: enrichDialogCoverageTypes.value,
-      maxHours: 4
+      maxHours: 4,
+      topN: enrichDialogTopN.value > 0 ? enrichDialogTopN.value : undefined
     });
     showEnrichDialog.value = false;
     activeTab.value = 'jobs';
@@ -680,7 +683,7 @@ onUnmounted(() => {
                       color="primary"
                       icon="play_arrow"
                       label="Enrich"
-                      @click="openEnrichDialog('super-sector', props.row.name)"
+                      @click="openEnrichDialog('super-sector', props.row.name, selectedTopPerSector)"
                     />
                     <q-icon v-else name="check_circle" color="positive" size="sm" />
                   </q-td>

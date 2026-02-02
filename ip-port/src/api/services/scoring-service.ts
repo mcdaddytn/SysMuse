@@ -845,6 +845,436 @@ export function scorePatentsBySector(profileId: string): Map<string, ScoredPaten
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// V2 Enhanced Scoring (custom weights, scaling, inversion)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ScalingType = 'linear' | 'log' | 'sqrt';
+
+export interface V2EnhancedConfig {
+  weights: Record<string, number>;
+  scaling: Record<string, ScalingType>;
+  invert: Record<string, boolean>;
+  topN: number;
+  llmEnhancedOnly: boolean;
+}
+
+export interface V2EnhancedScoredPatent {
+  patent_id: string;
+  rank: number;
+  rank_change?: number;
+  score: number;
+  normalized_metrics: Record<string, number>;
+  raw_metrics: Record<string, number>;
+  metrics_used: string[];
+  year_multiplier: number;
+  has_llm_data: boolean;
+  // Patent metadata
+  patent_title: string;
+  patent_date: string;
+  assignee: string;
+  primary_sector: string;
+  super_sector: string;
+  years_remaining: number;
+}
+
+// Max values for normalization (used with scaling functions)
+const METRIC_MAX_VALUES: Record<string, number> = {
+  competitor_citations: 20,
+  forward_citations: 900,
+  adjusted_forward_citations: 900,
+  years_remaining: 15,
+  competitor_count: 5,
+  competitor_density: 1,
+  // LLM/API scores are 1-5, normalized separately
+  eligibility_score: 4,
+  validity_score: 4,
+  claim_breadth: 4,
+  enforcement_clarity: 4,
+  design_around_difficulty: 4,
+  market_relevance_score: 4,
+  ipr_risk_score: 4,
+  prosecution_quality_score: 4,
+};
+
+// Scaling functions
+const SCALING_FUNCTIONS: Record<ScalingType, (value: number, max: number) => number> = {
+  linear: (v, max) => Math.min(1, v / max),
+  log: (v, max) => max > 0 ? Math.min(1, Math.log10(v + 1) / Math.log10(max + 1)) : 0,
+  sqrt: (v, max) => max > 0 ? Math.min(1, Math.sqrt(v) / Math.sqrt(max)) : 0,
+};
+
+/**
+ * Normalize a metric value with custom scaling and optional inversion
+ */
+function normalizeWithScaling(
+  metricName: string,
+  rawValue: number,
+  scaling: ScalingType,
+  invert: boolean
+): number {
+  // LLM/API scores are 1-5, need special handling
+  const isScoreMetric = LLM_METRICS.has(metricName) || API_METRICS.has(metricName);
+
+  let normalized: number;
+  if (isScoreMetric) {
+    // Convert 1-5 to 0-1, then apply scaling
+    const base = Math.max(0, (rawValue - 1) / 4);
+    // Scaling doesn't make much sense for 0-1 scores, but support it
+    const scaleFunc = SCALING_FUNCTIONS[scaling];
+    normalized = scaleFunc(base, 1);
+  } else {
+    const max = METRIC_MAX_VALUES[metricName] || 100;
+    const scaleFunc = SCALING_FUNCTIONS[scaling];
+    normalized = scaleFunc(rawValue, max);
+  }
+
+  // Apply inversion if requested
+  if (invert) {
+    normalized = 1 - normalized;
+  }
+
+  return Math.max(0, Math.min(1, normalized));
+}
+
+/**
+ * Default V2 Enhanced configuration
+ */
+export const DEFAULT_V2_ENHANCED_CONFIG: V2EnhancedConfig = {
+  weights: {
+    // Quantitative (60% total)
+    competitor_citations: 20,
+    adjusted_forward_citations: 10,
+    years_remaining: 15,
+    competitor_count: 5,
+    competitor_density: 5,
+    // LLM-Derived (30% total)
+    eligibility_score: 5,
+    validity_score: 5,
+    claim_breadth: 4,
+    enforcement_clarity: 6,
+    design_around_difficulty: 5,
+    market_relevance_score: 5,
+    // API-Derived (10% total)
+    ipr_risk_score: 5,
+    prosecution_quality_score: 5,
+  },
+  scaling: {
+    competitor_citations: 'linear',
+    adjusted_forward_citations: 'sqrt',
+    years_remaining: 'linear',
+    competitor_count: 'linear',
+    competitor_density: 'linear',
+    eligibility_score: 'linear',
+    validity_score: 'linear',
+    claim_breadth: 'linear',
+    enforcement_clarity: 'linear',
+    design_around_difficulty: 'linear',
+    market_relevance_score: 'linear',
+    ipr_risk_score: 'linear',
+    prosecution_quality_score: 'linear',
+  },
+  invert: {},
+  topN: 100,
+  llmEnhancedOnly: true,
+};
+
+/**
+ * V2 Enhanced built-in presets
+ */
+export const V2_ENHANCED_PRESETS = [
+  {
+    id: 'default',
+    name: 'Default Balanced',
+    description: 'Balanced weights across all metrics',
+    isBuiltIn: true,
+    weights: { ...DEFAULT_V2_ENHANCED_CONFIG.weights },
+    scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
+    invert: {},
+  },
+  {
+    id: 'litigation',
+    name: 'Litigation Focus',
+    description: 'Emphasizes enforcement clarity and design-around difficulty',
+    isBuiltIn: true,
+    weights: {
+      competitor_citations: 15,
+      adjusted_forward_citations: 5,
+      years_remaining: 10,
+      competitor_count: 5,
+      competitor_density: 5,
+      eligibility_score: 8,
+      validity_score: 7,
+      claim_breadth: 5,
+      enforcement_clarity: 15,
+      design_around_difficulty: 10,
+      market_relevance_score: 3,
+      ipr_risk_score: 7,
+      prosecution_quality_score: 5,
+    },
+    scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
+    invert: {},
+  },
+  {
+    id: 'licensing',
+    name: 'Licensing Focus',
+    description: 'Emphasizes claim breadth and market relevance',
+    isBuiltIn: true,
+    weights: {
+      competitor_citations: 18,
+      adjusted_forward_citations: 8,
+      years_remaining: 15,
+      competitor_count: 5,
+      competitor_density: 4,
+      eligibility_score: 5,
+      validity_score: 5,
+      claim_breadth: 10,
+      enforcement_clarity: 4,
+      design_around_difficulty: 3,
+      market_relevance_score: 10,
+      ipr_risk_score: 5,
+      prosecution_quality_score: 3,
+    },
+    scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
+    invert: {},
+  },
+  {
+    id: 'defensive',
+    name: 'Defensive',
+    description: 'Emphasizes validity and IPR risk',
+    isBuiltIn: true,
+    weights: {
+      competitor_citations: 10,
+      adjusted_forward_citations: 8,
+      years_remaining: 12,
+      competitor_count: 3,
+      competitor_density: 4,
+      eligibility_score: 6,
+      validity_score: 12,
+      claim_breadth: 8,
+      enforcement_clarity: 4,
+      design_around_difficulty: 6,
+      market_relevance_score: 4,
+      ipr_risk_score: 12,
+      prosecution_quality_score: 6,
+    },
+    scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
+    invert: {},
+  },
+  {
+    id: 'quick_wins',
+    name: 'Quick Wins',
+    description: 'High-confidence, clear enforcement opportunities',
+    isBuiltIn: true,
+    weights: {
+      competitor_citations: 15,
+      adjusted_forward_citations: 5,
+      years_remaining: 8,
+      competitor_count: 5,
+      competitor_density: 5,
+      eligibility_score: 12,
+      validity_score: 10,
+      claim_breadth: 4,
+      enforcement_clarity: 15,
+      design_around_difficulty: 3,
+      market_relevance_score: 4,
+      ipr_risk_score: 8,
+      prosecution_quality_score: 6,
+    },
+    scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
+    invert: {},
+  },
+];
+
+/**
+ * Score patents with V2 Enhanced custom configuration
+ */
+export function scoreWithCustomConfig(
+  config: V2EnhancedConfig,
+  previousRankings?: Map<string, number>
+): V2EnhancedScoredPatent[] {
+  const candidates = loadCandidates();
+  const classifications = loadAllClassifications();
+  const llmScores = loadAllLlmScores();
+  const iprScores = loadAllIprScores();
+  const prosecutionScores = loadAllProsecutionScores();
+
+  // Normalize weights to sum to 1
+  const totalWeight = Object.values(config.weights).reduce((sum, w) => sum + w, 0);
+  const normalizedWeights: Record<string, number> = {};
+  for (const [key, value] of Object.entries(config.weights)) {
+    normalizedWeights[key] = totalWeight > 0 ? value / totalWeight : 0;
+  }
+
+  const scored: V2EnhancedScoredPatent[] = [];
+
+  for (const candidate of candidates) {
+    const patentId = candidate.patent_id;
+    const classification = classifications.get(patentId) ?? null;
+    const llm = llmScores.get(patentId) ?? null;
+    const ipr = iprScores.get(patentId) ?? null;
+    const pros = prosecutionScores.get(patentId) ?? null;
+
+    const hasLlmData = llm !== null;
+
+    // Filter to LLM-enhanced only if requested
+    if (config.llmEnhancedOnly && !hasLlmData) {
+      continue;
+    }
+
+    // Build raw metrics
+    const metrics = buildMetrics(candidate, classification, llm, ipr, pros);
+    const rawMetrics: Record<string, number> = {
+      competitor_citations: metrics.competitor_citations,
+      adjusted_forward_citations: metrics.adjusted_forward_citations,
+      years_remaining: metrics.years_remaining,
+      competitor_count: metrics.competitor_count,
+      competitor_density: metrics.competitor_density,
+    };
+
+    // Add LLM metrics if available
+    if (llm) {
+      rawMetrics.eligibility_score = llm.eligibility_score;
+      rawMetrics.validity_score = llm.validity_score;
+      rawMetrics.claim_breadth = llm.claim_breadth;
+      rawMetrics.enforcement_clarity = llm.enforcement_clarity;
+      rawMetrics.design_around_difficulty = llm.design_around_difficulty;
+      if (llm.market_relevance_score !== undefined) {
+        rawMetrics.market_relevance_score = llm.market_relevance_score;
+      }
+    }
+
+    // Add API metrics if available
+    if (ipr) {
+      rawMetrics.ipr_risk_score = ipr.ipr_risk_score;
+    }
+    if (pros) {
+      rawMetrics.prosecution_quality_score = pros.prosecution_quality_score;
+    }
+
+    // Normalize and score
+    const normalizedMetrics: Record<string, number> = {};
+    const metricsUsed: string[] = [];
+    let availableWeight = 0;
+
+    for (const [metricName, weight] of Object.entries(normalizedWeights)) {
+      if (weight <= 0) continue;
+
+      const rawValue = rawMetrics[metricName];
+      const isSparse = LLM_METRICS.has(metricName) || API_METRICS.has(metricName);
+
+      if (isSparse && (rawValue === undefined || rawValue === null)) {
+        continue;
+      }
+
+      const scaling = config.scaling[metricName] || 'linear';
+      const invert = config.invert[metricName] || false;
+      normalizedMetrics[metricName] = normalizeWithScaling(metricName, rawValue ?? 0, scaling, invert);
+      metricsUsed.push(metricName);
+      availableWeight += weight;
+    }
+
+    // Compute weighted sum with renormalization
+    let baseScore = 0;
+    const renormFactor = availableWeight > 0 ? 1 / availableWeight : 0;
+
+    for (const metricName of metricsUsed) {
+      const weight = normalizedWeights[metricName] ?? 0;
+      const normalizedValue = normalizedMetrics[metricName] ?? 0;
+      baseScore += normalizedValue * weight * renormFactor;
+    }
+
+    const yearMultiplier = computeYearMultiplier(metrics.years_remaining);
+    const finalScore = baseScore * yearMultiplier * 100;
+
+    scored.push({
+      patent_id: patentId,
+      rank: 0, // Will be set after sorting
+      score: Math.round(finalScore * 100) / 100,
+      normalized_metrics: normalizedMetrics,
+      raw_metrics: rawMetrics,
+      metrics_used: metricsUsed,
+      year_multiplier: Math.round(yearMultiplier * 1000) / 1000,
+      has_llm_data: hasLlmData,
+      patent_title: candidate.patent_title || '',
+      patent_date: candidate.patent_date || '',
+      assignee: candidate.assignee || '',
+      primary_sector: candidate.primary_sector || 'general',
+      super_sector: candidate.super_sector || '',
+      years_remaining: metrics.years_remaining,
+    });
+  }
+
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // Assign ranks and calculate rank changes
+  for (let i = 0; i < scored.length; i++) {
+    scored[i].rank = i + 1;
+    if (previousRankings) {
+      const prevRank = previousRankings.get(scored[i].patent_id);
+      if (prevRank !== undefined) {
+        scored[i].rank_change = prevRank - scored[i].rank;
+      }
+    }
+  }
+
+  // Return top N
+  return scored.slice(0, config.topN);
+}
+
+/**
+ * Get V2 Enhanced presets in format expected by frontend
+ */
+export function getV2EnhancedPresets() {
+  return V2_ENHANCED_PRESETS.map(preset => ({
+    id: preset.id,
+    name: preset.name,
+    description: preset.description,
+    isBuiltIn: preset.isBuiltIn,
+    config: {
+      weights: preset.weights,
+      scaling: preset.scaling,
+      invert: preset.invert,
+      topN: DEFAULT_V2_ENHANCED_CONFIG.topN,
+      llmEnhancedOnly: DEFAULT_V2_ENHANCED_CONFIG.llmEnhancedOnly,
+    },
+  }));
+}
+
+/**
+ * Get list of all available metrics for V2 Enhanced scoring
+ * Returns flat array with category field for frontend consumption
+ */
+export function getV2EnhancedMetrics() {
+  const defaultConfig = DEFAULT_V2_ENHANCED_CONFIG;
+
+  const metrics = [
+    // Quantitative metrics
+    { key: 'competitor_citations', label: 'Competitor Citations', category: 'quantitative' as const, description: 'Citations from tracked competitors' },
+    { key: 'adjusted_forward_citations', label: 'Adj. Forward Citations', category: 'quantitative' as const, description: 'Forward citations weighted by source (competitor > neutral > affiliate)' },
+    { key: 'years_remaining', label: 'Years Remaining', category: 'quantitative' as const, description: 'Patent life remaining' },
+    { key: 'competitor_count', label: 'Competitor Count', category: 'quantitative' as const, description: 'Number of distinct competitors citing' },
+    { key: 'competitor_density', label: 'Competitor Density', category: 'quantitative' as const, description: 'Ratio of competitor to external citations' },
+    // LLM metrics
+    { key: 'eligibility_score', label: 'Eligibility', category: 'llm' as const, description: '35 USC 101 strength (1-5)' },
+    { key: 'validity_score', label: 'Validity', category: 'llm' as const, description: 'Prior art defensibility (1-5)' },
+    { key: 'claim_breadth', label: 'Claim Breadth', category: 'llm' as const, description: 'Scope of claims (1-5)' },
+    { key: 'enforcement_clarity', label: 'Enforcement Clarity', category: 'llm' as const, description: 'Detectability of infringement (1-5)' },
+    { key: 'design_around_difficulty', label: 'Design-Around Difficulty', category: 'llm' as const, description: 'Difficulty to design around (1-5)' },
+    { key: 'market_relevance_score', label: 'Market Relevance', category: 'llm' as const, description: 'Commercial applicability (1-5)' },
+    // API metrics
+    { key: 'ipr_risk_score', label: 'IPR Risk', category: 'api' as const, description: 'PTAB challenge risk (5=safe, 1=risky)' },
+    { key: 'prosecution_quality_score', label: 'Prosecution Quality', category: 'api' as const, description: 'File wrapper quality (1-5)' },
+  ];
+
+  return metrics.map(m => ({
+    ...m,
+    defaultWeight: defaultConfig.weights[m.key] ?? 0,
+    defaultScaling: defaultConfig.scaling[m.key] ?? 'linear',
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 

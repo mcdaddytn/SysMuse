@@ -278,6 +278,83 @@ export const scoringApi = {
   }
 };
 
+// V2 Enhanced Scoring types
+export type ScalingType = 'linear' | 'log' | 'sqrt';
+
+export interface V2EnhancedConfig {
+  weights: Record<string, number>;
+  scaling: Record<string, ScalingType>;
+  invert: Record<string, boolean>;
+  topN: number;
+  llmEnhancedOnly: boolean;
+}
+
+export interface V2EnhancedScoredPatent {
+  patent_id: string;
+  rank: number;
+  rank_change?: number;
+  score: number;
+  normalized_metrics: Record<string, number>;
+  raw_metrics: Record<string, number>;
+  metrics_used: string[];
+  year_multiplier: number;
+  has_llm_data: boolean;
+  patent_title: string;
+  patent_date: string;
+  assignee: string;
+  primary_sector: string;
+  super_sector: string;
+  years_remaining: number;
+}
+
+export interface V2EnhancedResponse {
+  data: V2EnhancedScoredPatent[];
+  total: number;
+  config: V2EnhancedConfig;
+}
+
+export interface V2EnhancedPreset {
+  id: string;
+  name: string;
+  description: string;
+  isBuiltIn: boolean;
+  config: V2EnhancedConfig;
+}
+
+export interface V2EnhancedMetric {
+  key: string;
+  label: string;
+  category: 'quantitative' | 'llm' | 'api';
+  defaultWeight: number;
+  defaultScaling: ScalingType;
+  description: string;
+  coverage?: string;
+}
+
+// V2 Enhanced Scoring API
+export const v2EnhancedApi = {
+  async getScores(
+    config: Partial<V2EnhancedConfig>,
+    previousRankings?: Array<{ patent_id: string; rank: number }>
+  ): Promise<V2EnhancedResponse> {
+    const { data } = await api.post('/scores/v2-enhanced', {
+      ...config,
+      previousRankings,
+    });
+    return data;
+  },
+
+  async getPresets(): Promise<V2EnhancedPreset[]> {
+    const { data } = await api.get('/scores/v2-enhanced/presets');
+    return data;
+  },
+
+  async getMetrics(): Promise<V2EnhancedMetric[]> {
+    const { data } = await api.get('/scores/v2-enhanced/metrics');
+    return data;
+  },
+};
+
 // Jobs API
 export const jobsApi = {
   async getJobs(status?: string) {
@@ -1370,8 +1447,8 @@ export const batchJobsApi = {
     return data;
   },
 
-  async getGaps(targetType: TargetType, targetValue: string): Promise<GapsResponse> {
-    const { data } = await api.get('/batch-jobs/gaps', { params: { targetType, targetValue } });
+  async getGaps(targetType: TargetType, targetValue: string, topN?: number): Promise<GapsResponse> {
+    const { data } = await api.get('/batch-jobs/gaps', { params: { targetType, targetValue, topN } });
     return data;
   },
 
@@ -1380,6 +1457,7 @@ export const batchJobsApi = {
     targetValue: string;
     coverageTypes: CoverageType[];
     maxHours?: number;
+    topN?: number;  // For super-sector/sector: limit to top N patents by score
   }): Promise<StartJobsResponse> {
     const { data } = await api.post('/batch-jobs', params);
     return data;

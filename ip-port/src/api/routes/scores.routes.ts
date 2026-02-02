@@ -22,6 +22,10 @@ import {
   loadAllProsecutionScores,
   clearScoringCache,
   getLlmStats,
+  scoreWithCustomConfig,
+  getV2EnhancedPresets,
+  getV2EnhancedMetrics,
+  V2EnhancedConfig,
 } from '../services/scoring-service.js';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
 import { clearPatentsCache, invalidateEnrichmentCache } from './patents.routes.js';
@@ -356,6 +360,92 @@ router.get('/v3', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error calculating v3 scores:', error);
     res.status(500).json({ error: 'Failed to calculate v3 scores' });
+  }
+});
+
+/**
+ * POST /api/scores/v2-enhanced
+ * V2 Enhanced scoring with configurable weights, scaling functions, and metric inversions
+ *
+ * Request body:
+ *   weights        - Record<string, number> of metric weights (percentages, 0-100)
+ *   scaling        - Record<string, ScalingType> of scaling functions ('linear'|'log'|'sqrt')
+ *   invert         - Record<string, boolean> for metric inversion flags
+ *   topN           - Number of top results to return (default: 100)
+ *   llmEnhancedOnly - Only include patents with LLM data (default: true)
+ *   previousRankings - Optional array of {patent_id, rank} for rank change calculation
+ */
+router.post('/v2-enhanced', (req: Request, res: Response) => {
+  try {
+    const {
+      weights = {},
+      scaling = {},
+      invert = {},
+      topN = 100,
+      llmEnhancedOnly = true,
+      previousRankings,
+    } = req.body;
+
+    const config: V2EnhancedConfig = {
+      weights,
+      scaling,
+      invert,
+      topN: Math.min(Math.max(1, topN), 5000),
+      llmEnhancedOnly,
+    };
+
+    // Convert previousRankings array to Map if provided
+    let prevRankMap: Map<string, number> | undefined;
+    if (previousRankings && Array.isArray(previousRankings)) {
+      prevRankMap = new Map(
+        previousRankings.map((r: { patent_id: string; rank: number }) => [r.patent_id, r.rank])
+      );
+    }
+
+    const scored = scoreWithCustomConfig(config, prevRankMap);
+
+    res.json({
+      data: scored,
+      total: scored.length,
+      config: {
+        weights: config.weights,
+        scaling: config.scaling,
+        invert: config.invert,
+        topN: config.topN,
+        llmEnhancedOnly: config.llmEnhancedOnly,
+      },
+    });
+  } catch (error) {
+    console.error('Error calculating v2-enhanced scores:', error);
+    res.status(500).json({ error: 'Failed to calculate v2-enhanced scores' });
+  }
+});
+
+/**
+ * GET /api/scores/v2-enhanced/presets
+ * Get available presets for V2 Enhanced scoring
+ */
+router.get('/v2-enhanced/presets', (_req: Request, res: Response) => {
+  try {
+    const presets = getV2EnhancedPresets();
+    res.json(presets);
+  } catch (error) {
+    console.error('Error getting v2-enhanced presets:', error);
+    res.status(500).json({ error: 'Failed to get presets' });
+  }
+});
+
+/**
+ * GET /api/scores/v2-enhanced/metrics
+ * Get available metrics for V2 Enhanced scoring with metadata
+ */
+router.get('/v2-enhanced/metrics', (_req: Request, res: Response) => {
+  try {
+    const metrics = getV2EnhancedMetrics();
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error getting v2-enhanced metrics:', error);
+    res.status(500).json({ error: 'Failed to get metrics' });
   }
 });
 

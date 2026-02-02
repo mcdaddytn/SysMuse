@@ -300,6 +300,7 @@ export interface V2EnhancedScoredPatent {
   year_multiplier: number;
   has_llm_data: boolean;
   patent_title: string;
+  patent_abstract: string;
   patent_date: string;
   assignee: string;
   primary_sector: string;

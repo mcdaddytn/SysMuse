@@ -870,6 +870,7 @@ export interface V2EnhancedScoredPatent {
   has_llm_data: boolean;
   // Patent metadata
   patent_title: string;
+  patent_abstract: string;
   patent_date: string;
   assignee: string;
   primary_sector: string;
@@ -1196,6 +1197,7 @@ export function scoreWithCustomConfig(
       year_multiplier: Math.round(yearMultiplier * 1000) / 1000,
       has_llm_data: hasLlmData,
       patent_title: candidate.patent_title || '',
+      patent_abstract: candidate.abstract || '',
       patent_date: candidate.patent_date || '',
       assignee: candidate.assignee || '',
       primary_sector: candidate.primary_sector || 'general',

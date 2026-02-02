@@ -507,6 +507,45 @@ function onMetricChange() {
   hasUnsavedChanges.value = true;
 }
 
+// Format metric key to human-readable name
+function formatMetricName(key: string): string {
+  const names: Record<string, string> = {
+    competitor_citations: 'Competitor Cites',
+    adjusted_forward_citations: 'Adj. Fwd Cites',
+    years_remaining: 'Years Remaining',
+    competitor_count: 'Competitor Count',
+    competitor_density: 'Competitor Density',
+    eligibility_score: 'Eligibility',
+    validity_score: 'Validity',
+    claim_breadth: 'Claim Breadth',
+    enforcement_clarity: 'Enforcement Clarity',
+    design_around_difficulty: 'Design Around',
+    market_relevance_score: 'Market Relevance',
+    ipr_risk_score: 'IPR Risk',
+    prosecution_quality_score: 'Prosecution Quality',
+  };
+  return names[key] || key;
+}
+
+// Format raw metric value appropriately
+function formatRawMetric(key: string, value: number | undefined): string {
+  if (value === undefined || value === null) return '-';
+  // LLM and API scores are 1-5
+  if (key.includes('score') || key === 'claim_breadth' || key === 'enforcement_clarity' || key === 'design_around_difficulty') {
+    return value.toFixed(1);
+  }
+  // Density is 0-1
+  if (key === 'competitor_density') {
+    return (value * 100).toFixed(0) + '%';
+  }
+  // Years
+  if (key === 'years_remaining') {
+    return value.toFixed(1);
+  }
+  // Citations and counts are integers
+  return Math.round(value).toString();
+}
+
 // Watch for filter changes
 watch([topN, llmEnhancedOnly], () => {
   hasUnsavedChanges.value = true;
@@ -849,6 +888,58 @@ onMounted(async () => {
                   >
                     {{ props.row.patent_id }}
                   </a>
+                  <q-tooltip
+                    anchor="center right"
+                    self="center left"
+                    :offset="[10, 0]"
+                    class="patent-detail-tooltip"
+                    max-width="500px"
+                  >
+                    <div class="patent-popup">
+                      <div class="text-subtitle1 text-weight-bold q-mb-xs">
+                        {{ props.row.patent_id }}
+                      </div>
+                      <div class="text-body2 q-mb-sm">{{ props.row.patent_title }}</div>
+
+                      <div class="row q-gutter-sm q-mb-sm text-caption">
+                        <q-badge color="cyan-4" text-color="dark">{{ props.row.assignee }}</q-badge>
+                        <q-badge color="blue-grey-4" text-color="dark">{{ props.row.super_sector || props.row.primary_sector }}</q-badge>
+                        <q-badge color="light-green-4" text-color="dark">{{ props.row.years_remaining?.toFixed(1) }} yrs</q-badge>
+                        <q-badge v-if="props.row.has_llm_data" color="amber-4" text-color="dark">LLM</q-badge>
+                      </div>
+
+                      <div v-if="props.row.patent_abstract" class="text-caption text-grey-8 q-mb-md abstract-text">
+                        {{ props.row.patent_abstract.length > 400
+                           ? props.row.patent_abstract.substring(0, 400) + '...'
+                           : props.row.patent_abstract }}
+                      </div>
+
+                      <div class="text-subtitle2 q-mb-xs">Scoring Metrics</div>
+                      <table class="metrics-table">
+                        <thead>
+                          <tr>
+                            <th>Metric</th>
+                            <th>Raw</th>
+                            <th>Norm</th>
+                            <th>Wt%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="key in props.row.metrics_used" :key="key">
+                            <td>{{ formatMetricName(key) }}</td>
+                            <td class="text-right">{{ formatRawMetric(key, props.row.raw_metrics[key]) }}</td>
+                            <td class="text-right">{{ (props.row.normalized_metrics[key] * 100).toFixed(0) }}%</td>
+                            <td class="text-right">{{ currentConfig.weights[key] || 0 }}%</td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      <div class="row q-mt-sm text-caption">
+                        <div class="col">Year Mult: <strong class="text-yellow-4">{{ props.row.year_multiplier?.toFixed(3) }}</strong></div>
+                        <div class="col text-right">Final Score: <strong class="text-amber-3" style="font-size: 1.1em">{{ props.row.score?.toFixed(2) }}</strong></div>
+                      </div>
+                    </div>
+                  </q-tooltip>
                 </q-td>
               </template>
 
@@ -998,5 +1089,44 @@ onMounted(async () => {
   font-size: 14px !important;
   line-height: 1.4;
   max-width: 350px;
+}
+
+/* Patent detail tooltip - larger and more detailed */
+.patent-detail-tooltip {
+  max-width: 500px !important;
+  font-size: 13px !important;
+}
+
+.patent-popup {
+  padding: 8px;
+}
+
+.patent-popup .abstract-text {
+  line-height: 1.3;
+  border-left: 3px solid #1976d2;
+  padding-left: 8px;
+  font-style: italic;
+}
+
+.patent-popup .metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.patent-popup .metrics-table th,
+.patent-popup .metrics-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.patent-popup .metrics-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #90caf9;
+}
+
+.patent-popup .metrics-table td.text-right {
+  text-align: right;
 }
 </style>

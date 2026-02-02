@@ -346,3 +346,63 @@ export interface SeedSummary {
   damagesUpdated: number;
   facetsUpdated: number;
 }
+
+// =============================================================================
+// V3 Consensus Scoring Types
+// =============================================================================
+
+export interface V3ConsensusRole {
+  roleId: string;           // e.g., 'executive', 'litigation', 'licensing'
+  roleName: string;         // Display name
+  v2PresetId: string;       // Which V2 preset they're using
+  consensusWeight: number;  // 0-100, their weight in consensus
+}
+
+export interface V3ConsensusPreset {
+  id: string;
+  name: string;
+  description: string;
+  isBuiltIn: boolean;
+  roles: V3ConsensusRole[];
+}
+
+export interface V3ConsensusConfig {
+  roles: V3ConsensusRole[];
+  topN: number;
+  llmEnhancedOnly: boolean;
+}
+
+export interface V3ConsensusScoredPatent {
+  patent_id: string;
+  rank: number;
+  rank_change?: number;
+  consensus_score: number;
+  role_scores: Record<string, number>;  // roleId -> score
+  // Patent details
+  patent_title: string;
+  patent_abstract: string;
+  patent_date: string;
+  assignee: string;
+  primary_sector: string;
+  super_sector: string;
+  years_remaining: number;
+  has_llm_data: boolean;
+  // Raw metrics for tooltip
+  raw_metrics: Record<string, number>;
+  normalized_metrics: Record<string, number>;
+  year_multiplier: number;
+}
+
+export interface V3ConsensusSnapshot {
+  id: string;
+  name: string;
+  timestamp: string;
+  topN: number;
+  config: V3ConsensusConfig;
+  rankings: Array<{
+    patent_id: string;
+    rank: number;
+    consensus_score: number;
+    rank_change?: number;
+  }>;
+}

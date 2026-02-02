@@ -1,175 +1,555 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { scoringApi } from '@/services/api';
-import type { ScoringProfile, V3ScoredPatent, LlmCoverage } from '@/types';
+import {
+  v2EnhancedApi,
+  type V2EnhancedConfig,
+  type V2EnhancedScoredPatent,
+  type V2EnhancedPreset,
+  type ScalingType,
+  DEFAULT_V3_ROLES,
+  BUILTIN_V3_PRESETS,
+} from '@/services/api';
+import type {
+  V3ConsensusRole,
+  V3ConsensusPreset,
+  V3ConsensusScoredPatent,
+  V3ConsensusSnapshot,
+} from '@/types';
 
 const router = useRouter();
 
-// State
-const profiles = ref<ScoringProfile[]>([]);
-const selectedProfileId = ref('executive');
-const patents = ref<V3ScoredPatent[]>([]);
+// LocalStorage keys
+const V3_PRESETS_KEY = 'v3-consensus-custom-presets';
+const V3_SNAPSHOTS_KEY = 'v3-consensus-snapshots';
+
+// State - Roles and Configuration
+const roles = ref<V3ConsensusRole[]>([]);
+const v2Presets = ref<V2EnhancedPreset[]>([]);  // Available V2 presets for role selection
+
+// State - V3 Presets
+const builtInV3Presets = ref<V3ConsensusPreset[]>([...BUILTIN_V3_PRESETS]);
+const customV3Presets = ref<V3ConsensusPreset[]>([]);
+const selectedV3PresetId = ref<string | null>('balanced-team');
+
+// State - View mode
+type ViewMode = 'consensus' | 'individual';
+const viewMode = ref<ViewMode>('consensus');
+const selectedIndividualRoleId = ref<string | null>(null);
+
+// State - Results
+const patents = ref<V3ConsensusScoredPatent[]>([]);
+const previousRankings = ref<Array<{ patent_id: string; rank: number }>>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const total = ref(0);
-const llmCoverage = ref<LlmCoverage | null>(null);
-const expandedRow = ref<string | null>(null);
-const sectorFilter = ref<string | null>(null);
-const minScoreFilter = ref<number | null>(1); // Default to score >= 1 to exclude zero-score patents
-const sectors = ref<{ label: string; value: string }[]>([]);
+const hasUnsavedChanges = ref(false);
 
-// Pagination
-const pagination = ref({
-  page: 1,
-  rowsPerPage: 100,
-  rowsNumber: 0,
-  sortBy: 'rank',
-  descending: false,
+// State - Snapshots
+const snapshots = ref<V3ConsensusSnapshot[]>([]);
+const selectedSnapshotId = ref<string | null>(null);
+const compareToSnapshot = ref(false);
+const snapshotRankMap = ref<Map<string, number>>(new Map());
+
+// State - Dialogs
+const showSavePresetDialog = ref(false);
+const showSaveSnapshotDialog = ref(false);
+const newPresetName = ref('');
+const newPresetDescription = ref('');
+const newSnapshotName = ref('');
+const resetAfterSnapshot = ref(true);
+
+// State - Filters
+const topNOptions = [60, 100, 250, 500, 1000];
+const topN = ref(100);
+const llmEnhancedOnly = ref(true);
+
+// Computed: all V3 presets
+const allV3Presets = computed(() => [...builtInV3Presets.value, ...customV3Presets.value]);
+
+// Computed: total weight
+const totalWeight = computed(() => {
+  return roles.value.reduce((sum, role) => sum + role.consensusWeight, 0);
 });
 
-// Current profile
-const currentProfile = computed(() => {
-  return profiles.value.find(p => p.id === selectedProfileId.value);
+// Computed: is weight valid (should sum to 100)
+const isWeightValid = computed(() => Math.abs(totalWeight.value - 100) < 1);
+
+// Computed: patents with snapshot comparison
+const patentsWithSnapshotChange = computed(() => {
+  if (!compareToSnapshot.value || !selectedSnapshotId.value) {
+    return patents.value;
+  }
+  return patents.value.map(p => ({
+    ...p,
+    snapshot_rank_change: snapshotRankMap.value.has(p.patent_id)
+      ? snapshotRankMap.value.get(p.patent_id)! - p.rank
+      : undefined,
+  }));
 });
 
-// Weight metric labels
-const METRIC_LABELS: Record<string, string> = {
-  competitor_citations: 'Competitor Citations',
-  forward_citations: 'Forward Citations (Raw)',
-  adjusted_forward_citations: 'Forward Citations (Adjusted)',
-  years_remaining: 'Years Remaining',
-  competitor_count: 'Competitor Count',
-  competitor_density: 'Competitor Density',
-  eligibility_score: 'Eligibility (LLM)',
-  validity_score: 'Validity (LLM)',
-  claim_breadth: 'Claim Breadth (LLM)',
-  enforcement_clarity: 'Enforcement Clarity (LLM)',
-  design_around_difficulty: 'Design-Around Difficulty (LLM)',
-  market_relevance_score: 'Market Relevance (LLM)',
-  ipr_risk_score: 'IPR Risk (API)',
-  prosecution_quality_score: 'Prosecution Quality (API)',
-};
+// Computed: table columns
+const columns = computed(() => {
+  const baseCols = [
+    { name: 'rank', label: 'Rank', field: 'rank', align: 'center' as const, sortable: true, style: 'width: 60px' },
+    { name: 'change', label: '+/-', field: 'rank_change', align: 'center' as const, style: 'width: 50px' },
+  ];
 
-const METRIC_COLORS: Record<string, string> = {
-  competitor_citations: '#e53935',
-  forward_citations: '#1e88e5',
-  adjusted_forward_citations: '#1565c0',
-  years_remaining: '#43a047',
-  competitor_count: '#f4511e',
-  competitor_density: '#d84315',
-  eligibility_score: '#8e24aa',
-  validity_score: '#5e35b1',
-  claim_breadth: '#3949ab',
-  enforcement_clarity: '#7b1fa2',
-  design_around_difficulty: '#6a1b9a',
-  market_relevance_score: '#00838f',
-  ipr_risk_score: '#bf360c',
-  prosecution_quality_score: '#4e342e',
-};
+  if (compareToSnapshot.value && selectedSnapshotId.value) {
+    baseCols.push({
+      name: 'snapshot_change',
+      label: 'vs Snap',
+      field: 'snapshot_rank_change',
+      align: 'center' as const,
+      style: 'width: 60px',
+    });
+  }
 
-// Sorted weights for the current profile
-const sortedWeights = computed(() => {
-  if (!currentProfile.value) return [];
-  return Object.entries(currentProfile.value.weights)
-    .filter(([_, w]) => w > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([key, weight]) => ({
-      key,
-      label: METRIC_LABELS[key] || key,
-      weight,
-      pct: Math.round(weight * 100),
-      color: METRIC_COLORS[key] || '#757575',
-      isLlm: ['eligibility_score', 'validity_score', 'claim_breadth', 'enforcement_clarity', 'design_around_difficulty'].includes(key),
-    }));
+  return [
+    ...baseCols,
+    { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const },
+    { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const },
+    { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left' as const },
+    { name: 'super_sector', label: 'Super-Sector', field: 'super_sector', align: 'left' as const },
+    { name: 'years_remaining', label: 'Years', field: 'years_remaining', align: 'center' as const, sortable: true,
+      format: (val: number) => val?.toFixed(1) },
+    { name: 'has_llm', label: 'LLM', field: 'has_llm_data', align: 'center' as const, style: 'width: 50px' },
+    { name: 'score', label: viewMode.value === 'consensus' ? 'Consensus' : 'Score', field: 'consensus_score', align: 'center' as const, sortable: true,
+      format: (val: number) => val?.toFixed(2) },
+  ];
 });
 
-// Table columns
-const columns = [
-  { name: 'rank', label: '#', field: 'rank', align: 'center' as const, sortable: true, style: 'width: 50px' },
-  { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const, sortable: false },
-  { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const, sortable: false },
-  { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left' as const, sortable: false },
-  { name: 'primary_sector', label: 'Sector', field: 'primary_sector', align: 'left' as const, sortable: false },
-  { name: 'score', label: 'Score', field: 'score', align: 'center' as const, sortable: true },
-  { name: 'competitor_citations', label: 'Comp Cites', field: 'competitor_citations', align: 'center' as const, sortable: true },
-  { name: 'forward_citations', label: 'Fwd Cites', field: 'forward_citations', align: 'center' as const, sortable: true },
-  { name: 'remaining_years', label: 'Years Left', field: 'remaining_years', align: 'center' as const, sortable: true,
-    format: (val: number) => val?.toFixed(1) },
-  { name: 'llm', label: 'LLM', field: 'has_llm_scores', align: 'center' as const, sortable: false, style: 'width: 40px' },
-  { name: 'expand', label: '', field: 'patent_id', align: 'center' as const, sortable: false, style: 'width: 40px' },
-];
+// Initialize roles from defaults
+function initRoles() {
+  roles.value = DEFAULT_V3_ROLES.map(r => ({ ...r }));
+}
 
-// Load profiles
-async function loadProfiles() {
+// Load V2 presets from API
+async function loadV2Presets() {
   try {
-    profiles.value = await scoringApi.getProfiles();
-    const defaultProfile = profiles.value.find(p => p.isDefault);
-    if (defaultProfile) {
-      selectedProfileId.value = defaultProfile.id;
-    }
+    v2Presets.value = await v2EnhancedApi.getPresets();
   } catch (err) {
-    console.error('Failed to load profiles:', err);
+    console.error('Failed to load V2 presets:', err);
+    // Fallback to built-in preset IDs
+    v2Presets.value = [
+      { id: 'default', name: 'Default Balanced', description: 'Balanced scoring', isBuiltIn: true, config: {} as V2EnhancedConfig },
+      { id: 'defensive', name: 'Defensive', description: 'Defensive portfolio', isBuiltIn: true, config: {} as V2EnhancedConfig },
+      { id: 'licensing_focused', name: 'Licensing Focus', description: 'Licensing emphasis', isBuiltIn: true, config: {} as V2EnhancedConfig },
+      { id: 'litigation_focused', name: 'Litigation Focus', description: 'Litigation emphasis', isBuiltIn: true, config: {} as V2EnhancedConfig },
+      { id: 'quick_wins', name: 'Quick Wins', description: 'Quick enforcement', isBuiltIn: true, config: {} as V2EnhancedConfig },
+    ];
   }
 }
 
-// Load scored patents
-async function fetchScores() {
+// Load custom V3 presets from localStorage
+function loadCustomV3Presets() {
+  try {
+    const stored = localStorage.getItem(V3_PRESETS_KEY);
+    if (stored) {
+      customV3Presets.value = JSON.parse(stored);
+    }
+  } catch (err) {
+    console.error('Failed to load custom V3 presets:', err);
+  }
+}
+
+// Save custom V3 presets to localStorage
+function saveCustomV3Presets() {
+  localStorage.setItem(V3_PRESETS_KEY, JSON.stringify(customV3Presets.value));
+}
+
+// Load snapshots from localStorage
+function loadSnapshots() {
+  try {
+    const stored = localStorage.getItem(V3_SNAPSHOTS_KEY);
+    if (stored) {
+      snapshots.value = JSON.parse(stored);
+    }
+  } catch (err) {
+    console.error('Failed to load snapshots:', err);
+  }
+}
+
+// Save snapshots to localStorage
+function saveSnapshots() {
+  localStorage.setItem(V3_SNAPSHOTS_KEY, JSON.stringify(snapshots.value));
+}
+
+// Apply a V3 preset
+function applyV3Preset(preset: V3ConsensusPreset) {
+  selectedV3PresetId.value = preset.id;
+  roles.value = preset.roles.map(r => ({ ...r }));
+  hasUnsavedChanges.value = true;
+}
+
+// Save current config as new V3 preset
+function saveAsV3Preset() {
+  if (!newPresetName.value.trim()) return;
+
+  const newPreset: V3ConsensusPreset = {
+    id: `custom-${Date.now()}`,
+    name: newPresetName.value.trim(),
+    description: newPresetDescription.value.trim() || 'Custom V3 preset',
+    isBuiltIn: false,
+    roles: roles.value.map(r => ({ ...r })),
+  };
+
+  customV3Presets.value.push(newPreset);
+  saveCustomV3Presets();
+  selectedV3PresetId.value = newPreset.id;
+
+  showSavePresetDialog.value = false;
+  newPresetName.value = '';
+  newPresetDescription.value = '';
+}
+
+// Delete a custom V3 preset
+function deleteV3Preset(presetId: string) {
+  customV3Presets.value = customV3Presets.value.filter(p => p.id !== presetId);
+  saveCustomV3Presets();
+  if (selectedV3PresetId.value === presetId) {
+    selectedV3PresetId.value = null;
+  }
+}
+
+// Normalize weights to sum to 100
+function normalizeWeights() {
+  const total = roles.value.reduce((sum, r) => sum + r.consensusWeight, 0);
+  if (total === 0) {
+    // If all weights are 0, distribute equally
+    const equalWeight = 100 / roles.value.length;
+    roles.value.forEach(r => r.consensusWeight = Math.round(equalWeight));
+  } else {
+    const factor = 100 / total;
+    roles.value.forEach(r => r.consensusWeight = Math.round(r.consensusWeight * factor));
+  }
+  // Adjust for rounding errors
+  const newTotal = roles.value.reduce((sum, r) => sum + r.consensusWeight, 0);
+  if (newTotal !== 100 && roles.value.length > 0) {
+    roles.value[0].consensusWeight += (100 - newTotal);
+  }
+  hasUnsavedChanges.value = true;
+  selectedV3PresetId.value = null;
+}
+
+// Build V2 config from preset ID
+function buildV2ConfigFromPreset(presetId: string): V2EnhancedConfig {
+  const preset = v2Presets.value.find(p => p.id === presetId);
+  if (preset?.config?.weights) {
+    return {
+      ...preset.config,
+      topN: topN.value,
+      llmEnhancedOnly: llmEnhancedOnly.value,
+    };
+  }
+  // Return default config if preset not found
+  return {
+    weights: {
+      competitor_citations: 20,
+      adjusted_forward_citations: 10,
+      years_remaining: 15,
+      competitor_count: 5,
+      competitor_density: 5,
+      eligibility_score: 5,
+      validity_score: 5,
+      claim_breadth: 4,
+      enforcement_clarity: 6,
+      design_around_difficulty: 5,
+      market_relevance_score: 5,
+      ipr_risk_score: 5,
+      prosecution_quality_score: 5,
+    },
+    scaling: {},
+    invert: {},
+    topN: topN.value,
+    llmEnhancedOnly: llmEnhancedOnly.value,
+  };
+}
+
+// Calculate consensus scores
+async function recalculate() {
   loading.value = true;
   error.value = null;
 
   try {
-    const response = await scoringApi.getV3Scores({
-      profile: selectedProfileId.value,
-      page: pagination.value.page,
-      limit: pagination.value.rowsPerPage,
-      sector: sectorFilter.value || undefined,
-      minScore: minScoreFilter.value || undefined,
-    });
+    if (viewMode.value === 'individual' && selectedIndividualRoleId.value) {
+      // Individual view: fetch scores for single role
+      const role = roles.value.find(r => r.roleId === selectedIndividualRoleId.value);
+      if (!role) {
+        error.value = 'Selected role not found';
+        return;
+      }
 
-    patents.value = response.data;
-    total.value = response.total;
-    pagination.value.rowsNumber = response.total;
-    llmCoverage.value = response.llm_coverage;
+      const config = buildV2ConfigFromPreset(role.v2PresetId);
+      const response = await v2EnhancedApi.getScores(config, previousRankings.value);
 
-    // Build sector list from first page results (use full set)
-    if (sectors.value.length === 0 && !sectorFilter.value) {
-      const sectorSet = new Set<string>();
-      for (const p of response.data) {
-        if (p.primary_sector && p.primary_sector !== 'general') {
-          sectorSet.add(p.primary_sector);
+      // Map to consensus format
+      patents.value = response.data.map(p => ({
+        patent_id: p.patent_id,
+        rank: p.rank,
+        rank_change: p.rank_change,
+        consensus_score: p.score,
+        role_scores: { [role.roleId]: p.score },
+        patent_title: p.patent_title,
+        patent_abstract: p.patent_abstract,
+        patent_date: p.patent_date,
+        assignee: p.assignee,
+        primary_sector: p.primary_sector,
+        super_sector: p.super_sector,
+        years_remaining: p.years_remaining,
+        has_llm_data: p.has_llm_data,
+        raw_metrics: p.raw_metrics,
+        normalized_metrics: p.normalized_metrics,
+        year_multiplier: p.year_multiplier,
+      }));
+      total.value = response.total;
+    } else {
+      // Consensus view: fetch scores for all roles and combine
+      const roleScores: Map<string, Map<string, { score: number; data: V2EnhancedScoredPatent }>> = new Map();
+      let allPatentIds = new Set<string>();
+
+      // Fetch scores for each role
+      for (const role of roles.value) {
+        if (role.consensusWeight <= 0) continue;
+
+        const config = buildV2ConfigFromPreset(role.v2PresetId);
+        const response = await v2EnhancedApi.getScores(config, []);
+
+        const scoreMap = new Map<string, { score: number; data: V2EnhancedScoredPatent }>();
+        for (const p of response.data) {
+          scoreMap.set(p.patent_id, { score: p.score, data: p });
+          allPatentIds.add(p.patent_id);
+        }
+        roleScores.set(role.roleId, scoreMap);
+      }
+
+      // Calculate consensus scores
+      const consensusResults: Array<{
+        patent_id: string;
+        consensus_score: number;
+        role_scores: Record<string, number>;
+        data: V2EnhancedScoredPatent | null;
+      }> = [];
+
+      const totalWeight = roles.value.reduce((sum, r) => sum + r.consensusWeight, 0);
+
+      for (const patentId of allPatentIds) {
+        let weightedSum = 0;
+        const roleScoresForPatent: Record<string, number> = {};
+        let patentData: V2EnhancedScoredPatent | null = null;
+
+        for (const role of roles.value) {
+          if (role.consensusWeight <= 0) continue;
+
+          const scoreEntry = roleScores.get(role.roleId)?.get(patentId);
+          if (scoreEntry) {
+            const normalizedWeight = role.consensusWeight / totalWeight;
+            weightedSum += normalizedWeight * scoreEntry.score;
+            roleScoresForPatent[role.roleId] = scoreEntry.score;
+            if (!patentData) patentData = scoreEntry.data;
+          }
+        }
+
+        if (patentData) {
+          consensusResults.push({
+            patent_id: patentId,
+            consensus_score: weightedSum,
+            role_scores: roleScoresForPatent,
+            data: patentData,
+          });
         }
       }
-      // We'll load sectors from the API too
-      loadSectors();
+
+      // Sort by consensus score and assign ranks
+      consensusResults.sort((a, b) => b.consensus_score - a.consensus_score);
+
+      // Apply topN limit
+      const limitedResults = consensusResults.slice(0, topN.value);
+
+      // Calculate rank changes
+      const prevRankMap = new Map(previousRankings.value.map(r => [r.patent_id, r.rank]));
+
+      patents.value = limitedResults.map((r, idx) => {
+        const rank = idx + 1;
+        const prevRank = prevRankMap.get(r.patent_id);
+        const rankChange = prevRank !== undefined ? prevRank - rank : undefined;
+
+        return {
+          patent_id: r.patent_id,
+          rank,
+          rank_change: rankChange,
+          consensus_score: r.consensus_score,
+          role_scores: r.role_scores,
+          patent_title: r.data?.patent_title || '',
+          patent_abstract: r.data?.patent_abstract || '',
+          patent_date: r.data?.patent_date || '',
+          assignee: r.data?.assignee || '',
+          primary_sector: r.data?.primary_sector || '',
+          super_sector: r.data?.super_sector || '',
+          years_remaining: r.data?.years_remaining || 0,
+          has_llm_data: r.data?.has_llm_data || false,
+          raw_metrics: r.data?.raw_metrics || {},
+          normalized_metrics: r.data?.normalized_metrics || {},
+          year_multiplier: r.data?.year_multiplier || 1,
+        };
+      });
+
+      total.value = consensusResults.length;
     }
+
+    // Update previous rankings for next comparison
+    previousRankings.value = patents.value.map(p => ({
+      patent_id: p.patent_id,
+      rank: p.rank,
+    }));
+
+    hasUnsavedChanges.value = false;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load v3 scores';
-    console.error('Failed to fetch v3 scores:', err);
+    error.value = err instanceof Error ? err.message : 'Failed to calculate scores';
+    console.error('Failed to calculate consensus scores:', err);
   } finally {
     loading.value = false;
   }
 }
 
-// Load sector options from the API
-async function loadSectors() {
-  try {
-    const response = await fetch('/api/patents/primary-sectors');
-    const data = await response.json();
-    sectors.value = data.map((s: { sector: string; count: number }) => ({
-      label: `${s.sector} (${s.count})`,
-      value: s.sector,
-    }));
-  } catch (err) {
-    console.error('Failed to load sectors:', err);
+// Reset rank movements
+function resetRankMovements() {
+  previousRankings.value = patents.value.map(p => ({
+    patent_id: p.patent_id,
+    rank: p.rank,
+  }));
+  patents.value = patents.value.map(p => ({
+    ...p,
+    rank_change: undefined,
+  }));
+}
+
+// Save snapshot
+function saveSnapshot() {
+  if (!newSnapshotName.value.trim()) return;
+
+  const snapshot: V3ConsensusSnapshot = {
+    id: `snap-${Date.now()}`,
+    name: newSnapshotName.value.trim(),
+    timestamp: new Date().toISOString(),
+    topN: topN.value,
+    config: {
+      roles: roles.value.map(r => ({ ...r })),
+      topN: topN.value,
+      llmEnhancedOnly: llmEnhancedOnly.value,
+    },
+    rankings: patents.value.map(p => ({
+      patent_id: p.patent_id,
+      rank: p.rank,
+      consensus_score: p.consensus_score,
+      rank_change: p.rank_change,
+    })),
+  };
+
+  snapshots.value.unshift(snapshot);
+  if (snapshots.value.length > 10) {
+    snapshots.value = snapshots.value.slice(0, 10);
+  }
+  saveSnapshots();
+
+  if (resetAfterSnapshot.value) {
+    resetRankMovements();
+  }
+
+  showSaveSnapshotDialog.value = false;
+  newSnapshotName.value = '';
+}
+
+// Delete snapshot
+function deleteSnapshot(snapshotId: string) {
+  snapshots.value = snapshots.value.filter(s => s.id !== snapshotId);
+  saveSnapshots();
+  if (selectedSnapshotId.value === snapshotId) {
+    selectedSnapshotId.value = null;
+    compareToSnapshot.value = false;
   }
 }
 
-// Handle pagination
-function onRequest(props: { pagination: typeof pagination.value }) {
-  pagination.value.page = props.pagination.page;
-  pagination.value.rowsPerPage = props.pagination.rowsPerPage;
-  fetchScores();
+// Select snapshot for comparison
+function onSnapshotSelect(snapshotId: string | null) {
+  selectedSnapshotId.value = snapshotId;
+  if (snapshotId) {
+    const snapshot = snapshots.value.find(s => s.id === snapshotId);
+    if (snapshot) {
+      snapshotRankMap.value = new Map(snapshot.rankings.map(r => [r.patent_id, r.rank]));
+    }
+  } else {
+    snapshotRankMap.value.clear();
+    compareToSnapshot.value = false;
+  }
+}
+
+// Export to CSV
+function exportCSV() {
+  const date = new Date().toISOString().split('T')[0];
+
+  // Build header comments
+  const comments = [
+    `# V3 Consensus Scoring Export`,
+    `# Generated: ${new Date().toISOString()}`,
+    `# View Mode: ${viewMode.value}`,
+    `# Top N: ${topN.value}`,
+    `# Complete Data Only: ${llmEnhancedOnly.value}`,
+    `# Role Weights: ${roles.value.map(r => `${r.roleName}=${r.consensusWeight}%`).join(', ')}`,
+  ];
+
+  // Build CSV headers
+  const roleScoreHeaders = viewMode.value === 'consensus'
+    ? roles.value.filter(r => r.consensusWeight > 0).map(r => `score_${r.roleId}`)
+    : [];
+
+  const headers = [
+    'rank',
+    'rank_change',
+    ...(compareToSnapshot.value && selectedSnapshotId.value ? ['snapshot_rank_change'] : []),
+    'patent_id',
+    'title',
+    'assignee',
+    'super_sector',
+    'primary_sector',
+    'years_remaining',
+    'has_llm_data',
+    'consensus_score',
+    ...roleScoreHeaders,
+  ];
+
+  // Build rows
+  const rows = patentsWithSnapshotChange.value.map(p => {
+    const row = [
+      p.rank,
+      p.rank_change ?? '',
+      ...(compareToSnapshot.value && selectedSnapshotId.value ? [(p as any).snapshot_rank_change ?? 'NEW'] : []),
+      p.patent_id,
+      `"${(p.patent_title || '').replace(/"/g, '""')}"`,
+      `"${(p.assignee || '').replace(/"/g, '""')}"`,
+      p.super_sector || '',
+      p.primary_sector || '',
+      p.years_remaining?.toFixed(1) || '',
+      p.has_llm_data ? 'Y' : 'N',
+      p.consensus_score?.toFixed(2) || '',
+      ...roleScoreHeaders.map(h => {
+        const roleId = h.replace('score_', '');
+        return p.role_scores[roleId]?.toFixed(2) || '';
+      }),
+    ];
+    return row.join(',');
+  });
+
+  const csvContent = [...comments, '', headers.join(','), ...rows].join('\n');
+
+  // Download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `v3-consensus-top${topN.value}-${date}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 // Navigate to patent detail
@@ -177,586 +557,605 @@ function goToPatent(patentId: string) {
   router.push({ name: 'patent-detail', params: { id: patentId } });
 }
 
-// Toggle score breakdown
-function toggleExpand(patentId: string) {
-  expandedRow.value = expandedRow.value === patentId ? null : patentId;
+// Handle role changes
+function onRoleChange() {
+  selectedV3PresetId.value = null;
+  hasUnsavedChanges.value = true;
 }
 
-// Score badge color
-function scoreColor(score: number): string {
-  if (score >= 60) return 'positive';
-  if (score >= 40) return 'primary';
-  if (score >= 25) return 'warning';
-  return 'grey';
-}
+// Watch filter changes
+watch([topN, llmEnhancedOnly], () => {
+  hasUnsavedChanges.value = true;
+});
 
-// Normalized metric bar width
-function metricBarWidth(value: number): string {
-  return `${Math.min(100, Math.round(value * 100))}%`;
-}
-
-// Metric contribution to total score
-function metricContribution(patent: V3ScoredPatent, metricKey: string): number {
-  const profile = currentProfile.value;
-  if (!profile) return 0;
-  const normValue = patent.normalized_metrics[metricKey] ?? 0;
-  const weight = profile.weights[metricKey] ?? 0;
-  return normValue * weight;
-}
-
-// Reload data
-async function reloadAll() {
-  try {
-    await scoringApi.reloadScores();
-    await fetchScores();
-  } catch (err) {
-    console.error('Failed to reload:', err);
+// Watch view mode changes
+watch(viewMode, () => {
+  if (viewMode.value === 'individual' && !selectedIndividualRoleId.value && roles.value.length > 0) {
+    selectedIndividualRoleId.value = roles.value[0].roleId;
   }
+  hasUnsavedChanges.value = true;
+});
+
+// Format metric key to human-readable name
+function formatMetricName(key: string): string {
+  const names: Record<string, string> = {
+    competitor_citations: 'Competitor Cites',
+    adjusted_forward_citations: 'Adj. Fwd Cites',
+    years_remaining: 'Years Remaining',
+    competitor_count: 'Competitor Count',
+    competitor_density: 'Competitor Density',
+    eligibility_score: 'Eligibility',
+    validity_score: 'Validity',
+    claim_breadth: 'Claim Breadth',
+    enforcement_clarity: 'Enforcement Clarity',
+    design_around_difficulty: 'Design Around',
+    market_relevance_score: 'Market Relevance',
+    ipr_risk_score: 'IPR Risk',
+    prosecution_quality_score: 'Prosecution Quality',
+  };
+  return names[key] || key;
 }
 
-// CSV export
-function exportCsv() {
-  const headers = ['Rank', 'Patent ID', 'Title', 'Assignee', 'Sector', 'Score', 'Comp Cites', 'Fwd Cites', 'Years Left', 'Year Multiplier', 'Has LLM'];
-  const rows = patents.value.map(p => [
-    p.rank,
-    p.patent_id,
-    `"${(p.patent_title || '').replace(/"/g, '""')}"`,
-    `"${(p.assignee || '').replace(/"/g, '""')}"`,
-    p.primary_sector,
-    p.score,
-    p.competitor_citations,
-    p.forward_citations,
-    p.remaining_years?.toFixed(1),
-    p.year_multiplier,
-    p.has_llm_scores ? 'Yes' : 'No',
-  ]);
-
-  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `v3-scores-${selectedProfileId.value}-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// Watch profile and filter changes
-watch(selectedProfileId, () => {
-  pagination.value.page = 1;
-  fetchScores();
-});
-
-watch(sectorFilter, () => {
-  pagination.value.page = 1;
-  fetchScores();
-});
-
-watch(minScoreFilter, () => {
-  pagination.value.page = 1;
-  fetchScores();
-});
-
+// Initialize
 onMounted(async () => {
-  await loadProfiles();
-  await fetchScores();
+  initRoles();
+  await loadV2Presets();
+  loadCustomV3Presets();
+  loadSnapshots();
+  await recalculate();
 });
 </script>
 
 <template>
   <q-page padding>
-    <!-- Header -->
     <div class="row items-center q-mb-md">
-      <div class="text-h5 q-mr-md">V3 Scoring</div>
-      <q-badge color="primary" class="q-mr-sm">
+      <div class="text-h5">V3 Consensus Scoring</div>
+      <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>
-      <q-badge v-if="llmCoverage" color="deep-purple" class="q-mr-sm">
-        LLM: {{ llmCoverage.patents_with_llm }} / {{ llmCoverage.total_patents }}
-        ({{ llmCoverage.coverage_pct }}%)
-      </q-badge>
       <q-space />
-
-      <!-- Actions -->
-      <q-btn flat dense icon="refresh" @click="reloadAll" class="q-mr-sm">
-        <q-tooltip>Reload scoring data</q-tooltip>
-      </q-btn>
-      <q-btn flat dense icon="download" @click="exportCsv" class="q-mr-sm">
-        <q-tooltip>Export CSV</q-tooltip>
-      </q-btn>
+      <q-badge v-if="hasUnsavedChanges" color="warning" outline class="q-mr-md">
+        Unsaved changes
+      </q-badge>
     </div>
 
-    <div class="row q-gutter-lg">
-      <!-- Left Panel: Profile & Weights -->
-      <div class="col-3">
-        <!-- Profile Selector -->
+    <div class="row q-gutter-md">
+      <!-- Left Sidebar: Role Configuration -->
+      <div class="col-3" style="min-width: 340px; max-width: 400px">
+        <!-- Top Controls -->
         <q-card class="q-mb-md">
-          <q-card-section>
-            <div class="text-subtitle1 text-weight-medium q-mb-sm">Scoring Profile</div>
-            <q-select
-              v-model="selectedProfileId"
-              :options="profiles"
-              option-value="id"
-              option-label="displayName"
-              emit-value
-              map-options
-              outlined
-              dense
-            >
-              <template v-slot:option="{ itemProps, opt }">
-                <q-item v-bind="itemProps">
-                  <q-item-section>
-                    <q-item-label>{{ opt.displayName }}</q-item-label>
-                    <q-item-label caption>{{ opt.description }}</q-item-label>
-                  </q-item-section>
-                  <q-item-section side v-if="opt.isDefault">
-                    <q-badge color="grey-5" label="Default" />
-                  </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
-
-            <div v-if="currentProfile" class="text-caption text-grey-6 q-mt-sm">
-              {{ currentProfile.description }}
-            </div>
-          </q-card-section>
-        </q-card>
-
-        <!-- Weight Visualization -->
-        <q-card class="q-mb-md">
-          <q-card-section>
-            <div class="text-subtitle1 text-weight-medium q-mb-md">Profile Weights</div>
-
-            <div v-for="w in sortedWeights" :key="w.key" class="q-mb-sm">
-              <div class="row items-center justify-between q-mb-xs">
-                <span class="text-caption" :class="{ 'text-purple-6': w.isLlm }">
-                  {{ w.label }}
-                </span>
-                <span class="text-caption text-weight-bold">{{ w.pct }}%</span>
-              </div>
-              <q-linear-progress
-                :value="w.weight"
-                :color="w.isLlm ? 'deep-purple' : 'primary'"
-                size="8px"
-                rounded
+          <q-card-section class="q-pb-sm">
+            <div class="row items-center q-gutter-sm">
+              <q-select
+                v-model="topN"
+                :options="topNOptions"
+                label="Top N"
+                dense
+                outlined
+                style="width: 100px"
+              />
+              <q-toggle
+                v-model="llmEnhancedOnly"
+                label="Complete Data"
+                dense
+              >
+                <q-tooltip>Only show patents with LLM enrichment data</q-tooltip>
+              </q-toggle>
+              <q-space />
+              <q-btn
+                color="primary"
+                label="Recalculate"
+                icon="refresh"
+                :loading="loading"
+                @click="recalculate"
               />
             </div>
+          </q-card-section>
+        </q-card>
 
-            <q-separator class="q-my-md" />
-            <div class="text-caption text-grey-6">
-              <q-icon name="circle" size="8px" color="primary" class="q-mr-xs" />
-              Quantitative metrics (always available)
-            </div>
-            <div class="text-caption text-grey-6">
-              <q-icon name="circle" size="8px" color="deep-purple" class="q-mr-xs" />
-              LLM metrics ({{ llmCoverage?.patents_with_llm || 0 }} patents)
-            </div>
-            <div class="text-caption text-grey-6 q-mt-xs">
-              When LLM metrics are missing, their weight is redistributed proportionally to available metrics.
+        <!-- View Mode -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-sm">
+            <div class="text-subtitle2 q-mb-sm">View Mode</div>
+            <div class="row q-gutter-sm">
+              <q-btn-toggle
+                v-model="viewMode"
+                :options="[
+                  { label: 'Consensus', value: 'consensus' },
+                  { label: 'Individual', value: 'individual' },
+                ]"
+                dense
+                no-caps
+                toggle-color="primary"
+              />
+              <q-select
+                v-if="viewMode === 'individual'"
+                v-model="selectedIndividualRoleId"
+                :options="roles.map(r => ({ label: r.roleName, value: r.roleId }))"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                dense
+                outlined
+                class="col"
+              />
             </div>
           </q-card-section>
         </q-card>
 
-        <!-- Filters -->
-        <q-card>
-          <q-card-section>
-            <div class="text-subtitle1 text-weight-medium q-mb-sm">Filters</div>
+        <!-- V3 Presets -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-sm">
+            <div class="row items-center q-mb-sm">
+              <span class="text-subtitle2">V3 Presets</span>
+              <q-space />
+              <q-btn
+                flat
+                dense
+                size="sm"
+                icon="add"
+                label="Save"
+                @click="showSavePresetDialog = true"
+              />
+            </div>
+            <div class="row q-gutter-xs">
+              <q-chip
+                v-for="preset in allV3Presets"
+                :key="preset.id"
+                clickable
+                :removable="!preset.isBuiltIn"
+                :color="selectedV3PresetId === preset.id ? 'primary' : 'grey-4'"
+                :text-color="selectedV3PresetId === preset.id ? 'white' : 'black'"
+                size="sm"
+                @click="applyV3Preset(preset)"
+                @remove="deleteV3Preset(preset.id)"
+              >
+                {{ preset.name }}
+                <q-tooltip>{{ preset.description }}</q-tooltip>
+              </q-chip>
+            </div>
+          </q-card-section>
+        </q-card>
 
+        <!-- Role Configuration Table -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-none">
+            <div class="row items-center">
+              <span class="text-subtitle2">Role Weights</span>
+              <q-space />
+              <q-badge
+                :color="isWeightValid ? 'positive' : 'warning'"
+              >
+                {{ totalWeight }}%
+              </q-badge>
+              <q-btn
+                v-if="!isWeightValid"
+                flat
+                dense
+                size="sm"
+                label="Normalize"
+                class="q-ml-sm"
+                @click="normalizeWeights"
+              >
+                <q-tooltip>Adjust weights to sum to 100%</q-tooltip>
+              </q-btn>
+            </div>
+          </q-card-section>
+
+          <q-card-section class="q-pt-sm">
+            <div
+              v-for="role in roles"
+              :key="role.roleId"
+              class="q-mb-md"
+            >
+              <div class="row items-center q-mb-xs">
+                <span class="text-body2 text-weight-medium">{{ role.roleName }}</span>
+                <q-space />
+                <q-badge color="primary" outline>
+                  {{ role.consensusWeight }}%
+                </q-badge>
+              </div>
+
+              <div class="row items-center q-gutter-sm">
+                <q-select
+                  v-model="role.v2PresetId"
+                  :options="v2Presets.map(p => ({ label: p.name, value: p.id }))"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  dense
+                  outlined
+                  class="col"
+                  @update:model-value="onRoleChange"
+                >
+                  <q-tooltip>V2 scoring preset for this role</q-tooltip>
+                </q-select>
+
+                <q-input
+                  v-model.number="role.consensusWeight"
+                  type="number"
+                  :min="0"
+                  :max="100"
+                  dense
+                  outlined
+                  style="width: 70px"
+                  @update:model-value="onRoleChange"
+                >
+                  <template v-slot:append>
+                    <span class="text-caption">%</span>
+                  </template>
+                </q-input>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Snapshots -->
+        <q-card class="q-mb-md">
+          <q-card-section class="q-pb-sm">
+            <div class="row items-center q-mb-sm">
+              <span class="text-subtitle2">Snapshots</span>
+              <q-space />
+              <q-btn
+                flat
+                dense
+                size="sm"
+                icon="camera_alt"
+                label="Save"
+                :disable="patents.length === 0"
+                @click="showSaveSnapshotDialog = true"
+              />
+            </div>
             <q-select
-              v-model="sectorFilter"
-              :options="sectors"
+              v-model="selectedSnapshotId"
+              :options="[{ label: '(None)', value: null }, ...snapshots.map(s => ({ label: `${s.name} (${new Date(s.timestamp).toLocaleDateString()})`, value: s.id }))]"
               option-value="value"
               option-label="label"
               emit-value
               map-options
-              outlined
               dense
+              outlined
               clearable
-              label="Sector"
-              class="q-mb-md"
+              placeholder="Select snapshot..."
+              @update:model-value="onSnapshotSelect"
             />
-
-            <q-input
-              v-model.number="minScoreFilter"
-              type="number"
-              outlined
+            <q-toggle
+              v-if="selectedSnapshotId"
+              v-model="compareToSnapshot"
+              label="Compare to snapshot"
               dense
-              clearable
-              label="Min Score"
-              :min="0"
-              :max="100"
+              class="q-mt-sm"
+            />
+            <q-btn
+              v-if="selectedSnapshotId"
+              flat
+              dense
+              size="sm"
+              color="negative"
+              icon="delete"
+              label="Delete snapshot"
+              class="q-mt-sm"
+              @click="deleteSnapshot(selectedSnapshotId)"
             />
           </q-card-section>
         </q-card>
       </div>
 
-      <!-- Right Panel: Rankings Table -->
-      <q-card class="col">
-        <q-card-section class="q-pb-none">
-          <div class="row items-center">
-            <div class="text-h6">Patent Rankings</div>
-            <q-space />
-            <q-spinner v-if="loading" color="primary" size="sm" class="q-mr-sm" />
-            <span v-if="loading" class="text-grey-6 text-caption">Loading...</span>
+      <!-- Right Side: Rankings Table -->
+      <div class="col">
+        <q-card>
+          <q-card-section class="q-pb-none">
+            <div class="row items-center">
+              <div class="text-h6">Patent Rankings</div>
+              <q-badge
+                v-if="viewMode === 'individual' && selectedIndividualRoleId"
+                color="deep-purple"
+                class="q-ml-sm"
+              >
+                {{ roles.find(r => r.roleId === selectedIndividualRoleId)?.roleName }}
+              </q-badge>
+              <q-space />
+              <q-btn
+                flat
+                dense
+                icon="restart_alt"
+                label="Reset +/-"
+                :disable="patents.length === 0"
+                class="q-mr-sm"
+                @click="resetRankMovements"
+              >
+                <q-tooltip>Clear rank movements and set current rankings as new baseline</q-tooltip>
+              </q-btn>
+              <q-btn
+                flat
+                dense
+                icon="download"
+                label="Export CSV"
+                :disable="patents.length === 0"
+                class="q-mr-sm"
+                @click="exportCSV"
+              />
+              <q-spinner v-if="loading" color="primary" size="sm" />
+            </div>
+          </q-card-section>
+
+          <q-card-section>
+            <q-banner v-if="error" class="bg-negative text-white q-mb-md">
+              {{ error }}
+              <template v-slot:action>
+                <q-btn flat label="Retry" @click="recalculate" />
+              </template>
+            </q-banner>
+
+            <q-table
+              :rows="patentsWithSnapshotChange"
+              :columns="columns"
+              row-key="patent_id"
+              :loading="loading"
+              flat
+              bordered
+              dense
+              :rows-per-page-options="[0]"
+              hide-pagination
+            >
+              <template v-slot:body-cell-rank="props">
+                <q-td :props="props">
+                  <span class="text-weight-bold">{{ props.row.rank }}</span>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-change="props">
+                <q-td :props="props">
+                  <template v-if="props.row.rank_change !== undefined && props.row.rank_change !== 0">
+                    <q-icon
+                      :name="props.row.rank_change > 0 ? 'arrow_upward' : 'arrow_downward'"
+                      :color="props.row.rank_change > 0 ? 'positive' : 'negative'"
+                      size="xs"
+                    />
+                    <span
+                      :class="props.row.rank_change > 0 ? 'text-positive' : 'text-negative'"
+                      class="text-caption"
+                    >
+                      {{ Math.abs(props.row.rank_change) }}
+                    </span>
+                  </template>
+                  <span v-else class="text-grey-5">-</span>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-snapshot_change="props">
+                <q-td :props="props">
+                  <template v-if="props.row.snapshot_rank_change !== undefined">
+                    <template v-if="props.row.snapshot_rank_change !== 0">
+                      <q-icon
+                        :name="props.row.snapshot_rank_change > 0 ? 'arrow_upward' : 'arrow_downward'"
+                        :color="props.row.snapshot_rank_change > 0 ? 'positive' : 'negative'"
+                        size="xs"
+                      />
+                      <span
+                        :class="props.row.snapshot_rank_change > 0 ? 'text-positive' : 'text-negative'"
+                        class="text-caption"
+                      >
+                        {{ Math.abs(props.row.snapshot_rank_change) }}
+                      </span>
+                    </template>
+                    <span v-else class="text-grey-5">-</span>
+                  </template>
+                  <q-badge v-else color="info" outline size="xs">NEW</q-badge>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-patent_id="props">
+                <q-td :props="props">
+                  <a
+                    href="#"
+                    class="text-primary"
+                    @click.prevent="goToPatent(props.row.patent_id)"
+                  >
+                    {{ props.row.patent_id }}
+                  </a>
+                  <q-tooltip
+                    anchor="center right"
+                    self="center left"
+                    :offset="[10, 0]"
+                    class="patent-detail-tooltip"
+                    max-width="550px"
+                  >
+                    <div class="patent-popup">
+                      <div class="text-subtitle1 text-weight-bold q-mb-xs">
+                        {{ props.row.patent_id }}
+                      </div>
+                      <div class="text-body2 q-mb-sm">{{ props.row.patent_title }}</div>
+
+                      <div class="row q-gutter-sm q-mb-sm text-caption">
+                        <q-badge color="cyan-4" text-color="dark">{{ props.row.assignee }}</q-badge>
+                        <q-badge color="blue-grey-4" text-color="dark">{{ props.row.super_sector || props.row.primary_sector }}</q-badge>
+                        <q-badge color="light-green-4" text-color="dark">{{ props.row.years_remaining?.toFixed(1) }} yrs</q-badge>
+                        <q-badge v-if="props.row.has_llm_data" color="amber-4" text-color="dark">LLM</q-badge>
+                      </div>
+
+                      <div v-if="props.row.patent_abstract" class="text-caption text-grey-8 q-mb-md abstract-text">
+                        {{ props.row.patent_abstract.length > 400
+                           ? props.row.patent_abstract.substring(0, 400) + '...'
+                           : props.row.patent_abstract }}
+                      </div>
+
+                      <!-- Role Scores (for consensus view) -->
+                      <div v-if="viewMode === 'consensus' && Object.keys(props.row.role_scores).length > 0" class="q-mb-md">
+                        <div class="text-subtitle2 q-mb-xs">Role Scores</div>
+                        <div class="row q-gutter-xs">
+                          <q-chip
+                            v-for="role in roles.filter(r => r.consensusWeight > 0)"
+                            :key="role.roleId"
+                            dense
+                            size="sm"
+                            :color="props.row.role_scores[role.roleId] >= 70 ? 'positive' : props.row.role_scores[role.roleId] >= 50 ? 'warning' : 'grey'"
+                          >
+                            {{ role.roleName.split(' ')[0] }}: {{ props.row.role_scores[role.roleId]?.toFixed(1) || '-' }}
+                          </q-chip>
+                        </div>
+                      </div>
+
+                      <div class="text-subtitle2 q-mb-xs">Scoring Metrics</div>
+                      <table class="metrics-table">
+                        <thead>
+                          <tr>
+                            <th>Metric</th>
+                            <th>Raw</th>
+                            <th>Norm</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="key in Object.keys(props.row.normalized_metrics || {}).slice(0, 10)" :key="key">
+                            <td>{{ formatMetricName(key) }}</td>
+                            <td class="text-right">{{ props.row.raw_metrics[key]?.toFixed?.(1) || props.row.raw_metrics[key] || '-' }}</td>
+                            <td class="text-right">{{ ((props.row.normalized_metrics[key] || 0) * 100).toFixed(0) }}%</td>
+                          </tr>
+                        </tbody>
+                      </table>
+
+                      <div class="row q-mt-sm text-caption">
+                        <div class="col">Year Mult: <strong class="text-yellow-4">{{ props.row.year_multiplier?.toFixed(3) }}</strong></div>
+                        <div class="col text-right">Consensus: <strong class="text-amber-3" style="font-size: 1.1em">{{ props.row.consensus_score?.toFixed(2) }}</strong></div>
+                      </div>
+                    </div>
+                  </q-tooltip>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-patent_title="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 250px">
+                    {{ props.row.patent_title }}
+                    <q-tooltip v-if="props.row.patent_title?.length > 40">
+                      {{ props.row.patent_title }}
+                    </q-tooltip>
+                  </div>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-assignee="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 150px">
+                    {{ props.row.assignee }}
+                    <q-tooltip v-if="props.row.assignee?.length > 20">
+                      {{ props.row.assignee }}
+                    </q-tooltip>
+                  </div>
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-has_llm="props">
+                <q-td :props="props">
+                  <q-icon
+                    :name="props.row.has_llm_data ? 'check_circle' : 'remove_circle_outline'"
+                    :color="props.row.has_llm_data ? 'positive' : 'grey-4'"
+                    size="sm"
+                  />
+                </q-td>
+              </template>
+
+              <template v-slot:body-cell-score="props">
+                <q-td :props="props">
+                  <q-badge
+                    :color="props.row.consensus_score > 70 ? 'positive' : props.row.consensus_score > 50 ? 'warning' : 'grey'"
+                  >
+                    {{ props.row.consensus_score?.toFixed(2) }}
+                  </q-badge>
+                </q-td>
+              </template>
+
+              <template v-slot:no-data>
+                <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">
+                  <q-icon size="2em" name="sentiment_dissatisfied" />
+                  <span>No patents found. Try adjusting filters or click Recalculate.</span>
+                </div>
+              </template>
+            </q-table>
+          </q-card-section>
+        </q-card>
+      </div>
+    </div>
+
+    <!-- Save Preset Dialog -->
+    <q-dialog v-model="showSavePresetDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Save as V3 Preset</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-input
+            v-model="newPresetName"
+            label="Preset Name"
+            dense
+            autofocus
+            @keyup.enter="saveAsV3Preset"
+          />
+          <q-input
+            v-model="newPresetDescription"
+            label="Description (optional)"
+            dense
+            class="q-mt-md"
+          />
+          <div class="text-caption text-grey q-mt-md">
+            Saves current role configuration ({{ roles.length }} roles with their V2 presets and weights).
           </div>
         </q-card-section>
 
-        <q-card-section>
-          <!-- Error State -->
-          <q-banner v-if="error" class="bg-negative text-white q-mb-md">
-            {{ error }}
-            <template v-slot:action>
-              <q-btn flat label="Retry" @click="fetchScores" />
-            </template>
-          </q-banner>
-
-          <!-- Rankings Table -->
-          <q-table
-            :rows="patents"
-            :columns="columns"
-            row-key="patent_id"
-            v-model:pagination="pagination"
-            :loading="loading"
-            flat
-            bordered
-            binary-state-sort
-            @request="onRequest"
-          >
-            <!-- Rank -->
-            <template v-slot:body-cell-rank="props">
-              <q-td :props="props">
-                <span class="text-weight-bold">{{ props.row.rank }}</span>
-              </q-td>
-            </template>
-
-            <!-- Patent ID as link -->
-            <template v-slot:body-cell-patent_id="props">
-              <q-td :props="props">
-                <a
-                  href="#"
-                  class="text-primary"
-                  @click.prevent="goToPatent(props.row.patent_id)"
-                >
-                  {{ props.row.patent_id }}
-                </a>
-              </q-td>
-            </template>
-
-            <!-- Title with truncation -->
-            <template v-slot:body-cell-patent_title="props">
-              <q-td :props="props">
-                <div class="ellipsis" style="max-width: 280px">
-                  {{ props.row.patent_title }}
-                  <q-tooltip v-if="props.row.patent_title?.length > 40">
-                    {{ props.row.patent_title }}
-                  </q-tooltip>
-                </div>
-              </q-td>
-            </template>
-
-            <!-- Assignee -->
-            <template v-slot:body-cell-assignee="props">
-              <q-td :props="props">
-                <div class="ellipsis" style="max-width: 150px">
-                  {{ props.row.assignee }}
-                  <q-tooltip v-if="props.row.assignee?.length > 20">
-                    {{ props.row.assignee }}
-                  </q-tooltip>
-                </div>
-              </q-td>
-            </template>
-
-            <!-- Sector -->
-            <template v-slot:body-cell-primary_sector="props">
-              <q-td :props="props">
-                <div class="ellipsis" style="max-width: 130px">
-                  {{ props.row.primary_sector }}
-                </div>
-              </q-td>
-            </template>
-
-            <!-- Score badge -->
-            <template v-slot:body-cell-score="props">
-              <q-td :props="props">
-                <q-badge :color="scoreColor(props.row.score)">
-                  {{ props.row.score.toFixed(1) }}
-                </q-badge>
-              </q-td>
-            </template>
-
-            <!-- Competitor citations -->
-            <template v-slot:body-cell-competitor_citations="props">
-              <q-td :props="props">
-                <span :class="{ 'text-red-7 text-weight-bold': props.row.competitor_citations > 0 }">
-                  {{ props.row.competitor_citations }}
-                </span>
-              </q-td>
-            </template>
-
-            <!-- LLM indicator -->
-            <template v-slot:body-cell-llm="props">
-              <q-td :props="props">
-                <q-icon
-                  v-if="props.row.has_llm_scores"
-                  name="psychology"
-                  color="deep-purple"
-                  size="xs"
-                >
-                  <q-tooltip>
-                    LLM scores available:
-                    Elig={{ props.row.llm_scores?.eligibility_score }},
-                    Valid={{ props.row.llm_scores?.validity_score }},
-                    Breadth={{ props.row.llm_scores?.claim_breadth }},
-                    Enforce={{ props.row.llm_scores?.enforcement_clarity }},
-                    Design={{ props.row.llm_scores?.design_around_difficulty }}
-                  </q-tooltip>
-                </q-icon>
-                <span v-else class="text-grey-4">-</span>
-              </q-td>
-            </template>
-
-            <!-- Expand button -->
-            <template v-slot:body-cell-expand="props">
-              <q-td :props="props">
-                <q-btn
-                  flat
-                  dense
-                  round
-                  size="sm"
-                  :icon="expandedRow === props.row.patent_id ? 'expand_less' : 'expand_more'"
-                  @click="toggleExpand(props.row.patent_id)"
-                />
-              </q-td>
-            </template>
-
-            <!-- Expanded row: Score breakdown -->
-            <template v-slot:body="props">
-              <q-tr :props="props">
-                <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                  <!-- Use slot template content for special columns -->
-                  <template v-if="col.name === 'rank'">
-                    <span class="text-weight-bold">{{ props.row.rank }}</span>
-                  </template>
-                  <template v-else-if="col.name === 'patent_id'">
-                    <a href="#" class="text-primary" @click.prevent="goToPatent(props.row.patent_id)">
-                      {{ props.row.patent_id }}
-                    </a>
-                  </template>
-                  <template v-else-if="col.name === 'patent_title'">
-                    <div class="ellipsis" style="max-width: 280px">
-                      {{ props.row.patent_title }}
-                      <q-tooltip v-if="props.row.patent_title?.length > 40">
-                        {{ props.row.patent_title }}
-                      </q-tooltip>
-                    </div>
-                  </template>
-                  <template v-else-if="col.name === 'assignee'">
-                    <div class="ellipsis" style="max-width: 150px">
-                      {{ props.row.assignee }}
-                      <q-tooltip v-if="props.row.assignee?.length > 20">
-                        {{ props.row.assignee }}
-                      </q-tooltip>
-                    </div>
-                  </template>
-                  <template v-else-if="col.name === 'primary_sector'">
-                    <div class="ellipsis" style="max-width: 130px">
-                      {{ props.row.primary_sector }}
-                    </div>
-                  </template>
-                  <template v-else-if="col.name === 'score'">
-                    <q-badge :color="scoreColor(props.row.score)">
-                      {{ props.row.score.toFixed(1) }}
-                    </q-badge>
-                  </template>
-                  <template v-else-if="col.name === 'competitor_citations'">
-                    <span :class="{ 'text-red-7 text-weight-bold': props.row.competitor_citations > 0 }">
-                      {{ props.row.competitor_citations }}
-                    </span>
-                  </template>
-                  <template v-else-if="col.name === 'remaining_years'">
-                    {{ props.row.remaining_years?.toFixed(1) }}
-                  </template>
-                  <template v-else-if="col.name === 'llm'">
-                    <q-icon v-if="props.row.has_llm_scores" name="psychology" color="deep-purple" size="xs">
-                      <q-tooltip>LLM scores available</q-tooltip>
-                    </q-icon>
-                    <span v-else class="text-grey-4">-</span>
-                  </template>
-                  <template v-else-if="col.name === 'expand'">
-                    <q-btn
-                      flat dense round size="sm"
-                      :icon="expandedRow === props.row.patent_id ? 'expand_less' : 'expand_more'"
-                      @click="toggleExpand(props.row.patent_id)"
-                    />
-                  </template>
-                  <template v-else>
-                    {{ col.value }}
-                  </template>
-                </q-td>
-              </q-tr>
-
-              <!-- Expanded: Score Breakdown -->
-              <q-tr v-show="expandedRow === props.row.patent_id" :props="props">
-                <q-td colspan="100%" class="bg-grey-1">
-                  <div class="q-pa-md">
-                    <div class="row q-gutter-lg">
-                      <!-- Score Formula -->
-                      <div class="col-5">
-                        <div class="text-subtitle2 q-mb-sm">Score Breakdown</div>
-                        <div class="text-caption text-grey-7 q-mb-md">
-                          Score = base_score &times; year_mult &times; 100
-                          = {{ props.row.base_score?.toFixed(4) }} &times; {{ props.row.year_multiplier?.toFixed(3) }} &times; 100
-                          = <b>{{ props.row.score.toFixed(1) }}</b>
-                        </div>
-
-                        <!-- Metrics breakdown -->
-                        <div v-for="w in sortedWeights" :key="w.key" class="q-mb-xs">
-                          <div class="row items-center no-wrap">
-                            <span class="text-caption col-5" :class="{ 'text-purple-6': w.isLlm }">
-                              {{ w.label }}
-                            </span>
-                            <div class="col-4">
-                              <q-linear-progress
-                                :value="props.row.normalized_metrics[w.key] || 0"
-                                :color="w.isLlm ? 'deep-purple-4' : 'blue-4'"
-                                size="6px"
-                                rounded
-                              />
-                            </div>
-                            <span class="text-caption text-right col-1 q-ml-sm">
-                              {{ ((props.row.normalized_metrics[w.key] || 0) * 100).toFixed(0) }}%
-                            </span>
-                            <span class="text-caption text-grey-6 text-right col-2 q-ml-sm">
-                              {{ (metricContribution(props.row, w.key) * 100).toFixed(1) }}pts
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- Patent Details -->
-                      <div class="col">
-                        <div class="text-subtitle2 q-mb-sm">Patent Details</div>
-                        <div class="row q-gutter-md">
-                          <div>
-                            <div class="text-caption text-grey-6">Forward Citations</div>
-                            <div class="text-body2">{{ props.row.forward_citations }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-blue-9">Adj. Fwd Cites</div>
-                            <div class="text-body2 text-blue-8">{{ props.row.adjusted_forward_citations?.toFixed(1) || '-' }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-grey-6">Competitor Cites</div>
-                            <div class="text-body2 text-red-7">{{ props.row.competitor_citations }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-grey-6">Affiliate Cites</div>
-                            <div class="text-body2 text-orange">{{ props.row.affiliate_citations }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-grey-6">Neutral Cites</div>
-                            <div class="text-body2">{{ props.row.neutral_citations }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-deep-orange-9">Comp. Density</div>
-                            <div class="text-body2">{{ props.row.competitor_density != null ? (props.row.competitor_density * 100).toFixed(0) + '%' : '-' }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-grey-6">Competitors</div>
-                            <div class="text-body2">{{ props.row.competitor_count }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-grey-6">Years Left</div>
-                            <div class="text-body2">{{ props.row.remaining_years?.toFixed(1) }}</div>
-                          </div>
-                          <div>
-                            <div class="text-caption text-grey-6">Year Multiplier</div>
-                            <div class="text-body2">{{ props.row.year_multiplier?.toFixed(3) }}</div>
-                          </div>
-                        </div>
-
-                        <!-- LLM Scores if available -->
-                        <div v-if="props.row.has_llm_scores && props.row.llm_scores" class="q-mt-md">
-                          <div class="text-subtitle2 q-mb-sm">
-                            <q-icon name="psychology" color="deep-purple" size="xs" class="q-mr-xs" />
-                            LLM Analysis Scores
-                          </div>
-                          <div class="row q-gutter-md">
-                            <div>
-                              <div class="text-caption text-grey-6">Eligibility</div>
-                              <q-badge :color="props.row.llm_scores.eligibility_score >= 4 ? 'positive' : props.row.llm_scores.eligibility_score >= 3 ? 'warning' : 'negative'">
-                                {{ props.row.llm_scores.eligibility_score }}/5
-                              </q-badge>
-                            </div>
-                            <div>
-                              <div class="text-caption text-grey-6">Validity</div>
-                              <q-badge :color="props.row.llm_scores.validity_score >= 4 ? 'positive' : props.row.llm_scores.validity_score >= 3 ? 'warning' : 'negative'">
-                                {{ props.row.llm_scores.validity_score }}/5
-                              </q-badge>
-                            </div>
-                            <div>
-                              <div class="text-caption text-grey-6">Claim Breadth</div>
-                              <q-badge :color="props.row.llm_scores.claim_breadth >= 4 ? 'positive' : props.row.llm_scores.claim_breadth >= 3 ? 'warning' : 'negative'">
-                                {{ props.row.llm_scores.claim_breadth }}/5
-                              </q-badge>
-                            </div>
-                            <div>
-                              <div class="text-caption text-grey-6">Enforcement</div>
-                              <q-badge :color="props.row.llm_scores.enforcement_clarity >= 4 ? 'positive' : props.row.llm_scores.enforcement_clarity >= 3 ? 'warning' : 'negative'">
-                                {{ props.row.llm_scores.enforcement_clarity }}/5
-                              </q-badge>
-                            </div>
-                            <div>
-                              <div class="text-caption text-grey-6">Design-Around</div>
-                              <q-badge :color="props.row.llm_scores.design_around_difficulty >= 4 ? 'positive' : props.row.llm_scores.design_around_difficulty >= 3 ? 'warning' : 'negative'">
-                                {{ props.row.llm_scores.design_around_difficulty }}/5
-                              </q-badge>
-                            </div>
-                          </div>
-                        </div>
-
-                        <!-- Competitor names -->
-                        <div v-if="props.row.competitor_names?.length" class="q-mt-md">
-                          <div class="text-caption text-grey-6">Competitor Companies Citing</div>
-                          <div class="row q-gutter-xs q-mt-xs">
-                            <q-chip
-                              v-for="name in props.row.competitor_names.slice(0, 10)"
-                              :key="name"
-                              dense
-                              size="sm"
-                              color="red-1"
-                              text-color="red-9"
-                            >
-                              {{ name }}
-                            </q-chip>
-                            <q-chip
-                              v-if="props.row.competitor_names.length > 10"
-                              dense
-                              size="sm"
-                              color="grey-3"
-                            >
-                              +{{ props.row.competitor_names.length - 10 }} more
-                            </q-chip>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </q-td>
-              </q-tr>
-            </template>
-
-            <!-- No data -->
-            <template v-slot:no-data>
-              <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">
-                <q-icon size="2em" name="analytics" />
-                <span>No scored patents found</span>
-              </div>
-            </template>
-          </q-table>
-        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save"
+            :disable="!newPresetName.trim()"
+            @click="saveAsV3Preset"
+          />
+        </q-card-actions>
       </q-card>
-    </div>
+    </q-dialog>
+
+    <!-- Save Snapshot Dialog -->
+    <q-dialog v-model="showSaveSnapshotDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Save Snapshot</div>
+        </q-card-section>
+
+        <q-card-section class="q-pt-none">
+          <q-input
+            v-model="newSnapshotName"
+            label="Snapshot Name"
+            dense
+            autofocus
+            :placeholder="`Snapshot ${new Date().toLocaleDateString()}`"
+            @keyup.enter="saveSnapshot"
+          />
+          <q-toggle
+            v-model="resetAfterSnapshot"
+            label="Reset rank movements after save"
+            dense
+            class="q-mt-md"
+          />
+          <div class="text-caption text-grey q-mt-sm">
+            Saves current rankings ({{ patents.length }} patents) with their consensus scores.
+            Limit: 10 snapshots.
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save"
+            :disable="!newSnapshotName.trim()"
+            @click="saveSnapshot"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -765,5 +1164,46 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+</style>
+
+<style>
+/* Patent detail tooltip - larger and more detailed */
+.patent-detail-tooltip {
+  max-width: 550px !important;
+  font-size: 13px !important;
+}
+
+.patent-popup {
+  padding: 8px;
+}
+
+.patent-popup .abstract-text {
+  line-height: 1.3;
+  border-left: 3px solid #1976d2;
+  padding-left: 8px;
+  font-style: italic;
+}
+
+.patent-popup .metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.patent-popup .metrics-table th,
+.patent-popup .metrics-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.patent-popup .metrics-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #90caf9;
+}
+
+.patent-popup .metrics-table td.text-right {
+  text-align: right;
 }
 </style>

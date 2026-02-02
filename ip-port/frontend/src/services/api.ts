@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking, LlmCoverage, SectorDetail, SuperSectorDetail, SectorRule, SectorRuleType, RulePreviewResult, SeedSummary } from '@/types';
+import type { Patent, PaginatedResponse, PortfolioFilters, PaginationParams, ScoringProfile, V3ScoredPatent, SectorRanking, LlmCoverage, SectorDetail, SuperSectorDetail, SectorRule, SectorRuleType, RulePreviewResult, SeedSummary, V3ConsensusRole, V3ConsensusPreset, V3ConsensusConfig, V3ConsensusScoredPatent, V3ConsensusSnapshot } from '@/types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -1479,5 +1479,75 @@ export const batchJobsApi = {
     return data;
   },
 };
+
+// =============================================================================
+// V3 Consensus Scoring API Helpers
+// =============================================================================
+
+// Re-export V3 types for convenience
+export type { V3ConsensusRole, V3ConsensusPreset, V3ConsensusConfig, V3ConsensusScoredPatent, V3ConsensusSnapshot };
+
+// Default roles with their default V2 presets
+export const DEFAULT_V3_ROLES: V3ConsensusRole[] = [
+  { roleId: 'executive', roleName: 'Executive', v2PresetId: 'default', consensusWeight: 25 },
+  { roleId: 'defensive', roleName: 'Defensive Counsel', v2PresetId: 'defensive', consensusWeight: 20 },
+  { roleId: 'balanced', roleName: 'Balanced Strategist', v2PresetId: 'default', consensusWeight: 20 },
+  { roleId: 'licensing', roleName: 'Licensing Focus', v2PresetId: 'licensing_focused', consensusWeight: 15 },
+  { roleId: 'litigation', roleName: 'Aggressive Litigator', v2PresetId: 'litigation_focused', consensusWeight: 10 },
+  { roleId: 'quickwins', roleName: 'Quick Wins', v2PresetId: 'quick_wins', consensusWeight: 10 },
+];
+
+// Built-in V3 presets
+export const BUILTIN_V3_PRESETS: V3ConsensusPreset[] = [
+  {
+    id: 'balanced-team',
+    name: 'Balanced Team',
+    description: 'Default weights - balances all stakeholder perspectives equally',
+    isBuiltIn: true,
+    roles: [...DEFAULT_V3_ROLES],
+  },
+  {
+    id: 'executive-led',
+    name: 'Executive-Led',
+    description: 'Executive voice dominates - for board-level portfolio decisions',
+    isBuiltIn: true,
+    roles: [
+      { roleId: 'executive', roleName: 'Executive', v2PresetId: 'default', consensusWeight: 40 },
+      { roleId: 'defensive', roleName: 'Defensive Counsel', v2PresetId: 'defensive', consensusWeight: 15 },
+      { roleId: 'balanced', roleName: 'Balanced Strategist', v2PresetId: 'default', consensusWeight: 15 },
+      { roleId: 'licensing', roleName: 'Licensing Focus', v2PresetId: 'licensing_focused', consensusWeight: 15 },
+      { roleId: 'litigation', roleName: 'Aggressive Litigator', v2PresetId: 'litigation_focused', consensusWeight: 10 },
+      { roleId: 'quickwins', roleName: 'Quick Wins', v2PresetId: 'quick_wins', consensusWeight: 5 },
+    ],
+  },
+  {
+    id: 'litigation-ready',
+    name: 'Litigation Ready',
+    description: 'Emphasis on enforcement - for active litigation campaigns',
+    isBuiltIn: true,
+    roles: [
+      { roleId: 'executive', roleName: 'Executive', v2PresetId: 'default', consensusWeight: 15 },
+      { roleId: 'defensive', roleName: 'Defensive Counsel', v2PresetId: 'defensive', consensusWeight: 15 },
+      { roleId: 'balanced', roleName: 'Balanced Strategist', v2PresetId: 'default', consensusWeight: 15 },
+      { roleId: 'licensing', roleName: 'Licensing Focus', v2PresetId: 'licensing_focused', consensusWeight: 10 },
+      { roleId: 'litigation', roleName: 'Aggressive Litigator', v2PresetId: 'litigation_focused', consensusWeight: 25 },
+      { roleId: 'quickwins', roleName: 'Quick Wins', v2PresetId: 'quick_wins', consensusWeight: 20 },
+    ],
+  },
+  {
+    id: 'licensing-campaign',
+    name: 'Licensing Campaign',
+    description: 'Emphasis on licensing value - for monetization programs',
+    isBuiltIn: true,
+    roles: [
+      { roleId: 'executive', roleName: 'Executive', v2PresetId: 'default', consensusWeight: 15 },
+      { roleId: 'defensive', roleName: 'Defensive Counsel', v2PresetId: 'defensive', consensusWeight: 15 },
+      { roleId: 'balanced', roleName: 'Balanced Strategist', v2PresetId: 'default', consensusWeight: 15 },
+      { roleId: 'licensing', roleName: 'Licensing Focus', v2PresetId: 'licensing_focused', consensusWeight: 30 },
+      { roleId: 'litigation', roleName: 'Aggressive Litigator', v2PresetId: 'litigation_focused', consensusWeight: 10 },
+      { roleId: 'quickwins', roleName: 'Quick Wins', v2PresetId: 'quick_wins', consensusWeight: 15 },
+    ],
+  },
+];
 
 export default api;

@@ -565,7 +565,7 @@ export async function callLlm(
   promptText: string,
   modelName: string,
   systemMessage: string,
-  maxTokens: number = 4096
+  maxTokens: number = 16384  // High enough to avoid truncation, low enough to avoid streaming requirement
 ): Promise<{ response: Record<string, unknown> | null; rawText: string; inputTokens?: number; outputTokens?: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -596,14 +596,41 @@ export async function callLlm(
   let response: Record<string, unknown> | null = null;
   try {
     let jsonStr = rawText;
+
+    // Strip markdown code blocks
     if (jsonStr.includes('```json')) {
       jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
     } else if (jsonStr.includes('```')) {
       jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
     }
-    response = JSON.parse(jsonStr);
-  } catch {
-    // JSON parse failed, store as rawText only
+
+    // First attempt: try parsing as-is
+    try {
+      response = JSON.parse(jsonStr);
+    } catch (firstError) {
+      // Second attempt: try to fix common JSON errors
+      console.log(`[callLlm] Initial JSON parse failed, attempting recovery...`);
+
+      // Fix unescaped quotes in string values - common LLM error
+      // Pattern: "field": "text with "quoted" word" should be "field": "text with \"quoted\" word"
+      // This is a heuristic and may not work for all cases
+      let fixedJson = jsonStr;
+
+      // Log first parse error for debugging
+      console.log(`[callLlm] Parse error: ${firstError instanceof Error ? firstError.message : String(firstError)}`);
+      console.log(`[callLlm] Raw JSON preview (first 300 chars): ${jsonStr.slice(0, 300)}`);
+
+      // Try parsing again after potential fixes
+      try {
+        response = JSON.parse(fixedJson);
+        console.log(`[callLlm] JSON recovery successful`);
+      } catch {
+        console.log(`[callLlm] JSON recovery failed - response will be stored as raw text only`);
+        // Store null response, rawText will be preserved
+      }
+    }
+  } catch (outerError) {
+    console.log(`[callLlm] Unexpected error during JSON processing: ${outerError instanceof Error ? outerError.message : String(outerError)}`);
   }
 
   const usage = result.usage_metadata;

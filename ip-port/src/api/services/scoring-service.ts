@@ -1220,8 +1220,8 @@ export function scoreWithCustomConfig(
     }
   }
 
-  // Return top N
-  return scored.slice(0, config.topN);
+  // Return top N (0 means all)
+  return config.topN === 0 ? scored : scored.slice(0, config.topN);
 }
 
 /**

@@ -390,7 +390,8 @@ router.post('/v2-enhanced', (req: Request, res: Response) => {
       weights,
       scaling,
       invert,
-      topN: Math.min(Math.max(1, topN), 5000),
+      // topN=0 means "All", otherwise limit to reasonable max of 15000
+      topN: topN === 0 ? 0 : Math.min(Math.max(1, topN), 15000),
       llmEnhancedOnly,
     };
 

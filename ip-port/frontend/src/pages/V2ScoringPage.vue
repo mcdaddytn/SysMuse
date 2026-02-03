@@ -70,9 +70,21 @@ const resetAfterSnapshot = ref(true);
 const autoRecalcOnPreset = ref(true);
 
 // Top N and filter options
-const topNOptions = [60, 100, 250, 500, 1000];
+const topNOptions = [
+  { label: '60', value: 60 },
+  { label: '100', value: 100 },
+  { label: '250', value: 250 },
+  { label: '500', value: 500 },
+  { label: '1000', value: 1000 },
+  { label: '2500', value: 2500 },
+  { label: '5000', value: 5000 },
+  { label: '7500', value: 7500 },
+  { label: '10000', value: 10000 },
+  { label: 'All', value: 0 },
+];
 const topN = ref(100);
 const llmEnhancedOnly = ref(true);
+const includeMetrics = ref(false);
 
 // Scaling options for dropdown
 const scalingOptions = [
@@ -84,7 +96,24 @@ const scalingOptions = [
 // All presets combined
 const allPresets = computed(() => [...builtInPresets.value, ...customPresets.value]);
 
-// Table columns - dynamic based on snapshot comparison
+// All metric keys for columns (used when includeMetrics is true)
+const allMetricKeys = [
+  'competitor_citations',
+  'adjusted_forward_citations',
+  'years_remaining',
+  'competitor_count',
+  'competitor_density',
+  'eligibility_score',
+  'validity_score',
+  'claim_breadth',
+  'enforcement_clarity',
+  'design_around_difficulty',
+  'market_relevance_score',
+  'ipr_risk_score',
+  'prosecution_quality_score',
+];
+
+// Table columns - dynamic based on snapshot comparison and includeMetrics
 const columns = computed(() => {
   const baseCols = [
     { name: 'rank', label: 'Rank', field: 'rank', align: 'center' as const, sortable: true, style: 'width: 60px' },
@@ -101,7 +130,7 @@ const columns = computed(() => {
     });
   }
 
-  return [
+  const mainCols = [
     ...baseCols,
     { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const },
     { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const },
@@ -113,6 +142,22 @@ const columns = computed(() => {
     { name: 'score', label: 'Score', field: 'score', align: 'center' as const, sortable: true,
       format: (val: number) => val?.toFixed(2) },
   ];
+
+  // Add metric columns if includeMetrics is enabled
+  if (includeMetrics.value) {
+    const metricCols = allMetricKeys.map(key => ({
+      name: `metric_${key}`,
+      label: formatMetricName(key),
+      field: (row: V2EnhancedScoredPatent) => row.raw_metrics?.[key],
+      align: 'center' as const,
+      sortable: true,
+      format: (val: number) => formatRawMetric(key, val),
+      style: 'width: 70px; font-size: 0.85em',
+    }));
+    return [...mainCols, ...metricCols];
+  }
+
+  return mainCols;
 });
 
 // Computed: build config from current state
@@ -420,13 +465,14 @@ function exportCSV() {
     `# V2 Enhanced Scoring Export`,
     `# Generated: ${new Date().toISOString()}`,
     `# Preset: ${presetName}`,
-    `# Top N: ${config.topN}`,
+    `# Top N: ${config.topN === 0 ? 'All' : config.topN}`,
     `# Complete Data Only: ${config.llmEnhancedOnly}`,
+    `# Include Metrics: ${includeMetrics.value}`,
     `# Weights: ${Object.entries(config.weights).map(([k, v]) => `${k}=${v}`).join(',')}`,
     `# Scaling: ${Object.entries(config.scaling).map(([k, v]) => `${k}=${v}`).join(',')}`,
   ];
 
-  // Build CSV headers
+  // Build CSV headers - base columns
   const headers = [
     'rank',
     'rank_change',
@@ -440,6 +486,11 @@ function exportCSV() {
     'has_llm_data',
     'score',
   ];
+
+  // Add metric headers if includeMetrics is enabled
+  if (includeMetrics.value) {
+    headers.push(...allMetricKeys);
+  }
 
   // Build rows
   const rows = patentsWithSnapshotChange.value.map(p => {
@@ -456,17 +507,27 @@ function exportCSV() {
       p.has_llm_data ? 'Y' : 'N',
       p.score?.toFixed(2) || '',
     ];
+
+    // Add metric values if includeMetrics is enabled
+    if (includeMetrics.value) {
+      for (const key of allMetricKeys) {
+        const val = p.raw_metrics?.[key];
+        row.push(val !== undefined && val !== null ? val.toString() : '');
+      }
+    }
+
     return row.join(',');
   });
 
   const csvContent = [...comments, '', headers.join(','), ...rows].join('\n');
 
-  // Download
+  // Download - use "all" in filename if topN is 0
+  const topNLabel = topN.value === 0 ? 'all' : `top${topN.value}`;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `v2-scoring-top${topN.value}-${date}.csv`;
+  link.download = `v2-scoring-${topNLabel}-${date}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -582,6 +643,10 @@ onMounted(async () => {
               <q-select
                 v-model="topN"
                 :options="topNOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
                 label="Top N"
                 dense
                 outlined
@@ -590,11 +655,20 @@ onMounted(async () => {
               />
               <q-toggle
                 v-model="llmEnhancedOnly"
-                label="Complete Data"
+                label="Complete Data Only"
                 dense
                 @update:model-value="onMetricChange"
               >
                 <q-tooltip>Only show patents with LLM enrichment data</q-tooltip>
+              </q-toggle>
+            </div>
+            <div class="row items-center q-gutter-sm q-mt-sm">
+              <q-toggle
+                v-model="includeMetrics"
+                label="Include Metrics"
+                dense
+              >
+                <q-tooltip>Show all metric component columns in table and CSV export</q-tooltip>
               </q-toggle>
               <q-space />
               <q-btn

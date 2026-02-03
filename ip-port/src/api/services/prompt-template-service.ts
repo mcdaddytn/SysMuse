@@ -564,7 +564,8 @@ function sleep(ms: number): Promise<void> {
 export async function callLlm(
   promptText: string,
   modelName: string,
-  systemMessage: string
+  systemMessage: string,
+  maxTokens: number = 4096
 ): Promise<{ response: Record<string, unknown> | null; rawText: string; inputTokens?: number; outputTokens?: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -574,7 +575,7 @@ export async function callLlm(
   const model = new ChatAnthropic({
     apiKey,
     model: modelName,
-    maxTokens: 4096,
+    maxTokens,
     temperature: 0.3,
   });
 

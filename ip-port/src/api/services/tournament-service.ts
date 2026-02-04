@@ -500,13 +500,14 @@ async function executeClusterV2(
     const patentInfo: Record<string, unknown> = {
       ID: numberedKey,  // Use numbered key as the identifier
       TITLE: p.patent_title || '',  // CAPS to emphasize - LLM MUST use this exact title
+      ABSTRACT: p.abstract || '',  // Include abstract for context - critical for evaluation
       assignee: p.assignee || '',
       primary_sector: p.primary_sector || '',
       cpc_codes: p.cpc_codes || [],
     };
 
-    // Add LLM-enriched fields if available
-    if (p.summary) patentInfo.summary = p.summary;
+    // Add LLM-enriched fields if available (summary, technical_solution complement the abstract)
+    if (p.summary) patentInfo.llm_summary = p.summary;
     if (p.technical_solution) patentInfo.technical_solution = p.technical_solution;
     if (p.market_segment) patentInfo.market_segment = p.market_segment;
 

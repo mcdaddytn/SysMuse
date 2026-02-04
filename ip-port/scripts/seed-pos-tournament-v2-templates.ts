@@ -674,8 +674,177 @@ Provide your strategic synthesis in JSON format.`;
 // Main Seeding Function
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DIAGNOSTIC TEMPLATE - Test if model can read titles correctly
+// ─────────────────────────────────────────────────────────────────────────────
+
+const diagnosticQuestions: StructuredQuestion[] = [
+  {
+    fieldName: 'patent_title_echo',
+    question: 'Copy the EXACT "TITLE" field from this patent\'s JSON data. Do not paraphrase or interpret - just copy the title verbatim.',
+    answerType: 'TEXT',
+  },
+  {
+    fieldName: 'title_first_three_words',
+    question: 'What are the first 3 words of the title?',
+    answerType: 'TEXT',
+  },
+  {
+    fieldName: 'title_character_count',
+    question: 'How many characters are in the title (approximate)?',
+    answerType: 'INTEGER',
+    constraints: { min: 0, max: 500 },
+  },
+  {
+    fieldName: 'has_abstract',
+    question: 'Does the patent JSON include an ABSTRACT field with content?',
+    answerType: 'ENUM',
+    constraints: { options: ['yes', 'no', 'empty'] },
+  },
+];
+
+const diagnosticPrompt = `DIAGNOSTIC TEST: Can you read the patent data correctly?
+
+This is a simple test to verify you can read and copy patent titles from the provided JSON.
+
+PATENT IDENTIFICATION:
+Each patent has a numbered key: PATENT_1, PATENT_2, etc.
+Valid keys: {{cluster.patentIdList}}
+
+=== PATENT DATA ===
+{{cluster.patentData}}
+
+TASK:
+For EACH patent, simply read the JSON and copy the information requested.
+DO NOT interpret, paraphrase, or make assumptions - just copy what you see.
+
+Return a JSON object with each patent key (PATENT_1, etc.) as keys.`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SIMPLIFIED TEMPLATE - Fewer questions, no ranking, no problematic examples
+// ─────────────────────────────────────────────────────────────────────────────
+
+const simplifiedQuestions: StructuredQuestion[] = [
+  // Echo title first - verify model is reading data
+  {
+    fieldName: 'title_verbatim',
+    question: 'Copy the EXACT "TITLE" field from this patent\'s JSON. Do not change any words.',
+    answerType: 'TEXT',
+  },
+  // Simple 4-layer scores
+  {
+    fieldName: 'mobility_score',
+    question: 'LAYER 1 - MOBILITY: Is this about portable/handheld devices? Score 0-5. Most patents score 0.',
+    answerType: 'INTEGER',
+    constraints: { min: 0, max: 5 },
+  },
+  {
+    fieldName: 'connectivity_score',
+    question: 'LAYER 2 - CONNECTIVITY: Is this about WiFi/Bluetooth/cellular management? Score 0-5. Most patents score 0.',
+    answerType: 'INTEGER',
+    constraints: { min: 0, max: 5 },
+  },
+  {
+    fieldName: 'peripheral_score',
+    question: 'LAYER 3 - PERIPHERAL: Is this about device-to-peripheral communication (card readers, printers)? Score 0-5. Most patents score 0.',
+    answerType: 'INTEGER',
+    constraints: { min: 0, max: 5 },
+  },
+  {
+    fieldName: 'reliability_score',
+    question: 'LAYER 4 - RELIABILITY: Is this about operation under stress (interference, low power)? Score 0-5. Most patents score 0.',
+    answerType: 'INTEGER',
+    constraints: { min: 0, max: 5 },
+  },
+  {
+    fieldName: 'total_score',
+    question: 'Sum of all 4 layer scores (0-20).',
+    answerType: 'INTEGER',
+    constraints: { min: 0, max: 20 },
+  },
+  // Misc tech relevance (replaces dark horse)
+  {
+    fieldName: 'misc_tech_relevance',
+    question: 'Does this patent have relevance to restaurant/retail technology NOT captured by the 4 layers? Brief explanation or "none".',
+    answerType: 'TEXT',
+  },
+];
+
+const simplifiedPrompt = `Evaluate patents for POS technology relevance.
+
+IMPORTANT - READ THE DATA BELOW CAREFULLY:
+Each patent has a TITLE field. You MUST copy this exact title in your response.
+Do NOT invent or assume titles - use only what is provided in the JSON.
+
+SCORING (be honest - most patents score 0):
+- Layer 1 MOBILITY: Portable/handheld devices, tablets
+- Layer 2 CONNECTIVITY: WiFi/Bluetooth/cellular management
+- Layer 3 PERIPHERAL: Card readers, printers, NFC terminals
+- Layer 4 RELIABILITY: Operation under stress, power issues
+
+PATENT IDENTIFICATION:
+Keys: {{cluster.patentIdList}}
+
+=== PATENT DATA (READ THE "TITLE" FIELD) ===
+{{cluster.patentData}}
+
+RESPONSE FORMAT:
+Return JSON with patent keys (PATENT_1, PATENT_2, etc.) as top-level keys.
+For each patent: copy title_verbatim FIRST, then provide scores.
+It is NORMAL for patents to score 0 in all layers.`;
+
 async function seedTemplates() {
   console.log('Seeding POS Tournament V2 templates...');
+
+  // Diagnostic Template
+  await prisma.promptTemplate.upsert({
+    where: { id: 'tmpl_diagnostic' },
+    update: {
+      name: 'Diagnostic - Title Echo Test',
+      description: 'Tests if model can read and echo patent titles correctly',
+      templateType: 'STRUCTURED',
+      promptText: diagnosticPrompt,
+      questions: diagnosticQuestions as any,
+      llmModel: 'claude-sonnet-4-20250514',
+      status: 'DRAFT',
+    },
+    create: {
+      id: 'tmpl_diagnostic',
+      name: 'Diagnostic - Title Echo Test',
+      description: 'Tests if model can read and echo patent titles correctly',
+      templateType: 'STRUCTURED',
+      promptText: diagnosticPrompt,
+      questions: diagnosticQuestions as any,
+      llmModel: 'claude-sonnet-4-20250514',
+      status: 'DRAFT',
+    },
+  });
+  console.log('  Created: tmpl_diagnostic');
+
+  // Simplified Template
+  await prisma.promptTemplate.upsert({
+    where: { id: 'tmpl_simplified_r1' },
+    update: {
+      name: 'Simplified - Round 1 (No Ranking)',
+      description: 'Simplified scoring without ranking or complex examples',
+      templateType: 'STRUCTURED',
+      promptText: simplifiedPrompt,
+      questions: simplifiedQuestions as any,
+      llmModel: 'claude-sonnet-4-20250514',
+      status: 'DRAFT',
+    },
+    create: {
+      id: 'tmpl_simplified_r1',
+      name: 'Simplified - Round 1 (No Ranking)',
+      description: 'Simplified scoring without ranking or complex examples',
+      templateType: 'STRUCTURED',
+      promptText: simplifiedPrompt,
+      questions: simplifiedQuestions as any,
+      llmModel: 'claude-sonnet-4-20250514',
+      status: 'DRAFT',
+    },
+  });
+  console.log('  Created: tmpl_simplified_r1');
 
   // Round 1 Template
   await prisma.promptTemplate.upsert({

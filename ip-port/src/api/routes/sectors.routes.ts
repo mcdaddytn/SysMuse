@@ -464,6 +464,47 @@ router.put('/sub-sectors/:subSectorId/status', async (req: Request, res: Respons
   }
 });
 
+/**
+ * POST /api/sectors/sub-sectors/assign
+ * Assign primary sub-sector to each patent based on inventive CPC codes
+ * Body: { dryRun?: boolean }
+ */
+router.post('/sub-sectors/assign', async (req: Request, res: Response) => {
+  try {
+    const { dryRun = false } = req.body;
+
+    // Import the assignment function
+    const { assignPrimarySubSectors } = await import('../services/sub-sector-service.js');
+
+    console.log(`[SubSectors] Starting primary sub-sector assignment (dryRun: ${dryRun})...`);
+
+    const result = await assignPrimarySubSectors(undefined, {
+      dryRun,
+      progressCallback: (current, total) => {
+        if (current % 5000 === 0) {
+          console.log(`[SubSectors] Assignment progress: ${current}/${total}`);
+        }
+      }
+    });
+
+    console.log(`[SubSectors] Assignment complete: ${result.assigned} assigned, ${result.noMatch} no match`);
+
+    res.json({
+      success: true,
+      dryRun,
+      result,
+      coverage: {
+        assignedPct: Math.round(result.assigned / result.processed * 1000) / 10,
+        byMatchType: result.byMatchType,
+        byConfidence: result.byConfidence,
+      }
+    });
+  } catch (err: unknown) {
+    console.error('[SubSectors] Assignment error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // =============================================================================
 // SECTORS — CRUD
 // =============================================================================

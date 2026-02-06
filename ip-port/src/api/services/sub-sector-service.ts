@@ -590,3 +590,269 @@ export async function analyzeSubSectorPotential(
     recommendedStrategy,
   };
 }
+
+// ============================================================================
+// Primary Sub-Sector Assignment
+// ============================================================================
+
+export interface SubSectorAssignment {
+  patentId: string;
+  subSectorId: string | null;
+  subSectorName: string | null;
+  sectorName: string | null;
+  matchedCpc: string | null;
+  matchType: 'inventive' | 'primary' | 'fallback' | 'none';
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface AssignmentResult {
+  processed: number;
+  assigned: number;
+  noMatch: number;
+  byMatchType: {
+    inventive: number;
+    primary: number;
+    fallback: number;
+    none: number;
+  };
+  byConfidence: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+}
+
+interface SubSectorLookup {
+  id: string;
+  name: string;
+  sectorName: string;
+  cpcCode: string | null;
+  parentCpcCode: string | null;
+  groupingType: SubSectorGroupingType;
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+}
+
+/**
+ * Assign primary sub-sector to each patent based on inventive CPC codes
+ */
+export async function assignPrimarySubSectors(
+  candidatesFile: string = 'streaming-candidates-2026-01-25.json',
+  options: {
+    dryRun?: boolean;
+    progressCallback?: (current: number, total: number) => void;
+  } = {}
+): Promise<AssignmentResult> {
+  const { dryRun = false, progressCallback } = options;
+
+  // Load all sub-sectors with their sector info
+  const subSectors = await prisma.subSector.findMany({
+    include: {
+      sector: {
+        select: { name: true }
+      }
+    }
+  });
+
+  console.log(`[SubSector Assignment] Loaded ${subSectors.length} sub-sectors`);
+
+  // Build lookup structures
+  const cpcToSubSectors = new Map<string, SubSectorLookup[]>();
+  const dateRangeSubSectors: SubSectorLookup[] = [];
+
+  for (const ss of subSectors) {
+    const lookup: SubSectorLookup = {
+      id: ss.id,
+      name: ss.name,
+      sectorName: ss.sector.name,
+      cpcCode: ss.cpcCode,
+      parentCpcCode: ss.parentCpcCode,
+      groupingType: ss.groupingType,
+      dateRangeStart: ss.dateRangeStart,
+      dateRangeEnd: ss.dateRangeEnd,
+    };
+
+    if (ss.groupingType === SubSectorGroupingType.DATE_RANGE) {
+      // Date-range sub-sectors need special handling
+      dateRangeSubSectors.push(lookup);
+    } else if (ss.cpcCode) {
+      // CPC-based sub-sectors: index by CPC code
+      if (!cpcToSubSectors.has(ss.cpcCode)) {
+        cpcToSubSectors.set(ss.cpcCode, []);
+      }
+      cpcToSubSectors.get(ss.cpcCode)!.push(lookup);
+    }
+  }
+
+  console.log(`[SubSector Assignment] CPC-based sub-sectors: ${cpcToSubSectors.size}`);
+  console.log(`[SubSector Assignment] Date-range sub-sectors: ${dateRangeSubSectors.length}`);
+
+  // Load candidates
+  const candidatesPath = path.join(process.cwd(), 'output', candidatesFile);
+  const data = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
+  const candidates = data.candidates || [];
+
+  const result: AssignmentResult = {
+    processed: 0,
+    assigned: 0,
+    noMatch: 0,
+    byMatchType: { inventive: 0, primary: 0, fallback: 0, none: 0 },
+    byConfidence: { high: 0, medium: 0, low: 0 },
+  };
+
+  for (let i = 0; i < candidates.length; i++) {
+    const patent = candidates[i];
+    const assignment = findBestSubSector(patent, cpcToSubSectors, dateRangeSubSectors);
+
+    // Store assignment on patent
+    patent.primary_sub_sector_id = assignment.subSectorId;
+    patent.primary_sub_sector_name = assignment.subSectorName;
+    patent.sub_sector_match_type = assignment.matchType;
+    patent.sub_sector_confidence = assignment.confidence;
+
+    // Update stats
+    result.processed++;
+    if (assignment.subSectorId) {
+      result.assigned++;
+    } else {
+      result.noMatch++;
+    }
+    result.byMatchType[assignment.matchType]++;
+    result.byConfidence[assignment.confidence]++;
+
+    if (progressCallback && (i + 1) % 5000 === 0) {
+      progressCallback(i + 1, candidates.length);
+    }
+  }
+
+  // Save if not dry run
+  if (!dryRun) {
+    data.lastSubSectorAssignment = {
+      date: new Date().toISOString(),
+      ...result,
+    };
+    fs.writeFileSync(candidatesPath, JSON.stringify(data, null, 2));
+    console.log(`[SubSector Assignment] Saved ${result.assigned} assignments`);
+  }
+
+  return result;
+}
+
+/**
+ * Find the best matching sub-sector for a patent
+ */
+function findBestSubSector(
+  patent: any,
+  cpcToSubSectors: Map<string, SubSectorLookup[]>,
+  dateRangeSubSectors: SubSectorLookup[]
+): SubSectorAssignment {
+  const patentId = patent.patent_id;
+  const patentDate = patent.patent_date || '';
+  const patentYear = patentDate.substring(0, 4);
+
+  // Get CPC codes to try, in priority order
+  const inventiveCpcs: string[] = patent.inventive_cpc_codes || [];
+  const primaryCpc: string | null = patent.primary_cpc || null;
+  const allCpcs: string[] = patent.cpc_codes || [];
+
+  // Try inventive CPCs first
+  for (const cpc of inventiveCpcs) {
+    const match = findSubSectorByCpc(cpc, cpcToSubSectors, dateRangeSubSectors, patentYear);
+    if (match) {
+      return {
+        patentId,
+        subSectorId: match.id,
+        subSectorName: match.name,
+        sectorName: match.sectorName,
+        matchedCpc: cpc,
+        matchType: 'inventive',
+        confidence: 'high',
+      };
+    }
+  }
+
+  // Try primary CPC
+  if (primaryCpc && !inventiveCpcs.includes(primaryCpc)) {
+    const match = findSubSectorByCpc(primaryCpc, cpcToSubSectors, dateRangeSubSectors, patentYear);
+    if (match) {
+      return {
+        patentId,
+        subSectorId: match.id,
+        subSectorName: match.name,
+        sectorName: match.sectorName,
+        matchedCpc: primaryCpc,
+        matchType: 'primary',
+        confidence: patent.primary_cpc_designation === 'I' ? 'high' : 'medium',
+      };
+    }
+  }
+
+  // Fallback to any CPC code
+  for (const cpc of allCpcs) {
+    if (inventiveCpcs.includes(cpc) || cpc === primaryCpc) continue;
+    const match = findSubSectorByCpc(cpc, cpcToSubSectors, dateRangeSubSectors, patentYear);
+    if (match) {
+      return {
+        patentId,
+        subSectorId: match.id,
+        subSectorName: match.name,
+        sectorName: match.sectorName,
+        matchedCpc: cpc,
+        matchType: 'fallback',
+        confidence: 'low',
+      };
+    }
+  }
+
+  // No match found
+  return {
+    patentId,
+    subSectorId: null,
+    subSectorName: null,
+    sectorName: null,
+    matchedCpc: null,
+    matchType: 'none',
+    confidence: 'low',
+  };
+}
+
+/**
+ * Find a sub-sector matching a CPC code
+ * Tries exact match first, then progressively shorter prefixes
+ */
+function findSubSectorByCpc(
+  cpc: string,
+  cpcToSubSectors: Map<string, SubSectorLookup[]>,
+  dateRangeSubSectors: SubSectorLookup[],
+  patentYear: string
+): SubSectorLookup | null {
+  // Try exact match first
+  if (cpcToSubSectors.has(cpc)) {
+    return cpcToSubSectors.get(cpc)![0];
+  }
+
+  // Try progressively shorter prefixes
+  // CPC format: G06F11/1453 -> G06F11/145 -> G06F11/14 -> G06F11/1 -> G06F11/ -> G06F11
+  let prefix = cpc;
+  while (prefix.length > 4) {
+    // At least section + class
+    prefix = prefix.slice(0, -1);
+    if (cpcToSubSectors.has(prefix)) {
+      return cpcToSubSectors.get(prefix)![0];
+    }
+  }
+
+  // Check date-range sub-sectors (these have parentCpcCode instead of cpcCode)
+  for (const ss of dateRangeSubSectors) {
+    if (ss.parentCpcCode && cpc.startsWith(ss.parentCpcCode)) {
+      // Check if patent date falls in range
+      if (ss.dateRangeStart && ss.dateRangeEnd) {
+        if (patentYear >= ss.dateRangeStart && patentYear <= ss.dateRangeEnd) {
+          return ss;
+        }
+      }
+    }
+  }
+
+  return null;
+}

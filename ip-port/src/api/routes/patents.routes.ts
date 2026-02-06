@@ -12,6 +12,7 @@ import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normali
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
 import { loadAllClassifications, scoreAllPatents, getDefaultProfileId } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
+import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
 
 const prisma = new PrismaClient();
 
@@ -1633,6 +1634,147 @@ router.get('/:id/backward-citations', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting backward citations:', error);
     res.status(500).json({ error: 'Failed to get backward citations' });
+  }
+});
+
+/**
+ * POST /api/patents/enrich-cpc-designation
+ * Enrich portfolio patents with CPC designation data (I = Inventive, A = Additional)
+ * Uses USPTO bulk XML files to extract designation information
+ * Body: { candidatesFile?: string, dryRun?: boolean }
+ */
+router.post('/enrich-cpc-designation', async (req: Request, res: Response) => {
+  try {
+    const { candidatesFile, dryRun = false } = req.body;
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR;
+
+    if (!xmlDir) {
+      return res.status(400).json({
+        error: 'USPTO_PATENT_GRANT_XML_DIR not set in environment',
+        hint: 'Set this in .env to the directory containing USPTO patent XML files'
+      });
+    }
+
+    console.log(`[CPC Enrichment] Starting enrichment (dryRun: ${dryRun})`);
+    console.log(`[CPC Enrichment] XML directory: ${xmlDir}`);
+
+    const result = await enrichCandidatesWithCpcDesignation(
+      candidatesFile,
+      xmlDir,
+      {
+        dryRun,
+        progressCallback: (current, total) => {
+          if (current % 5000 === 0) {
+            console.log(`[CPC Enrichment] Progress: ${current}/${total} (${Math.round(current/total*100)}%)`);
+          }
+        }
+      }
+    );
+
+    // Clear patents cache so next load picks up enriched data
+    if (!dryRun) {
+      clearPatentsCache();
+    }
+
+    res.json({
+      success: true,
+      dryRun,
+      result,
+      coverage: {
+        foundPct: Math.round(result.found / result.processed * 1000) / 10,
+        inventivePct: Math.round(result.patentsWithInventive / result.found * 1000) / 10
+      }
+    });
+  } catch (error) {
+    console.error('[CPC Enrichment] Error:', error);
+    res.status(500).json({ error: 'Failed to enrich CPC designations', message: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/patents/:id/cpc-designation
+ * Get CPC designation data for a single patent from USPTO XML
+ */
+router.get('/:id/cpc-designation', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR;
+
+    if (!xmlDir) {
+      return res.status(400).json({
+        error: 'USPTO_PATENT_GRANT_XML_DIR not set',
+        fallback: 'CPC designation data requires USPTO bulk XML files'
+      });
+    }
+
+    const xmlPath = findXmlPath(id, xmlDir);
+    if (!xmlPath) {
+      return res.status(404).json({
+        patent_id: id,
+        found: false,
+        message: 'XML file not found for this patent',
+        searchedPaths: [
+          path.join(xmlDir, `US${id}.xml`),
+          path.join(xmlDir, `US${id.padStart(8, '0')}.xml`)
+        ]
+      });
+    }
+
+    const cpcData = parsePatentXml(xmlPath);
+    res.json({
+      patent_id: id,
+      found: true,
+      xmlPath,
+      ...cpcData
+    });
+  } catch (error) {
+    console.error('Error getting CPC designation:', error);
+    res.status(500).json({ error: 'Failed to get CPC designation' });
+  }
+});
+
+/**
+ * POST /api/patents/analyze-cpc-cooccurrence
+ * Analyze CPC co-occurrence patterns in the portfolio
+ * Used for grouping related CPCs under dominant inventive codes
+ * Body: { minCooccurrence?: number }
+ */
+router.post('/analyze-cpc-cooccurrence', async (_req: Request, res: Response) => {
+  try {
+    const { minCooccurrence = 10 } = _req.body;
+    const patents = loadPatents();
+
+    console.log(`[CPC Co-occurrence] Analyzing ${patents.length} patents (minCooccurrence: ${minCooccurrence})`);
+
+    const cooccurrenceMap = analyzeCpcCooccurrence(patents, minCooccurrence);
+
+    // Convert Map to serializable object and sort by patent count
+    const results = Array.from(cooccurrenceMap.entries())
+      .map(([cpc, stats]) => ({
+        cpc,
+        totalPatents: stats.totalPatents,
+        cooccursWith: Array.from(stats.cooccurs.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 20) // Top 20 co-occurring CPCs
+          .map(([cooccurCpc, count]) => ({
+            cpc: cooccurCpc,
+            count,
+            cooccurrencePct: Math.round(count / stats.totalPatents * 1000) / 10
+          }))
+      }))
+      .filter(r => r.cooccursWith.length > 0)
+      .sort((a, b) => b.totalPatents - a.totalPatents);
+
+    res.json({
+      analyzedPatents: patents.length,
+      minCooccurrence,
+      uniqueCpcs: cooccurrenceMap.size,
+      cpcsWithCooccurrence: results.length,
+      results: results.slice(0, 100) // Top 100 CPCs by patent count
+    });
+  } catch (error) {
+    console.error('Error analyzing CPC co-occurrence:', error);
+    res.status(500).json({ error: 'Failed to analyze CPC co-occurrence' });
   }
 });
 

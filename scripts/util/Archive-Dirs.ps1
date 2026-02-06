@@ -4,8 +4,9 @@ Copies a list of source directories to a destination root using Robocopy.
 - Continues on errors (per-item)
 - Produces logs and a summary at the end
 
-Usage:
+Usage examples:
   powershell.exe -ExecutionPolicy Bypass -File .\Archive-Dirs.ps1 -ListFile "C:\lists\dirs.txt" -DestRoot "E:\Archive"
+  powershell.exe -ExecutionPolicy Bypass -File .\Archive-Dirs.ps1 -ListFile "C:\lists\dirs.txt" -DestRoot "E:\Archive" -IncludeDevice:$false
 
 List file format:
   One full directory path per line. Blank lines and lines starting with # are ignored.
@@ -16,30 +17,44 @@ param(
   [string]$ListFile,
 
   [Parameter(Mandatory=$true)]
-  [string]$DestRoot
+  [string]$DestRoot,
+
+  # Default ON: include device/UNC prefix in destination mapping (e.g., DestRoot\I\Folder)
+  [switch]$IncludeDevice = $true,
+
+  # Default ON: do NOT overwrite existing files (good for resume/restart)
+  [switch]$SkipExisting = $true
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Normalize-Path([string]$p) {
-  # Expand environment variables and resolve relative paths
   $expanded = [Environment]::ExpandEnvironmentVariables($p)
   return (Resolve-Path -LiteralPath $expanded).Path
 }
 
-function Get-RelativePathForDest([string]$src) {
-  # Recreate each source under DestRoot in a predictable way:
-  # C:\Foo\Bar   ->  DestRoot\C\Foo\Bar
-  # \\Server\Share\X -> DestRoot\UNC\Server\Share\X
-  if ($src.StartsWith("\\\")) { } # no-op, just to avoid accidental escaping in editors
-  if ($src.StartsWith("\\")) {
-    $trim = $src.TrimStart("\")
-    return Join-Path "UNC" $trim
+function Get-RelativePathForDest([string]$srcResolved, [bool]$includeDevice) {
+  if (-not $includeDevice) {
+    # Flatten: only leaf folder under DestRoot
+    # I:\GLP Documents -> DestRoot\GLP Documents
+    # \\NAS\Share\GLP Documents -> DestRoot\GLP Documents
+    return (Split-Path -Path $srcResolved -Leaf)
+  }
+
+  # Include device (one level) to reduce collisions:
+  # I:\GLP Documents -> DestRoot\I\GLP Documents
+  # \\NAS\Share\GLP Documents -> DestRoot\UNC\NAS\Share\GLP Documents
+  if ($srcResolved.StartsWith("\\")) {
+    $parts = $srcResolved.TrimStart("\").Split("\")
+    $server = $parts[0]
+    $share  = if ($parts.Length -gt 1) { $parts[1] } else { "Share" }
+    $leaf   = Split-Path -Path $srcResolved -Leaf
+    return (Join-Path (Join-Path (Join-Path "UNC" $server) $share) $leaf)
   } else {
-    $drive = $src.Substring(0,1)  # "C"
-    $rest  = $src.Substring(2).TrimStart("\") # after "C:"
-    return Join-Path $drive $rest
+    $drive = $srcResolved.Substring(0,1)
+    $leaf  = Split-Path -Path $srcResolved -Leaf
+    return (Join-Path $drive $leaf)
   }
 }
 
@@ -77,6 +92,8 @@ $summary = New-Object System.Collections.Generic.List[object]
 
 Write-Host "DestRoot: $DestRoot"
 Write-Host "ListFile: $ListFile"
+Write-Host "IncludeDevice: $IncludeDevice"
+Write-Host "SkipExisting:  $SkipExisting"
 Write-Host "LogDir:   $sessionLogDir"
 Write-Host "Items:    $($srcDirs.Count)"
 Write-Host "------------------------------------------------------------"
@@ -85,12 +102,11 @@ Write-Host "------------------------------------------------------------"
 # /E        copy subdirs incl empty
 # /COPY:DAT copy data, attributes, timestamps (no ACLs) (change to /COPY:DATS if you want security too)
 # /DCOPY:DAT copy dir timestamps too
-# /R:1 /W:1 minimal retry (avoid long hangs on bad files; you can raise if you want)
+# /R:1 /W:1 minimal retry (avoid long hangs on bad files; raise if you prefer)
 # /Z        restartable mode (better resilience on flaky connections)
 # /TEE      show output AND log
-# /NP       no progress (cleaner logs)
-# /NFL /NDL optional: reduce file/dir list spam (commented out by default)
-# /XJ       exclude junction points (prevents some recursion surprises)
+# /NP       no progress (cleaner)
+# /XJ       exclude junction points (prevents recursion surprises)
 $roboCommon = @(
   "/E",
   "/COPY:DAT",
@@ -101,8 +117,13 @@ $roboCommon = @(
   "/TEE",
   "/NP",
   "/XJ"
-  #,"/NFL","/NDL"
 )
+
+# Default ON: "resume / don't overwrite anything already there"
+# /XO /XN /XC = exclude older, newer, and changed files (i.e., only copy truly missing files)
+if ($SkipExisting) {
+  $roboCommon += @("/XO","/XN","/XC")
+}
 
 foreach ($srcRaw in $srcDirs) {
   $start = Get-Date
@@ -121,8 +142,8 @@ foreach ($srcRaw in $srcDirs) {
 
     $srcResolved = Normalize-Path $src
 
-    # Build destination path (recreate source structure under dest root)
-    $rel = Get-RelativePathForDest $srcResolved
+    # Build destination path
+    $rel = Get-RelativePathForDest $srcResolved ([bool]$IncludeDevice)
     $dest = Join-Path $DestRoot $rel
 
     # Ensure destination exists
@@ -136,7 +157,7 @@ foreach ($srcRaw in $srcDirs) {
     Write-Host "  -> $dest"
     Write-Host "LOG:  $logFile"
 
-    # Robocopy copies CONTENTS of source dir into dest dir when we use src and dest.
+    # Robocopy copies CONTENTS of source dir into dest dir
     $cmdArgs = @($srcResolved, $dest) + $roboCommon + @("/LOG+:$logFile")
 
     & robocopy @cmdArgs
@@ -159,14 +180,14 @@ foreach ($srcRaw in $srcDirs) {
     $durationSec = [Math]::Round(($end - $start).TotalSeconds, 1)
 
     $summary.Add([pscustomobject]@{
-      Source       = $srcRaw
+      Source         = $srcRaw
       SourceResolved = $srcResolved
-      Dest         = $dest
-      Status       = $status
-      RoboExitCode = $exitCode
-      Seconds      = $durationSec
-      LogFile      = $logFile
-      Error        = $err
+      Dest           = $dest
+      Status         = $status
+      RoboExitCode   = $exitCode
+      Seconds        = $durationSec
+      LogFile        = $logFile
+      Error          = $err
     }) | Out-Null
   }
 }
@@ -182,7 +203,6 @@ Write-Host ""
 Write-Host "==================== SUMMARY ===================="
 $ok     = @($summary | Where-Object { $_.Status -eq "OK" }).Count
 $failed = @($summary | Where-Object { $_.Status -ne "OK" }).Count
-
 Write-Host "OK:     $ok"
 Write-Host "Issues: $failed"
 Write-Host "Summary CSV:  $summaryCsv"
@@ -191,9 +211,7 @@ Write-Host "Summary JSON: $summaryJson"
 if ($failed -gt 0) {
   Write-Host ""
   Write-Host "Items with issues:" -ForegroundColor Yellow
-  $summary | Where-Object { $_.Status -ne "OK" } | Format-Table -AutoSize
+  @($summary | Where-Object { $_.Status -ne "OK" }) | Format-Table -AutoSize
 }
 
 Write-Host "Done."
-
-

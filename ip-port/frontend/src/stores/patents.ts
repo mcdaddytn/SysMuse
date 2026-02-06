@@ -45,6 +45,10 @@ export const usePatentsStore = defineStore('patents', () => {
     { name: 'affiliate', label: 'Affiliate', field: 'affiliate', sortable: true, align: 'left', visible: true, group: 'entity' },
     { name: 'super_sector', label: 'Super-Sector', field: 'super_sector', sortable: true, align: 'left', visible: true, group: 'entity' },
     { name: 'primary_sector', label: 'Primary Sector', field: 'primary_sector', sortable: true, align: 'left', visible: false, group: 'entity' },
+    { name: 'primary_sub_sector_name', label: 'Sub-Sector', field: 'primary_sub_sector_name', sortable: true, align: 'left', visible: false, group: 'entity',
+      description: 'CPC-based sub-sector for LLM scoring (from inventive designation)' },
+    { name: 'sub_sector_match_type', label: 'Match Type', field: 'sub_sector_match_type', sortable: true, align: 'center', visible: false, group: 'entity',
+      description: 'How sub-sector was assigned: inventive (high), primary (medium), fallback (low)' },
     { name: 'assignee', label: 'Assignee (Raw)', field: 'assignee', sortable: true, align: 'left', visible: false, group: 'entity',
       description: 'Original assignee name from USPTO' },
 

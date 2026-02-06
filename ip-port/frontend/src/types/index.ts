@@ -15,6 +15,18 @@ export interface Patent {
   primary_sector: string;
   cpc_codes: string[];
 
+  // Sub-sector assignment (from CPC inventive designation)
+  primary_sub_sector_id?: string;
+  primary_sub_sector_name?: string;
+  sub_sector_match_type?: 'inventive' | 'primary' | 'fallback' | 'none';
+  sub_sector_confidence?: 'high' | 'medium' | 'low';
+
+  // CPC designation data
+  primary_cpc?: string;
+  primary_cpc_designation?: 'I' | 'A';
+  inventive_cpc_codes?: string[];
+  additional_cpc_codes?: string[];
+
   // Citation classification (from P-0a pipeline)
   competitor_citations: number;
   affiliate_citations: number;

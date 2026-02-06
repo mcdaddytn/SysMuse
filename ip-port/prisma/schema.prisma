@@ -917,3 +917,109 @@ model PatentFamilyMember {
   @@index([explorationId])
   @@index([patentId])
 }
+
+// =============================================================================
+// SCORING TEMPLATES
+// Hierarchical templates for LLM-based patent scoring within sub-sectors.
+// Templates inherit from super-sector → sector → sub-sector levels.
+// =============================================================================
+
+model ScoringTemplate {
+  id              String   @id @default(cuid())
+
+  // Hierarchy binding (one of these set, or null for portfolio-wide default)
+  superSectorId   String?  @map("super_sector_id")
+  sectorId        String?  @map("sector_id")
+  subSectorId     String?  @map("sub_sector_id")
+
+  // Template identity
+  name            String
+  description     String?
+
+  // Questions that produce metrics
+  // Array of ScoringQuestion objects:
+  // {
+  //   fieldName: string,           // e.g., "technical_complexity"
+  //   displayName: string,         // e.g., "Technical Complexity"
+  //   question: string,            // The prompt question
+  //   answerType: "numeric" | "categorical" | "text",
+  //   scale?: { min: number, max: number },  // For numeric
+  //   options?: string[],          // For categorical
+  //   weight: number,              // Default weight in composite score (0-1)
+  //   requiresReasoning: boolean,
+  //   reasoningPrompt?: string
+  // }
+  questions       Json
+
+  // Inheritance: template ID to inherit questions from
+  // Inherited questions can be overridden by matching fieldName
+  inheritsFromId  String?  @map("inherits_from_id")
+  inheritsFrom    ScoringTemplate? @relation("TemplateInheritance", fields: [inheritsFromId], references: [id])
+  inheritedBy     ScoringTemplate[] @relation("TemplateInheritance")
+
+  // Status
+  isActive        Boolean  @default(true) @map("is_active")
+  isDefault       Boolean  @default(false) @map("is_default")  // Default template for this level
+  version         Int      @default(1)
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  scores          PatentSubSectorScore[]
+
+  @@map("scoring_templates")
+  @@index([superSectorId])
+  @@index([sectorId])
+  @@index([subSectorId])
+  @@index([isDefault])
+}
+
+// =============================================================================
+// PATENT SUB-SECTOR SCORES
+// Stores LLM-generated scores for patents within their primary sub-sector.
+// Each patent has ONE score record for its primary sub-sector assignment.
+// =============================================================================
+
+model PatentSubSectorScore {
+  id              String   @id @default(cuid())
+
+  patentId        String   @map("patent_id")
+  subSectorId     String   @map("sub_sector_id")
+
+  // Individual metric scores from LLM
+  // Map of fieldName → { score: number, reasoning: string, confidence?: number }
+  metrics         Json
+
+  // Calculated composite score (weighted sum of metrics)
+  compositeScore  Float    @map("composite_score")
+
+  // Rank within sub-sector (1 = highest)
+  rankInSubSector Int?     @map("rank_in_sub_sector")
+
+  // Normalized score for cross-sub-sector comparison (0-100 percentile)
+  normalizedScore Float?   @map("normalized_score")
+
+  // Sector-level rank (after rollup)
+  rankInSector    Int?     @map("rank_in_sector")
+
+  // Template used for scoring
+  templateId      String   @map("template_id")
+  template        ScoringTemplate @relation(fields: [templateId], references: [id])
+  templateVersion Int      @map("template_version")
+
+  // LLM execution metadata
+  llmModel        String?  @map("llm_model")
+  tokensUsed      Int?     @map("tokens_used")
+
+  executedAt      DateTime @map("executed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([patentId, subSectorId])
+  @@map("patent_sub_sector_scores")
+  @@index([subSectorId])
+  @@index([patentId])
+  @@index([compositeScore])
+  @@index([normalizedScore])
+}

@@ -19,6 +19,15 @@ import {
   reassignAllPatents,
   clearRuleCache,
 } from '../services/sector-assignment-service.js';
+import {
+  generateSubSectors,
+  applySubSectors,
+  getSubSectors,
+  analyzeSubSectorPotential,
+  manualSplitSubSector,
+  updateSubSectorStatus,
+  SubSectorConfig,
+} from '../services/sub-sector-service.js';
 import { clearSectorCache } from './scores.routes.js';
 
 const router = Router();
@@ -279,6 +288,178 @@ router.post('/seed-taxonomy', async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     console.error('[Sectors] Seed taxonomy error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
+// SUB-SECTORS (must be before /:id)
+// =============================================================================
+
+/**
+ * GET /api/sectors/sub-sectors/analyze/:sectorName
+ * Analyze sub-sector potential for a sector (quick summary)
+ */
+router.get('/sub-sectors/analyze/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { candidatesFile } = req.query;
+
+    const analysis = await analyzeSubSectorPotential(
+      sectorName,
+      candidatesFile as string | undefined
+    );
+
+    res.json(analysis);
+  } catch (err: unknown) {
+    console.error('[SubSectors] Analyze error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/sectors/sub-sectors/generate
+ * Generate prospective sub-sectors for a sector
+ * Body: {
+ *   sectorName: string,
+ *   candidatesFile?: string,
+ *   config?: Partial<SubSectorConfig>
+ * }
+ */
+router.post('/sub-sectors/generate', async (req: Request, res: Response) => {
+  try {
+    const { sectorName, candidatesFile, config } = req.body;
+
+    if (!sectorName) {
+      return res.status(400).json({ error: 'sectorName is required' });
+    }
+
+    console.log(`[SubSectors] Generating sub-sectors for ${sectorName}...`);
+    if (config) {
+      console.log('  Config:', JSON.stringify(config));
+    }
+
+    const result = await generateSubSectors(sectorName, candidatesFile, config);
+
+    console.log(`[SubSectors] Generated ${result.stats.totalSubSectors} sub-sectors`);
+    console.log(`  Under threshold: ${result.stats.underThreshold}`);
+    console.log(`  Over threshold: ${result.stats.overThreshold}`);
+    console.log(`  Needs review: ${result.stats.needsReview}`);
+
+    res.json(result);
+  } catch (err: unknown) {
+    console.error('[SubSectors] Generate error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/sectors/sub-sectors/apply
+ * Apply generated sub-sectors to database
+ * Body: {
+ *   result: SubSectorGenerationResult (from generate endpoint),
+ *   replaceExisting?: boolean
+ * }
+ */
+router.post('/sub-sectors/apply', async (req: Request, res: Response) => {
+  try {
+    const { result, replaceExisting } = req.body;
+
+    if (!result || !result.sectorId) {
+      return res.status(400).json({ error: 'result with sectorId is required' });
+    }
+
+    console.log(`[SubSectors] Applying ${result.subSectors?.length || 0} sub-sectors...`);
+
+    const applyResult = await applySubSectors(result, { replaceExisting });
+
+    console.log(`[SubSectors] Applied: created=${applyResult.created}, deleted=${applyResult.deleted}`);
+
+    res.json({
+      message: 'Sub-sectors applied to database',
+      ...applyResult,
+    });
+  } catch (err: unknown) {
+    console.error('[SubSectors] Apply error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * GET /api/sectors/sub-sectors/:sectorName
+ * Get existing sub-sectors for a sector
+ */
+router.get('/sub-sectors/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { status } = req.query;
+
+    const subSectors = await getSubSectors(
+      sectorName,
+      status as any
+    );
+
+    res.json(subSectors);
+  } catch (err: unknown) {
+    console.error('[SubSectors] Get error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/sectors/sub-sectors/:subSectorId/split
+ * Manually split a sub-sector that needs review
+ * Body: {
+ *   splitType: 'date' | 'chunks' | 'custom',
+ *   targetSize?: number,
+ *   chunkCount?: number,
+ *   customGroups?: Array<{ name: string; patentIds: string[] }>
+ * }
+ */
+router.post('/sub-sectors/:subSectorId/split', async (req: Request, res: Response) => {
+  try {
+    const { subSectorId } = req.params;
+    const { splitType, targetSize, chunkCount, customGroups } = req.body;
+
+    if (!splitType || !['date', 'chunks', 'custom'].includes(splitType)) {
+      return res.status(400).json({ error: 'splitType must be one of: date, chunks, custom' });
+    }
+
+    const newSubSectors = await manualSplitSubSector(subSectorId, splitType, {
+      targetSize,
+      chunkCount,
+      customGroups,
+    });
+
+    res.json({
+      message: `Split into ${newSubSectors.length} sub-sectors`,
+      subSectors: newSubSectors,
+    });
+  } catch (err: unknown) {
+    console.error('[SubSectors] Split error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * PUT /api/sectors/sub-sectors/:subSectorId/status
+ * Update sub-sector status (PROSPECTIVE -> APPLIED, etc.)
+ * Body: { status: 'PROSPECTIVE' | 'APPLIED' | 'ARCHIVED' }
+ */
+router.put('/sub-sectors/:subSectorId/status', async (req: Request, res: Response) => {
+  try {
+    const { subSectorId } = req.params;
+    const { status } = req.body;
+
+    if (!status || !['PROSPECTIVE', 'APPLIED', 'ARCHIVED'].includes(status)) {
+      return res.status(400).json({ error: 'status must be one of: PROSPECTIVE, APPLIED, ARCHIVED' });
+    }
+
+    const updated = await updateSubSectorStatus(subSectorId, status);
+
+    res.json(updated);
+  } catch (err: unknown) {
+    console.error('[SubSectors] Update status error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

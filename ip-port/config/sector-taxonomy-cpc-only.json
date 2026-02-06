@@ -1,6 +1,6 @@
 {
-  "version": "1.1",
-  "description": "Clean CPC-only sector taxonomy - portfolio-aware with 98%+ coverage",
+  "version": "1.2",
+  "description": "Clean CPC-only sector taxonomy - portfolio-aware with 99.6% coverage",
   "created": "2026-02-06",
   "notes": "Default taxonomy using only CPC classification codes. Covers Broadcom portfolio + extended patents.",
 
@@ -119,7 +119,8 @@
         "pcb-packaging",
         "magnetics-inductors",
         "lithography",
-        "audio"
+        "audio",
+        "semiconductor-manufacturing"
       ]
     }
   },
@@ -175,9 +176,9 @@
     },
     "network-management": {
       "displayName": "Network Management",
-      "description": "Network monitoring, configuration",
+      "description": "Network monitoring, configuration, addressing",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["H04L41/", "H04L43/"]
+      "cpcPrefixes": ["H04L41/", "H04L43/", "H04L61/"]
     },
     "network-protocols": {
       "displayName": "Network Protocols",
@@ -253,15 +254,15 @@
     },
     "radar-sensing": {
       "displayName": "Radar & Sensing",
-      "description": "Radio direction-finding, radar, sonar, lidar",
+      "description": "Radio direction-finding, radar, sonar, lidar, navigation",
       "damagesTier": "High",
-      "cpcPrefixes": ["G01S/"]
+      "cpcPrefixes": ["G01S/", "G01C/"]
     },
     "rf-acoustic": {
       "displayName": "RF Acoustic Resonators",
-      "description": "BAW/FBAR filters for RF",
+      "description": "BAW/FBAR filters for RF, waveguides",
       "damagesTier": "Very High",
-      "cpcPrefixes": ["H03H9/", "H03H/"]
+      "cpcPrefixes": ["H03H9/", "H03H/", "H01P/"]
     },
     "computing-os-security": {
       "displayName": "Computing OS Security",
@@ -277,27 +278,27 @@
     },
     "computing-auth-boot": {
       "displayName": "Computing Auth & Secure Boot",
-      "description": "Secure boot, user auth, process auth",
+      "description": "Secure boot, user auth, process auth, hardware security",
       "damagesTier": "High",
-      "cpcPrefixes": ["G06F21/1", "G06F21/3", "G06F21/4"]
+      "cpcPrefixes": ["G06F21/1", "G06F21/3", "G06F21/4", "G06F21/7", "G06F21/8"]
     },
     "computing-systems": {
       "displayName": "Computing Systems",
-      "description": "Power, interconnect, memory management",
+      "description": "Power, interconnect, memory management, program control",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G06F1/", "G06F12/", "G06F13/"]
+      "cpcPrefixes": ["G06F1/", "G06F12/", "G06F13/", "G05B/", "G08B/"]
     },
     "computing-runtime": {
       "displayName": "Computing Runtime",
-      "description": "VMs, scheduling, error detection",
+      "description": "VMs, scheduling, error detection, software development",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G06F9/", "G06F11/"]
+      "cpcPrefixes": ["G06F9/", "G06F11/", "G06F7/", "G06F8/", "G06F5/", "G06F15/"]
     },
     "computing-ui": {
       "displayName": "Computing UI",
-      "description": "I/O, displays, interaction",
+      "description": "I/O, displays, interaction, gaming",
       "damagesTier": "Low",
-      "cpcPrefixes": ["G06F3/"]
+      "cpcPrefixes": ["G06F3/", "A63F/"]
     },
     "data-retrieval": {
       "displayName": "Data Retrieval",
@@ -313,9 +314,9 @@
     },
     "power-management": {
       "displayName": "Power Management",
-      "description": "Power supply, charging, distribution circuits",
+      "description": "Power supply, charging, distribution, DC-DC conversion, protection",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["H02J/"]
+      "cpcPrefixes": ["H02J/", "H02M/", "G05F/", "H02H/"]
     },
     "video-client-processing": {
       "displayName": "Video Client Processing",
@@ -343,9 +344,9 @@
     },
     "video-broadcast": {
       "displayName": "Video Broadcast",
-      "description": "TV systems, signal processing",
+      "description": "TV systems, signal processing, radio broadcast",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["H04N5/", "H04N7/", "H04N9/"]
+      "cpcPrefixes": ["H04N5/", "H04N7/", "H04N9/", "H04H/"]
     },
     "video-storage": {
       "displayName": "Video Storage",
@@ -355,9 +356,9 @@
     },
     "display-control": {
       "displayName": "Display Control",
-      "description": "Display drivers, panel control, LED drivers",
+      "description": "Display drivers, panel control, LED drivers, lighting systems",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G09G/"]
+      "cpcPrefixes": ["G09G/", "H05B/", "F21/"]
     },
     "image-processing": {
       "displayName": "Image Processing",
@@ -373,27 +374,27 @@
     },
     "cameras-sensors": {
       "displayName": "Cameras & Sensors",
-      "description": "Image capture hardware",
+      "description": "Image capture hardware, scanning, document imaging",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["H04N23/", "H04N25/"]
+      "cpcPrefixes": ["H04N23/", "H04N25/", "H04N1/"]
     },
     "optics": {
       "displayName": "Optics & Photonics",
-      "description": "Optical systems, fiber, lasers",
+      "description": "Optical systems, fiber, lasers, photometry",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G02/", "H04J/", "H01S/"]
+      "cpcPrefixes": ["G02/", "H04J/", "H01S/", "G01J/"]
     },
     "recognition-biometrics": {
       "displayName": "Recognition & Biometrics",
-      "description": "Pattern recognition, barcodes, biometrics, OCR",
+      "description": "Pattern recognition, barcodes, biometrics, OCR, computer vision",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G06K/"]
+      "cpcPrefixes": ["G06K/", "G06V/"]
     },
     "ai-ml": {
       "displayName": "AI/Machine Learning",
-      "description": "Neural networks, ML algorithms",
+      "description": "Neural networks, ML algorithms, NLP",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G06N/"]
+      "cpcPrefixes": ["G06N/", "G06F40/"]
     },
     "semiconductor": {
       "displayName": "Semiconductor (Legacy)",
@@ -415,21 +416,21 @@
     },
     "test-measurement": {
       "displayName": "Test & Measurement",
-      "description": "Test equipment, probes, measuring circuits",
+      "description": "Test equipment, probes, measuring circuits, transducers, sensors",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["G01R/"]
+      "cpcPrefixes": ["G01R/", "G01D/", "G01B/", "G01N/", "G01P/", "G01K/", "G01L/", "G01F/", "G01H/"]
     },
     "pcb-packaging": {
       "displayName": "PCB & Packaging",
-      "description": "Printed circuits, casings, shielding",
+      "description": "Printed circuits, casings, shielding, connectors",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["H05K/"]
+      "cpcPrefixes": ["H05K/", "H01R/"]
     },
     "magnetics-inductors": {
       "displayName": "Magnetics & Inductors",
-      "description": "Magnets, inductors, transformers",
+      "description": "Magnets, inductors, transformers, capacitors",
       "damagesTier": "Medium",
-      "cpcPrefixes": ["H01F/"]
+      "cpcPrefixes": ["H01F/", "H01G/"]
     },
     "lithography": {
       "displayName": "Lithography",
@@ -445,9 +446,15 @@
     },
     "analog-circuits": {
       "displayName": "Analog Circuits",
-      "description": "Amplifiers, oscillators, PLLs, converters",
+      "description": "Amplifiers, oscillators, PLLs, converters, modulation",
       "damagesTier": "High",
-      "cpcPrefixes": ["H03F/", "H03B/", "H03D/", "H03G/", "H03J/", "H03K/", "H03L/", "H03M/"]
+      "cpcPrefixes": ["H03F/", "H03B/", "H03C/", "H03D/", "H03G/", "H03J/", "H03K/", "H03L/", "H03M/"]
+    },
+    "semiconductor-manufacturing": {
+      "displayName": "Semiconductor Manufacturing",
+      "description": "Wafer processing, CMP, lapping, polishing",
+      "damagesTier": "High",
+      "cpcPrefixes": ["B24B/", "C23C/", "H01J37/"]
     }
   },
 
@@ -455,8 +462,8 @@
 
   "statistics": {
     "superSectorCount": 8,
-    "sectorCount": 53,
-    "estimatedPortfolioCoverage": "98%+",
+    "sectorCount": 54,
+    "estimatedPortfolioCoverage": "99.6%",
     "cpcClassesCovered": [
       "G01R - Measuring/testing",
       "G01S - Radar/sensing",

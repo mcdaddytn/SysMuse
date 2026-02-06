@@ -180,8 +180,9 @@ $summary | ConvertTo-Json -Depth 6 | Out-File -LiteralPath $summaryJson -Encodin
 
 Write-Host ""
 Write-Host "==================== SUMMARY ===================="
-$ok = ($summary | Where-Object { $_.Status -eq "OK" }).Count
-$failed = ($summary | Where-Object { $_.Status -ne "OK" }).Count
+$ok     = @($summary | Where-Object { $_.Status -eq "OK" }).Count
+$failed = @($summary | Where-Object { $_.Status -ne "OK" }).Count
+
 Write-Host "OK:     $ok"
 Write-Host "Issues: $failed"
 Write-Host "Summary CSV:  $summaryCsv"

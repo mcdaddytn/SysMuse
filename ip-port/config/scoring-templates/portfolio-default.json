@@ -1,0 +1,71 @@
+{
+  "$schema": "./scoring-template.schema.json",
+  "id": "portfolio-default",
+  "name": "Portfolio Default",
+  "description": "Default scoring template for all patents. Provides base questions that can be inherited and overridden by sector-specific templates.",
+  "level": "portfolio",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "technical_novelty",
+      "displayName": "Technical Novelty",
+      "question": "Rate the technical novelty of this patent's core innovation. Consider: How different is this from prior art? Does it represent a significant departure from existing approaches?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this technically novel or incremental."
+    },
+    {
+      "fieldName": "claim_breadth",
+      "displayName": "Claim Breadth",
+      "question": "Rate the breadth of the patent claims. Consider: How broadly do the claims cover the invention? Could they capture variations and alternative implementations?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the scope of the claims."
+    },
+    {
+      "fieldName": "design_around_difficulty",
+      "displayName": "Design-Around Difficulty",
+      "question": "How difficult would it be for a competitor to design around this patent while achieving similar functionality?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this hard or easy to design around."
+    },
+    {
+      "fieldName": "market_relevance",
+      "displayName": "Market Relevance",
+      "question": "Rate the relevance of this technology to current market needs and industry trends.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the market context and relevance."
+    },
+    {
+      "fieldName": "implementation_clarity",
+      "displayName": "Implementation Clarity",
+      "question": "How clearly does the patent describe the implementation? Could infringement be easily detected in a product?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess detectability and clarity of implementation."
+    },
+    {
+      "fieldName": "standards_relevance",
+      "displayName": "Standards Relevance",
+      "question": "Is this patent related to any industry standards (IEEE, 3GPP, IETF, etc.)? Rate its standards essentiality.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any standards relationships."
+    }
+  ]
+}

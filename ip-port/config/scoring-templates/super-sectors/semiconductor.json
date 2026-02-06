@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "semiconductor",
+  "name": "Semiconductor Scoring",
+  "description": "Scoring template for Semiconductor super-sector patents. Includes manufacturing relevance and chip integration metrics.",
+  "level": "super_sector",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "manufacturing_relevance",
+      "displayName": "Manufacturing Relevance",
+      "question": "How relevant is this to semiconductor manufacturing processes? Consider lithography, etching, deposition, packaging, and process nodes.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify manufacturing processes and node relevance."
+    },
+    {
+      "fieldName": "chip_integration",
+      "displayName": "Chip Integration",
+      "question": "How easily can this be integrated into chip designs? Consider area, power, design complexity, and IP licensing potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe integration considerations and constraints."
+    },
+    {
+      "fieldName": "process_node_applicability",
+      "displayName": "Process Node Applicability",
+      "question": "How broadly applicable is this patent across different process nodes and technology generations?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify applicable process nodes and technology generations."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "interface",
+  "name": "Interface Scoring",
+  "description": "Scoring template for Interface super-sector patents. Includes interface standard and interoperability metrics.",
+  "level": "super_sector",
+  "superSectorName": "INTERFACE",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "interface_standard",
+      "displayName": "Interface Standard",
+      "question": "How relevant is this to interface standards (PCIe, USB4, HDMI, DisplayPort, CXL, NVMe, etc.)? Consider standard essentiality potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant interface standards and degree of alignment."
+    },
+    {
+      "fieldName": "interoperability",
+      "displayName": "Interoperability",
+      "question": "Rate the interoperability benefits this technology provides. Consider cross-platform compatibility, backward compatibility, and ecosystem adoption.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe interoperability benefits and compatibility considerations."
+    },
+    {
+      "fieldName": "signal_integrity",
+      "displayName": "Signal Integrity",
+      "question": "How does this patent improve signal integrity, error correction, or data transmission reliability?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe signal integrity improvements and techniques."
+    }
+  ]
+}

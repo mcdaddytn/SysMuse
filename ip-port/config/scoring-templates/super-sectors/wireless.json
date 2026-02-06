@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wireless",
+  "name": "Wireless Scoring",
+  "description": "Scoring template for Wireless super-sector patents. Includes spectrum efficiency and wireless standard alignment metrics.",
+  "level": "super_sector",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "spectrum_efficiency",
+      "displayName": "Spectrum Efficiency",
+      "question": "How efficiently does this technology use wireless spectrum? Consider modulation schemes, channel utilization, interference management, and bandwidth optimization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe spectrum efficiency improvements and techniques used."
+    },
+    {
+      "fieldName": "wireless_standard_alignment",
+      "displayName": "Wireless Standard Alignment",
+      "question": "Rate alignment with wireless standards (WiFi 6/7, 5G/6G, Bluetooth 5.x, LoRa, Zigbee, etc.). Consider standard essentiality potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant wireless standards and degree of alignment."
+    },
+    {
+      "fieldName": "wireless_range_reliability",
+      "displayName": "Range & Reliability",
+      "question": "How does this patent improve wireless range, coverage, or connection reliability?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe improvements to coverage, range, or reliability."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "security",
+  "name": "Security Scoring",
+  "description": "Scoring template for Security super-sector patents. Includes threat coverage and attack sophistication metrics.",
+  "level": "super_sector",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "threat_coverage",
+      "displayName": "Threat Coverage",
+      "question": "How comprehensive is this patent's coverage of security threats? Consider attack vectors, defensive mechanisms, and breadth of protection.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the security threats addressed and coverage gaps."
+    },
+    {
+      "fieldName": "attack_sophistication",
+      "displayName": "Attack Sophistication",
+      "question": "Rate the sophistication of attacks this patent helps prevent or detect. Consider APT, zero-day, and multi-stage attack scenarios.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the attack sophistication level addressed."
+    },
+    {
+      "fieldName": "security_standard_alignment",
+      "displayName": "Security Standard Alignment",
+      "question": "How well does this patent align with security standards and frameworks (NIST, ISO 27001, CIS, etc.)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant security standards and compliance frameworks."
+    }
+  ]
+}

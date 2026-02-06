@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "storage",
+  "name": "Storage Scoring",
+  "description": "Scoring template for Storage super-sector patents. Includes data integrity and storage efficiency metrics.",
+  "level": "super_sector",
+  "superSectorName": "STORAGE",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "data_integrity",
+      "displayName": "Data Integrity",
+      "question": "How well does this patent protect data integrity and reliability? Consider error correction, data protection, redundancy, and recovery mechanisms.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe data integrity protections and failure handling."
+    },
+    {
+      "fieldName": "storage_efficiency",
+      "displayName": "Storage Efficiency",
+      "question": "Rate the storage efficiency improvements this technology enables. Consider compression, deduplication, tiering, and capacity optimization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific efficiency techniques and expected gains."
+    },
+    {
+      "fieldName": "storage_performance",
+      "displayName": "Storage Performance",
+      "question": "How does this patent improve storage performance? Consider IOPS, throughput, latency, and access patterns.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe performance improvements for different workloads."
+    }
+  ]
+}

@@ -9,9 +9,17 @@
  * - Effective template resolution for any sub-sector
  * - Score calculation and normalization
  * - Ranking within sub-sector and sector
+ * - JSON config file support for version-controlled templates
  */
 
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const prisma = new PrismaClient();
 
@@ -497,21 +505,134 @@ export async function getPatentScore(patentId: string) {
 }
 
 // ============================================================================
+// JSON Config File Loading
+// ============================================================================
+
+const CONFIG_DIR = path.resolve(__dirname, '../../../config/scoring-templates');
+
+interface TemplateConfigFile {
+  $schema?: string;
+  id: string;
+  name: string;
+  description?: string;
+  level: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
+  superSectorName?: string;
+  sectorName?: string;
+  subSectorId?: string;
+  inheritsFrom?: string;
+  isDefault?: boolean;
+  version: number;
+  questions: ScoringQuestion[];
+}
+
+/**
+ * Load a template from a JSON config file
+ */
+export function loadTemplateFromFile(filePath: string): TemplateConfigFile {
+  const fullPath = path.isAbsolute(filePath) ? filePath : path.join(CONFIG_DIR, filePath);
+  const content = fs.readFileSync(fullPath, 'utf-8');
+  return JSON.parse(content) as TemplateConfigFile;
+}
+
+/**
+ * Load the portfolio default template from config
+ */
+export function loadPortfolioDefaultTemplate(): TemplateConfigFile {
+  return loadTemplateFromFile('portfolio-default.json');
+}
+
+/**
+ * Load all super-sector templates from config
+ */
+export function loadSuperSectorTemplates(): Map<string, TemplateConfigFile> {
+  const templates = new Map<string, TemplateConfigFile>();
+  const superSectorsDir = path.join(CONFIG_DIR, 'super-sectors');
+
+  if (!fs.existsSync(superSectorsDir)) {
+    return templates;
+  }
+
+  const files = fs.readdirSync(superSectorsDir).filter(f => f.endsWith('.json'));
+
+  for (const file of files) {
+    const template = loadTemplateFromFile(path.join('super-sectors', file));
+    if (template.superSectorName) {
+      templates.set(template.superSectorName, template);
+    }
+  }
+
+  return templates;
+}
+
+/**
+ * Get merged questions for a super-sector (inheriting from portfolio default)
+ */
+export function getMergedQuestionsForSuperSector(superSectorName: string): ScoringQuestion[] {
+  const portfolioDefault = loadPortfolioDefaultTemplate();
+  const superSectorTemplates = loadSuperSectorTemplates();
+  const superSectorTemplate = superSectorTemplates.get(superSectorName);
+
+  // Start with portfolio default questions
+  const merged = new Map<string, ScoringQuestion>();
+  for (const q of portfolioDefault.questions) {
+    merged.set(q.fieldName, q);
+  }
+
+  // Add/override with super-sector questions
+  if (superSectorTemplate) {
+    for (const q of superSectorTemplate.questions) {
+      merged.set(q.fieldName, q);
+    }
+  }
+
+  // Normalize weights to sum to ~1.0
+  const questions = Array.from(merged.values());
+  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+  if (totalWeight > 0) {
+    for (const q of questions) {
+      q.weight = Math.round((q.weight / totalWeight) * 100) / 100;
+    }
+  }
+
+  return questions;
+}
+
+// ============================================================================
 // Default Template Seeding
 // ============================================================================
 
 /**
- * Seed default templates for all super-sectors
+ * Seed default templates for all super-sectors from JSON config files
  * Called during initial setup or when new super-sectors are added
  */
 export async function seedDefaultTemplates(): Promise<{
   created: number;
   skipped: number;
+  errors: string[];
 }> {
   const superSectors = await prisma.superSector.findMany();
+  const errors: string[] = [];
 
   let created = 0;
   let skipped = 0;
+
+  // Load templates from JSON config files
+  let portfolioDefaultConfig: TemplateConfigFile;
+  let superSectorConfigs: Map<string, TemplateConfigFile>;
+
+  try {
+    portfolioDefaultConfig = loadPortfolioDefaultTemplate();
+  } catch (err) {
+    errors.push(`Failed to load portfolio-default.json: ${err}`);
+    return { created, skipped, errors };
+  }
+
+  try {
+    superSectorConfigs = loadSuperSectorTemplates();
+  } catch (err) {
+    errors.push(`Failed to load super-sector templates: ${err}`);
+    superSectorConfigs = new Map();
+  }
 
   // Portfolio-wide default template
   const portfolioDefault = await prisma.scoringTemplate.findFirst({
@@ -520,10 +641,10 @@ export async function seedDefaultTemplates(): Promise<{
 
   if (!portfolioDefault) {
     await createTemplate({
-      name: 'Portfolio Default',
-      description: 'Default scoring template for all patents',
+      name: portfolioDefaultConfig.name,
+      description: portfolioDefaultConfig.description,
       isDefault: true,
-      questions: getBaseQuestions()
+      questions: portfolioDefaultConfig.questions
     });
     created++;
   } else {
@@ -541,280 +662,114 @@ export async function seedDefaultTemplates(): Promise<{
       continue;
     }
 
-    const questions = getSuperSectorQuestions(ss.name);
+    const config = superSectorConfigs.get(ss.name);
+    if (!config) {
+      errors.push(`No config file found for super-sector: ${ss.name}`);
+      // Fall back to portfolio default questions only
+      await createTemplate({
+        name: `${ss.displayName} Scoring`,
+        description: `Scoring template for ${ss.displayName} patents (default - no config file)`,
+        superSectorId: ss.id,
+        isDefault: true,
+        questions: portfolioDefaultConfig.questions
+      });
+      created++;
+      continue;
+    }
+
+    // Merge questions with portfolio default
+    const mergedQuestions = getMergedQuestionsForSuperSector(ss.name);
+
     await createTemplate({
-      name: `${ss.displayName} Scoring`,
-      description: `Scoring template for ${ss.displayName} patents`,
+      name: config.name,
+      description: config.description,
       superSectorId: ss.id,
       isDefault: true,
-      questions
+      questions: mergedQuestions
     });
     created++;
   }
 
-  return { created, skipped };
+  return { created, skipped, errors };
 }
 
 /**
- * Get base questions applicable to all patents
+ * List all available template config files
  */
-function getBaseQuestions(): ScoringQuestion[] {
-  return [
-    {
-      fieldName: 'technical_novelty',
-      displayName: 'Technical Novelty',
-      question: 'Rate the technical novelty of this patent\'s core innovation. Consider: How different is this from prior art? Does it represent a significant departure from existing approaches?',
-      answerType: 'numeric',
-      scale: { min: 1, max: 10 },
-      weight: 0.20,
-      requiresReasoning: true,
-      reasoningPrompt: 'Explain what makes this technically novel or incremental.'
-    },
-    {
-      fieldName: 'claim_breadth',
-      displayName: 'Claim Breadth',
-      question: 'Rate the breadth of the patent claims. Consider: How broadly do the claims cover the invention? Could they capture variations and alternative implementations?',
-      answerType: 'numeric',
-      scale: { min: 1, max: 10 },
-      weight: 0.15,
-      requiresReasoning: true,
-      reasoningPrompt: 'Describe the scope of the claims.'
-    },
-    {
-      fieldName: 'design_around_difficulty',
-      displayName: 'Design-Around Difficulty',
-      question: 'How difficult would it be for a competitor to design around this patent while achieving similar functionality?',
-      answerType: 'numeric',
-      scale: { min: 1, max: 10 },
-      weight: 0.20,
-      requiresReasoning: true,
-      reasoningPrompt: 'Explain what makes this hard or easy to design around.'
-    },
-    {
-      fieldName: 'market_relevance',
-      displayName: 'Market Relevance',
-      question: 'Rate the relevance of this technology to current market needs and industry trends.',
-      answerType: 'numeric',
-      scale: { min: 1, max: 10 },
-      weight: 0.15,
-      requiresReasoning: true,
-      reasoningPrompt: 'Describe the market context and relevance.'
-    },
-    {
-      fieldName: 'implementation_clarity',
-      displayName: 'Implementation Clarity',
-      question: 'How clearly does the patent describe the implementation? Could infringement be easily detected in a product?',
-      answerType: 'numeric',
-      scale: { min: 1, max: 10 },
-      weight: 0.15,
-      requiresReasoning: true,
-      reasoningPrompt: 'Assess detectability and clarity of implementation.'
-    },
-    {
-      fieldName: 'standards_relevance',
-      displayName: 'Standards Relevance',
-      question: 'Is this patent related to any industry standards (IEEE, 3GPP, IETF, etc.)? Rate its standards essentiality.',
-      answerType: 'numeric',
-      scale: { min: 1, max: 10 },
-      weight: 0.15,
-      requiresReasoning: true,
-      reasoningPrompt: 'Identify any standards relationships.'
-    }
-  ];
-}
-
-/**
- * Get super-sector specific questions
- */
-function getSuperSectorQuestions(superSectorName: string): ScoringQuestion[] {
-  const base = getBaseQuestions();
-
-  // Add super-sector specific questions
-  const sectorQuestions: Record<string, ScoringQuestion[]> = {
-    'SECURITY': [
-      {
-        fieldName: 'threat_coverage',
-        displayName: 'Threat Coverage',
-        question: 'How comprehensive is this patent\'s coverage of security threats? Consider attack vectors, defensive mechanisms, and breadth of protection.',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.20,
-        requiresReasoning: true,
-        reasoningPrompt: 'Describe the security threats addressed.'
-      },
-      {
-        fieldName: 'attack_sophistication',
-        displayName: 'Attack Sophistication',
-        question: 'Rate the sophistication of attacks this patent helps prevent or detect.',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.10,
-        requiresReasoning: true
-      }
-    ],
-    'NETWORKING': [
-      {
-        fieldName: 'protocol_relevance',
-        displayName: 'Protocol Relevance',
-        question: 'How relevant is this patent to core networking protocols and standards?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true,
-        reasoningPrompt: 'Identify relevant protocols and standards.'
-      },
-      {
-        fieldName: 'scalability',
-        displayName: 'Scalability Impact',
-        question: 'Does this patent address scalability challenges in networking (bandwidth, latency, connections)?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.10,
-        requiresReasoning: true
-      }
-    ],
-    'COMPUTING': [
-      {
-        fieldName: 'performance_impact',
-        displayName: 'Performance Impact',
-        question: 'Rate the potential performance improvement this technology offers.',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      },
-      {
-        fieldName: 'resource_efficiency',
-        displayName: 'Resource Efficiency',
-        question: 'How efficiently does this technology use computing resources (CPU, memory, power)?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.10,
-        requiresReasoning: true
-      }
-    ],
-    'STORAGE': [
-      {
-        fieldName: 'data_integrity',
-        displayName: 'Data Integrity',
-        question: 'How well does this patent protect data integrity and reliability?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      },
-      {
-        fieldName: 'storage_efficiency',
-        displayName: 'Storage Efficiency',
-        question: 'Rate the storage efficiency improvements this technology enables.',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.10,
-        requiresReasoning: true
-      }
-    ],
-    'WIRELESS': [
-      {
-        fieldName: 'spectrum_efficiency',
-        displayName: 'Spectrum Efficiency',
-        question: 'How efficiently does this technology use wireless spectrum?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      },
-      {
-        fieldName: 'wireless_standard_alignment',
-        displayName: 'Wireless Standard Alignment',
-        question: 'Rate alignment with wireless standards (WiFi, 5G, Bluetooth, etc.).',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      }
-    ],
-    'MEDIA': [
-      {
-        fieldName: 'codec_efficiency',
-        displayName: 'Codec Efficiency',
-        question: 'Rate the compression efficiency or quality improvements this technology offers.',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      },
-      {
-        fieldName: 'media_standard_relevance',
-        displayName: 'Media Standard Relevance',
-        question: 'How relevant is this to media standards (HEVC, AV1, JPEG, etc.)?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      }
-    ],
-    'SEMICONDUCTOR': [
-      {
-        fieldName: 'manufacturing_relevance',
-        displayName: 'Manufacturing Relevance',
-        question: 'How relevant is this to semiconductor manufacturing processes?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      },
-      {
-        fieldName: 'chip_integration',
-        displayName: 'Chip Integration',
-        question: 'How easily can this be integrated into chip designs?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.10,
-        requiresReasoning: true
-      }
-    ],
-    'INTERFACE': [
-      {
-        fieldName: 'interface_standard',
-        displayName: 'Interface Standard',
-        question: 'How relevant is this to interface standards (PCIe, USB, etc.)?',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.15,
-        requiresReasoning: true
-      },
-      {
-        fieldName: 'interoperability',
-        displayName: 'Interoperability',
-        question: 'Rate the interoperability benefits this technology provides.',
-        answerType: 'numeric',
-        scale: { min: 1, max: 10 },
-        weight: 0.10,
-        requiresReasoning: true
-      }
-    ]
+export function listTemplateConfigFiles(): {
+  portfolioDefault: TemplateConfigFile | null;
+  superSectors: Array<{
+    filename: string;
+    superSectorName: string;
+    template: TemplateConfigFile;
+  }>;
+  sectors: Array<{ filename: string; template: TemplateConfigFile }>;
+  subSectors: Array<{ filename: string; template: TemplateConfigFile }>;
+} {
+  const result = {
+    portfolioDefault: null as TemplateConfigFile | null,
+    superSectors: [] as Array<{ filename: string; superSectorName: string; template: TemplateConfigFile }>,
+    sectors: [] as Array<{ filename: string; template: TemplateConfigFile }>,
+    subSectors: [] as Array<{ filename: string; template: TemplateConfigFile }>
   };
 
-  const additionalQuestions = sectorQuestions[superSectorName] || [];
-
-  // Merge: super-sector questions first, then base (base questions with matching fieldName are overridden)
-  const merged = new Map<string, ScoringQuestion>();
-
-  for (const q of base) {
-    merged.set(q.fieldName, q);
-  }
-  for (const q of additionalQuestions) {
-    merged.set(q.fieldName, q);
+  // Load portfolio default
+  try {
+    result.portfolioDefault = loadPortfolioDefaultTemplate();
+  } catch {
+    // File doesn't exist
   }
 
-  // Re-normalize weights to sum to ~1.0
-  const questions = Array.from(merged.values());
-  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
-  if (totalWeight > 0) {
-    for (const q of questions) {
-      q.weight = Math.round((q.weight / totalWeight) * 100) / 100;
+  // Load super-sector templates
+  const superSectorsDir = path.join(CONFIG_DIR, 'super-sectors');
+  if (fs.existsSync(superSectorsDir)) {
+    const files = fs.readdirSync(superSectorsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const template = loadTemplateFromFile(path.join('super-sectors', file));
+        if (template.superSectorName) {
+          result.superSectors.push({
+            filename: file,
+            superSectorName: template.superSectorName,
+            template
+          });
+        }
+      } catch {
+        // Skip invalid files
+      }
     }
   }
 
-  return questions;
+  // Load sector templates (if they exist)
+  const sectorsDir = path.join(CONFIG_DIR, 'sectors');
+  if (fs.existsSync(sectorsDir)) {
+    const files = fs.readdirSync(sectorsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const template = loadTemplateFromFile(path.join('sectors', file));
+        result.sectors.push({ filename: file, template });
+      } catch {
+        // Skip invalid files
+      }
+    }
+  }
+
+  // Load sub-sector templates (if they exist)
+  const subSectorsDir = path.join(CONFIG_DIR, 'sub-sectors');
+  if (fs.existsSync(subSectorsDir)) {
+    const files = fs.readdirSync(subSectorsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const template = loadTemplateFromFile(path.join('sub-sectors', file));
+        result.subSectors.push({ filename: file, template });
+      } catch {
+        // Skip invalid files
+      }
+    }
+  }
+
+  return result;
 }
+
+// Note: Template questions are now loaded from JSON config files in /config/scoring-templates/
+// See loadPortfolioDefaultTemplate(), loadSuperSectorTemplates(), and getMergedQuestionsForSuperSector()

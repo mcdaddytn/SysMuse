@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "networking",
+  "name": "Networking Scoring",
+  "description": "Scoring template for Networking super-sector patents. Includes protocol relevance and scalability metrics.",
+  "level": "super_sector",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "protocol_relevance",
+      "displayName": "Protocol Relevance",
+      "question": "How relevant is this patent to core networking protocols and standards? Consider TCP/IP, routing protocols, SDN, and network management protocols.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant protocols and standards this patent relates to."
+    },
+    {
+      "fieldName": "scalability",
+      "displayName": "Scalability Impact",
+      "question": "Does this patent address scalability challenges in networking? Consider bandwidth optimization, latency reduction, connection handling, and traffic management.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe scalability improvements and their practical impact."
+    },
+    {
+      "fieldName": "network_architecture",
+      "displayName": "Network Architecture",
+      "question": "How fundamental is this patent to modern network architectures (cloud, edge, data center, enterprise)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify which network architectures benefit from this technology."
+    }
+  ]
+}

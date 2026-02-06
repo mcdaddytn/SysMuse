@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing",
+  "name": "Computing Scoring",
+  "description": "Scoring template for Computing super-sector patents. Includes performance impact and resource efficiency metrics.",
+  "level": "super_sector",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "performance_impact",
+      "displayName": "Performance Impact",
+      "question": "Rate the potential performance improvement this technology offers. Consider processing speed, throughput, response time, and computational efficiency.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the performance benefits and how they are achieved."
+    },
+    {
+      "fieldName": "resource_efficiency",
+      "displayName": "Resource Efficiency",
+      "question": "How efficiently does this technology use computing resources? Consider CPU utilization, memory management, power consumption, and thermal efficiency.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify resource efficiency improvements and tradeoffs."
+    },
+    {
+      "fieldName": "virtualization_relevance",
+      "displayName": "Virtualization Relevance",
+      "question": "How relevant is this patent to virtualization, containerization, or cloud computing technologies?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe applicability to VMs, containers, or cloud infrastructure."
+    }
+  ]
+}

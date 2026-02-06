@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scoring-template.schema.json",
+  "title": "Scoring Template",
+  "description": "JSON schema for patent scoring templates with inheritance support",
+  "type": "object",
+  "required": ["id", "name", "level", "version", "questions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to this schema for validation"
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the template",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name for the template"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of what this template is for"
+    },
+    "level": {
+      "type": "string",
+      "enum": ["portfolio", "super_sector", "sector", "sub_sector"],
+      "description": "Hierarchy level of this template"
+    },
+    "superSectorName": {
+      "type": "string",
+      "description": "Name of super-sector (required for super_sector level)"
+    },
+    "sectorName": {
+      "type": "string",
+      "description": "Name of sector (required for sector level)"
+    },
+    "subSectorId": {
+      "type": "string",
+      "description": "ID of sub-sector (required for sub_sector level)"
+    },
+    "inheritsFrom": {
+      "type": "string",
+      "description": "ID of parent template to inherit questions from"
+    },
+    "isDefault": {
+      "type": "boolean",
+      "description": "Whether this is the default template for its level",
+      "default": false
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Version number for tracking template changes"
+    },
+    "questions": {
+      "type": "array",
+      "description": "Scoring questions specific to this template (merged with inherited)",
+      "items": {
+        "$ref": "#/$defs/question"
+      }
+    }
+  },
+  "$defs": {
+    "question": {
+      "type": "object",
+      "required": ["fieldName", "displayName", "question", "answerType", "weight", "requiresReasoning"],
+      "properties": {
+        "fieldName": {
+          "type": "string",
+          "description": "Unique identifier for this question/metric",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable name for display"
+        },
+        "question": {
+          "type": "string",
+          "description": "The prompt question for LLM scoring"
+        },
+        "answerType": {
+          "type": "string",
+          "enum": ["numeric", "categorical", "text"],
+          "description": "Type of answer expected"
+        },
+        "scale": {
+          "type": "object",
+          "description": "Min/max values for numeric answers",
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          },
+          "required": ["min", "max"]
+        },
+        "options": {
+          "type": "array",
+          "description": "Valid options for categorical answers",
+          "items": { "type": "string" }
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight of this question in composite score (0-1)"
+        },
+        "requiresReasoning": {
+          "type": "boolean",
+          "description": "Whether LLM must provide reasoning for the score"
+        },
+        "reasoningPrompt": {
+          "type": "string",
+          "description": "Optional prompt to guide reasoning generation"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "media",
+  "name": "Media Scoring",
+  "description": "Scoring template for Media super-sector patents. Includes codec efficiency and media standard relevance metrics.",
+  "level": "super_sector",
+  "superSectorName": "MEDIA",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "codec_efficiency",
+      "displayName": "Codec Efficiency",
+      "question": "Rate the compression efficiency or quality improvements this technology offers. Consider bitrate reduction, perceptual quality, encoding/decoding complexity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe compression gains and quality/efficiency tradeoffs."
+    },
+    {
+      "fieldName": "media_standard_relevance",
+      "displayName": "Media Standard Relevance",
+      "question": "How relevant is this to media standards (HEVC/H.265, VVC/H.266, AV1, JPEG XL, AAC, etc.)? Consider standard essentiality potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant media standards and degree of alignment."
+    },
+    {
+      "fieldName": "media_processing",
+      "displayName": "Media Processing",
+      "question": "How does this patent improve media processing (encoding, decoding, transcoding, streaming, rendering)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe processing improvements and use cases."
+    }
+  ]
+}

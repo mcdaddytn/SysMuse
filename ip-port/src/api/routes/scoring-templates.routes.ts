@@ -18,12 +18,91 @@ import {
   getPatentScore,
   normalizeSubSectorScores,
   normalizeSectorScores,
+  listTemplateConfigFiles,
+  getMergedQuestionsForSuperSector,
   CreateTemplateInput
 } from '../services/scoring-template-service.js';
 import { PrismaClient } from '@prisma/client';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// =============================================================================
+// CONFIG FILES (must be before /:id to avoid route conflicts)
+// =============================================================================
+
+/**
+ * GET /api/scoring-templates/config
+ * List all available template config files from the filesystem
+ */
+router.get('/config', async (_req: Request, res: Response) => {
+  try {
+    const configs = listTemplateConfigFiles();
+    res.json({
+      configDir: 'config/scoring-templates',
+      ...configs,
+      summary: {
+        hasPortfolioDefault: !!configs.portfolioDefault,
+        superSectorCount: configs.superSectors.length,
+        sectorCount: configs.sectors.length,
+        subSectorCount: configs.subSectors.length
+      }
+    });
+  } catch (error) {
+    console.error('[ScoringTemplates] Config list error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/config/merged/:superSectorName
+ * Get merged questions for a super-sector (portfolio default + super-sector specific)
+ */
+router.get('/config/merged/:superSectorName', async (req: Request, res: Response) => {
+  try {
+    const { superSectorName } = req.params;
+    const questions = getMergedQuestionsForSuperSector(superSectorName.toUpperCase());
+
+    const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+
+    res.json({
+      superSectorName: superSectorName.toUpperCase(),
+      questionCount: questions.length,
+      totalWeight: Math.round(totalWeight * 100) / 100,
+      questions
+    });
+  } catch (error) {
+    console.error('[ScoringTemplates] Merged config error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
+// TEMPLATE RESOLUTION (must be before /:id to avoid route conflicts)
+// =============================================================================
+
+/**
+ * GET /api/scoring-templates/resolve/:subSectorId
+ * Get the effective template for a sub-sector (with inheritance resolved)
+ */
+router.get('/resolve/:subSectorId', async (req: Request, res: Response) => {
+  try {
+    const { subSectorId } = req.params;
+
+    const effective = await resolveEffectiveTemplate(subSectorId);
+    if (!effective) {
+      return res.status(404).json({
+        error: 'No template found',
+        message: 'No scoring template available for this sub-sector. Seed default templates first.'
+      });
+    }
+
+    res.json(effective);
+  } catch (error) {
+    console.error('[ScoringTemplates] Resolve error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
 
 // =============================================================================
 // TEMPLATE CRUD
@@ -125,39 +204,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // =============================================================================
-// TEMPLATE RESOLUTION
-// =============================================================================
-
-/**
- * GET /api/scoring-templates/resolve/:subSectorId
- * Get the effective template for a sub-sector (with inheritance resolved)
- */
-router.get('/resolve/:subSectorId', async (req: Request, res: Response) => {
-  try {
-    const { subSectorId } = req.params;
-
-    const effective = await resolveEffectiveTemplate(subSectorId);
-    if (!effective) {
-      return res.status(404).json({
-        error: 'No template found',
-        message: 'No scoring template available for this sub-sector. Seed default templates first.'
-      });
-    }
-
-    res.json(effective);
-  } catch (error) {
-    console.error('[ScoringTemplates] Resolve error:', error);
-    res.status(500).json({ error: (error as Error).message });
-  }
-});
-
-// =============================================================================
 // SEEDING
 // =============================================================================
 
 /**
  * POST /api/scoring-templates/seed
- * Seed default templates for all super-sectors
+ * Seed default templates for all super-sectors from JSON config files
  */
 router.post('/seed', async (_req: Request, res: Response) => {
   try {

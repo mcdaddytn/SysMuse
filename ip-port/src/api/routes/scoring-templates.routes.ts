@@ -13,6 +13,7 @@ import {
   resolveEffectiveTemplate,
   getTemplateWithInheritance,
   seedDefaultTemplates,
+  syncTemplatesFromConfig,
   getSubSectorScores,
   getSubSectorScoreStats,
   getPatentScore,
@@ -22,6 +23,20 @@ import {
   getMergedQuestionsForSuperSector,
   CreateTemplateInput
 } from '../services/scoring-template-service.js';
+import {
+  scorePatent,
+  scoreSubSector,
+  scoreSector,
+  getPatentsForScoring,
+  getPatentsForSectorScoring,
+  PatentForScoring,
+  comparePatentScoring,
+  runComparisonTest,
+  getComparisonTestSet,
+  CLAIMS_CONTEXT_OPTIONS,
+  DEFAULT_CONTEXT_OPTIONS
+} from '../services/llm-scoring-service.js';
+import { getClaimsStats, extractClaimsText } from '../services/patent-xml-parser-service.js';
 import { PrismaClient } from '@prisma/client';
 
 const router = Router();
@@ -228,6 +243,28 @@ router.post('/seed', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/scoring-templates/sync
+ * Sync existing templates with JSON config files (updates questions from config)
+ * Use this after modifying JSON config files to push changes to database
+ */
+router.post('/sync', async (_req: Request, res: Response) => {
+  try {
+    console.log('[ScoringTemplates] Syncing templates from config files...');
+
+    const result = await syncTemplatesFromConfig();
+
+    console.log(`[ScoringTemplates] Sync complete: ${result.updated} updated, ${result.created} created`);
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('[ScoringTemplates] Sync error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 // =============================================================================
 // SCORES
 // =============================================================================
@@ -373,6 +410,346 @@ router.post('/preview', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[ScoringTemplates] Preview error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
+// LLM SCORING
+// =============================================================================
+
+/**
+ * POST /api/scoring-templates/llm/score-patent
+ * Score a single patent using LLM
+ */
+router.post('/llm/score-patent', async (req: Request, res: Response) => {
+  try {
+    const patent: PatentForScoring = req.body;
+    const { model, saveToDb } = req.query;
+
+    if (!patent.patent_id) {
+      return res.status(400).json({ error: 'patent_id is required' });
+    }
+
+    console.log(`[LLM Scoring] Scoring patent ${patent.patent_id}`);
+
+    const result = await scorePatent(patent, {
+      model: model as string,
+      saveToDb: saveToDb !== 'false'
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[LLM Scoring] Error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/llm/score-sub-sector/:subSectorId
+ * Score all unscored patents in a sub-sector
+ */
+router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Response) => {
+  try {
+    const { subSectorId } = req.params;
+    const { limit, model } = req.query;
+
+    console.log(`[LLM Scoring] Scoring sub-sector ${subSectorId}`);
+
+    const result = await scoreSubSector(subSectorId, {
+      limit: limit ? parseInt(limit as string) : 10,
+      model: model as string
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[LLM Scoring] Error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/llm/score-sector/:sectorName
+ * Score all unscored patents in a sector (batch operation)
+ */
+router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { limit, model, concurrency } = req.query;
+
+    console.log(`[LLM Scoring] Starting sector scoring: ${sectorName}`);
+
+    const result = await scoreSector(sectorName, {
+      limit: limit ? parseInt(limit as string) : 500,
+      model: model as string,
+      concurrency: concurrency ? parseInt(concurrency as string) : 2
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[LLM Scoring] Sector scoring error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/sector-preview/:sectorName
+ * Preview patents ready for scoring in a sector
+ */
+router.get('/llm/sector-preview/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { limit } = req.query;
+
+    const patents = await getPatentsForSectorScoring(sectorName, {
+      limit: limit ? parseInt(limit as string) : 10,
+      onlyUnscored: true
+    });
+
+    res.json({
+      sectorName,
+      unscoredCount: patents.length,
+      patents: patents.slice(0, 5).map(p => ({
+        patent_id: p.patent_id,
+        patent_title: p.patent_title,
+        primary_sub_sector_name: p.primary_sub_sector_name
+      }))
+    });
+  } catch (error) {
+    console.error('[LLM Scoring] Sector preview error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/preview/:subSectorId
+ * Preview patents ready for scoring in a sub-sector (without actually scoring)
+ */
+router.get('/llm/preview/:subSectorId', async (req: Request, res: Response) => {
+  try {
+    const { subSectorId } = req.params;
+    const { limit } = req.query;
+
+    const patents = await getPatentsForScoring(subSectorId, {
+      limit: limit ? parseInt(limit as string) : 5,
+      onlyUnscored: true
+    });
+
+    // Get effective template to show questions
+    const template = await resolveEffectiveTemplate(subSectorId);
+
+    res.json({
+      subSectorId,
+      patentCount: patents.length,
+      template: template ? {
+        name: template.templateName,
+        questionCount: template.questions.length,
+        questions: template.questions.map(q => ({
+          fieldName: q.fieldName,
+          displayName: q.displayName,
+          weight: q.weight
+        }))
+      } : null,
+      patents: patents.map(p => ({
+        patent_id: p.patent_id,
+        patent_title: p.patent_title,
+        abstract: p.abstract?.substring(0, 200) + '...',
+        super_sector: p.super_sector,
+        primary_sector: p.primary_sector
+      }))
+    });
+  } catch (error) {
+    console.error('[LLM Scoring] Preview error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
+// CLAIMS COMPARISON TESTING
+// =============================================================================
+
+/**
+ * GET /api/scoring-templates/claims/stats/:patentId
+ * Get claims statistics for a patent
+ */
+router.get('/claims/stats/:patentId', async (req: Request, res: Response) => {
+  try {
+    const { patentId } = req.params;
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '/Volumes/PortFat4/uspto/bulkdata/export';
+
+    const stats = getClaimsStats(patentId, xmlDir);
+    if (!stats) {
+      return res.status(404).json({
+        patentId,
+        found: false,
+        message: 'XML file not found or claims could not be extracted'
+      });
+    }
+
+    res.json({ patentId, ...stats });
+  } catch (error) {
+    console.error('[Claims] Stats error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/claims/preview/:patentId
+ * Preview extracted claims text for a patent
+ */
+router.get('/claims/preview/:patentId', async (req: Request, res: Response) => {
+  try {
+    const { patentId } = req.params;
+    const { independentOnly, maxClaims, maxTokens } = req.query;
+
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '/Volumes/PortFat4/uspto/bulkdata/export';
+
+    const claimsText = extractClaimsText(patentId, xmlDir, {
+      independentOnly: independentOnly !== 'false',
+      maxClaims: maxClaims ? parseInt(maxClaims as string) : 5,
+      maxTokens: maxTokens ? parseInt(maxTokens as string) : 800,
+    });
+
+    if (!claimsText) {
+      return res.status(404).json({
+        patentId,
+        found: false,
+        message: 'XML file not found or claims could not be extracted'
+      });
+    }
+
+    const stats = getClaimsStats(patentId, xmlDir);
+
+    res.json({
+      patentId,
+      found: true,
+      stats,
+      extractedText: claimsText,
+      estimatedTokens: Math.ceil(claimsText.length / 4),
+    });
+  } catch (error) {
+    console.error('[Claims] Preview error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/compare/single/:patentId
+ * Compare scoring with and without claims for a single patent
+ */
+router.post('/compare/single/:patentId', async (req: Request, res: Response) => {
+  try {
+    const { patentId } = req.params;
+    const { model } = req.query;
+
+    // Load patent data from candidates file
+    const fs = await import('fs');
+    const path = await import('path');
+
+    const candidatesPath = path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json');
+    const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
+    const candidates = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
+
+    const candidate = candidates.find((c: any) => c.patent_id === patentId);
+    if (!candidate) {
+      return res.status(404).json({ error: `Patent ${patentId} not found in candidates` });
+    }
+
+    const patent: PatentForScoring = {
+      patent_id: candidate.patent_id,
+      patent_title: candidate.patent_title,
+      primary_sub_sector_id: candidate.primary_sub_sector_id,
+      primary_sub_sector_name: candidate.primary_sub_sector_name,
+      primary_sector: candidate.primary_sector,
+      super_sector: candidate.super_sector,
+      cpc_codes: candidate.cpc_codes || [],
+    };
+
+    console.log(`[Compare] Running comparison for ${patentId}...`);
+    const result = await comparePatentScoring(patent, { model: model as string });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Compare] Single patent error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/compare/test-set/:sectorName
+ * Get a stratified test set from scored patents in a sector
+ */
+router.get('/compare/test-set/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { count } = req.query;
+
+    const testSet = await getComparisonTestSet(sectorName, {
+      count: count ? parseInt(count as string) : 50
+    });
+
+    // Get claims stats for each patent
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '/Volumes/PortFat4/uspto/bulkdata/export';
+    const withStats = testSet.map(p => ({
+      ...p,
+      claimsStats: getClaimsStats(p.patent_id, xmlDir)
+    }));
+
+    const claimsAvailable = withStats.filter(p => p.claimsStats?.found).length;
+
+    res.json({
+      sectorName,
+      totalPatents: testSet.length,
+      claimsAvailable,
+      coverage: Math.round((claimsAvailable / testSet.length) * 100) + '%',
+      testSet: withStats.map(p => ({
+        patent_id: p.patent_id,
+        patent_title: p.patent_title,
+        primary_sector: p.primary_sector,
+        claimsAvailable: p.claimsStats?.found || false,
+        estimatedClaimTokens: p.claimsStats?.estimatedTokens || 0,
+      }))
+    });
+  } catch (error) {
+    console.error('[Compare] Test set error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/compare/run/:sectorName
+ * Run full comparison test on a sector
+ * WARNING: This is expensive - scores each patent twice!
+ */
+router.post('/compare/run/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { count, model } = req.query;
+
+    console.log(`[Compare] Starting comparison test for sector: ${sectorName}`);
+
+    // Get test set
+    const testSet = await getComparisonTestSet(sectorName, {
+      count: count ? parseInt(count as string) : 20  // Default to 20 for cost control
+    });
+
+    if (testSet.length === 0) {
+      return res.status(404).json({ error: `No scored patents found in sector: ${sectorName}` });
+    }
+
+    console.log(`[Compare] Running comparison on ${testSet.length} patents...`);
+
+    // Run comparison
+    const result = await runComparisonTest(testSet, {
+      model: model as string,
+      progressCallback: (completed, total) => {
+        console.log(`[Compare] Progress: ${completed}/${total}`);
+      }
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Compare] Run error:', error);
     res.status(500).json({ error: (error as Error).message });
   }
 });

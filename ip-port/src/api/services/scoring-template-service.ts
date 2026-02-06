@@ -771,5 +771,100 @@ export function listTemplateConfigFiles(): {
   return result;
 }
 
+/**
+ * Sync existing templates with JSON config files (update questions)
+ * Use when config files have been modified and need to be pushed to database
+ */
+export async function syncTemplatesFromConfig(): Promise<{
+  updated: number;
+  created: number;
+  errors: string[];
+}> {
+  const superSectors = await prisma.superSector.findMany();
+  const errors: string[] = [];
+  let updated = 0;
+  let created = 0;
+
+  // Load configs
+  let portfolioDefaultConfig: TemplateConfigFile;
+  let superSectorConfigs: Map<string, TemplateConfigFile>;
+
+  try {
+    portfolioDefaultConfig = loadPortfolioDefaultTemplate();
+  } catch (err) {
+    errors.push(`Failed to load portfolio-default.json: ${err}`);
+    return { updated, created, errors };
+  }
+
+  try {
+    superSectorConfigs = loadSuperSectorTemplates();
+  } catch (err) {
+    errors.push(`Failed to load super-sector templates: ${err}`);
+    superSectorConfigs = new Map();
+  }
+
+  // Sync portfolio default
+  const portfolioDefault = await prisma.scoringTemplate.findFirst({
+    where: { isDefault: true, superSectorId: null, sectorId: null, subSectorId: null }
+  });
+
+  if (portfolioDefault) {
+    await prisma.scoringTemplate.update({
+      where: { id: portfolioDefault.id },
+      data: {
+        name: portfolioDefaultConfig.name,
+        description: portfolioDefaultConfig.description,
+        questions: portfolioDefaultConfig.questions as any,
+        version: portfolioDefault.version + 1,
+        updatedAt: new Date()
+      }
+    });
+    updated++;
+  } else {
+    await createTemplate({
+      name: portfolioDefaultConfig.name,
+      description: portfolioDefaultConfig.description,
+      isDefault: true,
+      questions: portfolioDefaultConfig.questions
+    });
+    created++;
+  }
+
+  // Sync super-sector templates
+  for (const ss of superSectors) {
+    const existing = await prisma.scoringTemplate.findFirst({
+      where: { superSectorId: ss.id, isDefault: true }
+    });
+
+    const config = superSectorConfigs.get(ss.name);
+    const mergedQuestions = getMergedQuestionsForSuperSector(ss.name);
+
+    if (existing) {
+      await prisma.scoringTemplate.update({
+        where: { id: existing.id },
+        data: {
+          name: config?.name || existing.name,
+          description: config?.description || existing.description,
+          questions: mergedQuestions as any,
+          version: existing.version + 1,
+          updatedAt: new Date()
+        }
+      });
+      updated++;
+    } else {
+      await createTemplate({
+        name: config?.name || `${ss.displayName} Scoring`,
+        description: config?.description || `Scoring template for ${ss.displayName} patents`,
+        superSectorId: ss.id,
+        isDefault: true,
+        questions: mergedQuestions
+      });
+      created++;
+    }
+  }
+
+  return { updated, created, errors };
+}
+
 // Note: Template questions are now loaded from JSON config files in /config/scoring-templates/
 // See loadPortfolioDefaultTemplate(), loadSuperSectorTemplates(), and getMergedQuestionsForSuperSector()

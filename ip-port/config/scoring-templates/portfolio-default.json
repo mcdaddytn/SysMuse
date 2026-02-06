@@ -66,6 +66,16 @@
       "weight": 0.15,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify any standards relationships."
+    },
+    {
+      "fieldName": "unique_value",
+      "displayName": "Unique/Hidden Value",
+      "question": "Beyond the standard metrics above, does this patent have unique or overlooked value that isn't captured by typical analysis? Consider: unusual claim scope, emerging technology applicability, underappreciated market timing, strategic defensive value, or any 'dark horse' characteristics that could make this patent more valuable than it appears.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any unique characteristics, hidden strengths, or overlooked value that distinguishes this patent from others in its sector. What makes this a potential 'dark horse' that standard analysis might miss? Be specific about what unique value exists and why it matters."
     }
   ]
 }

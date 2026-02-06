@@ -1,0 +1,53 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ai-ml",
+  "name": "AI/ML Scoring",
+  "description": "Scoring template for AI/ML super-sector patents. Includes model architecture, training efficiency, and inference deployment metrics.",
+  "level": "super_sector",
+  "superSectorName": "AI_ML",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "model_architecture",
+      "displayName": "Model Architecture",
+      "question": "How fundamental is this patent to neural network or ML model architectures? Consider transformers, CNNs, RNNs, attention mechanisms, and novel architectural innovations.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the model architecture elements and explain their significance to ML systems."
+    },
+    {
+      "fieldName": "training_efficiency",
+      "displayName": "Training Efficiency",
+      "question": "Does this patent improve ML training efficiency? Consider distributed training, gradient optimization, data preprocessing, hyperparameter tuning, and resource utilization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe training improvements and their practical impact on model development."
+    },
+    {
+      "fieldName": "inference_deployment",
+      "displayName": "Inference & Deployment",
+      "question": "How does this patent address ML inference and deployment? Consider model optimization, quantization, edge deployment, serving infrastructure, and real-time inference.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe inference optimizations and deployment scenarios."
+    },
+    {
+      "fieldName": "ai_application_breadth",
+      "displayName": "Application Breadth",
+      "question": "How broadly applicable is this AI/ML patent across different domains? Consider NLP, computer vision, recommendation systems, autonomous systems, and generative AI.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify applicable AI domains and explain cross-domain relevance."
+    }
+  ]
+}

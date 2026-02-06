@@ -1,4 +1,4 @@
-# Patent Portfolio Analysis - Session Context (2026-01-26, Session 14)
+# Patent Portfolio Analysis - Session Context (2026-02-06, Session 15+)
 
 ## Current State Summary
 
@@ -13,227 +13,231 @@
 | Date Range | 1982-06-29 to 2025-09-30 |
 | Status | Complete + Deduplicated |
 
-### Enrichment Coverage (as of Session 14)
+### Taxonomy Structure (Session 15)
 
-| Data Source | Count | Coverage (3yr+ active) | Change |
-|-------------|-------|----------------------|--------|
-| **LLM total** | **8,269** | 38% | +500 (batch complete) |
+| Level | Count | Description |
+|-------|-------|-------------|
+| **Super-Sectors** | 11 | VIDEO_STREAMING, AI_ML, IMAGING, NETWORKING, COMPUTING, STORAGE, WIRELESS, MEDIA, SEMICONDUCTOR, INTERFACE, SECURITY |
+| **Sectors** | 53 | Primary categorization (e.g., video-codec, video-streaming, ai-inference) |
+| **Sub-Sectors** | 31,025 | Fine-grained categorization |
+| **Patents Assigned** | 29,474 | Patents with sector assignments |
+
+### Enrichment Coverage
+
+| Data Source | Count | Coverage | Notes |
+|-------------|-------|----------|-------|
+| **LLM total** | **8,269** | 38% | Cached analyses |
 | **IPR risk scores** | **5,000** | 23% | Target reached |
-| **Prosecution scores** | **4,052** | 19% | +1,575 from Session 13 |
-| **Citation classification** | 28,913 | 100% | — |
-| **Forward citations** | 28,014 | 97% | — |
-| **Backward citations (parents)** | **4,852** | 22% | +2,773 from Session 13 |
-
-### Background Jobs Status (Session 13 — Complete)
-- **LLM analysis**: 8,269 cached (500 batch from Session 13 **complete**)
-- **IPR enrichment**: **5,000 done** (target reached)
-- **Prosecution enrichment**: 4,052 done (progressing, was 2,477)
-- **Patent family enrichment**: 4,852 parents cached (progressing, was 2,079)
-
-### Elasticsearch Index
-
-| Metric | Value |
-|--------|-------|
-| **Documents Indexed** | **28,913** |
-| Index Size | ~25 MB |
-| Abstracts Indexed | **28,869 (99.8%)** |
-| **Sector Fields** | **NEW — primary_sector + super_sector indexed** |
-| Super-Sector Distribution | Virtualization 6,946 / SDN 5,627 / Semiconductor 3,748 / Computing 3,498 / Wireless 3,323 / Security 3,182 / Video 1,584 / Imaging 718 / Audio 193 / AI 94 |
+| **Prosecution scores** | **4,052** | 19% | From Session 13 |
+| **Citation classification** | 28,913 | 100% | Complete |
+| **Abstracts (PatentsView)** | 28,869 | 99.8% | For LLM scoring |
 
 ---
 
-## Changes Completed This Session (Session 14)
+## Active Jobs (Session 15)
 
-### Search Scope for Focus Areas — Full Stack Implementation
+### Video-Codec Sector LLM Scoring — IN PROGRESS
 
-Implemented search scope as a first-class concept on focus areas, enabling sector-constrained search term evaluation with meaningful selectivity ratios.
+| Parameter | Value |
+|-----------|-------|
+| **Sector** | video-codec |
+| **Total Patents** | 376 |
+| **Abstract Coverage** | 373/376 (99%) |
+| **Start Time** | ~08:21 CST, 2026-02-06 |
+| **Estimated Duration** | ~2 hours |
+| **Concurrency** | 2 |
+| **Progress** | ~218/376 (58%) as of last check |
 
-#### Elasticsearch — Sector Fields Added
-
-**Index Mapping** (`services/elasticsearch-service.ts`):
-- Added `primary_sector` and `super_sector` as keyword fields in `PatentDocument` interface and index mapping
-- Added filter support: `primary_sector`, `super_sector` (single or array), `patent_ids` (for focus area intersection)
-- All filters work natively in ES bool queries
-
-**Import Script** (`services/import-to-elasticsearch.ts`):
-- Added `sector-mapper` import for `getPrimarySector()` and `getSuperSector()`
-- Each patent now indexed with computed `primary_sector` and `super_sector` from CPC codes
-- Re-indexed full portfolio: 28,913 patents with sector data
-
-#### Database Schema — Search Scope Fields
-
-**Prisma Schema** (`prisma/schema.prisma`):
-- Added `SearchScopeType` enum: `PORTFOLIO`, `SECTOR`, `SUPER_SECTOR`, `COMPOUND`, `PATENT_FAMILY`
-- Added `searchScopeType` and `searchScopeConfig` (JSON) to `FocusArea` model
-- Added `hitCountScope` to `SearchTerm` model
-- Migration applied via `prisma db push`
-
-#### Backend API — Scoped Search Preview
-
-**Focus Area Routes** (`src/api/routes/focus-areas.routes.ts`):
-
-New endpoint:
-- `GET /api/focus-areas/scope-options` — Returns available sectors and super-sectors with patent counts from ES aggregation
-
-Updated endpoints:
-- `POST /api/focus-areas/search-preview` — Now supports full scope filtering:
-  - `scopes.sectors[]` — Filter by one or more primary sectors
-  - `scopes.superSectors[]` — Filter by one or more super-sectors
-  - `scopes.focusAreaId` — Intersect with focus area patents (uses ES `ids` filter, no more 10,000-hit memory scan)
-  - Returns `hitCounts.scope` (hits in scope) and `scopeTotal` (total patents in scope)
-  - Sample hits now drawn from scoped results when scope is active
-- `POST /api/focus-areas` — Accepts `searchScopeType` and `searchScopeConfig`
-- `PUT /api/focus-areas/:id` — Accepts `searchScopeType` and `searchScopeConfig`
-
-Route ordering fix: `/scope-options` moved before `/:id` to prevent Express parameterized route capture.
-
-#### Frontend — Scope Selector UI
-
-**API Types** (`frontend/src/services/api.ts`):
-- Added `SearchScopeType`, `SearchScopeConfig`, `ScopeOption`, `ScopeOptions` types
-- Updated `FocusArea` interface with `searchScopeType` and `searchScopeConfig`
-- Updated `SearchTerm` with `hitCountScope`
-- Updated `SearchPreviewResult` with `hitCounts.scope` and `scopeTotal`
-- Updated `searchApi.previewSearchTerm()` to accept `sectors[]` and `superSectors[]`
-- Added `searchApi.getScopeOptions()` method
-
-**Focus Area Detail Page** (`frontend/src/pages/FocusAreaDetailPage.vue`):
-- **Scope chip** in header metadata: Shows active scope (e.g., "Scope: Security"), clickable to configure
-- **Scope configuration dialog**: Select scope type (Portfolio / Super-Sector / Sector), toggle sectors/super-sectors from ES aggregation with patent counts
-- **Scope-aware search preview**: Search terms evaluated against scope, showing Portfolio / Scope / Focus Area hit counts
-- **Selectivity ratio uses scope**: Focus ratio now computes `focusArea / scope` when scope is active (instead of `focusArea / portfolio`)
-- **Scoped sample hits**: Preview shows hits from within scope when active
-
-**Verified Results** (manual testing):
-- "authentication" KEYWORD: Portfolio 648 / Security scope 495 (out of 3,182) — 15.6% of security patents
-- "authentication token" KEYWORD_AND: Portfolio 752 / (network-auth-access + network-crypto) scope 333 (out of 1,087) — 30.6%
-- Scope options endpoint returns all ~40 sectors and ~10 super-sectors with counts
-
-### Design Documentation — Focus Area Reconciliation and Extended Families
-
-#### FOCUS_AREA_SYSTEM_DESIGN.md — New Section: "Focus Area as Reconciliation Point"
-- Focus area as reconciliation between grouping methods (explicit selection, search scope, search terms, patent family, category overlay)
-- Focused vs adjacent patents: focused = selected/matched, adjacent = in scope but not focused
-- Patent set operations: DIFF, INTERSECT, UNION, COMPLEMENT with API design
-- Workflow for reconciling patent sets across different qualifiers
-- Search scope as semantic context (selectivity signal, adjacent pool, cross-scope portability, family constraint)
-
-#### PATENT_FAMILIES_DESIGN.md — New Section: "Extended Family Model"
-- Diatomic family concept: three-generation unit (parents → self → children) analogous to two bonded nuclei
-- Extended family (cousins, 2nd cousins) via lateral expansion from siblings
-- Generational preference: favor newer patents for selection, retain older/expired as connectors
-- Category-constrained expansion using sectors, focus groups, CPC codes, boolean combinations
-- Recursive focus area scoping (focus areas as search scopes for new focus areas)
-- Cross-category family example: financial transactions + wireless + security convergence
-- Family-to-focus-area conversion with scope overlay
-
----
-
-## Changes Completed Session 13 (Previous)
-
-### Background Enrichment Jobs Queued
-
-Kicked off three long-running enrichment jobs to fill in portfolio data:
-1. **LLM V3 Analysis**: 500 additional patents (top-ranked without LLM data) — **COMPLETE**
-2. **Prosecution History**: 2,525 remaining patents to reach 5,000 target — **4,052 done (progressing)**
-3. **Patent Family Parents**: ~3,000 additional backward citations — **4,852 done (progressing)**
-
-### Citation-Aware Scoring — Implemented
-
-Implemented weighted citation scoring across the full stack:
-- `adjusted_forward_citations`: competitor×1.5, neutral×1.0, affiliate×0.25
-- `competitor_density`: competitor/(competitor+neutral) ratio
-- All 6 scoring profiles updated
-- VMware self-citation inflation addressed (16.5% → weighted down)
-
-### Design Documentation — Three New Sections in DESIGN_CONSIDERATIONS.md
-1. Competitor Classification — Formal Criteria
-2. Citation-Aware Scoring Design
-3. Conditional Facets — Sector-Specific LLM Questions via Facet System
-
----
-
-## GUI Development Status
-
-### Backend API Server (Port 3001)
-
+**Monitor Progress:**
 ```bash
-npm run api:dev
+# Check server output
+tail -f /var/folders/qk/n6vwrmqs1qn4l05tlzdy68l00000gn/T/claude/-Users-gmcaveney-Documents-dev-SysMuse-ip-port/tasks/b8a2a17.output
+
+# Check result file when complete
+cat /tmp/video-codec-scoring-result.json
 ```
 
-**Endpoints:**
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/patents` | List with filters/pagination (enriched with citation + LLM data) |
-| `GET /api/patents/:id` | Full patent details (+ abstract + LLM data from cache) |
-| `GET /api/patents/:id/preview` | Lightweight preview (+ abstract + citation data) |
-| `POST /api/patents/batch-preview` | Batch preview (+ abstracts + citation data) |
-| `GET /api/patents/:id/citations` | Forward citations + classification breakdown + in_portfolio flag |
-| `GET /api/patents/:id/backward-citations` | Parent patents from cache + in_portfolio flag |
-| `GET /api/patents/:id/prosecution` | Prosecution history from cache |
-| `GET /api/patents/:id/ptab` | PTAB/IPR data from cache |
-| `GET /api/patents/:id/llm` | Full LLM analysis (scores + text + classification) |
-| `GET /api/patents/cpc-descriptions` | CPC code descriptions (optional `?codes=` filter) |
-| `GET /api/patents/affiliates` | List affiliates with counts |
-| `GET /api/patents/super-sectors` | List super-sectors with counts |
-| `GET /api/patents/primary-sectors` | List 42 primary sectors with counts |
-| `GET /api/patents/assignees` | List raw assignees with counts |
-| `GET /api/scores/v2` | v2 scoring (includes affiliate + competitor_citations) |
-| `GET /api/scores/v3` | V3 scored rankings (profile, page, limit, sector, minScore) |
-| `GET /api/scores/profiles` | List 6 scoring profiles with weights |
-| `GET /api/scores/sectors` | Sector rankings with damages tiers (profile, topN) |
-| `POST /api/scores/reload` | Clear ALL caches (scoring + patent + LLM + CPC) |
-| `GET /api/scores/stats` | LLM/IPR/prosecution coverage statistics |
-| `GET/POST /api/focus-areas` | Focus area CRUD |
-| `GET /api/focus-areas/scope-options` | **NEW** Available sectors/super-sectors with patent counts |
-| `POST /api/focus-areas/search-preview` | **Updated** Search term hit preview with scope filtering |
-| `POST /api/focus-areas/extract-keywords` | Keyword extraction |
-| `GET/POST /api/focus-groups` | Focus group CRUD |
-| `POST /api/focus-groups/:id/formalize` | Convert to focus area |
-
-### Frontend App (Port 3000)
-
-```bash
-cd frontend && npm run dev
-```
-
-**Pages:**
-| Page | Route | Status |
-|------|-------|--------|
-| `PortfolioPage.vue` | `/` | Complete — LLM scores + text columns |
-| `PatentDetailPage.vue` | `/patent/:id` | Complete — LLM tab, backward citations, CPC tooltips |
-| `V2ScoringPage.vue` | `/v2-scoring` | Complete |
-| `V3ScoringPage.vue` | `/v3-scoring` | Complete |
-| `SectorRankingsPage.vue` | `/sectors` | Complete |
-| `FocusAreasPage.vue` | `/focus-areas` | Complete |
-| `FocusAreaDetailPage.vue` | `/focus-areas/:id` | **Updated** — Scope selector, scoped search preview |
+**Why This Job:**
+- First production test of LLM scoring system
+- video-codec has manageable size (376 patents) for ~2hr batch
+- Will validate scoring pipeline, template inheritance, score normalization
 
 ---
 
-## Known Issues / Next Session TODO
+## Changes Completed This Session (Session 15)
 
-### Immediate (Session 15)
-- [ ] Check prosecution and patent family enrichment completion (may be done by now)
-- [ ] Backfill 2,669 older patents with full V3 analysis (they only have 5 numeric scores, no text fields)
-- [ ] **Patent set operations** — Implement DIFF/INTERSECT/UNION between focus area, search results, and family sets (design complete in FOCUS_AREA_SYSTEM_DESIGN.md)
-- [ ] **Search term selectivity tracking** — Persist hit counts (portfolio, scope, focusArea) on SearchTerm records
-- [ ] Confirm batches 3-4 vendor submission status
-- [ ] Generate batches 5-10 with affiliate diversity cap
+### 1. Scoring Template System — JSON Config Files
 
-### Medium Priority
-- [ ] **Patent family builder** — Basic construction from cached backward citation data (see PATENT_FAMILIES_DESIGN.md extended family section)
-- [ ] **Dynamic columns based on sector** — conditional facet visibility (designed Session 13)
-- [ ] Integrate sector-specific LLM analysis into cache pipeline
-- [ ] **Formalize competitor promotion in GUI** — auto-suggest + manual promote
-- [ ] Add remaining LLM scores to V3 scoring profile weights
+**Goal:** Extract all scoring templates from code into version-controlled JSON files for independent maintenance and revision tracking.
 
-### Design Backlog
-- [ ] **Patent family expansion UI** — Category-constrained expansion with diatomic family visualization
-- [ ] **Focus area set operations UI** — Diff/merge/union dialogs with preview
-- [ ] **Bulk LLM Analysis Queuing** — Request from UI, queue management, cost estimation
-- [ ] Vendor Data tab integration (Patlytics batch results)
-- [ ] **Sector-specific LLM pipeline** — Decoupled second-pass for sector questions
-- [ ] **Competitor confidence levels** — Continuous 0-1 scoring
+#### Config File Structure
+
+```
+config/scoring-templates/
+├── scoring-template.schema.json    # JSON Schema for validation
+├── portfolio-default.json          # Base template (7 questions)
+└── super-sectors/
+    ├── video-streaming.json        # 4 additional questions
+    ├── ai-ml.json                  # 4 additional questions
+    ├── imaging.json                # 4 additional questions
+    ├── networking.json             # 3 additional questions
+    ├── computing.json              # 4 additional questions
+    ├── storage.json                # 3 additional questions
+    ├── wireless.json               # 4 additional questions
+    ├── media.json                  # 4 additional questions
+    ├── semiconductor.json          # 4 additional questions
+    ├── interface.json              # 3 additional questions
+    └── security.json               # 4 additional questions
+```
+
+#### Template Inheritance Model
+
+```
+Portfolio Default (7 questions, weight = 1.0)
+    └── Super-Sector Template (adds 3-4 questions)
+        └── Sector Template (can override/add)
+            └── Sub-Sector Template (can override/add)
+```
+
+Questions inherit by `fieldName` — child templates can override parent questions or add new ones.
+
+#### Base Questions (portfolio-default.json)
+
+| Field Name | Display Name | Weight |
+|------------|--------------|--------|
+| `technical_merit` | Technical Merit | 0.15 |
+| `novelty` | Novelty & Non-Obviousness | 0.15 |
+| `claim_breadth` | Claim Breadth | 0.15 |
+| `market_relevance` | Market Relevance | 0.15 |
+| `enforceability` | Enforceability | 0.10 |
+| `defensive_value` | Defensive Value | 0.10 |
+| `unique_value` | Unique/Hidden Value | 0.10 |
+
+**Unique Value Question (Dark Horse):**
+Captures hidden/overlooked value not covered by standard metrics — e.g., potential applications in emerging fields, strategic blocking potential, competitive moat value. This question requires reasoning to identify non-obvious value.
+
+### 2. LLM Scoring Service
+
+**File:** `src/api/services/llm-scoring-service.ts` (NEW)
+
+#### Architecture
+
+```
+Patent Data → Enrichment → Prompt Builder → Claude API → Response Parser → Score Storage
+    ↓              ↓            ↓              ↓              ↓              ↓
+ candidates   + abstract    questions      API call      JSON parse     prisma
+   JSON       + LLM data    from config    structured    scores +       PatentScore
+                                            response     reasoning       table
+```
+
+#### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `enrichPatentData()` | Load abstract from PatentsView cache, LLM data from llm-scores cache |
+| `enrichPatentBatch()` | Batch enrichment with file I/O |
+| `buildScoringPrompt()` | Construct prompt from template questions |
+| `scorePatent()` | Score single patent via Claude API |
+| `scorePatentBatch()` | Score batch with concurrency control |
+| `scoreSubSector()` | Score all unscored patents in sub-sector |
+| `scoreSector()` | Score all unscored patents in sector (used for video-codec) |
+
+#### Patent Data Enrichment
+
+Patents are enriched from file caches (not database):
+- **Abstract:** `cache/api/patentsview/patent/{patentId}.json` → `patent.patent_abstract`
+- **LLM Data:** `cache/llm-scores/{patentId}.json` → `detailed_tech_summary`, `key_technical_features`
+
+#### Score Output Structure
+
+```typescript
+interface ScoringResult {
+  patentId: string;
+  compositeScore: number;       // Weighted average (0-10)
+  metrics: {
+    [fieldName: string]: {
+      score: number;            // 1-10 scale
+      reasoning: string;        // LLM explanation
+      confidence: number;       // 0-1
+    }
+  };
+  templateId: string;
+  timestamp: Date;
+}
+```
+
+### 3. API Routes Updates
+
+**File:** `src/api/routes/scoring-templates.routes.ts`
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/scoring-templates/config` | GET | List all JSON config files |
+| `/api/scoring-templates/config/merged/:superSectorName` | GET | Get merged questions for super-sector |
+| `/api/scoring-templates/sync` | POST | Sync database from JSON configs |
+| `/api/scoring-templates/llm/score-patent` | POST | Score single patent |
+| `/api/scoring-templates/llm/score-sub-sector/:subSectorId` | POST | Batch score sub-sector |
+| `/api/scoring-templates/llm/score-sector/:sectorName` | POST | Batch score sector |
+| `/api/scoring-templates/llm/sector-preview/:sectorName` | GET | Preview patents for scoring |
+| `/api/scoring-templates/llm/preview/:subSectorId` | GET | Preview sub-sector patents |
+
+**Route Ordering Fix:** Specific routes (`/config`, `/resolve`) moved before parameterized `/:id` route to prevent Express capture.
+
+### 4. Bugs Fixed
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| `/config` returning 404 | Express `/:id` route capturing `/config` | Moved specific routes before parameterized routes |
+| `candidates.filter is not a function` | Candidates file has `{candidates: [...]}` wrapper | Handle both array and object formats |
+| Prisma Patent model undefined | Patents stored in JSON files, not DB | Rewrote enrichment to use file caches |
+| Abstracts showing as "undefined" | Not loading from PatentsView cache | Added `loadAbstract()` from `cache/api/patentsview/` |
+
+---
+
+## Database Schema (Relevant Tables)
+
+### PatentScore Table
+
+Stores LLM scoring results:
+
+```prisma
+model PatentScore {
+  id                String    @id @default(uuid())
+  patentId          String    @unique
+  templateId        String
+  compositeScore    Float     // Weighted average
+  normalizedScore   Float?    // Within sub-sector normalization
+  subSectorRank     Int?      // Rank within sub-sector
+  sectorRank        Int?      // Rank within sector
+  rawScores         Json      // Individual metric scores
+  reasoning         Json      // LLM reasoning per metric
+  confidence        Float?    // Overall confidence
+  scoredAt          DateTime
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  template          ScoringTemplate @relation(...)
+}
+```
+
+### ScoringTemplate Table
+
+```prisma
+model ScoringTemplate {
+  id            String    @id @default(uuid())
+  name          String
+  appliesTo     String    // "portfolio", "super_sector:VIDEO_STREAMING", etc.
+  superSectorId String?
+  sectorId      String?
+  subSectorId   String?
+  questions     Json      // Array of question definitions
+  inheritsFrom  String?   // Parent template ID
+  isActive      Boolean   @default(true)
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+```
 
 ---
 
@@ -243,48 +247,84 @@ cd frontend && npm run dev
 # 1. Start infrastructure
 docker compose up -d
 
-# 2. Verify ES data (should include sector fields)
-npx tsx services/elasticsearch-service.ts stats
-# Should show: Documents: 28913
-
-# 3. Check enrichment completion
-echo "LLM: $(ls cache/llm-scores/*.json | wc -l)"
-echo "IPR: $(ls cache/ipr-scores/*.json | wc -l)"
-echo "Prosecution: $(ls cache/prosecution-scores/*.json | wc -l)"
-echo "Patent Family Parents: $(ls cache/patent-families/parents/*.json | wc -l)"
-
-# 4. Start backend + frontend
+# 2. Start backend
 npm run api:dev
+
+# 3. Check if video-codec scoring completed
+curl http://localhost:3001/api/scoring-templates/scores/sub-sector/video-codec | jq '.stats'
+
+# 4. Start frontend
 cd frontend && npm run dev
 
-# 5. Reload scores (picks up new enrichment data)
-curl -X POST http://localhost:3001/api/scores/reload
+# 5. Test scoring template config
+curl http://localhost:3001/api/scoring-templates/config | jq '.summary'
 
-# 6. Open browser
-open http://localhost:3000
+# 6. Preview merged questions for a super-sector
+curl http://localhost:3001/api/scoring-templates/config/merged/VIDEO_STREAMING | jq '.questionCount'
 ```
 
-### Test Features
-| Feature | How to Test |
-|---------|-------------|
-| **Search scope** | Open any Focus Area → click "Scope: Portfolio" chip → select super-sector/sectors → save → search terms now filtered |
-| **Scoped preview** | Focus Area → Search Terms tab → Add Term → type query → click Search → see Portfolio/Scope/Focus Area counts |
-| **Scope options** | `curl http://localhost:3001/api/focus-areas/scope-options` — returns sectors with counts |
+---
+
+## Next Steps After video-codec Batch Completes
+
+1. **Normalize Scores** — Run normalization to compute ranks within sub-sectors:
+   ```bash
+   curl -X POST http://localhost:3001/api/scoring-templates/scores/normalize/sector/video-codec
+   ```
+
+2. **Analyze Score Distribution** — Check composite score histogram, identify outliers
+
+3. **Review Reasoning Quality** — Spot-check LLM reasoning for top/bottom scored patents
+
+4. **Scale to More Sectors** — Once validated, run scoring on larger sectors (wireless, networking)
+
+5. **Build Scoring UI** — Frontend components to view/compare patent scores
 
 ---
 
-## Design Documents
+## Known Issues / TODO
 
-| Document | Purpose |
-|----------|---------|
-| `docs/FOCUS_AREA_SYSTEM_DESIGN.md` | Focus Area lifecycle, search scope, reconciliation point, set operations, word count grid, LLM jobs |
-| `docs/PATENT_FAMILIES_DESIGN.md` | Patent families, diatomic family, extended family with category-constrained expansion, citation counting |
-| `docs/FACET_SYSTEM_DESIGN.md` | Facet terminology, scoring as facets, focus area-specific facets |
-| `docs/GUI_DESIGN.md` | GUI architecture, portfolio grid, scoring views, sector rankings |
-| `docs/DEVELOPMENT_QUEUE.md` | Consolidated prioritized roadmap with dependencies |
-| `docs/CITATION_CATEGORIZATION_PROBLEM.md` | Self-citation inflation analysis |
-| `docs/DESIGN_CONSIDERATIONS.md` | Vendor integration, batch strategies, citation-aware scoring, conditional facets |
+### Immediate (Session 16)
+
+- [ ] Verify video-codec scoring completion and results
+- [ ] Normalize scores within sub-sectors
+- [ ] Analyze score distribution and quality
+- [ ] Consider adjusting question weights based on results
+
+### Medium Priority
+
+- [ ] Score additional sectors (wireless: ~3,323 patents, networking: similar)
+- [ ] Build frontend scoring visualization
+- [ ] Add sector-level score comparison views
+- [ ] Implement score versioning (re-score with template changes)
+
+### Design Backlog
+
+- [ ] Multi-model scoring comparison (Claude vs other LLMs)
+- [ ] Batch scoring queue management
+- [ ] Cost tracking and estimation for LLM scoring
+- [ ] Score calibration / human-in-the-loop validation
 
 ---
 
-*Last Updated: 2026-01-26 (Session 14 — Implemented search scope for focus areas: added primary_sector/super_sector to ES index (28,913 patents re-indexed), SearchScopeType enum and fields in Prisma schema, scoped search preview with sector filtering (native ES filters), scope-options endpoint, scope selector UI in FocusAreaDetailPage with scope-aware selectivity ratios. Added design sections: Focus Area as Reconciliation Point (set operations, focused vs adjacent patents) in FOCUS_AREA_SYSTEM_DESIGN.md; Extended Family Model (diatomic family, category-constrained expansion) in PATENT_FAMILIES_DESIGN.md.)*
+## File Reference
+
+### New Files (Session 15)
+
+| File | Purpose |
+|------|---------|
+| `config/scoring-templates/scoring-template.schema.json` | JSON Schema for template validation |
+| `config/scoring-templates/portfolio-default.json` | Base template with 7 questions |
+| `config/scoring-templates/super-sectors/*.json` | 11 super-sector templates |
+| `src/api/services/llm-scoring-service.ts` | LLM scoring service |
+
+### Modified Files (Session 15)
+
+| File | Changes |
+|------|---------|
+| `src/api/services/scoring-template-service.ts` | Added JSON file loading, sync, merged questions |
+| `src/api/routes/scoring-templates.routes.ts` | Added config, sync, LLM scoring endpoints; fixed route ordering |
+
+---
+
+*Last Updated: 2026-02-06 (Session 15 — Implemented scoring template system with JSON config files, template inheritance (portfolio → super-sector → sector → sub-sector), LLM scoring service with Claude API integration, patent data enrichment from file caches, and sector-level batch scoring. Currently running video-codec scoring batch (376 patents, ~58% complete).)*

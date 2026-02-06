@@ -557,13 +557,18 @@ export const focusAreaApi = {
     return data;
   },
 
-  async addPatentsToFocusArea(id: string, patentIds: string[], membershipType = 'MANUAL'): Promise<{ added: number; total: number }> {
+  async addPatentsToFocusArea(id: string, patentIds: string[], membershipType = 'MANUAL'): Promise<{ added: number; total: number; fetched?: number; fetchFailed?: number }> {
     const { data } = await api.post(`/focus-areas/${id}/patents`, { patentIds, membershipType });
     return data;
   },
 
   async removePatentsFromFocusArea(id: string, patentIds: string[]): Promise<{ removed: number; total: number }> {
     const { data } = await api.delete(`/focus-areas/${id}/patents`, { data: { patentIds } });
+    return data;
+  },
+
+  async fetchPatentData(id: string): Promise<{ total: number; uncached: number; fetched: number; failed: number; failedIds?: string[] }> {
+    const { data } = await api.post(`/focus-areas/${id}/fetch-patents`);
     return data;
   },
 
@@ -1549,5 +1554,160 @@ export const BUILTIN_V3_PRESETS: V3ConsensusPreset[] = [
     ],
   },
 ];
+
+// ============================================================================
+// CPC (Cooperative Patent Classification) API
+// ============================================================================
+
+export interface CpcDescription {
+  code: string;
+  title: string;
+  titleLong?: string;
+  level: 'SECTION' | 'CLASS' | 'SUBCLASS' | 'GROUP' | 'SUBGROUP';
+  parentCode?: string;
+  hierarchy?: CpcDescription[];
+  sector?: string;
+  superSector?: string;
+}
+
+export interface CpcHierarchy {
+  section?: CpcDescription;
+  class?: CpcDescription;
+  subclass?: CpcDescription;
+  group?: CpcDescription;
+  subgroup?: CpcDescription;
+}
+
+export interface CpcStats {
+  total: number;
+  byLevel: Record<string, number>;
+  withDefinitions: number;
+  recentlyUpdated: number;
+  cache: { size: number; hitRate: string };
+}
+
+export interface CpcSeedProgress {
+  success: boolean;
+  filesProcessed: number;
+  codesInserted: number;
+  codesUpdated: number;
+  definitionsApplied: number;
+  errors: string[];
+}
+
+export const cpcApi = {
+  /**
+   * Look up a single CPC code
+   */
+  async lookup(code: string, includeHierarchy = false): Promise<CpcDescription | null> {
+    try {
+      const { data } = await api.get(`/cpc/lookup/${code}`, {
+        params: { hierarchy: includeHierarchy ? 'true' : undefined }
+      });
+      return data;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      throw error;
+    }
+  },
+
+  /**
+   * Batch look up multiple CPC codes
+   */
+  async batchLookup(codes: string[]): Promise<Record<string, CpcDescription | null>> {
+    const { data } = await api.post('/cpc/batch-lookup', { codes });
+    return data;
+  },
+
+  /**
+   * Get full hierarchy for a CPC code
+   */
+  async getHierarchy(code: string): Promise<{ code: string; hierarchy: CpcHierarchy }> {
+    const { data } = await api.get(`/cpc/hierarchy/${code}`);
+    return data;
+  },
+
+  /**
+   * Get immediate children of a CPC code
+   */
+  async getChildren(code: string): Promise<{ code: string; children: CpcDescription[]; count: number }> {
+    const { data } = await api.get(`/cpc/children/${code}`);
+    return data;
+  },
+
+  /**
+   * Search CPC codes by text
+   */
+  async search(query: string, options?: { level?: string; limit?: number }): Promise<{
+    query: string;
+    results: CpcDescription[];
+    count: number;
+  }> {
+    const { data } = await api.get('/cpc/search', {
+      params: { q: query, ...options }
+    });
+    return data;
+  },
+
+  /**
+   * Get all CPC codes under a prefix
+   */
+  async getByPrefix(prefix: string, options?: { includeNotAllocatable?: boolean; limit?: number }): Promise<{
+    prefix: string;
+    results: CpcDescription[];
+    count: number;
+  }> {
+    const { data } = await api.get(`/cpc/prefix/${prefix}`, { params: options });
+    return data;
+  },
+
+  /**
+   * Get sector mapping for a CPC code
+   */
+  async getSector(code: string): Promise<{ code: string; sector: string | null; superSector: string | null }> {
+    const { data } = await api.get(`/cpc/sector/${code}`);
+    return data;
+  },
+
+  /**
+   * Get CPC database statistics
+   */
+  async getStats(): Promise<CpcStats> {
+    const { data } = await api.get('/cpc/stats');
+    return data;
+  },
+
+  /**
+   * Get CPC configuration status
+   */
+  async getConfig(): Promise<{ configured: boolean; schemeDir: string | null; definitionDir: string | null }> {
+    const { data } = await api.get('/cpc/config');
+    return data;
+  },
+
+  /**
+   * Seed CPC codes from XML files
+   */
+  async seed(options?: { subclasses?: string[]; skipDefinitions?: boolean }): Promise<CpcSeedProgress> {
+    const { data } = await api.post('/cpc/seed', options || {});
+    return data;
+  },
+
+  /**
+   * Seed only patent-relevant CPC codes (faster)
+   */
+  async seedRelevant(): Promise<CpcSeedProgress> {
+    const { data } = await api.post('/cpc/seed-relevant');
+    return data;
+  },
+
+  /**
+   * Clear the CPC lookup cache
+   */
+  async clearCache(): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.post('/cpc/clear-cache');
+    return data;
+  },
+};
 
 export default api;

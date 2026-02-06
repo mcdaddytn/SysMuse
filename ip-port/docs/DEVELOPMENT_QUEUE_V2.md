@@ -28,6 +28,75 @@
 | Configurable delimiters | Done |
 | Template execution engine | Done |
 | Restaurant POS test case (13 patents) | Done |
+| Tournament-style POS scoring (attempted) | **Abandoned** — see Lessons Learned below |
+
+---
+
+## Lessons Learned: Tournament Approach & Product-Type Correlation
+
+**Date**: 2026-02-04
+**Status**: Approach abandoned; insights captured for revised strategy
+
+### Problem
+
+We attempted tournament-style LLM scoring to identify patents most relevant to specific product types (e.g., "Restaurant POS"). The approach asked LLMs to evaluate individual patents against product-category questions like "How applicable is this patent to mobile POS terminals?" and "Would this technology prove valuable in high-stress restaurant environments?"
+
+### What Went Wrong: Hallucinations from Inappropriate Correlation
+
+The fundamental issue was **projecting a direct correlation between patents (which describe technology components) and specific product types (which are complex assemblies of many technologies)**. This mismatch caused:
+
+1. **Forced relevance narratives**: When asked "How does this patent relate to Restaurant POS?", the LLM fabricated plausible-sounding but unfounded connections between low-level technology (e.g., a Bluetooth coexistence mechanism) and high-level product scenarios (e.g., "enables reliable payment processing in crowded restaurants")
+
+2. **Scoring inflation**: Nearly every wireless/networking patent received moderate-to-high POS relevance scores because the LLM could always construct a narrative path from any network technology to any networked product
+
+3. **Loss of discriminating signal**: Because the questions were too broad ("Could this apply to POS?"), the LLM couldn't meaningfully differentiate — a generic Wi-Fi optimization patent scored similarly to a patent specifically about payment terminal antenna design
+
+4. **Compounding errors in tournament rounds**: As hallucinated scores propagated through tournament rounds, the errors compounded rather than self-corrected. Patents advanced based on fabricated relevance narratives rather than genuine technical fit
+
+### Root Cause
+
+**The questions were not focused enough.** A patent describes a specific technical contribution (a component). A product type like "Restaurant POS" is a system of hundreds of components. Asking an LLM to bridge that gap in one step requires it to:
+- Infer a tech stack for the product type
+- Map the patent to a component in that tech stack
+- Assess fit at that specific layer
+
+This is too many inferential leaps in a single prompt, especially when the LLM has no grounding data about what tech stacks actually look like for these products.
+
+### Revised Approach: Tech Stack Component Discovery
+
+Instead of asking "Is this patent relevant to Restaurant POS?", the better approach is:
+
+1. **Identify tech stack components**: Find patents that describe components of technology stacks — not tied to any specific product, but identifiable by technical fingerprint (CPC codes, keyword clusters, citation patterns)
+
+2. **Cluster by tech stack layer**: Group patents into technology layers (wireless connectivity, security/auth, data processing, device management, etc.) using existing sector/super-sector classification + LLM-assisted refinement
+
+3. **Ask focused technical questions**: Instead of product-relevance questions, ask about the technology itself:
+   - "What technical problem does this patent solve?"
+   - "What system component would implement this?"
+   - "What other technologies would this need to interoperate with?"
+   - "Is this a foundational protocol or an application-layer optimization?"
+
+4. **Map tech stacks to product spaces**: As a separate step (not per-patent), define which tech stack profiles correspond to product categories. "Restaurant POS" needs: wireless connectivity (high-density, reliable), payment security, device management, low-latency data sync. This mapping is done once, not per-patent.
+
+5. **Intersect**: Patents that cluster into the right tech stack components are candidates for product-space relevance — but the relevance comes from the cluster membership, not from per-patent LLM hallucination.
+
+### Key Insight
+
+**The unit of analysis should be the tech stack component, not the product type.** Patents naturally map to tech stack components. Product types naturally map to sets of tech stack components. The patent-to-product mapping is a composition of these two mappings, not a direct jump.
+
+### What to Preserve
+
+- The prompt template system (STRUCTURED + FREE_FORM) is solid infrastructure
+- The tournament execution framework is reusable for other patterns
+- The focus area system with search scopes provides the right grouping mechanism
+- Per-patent LLM questions work well when they're about the technology itself (as V3 analysis demonstrates), not about product applicability
+
+### What to Change
+
+- Abandon direct patent → product-type scoring
+- Use focus areas + search scopes to define tech stack component clusters
+- Design LLM questions around technical characterization (what layer, what problem, what dependencies)
+- Build product-space mapping as a separate, higher-level analysis on top of clusters
 
 ---
 

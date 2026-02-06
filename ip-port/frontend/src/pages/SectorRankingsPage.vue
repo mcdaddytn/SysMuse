@@ -93,7 +93,7 @@ function toggleSector(sectorKey: string) {
 // Navigate to portfolio filtered by sector
 function drillDown(sectorKey: string) {
   router.push({
-    name: 'portfolio',
+    name: 'patent-summary',
     query: { primarySectors: sectorKey }
   });
 }

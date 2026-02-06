@@ -37,7 +37,7 @@ const currentUser = ref({
 const isAdmin = computed(() => currentUser.value?.accessLevel === 'ADMIN');
 
 const navItems = computed(() => [
-  { label: 'Portfolio', icon: 'folder', to: '/', show: true },
+  { label: 'Patent Summary', icon: 'summarize', to: '/', show: true },
   { label: 'Focus Areas', icon: 'filter_center_focus', to: '/focus-areas', show: true },
   { divider: true, show: true },
   { label: 'Base Score', icon: 'leaderboard', to: '/base-scoring', show: true },
@@ -77,7 +77,7 @@ function logout() {
         />
 
         <q-toolbar-title>
-          <span class="text-weight-bold">Patent Portfolio Workstation</span>
+          <span class="text-weight-bold">Patent Workstation</span>
         </q-toolbar-title>
 
         <!-- User Menu -->

@@ -429,6 +429,145 @@ function splitOnOperator(s: string, op: string): string[] {
   return parts.filter(p => p.trim().length > 0);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Full Re-assignment Function
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReassignmentSummary {
+  totalPatents: number;
+  reassigned: number;
+  unchanged: number;
+  noMatch: number;
+  sectorCounts: Record<string, number>;
+  superSectorCounts: Record<string, number>;
+  durationMs: number;
+}
+
+/**
+ * Fully re-assign all patents based on current sector rules.
+ * This evaluates each patent's CPC codes against the taxonomy rules
+ * and updates the candidates file with new sector assignments.
+ */
+export async function reassignAllPatents(
+  options: { dryRun?: boolean; progressCallback?: (current: number, total: number) => void } = {}
+): Promise<ReassignmentSummary> {
+  const startTime = Date.now();
+  const { dryRun = false, progressCallback } = options;
+
+  // Load the candidates file
+  const outputDir = path.join(process.cwd(), 'output');
+  const files = fs.readdirSync(outputDir)
+    .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
+    .sort()
+    .reverse();
+
+  if (files.length === 0) {
+    throw new Error('No candidates file found in output directory');
+  }
+
+  const filePath = path.join(outputDir, files[0]);
+  const fileData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  const candidates: PortfolioPatent[] = fileData.candidates || [];
+
+  console.log(`[ReassignAll] Processing ${candidates.length} patents from ${files[0]}`);
+
+  // Clear rule cache to ensure fresh rules
+  clearRuleCache();
+
+  // Track statistics
+  const sectorCounts: Record<string, number> = {};
+  const superSectorCounts: Record<string, number> = {};
+  let reassigned = 0;
+  let unchanged = 0;
+  let noMatch = 0;
+
+  // Process each patent
+  for (let i = 0; i < candidates.length; i++) {
+    const patent = candidates[i];
+    const oldSector = patent.primary_sector || patent.sector || 'general';
+
+    // Build CPC codes array from patent data
+    const cpcCodes = patent.cpc_codes || [];
+
+    // Assign sector based on CPC codes
+    const assignment = await assignSector({
+      patent_id: patent.patent_id,
+      cpc_codes: cpcCodes,
+      patent_title: patent.patent_title,
+      abstract: patent.abstract,
+    });
+
+    // Update patent with new assignment
+    const newSector = assignment.primarySector;
+    const newSuperSector = assignment.superSector;
+
+    if (newSector !== oldSector) {
+      reassigned++;
+    } else {
+      unchanged++;
+    }
+
+    if (newSector === 'general') {
+      noMatch++;
+    }
+
+    // Update the patent object
+    patent.primary_sector = newSector;
+    patent.sector = newSector;
+    patent.super_sector = newSuperSector;
+
+    // Track counts
+    sectorCounts[newSector] = (sectorCounts[newSector] || 0) + 1;
+    superSectorCounts[newSuperSector] = (superSectorCounts[newSuperSector] || 0) + 1;
+
+    // Progress callback
+    if (progressCallback && (i + 1) % 1000 === 0) {
+      progressCallback(i + 1, candidates.length);
+    }
+  }
+
+  // Save updated candidates file (unless dry run)
+  if (!dryRun) {
+    fileData.candidates = candidates;
+    fileData.lastSectorReassignment = new Date().toISOString();
+    fileData.taxonomyVersion = 'cpc-only-v1.1';
+    fs.writeFileSync(filePath, JSON.stringify(fileData, null, 2));
+    console.log(`[ReassignAll] Saved updated candidates to ${files[0]}`);
+
+    // Clear portfolio cache so next load gets fresh data
+    portfolioCache = null;
+    portfolioCacheTime = 0;
+
+    // Update sector patent counts in database
+    const sectors = await prisma.sector.findMany({ select: { id: true, name: true } });
+    for (const sector of sectors) {
+      const count = sectorCounts[sector.name] || 0;
+      await prisma.sector.update({
+        where: { id: sector.id },
+        data: { patentCount: count },
+      });
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+  console.log(`[ReassignAll] Completed in ${(durationMs / 1000).toFixed(1)}s`);
+  console.log(`  Reassigned: ${reassigned}, Unchanged: ${unchanged}, No match: ${noMatch}`);
+
+  return {
+    totalPatents: candidates.length,
+    reassigned,
+    unchanged,
+    noMatch,
+    sectorCounts,
+    superSectorCounts,
+    durationMs,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Patent Loader
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Patent loader — loads from the candidates file (same pattern as patents.routes.ts)
 interface PortfolioPatent {
   patent_id: string;

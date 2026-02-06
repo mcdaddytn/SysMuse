@@ -11,11 +11,12 @@
 
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { seedSectorsFromConfig } from '../services/sector-seed-service.js';
+import { seedSectorsFromConfig, seedCpcOnlyTaxonomy, listTaxonomyConfigs } from '../services/sector-seed-service.js';
 import {
   previewRule,
   recalculatePatentCounts,
   recalculateSectorPatentCount,
+  reassignAllPatents,
   clearRuleCache,
 } from '../services/sector-assignment-service.js';
 import { clearSectorCache } from './scores.routes.js';
@@ -171,7 +172,7 @@ router.post('/rules/:ruleId/promote', async (req: Request, res: Response) => {
 
 /**
  * POST /api/sectors/reassign-all
- * Re-evaluate all patents against current rules
+ * Re-count patents by existing sector assignments (fast, no re-evaluation)
  */
 router.post('/reassign-all', async (_req: Request, res: Response) => {
   try {
@@ -187,8 +188,41 @@ router.post('/reassign-all', async (_req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/sectors/reassign-patents
+ * Fully re-evaluate all patents against current CPC rules and update assignments.
+ * This is a heavier operation that updates the candidates file.
+ * Body: { dryRun?: boolean }
+ */
+router.post('/reassign-patents', async (req: Request, res: Response) => {
+  try {
+    const { dryRun } = req.body;
+
+    console.log('[Sectors] Starting full patent reassignment...');
+    console.log(`  Dry run: ${dryRun || false}`);
+
+    const summary = await reassignAllPatents({
+      dryRun,
+      progressCallback: (current, total) => {
+        console.log(`  Progress: ${current}/${total} patents (${Math.round(100 * current / total)}%)`);
+      },
+    });
+
+    clearRuleCache();
+    clearSectorCache();
+
+    res.json({
+      message: dryRun ? 'Dry run completed (no changes saved)' : 'All patents reassigned based on CPC rules',
+      ...summary,
+    });
+  } catch (err: unknown) {
+    console.error('[Sectors] Reassign-patents error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
  * POST /api/sectors/seed
- * Seed DB from config files
+ * Seed DB from config files (legacy format)
  */
 router.post('/seed', async (_req: Request, res: Response) => {
   try {
@@ -201,6 +235,50 @@ router.post('/seed', async (_req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     console.error('[Sectors] Seed error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * GET /api/sectors/taxonomy-configs
+ * List available taxonomy config files
+ */
+router.get('/taxonomy-configs', (_req: Request, res: Response) => {
+  try {
+    const configs = listTaxonomyConfigs();
+    res.json({ configs });
+  } catch (err: unknown) {
+    console.error('[Sectors] List taxonomy configs error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/sectors/seed-taxonomy
+ * Seed DB from CPC-only taxonomy format
+ * Body: { configFile?: string, cleanStart?: boolean }
+ *   - configFile: taxonomy config filename (default: 'sector-taxonomy-cpc-only.json')
+ *   - cleanStart: if true, deletes all existing sectors/rules first (default: false)
+ */
+router.post('/seed-taxonomy', async (req: Request, res: Response) => {
+  try {
+    const { configFile, cleanStart } = req.body;
+
+    console.log('[Sectors] Seeding from CPC-only taxonomy...');
+    console.log(`  Config file: ${configFile || 'sector-taxonomy-cpc-only.json'}`);
+    console.log(`  Clean start: ${cleanStart || false}`);
+
+    const summary = await seedCpcOnlyTaxonomy(configFile, cleanStart);
+    clearRuleCache();
+    clearSectorCache();
+
+    res.json({
+      message: 'Sectors seeded from CPC-only taxonomy',
+      configFile: configFile || 'sector-taxonomy-cpc-only.json',
+      ...summary,
+    });
+  } catch (err: unknown) {
+    console.error('[Sectors] Seed taxonomy error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

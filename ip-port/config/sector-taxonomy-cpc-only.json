@@ -1,0 +1,494 @@
+{
+  "version": "1.1",
+  "description": "Clean CPC-only sector taxonomy - portfolio-aware with 98%+ coverage",
+  "created": "2026-02-06",
+  "notes": "Default taxonomy using only CPC classification codes. Covers Broadcom portfolio + extended patents.",
+
+  "superSectors": {
+    "SECURITY": {
+      "displayName": "Security",
+      "description": "Cybersecurity, authentication, cryptography, and data protection",
+      "damagesTier": "High",
+      "sectors": [
+        "network-threat-protection",
+        "network-auth-access",
+        "network-crypto",
+        "network-secure-compute",
+        "wireless-security",
+        "computing-os-security",
+        "computing-data-protection",
+        "computing-auth-boot"
+      ]
+    },
+
+    "NETWORKING": {
+      "displayName": "Networking",
+      "description": "Network protocols, switching, routing, and management",
+      "damagesTier": "High",
+      "sectors": [
+        "network-switching",
+        "network-management",
+        "network-protocols",
+        "network-signal-processing",
+        "network-multiplexing",
+        "network-error-control",
+        "streaming-multimedia",
+        "telephony"
+      ]
+    },
+
+    "WIRELESS": {
+      "displayName": "Wireless & RF",
+      "description": "Wireless communications, cellular, RF, and antennas",
+      "damagesTier": "High",
+      "sectors": [
+        "wireless-scheduling",
+        "wireless-power-mgmt",
+        "wireless-mimo-antenna",
+        "wireless-transmission",
+        "wireless-mobility",
+        "wireless-infrastructure",
+        "wireless-services",
+        "rf-acoustic",
+        "antennas",
+        "radar-sensing"
+      ]
+    },
+
+    "VIDEO_STREAMING": {
+      "displayName": "Video & Streaming",
+      "description": "Video coding, streaming, broadcast, and media",
+      "damagesTier": "High",
+      "sectors": [
+        "video-codec",
+        "video-drm-conditional",
+        "video-client-processing",
+        "video-server-cdn",
+        "video-broadcast",
+        "video-storage",
+        "display-control"
+      ]
+    },
+
+    "IMAGING": {
+      "displayName": "Imaging & Optics",
+      "description": "Image processing, cameras, 3D, recognition, and optical systems",
+      "damagesTier": "Medium",
+      "sectors": [
+        "image-processing",
+        "3d-stereo-depth",
+        "cameras-sensors",
+        "optics",
+        "recognition-biometrics"
+      ]
+    },
+
+    "COMPUTING": {
+      "displayName": "Computing & Data",
+      "description": "Computing systems, runtime, UI, data management, and power",
+      "damagesTier": "Medium",
+      "sectors": [
+        "computing-systems",
+        "computing-runtime",
+        "computing-ui",
+        "data-retrieval",
+        "fintech-business",
+        "power-management"
+      ]
+    },
+
+    "AI_ML": {
+      "displayName": "AI & Machine Learning",
+      "description": "Artificial intelligence and machine learning",
+      "damagesTier": "High",
+      "sectors": [
+        "ai-ml"
+      ]
+    },
+
+    "SEMICONDUCTOR": {
+      "displayName": "Semiconductor & Hardware",
+      "description": "Chip design, circuits, memory, test, and packaging",
+      "damagesTier": "High",
+      "sectors": [
+        "semiconductor",
+        "semiconductor-modern",
+        "analog-circuits",
+        "memory-storage",
+        "test-measurement",
+        "pcb-packaging",
+        "magnetics-inductors",
+        "lithography",
+        "audio"
+      ]
+    }
+  },
+
+  "sectors": {
+    "network-threat-protection": {
+      "displayName": "Network Threat Protection",
+      "description": "Malware, intrusion detection, countermeasures",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04L63/14", "H04L63/12", "H04L63/16"]
+    },
+    "network-auth-access": {
+      "displayName": "Network Auth & Access Control",
+      "description": "Auth protocols, access control, firewalls",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04L63/08", "H04L63/10", "H04L63/04", "H04L63/02"]
+    },
+    "network-crypto": {
+      "displayName": "Network Cryptography",
+      "description": "Cryptographic schemes, signatures, PKI",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04L9/"]
+    },
+    "network-secure-compute": {
+      "displayName": "Secure Computing & MPC",
+      "description": "Multiparty computation, crypto mechanisms",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L63/20", "H04L63/06"]
+    },
+    "network-signal-processing": {
+      "displayName": "Network Signal Processing",
+      "description": "Baseband, modulation, equalization",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L25/", "H04L27/"]
+    },
+    "network-multiplexing": {
+      "displayName": "Network Multiplexing",
+      "description": "Frequency/time multiplexing, sync",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L5/", "H04L7/"]
+    },
+    "network-error-control": {
+      "displayName": "Network Error Control",
+      "description": "Error detection, FEC, ARQ",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L1/"]
+    },
+    "network-switching": {
+      "displayName": "Network Switching & Routing",
+      "description": "Switching, routing, QoS, selecting",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04L12/", "H04L45/", "H04L47/", "H04L49/", "H04Q/"]
+    },
+    "network-management": {
+      "displayName": "Network Management",
+      "description": "Network monitoring, configuration",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L41/", "H04L43/"]
+    },
+    "network-protocols": {
+      "displayName": "Network Protocols",
+      "description": "Application protocols, messaging",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L67/", "H04L69/"]
+    },
+    "streaming-multimedia": {
+      "displayName": "Streaming & Multimedia",
+      "description": "Real-time streaming protocols",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04L65/"]
+    },
+    "telephony": {
+      "displayName": "Telephony & VoIP",
+      "description": "Voice communication, PBX, conferencing",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04M/"]
+    },
+    "wireless-scheduling": {
+      "displayName": "Wireless Scheduling",
+      "description": "Resource scheduling, RACH, sync",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04W72/", "H04W74/", "H04W56/"]
+    },
+    "wireless-power-mgmt": {
+      "displayName": "Wireless Power Management",
+      "description": "Power control, DRX, battery optimization",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04W52/"]
+    },
+    "wireless-mimo-antenna": {
+      "displayName": "Wireless MIMO & Antenna",
+      "description": "MIMO, beamforming, antenna arrays",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04B7/"]
+    },
+    "wireless-transmission": {
+      "displayName": "Wireless Transmission",
+      "description": "TX fundamentals, near-field, optical",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04B1/", "H04B3/", "H04B5/", "H04B10/"]
+    },
+    "wireless-mobility": {
+      "displayName": "Wireless Mobility",
+      "description": "Handoff, connection mgmt, roaming",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04W36/", "H04W76/", "H04W8/"]
+    },
+    "wireless-infrastructure": {
+      "displayName": "Wireless Infrastructure",
+      "description": "Base stations, monitoring, coverage",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04W88/", "H04W24/", "H04W16/", "H04W28/", "H04W84/"]
+    },
+    "wireless-services": {
+      "displayName": "Wireless Services",
+      "description": "Location services, messaging",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04W4/", "H04W64/"]
+    },
+    "wireless-security": {
+      "displayName": "Wireless Security",
+      "description": "Auth, encryption at wireless layer",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04W12/"]
+    },
+    "antennas": {
+      "displayName": "Antennas",
+      "description": "Antenna arrays, feeders, waveguides",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H01Q/"]
+    },
+    "radar-sensing": {
+      "displayName": "Radar & Sensing",
+      "description": "Radio direction-finding, radar, sonar, lidar",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G01S/"]
+    },
+    "rf-acoustic": {
+      "displayName": "RF Acoustic Resonators",
+      "description": "BAW/FBAR filters for RF",
+      "damagesTier": "Very High",
+      "cpcPrefixes": ["H03H9/", "H03H/"]
+    },
+    "computing-os-security": {
+      "displayName": "Computing OS Security",
+      "description": "Kernel, OS protection, sandboxing",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G06F21/5"]
+    },
+    "computing-data-protection": {
+      "displayName": "Computing Data Protection",
+      "description": "Data at rest, DLP, storage encryption",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G06F21/6"]
+    },
+    "computing-auth-boot": {
+      "displayName": "Computing Auth & Secure Boot",
+      "description": "Secure boot, user auth, process auth",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G06F21/1", "G06F21/3", "G06F21/4"]
+    },
+    "computing-systems": {
+      "displayName": "Computing Systems",
+      "description": "Power, interconnect, memory management",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G06F1/", "G06F12/", "G06F13/"]
+    },
+    "computing-runtime": {
+      "displayName": "Computing Runtime",
+      "description": "VMs, scheduling, error detection",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G06F9/", "G06F11/"]
+    },
+    "computing-ui": {
+      "displayName": "Computing UI",
+      "description": "I/O, displays, interaction",
+      "damagesTier": "Low",
+      "cpcPrefixes": ["G06F3/"]
+    },
+    "data-retrieval": {
+      "displayName": "Data Retrieval",
+      "description": "Database, search, information retrieval",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G06F16/"]
+    },
+    "fintech-business": {
+      "displayName": "FinTech & Business",
+      "description": "Payments, workflow, commerce",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G06Q/"]
+    },
+    "power-management": {
+      "displayName": "Power Management",
+      "description": "Power supply, charging, distribution circuits",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H02J/"]
+    },
+    "video-client-processing": {
+      "displayName": "Video Client Processing",
+      "description": "Playback, buffering, adaptive bitrate",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04N21/4"]
+    },
+    "video-server-cdn": {
+      "displayName": "Video Server & CDN",
+      "description": "Server, CDN, delivery infrastructure",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04N21/2", "H04N21/8"]
+    },
+    "video-drm-conditional": {
+      "displayName": "Video DRM & Conditional Access",
+      "description": "DRM, conditional access, encryption",
+      "damagesTier": "Very High",
+      "cpcPrefixes": ["H04N21/6"]
+    },
+    "video-codec": {
+      "displayName": "Video Codec",
+      "description": "Compression, encoding",
+      "damagesTier": "Very High",
+      "cpcPrefixes": ["H04N19/"]
+    },
+    "video-broadcast": {
+      "displayName": "Video Broadcast",
+      "description": "TV systems, signal processing",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04N5/", "H04N7/", "H04N9/"]
+    },
+    "video-storage": {
+      "displayName": "Video Storage",
+      "description": "Recording, media storage",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G11B/"]
+    },
+    "display-control": {
+      "displayName": "Display Control",
+      "description": "Display drivers, panel control, LED drivers",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G09G/"]
+    },
+    "image-processing": {
+      "displayName": "Image Processing",
+      "description": "Enhancement, transforms, analysis",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G06T/"]
+    },
+    "3d-stereo-depth": {
+      "displayName": "3D Stereo & Depth",
+      "description": "3D imaging, depth sensing",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H04N13/", "G06T15/"]
+    },
+    "cameras-sensors": {
+      "displayName": "Cameras & Sensors",
+      "description": "Image capture hardware",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H04N23/", "H04N25/"]
+    },
+    "optics": {
+      "displayName": "Optics & Photonics",
+      "description": "Optical systems, fiber, lasers",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G02/", "H04J/", "H01S/"]
+    },
+    "recognition-biometrics": {
+      "displayName": "Recognition & Biometrics",
+      "description": "Pattern recognition, barcodes, biometrics, OCR",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G06K/"]
+    },
+    "ai-ml": {
+      "displayName": "AI/Machine Learning",
+      "description": "Neural networks, ML algorithms",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G06N/"]
+    },
+    "semiconductor": {
+      "displayName": "Semiconductor (Legacy)",
+      "description": "Chip design, circuits (pre-2023 classification)",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H01L/"]
+    },
+    "semiconductor-modern": {
+      "displayName": "Semiconductor (Modern)",
+      "description": "Modern semiconductor devices (H10 classification)",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H10/"]
+    },
+    "memory-storage": {
+      "displayName": "Memory & Static Storage",
+      "description": "RAM, ROM, flash memory, registers",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G11C/"]
+    },
+    "test-measurement": {
+      "displayName": "Test & Measurement",
+      "description": "Test equipment, probes, measuring circuits",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G01R/"]
+    },
+    "pcb-packaging": {
+      "displayName": "PCB & Packaging",
+      "description": "Printed circuits, casings, shielding",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H05K/"]
+    },
+    "magnetics-inductors": {
+      "displayName": "Magnetics & Inductors",
+      "description": "Magnets, inductors, transformers",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["H01F/"]
+    },
+    "lithography": {
+      "displayName": "Lithography",
+      "description": "Photomechanical production, photoresist",
+      "damagesTier": "High",
+      "cpcPrefixes": ["G03F/"]
+    },
+    "audio": {
+      "displayName": "Audio Processing",
+      "description": "Speech, audio codecs, speakers",
+      "damagesTier": "Medium",
+      "cpcPrefixes": ["G10L/", "H04R/", "H04S/"]
+    },
+    "analog-circuits": {
+      "displayName": "Analog Circuits",
+      "description": "Amplifiers, oscillators, PLLs, converters",
+      "damagesTier": "High",
+      "cpcPrefixes": ["H03F/", "H03B/", "H03D/", "H03G/", "H03J/", "H03K/", "H03L/", "H03M/"]
+    }
+  },
+
+  "unmappedSectorDefault": "general",
+
+  "statistics": {
+    "superSectorCount": 8,
+    "sectorCount": 53,
+    "estimatedPortfolioCoverage": "98%+",
+    "cpcClassesCovered": [
+      "G01R - Measuring/testing",
+      "G01S - Radar/sensing",
+      "G02 - Optics",
+      "G03F - Lithography",
+      "G06F - Computing",
+      "G06K - Recognition",
+      "G06N - AI/ML",
+      "G06Q - Business/Finance",
+      "G06T - Image Processing",
+      "G09G - Display control",
+      "G10L - Speech/Audio",
+      "G11B - Media storage",
+      "G11C - Static memory",
+      "H01F - Magnetics",
+      "H01L - Semiconductor (legacy)",
+      "H01Q - Antennas",
+      "H01S - Lasers",
+      "H02J - Power supply",
+      "H03 - Analog circuits",
+      "H03H - Filters",
+      "H04B - Transmission",
+      "H04J - Multiplex",
+      "H04L - Networks",
+      "H04M - Telephony",
+      "H04N - Video",
+      "H04Q - Selecting",
+      "H04R - Acoustics",
+      "H04S - Stereo Audio",
+      "H04W - Wireless",
+      "H05K - PCB/packaging",
+      "H10 - Semiconductor (modern)"
+    ]
+  }
+}

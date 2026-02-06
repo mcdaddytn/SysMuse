@@ -432,10 +432,14 @@ onMounted(() => {
                     </q-item-section>
                     <q-item-section side>
                       <q-badge
-                        :label="sector.patentCount"
-                        :color="sector.patentCount > 0 ? 'primary' : 'grey-4'"
-                        :text-color="sector.patentCount > 0 ? 'white' : 'grey-7'"
-                      />
+                        :label="(sector._count?.rules ?? 0) + ' rules'"
+                        :color="(sector._count?.rules ?? 0) > 0 ? 'primary' : 'grey-4'"
+                        :text-color="(sector._count?.rules ?? 0) > 0 ? 'white' : 'grey-7'"
+                      >
+                        <q-tooltip v-if="sector.patentCount > 0">
+                          {{ sector.patentCount }} patents
+                        </q-tooltip>
+                      </q-badge>
                     </q-item-section>
                   </q-item>
                 </q-expansion-item>

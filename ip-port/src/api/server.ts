@@ -19,6 +19,7 @@ import patentFamiliesRouter from './routes/patent-families.routes.js';
 import sectorsRouter from './routes/sectors.routes.js';
 import batchJobsRouter from './routes/batch-jobs.routes.js';
 import tournamentsRouter from './routes/tournaments.routes.js';
+import cpcRouter from './routes/cpc.routes.js';
 
 dotenv.config();
 
@@ -60,6 +61,7 @@ app.use('/api/patent-families', patentFamiliesRouter);
 app.use('/api/sectors', sectorsRouter);
 app.use('/api/batch-jobs', batchJobsRouter);
 app.use('/api/tournaments', tournamentsRouter);
+app.use('/api/cpc', cpcRouter);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

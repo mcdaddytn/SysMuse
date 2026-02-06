@@ -11,6 +11,7 @@ import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
 import { loadAllClassifications, scoreAllPatents, getDefaultProfileId } from '../services/scoring-service.js';
+import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 
 const prisma = new PrismaClient();
 
@@ -304,7 +305,7 @@ export function clearPatentsCache(): void {
 /**
  * Load patents from the candidates file and enrich with affiliate/sector
  */
-function loadPatents(): Patent[] {
+export function loadPatents(): Patent[] {
   const now = Date.now();
 
   // Return cached data if still valid
@@ -422,6 +423,9 @@ function loadPatents(): Patent[] {
   console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation/v2/v3 enrichment`);
   return patentsCache;
 }
+
+// Register portfolio loader with patent-fetch-service for cross-module access
+registerPortfolioLoader(loadPatents);
 
 /**
  * Infer super-sector from primary sector name
@@ -877,7 +881,39 @@ router.get('/', async (req: Request, res: Response) => {
         faPatents.map(fp => [fp.patentId, { membershipType: fp.membershipType, matchScore: fp.matchScore }])
       );
       const faPatentIds = new Set(faPatents.map(fp => fp.patentId));
-      patents = patents.filter(p => faPatentIds.has(p.patent_id));
+
+      // Filter portfolio patents to those in the focus area
+      const portfolioInFa = patents.filter(p => faPatentIds.has(p.patent_id));
+      const portfolioPatentIds = new Set(portfolioInFa.map(p => p.patent_id));
+
+      // Resolve non-portfolio patents from cache sources
+      const missingIds = [...faPatentIds].filter(id => !portfolioPatentIds.has(id));
+      if (missingIds.length > 0) {
+        const resolved = resolvePatents(missingIds);
+        const resolvedAsPatents = [...resolved.values()].map(rp => ({
+          patent_id: rp.patent_id,
+          patent_title: rp.patent_title,
+          title: rp.patent_title,
+          patent_date: rp.patent_date,
+          date: rp.patent_date,
+          assignee: rp.assignee,
+          abstract: rp.abstract || '',
+          affiliate: rp.affiliate || 'Unknown',
+          super_sector: rp.super_sector || 'Unknown',
+          primary_sector: rp.primary_sector || 'general',
+          cpc_codes: rp.cpc_codes || [],
+          forward_citations: rp.forward_citations || 0,
+          remaining_years: rp.remaining_years || 0,
+          score: 0,
+          v2_score: 0,
+          v3_score: 0,
+          in_portfolio: false,
+          data_source: rp.data_source,
+        }));
+        patents = [...portfolioInFa, ...resolvedAsPatents];
+      } else {
+        patents = portfolioInFa;
+      }
     }
 
     patents = applyFilters(patents, filters as Record<string, string>);
@@ -1150,7 +1186,8 @@ router.post('/batch-preview', (req: Request, res: Response) => {
           competitor_density: patent.competitor_density,
         };
       } else {
-        previews[id] = null;
+        // Fall back to other cache sources
+        previews[id] = resolvePatentPreview(id);
       }
     }
 
@@ -1301,33 +1338,38 @@ router.get('/:id/preview', (req: Request, res: Response) => {
     const patents = loadPatents();
 
     const patent = patents.find(p => p.patent_id === id);
-    if (!patent) {
-      return res.status(404).json({ error: 'Patent not found' });
+    if (patent) {
+      const preview: PatentPreview = {
+        patent_id: patent.patent_id,
+        patent_title: patent.patent_title,
+        abstract: loadAbstract(patent.patent_id),
+        patent_date: patent.patent_date,
+        assignee: patent.assignee,
+        affiliate: patent.affiliate,
+        super_sector: patent.super_sector,
+        primary_sector: patent.primary_sector,
+        cpc_codes: (patent as any).cpc_codes || [],
+        forward_citations: patent.forward_citations,
+        remaining_years: patent.remaining_years,
+        score: patent.score,
+        competitor_citations: patent.competitor_citations,
+        affiliate_citations: patent.affiliate_citations,
+        neutral_citations: patent.neutral_citations,
+        competitor_count: patent.competitor_count,
+        competitor_names: patent.competitor_names,
+        adjusted_forward_citations: patent.adjusted_forward_citations,
+        competitor_density: patent.competitor_density,
+      };
+      return res.json(preview);
     }
 
-    const preview: PatentPreview = {
-      patent_id: patent.patent_id,
-      patent_title: patent.patent_title,
-      abstract: loadAbstract(patent.patent_id),
-      patent_date: patent.patent_date,
-      assignee: patent.assignee,
-      affiliate: patent.affiliate,
-      super_sector: patent.super_sector,
-      primary_sector: patent.primary_sector,
-      cpc_codes: (patent as any).cpc_codes || [],
-      forward_citations: patent.forward_citations,
-      remaining_years: patent.remaining_years,
-      score: patent.score,
-      competitor_citations: patent.competitor_citations,
-      affiliate_citations: patent.affiliate_citations,
-      neutral_citations: patent.neutral_citations,
-      competitor_count: patent.competitor_count,
-      competitor_names: patent.competitor_names,
-      adjusted_forward_citations: patent.adjusted_forward_citations,
-      competitor_density: patent.competitor_density,
-    };
+    // Fall back to other cache sources
+    const resolved = resolvePatentPreview(id);
+    if (resolved) {
+      return res.json(resolved);
+    }
 
-    res.json(preview);
+    return res.status(404).json({ error: 'Patent not found' });
   } catch (error) {
     console.error('Error getting patent preview:', error);
     res.status(500).json({ error: 'Failed to get patent preview' });
@@ -1343,14 +1385,20 @@ router.get('/:id', (req: Request, res: Response) => {
     const { id } = req.params;
     const patents = loadPatents();
 
+    // Try portfolio first (richest data)
     const patent = patents.find(p => p.patent_id === id);
-    if (!patent) {
-      return res.status(404).json({ error: 'Patent not found' });
+    if (patent) {
+      const abstract = loadAbstract(id);
+      return res.json({ ...patent, abstract, in_portfolio: true });
     }
 
-    // Enrich with abstract from cache
-    const abstract = loadAbstract(id);
-    res.json({ ...patent, abstract });
+    // Fall back to other cache sources via patent-fetch-service
+    const resolved = resolvePatent(id);
+    if (resolved) {
+      return res.json(resolved);
+    }
+
+    return res.status(404).json({ error: 'Patent not found' });
   } catch (error) {
     console.error('Error getting patent:', error);
     res.status(500).json({ error: 'Failed to get patent' });
@@ -1404,6 +1452,7 @@ router.get('/:id/citations', (req: Request, res: Response) => {
         patent_date: p?.patent_date || '',
         affiliate: p ? normalizeAffiliate(p.assignee) : '',
         in_portfolio: !!p,
+        has_cached_data: !!p || hasPatentData(citingId),
       };
     });
 
@@ -1571,6 +1620,7 @@ router.get('/:id/backward-citations', (req: Request, res: Response) => {
         patent_date: portfolioPatent?.patent_date || details?.patent_date || '',
         affiliate: portfolioPatent ? normalizeAffiliate(portfolioPatent.assignee) : '',
         in_portfolio: !!portfolioPatent,
+        has_cached_data: !!portfolioPatent || !!details || hasPatentData(parentId),
       };
     });
 

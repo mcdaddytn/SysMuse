@@ -25,6 +25,7 @@ const citations = ref<{
     patent_date: string;
     affiliate?: string;
     in_portfolio?: boolean;
+    has_cached_data?: boolean;
   }>;
   cached: boolean;
   message?: string;
@@ -54,10 +55,19 @@ const loadingLlm = ref(false);
 const backwardCitations = ref<any>(null);
 const loadingBackward = ref(false);
 
-// CPC descriptions
-const cpcDescriptions = ref<Record<string, string | null>>({});
+// CPC descriptions (enhanced with hierarchy)
+interface CpcInfo {
+  code: string;
+  title: string;
+  titleLong?: string;
+  level: string;
+  parentCode?: string;
+  hierarchy?: Array<{ code: string; title: string }>;
+}
+const cpcDescriptions = ref<Record<string, CpcInfo | null>>({});
 
 // Computed
+const isInPortfolio = computed(() => (patent.value as any)?.in_portfolio !== false);
 const isExpired = computed(() => patent.value && patent.value.remaining_years <= 0);
 const expirationDate = computed(() => {
   if (!patent.value?.patent_date) return null;
@@ -202,14 +212,35 @@ async function loadBackwardCitations() {
   }
 }
 
-// Load CPC descriptions for the patent's codes
+// Load CPC descriptions for the patent's codes (using new CPC API)
 async function loadCpcDescriptions() {
   if (!patent.value?.cpc_codes?.length) return;
   try {
-    const codes = patent.value.cpc_codes.join(',');
-    const response = await fetch(`/api/patents/cpc-descriptions?codes=${encodeURIComponent(codes)}`);
+    // Use the new batch lookup endpoint for enhanced data
+    const response = await fetch('/api/cpc/batch-lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes: patent.value.cpc_codes })
+    });
     if (response.ok) {
       cpcDescriptions.value = await response.json();
+    } else {
+      // Fallback to legacy endpoint
+      const codes = patent.value.cpc_codes.join(',');
+      const legacyResponse = await fetch(`/api/patents/cpc-descriptions?codes=${encodeURIComponent(codes)}`);
+      if (legacyResponse.ok) {
+        const legacyData = await legacyResponse.json();
+        // Convert legacy format to new format
+        const converted: Record<string, CpcInfo | null> = {};
+        for (const [code, title] of Object.entries(legacyData)) {
+          if (title) {
+            converted[code] = { code, title: title as string, level: 'UNKNOWN' } as CpcInfo;
+          } else {
+            converted[code] = null;
+          }
+        }
+        cpcDescriptions.value = converted;
+      }
     }
   } catch (err) {
     console.error('Failed to load CPC descriptions:', err);
@@ -239,6 +270,11 @@ function goBack() {
 function openUSPTO() {
   window.open(`https://patents.google.com/patent/US${patentId.value}`, '_blank');
 }
+
+function openCpcLink(code: string) {
+  // Open CPC code on USPTO classification site
+  window.open(`https://www.uspto.gov/web/patents/classification/cpc/html/cpc-${code.charAt(0)}.html#${code}`, '_blank');
+}
 </script>
 
 <template>
@@ -263,6 +299,7 @@ function openUSPTO() {
         <div class="col">
           <div class="row items-center q-gutter-sm">
             <span class="text-h5">US{{ patent.patent_id }}</span>
+            <q-badge v-if="!isInPortfolio" color="grey-6" text-color="white">Not in Portfolio</q-badge>
             <q-badge v-if="isExpired" color="negative">Expired</q-badge>
             <q-badge v-else color="positive">Active</q-badge>
             <q-chip
@@ -396,14 +433,27 @@ function openUSPTO() {
                           dense
                           outline
                           size="sm"
+                          clickable
+                          @click="openCpcLink(cpc)"
                         >
                           {{ cpc }}
-                          <q-tooltip v-if="cpcDescriptions[cpc]" :delay="300" max-width="300px">
-                            <strong>{{ cpc }}</strong><br />
-                            {{ cpcDescriptions[cpc] }}
+                          <q-tooltip v-if="cpcDescriptions[cpc]" :delay="300" max-width="400px">
+                            <div class="cpc-tooltip">
+                              <div class="text-weight-bold q-mb-xs">{{ cpc }}</div>
+                              <div class="q-mb-sm">{{ cpcDescriptions[cpc]?.title }}</div>
+                              <div v-if="cpcDescriptions[cpc]?.titleLong" class="text-caption text-grey-4 q-mb-sm">
+                                {{ cpcDescriptions[cpc]?.titleLong }}
+                              </div>
+                              <div v-if="cpcDescriptions[cpc]?.hierarchy?.length" class="text-caption">
+                                <div class="text-grey-5 q-mb-xs">Hierarchy:</div>
+                                <div v-for="h in cpcDescriptions[cpc]?.hierarchy" :key="h.code" class="q-pl-sm">
+                                  <span class="text-grey-4">{{ h.code }}:</span> {{ h.title }}
+                                </div>
+                              </div>
+                            </div>
                           </q-tooltip>
                           <q-tooltip v-else :delay="300">
-                            {{ cpc }}
+                            {{ cpc }} (no description available)
                           </q-tooltip>
                         </q-chip>
                       </div>
@@ -538,18 +588,18 @@ function openUSPTO() {
               <q-item
                 v-for="citing in (citations.citing_patents || [])"
                 :key="citing.patent_id"
-                :clickable="citing.in_portfolio"
-                @click="citing.in_portfolio && router.push({ name: 'patent-detail', params: { id: citing.patent_id } })"
+                :clickable="citing.in_portfolio || citing.has_cached_data"
+                @click="(citing.in_portfolio || citing.has_cached_data) && router.push({ name: 'patent-detail', params: { id: citing.patent_id } })"
               >
                 <q-item-section avatar>
                   <q-icon
-                    :name="citing.in_portfolio ? 'link' : 'link_off'"
-                    :color="citing.in_portfolio ? 'primary' : 'grey-4'"
+                    :name="(citing.in_portfolio || citing.has_cached_data) ? 'link' : 'link_off'"
+                    :color="citing.in_portfolio ? 'primary' : (citing.has_cached_data ? 'grey-7' : 'grey-4')"
                     size="sm"
                   />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label :class="citing.in_portfolio ? 'text-primary cursor-pointer' : 'text-grey-7'">
+                  <q-item-label :class="(citing.in_portfolio || citing.has_cached_data) ? (citing.in_portfolio ? 'text-primary cursor-pointer' : 'text-grey-8 cursor-pointer') : 'text-grey-5'">
                     US{{ citing.patent_id }}
                   </q-item-label>
                   <q-item-label v-if="citing.patent_title" caption class="ellipsis">{{ citing.patent_title }}</q-item-label>
@@ -558,7 +608,7 @@ function openUSPTO() {
                   <q-item-label caption>{{ citing.patent_date }}</q-item-label>
                   <q-item-label caption class="text-grey-6">{{ citing.affiliate || citing.assignee }}</q-item-label>
                 </q-item-section>
-                <q-item-section v-if="citing.in_portfolio" side>
+                <q-item-section v-if="citing.in_portfolio || citing.has_cached_data" side>
                   <q-icon name="chevron_right" />
                 </q-item-section>
               </q-item>
@@ -604,18 +654,18 @@ function openUSPTO() {
               <q-item
                 v-for="parent in backwardCitations.parent_patents"
                 :key="parent.patent_id"
-                :clickable="parent.in_portfolio"
-                @click="parent.in_portfolio && router.push({ name: 'patent-detail', params: { id: parent.patent_id } })"
+                :clickable="parent.in_portfolio || parent.has_cached_data"
+                @click="(parent.in_portfolio || parent.has_cached_data) && router.push({ name: 'patent-detail', params: { id: parent.patent_id } })"
               >
                 <q-item-section avatar>
                   <q-icon
-                    :name="parent.in_portfolio ? 'link' : 'open_in_new'"
-                    :color="parent.in_portfolio ? 'deep-purple' : 'grey-4'"
+                    :name="(parent.in_portfolio || parent.has_cached_data) ? 'link' : 'open_in_new'"
+                    :color="parent.in_portfolio ? 'deep-purple' : (parent.has_cached_data ? 'grey-7' : 'grey-4')"
                     size="sm"
                   />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label :class="parent.in_portfolio ? 'text-deep-purple cursor-pointer' : 'text-grey-7'">
+                  <q-item-label :class="(parent.in_portfolio || parent.has_cached_data) ? (parent.in_portfolio ? 'text-deep-purple cursor-pointer' : 'text-grey-8 cursor-pointer') : 'text-grey-5'">
                     US{{ parent.patent_id }}
                   </q-item-label>
                   <q-item-label v-if="parent.patent_title" caption class="ellipsis">{{ parent.patent_title }}</q-item-label>
@@ -624,7 +674,7 @@ function openUSPTO() {
                   <q-item-label caption>{{ parent.patent_date }}</q-item-label>
                   <q-item-label caption class="text-grey-6">{{ parent.affiliate || parent.assignee }}</q-item-label>
                 </q-item-section>
-                <q-item-section v-if="parent.in_portfolio" side>
+                <q-item-section v-if="parent.in_portfolio || parent.has_cached_data" side>
                   <q-icon name="chevron_right" />
                 </q-item-section>
                 <q-item-section v-else-if="parent.patent_id" side>
@@ -1234,4 +1284,12 @@ function openUSPTO() {
 </template>
 
 <style scoped>
+.cpc-tooltip {
+  max-width: 400px;
+}
+
+.cpc-tooltip .text-weight-bold {
+  font-size: 1.1em;
+  color: #fff;
+}
 </style>

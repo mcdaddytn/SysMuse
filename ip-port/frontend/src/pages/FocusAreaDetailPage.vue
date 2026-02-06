@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
 import { focusAreaApi, patentApi, searchApi, type FocusArea, type FocusAreaPatent, type SearchTerm, type PatentPreview, type SearchPreviewResult, type ScopeOptions, type SearchScopeType, type SearchScopeConfig, type PromptTemplate, type PromptResult, type PromptPreviewResponse } from '@/services/api';
 import PatentPreviewTooltip from '@/components/PatentPreviewTooltip.vue';
 import KeywordExtractionPanel from '@/components/KeywordExtractionPanel.vue';
@@ -11,6 +12,7 @@ import type { Patent } from '@/types';
 const route = useRoute();
 const router = useRouter();
 const patentsStore = usePatentsStore();
+const $q = useQuasar();
 
 // State
 const focusArea = ref<FocusArea | null>(null);
@@ -67,6 +69,7 @@ const addingPatents = ref(false);
 const parsedPatentIds = ref<string[]>([]);
 const patentPreviews = ref<Record<string, PatentPreview | null>>({});
 const loadingPreviews = ref(false);
+const fetchingData = ref(false);
 let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Parse patent IDs from input
@@ -457,10 +460,8 @@ function cancelEdit() {
 
 // Add patents
 async function addPatents() {
-  const ids = newPatentIds.value
-    .split(/[\s,]+/)
-    .map(id => id.trim())
-    .filter(id => id);
+  // Use the same parser as the preview so IDs match
+  const ids = parsePatentIds(newPatentIds.value);
 
   if (ids.length === 0) return;
 
@@ -468,15 +469,81 @@ async function addPatents() {
   try {
     const result = await focusAreaApi.addPatentsToFocusArea(focusAreaId.value, ids);
 
+    // Show success notification
+    $q.notify({
+      type: 'positive',
+      message: `Added ${result.added} patent(s) to focus area`,
+      timeout: 3000,
+    });
+
+    // Show fetch feedback
+    if (result.fetched && result.fetched > 0) {
+      $q.notify({
+        type: 'positive',
+        message: `${result.fetched} patent(s) fetched from PatentsView API`,
+        timeout: 3000,
+      });
+    }
+    if (result.fetchFailed && result.fetchFailed > 0) {
+      $q.notify({
+        type: 'warning',
+        message: `${result.fetchFailed} patent(s) could not be fetched (invalid IDs or API error)`,
+        timeout: 5000,
+      });
+    }
+
     // Refresh
     await Promise.all([loadFocusArea(), loadPatents()]);
 
     showAddPatentDialog.value = false;
     newPatentIds.value = '';
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to add patents';
+    // Show error in a notification (not behind the dialog)
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : 'Failed to add patents',
+      timeout: 5000,
+    });
   } finally {
     addingPatents.value = false;
+  }
+}
+
+// Fetch patent data for uncached patents
+async function fetchPatentData() {
+  fetchingData.value = true;
+  try {
+    const result = await focusAreaApi.fetchPatentData(focusAreaId.value);
+    if (result.fetched > 0) {
+      $q.notify({
+        type: 'positive',
+        message: `Fetched data for ${result.fetched} patent(s) from PatentsView API`,
+        timeout: 3000,
+      });
+      // Refresh the patent list
+      await loadPatents();
+    } else if (result.uncached === 0) {
+      $q.notify({
+        type: 'info',
+        message: 'All patents already have cached data',
+        timeout: 3000,
+      });
+    }
+    if (result.failed > 0) {
+      $q.notify({
+        type: 'warning',
+        message: `${result.failed} patent(s) could not be fetched${result.failedIds ? ': ' + result.failedIds.slice(0, 5).join(', ') + (result.failedIds.length > 5 ? '...' : '') : ''}`,
+        timeout: 5000,
+      });
+    }
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : 'Failed to fetch patent data',
+      timeout: 5000,
+    });
+  } finally {
+    fetchingData.value = false;
   }
 }
 
@@ -1178,6 +1245,11 @@ onMounted(async () => {
 
             <!-- Add Patents -->
             <q-btn flat icon="add" label="Add" @click="showAddPatentDialog = true" />
+
+            <!-- Fetch Patent Data -->
+            <q-btn flat icon="cloud_download" label="Fetch Data" :loading="fetchingData" @click="fetchPatentData">
+              <q-tooltip>Fetch data from PatentsView API for uncached patents</q-tooltip>
+            </q-btn>
 
             <!-- Filter Toggle -->
             <q-btn
@@ -2231,7 +2303,7 @@ onMounted(async () => {
           <q-btn flat label="Cancel" v-close-popup @click="newPatentIds = ''" />
           <q-btn
             color="primary"
-            :label="`Add ${previewStats.found || parsedPatentIds.length} Patents`"
+            :label="`Add ${parsedPatentIds.length} Patents`"
             :loading="addingPatents"
             :disable="parsedPatentIds.length === 0"
             @click="addPatents"

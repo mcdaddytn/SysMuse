@@ -17,6 +17,13 @@ const newFocusGroupDescription = ref('');
 const creatingFocusGroup = ref(false);
 const focusGroupError = ref<string | null>(null);
 
+// View mode: portfolio vs all
+const viewMode = ref<'portfolio' | 'all'>('portfolio');
+const selectedPortfolio = ref('broadcom-core');
+const portfolioOptions = [
+  { value: 'broadcom-core', label: 'Broadcom Core' }
+];
+
 // Local state
 const searchText = ref('');
 const showColumnSelector = ref(false);
@@ -326,7 +333,32 @@ onMounted(async () => {
   <q-page padding>
     <!-- Header -->
     <div class="row items-center q-mb-md">
-      <div class="text-h5 q-mr-md">Patent Portfolio</div>
+      <div class="text-h5 q-mr-md">Patent Summary</div>
+      <q-btn-toggle
+        v-model="viewMode"
+        toggle-color="primary"
+        dense
+        no-caps
+        rounded
+        class="q-mr-md"
+        :options="[
+          { value: 'portfolio', label: 'Portfolio' },
+          { value: 'all', label: 'All Patents' }
+        ]"
+      />
+      <q-select
+        v-if="viewMode === 'portfolio'"
+        v-model="selectedPortfolio"
+        :options="portfolioOptions"
+        outlined
+        dense
+        emit-value
+        map-options
+        option-value="value"
+        option-label="label"
+        class="q-mr-md"
+        style="min-width: 180px"
+      />
       <q-badge color="primary" class="q-mr-md">
         {{ patentsStore.totalCount.toLocaleString() }} patents
       </q-badge>

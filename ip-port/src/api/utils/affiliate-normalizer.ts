@@ -51,10 +51,10 @@ function buildPatterns(): { pattern: RegExp; affiliate: string; displayName: str
 
   for (const [affiliateKey, affiliateData] of sortedAffiliates) {
     for (const patternStr of affiliateData.patterns) {
-      // Escape special regex characters and create case-insensitive pattern
+      // Escape special regex characters, add word boundaries, and create case-insensitive pattern
       const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       patterns.push({
-        pattern: new RegExp(escaped, 'i'),
+        pattern: new RegExp(`\\b${escaped}\\b`, 'i'),
         affiliate: affiliateKey,
         displayName: affiliateData.displayName
       });

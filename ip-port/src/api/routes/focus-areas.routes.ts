@@ -16,6 +16,7 @@ import {
   deleteResults,
   getFieldsForObjectType,
 } from '../services/prompt-template-service.js';
+import { hasPatentData, fetchAndCachePatents } from '../services/patent-fetch-service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -526,10 +527,78 @@ router.post('/:id/patents', async (req: Request, res: Response) => {
       data: { patentCount: count }
     });
 
-    res.json({ added: results.length, total: count });
+    // Auto-fetch data for patents not yet in the system
+    const uncachedIds = patentIds.filter((pid: string) => !hasPatentData(pid));
+    let fetched = 0;
+    let fetchFailed = 0;
+
+    if (uncachedIds.length > 0 && uncachedIds.length <= 100) {
+      // Synchronous fetch for small batches (1-2 API calls, ~2-4 seconds)
+      try {
+        console.log(`[FocusArea] Auto-fetching ${uncachedIds.length} uncached patents...`);
+        const fetchResult = await fetchAndCachePatents(uncachedIds);
+        fetched = fetchResult.fetched.length;
+        fetchFailed = fetchResult.failed.length;
+      } catch (fetchErr) {
+        console.error('[FocusArea] Auto-fetch failed:', fetchErr);
+        fetchFailed = uncachedIds.length;
+      }
+    } else if (uncachedIds.length > 100) {
+      console.warn(`[FocusArea] ${uncachedIds.length} patents need fetching — too many for sync, skipping auto-fetch`);
+      fetchFailed = uncachedIds.length;
+    }
+
+    res.json({
+      added: results.length,
+      total: count,
+      fetched,
+      fetchFailed,
+    });
   } catch (error) {
     console.error('Error adding patents to focus area:', error);
     res.status(500).json({ error: 'Failed to add patents' });
+  }
+});
+
+/**
+ * POST /api/focus-areas/:id/fetch-patents
+ * Re-fetch patent data from PatentsView API for uncached patents in the focus area
+ */
+router.post('/:id/fetch-patents', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get all patent IDs in this focus area
+    const faPatents = await prisma.focusAreaPatent.findMany({
+      where: { focusAreaId: id },
+      select: { patentId: true }
+    });
+    const allIds = faPatents.map(fp => fp.patentId);
+
+    // Find which ones are uncached
+    const uncachedIds = allIds.filter((pid: string) => !hasPatentData(pid));
+
+    if (uncachedIds.length === 0) {
+      return res.json({ message: 'All patents already have cached data', fetched: 0, failed: 0 });
+    }
+
+    if (uncachedIds.length > 200) {
+      return res.status(400).json({ error: `Too many uncached patents (${uncachedIds.length}). Max 200 at a time.` });
+    }
+
+    console.log(`[FocusArea] Re-fetching ${uncachedIds.length} uncached patents for focus area ${id}...`);
+    const fetchResult = await fetchAndCachePatents(uncachedIds);
+
+    res.json({
+      total: allIds.length,
+      uncached: uncachedIds.length,
+      fetched: fetchResult.fetched.length,
+      failed: fetchResult.failed.length,
+      failedIds: fetchResult.failed,
+    });
+  } catch (error) {
+    console.error('Error fetching patents for focus area:', error);
+    res.status(500).json({ error: 'Failed to fetch patents' });
   }
 });
 

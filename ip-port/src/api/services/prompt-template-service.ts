@@ -322,6 +322,53 @@ export function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData
     }
   }
 
+  // Fallback: for patent IDs not found in portfolio, try cache sources
+  const missingIds = patentIds.filter(id => !result.has(id));
+  if (missingIds.length > 0) {
+    const pvCacheDir = path.join(process.cwd(), 'cache/api/patentsview/patent');
+    const pdCacheDir = path.join(process.cwd(), 'cache/patent-families/parent-details');
+
+    for (const pid of missingIds) {
+      // Try PatentsView API cache (rich data)
+      const pvPath = path.join(pvCacheDir, `${pid}.json`);
+      if (fs.existsSync(pvPath)) {
+        try {
+          const raw = JSON.parse(fs.readFileSync(pvPath, 'utf-8'));
+          const data = raw.patents ? raw.patents[0] : raw;
+          const assignee = data.assignees?.[0]?.assignee_organization || data.assignee || 'Unknown';
+          const cpcData = data.cpc_current || data.cpc || [];
+          const cpcCodes = cpcData.map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '').filter(Boolean);
+
+          result.set(pid, {
+            patent_id: pid,
+            patent_title: data.patent_title || '',
+            abstract: data.patent_abstract || '',
+            patent_date: data.patent_date || '',
+            assignee,
+            cpc_codes: cpcCodes,
+            forward_citations: data.patent_num_times_cited_by_us_patents || 0,
+          });
+          continue;
+        } catch { /* skip */ }
+      }
+
+      // Try parent-details cache (minimal data)
+      const pdPath = path.join(pdCacheDir, `${pid}.json`);
+      if (fs.existsSync(pdPath)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(pdPath, 'utf-8'));
+          result.set(pid, {
+            patent_id: pid,
+            patent_title: data.patent_title || '',
+            patent_date: data.patent_date || '',
+            assignee: data.assignee || 'Unknown',
+            abstract: data.patent_abstract || '',
+          });
+        } catch { /* skip */ }
+      }
+    }
+  }
+
   // Enrich with LLM analysis data
   const llmDir = path.join(process.cwd(), 'cache/llm-scores');
   if (fs.existsSync(llmDir)) {

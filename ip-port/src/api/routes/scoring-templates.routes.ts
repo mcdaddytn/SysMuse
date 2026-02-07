@@ -471,18 +471,39 @@ router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Resp
 /**
  * POST /api/scoring-templates/llm/score-sector/:sectorName
  * Score all unscored patents in a sector (batch operation)
+ * Query params:
+ *   - limit: max patents to score (default 500)
+ *   - model: LLM model to use
+ *   - concurrency: parallel requests (default 2)
+ *   - useClaims: 'true' to include patent claims in context (1.6x cost)
+ *   - rescore: 'true' to re-score already scored patents (overwrites existing scores)
+ *   - minYear: filter to patents from this year or later (e.g., 2015)
  */
 router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
-    const { limit, model, concurrency } = req.query;
+    const { limit, model, concurrency, useClaims, rescore, minYear } = req.query;
+
+    const contextOptions = useClaims === 'true' ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
 
     console.log(`[LLM Scoring] Starting sector scoring: ${sectorName}`);
+    if (useClaims === 'true') {
+      console.log(`[LLM Scoring] CLAIMS CONTEXT ENABLED - expect ~1.6x token usage`);
+    }
+    if (rescore === 'true') {
+      console.log(`[LLM Scoring] RESCORE MODE - will overwrite existing scores`);
+    }
+    if (minYear) {
+      console.log(`[LLM Scoring] FILTER: patents from ${minYear}+`);
+    }
 
     const result = await scoreSector(sectorName, {
       limit: limit ? parseInt(limit as string) : 500,
       model: model as string,
-      concurrency: concurrency ? parseInt(concurrency as string) : 2
+      concurrency: concurrency ? parseInt(concurrency as string) : 2,
+      contextOptions,
+      rescore: rescore === 'true',
+      minYear: minYear ? parseInt(minYear as string) : undefined
     });
 
     res.json(result);
@@ -750,6 +771,285 @@ router.post('/compare/run/:sectorName', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('[Compare] Run error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
+// ENHANCED EXPORT (with LLM metrics, reasoning, and claims availability)
+// =============================================================================
+
+/**
+ * GET /api/scoring-templates/export/:superSector
+ * Export patents with all columns including sector-specific LLM metrics with reasoning
+ * Query params:
+ *   - format: 'csv' (default) or 'json'
+ *   - includeReasoning: 'true' to include reasoning text (default true)
+ *   - minScore: minimum composite score filter
+ */
+router.get('/export/:superSector', async (req: Request, res: Response) => {
+  try {
+    const { superSector } = req.params;
+    const { format = 'csv', includeReasoning = 'true', minScore } = req.query;
+
+    console.log(`[Export] Starting export for super-sector: ${superSector}`);
+
+    // Load candidates file
+    const fs = await import('fs');
+    const path = await import('path');
+    const possiblePaths = [
+      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json'),
+      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-24.json'),
+    ];
+
+    let candidatesPath: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        candidatesPath = p;
+        break;
+      }
+    }
+
+    if (!candidatesPath) {
+      return res.status(404).json({ error: 'Candidates file not found' });
+    }
+
+    const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
+    const candidates = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
+
+    // Filter to super-sector
+    const superSectorUpper = superSector.toUpperCase().replace(/-/g, '_');
+    let patents = candidates.filter((p: any) =>
+      p.super_sector?.toUpperCase().replace(/-/g, '_') === superSectorUpper
+    );
+
+    console.log(`[Export] Found ${patents.length} patents in ${superSector}`);
+
+    // Get all LLM scores for these patents
+    const patentIds = patents.map((p: any) => p.patent_id);
+    const scores = await prisma.patentSubSectorScore.findMany({
+      where: { patentId: { in: patentIds } }
+    });
+
+    console.log(`[Export] Found ${scores.length} LLM scores`);
+
+    // Create lookup map
+    const scoreMap = new Map(scores.map(s => [s.patentId, s]));
+
+    // Check claims availability
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '/Volumes/PortFat4/uspto/bulkdata/export';
+    const checkClaimsAvailable = (patentId: string): boolean => {
+      try {
+        const stats = getClaimsStats(patentId, xmlDir);
+        return stats !== null && stats.independentClaims > 0;
+      } catch {
+        return false;
+      }
+    };
+
+    // Collect all unique metric names from scores
+    const allMetricNames = new Set<string>();
+    scores.forEach(s => {
+      if (s.metrics && typeof s.metrics === 'object') {
+        Object.keys(s.metrics as object).forEach(k => allMetricNames.add(k));
+      }
+    });
+    const metricNames = Array.from(allMetricNames).sort();
+
+    console.log(`[Export] Found ${metricNames.length} unique metrics: ${metricNames.join(', ')}`);
+
+    // Build export rows
+    const exportRows = patents.map((p: any) => {
+      const score = scoreMap.get(p.patent_id);
+      const metrics = (score?.metrics || {}) as Record<string, { score: number; reasoning: string; confidence: number }>;
+      const claimsAvailable = checkClaimsAvailable(p.patent_id);
+
+      // Base columns
+      const row: Record<string, any> = {
+        patent_id: p.patent_id,
+        patent_title: p.patent_title,
+        patent_date: p.patent_date,
+        remaining_years: p.remaining_years,
+        assignee: p.assignee,
+        super_sector: p.super_sector,
+        primary_sector: p.primary_sector,
+        primary_sub_sector_name: p.primary_sub_sector_name,
+        forward_citations: p.forward_citations,
+        cpc_codes: Array.isArray(p.cpc_codes) ? p.cpc_codes.join('; ') : p.cpc_codes,
+        base_score: p.score,
+
+        // LLM composite score
+        llm_composite_score: score?.compositeScore ?? null,
+        has_llm_score: !!score,
+        claims_available: claimsAvailable,
+        scored_at: score?.executedAt?.toISOString() ?? null,
+      };
+
+      // Add each metric as separate columns
+      for (const metricName of metricNames) {
+        const metric = metrics[metricName];
+        row[`${metricName}_score`] = metric?.score ?? null;
+        row[`${metricName}_confidence`] = metric?.confidence ?? null;
+        if (includeReasoning === 'true') {
+          row[`${metricName}_reasoning`] = metric?.reasoning ?? null;
+        }
+      }
+
+      return row;
+    });
+
+    // Apply minScore filter if specified
+    let filteredRows = exportRows;
+    if (minScore) {
+      const threshold = parseFloat(minScore as string);
+      filteredRows = exportRows.filter(r => r.llm_composite_score >= threshold);
+      console.log(`[Export] Filtered to ${filteredRows.length} rows with score >= ${threshold}`);
+    }
+
+    // Sort by composite score descending
+    filteredRows.sort((a, b) => (b.llm_composite_score ?? 0) - (a.llm_composite_score ?? 0));
+
+    if (format === 'json') {
+      res.json({
+        superSector,
+        totalPatents: patents.length,
+        exportedPatents: filteredRows.length,
+        metricsIncluded: metricNames,
+        patents: filteredRows
+      });
+    } else {
+      // Build CSV
+      const escapeCSV = (val: unknown): string => {
+        if (val === null || val === undefined) return '';
+        if (Array.isArray(val)) return `"${val.join('; ')}"`;
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const columns = Object.keys(filteredRows[0] || {});
+      const header = columns.join(',');
+      const rows = filteredRows.map(row =>
+        columns.map(col => escapeCSV(row[col])).join(',')
+      );
+
+      const csv = [header, ...rows].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${superSector}-export-${new Date().toISOString().split('T')[0]}.csv"`);
+      console.log(`[Export] Completed CSV export: ${filteredRows.length} patents, ${columns.length} columns`);
+      res.send(csv);
+    }
+
+  } catch (error) {
+    console.error('[Export] Error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/claims-analysis/:superSector
+ * Analyze claims availability across a super-sector
+ */
+router.get('/claims-analysis/:superSector', async (req: Request, res: Response) => {
+  try {
+    const { superSector } = req.params;
+    const { topN } = req.query;
+
+    console.log(`[Claims Analysis] Analyzing ${superSector}...`);
+
+    // Load candidates
+    const fs = await import('fs');
+    const path = await import('path');
+    const candidatesPath = path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json');
+    const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
+    const candidates = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
+
+    // Filter to super-sector
+    const superSectorUpper = superSector.toUpperCase().replace(/-/g, '_');
+    let patents = candidates.filter((p: any) =>
+      p.super_sector?.toUpperCase().replace(/-/g, '_') === superSectorUpper
+    );
+
+    // Get LLM scores
+    const patentIds = patents.map((p: any) => p.patent_id);
+    const scores = await prisma.patentSubSectorScore.findMany({
+      where: { patentId: { in: patentIds } }
+    });
+    const scoreMap = new Map(scores.map(s => [s.patentId, s.compositeScore]));
+
+    // Sort by score if we have scores
+    patents = patents.map((p: any) => ({
+      ...p,
+      llm_score: scoreMap.get(p.patent_id) ?? null
+    }));
+    patents.sort((a: any, b: any) => (b.llm_score ?? b.score ?? 0) - (a.llm_score ?? a.score ?? 0));
+
+    // Limit to topN if specified
+    if (topN) {
+      patents = patents.slice(0, parseInt(topN as string));
+    }
+
+    // Check claims availability
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '/Volumes/PortFat4/uspto/bulkdata/export';
+
+    let withClaims = 0;
+    let withoutClaims = 0;
+    const missingClaimsList: any[] = [];
+    const bySector: Record<string, { total: number; withClaims: number; withoutClaims: number }> = {};
+
+    for (const p of patents) {
+      const sector = p.primary_sector || 'unknown';
+      if (!bySector[sector]) {
+        bySector[sector] = { total: 0, withClaims: 0, withoutClaims: 0 };
+      }
+      bySector[sector].total++;
+
+      try {
+        const stats = getClaimsStats(p.patent_id, xmlDir);
+        if (stats && stats.independentClaims > 0) {
+          withClaims++;
+          bySector[sector].withClaims++;
+        } else {
+          withoutClaims++;
+          bySector[sector].withoutClaims++;
+          missingClaimsList.push({
+            patent_id: p.patent_id,
+            patent_title: p.patent_title,
+            patent_date: p.patent_date,
+            sector: p.primary_sector,
+            llm_score: p.llm_score,
+            base_score: p.score
+          });
+        }
+      } catch {
+        withoutClaims++;
+        bySector[sector].withoutClaims++;
+        missingClaimsList.push({
+          patent_id: p.patent_id,
+          patent_title: p.patent_title,
+          patent_date: p.patent_date,
+          sector: p.primary_sector,
+          llm_score: p.llm_score,
+          base_score: p.score
+        });
+      }
+    }
+
+    res.json({
+      superSector,
+      totalAnalyzed: patents.length,
+      withClaims,
+      withoutClaims,
+      claimsAvailabilityRate: (withClaims / patents.length * 100).toFixed(1) + '%',
+      bySector,
+      missingClaimsPatents: missingClaimsList.slice(0, 50)  // Top 50 missing
+    });
+
+  } catch (error) {
+    console.error('[Claims Analysis] Error:', error);
     res.status(500).json({ error: (error as Error).message });
   }
 });

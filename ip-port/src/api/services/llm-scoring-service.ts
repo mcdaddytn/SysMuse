@@ -427,9 +427,10 @@ export async function scorePatentBatch(
     saveToDb?: boolean;
     concurrency?: number;
     progressCallback?: (completed: number, total: number) => void;
+    contextOptions?: ContextOptions;
   } = {}
 ): Promise<BatchScoringResult> {
-  const { concurrency = 3, progressCallback } = options;
+  const { concurrency = 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS } = options;
 
   const results: ScoringResult[] = [];
   let successful = 0;
@@ -439,16 +440,17 @@ export async function scorePatentBatch(
 
   // Enrich all patents upfront for efficiency
   console.log(`[LLM Scoring] Enriching ${patents.length} patents with database data...`);
-  const enrichedPatents = await enrichPatentBatch(patents);
+  const enrichedPatents = await enrichPatentBatch(patents, contextOptions);
   const enrichedCount = enrichedPatents.filter(p => p.abstract).length;
-  console.log(`[LLM Scoring] ${enrichedCount}/${patents.length} patents have abstracts`);
+  const claimsCount = enrichedPatents.filter(p => p.claims_text).length;
+  console.log(`[LLM Scoring] ${enrichedCount}/${patents.length} patents have abstracts, ${claimsCount} have claims`);
 
   // Process in batches with concurrency limit
   for (let i = 0; i < enrichedPatents.length; i += concurrency) {
     const batch = enrichedPatents.slice(i, i + concurrency);
 
     const batchResults = await Promise.all(
-      batch.map(patent => scorePatent(patent, { ...options, skipEnrichment: true }))
+      batch.map(patent => scorePatent(patent, { ...options, skipEnrichment: true, contextOptions }))
     );
 
     for (const result of batchResults) {
@@ -580,9 +582,10 @@ export async function scoreSubSector(
     limit?: number;
     model?: string;
     progressCallback?: (completed: number, total: number, lastResult: ScoringResult) => void;
+    contextOptions?: ContextOptions;
   } = {}
 ): Promise<BatchScoringResult> {
-  const { limit = 50, model, progressCallback } = options;
+  const { limit = 50, model, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS } = options;
 
   // Get patents to score
   const patents = await getPatentsForScoring(subSectorId, { limit, onlyUnscored: true });
@@ -604,6 +607,7 @@ export async function scoreSubSector(
     model,
     saveToDb: true,
     concurrency: 2,  // Conservative for rate limits
+    contextOptions,
     progressCallback: (completed, total) => {
       console.log(`[LLM Scoring] Progress: ${completed}/${total}`);
     }
@@ -615,9 +619,9 @@ export async function scoreSubSector(
  */
 export async function getPatentsForSectorScoring(
   sectorName: string,
-  options: { limit?: number; onlyUnscored?: boolean } = {}
+  options: { limit?: number; onlyUnscored?: boolean; minYear?: number } = {}
 ): Promise<PatentForScoring[]> {
-  const { limit = 500, onlyUnscored = true } = options;
+  const { limit = 500, onlyUnscored = true, minYear } = options;
 
   // Load candidates file
   const possiblePaths = [
@@ -642,6 +646,15 @@ export async function getPatentsForSectorScoring(
 
   // Filter to this sector
   let filtered = candidates.filter((p: any) => p.primary_sector === sectorName);
+
+  // Filter by minimum year if specified
+  if (minYear) {
+    filtered = filtered.filter((p: any) => {
+      const year = parseInt(p.patent_date?.substring(0, 4) || '0');
+      return year >= minYear;
+    });
+    console.log(`[LLM Scoring] Filtered to patents from ${minYear}+: ${filtered.length} patents`);
+  }
 
   // Filter out already scored if requested
   if (onlyUnscored) {
@@ -677,17 +690,20 @@ export async function scoreSector(
     limit?: number;
     model?: string;
     concurrency?: number;
+    contextOptions?: ContextOptions;
+    rescore?: boolean;  // If true, score patents even if already scored
+    minYear?: number;   // Filter to patents from this year or later
   } = {}
 ): Promise<BatchScoringResult> {
-  const { limit = 500, model, concurrency = 2 } = options;
+  const { limit = 500, model, concurrency = 2, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear } = options;
 
   console.log(`[LLM Scoring] Starting sector scoring for: ${sectorName}`);
 
   // Get patents to score
-  const patents = await getPatentsForSectorScoring(sectorName, { limit, onlyUnscored: true });
+  const patents = await getPatentsForSectorScoring(sectorName, { limit, onlyUnscored: !rescore, minYear });
 
   if (patents.length === 0) {
-    console.log(`[LLM Scoring] No unscored patents found in sector: ${sectorName}`);
+    console.log(`[LLM Scoring] No ${rescore ? '' : 'unscored '}patents found in sector: ${sectorName}`);
     return {
       total: 0,
       successful: 0,
@@ -698,12 +714,16 @@ export async function scoreSector(
   }
 
   console.log(`[LLM Scoring] Found ${patents.length} patents to score in sector: ${sectorName}`);
+  if (contextOptions.includeClaims !== 'none') {
+    console.log(`[LLM Scoring] Using CLAIMS CONTEXT (${contextOptions.includeClaims})`);
+  }
 
   // Score the batch
   return scorePatentBatch(patents, {
     model,
     saveToDb: true,
     concurrency,
+    contextOptions,
     progressCallback: (completed, total) => {
       const pct = Math.round((completed / total) * 100);
       console.log(`[LLM Scoring] Sector ${sectorName}: ${completed}/${total} (${pct}%)`);

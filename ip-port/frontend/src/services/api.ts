@@ -1769,11 +1769,14 @@ export interface TemplatePreviewResult extends TemplatePreviewContext {
 export interface SectorScoringProgress {
   level: 'super_sector' | 'sector' | 'sub_sector';
   name: string;
+  displayName?: string;
+  superSector?: string;
   total: number;
   scored: number;
   remaining: number;
   percentComplete: number;
   withClaims: number;
+  avgScore?: number | null;
   lastScoredAt?: string;
 }
 
@@ -1837,10 +1840,20 @@ export const scoringTemplatesApi = {
    */
   async previewPrompt(params: {
     patentId: string;
-    superSector: string;
+    sectorName: string;
     includeClaims?: boolean;
-  }): Promise<TemplatePreviewContext> {
-    const { data } = await api.post('/scoring-templates/preview', params);
+  }): Promise<{
+    patentId: string;
+    patentTitle: string;
+    sector: string;
+    superSector: string;
+    questionCount: number;
+    inheritanceChain: string[];
+    estimatedTokens: number;
+    renderedPrompt: string;
+    questions: Array<{ fieldName: string; displayName: string; weight: number }>;
+  }> {
+    const { data } = await api.post('/scoring-templates/llm/preview-patent', params);
     return data;
   },
 
@@ -1848,17 +1861,8 @@ export const scoringTemplatesApi = {
    * Get scoring progress for a sector
    */
   async getSectorProgress(sectorName: string): Promise<SectorScoringProgress> {
-    const { data } = await api.get(`/scoring-templates/llm/sector-preview/${sectorName}`);
-    // Transform the response to match SectorScoringProgress
-    return {
-      level: 'sector',
-      name: sectorName,
-      total: data.totalPatents,
-      scored: data.scoredPatents,
-      remaining: data.unscored,
-      percentComplete: data.totalPatents > 0 ? Math.round((data.scoredPatents / data.totalPatents) * 100) : 0,
-      withClaims: data.withClaims || 0,
-    };
+    const { data } = await api.get(`/scoring-templates/llm/sector-progress/${sectorName}`);
+    return data;
   },
 
   /**

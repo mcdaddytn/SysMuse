@@ -66,6 +66,20 @@ const scoringOptions = ref({
 });
 const scoringError = ref<string | null>(null);
 
+// Template Preview state
+const templatePreviewPatentId = ref('');
+const templatePreviewIncludeClaims = ref(true);
+const templatePreviewLoading = ref(false);
+const templatePreviewResult = ref<{
+  patentId: string;
+  patentTitle: string;
+  renderedPrompt: string;
+  estimatedTokens: number;
+  questionCount: number;
+  inheritanceChain: string[];
+} | null>(null);
+const templatePreviewError = ref<string | null>(null);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,6 +385,32 @@ async function startScoring() {
   }
 }
 
+async function previewTemplate() {
+  if (!selectedSector.value || !templatePreviewPatentId.value) return;
+  templatePreviewLoading.value = true;
+  templatePreviewError.value = null;
+  templatePreviewResult.value = null;
+  try {
+    const result = await scoringTemplatesApi.previewPrompt({
+      patentId: templatePreviewPatentId.value.trim(),
+      sectorName: selectedSector.value.name,
+      includeClaims: templatePreviewIncludeClaims.value,
+    });
+    templatePreviewResult.value = {
+      patentId: result.patentId,
+      patentTitle: result.patentTitle,
+      renderedPrompt: result.renderedPrompt,
+      estimatedTokens: result.estimatedTokens,
+      questionCount: result.questionCount || 0,
+      inheritanceChain: result.inheritanceChain || [],
+    };
+  } catch (err) {
+    templatePreviewError.value = err instanceof Error ? err.message : 'Failed to preview template';
+  } finally {
+    templatePreviewLoading.value = false;
+  }
+}
+
 // Helpers
 function ruleTypeLabel(type: string): string {
   return ruleTypeOptions.find(o => o.value === type)?.label || type;
@@ -394,6 +434,39 @@ function damagesLabel(rating: number | null | undefined): string {
     case 1: return 'Low';
     default: return 'N/A';
   }
+}
+
+function getSuperSectorIcon(name: string): string {
+  const icons: Record<string, string> = {
+    VIDEO_STREAMING: 'videocam',
+    AI_ML: 'psychology',
+    IMAGING: 'camera',
+    NETWORKING: 'lan',
+    COMPUTING: 'computer',
+    STORAGE: 'storage',
+    WIRELESS: 'wifi',
+    MEDIA: 'perm_media',
+    SEMICONDUCTOR: 'memory',
+    INTERFACE: 'settings_input_component',
+    SECURITY: 'security',
+  };
+  return icons[name] || 'layers';
+}
+
+function getSectorIcon(name: string): string {
+  // Map specific sectors to meaningful icons
+  if (name.includes('video')) return 'movie';
+  if (name.includes('codec')) return 'theaters';
+  if (name.includes('network')) return 'hub';
+  if (name.includes('wireless') || name.includes('antenna')) return 'cell_tower';
+  if (name.includes('security') || name.includes('auth') || name.includes('crypto')) return 'lock';
+  if (name.includes('memory') || name.includes('storage')) return 'sd_storage';
+  if (name.includes('power')) return 'bolt';
+  if (name.includes('audio') || name.includes('acoustic')) return 'graphic_eq';
+  if (name.includes('image') || name.includes('camera') || name.includes('optic')) return 'image';
+  if (name.includes('ai') || name.includes('ml')) return 'model_training';
+  if (name.includes('compute') || name.includes('runtime')) return 'dns';
+  return 'grain';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -451,26 +524,26 @@ watch(selectedSectorId, () => {
     </q-banner>
 
     <!-- Main Layout: Tree + Detail -->
-    <div class="row q-col-gutter-md" style="min-height: 600px">
-      <!-- Left: Tree Navigation -->
+    <div class="row q-col-gutter-md">
+      <!-- Left: Tree Navigation (fixed height with scroll) -->
       <div class="col-12 col-md-3">
-        <q-card flat bordered>
+        <q-card flat bordered class="sector-tree-card">
           <q-card-section class="q-pb-none">
-            <div class="text-subtitle2">Super-Sectors</div>
+            <div class="text-subtitle2">Portfolio Hierarchy</div>
           </q-card-section>
 
-          <q-card-section>
+          <q-card-section class="sector-tree-scroll">
             <q-inner-loading :showing="treeLoading" />
 
-            <q-list v-if="!treeLoading" dense separator>
+            <q-list v-if="!treeLoading" dense>
               <template v-for="ss in superSectors" :key="ss.id">
                 <q-expansion-item
                   :label="ss.displayName"
                   :caption="`${ss.sectors.length} sectors`"
-                  icon="folder"
+                  :icon="getSuperSectorIcon(ss.name)"
                   default-opened
                   dense
-                  header-class="text-weight-medium"
+                  header-class="text-weight-medium bg-grey-1"
                 >
                   <q-item
                     v-for="sector in ss.sectors"
@@ -478,26 +551,20 @@ watch(selectedSectorId, () => {
                     clickable
                     v-ripple
                     :active="selectedSectorId === sector.id"
-                    active-class="bg-blue-1"
+                    active-class="bg-primary text-white"
                     class="q-pl-lg"
                     @click="onNodeSelect(sector.id)"
                   >
                     <q-item-section avatar>
-                      <q-icon name="label" size="xs" />
+                      <q-icon :name="getSectorIcon(sector.name)" size="xs" :color="selectedSectorId === sector.id ? 'white' : 'grey-7'" />
                     </q-item-section>
                     <q-item-section>
-                      <q-item-label>{{ sector.displayName }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-badge
-                        :label="(sector._count?.rules ?? 0) + ' rules'"
-                        :color="(sector._count?.rules ?? 0) > 0 ? 'primary' : 'grey-4'"
-                        :text-color="(sector._count?.rules ?? 0) > 0 ? 'white' : 'grey-7'"
-                      >
-                        <q-tooltip v-if="sector.patentCount > 0">
-                          {{ sector.patentCount }} patents
-                        </q-tooltip>
-                      </q-badge>
+                      <q-item-label :class="{ 'text-white': selectedSectorId === sector.id }">
+                        {{ sector.displayName }}
+                      </q-item-label>
+                      <q-item-label caption :class="{ 'text-blue-2': selectedSectorId === sector.id }">
+                        {{ sector.patentCount?.toLocaleString() || 0 }} patents
+                      </q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-expansion-item>
@@ -789,21 +856,25 @@ watch(selectedSectorId, () => {
                 <q-separator />
                 <q-card-section v-if="scoringProgress">
                   <div class="row q-col-gutter-md">
-                    <div class="col-6 col-sm-3">
+                    <div class="col-6 col-sm-2">
                       <div class="text-caption text-grey-7">Total Patents</div>
                       <div class="text-h6">{{ scoringProgress.total }}</div>
                     </div>
-                    <div class="col-6 col-sm-3">
+                    <div class="col-6 col-sm-2">
                       <div class="text-caption text-grey-7">Scored</div>
                       <div class="text-h6 text-positive">{{ scoringProgress.scored }}</div>
                     </div>
-                    <div class="col-6 col-sm-3">
+                    <div class="col-6 col-sm-2">
                       <div class="text-caption text-grey-7">With Claims</div>
                       <div class="text-h6 text-primary">{{ scoringProgress.withClaims }}</div>
                     </div>
-                    <div class="col-6 col-sm-3">
+                    <div class="col-6 col-sm-2">
                       <div class="text-caption text-grey-7">Remaining</div>
                       <div class="text-h6 text-grey-7">{{ scoringProgress.remaining }}</div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                      <div class="text-caption text-grey-7">Avg Score</div>
+                      <div class="text-h6 text-secondary">{{ scoringProgress.avgScore?.toFixed(1) || '-' }}</div>
                     </div>
                   </div>
 
@@ -872,6 +943,96 @@ watch(selectedSectorId, () => {
                     @click="loadScoringProgress"
                   />
                 </q-card-actions>
+              </q-card>
+
+              <!-- Template Preview -->
+              <q-card flat bordered class="q-mt-md">
+                <q-card-section>
+                  <div class="text-subtitle2">Template Preview</div>
+                  <div class="text-caption text-grey-7">
+                    Preview how the scoring prompt will look for a specific patent
+                  </div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section>
+                  <div class="row q-col-gutter-md items-end">
+                    <div class="col-12 col-sm-6">
+                      <q-input
+                        v-model="templatePreviewPatentId"
+                        label="Patent ID"
+                        outlined
+                        dense
+                        placeholder="e.g., 10000000"
+                        hint="Enter a patent ID from this sector"
+                      />
+                    </div>
+                    <div class="col-12 col-sm-3">
+                      <q-toggle v-model="templatePreviewIncludeClaims" label="Include Claims" />
+                    </div>
+                    <div class="col-12 col-sm-3">
+                      <q-btn
+                        color="secondary"
+                        icon="visibility"
+                        label="Preview"
+                        :loading="templatePreviewLoading"
+                        :disable="!templatePreviewPatentId"
+                        @click="previewTemplate"
+                      />
+                    </div>
+                  </div>
+
+                  <q-banner v-if="templatePreviewError" class="bg-negative text-white q-mt-md" rounded>
+                    {{ templatePreviewError }}
+                  </q-banner>
+                </q-card-section>
+
+                <!-- Preview Result -->
+                <template v-if="templatePreviewResult">
+                  <q-separator />
+                  <q-card-section>
+                    <div class="row q-col-gutter-md q-mb-md">
+                      <div class="col-auto">
+                        <q-chip dense color="primary" text-color="white">
+                          {{ templatePreviewResult.patentId }}
+                        </q-chip>
+                      </div>
+                      <div class="col">
+                        <div class="text-weight-medium">{{ templatePreviewResult.patentTitle }}</div>
+                      </div>
+                    </div>
+
+                    <div class="row q-col-gutter-md q-mb-md">
+                      <div class="col-auto">
+                        <q-chip dense outline>
+                          {{ templatePreviewResult.questionCount }} questions
+                        </q-chip>
+                      </div>
+                      <div class="col-auto">
+                        <q-chip dense outline>
+                          ~{{ templatePreviewResult.estimatedTokens?.toLocaleString() }} tokens
+                        </q-chip>
+                      </div>
+                      <div class="col-auto" v-if="templatePreviewResult.inheritanceChain?.length">
+                        <span class="text-caption text-grey-7">
+                          Template: {{ templatePreviewResult.inheritanceChain.join(' → ') }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <q-expansion-item
+                      label="Rendered Prompt"
+                      icon="code"
+                      header-class="bg-grey-2"
+                      dense
+                    >
+                      <q-card>
+                        <q-card-section>
+                          <pre class="prompt-preview">{{ templatePreviewResult.renderedPrompt }}</pre>
+                        </q-card-section>
+                      </q-card>
+                    </q-expansion-item>
+                  </q-card-section>
+                </template>
               </q-card>
             </q-tab-panel>
           </q-tab-panels>
@@ -1114,5 +1275,49 @@ code {
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 0.85em;
+}
+
+.sector-tree-card {
+  position: sticky;
+  top: 60px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+}
+
+.sector-tree-scroll {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 260px);
+}
+
+.sector-tree-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sector-tree-scroll::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.sector-tree-scroll::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.sector-tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+.prompt-preview {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 400px;
+  overflow-y: auto;
 }
 </style>

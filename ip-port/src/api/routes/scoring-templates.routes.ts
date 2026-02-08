@@ -543,6 +543,131 @@ router.get('/llm/sector-preview/:sectorName', async (req: Request, res: Response
 });
 
 /**
+ * POST /api/scoring-templates/llm/preview-patent
+ * Preview how a scoring prompt would render for a specific patent
+ */
+router.post('/llm/preview-patent', async (req: Request, res: Response) => {
+  try {
+    const { patentId, sectorName, includeClaims } = req.body;
+
+    if (!patentId) {
+      return res.status(400).json({ error: 'patentId is required' });
+    }
+
+    // Get sector info
+    const sector = await prisma.sector.findFirst({
+      where: { name: sectorName },
+      include: { superSector: true }
+    });
+
+    // Get merged template questions
+    const superSectorName = sector?.superSector?.name || 'COMPUTING';
+    const questions = getMergedQuestionsForSuperSector(superSectorName);
+
+    // Get patent data
+    const patentData = await getPatentsForSectorScoring(sectorName || '', {
+      limit: 1000,
+      onlyUnscored: false
+    });
+
+    const patent = patentData.find(p => p.patent_id === patentId);
+
+    if (!patent) {
+      return res.status(404).json({ error: `Patent ${patentId} not found in sector ${sectorName}` });
+    }
+    const questionText = questions.map((q: any, i: number) =>
+      `${i + 1}. ${q.displayName} (${q.fieldName}): ${q.question}`
+    ).join('\n\n');
+
+    const promptPreview = `=== PATENT CONTEXT ===
+Patent ID: ${patent.patent_id}
+Title: ${patent.patent_title || 'N/A'}
+${patent.patent_abstract ? `Abstract: ${patent.patent_abstract.substring(0, 500)}...` : ''}
+${includeClaims && patent.claims_text ? `\nClaims: ${patent.claims_text.substring(0, 1000)}...` : ''}
+
+=== SCORING QUESTIONS (${questions.length} total) ===
+${questionText}
+
+=== EXPECTED OUTPUT ===
+JSON with scores (1-10) and reasoning for each field`;
+
+    const estimatedTokens = Math.round(promptPreview.length / 4);
+
+    res.json({
+      patentId: patent.patent_id,
+      patentTitle: patent.patent_title,
+      sector: sectorName,
+      superSector: superSectorName,
+      questionCount: questions.length,
+      inheritanceChain: ['portfolio-default', superSectorName, sectorName].filter(Boolean),
+      estimatedTokens,
+      renderedPrompt: promptPreview,
+      questions: questions.map((q: any) => ({
+        fieldName: q.fieldName,
+        displayName: q.displayName,
+        weight: q.weight
+      }))
+    });
+  } catch (error) {
+    console.error('[LLM Scoring] Preview patent error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/sector-progress/:sectorName
+ * Get scoring progress for a sector
+ */
+router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+
+    // Get sector info
+    const sector = await prisma.sector.findFirst({
+      where: { name: sectorName },
+      include: { superSector: true }
+    });
+
+    if (!sector) {
+      return res.status(404).json({ error: `Sector not found: ${sectorName}` });
+    }
+
+    // Get scoring stats from patent_sub_sector_scores using template_config_id
+    const stats = await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+      SELECT
+        COUNT(*) as scored,
+        SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+        AVG(composite_score) as avg_score
+      FROM patent_sub_sector_scores
+      WHERE template_config_id = ${sectorName}
+    `;
+
+    const scored = Number(stats[0]?.scored || 0);
+    const withClaims = Number(stats[0]?.with_claims || 0);
+    const avgScore = stats[0]?.avg_score || 0;
+    const total = sector.patentCount || 0;
+    const remaining = Math.max(0, total - scored);
+    const percentComplete = total > 0 ? Math.round((scored / total) * 100) : 0;
+
+    res.json({
+      level: 'sector',
+      name: sectorName,
+      displayName: sector.displayName,
+      superSector: sector.superSector?.name,
+      total,
+      scored,
+      withClaims,
+      remaining,
+      percentComplete,
+      avgScore: avgScore ? Number(avgScore.toFixed(2)) : null
+    });
+  } catch (error) {
+    console.error('[LLM Scoring] Sector progress error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
  * GET /api/scoring-templates/llm/preview/:subSectorId
  * Preview patents ready for scoring in a sub-sector (without actually scoring)
  */

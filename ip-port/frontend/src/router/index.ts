@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
         name: 'jobs',
         component: () => import('@/pages/JobQueuePage.vue'),
         meta: { title: 'Job Queue' }
+      },
+      {
+        path: 'llm-scores',
+        name: 'llm-scores',
+        component: () => import('@/pages/SectorScoresPage.vue'),
+        meta: { title: 'LLM Sector Scores' }
       }
     ]
   },

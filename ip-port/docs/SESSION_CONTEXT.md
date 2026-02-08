@@ -60,10 +60,21 @@
 
 2. **Added LLM Scoring Tab to SectorManagementPage**
    - New "LLM Scoring" tab with progress display
-   - Shows: Total, Scored, With Claims, Remaining
+   - Shows: Total, Scored, With Claims, Remaining, Avg Score
    - Progress bar with percentage
    - Start Scoring controls with options (useClaims, rescore, topN)
    - Auto-loads progress when tab is selected
+
+3. **Added Backend Progress Endpoint**
+   - `GET /api/scoring-templates/llm/sector-progress/:sectorName`
+   - Returns: total, scored, withClaims, remaining, percentComplete, avgScore
+
+4. **Created SectorScoresPage.vue** (`frontend/src/pages/SectorScoresPage.vue`)
+   - New page for viewing LLM scores across all sectors
+   - Shows scoring progress by super-sector with cards
+   - Per-sector progress bars and average scores
+   - Export to CSV per super-sector
+   - Accessible via "LLM Scores" in navigation menu
 
 ### Next Steps for GUI Integration
 

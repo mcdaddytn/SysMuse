@@ -552,3 +552,102 @@ config/facet-definitions/
 
 </Conditional Facets — Sector-Specific LLM Questions via Facet System>
 
+
+<GUI and Architecture Considerations — February 2026>
+
+Updated: 2026-02-08
+
+## Multi-Portfolio Support
+
+The system is evolving to support multiple portfolios. Key design decisions:
+
+1. **Portfolio Selector**: Most pages should have a portfolio selector at root level
+   - Can implement incrementally as pages are enhanced
+   - Initially disabled, defaulting to "broadcom" portfolio
+   - Enable once end-to-end functionality is proven
+
+2. **Data Isolation**: Each portfolio should have isolated:
+   - Patent assignments
+   - Sector configurations (or shared with overrides)
+   - Competitor/affiliate definitions
+   - LLM scores and analyses
+   - Focus areas
+
+3. **Shared Resources**: Some elements may be shared across portfolios:
+   - CPC code definitions
+   - Company name mappings (with portfolio-specific overrides)
+   - Scoring template definitions (base templates)
+
+## Performance Considerations
+
+As the application scales, consider:
+
+1. **Lazy Loading**:
+   - Load patent lists with pagination, not full datasets
+   - Defer loading of detailed data until needed
+   - Use virtual scrolling for large lists
+
+2. **Database Optimization**:
+   - Move frequently-queried data from JSON caches to indexed database tables
+   - Use materialized views for complex aggregations
+   - Consider read replicas for heavy query loads
+
+3. **Caching Layer**:
+   - Introduce Redis for frequently-accessed, slowly-changing data
+   - Cache API responses with appropriate TTLs
+   - Cache computed aggregations (sector counts, score distributions)
+
+4. **TopN Defaults**:
+   - GUI pages should default to TopN (e.g., top 500)
+   - Full dataset access via explicit "Load All" action
+   - Prevents accidental loading of 28k+ patents
+
+## Job Queue Integration
+
+Current state:
+- Job Queue page has "Sector Enrichment" functionality
+- New LLM Scoring tab added to Sector Management page
+- Need to clarify relationship between these features
+
+Proposed resolution:
+- **Job Queue**: For batch enrichment jobs (V2/V3 analysis, sector assignments)
+- **Sector Management → LLM Scoring**: For sector-specific template scoring
+- Long-term: Unify under a single "Analysis Jobs" system with different job types
+
+## Sector Management UI Improvements
+
+Issues identified:
+
+1. **Icons**: Current folder/label icons look dated
+   - Consider: category, folder_special, layers, workspaces for super-sectors
+   - Consider: grain, memory, sensors, videocam for sector-specific icons
+
+2. **Tree Scrolling**: Left pane scrolling loses sight of right detail pane
+   - Solution: Fixed-height left pane with internal scroll
+   - Or: Collapsible tree with better state management
+
+3. **Sub-Sectors**: Not yet visible in the tree
+   - Need to add expandable sub-sector level
+   - Show sub-sector count, scoring progress
+
+## Template Editor and Preview
+
+Key features needed:
+
+1. **Template Viewer**: Show merged questions from inheritance chain
+   - Display: portfolio-default → super-sector → sector → sub-sector
+   - Show which level contributed each question
+
+2. **Template Preview**: Render prompt for a specific patent
+   - Select patent from sector
+   - Toggle claims inclusion
+   - Show token count estimate
+   - Preview full rendered prompt
+
+3. **Template Test**: Actually send to LLM
+   - Execute scoring on single patent
+   - Show scores and reasoning response
+   - Display token usage
+
+</GUI and Architecture Considerations — February 2026>
+

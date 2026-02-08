@@ -446,7 +446,8 @@ export async function scorePatent(
         compositeScore,
         templateId,
         templateConfigId,
-        templateVersion
+        templateVersion,
+        withClaims: contextOptions.includeClaims !== 'none'
       };
 
       await savePatentScore(result);
@@ -664,7 +665,7 @@ export async function scoreSubSector(
   return scorePatentBatch(patents, {
     model,
     saveToDb: true,
-    concurrency: 2,  // Conservative for rate limits
+    concurrency: 4,  // Increased for faster throughput
     contextOptions,
     progressCallback: (completed, total) => {
       console.log(`[LLM Scoring] Progress: ${completed}/${total}`);
@@ -753,7 +754,7 @@ export async function scoreSector(
     minYear?: number;   // Filter to patents from this year or later
   } = {}
 ): Promise<BatchScoringResult> {
-  const { limit = 2000, model, concurrency = 2, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear } = options;
+  const { limit = 2000, model, concurrency = 4, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear } = options;
 
   console.log(`[LLM Scoring] Starting sector scoring for: ${sectorName}`);
 

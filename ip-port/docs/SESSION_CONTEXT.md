@@ -1,153 +1,116 @@
-# Session Context - February 7, 2026 (Continued)
+# Session Context - February 8, 2026
 
-## What Was Accomplished Today
+## Current Status
 
-### 1. WIRELESS Super-Sector Complete (Previous Session)
+### VIDEO_STREAMING Batch - IN PROGRESS
+Running 2 sectors in parallel with concurrency=4 per sector.
 
-**Template Hierarchy:**
-```
-portfolio-default (7 questions + scoringGuidance)
-    └── wireless (4 super-sector questions)
-        ├── rf-acoustic (6 sector questions) - COMPLETE 381 patents
-        ├── wireless-transmission (5 sector questions) - COMPLETE 1,339 patents
-        ├── wireless-infrastructure (5 sector questions) - COMPLETE 759 patents
-        ├── wireless-scheduling (5 sector questions) - COMPLETE 323 patents
-        └── wireless-mimo-antenna (5 sector questions) - COMPLETE 208 patents
-```
+**Completed sectors (all 100% with claims):**
+- display-control: 68/68
+- video-drm-conditional: 121/121
+- video-storage: 212/212
+- video-broadcast: 229/229
+- video-codec: 377/377
 
-**WIRELESS Results:** 3,010 patents scored, 100% success rate
+**In progress:**
+- video-client-processing: ~394 target
+- video-server-cdn: ~456 target
 
----
+**Total VIDEO_STREAMING target:** 1,857 patents
 
-### 2. SECURITY Super-Sector Setup (This Session)
+### Parallelism Settings
+Changed from sequential to parallel execution:
+- **concurrency=4** per sector (was 2) in `llm-scoring-service.ts` lines 668 and 757
+- Running **2 sectors simultaneously** via separate curl requests
+- Throughput: ~10.5 patents/min with 2 parallel sectors
+- No rate limit errors observed
 
-**Template Hierarchy:**
-```
-portfolio-default (7 questions + scoringGuidance)
-    └── security (4 super-sector questions)
-        ├── wireless-security (5 sector questions) - 28 patents
-        ├── network-crypto (5 sector questions) - 103 patents
-        ├── computing-data-protection (5 sector questions) - 210 patents
-        ├── computing-auth-boot (5 sector questions) - 414 patents
-        ├── network-secure-compute (5 sector questions) - 433 patents
-        ├── computing-os-security (8 sector questions) - 682 patents [ENHANCED]
-        ├── network-threat-protection (7 sector questions) - 703 patents [ENHANCED]
-        └── network-auth-access (7 sector questions) - 1,809 patents [ENHANCED]
-```
+### Claims Tracking
+- Added `with_claims` column to `patent_sub_sector_scores` table
+- All VIDEO_STREAMING patents scored with claims (100%)
+- SECURITY and WIRELESS previously scored WITHOUT claims - need rescore
 
-### 3. Super-Sector Questions (SECURITY)
+## Patents Needing Claims XML
 
-Updated `security.json` (v2) with 4 questions:
-1. `defense_posture` - Prevention (7-10) vs Detection (4-6) vs Response (1-3)
-2. `security_layer` - Hardware/firmware (1-3), OS/platform (4-6), Network/application (7-10)
-3. `threat_sophistication` - Basic (1-3), Intermediate (4-6), Advanced/APT (7-10)
-4. `deployment_context` - Consumer/IoT (1-3), SMB/Enterprise (4-6), Critical Infrastructure (7-10)
+**Export files created:**
+- `exports/missing-claims/all-needs-xml-fixed.csv` - 7,826 patents (post-2005)
+- `exports/missing-claims/pre-2005-cannot-get-claims.csv` - 213 patents
+- `exports/missing-claims/previously-missing-dates.csv` - 41 patents (fixed dates)
 
-### 4. Sector Templates Created
+**Claims drive currently offline** - user copying 7,826 patent XMLs to drive
 
-All 8 SECURITY sector templates created with 5 sector-specific questions each:
+## Portfolio Cache Stats
+- Total patents in cache: 29,507
+- Post-2005 (can get claims): 26,093 (88%)
+- Pre-2005 (no claims available): 3,414 (12%)
 
-| Sector | Questions | Focus Areas |
-|--------|-----------|-------------|
-| network-auth-access | auth_mechanism, identity_management, access_control_model, protocol_scope, perimeter_scope + 2 enhanced |
-| network-threat-protection | detection_method, threat_types, response_capability, network_visibility, intelligence_integration + 2 enhanced |
-| computing-os-security | protection_layer, malware_detection, isolation_mechanism, endpoint_scope, edr_capability + 3 enhanced |
-| network-secure-compute | encryption_scope, key_management, protocol_layer, performance_impact, secure_channel |
-| computing-auth-boot | trust_anchor, boot_integrity, credential_protection, attestation_capability, recovery_mechanism |
-| computing-data-protection | encryption_granularity, key_lifecycle, dlp_capability, compliance_support, access_control_integration |
-| network-crypto | crypto_primitive, security_strength, implementation_security, performance_efficiency, standards_potential |
-| wireless-security | wireless_protocol, wireless_auth, ota_security, device_pairing, wireless_ids |
+## Scoring Status by Super-Sector
 
-### 5. Unique Value Analysis & Enhanced Templates
+| Super-Sector | Scored | With Claims | Status |
+|--------------|--------|-------------|--------|
+| VIDEO_STREAMING | ~1,700 | 100% | In Progress |
+| SECURITY | 3,790 | 0% | Needs rescore with claims |
+| WIRELESS | 3,040 | 0% | Needs rescore with claims |
+| NETWORKING | 0 | - | Not started |
+| COMPUTING | 0 | - | Not started |
+| SEMICONDUCTOR | 0 | - | Not started |
+| IMAGING | 0 | - | Not started |
+| AI_ML | 0 | - | Not started |
 
-Sampled ~30 patents from 3 largest sectors to analyze `unique_value` (dark horse) responses for emerging themes.
+**Note:** The super-sector patent counts from sub_sectors table may have bad joins - need to verify actual counts.
 
-**Key Insights Identified:**
+## Scripts Created This Session
 
-| Sector | Emerging Themes |
-|--------|-----------------|
-| network-auth-access | Cloud/SASE connectivity, container orchestration, SD-WAN, zero-trust |
-| network-threat-protection | XDR/NDR platforms, temporal attack analysis, distributed threat intel |
-| computing-os-security | Hypervisor/VMI security, memory deception, agentless cloud scanning |
+- `scripts/run-video-streaming-sectors.sh` - VIDEO_STREAMING batch with claims+rescore
+- `scripts/export-patents-needing-xml.sh` - Export patents needing XML claims
+- `scripts/export-sample-prompts.ts` - Export actual LLM prompts for review (fixed ES module issue)
+- `scripts/check-claims-availability.sh` - Pre-flight check for claims
 
-**Enhanced Large Sector Templates (v2):**
+## Key Code Changes
 
-**network-auth-access** - Added 2 questions:
-- `cloud_hybrid_relevance` - SASE, SD-WAN, multi-cloud access control
-- `container_microservices` - Kubernetes, service mesh integration
+### llm-scoring-service.ts
+- Line 668: `concurrency: 4` (was 2)
+- Line 757: `concurrency = 4` (was 2)
+- Added `withClaims` flag to score saving
 
-**network-threat-protection** - Added 2 questions:
-- `xdr_ndr_relevance` - Cross-domain correlation (network + endpoint + cloud)
-- `temporal_behavioral` - Long-term APT campaign detection, connection graphs
+### scoring-template-service.ts
+- Added `withClaims?: boolean` to `ScoreCalculationResult` interface
+- Updated `savePatentScore` to save `with_claims` column
 
-**computing-os-security** - Added 3 questions:
-- `hypervisor_vmi` - VMI-based protection, privilege separation
-- `memory_protection` - Memory deception, CFI, anti-ROP techniques
-- `agentless_cloud` - Cloud-native, agentless security approaches
-
-### 6. Batch Scoring Started
-
-SECURITY batch scoring initiated at ~9:27 AM CST:
-- **Total patents:** ~4,400
-- **Estimated completion:** 10-12 hours
-- **Log file:** `/tmp/security-sectors-batch.log`
-
-**Question counts per sector:**
-- Enhanced sectors: 18-19 questions (7 portfolio + 4 super-sector + 7-8 sector)
-- Standard sectors: 16 questions (7 portfolio + 4 super-sector + 5 sector)
-
-## Files Modified/Created
-
-### Config Files - SECURITY
-- `config/scoring-templates/super-sectors/security.json` - Updated v2 with new questions + guidance
-- `config/scoring-templates/sectors/network-auth-access.json` - NEW + ENHANCED v2
-- `config/scoring-templates/sectors/network-threat-protection.json` - NEW + ENHANCED v2
-- `config/scoring-templates/sectors/computing-os-security.json` - NEW + ENHANCED v2
-- `config/scoring-templates/sectors/network-secure-compute.json` - NEW
-- `config/scoring-templates/sectors/computing-auth-boot.json` - NEW
-- `config/scoring-templates/sectors/computing-data-protection.json` - NEW
-- `config/scoring-templates/sectors/network-crypto.json` - NEW
-- `config/scoring-templates/sectors/wireless-security.json` - NEW
-- `scripts/run-security-sectors.sh` - Batch runner script
+### prisma/schema.prisma
+- Added `withClaims Boolean @default(false) @map("with_claims")` to patentSubSectorScore model
 
 ## Next Steps
 
-1. **Monitor SECURITY batch** - Check `/tmp/security-sectors-batch.log`
-2. **Analyze SECURITY results** - Review unique_value insights across sectors
-3. **Pick next super-sector** - SEMICONDUCTOR or VIDEO_STREAMING recommended
-4. **Consider sub-sector templates** - For very large sectors (1,800+ patents)
+1. **Check VIDEO_STREAMING completion** - Should finish soon
+2. **Bring claims drive online** - After XML copy completes
+3. **Rescore SECURITY with claims** - 3,790 patents
+4. **Rescore WIRELESS with claims** - 3,040 patents
+5. **Verify super-sector patent counts** - Fix SQL joins
+6. **Start unscored super-sectors** - IMAGING (small), AI_ML (tiny), then larger ones
 
 ## Commands Reference
 
 ```bash
-# Monitor SECURITY batch progress
-tail -f /tmp/security-sectors-batch.log
+# Check VIDEO_STREAMING progress
+tail -20 /tmp/api-server.log
 
-# Check API server activity
-cat /tmp/api-server.log | strings | tail -20
+# Get scored counts by sector
+docker exec ip-port-postgres psql -U ip_admin -d ip_portfolio -c "
+SELECT template_config_id, COUNT(*), SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims
+FROM patent_sub_sector_scores
+WHERE template_config_id IS NOT NULL
+GROUP BY template_config_id ORDER BY template_config_id;"
 
-# Query SECURITY results when complete
-curl -s "http://localhost:3001/api/scoring-templates/scores/patent/{patent_id}" | jq '.'
+# Start a sector with claims
+curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/{sector}?useClaims=true&rescore=true"
 
-# Get sector patent counts
-curl -s "http://localhost:3001/api/patents?sector=network-auth-access&limit=1" | jq '.total'
-
-# Test single patent scoring
-curl -s -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/{sector}?limit=1" \
-  -H "Content-Type: application/json" | jq '.'
+# Export sample prompts
+npx tsx scripts/export-sample-prompts.ts {sector} {limit}
 ```
 
-## Architecture Notes
+## Rate/Cost Estimates
 
-### Template Inheritance Flow
-```
-1. Load portfolio-default.json (base questions + scoringGuidance)
-2. Merge super-sector template (security.json) - adds questions + guidance
-3. Merge sector template (network-auth-access.json) - adds sector questions + guidance
-4. Build prompt with full contextDescription + scoringGuidance from all levels
-5. Score patent with merged question set (16-19 questions total)
-6. Save with templateConfigId = sector name
-```
-
-### Unique Value Question Strategy
-The `unique_value` question at portfolio level asks LLM to identify overlooked value, emerging market timing, strategic defensive value, or "dark horse" characteristics. Analyzing these responses across sampled patents revealed themes that informed the enhanced sector questions (cloud_hybrid, xdr_ndr, hypervisor_vmi, etc.).
+- **Throughput:** ~10.5 patents/min (2 parallel sectors @ concurrency=4)
+- **Cost:** ~$0.015 per patent (Claude Sonnet 4)
+- **Model:** claude-sonnet-4-20250514

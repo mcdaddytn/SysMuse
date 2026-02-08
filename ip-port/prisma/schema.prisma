@@ -1014,6 +1014,7 @@ model PatentSubSectorScore {
   // LLM execution metadata
   llmModel        String?  @map("llm_model")
   tokensUsed      Int?     @map("tokens_used")
+  withClaims      Boolean  @default(false) @map("with_claims")
 
   executedAt      DateTime @map("executed_at")
   createdAt       DateTime @default(now()) @map("created_at")

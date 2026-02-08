@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wireless-services",
+  "name": "Wireless Services",
+  "description": "Sector template for wireless network services patents including location services, messaging, VoIP, and mobile application services.",
+  "level": "sector",
+  "sectorName": "wireless-services",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "version": 1,
+  "contextDescription": "Wireless services patents cover the higher-layer services delivered over wireless networks. Key areas include location-based services (LBS), messaging (SMS, RCS), voice over LTE (VoLTE), push notifications, and mobile application enablement. Targets include mobile operators, OTT service providers, and mobile platform vendors.",
+  "scoringGuidance": [
+    "Location-based services patents are high value as indoor positioning becomes mainstream.",
+    "VoLTE/VoNR patents are relevant as voice transitions to IP-based delivery.",
+    "RCS messaging patents target operator messaging modernization.",
+    "Emergency services (E911, eCall) patents have regulatory compliance value.",
+    "Patents enabling new service models (network slicing, edge services) are strategically valuable."
+  ],
+  "questions": [
+    {
+      "fieldName": "service_type",
+      "displayName": "Service Type",
+      "question": "What type of wireless service does this patent address? Consider: location/LBS, voice/VoLTE, messaging/RCS, push notifications, or emerging services.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify service category: location, voice, messaging, data, emergency, value-added."
+    },
+    {
+      "fieldName": "network_dependency",
+      "displayName": "Network Dependency",
+      "question": "How dependent is this service on network infrastructure? Score 1-3 for device-only, 4-6 for basic network support, 7-10 for deep network integration (IMS, MEC, slicing).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Network-integrated services target operators. Device-centric target OEMs."
+    },
+    {
+      "fieldName": "user_experience",
+      "displayName": "User Experience Impact",
+      "question": "How does this patent improve user experience? Score 1-3 for infrastructure-focused, 4-6 for indirect UX improvement, 7-10 for direct/significant UX enhancement.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess user-facing improvements: latency, quality, reliability, new capabilities."
+    },
+    {
+      "fieldName": "lbs_relevance",
+      "displayName": "Location Services Relevance",
+      "question": "Is this patent relevant to location-based services? Score 1-3 if not applicable, 4-6 for basic location, 7-10 for advanced LBS (indoor, high-accuracy, proximity).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "LBS enables navigation, geofencing, asset tracking, and proximity marketing."
+    },
+    {
+      "fieldName": "operator_relevance",
+      "displayName": "Operator Relevance",
+      "question": "Is this patent relevant to mobile network operators? Score 1-3 for OTT/device-only, 4-6 for operator-optional, 7-10 for operator-essential (VoLTE, IMS, RCS).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Operator-essential patents enable licensing to carriers. Assess operator dependency."
+    }
+  ]
+}

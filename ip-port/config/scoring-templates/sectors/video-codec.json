@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-codec",
+  "name": "Video Codec & Compression",
+  "description": "Sector template for video compression and codec patents including H.264/AVC, HEVC/H.265, VVC, AV1, and related encoding/decoding technologies.",
+  "level": "sector",
+  "sectorName": "video-codec",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Video codec patents cover the core compression technologies used in streaming, broadcast, and recording. Key areas include motion estimation/compensation, transform coding (DCT, DST), entropy coding (CABAC, CAVLC), loop filtering, intra/inter prediction, and rate control. Standards include H.264/AVC, HEVC/H.265, VVC/H.266, VP9, and AV1. Patent value often correlates with standards essentiality and adoption breadth.",
+  "scoringGuidance": [
+    "Patents covering mandatory decoder operations (entropy decoding, motion compensation) are high value due to unavoidable infringement.",
+    "CABAC/entropy coding optimizations are computational bottlenecks - hardware implementations are valuable.",
+    "Standards-essential patents (H.264, HEVC, VVC) have higher licensing potential than proprietary codecs.",
+    "AV1/royalty-free codec patents may have defensive value against standard-essential assertions.",
+    "Look for patents that span multiple codec generations (techniques applicable to H.264 through VVC)."
+  ],
+  "questions": [
+    {
+      "fieldName": "codec_generation",
+      "displayName": "Codec Generation",
+      "question": "Which video codec generation(s) does this patent apply to? Score 1-3 for legacy only (MPEG-2, H.263), 4-6 for current mainstream (H.264/AVC, VP9), 7-10 for modern/next-gen (HEVC, VVC, AV1) or multi-generational applicability.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the codec standard(s) and assess current/future relevance. Multi-generational techniques score higher."
+    },
+    {
+      "fieldName": "compression_component",
+      "displayName": "Compression Component",
+      "question": "What compression component does this patent address? Consider: motion estimation/compensation, transform coding, quantization, entropy coding (CABAC/CAVLC), loop filtering, intra prediction, rate control.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the specific codec component. Score based on how fundamental/unavoidable the component is in typical implementations."
+    },
+    {
+      "fieldName": "standards_essentiality",
+      "displayName": "Standards Essentiality Potential",
+      "question": "How likely is this patent to be essential to a video coding standard? Score 1-3 for non-essential/alternative approach, 4-6 for potentially essential, 7-10 for likely essential to standard compliance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess whether the technique is required by H.264, HEVC, VVC, or AV1 specifications. Consider decoder-side requirements."
+    },
+    {
+      "fieldName": "hw_sw_applicability",
+      "displayName": "Hardware/Software Applicability",
+      "question": "Is this patent applicable to hardware implementations, software implementations, or both? Score 1-3 for software-only, 4-6 for hardware-focused, 7-10 for both or specifically targeting hardware acceleration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Hardware codec implementations in mobile SoCs and GPUs are high-value targets. Identify implementation applicability."
+    },
+    {
+      "fieldName": "encoder_decoder_scope",
+      "displayName": "Encoder/Decoder Scope",
+      "question": "Does this patent apply to encoding, decoding, or both? Score 1-4 for encoder-only, 5-7 for decoder-only, 8-10 for both or decoder-mandatory operations.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Decoder patents have broader infringement scope (every device with video playback). Encoder patents target content creators/platforms."
+    }
+  ]
+}

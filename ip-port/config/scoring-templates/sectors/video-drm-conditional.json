@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-drm-conditional",
+  "name": "Video DRM & Conditional Access",
+  "description": "Sector template for video content protection patents including DRM, conditional access, watermarking, and forensic marking.",
+  "level": "sector",
+  "sectorName": "video-drm-conditional",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Video DRM and conditional access patents cover content protection technologies for streaming and broadcast. Key areas include DRM systems (Widevine, FairPlay, PlayReady), conditional access (CAS), key management, license delivery, watermarking, and forensic marking. Targets include streaming platforms, DRM vendors, pay-TV operators, and content studios.",
+  "scoringGuidance": [
+    "Multi-DRM patents that work across Widevine, FairPlay, and PlayReady are high value.",
+    "Forensic watermarking patents enable piracy source identification - valuable to studios.",
+    "Patents addressing DRM for emerging formats (4K, HDR, immersive) are strategically important.",
+    "License portability and offline playback patents address key UX requirements.",
+    "Hardware-based content protection (TEE, secure boot) patents target device manufacturers."
+  ],
+  "questions": [
+    {
+      "fieldName": "protection_type",
+      "displayName": "Protection Type",
+      "question": "What type of content protection does this patent cover? Score based on sophistication: 1-3 for basic encryption, 4-6 for standard DRM/CAS, 7-10 for advanced (multi-DRM, hardware-backed, forensic).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify protection mechanism: encryption, DRM, CAS, watermarking, TEE-based."
+    },
+    {
+      "fieldName": "key_management",
+      "displayName": "Key Management",
+      "question": "Does this patent address key management or license delivery? Score 1-3 if not applicable, 4-6 for basic key exchange, 7-10 for advanced (key rotation, hierarchical keys, license portability).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Key management complexity increases with multi-device, offline, and live scenarios."
+    },
+    {
+      "fieldName": "watermarking",
+      "displayName": "Watermarking & Forensics",
+      "question": "Does this patent cover watermarking or forensic marking? Score 1-3 if not applicable, 4-6 for visible watermarks, 7-10 for forensic/invisible watermarking with source identification.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Forensic watermarking enables piracy tracing. Assess robustness and identification capability."
+    },
+    {
+      "fieldName": "drm_ecosystem",
+      "displayName": "DRM Ecosystem Scope",
+      "question": "What DRM ecosystem(s) does this patent apply to? Score 1-3 for proprietary/single, 4-6 for one major (Widevine, FairPlay, PlayReady), 7-10 for multi-DRM or CENC/Common Encryption.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Multi-DRM support is essential for cross-platform streaming. Identify DRM compatibility."
+    },
+    {
+      "fieldName": "hardware_security",
+      "displayName": "Hardware Security Integration",
+      "question": "Does this patent leverage hardware security features? Score 1-3 for software-only, 4-6 for hardware-assisted, 7-10 for TEE, secure boot, or hardware DRM integration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Hardware security (ARM TrustZone, Intel SGX) provides stronger protection. Assess integration."
+    }
+  ]
+}

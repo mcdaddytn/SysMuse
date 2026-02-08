@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wireless-mobility",
+  "name": "Wireless Mobility & Handover",
+  "description": "Sector template for wireless mobility patents including handover, roaming, connection management, and seamless mobility.",
+  "level": "sector",
+  "sectorName": "wireless-mobility",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "version": 1,
+  "contextDescription": "Wireless mobility patents cover the technologies that enable seamless connectivity as devices move between cells, networks, and technologies. Key areas include handover (handoff), roaming, dual connectivity, carrier aggregation, and connection state management. Targets include chipset vendors, infrastructure manufacturers, and network operators.",
+  "scoringGuidance": [
+    "Make-before-break handover patents are high value for voice/video continuity.",
+    "Dual connectivity patents (LTE+5G, WiFi+cellular) target current deployment scenarios.",
+    "Inter-RAT handover patents (4G to 5G, WiFi to cellular) have broad applicability.",
+    "Patents covering handover decision algorithms may be standards-essential.",
+    "Network slice mobility patents are emerging high-value area for 5G."
+  ],
+  "questions": [
+    {
+      "fieldName": "handover_type",
+      "displayName": "Handover Type",
+      "question": "What type of handover does this patent address? Score 1-3 for intra-frequency, 4-6 for inter-frequency/inter-cell, 7-10 for inter-RAT or seamless multi-technology.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify handover type: intra-cell, inter-cell, inter-frequency, inter-RAT (4G/5G/WiFi)."
+    },
+    {
+      "fieldName": "seamlessness",
+      "displayName": "Seamless Transition",
+      "question": "How seamless is the mobility transition? Score 1-3 for break-before-make, 4-6 for reduced interruption, 7-10 for make-before-break or zero-interruption.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Seamless handover is critical for real-time applications. Assess interruption minimization."
+    },
+    {
+      "fieldName": "dual_connectivity",
+      "displayName": "Dual Connectivity",
+      "question": "Does this patent address dual or multi-connectivity? Score 1-3 if not applicable, 4-6 for basic dual connectivity, 7-10 for advanced (EN-DC, NR-DC, WiFi-cellular aggregation).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Dual connectivity is a key 5G deployment mode. Identify EN-DC, NR-DC applicability."
+    },
+    {
+      "fieldName": "decision_algorithm",
+      "displayName": "Handover Decision Algorithm",
+      "question": "Does this patent improve handover decision-making? Score 1-3 for basic RSRP/RSRQ, 4-6 for multi-criteria, 7-10 for predictive/ML-based or context-aware.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess sophistication of handover triggering and target cell selection."
+    },
+    {
+      "fieldName": "network_impact",
+      "displayName": "Network Impact",
+      "question": "What is the impact on network resources during mobility? Score 1-3 for high overhead, 4-6 for moderate, 7-10 for optimized signaling or reduced network load.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess signaling efficiency and impact on network capacity during handover."
+    }
+  ]
+}

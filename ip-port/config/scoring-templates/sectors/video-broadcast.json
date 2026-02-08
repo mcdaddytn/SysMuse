@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-broadcast",
+  "name": "Video Broadcast",
+  "description": "Sector template for broadcast video patents including DVB, ATSC, cable TV, satellite, and hybrid broadcast-broadband technologies.",
+  "level": "sector",
+  "sectorName": "video-broadcast",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Video broadcast patents cover traditional and next-generation broadcast technologies. Key areas include DVB (DVB-T/T2, DVB-S/S2, DVB-C), ATSC (ATSC 1.0, ATSC 3.0), cable systems, satellite distribution, and hybrid broadcast-broadband (HbbTV). Targets include broadcast equipment manufacturers, pay-TV operators, and TV receiver manufacturers.",
+  "scoringGuidance": [
+    "ATSC 3.0 patents are high value as US broadcasters transition to next-gen broadcast.",
+    "Hybrid broadcast-broadband (HbbTV) patents bridge traditional and streaming - strategic value.",
+    "DVB-T2/S2 patents remain valuable in European and international markets.",
+    "Live broadcast latency reduction patents are increasingly important for sports/events.",
+    "Patents covering broadcast-to-IP conversion enable cord-cutting infrastructure."
+  ],
+  "questions": [
+    {
+      "fieldName": "broadcast_standard",
+      "displayName": "Broadcast Standard",
+      "question": "Which broadcast standard(s) does this patent apply to? Score 1-3 for legacy (analog, ATSC 1.0), 4-6 for current (DVB-T2, DVB-S2), 7-10 for next-gen (ATSC 3.0) or multi-standard.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify broadcast standards: DVB-T/T2, DVB-S/S2, DVB-C, ATSC 1.0/3.0, ISDB, cable."
+    },
+    {
+      "fieldName": "transmission_reception",
+      "displayName": "Transmission vs Reception",
+      "question": "Does this patent cover transmission (broadcast equipment), reception (receivers/TVs), or both? Score 1-4 for transmission-only, 5-7 for reception-only, 8-10 for both.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Receiver patents have broader target base (all TVs). Transmission targets broadcast infrastructure."
+    },
+    {
+      "fieldName": "hybrid_broadband",
+      "displayName": "Hybrid Broadcast-Broadband",
+      "question": "Does this patent address hybrid broadcast-broadband scenarios? Score 1-3 if broadcast-only, 4-6 for basic hybrid, 7-10 for advanced HbbTV, ATSC 3.0 interactive, or seamless broadcast-OTT.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Hybrid technologies bridge broadcast and streaming. Assess integration sophistication."
+    },
+    {
+      "fieldName": "live_linear",
+      "displayName": "Live & Linear Focus",
+      "question": "Is this patent specific to live or linear broadcast? Score 1-3 for VOD/non-live, 4-6 for linear programming, 7-10 for live events with low-latency requirements.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Live broadcast patents are strategic for sports/news. Assess live-specific optimizations."
+    },
+    {
+      "fieldName": "signal_processing",
+      "displayName": "Broadcast Signal Processing",
+      "question": "Does this patent address broadcast-specific signal processing? Consider: channel coding, modulation, multiplexing, error correction for broadcast channels.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify broadcast PHY/MAC innovations: OFDM, LDPC, interleaving, SFN."
+    }
+  ]
+}

@@ -27,7 +27,7 @@ for SECTOR in "${SECTORS[@]}"; do
   echo "============================================================" | tee -a $LOG_FILE
 
   # Score remaining unscored patents (limit=2000 is now the default)
-  RESULT=$(curl -s -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/$SECTOR" \
+  RESULT=$(curl -s -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/$SECTOR?useClaims=true" \
     -H "Content-Type: application/json")
 
   TOTAL=$(echo $RESULT | jq -r '.total // 0')

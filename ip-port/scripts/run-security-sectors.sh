@@ -33,7 +33,7 @@ for sector in "${SECTORS[@]}"; do
   echo "Time: $(date)" | tee -a $LOG_FILE
   echo "============================================================" | tee -a $LOG_FILE
 
-  result=$(curl -s -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/$sector" \
+  result=$(curl -s -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/$sector?useClaims=true" \
     -H "Content-Type: application/json" 2>&1)
 
   count=$(echo "$result" | jq -r '.total // 0')

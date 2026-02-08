@@ -12,6 +12,7 @@ yarn.lock
 output/
 dist/
 build/
+exports/
 
 # Cache directories (API responses, LLM responses)
 cache/

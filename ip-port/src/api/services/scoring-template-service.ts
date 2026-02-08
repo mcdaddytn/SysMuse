@@ -61,6 +61,7 @@ export interface ScoreCalculationResult {
   templateId?: string;            // Database template ID (legacy)
   templateConfigId?: string;       // JSON config template ID (e.g., "rf-acoustic")
   templateVersion: number;
+  withClaims?: boolean;           // Whether claims were included in scoring context
 }
 
 // ============================================================================
@@ -345,6 +346,7 @@ export async function savePatentScore(
       templateId: result.templateId || null,
       templateConfigId: result.templateConfigId || null,
       templateVersion: result.templateVersion,
+      withClaims: result.withClaims || false,
       executedAt: new Date()
     },
     update: {
@@ -353,6 +355,7 @@ export async function savePatentScore(
       templateId: result.templateId || null,
       templateConfigId: result.templateConfigId || null,
       templateVersion: result.templateVersion,
+      withClaims: result.withClaims || false,
       executedAt: new Date(),
       updatedAt: new Date()
     }

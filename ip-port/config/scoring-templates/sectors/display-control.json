@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "display-control",
+  "name": "Display Control",
+  "description": "Sector template for display control patents including timing controllers, color management, HDR processing, and display interfaces.",
+  "level": "sector",
+  "sectorName": "display-control",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Display control patents cover the interface between video processing and display panels. Key areas include timing controllers (TCONs), color management, HDR tone mapping, display interfaces (HDMI, DisplayPort), and power management. Targets include TV manufacturers, panel makers, and mobile device OEMs.",
+  "scoringGuidance": [
+    "HDR tone mapping patents (HDR10, Dolby Vision, HLG) are high value as HDR adoption grows.",
+    "High refresh rate patents (120Hz, VRR) target gaming displays and premium TVs.",
+    "OLED-specific control patents (burn-in prevention, pixel compensation) target premium displays.",
+    "Display interface patents (HDMI 2.1, DisplayPort 2.0) may have standards relevance.",
+    "Power-optimized display control patents are valuable for mobile and battery-powered devices."
+  ],
+  "questions": [
+    {
+      "fieldName": "display_technology",
+      "displayName": "Display Technology",
+      "question": "What display technology does this patent target? Score 1-3 for legacy LCD, 4-6 for current LCD/LED, 7-10 for advanced (OLED, Mini-LED, MicroLED, QD).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify target display technology and assess market trajectory."
+    },
+    {
+      "fieldName": "hdr_processing",
+      "displayName": "HDR Processing",
+      "question": "Does this patent address HDR processing or tone mapping? Score 1-3 if not applicable, 4-6 for basic HDR, 7-10 for advanced (Dolby Vision, dynamic metadata, scene-adaptive).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "HDR formats: HDR10, HDR10+, Dolby Vision, HLG. Assess tone mapping sophistication."
+    },
+    {
+      "fieldName": "color_management",
+      "displayName": "Color Management",
+      "question": "Does this patent address color accuracy or gamut management? Score 1-3 if not applicable, 4-6 for basic color, 7-10 for advanced (wide gamut, color calibration, perceptual).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Color spaces: sRGB, DCI-P3, BT.2020. Assess color accuracy and gamut mapping."
+    },
+    {
+      "fieldName": "refresh_rate",
+      "displayName": "Refresh Rate & Motion",
+      "question": "Does this patent address high refresh rate or motion handling? Score 1-3 if standard 60Hz, 4-6 for 120Hz support, 7-10 for VRR, ALLM, or motion interpolation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Gaming and sports demand high refresh. Assess VRR, HDMI 2.1 compatibility."
+    },
+    {
+      "fieldName": "power_optimization",
+      "displayName": "Display Power Optimization",
+      "question": "Does this patent optimize display power consumption? Score 1-3 if not applicable, 4-6 for basic dimming, 7-10 for advanced (local dimming, OLED power, ABL).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Power efficiency is critical for mobile. Assess power management techniques."
+    }
+  ]
+}

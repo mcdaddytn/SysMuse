@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wireless-power-mgmt",
+  "name": "Wireless Power Management",
+  "description": "Sector template for wireless device power management patents including DRX, power control, battery optimization, and energy efficiency.",
+  "level": "sector",
+  "sectorName": "wireless-power-mgmt",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "version": 1,
+  "contextDescription": "Wireless power management patents cover techniques to extend battery life and optimize power consumption in wireless devices. Key areas include DRX (Discontinuous Reception), power control algorithms, transmit power optimization, sleep modes, and energy-efficient protocols. Targets include mobile device OEMs, chipset vendors, and infrastructure equipment manufacturers.",
+  "scoringGuidance": [
+    "DRX optimization patents are high value as 5G power consumption is a major device concern.",
+    "Patents covering connected-mode DRX (C-DRX) target smartphone battery life directly.",
+    "Power control patents that span uplink and downlink have broader applicability.",
+    "IoT/LPWAN power optimization patents target massive IoT deployments.",
+    "Patents addressing trade-offs between latency and power are strategically valuable for 5G."
+  ],
+  "questions": [
+    {
+      "fieldName": "power_mechanism",
+      "displayName": "Power Management Mechanism",
+      "question": "What power management mechanism does this patent address? Score 1-3 for basic power control, 4-6 for sleep modes/DRX, 7-10 for advanced (adaptive DRX, ML-based, cross-layer optimization).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the power mechanism: transmit power control, DRX, idle mode, power-aware scheduling."
+    },
+    {
+      "fieldName": "device_network_scope",
+      "displayName": "Device vs Network Scope",
+      "question": "Does this patent focus on device-side or network-side power optimization? Score 1-4 for network-only, 5-7 for device-only, 8-10 for coordinated device-network optimization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Device-side patents target OEMs directly. Network-side patents target operators and infrastructure."
+    },
+    {
+      "fieldName": "battery_impact",
+      "displayName": "Battery Life Impact",
+      "question": "How significant is the potential battery life improvement? Score 1-3 for marginal, 4-6 for measurable, 7-10 for substantial or transformative impact.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess the potential battery life improvement in realistic usage scenarios."
+    },
+    {
+      "fieldName": "latency_tradeoff",
+      "displayName": "Latency vs Power Trade-off",
+      "question": "Does this patent address the trade-off between power savings and latency? Score 1-3 if not applicable, 4-6 for basic trade-off, 7-10 for intelligent/adaptive balancing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "5G requires balancing URLLC latency with power efficiency. Assess the trade-off handling."
+    },
+    {
+      "fieldName": "iot_applicability",
+      "displayName": "IoT/LPWAN Applicability",
+      "question": "Is this patent applicable to IoT or low-power wide-area networks? Score 1-3 for smartphone-focused, 4-6 for general applicability, 7-10 for IoT-specific (NB-IoT, LTE-M, LoRa).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "IoT devices have extreme power constraints. Assess IoT-specific applicability."
+    }
+  ]
+}

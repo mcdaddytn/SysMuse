@@ -1,0 +1,70 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wireless-security",
+  "name": "Wireless Security",
+  "description": "Sector template for wireless-specific security patents including WiFi security, Bluetooth security, cellular security, and wireless protocol authentication.",
+  "level": "sector",
+  "sectorName": "wireless-security",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 1,
+  "contextDescription": "Wireless security patents protect wireless communications from eavesdropping, unauthorized access, and attacks specific to wireless protocols. Technologies include WPA3, 802.1X, EAP methods, SIM-based authentication, Bluetooth pairing security, and wireless intrusion detection.",
+  "scoringGuidance": [
+    "Patents addressing specific wireless vulnerabilities (KRACK, BlueBorne, etc.) score higher on threat coverage.",
+    "Multi-protocol security (WiFi + Bluetooth + Cellular) increases market coverage.",
+    "Integration with cellular security (SIM, eSIM, 5G security) is high value for mobile.",
+    "Wireless-specific side-channel attacks (signal analysis, jamming detection) are specialized value."
+  ],
+  "questions": [
+    {
+      "fieldName": "wireless_protocol",
+      "displayName": "Wireless Protocol Coverage",
+      "question": "Which wireless protocols does this patent secure? Score 1-3 for single legacy protocol (WEP, older Bluetooth), 4-6 for current protocols (WPA3, BLE 5.x), 7-10 for multi-protocol or next-gen (WiFi 7, 5G security).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "List wireless protocols: WiFi, Bluetooth, cellular (4G/5G), Zigbee, LoRa, etc."
+    },
+    {
+      "fieldName": "wireless_auth",
+      "displayName": "Wireless Authentication",
+      "question": "How robust is the wireless authentication mechanism? Score 1-3 for pre-shared key only, 4-6 for 802.1X/EAP, 7-10 for advanced (SIM-based, certificate, multi-factor wireless auth).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe wireless authentication: PSK, 802.1X, EAP methods, SIM-based."
+    },
+    {
+      "fieldName": "ota_security",
+      "displayName": "Over-the-Air Security",
+      "question": "Does this patent address over-the-air attack protection? Score 1-3 if encryption only, 4-6 for replay/MitM protection, 7-10 for comprehensive OTA security (jamming detection, rogue AP detection).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe OTA security: eavesdropping protection, MitM, jamming, rogue detection."
+    },
+    {
+      "fieldName": "device_pairing",
+      "displayName": "Secure Device Pairing",
+      "question": "Does this patent improve secure device pairing? Score 1-3 if not addressed, 4-6 for improved pairing protocols, 7-10 for novel secure pairing (OOB, proximity-based, biometric).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe pairing security: Bluetooth pairing, WiFi Easy Connect, NFC bootstrap."
+    },
+    {
+      "fieldName": "wireless_ids",
+      "displayName": "Wireless Intrusion Detection",
+      "question": "Does this patent include wireless intrusion detection? Score 1-3 if none, 4-6 for basic rogue detection, 7-10 for comprehensive WIDS (attack classification, localization, response).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe WIDS capabilities: spectrum monitoring, attack detection, response."
+    }
+  ]
+}

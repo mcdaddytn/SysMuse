@@ -5,7 +5,16 @@
   "description": "Default scoring template for all patents. Provides base questions that can be inherited and overridden by sector-specific templates.",
   "level": "portfolio",
   "isDefault": true,
-  "version": 1,
+  "version": 2,
+  "scoringGuidance": [
+    "Score each question on a 1-10 scale based on the patent's actual content.",
+    "If a question topic is NOT addressed or NOT relevant to this patent, score 1-2 and state clearly in reasoning that this aspect is not applicable to this patent.",
+    "If a question topic is minimally addressed, score 3-4.",
+    "If a question topic is moderately addressed with some merit, score 5-6.",
+    "If a question topic is well addressed with clear value, score 7-8.",
+    "If a question topic is exceptionally addressed with significant innovation, score 9-10.",
+    "Always provide specific reasoning citing patent content. Avoid generic statements."
+  ],
   "questions": [
     {
       "fieldName": "technical_novelty",

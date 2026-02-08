@@ -1,0 +1,81 @@
+{
+  "$schema": "../../scoring-template.schema.json",
+  "id": "rf-acoustic",
+  "name": "RF Acoustic Filter Scoring",
+  "description": "Scoring template for RF acoustic filter patents (BAW, FBAR, SAW). Focuses on filter technology, materials science, and RF front-end applications. These are component-level innovations distinct from wireless communication protocols.",
+  "level": "sector",
+  "sectorName": "rf-acoustic",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "isDefault": true,
+  "version": 1,
+  "scoringGuidance": [
+    "RF acoustic patents focus on physical filter/resonator technology, not communication protocols.",
+    "For inherited super-sector questions: component_vs_system should score 1-3 (component focus), deployment_target should score high (smartphones), wireless_generation may score low unless specific to a band, standards_essentiality depends on whether filter specs are standardized.",
+    "Focus scoring weight on the sector-specific questions about filter technology, materials, and RF performance.",
+    "Key manufacturers in this space: Broadcom/Avago, Qualcomm, Murata, Skyworks, Qorvo - high licensing value."
+  ],
+  "contextDescription": "RF acoustic filters (BAW, FBAR, SAW) are critical components in every smartphone and wireless device for frequency selection and signal filtering. These patents cover resonator structures, piezoelectric materials, temperature compensation, and integration into RF front-end modules. This is a high-value area due to limited suppliers and presence in billions of devices.",
+  "questions": [
+    {
+      "fieldName": "filter_technology_type",
+      "displayName": "Filter Technology Type",
+      "question": "What type of acoustic filter or resonator technology does this patent cover? Consider: BAW (Bulk Acoustic Wave), FBAR (Film Bulk Acoustic Resonator), SAW (Surface Acoustic Wave), TC-SAW (Temperature Compensated SAW), or novel hybrid approaches.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the specific acoustic technology type and explain any novel structural innovations (e.g., laterally-coupled resonators, stacked resonators, cantilever structures)."
+    },
+    {
+      "fieldName": "material_innovation",
+      "displayName": "Material Innovation",
+      "question": "Rate the level of material science innovation in this patent. Consider: piezoelectric materials (AlN, ScAlN, ZnO, LiNbO3), rare-earth doping, electrode materials, thin film deposition techniques, or novel material compositions.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the materials involved and what makes them innovative. Note any specific dopants, compositions, or fabrication methods mentioned."
+    },
+    {
+      "fieldName": "frequency_band_coverage",
+      "displayName": "Frequency Band Coverage",
+      "question": "How broadly applicable is this technology across frequency bands? Consider: sub-1GHz, cellular bands (700MHz-2.7GHz), WiFi bands (2.4/5/6GHz), 5G sub-6GHz, 5G mmWave, or ultra-wideband applications.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the target frequency bands and explain whether the innovation is band-specific or broadly applicable across multiple bands."
+    },
+    {
+      "fieldName": "rf_frontend_application",
+      "displayName": "RF Front-End Application",
+      "question": "What RF front-end application does this enable? Consider: standalone filters, duplexers, multiplexers (quadplexers, hexaplexers), antenna tuners, RF front-end modules (FEMs), or integrated transceiver modules.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the target application and how this innovation improves RF front-end performance (insertion loss, isolation, selectivity, size)."
+    },
+    {
+      "fieldName": "performance_improvement",
+      "displayName": "Performance Improvement",
+      "question": "Rate the performance improvement this patent provides. Consider: temperature stability, insertion loss reduction, improved Q-factor, better power handling, smaller size, wider bandwidth, or spurious mode suppression.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the specific performance metrics improved and quantify if possible (e.g., X dB better insertion loss, Y% size reduction)."
+    },
+    {
+      "fieldName": "manufacturing_feasibility",
+      "displayName": "Manufacturing Feasibility",
+      "question": "How manufacturable is this innovation at scale? Consider: compatibility with existing MEMS/semiconductor fabs, yield implications, process complexity, and whether it requires novel equipment or materials.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess whether this can be manufactured at scale using existing processes or requires significant process development."
+    }
+  ]
+}

@@ -1003,10 +1003,13 @@ model PatentSubSectorScore {
   // Sector-level rank (after rollup)
   rankInSector    Int?     @map("rank_in_sector")
 
-  // Template used for scoring
-  templateId      String   @map("template_id")
-  template        ScoringTemplate @relation(fields: [templateId], references: [id])
+  // Template used for scoring (optional when using JSON config templates)
+  templateId      String?  @map("template_id")
+  template        ScoringTemplate? @relation(fields: [templateId], references: [id])
   templateVersion Int      @map("template_version")
+
+  // JSON config template identifier (for file-based templates)
+  templateConfigId String? @map("template_config_id")  // e.g., "rf-acoustic"
 
   // LLM execution metadata
   llmModel        String?  @map("llm_model")

@@ -58,7 +58,8 @@ export interface ScoreCalculationResult {
   subSectorId: string;
   metrics: Record<string, MetricScore>;
   compositeScore: number;
-  templateId: string;
+  templateId?: string;            // Database template ID (legacy)
+  templateConfigId?: string;       // JSON config template ID (e.g., "rf-acoustic")
   templateVersion: number;
 }
 
@@ -341,14 +342,16 @@ export async function savePatentScore(
       subSectorId: result.subSectorId,
       metrics: result.metrics,
       compositeScore: result.compositeScore,
-      templateId: result.templateId,
+      templateId: result.templateId || null,
+      templateConfigId: result.templateConfigId || null,
       templateVersion: result.templateVersion,
       executedAt: new Date()
     },
     update: {
       metrics: result.metrics,
       compositeScore: result.compositeScore,
-      templateId: result.templateId,
+      templateId: result.templateId || null,
+      templateConfigId: result.templateConfigId || null,
       templateVersion: result.templateVersion,
       executedAt: new Date(),
       updatedAt: new Date()
@@ -522,6 +525,18 @@ interface TemplateConfigFile {
   inheritsFrom?: string;
   isDefault?: boolean;
   version: number;
+  scoringGuidance?: string[];
+  contextDescription?: string;
+  questions: ScoringQuestion[];
+}
+
+export interface MergedTemplate {
+  name: string;
+  description: string;
+  level: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
+  inheritanceChain: string[];  // e.g., ['portfolio-default', 'wireless', 'rf-acoustic']
+  scoringGuidance: string[];   // Merged from all levels
+  contextDescription: string;  // Concatenated from all levels
   questions: ScoringQuestion[];
 }
 
@@ -595,6 +610,151 @@ export function getMergedQuestionsForSuperSector(superSectorName: string): Scori
   }
 
   return questions;
+}
+
+/**
+ * Load all sector templates from config
+ */
+export function loadSectorTemplates(): Map<string, TemplateConfigFile> {
+  const templates = new Map<string, TemplateConfigFile>();
+  const sectorsDir = path.join(CONFIG_DIR, 'sectors');
+
+  if (!fs.existsSync(sectorsDir)) {
+    return templates;
+  }
+
+  const files = fs.readdirSync(sectorsDir).filter(f => f.endsWith('.json'));
+
+  for (const file of files) {
+    const template = loadTemplateFromFile(path.join('sectors', file));
+    if (template.sectorName) {
+      templates.set(template.sectorName, template);
+    }
+  }
+
+  return templates;
+}
+
+/**
+ * Get fully merged template for a sector, including all inherited guidance and questions.
+ * Inheritance chain: portfolio-default → super-sector → sector
+ */
+export function getMergedTemplateForSector(sectorName: string, superSectorName: string): MergedTemplate {
+  const portfolioDefault = loadPortfolioDefaultTemplate();
+  const superSectorTemplates = loadSuperSectorTemplates();
+  const sectorTemplates = loadSectorTemplates();
+
+  const superSectorTemplate = superSectorTemplates.get(superSectorName);
+  const sectorTemplate = sectorTemplates.get(sectorName);
+
+  // Build inheritance chain
+  const inheritanceChain: string[] = [portfolioDefault.id];
+  if (superSectorTemplate) inheritanceChain.push(superSectorTemplate.id);
+  if (sectorTemplate) inheritanceChain.push(sectorTemplate.id);
+
+  // Merge scoring guidance (concatenate arrays)
+  const scoringGuidance: string[] = [
+    ...(portfolioDefault.scoringGuidance || []),
+    ...(superSectorTemplate?.scoringGuidance || []),
+    ...(sectorTemplate?.scoringGuidance || [])
+  ];
+
+  // Merge context descriptions (concatenate with newlines)
+  const contextParts: string[] = [];
+  if (portfolioDefault.contextDescription) contextParts.push(portfolioDefault.contextDescription);
+  if (superSectorTemplate?.contextDescription) contextParts.push(superSectorTemplate.contextDescription);
+  if (sectorTemplate?.contextDescription) contextParts.push(sectorTemplate.contextDescription);
+  const contextDescription = contextParts.join('\n\n');
+
+  // Merge questions (more specific overrides less specific)
+  const mergedQuestions = new Map<string, ScoringQuestion>();
+  for (const q of portfolioDefault.questions) {
+    mergedQuestions.set(q.fieldName, { ...q });
+  }
+  if (superSectorTemplate) {
+    for (const q of superSectorTemplate.questions) {
+      mergedQuestions.set(q.fieldName, { ...q });
+    }
+  }
+  if (sectorTemplate) {
+    for (const q of sectorTemplate.questions) {
+      mergedQuestions.set(q.fieldName, { ...q });
+    }
+  }
+
+  // Normalize weights
+  const questions = Array.from(mergedQuestions.values());
+  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+  if (totalWeight > 0) {
+    for (const q of questions) {
+      q.weight = Math.round((q.weight / totalWeight) * 100) / 100;
+    }
+  }
+
+  // Determine final name and description
+  const name = sectorTemplate?.name || superSectorTemplate?.name || portfolioDefault.name;
+  const description = sectorTemplate?.description || superSectorTemplate?.description || portfolioDefault.description || '';
+  const level = sectorTemplate ? 'sector' : (superSectorTemplate ? 'super_sector' : 'portfolio');
+
+  return {
+    name,
+    description,
+    level,
+    inheritanceChain,
+    scoringGuidance,
+    contextDescription,
+    questions
+  };
+}
+
+/**
+ * Get merged template for a super-sector (no sector-specific additions)
+ */
+export function getMergedTemplateForSuperSector(superSectorName: string): MergedTemplate {
+  const portfolioDefault = loadPortfolioDefaultTemplate();
+  const superSectorTemplates = loadSuperSectorTemplates();
+  const superSectorTemplate = superSectorTemplates.get(superSectorName);
+
+  const inheritanceChain: string[] = [portfolioDefault.id];
+  if (superSectorTemplate) inheritanceChain.push(superSectorTemplate.id);
+
+  const scoringGuidance: string[] = [
+    ...(portfolioDefault.scoringGuidance || []),
+    ...(superSectorTemplate?.scoringGuidance || [])
+  ];
+
+  const contextParts: string[] = [];
+  if (portfolioDefault.contextDescription) contextParts.push(portfolioDefault.contextDescription);
+  if (superSectorTemplate?.contextDescription) contextParts.push(superSectorTemplate.contextDescription);
+  const contextDescription = contextParts.join('\n\n');
+
+  const mergedQuestions = new Map<string, ScoringQuestion>();
+  for (const q of portfolioDefault.questions) {
+    mergedQuestions.set(q.fieldName, { ...q });
+  }
+  if (superSectorTemplate) {
+    for (const q of superSectorTemplate.questions) {
+      mergedQuestions.set(q.fieldName, { ...q });
+    }
+  }
+
+  const questions = Array.from(mergedQuestions.values());
+  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+  if (totalWeight > 0) {
+    for (const q of questions) {
+      q.weight = Math.round((q.weight / totalWeight) * 100) / 100;
+    }
+  }
+
+  return {
+    name: superSectorTemplate?.name || portfolioDefault.name,
+    description: superSectorTemplate?.description || portfolioDefault.description || '',
+    level: superSectorTemplate ? 'super_sector' : 'portfolio',
+    inheritanceChain,
+    scoringGuidance,
+    contextDescription,
+    questions
+  };
 }
 
 // ============================================================================

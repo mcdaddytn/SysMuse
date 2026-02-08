@@ -2,42 +2,58 @@
   "$schema": "../scoring-template.schema.json",
   "id": "wireless",
   "name": "Wireless Scoring",
-  "description": "Scoring template for Wireless super-sector patents. Includes spectrum efficiency and wireless standard alignment metrics.",
+  "description": "Scoring template for Wireless super-sector patents. Covers RF components, communication protocols, antennas, and network infrastructure with questions that differentiate across diverse wireless technologies.",
   "level": "super_sector",
   "superSectorName": "WIRELESS",
   "inheritsFrom": "portfolio-default",
   "isDefault": true,
-  "version": 1,
+  "version": 3,
+  "scoringGuidance": [
+    "This super-sector covers diverse wireless technologies: RF components (filters, amplifiers), communication protocols (modulation, scheduling), antennas, and network infrastructure.",
+    "The super-sector questions are designed to differentiate across all wireless patent types.",
+    "Sector-specific questions will add more targeted evaluation for each technology area."
+  ],
+  "contextDescription": "Wireless technology patents span from physical layer components (filters, amplifiers, antennas) through communication protocols (modulation, scheduling) to network infrastructure (base stations, access points). Key value drivers include standards essentiality, component ubiquity (every smartphone), and performance differentiation.",
   "questions": [
     {
-      "fieldName": "spectrum_efficiency",
-      "displayName": "Spectrum Efficiency",
-      "question": "How efficiently does this technology use wireless spectrum? Consider modulation schemes, channel utilization, interference management, and bandwidth optimization.",
+      "fieldName": "component_vs_system",
+      "displayName": "Component vs System Innovation",
+      "question": "Is this patent focused on a discrete component/device innovation or a system-level solution? Consider: Component-level includes filters, amplifiers, antennas, chips. System-level includes protocols, network architectures, resource management algorithms.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.15,
+      "weight": 0.12,
       "requiresReasoning": true,
-      "reasoningPrompt": "Describe spectrum efficiency improvements and techniques used."
+      "reasoningPrompt": "Score 1-3 for pure component focus, 4-6 for hybrid component+system, 7-10 for pure system/protocol focus. Describe what type of innovation this represents."
     },
     {
-      "fieldName": "wireless_standard_alignment",
-      "displayName": "Wireless Standard Alignment",
-      "question": "Rate alignment with wireless standards (WiFi 6/7, 5G/6G, Bluetooth 5.x, LoRa, Zigbee, etc.). Consider standard essentiality potential.",
+      "fieldName": "deployment_target",
+      "displayName": "Deployment Target",
+      "question": "What is the primary deployment target for this technology? Consider: Mobile device (smartphone, tablet), base station/access point, IoT/embedded device, infrastructure equipment (routers, gateways), or wearables.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.15,
+      "weight": 0.12,
       "requiresReasoning": true,
-      "reasoningPrompt": "Identify relevant wireless standards and degree of alignment."
+      "reasoningPrompt": "Identify the deployment target(s). Score higher for high-volume targets (smartphones=8-10) or high-value infrastructure (base stations=7-9). Score lower for niche applications."
     },
     {
-      "fieldName": "wireless_range_reliability",
-      "displayName": "Range & Reliability",
-      "question": "How does this patent improve wireless range, coverage, or connection reliability?",
+      "fieldName": "wireless_generation",
+      "displayName": "Wireless Generation Alignment",
+      "question": "Which wireless technology generation does this patent align with? Consider: 4G LTE, 5G NR, 5G Advanced, WiFi 5/6/6E/7, Bluetooth 5.x, or emerging 6G concepts. Rate applicability to current and next-gen standards.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.10,
+      "weight": 0.12,
       "requiresReasoning": true,
-      "reasoningPrompt": "Describe improvements to coverage, range, or reliability."
+      "reasoningPrompt": "Identify specific wireless generations. Score 8-10 for current mainstream (5G, WiFi 6/7), 5-7 for still-relevant older gen (4G, WiFi 5), 3-5 for legacy, 1-2 if wireless generation is not applicable (e.g., general RF components)."
+    },
+    {
+      "fieldName": "standards_essentiality",
+      "displayName": "Standards Essentiality Potential",
+      "question": "Could this patent be essential to implementing a wireless standard (3GPP, IEEE 802.11, Bluetooth SIG)? Consider: Does it cover functionality that all compliant implementations must include?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Score 9-10 for likely essential (mandatory standard feature), 6-8 for possibly essential (optional standard feature), 3-5 for standard-adjacent but not essential, 1-2 for not related to standards. Cite specific standards if applicable."
     }
   ]
 }

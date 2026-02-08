@@ -1,0 +1,70 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing-auth-boot",
+  "name": "Computing Authentication & Secure Boot",
+  "description": "Sector template for computing authentication and secure boot patents including hardware-rooted trust, TPM, secure boot chains, credential management, and system integrity verification.",
+  "level": "sector",
+  "sectorName": "computing-auth-boot",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 1,
+  "contextDescription": "Computing authentication and secure boot patents establish trust from hardware through the boot process. Technologies include TPM, secure boot, measured launch, hardware security modules (HSM), credential managers, and platform integrity verification.",
+  "scoringGuidance": [
+    "Hardware-rooted trust (TPM, secure element) patents score higher than software-only solutions.",
+    "Patents covering the full boot chain from firmware to OS score higher on boot_integrity.",
+    "Credential protection against side-channel attacks and physical tampering is high value.",
+    "Remote attestation and platform verification capabilities increase enterprise applicability."
+  ],
+  "questions": [
+    {
+      "fieldName": "trust_anchor",
+      "displayName": "Hardware Trust Anchor",
+      "question": "Does this patent use hardware-rooted trust? Score 1-3 for software-only, 4-6 for TPM/HSM usage, 7-10 for deep hardware integration (secure enclave, TEE, custom silicon).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify trust anchor: software, TPM, HSM, secure element, custom silicon."
+    },
+    {
+      "fieldName": "boot_integrity",
+      "displayName": "Boot Integrity Scope",
+      "question": "How comprehensive is boot integrity coverage? Score 1-3 for single stage, 4-6 for multi-stage boot verification, 7-10 for full chain of trust (firmware through OS/applications).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe boot verification: single stage, chain of trust, measured boot."
+    },
+    {
+      "fieldName": "credential_protection",
+      "displayName": "Credential Protection",
+      "question": "How well are credentials protected? Score 1-3 for encrypted storage only, 4-6 for isolated storage with access control, 7-10 for hardware-protected credentials (SE, TEE, biometric binding).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess credential storage and protection mechanisms."
+    },
+    {
+      "fieldName": "attestation_capability",
+      "displayName": "Remote Attestation",
+      "question": "Does this patent support remote attestation? Score 1-3 if none, 4-6 for local integrity checking, 7-10 for remote attestation with verifiable proofs.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe attestation: local integrity, remote verification, proof generation."
+    },
+    {
+      "fieldName": "recovery_mechanism",
+      "displayName": "Recovery Mechanism",
+      "question": "Does this patent address recovery from compromise? Score 1-3 if none, 4-6 for basic recovery, 7-10 for secure recovery with re-establishment of trust.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe recovery mechanisms for boot failures or credential compromise."
+    }
+  ]
+}

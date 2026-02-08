@@ -15,7 +15,9 @@ import {
   ScoringQuestion,
   MetricScore,
   ScoreCalculationResult,
-  calculateCompositeScore
+  calculateCompositeScore,
+  getMergedTemplateForSector,
+  MergedTemplate
 } from './scoring-template-service.js';
 import { extractClaimsText, getClaimsStats } from './patent-xml-parser-service.js';
 
@@ -208,11 +210,23 @@ async function enrichPatentBatch(
 
 /**
  * Build the scoring prompt for a patent
+ * Supports both legacy (questions array) and new (MergedTemplate) formats
  */
 function buildScoringPrompt(
   patent: PatentForScoring,
-  questions: ScoringQuestion[]
+  templateOrQuestions: MergedTemplate | ScoringQuestion[]
 ): string {
+  // Handle both old and new format
+  const questions = Array.isArray(templateOrQuestions)
+    ? templateOrQuestions
+    : templateOrQuestions.questions;
+  const scoringGuidance = Array.isArray(templateOrQuestions)
+    ? []
+    : (templateOrQuestions.scoringGuidance || []);
+  const contextDescription = Array.isArray(templateOrQuestions)
+    ? ''
+    : (templateOrQuestions.contextDescription || '');
+
   const questionPrompts = questions.map((q, i) => {
     let prompt = `${i + 1}. **${q.displayName}** (fieldName: "${q.fieldName}")
    Question: ${q.question}`;
@@ -241,8 +255,28 @@ ${patent.llm_technical_solution ? `**Technical Solution:** ${patent.llm_technica
 `;
   }
 
-  return `You are a patent analyst evaluating patents for litigation and licensing potential.
+  // Build scoring guidance section
+  let guidanceSection = '';
+  if (scoringGuidance.length > 0) {
+    guidanceSection = `
+## Scoring Guidelines
 
+${scoringGuidance.map(g => `- ${g}`).join('\n')}
+`;
+  }
+
+  // Build technology context section
+  let techContextSection = '';
+  if (contextDescription) {
+    techContextSection = `
+## Technology Context
+
+${contextDescription}
+`;
+  }
+
+  return `You are a patent analyst evaluating patents for litigation and licensing potential.
+${guidanceSection}${techContextSection}
 ## Patent Information
 
 **Patent ID:** ${patent.patent_id}
@@ -282,7 +316,7 @@ Respond with a JSON object containing the scores. Use this exact structure:
 }
 \`\`\`
 
-Be objective and critical. Scores should follow a normal distribution - most patents should score 4-7, with very few at the extremes.`;
+Be objective and critical. Follow the scoring guidelines above.`;
 }
 
 // ============================================================================
@@ -299,13 +333,15 @@ export async function scorePatent(
     saveToDb?: boolean;
     skipEnrichment?: boolean;
     contextOptions?: ContextOptions;
+    template?: MergedTemplate;  // Pre-resolved template (for batch scoring by sector)
   } = {}
 ): Promise<ScoringResult> {
   const {
     model = 'claude-sonnet-4-20250514',
     saveToDb = true,
     skipEnrichment = false,
-    contextOptions = DEFAULT_CONTEXT_OPTIONS
+    contextOptions = DEFAULT_CONTEXT_OPTIONS,
+    template: providedTemplate
   } = options;
 
   // Enrich patent with full data from file caches
@@ -313,28 +349,31 @@ export async function scorePatent(
 
   // Get sub-sector ID
   const subSectorId = enrichedPatent.primary_sub_sector_id || patent.primary_sub_sector_id;
-  if (!subSectorId) {
+  if (!subSectorId && !providedTemplate) {
     return {
       patentId: patent.patent_id,
       subSectorId: '',
       success: false,
-      error: 'Patent has no assigned sub-sector'
+      error: 'Patent has no assigned sub-sector and no template provided'
     };
   }
 
-  // Get effective template
-  const template = await resolveEffectiveTemplate(subSectorId);
+  // Get effective template - use provided or resolve from sub-sector
+  let template: MergedTemplate | { questions: ScoringQuestion[] } | null = providedTemplate || null;
+  if (!template && subSectorId) {
+    template = await resolveEffectiveTemplate(subSectorId);
+  }
   if (!template) {
     return {
       patentId: enrichedPatent.patent_id,
-      subSectorId,
+      subSectorId: subSectorId || '',
       success: false,
-      error: 'No scoring template found for sub-sector'
+      error: 'No scoring template found'
     };
   }
 
-  // Build prompt with enriched data
-  const prompt = buildScoringPrompt(enrichedPatent, template.questions);
+  // Build prompt with enriched data (supports both MergedTemplate and legacy format)
+  const prompt = buildScoringPrompt(enrichedPatent, template as MergedTemplate);
 
   try {
     // Call Claude
@@ -379,17 +418,35 @@ export async function scorePatent(
 
     // Save to database if requested
     if (saveToDb) {
-      const dbTemplate = await prisma.scoringTemplate.findFirst({
-        where: { id: template.templateId }
-      });
+      // Check if this is a MergedTemplate (from JSON config) or legacy DB template
+      const isMergedTemplate = 'inheritanceChain' in template;
+
+      let templateId: string | undefined;
+      let templateConfigId: string | undefined;
+      let templateVersion = 1;
+
+      if (isMergedTemplate) {
+        // Using JSON config template
+        const mergedTemplate = template as MergedTemplate;
+        templateConfigId = mergedTemplate.inheritanceChain[mergedTemplate.inheritanceChain.length - 1];
+        templateVersion = 1; // JSON templates don't have versions yet
+      } else {
+        // Legacy DB template
+        templateId = (template as any).templateId;
+        const dbTemplate = await prisma.scoringTemplate.findFirst({
+          where: { id: templateId }
+        });
+        templateVersion = dbTemplate?.version || 1;
+      }
 
       const result: ScoreCalculationResult = {
         patentId: enrichedPatent.patent_id,
         subSectorId,
         metrics,
         compositeScore,
-        templateId: template.templateId,
-        templateVersion: dbTemplate?.version || 1
+        templateId,
+        templateConfigId,
+        templateVersion
       };
 
       await savePatentScore(result);
@@ -428,9 +485,10 @@ export async function scorePatentBatch(
     concurrency?: number;
     progressCallback?: (completed: number, total: number) => void;
     contextOptions?: ContextOptions;
+    template?: MergedTemplate;  // Pre-resolved template (for sector batch scoring)
   } = {}
 ): Promise<BatchScoringResult> {
-  const { concurrency = 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS } = options;
+  const { concurrency = 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS, template } = options;
 
   const results: ScoringResult[] = [];
   let successful = 0;
@@ -450,7 +508,7 @@ export async function scorePatentBatch(
     const batch = enrichedPatents.slice(i, i + concurrency);
 
     const batchResults = await Promise.all(
-      batch.map(patent => scorePatent(patent, { ...options, skipEnrichment: true, contextOptions }))
+      batch.map(patent => scorePatent(patent, { ...options, skipEnrichment: true, contextOptions, template }))
     );
 
     for (const result of batchResults) {
@@ -695,7 +753,7 @@ export async function scoreSector(
     minYear?: number;   // Filter to patents from this year or later
   } = {}
 ): Promise<BatchScoringResult> {
-  const { limit = 500, model, concurrency = 2, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear } = options;
+  const { limit = 2000, model, concurrency = 2, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear } = options;
 
   console.log(`[LLM Scoring] Starting sector scoring for: ${sectorName}`);
 
@@ -718,12 +776,19 @@ export async function scoreSector(
     console.log(`[LLM Scoring] Using CLAIMS CONTEXT (${contextOptions.includeClaims})`);
   }
 
+  // Get the merged template for this sector (from JSON config files)
+  // First patent gives us the super-sector context
+  const superSector = patents[0]?.super_sector || 'WIRELESS';
+  const template = getMergedTemplateForSector(sectorName, superSector);
+  console.log(`[LLM Scoring] Using template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
+
   // Score the batch
   return scorePatentBatch(patents, {
     model,
     saveToDb: true,
     concurrency,
     contextOptions,
+    template,
     progressCallback: (completed, total) => {
       const pct = Math.round((completed / total) * 100);
       console.log(`[LLM Scoring] Sector ${sectorName}: ${completed}/${total} (${pct}%)`);

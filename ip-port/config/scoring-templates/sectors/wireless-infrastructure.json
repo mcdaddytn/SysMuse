@@ -1,0 +1,70 @@
+{
+  "$schema": "../../scoring-template.schema.json",
+  "id": "wireless-infrastructure",
+  "name": "Wireless Infrastructure Scoring",
+  "description": "Scoring template for wireless infrastructure patents covering base stations, access points, gateways, and network architecture.",
+  "level": "sector",
+  "sectorName": "wireless-infrastructure",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "isDefault": true,
+  "version": 1,
+  "scoringGuidance": [
+    "This sector covers network-side wireless equipment: base stations, access points, gateways, mesh networks.",
+    "Key value drivers: QoS management, multi-band/multi-RAT support, scalability, and deployment flexibility.",
+    "Look for innovations that reduce operator costs or improve network capacity."
+  ],
+  "contextDescription": "Wireless infrastructure patents cover the network equipment and architectures that enable wireless connectivity. This includes cellular base stations (macro, small cell), WiFi access points, mesh networks, and gateways. Key trends include network densification, virtualization (vRAN), and service-aware QoS.",
+  "questions": [
+    {
+      "fieldName": "infrastructure_type",
+      "displayName": "Infrastructure Type",
+      "question": "What type of wireless infrastructure does this patent address? Consider: Macro base station, small cell, femtocell, WiFi access point, mesh node, gateway, or backhaul equipment.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the infrastructure type. Score higher for widely deployed types (macro/small cell=8-10, AP=7-9). Score lower for niche infrastructure."
+    },
+    {
+      "fieldName": "network_architecture",
+      "displayName": "Network Architecture Innovation",
+      "question": "Does this patent advance network architecture? Consider: Mesh topology, self-organizing networks (SON), virtualization (NFV/vRAN), edge computing, or network slicing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe architectural innovations. Score 1-3 if focused on device-level only with no network impact."
+    },
+    {
+      "fieldName": "wireless_range_reliability",
+      "displayName": "Range & Reliability",
+      "question": "How does this patent improve wireless coverage, range, or connection reliability? Consider: Coverage extension, handoff reliability, interference coordination, or multi-path mitigation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe range/reliability improvements. Score 1-2 if not applicable."
+    },
+    {
+      "fieldName": "qos_management",
+      "displayName": "QoS Management",
+      "question": "Does this patent address Quality of Service management? Consider: Traffic prioritization, service class differentiation, latency optimization, or bandwidth allocation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe QoS mechanisms. Score 1-2 if QoS is not addressed."
+    },
+    {
+      "fieldName": "multi_technology",
+      "displayName": "Multi-Technology Support",
+      "question": "Does this patent support multiple wireless technologies or frequency bands? Consider: Multi-RAT (LTE+WiFi+5G), carrier aggregation, or multi-band operation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify multi-technology capabilities. Score 1-2 for single-technology only."
+    }
+  ]
+}

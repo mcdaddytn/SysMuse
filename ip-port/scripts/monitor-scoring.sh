@@ -10,9 +10,13 @@ JOBS=$(ps aux | grep -E "curl.*score-sector" | grep -v grep | wc -l | tr -d ' ')
 echo "Running jobs: $JOBS"
 echo ""
 
-# List running jobs
+# List running jobs with start times
 echo "Active sectors:"
-ps aux | grep -E "curl.*score-sector" | grep -v grep | awk '{print $NF}' | sed 's/.*score-sector\//  /' | sed 's/?.*//'
+ps aux | grep -E "curl.*score-sector" | grep -v grep | awk '{
+  # Extract sector name from URL
+  match($0, /score-sector\/([^?]+)/, arr)
+  if (arr[1]) print "  " arr[1] " (started " $9 ")"
+}'
 echo ""
 
 # Check for rate limit errors in recent logs

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { sectorApi } from '@/services/api';
+import { sectorApi, scoringTemplatesApi } from '@/services/api';
+import type { SectorScoringProgress } from '@/services/api';
 import type { SuperSectorDetail, SectorDetail, SectorRule, SectorRuleType, RulePreviewResult } from '@/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,6 +54,17 @@ const newSuperSector = ref({
   displayName: '',
   description: '',
 });
+
+// LLM Scoring state
+const scoringProgress = ref<SectorScoringProgress | null>(null);
+const scoringLoading = ref(false);
+const startScoringLoading = ref(false);
+const scoringOptions = ref({
+  useClaims: true,
+  rescore: false,
+  topN: 500,
+});
+const scoringError = ref<string | null>(null);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
@@ -326,6 +338,39 @@ async function addSuperSector() {
   }
 }
 
+// LLM Scoring
+async function loadScoringProgress() {
+  if (!selectedSector.value) return;
+  scoringLoading.value = true;
+  scoringError.value = null;
+  try {
+    scoringProgress.value = await scoringTemplatesApi.getSectorProgress(selectedSector.value.name);
+  } catch (err) {
+    scoringError.value = err instanceof Error ? err.message : 'Failed to load scoring progress';
+  } finally {
+    scoringLoading.value = false;
+  }
+}
+
+async function startScoring() {
+  if (!selectedSector.value) return;
+  startScoringLoading.value = true;
+  scoringError.value = null;
+  try {
+    const result = await scoringTemplatesApi.scoreSector(selectedSector.value.name, {
+      useClaims: scoringOptions.value.useClaims,
+      rescore: scoringOptions.value.rescore,
+      topN: scoringOptions.value.topN || undefined,
+    });
+    // Reload progress after starting
+    await loadScoringProgress();
+  } catch (err) {
+    scoringError.value = err instanceof Error ? err.message : 'Failed to start scoring';
+  } finally {
+    startScoringLoading.value = false;
+  }
+}
+
 // Helpers
 function ruleTypeLabel(type: string): string {
   return ruleTypeOptions.find(o => o.value === type)?.label || type;
@@ -357,6 +402,19 @@ function damagesLabel(rating: number | null | undefined): string {
 
 onMounted(() => {
   loadTree();
+});
+
+// Load scoring progress when switching to LLM Scoring tab
+watch(activeTab, (newTab) => {
+  if (newTab === 'llm-scoring' && selectedSector.value && !scoringProgress.value) {
+    loadScoringProgress();
+  }
+});
+
+// Reset scoring progress when sector changes
+watch(selectedSectorId, () => {
+  scoringProgress.value = null;
+  scoringError.value = null;
 });
 </script>
 
@@ -504,6 +562,7 @@ onMounted(() => {
             <q-tab name="overview" label="Overview" icon="info" />
             <q-tab name="rules" label="Rules" icon="rule" :badge="selectedSector.rules?.length" />
             <q-tab name="patents" label="Patents" icon="description" />
+            <q-tab name="llm-scoring" label="LLM Scoring" icon="psychology" />
           </q-tabs>
 
           <q-separator />
@@ -716,6 +775,104 @@ onMounted(() => {
                   @click="recalculateCount"
                 />
               </div>
+            </q-tab-panel>
+
+            <!-- LLM Scoring Tab -->
+            <q-tab-panel name="llm-scoring">
+              <q-inner-loading :showing="scoringLoading" />
+
+              <!-- Scoring Progress Card -->
+              <q-card flat bordered class="q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2">Scoring Progress</div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section v-if="scoringProgress">
+                  <div class="row q-col-gutter-md">
+                    <div class="col-6 col-sm-3">
+                      <div class="text-caption text-grey-7">Total Patents</div>
+                      <div class="text-h6">{{ scoringProgress.total }}</div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                      <div class="text-caption text-grey-7">Scored</div>
+                      <div class="text-h6 text-positive">{{ scoringProgress.scored }}</div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                      <div class="text-caption text-grey-7">With Claims</div>
+                      <div class="text-h6 text-primary">{{ scoringProgress.withClaims }}</div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                      <div class="text-caption text-grey-7">Remaining</div>
+                      <div class="text-h6 text-grey-7">{{ scoringProgress.remaining }}</div>
+                    </div>
+                  </div>
+
+                  <div class="q-mt-md">
+                    <q-linear-progress
+                      :value="scoringProgress.percentComplete / 100"
+                      size="lg"
+                      color="primary"
+                      track-color="grey-3"
+                      rounded
+                    >
+                      <div class="absolute-full flex flex-center">
+                        <span class="text-white text-caption text-weight-bold">
+                          {{ scoringProgress.percentComplete }}%
+                        </span>
+                      </div>
+                    </q-linear-progress>
+                  </div>
+                </q-card-section>
+                <q-card-section v-else class="text-grey-6 text-center">
+                  <q-btn flat @click="loadScoringProgress">Load Progress</q-btn>
+                </q-card-section>
+              </q-card>
+
+              <!-- Scoring Actions -->
+              <q-card flat bordered>
+                <q-card-section>
+                  <div class="text-subtitle2">Start Scoring Job</div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section>
+                  <div class="row q-col-gutter-md items-center">
+                    <div class="col-12 col-sm-6">
+                      <q-toggle v-model="scoringOptions.useClaims" label="Include Claims" />
+                      <q-toggle v-model="scoringOptions.rescore" label="Rescore Already Scored" />
+                    </div>
+                    <div class="col-12 col-sm-6">
+                      <q-select
+                        v-model="scoringOptions.topN"
+                        :options="[25, 50, 100, 250, 500, 1000, 0]"
+                        label="TopN Limit"
+                        outlined
+                        dense
+                        hint="0 = score all patents"
+                        :option-label="(v: number) => v === 0 ? 'All' : v.toString()"
+                      />
+                    </div>
+                  </div>
+
+                  <q-banner v-if="scoringError" class="bg-negative text-white q-mt-md">
+                    {{ scoringError }}
+                  </q-banner>
+                </q-card-section>
+                <q-card-actions>
+                  <q-btn
+                    color="primary"
+                    icon="play_arrow"
+                    label="Start Scoring"
+                    :loading="startScoringLoading"
+                    @click="startScoring"
+                  />
+                  <q-btn
+                    flat
+                    icon="refresh"
+                    label="Refresh Progress"
+                    @click="loadScoringProgress"
+                  />
+                </q-card-actions>
+              </q-card>
             </q-tab-panel>
           </q-tab-panels>
         </q-card>

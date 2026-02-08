@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "semiconductor-manufacturing-process",
+  "name": "Semiconductor Manufacturing Process",
+  "description": "Sub-sector template for semiconductor manufacturing patents (CPC H01L21*) including etching, deposition, and doping.",
+  "level": "sub_sector",
+  "subSectorPattern": "H01L21*",
+  "sectorName": "semiconductor",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor-general",
+  "version": 1,
+  "contextDescription": "Manufacturing process patents cover wafer fabrication steps. Key areas include plasma etching (RIE, ALE), thin film deposition (CVD, ALD, PVD), ion implantation, CMP, and cleaning. High-value targets include equipment vendors (Applied Materials, Lam Research, ASML, Tokyo Electron) and foundries. Process patents can be essential for node transitions.",
+  "scoringGuidance": [
+    "Atomic layer processes (ALD, ALE) are essential for advanced nodes.",
+    "High-aspect-ratio etching is critical for 3D NAND and DRAM.",
+    "EUV-related processes target 5nm and below.",
+    "Selective deposition patents reduce patterning steps.",
+    "Equipment-agnostic process patents have broader applicability."
+  ],
+  "questions": [
+    {
+      "fieldName": "process_type",
+      "displayName": "Process Type",
+      "question": "What manufacturing process does this patent cover (etch, deposition, implant, CMP, clean)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the process type and its criticality to manufacturing."
+    },
+    {
+      "fieldName": "equipment_applicability",
+      "displayName": "Equipment Applicability",
+      "question": "Does this target specific equipment vendors (Applied, Lam, TEL, ASML)? Or is it equipment-agnostic?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Equipment-specific patents may target fewer infringers but can be essential."
+    },
+    {
+      "fieldName": "advanced_node_relevance",
+      "displayName": "Advanced Node Relevance",
+      "question": "Is this process relevant to advanced nodes (sub-10nm)? Score higher for EUV or atomic-scale processes.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Advanced node processes are high-value with fewer alternatives."
+    },
+    {
+      "fieldName": "yield_improvement",
+      "displayName": "Yield Improvement",
+      "question": "Does this patent improve manufacturing yield or reduce defects? Yield patents are highly valuable.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Yield improvements directly impact profitability."
+    }
+  ]
+}

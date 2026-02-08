@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "modulation-demodulation",
+  "name": "Modulation & Demodulation",
+  "description": "Sub-sector template for modulation/demodulation patents (CPC H04L27*) including QAM, OFDM, and coherent detection.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04L27*",
+  "sectorName": "network-signal-processing",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "network-signal-processing",
+  "version": 1,
+  "contextDescription": "Modulation and demodulation patents cover signal encoding for transmission. Key areas include QAM (cable, wireless), OFDM (WiFi, LTE, 5G), coherent optical modulation, and carrier recovery. High-value targets include wireless chipset vendors (Qualcomm, Broadcom, MediaTek), optical transceiver vendors, and modem implementers.",
+  "scoringGuidance": [
+    "OFDM patents are in every WiFi and cellular device.",
+    "High-order QAM patents enable higher spectral efficiency.",
+    "Coherent optical modulation patents target 100G+ transport.",
+    "Carrier recovery patents are essential for all coherent systems.",
+    "MIMO-OFDM patents target WiFi 6/7 and 5G."
+  ],
+  "questions": [
+    {
+      "fieldName": "modulation_scheme",
+      "displayName": "Modulation Scheme",
+      "question": "What modulation scheme does this cover (QAM, OFDM, PSK, PAM, coherent)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the modulation scheme and its applications."
+    },
+    {
+      "fieldName": "wireless_applicability",
+      "displayName": "Wireless Applicability",
+      "question": "Is this applicable to wireless (WiFi, LTE, 5G, satellite)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Wireless modulation patents have massive volume."
+    },
+    {
+      "fieldName": "optical_coherent",
+      "displayName": "Optical Coherent",
+      "question": "Is this relevant to coherent optical communication (DP-QPSK, DP-16QAM)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Coherent optical is critical for backbone capacity."
+    },
+    {
+      "fieldName": "spectral_efficiency",
+      "displayName": "Spectral Efficiency",
+      "question": "Does this improve spectral efficiency or bits/Hz?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Spectral efficiency is the key metric for wireless and optical."
+    }
+  ]
+}

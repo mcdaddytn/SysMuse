@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing-runtime",
+  "name": "Computing Runtime & Execution",
+  "description": "Sector template for computing runtime patents including VMs, scheduling, error detection, and software development.",
+  "level": "sector",
+  "sectorName": "computing-runtime",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing",
+  "version": 1,
+  "contextDescription": "Computing runtime patents cover the execution layer of computing systems. Key areas include virtualization/VMs (G06F9/45*), process scheduling (G06F9/50*), error detection/correction (G06F11*), program development (G06F8*), and I/O systems (G06F3*). High-value targets include VMware, Microsoft Azure, AWS, Google Cloud, and container platforms like Docker/Kubernetes.",
+  "scoringGuidance": [
+    "VM and container patents are heavily used in cloud infrastructure - very high licensing potential.",
+    "Error detection/correction patents are fundamental to all computing systems.",
+    "Process scheduling patents read on operating systems and hypervisors.",
+    "Look for patents covering multi-tenant isolation, live migration, or resource management.",
+    "Hardware-accelerated virtualization (Intel VT-x, AMD-V) creates additional licensing targets."
+  ],
+  "questions": [
+    {
+      "fieldName": "execution_layer",
+      "displayName": "Execution Layer",
+      "question": "At what execution layer does this patent operate? Score: 1-3 for application-only, 4-6 for OS/kernel, 7-10 for hypervisor/firmware level.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Lower-level patents have broader infringement scope. Identify the execution layer."
+    },
+    {
+      "fieldName": "cloud_infrastructure",
+      "displayName": "Cloud Infrastructure Relevance",
+      "question": "How relevant is this patent to cloud infrastructure (AWS, Azure, GCP)? Consider VMs, containers, serverless, and orchestration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Cloud providers are high-value targets. Assess relevance to major cloud platforms."
+    },
+    {
+      "fieldName": "multi_tenancy",
+      "displayName": "Multi-Tenancy & Isolation",
+      "question": "Does this patent address multi-tenant isolation, resource partitioning, or workload separation? Critical for cloud security.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Multi-tenancy is fundamental to cloud computing. Assess isolation mechanisms."
+    },
+    {
+      "fieldName": "reliability_recovery",
+      "displayName": "Reliability & Recovery",
+      "question": "Does this patent improve system reliability, fault tolerance, or disaster recovery? Consider error detection, checkpoint/restart, and failover.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Reliability patents are essential for enterprise and cloud systems."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "streaming-multimedia",
+  "name": "Streaming & Multimedia",
+  "description": "Sector template for network streaming and multimedia delivery patents.",
+  "level": "sector",
+  "sectorName": "streaming-multimedia",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Streaming multimedia patents cover network-based media delivery. Key areas include adaptive streaming (HLS, DASH), media transport, and QoE optimization. High-value targets include Netflix, YouTube, Disney+, and all OTT providers. This sector overlaps with VIDEO_STREAMING but focuses on network transport aspects.",
+  "scoringGuidance": [
+    "Adaptive bitrate (ABR) patents target all streaming services.",
+    "Low-latency streaming patents target live events and gaming.",
+    "CDN optimization patents target Akamai, Cloudflare, Fastly.",
+    "Media transport patents (RTP, RTSP) are broadly applicable.",
+    "Buffer management patents improve playback quality."
+  ],
+  "questions": [
+    {
+      "fieldName": "streaming_function",
+      "displayName": "Streaming Function",
+      "question": "What streaming function does this cover (ABR, transport, buffering, CDN)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the streaming function and its importance."
+    },
+    {
+      "fieldName": "ott_relevance",
+      "displayName": "OTT Platform Relevance",
+      "question": "Is this relevant to OTT platforms (Netflix, YouTube, Disney+)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "OTT platforms are high-value targets with massive scale."
+    },
+    {
+      "fieldName": "live_streaming",
+      "displayName": "Live Streaming Relevance",
+      "question": "Is this relevant to live streaming or low-latency delivery?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Low-latency live streaming is a differentiating capability."
+    }
+  ]
+}

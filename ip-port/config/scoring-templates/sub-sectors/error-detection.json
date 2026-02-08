@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "error-detection",
+  "name": "Error Detection & Fault Tolerance",
+  "description": "Sub-sector template for error detection patents (CPC G06F11*) including fault tolerance, ECC, RAID, and system recovery.",
+  "level": "sub_sector",
+  "subSectorPattern": "G06F11*",
+  "sectorName": "computing-runtime",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing-runtime",
+  "version": 1,
+  "contextDescription": "Error detection patents cover fault tolerance and reliability in computing systems. G06F11/07 covers error detection in memory, G06F11/10 covers error correction codes (ECC), G06F11/14 covers checkpoint/restart, G06F11/20 covers redundancy (RAID). Key targets include storage vendors (EMC, NetApp, Pure), memory vendors (Samsung, SK Hynix), and enterprise system vendors (IBM, HPE, Dell).",
+  "scoringGuidance": [
+    "ECC memory patents (G06F11/10) are implemented in all server and enterprise memory.",
+    "RAID patents may be standards-essential or widely implemented in storage arrays.",
+    "Checkpoint/restart patents are essential for HPC and long-running workloads.",
+    "Hardware error detection patents apply to all processors and memory controllers.",
+    "Software-defined storage reliability patents target modern distributed systems."
+  ],
+  "questions": [
+    {
+      "fieldName": "error_detection_method",
+      "displayName": "Error Detection Method",
+      "question": "What error detection/correction method does this patent cover? Score: 1-3 for application-level, 4-6 for system/OS level, 7-10 for hardware-level (ECC, parity).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Hardware-level error detection is ubiquitous. Identify the detection layer."
+    },
+    {
+      "fieldName": "storage_applicability",
+      "displayName": "Storage System Applicability",
+      "question": "Does this patent apply to storage systems (RAID, SSD controllers, distributed storage)? Storage is error-critical.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Storage vendors are major implementers of error detection. Assess storage relevance."
+    },
+    {
+      "fieldName": "memory_reliability",
+      "displayName": "Memory Reliability",
+      "question": "Does this patent address memory reliability (ECC DIMM, scrubbing, error reporting)? Memory errors are critical in servers.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "All server memory uses ECC. Assess memory reliability relevance."
+    },
+    {
+      "fieldName": "recovery_mechanism",
+      "displayName": "Recovery Mechanism",
+      "question": "Does this patent cover recovery mechanisms (checkpoint, failover, rebuild, retry)? Recovery is as important as detection.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific recovery mechanisms covered by this patent."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "semiconductor-test-inline",
+  "name": "Semiconductor Inline Test & Metrology",
+  "description": "Sub-sector template for semiconductor in-line testing and metrology patents (CPC H01L22*) including inspection, measurement, and process control.",
+  "level": "sub_sector",
+  "subSectorPattern": "H01L22*",
+  "sectorName": "semiconductor",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor-general",
+  "version": 1,
+  "contextDescription": "Inline test and metrology patents cover wafer-level inspection and measurement. Key areas include optical inspection (KLA), CD-SEM, OCD (scatterometry), e-beam inspection, and process control. High-value targets include metrology equipment vendors (KLA, Applied Materials, ASML) and foundries. Critical for yield learning at advanced nodes.",
+  "scoringGuidance": [
+    "Defect inspection patents target KLA's core business.",
+    "CD (critical dimension) metrology is essential for patterning control.",
+    "Overlay metrology patents are critical for multi-patterning.",
+    "E-beam inspection patents target advanced node debugging.",
+    "Process control patents enable closed-loop manufacturing."
+  ],
+  "questions": [
+    {
+      "fieldName": "metrology_type",
+      "displayName": "Metrology Type",
+      "question": "What type of metrology or inspection does this patent cover (optical, e-beam, CD, overlay, defect)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the metrology type and its importance in the fab."
+    },
+    {
+      "fieldName": "advanced_node_metrology",
+      "displayName": "Advanced Node Metrology",
+      "question": "Is this relevant to advanced node metrology challenges (EUV, sub-10nm)? Score higher for cutting-edge requirements.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Advanced nodes have more stringent metrology requirements."
+    },
+    {
+      "fieldName": "kla_relevance",
+      "displayName": "KLA/Equipment Relevance",
+      "question": "Does this target inspection/metrology equipment vendors (KLA, Applied, ASML)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Metrology equipment is a concentrated market with few major players."
+    },
+    {
+      "fieldName": "process_control",
+      "displayName": "Process Control Integration",
+      "question": "Does this enable closed-loop process control or APC (advanced process control)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Process control integration increases the value of metrology data."
+    }
+  ]
+}

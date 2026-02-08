@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "telephony",
+  "name": "Telephony",
+  "description": "Sector template for telephony patents including VoIP, call signaling, and unified communications.",
+  "level": "sector",
+  "sectorName": "telephony",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Telephony patents cover voice communication systems. Key areas include VoIP (SIP, RTP), call signaling, IMS, and unified communications. High-value targets include Cisco (WebEx), Microsoft (Teams), Zoom, RingCentral, and telco IMS deployments. UCaaS is a growing cloud market.",
+  "scoringGuidance": [
+    "VoIP patents target enterprise and consumer calling.",
+    "SIP/IMS patents are relevant to telco infrastructure.",
+    "WebRTC patents target browser-based communication.",
+    "Call quality (jitter, echo) patents improve user experience.",
+    "UC patents target Microsoft Teams, Cisco WebEx, Zoom."
+  ],
+  "questions": [
+    {
+      "fieldName": "telephony_type",
+      "displayName": "Telephony Type",
+      "question": "What telephony function does this cover (VoIP, signaling, codec, UC)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the telephony function."
+    },
+    {
+      "fieldName": "ucaas_relevance",
+      "displayName": "UCaaS Relevance",
+      "question": "Is this relevant to unified communications (Teams, Zoom, WebEx)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "UCaaS is a high-growth cloud market."
+    },
+    {
+      "fieldName": "webrtc_relevance",
+      "displayName": "WebRTC Relevance",
+      "question": "Is this relevant to WebRTC or browser-based communication?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "WebRTC enables real-time communication in browsers."
+    }
+  ]
+}

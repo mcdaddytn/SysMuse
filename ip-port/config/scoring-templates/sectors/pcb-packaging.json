@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "pcb-packaging",
+  "name": "PCB & Packaging",
+  "description": "Sector template for PCB and semiconductor packaging patents including substrates, interconnects, and assembly.",
+  "level": "sector",
+  "sectorName": "pcb-packaging",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "PCB and packaging patents cover the physical assembly and interconnection of semiconductor devices. Key areas include PCB design (H05K), chip packaging (flip-chip, BGA, CSP), advanced packaging (2.5D, 3D, chiplets), and interconnects. High-value targets include OSAT vendors (ASE, Amkor), substrate suppliers, and advanced packaging leaders (TSMC CoWoS, Intel EMIB).",
+  "scoringGuidance": [
+    "Advanced packaging patents (2.5D, 3D, chiplets) are high-value growth area.",
+    "High-density interconnect patents target mobile and compute applications.",
+    "Thermal management patents are critical for high-power devices.",
+    "Substrate patents target Japanese/Taiwanese substrate suppliers.",
+    "Consider both design and manufacturing patents."
+  ],
+  "questions": [
+    {
+      "fieldName": "packaging_type",
+      "displayName": "Packaging Type",
+      "question": "What packaging technology does this patent cover? Score: 1-3 for legacy, 4-6 for standard (BGA, QFN), 7-10 for advanced (2.5D, 3D, chiplets).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the packaging technology and market trend."
+    },
+    {
+      "fieldName": "advanced_packaging",
+      "displayName": "Advanced Packaging",
+      "question": "Is this patent relevant to advanced packaging (CoWoS, EMIB, chiplets)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Advanced packaging is a key growth area. Assess applicability."
+    },
+    {
+      "fieldName": "thermal_management",
+      "displayName": "Thermal Management",
+      "question": "Does this patent address thermal management in packaging?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Thermal is critical for high-power chips."
+    }
+  ]
+}

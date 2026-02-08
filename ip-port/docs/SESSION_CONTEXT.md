@@ -1,116 +1,125 @@
-# Session Context - February 8, 2026
+# Session Context - February 8, 2026 (Updated)
 
-## Current Status
+## Current Jobs Running
 
-### VIDEO_STREAMING Batch - IN PROGRESS
-Running 2 sectors in parallel with concurrency=4 per sector.
+| Sector | Progress | Status |
+|--------|----------|--------|
+| recognition-biometrics | ~72% | IMAGING - almost complete |
+| image-processing | ~29% | IMAGING - in progress |
+| video-server-cdn | 1% | Rescore (duplicate job) |
 
-**Completed sectors (all 100% with claims):**
-- display-control: 68/68
-- video-drm-conditional: 121/121
-- video-storage: 212/212
-- video-broadcast: 229/229
-- video-codec: 377/377
+## Completed Scoring
 
-**In progress:**
-- video-client-processing: ~394 target
-- video-server-cdn: ~456 target
+| Super-Sector | Sectors | Patents | With Claims |
+|--------------|---------|---------|-------------|
+| VIDEO_STREAMING | 7 | 1,857 | 100% |
+| AI_ML | 1 | 69 | 100% |
 
-**Total VIDEO_STREAMING target:** 1,857 patents
+## Super-Sector Analysis Status
 
-### Parallelism Settings
-Changed from sequential to parallel execution:
-- **concurrency=4** per sector (was 2) in `llm-scoring-service.ts` lines 668 and 757
-- Running **2 sectors simultaneously** via separate curl requests
-- Throughput: ~10.5 patents/min with 2 parallel sectors
-- No rate limit errors observed
+| Super-Sector | Total Patents | Analyzed | Templates Created |
+|--------------|---------------|----------|-------------------|
+| COMPUTING | 7,929 | Yes | 6 sectors + 2 sub-sectors |
+| IMAGING | 584 | Yes | 5 sectors |
+| AI_ML | 69 | Yes | Super-sector only |
+| NETWORKING | 6,200 | Not yet | - |
+| SEMICONDUCTOR | 4,238 | Not yet | - |
+| SECURITY | 4,382 | Previous scores (no claims) | Some sector templates |
+| WIRELESS | 4,104 | Previous scores (no claims) | Some sector templates |
 
-### Claims Tracking
-- Added `with_claims` column to `patent_sub_sector_scores` table
-- All VIDEO_STREAMING patents scored with claims (100%)
-- SECURITY and WIRELESS previously scored WITHOUT claims - need rescore
+## New Templates Created This Session
 
-## Patents Needing Claims XML
+### COMPUTING Sector Templates (`config/scoring-templates/sectors/`)
+- `computing-runtime.json` - VMs, scheduling, error detection (3,868 patents)
+- `computing-systems.json` - Memory, interconnect, hardware (1,784 patents)
+- `data-retrieval.json` - Database, search, indexing (1,055 patents)
+- `computing-ui.json` - Displays, I/O, gaming (862 patents)
+- `power-management.json` - Power supply, charging (217 patents)
+- `fintech-business.json` - Payments, workflow (143 patents)
 
-**Export files created:**
-- `exports/missing-claims/all-needs-xml-fixed.csv` - 7,826 patents (post-2005)
-- `exports/missing-claims/pre-2005-cannot-get-claims.csv` - 213 patents
-- `exports/missing-claims/previously-missing-dates.csv` - 41 patents (fixed dates)
+### Sub-Sector Templates (`config/scoring-templates/sub-sectors/`)
+- `virtualization.json` - G06F9/45* (~300 patents) - VMs, hypervisors, containers
+- `error-detection.json` - G06F11* (~4,640 patents) - ECC, RAID, fault tolerance
 
-**Claims drive currently offline** - user copying 7,826 patent XMLs to drive
+### IMAGING Sector Templates (`config/scoring-templates/sectors/`)
+- `optics.json` - Lenses, waveguides, AR/VR (355 patents)
+- `3d-stereo-depth.json` - ToF, structured light, LiDAR (78 patents)
+- `cameras-sensors.json` - CMOS/CCD, camera modules (70 patents)
+- `image-processing.json` - Computational photography, ISP (56 patents)
+- `recognition-biometrics.json` - Face/fingerprint recognition (25 patents)
 
-## Portfolio Cache Stats
-- Total patents in cache: 29,507
-- Post-2005 (can get claims): 26,093 (88%)
-- Pre-2005 (no claims available): 3,414 (12%)
+## 3-Level Question Inheritance Model
 
-## Scoring Status by Super-Sector
+```
+portfolio-default (7 base questions)
+    └── super-sector template (+3-4 questions)
+        └── sector template (+3-5 questions)
+            └── sub-sector template (+3-4 questions by CPC pattern)
+```
 
-| Super-Sector | Scored | With Claims | Status |
-|--------------|--------|-------------|--------|
-| VIDEO_STREAMING | ~1,700 | 100% | In Progress |
-| SECURITY | 3,790 | 0% | Needs rescore with claims |
-| WIRELESS | 3,040 | 0% | Needs rescore with claims |
-| NETWORKING | 0 | - | Not started |
-| COMPUTING | 0 | - | Not started |
-| SEMICONDUCTOR | 0 | - | Not started |
-| IMAGING | 0 | - | Not started |
-| AI_ML | 0 | - | Not started |
+Example for virtualization patents:
+- portfolio-default: technical_novelty, claim_breadth, design_around, market_relevance, implementation_clarity, standards_relevance, unique_value
+- + computing: performance_impact, resource_efficiency, virtualization_relevance
+- + computing-runtime: execution_layer, cloud_infrastructure, multi_tenancy, reliability_recovery
+- + virtualization: vm_hypervisor_scope, live_migration, container_relevance, cloud_vendor_impact
+- **Total: ~18 questions** with increasing technology specificity
 
-**Note:** The super-sector patent counts from sub_sectors table may have bad joins - need to verify actual counts.
+## COMPUTING Sector Analysis
 
-## Scripts Created This Session
+### computing-runtime (3,868 patents) CPC Breakdown:
+| Technology Area | CPC Pattern | Patents |
+|-----------------|-------------|---------|
+| Error Detection | G06F11* | 4,640 |
+| I/O Systems | G06F3* | 1,493 |
+| Indexes | G06F2* | 983 |
+| Process Scheduling | G06F9/50* | 729 |
+| Program Development | G06F8* | 732 |
+| Software Arrangement | G06F9/44* | 431 |
+| **VM/Virtualization** | **G06F9/45*** | **300** |
+| Program Control | G06F9/48* | 284 |
 
-- `scripts/run-video-streaming-sectors.sh` - VIDEO_STREAMING batch with claims+rescore
-- `scripts/export-patents-needing-xml.sh` - Export patents needing XML claims
-- `scripts/export-sample-prompts.ts` - Export actual LLM prompts for review (fixed ES module issue)
-- `scripts/check-claims-availability.sh` - Pre-flight check for claims
+Key insight: Virtualization is only ~8% of computing-runtime, but very high value due to cloud infrastructure applicability.
 
-## Key Code Changes
+## Claims XML Status
 
-### llm-scoring-service.ts
-- Line 668: `concurrency: 4` (was 2)
-- Line 757: `concurrency = 4` (was 2)
-- Added `withClaims` flag to score saving
-
-### scoring-template-service.ts
-- Added `withClaims?: boolean` to `ScoreCalculationResult` interface
-- Updated `savePatentScore` to save `with_claims` column
-
-### prisma/schema.prisma
-- Added `withClaims Boolean @default(false) @map("with_claims")` to patentSubSectorScore model
+- Drive online at `/Volumes/PortFat4/uspto/bulkdata/export/`
+- 7,883 new XMLs copied from exports_new
+- ~26,000 total XMLs available with claims
 
 ## Next Steps
 
-1. **Check VIDEO_STREAMING completion** - Should finish soon
-2. **Bring claims drive online** - After XML copy completes
-3. **Rescore SECURITY with claims** - 3,790 patents
-4. **Rescore WIRELESS with claims** - 3,040 patents
-5. **Verify super-sector patent counts** - Fix SQL joins
-6. **Start unscored super-sectors** - IMAGING (small), AI_ML (tiny), then larger ones
+1. **Complete IMAGING scoring** (~584 patents remaining)
+2. **Start SEMICONDUCTOR sector** - 4,238 patents, create sector templates
+3. **Start NETWORKING sector** - 6,200 patents, analyze hierarchy
+4. **Overnight batch: COMPUTING** - 7,929 patents, largest sector
+5. **Eventually rescore SECURITY/WIRELESS with claims** - 8,486 patents
 
 ## Commands Reference
 
 ```bash
-# Check VIDEO_STREAMING progress
+# Check current progress
 tail -20 /tmp/api-server.log
 
-# Get scored counts by sector
+# Start remaining IMAGING sectors
+curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/cameras-sensors?useClaims=true"
+curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/3d-stereo-depth?useClaims=true"
+curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/optics?useClaims=true"
+
+# Start COMPUTING sectors
+curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/computing-runtime?useClaims=true"
+curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/computing-systems?useClaims=true"
+
+# Check scoring totals
 docker exec ip-port-postgres psql -U ip_admin -d ip_portfolio -c "
 SELECT template_config_id, COUNT(*), SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims
 FROM patent_sub_sector_scores
 WHERE template_config_id IS NOT NULL
 GROUP BY template_config_id ORDER BY template_config_id;"
-
-# Start a sector with claims
-curl -X POST "http://localhost:3001/api/scoring-templates/llm/score-sector/{sector}?useClaims=true&rescore=true"
-
-# Export sample prompts
-npx tsx scripts/export-sample-prompts.ts {sector} {limit}
 ```
 
-## Rate/Cost Estimates
+## Rate Estimates
 
-- **Throughput:** ~10.5 patents/min (2 parallel sectors @ concurrency=4)
-- **Cost:** ~$0.015 per patent (Claude Sonnet 4)
-- **Model:** claude-sonnet-4-20250514
+- **Current throughput:** ~15 patents/min (3 parallel sectors @ concurrency=4)
+- **IMAGING (584):** ~40 minutes
+- **COMPUTING (7,929):** ~9 hours
+- **All remaining (~19,000):** ~21 hours

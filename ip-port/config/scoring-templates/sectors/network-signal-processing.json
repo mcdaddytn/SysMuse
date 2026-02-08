@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-signal-processing",
+  "name": "Network Signal Processing",
+  "description": "Sector template for network physical layer signal processing patents including equalization, modulation, and SerDes.",
+  "level": "sector",
+  "sectorName": "network-signal-processing",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Network signal processing patents cover physical layer communication. Key areas include equalization (H04L25), modulation (H04L27), clock recovery (H04L7), and channel coding (H03M13). High-value targets include SerDes IP vendors (Synopsys, Cadence, Rambus), PHY vendors (Marvell, Broadcom, Microchip), and all high-speed interface implementers. Critical for PCIe, Ethernet, USB, and data center interconnects.",
+  "scoringGuidance": [
+    "High-speed SerDes patents (112G, 224G) target data center and AI interconnects.",
+    "Equalization patents (FFE, DFE, CTLE) are essential for all high-speed links.",
+    "PAM4 modulation patents target 400G/800G Ethernet.",
+    "Clock and data recovery (CDR) patents are in every serial link.",
+    "Forward error correction (FEC) patents enable longer reaches and higher speeds."
+  ],
+  "questions": [
+    {
+      "fieldName": "signal_processing_type",
+      "displayName": "Signal Processing Type",
+      "question": "What signal processing function does this cover (equalization, modulation, CDR, FEC)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the signal processing function and its universality."
+    },
+    {
+      "fieldName": "data_rate",
+      "displayName": "Data Rate Class",
+      "question": "What data rates is this applicable to? Score: 1-3 for legacy (<10G), 4-6 for current (25-56G), 7-10 for cutting-edge (112G+).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Higher data rates command higher value. Assess applicable speeds."
+    },
+    {
+      "fieldName": "serdes_relevance",
+      "displayName": "SerDes IP Relevance",
+      "question": "Is this relevant to SerDes IP? Targets Synopsys, Cadence, Rambus, Alphawave.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SerDes IP is a concentrated, high-margin market."
+    },
+    {
+      "fieldName": "interface_standards",
+      "displayName": "Interface Standards",
+      "question": "Which interface standards apply (PCIe, Ethernet, USB, DDR, CXL)? More standards = broader applicability.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify applicable interface standards."
+    }
+  ]
+}

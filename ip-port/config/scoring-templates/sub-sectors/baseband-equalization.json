@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "baseband-equalization",
+  "name": "Baseband & Equalization",
+  "description": "Sub-sector template for baseband signal processing patents (CPC H04L25*) including equalization, timing recovery, and channel estimation.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04L25*",
+  "sectorName": "network-signal-processing",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "network-signal-processing",
+  "version": 1,
+  "contextDescription": "Baseband and equalization patents cover receiver signal processing. Key areas include linear equalization (FFE, CTLE), decision feedback equalization (DFE), timing recovery, and channel estimation. High-value targets include all SerDes vendors (Synopsys, Cadence, Rambus), PHY vendors, and high-speed interface implementers. Essential for every high-speed link.",
+  "scoringGuidance": [
+    "DFE patents are in every high-speed SerDes.",
+    "CTLE patents are essential for channel compensation.",
+    "Timing recovery/CDR patents enable reliable data reception.",
+    "Adaptive equalization patents handle varying channel conditions.",
+    "PAM4 equalization patents target 100G+ links."
+  ],
+  "questions": [
+    {
+      "fieldName": "equalization_type",
+      "displayName": "Equalization Type",
+      "question": "What equalization technique does this cover (FFE, DFE, CTLE, MLSE)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the equalization technique and its use cases."
+    },
+    {
+      "fieldName": "pam4_relevance",
+      "displayName": "PAM4 Relevance",
+      "question": "Is this applicable to PAM4 signaling? PAM4 is standard for 100G+ links.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "PAM4 requires more sophisticated equalization than NRZ."
+    },
+    {
+      "fieldName": "adaptation",
+      "displayName": "Adaptation Capability",
+      "question": "Does this enable adaptive equalization or channel tracking?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Adaptation is essential for production-worthy links."
+    },
+    {
+      "fieldName": "power_efficiency",
+      "displayName": "Power Efficiency",
+      "question": "Does this improve power efficiency of the receiver? Critical for high-density links.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Power is a key constraint for SerDes in data centers."
+    }
+  ]
+}

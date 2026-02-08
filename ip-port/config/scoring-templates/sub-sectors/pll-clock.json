@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "pll-clock",
+  "name": "PLLs & Clock Circuits",
+  "description": "Sub-sector template for PLL and clock circuit patents (CPC H03L*) including frequency synthesizers and clock recovery.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03L*",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "analog-circuits",
+  "version": 1,
+  "contextDescription": "PLL and clock patents cover timing and frequency generation in all digital systems. Key areas include PLLs, DLLs, frequency synthesizers, clock recovery, and jitter reduction. Every processor, memory interface, and high-speed link needs clocking. High-value targets include all processor vendors (Intel, AMD, ARM licensees), SerDes in data centers, and wireless synthesizers.",
+  "scoringGuidance": [
+    "Every digital chip needs clocking - PLLs are absolutely fundamental.",
+    "Fractional-N synthesizers are in every RF transceiver.",
+    "Low-jitter clocks are critical for high-speed SerDes (PCIe, DDR, Ethernet).",
+    "Clock recovery is essential for all serial communication.",
+    "All-digital PLLs (ADPLL) enable advanced node integration."
+  ],
+  "questions": [
+    {
+      "fieldName": "clock_function",
+      "displayName": "Clock Function",
+      "question": "What clock function does this patent cover (PLL, DLL, synthesizer, clock recovery)? All are fundamental.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the clock/PLL function and its ubiquity."
+    },
+    {
+      "fieldName": "jitter_performance",
+      "displayName": "Jitter Performance",
+      "question": "Does this patent improve jitter performance? Low jitter is critical for high-speed links.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Jitter limits data rates. Assess jitter improvement."
+    },
+    {
+      "fieldName": "rf_synthesizer",
+      "displayName": "RF Synthesizer Relevance",
+      "question": "Is this relevant to RF frequency synthesis (cellular, WiFi, 5G)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RF synthesizers are in every wireless device."
+    },
+    {
+      "fieldName": "digital_integration",
+      "displayName": "Digital Integration",
+      "question": "Is this an all-digital or digitally-assisted design? Enables advanced node scaling.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Digital PLLs scale with process nodes."
+    }
+  ]
+}

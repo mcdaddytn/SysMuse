@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "transistor-devices",
+  "name": "Transistor & Semiconductor Devices",
+  "description": "Sub-sector template for semiconductor device patents (CPC H01L29*) including transistors, FETs, and diodes.",
+  "level": "sub_sector",
+  "subSectorPattern": "H01L29*",
+  "sectorName": "semiconductor",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor-general",
+  "version": 1,
+  "contextDescription": "Transistor and device patents cover fundamental semiconductor building blocks. Key areas include FinFETs, gate-all-around (GAA), MOSFET improvements, power devices (IGBT, SiC, GaN), and memory transistors. High-value targets include Intel, Samsung, TSMC (foundry), and all chipmakers. These are often foundational patents with broad implications.",
+  "scoringGuidance": [
+    "FinFET and GAA patents are essential for advanced nodes (7nm and below).",
+    "Power device patents (SiC, GaN) target EV and data center power.",
+    "Low-leakage transistor designs are critical for mobile.",
+    "High-frequency transistor patents target RF and 5G.",
+    "Memory transistors (floating gate, charge trap) are in all flash storage."
+  ],
+  "questions": [
+    {
+      "fieldName": "transistor_type",
+      "displayName": "Transistor Type",
+      "question": "What transistor type does this patent cover? Score: 1-3 for legacy planar, 4-6 for specialty (RF, power), 7-10 for advanced (FinFET, GAA, nanosheet).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the transistor architecture and its technology node relevance."
+    },
+    {
+      "fieldName": "process_node",
+      "displayName": "Process Node Relevance",
+      "question": "What process nodes is this relevant to? Score higher for advanced nodes (10nm and below).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess process node applicability. Advanced nodes are higher value."
+    },
+    {
+      "fieldName": "power_device",
+      "displayName": "Power Device Application",
+      "question": "Is this a power semiconductor (IGBT, SiC, GaN)? Power devices target EV, data centers, and industrial.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Power semiconductors are a high-growth market (EV, renewable)."
+    },
+    {
+      "fieldName": "foundry_relevance",
+      "displayName": "Foundry Relevance",
+      "question": "How relevant is this to foundries (TSMC, Samsung, Intel)? Foundry-applicable patents have broad licensing potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Patents that apply to foundry processes can be licensed broadly."
+    }
+  ]
+}

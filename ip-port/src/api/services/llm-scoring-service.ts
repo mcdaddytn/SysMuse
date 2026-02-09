@@ -20,6 +20,7 @@ import {
   MergedTemplate
 } from './scoring-template-service.js';
 import { extractClaimsText, getClaimsStats } from './patent-xml-parser-service.js';
+import { loadAllClassifications } from './scoring-service.js';
 
 const prisma = new PrismaClient();
 
@@ -676,11 +677,52 @@ export async function scoreSubSector(
 /**
  * Get all patents in a sector ready for scoring
  */
+// V2 scoring weights interface
+export interface V2Weights {
+  citation: number;
+  years: number;
+  competitor: number;
+}
+
+// Default V2 weights
+const DEFAULT_V2_WEIGHTS: V2Weights = {
+  citation: 50,
+  years: 30,
+  competitor: 20
+};
+
+// Calculate V2 score for a patent
+function calculateV2Score(patent: any, weights: V2Weights): number {
+  const totalWeight = weights.citation + weights.years + weights.competitor;
+  if (totalWeight === 0) return 0;
+
+  const citationNorm = weights.citation / totalWeight;
+  const yearsNorm = weights.years / totalWeight;
+  const competitorNorm = weights.competitor / totalWeight;
+
+  // Forward citations: log scale
+  const citationScore = Math.log10((patent.forward_citations || 0) + 1) * 30 * citationNorm;
+  // Remaining years: linear scale (max 20 years)
+  const yearsScore = Math.min((patent.remaining_years || 0) / 20, 1) * 100 * yearsNorm;
+  // Competitor citations: direct multiplier
+  const competitorScore = (patent.competitor_citations || 0) * 15 * competitorNorm;
+
+  return citationScore + yearsScore + competitorScore;
+}
+
 export async function getPatentsForSectorScoring(
   sectorName: string,
-  options: { limit?: number; onlyUnscored?: boolean; minYear?: number } = {}
+  options: {
+    limit?: number;
+    onlyUnscored?: boolean;
+    minYear?: number;
+    minScore?: number;
+    excludeDesign?: boolean;
+    prioritizeBy?: 'base' | 'v2';
+    v2Weights?: V2Weights;
+  } = {}
 ): Promise<PatentForScoring[]> {
-  const { limit = 500, onlyUnscored = true, minYear } = options;
+  const { limit = 500, onlyUnscored = true, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights = DEFAULT_V2_WEIGHTS } = options;
 
   // Load candidates file
   const possiblePaths = [
@@ -715,6 +757,22 @@ export async function getPatentsForSectorScoring(
     console.log(`[LLM Scoring] Filtered to patents from ${minYear}+: ${filtered.length} patents`);
   }
 
+  // Filter by minimum base score if specified
+  if (minScore !== undefined) {
+    filtered = filtered.filter((p: any) => (p.score ?? 0) >= minScore);
+    console.log(`[LLM Scoring] Filtered to score >= ${minScore}: ${filtered.length} patents`);
+  }
+
+  // Exclude design patents (D-prefix) if requested
+  if (excludeDesign) {
+    const beforeCount = filtered.length;
+    filtered = filtered.filter((p: any) => !p.patent_id.startsWith('D'));
+    const removed = beforeCount - filtered.length;
+    if (removed > 0) {
+      console.log(`[LLM Scoring] Excluded ${removed} design patents: ${filtered.length} remaining`);
+    }
+  }
+
   // Filter out already scored if requested
   if (onlyUnscored) {
     const scored = await prisma.patentSubSectorScore.findMany({
@@ -722,6 +780,42 @@ export async function getPatentsForSectorScoring(
     });
     const scoredIds = new Set(scored.map(s => s.patentId));
     filtered = filtered.filter((p: any) => !scoredIds.has(p.patent_id));
+  }
+
+  // Sort by selected prioritization method
+  if (prioritizeBy === 'v2') {
+    // Load classifications to get competitor_citations for V2 scoring
+    const classifications = loadAllClassifications();
+
+    // Merge classification data and calculate V2 scores
+    const withV2 = filtered.map((p: any) => {
+      const cls = classifications.get(p.patent_id);
+      const enriched = {
+        ...p,
+        competitor_citations: cls?.competitor_citations ?? 0,
+        affiliate_citations: cls?.affiliate_citations ?? 0,
+        neutral_citations: cls?.neutral_citations ?? 0,
+      };
+      return {
+        ...enriched,
+        _v2Score: calculateV2Score(enriched, v2Weights)
+      };
+    });
+    withV2.sort((a: any, b: any) => (b._v2Score ?? 0) - (a._v2Score ?? 0));
+    filtered = withV2;
+
+    console.log(`[LLM Scoring] After sorting by V2 score (weights: cit=${v2Weights.citation}, yrs=${v2Weights.years}, comp=${v2Weights.competitor}), top 5 patents:`);
+    filtered.slice(0, 5).forEach((p: any, i: number) => {
+      console.log(`  ${i+1}. ${p.patent_id}: v2_score=${p._v2Score?.toFixed(1)}, base_score=${p.score}, comp_cites=${p.competitor_citations}`);
+    });
+  } else {
+    // Sort by base score (default)
+    filtered.sort((a: any, b: any) => (b.score ?? 0) - (a.score ?? 0));
+
+    console.log(`[LLM Scoring] After sorting by base score, top 5 patents:`);
+    filtered.slice(0, 5).forEach((p: any, i: number) => {
+      console.log(`  ${i+1}. ${p.patent_id}: base_score=${p.score}`);
+    });
   }
 
   // Take limit
@@ -752,14 +846,21 @@ export async function scoreSector(
     contextOptions?: ContextOptions;
     rescore?: boolean;  // If true, score patents even if already scored
     minYear?: number;   // Filter to patents from this year or later
+    minScore?: number;  // Filter to patents with base score >= this value
+    excludeDesign?: boolean;  // Exclude design patents (D-prefix)
+    prioritizeBy?: 'base' | 'v2';  // How to prioritize patents for scoring
+    v2Weights?: V2Weights;  // Custom V2 weights when prioritizeBy='v2'
   } = {}
 ): Promise<BatchScoringResult> {
-  const { limit = 2000, model, concurrency = 4, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear } = options;
+  const { limit = 2000, model, concurrency = 4, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights } = options;
 
   console.log(`[LLM Scoring] Starting sector scoring for: ${sectorName}`);
+  if (prioritizeBy === 'v2') {
+    console.log(`[LLM Scoring] Prioritizing by V2 score`);
+  }
 
   // Get patents to score
-  const patents = await getPatentsForSectorScoring(sectorName, { limit, onlyUnscored: !rescore, minYear });
+  const patents = await getPatentsForSectorScoring(sectorName, { limit, onlyUnscored: !rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Weights });
 
   if (patents.length === 0) {
     console.log(`[LLM Scoring] No ${rescore ? '' : 'unscored '}patents found in sector: ${sectorName}`);

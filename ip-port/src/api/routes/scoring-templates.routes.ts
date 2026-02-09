@@ -472,17 +472,23 @@ router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Resp
  * POST /api/scoring-templates/llm/score-sector/:sectorName
  * Score all unscored patents in a sector (batch operation)
  * Query params:
- *   - limit: max patents to score (default 500)
+ *   - limit: max patents to score (default 2000)
  *   - model: LLM model to use
  *   - concurrency: parallel requests (default 2)
  *   - useClaims: 'true' to include patent claims in context (1.6x cost)
  *   - rescore: 'true' to re-score already scored patents (overwrites existing scores)
  *   - minYear: filter to patents from this year or later (e.g., 2015)
+ *   - minScore: filter to patents with base score >= this value (e.g., 3)
+ *   - excludeDesign: exclude design patents (D-prefix), defaults to true
+ *   - prioritizeBy: 'base' (default) or 'v2' - how to prioritize patents for scoring
+ *   - v2Citation: V2 citation weight (default 50) - only used when prioritizeBy=v2
+ *   - v2Years: V2 years weight (default 30) - only used when prioritizeBy=v2
+ *   - v2Competitor: V2 competitor weight (default 20) - only used when prioritizeBy=v2
  */
 router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
-    const { limit, model, concurrency, useClaims, rescore, minYear } = req.query;
+    const { limit, model, concurrency, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
 
     const contextOptions = useClaims === 'true' ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
 
@@ -496,14 +502,34 @@ router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response)
     if (minYear) {
       console.log(`[LLM Scoring] FILTER: patents from ${minYear}+`);
     }
+    if (minScore) {
+      console.log(`[LLM Scoring] FILTER: base score >= ${minScore}`);
+    }
+    if (excludeDesign !== 'false') {
+      console.log(`[LLM Scoring] FILTER: excluding design patents`);
+    }
+    if (prioritizeBy === 'v2') {
+      console.log(`[LLM Scoring] PRIORITIZING BY V2 SCORE`);
+    }
+
+    // Build V2 weights if prioritizing by V2
+    const v2Weights = prioritizeBy === 'v2' ? {
+      citation: v2Citation ? parseInt(v2Citation as string) : 50,
+      years: v2Years ? parseInt(v2Years as string) : 30,
+      competitor: v2Competitor ? parseInt(v2Competitor as string) : 20
+    } : undefined;
 
     const result = await scoreSector(sectorName, {
-      limit: limit ? parseInt(limit as string) : 500,
+      limit: limit ? parseInt(limit as string) : 2000,
       model: model as string,
       concurrency: concurrency ? parseInt(concurrency as string) : 2,
       contextOptions,
       rescore: rescore === 'true',
-      minYear: minYear ? parseInt(minYear as string) : undefined
+      minYear: minYear ? parseInt(minYear as string) : undefined,
+      minScore: minScore ? parseFloat(minScore as string) : undefined,
+      excludeDesign: excludeDesign !== 'false',
+      prioritizeBy: (prioritizeBy as 'base' | 'v2') || 'base',
+      v2Weights
     });
 
     res.json(result);
@@ -663,6 +689,215 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
     });
   } catch (error) {
     console.error('[LLM Scoring] Sector progress error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/sector-scores/:sectorName
+ * Get scored patents for a sector with all metrics and reasoning
+ * Query params:
+ *   - limit: max results (default 100)
+ *   - offset: pagination offset
+ *   - sortBy: 'composite_score' | metric field name (default 'composite_score')
+ *   - order: 'asc' | 'desc' (default 'desc')
+ */
+router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const {
+      limit = '100',
+      offset = '0',
+      sortBy = 'composite_score',
+      order = 'desc'
+    } = req.query;
+
+    const limitNum = Math.min(parseInt(limit as string) || 100, 500);
+    const offsetNum = parseInt(offset as string) || 0;
+
+    // Get sector info for display
+    const sector = await prisma.sector.findFirst({
+      where: { name: sectorName },
+      include: { superSector: true }
+    });
+
+    if (!sector) {
+      return res.status(404).json({ error: `Sector not found: ${sectorName}` });
+    }
+
+    // Get total count
+    const totalCount = await prisma.patentSubSectorScore.count({
+      where: { templateConfigId: sectorName }
+    });
+
+    // Get scores with pagination
+    const scores = await prisma.patentSubSectorScore.findMany({
+      where: { templateConfigId: sectorName },
+      orderBy: { compositeScore: order === 'asc' ? 'asc' : 'desc' },
+      take: limitNum,
+      skip: offsetNum
+    });
+
+    // Enrich with patent titles from candidates file
+    const fs = await import('fs');
+    const path = await import('path');
+    const possiblePaths = [
+      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json'),
+      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-24.json'),
+    ];
+
+    let candidatesPath: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        candidatesPath = p;
+        break;
+      }
+    }
+
+    type PatentCandidate = {
+      patent_id: string;
+      patent_title?: string;
+      patent_date?: string;
+      assignee?: string;
+    };
+
+    let patentMap = new Map<string, PatentCandidate>();
+    if (candidatesPath) {
+      const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
+      const candidates: PatentCandidate[] = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
+      const patentIds = scores.map(s => s.patentId);
+      patentMap = new Map(
+        candidates
+          .filter((p: PatentCandidate) => patentIds.includes(p.patent_id))
+          .map((p: PatentCandidate) => [p.patent_id, p])
+      );
+    }
+
+    // Format response with metrics expanded
+    const results = scores.map(score => {
+      const patent = patentMap.get(score.patentId);
+      const metrics = score.metrics as Record<string, { score: number; reasoning: string; confidence?: number }> || {};
+
+      return {
+        patentId: score.patentId,
+        patentTitle: patent?.patent_title || 'Unknown',
+        patentDate: patent?.patent_date,
+        assignee: patent?.assignee,
+        compositeScore: score.compositeScore,
+        withClaims: score.withClaims,
+        executedAt: score.executedAt,
+        templateVersion: score.templateVersion,
+        metrics: Object.entries(metrics).map(([fieldName, data]) => ({
+          fieldName,
+          displayName: fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          score: data.score,
+          reasoning: data.reasoning,
+          confidence: data.confidence
+        }))
+      };
+    });
+
+    // Get unique metric names for column headers
+    const allMetricNames = new Set<string>();
+    scores.forEach(s => {
+      const metrics = s.metrics as Record<string, unknown> || {};
+      Object.keys(metrics).forEach(k => allMetricNames.add(k));
+    });
+
+    res.json({
+      sectorName,
+      sectorDisplayName: sector.displayName,
+      superSector: sector.superSector?.name,
+      total: totalCount,
+      limit: limitNum,
+      offset: offsetNum,
+      metricNames: Array.from(allMetricNames).sort(),
+      results
+    });
+  } catch (error) {
+    console.error('[LLM Scoring] Sector scores error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/super-sector-progress/:superSectorName
+ * Get aggregated scoring progress for a super-sector
+ */
+router.get('/llm/super-sector-progress/:superSectorName', async (req: Request, res: Response) => {
+  try {
+    const { superSectorName } = req.params;
+
+    // Get super-sector and its sectors
+    const superSector = await prisma.superSector.findFirst({
+      where: { name: superSectorName },
+      include: { sectors: true }
+    });
+
+    if (!superSector) {
+      return res.status(404).json({ error: `Super-sector not found: ${superSectorName}` });
+    }
+
+    // Get scoring stats for each sector
+    const sectorStats = await Promise.all(
+      superSector.sectors.map(async (sector) => {
+        const stats = await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+          SELECT
+            COUNT(*) as scored,
+            SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+            AVG(composite_score) as avg_score
+          FROM patent_sub_sector_scores
+          WHERE template_config_id = ${sector.name}
+        `;
+
+        const scored = Number(stats[0]?.scored || 0);
+        const withClaims = Number(stats[0]?.with_claims || 0);
+        const avgScore = stats[0]?.avg_score || null;
+        const total = sector.patentCount || 0;
+
+        return {
+          sectorId: sector.id,
+          sectorName: sector.name,
+          displayName: sector.displayName,
+          total,
+          scored,
+          withClaims,
+          remaining: Math.max(0, total - scored),
+          percentComplete: total > 0 ? Math.round((scored / total) * 100) : 0,
+          avgScore: avgScore ? Number(avgScore.toFixed(2)) : null
+        };
+      })
+    );
+
+    // Aggregate totals
+    const totals = sectorStats.reduce((acc, s) => ({
+      total: acc.total + s.total,
+      scored: acc.scored + s.scored,
+      withClaims: acc.withClaims + s.withClaims
+    }), { total: 0, scored: 0, withClaims: 0 });
+
+    // Calculate weighted average score
+    const scoredSectors = sectorStats.filter(s => s.avgScore !== null && s.scored > 0);
+    const weightedAvg = scoredSectors.length > 0
+      ? scoredSectors.reduce((sum, s) => sum + (s.avgScore! * s.scored), 0) / totals.scored
+      : null;
+
+    res.json({
+      name: superSectorName,
+      displayName: superSector.displayName,
+      sectorCount: superSector.sectors.length,
+      totals: {
+        total: totals.total,
+        scored: totals.scored,
+        withClaims: totals.withClaims,
+        remaining: Math.max(0, totals.total - totals.scored),
+        percentComplete: totals.total > 0 ? Math.round((totals.scored / totals.total) * 100) : 0,
+        avgScore: weightedAvg ? Number(weightedAvg.toFixed(2)) : null
+      },
+      sectors: sectorStats.sort((a, b) => b.scored - a.scored)
+    });
+  } catch (error) {
+    console.error('[LLM Scoring] Super-sector progress error:', error);
     res.status(500).json({ error: (error as Error).message });
   }
 });

@@ -651,3 +651,246 @@ Key features needed:
 
 </GUI and Architecture Considerations — February 2026>
 
+
+<LLM Scoring Results and Template Editing — February 2026>
+
+Updated: 2026-02-08
+
+## Critical Priority: Viewing LLM Scoring Results
+
+The most important near-term feature is the ability to **view and export LLM scoring results**
+to verify quality. This includes:
+
+1. **Results Table**: View scored patents with:
+   - Composite score
+   - Individual metric scores (from structured questions)
+   - Reasoning text for each answer
+   - Whether claims were included
+   - Template version used
+
+2. **Filtering and Comparison**:
+   - Filter by sector, super-sector, score range
+   - Compare results from runs with/without claims
+   - Sort by individual metrics or composite score
+
+3. **Export Capabilities**:
+   - CSV export with all metrics and reasoning
+   - Filter by score threshold before export
+   - Include template metadata in export
+
+**Backend Status**: Export endpoint exists at `GET /api/scoring-templates/export/:superSector`
+which includes LLM metrics and reasoning. Scores stored in `patent_sub_sector_scores` table
+with `metrics` JSON column containing per-question scores and reasoning.
+
+## Sub-Sector Clarification
+
+There are TWO types of "sub-sectors" in the system:
+
+### 1. Defined Sub-Sectors (with structured questions)
+Located in `config/scoring-templates/sub-sectors/`:
+- virtualization.json
+- packet-switching.json
+- routing.json
+- chip-packaging.json
+- semiconductor-manufacturing.json
+- semiconductor-test.json
+- transistor-devices.json
+- adc-dac.json
+- amplifiers.json
+- pll-clock.json
+- modulation-demodulation.json
+- baseband-equalization.json
+- qos-traffic.json
+- error-detection.json
+
+These have domain-specific scoring questions that inherit from and extend their parent
+sector's questions. For example, `virtualization` extends `computing-runtime` with
+VM/hypervisor-specific questions.
+
+### 2. Prospective Sub-Sectors (auto-generated CPC groupings)
+These are CPC subgroup codes automatically identified as potential groupings within a sector.
+Example: `analog-circuits` has 1,178 prospective sub-sectors like H03F3/45183, H03F2200/451.
+These are candidates for manual review and refinement into proper sub-sectors with custom questions.
+
+**Design Vision**: Sub-sectors should aggregate minor CPC codes (after the slash) within a sector,
+similar to how sectors aggregate major CPC prefixes. Users would select which CPC subgroups
+to combine into a named sub-sector, then define domain-specific scoring questions.
+
+## Claims Integration Evolution
+
+Current state:
+- "Include Claims" toggle is temporary while backfilling scores without claims
+- "Rescore Already Scored" useful for updating old scores with claims
+
+Future state:
+- Claims will be **required** for all sector scoring jobs
+- Remove the include claims toggle
+- Add **Context Template Selector** with options:
+  - All claims (most comprehensive)
+  - Independent claims only (focused)
+  - Summarized claims (LLM-condensed for token efficiency)
+  - Claims + product context (when available)
+- May also affect base portfolio scoring to consider claims
+
+## Interface Organization Questions
+
+Current confusion:
+1. **Sector Management** vs **Sector Enrichment** — unclear separation
+2. **LLM Scoring tab** in Sector Management vs **Job Queue** for enrichment
+3. **Prompt Templates page** — confusing with multi-stage templates
+
+Proposed organization:
+
+### Option A: Separate Concerns
+- **Sector Management**: Define structure (super-sectors, sectors, sub-sectors, rules)
+- **Scoring Templates**: View/edit scoring questions (read-only initially)
+- **Job Queue**: Run all enrichment jobs (LLM scoring, prosecution, IPR, etc.)
+- **Results Dashboard**: View scoring results, export, quality verification
+
+### Option B: Consolidated Sector View
+- Keep LLM Scoring in Sector Management for context
+- Add "View Results" tab to show scored patents for selected sector
+- Job Queue only shows running/queued jobs, not initiation
+
+### Multi-Stage Template Complexity
+Prompt Templates page handles multiple object types:
+- Patent-level (single patent analysis)
+- Focus Area (multi-patent, multi-stage summarization)
+- Patent families (not yet implemented)
+- Products (not yet implemented)
+
+Each has different structure:
+- Patent-level: Simple question set, one-shot
+- Focus Area: Stage 1 (per-patent) → Stage 2 (group summary)
+- Sector scoring: Hierarchical inheritance (portfolio → super → sector → sub)
+
+**Recommendation**: Separate editors for different object types:
+- Patent/Sector scoring: Show inheritance chain, allow question editing at each level
+- Focus Area: Show multi-stage structure, stage-by-stage editing
+- Keep structure definition outside GUI initially, allow text editing within
+
+## Demo-Ready Template Editor
+
+Simple implementation steps for demonstrating the template system:
+
+### Phase 1: Read-Only Template Viewer
+1. List all defined scoring templates (portfolio, super-sector, sector, sub-sector)
+2. Show merged questions for any selected template
+3. Display inheritance chain visually (which level contributed each question)
+4. Show template metadata (version, last modified, etc.)
+
+### Phase 2: Template Preview with Patent
+1. Select a patent from the sector
+2. Render the full prompt as it would be sent to LLM
+3. Show token count, estimated cost
+4. Display claims if available, show impact on prompt size
+
+### Phase 3: Basic Editing (Admin Only)
+1. Modify question text at any level
+2. Add/remove questions at sector or sub-sector level
+3. Adjust weights on individual questions
+4. Track modifications for job re-run requirements
+
+### Downstream Impact Tracking
+- When a template is modified, flag affected scores as "stale"
+- Show in GUI which patents need re-scoring
+- Provide bulk re-score action for stale patents
+
+## Results Viewing Implementation Plan
+
+### Immediate (This Session)
+1. Enhance SectorScoresPage with detailed results table
+2. Add ability to view individual patent's full scoring breakdown
+3. Show reasoning for each metric answer
+4. Enable export with all metrics and reasoning
+
+### Near-Term
+1. Add super-sector summary view (aggregate progress across sectors)
+2. Comparison view: With-claims vs without-claims scoring
+3. Score distribution visualization per sector
+
+### Future
+1. Read-only template viewer showing inheritance
+2. Template test runner (score single patent, show result)
+3. Basic template editing with stale score tracking
+
+</LLM Scoring Results and Template Editing — February 2026>
+
+
+<LLM Scoring Prioritization Options — February 2026>
+
+## Problem Statement
+
+Different scoring formulas prioritize patents differently:
+- **Base Score**: Emphasizes forward citations + remaining years
+- **V2 Score**: Configurable weights for citations, years, and competitor citations
+- **V3 Score**: Multi-metric scoring with profiles
+
+Patents can rank highly in V2 (due to high competitor citations) but low in base score.
+If LLM sector scoring only prioritizes by base score, valuable V2 top patents may not get
+scored until late in the process.
+
+**Example**: Patent 6085333
+- Base score: 11.0 (low priority)
+- V2 score: 1448.3 (top priority due to competitor citations)
+
+## Solution: Prioritization Option for LLM Scoring
+
+Added `prioritizeBy` parameter to the sector scoring endpoint:
+
+```
+POST /api/scoring-templates/llm/score-sector/:sectorName
+  ?prioritizeBy=v2           # 'base' (default) or 'v2'
+  &v2Citation=50             # V2 citation weight (default 50)
+  &v2Years=30                # V2 years remaining weight (default 30)
+  &v2Competitor=20           # V2 competitor citation weight (default 20)
+  &useClaims=true
+  &limit=100
+```
+
+### Prioritization Modes
+
+**Base Score (default)**:
+- Sort by existing `score` field in candidates JSON
+- Formula: forward_citations + remaining_years (with scaling)
+- Best for: General portfolio coverage, newer patents
+
+**V2 Score**:
+- Calculate on-the-fly using configurable weights
+- Formula: weighted combination of log(citations), years, and competitor_citations
+- Best for: Targeting patents with high market/competitive value
+- Allows custom weights to match specific analysis needs
+
+## Recommended Usage
+
+### Strategy 1: Base-First, V2-Fill
+1. Run full sector scoring with base priority (covers high-citation, long-life patents)
+2. Run targeted V2-priority batch to fill gaps in V2 top rankings
+
+### Strategy 2: Parallel Coverage
+1. Run base-priority job with limit for broad coverage
+2. Run V2-priority job with limit for competitive coverage
+3. Both run simultaneously, avoiding duplicate scoring (onlyUnscored filter)
+
+### Strategy 3: Custom V2 Weights
+For specific analyses, customize V2 weights:
+- **Competitor-focused**: v2Competitor=60, v2Citation=30, v2Years=10
+- **Longevity-focused**: v2Years=50, v2Citation=30, v2Competitor=20
+- **Citation-focused**: v2Citation=60, v2Years=20, v2Competitor=20
+
+## Portfolio Coverage Analysis
+
+When exporting or analyzing results, correlate:
+- V2 top N patents with LLM coverage status
+- Identify gaps in V2 rankings that lack LLM scores
+- Run targeted batches to ensure top patents under any scoring formula have full LLM analysis
+
+## Implementation Notes
+
+- V2 score calculation matches the `/api/scores/v2` endpoint formula
+- Both base and V2 prioritization filter out already-scored patents
+- Scoring results are identical regardless of prioritization method
+- Prioritization only affects which patents get scored first in limited batches
+
+</LLM Scoring Prioritization Options — February 2026>
+

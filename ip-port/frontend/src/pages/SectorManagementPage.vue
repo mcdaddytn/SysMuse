@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
-import type { SectorScoringProgress } from '@/services/api';
+import type { SectorScoringProgress, SubSector } from '@/services/api';
 import type { SuperSectorDetail, SectorDetail, SectorRule, SectorRuleType, RulePreviewResult } from '@/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,6 +17,11 @@ const treeLoading = ref(false);
 const error = ref<string | null>(null);
 const seedLoading = ref(false);
 const recalcLoading = ref(false);
+
+// Sub-sectors state - keyed by sector name
+const subSectorsMap = ref<Record<string, SubSector[]>>({});
+const subSectorsLoading = ref<Record<string, boolean>>({});
+const expandedSectors = ref<Set<string>>(new Set());
 
 // Add Rule dialog
 const showAddRule = ref(false);
@@ -164,6 +169,45 @@ function onNodeSelect(nodeId: string) {
   if (nodeId.startsWith('ss-')) return; // Don't select super-sectors
   selectedSectorId.value = nodeId;
   loadSectorDetail(nodeId);
+}
+
+async function loadSubSectors(sectorName: string) {
+  if (subSectorsLoading.value[sectorName]) return;
+  subSectorsLoading.value[sectorName] = true;
+  try {
+    const subSectors = await sectorApi.getSubSectors(sectorName);
+    subSectorsMap.value[sectorName] = subSectors;
+  } catch (err) {
+    console.error(`Failed to load sub-sectors for ${sectorName}:`, err);
+    subSectorsMap.value[sectorName] = [];
+  } finally {
+    subSectorsLoading.value[sectorName] = false;
+  }
+}
+
+function toggleSectorExpansion(sectorName: string) {
+  if (expandedSectors.value.has(sectorName)) {
+    expandedSectors.value.delete(sectorName);
+  } else {
+    expandedSectors.value.add(sectorName);
+    // Load sub-sectors if not already loaded
+    if (!subSectorsMap.value[sectorName]) {
+      loadSubSectors(sectorName);
+    }
+  }
+}
+
+function hasSubSectors(sectorName: string): boolean {
+  return (subSectorsMap.value[sectorName]?.length ?? 0) > 0;
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'APPLIED': return 'green-7';
+    case 'PROSPECTIVE': return 'blue-7';
+    case 'REJECTED': return 'grey-6';
+    default: return 'grey-5';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -545,28 +589,84 @@ watch(selectedSectorId, () => {
                   dense
                   header-class="text-weight-medium bg-grey-1"
                 >
-                  <q-item
-                    v-for="sector in ss.sectors"
-                    :key="sector.id"
-                    clickable
-                    v-ripple
-                    :active="selectedSectorId === sector.id"
-                    active-class="bg-primary text-white"
-                    class="q-pl-lg"
-                    @click="onNodeSelect(sector.id)"
-                  >
-                    <q-item-section avatar>
-                      <q-icon :name="getSectorIcon(sector.name)" size="xs" :color="selectedSectorId === sector.id ? 'white' : 'grey-7'" />
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label :class="{ 'text-white': selectedSectorId === sector.id }">
-                        {{ sector.displayName }}
-                      </q-item-label>
-                      <q-item-label caption :class="{ 'text-blue-2': selectedSectorId === sector.id }">
-                        {{ sector.patentCount?.toLocaleString() || 0 }} patents
-                      </q-item-label>
-                    </q-item-section>
-                  </q-item>
+                  <template v-for="sector in ss.sectors" :key="sector.id">
+                    <!-- Sector item with expansion for sub-sectors -->
+                    <q-item
+                      clickable
+                      v-ripple
+                      :active="selectedSectorId === sector.id"
+                      active-class="bg-primary text-white"
+                      class="q-pl-lg"
+                      @click="onNodeSelect(sector.id)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon :name="getSectorIcon(sector.name)" size="xs" :color="selectedSectorId === sector.id ? 'white' : 'grey-7'" />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label :class="{ 'text-white': selectedSectorId === sector.id }">
+                          {{ sector.displayName }}
+                        </q-item-label>
+                        <q-item-label caption :class="{ 'text-blue-2': selectedSectorId === sector.id }">
+                          {{ sector.patentCount?.toLocaleString() || 0 }} patents
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          size="xs"
+                          :icon="expandedSectors.has(sector.name) ? 'expand_less' : 'expand_more'"
+                          :loading="subSectorsLoading[sector.name]"
+                          @click.stop="toggleSectorExpansion(sector.name)"
+                        >
+                          <q-tooltip>{{ expandedSectors.has(sector.name) ? 'Hide' : 'Show' }} sub-sectors</q-tooltip>
+                        </q-btn>
+                      </q-item-section>
+                    </q-item>
+
+                    <!-- Sub-sectors (expandable) -->
+                    <q-slide-transition>
+                      <div v-if="expandedSectors.has(sector.name)">
+                        <q-inner-loading :showing="subSectorsLoading[sector.name]" size="xs" />
+                        <template v-if="subSectorsMap[sector.name]?.length">
+                          <q-item
+                            v-for="subSector in subSectorsMap[sector.name]"
+                            :key="subSector.id"
+                            dense
+                            class="q-pl-xl sub-sector-item"
+                          >
+                            <q-item-section avatar>
+                              <q-icon name="subdirectory_arrow_right" size="xs" color="grey-5" />
+                            </q-item-section>
+                            <q-item-section>
+                              <q-item-label class="text-caption">
+                                {{ subSector.displayName }}
+                              </q-item-label>
+                              <q-item-label caption>
+                                {{ subSector.patentCount?.toLocaleString() || 0 }} patents
+                              </q-item-label>
+                            </q-item-section>
+                            <q-item-section side>
+                              <q-badge
+                                :color="getStatusColor(subSector.status)"
+                                :label="subSector.status"
+                                dense
+                                class="text-caption"
+                              />
+                            </q-item-section>
+                          </q-item>
+                        </template>
+                        <q-item v-else-if="!subSectorsLoading[sector.name]" dense class="q-pl-xl">
+                          <q-item-section>
+                            <q-item-label caption class="text-grey-6">
+                              No sub-sectors defined
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </div>
+                    </q-slide-transition>
+                  </template>
                 </q-expansion-item>
               </template>
             </q-list>
@@ -1319,5 +1419,16 @@ code {
   word-wrap: break-word;
   max-height: 400px;
   overflow-y: auto;
+}
+
+.sub-sector-item {
+  background-color: #fafafa;
+  border-left: 2px solid #e0e0e0;
+  margin-left: 24px;
+  min-height: 36px;
+}
+
+.sub-sector-item:hover {
+  background-color: #f0f0f0;
 }
 </style>

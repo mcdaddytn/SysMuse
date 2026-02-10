@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-storage",
+  "name": "Video Storage & Recording",
+  "description": "Sector template for video storage and recording patents including DVR, cloud DVR, time-shifting, and video asset management.",
+  "level": "sector",
+  "sectorName": "video-storage",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Video storage patents cover recording, time-shifting, and asset management for video content. Key areas include DVR (local and network), cloud DVR, trick-play (fast-forward, rewind), storage optimization, and video asset management systems. Targets include pay-TV operators, cloud DVR providers, and consumer electronics manufacturers.",
+  "scoringGuidance": [
+    "Cloud DVR patents are high value as pay-TV shifts recording to the cloud.",
+    "Network DVR patents addressing 'copy once' vs 'copy many' have regulatory implications.",
+    "Trick-play optimization patents (thumbnail generation, I-frame seeking) have broad applicability.",
+    "Storage efficiency patents (deduplication, tiered storage) reduce operator costs.",
+    "Patents enabling 'Start Over' and 'Catch Up' TV features are strategically valuable."
+  ],
+  "questions": [
+    {
+      "fieldName": "storage_architecture",
+      "displayName": "Storage Architecture",
+      "question": "What storage architecture does this patent address? Score 1-3 for local/device storage, 4-6 for network/operator storage, 7-10 for cloud DVR or hybrid cloud-local.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify storage location: local HDD/SSD, network DVR, cloud, or hybrid architectures."
+    },
+    {
+      "fieldName": "recording_capability",
+      "displayName": "Recording Capability",
+      "question": "What recording capabilities does this patent enable? Score 1-3 for basic recording, 4-6 for scheduled/series recording, 7-10 for advanced (whole-channel, predictive, cloud-based).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess recording sophistication: manual, scheduled, series, recommendation-based, whole-channel."
+    },
+    {
+      "fieldName": "trick_play",
+      "displayName": "Trick Play & Navigation",
+      "question": "Does this patent address trick-play or video navigation? Score 1-3 if not applicable, 4-6 for basic FF/REW, 7-10 for advanced (thumbnail preview, scene detection, variable speed).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Trick-play UX is differentiating. Assess innovation in navigation and preview."
+    },
+    {
+      "fieldName": "storage_efficiency",
+      "displayName": "Storage Efficiency",
+      "question": "Does this patent optimize storage efficiency? Score 1-3 if not applicable, 4-6 for basic compression, 7-10 for advanced (deduplication, tiered storage, intelligent retention).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Storage costs are significant for operators. Assess efficiency improvements."
+    },
+    {
+      "fieldName": "timeshifting",
+      "displayName": "Time-Shifting Features",
+      "question": "Does this patent enable time-shifting features? Score 1-3 for playback-only, 4-6 for pause/resume live, 7-10 for Start Over, Catch Up, or restart from beginning.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Time-shifting features are premium differentiators. Assess feature scope."
+    }
+  ]
+}

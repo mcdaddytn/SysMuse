@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "amplifiers",
+  "name": "Amplifiers",
+  "description": "Sub-sector template for amplifier patents (CPC H03F*) including operational amplifiers, power amplifiers, and LNAs.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03F*",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "analog-circuits",
+  "version": 1,
+  "contextDescription": "Amplifier patents cover signal amplification across all electronic systems. Key types include operational amplifiers (op-amps), power amplifiers (PA), low-noise amplifiers (LNA), variable gain amplifiers (VGA), and transimpedance amplifiers (TIA). High-value targets include Analog Devices, Texas Instruments, Qualcomm (RF PA/LNA), Skyworks, and all RF front-end vendors.",
+  "scoringGuidance": [
+    "Op-amp patents are fundamental and ubiquitous - in virtually every analog circuit.",
+    "RF power amplifier patents target every wireless device (smartphones, WiFi, cellular).",
+    "LNA patents are critical for receiver sensitivity in wireless systems.",
+    "Class-D audio amplifiers are in all mobile devices and smart speakers.",
+    "High-speed amplifiers target data center (SerDes, optical) applications."
+  ],
+  "questions": [
+    {
+      "fieldName": "amplifier_type",
+      "displayName": "Amplifier Type",
+      "question": "What amplifier type does this patent cover? Score by market size: 1-3 for specialized, 4-6 for common (instrumentation, buffer), 7-10 for high-volume (op-amp, PA, LNA).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the amplifier type and its market prevalence."
+    },
+    {
+      "fieldName": "rf_amplifier",
+      "displayName": "RF Amplifier Application",
+      "question": "Is this an RF amplifier patent (PA, LNA, driver)? RF amplifiers are in every wireless device.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RF amplifiers target Qualcomm, Skyworks, Qorvo. Identify RF applications."
+    },
+    {
+      "fieldName": "amplifier_performance",
+      "displayName": "Performance Metric",
+      "question": "What key performance does this patent improve (gain, noise, linearity, efficiency, bandwidth)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific performance improvements."
+    },
+    {
+      "fieldName": "cmos_compatibility",
+      "displayName": "CMOS Compatibility",
+      "question": "Is this amplifier CMOS-compatible for SoC integration? CMOS integration enables high-volume markets.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CMOS integration is key for mobile SoCs."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "chip-packaging",
+  "name": "Chip Packaging & Interconnects",
+  "description": "Sub-sector template for semiconductor packaging and interconnect patents (CPC H01L23*, H01L24*) including flip-chip, bonding, and 3D stacking.",
+  "level": "sub_sector",
+  "subSectorPattern": "H01L23*",
+  "sectorName": "semiconductor",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor-general",
+  "version": 1,
+  "contextDescription": "Packaging and interconnect patents cover chip-to-package and chip-to-chip connections. Key areas include flip-chip, TSV (through-silicon via), microbump, RDL (redistribution layer), and advanced packaging (2.5D/3D, chiplets). High-value targets include OSATs (ASE, Amkor), foundries with advanced packaging (TSMC CoWoS), and package substrate vendors.",
+  "scoringGuidance": [
+    "TSV and 3D stacking patents are essential for HBM memory.",
+    "Chiplet interconnect patents target AMD, Intel, and data center chips.",
+    "Fine-pitch microbump patents enable high-bandwidth interfaces.",
+    "Thermal management patents are critical for high-power packages.",
+    "RDL and fan-out patents target mobile AP packaging."
+  ],
+  "questions": [
+    {
+      "fieldName": "packaging_technology",
+      "displayName": "Packaging Technology",
+      "question": "What packaging technology does this cover? Score: 1-3 for wire bond, 4-6 for flip-chip/BGA, 7-10 for advanced (TSV, chiplet, 3D).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify packaging technology and market trend (advanced packaging is growing)."
+    },
+    {
+      "fieldName": "hbm_relevance",
+      "displayName": "HBM/Memory Relevance",
+      "question": "Is this relevant to HBM or high-bandwidth memory stacking? HBM is essential for AI accelerators.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "HBM packaging is a key growth area for AI/ML chips."
+    },
+    {
+      "fieldName": "chiplet_relevance",
+      "displayName": "Chiplet/2.5D Relevance",
+      "question": "Is this relevant to chiplet or 2.5D interposer architectures? Chiplets are the future of SoC design.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Chiplet architectures enable modular chip design and higher yields."
+    },
+    {
+      "fieldName": "thermal_solution",
+      "displayName": "Thermal Solution",
+      "question": "Does this patent address thermal management in packaging? Critical for high-power chips.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Thermal is a limiting factor for advanced packages."
+    }
+  ]
+}

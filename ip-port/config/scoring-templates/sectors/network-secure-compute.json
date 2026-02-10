@@ -1,0 +1,70 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-secure-compute",
+  "name": "Network Secure Computing",
+  "description": "Sector template for secure network computing patents including secure tunneling, encrypted communications, secure key exchange, and network-level confidentiality/integrity.",
+  "level": "sector",
+  "sectorName": "network-secure-compute",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 1,
+  "contextDescription": "Network secure computing patents protect data in transit and enable secure communication channels. Technologies include TLS/SSL, IPsec, VPN protocols, secure key exchange, network encryption, and secure session management.",
+  "scoringGuidance": [
+    "Key exchange patents resistant to quantum computing threats (post-quantum crypto) score higher.",
+    "Patents enabling zero-knowledge proofs or privacy-preserving computation are high value.",
+    "Performance optimization for encrypted traffic (hardware acceleration, efficient protocols) is valuable.",
+    "Perfect forward secrecy and ephemeral key mechanisms score higher on key_management."
+  ],
+  "questions": [
+    {
+      "fieldName": "encryption_scope",
+      "displayName": "Encryption Scope",
+      "question": "What is the scope of network encryption? Score 1-3 for specific data fields, 4-6 for session/connection encryption, 7-10 for full network layer encryption (all traffic).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe encryption scope: field-level, transport, or network layer."
+    },
+    {
+      "fieldName": "key_management",
+      "displayName": "Key Management",
+      "question": "How sophisticated is the key management approach? Score 1-3 for static keys, 4-6 for automated key rotation, 7-10 for advanced (ephemeral keys, PFS, post-quantum ready).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess key management: static, rotating, ephemeral, forward secrecy."
+    },
+    {
+      "fieldName": "protocol_layer",
+      "displayName": "Protocol Layer",
+      "question": "At which network layer does this patent operate? Score 1-3 for application layer (API security), 4-6 for transport layer (TLS), 7-10 for network layer (IPsec, MACsec).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the network layer: application, transport, or network."
+    },
+    {
+      "fieldName": "performance_impact",
+      "displayName": "Performance Optimization",
+      "question": "Does this patent address encryption performance? Score 1-3 if performance not addressed, 4-6 for software optimization, 7-10 for hardware acceleration or novel efficient algorithms.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe performance considerations: latency, throughput, hardware offload."
+    },
+    {
+      "fieldName": "secure_channel",
+      "displayName": "Secure Channel Establishment",
+      "question": "How robust is the secure channel establishment? Score 1-3 for basic handshake, 4-6 for mutual authentication, 7-10 for advanced (zero-knowledge, attestation-based, hardware-backed).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe channel establishment: handshake, authentication, attestation."
+    }
+  ]
+}

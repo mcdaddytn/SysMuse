@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "adc-dac",
+  "name": "ADC/DAC Converters",
+  "description": "Sub-sector template for data converter patents (CPC H03M*) including ADCs, DACs, and sigma-delta converters.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03M*",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "analog-circuits",
+  "version": 1,
+  "contextDescription": "Data converter patents cover the interface between analog and digital domains. Key types include SAR ADC, pipeline ADC, sigma-delta ADC, and various DAC architectures. Every sensor, audio, video, and communication system needs converters. High-value targets include Analog Devices, Texas Instruments, all smartphone SoC vendors, and automotive sensor systems.",
+  "scoringGuidance": [
+    "High-speed ADC patents target 5G, radar, and data center applications.",
+    "Audio ADC/DAC patents are in every device with sound.",
+    "Sensor interface ADCs target IoT, automotive, and industrial markets.",
+    "Sigma-delta converters dominate precision and audio applications.",
+    "Power-efficient converters are critical for mobile and wearables."
+  ],
+  "questions": [
+    {
+      "fieldName": "converter_type",
+      "displayName": "Converter Type",
+      "question": "What converter architecture does this patent cover (SAR, pipeline, sigma-delta, flash)? Score by prevalence.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the converter architecture and its applications."
+    },
+    {
+      "fieldName": "resolution_speed",
+      "displayName": "Resolution/Speed Class",
+      "question": "What resolution/speed class? Score: 1-3 for low-res/slow, 4-6 for medium (12-14 bit), 7-10 for high-speed (>1Gsps) or high-res (>16 bit).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "High-speed and high-resolution converters command premium pricing."
+    },
+    {
+      "fieldName": "application_breadth",
+      "displayName": "Application Breadth",
+      "question": "How broadly applicable is this converter technology? Consider audio, video, sensors, communications.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Converters are needed everywhere. Assess application breadth."
+    },
+    {
+      "fieldName": "power_efficiency",
+      "displayName": "Power Efficiency",
+      "question": "Does this patent improve power efficiency (Walden FOM, Schreier FOM)? Critical for mobile.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Power efficiency is the key differentiator for mobile converters."
+    }
+  ]
+}

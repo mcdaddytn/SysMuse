@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-threat-protection",
+  "name": "Network Threat Protection",
+  "description": "Sector template for network-level threat protection patents including malware detection, intrusion detection/prevention, threat intelligence, and network security monitoring.",
+  "level": "sector",
+  "sectorName": "network-threat-protection",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 2,
+  "contextDescription": "Network threat protection patents cover technologies that detect, prevent, and respond to network-based attacks. This includes IDS/IPS, DDoS mitigation, malware detection at the network layer, threat intelligence integration, security analytics, XDR/NDR platforms, and temporal attack analysis.",
+  "scoringGuidance": [
+    "Detection patents should be scored on their ability to identify unknown/zero-day threats vs only known signatures.",
+    "Patents using ML/AI for behavioral analysis score higher on detection_method.",
+    "Real-time inline protection scores higher than post-facto analysis.",
+    "Integration with threat intelligence feeds and automated response increases value.",
+    "XDR/NDR platform patents that correlate across endpoints and network are high value.",
+    "Temporal/behavioral analysis patents that detect APT campaigns over time are emerging high-value areas."
+  ],
+  "questions": [
+    {
+      "fieldName": "detection_method",
+      "displayName": "Detection Method",
+      "question": "What threat detection methodology is used? Score 1-3 for signature-based only, 4-6 for heuristic/behavioral patterns, 7-10 for advanced ML/AI-based anomaly detection.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the detection approach: signatures, heuristics, or ML-based."
+    },
+    {
+      "fieldName": "threat_types",
+      "displayName": "Threat Type Coverage",
+      "question": "What types of threats does this patent address? Score 1-3 for single threat type (e.g., just DDoS), 4-6 for multiple threat categories, 7-10 for comprehensive coverage (malware, intrusion, DDoS, exfiltration).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "List the threat types covered: malware, intrusion, DDoS, APT, exfiltration, etc."
+    },
+    {
+      "fieldName": "response_capability",
+      "displayName": "Response Capability",
+      "question": "What is the response capability? Score 1-3 for alerting only, 4-6 for semi-automated response, 7-10 for real-time automated prevention/blocking.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess whether it alerts, quarantines, blocks, or takes automated action."
+    },
+    {
+      "fieldName": "network_visibility",
+      "displayName": "Network Visibility Scope",
+      "question": "How much network visibility does this patent provide? Score 1-3 for single point monitoring, 4-6 for segment/zone visibility, 7-10 for full network visibility (east-west, north-south traffic).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the network monitoring scope and traffic visibility."
+    },
+    {
+      "fieldName": "intelligence_integration",
+      "displayName": "Threat Intelligence Integration",
+      "question": "Does this patent integrate with or enhance threat intelligence? Score 1-3 if none, 4-6 for threat feed consumption, 7-10 for active threat intelligence sharing/enrichment.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess threat intelligence capabilities: feeds, IoC sharing, enrichment."
+    },
+    {
+      "fieldName": "xdr_ndr_relevance",
+      "displayName": "XDR/NDR Platform Relevance",
+      "question": "Does this patent align with XDR/NDR platform capabilities? Score 1-3 if not applicable, 4-6 for single-domain detection, 7-10 for cross-domain correlation (network + endpoint + cloud).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess XDR/NDR applicability and cross-domain detection correlation."
+    },
+    {
+      "fieldName": "temporal_behavioral",
+      "displayName": "Temporal/Behavioral Analysis",
+      "question": "Does this patent use temporal or behavioral analysis? Score 1-3 if point-in-time only, 4-6 for session-level behavior, 7-10 for long-term temporal analysis (APT campaign detection, connection graphs over time).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess temporal analysis depth: point-in-time, session, or campaign-level."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "test-measurement",
+  "name": "Test & Measurement",
+  "description": "Sector template for semiconductor test patents including ATE, probes, BIST, and measurement circuits.",
+  "level": "sector",
+  "sectorName": "test-measurement",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Test and measurement patents cover semiconductor testing and characterization. Key areas include ATE (Automatic Test Equipment), probe cards, BIST (Built-In Self-Test), DFT (Design for Test), and measurement circuits. High-value targets include Teradyne, Advantest, Keysight, and all semiconductor fabs/IDMs. Test is critical for yield and quality.",
+  "scoringGuidance": [
+    "ATE patents target test equipment vendors (Teradyne, Advantest).",
+    "BIST/DFT patents read on all chip designs that implement self-test.",
+    "High-speed test patents are critical for advanced nodes and interfaces.",
+    "Wafer probe patents target foundries and IDMs.",
+    "Consider both hardware (equipment) and design (DFT) patents."
+  ],
+  "questions": [
+    {
+      "fieldName": "test_method",
+      "displayName": "Test Method",
+      "question": "What test method does this patent cover? Score: 1-3 for specialized test, 4-6 for standard functional test, 7-10 for fundamental methods (BIST, scan, JTAG).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the test methodology and its prevalence."
+    },
+    {
+      "fieldName": "ate_relevance",
+      "displayName": "ATE Relevance",
+      "question": "Does this patent apply to ATE (Automatic Test Equipment)? Targets Teradyne, Advantest, Keysight.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess applicability to test equipment vendors."
+    },
+    {
+      "fieldName": "dft_integration",
+      "displayName": "DFT Integration",
+      "question": "Is this a Design-for-Test patent that would be integrated into chip designs?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "DFT patents read on all chips implementing the technique."
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "../../scoring-template.schema.json",
+  "id": "wireless-mimo-antenna",
+  "name": "Wireless MIMO & Antenna Scoring",
+  "description": "Scoring template for MIMO and advanced antenna patents covering beamforming, antenna arrays, spatial multiplexing, and smart antenna systems.",
+  "level": "sector",
+  "sectorName": "wireless-mimo-antenna",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "isDefault": true,
+  "version": 1,
+  "scoringGuidance": [
+    "This sector covers MIMO technology and advanced antenna systems used to improve wireless capacity and coverage.",
+    "Key differentiators: MIMO order, beamforming approach, antenna configuration, and deployment context.",
+    "Look for innovations in massive MIMO, hybrid beamforming, and antenna integration."
+  ],
+  "contextDescription": "MIMO (Multiple-Input Multiple-Output) and advanced antenna patents address spatial dimension techniques that multiply wireless capacity. This includes spatial multiplexing, beamforming, antenna diversity, and increasingly massive MIMO for 5G. Key applications span from smartphone antennas to base station antenna arrays.",
+  "questions": [
+    {
+      "fieldName": "mimo_configuration",
+      "displayName": "MIMO Configuration",
+      "question": "What MIMO configuration does this patent address? Consider: 2x2, 4x4, 8x8, massive MIMO (64+), or reconfigurable MIMO. Also consider TDD vs FDD MIMO.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify MIMO order. Score 8-10 for massive MIMO or highly scalable, 5-7 for 4x4-8x8, 3-4 for 2x2, 1-2 if not MIMO related."
+    },
+    {
+      "fieldName": "beamforming_type",
+      "displayName": "Beamforming Type",
+      "question": "What beamforming approach does this patent use? Consider: Analog beamforming, digital beamforming, hybrid beamforming, or null steering. Also consider beam tracking/management.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify beamforming approach. Score 8-10 for hybrid or advanced digital, 5-7 for analog or basic digital, 1-2 if no beamforming."
+    },
+    {
+      "fieldName": "antenna_innovation",
+      "displayName": "Antenna Innovation",
+      "question": "What antenna innovations does this patent introduce? Consider: Novel array geometries, compact integration, reconfigurable elements, or new antenna types (patch, slot, dipole variants).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe antenna innovations. Score higher for novel structures or significant size/performance improvements."
+    },
+    {
+      "fieldName": "spectrum_efficiency",
+      "displayName": "Spectrum Efficiency",
+      "question": "How does this MIMO/antenna technology improve spectral efficiency? Consider: Spatial multiplexing gain, interference reduction through beamforming, or capacity improvements.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe spectral efficiency gains. Quantify if possible (e.g., 2x capacity through 2x2 MIMO)."
+    },
+    {
+      "fieldName": "deployment_applicability",
+      "displayName": "Deployment Applicability",
+      "question": "Where can this antenna/MIMO technology be deployed? Consider: Smartphone (space-constrained), base station (high power), IoT (low cost), or specialized (automotive, satellite).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify deployment contexts. Score higher for high-volume applications (smartphones, base stations)."
+    }
+  ]
+}

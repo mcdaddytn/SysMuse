@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { sectorApi } from '@/services/api';
+import { sectorApi, scoringTemplatesApi } from '@/services/api';
+import type { SectorScoringProgress, SubSector } from '@/services/api';
 import type { SuperSectorDetail, SectorDetail, SectorRule, SectorRuleType, RulePreviewResult } from '@/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,6 +17,11 @@ const treeLoading = ref(false);
 const error = ref<string | null>(null);
 const seedLoading = ref(false);
 const recalcLoading = ref(false);
+
+// Sub-sectors state - keyed by sector name
+const subSectorsMap = ref<Record<string, SubSector[]>>({});
+const subSectorsLoading = ref<Record<string, boolean>>({});
+const expandedSectors = ref<Set<string>>(new Set());
 
 // Add Rule dialog
 const showAddRule = ref(false);
@@ -53,6 +59,31 @@ const newSuperSector = ref({
   displayName: '',
   description: '',
 });
+
+// LLM Scoring state
+const scoringProgress = ref<SectorScoringProgress | null>(null);
+const scoringLoading = ref(false);
+const startScoringLoading = ref(false);
+const scoringOptions = ref({
+  useClaims: true,
+  rescore: false,
+  topN: 500,
+});
+const scoringError = ref<string | null>(null);
+
+// Template Preview state
+const templatePreviewPatentId = ref('');
+const templatePreviewIncludeClaims = ref(true);
+const templatePreviewLoading = ref(false);
+const templatePreviewResult = ref<{
+  patentId: string;
+  patentTitle: string;
+  renderedPrompt: string;
+  estimatedTokens: number;
+  questionCount: number;
+  inheritanceChain: string[];
+} | null>(null);
+const templatePreviewError = ref<string | null>(null);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
@@ -138,6 +169,45 @@ function onNodeSelect(nodeId: string) {
   if (nodeId.startsWith('ss-')) return; // Don't select super-sectors
   selectedSectorId.value = nodeId;
   loadSectorDetail(nodeId);
+}
+
+async function loadSubSectors(sectorName: string) {
+  if (subSectorsLoading.value[sectorName]) return;
+  subSectorsLoading.value[sectorName] = true;
+  try {
+    const subSectors = await sectorApi.getSubSectors(sectorName);
+    subSectorsMap.value[sectorName] = subSectors;
+  } catch (err) {
+    console.error(`Failed to load sub-sectors for ${sectorName}:`, err);
+    subSectorsMap.value[sectorName] = [];
+  } finally {
+    subSectorsLoading.value[sectorName] = false;
+  }
+}
+
+function toggleSectorExpansion(sectorName: string) {
+  if (expandedSectors.value.has(sectorName)) {
+    expandedSectors.value.delete(sectorName);
+  } else {
+    expandedSectors.value.add(sectorName);
+    // Load sub-sectors if not already loaded
+    if (!subSectorsMap.value[sectorName]) {
+      loadSubSectors(sectorName);
+    }
+  }
+}
+
+function hasSubSectors(sectorName: string): boolean {
+  return (subSectorsMap.value[sectorName]?.length ?? 0) > 0;
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'APPLIED': return 'green-7';
+    case 'PROSPECTIVE': return 'blue-7';
+    case 'REJECTED': return 'grey-6';
+    default: return 'grey-5';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -326,6 +396,65 @@ async function addSuperSector() {
   }
 }
 
+// LLM Scoring
+async function loadScoringProgress() {
+  if (!selectedSector.value) return;
+  scoringLoading.value = true;
+  scoringError.value = null;
+  try {
+    scoringProgress.value = await scoringTemplatesApi.getSectorProgress(selectedSector.value.name);
+  } catch (err) {
+    scoringError.value = err instanceof Error ? err.message : 'Failed to load scoring progress';
+  } finally {
+    scoringLoading.value = false;
+  }
+}
+
+async function startScoring() {
+  if (!selectedSector.value) return;
+  startScoringLoading.value = true;
+  scoringError.value = null;
+  try {
+    const result = await scoringTemplatesApi.scoreSector(selectedSector.value.name, {
+      useClaims: scoringOptions.value.useClaims,
+      rescore: scoringOptions.value.rescore,
+      topN: scoringOptions.value.topN || undefined,
+    });
+    // Reload progress after starting
+    await loadScoringProgress();
+  } catch (err) {
+    scoringError.value = err instanceof Error ? err.message : 'Failed to start scoring';
+  } finally {
+    startScoringLoading.value = false;
+  }
+}
+
+async function previewTemplate() {
+  if (!selectedSector.value || !templatePreviewPatentId.value) return;
+  templatePreviewLoading.value = true;
+  templatePreviewError.value = null;
+  templatePreviewResult.value = null;
+  try {
+    const result = await scoringTemplatesApi.previewPrompt({
+      patentId: templatePreviewPatentId.value.trim(),
+      sectorName: selectedSector.value.name,
+      includeClaims: templatePreviewIncludeClaims.value,
+    });
+    templatePreviewResult.value = {
+      patentId: result.patentId,
+      patentTitle: result.patentTitle,
+      renderedPrompt: result.renderedPrompt,
+      estimatedTokens: result.estimatedTokens,
+      questionCount: result.questionCount || 0,
+      inheritanceChain: result.inheritanceChain || [],
+    };
+  } catch (err) {
+    templatePreviewError.value = err instanceof Error ? err.message : 'Failed to preview template';
+  } finally {
+    templatePreviewLoading.value = false;
+  }
+}
+
 // Helpers
 function ruleTypeLabel(type: string): string {
   return ruleTypeOptions.find(o => o.value === type)?.label || type;
@@ -351,12 +480,58 @@ function damagesLabel(rating: number | null | undefined): string {
   }
 }
 
+function getSuperSectorIcon(name: string): string {
+  const icons: Record<string, string> = {
+    VIDEO_STREAMING: 'videocam',
+    AI_ML: 'psychology',
+    IMAGING: 'camera',
+    NETWORKING: 'lan',
+    COMPUTING: 'computer',
+    STORAGE: 'storage',
+    WIRELESS: 'wifi',
+    MEDIA: 'perm_media',
+    SEMICONDUCTOR: 'memory',
+    INTERFACE: 'settings_input_component',
+    SECURITY: 'security',
+  };
+  return icons[name] || 'layers';
+}
+
+function getSectorIcon(name: string): string {
+  // Map specific sectors to meaningful icons
+  if (name.includes('video')) return 'movie';
+  if (name.includes('codec')) return 'theaters';
+  if (name.includes('network')) return 'hub';
+  if (name.includes('wireless') || name.includes('antenna')) return 'cell_tower';
+  if (name.includes('security') || name.includes('auth') || name.includes('crypto')) return 'lock';
+  if (name.includes('memory') || name.includes('storage')) return 'sd_storage';
+  if (name.includes('power')) return 'bolt';
+  if (name.includes('audio') || name.includes('acoustic')) return 'graphic_eq';
+  if (name.includes('image') || name.includes('camera') || name.includes('optic')) return 'image';
+  if (name.includes('ai') || name.includes('ml')) return 'model_training';
+  if (name.includes('compute') || name.includes('runtime')) return 'dns';
+  return 'grain';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
 
 onMounted(() => {
   loadTree();
+});
+
+// Load scoring progress when switching to LLM Scoring tab
+watch(activeTab, (newTab) => {
+  if (newTab === 'llm-scoring' && selectedSector.value && !scoringProgress.value) {
+    loadScoringProgress();
+  }
+});
+
+// Reset scoring progress when sector changes
+watch(selectedSectorId, () => {
+  scoringProgress.value = null;
+  scoringError.value = null;
 });
 </script>
 
@@ -393,55 +568,105 @@ onMounted(() => {
     </q-banner>
 
     <!-- Main Layout: Tree + Detail -->
-    <div class="row q-col-gutter-md" style="min-height: 600px">
-      <!-- Left: Tree Navigation -->
+    <div class="row q-col-gutter-md">
+      <!-- Left: Tree Navigation (fixed height with scroll) -->
       <div class="col-12 col-md-3">
-        <q-card flat bordered>
+        <q-card flat bordered class="sector-tree-card">
           <q-card-section class="q-pb-none">
-            <div class="text-subtitle2">Super-Sectors</div>
+            <div class="text-subtitle2">Portfolio Hierarchy</div>
           </q-card-section>
 
-          <q-card-section>
+          <q-card-section class="sector-tree-scroll">
             <q-inner-loading :showing="treeLoading" />
 
-            <q-list v-if="!treeLoading" dense separator>
+            <q-list v-if="!treeLoading" dense>
               <template v-for="ss in superSectors" :key="ss.id">
                 <q-expansion-item
                   :label="ss.displayName"
                   :caption="`${ss.sectors.length} sectors`"
-                  icon="folder"
+                  :icon="getSuperSectorIcon(ss.name)"
                   default-opened
                   dense
-                  header-class="text-weight-medium"
+                  header-class="text-weight-medium bg-grey-1"
                 >
-                  <q-item
-                    v-for="sector in ss.sectors"
-                    :key="sector.id"
-                    clickable
-                    v-ripple
-                    :active="selectedSectorId === sector.id"
-                    active-class="bg-blue-1"
-                    class="q-pl-lg"
-                    @click="onNodeSelect(sector.id)"
-                  >
-                    <q-item-section avatar>
-                      <q-icon name="label" size="xs" />
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>{{ sector.displayName }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-badge
-                        :label="(sector._count?.rules ?? 0) + ' rules'"
-                        :color="(sector._count?.rules ?? 0) > 0 ? 'primary' : 'grey-4'"
-                        :text-color="(sector._count?.rules ?? 0) > 0 ? 'white' : 'grey-7'"
-                      >
-                        <q-tooltip v-if="sector.patentCount > 0">
-                          {{ sector.patentCount }} patents
-                        </q-tooltip>
-                      </q-badge>
-                    </q-item-section>
-                  </q-item>
+                  <template v-for="sector in ss.sectors" :key="sector.id">
+                    <!-- Sector item with expansion for sub-sectors -->
+                    <q-item
+                      clickable
+                      v-ripple
+                      :active="selectedSectorId === sector.id"
+                      active-class="bg-primary text-white"
+                      class="q-pl-lg"
+                      @click="onNodeSelect(sector.id)"
+                    >
+                      <q-item-section avatar>
+                        <q-icon :name="getSectorIcon(sector.name)" size="xs" :color="selectedSectorId === sector.id ? 'white' : 'grey-7'" />
+                      </q-item-section>
+                      <q-item-section>
+                        <q-item-label :class="{ 'text-white': selectedSectorId === sector.id }">
+                          {{ sector.displayName }}
+                        </q-item-label>
+                        <q-item-label caption :class="{ 'text-blue-2': selectedSectorId === sector.id }">
+                          {{ sector.patentCount?.toLocaleString() || 0 }} patents
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side>
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          size="xs"
+                          :icon="expandedSectors.has(sector.name) ? 'expand_less' : 'expand_more'"
+                          :loading="subSectorsLoading[sector.name]"
+                          @click.stop="toggleSectorExpansion(sector.name)"
+                        >
+                          <q-tooltip>{{ expandedSectors.has(sector.name) ? 'Hide' : 'Show' }} sub-sectors</q-tooltip>
+                        </q-btn>
+                      </q-item-section>
+                    </q-item>
+
+                    <!-- Sub-sectors (expandable) -->
+                    <q-slide-transition>
+                      <div v-if="expandedSectors.has(sector.name)">
+                        <q-inner-loading :showing="subSectorsLoading[sector.name]" size="xs" />
+                        <template v-if="subSectorsMap[sector.name]?.length">
+                          <q-item
+                            v-for="subSector in subSectorsMap[sector.name]"
+                            :key="subSector.id"
+                            dense
+                            class="q-pl-xl sub-sector-item"
+                          >
+                            <q-item-section avatar>
+                              <q-icon name="subdirectory_arrow_right" size="xs" color="grey-5" />
+                            </q-item-section>
+                            <q-item-section>
+                              <q-item-label class="text-caption">
+                                {{ subSector.displayName }}
+                              </q-item-label>
+                              <q-item-label caption>
+                                {{ subSector.patentCount?.toLocaleString() || 0 }} patents
+                              </q-item-label>
+                            </q-item-section>
+                            <q-item-section side>
+                              <q-badge
+                                :color="getStatusColor(subSector.status)"
+                                :label="subSector.status"
+                                dense
+                                class="text-caption"
+                              />
+                            </q-item-section>
+                          </q-item>
+                        </template>
+                        <q-item v-else-if="!subSectorsLoading[sector.name]" dense class="q-pl-xl">
+                          <q-item-section>
+                            <q-item-label caption class="text-grey-6">
+                              No sub-sectors defined
+                            </q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </div>
+                    </q-slide-transition>
+                  </template>
                 </q-expansion-item>
               </template>
             </q-list>
@@ -504,6 +729,7 @@ onMounted(() => {
             <q-tab name="overview" label="Overview" icon="info" />
             <q-tab name="rules" label="Rules" icon="rule" :badge="selectedSector.rules?.length" />
             <q-tab name="patents" label="Patents" icon="description" />
+            <q-tab name="llm-scoring" label="LLM Scoring" icon="psychology" />
           </q-tabs>
 
           <q-separator />
@@ -716,6 +942,198 @@ onMounted(() => {
                   @click="recalculateCount"
                 />
               </div>
+            </q-tab-panel>
+
+            <!-- LLM Scoring Tab -->
+            <q-tab-panel name="llm-scoring">
+              <q-inner-loading :showing="scoringLoading" />
+
+              <!-- Scoring Progress Card -->
+              <q-card flat bordered class="q-mb-md">
+                <q-card-section>
+                  <div class="text-subtitle2">Scoring Progress</div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section v-if="scoringProgress">
+                  <div class="row q-col-gutter-md">
+                    <div class="col-6 col-sm-2">
+                      <div class="text-caption text-grey-7">Total Patents</div>
+                      <div class="text-h6">{{ scoringProgress.total }}</div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                      <div class="text-caption text-grey-7">Scored</div>
+                      <div class="text-h6 text-positive">{{ scoringProgress.scored }}</div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                      <div class="text-caption text-grey-7">With Claims</div>
+                      <div class="text-h6 text-primary">{{ scoringProgress.withClaims }}</div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                      <div class="text-caption text-grey-7">Remaining</div>
+                      <div class="text-h6 text-grey-7">{{ scoringProgress.remaining }}</div>
+                    </div>
+                    <div class="col-6 col-sm-2">
+                      <div class="text-caption text-grey-7">Avg Score</div>
+                      <div class="text-h6 text-secondary">{{ scoringProgress.avgScore?.toFixed(1) || '-' }}</div>
+                    </div>
+                  </div>
+
+                  <div class="q-mt-md">
+                    <q-linear-progress
+                      :value="scoringProgress.percentComplete / 100"
+                      size="lg"
+                      color="primary"
+                      track-color="grey-3"
+                      rounded
+                    >
+                      <div class="absolute-full flex flex-center">
+                        <span class="text-white text-caption text-weight-bold">
+                          {{ scoringProgress.percentComplete }}%
+                        </span>
+                      </div>
+                    </q-linear-progress>
+                  </div>
+                </q-card-section>
+                <q-card-section v-else class="text-grey-6 text-center">
+                  <q-btn flat @click="loadScoringProgress">Load Progress</q-btn>
+                </q-card-section>
+              </q-card>
+
+              <!-- Scoring Actions -->
+              <q-card flat bordered>
+                <q-card-section>
+                  <div class="text-subtitle2">Start Scoring Job</div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section>
+                  <div class="row q-col-gutter-md items-center">
+                    <div class="col-12 col-sm-6">
+                      <q-toggle v-model="scoringOptions.useClaims" label="Include Claims" />
+                      <q-toggle v-model="scoringOptions.rescore" label="Rescore Already Scored" />
+                    </div>
+                    <div class="col-12 col-sm-6">
+                      <q-select
+                        v-model="scoringOptions.topN"
+                        :options="[25, 50, 100, 250, 500, 1000, 0]"
+                        label="TopN Limit"
+                        outlined
+                        dense
+                        hint="0 = score all patents"
+                        :option-label="(v: number) => v === 0 ? 'All' : v.toString()"
+                      />
+                    </div>
+                  </div>
+
+                  <q-banner v-if="scoringError" class="bg-negative text-white q-mt-md">
+                    {{ scoringError }}
+                  </q-banner>
+                </q-card-section>
+                <q-card-actions>
+                  <q-btn
+                    color="primary"
+                    icon="play_arrow"
+                    label="Start Scoring"
+                    :loading="startScoringLoading"
+                    @click="startScoring"
+                  />
+                  <q-btn
+                    flat
+                    icon="refresh"
+                    label="Refresh Progress"
+                    @click="loadScoringProgress"
+                  />
+                </q-card-actions>
+              </q-card>
+
+              <!-- Template Preview -->
+              <q-card flat bordered class="q-mt-md">
+                <q-card-section>
+                  <div class="text-subtitle2">Template Preview</div>
+                  <div class="text-caption text-grey-7">
+                    Preview how the scoring prompt will look for a specific patent
+                  </div>
+                </q-card-section>
+                <q-separator />
+                <q-card-section>
+                  <div class="row q-col-gutter-md items-end">
+                    <div class="col-12 col-sm-6">
+                      <q-input
+                        v-model="templatePreviewPatentId"
+                        label="Patent ID"
+                        outlined
+                        dense
+                        placeholder="e.g., 10000000"
+                        hint="Enter a patent ID from this sector"
+                      />
+                    </div>
+                    <div class="col-12 col-sm-3">
+                      <q-toggle v-model="templatePreviewIncludeClaims" label="Include Claims" />
+                    </div>
+                    <div class="col-12 col-sm-3">
+                      <q-btn
+                        color="secondary"
+                        icon="visibility"
+                        label="Preview"
+                        :loading="templatePreviewLoading"
+                        :disable="!templatePreviewPatentId"
+                        @click="previewTemplate"
+                      />
+                    </div>
+                  </div>
+
+                  <q-banner v-if="templatePreviewError" class="bg-negative text-white q-mt-md" rounded>
+                    {{ templatePreviewError }}
+                  </q-banner>
+                </q-card-section>
+
+                <!-- Preview Result -->
+                <template v-if="templatePreviewResult">
+                  <q-separator />
+                  <q-card-section>
+                    <div class="row q-col-gutter-md q-mb-md">
+                      <div class="col-auto">
+                        <q-chip dense color="primary" text-color="white">
+                          {{ templatePreviewResult.patentId }}
+                        </q-chip>
+                      </div>
+                      <div class="col">
+                        <div class="text-weight-medium">{{ templatePreviewResult.patentTitle }}</div>
+                      </div>
+                    </div>
+
+                    <div class="row q-col-gutter-md q-mb-md">
+                      <div class="col-auto">
+                        <q-chip dense outline>
+                          {{ templatePreviewResult.questionCount }} questions
+                        </q-chip>
+                      </div>
+                      <div class="col-auto">
+                        <q-chip dense outline>
+                          ~{{ templatePreviewResult.estimatedTokens?.toLocaleString() }} tokens
+                        </q-chip>
+                      </div>
+                      <div class="col-auto" v-if="templatePreviewResult.inheritanceChain?.length">
+                        <span class="text-caption text-grey-7">
+                          Template: {{ templatePreviewResult.inheritanceChain.join(' → ') }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <q-expansion-item
+                      label="Rendered Prompt"
+                      icon="code"
+                      header-class="bg-grey-2"
+                      dense
+                    >
+                      <q-card>
+                        <q-card-section>
+                          <pre class="prompt-preview">{{ templatePreviewResult.renderedPrompt }}</pre>
+                        </q-card-section>
+                      </q-card>
+                    </q-expansion-item>
+                  </q-card-section>
+                </template>
+              </q-card>
             </q-tab-panel>
           </q-tab-panels>
         </q-card>
@@ -957,5 +1375,60 @@ code {
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 0.85em;
+}
+
+.sector-tree-card {
+  position: sticky;
+  top: 60px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+}
+
+.sector-tree-scroll {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 260px);
+}
+
+.sector-tree-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sector-tree-scroll::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.sector-tree-scroll::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.sector-tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+.prompt-preview {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.sub-sector-item {
+  background-color: #fafafa;
+  border-left: 2px solid #e0e0e0;
+  margin-left: 24px;
+  min-height: 36px;
+}
+
+.sub-sector-item:hover {
+  background-color: #f0f0f0;
 }
 </style>

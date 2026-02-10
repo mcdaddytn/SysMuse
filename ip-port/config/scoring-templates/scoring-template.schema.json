@@ -54,6 +54,15 @@
       "minimum": 1,
       "description": "Version number for tracking template changes"
     },
+    "scoringGuidance": {
+      "type": "array",
+      "description": "General scoring instructions inherited and merged from parent templates. Applied to all questions.",
+      "items": { "type": "string" }
+    },
+    "contextDescription": {
+      "type": "string",
+      "description": "Context about this technology area to help LLM understand the domain. Inherited and concatenated."
+    },
     "questions": {
       "type": "array",
       "description": "Scoring questions specific to this template (merged with inherited)",

@@ -111,7 +111,7 @@ onMounted(async () => {
 
           <div class="text-subtitle2 q-mb-sm">Formula</div>
           <code class="text-caption">
-            base_score = (citation + time + velocity) × sector
+            base_score = (citation + time + velocity) × sector × expired
           </code>
 
           <q-separator class="q-my-md" />
@@ -129,7 +129,7 @@ onMounted(async () => {
               <q-icon name="schedule" color="secondary" class="q-mr-sm" />
               <div>
                 <span class="text-caption text-weight-medium">Time Score</span>
-                <div class="text-caption text-grey-7">remaining_years / 20 × 25 (expired get penalty, not zero)</div>
+                <div class="text-caption text-grey-7">remaining_years / 20 × 25</div>
               </div>
             </div>
             <div class="row items-center">
@@ -144,6 +144,13 @@ onMounted(async () => {
               <div>
                 <span class="text-caption text-weight-medium">Sector Multiplier</span>
                 <div class="text-caption text-grey-7">0.8× (Low) to 1.5× (Very High damages)</div>
+              </div>
+            </div>
+            <div class="row items-center">
+              <q-icon name="timer_off" color="negative" class="q-mr-sm" />
+              <div>
+                <span class="text-caption text-weight-medium">Expired Multiplier</span>
+                <div class="text-caption text-grey-7">0.1× for expired, 1.0× for active</div>
               </div>
             </div>
           </div>

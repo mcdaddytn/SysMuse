@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "image-processing",
+  "name": "Image Processing & Enhancement",
+  "description": "Sector template for image processing patents including enhancement, filtering, computational photography, and ISP algorithms.",
+  "level": "sector",
+  "sectorName": "image-processing",
+  "superSectorName": "IMAGING",
+  "inheritsFrom": "imaging",
+  "version": 1,
+  "contextDescription": "Image processing patents cover algorithms and systems for manipulating captured images. Key areas include denoising, deblurring, super-resolution, tone mapping, color correction, and computational photography. These techniques are implemented in ISPs (Image Signal Processors), camera apps, and cloud photo services. Patent value often relates to implementation in mobile ISPs (Qualcomm, Apple, MediaTek) or software platforms (Google Photos, Adobe).",
+  "scoringGuidance": [
+    "ISP algorithm patents read on every smartphone through Qualcomm, Apple, MediaTek chip implementations.",
+    "Computational photography (multi-frame fusion, night mode) is a key differentiator in flagship phones.",
+    "AI/ML-based image enhancement is rapidly growing and may overlap with AI_ML super-sector.",
+    "Consider both real-time (on-device ISP) and offline (cloud processing) implementations.",
+    "Super-resolution and upscaling patents have applications in displays, streaming, and gaming."
+  ],
+  "questions": [
+    {
+      "fieldName": "processing_stage",
+      "displayName": "Processing Stage",
+      "question": "At what stage of the imaging pipeline does this processing occur? Score: 1-3 for post-capture/cloud only, 4-6 for camera app processing, 7-10 for ISP-level real-time processing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "ISP-level processing reaches more devices. Identify where in the pipeline this operates."
+    },
+    {
+      "fieldName": "computational_photography",
+      "displayName": "Computational Photography",
+      "question": "Is this a computational photography technique (multi-frame, HDR+, night mode, portrait mode)? These are flagship camera differentiators.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Computational photography is the main differentiator in smartphone cameras. Assess relevance."
+    },
+    {
+      "fieldName": "ml_based_processing",
+      "displayName": "ML-Based Processing",
+      "question": "Does this patent use machine learning for image processing? ML is increasingly central to image enhancement.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "ML-based processing is the future of image enhancement. Assess the ML component."
+    },
+    {
+      "fieldName": "denoising_enhancement",
+      "displayName": "Denoising/Enhancement",
+      "question": "Does this patent address fundamental image quality issues (noise, blur, resolution, color)? These are universal problems.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess the specific quality improvement and its applicability across devices."
+    }
+  ]
+}

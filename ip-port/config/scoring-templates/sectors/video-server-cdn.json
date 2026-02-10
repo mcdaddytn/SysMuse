@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-server-cdn",
+  "name": "Video Server & CDN",
+  "description": "Sector template for video streaming server infrastructure, CDN technology, and content delivery optimization patents.",
+  "level": "sector",
+  "sectorName": "video-server-cdn",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Video server and CDN patents cover the infrastructure for delivering streaming content at scale. Key areas include origin servers, edge caching, transcoding/packaging, manifest generation (HLS, DASH), multi-CDN orchestration, and quality-based routing. Major targets include cloud providers (AWS, Azure, GCP), CDN operators (Akamai, Cloudflare, Fastly), and streaming platforms (Netflix, Disney+, YouTube).",
+  "scoringGuidance": [
+    "Edge computing and distributed transcoding patents are high value as streaming shifts to the edge.",
+    "Multi-CDN orchestration and failover patents target large streaming operations with redundancy requirements.",
+    "Real-time packaging (just-in-time transcoding) patents are valuable for live streaming use cases.",
+    "Patents covering manifest manipulation for ABR optimization have broad applicability.",
+    "Look for patents that reduce origin load or improve cache hit ratios - these have direct cost implications."
+  ],
+  "questions": [
+    {
+      "fieldName": "infrastructure_layer",
+      "displayName": "Infrastructure Layer",
+      "question": "What layer of streaming infrastructure does this patent address? Score 1-3 for origin-only, 4-6 for edge/CDN, 7-10 for end-to-end or multi-layer orchestration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify whether the patent covers origin server, edge cache, mid-tier, or orchestration across layers."
+    },
+    {
+      "fieldName": "transcoding_capability",
+      "displayName": "Transcoding & Packaging",
+      "question": "Does this patent address video transcoding or packaging? Score 1-3 if not applicable, 4-6 for basic transcoding, 7-10 for advanced (just-in-time, per-title encoding, AI-based).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess transcoding sophistication: static vs dynamic, quality optimization, codec flexibility."
+    },
+    {
+      "fieldName": "abr_manifest",
+      "displayName": "ABR & Manifest Generation",
+      "question": "Does this patent relate to adaptive bitrate streaming or manifest generation? Score 1-3 if not applicable, 4-6 for basic HLS/DASH, 7-10 for advanced ABR optimization (CMAF, low-latency, LL-HLS).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify ABR protocols (HLS, DASH, CMAF) and manifest optimization techniques."
+    },
+    {
+      "fieldName": "cache_optimization",
+      "displayName": "Cache & Delivery Optimization",
+      "question": "Does this patent optimize caching or content delivery? Score 1-3 if not applicable, 4-6 for basic caching, 7-10 for advanced (predictive caching, cache warming, popularity-based).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess cache efficiency improvements and their impact on hit ratio or origin offload."
+    },
+    {
+      "fieldName": "multi_cdn_orchestration",
+      "displayName": "Multi-CDN Orchestration",
+      "question": "Does this patent address multi-CDN strategies or orchestration? Score 1-3 if single-CDN only, 4-6 for basic multi-CDN, 7-10 for intelligent orchestration (quality-based routing, cost optimization).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Large streaming platforms use multiple CDNs. Assess multi-CDN decision-making and failover capabilities."
+    }
+  ]
+}

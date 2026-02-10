@@ -1,0 +1,43 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "imaging",
+  "name": "Imaging Scoring",
+  "description": "Scoring template for Imaging super-sector patents. Includes image processing, sensor technology, and display metrics.",
+  "level": "super_sector",
+  "superSectorName": "IMAGING",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "image_processing",
+      "displayName": "Image Processing",
+      "question": "How fundamental is this patent to image processing algorithms? Consider enhancement, filtering, segmentation, feature extraction, and computational photography.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the image processing techniques and their applications."
+    },
+    {
+      "fieldName": "sensor_technology",
+      "displayName": "Sensor Technology",
+      "question": "How relevant is this patent to imaging sensor technology? Consider CMOS/CCD sensors, HDR, low-light performance, and novel sensing approaches.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify sensor technologies and their advantages."
+    },
+    {
+      "fieldName": "display_rendering",
+      "displayName": "Display & Rendering",
+      "question": "How does this patent improve display technology or image rendering? Consider color accuracy, HDR display, refresh rates, and visual quality.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe display or rendering improvements and their visual impact."
+    }
+  ]
+}

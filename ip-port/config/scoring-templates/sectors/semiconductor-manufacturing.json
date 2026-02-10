@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "semiconductor-manufacturing",
+  "name": "Semiconductor Manufacturing",
+  "description": "Sector template for semiconductor manufacturing patents including wafer processing, CMP, and fab processes.",
+  "level": "sector",
+  "sectorName": "semiconductor-manufacturing",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Semiconductor manufacturing patents cover fab processes and equipment. Key areas include wafer processing, CMP (Chemical Mechanical Planarization), deposition, etching, and metrology. High-value targets include foundries (TSMC, Samsung, Intel), equipment vendors (ASML, Applied Materials, Lam Research, KLA), and materials suppliers.",
+  "scoringGuidance": [
+    "Process patents may be essential for specific technology nodes.",
+    "Equipment patents target ASML, Applied Materials, Lam Research, KLA.",
+    "CMP patents are essential for planarization in advanced nodes.",
+    "Metrology patents enable process control and yield improvement.",
+    "Consider both equipment and process integration patents."
+  ],
+  "questions": [
+    {
+      "fieldName": "process_step",
+      "displayName": "Process Step",
+      "question": "What manufacturing process step does this patent cover? Score based on criticality: 1-3 for auxiliary, 4-6 for standard steps, 7-10 for critical bottleneck steps.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the manufacturing step and its criticality."
+    },
+    {
+      "fieldName": "equipment_vendor",
+      "displayName": "Equipment Vendor Target",
+      "question": "Does this patent target equipment vendors (ASML, Applied Materials, Lam, KLA)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific equipment vendors that would implement this."
+    },
+    {
+      "fieldName": "foundry_relevance",
+      "displayName": "Foundry Relevance",
+      "question": "Is this patent relevant to foundry processes (TSMC, Samsung Foundry, Intel Foundry)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess foundry applicability and process node relevance."
+    }
+  ]
+}

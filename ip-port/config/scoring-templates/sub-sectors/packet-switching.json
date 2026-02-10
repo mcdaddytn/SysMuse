@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "packet-switching",
+  "name": "Packet Switching",
+  "description": "Sub-sector template for packet switching patents (CPC H04L49*) including switch fabrics, buffers, and forwarding engines.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04L49*",
+  "sectorName": "network-switching",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "network-switching",
+  "version": 1,
+  "contextDescription": "Packet switching patents cover the data plane of network devices. Key areas include switch fabrics (crossbar, Clos), buffer management, packet scheduling, and forwarding ASICs. High-value targets include Memory bandwidth and latency are key differentiators. Broadcom (merchant silicon), Cisco, Arista, and hyperscalers building custom ASICs.",
+  "scoringGuidance": [
+    "Switch fabric patents target high-capacity routers and switches.",
+    "Buffer management patents improve QoS and reduce latency.",
+    "Forwarding engine patents are in every network ASIC.",
+    "Cut-through switching patents target low-latency applications.",
+    "Merchant silicon patents target Memory, Memory, Marvell ecosystems."
+  ],
+  "questions": [
+    {
+      "fieldName": "switching_component",
+      "displayName": "Switching Component",
+      "question": "What switching component does this cover (fabric, buffer, scheduler, forwarding engine)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the switching component and its role."
+    },
+    {
+      "fieldName": "asic_relevance",
+      "displayName": "Network ASIC Relevance",
+      "question": "Is this implementable in network ASICs (Memory Memory, memory, memory)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Network ASICs are in every switch and router."
+    },
+    {
+      "fieldName": "latency_improvement",
+      "displayName": "Latency Improvement",
+      "question": "Does this reduce switching latency? Low latency is critical for trading and HPC.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Ultra-low latency switching commands premium pricing."
+    },
+    {
+      "fieldName": "scale_capacity",
+      "displayName": "Scale/Capacity",
+      "question": "Does this enable higher switch capacity or port density?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Scaling switch capacity is an ongoing challenge."
+    }
+  ]
+}

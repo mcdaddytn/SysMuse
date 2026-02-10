@@ -1362,7 +1362,36 @@ export const sectorApi = {
     const { data } = await api.put(`/sectors/super-sectors/${id}`, updates);
     return data;
   },
+
+  // Sub-Sectors
+  async getSubSectors(sectorName: string): Promise<SubSector[]> {
+    const { data } = await api.get(`/sectors/sub-sectors/${sectorName}`);
+    return data;
+  },
 };
+
+// Sub-Sector type
+export interface SubSector {
+  id: string;
+  sectorId: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  groupingType: 'CPC_SUBGROUP' | 'DATE_RANGE' | 'MANUAL';
+  cpcCode: string | null;
+  cpcPrefix: string | null;
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  status: 'PROSPECTIVE' | 'APPLIED' | 'REJECTED';
+  patentCount: number;
+  needsReview: boolean;
+  reviewReason: string | null;
+  sector?: {
+    id: string;
+    name: string;
+    displayName: string;
+  };
+}
 
 // Sector Enrichment types
 export interface SectorEnrichmentData {
@@ -1706,6 +1735,359 @@ export const cpcApi = {
    */
   async clearCache(): Promise<{ success: boolean; message: string }> {
     const { data } = await api.post('/cpc/clear-cache');
+    return data;
+  },
+};
+
+// =============================================================================
+// Scoring Templates Types
+// =============================================================================
+
+export interface ScoringQuestion {
+  fieldName: string;
+  displayName: string;
+  question: string;
+  answerType: 'numeric';
+  scale: { min: number; max: number };
+  weight: number;
+  requiresReasoning: boolean;
+  reasoningPrompt?: string;
+  sourceLevel: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
+}
+
+export interface ScoringTemplateConfig {
+  id: string;
+  name: string;
+  description: string;
+  level: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
+  questions: ScoringQuestion[];
+  scoringGuidance?: string[];
+  contextDescription?: string;
+}
+
+export interface MergedTemplate {
+  level: 'super_sector' | 'sector' | 'sub_sector';
+  inheritanceChain: string[];
+  questionCount: number;
+  totalWeight: number;
+  questions: ScoringQuestion[];
+  availableFields: string[];
+}
+
+export interface TemplatePreviewContext {
+  patentId: string;
+  patentTitle: string;
+  context: {
+    title: string;
+    abstract: string;
+    claims?: string;
+    cpcCodes: string[];
+  };
+  renderedPrompt: string;
+  estimatedTokens: number;
+}
+
+export interface TemplatePreviewResult extends TemplatePreviewContext {
+  llmResponse: {
+    scores: Record<string, number>;
+    reasoning: Record<string, string>;
+  };
+  actualTokens: { input: number; output: number };
+}
+
+export interface SectorScoringProgress {
+  level: 'super_sector' | 'sector' | 'sub_sector';
+  name: string;
+  displayName?: string;
+  superSector?: string;
+  total: number;
+  scored: number;
+  remaining: number;
+  percentComplete: number;
+  withClaims: number;
+  avgScore?: number | null;
+  lastScoredAt?: string;
+}
+
+export interface ScoredPatentMetric {
+  fieldName: string;
+  displayName: string;
+  score: number;
+  reasoning: string;
+  confidence?: number;
+}
+
+export interface ScoredPatent {
+  patentId: string;
+  patentTitle: string;
+  patentDate?: string;
+  assignee?: string;
+  compositeScore: number;
+  withClaims: boolean;
+  executedAt?: string;
+  templateVersion?: number;
+  metrics: ScoredPatentMetric[];
+}
+
+export interface SectorScoresResponse {
+  sectorName: string;
+  sectorDisplayName: string;
+  superSector: string;
+  total: number;
+  limit: number;
+  offset: number;
+  metricNames: string[];
+  results: ScoredPatent[];
+}
+
+export interface SuperSectorProgress {
+  name: string;
+  displayName: string;
+  sectorCount: number;
+  totals: {
+    total: number;
+    scored: number;
+    withClaims: number;
+    remaining: number;
+    percentComplete: number;
+    avgScore: number | null;
+  };
+  sectors: Array<{
+    sectorId: string;
+    sectorName: string;
+    displayName: string;
+    total: number;
+    scored: number;
+    withClaims: number;
+    remaining: number;
+    percentComplete: number;
+    avgScore: number | null;
+  }>;
+}
+
+export interface DynamicColumns {
+  baseColumns: string[];
+  scoreColumns: string[];
+  reasoningColumns: string[];
+  availableColumns: string[];
+  commonColumns: string[];
+}
+
+export interface ScoringConfigSummary {
+  portfolioDefault: ScoringTemplateConfig;
+  superSectors: Array<{ filename: string; template: ScoringTemplateConfig }>;
+  sectors: Array<{ filename: string; template: ScoringTemplateConfig }>;
+  subSectors: Array<{ filename: string; template: ScoringTemplateConfig }>;
+  summary: {
+    superSectorCount: number;
+    sectorCount: number;
+    subSectorCount: number;
+  };
+}
+
+export interface SubSectorInfo {
+  id: string;
+  name: string;
+  displayName: string;
+  cpcPatterns: string[];
+  patentCount: number;
+  scoredCount: number;
+}
+
+// Scoring Templates API
+export const scoringTemplatesApi = {
+  /**
+   * Get all scoring template configs
+   */
+  async getConfig(): Promise<ScoringConfigSummary> {
+    const { data } = await api.get('/scoring-templates/config');
+    return data;
+  },
+
+  /**
+   * Get merged template with inherited questions
+   */
+  async getMergedTemplate(superSectorName: string): Promise<MergedTemplate> {
+    const { data } = await api.get(`/scoring-templates/config/merged/${superSectorName}`);
+    return data;
+  },
+
+  /**
+   * Sync templates from JSON config to database
+   */
+  async syncTemplates(): Promise<{ message: string; synced: number }> {
+    const { data } = await api.post('/scoring-templates/sync');
+    return data;
+  },
+
+  /**
+   * Preview rendered prompt for a patent
+   */
+  async previewPrompt(params: {
+    patentId: string;
+    sectorName: string;
+    includeClaims?: boolean;
+  }): Promise<{
+    patentId: string;
+    patentTitle: string;
+    sector: string;
+    superSector: string;
+    questionCount: number;
+    inheritanceChain: string[];
+    estimatedTokens: number;
+    renderedPrompt: string;
+    questions: Array<{ fieldName: string; displayName: string; weight: number }>;
+  }> {
+    const { data } = await api.post('/scoring-templates/llm/preview-patent', params);
+    return data;
+  },
+
+  /**
+   * Get scoring progress for a sector
+   */
+  async getSectorProgress(sectorName: string): Promise<SectorScoringProgress> {
+    const { data } = await api.get(`/scoring-templates/llm/sector-progress/${sectorName}`);
+    return data;
+  },
+
+  /**
+   * Start scoring a sector
+   */
+  async scoreSector(
+    sectorName: string,
+    options?: { useClaims?: boolean; rescore?: boolean; minYear?: number; topN?: number }
+  ): Promise<{ message: string; total: number }> {
+    const params = new URLSearchParams();
+    if (options?.useClaims) params.append('useClaims', 'true');
+    if (options?.rescore) params.append('rescore', 'true');
+    if (options?.minYear) params.append('minYear', options.minYear.toString());
+    if (options?.topN) params.append('topN', options.topN.toString());
+    const { data } = await api.post(`/scoring-templates/llm/score-sector/${sectorName}?${params}`);
+    return data;
+  },
+
+  /**
+   * Get scores for a sub-sector
+   */
+  async getSubSectorScores(subSectorId: string): Promise<{
+    subSectorId: string;
+    stats: { count: number; avgScore: number; minScore: number; maxScore: number };
+    scores: Array<{
+      patentId: string;
+      compositeScore: number;
+      normalizedScore: number | null;
+      rank: number | null;
+      metrics: Record<string, { score: number; reasoning: string }>;
+    }>;
+  }> {
+    const { data } = await api.get(`/scoring-templates/scores/sub-sector/${subSectorId}`);
+    return data;
+  },
+
+  /**
+   * Get score for a specific patent
+   */
+  async getPatentScore(patentId: string): Promise<{
+    patentId: string;
+    templateId: string;
+    compositeScore: number;
+    normalizedScore: number | null;
+    metrics: Record<string, { score: number; reasoning: string; confidence?: number }>;
+    scoredAt: string;
+  } | null> {
+    try {
+      const { data } = await api.get(`/scoring-templates/scores/patent/${patentId}`);
+      return data;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * Normalize scores within a sector
+   */
+  async normalizeSector(sectorId: string): Promise<{ message: string; normalized: number }> {
+    const { data } = await api.post(`/scoring-templates/scores/normalize/sector/${sectorId}`);
+    return data;
+  },
+
+  /**
+   * Export scores for a super-sector
+   */
+  async exportScores(superSector: string): Promise<Blob> {
+    const response = await api.get(`/scoring-templates/export/${superSector}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
+   * Get scored patents for a sector with full metrics
+   */
+  async getSectorScores(sectorName: string, options?: {
+    limit?: number;
+    offset?: number;
+    sortBy?: string;
+    order?: 'asc' | 'desc';
+  }): Promise<SectorScoresResponse> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.offset) params.append('offset', options.offset.toString());
+    if (options?.sortBy) params.append('sortBy', options.sortBy);
+    if (options?.order) params.append('order', options.order);
+    const { data } = await api.get(`/scoring-templates/llm/sector-scores/${sectorName}?${params}`);
+    return data;
+  },
+
+  /**
+   * Get aggregated progress for a super-sector
+   */
+  async getSuperSectorProgress(superSectorName: string): Promise<SuperSectorProgress> {
+    const { data } = await api.get(`/scoring-templates/llm/super-sector-progress/${superSectorName}`);
+    return data;
+  },
+
+  /**
+   * Get claims analysis for a super-sector
+   */
+  async getClaimsAnalysis(superSector: string): Promise<{
+    superSector: string;
+    totalPatents: number;
+    withClaims: number;
+    withoutClaims: number;
+    sectors: Array<{
+      name: string;
+      total: number;
+      withClaims: number;
+      percentage: number;
+    }>;
+  }> {
+    const { data } = await api.get(`/scoring-templates/claims-analysis/${superSector}`);
+    return data;
+  },
+
+  /**
+   * Get claims stats for a patent
+   */
+  async getClaimsStats(patentId: string): Promise<{
+    patentId: string;
+    hasClaims: boolean;
+    claimCount?: number;
+    independentClaimCount?: number;
+    totalCharacters?: number;
+  }> {
+    const { data } = await api.get(`/scoring-templates/claims/stats/${patentId}`);
+    return data;
+  },
+
+  /**
+   * Preview claims for a patent
+   */
+  async previewClaims(patentId: string): Promise<{
+    patentId: string;
+    claims: Array<{ number: number; text: string; isIndependent: boolean }>;
+  }> {
+    const { data } = await api.get(`/scoring-templates/claims/preview/${patentId}`);
     return data;
   },
 };

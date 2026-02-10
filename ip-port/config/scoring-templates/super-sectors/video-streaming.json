@@ -1,0 +1,53 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-streaming",
+  "name": "Video Streaming Scoring",
+  "description": "Scoring template for Video Streaming super-sector patents. Includes streaming protocol relevance, codec efficiency, and CDN/delivery metrics.",
+  "level": "super_sector",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "portfolio-default",
+  "isDefault": true,
+  "version": 1,
+  "questions": [
+    {
+      "fieldName": "streaming_protocol",
+      "displayName": "Streaming Protocol Relevance",
+      "question": "How relevant is this patent to streaming protocols and standards (HLS, DASH, CMAF, WebRTC, RTMP, etc.)? Consider standard essentiality and widespread adoption potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant streaming protocols and standards, and explain how essential this patent might be to their implementation."
+    },
+    {
+      "fieldName": "codec_compression",
+      "displayName": "Codec & Compression",
+      "question": "How does this patent relate to video codecs and compression (H.264/AVC, H.265/HEVC, VP9, AV1, VVC)? Rate its compression efficiency improvements or codec relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify codec technologies involved and describe compression or quality improvements."
+    },
+    {
+      "fieldName": "delivery_scalability",
+      "displayName": "Delivery & Scalability",
+      "question": "How does this patent address video delivery challenges? Consider CDN optimization, adaptive bitrate, edge computing, caching, and large-scale distribution.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe delivery optimizations and scalability benefits."
+    },
+    {
+      "fieldName": "user_experience",
+      "displayName": "User Experience",
+      "question": "How does this patent improve the end-user streaming experience? Consider latency reduction, quality of experience (QoE), buffering prevention, and playback smoothness.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe user experience improvements and their measurable impact."
+    }
+  ]
+}

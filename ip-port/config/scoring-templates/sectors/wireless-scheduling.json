@@ -1,0 +1,70 @@
+{
+  "$schema": "../../scoring-template.schema.json",
+  "id": "wireless-scheduling",
+  "name": "Wireless Scheduling Scoring",
+  "description": "Scoring template for wireless scheduling patents covering resource allocation, MAC protocols, coexistence, and interference management.",
+  "level": "sector",
+  "sectorName": "wireless-scheduling",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "isDefault": true,
+  "version": 1,
+  "scoringGuidance": [
+    "This sector covers medium access control, resource scheduling, and interference/coexistence management.",
+    "Key differentiators: efficiency gains, latency reduction, fairness, and multi-RAT coexistence.",
+    "Look for innovations in OFDMA scheduling, unlicensed band coexistence (LTE-WiFi), and 5G NR scheduling."
+  ],
+  "contextDescription": "Wireless scheduling patents address how wireless resources (time, frequency, spatial) are allocated among users and services. This includes MAC layer protocols, resource block scheduling, coexistence between technologies (e.g., LTE-WiFi-Bluetooth), and interference coordination. These are often standards-adjacent with high SEP potential.",
+  "questions": [
+    {
+      "fieldName": "resource_dimension",
+      "displayName": "Resource Dimension",
+      "question": "Which resource dimension(s) does this scheduling innovation address? Consider: Time-domain (TDMA, slots), frequency-domain (FDMA, subcarriers, channels), spatial-domain (SDMA, beams), or code-domain (CDMA).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify resource dimensions. Score higher for multi-dimensional scheduling (8-10) vs single dimension (4-6)."
+    },
+    {
+      "fieldName": "spectrum_efficiency",
+      "displayName": "Spectrum Efficiency",
+      "question": "How does this scheduling approach improve spectrum utilization? Consider: Higher throughput per Hz, reduced overhead, better spatial reuse, or improved channel utilization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe efficiency gains. Quantify if possible (e.g., X% throughput improvement)."
+    },
+    {
+      "fieldName": "coexistence_strategy",
+      "displayName": "Coexistence Strategy",
+      "question": "Does this patent address coexistence between wireless technologies? Consider: LTE-WiFi coexistence (LAA, LTE-U), WiFi-Bluetooth coordination, or 5G NR unlicensed (NR-U).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify coexistence mechanisms. Score 1-2 if single-technology with no coexistence aspect."
+    },
+    {
+      "fieldName": "latency_optimization",
+      "displayName": "Latency Optimization",
+      "question": "Does this patent reduce wireless latency? Consider: Fast scheduling decisions, preemptive scheduling, mini-slots, or URLLC (Ultra-Reliable Low-Latency Communication) features.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe latency benefits. Score 8-10 for URLLC-class improvements, 5-7 for moderate gains, 1-2 if latency not addressed."
+    },
+    {
+      "fieldName": "fairness_qos",
+      "displayName": "Fairness & QoS",
+      "question": "Does this patent address fairness among users or QoS differentiation? Consider: Proportional fairness, priority scheduling, service differentiation, or resource guarantees.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe fairness or QoS mechanisms. Score 1-2 if not addressed."
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-crypto",
+  "name": "Network Cryptography",
+  "description": "Sector template for cryptographic patents including encryption algorithms, key exchange protocols, digital signatures, hash functions, and cryptographic protocol implementations.",
+  "level": "sector",
+  "sectorName": "network-crypto",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 1,
+  "contextDescription": "Network cryptography patents cover fundamental cryptographic primitives and protocols used to secure communications. Technologies include symmetric/asymmetric encryption, key exchange (DH, ECDH), digital signatures, hash functions, and cryptographic protocol design (TLS, SSH).",
+  "scoringGuidance": [
+    "Post-quantum cryptographic algorithms (lattice-based, hash-based signatures) are extremely high value.",
+    "Novel cryptographic primitives that improve security/performance trade-offs score highly.",
+    "Patents on side-channel resistant implementations have significant hardware relevance.",
+    "Standardization potential (NIST, IETF) dramatically increases licensing opportunity."
+  ],
+  "questions": [
+    {
+      "fieldName": "crypto_primitive",
+      "displayName": "Cryptographic Primitive Type",
+      "question": "What type of cryptographic primitive does this patent cover? Score 1-3 for application of existing crypto, 4-6 for optimization/implementation of standard crypto, 7-10 for novel cryptographic algorithm or protocol.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.25,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the cryptographic primitive: encryption, signature, hash, key exchange, or novel."
+    },
+    {
+      "fieldName": "security_strength",
+      "displayName": "Cryptographic Security Strength",
+      "question": "What is the cryptographic security strength? Score 1-3 for weak/outdated (DES, MD5), 4-6 for current standards (AES-128, SHA-256), 7-10 for future-proof (AES-256, post-quantum).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess security strength in bits and resistance to known attacks."
+    },
+    {
+      "fieldName": "implementation_security",
+      "displayName": "Implementation Security",
+      "question": "Does this patent address implementation security? Score 1-3 if not addressed, 4-6 for basic secure coding, 7-10 for side-channel resistance (timing, power, fault attacks).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe implementation security: side-channel resistance, constant-time operations."
+    },
+    {
+      "fieldName": "performance_efficiency",
+      "displayName": "Performance Efficiency",
+      "question": "How efficient is the cryptographic operation? Score 1-3 for computationally expensive, 4-6 for standard performance, 7-10 for highly optimized or hardware-accelerated.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess computational efficiency and hardware acceleration potential."
+    },
+    {
+      "fieldName": "standards_potential",
+      "displayName": "Standardization Potential",
+      "question": "Does this patent have standardization potential? Score 1-3 if proprietary only, 4-6 for compatible with standards, 7-10 for standards-essential or NIST/IETF submission candidate.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify standardization relevance: NIST, IETF, IEEE, ISO potential."
+    }
+  ]
+}

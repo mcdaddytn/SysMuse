@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "3d-stereo-depth",
+  "name": "3D & Depth Sensing",
+  "description": "Sector template for 3D imaging, stereoscopic vision, and depth sensing patents including structured light, ToF, and stereo vision.",
+  "level": "sector",
+  "sectorName": "3d-stereo-depth",
+  "superSectorName": "IMAGING",
+  "inheritsFrom": "imaging",
+  "version": 1,
+  "contextDescription": "3D and depth sensing patents cover technologies for spatial perception in devices. Key areas include time-of-flight (ToF) sensors, structured light projection, stereo vision algorithms, LiDAR, and depth map processing. Applications span smartphones (Face ID), automotive (ADAS/autonomous driving), robotics, and AR/VR. Patents in this space often relate to Apple's Face ID technology, automotive sensing, and industrial automation.",
+  "scoringGuidance": [
+    "ToF and structured light patents are heavily used in smartphone face unlock systems.",
+    "Automotive LiDAR and depth sensing is a rapidly growing market with significant licensing potential.",
+    "Consider both hardware (sensors, projectors) and algorithm (depth estimation, point cloud processing) patents.",
+    "Face ID/facial depth sensing patents may read on Apple, Samsung, and Android device implementations.",
+    "Robotics and industrial automation represent emerging high-value applications."
+  ],
+  "questions": [
+    {
+      "fieldName": "depth_sensing_method",
+      "displayName": "Depth Sensing Method",
+      "question": "What depth sensing method does this patent cover? Score based on market adoption: 1-3 for passive stereo only, 4-6 for single-sensor methods, 7-10 for ToF, structured light, or multi-modal approaches used in flagship devices.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the sensing method (ToF, structured light, stereo, LiDAR, etc.) and its industry adoption."
+    },
+    {
+      "fieldName": "automotive_applicability",
+      "displayName": "Automotive Applicability",
+      "question": "How applicable is this patent to automotive ADAS or autonomous driving systems? Consider LiDAR, depth sensing, object detection, and 3D scene understanding.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess automotive applications. ADAS and autonomous driving are high-damages targets."
+    },
+    {
+      "fieldName": "mobile_biometric",
+      "displayName": "Mobile Biometric Relevance",
+      "question": "Does this patent relate to mobile face unlock, facial recognition, or biometric depth sensing (Face ID-style technology)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Face unlock patents read on billions of smartphones. Assess relevance to Apple Face ID, Android face unlock."
+    },
+    {
+      "fieldName": "point_cloud_processing",
+      "displayName": "Point Cloud Processing",
+      "question": "Does this patent address 3D point cloud generation, processing, or analysis? Consider depth map refinement, 3D reconstruction, and spatial data processing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Point cloud processing is essential for AR, robotics, and autonomous systems."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-multiplexing",
+  "name": "Network Multiplexing",
+  "description": "Sector template for network multiplexing patents including TDM, WDM, and channel access.",
+  "level": "sector",
+  "sectorName": "network-multiplexing",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Network multiplexing patents cover channel sharing and bandwidth allocation. Key areas include TDMA/TDM, OFDM, WDM (optical), and resource scheduling. High-value targets include optical network vendors (Ciena, Infinera), wireless infrastructure (Nokia, Ericsson), and broadband access (DOCSIS). Optical multiplexing is critical for backbone capacity.",
+  "scoringGuidance": [
+    "WDM/DWDM patents target optical network vendors (Ciena, Infinera).",
+    "OFDM patents apply to WiFi, LTE, and 5G.",
+    "Resource scheduling patents target wireless base stations.",
+    "Coherent optical patents enable 400G+ transport.",
+    "PON multiplexing patents target FTTH deployments."
+  ],
+  "questions": [
+    {
+      "fieldName": "multiplexing_type",
+      "displayName": "Multiplexing Type",
+      "question": "What multiplexing technique does this cover (TDM, FDM, WDM, OFDM, CDMA)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the multiplexing technique and its applications."
+    },
+    {
+      "fieldName": "optical_relevance",
+      "displayName": "Optical Network Relevance",
+      "question": "Is this relevant to optical networking (WDM, coherent, PON)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Optical is critical for backbone and metro networks."
+    },
+    {
+      "fieldName": "wireless_relevance",
+      "displayName": "Wireless Relevance",
+      "question": "Is this relevant to wireless access (WiFi, cellular, satellite)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Wireless multiplexing is essential for spectrum efficiency."
+    }
+  ]
+}

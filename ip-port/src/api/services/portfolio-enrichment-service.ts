@@ -120,7 +120,10 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Calculate base score using multi-factor formula:
- * base_score = (citation_score + time_score + velocity_score) × sector_multiplier
+ * base_score = (citation_score + time_score + velocity_score) × sector_multiplier × expired_multiplier
+ *
+ * Expired patents get a 0.1x multiplier so they always rank below active patents,
+ * while maintaining fair relative ranking among themselves.
  */
 function calculateBaseScore(patent: {
   forward_citations?: number;
@@ -146,8 +149,12 @@ function calculateBaseScore(patent: {
   // Sector Multiplier: 0.8x to 1.5x
   const sectorMultiplier = getSectorMultiplier(patent.primary_sector);
 
+  // Expired Multiplier: 0.1x for expired patents, 1.0x for active
+  // Ensures expired patents always rank below active patents
+  const expiredMultiplier = remainingYears <= 0 ? 0.1 : 1.0;
+
   const rawScore = citationScore + timeScore + velocityScore;
-  return Math.round(rawScore * sectorMultiplier * 100) / 100;
+  return Math.round(rawScore * sectorMultiplier * expiredMultiplier * 100) / 100;
 }
 
 function loadCompetitorConfig(): {

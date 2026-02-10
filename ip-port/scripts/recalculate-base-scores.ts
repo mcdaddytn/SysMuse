@@ -4,13 +4,14 @@
  * Updates the base score for patents in the portfolio using a multi-factor formula.
  *
  * Formula:
- *   base_score = (citation_score + time_score + velocity_score) × sector_multiplier
+ *   base_score = (citation_score + time_score + velocity_score) × sector_multiplier × expired_multiplier
  *
  * Components:
  *   - Citation Score: log10(forward_citations + 1) × 40
  *   - Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
  *   - Velocity Score: log10(citations_per_year + 1) × 20
  *   - Sector Multiplier: 0.8 + (damages_rating - 1) × 0.233
+ *   - Expired Multiplier: 0.1 for expired patents, 1.0 for active
  *
  * Usage:
  *   npx tsx scripts/recalculate-base-scores.ts --all
@@ -116,7 +117,6 @@ function calculateBaseScore(patent: Patent): number {
   const citationScore = Math.log10(forwardCitations + 1) * 40;
 
   // Component 2: Time Score (remaining years factor, -12.5 to +25)
-  // Expired patents get negative but not zeroed out
   const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
   const timeScore = timeFactor * 25;
 
@@ -127,9 +127,13 @@ function calculateBaseScore(patent: Patent): number {
   // Component 4: Sector Multiplier (0.8x to 1.5x based on damages potential)
   const sectorMultiplier = getSectorMultiplier(patent.primary_sector);
 
+  // Component 5: Expired Multiplier (0.1x for expired, 1.0x for active)
+  // Ensures expired patents always rank below active patents
+  const expiredMultiplier = remainingYears <= 0 ? 0.1 : 1.0;
+
   // Combine components
   const rawScore = citationScore + timeScore + velocityScore;
-  const finalScore = rawScore * sectorMultiplier;
+  const finalScore = rawScore * sectorMultiplier * expiredMultiplier;
 
   // Round to 2 decimal places
   return Math.round(finalScore * 100) / 100;
@@ -169,13 +173,14 @@ async function main() {
 Recalculate Base Scores - Multi-factor scoring formula
 
 Formula:
-  base_score = (citation_score + time_score + velocity_score) × sector_multiplier
+  base_score = (citation_score + time_score + velocity_score) × sector × expired
 
 Components:
   - Citation Score: log10(forward_citations + 1) × 40
   - Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
   - Velocity Score: log10(citations_per_year + 1) × 20
   - Sector Multiplier: 0.8x (Low) to 1.5x (Very High) based on damages potential
+  - Expired Multiplier: 0.1x for expired patents, 1.0x for active
 
 Usage:
   npx tsx scripts/recalculate-base-scores.ts --all
@@ -295,7 +300,7 @@ Usage:
     data.metadata = data.metadata || {};
     data.metadata.lastScoreRecalc = new Date().toISOString();
     data.metadata.scoreRecalcCount = updated;
-    data.metadata.scoreFormula = 'v2: (citation + time + velocity) × sector_multiplier';
+    data.metadata.scoreFormula = 'v3: (citation + time + velocity) × sector × expired(0.1)';
 
     const outputPath = path.join(OUTPUT_DIR, filename);
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));

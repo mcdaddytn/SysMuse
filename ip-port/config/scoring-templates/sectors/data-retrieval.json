@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "data-retrieval",
+  "name": "Data Retrieval & Database",
+  "description": "Sector template for data retrieval patents including databases, search, indexing, and information retrieval.",
+  "level": "sector",
+  "sectorName": "data-retrieval",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing",
+  "version": 1,
+  "contextDescription": "Data retrieval patents cover database systems, search engines, and information retrieval. Key areas include query optimization (G06F16/24*), indexing (G06F16/22*), distributed databases (G06F16/27*), and search (G06F16/9*). High-value targets include Oracle, Microsoft SQL Server, AWS databases, Google search, and modern systems like MongoDB, Elasticsearch, Snowflake.",
+  "scoringGuidance": [
+    "Query optimization patents are fundamental to all database systems.",
+    "Distributed database patents (sharding, replication) apply to modern cloud databases.",
+    "Search/indexing patents may read on search engines and enterprise search platforms.",
+    "Consider both traditional RDBMS and NoSQL implementations.",
+    "Real-time analytics patents target high-growth markets (Snowflake, Databricks)."
+  ],
+  "questions": [
+    {
+      "fieldName": "database_system",
+      "displayName": "Database System Relevance",
+      "question": "How relevant is this patent to database management systems (RDBMS, NoSQL, NewSQL)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific database systems or vendors that would implement this."
+    },
+    {
+      "fieldName": "query_optimization",
+      "displayName": "Query Optimization",
+      "question": "Does this patent address query optimization, execution planning, or indexing strategies?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Query optimization is universal in databases. Assess optimization techniques."
+    },
+    {
+      "fieldName": "distributed_data",
+      "displayName": "Distributed Data Systems",
+      "question": "Does this patent apply to distributed databases, data lakes, or cloud data platforms?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Distributed systems are the future of data. Assess scalability aspects."
+    },
+    {
+      "fieldName": "search_retrieval",
+      "displayName": "Search & Retrieval",
+      "question": "Does this patent improve search, full-text retrieval, or semantic search capabilities?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Search is embedded in many applications. Assess search/retrieval aspects."
+    }
+  ]
+}

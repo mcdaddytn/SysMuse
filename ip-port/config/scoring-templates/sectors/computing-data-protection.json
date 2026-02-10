@@ -1,0 +1,70 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing-data-protection",
+  "name": "Computing Data Protection",
+  "description": "Sector template for data protection patents including encryption at rest, data loss prevention (DLP), secure storage, key management, and data confidentiality mechanisms.",
+  "level": "sector",
+  "sectorName": "computing-data-protection",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 1,
+  "contextDescription": "Computing data protection patents secure data at rest and prevent unauthorized data access or exfiltration. Technologies include full disk encryption, file-level encryption, DLP, secure key storage, tokenization, and data masking.",
+  "scoringGuidance": [
+    "Patents with transparent encryption (user unaware) score higher on usability but must maintain security.",
+    "Key management that supports regulatory compliance (GDPR, HIPAA key deletion) is high value.",
+    "DLP patents with content-aware policies and ML-based classification score higher.",
+    "Hardware-accelerated encryption (AES-NI, storage controller encryption) improves performance scoring."
+  ],
+  "questions": [
+    {
+      "fieldName": "encryption_granularity",
+      "displayName": "Encryption Granularity",
+      "question": "At what granularity is data encrypted? Score 1-3 for full-disk only, 4-6 for file/folder level, 7-10 for field-level or attribute-based encryption.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe encryption granularity: disk, volume, file, field, or attribute level."
+    },
+    {
+      "fieldName": "key_lifecycle",
+      "displayName": "Key Lifecycle Management",
+      "question": "How comprehensive is key lifecycle management? Score 1-3 for basic key storage, 4-6 for rotation and revocation, 7-10 for full lifecycle (generation, distribution, rotation, archival, destruction).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess key lifecycle: generation, storage, rotation, revocation, destruction."
+    },
+    {
+      "fieldName": "dlp_capability",
+      "displayName": "Data Loss Prevention",
+      "question": "Does this patent include DLP capabilities? Score 1-3 if none, 4-6 for basic content filtering, 7-10 for advanced DLP (ML classification, contextual policies, multi-channel).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe DLP features: content inspection, policy enforcement, channel coverage."
+    },
+    {
+      "fieldName": "compliance_support",
+      "displayName": "Compliance & Audit Support",
+      "question": "How well does this patent support regulatory compliance? Score 1-3 if not addressed, 4-6 for basic audit logging, 7-10 for comprehensive compliance (GDPR, HIPAA, PCI-DSS, crypto agility).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify compliance frameworks and audit capabilities supported."
+    },
+    {
+      "fieldName": "access_control_integration",
+      "displayName": "Access Control Integration",
+      "question": "How well does encryption integrate with access control? Score 1-3 for password-based only, 4-6 for user/group policies, 7-10 for attribute-based or policy-driven access with encryption.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe how encryption keys are bound to access control policies."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "magnetics-inductors",
+  "name": "Magnetics & Inductors",
+  "description": "Sector template for magnetic component patents including inductors, transformers, and capacitors.",
+  "level": "sector",
+  "sectorName": "magnetics-inductors",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Magnetics and inductor patents cover passive components in electronic systems. Key areas include power inductors (H01F), transformers, magnetic materials, and capacitors. High-value targets include passive component vendors (Murata, TDK, Vishay), power supply designs, and integrated power solutions. These components are essential for power conversion and filtering.",
+  "scoringGuidance": [
+    "Power inductor patents target mobile device power management.",
+    "Transformer patents apply to power supplies and isolation.",
+    "Integrated magnetics patents target SoC power solutions.",
+    "High-frequency magnetics patents target RF and wireless charging.",
+    "Consider both discrete components and integrated solutions."
+  ],
+  "questions": [
+    {
+      "fieldName": "component_type",
+      "displayName": "Component Type",
+      "question": "What magnetic component does this patent cover (inductor, transformer, capacitor)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the component type and its applications."
+    },
+    {
+      "fieldName": "power_application",
+      "displayName": "Power Application",
+      "question": "Is this patent relevant to power conversion or power management?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Power is the primary application for magnetics."
+    },
+    {
+      "fieldName": "integration_potential",
+      "displayName": "Integration Potential",
+      "question": "Can this be integrated into semiconductor packages or SoCs?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Integrated magnetics is a growing trend."
+    }
+  ]
+}

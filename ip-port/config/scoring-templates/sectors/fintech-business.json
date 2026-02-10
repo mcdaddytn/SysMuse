@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "fintech-business",
+  "name": "FinTech & Business",
+  "description": "Sector template for fintech and business method patents including payments, workflow, and e-commerce.",
+  "level": "sector",
+  "sectorName": "fintech-business",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing",
+  "version": 1,
+  "contextDescription": "FinTech and business method patents cover payment systems, digital commerce, and business workflows. Key areas include payment processing (G06Q20/*), commerce (G06Q30/*), and workflow automation (G06Q10/*). Targets include payment networks (Visa, Mastercard), digital wallets (Apple Pay, Google Pay, PayPal), and e-commerce platforms (Amazon, Shopify). Business method patents face heightened Alice/§101 scrutiny.",
+  "scoringGuidance": [
+    "Payment patents must survive Alice/§101 analysis - assess technical implementation.",
+    "Fraud detection patents with technical implementations are more defensible.",
+    "Digital wallet/mobile payment patents target high-growth markets.",
+    "Consider both issuer-side and merchant-side implementations.",
+    "Cross-border payment patents have high value due to complex technical requirements."
+  ],
+  "questions": [
+    {
+      "fieldName": "payment_system",
+      "displayName": "Payment System Relevance",
+      "question": "Does this patent relate to payment processing, authorization, or settlement?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Payment patents target Visa, Mastercard, and digital wallets. Assess payment relevance."
+    },
+    {
+      "fieldName": "alice_survivability",
+      "displayName": "Alice/§101 Survivability",
+      "question": "How likely is this patent to survive Alice/§101 scrutiny? Score based on technical implementation specificity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Business method patents face §101 challenges. Assess technical implementation depth."
+    },
+    {
+      "fieldName": "fraud_security",
+      "displayName": "Fraud & Security",
+      "question": "Does this patent address fraud detection, transaction security, or authentication?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Fraud/security patents have technical grounding. Assess security aspects."
+    },
+    {
+      "fieldName": "digital_wallet",
+      "displayName": "Digital Wallet Relevance",
+      "question": "Does this patent apply to digital wallets, mobile payments, or contactless transactions?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Digital wallets are growing rapidly. Assess mobile payment applicability."
+    }
+  ]
+}

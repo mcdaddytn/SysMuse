@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing-systems",
+  "name": "Computing Systems & Hardware",
+  "description": "Sector template for computing systems patents including memory management, interconnects, and hardware architecture.",
+  "level": "sector",
+  "sectorName": "computing-systems",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing",
+  "version": 1,
+  "contextDescription": "Computing systems patents cover the hardware and low-level software of computing platforms. Key areas include memory management (G06F12*), bus/interconnect (G06F13*), memory controllers, cache systems, and system architecture. High-value targets include Intel, AMD, ARM, Qualcomm, and memory vendors like Samsung, SK Hynix, Micron.",
+  "scoringGuidance": [
+    "Memory management patents (caching, virtual memory, TLB) are essential to all processors.",
+    "Interconnect/bus patents apply to chip-to-chip and system-level communication.",
+    "Hardware architecture patents may be standards-essential (DDR, PCIe, CXL).",
+    "Consider both desktop/server and mobile/embedded implementations.",
+    "Cache coherency and memory consistency patents are fundamental to multicore systems."
+  ],
+  "questions": [
+    {
+      "fieldName": "hardware_level",
+      "displayName": "Hardware Level",
+      "question": "Does this patent require hardware implementation? Score: 1-3 for pure software, 4-6 for hardware-optional, 7-10 for hardware-required.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Hardware patents often have higher damages due to per-unit royalties on chip sales."
+    },
+    {
+      "fieldName": "memory_subsystem",
+      "displayName": "Memory Subsystem Relevance",
+      "question": "How relevant is this patent to memory subsystems (cache, DRAM, controllers, virtual memory)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Memory is a bottleneck in all systems. Assess memory subsystem impact."
+    },
+    {
+      "fieldName": "processor_applicability",
+      "displayName": "Processor Applicability",
+      "question": "Does this patent apply to processor/SoC design? Consider Intel, AMD, ARM, Apple, Qualcomm implementations.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Processor vendors are high-value targets. Identify processor applicability."
+    },
+    {
+      "fieldName": "interconnect_bus",
+      "displayName": "Interconnect/Bus Relevance",
+      "question": "Does this patent relate to interconnects, buses, or data paths (PCIe, CXL, DDR, on-chip networks)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Interconnect patents may be standards-essential. Identify bus/interconnect technologies."
+    }
+  ]
+}

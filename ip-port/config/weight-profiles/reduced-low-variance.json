@@ -1,0 +1,12 @@
+{
+  "_description": "Reduced weights for low-variance questions that don't discriminate well",
+  "_rationale": "claim_breadth, technical_novelty, implementation_clarity have stdDev < 1.0",
+
+  "technical_novelty": 0.10,
+  "claim_breadth": 0.08,
+  "design_around_difficulty": 0.25,
+  "market_relevance": 0.20,
+  "implementation_clarity": 0.07,
+  "standards_relevance": 0.18,
+  "unique_value": 0.12
+}

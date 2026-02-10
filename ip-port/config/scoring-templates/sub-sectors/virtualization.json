@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "virtualization",
+  "name": "Virtualization & VMs",
+  "description": "Sub-sector template for virtualization patents (CPC G06F9/45*) including hypervisors, VMs, containers, and cloud orchestration.",
+  "level": "sub_sector",
+  "subSectorPattern": "G06F9/45*",
+  "sectorName": "computing-runtime",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing-runtime",
+  "version": 1,
+  "contextDescription": "Virtualization patents cover the core technologies enabling cloud computing. G06F9/455 covers virtual machine management, G06F9/45533 covers VM migration, G06F9/45558 covers hypervisor technologies. Key targets include VMware, Microsoft Hyper-V, AWS EC2, Google Cloud, Oracle VM, and container platforms (Docker, Kubernetes). These patents often command high royalties due to per-instance licensing.",
+  "scoringGuidance": [
+    "Hypervisor-level patents have the broadest infringement scope in virtualization.",
+    "Live migration patents (G06F9/45533) are critical for cloud elasticity and high availability.",
+    "Container/namespace patents may overlap with VM patents in hybrid environments.",
+    "Hardware-assisted virtualization patents (VT-x, AMD-V) read on all modern processors.",
+    "Multi-tenancy isolation patents are essential for public cloud security."
+  ],
+  "questions": [
+    {
+      "fieldName": "vm_hypervisor_scope",
+      "displayName": "VM/Hypervisor Scope",
+      "question": "Does this patent cover hypervisor-level functionality, VM management, or guest OS behavior? Score: 1-3 for guest-only, 4-6 for VMM/hypervisor, 7-10 for Type-1 hypervisor or hardware-level.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Hypervisor patents have broadest scope. Identify the virtualization layer."
+    },
+    {
+      "fieldName": "live_migration",
+      "displayName": "Live Migration & Mobility",
+      "question": "Does this patent address live VM migration, memory ballooning, or workload mobility? Essential for cloud elasticity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Live migration is used constantly in cloud environments."
+    },
+    {
+      "fieldName": "container_relevance",
+      "displayName": "Container Relevance",
+      "question": "Does this patent apply to container technologies (Docker, Kubernetes, LXC)? Containers are the dominant deployment model.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Containers have overtaken VMs for many workloads. Assess container applicability."
+    },
+    {
+      "fieldName": "cloud_vendor_impact",
+      "displayName": "Cloud Vendor Impact",
+      "question": "Which major cloud vendors likely implement this? Score based on breadth: 1-3 for niche, 4-6 for 1-2 major vendors, 7-10 for all major clouds (AWS, Azure, GCP).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific cloud platforms that would use this technology."
+    }
+  ]
+}

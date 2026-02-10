@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "analog-circuits",
+  "name": "Analog & Mixed-Signal Circuits",
+  "description": "Sector template for analog circuit patents including amplifiers, PLLs, ADC/DAC, and oscillators.",
+  "level": "sector",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Analog circuit patents cover fundamental building blocks in all electronic systems. Key areas include amplifiers (H03F), PLLs and clock circuits (H03L), ADC/DAC converters (H03M), oscillators (H03B), and filters (H03H). High-value targets include Analog Devices, Texas Instruments, NXP, Qualcomm (RF), and all SoC vendors. Analog IP is critical for mixed-signal integration.",
+  "scoringGuidance": [
+    "ADC/DAC patents are in every device with analog I/O - extremely broad applicability.",
+    "PLL patents are essential for clocking in all digital systems.",
+    "Low-power analog patents are critical for mobile and IoT devices.",
+    "RF analog patents (LNA, PA, mixer) target wireless device markets.",
+    "High-speed interface patents (SerDes) target data center and networking."
+  ],
+  "questions": [
+    {
+      "fieldName": "circuit_type",
+      "displayName": "Circuit Type",
+      "question": "What type of analog circuit does this patent cover? Score based on market ubiquity: 1-3 for specialized, 4-6 for common (filter, oscillator), 7-10 for fundamental (amplifier, ADC/DAC, PLL).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the circuit type and assess its ubiquity in electronic systems."
+    },
+    {
+      "fieldName": "analog_performance",
+      "displayName": "Performance Improvement",
+      "question": "Does this patent improve key analog metrics (noise, linearity, bandwidth, power consumption)? These are critical differentiators.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific performance metrics improved by this patent."
+    },
+    {
+      "fieldName": "mixed_signal_integration",
+      "displayName": "Mixed-Signal Integration",
+      "question": "How suitable is this for integration in mixed-signal SoCs? Consider CMOS compatibility and digital interface.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess SoC integration potential and CMOS compatibility."
+    },
+    {
+      "fieldName": "rf_wireless",
+      "displayName": "RF/Wireless Relevance",
+      "question": "Does this patent apply to RF/wireless circuits (LNA, PA, mixer, synthesizer)? RF commands premium IP licensing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify RF applications and frequency ranges."
+    }
+  ]
+}

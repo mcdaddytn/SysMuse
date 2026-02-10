@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "routing",
+  "name": "Routing Protocols",
+  "description": "Sub-sector template for routing protocol patents (CPC H04L45*) including BGP, OSPF, MPLS, and segment routing.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04L45*",
+  "sectorName": "network-switching",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "network-switching",
+  "version": 1,
+  "contextDescription": "Routing protocol patents cover path selection and forwarding decisions. Key areas include BGP (internet backbone), OSPF/IS-IS (enterprise/SP), MPLS (carrier), and segment routing. High-value targets include Cisco, Juniper, Arista, Nokia, and cloud providers running their own routing stacks. Routing is fundamental to all IP networks.",
+  "scoringGuidance": [
+    "BGP patents are essential for internet and data center routing.",
+    "Segment routing (SR/SRv6) patents target network modernization.",
+    "MPLS patents target carrier networks.",
+    "Fast reroute patents improve network resilience.",
+    "SDN routing patents enable programmable networks."
+  ],
+  "questions": [
+    {
+      "fieldName": "routing_protocol",
+      "displayName": "Routing Protocol",
+      "question": "What routing protocol does this cover (BGP, OSPF, IS-IS, MPLS, segment routing)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the routing protocol and its deployment scope."
+    },
+    {
+      "fieldName": "bgp_relevance",
+      "displayName": "BGP Relevance",
+      "question": "Is this relevant to BGP or inter-domain routing? BGP is the protocol of the internet.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "BGP patents have broad applicability to internet infrastructure."
+    },
+    {
+      "fieldName": "segment_routing",
+      "displayName": "Segment Routing",
+      "question": "Is this relevant to segment routing (SR-MPLS, SRv6)? SR is the future of carrier routing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Segment routing is being adopted by major carriers."
+    },
+    {
+      "fieldName": "convergence_resilience",
+      "displayName": "Convergence/Resilience",
+      "question": "Does this improve routing convergence or network resilience (fast reroute, BFD)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Fast convergence is critical for carrier-grade networks."
+    }
+  ]
+}

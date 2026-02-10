@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing-ui",
+  "name": "Computing UI & Interaction",
+  "description": "Sector template for UI patents including displays, I/O, gaming, and human-computer interaction.",
+  "level": "sector",
+  "sectorName": "computing-ui",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing",
+  "version": 1,
+  "contextDescription": "Computing UI patents cover human-computer interaction and display technologies. Key areas include display processing (G06F3/14*), input methods (G06F3/01*, G06F3/04*), graphics/gaming (A63F13/*), and UI frameworks. Targets include consumer electronics (Apple, Samsung), gaming (Sony, Microsoft, Nintendo), and software platforms (iOS, Android, Windows).",
+  "scoringGuidance": [
+    "Touch/gesture patents read on billions of mobile devices annually.",
+    "Display rendering patents apply to all screens with graphical output.",
+    "Gaming input/output patents target high-margin gaming consoles and platforms.",
+    "Consider VR/AR headset interfaces as emerging high-value targets.",
+    "Cross-platform UI patents have broader infringement scope."
+  ],
+  "questions": [
+    {
+      "fieldName": "input_method",
+      "displayName": "Input Method Relevance",
+      "question": "Does this patent address input methods (touch, gesture, voice, controller)? Score based on ubiquity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Touch and gesture inputs are universal. Identify the input modality."
+    },
+    {
+      "fieldName": "display_graphics",
+      "displayName": "Display & Graphics",
+      "question": "Does this patent relate to display rendering, graphics processing, or visual output?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Display patents can read on all devices with screens."
+    },
+    {
+      "fieldName": "mobile_device",
+      "displayName": "Mobile Device Relevance",
+      "question": "How applicable is this patent to smartphones and tablets? The highest-volume consumer electronics.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Mobile devices ship billions of units. Assess mobile applicability."
+    },
+    {
+      "fieldName": "gaming_xr",
+      "displayName": "Gaming & XR",
+      "question": "Does this patent apply to gaming or XR (VR/AR/MR) systems? High-margin markets.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Gaming and XR are growth markets. Assess applicability."
+    }
+  ]
+}

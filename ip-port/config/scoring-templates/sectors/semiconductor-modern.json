@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "semiconductor-modern",
+  "name": "Semiconductor - Modern",
+  "description": "Sector template for modern semiconductor device patents using H10 classification (post-2023 reorganization).",
+  "level": "sector",
+  "sectorName": "semiconductor-modern",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Modern semiconductor patents use the H10 CPC classification introduced in 2023 to reorganize semiconductor device patents. Key areas include H10B (memory devices), H10D (semiconductor devices), H10F (radiation-sensitive devices), H10K (organic electronics), and H10N (electric solid-state devices). These patents cover the latest device innovations and manufacturing techniques.",
+  "scoringGuidance": [
+    "H10B patents cover memory device structures (3D NAND, DRAM cells).",
+    "H10D patents cover transistor and device structures.",
+    "H10N patents cover thermoelectric and superconducting devices.",
+    "These modern classifications often represent recent innovations.",
+    "Consider overlap with traditional H01L classifications."
+  ],
+  "questions": [
+    {
+      "fieldName": "device_innovation",
+      "displayName": "Device Innovation",
+      "question": "How novel is the semiconductor device structure or architecture described?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the device innovation and its advancement over prior art."
+    },
+    {
+      "fieldName": "advanced_node",
+      "displayName": "Advanced Node Relevance",
+      "question": "Is this patent relevant to advanced process nodes (7nm and below)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Advanced nodes command premium licensing. Assess node applicability."
+    },
+    {
+      "fieldName": "emerging_memory",
+      "displayName": "Emerging Memory",
+      "question": "Does this patent relate to emerging memory technologies (3D NAND, MRAM, ReRAM)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify emerging memory technologies."
+    }
+  ]
+}

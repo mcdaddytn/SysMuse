@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "optics",
+  "name": "Optics & Optical Systems",
+  "description": "Sector template for optical system patents including lenses, waveguides, optical fibers, and light manipulation technologies.",
+  "level": "sector",
+  "sectorName": "optics",
+  "superSectorName": "IMAGING",
+  "inheritsFrom": "imaging",
+  "version": 1,
+  "contextDescription": "Optics patents cover optical components and systems used in cameras, displays, fiber communications, and sensing. Key areas include lens design, waveguide technology, optical coatings, light modulation, and photonic devices. High-value patents often relate to miniaturization for mobile devices, AR/VR applications, or high-performance imaging.",
+  "scoringGuidance": [
+    "Patents enabling smartphone camera miniaturization have high market relevance.",
+    "Waveguide patents for AR/VR headsets are high-value emerging targets.",
+    "Fiber optic innovations apply to both telecom and data center markets.",
+    "Consider both consumer electronics and industrial/medical imaging applications.",
+    "Look for patents bridging traditional optics with computational photography."
+  ],
+  "questions": [
+    {
+      "fieldName": "optical_component",
+      "displayName": "Optical Component Type",
+      "question": "What type of optical component does this patent address? Score based on market impact: 1-3 for specialized/niche components, 4-6 for common components (lenses, filters), 7-10 for fundamental components in high-volume applications.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the optical component type and its applications. Consider market size and growth potential."
+    },
+    {
+      "fieldName": "miniaturization",
+      "displayName": "Miniaturization Potential",
+      "question": "Does this patent enable optical miniaturization for mobile devices, wearables, or compact systems? Score 1-3 for bulk optics only, 4-6 for moderate miniaturization, 7-10 for significant mobile/wearable applicability.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess miniaturization benefits for smartphones, AR/VR, wearables, and IoT devices."
+    },
+    {
+      "fieldName": "ar_vr_applicability",
+      "displayName": "AR/VR Applicability",
+      "question": "How applicable is this patent to augmented reality or virtual reality systems? Consider waveguides, display optics, eye tracking, and optical combiners.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify AR/VR applications. This is a fast-growing market with limited competition in optical IP."
+    },
+    {
+      "fieldName": "manufacturing_feasibility",
+      "displayName": "Manufacturing Feasibility",
+      "question": "How manufacturable is the optical technology described? Score 1-3 for complex/expensive processes, 4-6 for standard manufacturing, 7-10 for mass-production compatible designs.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess manufacturing complexity and scalability. High-volume feasibility increases patent value."
+    }
+  ]
+}

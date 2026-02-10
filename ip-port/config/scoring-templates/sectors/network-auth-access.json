@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-auth-access",
+  "name": "Network Authentication & Access Control",
+  "description": "Sector template for network-level authentication, authorization, and access control patents including identity management, SSO, OAuth, firewalls, and certificate-based security.",
+  "level": "sector",
+  "sectorName": "network-auth-access",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 2,
+  "contextDescription": "Network authentication and access control patents cover identity verification, session management, access policies, and perimeter security. Key technologies include LDAP, RADIUS, OAuth, SAML, PKI certificates, firewalls, VPNs, zero-trust architectures, SASE, SD-WAN, and container security.",
+  "scoringGuidance": [
+    "Authentication patents should be scored on their resistance to credential theft, replay attacks, and session hijacking.",
+    "Access control patents focusing on policy granularity and dynamic authorization score higher.",
+    "Zero-trust architecture patents that eliminate implicit trust should score highly on access_control_model.",
+    "Patents with broad protocol support (SAML, OAuth, OIDC) score higher on protocol_scope.",
+    "Cloud-native and SASE-aligned patents addressing hybrid connectivity are high value in current market.",
+    "Container/microservices security patents that bridge orchestration with access control are emerging high-value areas."
+  ],
+  "questions": [
+    {
+      "fieldName": "auth_mechanism",
+      "displayName": "Authentication Mechanism",
+      "question": "What type of authentication mechanism does this patent cover? Score 1-3 for single-factor (password only), 4-6 for multi-factor (2FA, MFA), 7-10 for advanced/continuous authentication (biometric, behavioral, risk-based).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the authentication factors and mechanism sophistication."
+    },
+    {
+      "fieldName": "identity_management",
+      "displayName": "Identity Management Scope",
+      "question": "How comprehensive is the identity management capability? Score 1-3 for basic user/password, 4-6 for enterprise IAM (SSO, federation), 7-10 for comprehensive identity governance (provisioning, lifecycle, privileged access).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess the scope of identity management from basic to full lifecycle."
+    },
+    {
+      "fieldName": "access_control_model",
+      "displayName": "Access Control Model",
+      "question": "What access control model is implemented? Score 1-3 for simple ACLs, 4-6 for RBAC (role-based), 7-10 for advanced models (ABAC, policy-based, zero-trust).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the access control paradigm and its flexibility."
+    },
+    {
+      "fieldName": "protocol_scope",
+      "displayName": "Protocol & Standards Scope",
+      "question": "How well does the patent align with or extend authentication standards? Score 1-3 if proprietary only, 4-6 for single standard (OAuth, SAML), 7-10 for multi-protocol or standards-essential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant standards: OAuth, SAML, OIDC, FIDO, Kerberos, RADIUS, etc."
+    },
+    {
+      "fieldName": "perimeter_scope",
+      "displayName": "Perimeter & Network Scope",
+      "question": "Does this patent address network perimeter security? Score 1-3 for host-only, 4-6 for network segment/VPN, 7-10 for enterprise-wide perimeter (next-gen firewall, SASE, SD-WAN security).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess network perimeter coverage from host to enterprise-wide."
+    },
+    {
+      "fieldName": "cloud_hybrid_relevance",
+      "displayName": "Cloud/Hybrid Connectivity",
+      "question": "Does this patent address cloud or hybrid connectivity scenarios? Score 1-3 if not applicable, 4-6 for basic cloud integration, 7-10 for SASE, SD-WAN, or multi-cloud access control.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess cloud-native, hybrid cloud, or SASE/SD-WAN applicability."
+    },
+    {
+      "fieldName": "container_microservices",
+      "displayName": "Container/Microservices Security",
+      "question": "Does this patent address container orchestration or microservices security? Score 1-3 if not applicable, 4-6 for container-aware access control, 7-10 for Kubernetes/service mesh integration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess container, Kubernetes, or service mesh security applicability."
+    }
+  ]
+}

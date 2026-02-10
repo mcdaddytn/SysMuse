@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-protocols",
+  "name": "Network Protocols",
+  "description": "Sector template for network protocol patents including transport protocols, application protocols, and protocol stacks.",
+  "level": "sector",
+  "sectorName": "network-protocols",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Network protocol patents cover communication protocols and standards. Key areas include transport protocols (TCP/UDP variants, QUIC), application protocols (HTTP, DNS), and protocol optimization. High-value targets include Google (QUIC), Cloudflare, Akamai, and all CDN/edge providers. Standards-essential patents have significant licensing potential.",
+  "scoringGuidance": [
+    "QUIC/HTTP3 patents target Google and modern web infrastructure.",
+    "TCP optimization patents apply to all networked systems.",
+    "DNS/naming patents target Cloudflare, Akamai, cloud providers.",
+    "Protocol security patents (TLS improvements) are broadly applicable.",
+    "Low-latency protocol patents target gaming, trading, real-time apps."
+  ],
+  "questions": [
+    {
+      "fieldName": "protocol_layer",
+      "displayName": "Protocol Layer",
+      "question": "What protocol layer does this patent cover (transport, session, application)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the protocol layer and its ubiquity."
+    },
+    {
+      "fieldName": "standards_relevance",
+      "displayName": "Standards Relevance",
+      "question": "Is this relevant to IETF or other protocol standards? Standards patents have licensing value.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Standards-essential patents are highly valuable."
+    },
+    {
+      "fieldName": "web_infrastructure",
+      "displayName": "Web Infrastructure",
+      "question": "Is this relevant to web infrastructure (CDN, edge, HTTP/QUIC)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Web infrastructure is deployed at massive scale."
+    }
+  ]
+}

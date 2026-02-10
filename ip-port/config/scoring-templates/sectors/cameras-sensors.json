@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "cameras-sensors",
+  "name": "Cameras & Imaging Sensors",
+  "description": "Sector template for camera module and imaging sensor patents including CMOS/CCD sensors, pixel architectures, and camera systems.",
+  "level": "sector",
+  "sectorName": "cameras-sensors",
+  "superSectorName": "IMAGING",
+  "inheritsFrom": "imaging",
+  "version": 1,
+  "contextDescription": "Camera and sensor patents cover the fundamental capture technology in all imaging devices. Key areas include CMOS pixel design, low-light performance, HDR imaging, autofocus systems, image stabilization, and multi-camera systems. Sony, Samsung, and OmniVision dominate the sensor market. Patents reading on mobile camera systems have enormous volume potential given billions of smartphones shipped annually.",
+  "scoringGuidance": [
+    "CMOS pixel innovations (stacked sensors, dual-gain) are high-value given Sony/Samsung dominance.",
+    "Multi-camera and computational photography patents read on all flagship smartphones.",
+    "Low-light and HDR sensing innovations are key differentiators in the camera market.",
+    "Consider both sensor-level patents (pixel, array) and system-level patents (module, ISP integration).",
+    "Autofocus and stabilization patents have high infringement potential across device categories."
+  ],
+  "questions": [
+    {
+      "fieldName": "sensor_technology",
+      "displayName": "Sensor Technology Level",
+      "question": "At what level does this patent operate? Score: 1-3 for system-level only, 4-6 for module/integration, 7-10 for fundamental pixel/sensor architecture innovations.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify whether this is pixel-level, sensor-level, module-level, or system-level innovation."
+    },
+    {
+      "fieldName": "mobile_camera_relevance",
+      "displayName": "Mobile Camera Relevance",
+      "question": "How relevant is this patent to smartphone camera systems? Consider multi-camera arrays, computational photography, low-light, and compact form factors.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Smartphone cameras are the highest-volume market. Assess relevance to flagship camera features."
+    },
+    {
+      "fieldName": "hdr_low_light",
+      "displayName": "HDR/Low-Light Performance",
+      "question": "Does this patent improve HDR imaging or low-light performance? These are key differentiators in the camera market.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "HDR and low-light are premium features. Assess the specific improvement offered."
+    },
+    {
+      "fieldName": "autofocus_stabilization",
+      "displayName": "Autofocus/Stabilization",
+      "question": "Does this patent address autofocus (PDAF, contrast-detect, laser) or image/optical stabilization? These are universal camera features.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Autofocus and OIS/EIS are in virtually all smartphone cameras. Assess infringement breadth."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "qos-traffic",
+  "name": "QoS & Traffic Management",
+  "description": "Sub-sector template for QoS and traffic management patents (CPC H04L47*) including scheduling, shaping, and congestion control.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04L47*",
+  "sectorName": "network-switching",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "network-switching",
+  "version": 1,
+  "contextDescription": "QoS and traffic management patents cover network resource allocation. Key areas include traffic scheduling (WFQ, priority queuing), traffic shaping, congestion control (ECN, AQM), and bandwidth management. High-value targets include enterprise networks, 5G transport, and cloud providers. Critical for ensuring service quality.",
+  "scoringGuidance": [
+    "Congestion control patents (BBR, CUBIC improvements) improve TCP performance.",
+    "Traffic scheduling patents ensure SLA compliance.",
+    "ECN/AQM patents improve data center performance.",
+    "5G transport QoS patents target mobile backhaul.",
+    "Multi-tenant QoS patents target cloud providers."
+  ],
+  "questions": [
+    {
+      "fieldName": "qos_function",
+      "displayName": "QoS Function",
+      "question": "What QoS function does this cover (scheduling, shaping, policing, congestion control)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the QoS function and its network role."
+    },
+    {
+      "fieldName": "congestion_control",
+      "displayName": "Congestion Control",
+      "question": "Is this relevant to congestion control (TCP, ECN, AQM)? Critical for internet performance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Congestion control affects all internet traffic."
+    },
+    {
+      "fieldName": "datacenter_qos",
+      "displayName": "Data Center QoS",
+      "question": "Is this applicable to data center QoS (RDMA, lossless Ethernet, PFC)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Data center QoS is critical for AI/ML workloads."
+    },
+    {
+      "fieldName": "mobile_transport",
+      "displayName": "Mobile Transport",
+      "question": "Is this relevant to mobile transport or 5G QoS?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "5G transport requires strict QoS guarantees."
+    }
+  ]
+}

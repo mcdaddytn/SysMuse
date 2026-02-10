@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "memory-storage",
+  "name": "Memory & Storage",
+  "description": "Sector template for memory patents including RAM, flash, registers, and memory controllers.",
+  "level": "sector",
+  "sectorName": "memory-storage",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Memory patents cover storage and retrieval in electronic systems. Key areas include SRAM/DRAM (G11C11), flash memory (G11C16), memory controllers, error correction (ECC), and emerging memories (MRAM, ReRAM). High-value targets include Samsung, SK Hynix, Micron, Kioxia, and all processor/SoC vendors using embedded memory.",
+  "scoringGuidance": [
+    "DRAM patents target high-volume memory vendors (Samsung, SK Hynix, Micron).",
+    "NAND flash patents apply to SSDs, mobile storage, and data centers.",
+    "Memory controller patents read on all processors and SoCs.",
+    "Embedded memory (SRAM, eDRAM) patents target processor vendors.",
+    "ECC and reliability patents are essential for enterprise and automotive."
+  ],
+  "questions": [
+    {
+      "fieldName": "memory_type",
+      "displayName": "Memory Type",
+      "question": "What memory type does this patent cover? Score based on market size: 1-3 for emerging/specialty, 4-6 for embedded (SRAM), 7-10 for high-volume (DRAM, NAND).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the memory technology and market applicability."
+    },
+    {
+      "fieldName": "memory_vendor_target",
+      "displayName": "Memory Vendor Targeting",
+      "question": "Does this patent target major memory vendors (Samsung, SK Hynix, Micron) or embedded memory in SoCs?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific memory vendors or SoC makers that would implement this."
+    },
+    {
+      "fieldName": "memory_performance",
+      "displayName": "Performance/Density",
+      "question": "Does this patent improve memory performance (speed, bandwidth) or density? Key competitive differentiators.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify performance or density improvements."
+    },
+    {
+      "fieldName": "memory_reliability",
+      "displayName": "Reliability & Endurance",
+      "question": "Does this patent address memory reliability, endurance, or error correction? Critical for enterprise/automotive.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess reliability improvements and target markets."
+    }
+  ]
+}

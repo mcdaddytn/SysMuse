@@ -5,7 +5,16 @@
   "description": "Default scoring template for all patents. Provides base questions that can be inherited and overridden by sector-specific templates.",
   "level": "portfolio",
   "isDefault": true,
-  "version": 1,
+  "version": 2,
+  "scoringGuidance": [
+    "Score each question on a 1-10 scale based on the patent's actual content.",
+    "If a question topic is NOT addressed or NOT relevant to this patent, score 1-2 and state clearly in reasoning that this aspect is not applicable to this patent.",
+    "If a question topic is minimally addressed, score 3-4.",
+    "If a question topic is moderately addressed with some merit, score 5-6.",
+    "If a question topic is well addressed with clear value, score 7-8.",
+    "If a question topic is exceptionally addressed with significant innovation, score 9-10.",
+    "Always provide specific reasoning citing patent content. Avoid generic statements."
+  ],
   "questions": [
     {
       "fieldName": "technical_novelty",
@@ -66,6 +75,16 @@
       "weight": 0.15,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify any standards relationships."
+    },
+    {
+      "fieldName": "unique_value",
+      "displayName": "Unique/Hidden Value",
+      "question": "Beyond the standard metrics above, does this patent have unique or overlooked value that isn't captured by typical analysis? Consider: unusual claim scope, emerging technology applicability, underappreciated market timing, strategic defensive value, or any 'dark horse' characteristics that could make this patent more valuable than it appears.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any unique characteristics, hidden strengths, or overlooked value that distinguishes this patent from others in its sector. What makes this a potential 'dark horse' that standard analysis might miss? Be specific about what unique value exists and why it matters."
     }
   ]
 }

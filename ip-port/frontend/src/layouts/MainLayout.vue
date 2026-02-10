@@ -48,6 +48,7 @@ const navItems = computed(() => [
   { label: 'Sector Management', icon: 'build', to: '/sector-management', show: true },
   { label: 'Prompt Templates', icon: 'auto_awesome', to: '/prompt-templates', show: true },
   { label: 'Job Queue', icon: 'queue', to: '/jobs', show: true },
+  { label: 'LLM Scores', icon: 'psychology', to: '/llm-scores', show: true },
   { divider: true, show: isAdmin.value },
   { label: 'Admin', icon: 'admin_panel_settings', to: '/admin', show: isAdmin.value }
 ].filter(item => item.show));

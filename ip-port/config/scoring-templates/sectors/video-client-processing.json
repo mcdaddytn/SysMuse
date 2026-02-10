@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "video-client-processing",
+  "name": "Video Client Processing",
+  "description": "Sector template for client-side video processing patents including ABR clients, video players, buffer management, and quality of experience optimization.",
+  "level": "sector",
+  "sectorName": "video-client-processing",
+  "superSectorName": "VIDEO_STREAMING",
+  "inheritsFrom": "video-streaming",
+  "version": 1,
+  "contextDescription": "Video client processing patents cover the player and client-side technologies for streaming video consumption. Key areas include ABR algorithms, buffer management, bitrate selection, quality of experience (QoE) metrics, seamless playback, and multi-device support. Targets include streaming app developers, smart TV manufacturers, set-top box makers, and mobile device OEMs.",
+  "scoringGuidance": [
+    "ABR algorithm patents that improve bitrate selection under varying network conditions are high value.",
+    "Buffer management innovations that reduce rebuffering while minimizing latency are critical for live streaming.",
+    "QoE-based patents that correlate technical metrics with user satisfaction have broad applicability.",
+    "Multi-device/multi-screen patents are valuable as viewing shifts between devices.",
+    "Low-latency streaming client patents (sub-second latency) are emerging high-value area for live sports/events."
+  ],
+  "questions": [
+    {
+      "fieldName": "abr_algorithm",
+      "displayName": "ABR Algorithm Sophistication",
+      "question": "Does this patent address adaptive bitrate selection algorithms? Score 1-3 if not applicable, 4-6 for basic throughput-based ABR, 7-10 for advanced (buffer-based, hybrid, ML-based, low-latency).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the ABR approach: throughput estimation, buffer occupancy, hybrid, or machine learning based."
+    },
+    {
+      "fieldName": "buffer_management",
+      "displayName": "Buffer Management",
+      "question": "Does this patent optimize video buffering or playback continuity? Score 1-3 if not applicable, 4-6 for basic buffering, 7-10 for advanced (predictive, adaptive, low-latency optimized).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess buffer strategy sophistication and impact on rebuffering/startup delay."
+    },
+    {
+      "fieldName": "qoe_optimization",
+      "displayName": "QoE Optimization",
+      "question": "Does this patent measure or optimize quality of experience (QoE)? Score 1-3 if not applicable, 4-6 for basic quality metrics, 7-10 for comprehensive QoE (perceptual quality, engagement correlation).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify QoE metrics: VMAF, MOS, rebuffering ratio, startup time, bitrate stability."
+    },
+    {
+      "fieldName": "player_architecture",
+      "displayName": "Player Architecture",
+      "question": "What player architecture components does this patent address? Consider: media pipeline, decoder integration, DRM client, UI/controls, analytics.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify player components and assess architectural breadth vs. specific optimization."
+    },
+    {
+      "fieldName": "device_scope",
+      "displayName": "Device Scope",
+      "question": "What device types does this patent target? Score 1-3 for single device type, 4-6 for multiple (TV + mobile), 7-10 for universal/cross-platform or emerging devices (VR/AR).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess device applicability: smart TV, mobile, STB, gaming console, web, VR/AR."
+    }
+  ]
+}

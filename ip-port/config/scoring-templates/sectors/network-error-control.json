@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-error-control",
+  "name": "Network Error Control",
+  "description": "Sector template for network error control patents including FEC, ARQ, and reliability mechanisms.",
+  "level": "sector",
+  "sectorName": "network-error-control",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Network error control patents cover reliability and error correction. Key areas include forward error correction (FEC), automatic repeat request (ARQ), checksums, and link-layer retransmission. High-value targets include all networking vendors, storage systems, and high-reliability applications. FEC is essential for high-speed links and wireless.",
+  "scoringGuidance": [
+    "FEC patents (LDPC, Reed-Solomon, polar codes) are essential for modern links.",
+    "ARQ/HARQ patents target wireless and unreliable links.",
+    "Interleaving patents improve burst error resilience.",
+    "Soft-decision decoding patents improve coding gain.",
+    "Application-layer FEC targets streaming and real-time video."
+  ],
+  "questions": [
+    {
+      "fieldName": "error_control_type",
+      "displayName": "Error Control Type",
+      "question": "What error control mechanism does this cover (FEC, ARQ, CRC, interleaving)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the error control mechanism and its applications."
+    },
+    {
+      "fieldName": "coding_type",
+      "displayName": "Coding Type",
+      "question": "If FEC, what coding family (LDPC, turbo, polar, Reed-Solomon, convolutional)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Modern codes (LDPC, polar) are in 5G and high-speed links."
+    },
+    {
+      "fieldName": "application_scope",
+      "displayName": "Application Scope",
+      "question": "What applications benefit (wireless, optical, storage, streaming)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Broader application scope increases patent value."
+    }
+  ]
+}

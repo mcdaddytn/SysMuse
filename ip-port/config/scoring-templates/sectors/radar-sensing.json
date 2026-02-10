@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "radar-sensing",
+  "name": "Radar & Sensing",
+  "description": "Sector template for radar, positioning, and sensing patents including GPS/GNSS, LIDAR, radar signal processing, and location technologies.",
+  "level": "sector",
+  "sectorName": "radar-sensing",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "version": 1,
+  "contextDescription": "Radar and sensing patents cover technologies for positioning, detection, and environmental sensing. Key areas include GPS/GNSS receivers, LIDAR, automotive radar, gesture sensing, and proximity detection. Targets include automotive suppliers, consumer electronics OEMs, and industrial equipment manufacturers.",
+  "scoringGuidance": [
+    "Automotive radar patents (77GHz) are high value as ADAS adoption accelerates.",
+    "GNSS multi-constellation patents (GPS + Galileo + GLONASS + BeiDou) have broader applicability.",
+    "Indoor positioning patents address the challenging GPS-denied environments.",
+    "Gesture sensing patents target consumer electronics and automotive HMI.",
+    "Fusion patents (radar + camera + LIDAR) are strategically valuable for autonomous vehicles."
+  ],
+  "questions": [
+    {
+      "fieldName": "sensing_technology",
+      "displayName": "Sensing Technology",
+      "question": "What sensing technology does this patent address? Score 1-3 for single modality (GPS only), 4-6 for enhanced single modality, 7-10 for multi-modal or sensor fusion.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify sensing modality: GPS/GNSS, radar, LIDAR, ultrasonic, camera, fusion."
+    },
+    {
+      "fieldName": "automotive_applicability",
+      "displayName": "Automotive Applicability",
+      "question": "Is this patent applicable to automotive sensing (ADAS, autonomous driving)? Score 1-3 if not automotive, 4-6 for general automotive sensing, 7-10 for ADAS-critical or autonomous vehicle.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Automotive sensing is a high-growth market. Assess ADAS/AV applicability."
+    },
+    {
+      "fieldName": "positioning_accuracy",
+      "displayName": "Positioning/Detection Accuracy",
+      "question": "What level of accuracy does this patent enable? Score 1-3 for basic (meters), 4-6 for enhanced (sub-meter), 7-10 for high-precision (centimeter or better).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "High-accuracy positioning enables RTK, autonomous vehicles, and industrial applications."
+    },
+    {
+      "fieldName": "environment_robustness",
+      "displayName": "Environmental Robustness",
+      "question": "How robust is the sensing in challenging environments? Score 1-3 for ideal conditions only, 4-6 for moderate robustness, 7-10 for all-weather/GPS-denied/multipath-resistant.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Robustness to weather, multipath, and interference is critical for reliability."
+    },
+    {
+      "fieldName": "signal_processing",
+      "displayName": "Signal Processing Innovation",
+      "question": "What signal processing innovations does this patent introduce? Consider: waveform design, interference mitigation, target detection/tracking algorithms.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify signal processing techniques: FMCW, pulse compression, CFAR, tracking filters."
+    }
+  ]
+}

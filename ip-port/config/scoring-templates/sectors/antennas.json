@@ -1,0 +1,71 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "antennas",
+  "name": "Antennas",
+  "description": "Sector template for antenna patents including antenna elements, arrays, integration, and packaging for wireless systems.",
+  "level": "sector",
+  "sectorName": "antennas",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "version": 1,
+  "contextDescription": "Antenna patents cover the design, integration, and packaging of antennas for wireless communication. Key areas include antenna elements (patch, dipole, slot), antenna arrays, phased arrays, MIMO antennas, and antenna-in-package (AiP) integration. Targets include mobile device OEMs, chipset vendors, and infrastructure equipment manufacturers.",
+  "scoringGuidance": [
+    "Antenna-in-Package (AiP) patents are high value for 5G mmWave devices.",
+    "Multi-band antennas that cover 4G/5G/WiFi bands are valuable for device miniaturization.",
+    "Phased array patents target 5G beamforming applications.",
+    "Low-profile and conformal antenna patents address wearables and IoT form factors.",
+    "Patents addressing antenna-body interaction (SAR, hand effect) target mobile device certification."
+  ],
+  "questions": [
+    {
+      "fieldName": "antenna_type",
+      "displayName": "Antenna Type",
+      "question": "What type of antenna does this patent cover? Score 1-3 for basic elements (dipole, monopole), 4-6 for advanced elements (patch, slot, PIFA), 7-10 for arrays or integrated solutions.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify antenna type: dipole, patch, slot, PIFA, phased array, AiP."
+    },
+    {
+      "fieldName": "integration_level",
+      "displayName": "Integration Level",
+      "question": "What is the level of antenna integration? Score 1-3 for discrete antenna, 4-6 for module integration, 7-10 for antenna-in-package (AiP) or system-in-package (SiP).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "High integration is valuable for 5G mmWave. Assess packaging and integration level."
+    },
+    {
+      "fieldName": "frequency_coverage",
+      "displayName": "Frequency Coverage",
+      "question": "What frequency bands does this antenna cover? Score 1-3 for single band, 4-6 for multi-band (2-3 bands), 7-10 for wideband or many-band (4+ bands, mmWave).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Modern devices need multi-band support. Identify frequency bands: sub-6GHz, mmWave, WiFi."
+    },
+    {
+      "fieldName": "form_factor",
+      "displayName": "Form Factor Innovation",
+      "question": "Does this patent address form factor challenges? Score 1-3 for standard size, 4-6 for compact/low-profile, 7-10 for conformal, flexible, or miniaturized.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Form factor is critical for wearables, IoT, and thin devices. Assess size innovation."
+    },
+    {
+      "fieldName": "performance_enhancement",
+      "displayName": "Performance Enhancement",
+      "question": "What performance aspects does this patent improve? Consider: gain, efficiency, bandwidth, isolation, SAR compliance, beam steering.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify performance metrics improved and their significance for target applications."
+    }
+  ]
+}

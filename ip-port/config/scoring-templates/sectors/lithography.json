@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "lithography",
+  "name": "Lithography",
+  "description": "Sector template for lithography patents including photoresist, exposure, and patterning technologies.",
+  "level": "sector",
+  "sectorName": "lithography",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Lithography patents cover the critical patterning step in semiconductor manufacturing. Key areas include photoresist chemistry, exposure systems (DUV, EUV), mask technology, and computational lithography. High-value targets include ASML (sole EUV vendor), photoresist suppliers (JSR, TOK, Shin-Etsu), and foundries. Lithography is the bottleneck for advanced nodes.",
+  "scoringGuidance": [
+    "EUV-related patents are extremely high value given ASML's monopoly.",
+    "Photoresist chemistry patents target specialized chemical suppliers.",
+    "Computational lithography patents (OPC, ILT) target EDA vendors.",
+    "Mask/reticle patents apply to all advanced semiconductor manufacturing.",
+    "Multi-patterning patents are essential for nodes below 10nm."
+  ],
+  "questions": [
+    {
+      "fieldName": "lithography_type",
+      "displayName": "Lithography Type",
+      "question": "What lithography technology does this patent cover? Score: 1-3 for legacy (i-line), 4-6 for DUV/immersion, 7-10 for EUV or next-gen.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the lithography technology and its relevance to advanced nodes."
+    },
+    {
+      "fieldName": "asml_relevance",
+      "displayName": "ASML Relevance",
+      "question": "Does this patent apply to ASML exposure systems? ASML has monopoly on EUV.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess relevance to ASML scanner technology."
+    },
+    {
+      "fieldName": "photoresist_chemistry",
+      "displayName": "Photoresist Chemistry",
+      "question": "Does this patent cover photoresist materials or chemistry?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify photoresist materials and suppliers."
+    }
+  ]
+}

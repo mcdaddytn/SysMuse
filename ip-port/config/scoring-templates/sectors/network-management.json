@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "network-management",
+  "name": "Network Management",
+  "description": "Sector template for network management patents including monitoring, configuration, and orchestration.",
+  "level": "sector",
+  "sectorName": "network-management",
+  "superSectorName": "NETWORKING",
+  "inheritsFrom": "networking",
+  "version": 1,
+  "contextDescription": "Network management patents cover network operations and automation. Key areas include SNMP/monitoring (H04L43), configuration management (H04L41), network orchestration, and AIOps. High-value targets include Cisco, VMware, ServiceNow, SolarWinds, and cloud management platforms. Automation and AI-driven operations are growth areas.",
+  "scoringGuidance": [
+    "Network automation patents target NetOps modernization.",
+    "Monitoring/observability patents target SolarWinds, Datadog, Splunk.",
+    "Intent-based networking patents are a Cisco focus area.",
+    "Multi-cloud management patents target hybrid enterprise environments.",
+    "AIOps patents apply ML to network operations."
+  ],
+  "questions": [
+    {
+      "fieldName": "management_function",
+      "displayName": "Management Function",
+      "question": "What network management function does this cover (monitoring, config, automation, orchestration)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the management function and operational value."
+    },
+    {
+      "fieldName": "automation_level",
+      "displayName": "Automation Level",
+      "question": "Does this enable network automation or reduce manual operations? Automation is a key industry trend.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Network automation reduces OpEx and improves reliability."
+    },
+    {
+      "fieldName": "cloud_applicability",
+      "displayName": "Cloud Applicability",
+      "question": "Is this applicable to cloud or multi-cloud network management?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Cloud network management is a growing market."
+    }
+  ]
+}

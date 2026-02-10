@@ -1,0 +1,103 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "computing-os-security",
+  "name": "Computing & OS Security",
+  "description": "Sector template for operating system and endpoint security patents including malware protection, sandboxing, kernel security, and endpoint detection and response (EDR).",
+  "level": "sector",
+  "sectorName": "computing-os-security",
+  "superSectorName": "SECURITY",
+  "inheritsFrom": "security",
+  "version": 2,
+  "contextDescription": "Computing and OS security patents protect endpoints and operating systems from malware, unauthorized access, and exploitation. Technologies include antivirus/antimalware, application sandboxing, kernel hardening, memory protection, EDR/XDR, host-based intrusion prevention, VMI security, and confidential computing.",
+  "scoringGuidance": [
+    "Kernel-level and hypervisor security patents generally have higher value due to privileged access.",
+    "Patents addressing fileless malware, living-off-the-land attacks, and evasion techniques score higher.",
+    "Cross-platform applicability (Windows, Linux, macOS, mobile) increases market_relevance.",
+    "EDR/XDR patents with behavioral analysis outperform signature-only solutions.",
+    "Hypervisor/VMI security patents leveraging privilege separation are high value for cloud security.",
+    "Memory protection and deception techniques addressing advanced threats are emerging high-value areas.",
+    "Agentless security approaches for cloud and container environments have growing market relevance."
+  ],
+  "questions": [
+    {
+      "fieldName": "protection_layer",
+      "displayName": "OS Protection Layer",
+      "question": "At what OS layer does this patent operate? Score 1-3 for user-space application, 4-6 for system services/drivers, 7-10 for kernel/hypervisor level.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the operating system layer: user-space, kernel, hypervisor."
+    },
+    {
+      "fieldName": "malware_detection",
+      "displayName": "Malware Detection Capability",
+      "question": "How effective is the malware detection approach? Score 1-3 for signature matching only, 4-6 for behavioral analysis, 7-10 for advanced detection (fileless, rootkits, bootkits, APT).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe malware detection capabilities and evasion resistance."
+    },
+    {
+      "fieldName": "isolation_mechanism",
+      "displayName": "Isolation Mechanism",
+      "question": "Does this patent implement process/application isolation? Score 1-3 if none, 4-6 for application sandboxing, 7-10 for hardware-backed isolation (TEE, SGX, VM-based).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe isolation technology: sandboxing, containers, VMs, TEEs."
+    },
+    {
+      "fieldName": "endpoint_scope",
+      "displayName": "Endpoint Coverage",
+      "question": "What endpoint types does this patent cover? Score 1-3 for single OS/platform, 4-6 for desktop/server coverage, 7-10 for comprehensive coverage (desktop, server, mobile, IoT).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "List supported platforms: Windows, Linux, macOS, Android, iOS, IoT."
+    },
+    {
+      "fieldName": "edr_capability",
+      "displayName": "EDR/XDR Capability",
+      "question": "Does this patent include endpoint detection and response functionality? Score 1-3 if protection only, 4-6 for detection and forensics, 7-10 for full EDR/XDR with automated response.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess EDR capabilities: telemetry, investigation, automated response."
+    },
+    {
+      "fieldName": "hypervisor_vmi",
+      "displayName": "Hypervisor/VMI Security",
+      "question": "Does this patent leverage hypervisor or VMI (Virtual Machine Introspection) capabilities? Score 1-3 if not applicable, 4-6 for VM-aware security, 7-10 for hypervisor-level privilege separation or VMI-based protection.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess hypervisor/VMI relevance for cloud and virtualized security."
+    },
+    {
+      "fieldName": "memory_protection",
+      "displayName": "Advanced Memory Protection",
+      "question": "Does this patent address advanced memory-based attacks? Score 1-3 if not applicable, 4-6 for standard memory protection, 7-10 for advanced techniques (memory deception, CFI, shadow stacks, anti-ROP).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess memory protection depth: basic, hardening, or advanced deception."
+    },
+    {
+      "fieldName": "agentless_cloud",
+      "displayName": "Agentless/Cloud Security",
+      "question": "Does this patent support agentless security or cloud-native deployment? Score 1-3 if agent-required only, 4-6 for hybrid agent/agentless, 7-10 for fully agentless or cloud-native security.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess agentless capability and cloud-native deployment applicability."
+    }
+  ]
+}

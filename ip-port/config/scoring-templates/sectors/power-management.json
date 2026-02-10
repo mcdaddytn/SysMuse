@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "power-management",
+  "name": "Power Management",
+  "description": "Sector template for power management patents including power supply, charging, DC-DC conversion, and power distribution.",
+  "level": "sector",
+  "sectorName": "power-management",
+  "superSectorName": "COMPUTING",
+  "inheritsFrom": "computing",
+  "version": 1,
+  "contextDescription": "Power management patents cover power supply, distribution, and efficiency in electronic systems. Key areas include DC-DC converters, battery charging (H02J7/*), power distribution (H02J1/*), and power protection. High-value targets include mobile device chargers (Apple, Samsung, Qualcomm QC, USB-PD), laptop power systems, and data center power infrastructure.",
+  "scoringGuidance": [
+    "Fast charging patents (QC, USB-PD) are widely licensed and litigated.",
+    "DC-DC converter patents apply to all battery-powered devices.",
+    "Power efficiency patents have growing importance due to sustainability regulations.",
+    "Data center power patents target cloud infrastructure.",
+    "Wireless charging patents are increasingly important in mobile and automotive."
+  ],
+  "questions": [
+    {
+      "fieldName": "charging_relevance",
+      "displayName": "Battery Charging Relevance",
+      "question": "Does this patent relate to battery charging technology (fast charge, wireless, USB-PD)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Fast charging is a competitive differentiator. Assess charging technology."
+    },
+    {
+      "fieldName": "mobile_power",
+      "displayName": "Mobile Power Systems",
+      "question": "How applicable is this to mobile device power management (smartphones, tablets, laptops)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Mobile power is constrained and critical. Assess mobile applicability."
+    },
+    {
+      "fieldName": "efficiency_improvement",
+      "displayName": "Efficiency Improvement",
+      "question": "Does this patent improve power conversion efficiency or reduce power losses?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Efficiency is universally important. Quantify efficiency improvements if possible."
+    }
+  ]
+}

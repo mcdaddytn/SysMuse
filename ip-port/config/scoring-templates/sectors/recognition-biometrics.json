@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "recognition-biometrics",
+  "name": "Recognition & Biometrics",
+  "description": "Sector template for recognition and biometric patents including facial recognition, fingerprint scanning, iris recognition, and object detection.",
+  "level": "sector",
+  "sectorName": "recognition-biometrics",
+  "superSectorName": "IMAGING",
+  "inheritsFrom": "imaging",
+  "version": 1,
+  "contextDescription": "Recognition and biometrics patents cover identification and authentication technologies. Key areas include facial recognition (2D and 3D), fingerprint sensing (capacitive, optical, ultrasonic), iris recognition, gesture recognition, and object detection. High-value applications include smartphone unlock (Face ID, fingerprint), access control, surveillance, and automotive (driver monitoring). This is a sensitive area with privacy regulations affecting deployment.",
+  "scoringGuidance": [
+    "Face unlock patents read on billions of smartphones globally.",
+    "Under-display fingerprint sensing is a rapidly growing technology in premium phones.",
+    "3D facial recognition (depth-based) has higher security and licensing value than 2D.",
+    "Driver monitoring systems (DMS) are becoming mandatory in vehicles - growing market.",
+    "Consider privacy regulation impact on deployment but not on patent value."
+  ],
+  "questions": [
+    {
+      "fieldName": "biometric_modality",
+      "displayName": "Biometric Modality",
+      "question": "What biometric modality does this patent address? Score: 1-3 for niche modalities, 4-6 for single mainstream modality, 7-10 for face/fingerprint (high-volume) or multi-modal systems.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the biometric type (face, fingerprint, iris, voice, gesture) and market volume."
+    },
+    {
+      "fieldName": "mobile_unlock",
+      "displayName": "Mobile Unlock Relevance",
+      "question": "How relevant is this patent to smartphone biometric unlock (Face ID, fingerprint)? This is the highest-volume biometric application.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Smartphone unlock patents have enormous volume. Assess applicability to Apple/Android implementations."
+    },
+    {
+      "fieldName": "security_robustness",
+      "displayName": "Security & Anti-Spoofing",
+      "question": "Does this patent address security aspects like liveness detection, anti-spoofing, or attack resistance? These are premium security features.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Anti-spoofing and liveness detection are required for secure biometric systems."
+    },
+    {
+      "fieldName": "recognition_accuracy",
+      "displayName": "Recognition Accuracy",
+      "question": "Does this patent improve recognition accuracy, speed, or reduce false accept/reject rates? These are key performance metrics.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Accuracy improvements are critical for user experience and security certification."
+    }
+  ]
+}

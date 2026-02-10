@@ -1,0 +1,51 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "audio",
+  "name": "Audio & Speech",
+  "description": "Sector template for audio patents including speech processing, audio codecs, and speaker/microphone technology.",
+  "level": "sector",
+  "sectorName": "audio",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "Audio patents cover speech and sound processing in electronic devices. Key areas include audio codecs (G10L19), speech recognition (G10L15), speaker/microphone arrays, noise cancellation, and acoustic processing. High-value targets include smartphone vendors (Apple, Samsung), audio chip vendors (Qualcomm, Cirrus Logic), and smart speaker makers (Amazon, Google).",
+  "scoringGuidance": [
+    "Voice assistant patents target Amazon Alexa, Google Assistant, Apple Siri.",
+    "Noise cancellation patents apply to all ANC headphones and earbuds.",
+    "Audio codec patents may be standards-related (AAC, LDAC, aptX).",
+    "MEMS microphone patents target mobile devices and smart speakers.",
+    "Speaker array/beamforming patents apply to smart speakers and conferencing."
+  ],
+  "questions": [
+    {
+      "fieldName": "audio_function",
+      "displayName": "Audio Function",
+      "question": "What audio function does this patent cover? Score: 1-3 for niche, 4-6 for common (playback, recording), 7-10 for essential (codec, ANC, voice recognition).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the audio function and its prevalence in devices."
+    },
+    {
+      "fieldName": "voice_assistant",
+      "displayName": "Voice Assistant Relevance",
+      "question": "Does this patent apply to voice assistants (Alexa, Siri, Google Assistant)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Voice assistants are in billions of devices. Assess applicability."
+    },
+    {
+      "fieldName": "mobile_audio",
+      "displayName": "Mobile Audio",
+      "question": "How relevant is this patent to mobile device audio (smartphones, tablets, earbuds)?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Mobile is the highest-volume audio market."
+    }
+  ]
+}

@@ -48,6 +48,33 @@ export interface EnrichmentResult {
 }
 
 // ============================================================================
+// Claims Types
+// ============================================================================
+
+export interface PatentClaim {
+  number: number;
+  text: string;
+  isIndependent: boolean;
+  dependsOn?: number;  // Claim number this depends on (for dependent claims)
+}
+
+export interface PatentClaimsData {
+  patentId: string;
+  claims: PatentClaim[];
+  independentClaims: PatentClaim[];
+  dependentClaims: PatentClaim[];
+  totalClaimCount: number;
+  independentClaimCount: number;
+  parseError?: string;
+}
+
+export interface ClaimsExtractionOptions {
+  independentOnly?: boolean;
+  maxClaims?: number;
+  maxTokens?: number;  // Approximate token limit
+}
+
+// ============================================================================
 // XML Parser Configuration
 // ============================================================================
 
@@ -484,4 +511,202 @@ export function analyzeCpcCooccurrence(
   }
 
   return cpcStats;
+}
+
+// ============================================================================
+// Claims Extraction Functions
+// ============================================================================
+
+/**
+ * Parse a single patent XML file to extract claims
+ */
+export function parsePatentClaims(xmlPath: string): PatentClaimsData {
+  const patentId = path.basename(xmlPath, '.xml').replace(/^US/, '');
+
+  try {
+    const xmlContent = fs.readFileSync(xmlPath, 'utf-8');
+
+    // Find the claims section
+    const claimsMatch = xmlContent.match(/<claims[^>]*>([\s\S]*?)<\/claims>/);
+    if (!claimsMatch) {
+      return {
+        patentId,
+        claims: [],
+        independentClaims: [],
+        dependentClaims: [],
+        totalClaimCount: 0,
+        independentClaimCount: 0,
+        parseError: 'No claims section found',
+      };
+    }
+
+    const claimsXml = claimsMatch[1];
+    const claims: PatentClaim[] = [];
+
+    // Extract individual claims
+    const claimMatches = Array.from(claimsXml.matchAll(/<claim id="CLM-(\d+)"[^>]*>([\s\S]*?)<\/claim>/g));
+
+    for (const match of claimMatches) {
+      const claimNum = parseInt(match[1], 10);
+      const claimContent = match[2];
+
+      // Extract claim text, stripping XML tags
+      let text = claimContent
+        .replace(/<claim-ref[^>]*>([^<]*)<\/claim-ref>/g, '$1')  // Keep claim ref text
+        .replace(/<[^>]+>/g, ' ')  // Remove other XML tags
+        .replace(/\s+/g, ' ')       // Normalize whitespace
+        .trim();
+
+      // Check if this claim references another (dependent claim)
+      const refMatch = claimContent.match(/<claim-ref idref="CLM-(\d+)"/);
+      const dependsOn = refMatch ? parseInt(refMatch[1], 10) : undefined;
+      const isIndependent = !refMatch;
+
+      claims.push({
+        number: claimNum,
+        text,
+        isIndependent,
+        dependsOn,
+      });
+    }
+
+    // Categorize claims
+    const independentClaims = claims.filter(c => c.isIndependent);
+    const dependentClaims = claims.filter(c => !c.isIndependent);
+
+    return {
+      patentId,
+      claims,
+      independentClaims,
+      dependentClaims,
+      totalClaimCount: claims.length,
+      independentClaimCount: independentClaims.length,
+    };
+  } catch (error) {
+    return {
+      patentId,
+      claims: [],
+      independentClaims: [],
+      dependentClaims: [],
+      totalClaimCount: 0,
+      independentClaimCount: 0,
+      parseError: `Parse error: ${(error as Error).message}`,
+    };
+  }
+}
+
+/**
+ * Extract claims text for use in LLM prompts
+ *
+ * @param patentId - Patent ID to look up
+ * @param xmlDir - Directory containing patent XML files
+ * @param options - Extraction options (independentOnly, maxClaims, maxTokens)
+ * @returns Formatted claims text for LLM prompt, or null if not found
+ */
+export function extractClaimsText(
+  patentId: string,
+  xmlDir: string = process.env.USPTO_PATENT_GRANT_XML_DIR || '',
+  options: ClaimsExtractionOptions = {}
+): string | null {
+  const { independentOnly = true, maxClaims = 5, maxTokens = 800 } = options;
+
+  if (!xmlDir) {
+    return null;
+  }
+
+  const xmlPath = findXmlPath(patentId, xmlDir);
+  if (!xmlPath) {
+    return null;
+  }
+
+  const claimsData = parsePatentClaims(xmlPath);
+  if (claimsData.parseError || claimsData.claims.length === 0) {
+    return null;
+  }
+
+  // Select which claims to include
+  const selectedClaims = independentOnly
+    ? claimsData.independentClaims
+    : claimsData.claims;
+
+  // Limit number of claims
+  const limitedClaims = selectedClaims.slice(0, maxClaims);
+
+  // Build text with token limit
+  const charLimit = maxTokens * 4;  // Rough estimate: 4 chars per token
+  let result = '';
+  let totalChars = 0;
+
+  for (const claim of limitedClaims) {
+    const claimText = `Claim ${claim.number}: ${claim.text}\n\n`;
+
+    if (totalChars + claimText.length > charLimit) {
+      // Truncate this claim if needed
+      const remaining = charLimit - totalChars;
+      if (remaining > 100) {  // Only add if meaningful space
+        result += `Claim ${claim.number}: ${claim.text.substring(0, remaining - 50)}...\n\n`;
+      }
+      break;
+    }
+
+    result += claimText;
+    totalChars += claimText.length;
+  }
+
+  return result.trim() || null;
+}
+
+/**
+ * Get claims statistics for a patent
+ */
+export function getClaimsStats(patentId: string, xmlDir: string): {
+  found: boolean;
+  totalClaims: number;
+  independentClaims: number;
+  dependentClaims: number;
+  totalChars: number;
+  estimatedTokens: number;
+} | null {
+  if (!xmlDir) return null;
+
+  const xmlPath = findXmlPath(patentId, xmlDir);
+  if (!xmlPath) return null;
+
+  const claimsData = parsePatentClaims(xmlPath);
+  if (claimsData.parseError) return null;
+
+  const totalChars = claimsData.claims.reduce((sum, c) => sum + c.text.length, 0);
+
+  return {
+    found: true,
+    totalClaims: claimsData.totalClaimCount,
+    independentClaims: claimsData.independentClaimCount,
+    dependentClaims: claimsData.dependentClaims.length,
+    totalChars,
+    estimatedTokens: Math.ceil(totalChars / 4),
+  };
+}
+
+/**
+ * Batch extract claims for multiple patents
+ * Returns a map of patentId -> claims text
+ */
+export function extractClaimsBatch(
+  patentIds: string[],
+  xmlDir: string = process.env.USPTO_PATENT_GRANT_XML_DIR || '',
+  options: ClaimsExtractionOptions = {},
+  progressCallback?: (current: number, total: number) => void
+): Map<string, string | null> {
+  const results = new Map<string, string | null>();
+
+  for (let i = 0; i < patentIds.length; i++) {
+    const patentId = patentIds[i];
+    results.set(patentId, extractClaimsText(patentId, xmlDir, options));
+
+    if (progressCallback && (i + 1) % 100 === 0) {
+      progressCallback(i + 1, patentIds.length);
+    }
+  }
+
+  return results;
 }

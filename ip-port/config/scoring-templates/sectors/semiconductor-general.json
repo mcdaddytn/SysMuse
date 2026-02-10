@@ -1,0 +1,61 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "semiconductor-general",
+  "name": "Semiconductor - General",
+  "description": "Sector template for general semiconductor design patents including digital logic, circuit design, and chip architecture.",
+  "level": "sector",
+  "sectorName": "semiconductor",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "semiconductor",
+  "version": 1,
+  "contextDescription": "General semiconductor patents cover chip design, digital logic, and circuit architecture. This sector uses older CPC classifications (pre-2023 H01L reorganization). High-value targets include Intel, AMD, NVIDIA, Qualcomm, Apple, ARM, and all fabless/IDM semiconductor companies. Patents may cover transistor design, logic circuits, power management, or I/O interfaces.",
+  "scoringGuidance": [
+    "Transistor-level patents may be standards-essential or process-dependent.",
+    "Digital logic patents have broad applicability across all digital chips.",
+    "Power management patents are critical for mobile and data center.",
+    "I/O interface patents may target specific standards (PCIe, DDR, USB).",
+    "Consider both design patents and implementation patents."
+  ],
+  "questions": [
+    {
+      "fieldName": "design_level",
+      "displayName": "Design Level",
+      "question": "At what design level does this patent operate? Score: 1-3 for system-level, 4-6 for RTL/logic, 7-10 for transistor/circuit level.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the design abstraction level (system, logic, circuit, transistor)."
+    },
+    {
+      "fieldName": "processor_relevance",
+      "displayName": "Processor Relevance",
+      "question": "How relevant is this patent to processor/SoC design? Consider Intel, AMD, ARM, Apple, Qualcomm, NVIDIA.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify processor vendors that would implement this."
+    },
+    {
+      "fieldName": "power_efficiency",
+      "displayName": "Power Efficiency",
+      "question": "Does this patent improve power efficiency or power management? Critical for mobile and data center.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess power efficiency improvements and target markets."
+    },
+    {
+      "fieldName": "digital_standards",
+      "displayName": "Digital Standards",
+      "question": "Does this patent relate to digital interface standards (PCIe, DDR, USB, Ethernet)? Standards patents have licensing potential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify relevant interface standards."
+    }
+  ]
+}

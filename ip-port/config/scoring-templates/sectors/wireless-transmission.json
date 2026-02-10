@@ -1,0 +1,70 @@
+{
+  "$schema": "../../scoring-template.schema.json",
+  "id": "wireless-transmission",
+  "name": "Wireless Transmission Scoring",
+  "description": "Scoring template for wireless transmission patents covering RF signal chain, modulation, NFC, amplifiers, and transceivers.",
+  "level": "sector",
+  "sectorName": "wireless-transmission",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless",
+  "isDefault": true,
+  "version": 1,
+  "scoringGuidance": [
+    "This sector covers the RF signal chain from antenna to baseband: amplifiers, mixers, filters, modulators, transceivers.",
+    "NFC (Near Field Communication) patents are included and represent a significant portion of high-value patents.",
+    "Look for innovations in power efficiency, linearity, noise figure, and integration."
+  ],
+  "contextDescription": "Wireless transmission patents cover the physical and link layer signal processing in wireless devices. This includes RF front-end components (LNA, PA, mixers), modulation/demodulation, and increasingly NFC technology. Key differentiators are power efficiency, signal quality, and component integration.",
+  "questions": [
+    {
+      "fieldName": "rf_chain_position",
+      "displayName": "RF Chain Position",
+      "question": "Where in the RF signal chain does this innovation apply? Consider: Antenna interface, RF front-end (LNA, PA, switch), frequency conversion (mixer, synthesizer), baseband processing, or end-to-end transceiver.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the RF chain position. Score based on breadth of applicability: end-to-end (9-10), multiple stages (6-8), single component (3-5). State the specific components involved."
+    },
+    {
+      "fieldName": "spectrum_efficiency",
+      "displayName": "Spectrum Efficiency",
+      "question": "How does this technology improve wireless spectrum utilization? Consider: modulation efficiency (bits/Hz), interference mitigation, bandwidth optimization, and spectral mask compliance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe spectrum efficiency improvements. Score 1-2 if not applicable (e.g., pure NFC or power-focused patents)."
+    },
+    {
+      "fieldName": "power_efficiency",
+      "displayName": "Power Efficiency",
+      "question": "Does this patent improve power efficiency in transmission or reception? Consider: PA efficiency, low-power modes, power-aware modulation, or energy harvesting.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe power efficiency benefits. Score 1-2 if power is not addressed."
+    },
+    {
+      "fieldName": "signal_quality",
+      "displayName": "Signal Quality Innovation",
+      "question": "How does this patent improve signal quality? Consider: noise figure reduction, linearity improvement, EVM optimization, interference cancellation, or receiver sensitivity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify signal quality metrics improved and their significance."
+    },
+    {
+      "fieldName": "nfc_relevance",
+      "displayName": "NFC Relevance",
+      "question": "Is this patent related to NFC (Near Field Communication) technology? Consider: NFC protocols, NFC power harvesting, proximity detection, or NFC security.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Score 8-10 for core NFC innovation, 4-7 for NFC-applicable, 1-3 if not NFC related."
+    }
+  ]
+}

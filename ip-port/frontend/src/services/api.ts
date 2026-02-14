@@ -356,6 +356,113 @@ export const v2EnhancedApi = {
   },
 };
 
+// =============================================================================
+// Score Snapshots API
+// =============================================================================
+
+export type ScoreType = 'V2' | 'V3';
+
+export interface ScoreSnapshot {
+  id: string;
+  name: string;
+  description?: string;
+  scoreType: ScoreType;
+  config: V2EnhancedConfig | Record<string, unknown>;
+  isActive: boolean;
+  patentCount: number;
+  llmDataCount: number;
+  createdAt: string;
+}
+
+export interface ActiveSnapshots {
+  V2: ScoreSnapshot | null;
+  V3: ScoreSnapshot | null;
+}
+
+export interface SaveSnapshotRequest {
+  name: string;
+  description?: string;
+  scoreType: ScoreType;
+  config: V2EnhancedConfig | Record<string, unknown>;
+  scores: Array<{
+    patent_id: string;
+    score: number;
+    rank: number;
+    raw_metrics?: Record<string, number>;
+    normalized_metrics?: Record<string, number>;
+  }>;
+  setActive?: boolean;
+}
+
+export const snapshotApi = {
+  /**
+   * List all saved score snapshots
+   */
+  async list(): Promise<ScoreSnapshot[]> {
+    const { data } = await api.get('/scores/snapshots');
+    return data;
+  },
+
+  /**
+   * Get currently active snapshots (one per score type)
+   */
+  async getActive(): Promise<ActiveSnapshots> {
+    const { data } = await api.get('/scores/snapshots/active');
+    return data;
+  },
+
+  /**
+   * Save a new score snapshot
+   */
+  async save(request: SaveSnapshotRequest): Promise<ScoreSnapshot> {
+    const { data } = await api.post('/scores/snapshots', request);
+    return data;
+  },
+
+  /**
+   * Activate a snapshot (set as current for its score type)
+   */
+  async activate(snapshotId: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.put(`/scores/snapshots/${snapshotId}/activate`);
+    return data;
+  },
+
+  /**
+   * Deactivate a snapshot
+   */
+  async deactivate(snapshotId: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.put(`/scores/snapshots/${snapshotId}/deactivate`);
+    return data;
+  },
+
+  /**
+   * Delete a snapshot
+   */
+  async delete(snapshotId: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.delete(`/scores/snapshots/${snapshotId}`);
+    return data;
+  },
+
+  /**
+   * Get scores from a snapshot (for debugging/export)
+   */
+  async getScores(snapshotId: string, options?: { limit?: number; offset?: number }): Promise<{
+    scores: Array<{
+      patentId: string;
+      score: number;
+      rank: number;
+      rawMetrics?: Record<string, number>;
+      normalizedMetrics?: Record<string, number>;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const { data } = await api.get(`/scores/snapshots/${snapshotId}/scores`, { params: options });
+    return data;
+  },
+};
+
 // Jobs API
 export const jobsApi = {
   async getJobs(status?: string) {

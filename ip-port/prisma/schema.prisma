@@ -1027,3 +1027,67 @@ model PatentSubSectorScore {
   @@index([compositeScore])
   @@index([normalizedScore])
 }
+
+// =============================================================================
+// SCORE SNAPSHOTS
+// Persisted V2/V3 scoring results for use across the application.
+// Scores are computed on-demand in scoring pages, then saved here for:
+// - Filtering/aggregating in Portfolio and Aggregates pages
+// - Consistent scoring across sessions
+// - Historical comparison
+// =============================================================================
+
+model ScoreSnapshot {
+  id              String   @id @default(cuid())
+
+  // Snapshot identity
+  name            String
+  description     String?
+  scoreType       ScoreType @map("score_type")  // V2 or V3
+
+  // Scoring configuration used (full config for reproducibility)
+  config          Json                          // V2EnhancedConfig or V3ConsensusConfig
+
+  // Status
+  isActive        Boolean  @default(false) @map("is_active")  // Is this the "current" snapshot for its type?
+
+  // Stats
+  patentCount     Int      @default(0) @map("patent_count")
+  llmDataCount    Int      @default(0) @map("llm_data_count")  // Patents with LLM data
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  scores          PatentScoreEntry[]
+
+  @@map("score_snapshots")
+  @@index([scoreType])
+  @@index([isActive])
+}
+
+model PatentScoreEntry {
+  id              String   @id @default(cuid())
+
+  snapshotId      String   @map("snapshot_id")
+  snapshot        ScoreSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  patentId        String   @map("patent_id")
+  score           Float
+  rank            Int
+
+  // Optional: store raw metric values for transparency
+  rawMetrics      Json?    @map("raw_metrics")
+  normalizedMetrics Json?  @map("normalized_metrics")
+
+  @@unique([snapshotId, patentId])
+  @@map("patent_score_entries")
+  @@index([snapshotId])
+  @@index([patentId])
+  @@index([score])
+  @@index([rank])
+}
+
+enum ScoreType {
+  V2
+  V3
+}

@@ -19,6 +19,109 @@ const prisma = new PrismaClient();
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Active Snapshot Score Cache
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Cache for active snapshot scores (loaded from database)
+let snapshotV2Scores: Map<string, number> | null = null;
+let snapshotV3Scores: Map<string, number> | null = null;
+let snapshotScoreCacheExpiry = 0;
+const SNAPSHOT_SCORE_CACHE_TTL = 60 * 1000; // 1 minute
+
+/**
+ * Load active V2 snapshot scores from database
+ */
+async function loadActiveV2SnapshotScores(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+
+  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
+    where: { scoreType: 'V2', isActive: true },
+    select: { id: true },
+  });
+
+  if (activeSnapshot) {
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: activeSnapshot.id },
+      select: { patentId: true, score: true },
+    });
+    for (const s of scores) {
+      map.set(s.patentId, s.score);
+    }
+    console.log(`[Patents] Loaded ${map.size} V2 snapshot scores`);
+  }
+
+  return map;
+}
+
+/**
+ * Load active V3 snapshot scores from database
+ */
+async function loadActiveV3SnapshotScores(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+
+  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
+    where: { scoreType: 'V3', isActive: true },
+    select: { id: true },
+  });
+
+  if (activeSnapshot) {
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: activeSnapshot.id },
+      select: { patentId: true, score: true },
+    });
+    for (const s of scores) {
+      map.set(s.patentId, s.score);
+    }
+    console.log(`[Patents] Loaded ${map.size} V3 snapshot scores`);
+  }
+
+  return map;
+}
+
+/**
+ * Preload active snapshot scores (call at startup and when caches are cleared)
+ */
+export async function preloadSnapshotScores(): Promise<void> {
+  try {
+    const [v2, v3] = await Promise.all([
+      loadActiveV2SnapshotScores(),
+      loadActiveV3SnapshotScores(),
+    ]);
+    snapshotV2Scores = v2;
+    snapshotV3Scores = v3;
+    snapshotScoreCacheExpiry = Date.now() + SNAPSHOT_SCORE_CACHE_TTL;
+    console.log(`[Patents] Snapshot scores preloaded: V2=${v2.size}, V3=${v3.size}`);
+  } catch (err) {
+    console.error('[Patents] Failed to preload snapshot scores:', err);
+  }
+}
+
+/**
+ * Clear snapshot score cache (call when snapshots are modified)
+ */
+export function clearSnapshotScoreCache(): void {
+  snapshotV2Scores = null;
+  snapshotV3Scores = null;
+  snapshotScoreCacheExpiry = 0;
+  console.log('[Patents] Snapshot score cache cleared');
+}
+
+/**
+ * Get cached snapshot scores (returns null if not loaded or expired)
+ */
+function getSnapshotScores(): { v2: Map<string, number> | null; v3: Map<string, number> | null } {
+  const now = Date.now();
+  if (now > snapshotScoreCacheExpiry) {
+    // Cache expired, trigger async refresh but return current (possibly stale) data
+    preloadSnapshotScores().catch(console.error);
+  }
+  return { v2: snapshotV2Scores, v3: snapshotV3Scores };
+}
+
+// Preload snapshot scores at module load
+preloadSnapshotScores().catch(console.error);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Enrichment cache set cache (avoids re-reading directories on every request)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -300,6 +403,9 @@ export function clearPatentsCache(): void {
   fullLlmCache = null;
   fullLlmCacheLoadTime = 0;
   cpcDescriptionsCache = null;
+  // Also clear snapshot score cache and trigger refresh
+  clearSnapshotScoreCache();
+  preloadSnapshotScores().catch(console.error);
   console.log('[Patents] Caches cleared');
 }
 
@@ -336,13 +442,27 @@ export function loadPatents(): Patent[] {
   // Load enrichment data
   const llmData = loadAllFullLlmData();
 
-  // Load V3 scores (uses default profile)
-  let v3ScoresMap: Map<string, number> = new Map();
-  try {
-    const v3Scored = scoreAllPatents(getDefaultProfileId());
-    v3ScoresMap = new Map(v3Scored.map(s => [s.patent_id, s.score]));
-  } catch (e) {
-    console.warn('[Patents] Could not load v3 scores:', e);
+  // Get snapshot scores (from active database snapshots if available)
+  const snapshotScores = getSnapshotScores();
+  const hasV2Snapshot = snapshotScores.v2 && snapshotScores.v2.size > 0;
+  const hasV3Snapshot = snapshotScores.v3 && snapshotScores.v3.size > 0;
+
+  // Load fallback V3 scores (only if no active V3 snapshot)
+  let fallbackV3ScoresMap: Map<string, number> = new Map();
+  if (!hasV3Snapshot) {
+    try {
+      const v3Scored = scoreAllPatents(getDefaultProfileId());
+      fallbackV3ScoresMap = new Map(v3Scored.map(s => [s.patent_id, s.score]));
+    } catch (e) {
+      console.warn('[Patents] Could not load fallback v3 scores:', e);
+    }
+  }
+
+  if (hasV2Snapshot) {
+    console.log(`[Patents] Using active V2 snapshot scores (${snapshotScores.v2!.size} patents)`);
+  }
+  if (hasV3Snapshot) {
+    console.log(`[Patents] Using active V3 snapshot scores (${snapshotScores.v3!.size} patents)`);
   }
 
   // Enrich patents with affiliate, super_sector, citation classification, LLM data, and computed scores
@@ -351,11 +471,15 @@ export function loadPatents(): Patent[] {
     const llm = llmData.get(p.patent_id);
     const competitorCites = classification?.competitor_citations ?? 0;
 
-    // Compute v2 score with default weights
-    const v2Score = calculateV2Score(p.forward_citations, p.remaining_years, competitorCites);
+    // Get V2 score: prefer snapshot, fall back to calculated
+    const v2Score = hasV2Snapshot && snapshotScores.v2!.has(p.patent_id)
+      ? snapshotScores.v2!.get(p.patent_id)!
+      : calculateV2Score(p.forward_citations, p.remaining_years, competitorCites);
 
-    // Get pre-computed v3 score
-    const v3Score = v3ScoresMap.get(p.patent_id) ?? 0;
+    // Get V3 score: prefer snapshot, fall back to computed/default
+    const v3Score = hasV3Snapshot && snapshotScores.v3!.has(p.patent_id)
+      ? snapshotScores.v3!.get(p.patent_id)!
+      : fallbackV3ScoresMap.get(p.patent_id) ?? 0;
 
     return {
       ...p,
@@ -421,7 +545,10 @@ export function loadPatents(): Patent[] {
 
   lastLoadTime = now;
 
-  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation/v2/v3 enrichment`);
+  const scoreSource = hasV2Snapshot || hasV3Snapshot
+    ? ` (V2:${hasV2Snapshot ? 'snapshot' : 'calc'}, V3:${hasV3Snapshot ? 'snapshot' : 'calc'})`
+    : '';
+  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation/v2/v3 enrichment${scoreSource}`);
   return patentsCache;
 }
 

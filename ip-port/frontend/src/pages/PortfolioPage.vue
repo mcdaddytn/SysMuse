@@ -2,7 +2,7 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
-import { focusAreaApi, jobsApi, patentApi } from '@/services/api';
+import { focusAreaApi, jobsApi, patentApi, snapshotApi, type ActiveSnapshots } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
 import type { Patent } from '@/types';
@@ -24,6 +24,9 @@ const selectedPortfolio = ref('broadcom-core');
 const portfolioOptions = [
   { value: 'broadcom-core', label: 'Broadcom Core' }
 ];
+
+// Active snapshots state
+const activeSnapshots = ref<ActiveSnapshots>({ V2: null, V3: null });
 
 // Local state
 const searchText = ref('');
@@ -212,33 +215,41 @@ async function queueEnrichment() {
 
 // Lifecycle
 onMounted(async () => {
-  // Apply filters from query params (e.g., from sector drill-down)
-  const queryFilters: Record<string, unknown> = {};
-  if (route.query.primarySectors) {
-    const sectors = Array.isArray(route.query.primarySectors)
-      ? route.query.primarySectors as string[]
-      : [route.query.primarySectors as string];
-    queryFilters.primarySectors = sectors;
-  }
-  if (route.query.superSectors) {
-    const sectors = Array.isArray(route.query.superSectors)
-      ? route.query.superSectors as string[]
-      : [route.query.superSectors as string];
-    queryFilters.superSectors = sectors;
-  }
-  if (route.query.affiliates) {
-    const affs = Array.isArray(route.query.affiliates)
-      ? route.query.affiliates as string[]
-      : [route.query.affiliates as string];
-    queryFilters.affiliates = affs;
-  }
+  // Load active snapshots and apply query filters in parallel
+  const [, snapshots] = await Promise.all([
+    (async () => {
+      // Apply filters from query params (e.g., from sector drill-down)
+      const queryFilters: Record<string, unknown> = {};
+      if (route.query.primarySectors) {
+        const sectors = Array.isArray(route.query.primarySectors)
+          ? route.query.primarySectors as string[]
+          : [route.query.primarySectors as string];
+        queryFilters.primarySectors = sectors;
+      }
+      if (route.query.superSectors) {
+        const sectors = Array.isArray(route.query.superSectors)
+          ? route.query.superSectors as string[]
+          : [route.query.superSectors as string];
+        queryFilters.superSectors = sectors;
+      }
+      if (route.query.affiliates) {
+        const affs = Array.isArray(route.query.affiliates)
+          ? route.query.affiliates as string[]
+          : [route.query.affiliates as string];
+        queryFilters.affiliates = affs;
+      }
 
-  if (Object.keys(queryFilters).length > 0) {
-    patentsStore.updateFilters(queryFilters);
-  }
+      if (Object.keys(queryFilters).length > 0) {
+        patentsStore.updateFilters(queryFilters);
+      }
 
-  // Load patents
-  await patentsStore.loadPatents();
+      // Load patents
+      await patentsStore.loadPatents();
+    })(),
+    snapshotApi.getActive().catch(() => ({ V2: null, V3: null })),
+  ]);
+
+  activeSnapshots.value = snapshots;
 });
 </script>
 
@@ -275,6 +286,54 @@ onMounted(async () => {
       <q-badge color="primary" class="q-mr-md">
         {{ patentsStore.totalCount.toLocaleString() }} patents
       </q-badge>
+
+      <!-- Snapshot Status -->
+      <q-badge
+        v-if="activeSnapshots.V2"
+        color="positive"
+        class="q-mr-xs"
+      >
+        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+        V2: {{ activeSnapshots.V2.name }}
+        <q-tooltip>
+          V2 scores from snapshot "{{ activeSnapshots.V2.name }}"
+          ({{ activeSnapshots.V2.patentCount.toLocaleString() }} patents,
+          {{ new Date(activeSnapshots.V2.createdAt).toLocaleDateString() }})
+        </q-tooltip>
+      </q-badge>
+      <q-badge
+        v-else
+        color="warning"
+        outline
+        class="q-mr-xs"
+      >
+        V2: calculated
+        <q-tooltip>V2 scores are calculated on-the-fly. Save a snapshot in V2 Scoring for consistent scores.</q-tooltip>
+      </q-badge>
+
+      <q-badge
+        v-if="activeSnapshots.V3"
+        color="positive"
+        class="q-mr-md"
+      >
+        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+        V3: {{ activeSnapshots.V3.name }}
+        <q-tooltip>
+          V3 scores from snapshot "{{ activeSnapshots.V3.name }}"
+          ({{ activeSnapshots.V3.patentCount.toLocaleString() }} patents,
+          {{ new Date(activeSnapshots.V3.createdAt).toLocaleDateString() }})
+        </q-tooltip>
+      </q-badge>
+      <q-badge
+        v-else
+        color="warning"
+        outline
+        class="q-mr-md"
+      >
+        V3: calculated
+        <q-tooltip>V3 scores are calculated on-the-fly. Save a snapshot in V3 Scoring for consistent scores.</q-tooltip>
+      </q-badge>
+
       <q-space />
 
       <!-- Search -->

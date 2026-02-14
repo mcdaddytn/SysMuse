@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
 import {
   v2EnhancedApi,
+  snapshotApi,
   type V2EnhancedConfig,
   type V2EnhancedScoredPatent,
   type V2EnhancedPreset,
   type ScalingType,
+  type ScoreSnapshot,
   DEFAULT_V3_ROLES,
   BUILTIN_V3_PRESETS,
 } from '@/services/api';
@@ -18,10 +21,10 @@ import type {
 } from '@/types';
 
 const router = useRouter();
+const $q = useQuasar();
 
 // LocalStorage keys
 const V3_PRESETS_KEY = 'v3-consensus-custom-presets';
-const V3_SNAPSHOTS_KEY = 'v3-consensus-snapshots';
 
 // State - Roles and Configuration
 const roles = ref<V3ConsensusRole[]>([]);
@@ -45,19 +48,22 @@ const error = ref<string | null>(null);
 const total = ref(0);
 const hasUnsavedChanges = ref(false);
 
-// State - Snapshots
-const snapshots = ref<V3ConsensusSnapshot[]>([]);
-const selectedSnapshotId = ref<string | null>(null);
-const compareToSnapshot = ref(false);
-const snapshotRankMap = ref<Map<string, number>>(new Map());
+// State - Saved Scores
+const savedScores = ref<ScoreSnapshot[]>([]);
+const activeSnapshot = ref<ScoreSnapshot | null>(null);
+const savedScoresLoading = ref(false);
 
 // State - Dialogs
 const showSavePresetDialog = ref(false);
-const showSaveSnapshotDialog = ref(false);
+const showSaveDialog = ref(false);
 const newPresetName = ref('');
 const newPresetDescription = ref('');
-const newSnapshotName = ref('');
-const resetAfterSnapshot = ref(true);
+
+// Save dialog state
+const snapshotName = ref('');
+const snapshotDescription = ref('');
+const setAsActive = ref(true);
+const saving = ref(false);
 
 // State - Filters
 const topNOptions = [60, 100, 250, 500, 1000];
@@ -75,49 +81,20 @@ const totalWeight = computed(() => {
 // Computed: is weight valid (should sum to 100)
 const isWeightValid = computed(() => Math.abs(totalWeight.value - 100) < 1);
 
-// Computed: patents with snapshot comparison
-const patentsWithSnapshotChange = computed(() => {
-  if (!compareToSnapshot.value || !selectedSnapshotId.value) {
-    return patents.value;
-  }
-  return patents.value.map(p => ({
-    ...p,
-    snapshot_rank_change: snapshotRankMap.value.has(p.patent_id)
-      ? snapshotRankMap.value.get(p.patent_id)! - p.rank
-      : undefined,
-  }));
-});
-
 // Computed: table columns
-const columns = computed(() => {
-  const baseCols = [
-    { name: 'rank', label: 'Rank', field: 'rank', align: 'center' as const, sortable: true, style: 'width: 60px' },
-    { name: 'change', label: '+/-', field: 'rank_change', align: 'center' as const, style: 'width: 50px' },
-  ];
-
-  if (compareToSnapshot.value && selectedSnapshotId.value) {
-    baseCols.push({
-      name: 'snapshot_change',
-      label: 'vs Snap',
-      field: 'snapshot_rank_change',
-      align: 'center' as const,
-      style: 'width: 60px',
-    });
-  }
-
-  return [
-    ...baseCols,
-    { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const },
-    { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const },
-    { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left' as const },
-    { name: 'super_sector', label: 'Super-Sector', field: 'super_sector', align: 'left' as const },
-    { name: 'years_remaining', label: 'Years', field: 'years_remaining', align: 'center' as const, sortable: true,
-      format: (val: number) => val?.toFixed(1) },
-    { name: 'has_llm', label: 'LLM', field: 'has_llm_data', align: 'center' as const, style: 'width: 50px' },
-    { name: 'score', label: viewMode.value === 'consensus' ? 'Consensus' : 'Score', field: 'consensus_score', align: 'center' as const, sortable: true,
-      format: (val: number) => val?.toFixed(2) },
-  ];
-});
+const columns = computed(() => [
+  { name: 'rank', label: 'Rank', field: 'rank', align: 'center' as const, sortable: true, style: 'width: 60px' },
+  { name: 'change', label: '+/-', field: 'rank_change', align: 'center' as const, style: 'width: 50px' },
+  { name: 'patent_id', label: 'Patent ID', field: 'patent_id', align: 'left' as const },
+  { name: 'patent_title', label: 'Title', field: 'patent_title', align: 'left' as const },
+  { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left' as const },
+  { name: 'super_sector', label: 'Super-Sector', field: 'super_sector', align: 'left' as const },
+  { name: 'years_remaining', label: 'Years', field: 'years_remaining', align: 'center' as const, sortable: true,
+    format: (val: number) => val?.toFixed(1) },
+  { name: 'has_llm', label: 'LLM', field: 'has_llm_data', align: 'center' as const, style: 'width: 50px' },
+  { name: 'score', label: viewMode.value === 'consensus' ? 'Consensus' : 'Score', field: 'consensus_score', align: 'center' as const, sortable: true,
+    format: (val: number) => val?.toFixed(2) },
+]);
 
 // Initialize roles from defaults
 function initRoles() {
@@ -156,23 +133,6 @@ function loadCustomV3Presets() {
 // Save custom V3 presets to localStorage
 function saveCustomV3Presets() {
   localStorage.setItem(V3_PRESETS_KEY, JSON.stringify(customV3Presets.value));
-}
-
-// Load snapshots from localStorage
-function loadSnapshots() {
-  try {
-    const stored = localStorage.getItem(V3_SNAPSHOTS_KEY);
-    if (stored) {
-      snapshots.value = JSON.parse(stored);
-    }
-  } catch (err) {
-    console.error('Failed to load snapshots:', err);
-  }
-}
-
-// Save snapshots to localStorage
-function saveSnapshots() {
-  localStorage.setItem(V3_SNAPSHOTS_KEY, JSON.stringify(snapshots.value));
 }
 
 // Apply a V3 preset
@@ -424,64 +384,136 @@ function resetRankMovements() {
   }));
 }
 
-// Save snapshot
-function saveSnapshot() {
-  if (!newSnapshotName.value.trim()) return;
+// Load saved scores from database
+async function loadSavedScores() {
+  savedScoresLoading.value = true;
+  try {
+    const [allSnapshots, activeSnapshots] = await Promise.all([
+      snapshotApi.list(),
+      snapshotApi.getActive(),
+    ]);
+    // Filter to V3 only
+    savedScores.value = allSnapshots.filter(s => s.scoreType === 'V3');
+    activeSnapshot.value = activeSnapshots.V3;
+  } catch (err) {
+    console.error('Failed to load saved scores:', err);
+  } finally {
+    savedScoresLoading.value = false;
+  }
+}
 
-  const snapshot: V3ConsensusSnapshot = {
-    id: `snap-${Date.now()}`,
-    name: newSnapshotName.value.trim(),
-    timestamp: new Date().toISOString(),
-    topN: topN.value,
-    config: {
+async function saveScores() {
+  if (!snapshotName.value.trim()) return;
+
+  saving.value = true;
+  try {
+    // Build the scores array from current patents
+    const scores = patents.value.map(p => ({
+      patent_id: p.patent_id,
+      score: p.consensus_score,
+      rank: p.rank,
+      raw_metrics: p.raw_metrics,
+      normalized_metrics: p.normalized_metrics,
+    }));
+
+    // Build the config including role configuration
+    const config = {
       roles: roles.value.map(r => ({ ...r })),
       topN: topN.value,
       llmEnhancedOnly: llmEnhancedOnly.value,
-    },
-    rankings: patents.value.map(p => ({
-      patent_id: p.patent_id,
-      rank: p.rank,
-      consensus_score: p.consensus_score,
-      rank_change: p.rank_change,
-    })),
-  };
+    };
 
-  snapshots.value.unshift(snapshot);
-  if (snapshots.value.length > 10) {
-    snapshots.value = snapshots.value.slice(0, 10);
+    const snapshot = await snapshotApi.save({
+      name: snapshotName.value.trim(),
+      description: snapshotDescription.value.trim() || undefined,
+      scoreType: 'V3',
+      config,
+      scores,
+      setActive: setAsActive.value,
+    });
+
+    $q.notify({
+      type: 'positive',
+      message: `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
+      caption: setAsActive.value ? 'Set as active V3 scores' : undefined,
+    });
+
+    // Reload saved scores
+    await loadSavedScores();
+
+    // Reset dialog
+    showSaveDialog.value = false;
+    snapshotName.value = '';
+    snapshotDescription.value = '';
+    setAsActive.value = true;
+  } catch (err) {
+    console.error('Failed to save scores:', err);
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to save scores',
+      caption: err instanceof Error ? err.message : 'Unknown error',
+    });
+  } finally {
+    saving.value = false;
   }
-  saveSnapshots();
-
-  if (resetAfterSnapshot.value) {
-    resetRankMovements();
-  }
-
-  showSaveSnapshotDialog.value = false;
-  newSnapshotName.value = '';
 }
 
-// Delete snapshot
-function deleteSnapshot(snapshotId: string) {
-  snapshots.value = snapshots.value.filter(s => s.id !== snapshotId);
-  saveSnapshots();
-  if (selectedSnapshotId.value === snapshotId) {
-    selectedSnapshotId.value = null;
-    compareToSnapshot.value = false;
+async function activateSnapshot(snapshotId: string) {
+  try {
+    await snapshotApi.activate(snapshotId);
+    await loadSavedScores();
+    $q.notify({
+      type: 'positive',
+      message: 'Scores activated',
+      caption: 'These scores will be used in Portfolio and Aggregates',
+    });
+  } catch (err) {
+    console.error('Failed to activate snapshot:', err);
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to activate snapshot',
+    });
   }
 }
 
-// Select snapshot for comparison
-function onSnapshotSelect(snapshotId: string | null) {
-  selectedSnapshotId.value = snapshotId;
-  if (snapshotId) {
-    const snapshot = snapshots.value.find(s => s.id === snapshotId);
-    if (snapshot) {
-      snapshotRankMap.value = new Map(snapshot.rankings.map(r => [r.patent_id, r.rank]));
+async function deactivateSnapshot(snapshotId: string) {
+  try {
+    await snapshotApi.deactivate(snapshotId);
+    await loadSavedScores();
+    $q.notify({
+      type: 'info',
+      message: 'Scores deactivated',
+    });
+  } catch (err) {
+    console.error('Failed to deactivate snapshot:', err);
+  }
+}
+
+async function deleteSavedScores(snapshotId: string) {
+  const snapshot = savedScores.value.find(s => s.id === snapshotId);
+  if (!snapshot) return;
+
+  $q.dialog({
+    title: 'Delete Saved Scores',
+    message: `Delete "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores? This cannot be undone.`,
+    cancel: true,
+    persistent: true,
+  }).onOk(async () => {
+    try {
+      await snapshotApi.delete(snapshotId);
+      await loadSavedScores();
+      $q.notify({
+        type: 'info',
+        message: 'Saved scores deleted',
+      });
+    } catch (err) {
+      console.error('Failed to delete saved scores:', err);
+      $q.notify({
+        type: 'negative',
+        message: 'Failed to delete saved scores',
+      });
     }
-  } else {
-    snapshotRankMap.value.clear();
-    compareToSnapshot.value = false;
-  }
+  });
 }
 
 // Export to CSV
@@ -506,7 +538,6 @@ function exportCSV() {
   const headers = [
     'rank',
     'rank_change',
-    ...(compareToSnapshot.value && selectedSnapshotId.value ? ['snapshot_rank_change'] : []),
     'patent_id',
     'title',
     'assignee',
@@ -519,11 +550,10 @@ function exportCSV() {
   ];
 
   // Build rows
-  const rows = patentsWithSnapshotChange.value.map(p => {
+  const rows = patents.value.map(p => {
     const row = [
       p.rank,
       p.rank_change ?? '',
-      ...(compareToSnapshot.value && selectedSnapshotId.value ? [(p as any).snapshot_rank_change ?? 'NEW'] : []),
       p.patent_id,
       `"${(p.patent_title || '').replace(/"/g, '""')}"`,
       `"${(p.assignee || '').replace(/"/g, '""')}"`,
@@ -599,9 +629,8 @@ function formatMetricName(key: string): string {
 // Initialize
 onMounted(async () => {
   initRoles();
-  await loadV2Presets();
+  await Promise.all([loadV2Presets(), loadSavedScores()]);
   loadCustomV3Presets();
-  loadSnapshots();
   await recalculate();
 });
 </script>
@@ -792,53 +821,106 @@ onMounted(async () => {
           </q-card-section>
         </q-card>
 
-        <!-- Snapshots -->
+        <!-- Saved Scores -->
         <q-card class="q-mb-md">
           <q-card-section class="q-pb-sm">
             <div class="row items-center q-mb-sm">
-              <span class="text-subtitle2">Snapshots</span>
+              <span class="text-subtitle2">Saved Scores</span>
               <q-space />
               <q-btn
                 flat
                 dense
                 size="sm"
-                icon="camera_alt"
+                icon="save"
                 label="Save"
+                color="primary"
                 :disable="patents.length === 0"
-                @click="showSaveSnapshotDialog = true"
+                @click="showSaveDialog = true"
               />
             </div>
-            <q-select
-              v-model="selectedSnapshotId"
-              :options="[{ label: '(None)', value: null }, ...snapshots.map(s => ({ label: `${s.name} (${new Date(s.timestamp).toLocaleDateString()})`, value: s.id }))]"
-              option-value="value"
-              option-label="label"
-              emit-value
-              map-options
-              dense
-              outlined
-              clearable
-              placeholder="Select snapshot..."
-              @update:model-value="onSnapshotSelect"
-            />
-            <q-toggle
-              v-if="selectedSnapshotId"
-              v-model="compareToSnapshot"
-              label="Compare to snapshot"
-              dense
-              class="q-mt-sm"
-            />
-            <q-btn
-              v-if="selectedSnapshotId"
-              flat
-              dense
-              size="sm"
-              color="negative"
-              icon="delete"
-              label="Delete snapshot"
-              class="q-mt-sm"
-              @click="deleteSnapshot(selectedSnapshotId)"
-            />
+
+            <!-- Active Snapshot Badge -->
+            <div v-if="activeSnapshot" class="q-mb-sm">
+              <q-badge color="positive" class="q-pa-xs">
+                <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+                Active: {{ activeSnapshot.name }}
+              </q-badge>
+            </div>
+            <div v-else class="q-mb-sm">
+              <q-badge color="warning" outline class="q-pa-xs">
+                No active V3 scores
+              </q-badge>
+            </div>
+
+            <!-- Saved Scores List -->
+            <q-list v-if="savedScores.length > 0" dense separator class="bg-grey-1 rounded-borders">
+              <q-item
+                v-for="snap in savedScores"
+                :key="snap.id"
+                dense
+              >
+                <q-item-section>
+                  <q-item-label>
+                    {{ snap.name }}
+                    <q-icon
+                      v-if="snap.isActive"
+                      name="check_circle"
+                      color="positive"
+                      size="xs"
+                      class="q-ml-xs"
+                    />
+                  </q-item-label>
+                  <q-item-label caption>
+                    {{ snap.patentCount.toLocaleString() }} patents
+                    <span class="q-mx-xs">|</span>
+                    {{ new Date(snap.createdAt).toLocaleDateString() }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="row no-wrap q-gutter-xs">
+                    <q-btn
+                      v-if="!snap.isActive"
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      icon="check_circle"
+                      color="positive"
+                      @click="activateSnapshot(snap.id)"
+                    >
+                      <q-tooltip>Set as active</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-else
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      icon="remove_circle"
+                      color="grey"
+                      @click="deactivateSnapshot(snap.id)"
+                    >
+                      <q-tooltip>Deactivate</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      flat
+                      dense
+                      round
+                      size="sm"
+                      icon="delete"
+                      color="negative"
+                      @click="deleteSavedScores(snap.id)"
+                    >
+                      <q-tooltip>Delete</q-tooltip>
+                    </q-btn>
+                  </div>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <div v-else-if="!savedScoresLoading" class="text-caption text-grey q-pa-sm">
+              No saved scores. Save current scores to use them in Portfolio and Aggregates.
+            </div>
+            <q-spinner v-if="savedScoresLoading" size="sm" class="q-mt-sm" />
           </q-card-section>
         </q-card>
       </div>
@@ -890,7 +972,7 @@ onMounted(async () => {
             </q-banner>
 
             <q-table
-              :rows="patentsWithSnapshotChange"
+              :rows="patents"
               :columns="columns"
               row-key="patent_id"
               :loading="loading"
@@ -922,28 +1004,6 @@ onMounted(async () => {
                     </span>
                   </template>
                   <span v-else class="text-grey-5">-</span>
-                </q-td>
-              </template>
-
-              <template v-slot:body-cell-snapshot_change="props">
-                <q-td :props="props">
-                  <template v-if="props.row.snapshot_rank_change !== undefined">
-                    <template v-if="props.row.snapshot_rank_change !== 0">
-                      <q-icon
-                        :name="props.row.snapshot_rank_change > 0 ? 'arrow_upward' : 'arrow_downward'"
-                        :color="props.row.snapshot_rank_change > 0 ? 'positive' : 'negative'"
-                        size="xs"
-                      />
-                      <span
-                        :class="props.row.snapshot_rank_change > 0 ? 'text-positive' : 'text-negative'"
-                        class="text-caption"
-                      >
-                        {{ Math.abs(props.row.snapshot_rank_change) }}
-                      </span>
-                    </template>
-                    <span v-else class="text-grey-5">-</span>
-                  </template>
-                  <q-badge v-else color="info" outline size="xs">NEW</q-badge>
                 </q-td>
               </template>
 
@@ -1117,41 +1177,59 @@ onMounted(async () => {
       </q-card>
     </q-dialog>
 
-    <!-- Save Snapshot Dialog -->
-    <q-dialog v-model="showSaveSnapshotDialog">
-      <q-card style="min-width: 350px">
+    <!-- Save Scores Dialog -->
+    <q-dialog v-model="showSaveDialog">
+      <q-card style="min-width: 400px">
         <q-card-section>
-          <div class="text-h6">Save Snapshot</div>
+          <div class="text-h6">Save Scores</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
           <q-input
-            v-model="newSnapshotName"
-            label="Snapshot Name"
+            v-model="snapshotName"
+            label="Name"
             dense
             autofocus
-            :placeholder="`Snapshot ${new Date().toLocaleDateString()}`"
-            @keyup.enter="saveSnapshot"
+            :placeholder="`V3 Consensus - ${new Date().toLocaleDateString()}`"
+          />
+          <q-input
+            v-model="snapshotDescription"
+            label="Description (optional)"
+            dense
+            type="textarea"
+            rows="2"
+            class="q-mt-md"
           />
           <q-toggle
-            v-model="resetAfterSnapshot"
-            label="Reset rank movements after save"
+            v-model="setAsActive"
+            label="Set as active V3 scores"
             dense
             class="q-mt-md"
           />
           <div class="text-caption text-grey q-mt-sm">
-            Saves current rankings ({{ patents.length }} patents) with their consensus scores.
-            Limit: 10 snapshots.
+            Saves {{ patents.length.toLocaleString() }} consensus scores.
+            <strong v-if="setAsActive">Active scores</strong>
+            <span v-else>Saved scores</span>
+            will be used for V3 in Portfolio Summary and Aggregate View.
           </div>
+
+          <q-banner v-if="activeSnapshot && setAsActive" class="bg-warning-1 q-mt-md" dense>
+            <template v-slot:avatar>
+              <q-icon name="info" color="warning" />
+            </template>
+            This will replace "{{ activeSnapshot.name }}" as the active V3 scores.
+          </q-banner>
         </q-card-section>
 
         <q-card-actions align="right">
-          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn flat label="Cancel" v-close-popup :disable="saving" />
           <q-btn
             color="primary"
             label="Save"
-            :disable="!newSnapshotName.trim()"
-            @click="saveSnapshot"
+            icon="save"
+            :disable="!snapshotName.trim()"
+            :loading="saving"
+            @click="saveScores"
           />
         </q-card-actions>
       </q-card>

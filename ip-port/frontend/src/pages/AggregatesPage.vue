@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
+import { snapshotApi, type ActiveSnapshots } from '@/services/api';
 
 // Group by field options
 interface GroupByOption {
@@ -68,6 +69,9 @@ const results = ref<Array<Record<string, string | number>>>([]);
 const totalGroups = ref(0);
 const filteredPatents = ref(0);
 const exporting = ref(false);
+
+// Active snapshots state
+const activeSnapshots = ref<ActiveSnapshots>({ V2: null, V3: null });
 
 // Check if any selected groupBy field is an array field
 const hasArrayGroupBy = computed(() =>
@@ -215,8 +219,13 @@ function onFiltersUpdate(newFilters: Record<string, unknown>) {
 }
 
 // Run initial aggregation
-onMounted(() => {
-  runAggregation();
+onMounted(async () => {
+  // Load active snapshots and run aggregation in parallel
+  const [, snapshots] = await Promise.all([
+    runAggregation(),
+    snapshotApi.getActive().catch(() => ({ V2: null, V3: null })),
+  ]);
+  activeSnapshots.value = snapshots;
 });
 </script>
 
@@ -228,9 +237,57 @@ onMounted(() => {
       <q-badge color="primary" class="q-mr-md">
         {{ filteredPatents.toLocaleString() }} patents
       </q-badge>
-      <q-badge color="secondary">
+      <q-badge color="secondary" class="q-mr-md">
         {{ totalGroups.toLocaleString() }} groups
       </q-badge>
+
+      <!-- Snapshot Status -->
+      <q-badge
+        v-if="activeSnapshots.V2"
+        color="positive"
+        class="q-mr-xs"
+      >
+        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+        V2: {{ activeSnapshots.V2.name }}
+        <q-tooltip>
+          V2 scores from snapshot "{{ activeSnapshots.V2.name }}"
+          ({{ activeSnapshots.V2.patentCount.toLocaleString() }} patents,
+          {{ new Date(activeSnapshots.V2.createdAt).toLocaleDateString() }})
+        </q-tooltip>
+      </q-badge>
+      <q-badge
+        v-else
+        color="warning"
+        outline
+        class="q-mr-xs"
+      >
+        V2: calculated
+        <q-tooltip>V2 scores are calculated on-the-fly. Save a snapshot in V2 Scoring for consistent scores.</q-tooltip>
+      </q-badge>
+
+      <q-badge
+        v-if="activeSnapshots.V3"
+        color="positive"
+        class="q-mr-md"
+      >
+        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+        V3: {{ activeSnapshots.V3.name }}
+        <q-tooltip>
+          V3 scores from snapshot "{{ activeSnapshots.V3.name }}"
+          ({{ activeSnapshots.V3.patentCount.toLocaleString() }} patents,
+          {{ new Date(activeSnapshots.V3.createdAt).toLocaleDateString() }})
+        </q-tooltip>
+      </q-badge>
+      <q-badge
+        v-else
+        color="warning"
+        outline
+        class="q-mr-md"
+      >
+        V3: calculated
+        <q-tooltip>V3 scores are calculated on-the-fly. Save a snapshot in V3 Scoring for consistent scores.</q-tooltip>
+      </q-badge>
+
       <q-space />
       <q-btn
         color="primary"

@@ -177,6 +177,13 @@ export const usePatentsStore = defineStore('patents', () => {
     loadPatents();
   }
 
+  function setFilters(newFilters: PortfolioFilters) {
+    // Replace filters completely (not merge)
+    filters.value = newFilters;
+    pagination.value.page = 1;
+    loadPatents();
+  }
+
   function clearFilters() {
     filters.value = {};
     pagination.value.page = 1;
@@ -282,6 +289,7 @@ export const usePatentsStore = defineStore('patents', () => {
     loadPatents,
     updatePagination,
     updateFilters,
+    setFilters,
     clearFilters,
     toggleColumn,
     setColumnVisibility,

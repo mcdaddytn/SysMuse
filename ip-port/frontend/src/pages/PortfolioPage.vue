@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
 import { focusAreaApi, jobsApi, patentApi } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
+import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
 import type { Patent } from '@/types';
 
 const router = useRouter();
@@ -30,100 +31,18 @@ const showColumnSelector = ref(false);
 const selectedPatents = ref<Patent[]>([]);
 const showFilters = ref(true);
 
-// Filter options (loaded from API)
-interface FilterOption {
-  name: string;
-  count: number;
-}
-const affiliateOptions = ref<FilterOption[]>([]);
-const superSectorOptions = ref<FilterOption[]>([]);
-const primarySectorOptions = ref<FilterOption[]>([]);
-const loadingFilters = ref(false);
+// Flexible filters (v2)
+const flexFilters = computed({
+  get: () => patentsStore.filters as Record<string, unknown>,
+  set: (val) => patentsStore.updateFilters(val)
+});
 
-// Selected filter values (multi-select)
-const selectedAffiliates = ref<string[]>([]);
-const selectedSuperSectors = ref<string[]>([]);
-const selectedPrimarySectors = ref<string[]>([]);
-
-// Numeric range filters
-const scoreFilterType = ref<'score' | 'v2_score' | 'v3_score'>('score');
-const scoreFilterOptions = [
-  { value: 'score', label: 'Base Score' },
-  { value: 'v2_score', label: 'v2 Score' },
-  { value: 'v3_score', label: 'v3 Score' }
-];
-const scoreMin = ref<number | null>(null);
-const scoreMax = ref<number | null>(null);
-const yearsMin = ref<number | null>(null);
-const yearsMax = ref<number | null>(null);
-const competitorCitesMin = ref<number | null>(null);
-const competitorCitesMax = ref<number | null>(null);
-const forwardCitesMin = ref<number | null>(null);
-const forwardCitesMax = ref<number | null>(null);
-
-// Load filter options from API
-async function loadFilterOptions() {
-  loadingFilters.value = true;
-  try {
-    const [affiliatesRes, sectorsRes, primarySectorsRes] = await Promise.all([
-      fetch('/api/patents/affiliates'),
-      fetch('/api/patents/super-sectors'),
-      fetch('/api/patents/primary-sectors')
-    ]);
-
-    if (affiliatesRes.ok) {
-      affiliateOptions.value = await affiliatesRes.json();
-    }
-    if (sectorsRes.ok) {
-      superSectorOptions.value = await sectorsRes.json();
-    }
-    if (primarySectorsRes.ok) {
-      primarySectorOptions.value = await primarySectorsRes.json();
-    }
-  } catch (err) {
-    console.error('Failed to load filter options:', err);
-  } finally {
-    loadingFilters.value = false;
-  }
-}
-
-// Sync local filter state with store
-watch(() => patentsStore.filters, (newFilters) => {
-  selectedAffiliates.value = newFilters.affiliates || [];
-  selectedSuperSectors.value = newFilters.superSectors || [];
-  selectedPrimarySectors.value = newFilters.primarySectors || [];
-  scoreMin.value = newFilters.scoreMin ?? null;
-  scoreMax.value = newFilters.scoreMax ?? null;
-  yearsMin.value = newFilters.yearsMin ?? null;
-  yearsMax.value = newFilters.yearsMax ?? null;
-  competitorCitesMin.value = newFilters.competitorCitesMin ?? null;
-  competitorCitesMax.value = newFilters.competitorCitesMax ?? null;
-  forwardCitesMin.value = newFilters.forwardCitesMin ?? null;
-  forwardCitesMax.value = newFilters.forwardCitesMax ?? null;
-}, { immediate: true });
-
-// Apply filters when dropdowns change
-function applyFilters() {
-  patentsStore.updateFilters({
-    affiliates: selectedAffiliates.value.length > 0 ? selectedAffiliates.value : undefined,
-    superSectors: selectedSuperSectors.value.length > 0 ? selectedSuperSectors.value : undefined,
-    primarySectors: selectedPrimarySectors.value.length > 0 ? selectedPrimarySectors.value : undefined,
-    scoreField: scoreFilterType.value,
-    scoreMin: scoreMin.value ?? undefined,
-    scoreMax: scoreMax.value ?? undefined,
-    yearsMin: yearsMin.value ?? undefined,
-    yearsMax: yearsMax.value ?? undefined,
-    competitorCitesMin: competitorCitesMin.value ?? undefined,
-    competitorCitesMax: competitorCitesMax.value ?? undefined,
-    forwardCitesMin: forwardCitesMin.value ?? undefined,
-    forwardCitesMax: forwardCitesMax.value ?? undefined,
-  });
-}
-
-// Get score filter label for display
-function getScoreFilterLabel(): string {
-  const opt = scoreFilterOptions.find(o => o.value === scoreFilterType.value);
-  return opt?.label || 'Base Score';
+// Apply flex filters from the builder (replaces all filters except search)
+function onFlexFiltersUpdate(filters: Record<string, unknown>) {
+  // Preserve search from the separate search input
+  const search = patentsStore.filters.search;
+  // Use setFilters to REPLACE (not merge) filters
+  patentsStore.setFilters({ ...filters, search });
 }
 
 // Super-sector color mapping
@@ -300,32 +219,26 @@ onMounted(async () => {
       ? route.query.primarySectors as string[]
       : [route.query.primarySectors as string];
     queryFilters.primarySectors = sectors;
-    selectedPrimarySectors.value = sectors;
   }
   if (route.query.superSectors) {
     const sectors = Array.isArray(route.query.superSectors)
       ? route.query.superSectors as string[]
       : [route.query.superSectors as string];
     queryFilters.superSectors = sectors;
-    selectedSuperSectors.value = sectors;
   }
   if (route.query.affiliates) {
     const affs = Array.isArray(route.query.affiliates)
       ? route.query.affiliates as string[]
       : [route.query.affiliates as string];
     queryFilters.affiliates = affs;
-    selectedAffiliates.value = affs;
   }
 
   if (Object.keys(queryFilters).length > 0) {
     patentsStore.updateFilters(queryFilters);
   }
 
-  // Load filter options and patents in parallel
-  await Promise.all([
-    loadFilterOptions(),
-    patentsStore.loadPatents()
-  ]);
+  // Load patents
+  await patentsStore.loadPatents();
 });
 </script>
 
@@ -408,151 +321,15 @@ onMounted(async () => {
       />
     </div>
 
-    <!-- Filter Bar -->
+    <!-- Flexible Filter Builder -->
     <q-slide-transition>
       <div v-show="showFilters" class="q-mb-md">
         <q-card flat bordered>
           <q-card-section class="q-py-sm">
-            <div class="row q-gutter-md items-center">
-              <!-- Affiliate Multi-Select -->
-              <q-select
-                v-model="selectedAffiliates"
-                :options="affiliateOptions"
-                option-value="name"
-                option-label="name"
-                emit-value
-                map-options
-                multiple
-                use-chips
-                dense
-                outlined
-                clearable
-                :loading="loadingFilters"
-                label="Affiliate"
-                style="min-width: 200px"
-                @update:model-value="applyFilters"
-              >
-                <template v-slot:option="{ itemProps, opt }">
-                  <q-item v-bind="itemProps">
-                    <q-item-section>
-                      <q-item-label>{{ opt.name }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
-                    </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
-
-              <!-- Super-Sector Multi-Select -->
-              <q-select
-                v-model="selectedSuperSectors"
-                :options="superSectorOptions"
-                option-value="name"
-                option-label="name"
-                emit-value
-                map-options
-                multiple
-                use-chips
-                dense
-                outlined
-                clearable
-                :loading="loadingFilters"
-                label="Super-Sector"
-                style="min-width: 220px"
-                @update:model-value="applyFilters"
-              >
-                <template v-slot:option="{ itemProps, opt }">
-                  <q-item v-bind="itemProps">
-                    <q-item-section avatar>
-                      <q-badge :color="getSectorColor(opt.name)" />
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>{{ opt.name }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
-                    </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
-
-              <!-- Primary Sector Multi-Select -->
-              <q-select
-                v-model="selectedPrimarySectors"
-                :options="primarySectorOptions"
-                option-value="name"
-                option-label="name"
-                emit-value
-                map-options
-                multiple
-                use-chips
-                dense
-                outlined
-                clearable
-                :loading="loadingFilters"
-                label="Primary Sector"
-                style="min-width: 220px"
-                @update:model-value="applyFilters"
-              >
-                <template v-slot:option="{ itemProps, opt }">
-                  <q-item v-bind="itemProps">
-                    <q-item-section>
-                      <q-item-label>{{ opt.name }}</q-item-label>
-                    </q-item-section>
-                    <q-item-section side>
-                      <q-badge color="grey-6">{{ opt.count.toLocaleString() }}</q-badge>
-                    </q-item-section>
-                  </q-item>
-                </template>
-              </q-select>
-
-              <!-- Numeric Range Filters -->
-              <div class="row items-center q-gutter-xs">
-                <q-select
-                  v-model="scoreFilterType"
-                  :options="scoreFilterOptions"
-                  option-value="value"
-                  option-label="label"
-                  emit-value
-                  map-options
-                  dense
-                  outlined
-                  style="width: 120px"
-                  @update:model-value="applyFilters"
-                />
-                <q-input v-model.number="scoreMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
-                <q-input v-model.number="scoreMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
-              </div>
-              <div class="row items-center q-gutter-xs">
-                <span class="text-caption text-grey-7">Years Left:</span>
-                <q-input v-model.number="yearsMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
-                <q-input v-model.number="yearsMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
-              </div>
-              <div class="row items-center q-gutter-xs">
-                <span class="text-caption text-grey-7">Competitor Cites:</span>
-                <q-input v-model.number="competitorCitesMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
-                <q-input v-model.number="competitorCitesMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
-              </div>
-              <div class="row items-center q-gutter-xs">
-                <span class="text-caption text-grey-7">Forward Cites:</span>
-                <q-input v-model.number="forwardCitesMin" type="number" dense outlined placeholder="min" style="width: 80px" @change="applyFilters" />
-                <q-input v-model.number="forwardCitesMax" type="number" dense outlined placeholder="max" style="width: 80px" @change="applyFilters" />
-              </div>
-
-              <q-space />
-
-              <!-- Clear Filters -->
-              <q-btn
-                v-if="patentsStore.hasFilters"
-                flat
-                dense
-                color="negative"
-                icon="clear_all"
-                label="Clear All"
-                @click="patentsStore.clearFilters(); selectedAffiliates = []; selectedSuperSectors = []; selectedPrimarySectors = []; scoreMin = null; scoreMax = null; yearsMin = null; yearsMax = null; competitorCitesMin = null; competitorCitesMax = null; forwardCitesMin = null; forwardCitesMax = null;"
-              />
-            </div>
+            <FlexFilterBuilder
+              :model-value="flexFilters"
+              @update:model-value="onFlexFiltersUpdate"
+            />
           </q-card-section>
         </q-card>
       </div>
@@ -561,90 +338,9 @@ onMounted(async () => {
     <!-- Active Filter Summary (shown when filters hidden) -->
     <div v-if="!showFilters && patentsStore.hasFilters" class="q-mb-md">
       <div class="row q-gutter-sm items-center">
-        <span class="text-caption text-grey-7">Filters:</span>
-        <q-chip
-          v-for="affiliate in (patentsStore.filters.affiliates || [])"
-          :key="'aff-' + affiliate"
-          dense
-          removable
-          color="primary"
-          text-color="white"
-          @remove="selectedAffiliates = selectedAffiliates.filter(a => a !== affiliate); applyFilters()"
-        >
-          {{ affiliate }}
-        </q-chip>
-        <q-chip
-          v-for="sector in (patentsStore.filters.superSectors || [])"
-          :key="'sec-' + sector"
-          dense
-          removable
-          :color="getSectorColor(sector)"
-          text-color="white"
-          @remove="selectedSuperSectors = selectedSuperSectors.filter(s => s !== sector); applyFilters()"
-        >
-          {{ sector }}
-        </q-chip>
-        <q-chip
-          v-for="sector in (patentsStore.filters.primarySectors || [])"
-          :key="'psec-' + sector"
-          dense
-          removable
-          color="deep-purple"
-          text-color="white"
-          @remove="selectedPrimarySectors = selectedPrimarySectors.filter(s => s !== sector); applyFilters()"
-        >
-          {{ sector }}
-        </q-chip>
-        <q-chip
-          v-if="patentsStore.filters.scoreMin != null || patentsStore.filters.scoreMax != null"
-          dense
-          removable
-          color="green"
-          text-color="white"
-          @remove="scoreMin = null; scoreMax = null; applyFilters()"
-        >
-          {{ getScoreFilterLabel() }}: {{ patentsStore.filters.scoreMin ?? '*' }}–{{ patentsStore.filters.scoreMax ?? '*' }}
-        </q-chip>
-        <q-chip
-          v-if="patentsStore.filters.yearsMin != null || patentsStore.filters.yearsMax != null"
-          dense
-          removable
-          color="teal"
-          text-color="white"
-          @remove="yearsMin = null; yearsMax = null; applyFilters()"
-        >
-          Years: {{ patentsStore.filters.yearsMin ?? '*' }}–{{ patentsStore.filters.yearsMax ?? '*' }}
-        </q-chip>
-        <q-chip
-          v-if="patentsStore.filters.competitorCitesMin != null || patentsStore.filters.competitorCitesMax != null"
-          dense
-          removable
-          color="orange"
-          text-color="white"
-          @remove="competitorCitesMin = null; competitorCitesMax = null; applyFilters()"
-        >
-          Comp. Cites: {{ patentsStore.filters.competitorCitesMin ?? '*' }}–{{ patentsStore.filters.competitorCitesMax ?? '*' }}
-        </q-chip>
-        <q-chip
-          v-if="patentsStore.filters.forwardCitesMin != null || patentsStore.filters.forwardCitesMax != null"
-          dense
-          removable
-          color="blue"
-          text-color="white"
-          @remove="forwardCitesMin = null; forwardCitesMax = null; applyFilters()"
-        >
-          Fwd Cites: {{ patentsStore.filters.forwardCitesMin ?? '*' }}–{{ patentsStore.filters.forwardCitesMax ?? '*' }}
-        </q-chip>
-        <q-chip
-          v-if="patentsStore.filters.search"
-          dense
-          removable
-          color="grey-7"
-          text-color="white"
-          @remove="searchText = ''; patentsStore.updateFilters({ search: undefined })"
-        >
-          Search: {{ patentsStore.filters.search }}
-        </q-chip>
+        <span class="text-caption text-grey-7">Active filters:</span>
+        <q-badge color="primary">{{ Object.keys(patentsStore.filters).filter(k => patentsStore.filters[k] != null).length }} filters</q-badge>
+        <q-btn flat dense size="sm" label="Show" @click="showFilters = true" />
       </div>
     </div>
 

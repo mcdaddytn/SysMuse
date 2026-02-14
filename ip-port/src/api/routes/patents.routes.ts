@@ -591,6 +591,102 @@ function applyFilters(patents: Patent[], filters: Record<string, string | string
     result = result.filter(p => p.remaining_years > 0);
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW FILTERS - Phase 2: One-to-many and additional field filters
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Competitor names filter (one-to-many: any match)
+  if (filters.competitorNames) {
+    const nameList = Array.isArray(filters.competitorNames)
+      ? filters.competitorNames
+      : [filters.competitorNames];
+    const lowerNames = nameList.map(n => n.toLowerCase());
+    result = result.filter(p => {
+      const patentCompetitors = p.competitor_names || [];
+      return patentCompetitors.some(c =>
+        lowerNames.some(n => c.toLowerCase().includes(n))
+      );
+    });
+  }
+
+  // CPC codes filter (one-to-many: prefix match)
+  if (filters.cpcCodes) {
+    const cpcList = Array.isArray(filters.cpcCodes)
+      ? filters.cpcCodes
+      : [filters.cpcCodes];
+    const upperCodes = cpcList.map(c => c.toUpperCase());
+    result = result.filter(p => {
+      const patentCpcs = p.cpc_codes || [];
+      return patentCpcs.some(cpc =>
+        upperCodes.some(filter => cpc.toUpperCase().startsWith(filter))
+      );
+    });
+  }
+
+  // Sub-sector filter
+  if (filters.subSectors) {
+    const subSectorList = Array.isArray(filters.subSectors)
+      ? filters.subSectors
+      : [filters.subSectors];
+    result = result.filter(p =>
+      subSectorList.some(s => p.primary_sub_sector_name === s)
+    );
+  }
+
+  // Has LLM data filter
+  if (filters.hasLlmData === 'true') {
+    result = result.filter(p => p.llm_summary && p.llm_summary.length > 0);
+  } else if (filters.hasLlmData === 'false') {
+    result = result.filter(p => !p.llm_summary || p.llm_summary.length === 0);
+  }
+
+  // Is Expired filter (patents with remaining_years <= 0)
+  if (filters.isExpired === 'true') {
+    result = result.filter(p => p.remaining_years <= 0);
+  } else if (filters.isExpired === 'false') {
+    result = result.filter(p => p.remaining_years > 0);
+  }
+
+  // V2 Score range filter (omits patents without v2_score)
+  if (filters.v2ScoreMin) {
+    const min = parseFloat(filters.v2ScoreMin as string);
+    result = result.filter(p => p.v2_score != null && p.v2_score >= min);
+  }
+  if (filters.v2ScoreMax) {
+    const max = parseFloat(filters.v2ScoreMax as string);
+    result = result.filter(p => p.v2_score != null && p.v2_score <= max);
+  }
+
+  // V3 Score range filter (omits patents without v3_score)
+  if (filters.v3ScoreMin) {
+    const min = parseFloat(filters.v3ScoreMin as string);
+    result = result.filter(p => p.v3_score != null && p.v3_score >= min);
+  }
+  if (filters.v3ScoreMax) {
+    const max = parseFloat(filters.v3ScoreMax as string);
+    result = result.filter(p => p.v3_score != null && p.v3_score <= max);
+  }
+
+  // Affiliate citations range filter
+  if (filters.affiliateCitesMin) {
+    const min = parseFloat(filters.affiliateCitesMin as string);
+    result = result.filter(p => (p.affiliate_citations ?? 0) >= min);
+  }
+  if (filters.affiliateCitesMax) {
+    const max = parseFloat(filters.affiliateCitesMax as string);
+    result = result.filter(p => (p.affiliate_citations ?? 0) <= max);
+  }
+
+  // Neutral citations range filter
+  if (filters.neutralCitesMin) {
+    const min = parseFloat(filters.neutralCitesMin as string);
+    result = result.filter(p => (p.neutral_citations ?? 0) >= min);
+  }
+  if (filters.neutralCitesMax) {
+    const max = parseFloat(filters.neutralCitesMax as string);
+    result = result.filter(p => (p.neutral_citations ?? 0) <= max);
+  }
+
   return result;
 }
 
@@ -1112,6 +1208,229 @@ router.get('/assignees', (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting assignees:', error);
     res.status(500).json({ error: 'Failed to get assignees' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2: New filter option endpoints for flexible filtering
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/patents/competitor-names
+ * Get list of unique competitor names with citation counts
+ */
+router.get('/competitor-names', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const competitorCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      const competitors = p.competitor_names || [];
+      competitors.forEach(name => {
+        competitorCounts[name] = (competitorCounts[name] || 0) + 1;
+      });
+    });
+
+    const competitorNames = Object.entries(competitorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    res.json(competitorNames);
+  } catch (error) {
+    console.error('Error getting competitor names:', error);
+    res.status(500).json({ error: 'Failed to get competitor names' });
+  }
+});
+
+/**
+ * GET /api/patents/cpc-codes
+ * Get list of unique CPC codes with patent counts
+ * Optional query param: level=section|class|subclass|group (default: subclass)
+ */
+router.get('/cpc-codes', (req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+    const level = (req.query.level as string) || 'subclass';
+
+    // CPC level extraction
+    // Examples: H04L63/00 -> H (section), H04 (class), H04L (subclass), H04L63 (group)
+    function extractLevel(cpc: string, lvl: string): string {
+      switch (lvl) {
+        case 'section': return cpc.slice(0, 1);      // H
+        case 'class': return cpc.slice(0, 3);        // H04
+        case 'subclass': return cpc.slice(0, 4);     // H04L
+        case 'group': return cpc.split('/')[0];      // H04L63
+        default: return cpc.slice(0, 4);
+      }
+    }
+
+    const cpcCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      const cpcs = p.cpc_codes || [];
+      const seen = new Set<string>();
+      cpcs.forEach(cpc => {
+        const key = extractLevel(cpc, level);
+        if (!seen.has(key)) {
+          seen.add(key);
+          cpcCounts[key] = (cpcCounts[key] || 0) + 1;
+        }
+      });
+    });
+
+    const cpcCodes = Object.entries(cpcCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, count]) => ({
+        code,
+        count,
+        description: resolveCpcDescription(code)
+      }));
+
+    res.json(cpcCodes);
+  } catch (error) {
+    console.error('Error getting CPC codes:', error);
+    res.status(500).json({ error: 'Failed to get CPC codes' });
+  }
+});
+
+/**
+ * GET /api/patents/sub-sectors
+ * Get list of unique sub-sectors with patent counts
+ */
+router.get('/sub-sectors', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
+    patents.forEach(p => {
+      const subSector = (p as any).primary_sub_sector_name;
+      if (subSector) {
+        if (!subSectorCounts[subSector]) {
+          subSectorCounts[subSector] = { count: 0, sector: p.primary_sector };
+        }
+        subSectorCounts[subSector].count++;
+      }
+    });
+
+    const subSectors = Object.entries(subSectorCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        sector: data.sector
+      }));
+
+    res.json(subSectors);
+  } catch (error) {
+    console.error('Error getting sub-sectors:', error);
+    res.status(500).json({ error: 'Failed to get sub-sectors' });
+  }
+});
+
+/**
+ * GET /api/patents/filter-options
+ * Get all available filter options in a single call (for FlexFilterBuilder)
+ */
+router.get('/filter-options', async (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    // Affiliates
+    const affiliateCounts: Record<string, number> = {};
+    // Super-sectors
+    const superSectorCounts: Record<string, number> = {};
+    // Primary sectors
+    const primarySectorCounts: Record<string, number> = {};
+    // Competitor names
+    const competitorCounts: Record<string, number> = {};
+    // CPC codes (subclass level)
+    const cpcCounts: Record<string, number> = {};
+    // Sub-sectors
+    const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
+    // Score range
+    let scoreMin = Infinity, scoreMax = -Infinity;
+    // Years range
+    let yearsMin = Infinity, yearsMax = -Infinity;
+    // Counts
+    let withLlmData = 0, withCompetitors = 0, expired = 0;
+
+    patents.forEach(p => {
+      // Affiliates
+      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
+      // Super-sectors
+      superSectorCounts[p.super_sector] = (superSectorCounts[p.super_sector] || 0) + 1;
+      // Primary sectors
+      const sector = p.primary_sector || 'unknown';
+      primarySectorCounts[sector] = (primarySectorCounts[sector] || 0) + 1;
+      // Competitors
+      (p.competitor_names || []).forEach(name => {
+        competitorCounts[name] = (competitorCounts[name] || 0) + 1;
+      });
+      // CPC codes (subclass)
+      const seen = new Set<string>();
+      (p.cpc_codes || []).forEach(cpc => {
+        const key = cpc.slice(0, 4);
+        if (!seen.has(key)) {
+          seen.add(key);
+          cpcCounts[key] = (cpcCounts[key] || 0) + 1;
+        }
+      });
+      // Sub-sectors
+      const subSector = (p as any).primary_sub_sector_name;
+      if (subSector) {
+        if (!subSectorCounts[subSector]) {
+          subSectorCounts[subSector] = { count: 0, sector: p.primary_sector };
+        }
+        subSectorCounts[subSector].count++;
+      }
+      // Score range
+      if (p.score < scoreMin) scoreMin = p.score;
+      if (p.score > scoreMax) scoreMax = p.score;
+      // Years range
+      if (p.remaining_years < yearsMin) yearsMin = p.remaining_years;
+      if (p.remaining_years > yearsMax) yearsMax = p.remaining_years;
+      // LLM data
+      if (p.has_llm_data) withLlmData++;
+      // Competitors
+      if ((p.competitor_count ?? 0) > 0) withCompetitors++;
+      // Expired
+      if (p.remaining_years <= 0) expired++;
+    });
+
+    res.json({
+      affiliates: Object.entries(affiliateCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+      superSectors: Object.entries(superSectorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+      primarySectors: Object.entries(primarySectorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+      competitorNames: Object.entries(competitorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 100)  // Top 100 competitors
+        .map(([name, count]) => ({ name, count })),
+      cpcCodes: Object.entries(cpcCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 100)  // Top 100 CPC subclasses
+        .map(([code, count]) => ({ code, count, description: resolveCpcDescription(code) })),
+      subSectors: Object.entries(subSectorCounts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, data]) => ({ name, count: data.count, sector: data.sector })),
+      ranges: {
+        score: { min: scoreMin === Infinity ? 0 : scoreMin, max: scoreMax === -Infinity ? 100 : scoreMax },
+        years: { min: yearsMin === Infinity ? 0 : yearsMin, max: yearsMax === -Infinity ? 20 : yearsMax }
+      },
+      counts: {
+        total: patents.length,
+        withLlmData,
+        withCompetitors,
+        expired
+      }
+    });
+  } catch (error) {
+    console.error('Error getting filter options:', error);
+    res.status(500).json({ error: 'Failed to get filter options' });
   }
 });
 

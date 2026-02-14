@@ -71,44 +71,57 @@
 
 ---
 
-## Phase 2 - Filtering Enhancements (NEXT)
+## Phase 2 - Filtering Enhancements (IN PROGRESS)
 
 ### Goals
 1. **Flexible Filter Builder** - Dynamic filter selection instead of fixed filters
 2. **One-to-Many Field Filtering** - Filter by competitor names, CPC codes, sub-sectors
-3. **Filter Presets** - Save and load filter configurations
+3. **Filter Presets** - Save and load filter configurations (TODO)
 
-### Implementation Plan
+### Completed
 
-**2.1 Dynamic Filter Component**
-- Create `FlexFilterBuilder.vue` component
-- "Add Filter" button → dropdown of available fields
-- Render appropriate control based on field type (select, multiselect, range, text)
+**2.1 Backend Filter Support**
+Added new filters to `applyFilters()` in `patents.routes.ts`:
+- `competitorNames` - one-to-many filter (any match, partial string)
+- `cpcCodes` - one-to-many filter (prefix match)
+- `subSectors` - filter by sub-sector name
+- `hasLlmData` - boolean filter (true/false)
+- `hasCompetitors` - boolean filter (true/false)
 
-**2.2 Available Filter Fields**
-```typescript
-const availableFilters = [
-  // Existing
-  { field: 'affiliates', type: 'multiselect' },
-  { field: 'superSectors', type: 'multiselect' },
-  { field: 'primarySectors', type: 'multiselect' },
-  { field: 'score', type: 'range' },
-  { field: 'remaining_years', type: 'range' },
+**2.2 Filter Options API Endpoints**
+New endpoints added to `patents.routes.ts`:
+- `GET /api/patents/competitor-names` - unique competitors with citation counts
+- `GET /api/patents/cpc-codes?level=subclass` - CPC codes with descriptions
+- `GET /api/patents/sub-sectors` - sub-sectors with counts
+- `GET /api/patents/filter-options` - all options in one call (for FlexFilterBuilder)
 
-  // New one-to-many filters
-  { field: 'competitor_names', type: 'multiselect', isArray: true },
-  { field: 'cpc_codes', type: 'multiselect', isArray: true },
-  { field: 'primary_sub_sector_name', type: 'multiselect' },
+**2.3 FlexFilterBuilder Component**
+Created `frontend/src/components/filters/FlexFilterBuilder.vue`:
+- Dynamic "Add Filter" dropdown with categorized filter types
+- Multiselect filters: Affiliate, Super-Sector, Primary Sector, Competitor Names, CPC Codes, Sub-Sector
+- Range filters: Base Score, V2 Score, V3 Score, Years Remaining, Forward Citations, Competitor Citations, Affiliate Citations, Neutral Citations
+- Boolean filters: Has LLM Data, Is Expired
+- Removable filter chips with proper event handling
+- Clear All button with proper state reset
+- Loads all options from single `/api/patents/filter-options` endpoint
+- Summary showing total patents, LLM data coverage, expired count
+- Fixed feedback loop issue with `isUpdatingLocally` flag
 
-  // New boolean filters
-  { field: 'has_llm_data', type: 'boolean' },
-  { field: 'has_competitor_citations', type: 'boolean' },
-];
-```
+**2.4 PortfolioPage Integration**
+- Replaced fixed filter bar with FlexFilterBuilder
+- Updated types to include new filter fields
+- Simplified filter state management
 
-**2.3 Backend Changes**
-- Add filter options endpoint: `GET /api/patents/filter-options`
-- Support array field filtering (any match)
+**2.5 Extended Backend Filters**
+Added to `applyFilters()`:
+- `v2ScoreMin/v2ScoreMax` - filters patents with v2_score in range (omits nulls)
+- `v3ScoreMin/v3ScoreMax` - filters patents with v3_score in range (omits nulls)
+- `affiliateCitesMin/affiliateCitesMax` - affiliate citation count range
+- `neutralCitesMin/neutralCitesMax` - neutral citation count range
+- `isExpired` - boolean filter for patents with remaining_years <= 0
+
+### Remaining (Phase 2.6)
+- **Filter Presets** - Save/load filter configurations to localStorage or backend
 
 ---
 
@@ -140,11 +153,14 @@ const availableFilters = [
 | File | Changes |
 |------|---------|
 | `package.json` | Added `"dev"` script |
-| `frontend/src/pages/PortfolioPage.vue` | Scroll layout, sticky headers, pagination, competitor_names slot |
+| `frontend/src/pages/PortfolioPage.vue` | Scroll layout, sticky headers, FlexFilterBuilder integration |
 | `frontend/src/pages/PromptTemplatesPage.vue` | Question normalization, null checks |
 | `frontend/src/pages/SectorManagementPage.vue` | CPC tooltips, preloading |
 | `frontend/src/stores/patents.ts` | Added `competitor_names` column |
 | `frontend/src/composables/useCpcDescriptions.ts` | NEW - CPC lookup composable |
+| `frontend/src/components/filters/FlexFilterBuilder.vue` | NEW - Dynamic filter builder |
+| `frontend/src/types/index.ts` | Added Phase 2 filter fields |
+| `src/api/routes/patents.routes.ts` | Phase 2 filters + filter options endpoints |
 | `docs/MIGRATION_GUIDE.md` | Updated server command |
 
 ---

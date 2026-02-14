@@ -213,17 +213,32 @@ export interface PortfolioFilters {
   assignees?: string[];
   primarySectors?: string[];
   focusAreaId?: string;
-  // Score filtering - can filter by different score types
-  scoreField?: 'score' | 'v2_score' | 'v3_score';
+  // Score filtering
   scoreMin?: number;
   scoreMax?: number;
-  // Other numeric ranges
+  v2ScoreMin?: number;
+  v2ScoreMax?: number;
+  v3ScoreMin?: number;
+  v3ScoreMax?: number;
+  // Time ranges
   yearsMin?: number;
   yearsMax?: number;
-  competitorCitesMin?: number;
-  competitorCitesMax?: number;
+  // Citation ranges
   forwardCitesMin?: number;
   forwardCitesMax?: number;
+  competitorCitesMin?: number;
+  competitorCitesMax?: number;
+  affiliateCitesMin?: number;
+  affiliateCitesMax?: number;
+  neutralCitesMin?: number;
+  neutralCitesMax?: number;
+  // Phase 2: One-to-many filters
+  competitorNames?: string[];
+  cpcCodes?: string[];
+  subSectors?: string[];
+  // Phase 2: Boolean filters
+  hasLlmData?: string;      // 'true' | 'false' | undefined
+  isExpired?: string;       // 'true' | 'false' | undefined
 }
 
 // Column group for organized column selector

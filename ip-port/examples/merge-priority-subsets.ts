@@ -43,7 +43,7 @@ async function main() {
   const overlap0_300 = await loadJSON('./output/citation-overlap-2026-01-15.json');
   if (overlap0_300?.results) {
     for (const r of overlap0_300.results) {
-      const existing = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
+      const existing: PatentRecord = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
       existing.title = r.broadcom_title;
       existing.date = r.broadcom_date;
       existing.assignee = r.broadcom_assignee;
@@ -67,7 +67,7 @@ async function main() {
   const overlap300_600 = await loadJSON('./output/citation-overlap-300-600-2026-01-15.json');
   if (overlap300_600?.results) {
     for (const r of overlap300_600.results) {
-      const existing = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
+      const existing: PatentRecord = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
       existing.title = existing.title || r.broadcom_title;
       existing.date = existing.date || r.broadcom_date;
       existing.assignee = existing.assignee || r.broadcom_assignee;
@@ -95,7 +95,7 @@ async function main() {
   const overlap600_1000 = await loadJSON('./output/citation-overlap-600-1000-2026-01-15.json');
   if (overlap600_1000?.results) {
     for (const r of overlap600_1000.results) {
-      const existing = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
+      const existing: PatentRecord = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
       existing.title = existing.title || r.broadcom_title;
       existing.date = existing.date || r.broadcom_date;
       existing.assignee = existing.assignee || r.broadcom_assignee;
@@ -123,7 +123,7 @@ async function main() {
   const highCite = await loadJSON('./output/high-cite-overlap-2026-01-15.json');
   if (highCite?.results) {
     for (const r of highCite.results) {
-      const existing = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
+      const existing: PatentRecord = masterMap.get(r.broadcom_patent_id) || { patent_id: r.broadcom_patent_id, source: [] };
       existing.title = existing.title || r.broadcom_title;
       existing.date = existing.date || r.broadcom_date;
       existing.assignee = existing.assignee || r.broadcom_assignee;
@@ -149,7 +149,7 @@ async function main() {
   const cpcPriority = await loadJSON('./output/cpc-priority-patents-2026-01-15.json');
   if (cpcPriority) {
     for (const r of cpcPriority) {
-      const existing = masterMap.get(r.patent_id) || { patent_id: r.patent_id, source: [] };
+      const existing: PatentRecord = masterMap.get(r.patent_id) || { patent_id: r.patent_id, source: [] };
       existing.title = existing.title || r.title;
       existing.forward_citations = Math.max(existing.forward_citations || 0, r.citations || 0);
       existing.cpc_overlap = true;

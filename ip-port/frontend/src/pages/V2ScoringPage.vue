@@ -47,6 +47,10 @@ const total = ref(0);
 const hasUnsavedChanges = ref(false);
 const lastConfig = ref<V2EnhancedConfig | null>(null);
 
+// Baseline state for revert functionality
+const baselineConfig = ref<V2EnhancedConfig | null>(null);
+const baselinePatents = ref<V2EnhancedScoredPatent[]>([]);
+
 // Saved scores state
 const savedScores = ref<ScoreSnapshot[]>([]);
 const activeSnapshot = ref<ScoreSnapshot | null>(null);
@@ -561,6 +565,10 @@ async function recalculate() {
     lastConfig.value = response.config;
     hasUnsavedChanges.value = false;
 
+    // Save baseline for revert functionality
+    baselineConfig.value = { ...currentConfig.value };
+    baselinePatents.value = [...response.data];
+
     previousRankings.value = response.data.map(p => ({
       patent_id: p.patent_id,
       rank: p.rank,
@@ -571,6 +579,88 @@ async function recalculate() {
   } finally {
     loading.value = false;
   }
+}
+
+// Revert to last calculated state
+function revertToLastCalculation() {
+  if (!baselineConfig.value || baselinePatents.value.length === 0) {
+    $q.notify({
+      type: 'warning',
+      message: 'No previous calculation to revert to',
+    });
+    return;
+  }
+
+  // Restore metrics from baseline config
+  for (const cat of categories.value) {
+    for (const metric of cat.metrics) {
+      metric.weight = baselineConfig.value.weights[metric.key] ?? 0;
+      metric.scaling = baselineConfig.value.scaling[metric.key] ?? 'linear';
+      metric.invert = baselineConfig.value.invert[metric.key] ?? false;
+    }
+  }
+
+  // Restore patents without rank changes
+  patents.value = baselinePatents.value.map(p => ({
+    ...p,
+    rank_change: undefined,
+  }));
+
+  // Reset previous rankings to baseline
+  previousRankings.value = baselinePatents.value.map(p => ({
+    patent_id: p.patent_id,
+    rank: p.rank,
+  }));
+
+  hasUnsavedChanges.value = false;
+  selectedPresetId.value = null;
+
+  $q.notify({
+    type: 'info',
+    message: 'Reverted to last calculation',
+  });
+}
+
+// Revert to active saved scores
+async function revertToActiveScores() {
+  if (!activeSnapshot.value) {
+    $q.notify({
+      type: 'warning',
+      message: 'No active saved scores to revert to',
+    });
+    return;
+  }
+
+  // Load the config from the active snapshot
+  const config = activeSnapshot.value.config as V2EnhancedConfig;
+  if (!config?.weights) {
+    $q.notify({
+      type: 'warning',
+      message: 'Active snapshot has no saved configuration',
+    });
+    return;
+  }
+
+  // Restore metrics from snapshot config
+  for (const cat of categories.value) {
+    for (const metric of cat.metrics) {
+      metric.weight = config.weights[metric.key] ?? 0;
+      metric.scaling = config.scaling?.[metric.key] ?? 'linear';
+      metric.invert = config.invert?.[metric.key] ?? false;
+    }
+  }
+
+  // Clear rank movements and recalculate
+  previousRankings.value = [];
+  hasUnsavedChanges.value = false;
+  selectedPresetId.value = null;
+
+  await recalculate();
+
+  $q.notify({
+    type: 'info',
+    message: `Reverted to "${activeSnapshot.value.name}"`,
+  });
 }
 
 // Navigate to patent detail
@@ -931,6 +1021,36 @@ onMounted(async () => {
             <div class="row items-center">
               <div class="text-h6">Patent Rankings</div>
               <q-space />
+              <q-btn-dropdown
+                flat
+                dense
+                icon="undo"
+                label="Revert"
+                :disable="patents.length === 0"
+                class="q-mr-sm"
+              >
+                <q-list>
+                  <q-item clickable v-close-popup @click="revertToLastCalculation" :disable="!baselineConfig">
+                    <q-item-section avatar>
+                      <q-icon name="history" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>Last Calculation</q-item-label>
+                      <q-item-label caption>Restore sliders and rankings to last calculated state</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup @click="revertToActiveScores" :disable="!activeSnapshot">
+                    <q-item-section avatar>
+                      <q-icon name="bookmark" color="positive" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>Active Saved Scores</q-item-label>
+                      <q-item-label caption v-if="activeSnapshot">{{ activeSnapshot.name }}</q-item-label>
+                      <q-item-label caption v-else class="text-grey">No active scores saved</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-btn-dropdown>
               <q-btn
                 flat
                 dense

@@ -61,7 +61,7 @@ async function main() {
       const data = JSON.parse(await fs.readFile(file, 'utf-8'));
       for (const r of (data.results || [])) {
         const id = r.broadcom_patent_id;
-        const existing = masterMap.get(id) || { patent_id: id, competitors: [] };
+        const existing: Patent = masterMap.get(id) || { patent_id: id, competitors: [] };
 
         const newCompetitors = (r.competitor_cites || []).map((c: any) => normalizeCompetitor(c.assignee));
 

@@ -48,6 +48,10 @@ const error = ref<string | null>(null);
 const total = ref(0);
 const hasUnsavedChanges = ref(false);
 
+// Baseline state for revert functionality
+const baselineRoles = ref<V3ConsensusRole[]>([]);
+const baselinePatents = ref<V3ConsensusScoredPatent[]>([]);
+
 // State - Saved Scores
 const savedScores = ref<ScoreSnapshot[]>([]);
 const activeSnapshot = ref<ScoreSnapshot | null>(null);
@@ -357,6 +361,10 @@ async function recalculate() {
       total.value = consensusResults.length;
     }
 
+    // Save baseline for revert functionality
+    baselineRoles.value = roles.value.map(r => ({ ...r }));
+    baselinePatents.value = [...patents.value];
+
     // Update previous rankings for next comparison
     previousRankings.value = patents.value.map(p => ({
       patent_id: p.patent_id,
@@ -370,6 +378,76 @@ async function recalculate() {
   } finally {
     loading.value = false;
   }
+}
+
+// Revert to last calculated state
+function revertToLastCalculation() {
+  if (baselineRoles.value.length === 0 || baselinePatents.value.length === 0) {
+    $q.notify({
+      type: 'warning',
+      message: 'No previous calculation to revert to',
+    });
+    return;
+  }
+
+  // Restore roles from baseline
+  roles.value = baselineRoles.value.map(r => ({ ...r }));
+
+  // Restore patents without rank changes
+  patents.value = baselinePatents.value.map(p => ({
+    ...p,
+    rank_change: undefined,
+  }));
+
+  // Reset previous rankings to baseline
+  previousRankings.value = baselinePatents.value.map(p => ({
+    patent_id: p.patent_id,
+    rank: p.rank,
+  }));
+
+  hasUnsavedChanges.value = false;
+  selectedV3PresetId.value = null;
+
+  $q.notify({
+    type: 'info',
+    message: 'Reverted to last calculation',
+  });
+}
+
+// Revert to active saved scores
+async function revertToActiveScores() {
+  if (!activeSnapshot.value) {
+    $q.notify({
+      type: 'warning',
+      message: 'No active saved scores to revert to',
+    });
+    return;
+  }
+
+  // Load the config from the active snapshot
+  const config = activeSnapshot.value.config as { roles?: V3ConsensusRole[] };
+  if (!config?.roles) {
+    $q.notify({
+      type: 'warning',
+      message: 'Active snapshot has no saved configuration',
+    });
+    return;
+  }
+
+  // Restore roles from snapshot config
+  roles.value = config.roles.map(r => ({ ...r }));
+
+  // Clear rank movements and recalculate
+  previousRankings.value = [];
+  hasUnsavedChanges.value = false;
+  selectedV3PresetId.value = null;
+
+  await recalculate();
+
+  $q.notify({
+    type: 'info',
+    message: `Reverted to "${activeSnapshot.value.name}"`,
+  });
 }
 
 // Reset rank movements
@@ -809,7 +887,7 @@ onMounted(async () => {
                   :max="100"
                   dense
                   outlined
-                  style="width: 70px"
+                  style="width: 85px"
                   @update:model-value="onRoleChange"
                 >
                   <template v-slot:append>
@@ -939,6 +1017,36 @@ onMounted(async () => {
                 {{ roles.find(r => r.roleId === selectedIndividualRoleId)?.roleName }}
               </q-badge>
               <q-space />
+              <q-btn-dropdown
+                flat
+                dense
+                icon="undo"
+                label="Revert"
+                :disable="patents.length === 0"
+                class="q-mr-sm"
+              >
+                <q-list>
+                  <q-item clickable v-close-popup @click="revertToLastCalculation" :disable="baselineRoles.length === 0">
+                    <q-item-section avatar>
+                      <q-icon name="history" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>Last Calculation</q-item-label>
+                      <q-item-label caption>Restore roles and rankings to last calculated state</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup @click="revertToActiveScores" :disable="!activeSnapshot">
+                    <q-item-section avatar>
+                      <q-icon name="bookmark" color="positive" />
+                    </q-item-section>
+                    <q-item-section>
+                      <q-item-label>Active Saved Scores</q-item-label>
+                      <q-item-label caption v-if="activeSnapshot">{{ activeSnapshot.name }}</q-item-label>
+                      <q-item-label caption v-else class="text-grey">No active scores saved</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-btn-dropdown>
               <q-btn
                 flat
                 dense

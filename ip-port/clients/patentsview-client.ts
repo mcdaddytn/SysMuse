@@ -11,7 +11,7 @@
  * Rate Limit: 45 requests/minute per API key
  */
 
-import { BaseAPIClient, APIConfig, buildQueryString } from './base-client.js';
+import { BaseAPIClient } from './base-client.js';
 
 const PATENTSVIEW_BASE_URL = 'https://search.patentsview.org/api/v1';
 

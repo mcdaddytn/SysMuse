@@ -15,7 +15,7 @@
  * Note: PTAB v3 endpoints migrated November 2025 to api.uspto.gov
  */
 
-import { BaseAPIClient, APIConfig } from './base-client.js';
+import { BaseAPIClient } from './base-client.js';
 
 const PTAB_BASE_URL = 'https://api.uspto.gov/api/v1/patent';
 
@@ -573,7 +573,7 @@ export class PTABClient extends BaseAPIClient {
    * Full text search in decisions
    * Note: v3 API may not support full text search - returns empty results if not available
    */
-  async searchDecisionsFullText(searchText: string): Promise<PTABDecisionSearchResponse> {
+  async searchDecisionsFullText(_searchText: string): Promise<PTABDecisionSearchResponse> {
     // v3 API doesn't support searchText parameter
     // Return empty results with a note
     console.warn('PTAB v3 API does not support full text search in decisions');

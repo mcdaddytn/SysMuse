@@ -125,17 +125,40 @@ Added to `applyFilters()`:
 
 ---
 
-## Phase 3 - Aggregates Page
+## Phase 3 - Aggregates Page (COMPLETED)
 
 ### Goals
 1. **Group By** functionality with one-to-many support
 2. **Aggregations** - Avg, Min, Max, Count, Sum on numeric fields
 3. **CSV Export** of current view
 
-### Design Considerations
-- Group by one-to-many fields (competitors, CPC codes): "explode" vs "primary only" modes
-- Reuse flexible filter builder from Phase 2
-- Similar column selector pattern
+### Completed
+
+**3.1 Backend Aggregation API**
+Added to `patents.routes.ts`:
+- `POST /api/patents/aggregate` - Main aggregation endpoint
+  - `groupBy`: single field or array of fields
+  - `aggregations`: array of `{ field, op }` where op is sum/avg/min/max/count_nonnull
+  - `explodeArrays`: boolean to expand array fields (competitor_names, cpc_codes)
+  - `filters`: reuses existing filter logic
+  - `sortBy`, `sortDesc`, `limit`: result ordering
+- `POST /api/patents/aggregate/export` - Export results as CSV
+
+**3.2 Frontend AggregatesPage.vue**
+Created new page with:
+- **Group By Selector**: Multi-select with 9 groupable fields
+  - Standard fields: Affiliate, Super-Sector, Primary Sector, Sub-Sector, Tech Category, Market Segment, Implementation Type
+  - Array fields: Competitor Names, CPC Codes (with explode toggle)
+- **Aggregation Builder**: Add multiple aggregations
+  - 14 numeric fields: scores, citations, years, LLM metrics
+  - 5 operations: Average, Sum, Min, Max, Count (non-null)
+- **FlexFilterBuilder Integration**: Same filters as Patent Summary
+- **Results Table**: Sortable columns, number formatting
+- **CSV Export**: Download aggregated results
+
+**3.3 Navigation**
+- Added route `/aggregates` with name `aggregates`
+- Added nav item "Aggregate View" with analytics icon
 
 ---
 
@@ -154,13 +177,16 @@ Added to `applyFilters()`:
 |------|---------|
 | `package.json` | Added `"dev"` script |
 | `frontend/src/pages/PortfolioPage.vue` | Scroll layout, sticky headers, FlexFilterBuilder integration |
+| `frontend/src/pages/AggregatesPage.vue` | NEW - Phase 3 aggregation page |
 | `frontend/src/pages/PromptTemplatesPage.vue` | Question normalization, null checks |
 | `frontend/src/pages/SectorManagementPage.vue` | CPC tooltips, preloading |
-| `frontend/src/stores/patents.ts` | Added `competitor_names` column |
+| `frontend/src/stores/patents.ts` | Added `competitor_names` column, `setFilters` method |
 | `frontend/src/composables/useCpcDescriptions.ts` | NEW - CPC lookup composable |
 | `frontend/src/components/filters/FlexFilterBuilder.vue` | NEW - Dynamic filter builder |
 | `frontend/src/types/index.ts` | Added Phase 2 filter fields |
-| `src/api/routes/patents.routes.ts` | Phase 2 filters + filter options endpoints |
+| `frontend/src/router/index.ts` | Added aggregates route |
+| `frontend/src/layouts/MainLayout.vue` | Added Aggregate View nav item |
+| `src/api/routes/patents.routes.ts` | Phase 2 filters + Phase 3 aggregate endpoints |
 | `docs/MIGRATION_GUIDE.md` | Updated server command |
 
 ---

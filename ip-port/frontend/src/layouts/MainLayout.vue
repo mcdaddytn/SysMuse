@@ -38,6 +38,7 @@ const isAdmin = computed(() => currentUser.value?.accessLevel === 'ADMIN');
 
 const navItems = computed(() => [
   { label: 'Patent Summary', icon: 'summarize', to: '/', show: true },
+  { label: 'Aggregate View', icon: 'analytics', to: '/aggregates', show: true },
   { label: 'Focus Areas', icon: 'filter_center_focus', to: '/focus-areas', show: true },
   { divider: true, show: true },
   { label: 'Base Score', icon: 'leaderboard', to: '/base-scoring', show: true },

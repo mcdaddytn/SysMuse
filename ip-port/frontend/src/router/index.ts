@@ -14,6 +14,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Patent Summary' }
       },
       {
+        path: 'aggregates',
+        name: 'aggregates',
+        component: () => import('@/pages/AggregatesPage.vue'),
+        meta: { title: 'Aggregate View' }
+      },
+      {
         path: 'base-scoring',
         name: 'base-scoring',
         component: () => import('@/pages/BaseScoringPage.vue'),

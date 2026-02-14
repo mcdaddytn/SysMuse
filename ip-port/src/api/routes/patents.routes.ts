@@ -1648,6 +1648,324 @@ router.get('/export', (req: Request, res: Response) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3: Aggregation endpoint for analytics
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/patents/aggregate
+ * Aggregate patents with groupBy and aggregation functions
+ *
+ * Body: {
+ *   groupBy: string | string[],       // Field(s) to group by
+ *   aggregations: [{ field, op }],    // Operations: count, sum, avg, min, max
+ *   explodeArrays?: boolean,          // If true, explode array fields (e.g., competitor_names)
+ *   filters?: Record<string, any>,    // Same filters as GET /api/patents
+ *   sortBy?: string,                  // Sort by aggregation result field
+ *   sortDesc?: boolean,               // Sort descending
+ *   limit?: number                    // Limit results
+ * }
+ */
+router.post('/aggregate', (req: Request, res: Response) => {
+  try {
+    const {
+      groupBy,
+      aggregations = [],
+      explodeArrays = false,
+      filters = {},
+      sortBy = 'count',
+      sortDesc = true,
+      limit = 100
+    } = req.body;
+
+    if (!groupBy) {
+      return res.status(400).json({ error: 'groupBy is required' });
+    }
+
+    // Normalize groupBy to array
+    const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
+
+    // Load and filter patents
+    let patents = loadPatents();
+    patents = applyFilters(patents, filters);
+
+    // Fields that are arrays and can be exploded
+    const arrayFields = new Set(['competitor_names', 'cpc_codes']);
+
+    // Build groups
+    interface AggGroup {
+      key: Record<string, string>;
+      patents: typeof patents;
+    }
+
+    const groups = new Map<string, AggGroup>();
+
+    for (const patent of patents) {
+      // Get group key values
+      const keyValues: Record<string, string>[] = [{}];
+
+      for (const field of groupByFields) {
+        const val = (patent as any)[field];
+        const newKeyValues: Record<string, string>[] = [];
+
+        if (explodeArrays && arrayFields.has(field) && Array.isArray(val)) {
+          // Explode: create a row for each array element
+          if (val.length === 0) {
+            // No values - use placeholder
+            for (const existing of keyValues) {
+              newKeyValues.push({ ...existing, [field]: '(none)' });
+            }
+          } else {
+            for (const existing of keyValues) {
+              for (const item of val) {
+                newKeyValues.push({ ...existing, [field]: String(item) });
+              }
+            }
+          }
+        } else {
+          // Normal: single value or array as string
+          const strVal = Array.isArray(val) ? val.join(', ') : String(val ?? '(none)');
+          for (const existing of keyValues) {
+            newKeyValues.push({ ...existing, [field]: strVal });
+          }
+        }
+
+        keyValues.length = 0;
+        keyValues.push(...newKeyValues);
+      }
+
+      // Add patent to each group
+      for (const keyObj of keyValues) {
+        const keyStr = JSON.stringify(keyObj);
+        if (!groups.has(keyStr)) {
+          groups.set(keyStr, { key: keyObj, patents: [] });
+        }
+        groups.get(keyStr)!.patents.push(patent);
+      }
+    }
+
+    // Compute aggregations for each group
+    interface AggResult {
+      [key: string]: string | number;
+    }
+
+    const results: AggResult[] = [];
+
+    for (const group of groups.values()) {
+      const result: AggResult = { ...group.key, count: group.patents.length };
+
+      for (const agg of aggregations) {
+        const { field, op } = agg;
+        const values = group.patents
+          .map(p => (p as any)[field])
+          .filter(v => v != null && typeof v === 'number') as number[];
+
+        const aggKey = `${field}_${op}`;
+
+        switch (op) {
+          case 'sum':
+            result[aggKey] = values.reduce((a, b) => a + b, 0);
+            break;
+          case 'avg':
+            result[aggKey] = values.length > 0
+              ? Math.round(values.reduce((a, b) => a + b, 0) / values.length * 100) / 100
+              : 0;
+            break;
+          case 'min':
+            result[aggKey] = values.length > 0 ? Math.min(...values) : 0;
+            break;
+          case 'max':
+            result[aggKey] = values.length > 0 ? Math.max(...values) : 0;
+            break;
+          case 'count_nonnull':
+            result[aggKey] = values.length;
+            break;
+        }
+      }
+
+      results.push(result);
+    }
+
+    // Sort results
+    results.sort((a, b) => {
+      const aVal = a[sortBy] ?? 0;
+      const bVal = b[sortBy] ?? 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDesc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+      }
+      return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
+    });
+
+    // Limit results
+    const limitedResults = results.slice(0, limit);
+
+    res.json({
+      groupBy: groupByFields,
+      aggregations,
+      explodeArrays,
+      totalGroups: results.length,
+      filteredPatents: patents.length,
+      results: limitedResults
+    });
+  } catch (error) {
+    console.error('Error aggregating patents:', error);
+    res.status(500).json({ error: 'Failed to aggregate patents' });
+  }
+});
+
+/**
+ * GET /api/patents/aggregate/export
+ * Export aggregation results as CSV
+ */
+router.post('/aggregate/export', (req: Request, res: Response) => {
+  try {
+    const {
+      groupBy,
+      aggregations = [],
+      explodeArrays = false,
+      filters = {},
+      sortBy = 'count',
+      sortDesc = true
+    } = req.body;
+
+    if (!groupBy) {
+      return res.status(400).json({ error: 'groupBy is required' });
+    }
+
+    // Normalize groupBy to array
+    const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
+
+    // Load and filter patents
+    let patents = loadPatents();
+    patents = applyFilters(patents, filters);
+
+    // Same grouping logic as /aggregate
+    const arrayFields = new Set(['competitor_names', 'cpc_codes']);
+    const groups = new Map<string, { key: Record<string, string>; patents: typeof patents }>();
+
+    for (const patent of patents) {
+      const keyValues: Record<string, string>[] = [{}];
+
+      for (const field of groupByFields) {
+        const val = (patent as any)[field];
+        const newKeyValues: Record<string, string>[] = [];
+
+        if (explodeArrays && arrayFields.has(field) && Array.isArray(val)) {
+          if (val.length === 0) {
+            for (const existing of keyValues) {
+              newKeyValues.push({ ...existing, [field]: '(none)' });
+            }
+          } else {
+            for (const existing of keyValues) {
+              for (const item of val) {
+                newKeyValues.push({ ...existing, [field]: String(item) });
+              }
+            }
+          }
+        } else {
+          const strVal = Array.isArray(val) ? val.join(', ') : String(val ?? '(none)');
+          for (const existing of keyValues) {
+            newKeyValues.push({ ...existing, [field]: strVal });
+          }
+        }
+
+        keyValues.length = 0;
+        keyValues.push(...newKeyValues);
+      }
+
+      for (const keyObj of keyValues) {
+        const keyStr = JSON.stringify(keyObj);
+        if (!groups.has(keyStr)) {
+          groups.set(keyStr, { key: keyObj, patents: [] });
+        }
+        groups.get(keyStr)!.patents.push(patent);
+      }
+    }
+
+    // Compute aggregations
+    interface AggResult {
+      [key: string]: string | number;
+    }
+
+    const results: AggResult[] = [];
+
+    for (const group of groups.values()) {
+      const result: AggResult = { ...group.key, count: group.patents.length };
+
+      for (const agg of aggregations) {
+        const { field, op } = agg;
+        const values = group.patents
+          .map(p => (p as any)[field])
+          .filter(v => v != null && typeof v === 'number') as number[];
+
+        const aggKey = `${field}_${op}`;
+
+        switch (op) {
+          case 'sum':
+            result[aggKey] = values.reduce((a, b) => a + b, 0);
+            break;
+          case 'avg':
+            result[aggKey] = values.length > 0
+              ? Math.round(values.reduce((a, b) => a + b, 0) / values.length * 100) / 100
+              : 0;
+            break;
+          case 'min':
+            result[aggKey] = values.length > 0 ? Math.min(...values) : 0;
+            break;
+          case 'max':
+            result[aggKey] = values.length > 0 ? Math.max(...values) : 0;
+            break;
+          case 'count_nonnull':
+            result[aggKey] = values.length;
+            break;
+        }
+      }
+
+      results.push(result);
+    }
+
+    // Sort
+    results.sort((a, b) => {
+      const aVal = a[sortBy] ?? 0;
+      const bVal = b[sortBy] ?? 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDesc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+      }
+      return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
+    });
+
+    // Build CSV
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'No results to export' });
+    }
+
+    const columns = Object.keys(results[0]);
+
+    function escapeCSV(val: unknown): string {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }
+
+    const header = columns.map(c => escapeCSV(c)).join(',');
+    const rows = results.map(row =>
+      columns.map(col => escapeCSV(row[col])).join(',')
+    );
+
+    const csv = [header, ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="patent-aggregate-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting aggregation:', error);
+    res.status(500).json({ error: 'Failed to export aggregation' });
+  }
+});
+
 /**
  * GET /api/patents/:id/preview
  * Get lightweight preview data for a single patent

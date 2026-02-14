@@ -159,8 +159,8 @@ GROUP BY sup.name
 ORDER BY sup.name;
 "
 
-# 3. Start the API server
-npm run dev
+# 3. Start the API server (from project root)
+npm run dev    # or: npm run api:dev
 
 # 4. In another terminal, verify API responses
 curl http://localhost:3001/api/scoring-templates/llm/super-sector-progress/WIRELESS

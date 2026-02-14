@@ -3,6 +3,10 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
 import type { SectorScoringProgress, SubSector } from '@/services/api';
 import type { SuperSectorDetail, SectorDetail, SectorRule, SectorRuleType, RulePreviewResult } from '@/types';
+import { useCpcDescriptions } from '@/composables/useCpcDescriptions';
+
+// CPC description lookups for tooltips
+const { getDescription, formatTooltip, preloadCodes } = useCpcDescriptions();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -158,6 +162,22 @@ async function loadSectorDetail(id: string) {
   error.value = null;
   try {
     selectedSector.value = await sectorApi.getSector(id);
+
+    // Preload CPC descriptions for tooltips
+    const cpcCodes: string[] = [];
+    if (selectedSector.value.cpcPrefixes) {
+      cpcCodes.push(...selectedSector.value.cpcPrefixes);
+    }
+    if (selectedSector.value.rules) {
+      for (const rule of selectedSector.value.rules) {
+        if (rule.ruleType === 'CPC_PREFIX' || rule.ruleType === 'CPC_SUBGROUP') {
+          cpcCodes.push(rule.expression);
+        }
+      }
+    }
+    if (cpcCodes.length > 0) {
+      preloadCodes(cpcCodes);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load sector';
   } finally {
@@ -177,6 +197,16 @@ async function loadSubSectors(sectorName: string) {
   try {
     const subSectors = await sectorApi.getSubSectors(sectorName);
     subSectorsMap.value[sectorName] = subSectors;
+
+    // Preload CPC descriptions for sub-sector tooltips
+    const cpcCodes: string[] = [];
+    for (const ss of subSectors) {
+      if (ss.cpcCode) cpcCodes.push(ss.cpcCode);
+      if (ss.cpcPrefix) cpcCodes.push(ss.cpcPrefix);
+    }
+    if (cpcCodes.length > 0) {
+      preloadCodes(cpcCodes);
+    }
   } catch (err) {
     console.error(`Failed to load sub-sectors for ${sectorName}:`, err);
     subSectorsMap.value[sectorName] = [];
@@ -642,6 +672,18 @@ watch(selectedSectorId, () => {
                             <q-item-section>
                               <q-item-label class="text-caption">
                                 {{ subSector.displayName }}
+                                <q-tooltip
+                                  v-if="subSector.cpcCode && getDescription(subSector.cpcCode)"
+                                  :delay="200"
+                                >
+                                  {{ formatTooltip(subSector.cpcCode) }}
+                                </q-tooltip>
+                                <q-tooltip
+                                  v-else-if="subSector.cpcPrefix && getDescription(subSector.cpcPrefix)"
+                                  :delay="200"
+                                >
+                                  {{ formatTooltip(subSector.cpcPrefix) }}
+                                </q-tooltip>
                               </q-item-label>
                               <q-item-label caption>
                                 {{ subSector.patentCount?.toLocaleString() || 0 }} patents
@@ -769,7 +811,12 @@ watch(selectedSectorId, () => {
                             dense
                             size="sm"
                             color="grey-3"
-                          >{{ cpc }}</q-chip>
+                          >
+                            {{ cpc }}
+                            <q-tooltip v-if="getDescription(cpc)" :delay="200">
+                              {{ formatTooltip(cpc) }}
+                            </q-tooltip>
+                          </q-chip>
                           <span v-if="!selectedSector.cpcPrefixes.length" class="text-grey-6">None</span>
                         </q-item-label>
                       </q-item-section>
@@ -854,6 +901,12 @@ watch(selectedSectorId, () => {
                 <template #body-cell-expression="props">
                   <q-td :props="props">
                     <code class="text-body2">{{ props.row.expression }}</code>
+                    <q-tooltip
+                      v-if="(props.row.ruleType === 'CPC_PREFIX' || props.row.ruleType === 'CPC_SUBGROUP') && getDescription(props.row.expression)"
+                      :delay="200"
+                    >
+                      {{ formatTooltip(props.row.expression) }}
+                    </q-tooltip>
                     <q-icon
                       v-if="props.row.isExclusion"
                       name="block"

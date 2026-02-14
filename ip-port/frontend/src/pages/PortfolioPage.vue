@@ -1130,85 +1130,120 @@ onMounted(async () => {
   flex-direction: column;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
+  /* Critical: don't let wrapper overflow, contain everything */
   overflow: hidden;
+  /* Fixed height so we control scrolling */
+  height: calc(100vh - 340px);
+  min-height: 350px;
 }
 
 .table-scroll-container {
-  /* Fixed height with scrollbars always accessible */
+  /* Fill available space */
   flex: 1;
-  height: calc(100vh - 360px);
-  min-height: 300px;
-  overflow: auto;
-  /* Always show scrollbars */
-  scrollbar-gutter: stable;
+  /* ALWAYS show both scrollbars */
+  overflow: scroll !important;
+  /* Contain the table */
+  position: relative;
 }
 
-/* Custom scrollbar styling */
+/* Custom scrollbar styling - larger and always visible */
 .table-scroll-container::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .table-scroll-container::-webkit-scrollbar-track {
-  background: #f5f5f5;
+  background: #e8e8e8;
 }
 
 .table-scroll-container::-webkit-scrollbar-thumb {
-  background: #bdbdbd;
-  border: 3px solid #f5f5f5;
-  border-radius: 7px;
+  background: #999;
+  border: 3px solid #e8e8e8;
+  border-radius: 8px;
 }
 
 .table-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #9e9e9e;
+  background: #666;
 }
 
 .table-scroll-container::-webkit-scrollbar-corner {
-  background: #f5f5f5;
+  background: #e8e8e8;
 }
 
-/* Firefox scrollbar */
+/* Firefox scrollbar - always visible */
 .table-scroll-container {
   scrollbar-width: auto;
-  scrollbar-color: #bdbdbd #f5f5f5;
+  scrollbar-color: #999 #e8e8e8;
 }
 
 .pagination-bar {
   border-top: 1px solid #e0e0e0;
   flex-shrink: 0;
+  background: #fafafa;
 }
 
-/* Pin selection checkbox column */
+/* ═══════════════════════════════════════════════════════════════════════════
+   STICKY HEADER - Excel-like freeze panes
+   The key is to make thead sticky relative to the scroll container
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Remove any default q-table wrapper scrolling */
+:deep(.q-table__container) {
+  overflow: visible !important;
+}
+
+:deep(.q-table__middle) {
+  overflow: visible !important;
+}
+
+/* Make the table fill its container */
+:deep(.q-table) {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* STICKY HEADER ROW */
+:deep(.q-table thead tr) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+:deep(.q-table thead th) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f5f5f5 !important;
+  border-bottom: 2px solid #ddd !important;
+}
+
+/* Pin selection checkbox column (frozen left) */
 :deep(.q-table td:first-child),
 :deep(.q-table th:first-child) {
   position: sticky;
   left: 0;
-  z-index: 1;
+  z-index: 5;
   background: #fff;
 }
 
-/* Pin patent_id column */
+:deep(.q-table thead th:first-child) {
+  z-index: 15 !important;
+  background: #f5f5f5 !important;
+}
+
+/* Pin patent_id column (frozen left, second column) */
 :deep(.q-table td:nth-child(2)),
 :deep(.q-table th:nth-child(2)) {
   position: sticky;
   left: 48px;
-  z-index: 1;
+  z-index: 5;
   background: #fff;
-  box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.15);
 }
 
-/* Header row stays pinned */
-:deep(.q-table thead th) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #fff;
-}
-
-/* Corner cells get highest z-index */
-:deep(.q-table thead th:first-child),
 :deep(.q-table thead th:nth-child(2)) {
-  z-index: 3;
+  z-index: 15 !important;
+  background: #f5f5f5 !important;
 }
 
 :deep(.q-table tbody tr) {

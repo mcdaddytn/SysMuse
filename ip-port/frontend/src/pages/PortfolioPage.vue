@@ -648,22 +648,24 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Data Table -->
-    <div class="table-scroll-container">
-    <q-table
-      :rows="patentsStore.patents"
-      :columns="tableColumns"
-      row-key="patent_id"
-      v-model:pagination="paginationModel"
-      v-model:selected="selectedPatents"
-      :loading="patentsStore.loading"
-      selection="multiple"
-      flat
-      bordered
-      binary-state-sort
-      @row-click="onRowClick"
-      @request="onRequest"
-    >
+    <!-- Data Table with fixed pagination -->
+    <div class="table-wrapper">
+      <div class="table-scroll-container">
+        <q-table
+          :rows="patentsStore.patents"
+          :columns="tableColumns"
+          row-key="patent_id"
+          v-model:pagination="paginationModel"
+          v-model:selected="selectedPatents"
+          :loading="patentsStore.loading"
+          selection="multiple"
+          flat
+          bordered
+          binary-state-sort
+          hide-pagination
+          @row-click="onRowClick"
+          @request="onRequest"
+        >
       <!-- Patent ID as link -->
       <template v-slot:body-cell-patent_id="props">
         <q-td :props="props">
@@ -767,6 +769,19 @@ onMounted(async () => {
           <q-tooltip v-if="props.row.competitor_names?.length > 0">
             {{ props.row.competitor_names.join(', ') }}
           </q-tooltip>
+        </q-td>
+      </template>
+
+      <!-- Competitor names as list -->
+      <template v-slot:body-cell-competitor_names="props">
+        <q-td :props="props">
+          <div v-if="props.row.competitor_names?.length > 0" class="ellipsis" style="max-width: 250px">
+            {{ props.row.competitor_names.join(', ') }}
+            <q-tooltip v-if="props.row.competitor_names?.length > 2" max-width="400px">
+              {{ props.row.competitor_names.join(', ') }}
+            </q-tooltip>
+          </div>
+          <span v-else class="text-grey-4">--</span>
         </q-td>
       </template>
 
@@ -947,7 +962,41 @@ onMounted(async () => {
       <template v-slot:loading>
         <q-inner-loading showing color="primary" />
       </template>
-    </q-table>
+        </q-table>
+      </div>
+
+      <!-- Pagination Controls (always visible outside scroll area) -->
+      <div class="pagination-bar q-pa-sm bg-grey-1 row items-center justify-between">
+        <div class="text-caption text-grey-7">
+          {{ patentsStore.totalCount.toLocaleString() }} total patents
+          <span v-if="paginationModel.rowsNumber > 0">
+            &middot; Page {{ paginationModel.page }} of {{ Math.ceil(paginationModel.rowsNumber / paginationModel.rowsPerPage) }}
+          </span>
+        </div>
+        <div class="row items-center q-gutter-sm">
+          <span class="text-caption text-grey-7">Rows per page:</span>
+          <q-select
+            v-model="paginationModel.rowsPerPage"
+            :options="[25, 50, 100, 250, 500]"
+            dense
+            borderless
+            style="min-width: 60px"
+            @update:model-value="onRequest({ pagination: paginationModel })"
+          />
+          <q-pagination
+            v-model="paginationModel.page"
+            :max="Math.ceil(paginationModel.rowsNumber / paginationModel.rowsPerPage) || 1"
+            :max-pages="7"
+            direction-links
+            boundary-links
+            icon-first="first_page"
+            icon-last="last_page"
+            icon-prev="chevron_left"
+            icon-next="chevron_right"
+            @update:model-value="onRequest({ pagination: paginationModel })"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- Bulk Actions (when items selected) -->
@@ -1076,9 +1125,57 @@ onMounted(async () => {
   text-overflow: ellipsis;
 }
 
+.table-wrapper {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
 .table-scroll-container {
-  max-height: calc(100vh - 260px);
+  /* Fixed height with scrollbars always accessible */
+  flex: 1;
+  height: calc(100vh - 360px);
+  min-height: 300px;
   overflow: auto;
+  /* Always show scrollbars */
+  scrollbar-gutter: stable;
+}
+
+/* Custom scrollbar styling */
+.table-scroll-container::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #bdbdbd;
+  border: 3px solid #f5f5f5;
+  border-radius: 7px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #9e9e9e;
+}
+
+.table-scroll-container::-webkit-scrollbar-corner {
+  background: #f5f5f5;
+}
+
+/* Firefox scrollbar */
+.table-scroll-container {
+  scrollbar-width: auto;
+  scrollbar-color: #bdbdbd #f5f5f5;
+}
+
+.pagination-bar {
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
 }
 
 /* Pin selection checkbox column */

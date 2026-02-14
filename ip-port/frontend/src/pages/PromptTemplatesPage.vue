@@ -171,16 +171,21 @@ function startNew() {
 function startEdit() {
   if (!selectedTemplate.value) return;
   const t = selectedTemplate.value;
+
+  // Normalize questions to ensure they have all required fields
+  // This handles old tournament templates with different schemas
+  const normalizedQuestions = normalizeQuestions(t.questions);
+
   form.value = {
     name: t.name,
     description: t.description || '',
     templateType: t.templateType || 'FREE_FORM',
     objectType: t.objectType || 'patent',
     promptText: t.promptText || '',
-    questions: (t.questions as StructuredQuestion[] | null) || [],
+    questions: normalizedQuestions,
     executionMode: t.executionMode,
-    contextFields: [...t.contextFields],
-    llmModel: t.llmModel,
+    contextFields: [...(t.contextFields || [])],
+    llmModel: t.llmModel || 'claude-sonnet-4-20250514',
     delimiterStart: t.delimiterStart || '<<',
     delimiterEnd: t.delimiterEnd || '>>',
     focusAreaId: t.focusAreaId || null
@@ -242,6 +247,38 @@ async function deleteSelected() {
 }
 
 // Structured questions helpers
+
+/**
+ * Normalize a question to ensure it has all required fields
+ * This handles old tournament templates with different schemas
+ */
+function normalizeQuestion(q: Partial<StructuredQuestion>): StructuredQuestion {
+  // Default answer type if missing
+  const answerType = q.answerType || 'INTEGER';
+
+  // Get default constraints for this answer type
+  const defaultConstraints = answerTypeDefaults[answerType] || {};
+
+  return {
+    fieldName: q.fieldName || '',
+    question: q.question || '',
+    answerType: answerType as StructuredQuestion['answerType'],
+    constraints: {
+      ...defaultConstraints,
+      ...(q.constraints || {})
+    },
+    description: q.description || ''
+  };
+}
+
+/**
+ * Normalize all questions in an array
+ */
+function normalizeQuestions(questions: unknown): StructuredQuestion[] {
+  if (!Array.isArray(questions)) return [];
+  return questions.map(q => normalizeQuestion(q as Partial<StructuredQuestion>));
+}
+
 function addQuestion() {
   form.value.questions.push({
     fieldName: '',
@@ -596,8 +633,8 @@ onMounted(() => {
                   <!-- Constraints row -->
                   <div class="row q-gutter-sm q-mt-xs">
                     <q-input
-                      v-if="q.answerType === 'INTEGER' || q.answerType === 'FLOAT'"
-                      v-model.number="q.constraints!.min"
+                      v-if="(q.answerType === 'INTEGER' || q.answerType === 'FLOAT') && q.constraints"
+                      v-model.number="q.constraints.min"
                       label="Min"
                       type="number"
                       outlined
@@ -605,8 +642,8 @@ onMounted(() => {
                       class="col-2"
                     />
                     <q-input
-                      v-if="q.answerType === 'INTEGER' || q.answerType === 'FLOAT'"
-                      v-model.number="q.constraints!.max"
+                      v-if="(q.answerType === 'INTEGER' || q.answerType === 'FLOAT') && q.constraints"
+                      v-model.number="q.constraints.max"
                       label="Max"
                       type="number"
                       outlined
@@ -614,8 +651,8 @@ onMounted(() => {
                       class="col-2"
                     />
                     <q-input
-                      v-if="q.answerType === 'TEXT'"
-                      v-model.number="q.constraints!.maxSentences"
+                      v-if="q.answerType === 'TEXT' && q.constraints"
+                      v-model.number="q.constraints.maxSentences"
                       label="Max Sentences"
                       type="number"
                       outlined
@@ -623,8 +660,8 @@ onMounted(() => {
                       class="col-2"
                     />
                     <q-input
-                      v-if="q.answerType === 'TEXT_ARRAY'"
-                      v-model.number="q.constraints!.maxItems"
+                      v-if="q.answerType === 'TEXT_ARRAY' && q.constraints"
+                      v-model.number="q.constraints.maxItems"
                       label="Max Items"
                       type="number"
                       outlined
@@ -633,7 +670,7 @@ onMounted(() => {
                     />
                     <q-input
                       v-if="q.answerType === 'ENUM'"
-                      :model-value="q.constraints?.options?.join(', ')"
+                      :model-value="q.constraints?.options?.join(', ') || ''"
                       @update:model-value="(v: string) => { q.constraints = { ...q.constraints, options: v.split(',').map((s: string) => s.trim()).filter(Boolean) }; }"
                       label="Options (comma-separated)"
                       outlined

@@ -72,23 +72,24 @@ At each step, the system:
 
 Each candidate patent receives a score from 0-100, computed as a weighted sum of the following dimensions. All dimension scores are normalized to 0-1 before weighting.
 
-#### 1. Taxonomic Overlap (Sector Membership)
+#### 1. Taxonomic Overlap (Sector Hierarchy)
 
-How closely does the candidate's taxonomic placement match the seed patents?
+How closely does the candidate's taxonomic placement match the seed patents? More specific matches score higher — a sub-sector match is a much stronger signal than a super-sector match.
 
 | Match Level | Score | Rationale |
 |-------------|-------|-----------|
 | Same sub-sector as any seed | 1.0 | Strongest signal — near-identical technology area |
-| Same sector as any seed | 0.7 | Same technology domain |
-| Same super-sector as any seed | 0.4 | Same broad technology family |
+| Same sector as any seed | 0.5 | Same technology domain, but could be different niche |
+| Same super-sector as any seed | 0.2 | Same broad technology family — weak signal alone |
 | No overlap | 0.0 | Different technology entirely |
 
-**Computation**: Take the maximum match level across all seed patents. For candidates with data from multiple seeds, use the best match.
+**Computation**: Take the maximum match level across all seed patents. For candidates matching multiple seeds at different levels, use the best match.
 
-**For external patents** (not in portfolio): Sector may be unknown. Options:
-- Infer from CPC codes using the sector→CPC mapping
-- Leave unscored on this dimension (exclude from denominator)
-- Fetch and classify on-demand
+**Multiple taxonomy matches**: If a candidate matches seed S1 at sub-sector level AND seed S2 at sector level, use the best (sub-sector = 1.0). In the future, we may support multiple taxonomy systems; for now, the sector hierarchy (sub-sector → sector → super-sector) is the primary taxonomy, mapped from CPC codes.
+
+**For external patents** (not in portfolio): Sector may be unknown. Use the sector→CPC mapping to infer sector from the candidate's CPC codes. Since our sectors are derived from CPC prefixes, this provides a reasonable approximation. If CPC codes are also unavailable, exclude this dimension from scoring.
+
+**Note on CPC overlap**: Since our sector taxonomy is currently mapped from CPC codes, a separate CPC overlap dimension would be largely redundant. CPC overlap is folded into this dimension via the sector→CPC inference path. If we add alternative taxonomies in the future (e.g., market-based or LLM-classified), CPC overlap could be reintroduced as an independent signal.
 
 **Default weight**: 0.20
 
@@ -163,22 +164,7 @@ Score = aligned_links / max(citation_links, 1)
 
 **Default weight**: 0.07
 
-#### 7. CPC Code Overlap
-
-Similarity of CPC classification codes between candidate and seeds.
-
-```
-// At each CPC level, compute overlap
-subclass_overlap = |candidate_subclasses ∩ seed_subclasses| / |candidate_subclasses ∪ seed_subclasses|
-group_overlap = |candidate_groups ∩ seed_groups| / |candidate_groups ∪ seed_groups|
-Score = 0.6 * group_overlap + 0.4 * subclass_overlap
-```
-
-**Rationale**: CPC codes are the patent office's own classification and provide an independent taxonomic signal from our custom sector system. Overlap at the group level (e.g., H04L63/08) is more specific than subclass (H04L63).
-
-**Default weight**: 0.10
-
-#### 8. Multi-Path Connectivity
+#### 7. Multi-Path Connectivity
 
 How many independent citation paths connect the candidate to the seed set?
 
@@ -191,37 +177,41 @@ Score = min(paths / 3, 1.0)  // Cap at 3+ paths = maximum score
 
 **Default weight**: 0.05
 
-#### 9. Suggested Additional Dimensions
+#### 8. Assignee Relationship
 
-These dimensions could strengthen the scoring system based on the project's goals:
-
-**a. Assignee Relationship (weight: 0.05)**
-
-Is the candidate assigned to the same entity as any seed patent? Same-assignee patents are often part of the same R&D program.
+Is the candidate assigned to the same entity as any seed patent?
 
 ```
 Score = 1.0 if same assignee as any seed, 0.5 if same parent company, 0.0 otherwise
 ```
 
-**b. Temporal Proximity (weight: 0.03-0.05)**
+**Rationale**: Same-assignee patents are often part of the same R&D program. This is a quick signal especially useful for expanding within a portfolio holder's own patent estate.
 
-Patents filed within a few years of the seeds are more likely to represent the same generation of technology.
+**Default weight**: 0.05
+
+#### 9. Temporal Proximity
+
+Patents filed close in time to the seeds are more likely to represent the same technology generation.
 
 ```
 years_apart = min(|candidate_filing_date - seed_filing_date|) across all seeds
 Score = max(0, 1.0 - years_apart / 15)  // Linear decay over 15 years
 ```
 
-**c. Citation Depth Penalty (weight: applied as multiplier)**
+**Rationale**: While siblings and cousins naturally tend to be temporally close (same generation of citing/cited patents), this isn't guaranteed. A sibling discovered through a very old parent might be decades apart from the seed. Temporal proximity adds a gentle penalty for large time gaps, preventing the family from drifting into irrelevant eras. The 15-year decay window is lenient — it only significantly penalizes patents more than a decade apart.
 
-Closer generations should score higher than distant ones, all else equal. Rather than a separate dimension, apply as a multiplier:
+**Default weight**: 0.05
+
+#### Generation Distance Multiplier (Applied Separately)
+
+Closer generations should score higher than distant ones, all else equal. Applied as a multiplier on the composite score rather than as a separate dimension:
 
 ```
-depth_multiplier = 1.0 / (1.0 + 0.2 * generation_distance)
-// Gen 1: 0.83, Gen 2: 0.71, Gen 3: 0.63
+depth_multiplier = 1.0 / (1.0 + decay_rate * generation_distance)
+// With decay_rate = 0.2: Gen 1: 0.83, Gen 2: 0.71, Gen 3: 0.63
 ```
 
-Or configurable via slider as well.
+The decay rate is configurable via slider. At 0.0, no distance penalty. At 0.3, generation 2 scores 62.5% of generation 1.
 
 ### Composite Score Formula
 
@@ -245,11 +235,14 @@ Dimensions where data is unavailable (e.g., no sector assignment for external pa
 │  Taxonomic Overlap      [████████░░░░] 0.20                 │
 │  Common Prior Art       [████████░░░░] 0.20                 │
 │  Common Forward Cites   [████████░░░░] 0.20                 │
-│  CPC Code Overlap       [████░░░░░░░░] 0.10                 │
 │  Portfolio/Affiliate    [████░░░░░░░░] 0.10                 │
 │  Competitor Overlap     [███░░░░░░░░░] 0.08                 │
-│  Citation Sector Align  [██░░░░░░░░░░] 0.07                 │
+│  Citation Sector Align  [███░░░░░░░░░] 0.07                 │
 │  Multi-Path Connect     [██░░░░░░░░░░] 0.05                 │
+│  Assignee Relationship  [██░░░░░░░░░░] 0.05                 │
+│  Temporal Proximity     [██░░░░░░░░░░] 0.05                 │
+│                                                              │
+│  Gen Distance Decay     [██░░░░░░░░░░] 0.20                 │
 │                                                              │
 │  [Reset to Defaults] [Save as Preset]                       │
 │                                                              │
@@ -270,11 +263,12 @@ Weights are automatically normalized at computation time (they don't need to sum
 
 | Preset | Use Case | Emphasis |
 |--------|----------|----------|
-| **Balanced** | General exploration | Equal weights |
-| **Citation-Heavy** | Finding technologically related patents | Prior art + forward cites at 0.30 each |
-| **Portfolio-Focused** | Internal family building | Portfolio/affiliate at 0.25, taxonomy at 0.25 |
+| **Balanced** | General exploration | Default weights, thresholds 60/30 |
+| **Citation-Heavy** | Finding technologically related patents | Prior art + forward cites at 0.30 each, lower taxonomy |
+| **Portfolio-Focused** | Internal family building | Portfolio/affiliate at 0.25, taxonomy at 0.25, portfolio boost on |
 | **Competitive Analysis** | Finding competitor targets | Competitor overlap at 0.20, sector alignment at 0.15 |
-| **Broad Discovery** | Casting a wide net | Lower thresholds, lower depth penalty |
+| **Broad Discovery** | Casting a wide net | Lower thresholds (40/15), lower depth decay, temporal at 0.0 |
+| **Tight Technology** | Specific sub-sector focus | Taxonomy at 0.35, temporal at 0.10, high membership threshold (75) |
 
 ---
 
@@ -328,19 +322,40 @@ This pairs with Approach A: thresholds set the baseline, manual overrides handle
 
 ### Approach C: Sibling/Cousin Level Control (Supplementary, Use with Caution)
 
-The option to include siblings (lateral at same generation) and cousins (one additional generation through siblings):
+The option to include siblings (lateral at same generation) and cousins (one additional generation through siblings).
 
-**Siblings** (1-level lateral):
-- Parents' other children OR children's other parents
-- Generally safe — bounded by parent/child count
-- Useful for "what other patents build on the same foundation?"
+**Bidirectional Sibling Discovery**:
+
+Siblings can be found through EITHER direction depending on the patent's age and citation profile:
+
+| Direction | Method | Best For |
+|-----------|--------|----------|
+| **Via parents (backward)** | Find seed's parents → find parents' other children | Newer patents — they cite established prior art that has many children |
+| **Via children (forward)** | Find seed's children → find children's other parents (co-cited patents) | Older patents — they are cited by newer patents that also cite peer patents |
+| **Both** | Union of above | General case — catches peers from both directions |
+
+```
+Via parents (backward siblings):
+    Parent A ──→ Seed
+    Parent A ──→ Sibling 1   ← same foundation
+    Parent A ──→ Sibling 2
+
+Via children (forward siblings / co-cited peers):
+    Seed      ──→ Child X
+    Sibling 3 ──→ Child X    ← cited together by same downstream patent
+    Sibling 4 ──→ Child X
+```
+
+This is critical: for a very new patent with few forward citations, the only way to find siblings is through shared prior art (backward). For an older patent whose forward citations have matured, the co-cited pattern (forward) often reveals the most relevant peers.
+
+**Temporal drift with siblings**: Siblings found via parents are naturally constrained in age — they cite the same prior art, so they tend to be from a similar era. Forward-discovered siblings (co-cited) can have wider temporal spread since a 2024 patent might cite both a 2010 and 2020 patent. The temporal proximity dimension handles this naturally, applying a gentle penalty when siblings drift too far in time from seeds.
 
 **Cousins** (2-level lateral):
-- Children of siblings
+- Children of siblings (via either direction)
 - **Risk**: If a seed has 20 parents and each parent has 50 children (siblings), those siblings have their own children (cousins) — potentially 20 × 50 × N candidates
 - Should ONLY be used with strict scoring thresholds and expansion limits
 
-**Recommendation**: Support siblings as a toggle. For cousins, fold them into the generational expansion model — "expand forward from siblings" in the next generation step achieves the same result with scoring-based pruning already applied.
+**Recommendation**: Support siblings as a toggle with direction choice (backward / forward / both). For cousins, fold them into the generational expansion model — "expand forward from siblings" in the next generation step achieves the same result with scoring-based pruning already applied. This avoids the cousin explosion by making the user explicitly decide to expand through siblings before seeing their children.
 
 ### Approach Synthesis: Recommended Architecture
 

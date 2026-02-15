@@ -28,6 +28,17 @@ import {
   type MultiSeedConfig,
   type MergeStrategy,
 } from '../services/patent-family-service.js';
+import {
+  createExplorationV2,
+  expandOneGeneration,
+  expandSiblings,
+  rescoreExploration,
+  updateCandidateStatuses,
+  getExplorationV2,
+  saveExploration,
+  createFocusAreaFromV2,
+  getScoringPresets,
+} from '../services/family-expansion-v2-service.js';
 
 const router = Router();
 
@@ -628,6 +639,235 @@ router.post('/enrich-with-details', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error enriching patents with details:', error);
     res.status(500).json({ error: 'Failed to enrich patents' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 Family Expansion Endpoints (Iterative, Scored)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /v2/presets
+ * Get available scoring weight presets
+ */
+router.get('/v2/presets', (_req: Request, res: Response) => {
+  try {
+    const presets = getScoringPresets();
+    res.json(presets);
+  } catch (error) {
+    console.error('Error getting presets:', error);
+    res.status(500).json({ error: 'Failed to get presets' });
+  }
+});
+
+/**
+ * POST /v2/explorations
+ * Create a new v2 exploration with seed patents
+ */
+router.post('/v2/explorations', async (req: Request, res: Response) => {
+  try {
+    const { seedPatentIds, name, weights, membershipThreshold, expansionThreshold } = req.body;
+
+    if (!seedPatentIds || !Array.isArray(seedPatentIds) || seedPatentIds.length === 0) {
+      return res.status(400).json({ error: 'seedPatentIds array is required' });
+    }
+
+    const exploration = await createExplorationV2({
+      seedPatentIds,
+      name,
+      weights,
+      membershipThreshold,
+      expansionThreshold,
+    });
+
+    res.status(201).json(exploration);
+  } catch (error) {
+    console.error('Error creating v2 exploration:', error);
+    res.status(500).json({ error: 'Failed to create exploration' });
+  }
+});
+
+/**
+ * GET /v2/explorations/:id
+ * Get full v2 exploration state with members, candidates, excluded
+ */
+router.get('/v2/explorations/:id', async (req: Request, res: Response) => {
+  try {
+    const state = await getExplorationV2(req.params.id);
+    res.json(state);
+  } catch (error) {
+    console.error('Error getting v2 exploration:', error);
+    res.status(500).json({ error: 'Failed to get exploration' });
+  }
+});
+
+/**
+ * POST /v2/explorations/:id/expand
+ * Expand one generation (forward, backward, or both)
+ */
+router.post('/v2/explorations/:id/expand', async (req: Request, res: Response) => {
+  try {
+    const {
+      direction = 'both',
+      weights,
+      membershipThreshold,
+      expansionThreshold,
+      maxCandidates,
+      portfolioBoost,
+    } = req.body;
+
+    if (!['forward', 'backward', 'both'].includes(direction)) {
+      return res.status(400).json({ error: 'direction must be forward, backward, or both' });
+    }
+
+    const result = await expandOneGeneration(req.params.id, {
+      direction,
+      weights,
+      membershipThreshold,
+      expansionThreshold,
+      maxCandidates,
+      portfolioBoost,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error expanding generation:', error);
+    res.status(500).json({ error: 'Failed to expand generation' });
+  }
+});
+
+/**
+ * POST /v2/explorations/:id/expand-siblings
+ * Discover siblings via parent/child traversal
+ */
+router.post('/v2/explorations/:id/expand-siblings', async (req: Request, res: Response) => {
+  try {
+    const {
+      direction = 'both',
+      weights,
+      membershipThreshold,
+      expansionThreshold,
+      maxCandidates,
+      portfolioBoost,
+    } = req.body;
+
+    if (!['forward', 'backward', 'both'].includes(direction)) {
+      return res.status(400).json({ error: 'direction must be forward, backward, or both' });
+    }
+
+    const result = await expandSiblings(req.params.id, {
+      direction,
+      weights,
+      membershipThreshold,
+      expansionThreshold,
+      maxCandidates,
+      portfolioBoost,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error expanding siblings:', error);
+    res.status(500).json({ error: 'Failed to expand siblings' });
+  }
+});
+
+/**
+ * POST /v2/explorations/:id/rescore
+ * Re-score all candidates with new weights/thresholds (no new expansion)
+ */
+router.post('/v2/explorations/:id/rescore', async (req: Request, res: Response) => {
+  try {
+    const { weights, membershipThreshold, expansionThreshold, portfolioBoost } = req.body;
+
+    if (!weights) {
+      return res.status(400).json({ error: 'weights object is required' });
+    }
+    if (membershipThreshold == null || expansionThreshold == null) {
+      return res.status(400).json({ error: 'membershipThreshold and expansionThreshold are required' });
+    }
+
+    const result = await rescoreExploration(req.params.id, {
+      weights,
+      membershipThreshold,
+      expansionThreshold,
+      portfolioBoost,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error rescoring exploration:', error);
+    res.status(500).json({ error: 'Failed to rescore exploration' });
+  }
+});
+
+/**
+ * POST /v2/explorations/:id/candidates
+ * Update candidate statuses (include/exclude/neutral)
+ */
+router.post('/v2/explorations/:id/candidates', async (req: Request, res: Response) => {
+  try {
+    const { updates } = req.body;
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: 'updates array is required with {patentId, status} objects' });
+    }
+
+    for (const u of updates) {
+      if (!u.patentId || !['member', 'candidate', 'excluded'].includes(u.status)) {
+        return res.status(400).json({ error: 'Each update must have patentId and status (member|candidate|excluded)' });
+      }
+    }
+
+    const result = await updateCandidateStatuses(req.params.id, updates);
+    res.json(result);
+  } catch (error) {
+    console.error('Error updating candidates:', error);
+    res.status(500).json({ error: 'Failed to update candidates' });
+  }
+});
+
+/**
+ * POST /v2/explorations/:id/save
+ * Save/name an exploration
+ */
+router.post('/v2/explorations/:id/save', async (req: Request, res: Response) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    await saveExploration(req.params.id, { name, description });
+    res.json({ message: 'Exploration saved' });
+  } catch (error) {
+    console.error('Error saving exploration:', error);
+    res.status(500).json({ error: 'Failed to save exploration' });
+  }
+});
+
+/**
+ * POST /v2/explorations/:id/create-focus-area
+ * Create a focus area from accepted members
+ */
+router.post('/v2/explorations/:id/create-focus-area', async (req: Request, res: Response) => {
+  try {
+    const { name, description, includeExternalPatents } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const result = await createFocusAreaFromV2(req.params.id, {
+      name,
+      description,
+      includeExternalPatents,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error creating focus area from v2 exploration:', error);
+    res.status(500).json({ error: 'Failed to create focus area' });
   }
 });
 

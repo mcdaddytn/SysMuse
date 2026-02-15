@@ -18,7 +18,7 @@ const prisma = new PrismaClient();
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface PortfolioPatent {
+export interface PortfolioPatent {
   patent_id: string;
   patent_title: string;
   patent_date: string;
@@ -50,7 +50,7 @@ interface MemberRecord {
   inPortfolio: boolean;
 }
 
-interface PatentDetail {
+export interface PatentDetail {
   patent_id: string;
   patent_title?: string;
   assignee?: string;
@@ -140,7 +140,7 @@ let portfolioCache: Map<string, PortfolioPatent> | null = null;
 let portfolioCacheTime = 0;
 const PORTFOLIO_TTL = 5 * 60 * 1000;
 
-function loadPortfolioMap(): Map<string, PortfolioPatent> {
+export function loadPortfolioMap(): Map<string, PortfolioPatent> {
   const now = Date.now();
   if (portfolioCache && (now - portfolioCacheTime) < PORTFOLIO_TTL) {
     return portfolioCache;
@@ -175,7 +175,7 @@ function loadPortfolioMap(): Map<string, PortfolioPatent> {
 // Cache loading functions
 // ─────────────────────────────────────────────────────────────────────────────
 
-function loadCachedForwardCitations(patentId: string): string[] | null {
+export function loadCachedForwardCitations(patentId: string): string[] | null {
   try {
     const cachePath = path.join(process.cwd(), 'cache/api/patentsview/forward-citations', `${patentId}.json`);
     if (fs.existsSync(cachePath)) {
@@ -186,7 +186,7 @@ function loadCachedForwardCitations(patentId: string): string[] | null {
   return null;
 }
 
-function loadCachedBackwardCitations(patentId: string): string[] | null {
+export function loadCachedBackwardCitations(patentId: string): string[] | null {
   try {
     const cachePath = path.join(process.cwd(), 'cache/patent-families/parents', `${patentId}.json`);
     if (fs.existsSync(cachePath)) {
@@ -197,7 +197,7 @@ function loadCachedBackwardCitations(patentId: string): string[] | null {
   return null;
 }
 
-function loadPatentDetail(patentId: string, portfolioMap: Map<string, PortfolioPatent>): PatentDetail | null {
+export function loadPatentDetail(patentId: string, portfolioMap: Map<string, PortfolioPatent>): PatentDetail | null {
   // Portfolio first
   const portfolioPatent = portfolioMap.get(patentId);
   if (portfolioPatent) {
@@ -461,7 +461,7 @@ function getRelationLabel(depth: number, isSibling: boolean): string {
 
 const MAX_FAMILY_SIZE = 500;
 
-async function getForwardCitations(patentId: string, allowLive: boolean): Promise<string[]> {
+export async function getForwardCitations(patentId: string, allowLive: boolean): Promise<string[]> {
   const cached = loadCachedForwardCitations(patentId);
   if (cached !== null) return cached;
   if (allowLive) {
@@ -471,7 +471,7 @@ async function getForwardCitations(patentId: string, allowLive: boolean): Promis
   return [];
 }
 
-async function getBackwardCitations(patentId: string, allowLive: boolean): Promise<string[]> {
+export async function getBackwardCitations(patentId: string, allowLive: boolean): Promise<string[]> {
   const cached = loadCachedBackwardCitations(patentId);
   if (cached !== null) return cached;
   if (allowLive) {

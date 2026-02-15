@@ -1,26 +1,52 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
-  patentFamilyApi,
-  type MultiSeedConfig,
-  type MergeStrategy,
-  type PreviewResult,
-  type EnrichedFamilyMember,
-  type FilterOptions,
-  type LitigationIndicator,
+  patentFamilyV2Api,
+  type ScoringWeightsV2,
+  type ScoredCandidateV2,
+  type ExplorationStateV2,
+  type ExpansionHistoryStep,
+  type ScoringPresetV2,
 } from '@/services/api';
 
-const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// State
+// Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Seed patent input
+const DEFAULT_WEIGHTS: ScoringWeightsV2 = {
+  taxonomicOverlap: 0.20,
+  commonPriorArt: 0.20,
+  commonForwardCites: 0.20,
+  competitorOverlap: 0.08,
+  portfolioAffiliate: 0.10,
+  citationSectorAlignment: 0.07,
+  multiPathConnectivity: 0.05,
+  assigneeRelationship: 0.05,
+  temporalProximity: 0.05,
+  depthDecayRate: 0.20,
+};
+
+const WEIGHT_DIMENSIONS = [
+  { key: 'taxonomicOverlap' as const, label: 'Taxonomic Overlap', description: 'Sub-sector, sector, or super-sector match with seeds', color: 'blue' },
+  { key: 'commonPriorArt' as const, label: 'Common Prior Art', description: 'Jaccard similarity of backward citations', color: 'indigo' },
+  { key: 'commonForwardCites' as const, label: 'Common Forward Cites', description: 'Jaccard similarity of forward citations', color: 'deep-purple' },
+  { key: 'competitorOverlap' as const, label: 'Competitor Overlap', description: 'Shared competitor entities in citation network', color: 'red' },
+  { key: 'portfolioAffiliate' as const, label: 'Portfolio/Affiliate', description: 'In portfolio (1.0) or affiliate (0.7)', color: 'green' },
+  { key: 'citationSectorAlignment' as const, label: 'Citation Sector Align', description: 'Fraction of connecting citations in matching sectors', color: 'teal' },
+  { key: 'multiPathConnectivity' as const, label: 'Multi-Path Connect', description: 'Number of independent citation paths (capped at 3)', color: 'cyan' },
+  { key: 'assigneeRelationship' as const, label: 'Assignee Relationship', description: 'Same assignee (1.0) or affiliate group (0.5)', color: 'amber' },
+  { key: 'temporalProximity' as const, label: 'Temporal Proximity', description: 'Linear decay over 15 years from seed filing dates', color: 'orange' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Seeds
+// ─────────────────────────────────────────────────────────────────────────────
+
 const seedInput = ref('');
 const seedPatentIds = computed(() => {
   return seedInput.value
@@ -29,49 +55,39 @@ const seedPatentIds = computed(() => {
     .filter(id => id && /^\d{6,}$/.test(id));
 });
 
-// Expansion configuration
-const maxAncestorDepth = ref(1);
-const maxDescendantDepth = ref(1);
-const includeSiblings = ref(true);
-const includeCousins = ref(false);
-const requireInPortfolio = ref(false);
-const mergeStrategy = ref<MergeStrategy>('INTERSECTION');
-const minFilingYear = ref<number | null>(null);
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Exploration
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Filter options (loaded from API)
-const filterOptions = ref<FilterOptions | null>(null);
-const selectedCompetitors = ref<string[]>([]);
-const selectedAffiliates = ref<string[]>([]);
-const selectedSectors = ref<string[]>([]);
-
-// Preview state
-const preview = ref<PreviewResult | null>(null);
-const loadingPreview = ref(false);
-const previewError = ref<string | null>(null);
-
-// Exploration results
-const members = ref<EnrichedFamilyMember[]>([]);
 const explorationId = ref<string | null>(null);
-const loadingExploration = ref(false);
-const explorationError = ref<string | null>(null);
+const explorationState = ref<ExplorationStateV2 | null>(null);
+const loading = ref(false);
+const expanding = ref(false);
+const rescoring = ref(false);
+const error = ref<string | null>(null);
 
-// Selection and filtering
-const selectedMembers = ref<EnrichedFamilyMember[]>([]);
-const memberFilter = ref({
-  relation: 'all',
-  inPortfolio: 'all',
-  competitor: 'all',
-});
-const memberSearch = ref('');
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Weights & Presets
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Focus Area creation
-const showCreateFocusAreaDialog = ref(false);
-const newFocusAreaName = ref('');
-const newFocusAreaDescription = ref('');
-const includeExternalPatents = ref(true);
-const creatingFocusArea = ref(false);
+const weights = ref<ScoringWeightsV2>({ ...DEFAULT_WEIGHTS });
+const presets = ref<Record<string, ScoringPresetV2>>({});
+const selectedPreset = ref<string | null>('balanced');
 
-// Pagination
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Thresholds
+// ─────────────────────────────────────────────────────────────────────────────
+
+const membershipThreshold = ref(60);
+const expansionThreshold = ref(30);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State — UI
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ZoneFilter = 'all' | 'members' | 'candidates' | 'excluded';
+const activeZone = ref<ZoneFilter>('all');
+const searchFilter = ref('');
 const pagination = ref({
   page: 1,
   rowsPerPage: 50,
@@ -79,363 +95,417 @@ const pagination = ref({
   descending: true,
 });
 
-// Litigation enrichment
-const litigationData = ref<Map<string, LitigationIndicator>>(new Map());
-const enrichingLitigation = ref(false);
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Computed
+// State — Dialogs
 // ─────────────────────────────────────────────────────────────────────────────
 
-const config = computed<MultiSeedConfig>(() => ({
-  seedPatentIds: seedPatentIds.value,
-  maxAncestorDepth: maxAncestorDepth.value,
-  maxDescendantDepth: maxDescendantDepth.value,
-  includeSiblings: includeSiblings.value,
-  includeCousins: includeCousins.value,
-  limitToCompetitors: selectedCompetitors.value,
-  limitToAffiliates: selectedAffiliates.value,
-  limitToSectors: selectedSectors.value,
-  requireInPortfolio: requireInPortfolio.value,
-  mergeStrategy: mergeStrategy.value,
-  minFilingYear: minFilingYear.value ?? undefined,
-}));
+const showSaveDialog = ref(false);
+const saveName = ref('');
+const saveDescription = ref('');
+const saving = ref(false);
 
-const filteredMembers = computed(() => {
-  let result = members.value;
+const showFocusAreaDialog = ref(false);
+const focusAreaName = ref('');
+const focusAreaDescription = ref('');
+const creatingFocusArea = ref(false);
 
-  // Apply relation filter
-  if (memberFilter.value.relation !== 'all') {
-    result = result.filter(m => m.relationToSeed === memberFilter.value.relation);
+// ─────────────────────────────────────────────────────────────────────────────
+// Computed — All Candidates (merged view)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const allCandidates = computed<ScoredCandidateV2[]>(() => {
+  if (!explorationState.value) return [];
+  return [
+    ...explorationState.value.members,
+    ...explorationState.value.candidates,
+    ...explorationState.value.excluded,
+  ];
+});
+
+const zoneCounts = computed(() => {
+  if (!explorationState.value) return { all: 0, members: 0, candidates: 0, excluded: 0 };
+  return {
+    all: allCandidates.value.length,
+    members: explorationState.value.members.length,
+    candidates: explorationState.value.candidates.length,
+    excluded: explorationState.value.excluded.length,
+  };
+});
+
+const displayedCandidates = computed(() => {
+  let list: ScoredCandidateV2[];
+  if (!explorationState.value) return [];
+
+  switch (activeZone.value) {
+    case 'members':
+      list = explorationState.value.members;
+      break;
+    case 'candidates':
+      list = explorationState.value.candidates;
+      break;
+    case 'excluded':
+      list = explorationState.value.excluded;
+      break;
+    default:
+      list = allCandidates.value;
   }
 
-  // Apply portfolio filter
-  if (memberFilter.value.inPortfolio === 'yes') {
-    result = result.filter(m => m.inPortfolio);
-  } else if (memberFilter.value.inPortfolio === 'no') {
-    result = result.filter(m => !m.inPortfolio);
-  }
-
-  // Apply competitor filter
-  if (memberFilter.value.competitor === 'competitors') {
-    result = result.filter(m => m.competitorMatch);
-  } else if (memberFilter.value.competitor === 'non-competitors') {
-    result = result.filter(m => !m.competitorMatch);
-  }
-
-  // Apply search
-  if (memberSearch.value.trim()) {
-    const search = memberSearch.value.toLowerCase();
-    result = result.filter(m =>
-      m.patentId.includes(search) ||
-      m.patentTitle.toLowerCase().includes(search) ||
-      m.assignee.toLowerCase().includes(search)
+  if (searchFilter.value.trim()) {
+    const q = searchFilter.value.toLowerCase();
+    list = list.filter(c =>
+      c.patentId.includes(q) ||
+      (c.title || '').toLowerCase().includes(q) ||
+      (c.assignee || '').toLowerCase().includes(q) ||
+      (c.sector || '').toLowerCase().includes(q)
     );
   }
 
-  return result;
+  return list;
 });
 
-const relationCounts = computed(() => {
-  const counts: Record<string, number> = {};
-  for (const m of members.value) {
-    counts[m.relationToSeed] = (counts[m.relationToSeed] || 0) + 1;
-  }
-  return counts;
-});
-
-const portfolioCounts = computed(() => ({
-  inPortfolio: members.value.filter(m => m.inPortfolio).length,
-  external: members.value.filter(m => !m.inPortfolio).length,
-}));
-
-const competitorCounts = computed(() => ({
-  competitors: members.value.filter(m => m.competitorMatch).length,
-  nonCompetitors: members.value.filter(m => !m.competitorMatch).length,
-}));
-
-const uniqueCompetitors = computed(() => {
-  const companies = new Set<string>();
-  for (const m of members.value) {
-    if (m.competitorMatch) {
-      companies.add(m.competitorMatch.company);
-    }
-  }
-  return [...companies].sort();
+const totalWeight = computed(() => {
+  const w = weights.value;
+  return w.taxonomicOverlap + w.commonPriorArt + w.commonForwardCites +
+    w.competitorOverlap + w.portfolioAffiliate + w.citationSectorAlignment +
+    w.multiPathConnectivity + w.assigneeRelationship + w.temporalProximity;
 });
 
 const tableColumns = computed(() => [
+  { name: 'status', label: 'Status', field: 'zone', sortable: true, align: 'center' as const, style: 'width: 50px' },
+  { name: 'score', label: 'Score', field: (row: ScoredCandidateV2) => row.score.compositeScore, sortable: true, align: 'right' as const, style: 'width: 70px' },
   { name: 'patentId', label: 'Patent ID', field: 'patentId', sortable: true, align: 'left' as const },
-  { name: 'patentTitle', label: 'Title', field: 'patentTitle', sortable: true, align: 'left' as const },
+  { name: 'title', label: 'Title', field: 'title', sortable: true, align: 'left' as const },
   { name: 'assignee', label: 'Assignee', field: 'assignee', sortable: true, align: 'left' as const },
-  { name: 'relationToSeed', label: 'Relation', field: 'relationToSeed', sortable: true, align: 'left' as const },
-  { name: 'inPortfolio', label: 'Portfolio', field: 'inPortfolio', sortable: true, align: 'center' as const },
-  { name: 'competitorMatch', label: 'Competitor', field: (row: EnrichedFamilyMember) => row.competitorMatch?.company || '', sortable: true, align: 'left' as const },
-  { name: 'ipr', label: 'IPR', field: (row: EnrichedFamilyMember) => getLitigationIndicator(row.patentId)?.hasIPR ? 'Yes' : '', sortable: true, align: 'center' as const },
-  { name: 'remainingYears', label: 'Years Left', field: 'remainingYears', sortable: true, align: 'right' as const, format: (val: number | undefined) => val?.toFixed(1) || '--' },
-  { name: 'score', label: 'Score', field: 'score', sortable: true, align: 'right' as const, format: (val: number | undefined) => val?.toFixed(1) || '--' },
+  { name: 'sector', label: 'Sector', field: 'sector', sortable: true, align: 'left' as const },
+  { name: 'relation', label: 'Relation', field: 'relation', sortable: true, align: 'left' as const },
+  { name: 'inPortfolio', label: 'Portfolio', field: 'inPortfolio', sortable: true, align: 'center' as const, style: 'width: 50px' },
+  { name: 'remainingYears', label: 'Yrs Left', field: 'remainingYears', sortable: true, align: 'right' as const, format: (val: number | undefined) => val?.toFixed(1) || '--' },
 ]);
 
-const enrichmentCounts = computed(() => {
-  let hasIPR = 0;
-  let hasProsecution = 0;
-  let checked = 0;
-  for (const m of members.value) {
-    const lit = litigationData.value.get(m.patentId);
-    if (lit) {
-      checked++;
-      if (lit.hasIPR) hasIPR++;
-      if (lit.hasProsecutionHistory) hasProsecution++;
-    }
-  }
-  return { hasIPR, hasProsecution, checked, total: members.value.length };
-});
-
-// Legacy alias for template
-const iprCounts = computed(() => enrichmentCounts.value);
+const hasExploration = computed(() => !!explorationId.value && !!explorationState.value);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Methods
+// Methods — Exploration Lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function loadFilterOptions() {
-  try {
-    filterOptions.value = await patentFamilyApi.getFilterOptions();
-  } catch (err) {
-    console.error('Failed to load filter options:', err);
-  }
-}
-
-async function loadPreview() {
-  if (seedPatentIds.value.length === 0) {
-    preview.value = null;
-    return;
-  }
-
-  loadingPreview.value = true;
-  previewError.value = null;
-
-  try {
-    preview.value = await patentFamilyApi.previewMultiSeed(config.value);
-  } catch (err) {
-    previewError.value = err instanceof Error ? err.message : 'Preview failed';
-    preview.value = null;
-  } finally {
-    loadingPreview.value = false;
-  }
-}
-
-async function executeExploration() {
+async function createExploration() {
   if (seedPatentIds.value.length === 0) return;
 
-  loadingExploration.value = true;
-  explorationError.value = null;
-  members.value = [];
-  selectedMembers.value = [];
+  loading.value = true;
+  error.value = null;
 
   try {
-    const result = await patentFamilyApi.executeMultiSeed(config.value);
-    explorationId.value = result.exploration.id;
-    members.value = result.members;
+    const state = await patentFamilyV2Api.createExploration({
+      seedPatentIds: seedPatentIds.value,
+      weights: weights.value,
+      membershipThreshold: membershipThreshold.value,
+      expansionThreshold: expansionThreshold.value,
+    });
+
+    explorationId.value = state.id;
+    explorationState.value = state;
 
     $q.notify({
       type: 'positive',
-      message: `Found ${result.memberCount} patents in family`,
+      message: `Exploration created with ${state.memberCount} seed patents`,
     });
   } catch (err) {
-    explorationError.value = err instanceof Error ? err.message : 'Exploration failed';
-    $q.notify({
-      type: 'negative',
-      message: 'Exploration failed',
-    });
+    error.value = err instanceof Error ? err.message : 'Failed to create exploration';
+    $q.notify({ type: 'negative', message: error.value });
   } finally {
-    loadingExploration.value = false;
+    loading.value = false;
   }
 }
 
-function openCreateFocusAreaDialog() {
-  if (selectedMembers.value.length === 0) {
-    $q.notify({
-      type: 'warning',
-      message: 'Please select patents first',
+async function expand(direction: 'forward' | 'backward' | 'both') {
+  if (!explorationId.value) return;
+
+  expanding.value = true;
+  error.value = null;
+
+  try {
+    const result = await patentFamilyV2Api.expand(explorationId.value, {
+      direction,
+      weights: weights.value,
+      membershipThreshold: membershipThreshold.value,
+      expansionThreshold: expansionThreshold.value,
     });
+
+    // Refresh full state
+    explorationState.value = await patentFamilyV2Api.getExploration(explorationId.value);
+
+    const msg = `Discovered ${result.stats.totalDiscovered} patents: ${result.stats.aboveMembership} members, ${result.stats.inExpansionZone} candidates, ${result.stats.belowExpansion} excluded`;
+    $q.notify({ type: 'positive', message: msg, timeout: 5000 });
+
+    if (result.warnings.length > 0) {
+      $q.notify({ type: 'warning', message: result.warnings.join('; '), timeout: 8000 });
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Expansion failed';
+    $q.notify({ type: 'negative', message: error.value });
+  } finally {
+    expanding.value = false;
+  }
+}
+
+async function expandSiblingsAction(direction: 'forward' | 'backward' | 'both') {
+  if (!explorationId.value) return;
+
+  expanding.value = true;
+  error.value = null;
+
+  try {
+    const result = await patentFamilyV2Api.expandSiblings(explorationId.value, {
+      direction,
+      weights: weights.value,
+      membershipThreshold: membershipThreshold.value,
+      expansionThreshold: expansionThreshold.value,
+    });
+
+    explorationState.value = await patentFamilyV2Api.getExploration(explorationId.value);
+
+    const msg = `Sibling discovery: ${result.stats.totalDiscovered} found, ${result.stats.aboveMembership} members, ${result.stats.inExpansionZone} candidates`;
+    $q.notify({ type: 'positive', message: msg, timeout: 5000 });
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Sibling expansion failed';
+    $q.notify({ type: 'negative', message: error.value });
+  } finally {
+    expanding.value = false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Methods — Rescore (debounced)
+// ─────────────────────────────────────────────────────────────────────────────
+
+let rescoreTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRescore() {
+  if (!explorationId.value) return;
+  if (rescoreTimer) clearTimeout(rescoreTimer);
+  rescoreTimer = setTimeout(executeRescore, 300);
+}
+
+async function executeRescore() {
+  if (!explorationId.value) return;
+
+  rescoring.value = true;
+  try {
+    await patentFamilyV2Api.rescore(explorationId.value, {
+      weights: weights.value,
+      membershipThreshold: membershipThreshold.value,
+      expansionThreshold: expansionThreshold.value,
+    });
+
+    explorationState.value = await patentFamilyV2Api.getExploration(explorationId.value);
+  } catch (err) {
+    console.error('[Rescore] Failed:', err);
+  } finally {
+    rescoring.value = false;
+  }
+}
+
+// Deep watch weights + thresholds for rescore
+watch(
+  [weights, membershipThreshold, expansionThreshold],
+  () => {
+    if (explorationId.value) {
+      selectedPreset.value = null; // custom weights now
+      scheduleRescore();
+    }
+  },
+  { deep: true },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Methods — Status Toggle
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function toggleStatus(candidate: ScoredCandidateV2) {
+  if (!explorationId.value) return;
+
+  // Cycle: member → excluded → candidate → member
+  const statusCycle: Record<string, 'member' | 'candidate' | 'excluded'> = {
+    member: 'excluded',
+    expansion: 'excluded',
+    rejected: 'member',
+  };
+  const newStatus = statusCycle[candidate.zone] || 'candidate';
+
+  try {
+    await patentFamilyV2Api.updateCandidates(explorationId.value, [
+      { patentId: candidate.patentId, status: newStatus },
+    ]);
+    explorationState.value = await patentFamilyV2Api.getExploration(explorationId.value);
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to update status' });
+  }
+}
+
+async function acceptAllAboveThreshold() {
+  if (!explorationId.value || !explorationState.value) return;
+
+  const toAccept = explorationState.value.candidates.filter(
+    c => c.score.compositeScore >= membershipThreshold.value
+  );
+
+  if (toAccept.length === 0) {
+    $q.notify({ type: 'info', message: 'No candidates above membership threshold' });
     return;
   }
-  newFocusAreaName.value = '';
-  newFocusAreaDescription.value = '';
-  showCreateFocusAreaDialog.value = true;
+
+  try {
+    await patentFamilyV2Api.updateCandidates(
+      explorationId.value,
+      toAccept.map(c => ({ patentId: c.patentId, status: 'member' as const })),
+    );
+    explorationState.value = await patentFamilyV2Api.getExploration(explorationId.value);
+    $q.notify({ type: 'positive', message: `Accepted ${toAccept.length} candidates as members` });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to accept candidates' });
+  }
+}
+
+async function rejectAllBelowThreshold() {
+  if (!explorationId.value || !explorationState.value) return;
+
+  const toReject = explorationState.value.candidates.filter(
+    c => c.score.compositeScore < expansionThreshold.value
+  );
+
+  if (toReject.length === 0) {
+    $q.notify({ type: 'info', message: 'No candidates below expansion threshold' });
+    return;
+  }
+
+  try {
+    await patentFamilyV2Api.updateCandidates(
+      explorationId.value,
+      toReject.map(c => ({ patentId: c.patentId, status: 'excluded' as const })),
+    );
+    explorationState.value = await patentFamilyV2Api.getExploration(explorationId.value);
+    $q.notify({ type: 'positive', message: `Excluded ${toReject.length} candidates` });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to exclude candidates' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Methods — Presets
+// ─────────────────────────────────────────────────────────────────────────────
+
+function applyPreset(key: string) {
+  const preset = presets.value[key];
+  if (!preset) return;
+
+  selectedPreset.value = key;
+  // Update weights without triggering rescore for each field — set all at once
+  weights.value = { ...preset.weights };
+  // The deep watcher will trigger rescore
+}
+
+function resetWeights() {
+  selectedPreset.value = 'balanced';
+  weights.value = { ...DEFAULT_WEIGHTS };
+  membershipThreshold.value = 60;
+  expansionThreshold.value = 30;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Methods — Save & Focus Area
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function saveExploration() {
+  if (!explorationId.value || !saveName.value.trim()) return;
+
+  saving.value = true;
+  try {
+    await patentFamilyV2Api.save(explorationId.value, {
+      name: saveName.value.trim(),
+      description: saveDescription.value.trim() || undefined,
+    });
+    showSaveDialog.value = false;
+    $q.notify({ type: 'positive', message: 'Exploration saved' });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to save exploration' });
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function createFocusArea() {
-  if (!newFocusAreaName.value.trim()) return;
+  if (!explorationId.value || !focusAreaName.value.trim()) return;
 
   creatingFocusArea.value = true;
-
   try {
-    const patentIds = selectedMembers.value.map(m => m.patentId);
+    const result = await patentFamilyV2Api.createFocusArea(explorationId.value, {
+      name: focusAreaName.value.trim(),
+      description: focusAreaDescription.value.trim() || undefined,
+      includeExternalPatents: true,
+    });
 
-    const result = explorationId.value
-      ? await patentFamilyApi.createFocusAreaFromExploration(explorationId.value, {
-          name: newFocusAreaName.value.trim(),
-          description: newFocusAreaDescription.value.trim() || undefined,
-          patentIds,
-          includeExternalPatents: includeExternalPatents.value,
-        })
-      : await patentFamilyApi.createFocusAreaDirect({
-          name: newFocusAreaName.value.trim(),
-          description: newFocusAreaDescription.value.trim() || undefined,
-          patentIds,
-          includeExternalPatents: includeExternalPatents.value,
-        });
-
-    showCreateFocusAreaDialog.value = false;
+    showFocusAreaDialog.value = false;
     $q.notify({
       type: 'positive',
       message: `Created focus area "${result.focusArea.name}" with ${result.added} patents`,
     });
 
-    // Navigate to the new focus area
     router.push({ name: 'focus-area-detail', params: { id: result.focusArea.id } });
   } catch (err) {
-    $q.notify({
-      type: 'negative',
-      message: err instanceof Error ? err.message : 'Failed to create focus area',
-    });
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : 'Failed to create focus area' });
   } finally {
     creatingFocusArea.value = false;
   }
 }
 
-function selectAllPortfolio() {
-  selectedMembers.value = members.value.filter(m => m.inPortfolio);
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-function selectAllCompetitors() {
-  selectedMembers.value = members.value.filter(m => m.competitorMatch);
-}
-
-function clearSelection() {
-  selectedMembers.value = [];
-}
-
-function clearSeeds() {
+function clearExploration() {
   seedInput.value = '';
-  preview.value = null;
-  members.value = [];
-  selectedMembers.value = [];
   explorationId.value = null;
+  explorationState.value = null;
+  error.value = null;
+  resetWeights();
 }
 
-function onRowClick(_evt: Event, row: EnrichedFamilyMember) {
-  router.push({ name: 'patent-detail', params: { id: row.patentId } });
+function scoreColor(score: number): string {
+  if (score >= membershipThreshold.value) return 'positive';
+  if (score >= expansionThreshold.value) return 'amber';
+  return 'negative';
 }
 
-// Litigation enrichment (also fetches basic patent details first)
-// Enriches all family members (up to 200 by default, max 500)
-async function enrichLitigation(selectedOnly = false) {
-  if (members.value.length === 0) return;
-
-  enrichingLitigation.value = true;
-  try {
-    // Enrich selected patents only, or all members
-    const patentIds = selectedOnly && selectedMembers.value.length > 0
-      ? selectedMembers.value.map(m => m.patentId)
-      : members.value.map(m => m.patentId);
-
-    // Use enrichWithDetails to fetch patent details AND litigation data
-    const result = await patentFamilyApi.enrichWithDetails(patentIds, {
-      fetchBasicDetails: true,
-      includeIpr: true,
-      includeProsecution: true,
-      limit: 200,  // Process up to 200 patents
-    });
-
-    // Store litigation results in map for quick lookup
-    // Use a new Map to ensure Vue reactivity is triggered
-    const newMap = new Map(litigationData.value);
-    for (const indicator of result.litigation.indicators) {
-      newMap.set(indicator.patentId, indicator);
-    }
-    litigationData.value = newMap;
-
-    console.log('[PatentFamily] Enrichment result:', {
-      indicatorCount: result.litigation.indicators.length,
-      iprFound: result.litigation.indicators.filter(i => i.hasIPR).length,
-      prosFound: result.litigation.indicators.filter(i => i.hasProsecutionHistory).length,
-      sample: result.litigation.indicators.slice(0, 2),
-    });
-
-    // Count results
-    const iprCount = result.litigation.indicators.filter(i => i.hasIPR).length;
-    const prosCount = result.litigation.indicators.filter(i => i.hasProsecutionHistory).length;
-    const parts: string[] = [];
-
-    if (result.detailsFetched.fetched > 0) {
-      parts.push(`Details: ${result.detailsFetched.fetched}`);
-    }
-    parts.push(`IPR: ${iprCount}`);
-    parts.push(`Prosecution: ${prosCount}`);
-
-    const countMsg = result.truncated && result.originalCount
-      ? ` (${result.total} of ${result.originalCount})`
-      : ` (${result.total} patents)`;
-
-    $q.notify({
-      type: 'positive',
-      message: `Enriched${countMsg}: ${parts.join(', ')}`,
-      timeout: 5000,
-    });
-
-    // If we fetched new patent details, we should reload the exploration to show updated titles/assignees
-    if (result.detailsFetched.fetched > 0) {
-      // Re-run exploration to get updated member details
-      const refreshed = await patentFamilyApi.executeMultiSeed(config.value);
-      members.value = refreshed.members;
-    }
-  } catch (err) {
-    $q.notify({
-      type: 'negative',
-      message: 'Failed to enrich data',
-    });
-  } finally {
-    enrichingLitigation.value = false;
-  }
+function zoneIcon(zone: string): string {
+  if (zone === 'member') return 'check_circle';
+  if (zone === 'rejected') return 'cancel';
+  return 'remove_circle_outline';
 }
 
-function getLitigationIndicator(patentId: string): LitigationIndicator | undefined {
-  return litigationData.value.get(patentId);
+function zoneColor(zone: string): string {
+  if (zone === 'member') return 'positive';
+  if (zone === 'rejected') return 'negative';
+  return 'grey';
 }
 
-function getDataStatusLabel(status: string): string {
-  switch (status) {
-    case 'portfolio': return 'In portfolio (complete data)';
-    case 'cached': return 'Retrieved from PatentsView';
-    case 'not_attempted': return 'Not yet retrieved';
-    case 'not_found': return 'Not found in database';
-    case 'partial': return 'Partial data available';
-    default: return status;
-  }
+function dimensionLabel(key: string): string {
+  const dim = WEIGHT_DIMENSIONS.find(d => d.key === key);
+  return dim?.label || key;
 }
 
-// Debounced preview
-let previewTimeout: ReturnType<typeof setTimeout> | null = null;
-watch([seedPatentIds, maxAncestorDepth, maxDescendantDepth, includeSiblings, mergeStrategy], () => {
-  if (previewTimeout) clearTimeout(previewTimeout);
-  previewTimeout = setTimeout(loadPreview, 500);
-});
+function formatPct(val: number): string {
+  return `${Math.round(val * 100)}%`;
+}
 
-// Load seeds from URL params
+// ─────────────────────────────────────────────────────────────────────────────
+// Mount — Load presets
+// ─────────────────────────────────────────────────────────────────────────────
+
 onMounted(async () => {
-  await loadFilterOptions();
-
-  // Check for seeds from URL or navigation state
-  const urlSeeds = route.query.seeds;
-  if (urlSeeds) {
-    if (Array.isArray(urlSeeds)) {
-      seedInput.value = urlSeeds.join('\n');
-    } else {
-      seedInput.value = urlSeeds;
-    }
+  try {
+    presets.value = await patentFamilyV2Api.getPresets();
+  } catch (err) {
+    console.error('Failed to load presets:', err);
   }
 });
 </script>
@@ -445,21 +515,34 @@ onMounted(async () => {
     <!-- Header -->
     <div class="row items-center q-mb-md">
       <div class="text-h5">Patent Family Explorer</div>
-      <q-badge color="primary" class="q-ml-md" v-if="members.length > 0">
-        {{ members.length }} patents
+      <q-badge color="primary" class="q-ml-md" v-if="explorationState">
+        Gen {{ explorationState.currentGeneration }}
       </q-badge>
+      <q-badge color="green" class="q-ml-sm" v-if="zoneCounts.members > 0">
+        {{ zoneCounts.members }} members
+      </q-badge>
+      <q-badge color="amber" text-color="dark" class="q-ml-sm" v-if="zoneCounts.candidates > 0">
+        {{ zoneCounts.candidates }} candidates
+      </q-badge>
+      <q-spinner-dots v-if="rescoring" color="primary" class="q-ml-md" size="20px" />
       <q-space />
       <q-btn
+        v-if="hasExploration"
         flat
-        icon="help_outline"
-        @click="$q.notify({ message: 'Enter seed patents, configure expansion, then explore to find related patents.' })"
+        dense
+        icon="refresh"
+        label="New"
+        @click="clearExploration"
       />
     </div>
 
     <div class="row q-col-gutter-md">
-      <!-- Left Panel: Configuration -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- LEFT PANEL (col-4) -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
       <div class="col-12 col-md-4">
-        <!-- Seed Patents -->
+
+        <!-- Card 1: Seed Patents -->
         <q-card class="q-mb-md">
           <q-card-section>
             <div class="text-subtitle1 q-mb-sm">
@@ -472,569 +555,449 @@ onMounted(async () => {
               outlined
               dense
               rows="4"
+              :disable="hasExploration"
               placeholder="Enter patent IDs (one per line or comma-separated)&#10;e.g., 10123456, 10234567"
-              hint="Paste from scoring results or other sources"
             />
-            <div class="row q-mt-sm q-gutter-sm">
+            <div class="row q-mt-sm q-gutter-sm items-center">
               <q-badge color="primary">{{ seedPatentIds.length }} seeds</q-badge>
-              <q-btn v-if="seedPatentIds.length > 0" flat dense size="sm" label="Clear" @click="clearSeeds" />
+              <q-btn
+                v-if="seedPatentIds.length > 0 && !hasExploration"
+                flat dense size="sm" label="Clear"
+                @click="seedInput = ''"
+              />
             </div>
           </q-card-section>
         </q-card>
 
-        <!-- Expansion Config -->
-        <q-card class="q-mb-md">
+        <!-- Create Exploration Button -->
+        <q-btn
+          v-if="!hasExploration"
+          color="primary"
+          icon="explore"
+          label="Create Exploration"
+          :loading="loading"
+          :disable="seedPatentIds.length === 0"
+          class="full-width q-mb-md"
+          @click="createExploration"
+        />
+
+        <!-- Card 2: Scoring Weights (after exploration) -->
+        <q-card v-if="hasExploration" class="q-mb-md">
           <q-card-section>
-            <div class="text-subtitle1 q-mb-sm">
-              <q-icon name="account_tree" class="q-mr-sm" />
-              Expansion Configuration
+            <div class="row items-center q-mb-sm">
+              <div class="text-subtitle1">
+                <q-icon name="tune" class="q-mr-sm" />
+                Scoring Weights
+              </div>
+              <q-space />
+              <q-btn flat dense size="sm" label="Reset" icon="restart_alt" @click="resetWeights" />
             </div>
 
-            <div class="row q-col-gutter-sm q-mb-sm">
-              <div class="col-6">
-                <q-select
-                  v-model="maxAncestorDepth"
-                  :options="[0, 1, 2, 3]"
-                  label="Ancestors (parents)"
-                  outlined
-                  dense
-                />
-              </div>
-              <div class="col-6">
-                <q-select
-                  v-model="maxDescendantDepth"
-                  :options="[0, 1, 2, 3]"
-                  label="Descendants (children)"
-                  outlined
-                  dense
-                />
-              </div>
-            </div>
+            <!-- Preset dropdown -->
+            <q-select
+              v-model="selectedPreset"
+              :options="Object.entries(presets).map(([k, v]) => ({ label: v.label, value: k, description: v.description }))"
+              label="Preset"
+              outlined dense
+              emit-value
+              map-options
+              clearable
+              class="q-mb-md"
+              @update:model-value="(val: string | null) => val && applyPreset(val)"
+            >
+              <template v-slot:option="scope">
+                <q-item v-bind="scope.itemProps">
+                  <q-item-section>
+                    <q-item-label>{{ scope.opt.label }}</q-item-label>
+                    <q-item-label caption>{{ scope.opt.description }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </template>
+            </q-select>
 
-            <div class="row q-gutter-sm q-mb-sm">
-              <q-checkbox v-model="includeSiblings" label="Include siblings" dense />
-              <q-checkbox v-model="includeCousins" label="Include cousins" dense />
+            <!-- Dimension weight sliders -->
+            <div v-for="dim in WEIGHT_DIMENSIONS" :key="dim.key" class="q-mb-sm">
+              <div class="row items-center no-wrap">
+                <div class="text-caption col" style="min-width: 0">
+                  {{ dim.label }}
+                  <q-tooltip>{{ dim.description }}</q-tooltip>
+                </div>
+                <q-badge :color="dim.color" class="q-ml-sm" style="min-width: 36px; text-align: center">
+                  {{ formatPct(weights[dim.key]) }}
+                </q-badge>
+              </div>
+              <q-slider
+                v-model="weights[dim.key]"
+                :min="0"
+                :max="0.50"
+                :step="0.01"
+                :color="dim.color"
+                dense
+              />
             </div>
 
             <q-separator class="q-my-sm" />
 
-            <div class="text-caption text-grey-7 q-mb-xs">Merge Strategy</div>
-            <q-btn-toggle
-              v-model="mergeStrategy"
-              toggle-color="primary"
-              :options="[
-                { value: 'INTERSECTION', label: 'Intersection' },
-                { value: 'UNION', label: 'Union' },
-              ]"
-              dense
-              no-caps
-              class="q-mb-sm"
-            />
-            <div class="text-caption text-grey-6">
-              <template v-if="mergeStrategy === 'INTERSECTION'">
-                Only patents connected to ALL seeds
-              </template>
-              <template v-else>
-                Patents connected to ANY seed
-              </template>
+            <!-- Depth Decay -->
+            <div class="q-mb-sm">
+              <div class="row items-center no-wrap">
+                <div class="text-caption col">Depth Decay Rate</div>
+                <q-badge color="orange" class="q-ml-sm" style="min-width: 36px; text-align: center">
+                  {{ formatPct(weights.depthDecayRate) }}
+                </q-badge>
+              </div>
+              <q-slider
+                v-model="weights.depthDecayRate"
+                :min="0"
+                :max="0.50"
+                :step="0.01"
+                color="orange"
+                dense
+              />
+            </div>
+
+            <!-- Total weight indicator -->
+            <div class="row items-center q-mt-sm">
+              <div class="text-caption text-grey-7">Total dimension weight:</div>
+              <q-badge
+                :color="Math.abs(totalWeight - 1.0) < 0.02 ? 'positive' : 'warning'"
+                class="q-ml-sm"
+              >
+                {{ (totalWeight * 100).toFixed(0) }}%
+              </q-badge>
             </div>
           </q-card-section>
         </q-card>
 
-        <!-- Constraints -->
-        <q-card class="q-mb-md">
+        <!-- Card 3: Thresholds -->
+        <q-card v-if="hasExploration" class="q-mb-md">
           <q-card-section>
             <div class="text-subtitle1 q-mb-sm">
-              <q-icon name="filter_list" class="q-mr-sm" />
-              Constraints
+              <q-icon name="speed" class="q-mr-sm" />
+              Thresholds
             </div>
 
-            <q-checkbox
-              v-model="requireInPortfolio"
-              label="Portfolio patents only"
-              dense
-              class="q-mb-sm"
-            />
+            <div class="q-mb-md">
+              <div class="row items-center no-wrap q-mb-xs">
+                <div class="text-caption col">Membership Threshold</div>
+                <q-badge color="positive">{{ membershipThreshold }}</q-badge>
+              </div>
+              <q-slider
+                v-model="membershipThreshold"
+                :min="0"
+                :max="100"
+                :step="1"
+                color="positive"
+                dense
+              />
+            </div>
 
-            <q-select
-              v-model="selectedCompetitors"
-              :options="filterOptions?.competitors || []"
-              label="Limit to competitors"
-              outlined
-              dense
-              multiple
-              use-chips
-              clearable
-              class="q-mb-sm"
-            />
+            <div class="q-mb-sm">
+              <div class="row items-center no-wrap q-mb-xs">
+                <div class="text-caption col">Expansion Threshold</div>
+                <q-badge color="amber" text-color="dark">{{ expansionThreshold }}</q-badge>
+              </div>
+              <q-slider
+                v-model="expansionThreshold"
+                :min="0"
+                :max="100"
+                :step="1"
+                color="amber"
+                dense
+              />
+            </div>
 
-            <q-select
-              v-model="selectedAffiliates"
-              :options="(filterOptions?.affiliates || []).map(a => ({ label: a.displayName, value: a.key }))"
-              label="Limit to affiliates"
-              outlined
-              dense
-              multiple
-              use-chips
-              clearable
-              emit-value
-              map-options
-              class="q-mb-sm"
-            />
-
-            <q-input
-              v-model.number="minFilingYear"
-              type="number"
-              label="Min filing year"
-              outlined
-              dense
-              placeholder="e.g., 2015"
-              clearable
-            />
+            <!-- Zone counts -->
+            <div class="row q-gutter-sm q-mt-sm">
+              <q-badge color="positive" outline>{{ zoneCounts.members }} members</q-badge>
+              <q-badge color="amber" text-color="dark" outline>{{ zoneCounts.candidates }} candidates</q-badge>
+              <q-badge color="negative" outline>{{ zoneCounts.excluded }} excluded</q-badge>
+            </div>
           </q-card-section>
         </q-card>
 
-        <!-- Preview -->
-        <q-card v-if="preview || loadingPreview" class="q-mb-md">
+        <!-- Card 4: Expansion Controls -->
+        <q-card v-if="hasExploration" class="q-mb-md">
           <q-card-section>
             <div class="text-subtitle1 q-mb-sm">
-              <q-icon name="preview" class="q-mr-sm" />
-              Preview Estimate
+              <q-icon name="account_tree" class="q-mr-sm" />
+              Expansion Controls
             </div>
 
-            <q-inner-loading :showing="loadingPreview" />
+            <div class="text-caption text-grey-7 q-mb-sm">
+              Current Generation: {{ explorationState?.currentGeneration || 0 }}
+            </div>
 
-            <template v-if="preview && !loadingPreview">
-              <div class="row q-col-gutter-xs q-mb-sm">
-                <div class="col-6">
-                  <div class="text-h6">~{{ preview.estimatedMembers.total }}</div>
-                  <div class="text-caption text-grey-7">Est. total</div>
-                </div>
-                <div class="col-6">
-                  <div class="text-body2">
-                    Parents: {{ preview.estimatedMembers.parents }}<br>
-                    Children: {{ preview.estimatedMembers.children }}<br>
-                    Siblings: {{ preview.estimatedMembers.siblings }}
-                  </div>
-                </div>
-              </div>
+            <!-- Direction expansion -->
+            <div class="text-caption text-grey-7 q-mb-xs">Expand Citations</div>
+            <div class="row q-gutter-sm q-mb-md">
+              <q-btn
+                dense no-caps
+                color="primary" outline
+                icon="arrow_forward"
+                label="Forward"
+                :loading="expanding"
+                @click="expand('forward')"
+              />
+              <q-btn
+                dense no-caps
+                color="primary" outline
+                icon="arrow_back"
+                label="Backward"
+                :loading="expanding"
+                @click="expand('backward')"
+              />
+              <q-btn
+                dense no-caps
+                color="primary" outline
+                icon="swap_horiz"
+                label="Both"
+                :loading="expanding"
+                @click="expand('both')"
+              />
+            </div>
 
-              <q-separator class="q-my-sm" />
+            <!-- Sibling expansion -->
+            <div class="text-caption text-grey-7 q-mb-xs">Find Siblings</div>
+            <div class="row q-gutter-sm q-mb-md">
+              <q-btn
+                dense no-caps
+                color="deep-purple" outline
+                icon="arrow_forward"
+                label="Fwd Siblings"
+                :loading="expanding"
+                @click="expandSiblingsAction('forward')"
+              />
+              <q-btn
+                dense no-caps
+                color="deep-purple" outline
+                icon="arrow_back"
+                label="Bwd Siblings"
+                :loading="expanding"
+                @click="expandSiblingsAction('backward')"
+              />
+              <q-btn
+                dense no-caps
+                color="deep-purple" outline
+                icon="swap_horiz"
+                label="All Siblings"
+                :loading="expanding"
+                @click="expandSiblingsAction('both')"
+              />
+            </div>
 
-              <div class="text-caption">
-                <q-icon name="check_circle" color="positive" v-if="preview.cachedDataAvailable === seedPatentIds.length" />
-                <q-icon name="cloud_download" color="warning" v-else />
-                {{ preview.cachedDataAvailable }}/{{ seedPatentIds.length }} seeds cached
-                <span v-if="preview.estimatedApiCalls > 0">
-                  (~{{ preview.estimatedApiCalls }} API calls needed)
-                </span>
-              </div>
-
-              <div v-if="preview.seedOverlap.commonSectors.length > 0" class="q-mt-sm">
-                <div class="text-caption text-grey-7">Common sectors:</div>
-                <q-chip
-                  v-for="sector in preview.seedOverlap.commonSectors"
-                  :key="sector"
-                  dense
-                  size="sm"
-                >
-                  {{ sector }}
-                </q-chip>
-              </div>
-            </template>
-
-            <q-banner v-if="previewError" class="bg-negative text-white q-mt-sm">
-              {{ previewError }}
-            </q-banner>
+            <!-- Expansion History -->
+            <q-expansion-item
+              v-if="explorationState?.expansionHistory?.length"
+              dense
+              label="Expansion History"
+              icon="history"
+              header-class="text-caption"
+            >
+              <q-list dense separator>
+                <q-item v-for="step in explorationState.expansionHistory" :key="step.stepNumber">
+                  <q-item-section>
+                    <q-item-label class="text-caption">
+                      Step {{ step.stepNumber }}: {{ step.direction }}
+                      (gen {{ step.generationDepth }})
+                    </q-item-label>
+                    <q-item-label caption>
+                      {{ step.candidatesEvaluated }} evaluated,
+                      {{ step.autoIncluded }} auto-included,
+                      {{ step.expansionZone }} expansion zone,
+                      {{ step.autoRejected }} rejected
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-expansion-item>
           </q-card-section>
         </q-card>
-
-        <!-- Execute Button -->
-        <q-btn
-          color="primary"
-          icon="search"
-          label="Explore Family"
-          :loading="loadingExploration"
-          :disable="seedPatentIds.length === 0"
-          class="full-width"
-          @click="executeExploration"
-        />
       </div>
 
-      <!-- Right Panel: Results -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- RIGHT PANEL (col-8) -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
       <div class="col-12 col-md-8">
-        <q-card v-if="members.length > 0 || loadingExploration">
+        <q-card v-if="hasExploration">
           <q-card-section>
+            <!-- Zone Tab Selector -->
             <div class="row items-center q-mb-md">
-              <div class="text-subtitle1">
-                Results ({{ filteredMembers.length }} patents)
-              </div>
-              <q-space />
-
-              <!-- Filter controls -->
-              <q-select
-                v-model="memberFilter.relation"
-                :options="[
-                  { label: 'All relations', value: 'all' },
-                  ...Object.entries(relationCounts).map(([rel, count]) => ({ label: `${rel} (${count})`, value: rel }))
-                ]"
-                outlined
+              <q-btn-toggle
+                v-model="activeZone"
+                toggle-color="primary"
+                no-caps
                 dense
-                emit-value
-                map-options
-                style="min-width: 140px"
-                class="q-mr-sm"
-              />
-
-              <q-select
-                v-model="memberFilter.inPortfolio"
                 :options="[
-                  { label: 'All', value: 'all' },
-                  { label: `Portfolio (${portfolioCounts.inPortfolio})`, value: 'yes' },
-                  { label: `External (${portfolioCounts.external})`, value: 'no' },
+                  { label: `All (${zoneCounts.all})`, value: 'all' },
+                  { label: `Members (${zoneCounts.members})`, value: 'members' },
+                  { label: `Candidates (${zoneCounts.candidates})`, value: 'candidates' },
+                  { label: `Excluded (${zoneCounts.excluded})`, value: 'excluded' },
                 ]"
-                outlined
-                dense
-                emit-value
-                map-options
-                style="min-width: 130px"
-                class="q-mr-sm"
-              />
-
-              <q-select
-                v-model="memberFilter.competitor"
-                :options="[
-                  { label: 'All', value: 'all' },
-                  { label: `Competitors (${competitorCounts.competitors})`, value: 'competitors' },
-                  { label: `Non-comp (${competitorCounts.nonCompetitors})`, value: 'non-competitors' },
-                ]"
-                outlined
-                dense
-                emit-value
-                map-options
-                style="min-width: 150px"
               />
             </div>
 
+            <!-- Search filter -->
             <q-input
-              v-model="memberSearch"
-              dense
-              outlined
-              placeholder="Search patents..."
+              v-model="searchFilter"
+              dense outlined
+              placeholder="Search by patent ID, title, assignee, or sector..."
               class="q-mb-md"
             >
               <template v-slot:append>
                 <q-icon name="search" />
               </template>
+              <template v-slot:after v-if="searchFilter">
+                <q-btn flat dense icon="clear" @click="searchFilter = ''" />
+              </template>
             </q-input>
 
-            <q-inner-loading :showing="loadingExploration" />
-
-            <!-- Summary chips -->
-            <div class="row q-gutter-sm q-mb-md" v-if="!loadingExploration">
-              <q-chip dense icon="business" v-if="uniqueCompetitors.length > 0">
-                {{ uniqueCompetitors.length }} competitors
-                <q-tooltip>{{ uniqueCompetitors.join(', ') }}</q-tooltip>
-              </q-chip>
-              <q-chip dense icon="folder" color="primary" text-color="white">
-                {{ portfolioCounts.inPortfolio }} in portfolio
-              </q-chip>
-              <q-chip dense icon="public" outline>
-                {{ portfolioCounts.external }} external
-              </q-chip>
-              <q-chip
-                v-if="enrichmentCounts.checked > 0"
-                dense
-                icon="gavel"
-                :color="enrichmentCounts.hasIPR > 0 ? 'negative' : 'positive'"
-                text-color="white"
-              >
-                {{ enrichmentCounts.hasIPR }} IPR
-                <q-tooltip>{{ enrichmentCounts.hasIPR }} patents have IPR proceedings</q-tooltip>
-              </q-chip>
-              <q-chip
-                v-if="enrichmentCounts.checked > 0"
-                dense
-                icon="description"
-                :color="enrichmentCounts.hasProsecution > 0 ? 'info' : 'grey'"
-                text-color="white"
-              >
-                {{ enrichmentCounts.hasProsecution }} prosecution
-                <q-tooltip>{{ enrichmentCounts.hasProsecution }} patents have prosecution history</q-tooltip>
-              </q-chip>
-              <q-chip
-                v-if="enrichmentCounts.checked > 0 && enrichmentCounts.checked < enrichmentCounts.total"
-                dense
-                outline
-              >
-                {{ enrichmentCounts.checked }}/{{ enrichmentCounts.total }} enriched
-              </q-chip>
+            <!-- Bulk actions bar -->
+            <div class="row items-center q-gutter-sm q-mb-md">
+              <q-btn
+                dense no-caps flat
+                icon="check_circle"
+                label="Accept Above Threshold"
+                color="positive"
+                :disable="zoneCounts.candidates === 0"
+                @click="acceptAllAboveThreshold"
+              />
+              <q-btn
+                dense no-caps flat
+                icon="cancel"
+                label="Reject Below Expansion"
+                color="negative"
+                :disable="zoneCounts.candidates === 0"
+                @click="rejectAllBelowThreshold"
+              />
               <q-space />
               <q-btn
-                flat
-                dense
-                icon="gavel"
-                label="Enrich Data"
-                :loading="enrichingLitigation"
-                :disable="members.length === 0"
-                @click="enrichLitigation"
-              >
-                <q-tooltip>
-                  Fetch for all {{ members.length }} patents (first 200):
-                  <br>• Patent details (title, assignee) for external patents
-                  <br>• IPR proceedings from PTAB
-                  <br>• Prosecution history from USPTO
-                </q-tooltip>
-              </q-btn>
+                dense no-caps flat
+                icon="save"
+                label="Save"
+                @click="showSaveDialog = true; saveName = explorationState?.name || ''"
+              />
+              <q-btn
+                dense no-caps
+                icon="folder_special"
+                label="Create Focus Area"
+                color="primary"
+                :disable="zoneCounts.members === 0"
+                @click="showFocusAreaDialog = true; focusAreaName = ''; focusAreaDescription = ''"
+              />
             </div>
 
             <!-- Results table -->
             <q-table
-              :rows="filteredMembers"
+              :rows="displayedCandidates"
               :columns="tableColumns"
               row-key="patentId"
               v-model:pagination="pagination"
-              v-model:selected="selectedMembers"
-              :loading="loadingExploration"
-              selection="multiple"
-              flat
-              bordered
-              dense
-              @row-click="onRowClick"
+              flat bordered dense
+              :loading="expanding"
             >
-              <template v-slot:body-cell-patentId="props">
-                <q-td :props="props">
-                  <div class="row items-center no-wrap">
-                    <router-link
-                      :to="{ name: 'patent-detail', params: { id: props.row.patentId } }"
-                      class="text-primary"
-                      @click.stop
-                    >
-                      {{ props.row.patentId }}
-                    </router-link>
-                    <q-icon
-                      v-if="props.row.dataStatus === 'not_attempted'"
-                      name="help_outline"
-                      size="14px"
-                      color="grey-5"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>Data not yet retrieved</q-tooltip>
-                    </q-icon>
-                    <q-icon
-                      v-else-if="props.row.dataStatus === 'not_found'"
-                      name="error_outline"
-                      size="14px"
-                      color="warning"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>{{ props.row.dataStatusReason || 'Patent not found in database' }}</q-tooltip>
-                    </q-icon>
-                    <q-icon
-                      v-else-if="props.row.dataStatus === 'partial'"
-                      name="warning"
-                      size="14px"
-                      color="orange"
-                      class="q-ml-xs"
-                    >
-                      <q-tooltip>{{ props.row.dataStatusReason || 'Incomplete data' }}</q-tooltip>
-                    </q-icon>
-                  </div>
-                  <q-tooltip
-                    anchor="center right"
-                    self="center left"
-                    :offset="[10, 0]"
-                    class="patent-detail-tooltip"
-                    max-width="450px"
+              <!-- Status column: clickable icon -->
+              <template v-slot:body-cell-status="props">
+                <q-td :props="props" class="cursor-pointer" @click.stop="toggleStatus(props.row)">
+                  <q-icon
+                    :name="zoneIcon(props.row.zone)"
+                    :color="zoneColor(props.row.zone)"
+                    size="20px"
                   >
-                    <div class="patent-popup">
-                      <!-- Header -->
-                      <div class="text-subtitle1 text-weight-bold q-mb-xs">
-                        {{ props.row.patentId }}
-                      </div>
-                      <div v-if="props.row.patentTitle" class="text-body2 q-mb-sm">
-                        {{ props.row.patentTitle }}
-                      </div>
+                    <q-tooltip>
+                      Click to toggle ({{ props.row.zone }})
+                    </q-tooltip>
+                  </q-icon>
+                </q-td>
+              </template>
 
-                      <!-- Quick badges -->
-                      <div class="row q-gutter-sm q-mb-sm text-caption">
-                        <q-badge v-if="props.row.assignee" color="cyan-4" text-color="dark">
-                          {{ props.row.assignee }}
-                        </q-badge>
-                        <q-badge :color="props.row.inPortfolio ? 'positive' : 'grey-5'" text-color="white">
-                          {{ props.row.inPortfolio ? 'Portfolio' : 'External' }}
-                        </q-badge>
-                        <q-badge color="blue-grey-4" text-color="dark">
-                          {{ props.row.relationToSeed }}
-                        </q-badge>
-                        <q-badge v-if="props.row.remainingYears" color="light-green-4" text-color="dark">
-                          {{ props.row.remainingYears?.toFixed(1) }} yrs
-                        </q-badge>
-                        <q-badge v-if="props.row.competitorMatch" color="orange" text-color="dark">
-                          {{ props.row.competitorMatch.company }}
-                        </q-badge>
-                      </div>
-
-                      <!-- Data Status -->
-                      <div class="text-caption text-grey-4 q-mb-sm">
-                        Data: {{ getDataStatusLabel(props.row.dataStatus) }}
-                      </div>
-
-                      <!-- IPR Section -->
-                      <template v-if="getLitigationIndicator(props.row.patentId)">
-                        <div class="text-subtitle2 q-mb-xs">IPR Status</div>
-                        <div v-if="getLitigationIndicator(props.row.patentId)?.hasIPR" class="q-mb-sm">
-                          <q-badge color="negative" text-color="white" class="q-mb-xs">
-                            <q-icon name="gavel" size="12px" class="q-mr-xs" />
-                            {{ getLitigationIndicator(props.row.patentId)?.iprCount }} IPR proceeding(s)
-                          </q-badge>
-                          <table v-if="getLitigationIndicator(props.row.patentId)?.iprTrials?.length" class="litigation-table q-mt-xs">
-                            <thead>
-                              <tr>
-                                <th>Trial #</th>
-                                <th>Status</th>
-                                <th>Petitioner</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr v-for="trial in getLitigationIndicator(props.row.patentId)?.iprTrials?.slice(0, 3)" :key="trial.trialNumber">
-                                <td>{{ trial.trialNumber }}</td>
-                                <td>{{ trial.status || trial.institutionDecision || '--' }}</td>
-                                <td class="ellipsis" style="max-width: 150px">{{ trial.petitionerName || '--' }}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          <div v-if="(getLitigationIndicator(props.row.patentId)?.iprTrials?.length || 0) > 3" class="text-caption text-grey-4">
-                            + {{ (getLitigationIndicator(props.row.patentId)?.iprTrials?.length || 0) - 3 }} more
-                          </div>
-                        </div>
-                        <div v-else class="text-positive q-mb-sm">
-                          <q-icon name="check_circle_outline" size="14px" class="q-mr-xs" />
-                          No IPR history
-                        </div>
-
-                        <!-- Prosecution Section -->
-                        <div class="text-subtitle2 q-mb-xs">Prosecution</div>
-                        <div v-if="getLitigationIndicator(props.row.patentId)?.hasProsecutionHistory">
-                          <div class="row q-gutter-sm q-mb-xs">
-                            <q-badge v-if="getLitigationIndicator(props.row.patentId)?.prosecutionStatus" color="blue-grey" text-color="white">
-                              {{ getLitigationIndicator(props.row.patentId)?.prosecutionStatus }}
-                            </q-badge>
-                            <span v-if="getLitigationIndicator(props.row.patentId)?.officeActionCount">
-                              {{ getLitigationIndicator(props.row.patentId)?.officeActionCount }} office action(s)
-                            </span>
-                            <span v-if="getLitigationIndicator(props.row.patentId)?.rejectionCount">
-                              {{ getLitigationIndicator(props.row.patentId)?.rejectionCount }} rejection(s)
-                            </span>
-                          </div>
-                        </div>
-                        <div v-else class="text-grey-4">
-                          No prosecution history retrieved
-                        </div>
-                      </template>
-                      <div v-else class="text-grey-5 text-caption">
-                        <q-icon name="info" size="14px" class="q-mr-xs" />
-                        Click "Enrich Data" to fetch IPR/prosecution info
-                      </div>
+              <!-- Score column: colored badge with tooltip -->
+              <template v-slot:body-cell-score="props">
+                <q-td :props="props">
+                  <q-badge :color="scoreColor(props.row.score.compositeScore)">
+                    {{ props.row.score.compositeScore.toFixed(1) }}
+                  </q-badge>
+                  <!-- Score tooltip: dimension breakdown -->
+                  <q-tooltip anchor="center right" self="center left" :offset="[10, 0]" max-width="350px">
+                    <div class="text-subtitle2 q-mb-xs">Score Breakdown</div>
+                    <div class="text-caption q-mb-sm">
+                      Composite: {{ props.row.score.compositeScore.toFixed(1) }}
+                      (raw: {{ props.row.score.rawWeightedScore.toFixed(1) }},
+                      depth: x{{ props.row.score.depthMultiplier.toFixed(2) }})
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px">
+                      <tr v-for="dim in WEIGHT_DIMENSIONS" :key="dim.key"
+                          style="border-bottom: 1px solid rgba(255,255,255,0.15)">
+                        <td style="padding: 2px 4px">{{ dim.label }}</td>
+                        <td style="padding: 2px 4px; text-align: right">
+                          {{ ((props.row.score.dimensions as Record<string, number>)[dim.key] * 100).toFixed(0) }}%
+                        </td>
+                      </tr>
+                    </table>
+                    <div class="text-caption q-mt-xs text-grey-4">
+                      Data completeness: {{ (props.row.score.dataCompleteness * 100).toFixed(0) }}%
                     </div>
                   </q-tooltip>
                 </q-td>
               </template>
 
-              <template v-slot:body-cell-patentTitle="props">
+              <!-- Patent ID: link to detail -->
+              <template v-slot:body-cell-patentId="props">
                 <q-td :props="props">
-                  <div class="ellipsis" style="max-width: 300px">
-                    {{ props.row.patentTitle }}
-                    <q-tooltip v-if="props.row.patentTitle?.length > 40">
-                      {{ props.row.patentTitle }}
+                  <router-link
+                    :to="{ name: 'patent-detail', params: { id: props.row.patentId } }"
+                    class="text-primary"
+                    @click.stop
+                  >
+                    {{ props.row.patentId }}
+                  </router-link>
+                </q-td>
+              </template>
+
+              <!-- Title: truncated with tooltip -->
+              <template v-slot:body-cell-title="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 250px">
+                    {{ props.row.title || '--' }}
+                    <q-tooltip v-if="props.row.title && props.row.title.length > 35">
+                      {{ props.row.title }}
                     </q-tooltip>
                   </div>
                 </q-td>
               </template>
 
+              <!-- Assignee: truncated -->
+              <template v-slot:body-cell-assignee="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 150px">
+                    {{ props.row.assignee || '--' }}
+                    <q-tooltip v-if="props.row.assignee && props.row.assignee.length > 20">
+                      {{ props.row.assignee }}
+                    </q-tooltip>
+                  </div>
+                </q-td>
+              </template>
+
+              <!-- Sector: truncated -->
+              <template v-slot:body-cell-sector="props">
+                <q-td :props="props">
+                  <div class="ellipsis" style="max-width: 120px">
+                    {{ props.row.sector || '--' }}
+                  </div>
+                </q-td>
+              </template>
+
+              <!-- Portfolio icon -->
               <template v-slot:body-cell-inPortfolio="props">
                 <q-td :props="props">
                   <q-icon
                     :name="props.row.inPortfolio ? 'check_circle' : 'public'"
                     :color="props.row.inPortfolio ? 'positive' : 'grey'"
+                    size="18px"
                   />
                 </q-td>
               </template>
-
-              <template v-slot:body-cell-competitorMatch="props">
-                <q-td :props="props">
-                  <q-chip
-                    v-if="props.row.competitorMatch"
-                    dense
-                    size="sm"
-                    color="negative"
-                    text-color="white"
-                  >
-                    {{ props.row.competitorMatch.company }}
-                  </q-chip>
-                  <span v-else class="text-grey-5">--</span>
-                </q-td>
-              </template>
-
-              <template v-slot:body-cell-score="props">
-                <q-td :props="props">
-                  <q-badge
-                    v-if="props.row.score"
-                    :color="props.row.score > 100 ? 'positive' : props.row.score > 50 ? 'warning' : 'grey'"
-                  >
-                    {{ props.row.score?.toFixed(1) }}
-                  </q-badge>
-                  <span v-else class="text-grey-5">--</span>
-                </q-td>
-              </template>
-
-              <template v-slot:body-cell-ipr="props">
-                <q-td :props="props">
-                  <template v-if="getLitigationIndicator(props.row.patentId)">
-                    <q-badge
-                      v-if="getLitigationIndicator(props.row.patentId)?.hasIPR"
-                      color="negative"
-                      text-color="white"
-                    >
-                      <q-icon name="gavel" size="12px" class="q-mr-xs" />
-                      {{ getLitigationIndicator(props.row.patentId)?.iprCount }}
-                      <q-tooltip>
-                        {{ getLitigationIndicator(props.row.patentId)?.iprCount }} IPR proceeding(s)
-                      </q-tooltip>
-                    </q-badge>
-                    <q-icon
-                      v-else
-                      name="check_circle_outline"
-                      color="positive"
-                      size="18px"
-                    >
-                      <q-tooltip>No IPR history found</q-tooltip>
-                    </q-icon>
-                  </template>
-                  <span v-else-if="enrichingLitigation" class="text-grey-5">
-                    <q-spinner size="14px" />
-                  </span>
-                  <span v-else class="text-grey-5">--</span>
-                </q-td>
-              </template>
             </q-table>
-          </q-card-section>
-
-          <!-- Selection Actions -->
-          <q-card-section v-if="selectedMembers.length > 0" class="bg-grey-2">
-            <div class="row items-center q-gutter-sm">
-              <span class="text-body2">{{ selectedMembers.length }} selected</span>
-              <q-btn flat dense label="Select All Portfolio" @click="selectAllPortfolio" />
-              <q-btn flat dense label="Select Competitors" @click="selectAllCompetitors" />
-              <q-btn flat dense label="Clear" @click="clearSelection" />
-              <q-space />
-              <q-btn
-                color="primary"
-                icon="folder_special"
-                label="Create Focus Area"
-                @click="openCreateFocusAreaDialog"
-              />
-            </div>
           </q-card-section>
         </q-card>
 
@@ -1042,17 +1005,56 @@ onMounted(async () => {
         <q-card v-else>
           <q-card-section class="text-center q-pa-xl">
             <q-icon name="account_tree" size="64px" color="grey-4" />
-            <div class="text-h6 text-grey-6 q-mt-md">No exploration results</div>
+            <div class="text-h6 text-grey-6 q-mt-md">No exploration active</div>
             <div class="text-body2 text-grey-5">
-              Enter seed patents and click "Explore Family" to find related patents
+              Enter seed patents and click "Create Exploration" to begin iterative family discovery
             </div>
           </q-card-section>
         </q-card>
       </div>
     </div>
 
-    <!-- Create Focus Area Dialog -->
-    <q-dialog v-model="showCreateFocusAreaDialog" persistent>
+    <!-- ═════════════════════════════════════════════════════════════════════ -->
+    <!-- Save Dialog -->
+    <!-- ═════════════════════════════════════════════════════════════════════ -->
+    <q-dialog v-model="showSaveDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6">Save Exploration</div>
+        </q-card-section>
+        <q-card-section>
+          <q-input
+            v-model="saveName"
+            label="Name *"
+            outlined autofocus
+            :rules="[val => !!val?.trim() || 'Name is required']"
+            class="q-mb-md"
+          />
+          <q-input
+            v-model="saveDescription"
+            label="Description (optional)"
+            outlined
+            type="textarea"
+            rows="2"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="primary"
+            label="Save"
+            :loading="saving"
+            :disable="!saveName.trim()"
+            @click="saveExploration"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ═════════════════════════════════════════════════════════════════════ -->
+    <!-- Focus Area Dialog -->
+    <!-- ═════════════════════════════════════════════════════════════════════ -->
+    <q-dialog v-model="showFocusAreaDialog" persistent>
       <q-card style="min-width: 450px">
         <q-card-section class="row items-center">
           <q-avatar icon="folder_special" color="primary" text-color="white" />
@@ -1060,43 +1062,25 @@ onMounted(async () => {
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
-
         <q-card-section>
           <div class="text-body2 text-grey-7 q-mb-md">
-            Creating a focus area with {{ selectedMembers.length }} selected patents
-            ({{ selectedMembers.filter(m => m.inPortfolio).length }} in portfolio,
-            {{ selectedMembers.filter(m => !m.inPortfolio).length }} external).
+            Creating a focus area from {{ zoneCounts.members }} accepted members.
           </div>
-
           <q-input
-            v-model="newFocusAreaName"
+            v-model="focusAreaName"
             label="Focus Area Name *"
-            outlined
-            autofocus
+            outlined autofocus
             :rules="[val => !!val?.trim() || 'Name is required']"
             class="q-mb-md"
-            placeholder="e.g., Authentication Patent Family"
           />
-
           <q-input
-            v-model="newFocusAreaDescription"
+            v-model="focusAreaDescription"
             label="Description (optional)"
             outlined
             type="textarea"
             rows="2"
-            placeholder="Brief description..."
-            class="q-mb-md"
           />
-
-          <q-checkbox
-            v-model="includeExternalPatents"
-            label="Include external (non-portfolio) patents"
-          />
-          <div class="text-caption text-grey-6 q-ml-lg">
-            External patents provide context but may have limited data
-          </div>
         </q-card-section>
-
         <q-card-actions align="right">
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn
@@ -1104,7 +1088,7 @@ onMounted(async () => {
             icon="add"
             label="Create Focus Area"
             :loading="creatingFocusArea"
-            :disable="!newFocusAreaName.trim()"
+            :disable="!focusAreaName.trim()"
             @click="createFocusArea"
           />
         </q-card-actions>
@@ -1115,47 +1099,6 @@ onMounted(async () => {
 
 <style scoped>
 .ellipsis {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-</style>
-
-<style>
-/* Patent detail tooltip - non-scoped as tooltip renders outside component */
-.patent-detail-tooltip {
-  max-width: 450px !important;
-  font-size: 13px !important;
-}
-
-.patent-popup {
-  padding: 8px;
-}
-
-.patent-popup .text-subtitle2 {
-  color: #90caf9;
-  font-weight: 600;
-}
-
-.litigation-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-
-.litigation-table th,
-.litigation-table td {
-  padding: 3px 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.2);
-}
-
-.litigation-table th {
-  text-align: left;
-  font-weight: 600;
-  color: #90caf9;
-}
-
-.litigation-table td.ellipsis {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

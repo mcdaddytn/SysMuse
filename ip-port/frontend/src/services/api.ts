@@ -1600,6 +1600,193 @@ export const patentFamilyApi = {
 };
 
 // =============================================================================
+// Patent Family V2 (Iterative Expansion) Types
+// =============================================================================
+
+export interface ScoringWeightsV2 {
+  taxonomicOverlap: number;
+  commonPriorArt: number;
+  commonForwardCites: number;
+  competitorOverlap: number;
+  portfolioAffiliate: number;
+  citationSectorAlignment: number;
+  multiPathConnectivity: number;
+  assigneeRelationship: number;
+  temporalProximity: number;
+  depthDecayRate: number;
+}
+
+export interface DimensionScoresV2 {
+  taxonomicOverlap: number;
+  commonPriorArt: number;
+  commonForwardCites: number;
+  competitorOverlap: number;
+  portfolioAffiliate: number;
+  citationSectorAlignment: number;
+  multiPathConnectivity: number;
+  assigneeRelationship: number;
+  temporalProximity: number;
+}
+
+export interface CandidateScoreV2 {
+  patentId: string;
+  dimensions: DimensionScoresV2;
+  compositeScore: number;
+  rawWeightedScore: number;
+  generationDistance: number;
+  depthMultiplier: number;
+  dataCompleteness: number;
+}
+
+export interface ScoredCandidateV2 {
+  patentId: string;
+  title?: string;
+  assignee?: string;
+  score: CandidateScoreV2;
+  generation: number;
+  relation: string;
+  inPortfolio: boolean;
+  isCompetitor: boolean;
+  competitorName?: string;
+  isAffiliate: boolean;
+  sector?: string;
+  superSector?: string;
+  filingDate?: string;
+  remainingYears?: number;
+  forwardCitationCount?: number;
+  discoveredVia: string[];
+  dataStatus: string;
+  zone: 'member' | 'expansion' | 'rejected';
+}
+
+export interface ExpansionResultV2 {
+  candidates: ScoredCandidateV2[];
+  stats: {
+    totalDiscovered: number;
+    aboveMembership: number;
+    inExpansionZone: number;
+    belowExpansion: number;
+    pruned: number;
+    direction: string;
+    generationDepth: number;
+  };
+  scoreDistribution: number[];
+  warnings: string[];
+}
+
+export interface ExpansionHistoryStep {
+  stepNumber: number;
+  direction: string;
+  generationDepth: number;
+  candidatesEvaluated: number;
+  autoIncluded: number;
+  expansionZone: number;
+  autoRejected: number;
+  createdAt: string;
+}
+
+export interface ExplorationStateV2 {
+  id: string;
+  name?: string;
+  seedPatentIds: string[];
+  weights: ScoringWeightsV2;
+  membershipThreshold: number;
+  expansionThreshold: number;
+  currentGeneration: number;
+  members: ScoredCandidateV2[];
+  candidates: ScoredCandidateV2[];
+  excluded: ScoredCandidateV2[];
+  expansionHistory: ExpansionHistoryStep[];
+  status: string;
+  memberCount: number;
+  candidateCount: number;
+}
+
+export interface ScoringPresetV2 {
+  label: string;
+  description: string;
+  weights: ScoringWeightsV2;
+}
+
+// Patent Family V2 API
+export const patentFamilyV2Api = {
+  async getPresets(): Promise<Record<string, ScoringPresetV2>> {
+    const { data } = await api.get('/patent-families/v2/presets');
+    return data;
+  },
+
+  async createExploration(params: {
+    seedPatentIds: string[];
+    name?: string;
+    weights?: ScoringWeightsV2;
+    membershipThreshold?: number;
+    expansionThreshold?: number;
+  }): Promise<ExplorationStateV2> {
+    const { data } = await api.post('/patent-families/v2/explorations', params);
+    return data;
+  },
+
+  async getExploration(id: string): Promise<ExplorationStateV2> {
+    const { data } = await api.get(`/patent-families/v2/explorations/${id}`);
+    return data;
+  },
+
+  async expand(id: string, params: {
+    direction: 'forward' | 'backward' | 'both';
+    weights?: ScoringWeightsV2;
+    membershipThreshold?: number;
+    expansionThreshold?: number;
+    maxCandidates?: number;
+  }): Promise<ExpansionResultV2> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/expand`, params);
+    return data;
+  },
+
+  async expandSiblings(id: string, params: {
+    direction: 'forward' | 'backward' | 'both';
+    weights?: ScoringWeightsV2;
+    membershipThreshold?: number;
+    expansionThreshold?: number;
+    maxCandidates?: number;
+  }): Promise<ExpansionResultV2> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/expand-siblings`, params);
+    return data;
+  },
+
+  async rescore(id: string, params: {
+    weights: ScoringWeightsV2;
+    membershipThreshold: number;
+    expansionThreshold: number;
+  }): Promise<ExpansionResultV2> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/rescore`, params);
+    return data;
+  },
+
+  async updateCandidates(id: string, updates: Array<{ patentId: string; status: 'member' | 'candidate' | 'excluded' }>): Promise<{
+    updated: number;
+    memberCount: number;
+    candidateCount: number;
+  }> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/candidates`, { updates });
+    return data;
+  },
+
+  async save(id: string, params: { name: string; description?: string }): Promise<{ message: string }> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/save`, params);
+    return data;
+  },
+
+  async createFocusArea(id: string, params: {
+    name: string;
+    description?: string;
+    includeExternalPatents?: boolean;
+  }): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/create-focus-area`, params);
+    return data;
+  },
+};
+
+// =============================================================================
 // Sector Management API
 // =============================================================================
 

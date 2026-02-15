@@ -351,10 +351,16 @@ Phase 5 extends this to support `patent_family` with multi-stage execution.
   - [ ] Portfolio indicator
   - [ ] Competitor badges
   - [ ] IPR column (after enrichment)
-  - [ ] Patent ID tooltip with title, assignee, date, data status
+  - [ ] Patent ID tooltip with rich patent details popup
   - [ ] Data status icons (warning for not_found, help for not_attempted)
-- [ ] Click "Enrich Litigation Data"
+- [ ] Click "Enrich Data" (processes up to 200 patents)
 - [ ] Verify IPR indicators appear
+- [ ] Hover on patent ID and verify tooltip shows:
+  - [ ] Patent title and assignee badges
+  - [ ] Relation type and portfolio status badges
+  - [ ] Competitor badge (if applicable)
+  - [ ] IPR status section with trial details (after enrichment)
+  - [ ] Prosecution status with office action counts (after enrichment)
 - [ ] Select patents and create Focus Area
 - [ ] Verify Focus Area is created and navigable
 - [ ] Test entry from Portfolio page (bulk action)
@@ -429,6 +435,118 @@ Phase 5 focuses on LLM templates, but future work could add:
 - Zoomable citation tree visualization
 - Interactive exploration (click to expand)
 - Visual highlighting of competitors, IPR patents, etc.
+
+---
+
+## Design Considerations (In Progress)
+
+### Exploration Persistence & Naming
+
+**Current State:**
+- Explorations are transient - run, view results, optionally create Focus Area
+- Citation data is cached (reused across explorations)
+- No way to name/save an exploration before creating Focus Area
+
+**Desired Workflow:**
+1. Run initial exploration with seed patents
+2. Name and save the exploration (e.g., "SDN Security Family")
+3. Iteratively refine:
+   - Add/remove filters (sectors, competitors)
+   - Expand generations incrementally
+   - Mark patents as interesting/excluded
+   - Enrich with IPR/prosecution
+4. Eventually: Create Focus Area from refined subset
+
+**Implementation Options:**
+- Save exploration to database with name, config, current member list
+- Track which patents have been reviewed/marked
+- Allow re-running with modified parameters
+- Show history of explorations (recent, named)
+
+### Enrichment Strategy
+
+**Current:** 200 patents per request (max 500 via API)
+
+**Options for larger families:**
+1. **Paginated enrichment** - "Enrich current page" vs "Enrich all (N patents)"
+2. **Background enrichment** - Queue all patents, show progress
+3. **Selective enrichment** - Only enrich selected/checked patents
+4. **Priority enrichment** - Enrich high-score patents first
+
+**Status:** Current implementation enriches up to 200 patents in a single request.
+
+### Selection Checkboxes Purpose
+
+**Current:** Used for "Create Focus Area" with selected patents
+
+**Additional uses to consider:**
+1. **Mark as interesting** - Flag for follow-up
+2. **Mark as excluded** - Remove from consideration
+3. **Batch actions:**
+   - Enrich selected only
+   - Add to existing Focus Area
+   - Export selected
+   - Expand family from selected (new seeds)
+4. **Screening workflow:**
+   - Review each patent before expanding further
+   - Require selection before adding next generation
+   - Filter to show only selected/unselected
+
+### Grid Columns & Customization
+
+**Current columns:** Patent ID, Title, Assignee, Relation, Portfolio, Competitor, IPR, Years Left, Score
+
+**Additional columns needed:**
+- Super-sector
+- Sector
+- Prosecution status
+- Filing date
+- CPC codes (abbreviated)
+- Data status (portfolio/cached/not_found)
+
+**Implementation:**
+- Follow Patent Summary pattern with column selector
+- Persist column preferences per user
+- Default to compact view, expand as needed
+
+### Constraint Filters
+
+**Current:** Competitors, Affiliates, Portfolio requirement, Filing year
+
+**Additional filters needed:**
+- Super-sector (dropdown)
+- Sector (dropdown, filtered by super-sector)
+- CPC prefix
+- Score range (min/max)
+- Years remaining range
+- Has IPR (yes/no/any)
+- Has prosecution (yes/no/any)
+- Data status (portfolio/external/unknown)
+
+### Patent Tooltip Enhancement (Implemented)
+
+Rich tooltip on patent ID showing:
+- Title, assignee badges (relation type, portfolio status, competitor)
+- Data retrieval status
+- IPR summary with trial table (trial #, status, petitioner)
+- Prosecution summary (status, office action count, rejection count)
+- Click-through to patent detail page
+
+**Pattern:** Similar to V2/V3 scoring page tooltips but adapted for family context.
+
+### Incremental Generation Expansion
+
+**Concept:** Rather than setting ancestors=2, descendants=2 upfront:
+1. Start with 1 generation each direction
+2. Review results, apply filters, select interesting patents
+3. Click "Expand +1 generation" to add next level
+4. Repeat until family is complete
+
+**Benefits:**
+- Prevents explosion (filter as you go)
+- Surfaces interesting patents early
+- Allows marking patents before expansion
+- Natural workflow for discovery
 
 ---
 

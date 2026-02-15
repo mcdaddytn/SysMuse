@@ -331,40 +331,58 @@ function onRowClick(_evt: Event, row: EnrichedFamilyMember) {
 }
 
 // Litigation enrichment (also fetches basic patent details first)
-// NOTE: This enriches ALL family members (up to 50), not just current page
-async function enrichLitigation() {
+// Enriches all family members (up to 200 by default, max 500)
+async function enrichLitigation(selectedOnly = false) {
   if (members.value.length === 0) return;
 
   enrichingLitigation.value = true;
   try {
-    // Enrich all members (API limits to first 50)
-    const patentIds = members.value.map(m => m.patentId);
+    // Enrich selected patents only, or all members
+    const patentIds = selectedOnly && selectedMembers.value.length > 0
+      ? selectedMembers.value.map(m => m.patentId)
+      : members.value.map(m => m.patentId);
 
     // Use enrichWithDetails to fetch patent details AND litigation data
     const result = await patentFamilyApi.enrichWithDetails(patentIds, {
       fetchBasicDetails: true,
       includeIpr: true,
       includeProsecution: true,
+      limit: 200,  // Process up to 200 patents
     });
 
     // Store litigation results in map for quick lookup
+    // Use a new Map to ensure Vue reactivity is triggered
+    const newMap = new Map(litigationData.value);
     for (const indicator of result.litigation.indicators) {
-      litigationData.value.set(indicator.patentId, indicator);
+      newMap.set(indicator.patentId, indicator);
     }
+    litigationData.value = newMap;
+
+    console.log('[PatentFamily] Enrichment result:', {
+      indicatorCount: result.litigation.indicators.length,
+      iprFound: result.litigation.indicators.filter(i => i.hasIPR).length,
+      prosFound: result.litigation.indicators.filter(i => i.hasProsecutionHistory).length,
+      sample: result.litigation.indicators.slice(0, 2),
+    });
 
     // Count results
     const iprCount = result.litigation.indicators.filter(i => i.hasIPR).length;
     const prosCount = result.litigation.indicators.filter(i => i.hasProsecutionHistory).length;
-    const detailsMsg = result.detailsFetched.fetched > 0
-      ? `Fetched details: ${result.detailsFetched.fetched}. `
-      : '';
-    const truncatedMsg = result.truncated
-      ? ` (first 50 of ${patentIds.length})`
-      : '';
+    const parts: string[] = [];
+
+    if (result.detailsFetched.fetched > 0) {
+      parts.push(`Details: ${result.detailsFetched.fetched}`);
+    }
+    parts.push(`IPR: ${iprCount}`);
+    parts.push(`Prosecution: ${prosCount}`);
+
+    const countMsg = result.truncated && result.originalCount
+      ? ` (${result.total} of ${result.originalCount})`
+      : ` (${result.total} patents)`;
 
     $q.notify({
       type: 'positive',
-      message: `${detailsMsg}IPR: ${iprCount}, Prosecution: ${prosCount}${truncatedMsg}`,
+      message: `Enriched${countMsg}: ${parts.join(', ')}`,
       timeout: 5000,
     });
 
@@ -762,7 +780,7 @@ onMounted(async () => {
                 @click="enrichLitigation"
               >
                 <q-tooltip>
-                  Fetch for all {{ members.length }} patents (first 50):
+                  Fetch for all {{ members.length }} patents (first 200):
                   <br>• Patent details (title, assignee) for external patents
                   <br>• IPR proceedings from PTAB
                   <br>• Prosecution history from USPTO
@@ -822,13 +840,102 @@ onMounted(async () => {
                       <q-tooltip>{{ props.row.dataStatusReason || 'Incomplete data' }}</q-tooltip>
                     </q-icon>
                   </div>
-                  <q-tooltip v-if="props.row.patentTitle">
-                    <div class="text-bold q-mb-xs">{{ props.row.patentTitle }}</div>
-                    <div>{{ props.row.assignee }}</div>
-                    <div v-if="props.row.patentDate">Date: {{ props.row.patentDate }}</div>
-                    <div v-if="props.row.remainingYears">Years left: {{ props.row.remainingYears?.toFixed(1) }}</div>
-                    <div class="text-caption text-grey-4 q-mt-xs">
-                      Status: {{ getDataStatusLabel(props.row.dataStatus) }}
+                  <q-tooltip
+                    anchor="center right"
+                    self="center left"
+                    :offset="[10, 0]"
+                    class="patent-detail-tooltip"
+                    max-width="450px"
+                  >
+                    <div class="patent-popup">
+                      <!-- Header -->
+                      <div class="text-subtitle1 text-weight-bold q-mb-xs">
+                        {{ props.row.patentId }}
+                      </div>
+                      <div v-if="props.row.patentTitle" class="text-body2 q-mb-sm">
+                        {{ props.row.patentTitle }}
+                      </div>
+
+                      <!-- Quick badges -->
+                      <div class="row q-gutter-sm q-mb-sm text-caption">
+                        <q-badge v-if="props.row.assignee" color="cyan-4" text-color="dark">
+                          {{ props.row.assignee }}
+                        </q-badge>
+                        <q-badge :color="props.row.inPortfolio ? 'positive' : 'grey-5'" text-color="white">
+                          {{ props.row.inPortfolio ? 'Portfolio' : 'External' }}
+                        </q-badge>
+                        <q-badge color="blue-grey-4" text-color="dark">
+                          {{ props.row.relationToSeed }}
+                        </q-badge>
+                        <q-badge v-if="props.row.remainingYears" color="light-green-4" text-color="dark">
+                          {{ props.row.remainingYears?.toFixed(1) }} yrs
+                        </q-badge>
+                        <q-badge v-if="props.row.competitorMatch" color="orange" text-color="dark">
+                          {{ props.row.competitorMatch.company }}
+                        </q-badge>
+                      </div>
+
+                      <!-- Data Status -->
+                      <div class="text-caption text-grey-4 q-mb-sm">
+                        Data: {{ getDataStatusLabel(props.row.dataStatus) }}
+                      </div>
+
+                      <!-- IPR Section -->
+                      <template v-if="getLitigationIndicator(props.row.patentId)">
+                        <div class="text-subtitle2 q-mb-xs">IPR Status</div>
+                        <div v-if="getLitigationIndicator(props.row.patentId)?.hasIPR" class="q-mb-sm">
+                          <q-badge color="negative" text-color="white" class="q-mb-xs">
+                            <q-icon name="gavel" size="12px" class="q-mr-xs" />
+                            {{ getLitigationIndicator(props.row.patentId)?.iprCount }} IPR proceeding(s)
+                          </q-badge>
+                          <table v-if="getLitigationIndicator(props.row.patentId)?.iprTrials?.length" class="litigation-table q-mt-xs">
+                            <thead>
+                              <tr>
+                                <th>Trial #</th>
+                                <th>Status</th>
+                                <th>Petitioner</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr v-for="trial in getLitigationIndicator(props.row.patentId)?.iprTrials?.slice(0, 3)" :key="trial.trialNumber">
+                                <td>{{ trial.trialNumber }}</td>
+                                <td>{{ trial.status || trial.institutionDecision || '--' }}</td>
+                                <td class="ellipsis" style="max-width: 150px">{{ trial.petitionerName || '--' }}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <div v-if="(getLitigationIndicator(props.row.patentId)?.iprTrials?.length || 0) > 3" class="text-caption text-grey-4">
+                            + {{ (getLitigationIndicator(props.row.patentId)?.iprTrials?.length || 0) - 3 }} more
+                          </div>
+                        </div>
+                        <div v-else class="text-positive q-mb-sm">
+                          <q-icon name="check_circle_outline" size="14px" class="q-mr-xs" />
+                          No IPR history
+                        </div>
+
+                        <!-- Prosecution Section -->
+                        <div class="text-subtitle2 q-mb-xs">Prosecution</div>
+                        <div v-if="getLitigationIndicator(props.row.patentId)?.hasProsecutionHistory">
+                          <div class="row q-gutter-sm q-mb-xs">
+                            <q-badge v-if="getLitigationIndicator(props.row.patentId)?.prosecutionStatus" color="blue-grey" text-color="white">
+                              {{ getLitigationIndicator(props.row.patentId)?.prosecutionStatus }}
+                            </q-badge>
+                            <span v-if="getLitigationIndicator(props.row.patentId)?.officeActionCount">
+                              {{ getLitigationIndicator(props.row.patentId)?.officeActionCount }} office action(s)
+                            </span>
+                            <span v-if="getLitigationIndicator(props.row.patentId)?.rejectionCount">
+                              {{ getLitigationIndicator(props.row.patentId)?.rejectionCount }} rejection(s)
+                            </span>
+                          </div>
+                        </div>
+                        <div v-else class="text-grey-4">
+                          No prosecution history retrieved
+                        </div>
+                      </template>
+                      <div v-else class="text-grey-5 text-caption">
+                        <q-icon name="info" size="14px" class="q-mr-xs" />
+                        Click "Enrich Data" to fetch IPR/prosecution info
+                      </div>
                     </div>
                   </q-tooltip>
                 </q-td>
@@ -1008,6 +1115,47 @@ onMounted(async () => {
 
 <style scoped>
 .ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
+
+<style>
+/* Patent detail tooltip - non-scoped as tooltip renders outside component */
+.patent-detail-tooltip {
+  max-width: 450px !important;
+  font-size: 13px !important;
+}
+
+.patent-popup {
+  padding: 8px;
+}
+
+.patent-popup .text-subtitle2 {
+  color: #90caf9;
+  font-weight: 600;
+}
+
+.litigation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.litigation-table th,
+.litigation-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.litigation-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #90caf9;
+}
+
+.litigation-table td.ellipsis {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

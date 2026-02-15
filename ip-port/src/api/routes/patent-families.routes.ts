@@ -598,15 +598,19 @@ router.post('/enrich-with-details', async (req: Request, res: Response) => {
       patentIds,
       fetchBasicDetails = true,
       includeIpr = true,
-      includeProsecution = true
+      includeProsecution = true,
+      limit = 200,  // Default to 200, max 500
     } = req.body;
 
     if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
       return res.status(400).json({ error: 'patentIds array is required' });
     }
 
-    // Limit batch size
-    const limitedIds = patentIds.slice(0, 50);
+    // Limit batch size (max 500 to avoid timeouts)
+    const maxLimit = Math.min(limit, 500);
+    const limitedIds = patentIds.slice(0, maxLimit);
+
+    console.log(`[PatentFamily] Enriching ${limitedIds.length} of ${patentIds.length} patents...`);
 
     const result = await enrichPatentsWithDetails(limitedIds, {
       fetchBasicDetails,
@@ -618,7 +622,8 @@ router.post('/enrich-with-details', async (req: Request, res: Response) => {
       detailsFetched: result.detailsFetched,
       litigation: result.litigation,
       total: limitedIds.length,
-      truncated: patentIds.length > 50,
+      truncated: patentIds.length > maxLimit,
+      originalCount: patentIds.length,
     });
   } catch (error) {
     console.error('Error enriching patents with details:', error);

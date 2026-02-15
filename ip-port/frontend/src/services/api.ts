@@ -1588,8 +1588,9 @@ export const patentFamilyApi = {
       fetchBasicDetails?: boolean;
       includeIpr?: boolean;
       includeProsecution?: boolean;
+      limit?: number;  // Default 200, max 500
     }
-  ): Promise<EnrichWithDetailsResult> {
+  ): Promise<EnrichWithDetailsResult & { originalCount?: number }> {
     const { data } = await api.post('/patent-families/enrich-with-details', {
       patentIds,
       ...options,

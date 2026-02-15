@@ -40,6 +40,7 @@ const navItems = computed(() => [
   { label: 'Patent Summary', icon: 'summarize', to: '/', show: true },
   { label: 'Aggregate View', icon: 'analytics', to: '/aggregates', show: true },
   { label: 'Focus Areas', icon: 'filter_center_focus', to: '/focus-areas', show: true },
+  { label: 'Family Explorer', icon: 'account_tree', to: '/patent-families', show: true },
   { divider: true, show: true },
   { label: 'Base Score', icon: 'leaderboard', to: '/base-scoring', show: true },
   { label: 'v2 Scoring', icon: 'score', to: '/v2-scoring', show: true },

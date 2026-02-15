@@ -247,7 +247,11 @@ export type ColumnGroup =
   | 'entity'
   | 'citations'
   | 'scores'
-  | 'llmText';
+  | 'llmText'
+  | 'family'
+  | 'scoring'
+  | 'dimensions'
+  | 'litigation';
 
 export interface ColumnGroupInfo {
   id: ColumnGroup;
@@ -255,6 +259,24 @@ export interface ColumnGroupInfo {
   description?: string;
   icon: string;
   defaultExpanded: boolean;
+}
+
+// Generic grid column metadata (not tied to any specific data type)
+export interface GridColumnMeta {
+  name: string;
+  label: string;
+  group: string;
+  defaultVisible: boolean;
+  description?: string;
+}
+
+// Generic column group definition
+export interface GridColumnGroup {
+  id: string;
+  label: string;
+  icon: string;
+  description?: string;
+  defaultExpanded?: boolean;
 }
 
 // Grid column definition

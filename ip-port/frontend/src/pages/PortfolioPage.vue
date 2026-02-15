@@ -906,6 +906,10 @@ onMounted(async () => {
 .table-scroll-container {
   /* Fill available space */
   flex: 1;
+  /* Critical: override flexbox default min-height: auto so this
+     container can be smaller than its content and actually scroll */
+  min-height: 0;
+  min-width: 0;
   /* ALWAYS show both scrollbars */
   overflow: scroll !important;
   /* Contain the table */

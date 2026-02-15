@@ -1708,8 +1708,33 @@ export interface ScoringPresetV2 {
   weights: ScoringWeightsV2;
 }
 
+export interface ExplorationSummaryV2 {
+  id: string;
+  name?: string;
+  seedPatentId: string;
+  seedPatentIds: string[];
+  version: number;
+  status: string;
+  currentGeneration: number;
+  memberCount: number;
+  candidateCount: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { members: number };
+}
+
 // Patent Family V2 API
 export const patentFamilyV2Api = {
+  async listExplorations(): Promise<ExplorationSummaryV2[]> {
+    const { data } = await api.get('/patent-families/explorations');
+    // Filter to v2 only (version === 2)
+    return (data as ExplorationSummaryV2[]).filter(e => e.version === 2);
+  },
+
+  async deleteExploration(id: string): Promise<void> {
+    await api.delete(`/patent-families/explorations/${id}`);
+  },
+
   async getPresets(): Promise<Record<string, ScoringPresetV2>> {
     const { data } = await api.get('/patent-families/v2/presets');
     return data;
@@ -1779,8 +1804,15 @@ export const patentFamilyV2Api = {
   async createFocusArea(id: string, params: {
     name: string;
     description?: string;
+    patentIds?: string[];
     includeExternalPatents?: boolean;
   }): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    // When explicit patentIds provided, use the generic endpoint that accepts them
+    if (params.patentIds && params.patentIds.length > 0) {
+      const { data } = await api.post(`/patent-families/explorations/${id}/create-focus-area`, params);
+      return data;
+    }
+    // Otherwise use v2 endpoint that auto-selects server-side members
     const { data } = await api.post(`/patent-families/v2/explorations/${id}/create-focus-area`, params);
     return data;
   },

@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
+  patentFamilyApi,
   patentFamilyV2Api,
   type ScoringWeightsV2,
   type ScoredCandidateV2,
   type ExplorationStateV2,
   type ExpansionHistoryStep,
   type ScoringPresetV2,
+  type ExplorationSummaryV2,
+  type LitigationIndicator,
 } from '@/services/api';
+import { useGridColumns } from '@/composables/useGridColumns';
+import GenericColumnSelector from '@/components/grid/GenericColumnSelector.vue';
 
+const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
 
@@ -42,6 +48,49 @@ const WEIGHT_DIMENSIONS = [
   { key: 'assigneeRelationship' as const, label: 'Assignee Relationship', description: 'Same assignee (1.0) or affiliate group (0.5)', color: 'amber' },
   { key: 'temporalProximity' as const, label: 'Temporal Proximity', description: 'Linear decay over 15 years from seed filing dates', color: 'orange' },
 ];
+
+const COLUMN_GROUPS = [
+  { id: 'core', label: 'Core', icon: 'view_list' },
+  { id: 'family', label: 'Family', icon: 'account_tree' },
+  { id: 'scoring', label: 'Score Details', icon: 'leaderboard' },
+  { id: 'dimensions', label: 'Score Dimensions', icon: 'tune' },
+  { id: 'litigation', label: 'Litigation', icon: 'gavel' },
+];
+
+const COLUMN_META = [
+  // Core
+  { name: 'status', label: 'Status', group: 'core', defaultVisible: true },
+  { name: 'score', label: 'Score', group: 'core', defaultVisible: true },
+  { name: 'patentId', label: 'Patent ID', group: 'core', defaultVisible: true },
+  { name: 'title', label: 'Title', group: 'core', defaultVisible: true },
+  { name: 'assignee', label: 'Assignee', group: 'core', defaultVisible: true },
+  { name: 'sector', label: 'Sector', group: 'core', defaultVisible: true },
+  { name: 'remainingYears', label: 'Yrs Left', group: 'core', defaultVisible: true },
+  // Family
+  { name: 'relation', label: 'Relation', group: 'family', defaultVisible: true },
+  { name: 'inPortfolio', label: 'Portfolio', group: 'family', defaultVisible: true },
+  { name: 'generation', label: 'Generation', group: 'family', defaultVisible: false },
+  { name: 'isCompetitor', label: 'Competitor', group: 'family', defaultVisible: false },
+  { name: 'forwardCitationCount', label: 'Fwd Cites', group: 'family', defaultVisible: false },
+  { name: 'filingDate', label: 'Filing Date', group: 'family', defaultVisible: false },
+  // Scoring
+  { name: 'rawScore', label: 'Raw Score', group: 'scoring', defaultVisible: false },
+  { name: 'depthMultiplier', label: 'Depth Multiplier', group: 'scoring', defaultVisible: false },
+  { name: 'dataCompleteness', label: 'Data Completeness', group: 'scoring', defaultVisible: false },
+  // Dimensions
+  ...WEIGHT_DIMENSIONS.map(dim => ({
+    name: `dim_${dim.key}`,
+    label: dim.label,
+    group: 'dimensions',
+    defaultVisible: false,
+    description: dim.description,
+  })),
+  // Litigation
+  { name: 'ipr', label: 'IPR', group: 'litigation', defaultVisible: false },
+  { name: 'prosecution', label: 'Prosecution', group: 'litigation', defaultVisible: false },
+];
+
+// (Column visibility managed by useGridColumns composable below)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State — Seeds
@@ -88,6 +137,7 @@ const expansionThreshold = ref(30);
 type ZoneFilter = 'all' | 'members' | 'candidates' | 'excluded';
 const activeZone = ref<ZoneFilter>('all');
 const searchFilter = ref('');
+const selectedCandidates = ref<ScoredCandidateV2[]>([]);
 const pagination = ref({
   page: 1,
   rowsPerPage: 50,
@@ -108,6 +158,30 @@ const showFocusAreaDialog = ref(false);
 const focusAreaName = ref('');
 const focusAreaDescription = ref('');
 const creatingFocusArea = ref(false);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Saved Explorations
+// ─────────────────────────────────────────────────────────────────────────────
+
+const savedExplorations = ref<ExplorationSummaryV2[]>([]);
+const loadingSaved = ref(false);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Data Enrichment
+// ─────────────────────────────────────────────────────────────────────────────
+
+const litigationData = ref<Map<string, LitigationIndicator>>(new Map());
+const enrichingData = ref(false);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State — Column Visibility (shared composable)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const gridColumns = useGridColumns({
+  storageKey: 'family-explorer-columns',
+  columns: COLUMN_META,
+  groups: COLUMN_GROUPS,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed — All Candidates (merged view)
@@ -170,19 +244,70 @@ const totalWeight = computed(() => {
     w.multiPathConnectivity + w.assigneeRelationship + w.temporalProximity;
 });
 
-const tableColumns = computed(() => [
+const allTableColumnDefs = computed(() => [
+  // Core
   { name: 'status', label: 'Status', field: 'zone', sortable: true, align: 'center' as const, style: 'width: 50px' },
   { name: 'score', label: 'Score', field: (row: ScoredCandidateV2) => row.score.compositeScore, sortable: true, align: 'right' as const, style: 'width: 70px' },
   { name: 'patentId', label: 'Patent ID', field: 'patentId', sortable: true, align: 'left' as const },
   { name: 'title', label: 'Title', field: 'title', sortable: true, align: 'left' as const },
   { name: 'assignee', label: 'Assignee', field: 'assignee', sortable: true, align: 'left' as const },
   { name: 'sector', label: 'Sector', field: 'sector', sortable: true, align: 'left' as const },
+  { name: 'remainingYears', label: 'Yrs Left', field: 'remainingYears', sortable: true, align: 'right' as const, format: (val: number | undefined) => val?.toFixed(1) || '--' },
+  // Family
   { name: 'relation', label: 'Relation', field: 'relation', sortable: true, align: 'left' as const },
   { name: 'inPortfolio', label: 'Portfolio', field: 'inPortfolio', sortable: true, align: 'center' as const, style: 'width: 50px' },
-  { name: 'remainingYears', label: 'Yrs Left', field: 'remainingYears', sortable: true, align: 'right' as const, format: (val: number | undefined) => val?.toFixed(1) || '--' },
+  { name: 'generation', label: 'Generation', field: 'generation', sortable: true, align: 'center' as const },
+  { name: 'isCompetitor', label: 'Competitor', field: 'isCompetitor', sortable: true, align: 'center' as const },
+  { name: 'forwardCitationCount', label: 'Fwd Cites', field: 'forwardCitationCount', sortable: true, align: 'right' as const, format: (val: number | undefined) => val != null ? val.toLocaleString() : '--' },
+  { name: 'filingDate', label: 'Filing Date', field: 'filingDate', sortable: true, align: 'left' as const },
+  // Scoring
+  { name: 'rawScore', label: 'Raw Score', field: (row: ScoredCandidateV2) => row.score.rawWeightedScore, sortable: true, align: 'right' as const, format: (val: number) => val?.toFixed(1) || '--' },
+  { name: 'depthMultiplier', label: 'Depth Mult', field: (row: ScoredCandidateV2) => row.score.depthMultiplier, sortable: true, align: 'right' as const, format: (val: number) => val != null ? `x${val.toFixed(2)}` : '--' },
+  { name: 'dataCompleteness', label: 'Data Complete', field: (row: ScoredCandidateV2) => row.score.dataCompleteness, sortable: true, align: 'right' as const, format: (val: number) => val != null ? `${(val * 100).toFixed(0)}%` : '--' },
+  // Dimensions (9)
+  ...WEIGHT_DIMENSIONS.map(dim => ({
+    name: `dim_${dim.key}`,
+    label: dim.label,
+    field: (row: ScoredCandidateV2) => (row.score.dimensions as Record<string, number>)[dim.key],
+    sortable: true,
+    align: 'right' as const,
+    format: (val: number) => val != null ? `${(val * 100).toFixed(0)}%` : '--',
+  })),
+  // Litigation
+  { name: 'ipr', label: 'IPR', field: (row: ScoredCandidateV2) => litigationData.value.get(row.patentId)?.iprCount || 0, sortable: true, align: 'center' as const, style: 'width: 60px' },
+  { name: 'prosecution', label: 'Prosecution', field: (row: ScoredCandidateV2) => litigationData.value.get(row.patentId)?.prosecutionStatus || '', sortable: true, align: 'left' as const },
 ]);
 
+const tableColumns = computed(() =>
+  allTableColumnDefs.value.filter(col => gridColumns.visibleColumns.value.has(col.name))
+);
+
 const hasExploration = computed(() => !!explorationId.value && !!explorationState.value);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Selection — Auto-select members on state changes
+// ─────────────────────────────────────────────────────────────────────────────
+
+function autoSelectMembers() {
+  if (!explorationState.value) {
+    selectedCandidates.value = [];
+    return;
+  }
+  selectedCandidates.value = [...explorationState.value.members];
+}
+
+function selectAllDisplayed() {
+  selectedCandidates.value = [...displayedCandidates.value];
+}
+
+function clearSelection() {
+  selectedCandidates.value = [];
+}
+
+// Auto-select members whenever exploration state refreshes
+watch(explorationState, () => {
+  autoSelectMembers();
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Methods — Exploration Lifecycle
@@ -425,6 +550,7 @@ async function saveExploration() {
       description: saveDescription.value.trim() || undefined,
     });
     showSaveDialog.value = false;
+    loadSavedExplorations();
     $q.notify({ type: 'positive', message: 'Exploration saved' });
   } catch (err) {
     $q.notify({ type: 'negative', message: 'Failed to save exploration' });
@@ -435,12 +561,15 @@ async function saveExploration() {
 
 async function createFocusArea() {
   if (!explorationId.value || !focusAreaName.value.trim()) return;
+  if (selectedCandidates.value.length === 0) return;
 
   creatingFocusArea.value = true;
   try {
+    const patentIds = selectedCandidates.value.map(c => c.patentId);
     const result = await patentFamilyV2Api.createFocusArea(explorationId.value, {
       name: focusAreaName.value.trim(),
       description: focusAreaDescription.value.trim() || undefined,
+      patentIds,
       includeExternalPatents: true,
     });
 
@@ -467,7 +596,111 @@ function clearExploration() {
   explorationId.value = null;
   explorationState.value = null;
   error.value = null;
+  selectedCandidates.value = [];
+  litigationData.value = new Map();
   resetWeights();
+  loadSavedExplorations();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Methods — Saved Explorations
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadSavedExplorations() {
+  loadingSaved.value = true;
+  try {
+    savedExplorations.value = await patentFamilyV2Api.listExplorations();
+  } catch (err) {
+    console.error('Failed to load saved explorations:', err);
+  } finally {
+    loadingSaved.value = false;
+  }
+}
+
+async function loadExploration(id: string) {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    // Clear current exploration first to prevent watcher-triggered rescore
+    explorationId.value = null;
+    explorationState.value = null;
+    litigationData.value = new Map();
+
+    const state = await patentFamilyV2Api.getExploration(id);
+
+    // Restore weights and thresholds from saved state (before setting ID, so watcher doesn't fire)
+    weights.value = { ...state.weights };
+    membershipThreshold.value = state.membershipThreshold;
+    expansionThreshold.value = state.expansionThreshold;
+
+    // Populate seeds
+    seedInput.value = state.seedPatentIds.join('\n');
+
+    // Set the exploration
+    explorationState.value = state;
+    explorationId.value = state.id;
+
+    $q.notify({
+      type: 'positive',
+      message: `Loaded exploration${state.name ? ` "${state.name}"` : ''} — ${state.memberCount} members, ${state.candidateCount} candidates`,
+    });
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to load exploration';
+    $q.notify({ type: 'negative', message: error.value });
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function deleteSavedExploration(id: string) {
+  try {
+    await patentFamilyV2Api.deleteExploration(id);
+    savedExplorations.value = savedExplorations.value.filter(e => e.id !== id);
+
+    if (explorationId.value === id) {
+      clearExploration();
+    }
+
+    $q.notify({ type: 'positive', message: 'Exploration deleted' });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to delete exploration' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Methods — Data Enrichment
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function enrichData() {
+  if (!explorationState.value) return;
+
+  const allPatentIds = allCandidates.value.map(c => c.patentId);
+  if (allPatentIds.length === 0) return;
+
+  enrichingData.value = true;
+  try {
+    const result = await patentFamilyApi.enrichWithDetails(allPatentIds, {
+      includeIpr: true,
+      includeProsecution: true,
+    });
+
+    const newMap = new Map(litigationData.value);
+    for (const indicator of result.litigation.indicators) {
+      newMap.set(indicator.patentId, indicator);
+    }
+    litigationData.value = newMap;
+
+    $q.notify({
+      type: 'positive',
+      message: `Enriched ${result.total} patents — ${result.litigation.enriched} with litigation data`,
+      timeout: 4000,
+    });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'Failed to enrich patent data' });
+  } finally {
+    enrichingData.value = false;
+  }
 }
 
 function scoreColor(score: number): string {
@@ -507,6 +740,18 @@ onMounted(async () => {
   } catch (err) {
     console.error('Failed to load presets:', err);
   }
+
+  loadSavedExplorations();
+
+  // Populate seeds from URL query (e.g., ?seeds=10002084,10003456)
+  const urlSeeds = route.query.seeds;
+  if (urlSeeds) {
+    if (Array.isArray(urlSeeds)) {
+      seedInput.value = urlSeeds.join('\n');
+    } else {
+      seedInput.value = String(urlSeeds).replace(/,/g, '\n');
+    }
+  }
 });
 </script>
 
@@ -541,6 +786,61 @@ onMounted(async () => {
       <!-- LEFT PANEL (col-4) -->
       <!-- ═══════════════════════════════════════════════════════════════════ -->
       <div class="col-12 col-md-4">
+
+        <!-- Card 0: Saved Explorations (shown when no active exploration) -->
+        <q-card v-if="!hasExploration" class="q-mb-md">
+          <q-card-section>
+            <div class="row items-center q-mb-sm">
+              <div class="text-subtitle1">
+                <q-icon name="folder_open" class="q-mr-sm" />
+                Saved Explorations
+              </div>
+              <q-space />
+              <q-btn flat dense size="sm" icon="refresh" :loading="loadingSaved" @click="loadSavedExplorations" />
+            </div>
+
+            <q-spinner v-if="loadingSaved && savedExplorations.length === 0" color="primary" />
+
+            <q-list v-else-if="savedExplorations.length > 0" dense separator>
+              <q-item
+                v-for="exp in savedExplorations"
+                :key="exp.id"
+                clickable
+                v-ripple
+                @click="loadExploration(exp.id)"
+              >
+                <q-item-section>
+                  <q-item-label>
+                    {{ exp.name || `Exploration ${exp.id.slice(0, 8)}` }}
+                  </q-item-label>
+                  <q-item-label caption>
+                    {{ exp.seedPatentIds?.length || 1 }} seeds ·
+                    {{ exp.memberCount || exp._count?.members || 0 }} members ·
+                    Gen {{ exp.currentGeneration || 0 }}
+                  </q-item-label>
+                  <q-item-label caption class="text-grey-5">
+                    {{ new Date(exp.updatedAt).toLocaleDateString() }}
+                  </q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-btn
+                    flat dense round
+                    icon="delete"
+                    size="sm"
+                    color="negative"
+                    @click.stop="deleteSavedExploration(exp.id)"
+                  >
+                    <q-tooltip>Delete exploration</q-tooltip>
+                  </q-btn>
+                </q-item-section>
+              </q-item>
+            </q-list>
+
+            <div v-else class="text-body2 text-grey-5 q-pa-sm">
+              No saved explorations yet
+            </div>
+          </q-card-section>
+        </q-card>
 
         <!-- Card 1: Seed Patents -->
         <q-card class="q-mb-md">
@@ -583,17 +883,17 @@ onMounted(async () => {
 
         <!-- Card 2: Scoring Weights (after exploration) -->
         <q-card v-if="hasExploration" class="q-mb-md">
-          <q-card-section>
+          <q-card-section class="q-pb-none">
             <div class="row items-center q-mb-sm">
               <div class="text-subtitle1">
                 <q-icon name="tune" class="q-mr-sm" />
-                Scoring Weights
+                Scoring
               </div>
               <q-space />
               <q-btn flat dense size="sm" label="Reset" icon="restart_alt" @click="resetWeights" />
             </div>
 
-            <!-- Preset dropdown -->
+            <!-- Preset dropdown (always visible) -->
             <q-select
               v-model="selectedPreset"
               :options="Object.entries(presets).map(([k, v]) => ({ label: v.label, value: k, description: v.description }))"
@@ -602,7 +902,6 @@ onMounted(async () => {
               emit-value
               map-options
               clearable
-              class="q-mb-md"
               @update:model-value="(val: string | null) => val && applyPreset(val)"
             >
               <template v-slot:option="scope">
@@ -614,59 +913,70 @@ onMounted(async () => {
                 </q-item>
               </template>
             </q-select>
-
-            <!-- Dimension weight sliders -->
-            <div v-for="dim in WEIGHT_DIMENSIONS" :key="dim.key" class="q-mb-sm">
-              <div class="row items-center no-wrap">
-                <div class="text-caption col" style="min-width: 0">
-                  {{ dim.label }}
-                  <q-tooltip>{{ dim.description }}</q-tooltip>
-                </div>
-                <q-badge :color="dim.color" class="q-ml-sm" style="min-width: 36px; text-align: center">
-                  {{ formatPct(weights[dim.key]) }}
-                </q-badge>
-              </div>
-              <q-slider
-                v-model="weights[dim.key]"
-                :min="0"
-                :max="0.50"
-                :step="0.01"
-                :color="dim.color"
-                dense
-              />
-            </div>
-
-            <q-separator class="q-my-sm" />
-
-            <!-- Depth Decay -->
-            <div class="q-mb-sm">
-              <div class="row items-center no-wrap">
-                <div class="text-caption col">Depth Decay Rate</div>
-                <q-badge color="orange" class="q-ml-sm" style="min-width: 36px; text-align: center">
-                  {{ formatPct(weights.depthDecayRate) }}
-                </q-badge>
-              </div>
-              <q-slider
-                v-model="weights.depthDecayRate"
-                :min="0"
-                :max="0.50"
-                :step="0.01"
-                color="orange"
-                dense
-              />
-            </div>
-
-            <!-- Total weight indicator -->
-            <div class="row items-center q-mt-sm">
-              <div class="text-caption text-grey-7">Total dimension weight:</div>
-              <q-badge
-                :color="Math.abs(totalWeight - 1.0) < 0.02 ? 'positive' : 'warning'"
-                class="q-ml-sm"
-              >
-                {{ (totalWeight * 100).toFixed(0) }}%
-              </q-badge>
-            </div>
           </q-card-section>
+
+          <!-- Collapsible weight sliders -->
+          <q-expansion-item
+            dense
+            label="Weight Sliders"
+            icon="sliders"
+            header-class="text-caption text-grey-7"
+            :default-opened="false"
+          >
+            <q-card-section class="q-pt-none">
+              <!-- Dimension weight sliders -->
+              <div v-for="dim in WEIGHT_DIMENSIONS" :key="dim.key" class="q-mb-sm">
+                <div class="row items-center no-wrap">
+                  <div class="text-caption col" style="min-width: 0">
+                    {{ dim.label }}
+                    <q-tooltip>{{ dim.description }}</q-tooltip>
+                  </div>
+                  <q-badge :color="dim.color" class="q-ml-sm" style="min-width: 36px; text-align: center">
+                    {{ formatPct(weights[dim.key]) }}
+                  </q-badge>
+                </div>
+                <q-slider
+                  v-model="weights[dim.key]"
+                  :min="0"
+                  :max="0.50"
+                  :step="0.01"
+                  :color="dim.color"
+                  dense
+                />
+              </div>
+
+              <q-separator class="q-my-sm" />
+
+              <!-- Depth Decay -->
+              <div class="q-mb-sm">
+                <div class="row items-center no-wrap">
+                  <div class="text-caption col">Depth Decay Rate</div>
+                  <q-badge color="orange" class="q-ml-sm" style="min-width: 36px; text-align: center">
+                    {{ formatPct(weights.depthDecayRate) }}
+                  </q-badge>
+                </div>
+                <q-slider
+                  v-model="weights.depthDecayRate"
+                  :min="0"
+                  :max="0.50"
+                  :step="0.01"
+                  color="orange"
+                  dense
+                />
+              </div>
+
+              <!-- Total weight indicator -->
+              <div class="row items-center q-mt-sm">
+                <div class="text-caption text-grey-7">Total dimension weight:</div>
+                <q-badge
+                  :color="Math.abs(totalWeight - 1.0) < 0.02 ? 'positive' : 'warning'"
+                  class="q-ml-sm"
+                >
+                  {{ (totalWeight * 100).toFixed(0) }}%
+                </q-badge>
+              </div>
+            </q-card-section>
+          </q-expansion-item>
         </q-card>
 
         <!-- Card 3: Thresholds -->
@@ -837,23 +1147,31 @@ onMounted(async () => {
               />
             </div>
 
-            <!-- Search filter -->
-            <q-input
-              v-model="searchFilter"
-              dense outlined
-              placeholder="Search by patent ID, title, assignee, or sector..."
-              class="q-mb-md"
-            >
-              <template v-slot:append>
-                <q-icon name="search" />
-              </template>
-              <template v-slot:after v-if="searchFilter">
-                <q-btn flat dense icon="clear" @click="searchFilter = ''" />
-              </template>
-            </q-input>
-
-            <!-- Bulk actions bar -->
+            <!-- Search filter + Columns button -->
             <div class="row items-center q-gutter-sm q-mb-md">
+              <q-input
+                v-model="searchFilter"
+                dense outlined
+                placeholder="Search by patent ID, title, assignee, or sector..."
+                class="col"
+              >
+                <template v-slot:append>
+                  <q-icon v-if="!searchFilter" name="search" />
+                  <q-icon v-else name="clear" class="cursor-pointer" @click="searchFilter = ''" />
+                </template>
+              </q-input>
+              <q-btn
+                flat dense
+                icon="view_column"
+                label="Columns"
+                @click="gridColumns.showColumnDialog.value = true"
+              >
+                <q-badge color="primary" floating>{{ gridColumns.visibleCount.value }}</q-badge>
+              </q-btn>
+            </div>
+
+            <!-- Zone actions bar -->
+            <div class="row items-center q-gutter-sm q-mb-sm">
               <q-btn
                 dense no-caps flat
                 icon="check_circle"
@@ -870,6 +1188,17 @@ onMounted(async () => {
                 :disable="zoneCounts.candidates === 0"
                 @click="rejectAllBelowThreshold"
               />
+              <q-btn
+                dense no-caps flat
+                icon="biotech"
+                label="Enrich Data"
+                color="deep-purple"
+                :loading="enrichingData"
+                :disable="allCandidates.length === 0"
+                @click="enrichData"
+              >
+                <q-tooltip>Fetch IPR & prosecution data for all patents</q-tooltip>
+              </q-btn>
               <q-space />
               <q-btn
                 dense no-caps flat
@@ -877,12 +1206,43 @@ onMounted(async () => {
                 label="Save"
                 @click="showSaveDialog = true; saveName = explorationState?.name || ''"
               />
+            </div>
+
+            <!-- Selection bar -->
+            <div class="row items-center q-gutter-sm q-mb-md">
+              <q-badge :color="selectedCandidates.length > 0 ? 'primary' : 'grey'" class="q-py-xs q-px-sm">
+                {{ selectedCandidates.length }} selected
+              </q-badge>
+              <q-btn
+                dense no-caps flat size="sm"
+                label="Select Members"
+                icon="done_all"
+                @click="autoSelectMembers"
+                :disable="zoneCounts.members === 0"
+              >
+                <q-tooltip>Select all patents in member zone</q-tooltip>
+              </q-btn>
+              <q-btn
+                dense no-caps flat size="sm"
+                label="Select Displayed"
+                icon="select_all"
+                @click="selectAllDisplayed"
+                :disable="displayedCandidates.length === 0"
+              />
+              <q-btn
+                v-if="selectedCandidates.length > 0"
+                dense no-caps flat size="sm"
+                label="Clear"
+                icon="deselect"
+                @click="clearSelection"
+              />
+              <q-space />
               <q-btn
                 dense no-caps
                 icon="folder_special"
                 label="Create Focus Area"
                 color="primary"
-                :disable="zoneCounts.members === 0"
+                :disable="selectedCandidates.length === 0"
                 @click="showFocusAreaDialog = true; focusAreaName = ''; focusAreaDescription = ''"
               />
             </div>
@@ -893,6 +1253,8 @@ onMounted(async () => {
               :columns="tableColumns"
               row-key="patentId"
               v-model:pagination="pagination"
+              v-model:selected="selectedCandidates"
+              selection="multiple"
               flat bordered dense
               :loading="expanding"
             >
@@ -997,6 +1359,58 @@ onMounted(async () => {
                   />
                 </q-td>
               </template>
+
+              <!-- Competitor icon -->
+              <template v-slot:body-cell-isCompetitor="props">
+                <q-td :props="props">
+                  <q-icon
+                    v-if="props.row.isCompetitor"
+                    name="warning"
+                    color="red"
+                    size="18px"
+                  >
+                    <q-tooltip v-if="props.row.competitorName">{{ props.row.competitorName }}</q-tooltip>
+                  </q-icon>
+                  <span v-else class="text-grey-4">—</span>
+                </q-td>
+              </template>
+
+              <!-- IPR column -->
+              <template v-slot:body-cell-ipr="props">
+                <q-td :props="props">
+                  <template v-if="litigationData.get(props.row.patentId)">
+                    <q-badge
+                      v-if="litigationData.get(props.row.patentId)!.hasIPR"
+                      color="red"
+                    >
+                      {{ litigationData.get(props.row.patentId)!.iprCount }}
+                      <q-tooltip v-if="litigationData.get(props.row.patentId)!.iprTrials?.length">
+                        <div v-for="trial in litigationData.get(props.row.patentId)!.iprTrials" :key="trial.trialNumber" class="text-caption">
+                          {{ trial.trialNumber }} — {{ trial.trialType }} ({{ trial.status || 'unknown' }})
+                        </div>
+                      </q-tooltip>
+                    </q-badge>
+                    <span v-else class="text-grey-5">—</span>
+                  </template>
+                  <span v-else class="text-grey-4">·</span>
+                </q-td>
+              </template>
+
+              <!-- Prosecution column -->
+              <template v-slot:body-cell-prosecution="props">
+                <q-td :props="props">
+                  <template v-if="litigationData.get(props.row.patentId)?.hasProsecutionHistory">
+                    <span class="text-caption">
+                      {{ litigationData.get(props.row.patentId)!.prosecutionStatus || 'Yes' }}
+                    </span>
+                    <q-tooltip v-if="litigationData.get(props.row.patentId)!.officeActionCount">
+                      {{ litigationData.get(props.row.patentId)!.officeActionCount }} office actions,
+                      {{ litigationData.get(props.row.patentId)!.rejectionCount || 0 }} rejections
+                    </q-tooltip>
+                  </template>
+                  <span v-else class="text-grey-4">·</span>
+                </q-td>
+              </template>
             </q-table>
           </q-card-section>
         </q-card>
@@ -1064,7 +1478,7 @@ onMounted(async () => {
         </q-card-section>
         <q-card-section>
           <div class="text-body2 text-grey-7 q-mb-md">
-            Creating a focus area from {{ zoneCounts.members }} accepted members.
+            Creating a focus area from {{ selectedCandidates.length }} selected patents.
           </div>
           <q-input
             v-model="focusAreaName"
@@ -1094,6 +1508,17 @@ onMounted(async () => {
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Column Selector (shared component) -->
+    <GenericColumnSelector
+      v-model="gridColumns.showColumnDialog.value"
+      :columns="COLUMN_META"
+      :groups="COLUMN_GROUPS"
+      :visible-columns="gridColumns.visibleColumns.value"
+      @toggle-column="gridColumns.toggleColumn"
+      @toggle-group="gridColumns.toggleGroup"
+      @reset="gridColumns.resetVisibility"
+    />
   </q-page>
 </template>
 

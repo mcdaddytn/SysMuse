@@ -58,16 +58,23 @@ GET  /api/patent-families/filter-options
 
 ### Phase 4: Prosecution/IPR Enrichment
 
+**Patent Detail Fetching:**
+- External patents (not in portfolio) need basic details (title, assignee, etc.)
+- Enrichment automatically fetches missing patent details from PatentsView API
+- Details are cached locally for future use
+
 **Litigation Data Fetching:**
 - IPR proceedings from PTAB API (via `odp-ptab-client.ts`)
 - Prosecution history from File Wrapper API (via `odp-file-wrapper-client.ts`)
-- "Enrich Litigation Data" button fetches data for all results
+- "Enrich Litigation Data" button fetches both details AND litigation data
 - IPR column shows indicators with counts and tooltips
 - Summary chip shows IPR statistics
 
 **API Endpoints:**
 ```
-POST /api/patent-families/enrich-litigation
+POST /api/patent-families/fetch-details              # Fetch basic patent details only
+POST /api/patent-families/enrich-with-details        # Fetch details AND litigation (recommended)
+POST /api/patent-families/enrich-litigation          # Fetch litigation only (legacy)
 GET  /api/patent-families/litigation-status
 GET  /api/patent-families/ipr/:patentId
 GET  /api/patent-families/prosecution/:patentId
@@ -98,7 +105,10 @@ POST /api/patent-families/explorations/:id/enrich-litigation
 
 5. **Explore**: Execute the exploration to see all discovered patents
 
-6. **Enrich** (optional): Click "Enrich Litigation Data" to fetch IPR/prosecution history
+6. **Enrich** (optional): Click "Enrich Litigation Data" to:
+   - **Fetch patent details** (title, assignee, etc.) for external patents not yet in the system
+   - **Fetch IPR/prosecution history** for all patents
+   - Results table updates to show enriched data
 
 7. **Select & Create**: Select relevant patents and create a Focus Area
 
@@ -341,6 +351,8 @@ Phase 5 extends this to support `patent_family` with multi-stage execution.
   - [ ] Portfolio indicator
   - [ ] Competitor badges
   - [ ] IPR column (after enrichment)
+  - [ ] Patent ID tooltip with title, assignee, date, data status
+  - [ ] Data status icons (warning for not_found, help for not_attempted)
 - [ ] Click "Enrich Litigation Data"
 - [ ] Verify IPR indicators appear
 - [ ] Select patents and create Focus Area
@@ -358,6 +370,49 @@ Phase 5 extends this to support `patent_family` with multi-stage execution.
 ---
 
 ## Future Considerations
+
+### Advanced Relationship Calculations
+
+**Current Implementation (Siblings):**
+- Via parents (if ancestors > 0): Find children of seed's parents (other patents citing same prior art)
+- Via children (if descendants > 0): Find other parents of seed's children (co-cited patents)
+- Automatically uses available direction based on config
+
+**Cousin Implementation (Not Yet Implemented):**
+- First cousins: Children of siblings
+- Second cousins: Children of first cousins (or grandchildren of seed's parents' siblings)
+- Should use same bidirectional logic as siblings
+- Need filters to prevent explosion (sector, CPC, competitor constraints)
+
+**Advanced: Patent Distance Calculation:**
+
+Instead of rigid relationship categories, calculate a "citation distance" between patents:
+
+```typescript
+interface PatentDistance {
+  patentA: string;
+  patentB: string;
+  distance: number;           // Lower = more related
+  pathTypes: string[];        // ['shared_parent', 'sibling', 'co_cited']
+  sharedCitations: number;    // Patents that cite both
+  sharedPriorArt: number;     // Prior art cited by both
+  cpcOverlap: number;         // 0-1 similarity in CPC codes
+}
+```
+
+Use cases:
+- Prioritize patents with multiple relationship paths over single-link relations
+- Rank family members by relevance rather than just generation depth
+- Identify "bridge" patents that connect different technology areas
+- Weight siblings/cousins discovered through multiple paths higher
+
+### Application Citations
+
+Current backward citations now include both:
+- `us_patent_citations` - cited granted patents
+- `us_application_citations` - cited applications (some may have granted)
+
+Future: Option to control whether applications are included in family expansion.
 
 ### Company Abstraction Layer
 

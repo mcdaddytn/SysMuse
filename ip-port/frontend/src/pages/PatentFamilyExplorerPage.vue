@@ -176,18 +176,23 @@ const tableColumns = computed(() => [
   { name: 'score', label: 'Score', field: 'score', sortable: true, align: 'right' as const, format: (val: number | undefined) => val?.toFixed(1) || '--' },
 ]);
 
-const iprCounts = computed(() => {
+const enrichmentCounts = computed(() => {
   let hasIPR = 0;
+  let hasProsecution = 0;
   let checked = 0;
   for (const m of members.value) {
     const lit = litigationData.value.get(m.patentId);
     if (lit) {
       checked++;
       if (lit.hasIPR) hasIPR++;
+      if (lit.hasProsecutionHistory) hasProsecution++;
     }
   }
-  return { hasIPR, checked, total: members.value.length };
+  return { hasIPR, hasProsecution, checked, total: members.value.length };
 });
+
+// Legacy alias for template
+const iprCounts = computed(() => enrichmentCounts.value);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Methods
@@ -325,32 +330,54 @@ function onRowClick(_evt: Event, row: EnrichedFamilyMember) {
   router.push({ name: 'patent-detail', params: { id: row.patentId } });
 }
 
-// Litigation enrichment
+// Litigation enrichment (also fetches basic patent details first)
+// NOTE: This enriches ALL family members (up to 50), not just current page
 async function enrichLitigation() {
   if (members.value.length === 0) return;
 
   enrichingLitigation.value = true;
   try {
+    // Enrich all members (API limits to first 50)
     const patentIds = members.value.map(m => m.patentId);
-    const result = await patentFamilyApi.enrichLitigation(patentIds, {
+
+    // Use enrichWithDetails to fetch patent details AND litigation data
+    const result = await patentFamilyApi.enrichWithDetails(patentIds, {
+      fetchBasicDetails: true,
       includeIpr: true,
       includeProsecution: true,
     });
 
-    // Store results in map for quick lookup
-    for (const indicator of result.indicators) {
+    // Store litigation results in map for quick lookup
+    for (const indicator of result.litigation.indicators) {
       litigationData.value.set(indicator.patentId, indicator);
     }
 
-    const iprCount = result.indicators.filter(i => i.hasIPR).length;
+    // Count results
+    const iprCount = result.litigation.indicators.filter(i => i.hasIPR).length;
+    const prosCount = result.litigation.indicators.filter(i => i.hasProsecutionHistory).length;
+    const detailsMsg = result.detailsFetched.fetched > 0
+      ? `Fetched details: ${result.detailsFetched.fetched}. `
+      : '';
+    const truncatedMsg = result.truncated
+      ? ` (first 50 of ${patentIds.length})`
+      : '';
+
     $q.notify({
       type: 'positive',
-      message: `Enriched ${result.enriched} patents. ${iprCount} have IPR history.`,
+      message: `${detailsMsg}IPR: ${iprCount}, Prosecution: ${prosCount}${truncatedMsg}`,
+      timeout: 5000,
     });
+
+    // If we fetched new patent details, we should reload the exploration to show updated titles/assignees
+    if (result.detailsFetched.fetched > 0) {
+      // Re-run exploration to get updated member details
+      const refreshed = await patentFamilyApi.executeMultiSeed(config.value);
+      members.value = refreshed.members;
+    }
   } catch (err) {
     $q.notify({
       type: 'negative',
-      message: 'Failed to enrich litigation data',
+      message: 'Failed to enrich data',
     });
   } finally {
     enrichingLitigation.value = false;
@@ -359,6 +386,17 @@ async function enrichLitigation() {
 
 function getLitigationIndicator(patentId: string): LitigationIndicator | undefined {
   return litigationData.value.get(patentId);
+}
+
+function getDataStatusLabel(status: string): string {
+  switch (status) {
+    case 'portfolio': return 'In portfolio (complete data)';
+    case 'cached': return 'Retrieved from PatentsView';
+    case 'not_attempted': return 'Not yet retrieved';
+    case 'not_found': return 'Not found in database';
+    case 'partial': return 'Partial data available';
+    default: return status;
+  }
 }
 
 // Debounced preview
@@ -687,25 +725,48 @@ onMounted(async () => {
                 {{ portfolioCounts.external }} external
               </q-chip>
               <q-chip
-                v-if="iprCounts.checked > 0"
+                v-if="enrichmentCounts.checked > 0"
                 dense
                 icon="gavel"
-                :color="iprCounts.hasIPR > 0 ? 'negative' : 'positive'"
+                :color="enrichmentCounts.hasIPR > 0 ? 'negative' : 'positive'"
                 text-color="white"
               >
-                {{ iprCounts.hasIPR }} with IPR ({{ iprCounts.checked }}/{{ iprCounts.total }} checked)
+                {{ enrichmentCounts.hasIPR }} IPR
+                <q-tooltip>{{ enrichmentCounts.hasIPR }} patents have IPR proceedings</q-tooltip>
+              </q-chip>
+              <q-chip
+                v-if="enrichmentCounts.checked > 0"
+                dense
+                icon="description"
+                :color="enrichmentCounts.hasProsecution > 0 ? 'info' : 'grey'"
+                text-color="white"
+              >
+                {{ enrichmentCounts.hasProsecution }} prosecution
+                <q-tooltip>{{ enrichmentCounts.hasProsecution }} patents have prosecution history</q-tooltip>
+              </q-chip>
+              <q-chip
+                v-if="enrichmentCounts.checked > 0 && enrichmentCounts.checked < enrichmentCounts.total"
+                dense
+                outline
+              >
+                {{ enrichmentCounts.checked }}/{{ enrichmentCounts.total }} enriched
               </q-chip>
               <q-space />
               <q-btn
                 flat
                 dense
                 icon="gavel"
-                label="Enrich Litigation Data"
+                label="Enrich Data"
                 :loading="enrichingLitigation"
                 :disable="members.length === 0"
                 @click="enrichLitigation"
               >
-                <q-tooltip>Fetch IPR and prosecution history for all patents</q-tooltip>
+                <q-tooltip>
+                  Fetch for all {{ members.length }} patents (first 50):
+                  <br>• Patent details (title, assignee) for external patents
+                  <br>• IPR proceedings from PTAB
+                  <br>• Prosecution history from USPTO
+                </q-tooltip>
               </q-btn>
             </div>
 
@@ -725,13 +786,51 @@ onMounted(async () => {
             >
               <template v-slot:body-cell-patentId="props">
                 <q-td :props="props">
-                  <router-link
-                    :to="{ name: 'patent-detail', params: { id: props.row.patentId } }"
-                    class="text-primary"
-                    @click.stop
-                  >
-                    {{ props.row.patentId }}
-                  </router-link>
+                  <div class="row items-center no-wrap">
+                    <router-link
+                      :to="{ name: 'patent-detail', params: { id: props.row.patentId } }"
+                      class="text-primary"
+                      @click.stop
+                    >
+                      {{ props.row.patentId }}
+                    </router-link>
+                    <q-icon
+                      v-if="props.row.dataStatus === 'not_attempted'"
+                      name="help_outline"
+                      size="14px"
+                      color="grey-5"
+                      class="q-ml-xs"
+                    >
+                      <q-tooltip>Data not yet retrieved</q-tooltip>
+                    </q-icon>
+                    <q-icon
+                      v-else-if="props.row.dataStatus === 'not_found'"
+                      name="error_outline"
+                      size="14px"
+                      color="warning"
+                      class="q-ml-xs"
+                    >
+                      <q-tooltip>{{ props.row.dataStatusReason || 'Patent not found in database' }}</q-tooltip>
+                    </q-icon>
+                    <q-icon
+                      v-else-if="props.row.dataStatus === 'partial'"
+                      name="warning"
+                      size="14px"
+                      color="orange"
+                      class="q-ml-xs"
+                    >
+                      <q-tooltip>{{ props.row.dataStatusReason || 'Incomplete data' }}</q-tooltip>
+                    </q-icon>
+                  </div>
+                  <q-tooltip v-if="props.row.patentTitle">
+                    <div class="text-bold q-mb-xs">{{ props.row.patentTitle }}</div>
+                    <div>{{ props.row.assignee }}</div>
+                    <div v-if="props.row.patentDate">Date: {{ props.row.patentDate }}</div>
+                    <div v-if="props.row.remainingYears">Years left: {{ props.row.remainingYears?.toFixed(1) }}</div>
+                    <div class="text-caption text-grey-4 q-mt-xs">
+                      Status: {{ getDataStatusLabel(props.row.dataStatus) }}
+                    </div>
+                  </q-tooltip>
                 </q-td>
               </template>
 

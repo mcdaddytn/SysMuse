@@ -10,6 +10,7 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
 import { getCompetitorMatcher, type CompetitorMatch } from '../../../services/competitor-config.js';
+import { fetchAndCachePatents, hasPatentData } from './patent-fetch-service.js';
 
 const prisma = new PrismaClient();
 
@@ -104,6 +105,13 @@ export interface PreviewResult {
   }>;
 }
 
+export type DataRetrievalStatus =
+  | 'portfolio'       // Data from portfolio (complete)
+  | 'cached'          // Data retrieved and cached
+  | 'not_attempted'   // Not yet attempted to retrieve
+  | 'not_found'       // Attempted but not found (too recent, invalid ID)
+  | 'partial';        // Some data available but incomplete
+
 export interface EnrichedFamilyMember {
   patentId: string;
   relationToSeed: string;
@@ -120,6 +128,8 @@ export interface EnrichedFamilyMember {
   competitorMatch?: CompetitorMatch | null;
   seedPatentIds: string[];  // Which seeds this was discovered from
   remainingYears?: number;
+  dataStatus: DataRetrievalStatus;  // Status of patent data retrieval
+  dataStatusReason?: string;        // Explanation (e.g., "Too recent for PatentsView")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,16 +234,63 @@ function loadPatentDetail(patentId: string, portfolioMap: Map<string, PortfolioP
     const pvPath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
     if (fs.existsSync(pvPath)) {
       const data = JSON.parse(fs.readFileSync(pvPath, 'utf-8'));
+      const cpcCodes = data.cpc_current?.map((c: any) => c.cpc_group_id || c.cpc_subgroup_id).filter(Boolean) || [];
       return {
         patent_id: patentId,
         patent_title: data.patent_title,
-        assignee: data.assignees?.[0]?.assignee_organization || '',
+        assignee: data.assignees?.[0]?.assignee_organization || data.assignees?.[0]?.assignee_individual || '',
         patent_date: data.patent_date,
+        cpc_codes: cpcCodes,
+        forward_citations: data.patent_num_times_cited_by_us_patents,
       };
     }
   } catch { /* skip */ }
 
   return null;
+}
+
+/**
+ * Determine the data retrieval status for a patent
+ */
+function getPatentDataStatus(
+  patentId: string,
+  portfolioMap: Map<string, PortfolioPatent>,
+  detail: PatentDetail | null
+): { status: DataRetrievalStatus; reason?: string } {
+  // In portfolio = complete data
+  if (portfolioMap.has(patentId)) {
+    return { status: 'portfolio' };
+  }
+
+  // Check if we have cached data
+  const pvCachePath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
+  const parentDetailsCachePath = path.join(process.cwd(), 'cache/patent-families/parent-details', `${patentId}.json`);
+
+  if (detail && detail.patent_title) {
+    // We have data - determine source
+    if (fs.existsSync(pvCachePath)) {
+      return { status: 'cached' };
+    }
+    if (fs.existsSync(parentDetailsCachePath)) {
+      return { status: 'cached' };
+    }
+    return { status: 'cached' };
+  }
+
+  // No data - check if we attempted to fetch
+  // Check if patent is in the "failed" list (very recent patents)
+  const patentNum = parseInt(patentId, 10);
+  if (patentNum >= 12000000) {
+    // Patents in 12M+ range are from 2024+ and may not be in PatentsView yet
+    return { status: 'not_found', reason: 'Too recent for PatentsView database' };
+  }
+
+  // Check if PatentsView cache exists but is empty/failed
+  if (fs.existsSync(pvCachePath)) {
+    return { status: 'partial', reason: 'Cached but incomplete data' };
+  }
+
+  return { status: 'not_attempted' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,16 +323,34 @@ async function fetchBackwardCitationsLive(patentId: string): Promise<string[] | 
     const { createPatentsViewClient } = await import('../../../clients/patentsview-client.js');
     const client = createPatentsViewClient();
 
-    // Get backward citations via the patent's us_patent_citations field
+    // Get backward citations via the patent's us_patent_citations
+    // Note: us_application_citations is not supported in search endpoint
     const result = await client.searchPatents({
       query: { patent_id: patentId },
       fields: ['patent_id', 'us_patent_citations'],
     });
 
-    if (result.patents.length === 0) return [];
+    if (result.patents.length === 0) {
+      // Patent not found - cache empty result
+      const cacheDir = path.join(process.cwd(), 'cache/patent-families/parents');
+      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(cacheDir, `${patentId}.json`),
+        JSON.stringify({
+          patent_id: patentId,
+          parent_patent_ids: [],
+          parent_count: 0,
+          fetched_at: new Date().toISOString(),
+          note: 'Patent not found in PatentsView',
+        }, null, 2)
+      );
+      return [];
+    }
 
     const patent = result.patents[0];
-    const parentIds = (patent.us_patent_citations || [])
+
+    // Collect cited patents
+    const citedPatentIds = (patent.us_patent_citations || [])
       .map((c: any) => c.cited_patent_id || c.cited_patent_number)
       .filter(Boolean) as string[];
 
@@ -284,12 +359,23 @@ async function fetchBackwardCitationsLive(patentId: string): Promise<string[] | 
     if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
     fs.writeFileSync(
       path.join(cacheDir, `${patentId}.json`),
-      JSON.stringify({ patent_id: patentId, parent_patent_ids: parentIds }, null, 2)
+      JSON.stringify({
+        patent_id: patentId,
+        parent_patent_ids: citedPatentIds,
+        parent_count: citedPatentIds.length,
+        fetched_at: new Date().toISOString(),
+      }, null, 2)
     );
 
-    return parentIds;
-  } catch (err) {
-    console.warn(`[PatentFamily] Live API fetch failed for backward citations of ${patentId}:`, err);
+    return citedPatentIds;
+  } catch (err: any) {
+    // Log at debug level for expected errors (patent not in database, API limits)
+    const isExpected = err?.statusCode === 400 || err?.statusCode === 404;
+    if (isExpected) {
+      console.log(`[PatentFamily] No backward citations available for ${patentId} (${err?.statusCode || 'unknown'})`);
+    } else {
+      console.warn(`[PatentFamily] Live API fetch failed for backward citations of ${patentId}:`, err);
+    }
     return null;
   }
 }
@@ -993,24 +1079,52 @@ export async function executeMultiSeedExploration(
       }
     }
 
-    // Siblings
+    // Siblings - find through available directions based on config
+    // If ancestors > 0: siblings = children of parents (other patents citing same prior art)
+    // If descendants > 0: co-siblings = other children of child's parents (patents with shared citing patents)
     if (config.includeSiblings) {
-      const seedParents = await getBackwardCitations(seedPatentId, allowLive);
-      for (const parentId of seedParents) {
-        const siblings = await getForwardCitations(parentId, allowLive);
-        for (const siblingId of siblings) {
-          if (!visited.has(siblingId)) {
-            visited.add(siblingId);
-            if (!patentToSeeds.has(siblingId)) {
-              patentToSeeds.set(siblingId, new Set());
-            }
-            patentToSeeds.get(siblingId)!.add(seedPatentId);
-            if (!patentToRelation.has(siblingId)) {
-              patentToRelation.set(siblingId, { relation: 'sibling', depth: 0 });
-            }
-          } else {
-            patentToSeeds.get(siblingId)?.add(seedPatentId);
+      const siblingCandidates = new Set<string>();
+
+      // Method 1: Via parents (if we're traversing ancestors)
+      // Siblings = other patents that cite the same prior art as seed
+      if (config.maxAncestorDepth > 0) {
+        const seedParents = await getBackwardCitations(seedPatentId, allowLive);
+        for (const parentId of seedParents) {
+          const siblingsViaParent = await getForwardCitations(parentId, allowLive);
+          for (const sibId of siblingsViaParent) {
+            if (sibId !== seedPatentId) siblingCandidates.add(sibId);
           }
+        }
+      }
+
+      // Method 2: Via children (if we're traversing descendants)
+      // Co-siblings = other patents cited by the same patents that cite seed
+      // This is useful when seed has no parents (like patent 10944691)
+      if (config.maxDescendantDepth > 0) {
+        const seedChildren = await getForwardCitations(seedPatentId, allowLive);
+        // Sample children to avoid explosion (first 10)
+        const sampledChildren = seedChildren.slice(0, 10);
+        for (const childId of sampledChildren) {
+          const childParents = await getBackwardCitations(childId, allowLive);
+          for (const coSiblingId of childParents) {
+            if (coSiblingId !== seedPatentId) siblingCandidates.add(coSiblingId);
+          }
+        }
+      }
+
+      // Add all sibling candidates
+      for (const siblingId of siblingCandidates) {
+        if (!visited.has(siblingId)) {
+          visited.add(siblingId);
+          if (!patentToSeeds.has(siblingId)) {
+            patentToSeeds.set(siblingId, new Set());
+          }
+          patentToSeeds.get(siblingId)!.add(seedPatentId);
+          if (!patentToRelation.has(siblingId)) {
+            patentToRelation.set(siblingId, { relation: 'sibling', depth: 0 });
+          }
+        } else {
+          patentToSeeds.get(siblingId)?.add(seedPatentId);
         }
       }
     }
@@ -1076,6 +1190,13 @@ export async function executeMultiSeedExploration(
       remainingYears = Math.max(0, (expiryDate.getTime() - Date.now()) / (365.25 * 24 * 60 * 60 * 1000));
     }
 
+    // Get data retrieval status
+    const { status: dataStatus, reason: dataStatusReason } = getPatentDataStatus(
+      candidate.patentId,
+      portfolioMap,
+      detail
+    );
+
     members.push({
       patentId: candidate.patentId,
       relationToSeed: candidate.relation,
@@ -1092,6 +1213,8 @@ export async function executeMultiSeedExploration(
       competitorMatch,
       seedPatentIds: candidate.seedPatentIds,
       remainingYears,
+      dataStatus,
+      dataStatusReason,
     });
   }
 
@@ -1453,4 +1576,123 @@ export function getCachedLitigationStatus(patentIds: string[]): EnrichmentStatus
       hasProsecutionHistory: hasProsecution,
     };
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Patent Detail Fetching
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FetchPatentDetailsResult {
+  fetched: number;
+  alreadyCached: number;
+  failed: number;
+  patentIds: {
+    fetched: string[];
+    alreadyCached: string[];
+    failed: string[];
+  };
+}
+
+/**
+ * Fetch basic patent details for external patents that don't have data yet.
+ * This is called before enrichment or when viewing patents in Family Explorer.
+ */
+export async function fetchMissingPatentDetails(
+  patentIds: string[]
+): Promise<FetchPatentDetailsResult> {
+  const portfolioMap = loadPortfolioMap();
+
+  // Find patents that need fetching (not in portfolio and not cached)
+  const needsFetching: string[] = [];
+  const alreadyCached: string[] = [];
+
+  for (const patentId of patentIds) {
+    // Skip portfolio patents - they have all the data
+    if (portfolioMap.has(patentId)) {
+      alreadyCached.push(patentId);
+      continue;
+    }
+
+    // Check if we already have data
+    if (hasPatentData(patentId)) {
+      alreadyCached.push(patentId);
+      continue;
+    }
+
+    needsFetching.push(patentId);
+  }
+
+  if (needsFetching.length === 0) {
+    console.log(`[PatentFamily] All ${patentIds.length} patents already have data`);
+    return {
+      fetched: 0,
+      alreadyCached: alreadyCached.length,
+      failed: 0,
+      patentIds: { fetched: [], alreadyCached, failed: [] },
+    };
+  }
+
+  console.log(`[PatentFamily] Fetching details for ${needsFetching.length} patents...`);
+
+  try {
+    const result = await fetchAndCachePatents(needsFetching);
+
+    return {
+      fetched: result.fetched.length,
+      alreadyCached: alreadyCached.length + result.alreadyCached.length,
+      failed: result.failed.length,
+      patentIds: {
+        fetched: result.fetched,
+        alreadyCached: [...alreadyCached, ...result.alreadyCached],
+        failed: result.failed,
+      },
+    };
+  } catch (err) {
+    console.error('[PatentFamily] Failed to fetch patent details:', err);
+    return {
+      fetched: 0,
+      alreadyCached: alreadyCached.length,
+      failed: needsFetching.length,
+      patentIds: { fetched: [], alreadyCached, failed: needsFetching },
+    };
+  }
+}
+
+/**
+ * Enrich patents with both basic details AND litigation data.
+ * This ensures patent title/assignee/etc are available before IPR/prosecution enrichment.
+ */
+export async function enrichPatentsWithDetails(
+  patentIds: string[],
+  options: {
+    fetchBasicDetails?: boolean;
+    includeIpr?: boolean;
+    includeProsecution?: boolean;
+  } = {}
+): Promise<{
+  detailsFetched: FetchPatentDetailsResult;
+  litigation: { enriched: number; indicators: LitigationIndicator[] };
+}> {
+  const {
+    fetchBasicDetails = true,
+    includeIpr = true,
+    includeProsecution = true
+  } = options;
+
+  // Step 1: Fetch basic patent details first
+  let detailsFetched: FetchPatentDetailsResult = {
+    fetched: 0,
+    alreadyCached: patentIds.length,
+    failed: 0,
+    patentIds: { fetched: [], alreadyCached: patentIds, failed: [] },
+  };
+
+  if (fetchBasicDetails) {
+    detailsFetched = await fetchMissingPatentDetails(patentIds);
+  }
+
+  // Step 2: Enrich with litigation data
+  const litigation = await enrichWithLitigation(patentIds, { includeIpr, includeProsecution });
+
+  return { detailsFetched, litigation };
 }

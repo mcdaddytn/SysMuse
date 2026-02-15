@@ -1327,6 +1327,13 @@ export interface CompetitorMatch {
   pattern: string;
 }
 
+export type DataRetrievalStatus =
+  | 'portfolio'       // Data from portfolio (complete)
+  | 'cached'          // Data retrieved and cached
+  | 'not_attempted'   // Not yet attempted to retrieve
+  | 'not_found'       // Attempted but not found (too recent, invalid ID)
+  | 'partial';        // Some data available but incomplete
+
 export interface EnrichedFamilyMember {
   patentId: string;
   relationToSeed: string;
@@ -1343,6 +1350,8 @@ export interface EnrichedFamilyMember {
   competitorMatch?: CompetitorMatch | null;
   seedPatentIds: string[];
   remainingYears?: number;
+  dataStatus: DataRetrievalStatus;
+  dataStatusReason?: string;
 }
 
 export interface MultiSeedExplorationResult {
@@ -1390,6 +1399,28 @@ export interface EnrichmentResult {
   enriched: number;
   total: number;
   indicators: LitigationIndicator[];
+  truncated: boolean;
+}
+
+export interface FetchPatentDetailsResult {
+  fetched: number;
+  alreadyCached: number;
+  failed: number;
+  truncated: boolean;
+  patentIds: {
+    fetched: string[];
+    alreadyCached: string[];
+    failed: string[];
+  };
+}
+
+export interface EnrichWithDetailsResult {
+  detailsFetched: Omit<FetchPatentDetailsResult, 'truncated'>;
+  litigation: {
+    enriched: number;
+    indicators: LitigationIndicator[];
+  };
+  total: number;
   truncated: boolean;
 }
 
@@ -1541,6 +1572,28 @@ export const patentFamilyApi = {
     options?: { patentIds?: string[]; includeIpr?: boolean; includeProsecution?: boolean }
   ): Promise<EnrichmentResult & { explorationId: string }> {
     const { data } = await api.post(`/patent-families/explorations/${explorationId}/enrich-litigation`, options);
+    return data;
+  },
+
+  // Fetch basic patent details (title, assignee, etc.) for external patents
+  async fetchPatentDetails(patentIds: string[]): Promise<FetchPatentDetailsResult> {
+    const { data } = await api.post('/patent-families/fetch-details', { patentIds });
+    return data;
+  },
+
+  // Fetch patent details AND litigation data in one call (recommended for enrichment)
+  async enrichWithDetails(
+    patentIds: string[],
+    options?: {
+      fetchBasicDetails?: boolean;
+      includeIpr?: boolean;
+      includeProsecution?: boolean;
+    }
+  ): Promise<EnrichWithDetailsResult> {
+    const { data } = await api.post('/patent-families/enrich-with-details', {
+      patentIds,
+      ...options,
+    });
     return data;
   },
 };

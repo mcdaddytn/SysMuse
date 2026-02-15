@@ -23,6 +23,8 @@ import {
   getCachedLitigationStatus,
   checkPatentIPR,
   checkPatentProsecution,
+  fetchMissingPatentDetails,
+  enrichPatentsWithDetails,
   type MultiSeedConfig,
   type MergeStrategy,
 } from '../services/patent-family-service.js';
@@ -554,6 +556,73 @@ router.post('/explorations/:id/enrich-litigation', async (req: Request, res: Res
   } catch (error) {
     console.error('Error enriching exploration:', error);
     res.status(500).json({ error: 'Failed to enrich exploration' });
+  }
+});
+
+/**
+ * POST /fetch-details
+ * Fetch basic patent details (title, assignee, etc.) for external patents
+ * Call this before viewing patents or doing enrichment
+ */
+router.post('/fetch-details', async (req: Request, res: Response) => {
+  try {
+    const { patentIds } = req.body;
+
+    if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds array is required' });
+    }
+
+    // Limit batch size to avoid overwhelming the API
+    const limitedIds = patentIds.slice(0, 100);
+
+    const result = await fetchMissingPatentDetails(limitedIds);
+
+    res.json({
+      ...result,
+      truncated: patentIds.length > 100,
+    });
+  } catch (error) {
+    console.error('Error fetching patent details:', error);
+    res.status(500).json({ error: 'Failed to fetch patent details' });
+  }
+});
+
+/**
+ * POST /enrich-with-details
+ * Fetch patent details AND litigation data in one call
+ * This is the recommended endpoint for enrichment - ensures basic data is present first
+ */
+router.post('/enrich-with-details', async (req: Request, res: Response) => {
+  try {
+    const {
+      patentIds,
+      fetchBasicDetails = true,
+      includeIpr = true,
+      includeProsecution = true
+    } = req.body;
+
+    if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds array is required' });
+    }
+
+    // Limit batch size
+    const limitedIds = patentIds.slice(0, 50);
+
+    const result = await enrichPatentsWithDetails(limitedIds, {
+      fetchBasicDetails,
+      includeIpr,
+      includeProsecution,
+    });
+
+    res.json({
+      detailsFetched: result.detailsFetched,
+      litigation: result.litigation,
+      total: limitedIds.length,
+      truncated: patentIds.length > 50,
+    });
+  } catch (error) {
+    console.error('Error enriching patents with details:', error);
+    res.status(500).json({ error: 'Failed to enrich patents' });
   }
 });
 

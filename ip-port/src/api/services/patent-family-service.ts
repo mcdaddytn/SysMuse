@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
+import { getCompetitorMatcher, type CompetitorMatch } from '../../../services/competitor-config.js';
 
 const prisma = new PrismaClient();
 
@@ -58,6 +59,67 @@ interface PatentDetail {
   forward_citations?: number;
   score?: number;
   cpc_codes?: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Seed Exploration Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type MergeStrategy = 'UNION' | 'INTERSECTION';
+
+export interface MultiSeedConfig {
+  seedPatentIds: string[];
+  maxAncestorDepth: number;
+  maxDescendantDepth: number;
+  includeSiblings: boolean;
+  includeCousins: boolean;
+  limitToSectors: string[];
+  limitToCpcPrefixes: string[];
+  limitToCompetitors: string[];
+  limitToAffiliates: string[];
+  requireInPortfolio: boolean;
+  mergeStrategy: MergeStrategy;
+  minFilingYear?: number;
+}
+
+export interface PreviewResult {
+  estimatedMembers: {
+    total: number;
+    parents: number;
+    children: number;
+    siblings: number;
+    seeds: number;
+  };
+  seedOverlap: {
+    sharedCitationsCount: number;
+    commonSectors: string[];
+  };
+  cachedDataAvailable: number;
+  estimatedApiCalls: number;
+  seedDetails: Array<{
+    patentId: string;
+    title?: string;
+    inPortfolio: boolean;
+    hasCachedCitations: boolean;
+  }>;
+}
+
+export interface EnrichedFamilyMember {
+  patentId: string;
+  relationToSeed: string;
+  generationDepth: number;
+  inPortfolio: boolean;
+  patentTitle: string;
+  assignee: string;
+  patentDate: string;
+  primarySector: string;
+  superSector: string;
+  forwardCitations?: number;
+  score?: number;
+  affiliate: string;
+  competitorMatch?: CompetitorMatch | null;
+  seedPatentIds: string[];  // Which seeds this was discovered from
+  remainingYears?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -747,4 +809,648 @@ export function getCacheStatus(patentId: string) {
     hasBackwardCitations: fs.existsSync(bwdPath),
     hasParentDetails: fs.existsSync(detailPath),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Seed Exploration Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Preview multi-seed exploration results without executing full BFS
+ */
+export async function previewMultiSeedExploration(config: MultiSeedConfig): Promise<PreviewResult> {
+  const portfolioMap = loadPortfolioMap();
+  const allowLive = false; // Preview only uses cached data
+
+  const seedDetails: PreviewResult['seedDetails'] = [];
+  let totalParents = 0;
+  let totalChildren = 0;
+  let totalSiblings = 0;
+
+  const allCitedPatents = new Set<string>();
+  const allCitingPatents = new Set<string>();
+
+  for (const seedPatentId of config.seedPatentIds) {
+    const inPortfolio = portfolioMap.has(seedPatentId);
+    const fwdPath = path.join(process.cwd(), 'cache/api/patentsview/forward-citations', `${seedPatentId}.json`);
+    const bwdPath = path.join(process.cwd(), 'cache/patent-families/parents', `${seedPatentId}.json`);
+    const hasCachedCitations = fs.existsSync(fwdPath) || fs.existsSync(bwdPath);
+    const detail = loadPatentDetail(seedPatentId, portfolioMap);
+
+    seedDetails.push({
+      patentId: seedPatentId,
+      title: detail?.patent_title,
+      inPortfolio,
+      hasCachedCitations,
+    });
+
+    // Count immediate parents (depth 1)
+    const parents = await getBackwardCitations(seedPatentId, allowLive);
+    totalParents += parents.length;
+    parents.forEach(p => allCitedPatents.add(p));
+
+    // Count immediate children (depth 1)
+    const children = await getForwardCitations(seedPatentId, allowLive);
+    totalChildren += children.length;
+    children.forEach(c => allCitingPatents.add(c));
+
+    // Estimate siblings
+    if (config.includeSiblings) {
+      for (const parentId of parents.slice(0, 3)) { // Sample first 3 parents
+        const siblingCandidates = await getForwardCitations(parentId, allowLive);
+        totalSiblings += siblingCandidates.length;
+      }
+    }
+  }
+
+  // Calculate seed overlap (shared citations indicate related patents)
+  const sharedCitationsCount = config.seedPatentIds.length > 1
+    ? [...allCitedPatents].filter(p => allCitingPatents.has(p)).length
+    : 0;
+
+  // Collect common sectors
+  const sectorCounts = new Map<string, number>();
+  for (const detail of seedDetails) {
+    const patent = loadPatentDetail(detail.patentId, portfolioMap);
+    if (patent?.primary_sector) {
+      sectorCounts.set(patent.primary_sector, (sectorCounts.get(patent.primary_sector) || 0) + 1);
+    }
+  }
+  const commonSectors = [...sectorCounts.entries()]
+    .filter(([_, count]) => count > 1)
+    .map(([sector]) => sector);
+
+  const cachedDataAvailable = seedDetails.filter(s => s.hasCachedCitations).length;
+  const estimatedApiCalls = (config.seedPatentIds.length - cachedDataAvailable) * 2; // 2 calls per seed (fwd + bwd)
+
+  // Rough estimate: apply depth multiplier
+  const depthMultiplier = (config.maxAncestorDepth + config.maxDescendantDepth) / 2;
+  const estimatedTotal = Math.round(
+    config.seedPatentIds.length +
+    (totalParents * depthMultiplier) / config.seedPatentIds.length +
+    (totalChildren * depthMultiplier) / config.seedPatentIds.length +
+    totalSiblings / 3
+  );
+
+  return {
+    estimatedMembers: {
+      total: Math.min(estimatedTotal, MAX_FAMILY_SIZE),
+      parents: Math.round(totalParents * depthMultiplier / config.seedPatentIds.length),
+      children: Math.round(totalChildren * depthMultiplier / config.seedPatentIds.length),
+      siblings: Math.round(totalSiblings / 3),
+      seeds: config.seedPatentIds.length,
+    },
+    seedOverlap: {
+      sharedCitationsCount,
+      commonSectors,
+    },
+    cachedDataAvailable,
+    estimatedApiCalls,
+    seedDetails,
+  };
+}
+
+/**
+ * Execute multi-seed exploration with merge strategy
+ */
+export async function executeMultiSeedExploration(
+  explorationId: string,
+  config: MultiSeedConfig,
+): Promise<EnrichedFamilyMember[]> {
+  const portfolioMap = loadPortfolioMap();
+  const allowLive = !!process.env.PATENTSVIEW_API_KEY;
+
+  // Track which seeds discovered each patent
+  const patentToSeeds = new Map<string, Set<string>>();
+  const patentToRelation = new Map<string, { relation: string; depth: number }>();
+
+  // Run BFS for each seed
+  for (const seedPatentId of config.seedPatentIds) {
+    const visited = new Set<string>();
+    visited.add(seedPatentId);
+
+    // Record seed
+    if (!patentToSeeds.has(seedPatentId)) {
+      patentToSeeds.set(seedPatentId, new Set());
+    }
+    patentToSeeds.get(seedPatentId)!.add(seedPatentId);
+    patentToRelation.set(seedPatentId, { relation: 'seed', depth: 0 });
+
+    // BFS upward (ancestors)
+    if (config.maxAncestorDepth > 0) {
+      let frontier = [seedPatentId];
+      for (let gen = -1; gen >= -config.maxAncestorDepth; gen--) {
+        const nextFrontier: string[] = [];
+        for (const pid of frontier) {
+          const parents = await getBackwardCitations(pid, allowLive);
+          for (const parentId of parents) {
+            if (!visited.has(parentId)) {
+              visited.add(parentId);
+              if (!patentToSeeds.has(parentId)) {
+                patentToSeeds.set(parentId, new Set());
+              }
+              patentToSeeds.get(parentId)!.add(seedPatentId);
+              if (!patentToRelation.has(parentId)) {
+                patentToRelation.set(parentId, { relation: getRelationLabel(gen, false), depth: gen });
+              }
+              nextFrontier.push(parentId);
+            } else {
+              // Already visited - record this seed as another source
+              patentToSeeds.get(parentId)?.add(seedPatentId);
+            }
+          }
+        }
+        frontier = nextFrontier;
+        if (frontier.length === 0) break;
+      }
+    }
+
+    // BFS downward (descendants)
+    if (config.maxDescendantDepth > 0) {
+      let frontier = [seedPatentId];
+      for (let gen = 1; gen <= config.maxDescendantDepth; gen++) {
+        const nextFrontier: string[] = [];
+        for (const pid of frontier) {
+          const children = await getForwardCitations(pid, allowLive);
+          for (const childId of children) {
+            if (!visited.has(childId)) {
+              visited.add(childId);
+              if (!patentToSeeds.has(childId)) {
+                patentToSeeds.set(childId, new Set());
+              }
+              patentToSeeds.get(childId)!.add(seedPatentId);
+              if (!patentToRelation.has(childId)) {
+                patentToRelation.set(childId, { relation: getRelationLabel(gen, false), depth: gen });
+              }
+              nextFrontier.push(childId);
+            } else {
+              patentToSeeds.get(childId)?.add(seedPatentId);
+            }
+          }
+        }
+        frontier = nextFrontier;
+        if (frontier.length === 0) break;
+      }
+    }
+
+    // Siblings
+    if (config.includeSiblings) {
+      const seedParents = await getBackwardCitations(seedPatentId, allowLive);
+      for (const parentId of seedParents) {
+        const siblings = await getForwardCitations(parentId, allowLive);
+        for (const siblingId of siblings) {
+          if (!visited.has(siblingId)) {
+            visited.add(siblingId);
+            if (!patentToSeeds.has(siblingId)) {
+              patentToSeeds.set(siblingId, new Set());
+            }
+            patentToSeeds.get(siblingId)!.add(seedPatentId);
+            if (!patentToRelation.has(siblingId)) {
+              patentToRelation.set(siblingId, { relation: 'sibling', depth: 0 });
+            }
+          } else {
+            patentToSeeds.get(siblingId)?.add(seedPatentId);
+          }
+        }
+      }
+    }
+  }
+
+  // Apply merge strategy
+  const seedCount = config.seedPatentIds.length;
+  const candidatePatents = [...patentToSeeds.entries()]
+    .filter(([_, seeds]) => {
+      if (config.mergeStrategy === 'INTERSECTION') {
+        // Must be discovered by ALL seeds
+        return seeds.size === seedCount;
+      }
+      // UNION: discovered by ANY seed
+      return seeds.size > 0;
+    })
+    .map(([patentId, seeds]) => ({
+      patentId,
+      seedPatentIds: [...seeds],
+      ...patentToRelation.get(patentId)!,
+    }));
+
+  // Apply filters and enrich
+  const competitorMatcher = getCompetitorMatcher();
+  const members: EnrichedFamilyMember[] = [];
+
+  for (const candidate of candidatePatents) {
+    if (members.length >= MAX_FAMILY_SIZE) break;
+
+    const detail = loadPatentDetail(candidate.patentId, portfolioMap);
+    const inPortfolio = portfolioMap.has(candidate.patentId);
+    const assignee = detail?.assignee || '';
+    const affiliate = normalizeAffiliate(assignee);
+    const competitorMatch = competitorMatcher.matchCompetitor(assignee);
+
+    // Apply filters
+    if (config.requireInPortfolio && !inPortfolio) continue;
+
+    if (config.limitToSectors.length > 0) {
+      const sector = detail?.primary_sector;
+      if (!sector || !config.limitToSectors.includes(sector)) continue;
+    }
+
+    if (config.limitToCompetitors.length > 0) {
+      if (!competitorMatch || !config.limitToCompetitors.includes(competitorMatch.company)) continue;
+    }
+
+    if (config.limitToAffiliates.length > 0) {
+      if (!config.limitToAffiliates.includes(affiliate) && affiliate !== 'Unknown') continue;
+    }
+
+    if (config.minFilingYear) {
+      const year = detail?.patent_date ? parseInt(detail.patent_date.split('-')[0], 10) : 0;
+      if (year < config.minFilingYear) continue;
+    }
+
+    // Calculate remaining years
+    let remainingYears: number | undefined;
+    if (detail?.patent_date) {
+      const grantDate = new Date(detail.patent_date);
+      const expiryDate = new Date(grantDate);
+      expiryDate.setFullYear(expiryDate.getFullYear() + 20);
+      remainingYears = Math.max(0, (expiryDate.getTime() - Date.now()) / (365.25 * 24 * 60 * 60 * 1000));
+    }
+
+    members.push({
+      patentId: candidate.patentId,
+      relationToSeed: candidate.relation,
+      generationDepth: candidate.depth,
+      inPortfolio,
+      patentTitle: detail?.patent_title || '',
+      assignee,
+      patentDate: detail?.patent_date || '',
+      primarySector: detail?.primary_sector || '',
+      superSector: detail?.super_sector || '',
+      forwardCitations: detail?.forward_citations,
+      score: detail?.score,
+      affiliate,
+      competitorMatch,
+      seedPatentIds: candidate.seedPatentIds,
+      remainingYears,
+    });
+  }
+
+  return members;
+}
+
+/**
+ * Create a Focus Area from exploration results
+ */
+export async function createFocusAreaFromExploration(params: {
+  explorationId?: string;
+  name: string;
+  description?: string;
+  patentIds: string[];
+  includeExternalPatents: boolean;
+  ownerId: string;
+}): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+  const portfolioMap = loadPortfolioMap();
+
+  // Filter patents based on includeExternalPatents
+  const patentsToAdd = params.includeExternalPatents
+    ? params.patentIds
+    : params.patentIds.filter(id => portfolioMap.has(id));
+
+  // Create the focus area
+  const focusArea = await prisma.focusArea.create({
+    data: {
+      name: params.name,
+      description: params.description,
+      ownerId: params.ownerId,
+      status: 'ACTIVE',
+      searchScopeType: 'PATENT_FAMILY',
+      searchScopeConfig: params.explorationId ? { explorationId: params.explorationId } : undefined,
+      patentCount: patentsToAdd.length,
+      lastCalculatedAt: new Date(),
+    },
+  });
+
+  // Add patents to the focus area
+  let added = 0;
+  for (const patentId of patentsToAdd) {
+    try {
+      await prisma.focusAreaPatent.create({
+        data: {
+          focusAreaId: focusArea.id,
+          patentId,
+          membershipType: 'MANUAL',
+        },
+      });
+      added++;
+    } catch {
+      // Skip duplicates
+    }
+  }
+
+  // Update count
+  await prisma.focusArea.update({
+    where: { id: focusArea.id },
+    data: { patentCount: added },
+  });
+
+  return {
+    focusArea: {
+      id: focusArea.id,
+      name: focusArea.name,
+      patentCount: added,
+    },
+    added,
+  };
+}
+
+/**
+ * Get competitor list for filtering
+ */
+export function getAvailableCompetitors(): string[] {
+  const matcher = getCompetitorMatcher();
+  return matcher.getAllCompanyNames();
+}
+
+/**
+ * Get affiliate list for filtering
+ */
+export function getAvailableAffiliates(): { key: string; displayName: string }[] {
+  const affiliatesPath = path.join(process.cwd(), 'config/portfolio-affiliates.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(affiliatesPath, 'utf-8'));
+    return Object.entries(data.affiliates as Record<string, { displayName: string }>)
+      .map(([key, val]) => ({ key, displayName: val.displayName }));
+  } catch {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prosecution/IPR Enrichment Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LitigationIndicator {
+  patentId: string;
+  hasIPR: boolean;
+  iprCount: number;
+  iprTrials?: Array<{
+    trialNumber: string;
+    trialType: string;
+    status?: string;
+    petitionerName?: string;
+    filingDate?: string;
+    institutionDecision?: string;
+  }>;
+  hasProsecutionHistory: boolean;
+  prosecutionStatus?: string;
+  officeActionCount?: number;
+  rejectionCount?: number;
+}
+
+export interface EnrichmentStatus {
+  patentId: string;
+  status: 'pending' | 'in_progress' | 'complete' | 'error';
+  hasIPR?: boolean;
+  hasProsecutionHistory?: boolean;
+  error?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prosecution/IPR Enrichment Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check if a patent has IPR/litigation history
+ */
+export async function checkPatentIPR(patentId: string): Promise<LitigationIndicator> {
+  const cachePath = path.join(process.cwd(), 'cache/api/ptab', `${patentId}.json`);
+
+  // Check cache first
+  if (fs.existsSync(cachePath)) {
+    try {
+      const cached = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+      return {
+        patentId,
+        hasIPR: cached.trials?.length > 0,
+        iprCount: cached.trials?.length || 0,
+        iprTrials: cached.trials,
+        hasProsecutionHistory: false,
+      };
+    } catch {
+      // Fall through to API call
+    }
+  }
+
+  // Try to use PTAB client if API key is available
+  if (process.env.USPTO_ODP_API_KEY) {
+    try {
+      const { createPTABClient } = await import('../../../clients/odp-ptab-client.js');
+      const client = createPTABClient();
+      const response = await client.searchIPRsByPatent(patentId);
+
+      const result = {
+        patentId,
+        hasIPR: response.trials.length > 0,
+        iprCount: response.trials.length,
+        iprTrials: response.trials.map(t => ({
+          trialNumber: t.trialNumber,
+          trialType: t.trialType,
+          status: t.trialStatusText,
+          petitionerName: t.petitionerPartyName,
+          filingDate: t.filingDate,
+          institutionDecision: t.institutionDecision,
+        })),
+        hasProsecutionHistory: false,
+      };
+
+      // Cache the result
+      const cacheDir = path.dirname(cachePath);
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      }
+      fs.writeFileSync(cachePath, JSON.stringify({ trials: result.iprTrials }, null, 2));
+
+      return result;
+    } catch (err) {
+      console.warn(`[PatentFamily] IPR check failed for ${patentId}:`, err);
+    }
+  }
+
+  return {
+    patentId,
+    hasIPR: false,
+    iprCount: 0,
+    hasProsecutionHistory: false,
+  };
+}
+
+/**
+ * Check prosecution history for a patent
+ */
+export async function checkPatentProsecution(patentId: string): Promise<LitigationIndicator> {
+  const cachePath = path.join(process.cwd(), 'cache/api/file-wrapper', `${patentId}.json`);
+
+  // Check cache first
+  if (fs.existsSync(cachePath)) {
+    try {
+      const cached = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+      return {
+        patentId,
+        hasIPR: false,
+        iprCount: 0,
+        hasProsecutionHistory: true,
+        prosecutionStatus: cached.status,
+        officeActionCount: cached.officeActionCount,
+        rejectionCount: cached.rejectionCount,
+      };
+    } catch {
+      // Fall through to API call
+    }
+  }
+
+  // Try to use File Wrapper client if API key is available
+  if (process.env.USPTO_ODP_API_KEY) {
+    try {
+      const { createFileWrapperClient } = await import('../../../clients/odp-file-wrapper-client.js');
+      const client = createFileWrapperClient();
+
+      // Find application by patent number
+      const app = await client.getApplicationByPatentNumber(patentId);
+      if (!app) {
+        return {
+          patentId,
+          hasIPR: false,
+          iprCount: 0,
+          hasProsecutionHistory: false,
+        };
+      }
+
+      const appNumber = app.applicationNumberText;
+      const [status, docs] = await Promise.all([
+        client.getApplicationStatus(appNumber),
+        client.getDocuments(appNumber).catch(() => ({ documents: [] })),
+      ]);
+
+      // Count office actions and rejections
+      const officeActionCodes = ['CTNF', 'CTFR'];
+      const officeActions = docs.documents?.filter(d =>
+        officeActionCodes.includes(d.documentCode || '')
+      ) || [];
+
+      const result = {
+        patentId,
+        hasIPR: false,
+        iprCount: 0,
+        hasProsecutionHistory: true,
+        prosecutionStatus: status.status,
+        officeActionCount: officeActions.length,
+        rejectionCount: officeActions.filter(d => d.documentCode === 'CTFR').length,
+      };
+
+      // Cache the result
+      const cacheDir = path.dirname(cachePath);
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      }
+      fs.writeFileSync(cachePath, JSON.stringify({
+        status: result.prosecutionStatus,
+        officeActionCount: result.officeActionCount,
+        rejectionCount: result.rejectionCount,
+        applicationNumber: appNumber,
+      }, null, 2));
+
+      return result;
+    } catch (err) {
+      console.warn(`[PatentFamily] Prosecution check failed for ${patentId}:`, err);
+    }
+  }
+
+  return {
+    patentId,
+    hasIPR: false,
+    iprCount: 0,
+    hasProsecutionHistory: false,
+  };
+}
+
+/**
+ * Batch enrich patents with litigation data
+ */
+export async function enrichWithLitigation(
+  patentIds: string[],
+  options: {
+    includeIpr?: boolean;
+    includeProsecution?: boolean;
+  } = {}
+): Promise<{
+  enriched: number;
+  indicators: LitigationIndicator[];
+}> {
+  const { includeIpr = true, includeProsecution = true } = options;
+  const indicators: LitigationIndicator[] = [];
+  let enriched = 0;
+
+  for (const patentId of patentIds) {
+    try {
+      let indicator: LitigationIndicator = {
+        patentId,
+        hasIPR: false,
+        iprCount: 0,
+        hasProsecutionHistory: false,
+      };
+
+      if (includeIpr) {
+        const iprData = await checkPatentIPR(patentId);
+        indicator = { ...indicator, ...iprData };
+      }
+
+      if (includeProsecution) {
+        const prosData = await checkPatentProsecution(patentId);
+        indicator = {
+          ...indicator,
+          hasProsecutionHistory: prosData.hasProsecutionHistory,
+          prosecutionStatus: prosData.prosecutionStatus,
+          officeActionCount: prosData.officeActionCount,
+          rejectionCount: prosData.rejectionCount,
+        };
+      }
+
+      indicators.push(indicator);
+      enriched++;
+    } catch (err) {
+      console.warn(`[PatentFamily] Enrichment failed for ${patentId}:`, err);
+      indicators.push({
+        patentId,
+        hasIPR: false,
+        iprCount: 0,
+        hasProsecutionHistory: false,
+      });
+    }
+  }
+
+  return { enriched, indicators };
+}
+
+/**
+ * Get cached litigation status for patents
+ */
+export function getCachedLitigationStatus(patentIds: string[]): EnrichmentStatus[] {
+  return patentIds.map(patentId => {
+    const iprPath = path.join(process.cwd(), 'cache/api/ptab', `${patentId}.json`);
+    const prosPath = path.join(process.cwd(), 'cache/api/file-wrapper', `${patentId}.json`);
+
+    const hasIPR = fs.existsSync(iprPath);
+    const hasProsecution = fs.existsSync(prosPath);
+
+    if (!hasIPR && !hasProsecution) {
+      return { patentId, status: 'pending' as const };
+    }
+
+    return {
+      patentId,
+      status: 'complete' as const,
+      hasIPR,
+      hasProsecutionHistory: hasProsecution,
+    };
+  });
 }

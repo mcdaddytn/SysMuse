@@ -14,6 +14,17 @@ import {
   deleteExploration,
   addMembersToFocusArea,
   getCacheStatus,
+  previewMultiSeedExploration,
+  executeMultiSeedExploration,
+  createFocusAreaFromExploration,
+  getAvailableCompetitors,
+  getAvailableAffiliates,
+  enrichWithLitigation,
+  getCachedLitigationStatus,
+  checkPatentIPR,
+  checkPatentProsecution,
+  type MultiSeedConfig,
+  type MergeStrategy,
 } from '../services/patent-family-service.js';
 
 const router = Router();
@@ -211,6 +222,338 @@ router.get('/cache-status/:patentId', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting cache status:', error);
     res.status(500).json({ error: 'Failed to get cache status' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-Seed Exploration Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /explorations/preview
+ * Preview multi-seed exploration results before execution
+ */
+router.post('/explorations/preview', async (req: Request, res: Response) => {
+  try {
+    const {
+      seedPatentIds,
+      maxAncestorDepth = 1,
+      maxDescendantDepth = 1,
+      includeSiblings = true,
+      includeCousins = false,
+      limitToSectors = [],
+      limitToCpcPrefixes = [],
+      limitToCompetitors = [],
+      limitToAffiliates = [],
+      requireInPortfolio = false,
+      mergeStrategy = 'INTERSECTION',
+      minFilingYear,
+    } = req.body;
+
+    if (!seedPatentIds || !Array.isArray(seedPatentIds) || seedPatentIds.length === 0) {
+      return res.status(400).json({ error: 'seedPatentIds array is required' });
+    }
+
+    const config: MultiSeedConfig = {
+      seedPatentIds,
+      maxAncestorDepth,
+      maxDescendantDepth,
+      includeSiblings,
+      includeCousins,
+      limitToSectors,
+      limitToCpcPrefixes,
+      limitToCompetitors,
+      limitToAffiliates,
+      requireInPortfolio,
+      mergeStrategy: mergeStrategy as MergeStrategy,
+      minFilingYear,
+    };
+
+    const preview = await previewMultiSeedExploration(config);
+    res.json(preview);
+  } catch (error) {
+    console.error('Error previewing exploration:', error);
+    res.status(500).json({ error: 'Failed to preview exploration' });
+  }
+});
+
+/**
+ * POST /explorations/multi-seed
+ * Create and execute multi-seed exploration
+ */
+router.post('/explorations/multi-seed', async (req: Request, res: Response) => {
+  try {
+    const {
+      seedPatentIds,
+      name,
+      description,
+      maxAncestorDepth = 1,
+      maxDescendantDepth = 1,
+      includeSiblings = true,
+      includeCousins = false,
+      limitToSectors = [],
+      limitToCpcPrefixes = [],
+      limitToCompetitors = [],
+      limitToAffiliates = [],
+      requireInPortfolio = false,
+      mergeStrategy = 'INTERSECTION',
+      minFilingYear,
+    } = req.body;
+
+    if (!seedPatentIds || !Array.isArray(seedPatentIds) || seedPatentIds.length === 0) {
+      return res.status(400).json({ error: 'seedPatentIds array is required' });
+    }
+
+    const config: MultiSeedConfig = {
+      seedPatentIds,
+      maxAncestorDepth,
+      maxDescendantDepth,
+      includeSiblings,
+      includeCousins,
+      limitToSectors,
+      limitToCpcPrefixes,
+      limitToCompetitors,
+      limitToAffiliates,
+      requireInPortfolio,
+      mergeStrategy: mergeStrategy as MergeStrategy,
+      minFilingYear,
+    };
+
+    // For multi-seed, we create a special exploration with the first seed as primary
+    // and store all seeds in the description for now (schema supports single seed)
+    const exploration = await createExploration({
+      seedPatentId: seedPatentIds[0],
+      name: name || `Multi-seed family (${seedPatentIds.length} seeds)`,
+      description: description || `Seeds: ${seedPatentIds.join(', ')}`,
+      maxAncestorDepth,
+      maxDescendantDepth,
+      includeSiblings,
+      includeCousins,
+      limitToSectors,
+      limitToCpcPrefixes,
+      requireInPortfolio,
+    });
+
+    // Execute the multi-seed exploration
+    const members = await executeMultiSeedExploration(exploration.id, config);
+
+    res.status(201).json({
+      exploration: {
+        ...exploration,
+        seedPatentIds,
+        mergeStrategy,
+      },
+      members,
+      memberCount: members.length,
+    });
+  } catch (error) {
+    console.error('Error creating multi-seed exploration:', error);
+    res.status(500).json({ error: 'Failed to create multi-seed exploration' });
+  }
+});
+
+/**
+ * POST /explorations/:id/create-focus-area
+ * Create a Focus Area from exploration results
+ */
+router.post('/explorations/:id/create-focus-area', async (req: Request, res: Response) => {
+  try {
+    const { name, description, patentIds, includeExternalPatents = true, ownerId = 'default-user' } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds array is required' });
+    }
+
+    const result = await createFocusAreaFromExploration({
+      explorationId: req.params.id,
+      name,
+      description,
+      patentIds,
+      includeExternalPatents,
+      ownerId,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error creating focus area from exploration:', error);
+    res.status(500).json({ error: 'Failed to create focus area' });
+  }
+});
+
+/**
+ * POST /create-focus-area
+ * Create a Focus Area directly from patent IDs (without exploration)
+ */
+router.post('/create-focus-area', async (req: Request, res: Response) => {
+  try {
+    const { name, description, patentIds, includeExternalPatents = true, ownerId = 'default-user' } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds array is required' });
+    }
+
+    const result = await createFocusAreaFromExploration({
+      name,
+      description,
+      patentIds,
+      includeExternalPatents,
+      ownerId,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error creating focus area:', error);
+    res.status(500).json({ error: 'Failed to create focus area' });
+  }
+});
+
+/**
+ * GET /filter-options
+ * Get available competitors and affiliates for filtering
+ */
+router.get('/filter-options', (_req: Request, res: Response) => {
+  try {
+    const competitors = getAvailableCompetitors();
+    const affiliates = getAvailableAffiliates();
+    res.json({ competitors, affiliates });
+  } catch (error) {
+    console.error('Error getting filter options:', error);
+    res.status(500).json({ error: 'Failed to get filter options' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prosecution/IPR Enrichment Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /enrich-litigation
+ * Batch enrich patents with IPR and prosecution data
+ */
+router.post('/enrich-litigation', async (req: Request, res: Response) => {
+  try {
+    const { patentIds, includeIpr = true, includeProsecution = true } = req.body;
+
+    if (!patentIds || !Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds array is required' });
+    }
+
+    // Limit batch size to prevent long-running requests
+    const limitedIds = patentIds.slice(0, 50);
+
+    const result = await enrichWithLitigation(limitedIds, {
+      includeIpr,
+      includeProsecution,
+    });
+
+    res.json({
+      enriched: result.enriched,
+      total: limitedIds.length,
+      indicators: result.indicators,
+      truncated: patentIds.length > 50,
+    });
+  } catch (error) {
+    console.error('Error enriching litigation data:', error);
+    res.status(500).json({ error: 'Failed to enrich litigation data' });
+  }
+});
+
+/**
+ * GET /litigation-status
+ * Get cached litigation status for patents
+ */
+router.get('/litigation-status', (req: Request, res: Response) => {
+  try {
+    const patentIdsParam = req.query.patentIds;
+    if (!patentIdsParam) {
+      return res.status(400).json({ error: 'patentIds query parameter is required' });
+    }
+
+    const patentIds = Array.isArray(patentIdsParam)
+      ? patentIdsParam as string[]
+      : (patentIdsParam as string).split(',');
+
+    const statuses = getCachedLitigationStatus(patentIds);
+    res.json({ statuses });
+  } catch (error) {
+    console.error('Error getting litigation status:', error);
+    res.status(500).json({ error: 'Failed to get litigation status' });
+  }
+});
+
+/**
+ * GET /ipr/:patentId
+ * Get IPR history for a single patent
+ */
+router.get('/ipr/:patentId', async (req: Request, res: Response) => {
+  try {
+    const indicator = await checkPatentIPR(req.params.patentId);
+    res.json(indicator);
+  } catch (error) {
+    console.error('Error checking IPR:', error);
+    res.status(500).json({ error: 'Failed to check IPR' });
+  }
+});
+
+/**
+ * GET /prosecution/:patentId
+ * Get prosecution history for a single patent
+ */
+router.get('/prosecution/:patentId', async (req: Request, res: Response) => {
+  try {
+    const indicator = await checkPatentProsecution(req.params.patentId);
+    res.json(indicator);
+  } catch (error) {
+    console.error('Error checking prosecution:', error);
+    res.status(500).json({ error: 'Failed to check prosecution' });
+  }
+});
+
+/**
+ * POST /explorations/:id/enrich-litigation
+ * Enrich exploration members with litigation data
+ */
+router.post('/explorations/:id/enrich-litigation', async (req: Request, res: Response) => {
+  try {
+    const { includeIpr = true, includeProsecution = true, patentIds } = req.body;
+
+    // Get exploration members
+    const exploration = await getExplorationWithMembers(req.params.id);
+    if (!exploration) {
+      return res.status(404).json({ error: 'Exploration not found' });
+    }
+
+    // Use provided patentIds or all members
+    const idsToEnrich = patentIds && Array.isArray(patentIds)
+      ? patentIds
+      : exploration.members.map(m => m.patentId);
+
+    // Limit batch size
+    const limitedIds = idsToEnrich.slice(0, 50);
+
+    const result = await enrichWithLitigation(limitedIds, {
+      includeIpr,
+      includeProsecution,
+    });
+
+    res.json({
+      explorationId: req.params.id,
+      enriched: result.enriched,
+      total: limitedIds.length,
+      indicators: result.indicators,
+      truncated: idsToEnrich.length > 50,
+    });
+  } catch (error) {
+    console.error('Error enriching exploration:', error);
+    res.status(500).json({ error: 'Failed to enrich exploration' });
   }
 });
 

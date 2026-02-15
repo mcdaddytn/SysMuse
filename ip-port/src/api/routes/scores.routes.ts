@@ -247,9 +247,12 @@ function calculateV2Score(patent: Patent, weights: ScoreWeights): number {
 
 /**
  * GET /api/scores/v2
- * Get v2 scored rankings with custom weights
+ * @deprecated Use /api/scores/v2-enhanced instead. This Basic V2 endpoint uses a simplified
+ * 3-factor formula (citations, years, competitor). V2 Enhanced uses 12+ factors including
+ * LLM-derived metrics and is the standard scoring system.
  */
 router.get('/v2', (req: Request, res: Response) => {
+  console.warn('[DEPRECATED] /api/scores/v2 called - use /api/scores/v2-enhanced instead');
   try {
     const {
       citation = DEFAULT_WEIGHTS.citation.toString(),

@@ -1279,6 +1279,120 @@ export interface FamilyCacheStatus {
   hasParentDetails: boolean;
 }
 
+// Multi-seed exploration types
+export type MergeStrategy = 'UNION' | 'INTERSECTION';
+
+export interface MultiSeedConfig {
+  seedPatentIds: string[];
+  maxAncestorDepth?: number;
+  maxDescendantDepth?: number;
+  includeSiblings?: boolean;
+  includeCousins?: boolean;
+  limitToSectors?: string[];
+  limitToCpcPrefixes?: string[];
+  limitToCompetitors?: string[];
+  limitToAffiliates?: string[];
+  requireInPortfolio?: boolean;
+  mergeStrategy?: MergeStrategy;
+  minFilingYear?: number;
+  name?: string;
+  description?: string;
+}
+
+export interface PreviewResult {
+  estimatedMembers: {
+    total: number;
+    parents: number;
+    children: number;
+    siblings: number;
+    seeds: number;
+  };
+  seedOverlap: {
+    sharedCitationsCount: number;
+    commonSectors: string[];
+  };
+  cachedDataAvailable: number;
+  estimatedApiCalls: number;
+  seedDetails: Array<{
+    patentId: string;
+    title?: string;
+    inPortfolio: boolean;
+    hasCachedCitations: boolean;
+  }>;
+}
+
+export interface CompetitorMatch {
+  company: string;
+  category: string;
+  pattern: string;
+}
+
+export interface EnrichedFamilyMember {
+  patentId: string;
+  relationToSeed: string;
+  generationDepth: number;
+  inPortfolio: boolean;
+  patentTitle: string;
+  assignee: string;
+  patentDate: string;
+  primarySector: string;
+  superSector: string;
+  forwardCitations?: number;
+  score?: number;
+  affiliate: string;
+  competitorMatch?: CompetitorMatch | null;
+  seedPatentIds: string[];
+  remainingYears?: number;
+}
+
+export interface MultiSeedExplorationResult {
+  exploration: PatentFamilyExploration & {
+    seedPatentIds: string[];
+    mergeStrategy: MergeStrategy;
+  };
+  members: EnrichedFamilyMember[];
+  memberCount: number;
+}
+
+export interface FilterOptions {
+  competitors: string[];
+  affiliates: Array<{ key: string; displayName: string }>;
+}
+
+// Litigation/IPR enrichment types
+export interface LitigationIndicator {
+  patentId: string;
+  hasIPR: boolean;
+  iprCount: number;
+  iprTrials?: Array<{
+    trialNumber: string;
+    trialType: string;
+    status?: string;
+    petitionerName?: string;
+    filingDate?: string;
+    institutionDecision?: string;
+  }>;
+  hasProsecutionHistory: boolean;
+  prosecutionStatus?: string;
+  officeActionCount?: number;
+  rejectionCount?: number;
+}
+
+export interface EnrichmentStatusItem {
+  patentId: string;
+  status: 'pending' | 'in_progress' | 'complete' | 'error';
+  hasIPR?: boolean;
+  hasProsecutionHistory?: boolean;
+  error?: string;
+}
+
+export interface EnrichmentResult {
+  enriched: number;
+  total: number;
+  indicators: LitigationIndicator[];
+  truncated: boolean;
+}
+
 // Patent Family API
 export const patentFamilyApi = {
   async createExploration(params: {
@@ -1349,6 +1463,84 @@ export const patentFamilyApi = {
 
   async getCacheStatus(patentId: string): Promise<FamilyCacheStatus> {
     const { data } = await api.get(`/patent-families/cache-status/${patentId}`);
+    return data;
+  },
+
+  // Multi-seed exploration
+  async previewMultiSeed(config: MultiSeedConfig): Promise<PreviewResult> {
+    const { data } = await api.post('/patent-families/explorations/preview', config);
+    return data;
+  },
+
+  async executeMultiSeed(config: MultiSeedConfig): Promise<MultiSeedExplorationResult> {
+    const { data } = await api.post('/patent-families/explorations/multi-seed', config);
+    return data;
+  },
+
+  async createFocusAreaFromExploration(
+    explorationId: string,
+    params: {
+      name: string;
+      description?: string;
+      patentIds: string[];
+      includeExternalPatents?: boolean;
+      ownerId?: string;
+    }
+  ): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    const { data } = await api.post(`/patent-families/explorations/${explorationId}/create-focus-area`, params);
+    return data;
+  },
+
+  async createFocusAreaDirect(params: {
+    name: string;
+    description?: string;
+    patentIds: string[];
+    includeExternalPatents?: boolean;
+    ownerId?: string;
+  }): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    const { data } = await api.post('/patent-families/create-focus-area', params);
+    return data;
+  },
+
+  async getFilterOptions(): Promise<FilterOptions> {
+    const { data } = await api.get('/patent-families/filter-options');
+    return data;
+  },
+
+  // Litigation/IPR enrichment
+  async enrichLitigation(
+    patentIds: string[],
+    options?: { includeIpr?: boolean; includeProsecution?: boolean }
+  ): Promise<EnrichmentResult> {
+    const { data } = await api.post('/patent-families/enrich-litigation', {
+      patentIds,
+      ...options,
+    });
+    return data;
+  },
+
+  async getLitigationStatus(patentIds: string[]): Promise<{ statuses: EnrichmentStatusItem[] }> {
+    const { data } = await api.get('/patent-families/litigation-status', {
+      params: { patentIds: patentIds.join(',') },
+    });
+    return data;
+  },
+
+  async getPatentIPR(patentId: string): Promise<LitigationIndicator> {
+    const { data } = await api.get(`/patent-families/ipr/${patentId}`);
+    return data;
+  },
+
+  async getPatentProsecution(patentId: string): Promise<LitigationIndicator> {
+    const { data } = await api.get(`/patent-families/prosecution/${patentId}`);
+    return data;
+  },
+
+  async enrichExplorationLitigation(
+    explorationId: string,
+    options?: { patentIds?: string[]; includeIpr?: boolean; includeProsecution?: boolean }
+  ): Promise<EnrichmentResult & { explorationId: string }> {
+    const { data } = await api.post(`/patent-families/explorations/${explorationId}/enrich-litigation`, options);
     return data;
   },
 };

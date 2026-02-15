@@ -458,6 +458,23 @@ function cancelEdit() {
   editing.value = false;
 }
 
+// Navigate to Patent Family Explorer with focus area patents as seeds
+function exploreFamilies() {
+  // Use first 20 patents as seeds (reasonable limit for exploration)
+  const patentIds = faPatents.value.slice(0, 20).map(p => p.patent_id);
+  if (patentIds.length === 0) {
+    $q.notify({
+      type: 'warning',
+      message: 'No patents in focus area to explore',
+    });
+    return;
+  }
+  router.push({
+    name: 'patent-families',
+    query: { seeds: patentIds.join(',') }
+  });
+}
+
 // Add patents
 async function addPatents() {
   // Use the same parser as the preview so IDs match
@@ -1206,6 +1223,7 @@ onMounted(async () => {
                   <div class="text-subtitle2 q-mb-md">Quick Actions</div>
                   <div class="column q-gutter-sm">
                     <q-btn outline icon="add" label="Add Patents" @click="showAddPatentDialog = true" />
+                    <q-btn outline icon="account_tree" label="Explore Families" @click="exploreFamilies" />
                     <q-btn outline icon="search" label="Add Search Term" @click="showAddTermDialog = true" />
                     <q-btn outline icon="analytics" label="Define Facet" disabled />
                   </div>

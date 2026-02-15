@@ -90,6 +90,12 @@ const routes: RouteRecordRaw[] = [
         name: 'llm-scores',
         component: () => import('@/pages/SectorScoresPage.vue'),
         meta: { title: 'LLM Sector Scores' }
+      },
+      {
+        path: 'patent-families',
+        name: 'patent-families',
+        component: () => import('@/pages/PatentFamilyExplorerPage.vue'),
+        meta: { title: 'Patent Family Explorer' }
       }
     ]
   },

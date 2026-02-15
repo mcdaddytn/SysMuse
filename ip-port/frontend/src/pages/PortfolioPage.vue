@@ -213,6 +213,16 @@ async function queueEnrichment() {
   }
 }
 
+// Navigate to Patent Family Explorer with selected patents as seeds
+function exploreFamilies() {
+  if (selectedPatents.value.length === 0) return;
+  const patentIds = selectedPatents.value.map(p => p.patent_id);
+  router.push({
+    name: 'patent-families',
+    query: { seeds: patentIds.join(',') }
+  });
+}
+
 // Lifecycle
 onMounted(async () => {
   // Load active snapshots and apply query filters in parallel
@@ -763,6 +773,7 @@ onMounted(async () => {
         {{ selectedPatents.length }} patents selected
         <template v-slot:action>
           <q-btn flat icon="folder_special" label="Create Focus Group" @click="openCreateFocusGroupDialog" />
+          <q-btn flat icon="account_tree" label="Explore Families" @click="exploreFamilies" />
           <q-btn flat icon="science" label="Queue Enrichment" @click="openEnrichmentDialog" />
           <q-btn flat icon="download" label="Export Selected" @click="exportToCSV" />
           <q-btn flat label="Clear" @click="selectedPatents = []" />

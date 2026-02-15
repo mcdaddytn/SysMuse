@@ -10,7 +10,7 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
-import { loadAllClassifications, scoreAllPatents, getDefaultProfileId } from '../services/scoring-service.js';
+import { loadAllClassifications } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
 
@@ -370,25 +370,6 @@ interface CandidatesFile {
   candidates: Patent[];
 }
 
-// V2 scoring defaults (same as scores.routes.ts)
-const DEFAULT_V2_WEIGHTS = { citation: 50, years: 30, competitor: 20 };
-
-/**
- * Calculate v2 score with default weights (same formula as scores.routes.ts)
- */
-function calculateV2Score(forwardCitations: number, remainingYears: number, competitorCites: number): number {
-  const totalWeight = DEFAULT_V2_WEIGHTS.citation + DEFAULT_V2_WEIGHTS.years + DEFAULT_V2_WEIGHTS.competitor;
-  const citationNorm = DEFAULT_V2_WEIGHTS.citation / totalWeight;
-  const yearsNorm = DEFAULT_V2_WEIGHTS.years / totalWeight;
-  const competitorNorm = DEFAULT_V2_WEIGHTS.competitor / totalWeight;
-
-  const citationScore = Math.log10(forwardCitations + 1) * 30 * citationNorm;
-  const yearsScore = Math.min(remainingYears / 20, 1) * 100 * yearsNorm;
-  const competitorScore = competitorCites * 15 * competitorNorm;
-
-  return Math.round((citationScore + yearsScore + competitorScore) * 100) / 100;
-}
-
 // Cache the loaded data
 let patentsCache: Patent[] | null = null;
 let lastLoadTime: number = 0;
@@ -443,20 +424,11 @@ export function loadPatents(): Patent[] {
   const llmData = loadAllFullLlmData();
 
   // Get snapshot scores (from active database snapshots if available)
+  // V2 and V3 scores require active snapshots - no fallback computation
+  // Patents without snapshot scores show 0 and fall to bottom when sorting
   const snapshotScores = getSnapshotScores();
   const hasV2Snapshot = snapshotScores.v2 && snapshotScores.v2.size > 0;
   const hasV3Snapshot = snapshotScores.v3 && snapshotScores.v3.size > 0;
-
-  // Load fallback V3 scores (only if no active V3 snapshot)
-  let fallbackV3ScoresMap: Map<string, number> = new Map();
-  if (!hasV3Snapshot) {
-    try {
-      const v3Scored = scoreAllPatents(getDefaultProfileId());
-      fallbackV3ScoresMap = new Map(v3Scored.map(s => [s.patent_id, s.score]));
-    } catch (e) {
-      console.warn('[Patents] Could not load fallback v3 scores:', e);
-    }
-  }
 
   if (hasV2Snapshot) {
     console.log(`[Patents] Using active V2 snapshot scores (${snapshotScores.v2!.size} patents)`);
@@ -471,15 +443,15 @@ export function loadPatents(): Patent[] {
     const llm = llmData.get(p.patent_id);
     const competitorCites = classification?.competitor_citations ?? 0;
 
-    // Get V2 score: prefer snapshot, fall back to calculated
+    // Get V2 score from snapshot only (no fallback - patents without V2 Enhanced scores show 0)
     const v2Score = hasV2Snapshot && snapshotScores.v2!.has(p.patent_id)
       ? snapshotScores.v2!.get(p.patent_id)!
-      : calculateV2Score(p.forward_citations, p.remaining_years, competitorCites);
+      : 0;
 
-    // Get V3 score: prefer snapshot, fall back to computed/default
+    // Get V3 score from snapshot only (no fallback - patents without V3 scores show 0)
     const v3Score = hasV3Snapshot && snapshotScores.v3!.has(p.patent_id)
       ? snapshotScores.v3!.get(p.patent_id)!
-      : fallbackV3ScoresMap.get(p.patent_id) ?? 0;
+      : 0;
 
     return {
       ...p,

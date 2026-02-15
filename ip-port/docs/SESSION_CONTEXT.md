@@ -1,11 +1,6 @@
-# Session Context - February 14, 2026
+# Session Context — February 15, 2026
 
 ## Current State Summary
-
-### Migration Status
-- Successfully migrated to new machine
-- Database imported from backup
-- Server command standardized: `npm run dev` works in both root (API) and frontend directories
 
 ### Infrastructure Status
 
@@ -18,176 +13,133 @@
 
 ---
 
-## Phase Plan: Application Re-integration
+## Completed Phases
 
-### Analysis Completed
+### Phase 1 — Portfolio Page & Infrastructure (Feb 14)
+- Server command fix (`npm run dev` in both root and frontend)
+- Portfolio page scroll layout (sticky headers, frozen columns, always-visible scrollbars)
+- Prompt templates structured questions fix
+- Competitors column
+- CPC tooltips composable (`useCpcDescriptions.ts`)
 
-**Sector Integration Status:**
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Sector CRUD | Strong | Full API and UI integration |
-| LLM Scoring | Strong | Templates, progress, preview all work |
-| Sub-Sectors | Partial | Display works, limited management |
-| CPC Code Tooltips | Implemented | Composable with batch lookup + caching |
-| Prompt Templates UI | Gap | 113+ templates not viewable in Prompt Templates section |
-| Sector Enrichment UI | Partial | Job Queue has tab, could integrate with LLM scoring |
+### Phase 2 — Filtering Enhancements (Feb 14)
+- FlexFilterBuilder component with dynamic filter types
+- Backend filters: competitorNames, cpcCodes, subSectors, hasLlmData, score ranges, etc.
+- Filter options API endpoints
+- PortfolioPage integration (replaced fixed filter bar)
 
----
+### Phase 3 — Aggregates Page (Feb 14)
+- Backend `POST /api/patents/aggregate` endpoint with group-by and aggregation ops
+- AggregatesPage.vue with group-by selector, aggregation builder, results table, CSV export
 
-## Phase 1 - COMPLETED
+### Phase 4 — Patent Family Explorer V2 Frontend (Feb 14-15)
+Full plan: `/Users/gmac/.claude/plans/purring-watching-llama.md`
 
-### 1.1 Server Command Fix
-- Added `"dev": "tsx watch src/api/server.ts"` to root `package.json`
-- Both server and frontend now use `npm run dev`
+**Core implementation:**
+- V2 types + `patentFamilyV2Api` API client in `frontend/src/services/api.ts`
+- Full rewrite of `PatentFamilyExplorerPage.vue` (~1650 lines)
+- Seeds input, 9 weighted scoring sliders with presets, thresholds, expansion controls
+- Zone tab selector (All/Members/Candidates/Excluded), results grid, save/focus-area dialogs
 
-### 1.2 Portfolio Page Scroll Layout
-- Fixed height container with always-visible scrollbars
-- Sticky headers (Excel-like freeze panes)
-- Frozen left columns (checkbox + Patent ID)
-- Pagination controls always visible below scroll area
-- Custom scrollbar styling (16px, always visible)
+**Stage 1 — Saved Explorations + Enrichment:**
+- Load/resume saved explorations list
+- Enrichment with IPR & prosecution data
 
-**Key CSS:**
-```css
-.table-wrapper { height: calc(100vh - 340px); }
-.table-scroll-container { overflow: scroll !important; }
-:deep(.q-table thead th) { position: sticky; top: 0; z-index: 10; }
-```
+**Stage 2 — Flexible Column Display:**
+- 27 columns across 5 groups (core, family, scoring, dimensions, litigation)
+- Column selector dialog, localStorage-persisted visibility
+- Scoring weights collapsed by default
 
-### 1.3 Prompt Templates Structured Questions Fix
-- Added `normalizeQuestion()` and `normalizeQuestions()` functions
-- Handles old tournament templates with missing `answerType` or `constraints`
-- Added null checks in template constraint rendering
+**Stage 3 — Selection Model:**
+- Checkbox selection, auto-select members after create/expand/rescore
+- Create Focus Area from selected patents
 
-### 1.4 Competitors Column
-- Added `competitor_names` column to store with format function
-- Added template slot for comma-separated display with tooltip
-
-### 1.5 CPC Tooltips (Sector Management)
-- Created `frontend/src/composables/useCpcDescriptions.ts`
-- Batch lookups with 50ms debounce, in-memory caching
-- Parent prefix fallback (e.g., H04N19/00 → H04N19)
-- Tooltips on CPC prefix chips, rule expressions, and sub-sectors
+**Stage 4 — Shared Grid Infrastructure:**
+- `useGridColumns` composable: `frontend/src/composables/useGridColumns.ts`
+- `GenericColumnSelector`: `frontend/src/components/grid/GenericColumnSelector.vue`
+- Refactored `ColumnSelector.vue` to thin wrapper
+- Extended `ColumnGroup` type in `types/index.ts`
 
 ---
 
-## Phase 2 - Filtering Enhancements (IN PROGRESS)
+## Bug Fixes Applied (Feb 15)
 
-### Goals
-1. **Flexible Filter Builder** - Dynamic filter selection instead of fixed filters
-2. **One-to-Many Field Filtering** - Filter by competitor names, CPC codes, sub-sectors
-3. **Filter Presets** - Save and load filter configurations (TODO)
-
-### Completed
-
-**2.1 Backend Filter Support**
-Added new filters to `applyFilters()` in `patents.routes.ts`:
-- `competitorNames` - one-to-many filter (any match, partial string)
-- `cpcCodes` - one-to-many filter (prefix match)
-- `subSectors` - filter by sub-sector name
-- `hasLlmData` - boolean filter (true/false)
-- `hasCompetitors` - boolean filter (true/false)
-
-**2.2 Filter Options API Endpoints**
-New endpoints added to `patents.routes.ts`:
-- `GET /api/patents/competitor-names` - unique competitors with citation counts
-- `GET /api/patents/cpc-codes?level=subclass` - CPC codes with descriptions
-- `GET /api/patents/sub-sectors` - sub-sectors with counts
-- `GET /api/patents/filter-options` - all options in one call (for FlexFilterBuilder)
-
-**2.3 FlexFilterBuilder Component**
-Created `frontend/src/components/filters/FlexFilterBuilder.vue`:
-- Dynamic "Add Filter" dropdown with categorized filter types
-- Multiselect filters: Affiliate, Super-Sector, Primary Sector, Competitor Names, CPC Codes, Sub-Sector
-- Range filters: Base Score, V2 Score, V3 Score, Years Remaining, Forward Citations, Competitor Citations, Affiliate Citations, Neutral Citations
-- Boolean filters: Has LLM Data, Is Expired
-- Removable filter chips with proper event handling
-- Clear All button with proper state reset
-- Loads all options from single `/api/patents/filter-options` endpoint
-- Summary showing total patents, LLM data coverage, expired count
-- Fixed feedback loop issue with `isUpdatingLocally` flag
-
-**2.4 PortfolioPage Integration**
-- Replaced fixed filter bar with FlexFilterBuilder
-- Updated types to include new filter fields
-- Simplified filter state management
-
-**2.5 Extended Backend Filters**
-Added to `applyFilters()`:
-- `v2ScoreMin/v2ScoreMax` - filters patents with v2_score in range (omits nulls)
-- `v3ScoreMin/v3ScoreMax` - filters patents with v3_score in range (omits nulls)
-- `affiliateCitesMin/affiliateCitesMax` - affiliate citation count range
-- `neutralCitesMin/neutralCitesMax` - neutral citation count range
-- `isExpired` - boolean filter for patents with remaining_years <= 0
-
-### Remaining (Phase 2.6)
-- **Filter Presets** - Save/load filter configurations to localStorage or backend
+1. **Column badge removed** — Floating count badge on Columns button was blocking text
+2. **Global scrollbar CSS** — `frontend/src/assets/grid-scrollbars.css` (imported in main.ts):
+   - **Critical: `overflow: scroll !important`** (not `auto`) — forces scrollbars always visible on macOS
+   - **16px scrollbar width/height** — overrides macOS overlay behavior via `::-webkit-scrollbar`
+   - **Firefox: `scrollbar-width: auto`** (not `thin`) — keeps scrollbars visible
+   - Applied to all pages: PortfolioPage, FocusAreaDetailPage, PatentFamilyExplorerPage
+3. **PatentFamilyExplorerPage scroll container** — Added `.table-wrapper` + `.table-scroll-container` with:
+   - Fixed height: `calc(100vh - 340px)`
+   - `hide-pagination` on q-table, separate pagination bar outside scroll area
+   - Sticky headers, q-table scroll overrides (`:deep(.q-table__container)` overflow visible)
+   - Matching PortfolioPage scroll container pattern
+4. **IPR/Prosecution cache fix** — `checkPatentIPR()` and `checkPatentProsecution()` in `patent-family-service.ts` now check BOTH cache locations:
+   - `cache/ipr-scores/` (~10,745 files from scoring pipeline) + `cache/api/ptab/` (~455 from enrichment API)
+   - `cache/prosecution-scores/` (~11,576 files from scoring pipeline) + `cache/api/file-wrapper/` (~454 from enrichment API)
+5. **Enrichment UX simplified** — Split button with 3 options (Members, Current Page, All), auto-skips already-enriched, shows "(N new)" counts. Distinguished "None" (green) vs "—" (grey, not yet enriched) in columns.
+6. **Enrichment batching** — Frontend now processes enrichment in batches of 500 to avoid backend 200-patent truncation limit. Accumulates IPR/prosecution counts across batches.
+7. **Exploration state preserved on navigation** — Exploration ID stored in URL query param (`?exploration=xxx`). On mount, if present, auto-loads the exploration. Clicking "New" clears both state and URL.
 
 ---
 
-## Phase 3 - Aggregates Page (COMPLETED)
+## Key Files
 
-### Goals
-1. **Group By** functionality with one-to-many support
-2. **Aggregations** - Avg, Min, Max, Count, Sum on numeric fields
-3. **CSV Export** of current view
-
-### Completed
-
-**3.1 Backend Aggregation API**
-Added to `patents.routes.ts`:
-- `POST /api/patents/aggregate` - Main aggregation endpoint
-  - `groupBy`: single field or array of fields
-  - `aggregations`: array of `{ field, op }` where op is sum/avg/min/max/count_nonnull
-  - `explodeArrays`: boolean to expand array fields (competitor_names, cpc_codes)
-  - `filters`: reuses existing filter logic
-  - `sortBy`, `sortDesc`, `limit`: result ordering
-- `POST /api/patents/aggregate/export` - Export results as CSV
-
-**3.2 Frontend AggregatesPage.vue**
-Created new page with:
-- **Group By Selector**: Multi-select with 9 groupable fields
-  - Standard fields: Affiliate, Super-Sector, Primary Sector, Sub-Sector, Tech Category, Market Segment, Implementation Type
-  - Array fields: Competitor Names, CPC Codes (with explode toggle)
-- **Aggregation Builder**: Add multiple aggregations
-  - 14 numeric fields: scores, citations, years, LLM metrics
-  - 5 operations: Average, Sum, Min, Max, Count (non-null)
-- **FlexFilterBuilder Integration**: Same filters as Patent Summary
-- **Results Table**: Sortable columns, number formatting
-- **CSV Export**: Download aggregated results
-
-**3.3 Navigation**
-- Added route `/aggregates` with name `aggregates`
-- Added nav item "Aggregate View" with analytics icon
-
----
-
-## Phase 4 - Template System Improvements
-
-### Goals
-1. **View Scoring Templates** in Prompt Templates section (read-only)
-2. **Template Type Separation** - Different editors for tournament vs scoring templates
-3. **Inheritance Visualization** - Show template inheritance chain
-
----
-
-## Files Changed This Session
-
-| File | Changes |
+| File | Purpose |
 |------|---------|
-| `package.json` | Added `"dev"` script |
-| `frontend/src/pages/PortfolioPage.vue` | Scroll layout, sticky headers, FlexFilterBuilder integration |
-| `frontend/src/pages/AggregatesPage.vue` | NEW - Phase 3 aggregation page |
-| `frontend/src/pages/PromptTemplatesPage.vue` | Question normalization, null checks |
-| `frontend/src/pages/SectorManagementPage.vue` | CPC tooltips, preloading |
-| `frontend/src/stores/patents.ts` | Added `competitor_names` column, `setFilters` method |
-| `frontend/src/composables/useCpcDescriptions.ts` | NEW - CPC lookup composable |
-| `frontend/src/components/filters/FlexFilterBuilder.vue` | NEW - Dynamic filter builder |
-| `frontend/src/types/index.ts` | Added Phase 2 filter fields |
-| `frontend/src/router/index.ts` | Added aggregates route |
-| `frontend/src/layouts/MainLayout.vue` | Added Aggregate View nav item |
-| `src/api/routes/patents.routes.ts` | Phase 2 filters + Phase 3 aggregate endpoints |
-| `docs/MIGRATION_GUIDE.md` | Updated server command |
+| `frontend/src/services/api.ts` | V2 types, `patentFamilyV2Api` client (~1815 lines) |
+| `frontend/src/pages/PatentFamilyExplorerPage.vue` | V2 explorer page (~1650 lines) |
+| `frontend/src/pages/PortfolioPage.vue` | Patent summary with flex filters |
+| `frontend/src/pages/FocusAreaDetailPage.vue` | Focus area detail (~2750 lines) |
+| `frontend/src/composables/useGridColumns.ts` | Reusable column visibility composable |
+| `frontend/src/components/grid/GenericColumnSelector.vue` | Props-driven column selector dialog |
+| `frontend/src/components/grid/ColumnSelector.vue` | Thin wrapper for patents store |
+| `frontend/src/components/filters/FlexFilterBuilder.vue` | Dynamic filter builder |
+| `frontend/src/assets/grid-scrollbars.css` | Global always-visible scrollbar styles |
+| `frontend/src/types/index.ts` | ColumnGroup, GridColumnMeta, GridColumnGroup types |
+| `src/api/services/patent-family-service.ts` | Backend enrichment with dual-cache lookups |
+| `src/api/routes/patent-families.routes.ts` | V2 endpoints + enrichment routes |
+| `src/api/services/family-expansion-v2-service.ts` | V2 expansion service |
+| `src/api/services/family-expansion-scorer.ts` | 9-dimension scoring with presets |
+
+---
+
+## Known Issues / Future Work
+
+### From User Feedback (not yet addressed)
+1. **Multi-seed scoring** — How to handle multiple seeds' sectors in scoring (averaging, union, etc.). Needs design discussion.
+2. **Flexible filtering on grids** — Need filters for relationship type (child, sibling, cousin) in family explorer. FocusAreaDetailPage has old static filtering.
+3. **Affiliate admin** — Admin UI for managing multi-assignee affiliates.
+4. **Rate limiting (429)** — PatentsView API throttling during sibling expansion. May need request batching/queuing.
+
+### Technical Debt
+- FocusAreaDetailPage could benefit from `useGridColumns` composable
+- Consider extracting scroll container pattern into shared component
+- Filter presets (save/load filter configurations) — Phase 2.6 remaining
+
+---
+
+## Architecture Notes
+
+### Scoring System
+- 9 weighted dimensions + depthDecayRate
+- Three zones: member (>= membershipThreshold), candidate (>= expansionThreshold), excluded (< expansionThreshold)
+- Debounced rescore (300ms) via deep watch on weights + thresholds
+- DEFAULT_WEIGHTS defined in PatentFamilyExplorerPage.vue
+
+### Cache Locations (backend)
+| Cache | Path | ~Count | Source |
+|-------|------|--------|--------|
+| Prosecution scores | `cache/prosecution-scores/` | 11,576 | Prosecution scoring pipeline |
+| IPR scores | `cache/ipr-scores/` | 10,745 | IPR scoring pipeline |
+| File wrapper | `cache/api/file-wrapper/` | 454 | enrichWithDetails API |
+| PTAB | `cache/api/ptab/` | 455 | enrichWithDetails API |
+
+### State Management
+- PatentFamilyExplorerPage: local `ref()` + `computed()` (no Pinia)
+- PortfolioPage / FocusAreaDetailPage: `usePatentsStore` (Pinia)
+- Column visibility: localStorage via `useGridColumns` composable
 
 ---
 
@@ -200,17 +152,10 @@ npm run dev
 # Start frontend (from frontend directory)
 cd frontend && npm run dev
 
-# Check scoring progress
-docker exec -u postgres ip-port-postgres psql -U ip_admin -d ip_portfolio -c "
-SELECT template_config_id, COUNT(*), SUM(CASE WHEN with_claims THEN 1 ELSE 0 END)
-FROM patent_sub_sector_scores
-WHERE template_config_id IS NOT NULL
-GROUP BY template_config_id ORDER BY template_config_id;"
-
 # Start Docker services
 docker-compose up -d postgres elasticsearch
 ```
 
 ---
 
-*Last Updated: 2026-02-14*
+*Last Updated: 2026-02-15*

@@ -912,7 +912,6 @@ onMounted(async () => {
   min-width: 0;
   /* ALWAYS show both scrollbars */
   overflow: scroll !important;
-  /* Contain the table */
   position: relative;
 }
 

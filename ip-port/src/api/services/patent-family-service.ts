@@ -1346,9 +1346,9 @@ export interface EnrichmentStatus {
  * Check if a patent has IPR/litigation history
  */
 export async function checkPatentIPR(patentId: string): Promise<LitigationIndicator> {
+  // Check enrichment-specific cache first (api/ptab)
   const cachePath = path.join(process.cwd(), 'cache/api/ptab', `${patentId}.json`);
 
-  // Check cache first
   if (fs.existsSync(cachePath)) {
     try {
       const cached = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
@@ -1360,7 +1360,31 @@ export async function checkPatentIPR(patentId: string): Promise<LitigationIndica
         hasProsecutionHistory: false,
       };
     } catch {
-      // Fall through to API call
+      // Fall through
+    }
+  }
+
+  // Check main ipr-scores cache (populated by prosecution/IPR scoring pipeline)
+  const iprScoresPath = path.join(process.cwd(), 'cache/ipr-scores', `${patentId}.json`);
+  if (fs.existsSync(iprScoresPath)) {
+    try {
+      const cached = JSON.parse(fs.readFileSync(iprScoresPath, 'utf-8'));
+      return {
+        patentId,
+        hasIPR: cached.has_ipr_history === true || cached.petitions_filed > 0,
+        iprCount: cached.petitions_filed || 0,
+        iprTrials: (cached.details || []).map((d: any) => ({
+          trialNumber: d.trial_number || d.trialNumber,
+          trialType: d.trial_type || d.trialType || 'IPR',
+          status: d.status || d.trialStatusText,
+          petitionerName: d.petitioner || d.petitionerPartyName,
+          filingDate: d.filing_date || d.filingDate,
+          institutionDecision: d.institution_decision || d.institutionDecision,
+        })),
+        hasProsecutionHistory: false,
+      };
+    } catch {
+      // Fall through
     }
   }
 
@@ -1411,9 +1435,9 @@ export async function checkPatentIPR(patentId: string): Promise<LitigationIndica
  * Check prosecution history for a patent
  */
 export async function checkPatentProsecution(patentId: string): Promise<LitigationIndicator> {
+  // Check enrichment-specific cache first (api/file-wrapper)
   const cachePath = path.join(process.cwd(), 'cache/api/file-wrapper', `${patentId}.json`);
 
-  // Check cache first
   if (fs.existsSync(cachePath)) {
     try {
       const cached = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
@@ -1427,7 +1451,27 @@ export async function checkPatentProsecution(patentId: string): Promise<Litigati
         rejectionCount: cached.rejectionCount,
       };
     } catch {
-      // Fall through to API call
+      // Fall through
+    }
+  }
+
+  // Check main prosecution-scores cache (populated by prosecution scoring pipeline)
+  const prosScoresPath = path.join(process.cwd(), 'cache/prosecution-scores', `${patentId}.json`);
+  if (fs.existsSync(prosScoresPath)) {
+    try {
+      const cached = JSON.parse(fs.readFileSync(prosScoresPath, 'utf-8'));
+      const totalRejections = (cached.non_final_rejections || 0) + (cached.final_rejections || 0);
+      return {
+        patentId,
+        hasIPR: false,
+        iprCount: 0,
+        hasProsecutionHistory: true,
+        prosecutionStatus: cached.prosecution_quality_category || 'Patented',
+        officeActionCount: cached.office_actions_count || 0,
+        rejectionCount: totalRejections,
+      };
+    } catch {
+      // Fall through
     }
   }
 

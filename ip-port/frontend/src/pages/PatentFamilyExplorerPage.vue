@@ -86,8 +86,8 @@ const COLUMN_META = [
     description: dim.description,
   })),
   // Litigation
-  { name: 'ipr', label: 'IPR', group: 'litigation', defaultVisible: false },
-  { name: 'prosecution', label: 'Prosecution', group: 'litigation', defaultVisible: false },
+  { name: 'ipr', label: 'IPR', group: 'litigation', defaultVisible: true },
+  { name: 'prosecution', label: 'Prosecution', group: 'litigation', defaultVisible: true },
 ];
 
 // (Column visibility managed by useGridColumns composable below)
@@ -172,6 +172,11 @@ const loadingSaved = ref(false);
 
 const litigationData = ref<Map<string, LitigationIndicator>>(new Map());
 const enrichingData = ref(false);
+const enrichedCount = computed(() => litigationData.value.size);
+const unenrichedCount = computed(() => {
+  const total = allCandidates.value.length;
+  return total - enrichedCount.value;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State — Column Visibility (shared composable)
@@ -329,6 +334,7 @@ async function createExploration() {
 
     explorationId.value = state.id;
     explorationState.value = state;
+    updateUrlWithExploration(state.id);
 
     $q.notify({
       type: 'positive',
@@ -599,6 +605,7 @@ function clearExploration() {
   selectedCandidates.value = [];
   litigationData.value = new Map();
   resetWeights();
+  updateUrlWithExploration(null);
   loadSavedExplorations();
 }
 
@@ -640,6 +647,7 @@ async function loadExploration(id: string) {
     // Set the exploration
     explorationState.value = state;
     explorationId.value = state.id;
+    updateUrlWithExploration(state.id);
 
     $q.notify({
       type: 'positive',
@@ -672,29 +680,65 @@ async function deleteSavedExploration(id: string) {
 // Methods — Data Enrichment
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function enrichData() {
-  if (!explorationState.value) return;
+type EnrichTarget = 'members' | 'displayed' | 'all';
 
-  const allPatentIds = allCandidates.value.map(c => c.patentId);
-  if (allPatentIds.length === 0) return;
+function getEnrichTargetIds(target: EnrichTarget): string[] {
+  if (!explorationState.value) return [];
+  switch (target) {
+    case 'members':
+      return explorationState.value.members.map(c => c.patentId);
+    case 'displayed':
+      return displayedCandidates.value.map(c => c.patentId);
+    default:
+      return allCandidates.value.map(c => c.patentId);
+  }
+}
+
+function unenrichedForTarget(target: EnrichTarget): number {
+  return getEnrichTargetIds(target).filter(id => !litigationData.value.has(id)).length;
+}
+
+const ENRICH_BATCH_SIZE = 500;
+
+async function enrichData(target: EnrichTarget = 'all') {
+  // Only send patents we haven't already enriched this session
+  const allIds = getEnrichTargetIds(target);
+  const patentIds = allIds.filter(id => !litigationData.value.has(id));
+  if (patentIds.length === 0) {
+    $q.notify({ type: 'info', message: 'All patents in this selection already enriched' });
+    return;
+  }
 
   enrichingData.value = true;
-  try {
-    const result = await patentFamilyApi.enrichWithDetails(allPatentIds, {
-      includeIpr: true,
-      includeProsecution: true,
-    });
+  let totalIpr = 0;
+  let totalPros = 0;
+  let totalEnriched = 0;
 
-    const newMap = new Map(litigationData.value);
-    for (const indicator of result.litigation.indicators) {
-      newMap.set(indicator.patentId, indicator);
+  try {
+    // Process in batches of 500 to avoid backend truncation
+    for (let i = 0; i < patentIds.length; i += ENRICH_BATCH_SIZE) {
+      const batch = patentIds.slice(i, i + ENRICH_BATCH_SIZE);
+      const result = await patentFamilyApi.enrichWithDetails(batch, {
+        includeIpr: true,
+        includeProsecution: true,
+        limit: ENRICH_BATCH_SIZE,
+      });
+
+      const newMap = new Map(litigationData.value);
+      for (const indicator of result.litigation.indicators) {
+        newMap.set(indicator.patentId, indicator);
+      }
+      litigationData.value = newMap;
+
+      totalIpr += result.litigation.indicators.filter(i => i.hasIPR).length;
+      totalPros += result.litigation.indicators.filter(i => i.hasProsecutionHistory).length;
+      totalEnriched += result.total;
     }
-    litigationData.value = newMap;
 
     $q.notify({
       type: 'positive',
-      message: `Enriched ${result.total} patents — ${result.litigation.enriched} with litigation data`,
-      timeout: 4000,
+      message: `Enriched ${totalEnriched} patents: ${totalIpr} with IPR, ${totalPros} with prosecution history`,
+      timeout: 5000,
     });
   } catch (err) {
     $q.notify({ type: 'negative', message: 'Failed to enrich patent data' });
@@ -734,6 +778,17 @@ function formatPct(val: number): string {
 // Mount — Load presets
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Sync exploration ID to URL query params for back-navigation
+function updateUrlWithExploration(id: string | null) {
+  const query = { ...route.query };
+  if (id) {
+    query.exploration = id;
+  } else {
+    delete query.exploration;
+  }
+  router.replace({ query });
+}
+
 onMounted(async () => {
   try {
     presets.value = await patentFamilyV2Api.getPresets();
@@ -742,6 +797,13 @@ onMounted(async () => {
   }
 
   loadSavedExplorations();
+
+  // Restore exploration from URL query (back-navigation support)
+  const urlExploration = route.query.exploration;
+  if (urlExploration && typeof urlExploration === 'string') {
+    await loadExploration(urlExploration);
+    return;
+  }
 
   // Populate seeds from URL query (e.g., ?seeds=10002084,10003456)
   const urlSeeds = route.query.seeds;
@@ -1161,13 +1223,11 @@ onMounted(async () => {
                 </template>
               </q-input>
               <q-btn
-                flat dense
+                flat dense no-caps
                 icon="view_column"
                 label="Columns"
                 @click="gridColumns.showColumnDialog.value = true"
-              >
-                <q-badge color="primary" floating>{{ gridColumns.visibleCount.value }}</q-badge>
-              </q-btn>
+              />
             </div>
 
             <!-- Zone actions bar -->
@@ -1188,17 +1248,39 @@ onMounted(async () => {
                 :disable="zoneCounts.candidates === 0"
                 @click="rejectAllBelowThreshold"
               />
-              <q-btn
-                dense no-caps flat
+              <q-btn-dropdown
+                dense no-caps flat split
                 icon="biotech"
-                label="Enrich Data"
+                :label="unenrichedCount > 0 ? `Enrich (${unenrichedCount} new)` : `Enriched (${enrichedCount})`"
                 color="deep-purple"
                 :loading="enrichingData"
                 :disable="allCandidates.length === 0"
-                @click="enrichData"
+                @click="enrichData('all')"
               >
-                <q-tooltip>Fetch IPR & prosecution data for all patents</q-tooltip>
-              </q-btn>
+                <q-list dense>
+                  <q-item clickable v-close-popup @click="enrichData('members')">
+                    <q-item-section avatar><q-icon name="check_circle" color="positive" /></q-item-section>
+                    <q-item-section>
+                      <q-item-label>Members only</q-item-label>
+                      <q-item-label caption>{{ zoneCounts.members }} members{{ unenrichedForTarget('members') > 0 ? ` (${unenrichedForTarget('members')} new)` : '' }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup @click="enrichData('displayed')">
+                    <q-item-section avatar><q-icon name="visibility" /></q-item-section>
+                    <q-item-section>
+                      <q-item-label>Current page</q-item-label>
+                      <q-item-label caption>{{ displayedCandidates.length }} in view{{ unenrichedForTarget('displayed') > 0 ? ` (${unenrichedForTarget('displayed')} new)` : '' }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup @click="enrichData('all')">
+                    <q-item-section avatar><q-icon name="select_all" /></q-item-section>
+                    <q-item-section>
+                      <q-item-label>All patents</q-item-label>
+                      <q-item-label caption>{{ allCandidates.length }} total{{ unenrichedCount > 0 ? ` (${unenrichedCount} new)` : '' }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-btn-dropdown>
               <q-space />
               <q-btn
                 dense no-caps flat
@@ -1248,6 +1330,8 @@ onMounted(async () => {
             </div>
 
             <!-- Results table -->
+            <div class="table-wrapper">
+            <div class="table-scroll-container">
             <q-table
               :rows="displayedCandidates"
               :columns="tableColumns"
@@ -1256,6 +1340,7 @@ onMounted(async () => {
               v-model:selected="selectedCandidates"
               selection="multiple"
               flat bordered dense
+              hide-pagination
               :loading="expanding"
             >
               <!-- Status column: clickable icon -->
@@ -1390,28 +1475,58 @@ onMounted(async () => {
                         </div>
                       </q-tooltip>
                     </q-badge>
-                    <span v-else class="text-grey-5">—</span>
+                    <span v-else class="text-green-4 text-caption">None</span>
                   </template>
-                  <span v-else class="text-grey-4">·</span>
+                  <span v-else class="text-grey-4 text-caption">—</span>
                 </q-td>
               </template>
 
               <!-- Prosecution column -->
               <template v-slot:body-cell-prosecution="props">
                 <q-td :props="props">
-                  <template v-if="litigationData.get(props.row.patentId)?.hasProsecutionHistory">
-                    <span class="text-caption">
-                      {{ litigationData.get(props.row.patentId)!.prosecutionStatus || 'Yes' }}
-                    </span>
-                    <q-tooltip v-if="litigationData.get(props.row.patentId)!.officeActionCount">
-                      {{ litigationData.get(props.row.patentId)!.officeActionCount }} office actions,
-                      {{ litigationData.get(props.row.patentId)!.rejectionCount || 0 }} rejections
-                    </q-tooltip>
+                  <template v-if="litigationData.has(props.row.patentId)">
+                    <template v-if="litigationData.get(props.row.patentId)!.hasProsecutionHistory">
+                      <q-badge
+                        :color="(litigationData.get(props.row.patentId)!.rejectionCount || 0) > 0 ? 'orange' : 'green'"
+                        text-color="white"
+                      >
+                        {{ litigationData.get(props.row.patentId)!.officeActionCount || 0 }} OA
+                        <q-tooltip>
+                          Status: {{ litigationData.get(props.row.patentId)!.prosecutionStatus || 'unknown' }}<br/>
+                          {{ litigationData.get(props.row.patentId)!.officeActionCount || 0 }} office actions,
+                          {{ litigationData.get(props.row.patentId)!.rejectionCount || 0 }} rejections
+                        </q-tooltip>
+                      </q-badge>
+                    </template>
+                    <span v-else class="text-green-4 text-caption">None</span>
                   </template>
-                  <span v-else class="text-grey-4">·</span>
+                  <span v-else class="text-grey-4 text-caption">—</span>
                 </q-td>
               </template>
             </q-table>
+            </div><!-- /table-scroll-container -->
+            <!-- Pagination bar outside scroll area -->
+            <div class="pagination-bar row items-center justify-between q-px-md q-py-xs">
+              <span class="text-caption text-grey-7">
+                {{ displayedCandidates.length }} patents
+              </span>
+              <q-pagination
+                v-model="pagination.page"
+                :max="Math.ceil(displayedCandidates.length / pagination.rowsPerPage)"
+                :max-pages="7"
+                direction-links
+                boundary-links
+                input
+                size="sm"
+              />
+              <q-select
+                v-model="pagination.rowsPerPage"
+                :options="[25, 50, 100, 200]"
+                dense borderless
+                style="width: 70px"
+              />
+            </div>
+            </div><!-- /table-wrapper -->
           </q-card-section>
         </q-card>
 
@@ -1527,5 +1642,126 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLL CONTAINER — matches PortfolioPage pattern
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.table-wrapper {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  height: calc(100vh - 340px);
+  min-height: 350px;
+}
+
+.table-scroll-container {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  /* ALWAYS show both scrollbars */
+  overflow: scroll !important;
+  position: relative;
+}
+
+/* Custom scrollbar styling - larger and always visible */
+.table-scroll-container::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #e8e8e8;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #999;
+  border: 3px solid #e8e8e8;
+  border-radius: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.table-scroll-container::-webkit-scrollbar-corner {
+  background: #e8e8e8;
+}
+
+/* Firefox scrollbar - always visible */
+.table-scroll-container {
+  scrollbar-width: auto;
+  scrollbar-color: #999 #e8e8e8;
+}
+
+.pagination-bar {
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
+  background: #fafafa;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STICKY HEADER + FROZEN COLUMNS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Remove any default q-table wrapper scrolling — we control it */
+:deep(.q-table__container) {
+  overflow: visible !important;
+}
+
+:deep(.q-table__middle) {
+  overflow: visible !important;
+}
+
+:deep(.q-table) {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Sticky header row */
+:deep(.q-table thead tr) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+:deep(.q-table thead th) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f5f5f5 !important;
+  border-bottom: 2px solid #ddd !important;
+}
+
+/* Pin selection checkbox column (frozen left) */
+:deep(.q-table td:first-child),
+:deep(.q-table th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: #fff;
+}
+
+:deep(.q-table thead th:first-child) {
+  z-index: 15 !important;
+  background: #f5f5f5 !important;
+}
+
+/* Pin status column (frozen left, second column) */
+:deep(.q-table td:nth-child(2)),
+:deep(.q-table th:nth-child(2)) {
+  position: sticky;
+  left: 48px;
+  z-index: 5;
+  background: #fff;
+  box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.q-table thead th:nth-child(2)) {
+  z-index: 15 !important;
+  background: #f5f5f5 !important;
 }
 </style>

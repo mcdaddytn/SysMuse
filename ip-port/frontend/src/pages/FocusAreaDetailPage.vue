@@ -2596,7 +2596,38 @@ code {
 
 .table-scroll-container {
   max-height: calc(100vh - 260px);
-  overflow: auto;
+  /* ALWAYS show both scrollbars */
+  overflow: scroll !important;
+}
+
+/* Custom scrollbar styling - larger and always visible */
+.table-scroll-container::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #e8e8e8;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #999;
+  border: 3px solid #e8e8e8;
+  border-radius: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.table-scroll-container::-webkit-scrollbar-corner {
+  background: #e8e8e8;
+}
+
+/* Firefox scrollbar - always visible */
+.table-scroll-container {
+  scrollbar-width: auto;
+  scrollbar-color: #999 #e8e8e8;
 }
 
 /* Pin selection checkbox column */

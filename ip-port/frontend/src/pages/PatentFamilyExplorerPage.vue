@@ -340,6 +340,9 @@ async function createExploration() {
       type: 'positive',
       message: `Exploration created with ${state.memberCount} seed patents`,
     });
+
+    // Auto-enrich with cached IPR/prosecution data
+    autoEnrich();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to create exploration';
     $q.notify({ type: 'negative', message: error.value });
@@ -653,6 +656,9 @@ async function loadExploration(id: string) {
       type: 'positive',
       message: `Loaded exploration${state.name ? ` "${state.name}"` : ''} — ${state.memberCount} members, ${state.candidateCount} candidates`,
     });
+
+    // Auto-enrich with cached IPR/prosecution data (fast, reads from local cache)
+    autoEnrich();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load exploration';
     $q.notify({ type: 'negative', message: error.value });
@@ -680,15 +686,21 @@ async function deleteSavedExploration(id: string) {
 // Methods — Data Enrichment
 // ─────────────────────────────────────────────────────────────────────────────
 
-type EnrichTarget = 'members' | 'displayed' | 'all';
+type EnrichTarget = 'members' | 'page' | 'all';
+
+// Get the actual paginated page of patents currently visible on screen
+const currentPagePatents = computed<ScoredCandidateV2[]>(() => {
+  const start = (pagination.value.page - 1) * pagination.value.rowsPerPage;
+  return displayedCandidates.value.slice(start, start + pagination.value.rowsPerPage);
+});
 
 function getEnrichTargetIds(target: EnrichTarget): string[] {
   if (!explorationState.value) return [];
   switch (target) {
     case 'members':
       return explorationState.value.members.map(c => c.patentId);
-    case 'displayed':
-      return displayedCandidates.value.map(c => c.patentId);
+    case 'page':
+      return currentPagePatents.value.map(c => c.patentId);
     default:
       return allCandidates.value.map(c => c.patentId);
   }
@@ -744,6 +756,32 @@ async function enrichData(target: EnrichTarget = 'all') {
     $q.notify({ type: 'negative', message: 'Failed to enrich patent data' });
   } finally {
     enrichingData.value = false;
+  }
+}
+
+// Silent background enrichment — reads ONLY from local cache (fast, no API calls)
+async function autoEnrich() {
+  if (!explorationState.value) return;
+  const patentIds = allCandidates.value
+    .filter(c => !litigationData.value.has(c.patentId))
+    .map(c => c.patentId);
+  if (patentIds.length === 0) return;
+
+  try {
+    // Cache-only mode: no live API calls, higher batch limit, fast
+    const result = await patentFamilyApi.enrichWithDetails(patentIds, {
+      includeIpr: true,
+      includeProsecution: true,
+      cacheOnly: true,
+      limit: 2000,
+    });
+    const newMap = new Map(litigationData.value);
+    for (const indicator of result.litigation.indicators) {
+      newMap.set(indicator.patentId, indicator);
+    }
+    litigationData.value = newMap;
+  } catch {
+    // Silent — don't bother user if background enrichment fails
   }
 }
 
@@ -831,16 +869,17 @@ onMounted(async () => {
       <q-badge color="amber" text-color="dark" class="q-ml-sm" v-if="zoneCounts.candidates > 0">
         {{ zoneCounts.candidates }} candidates
       </q-badge>
-      <q-spinner-dots v-if="rescoring" color="primary" class="q-ml-md" size="20px" />
-      <q-space />
       <q-btn
         v-if="hasExploration"
-        flat
-        dense
-        icon="refresh"
-        label="New"
+        flat dense no-caps
+        icon="open_in_new"
+        label="Open"
+        class="q-ml-md"
         @click="clearExploration"
-      />
+      >
+        <q-tooltip>Start a new exploration</q-tooltip>
+      </q-btn>
+      <q-spinner-dots v-if="rescoring" color="primary" class="q-ml-md" size="20px" />
     </div>
 
     <div class="row q-col-gutter-md">
@@ -1265,11 +1304,11 @@ onMounted(async () => {
                       <q-item-label caption>{{ zoneCounts.members }} members{{ unenrichedForTarget('members') > 0 ? ` (${unenrichedForTarget('members')} new)` : '' }}</q-item-label>
                     </q-item-section>
                   </q-item>
-                  <q-item clickable v-close-popup @click="enrichData('displayed')">
+                  <q-item clickable v-close-popup @click="enrichData('page')">
                     <q-item-section avatar><q-icon name="visibility" /></q-item-section>
                     <q-item-section>
                       <q-item-label>Current page</q-item-label>
-                      <q-item-label caption>{{ displayedCandidates.length }} in view{{ unenrichedForTarget('displayed') > 0 ? ` (${unenrichedForTarget('displayed')} new)` : '' }}</q-item-label>
+                      <q-item-label caption>{{ currentPagePatents.length }} on page{{ unenrichedForTarget('page') > 0 ? ` (${unenrichedForTarget('page')} new)` : '' }}</q-item-label>
                     </q-item-section>
                   </q-item>
                   <q-item clickable v-close-popup @click="enrichData('all')">
@@ -1671,6 +1710,7 @@ onMounted(async () => {
 .table-scroll-container::-webkit-scrollbar {
   width: 16px;
   height: 16px;
+  -webkit-appearance: none;
 }
 
 .table-scroll-container::-webkit-scrollbar-track {

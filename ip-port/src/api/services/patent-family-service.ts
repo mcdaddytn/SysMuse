@@ -1345,7 +1345,7 @@ export interface EnrichmentStatus {
 /**
  * Check if a patent has IPR/litigation history
  */
-export async function checkPatentIPR(patentId: string): Promise<LitigationIndicator> {
+export async function checkPatentIPR(patentId: string, cacheOnly = false): Promise<LitigationIndicator> {
   // Check enrichment-specific cache first (api/ptab)
   const cachePath = path.join(process.cwd(), 'cache/api/ptab', `${patentId}.json`);
 
@@ -1388,8 +1388,8 @@ export async function checkPatentIPR(patentId: string): Promise<LitigationIndica
     }
   }
 
-  // Try to use PTAB client if API key is available
-  if (process.env.USPTO_ODP_API_KEY) {
+  // Try to use PTAB client if API key is available (skip for cache-only mode)
+  if (!cacheOnly && process.env.USPTO_ODP_API_KEY) {
     try {
       const { createPTABClient } = await import('../../../clients/odp-ptab-client.js');
       const client = createPTABClient();
@@ -1434,7 +1434,7 @@ export async function checkPatentIPR(patentId: string): Promise<LitigationIndica
 /**
  * Check prosecution history for a patent
  */
-export async function checkPatentProsecution(patentId: string): Promise<LitigationIndicator> {
+export async function checkPatentProsecution(patentId: string, cacheOnly = false): Promise<LitigationIndicator> {
   // Check enrichment-specific cache first (api/file-wrapper)
   const cachePath = path.join(process.cwd(), 'cache/api/file-wrapper', `${patentId}.json`);
 
@@ -1475,8 +1475,8 @@ export async function checkPatentProsecution(patentId: string): Promise<Litigati
     }
   }
 
-  // Try to use File Wrapper client if API key is available
-  if (process.env.USPTO_ODP_API_KEY) {
+  // Try to use File Wrapper client if API key is available (skip for cache-only mode)
+  if (!cacheOnly && process.env.USPTO_ODP_API_KEY) {
     try {
       const { createFileWrapperClient } = await import('../../../clients/odp-file-wrapper-client.js');
       const client = createFileWrapperClient();
@@ -1548,12 +1548,13 @@ export async function enrichWithLitigation(
   options: {
     includeIpr?: boolean;
     includeProsecution?: boolean;
+    cacheOnly?: boolean;
   } = {}
 ): Promise<{
   enriched: number;
   indicators: LitigationIndicator[];
 }> {
-  const { includeIpr = true, includeProsecution = true } = options;
+  const { includeIpr = true, includeProsecution = true, cacheOnly = false } = options;
   const indicators: LitigationIndicator[] = [];
   let enriched = 0;
 
@@ -1567,12 +1568,12 @@ export async function enrichWithLitigation(
       };
 
       if (includeIpr) {
-        const iprData = await checkPatentIPR(patentId);
+        const iprData = await checkPatentIPR(patentId, cacheOnly);
         indicator = { ...indicator, ...iprData };
       }
 
       if (includeProsecution) {
-        const prosData = await checkPatentProsecution(patentId);
+        const prosData = await checkPatentProsecution(patentId, cacheOnly);
         indicator = {
           ...indicator,
           hasProsecutionHistory: prosData.hasProsecutionHistory,
@@ -1712,6 +1713,7 @@ export async function enrichPatentsWithDetails(
     fetchBasicDetails?: boolean;
     includeIpr?: boolean;
     includeProsecution?: boolean;
+    cacheOnly?: boolean;
   } = {}
 ): Promise<{
   detailsFetched: FetchPatentDetailsResult;
@@ -1720,7 +1722,8 @@ export async function enrichPatentsWithDetails(
   const {
     fetchBasicDetails = true,
     includeIpr = true,
-    includeProsecution = true
+    includeProsecution = true,
+    cacheOnly = false,
   } = options;
 
   // Step 1: Fetch basic patent details first
@@ -1731,12 +1734,12 @@ export async function enrichPatentsWithDetails(
     patentIds: { fetched: [], alreadyCached: patentIds, failed: [] },
   };
 
-  if (fetchBasicDetails) {
+  if (fetchBasicDetails && !cacheOnly) {
     detailsFetched = await fetchMissingPatentDetails(patentIds);
   }
 
   // Step 2: Enrich with litigation data
-  const litigation = await enrichWithLitigation(patentIds, { includeIpr, includeProsecution });
+  const litigation = await enrichWithLitigation(patentIds, { includeIpr, includeProsecution, cacheOnly });
 
   return { detailsFetched, litigation };
 }

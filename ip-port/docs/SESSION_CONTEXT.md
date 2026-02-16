@@ -65,22 +65,77 @@ Full plan: `/Users/gmac/.claude/plans/purring-watching-llama.md`
 ## Bug Fixes Applied (Feb 15)
 
 1. **Column badge removed** — Floating count badge on Columns button was blocking text
-2. **Global scrollbar CSS** — `frontend/src/assets/grid-scrollbars.css` (imported in main.ts):
+2. **Scrollbar CSS** — Each page has its own inline scoped scrollbar CSS (DO NOT use global CSS file):
    - **Critical: `overflow: scroll !important`** (not `auto`) — forces scrollbars always visible on macOS
-   - **16px scrollbar width/height** — overrides macOS overlay behavior via `::-webkit-scrollbar`
+   - **16px scrollbar width/height + `-webkit-appearance: none`** — overrides macOS overlay in Chrome and Safari
    - **Firefox: `scrollbar-width: auto`** (not `thin`) — keeps scrollbars visible
-   - Applied to all pages: PortfolioPage, FocusAreaDetailPage, PatentFamilyExplorerPage
+   - Removed `grid-scrollbars.css` global import from main.ts (it conflicted with scoped `:deep(.q-table__middle) { overflow: visible }`)
+   - Applied inline to: PortfolioPage, PatentFamilyExplorerPage, FocusAreaDetailPage
 3. **PatentFamilyExplorerPage scroll container** — Added `.table-wrapper` + `.table-scroll-container` with:
    - Fixed height: `calc(100vh - 340px)`
    - `hide-pagination` on q-table, separate pagination bar outside scroll area
-   - Sticky headers, q-table scroll overrides (`:deep(.q-table__container)` overflow visible)
-   - Matching PortfolioPage scroll container pattern
+   - Sticky headers, frozen checkbox + status columns (sticky left)
+   - q-table scroll overrides (`:deep(.q-table__container)` overflow visible)
 4. **IPR/Prosecution cache fix** — `checkPatentIPR()` and `checkPatentProsecution()` in `patent-family-service.ts` now check BOTH cache locations:
-   - `cache/ipr-scores/` (~10,745 files from scoring pipeline) + `cache/api/ptab/` (~455 from enrichment API)
-   - `cache/prosecution-scores/` (~11,576 files from scoring pipeline) + `cache/api/file-wrapper/` (~454 from enrichment API)
-5. **Enrichment UX simplified** — Split button with 3 options (Members, Current Page, All), auto-skips already-enriched, shows "(N new)" counts. Distinguished "None" (green) vs "—" (grey, not yet enriched) in columns.
-6. **Enrichment batching** — Frontend now processes enrichment in batches of 500 to avoid backend 200-patent truncation limit. Accumulates IPR/prosecution counts across batches.
-7. **Exploration state preserved on navigation** — Exploration ID stored in URL query param (`?exploration=xxx`). On mount, if present, auto-loads the exploration. Clicking "New" clears both state and URL.
+   - `cache/ipr-scores/` (~10,745 files) + `cache/api/ptab/` (~455)
+   - `cache/prosecution-scores/` (~11,576 files) + `cache/api/file-wrapper/` (~454)
+5. **Enrichment UX simplified** — Split button with 3 options (Members, Current Page, All). "Current Page" now uses actual paginated page (e.g., 50 patents), not entire zone.
+6. **Enrichment batching** — Frontend batches in groups of 500 to avoid backend 200-patent truncation limit.
+7. **Exploration state preserved on navigation** — Exploration ID in URL query param. On back-navigation, auto-loads.
+8. **Auto-enrichment on load** — `autoEnrich()` runs silently with `cacheOnly: true` when creating or loading an exploration. Only reads from local file cache (no API calls), fast for any number of patents.
+9. **"Open" button** — Renamed from "New", repositioned next to title badges.
+10. **Prosecution column display** — Shows badge with "N OA" (office action count), color-coded (orange if rejections, green if clean), with tooltip showing status + details.
+
+---
+
+## ONGOING: Chrome Scrollbar Visibility Problem
+
+**Status**: UNRESOLVED — scrollbars work in Safari but NOT in Chrome.
+
+**Working reference**: Commit `37bf802` ("Fixed scrolling patent summary", 2/14 2:03 PM) — scrollbars were confirmed working in Chrome after this commit.
+
+**What we know**:
+- The CSS in the current codebase is functionally identical to commit `37bf802` (verified via diff)
+- Safari renders the custom `::-webkit-scrollbar` styles correctly — scrollbars always visible
+- Chrome does NOT render them — shows macOS overlay behavior (vertical only while scrolling, no horizontal)
+- Quasar CSS (`quasar.css`) does not have conflicting scrollbar rules on `.q-table__middle`
+- No other CSS files in the project affect scrollbars
+- The global `grid-scrollbars.css` was removed (it conflicted with scoped `:deep(.q-table__middle)` rules)
+- Vite HMR confirmed serving the correct CSS with scrollbar rules
+
+**CSS pattern that should work** (from commit `37bf802`, scoped in each page):
+```css
+.table-scroll-container {
+  overflow: scroll !important;
+}
+.table-scroll-container::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  -webkit-appearance: none;  /* added later for Chrome */
+}
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #e8e8e8;
+}
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #999;
+  border: 3px solid #e8e8e8;
+  border-radius: 8px;
+}
+.table-scroll-container {
+  scrollbar-width: auto;
+  scrollbar-color: #999 #e8e8e8;
+}
+```
+
+**Things to investigate next**:
+1. Chrome version / flags — check `chrome://flags` for overlay scrollbar settings
+2. Chrome DevTools — inspect `.table-scroll-container` element, check Computed styles for `overflow` and whether `::-webkit-scrollbar` rules appear in the Styles pane
+3. Try adding `scrollbar-gutter: stable both-edges` as an alternative approach
+4. Try `overflow: overlay` (deprecated but Chrome may respond to it)
+5. Check if Chrome is treating scoped `[data-v-xxx]::-webkit-scrollbar` differently than unscoped — try moving scrollbar CSS to `<style>` (unscoped) section
+6. Compare Chrome version to when it was working (Feb 14)
+7. Check if `min-height: 0; min-width: 0;` on `.table-scroll-container` (added after 37bf802) somehow affects Chrome's scrollbar rendering
+8. Try reverting PortfolioPage.vue to exact `37bf802` version with `git checkout 37bf802 -- ip-port/frontend/src/pages/PortfolioPage.vue` and test in Chrome
 
 ---
 

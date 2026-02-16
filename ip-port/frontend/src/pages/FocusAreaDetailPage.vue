@@ -2604,6 +2604,7 @@ code {
 .table-scroll-container::-webkit-scrollbar {
   width: 16px;
   height: 16px;
+  -webkit-appearance: none;
 }
 
 .table-scroll-container::-webkit-scrollbar-track {

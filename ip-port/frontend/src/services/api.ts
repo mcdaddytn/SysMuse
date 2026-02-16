@@ -1588,6 +1588,7 @@ export const patentFamilyApi = {
       fetchBasicDetails?: boolean;
       includeIpr?: boolean;
       includeProsecution?: boolean;
+      cacheOnly?: boolean;  // Only read from local cache, skip live API calls
       limit?: number;  // Default 200, max 500
     }
   ): Promise<EnrichWithDetailsResult & { originalCount?: number }> {

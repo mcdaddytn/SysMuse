@@ -610,6 +610,7 @@ router.post('/enrich-with-details', async (req: Request, res: Response) => {
       fetchBasicDetails = true,
       includeIpr = true,
       includeProsecution = true,
+      cacheOnly = false,
       limit = 200,  // Default to 200, max 500
     } = req.body;
 
@@ -617,16 +618,17 @@ router.post('/enrich-with-details', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'patentIds array is required' });
     }
 
-    // Limit batch size (max 500 to avoid timeouts)
-    const maxLimit = Math.min(limit, 500);
+    // Limit batch size (max 500 to avoid timeouts, allow more for cache-only)
+    const maxLimit = cacheOnly ? Math.min(limit, 2000) : Math.min(limit, 500);
     const limitedIds = patentIds.slice(0, maxLimit);
 
-    console.log(`[PatentFamily] Enriching ${limitedIds.length} of ${patentIds.length} patents...`);
+    console.log(`[PatentFamily] Enriching ${limitedIds.length} of ${patentIds.length} patents${cacheOnly ? ' (cache only)' : ''}...`);
 
     const result = await enrichPatentsWithDetails(limitedIds, {
-      fetchBasicDetails,
+      fetchBasicDetails: cacheOnly ? false : fetchBasicDetails,
       includeIpr,
       includeProsecution,
+      cacheOnly,
     });
 
     res.json({

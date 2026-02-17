@@ -356,6 +356,113 @@ export const v2EnhancedApi = {
   },
 };
 
+// =============================================================================
+// Score Snapshots API
+// =============================================================================
+
+export type ScoreType = 'V2' | 'V3';
+
+export interface ScoreSnapshot {
+  id: string;
+  name: string;
+  description?: string;
+  scoreType: ScoreType;
+  config: V2EnhancedConfig | Record<string, unknown>;
+  isActive: boolean;
+  patentCount: number;
+  llmDataCount: number;
+  createdAt: string;
+}
+
+export interface ActiveSnapshots {
+  V2: ScoreSnapshot | null;
+  V3: ScoreSnapshot | null;
+}
+
+export interface SaveSnapshotRequest {
+  name: string;
+  description?: string;
+  scoreType: ScoreType;
+  config: V2EnhancedConfig | Record<string, unknown>;
+  scores: Array<{
+    patent_id: string;
+    score: number;
+    rank: number;
+    raw_metrics?: Record<string, number>;
+    normalized_metrics?: Record<string, number>;
+  }>;
+  setActive?: boolean;
+}
+
+export const snapshotApi = {
+  /**
+   * List all saved score snapshots
+   */
+  async list(): Promise<ScoreSnapshot[]> {
+    const { data } = await api.get('/scores/snapshots');
+    return data;
+  },
+
+  /**
+   * Get currently active snapshots (one per score type)
+   */
+  async getActive(): Promise<ActiveSnapshots> {
+    const { data } = await api.get('/scores/snapshots/active');
+    return data;
+  },
+
+  /**
+   * Save a new score snapshot
+   */
+  async save(request: SaveSnapshotRequest): Promise<ScoreSnapshot> {
+    const { data } = await api.post('/scores/snapshots', request);
+    return data;
+  },
+
+  /**
+   * Activate a snapshot (set as current for its score type)
+   */
+  async activate(snapshotId: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.put(`/scores/snapshots/${snapshotId}/activate`);
+    return data;
+  },
+
+  /**
+   * Deactivate a snapshot
+   */
+  async deactivate(snapshotId: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.put(`/scores/snapshots/${snapshotId}/deactivate`);
+    return data;
+  },
+
+  /**
+   * Delete a snapshot
+   */
+  async delete(snapshotId: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.delete(`/scores/snapshots/${snapshotId}`);
+    return data;
+  },
+
+  /**
+   * Get scores from a snapshot (for debugging/export)
+   */
+  async getScores(snapshotId: string, options?: { limit?: number; offset?: number }): Promise<{
+    scores: Array<{
+      patentId: string;
+      score: number;
+      rank: number;
+      rawMetrics?: Record<string, number>;
+      normalizedMetrics?: Record<string, number>;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const { data } = await api.get(`/scores/snapshots/${snapshotId}/scores`, { params: options });
+    return data;
+  },
+};
+
 // Jobs API
 export const jobsApi = {
   async getJobs(status?: string) {
@@ -1172,6 +1279,151 @@ export interface FamilyCacheStatus {
   hasParentDetails: boolean;
 }
 
+// Multi-seed exploration types
+export type MergeStrategy = 'UNION' | 'INTERSECTION';
+
+export interface MultiSeedConfig {
+  seedPatentIds: string[];
+  maxAncestorDepth?: number;
+  maxDescendantDepth?: number;
+  includeSiblings?: boolean;
+  includeCousins?: boolean;
+  limitToSectors?: string[];
+  limitToCpcPrefixes?: string[];
+  limitToCompetitors?: string[];
+  limitToAffiliates?: string[];
+  requireInPortfolio?: boolean;
+  mergeStrategy?: MergeStrategy;
+  minFilingYear?: number;
+  name?: string;
+  description?: string;
+}
+
+export interface PreviewResult {
+  estimatedMembers: {
+    total: number;
+    parents: number;
+    children: number;
+    siblings: number;
+    seeds: number;
+  };
+  seedOverlap: {
+    sharedCitationsCount: number;
+    commonSectors: string[];
+  };
+  cachedDataAvailable: number;
+  estimatedApiCalls: number;
+  seedDetails: Array<{
+    patentId: string;
+    title?: string;
+    inPortfolio: boolean;
+    hasCachedCitations: boolean;
+  }>;
+}
+
+export interface CompetitorMatch {
+  company: string;
+  category: string;
+  pattern: string;
+}
+
+export type DataRetrievalStatus =
+  | 'portfolio'       // Data from portfolio (complete)
+  | 'cached'          // Data retrieved and cached
+  | 'not_attempted'   // Not yet attempted to retrieve
+  | 'not_found'       // Attempted but not found (too recent, invalid ID)
+  | 'partial';        // Some data available but incomplete
+
+export interface EnrichedFamilyMember {
+  patentId: string;
+  relationToSeed: string;
+  generationDepth: number;
+  inPortfolio: boolean;
+  patentTitle: string;
+  assignee: string;
+  patentDate: string;
+  primarySector: string;
+  superSector: string;
+  forwardCitations?: number;
+  score?: number;
+  affiliate: string;
+  competitorMatch?: CompetitorMatch | null;
+  seedPatentIds: string[];
+  remainingYears?: number;
+  dataStatus: DataRetrievalStatus;
+  dataStatusReason?: string;
+}
+
+export interface MultiSeedExplorationResult {
+  exploration: PatentFamilyExploration & {
+    seedPatentIds: string[];
+    mergeStrategy: MergeStrategy;
+  };
+  members: EnrichedFamilyMember[];
+  memberCount: number;
+}
+
+export interface FilterOptions {
+  competitors: string[];
+  affiliates: Array<{ key: string; displayName: string }>;
+}
+
+// Litigation/IPR enrichment types
+export interface LitigationIndicator {
+  patentId: string;
+  hasIPR: boolean;
+  iprCount: number;
+  iprTrials?: Array<{
+    trialNumber: string;
+    trialType: string;
+    status?: string;
+    petitionerName?: string;
+    filingDate?: string;
+    institutionDecision?: string;
+  }>;
+  hasProsecutionHistory: boolean;
+  prosecutionStatus?: string;
+  officeActionCount?: number;
+  rejectionCount?: number;
+}
+
+export interface EnrichmentStatusItem {
+  patentId: string;
+  status: 'pending' | 'in_progress' | 'complete' | 'error';
+  hasIPR?: boolean;
+  hasProsecutionHistory?: boolean;
+  error?: string;
+}
+
+export interface EnrichmentResult {
+  enriched: number;
+  total: number;
+  indicators: LitigationIndicator[];
+  truncated: boolean;
+}
+
+export interface FetchPatentDetailsResult {
+  fetched: number;
+  alreadyCached: number;
+  failed: number;
+  truncated: boolean;
+  patentIds: {
+    fetched: string[];
+    alreadyCached: string[];
+    failed: string[];
+  };
+}
+
+export interface EnrichWithDetailsResult {
+  detailsFetched: Omit<FetchPatentDetailsResult, 'truncated'>;
+  litigation: {
+    enriched: number;
+    indicators: LitigationIndicator[];
+  };
+  total: number;
+  truncated: boolean;
+}
+
 // Patent Family API
 export const patentFamilyApi = {
   async createExploration(params: {
@@ -1242,6 +1494,327 @@ export const patentFamilyApi = {
 
   async getCacheStatus(patentId: string): Promise<FamilyCacheStatus> {
     const { data } = await api.get(`/patent-families/cache-status/${patentId}`);
+    return data;
+  },
+
+  // Multi-seed exploration
+  async previewMultiSeed(config: MultiSeedConfig): Promise<PreviewResult> {
+    const { data } = await api.post('/patent-families/explorations/preview', config);
+    return data;
+  },
+
+  async executeMultiSeed(config: MultiSeedConfig): Promise<MultiSeedExplorationResult> {
+    const { data } = await api.post('/patent-families/explorations/multi-seed', config);
+    return data;
+  },
+
+  async createFocusAreaFromExploration(
+    explorationId: string,
+    params: {
+      name: string;
+      description?: string;
+      patentIds: string[];
+      includeExternalPatents?: boolean;
+      ownerId?: string;
+    }
+  ): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    const { data } = await api.post(`/patent-families/explorations/${explorationId}/create-focus-area`, params);
+    return data;
+  },
+
+  async createFocusAreaDirect(params: {
+    name: string;
+    description?: string;
+    patentIds: string[];
+    includeExternalPatents?: boolean;
+    ownerId?: string;
+  }): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    const { data } = await api.post('/patent-families/create-focus-area', params);
+    return data;
+  },
+
+  async getFilterOptions(): Promise<FilterOptions> {
+    const { data } = await api.get('/patent-families/filter-options');
+    return data;
+  },
+
+  // Litigation/IPR enrichment
+  async enrichLitigation(
+    patentIds: string[],
+    options?: { includeIpr?: boolean; includeProsecution?: boolean }
+  ): Promise<EnrichmentResult> {
+    const { data } = await api.post('/patent-families/enrich-litigation', {
+      patentIds,
+      ...options,
+    });
+    return data;
+  },
+
+  async getLitigationStatus(patentIds: string[]): Promise<{ statuses: EnrichmentStatusItem[] }> {
+    const { data } = await api.get('/patent-families/litigation-status', {
+      params: { patentIds: patentIds.join(',') },
+    });
+    return data;
+  },
+
+  async getPatentIPR(patentId: string): Promise<LitigationIndicator> {
+    const { data } = await api.get(`/patent-families/ipr/${patentId}`);
+    return data;
+  },
+
+  async getPatentProsecution(patentId: string): Promise<LitigationIndicator> {
+    const { data } = await api.get(`/patent-families/prosecution/${patentId}`);
+    return data;
+  },
+
+  async enrichExplorationLitigation(
+    explorationId: string,
+    options?: { patentIds?: string[]; includeIpr?: boolean; includeProsecution?: boolean }
+  ): Promise<EnrichmentResult & { explorationId: string }> {
+    const { data } = await api.post(`/patent-families/explorations/${explorationId}/enrich-litigation`, options);
+    return data;
+  },
+
+  // Fetch basic patent details (title, assignee, etc.) for external patents
+  async fetchPatentDetails(patentIds: string[]): Promise<FetchPatentDetailsResult> {
+    const { data } = await api.post('/patent-families/fetch-details', { patentIds });
+    return data;
+  },
+
+  // Fetch patent details AND litigation data in one call (recommended for enrichment)
+  async enrichWithDetails(
+    patentIds: string[],
+    options?: {
+      fetchBasicDetails?: boolean;
+      includeIpr?: boolean;
+      includeProsecution?: boolean;
+      cacheOnly?: boolean;  // Only read from local cache, skip live API calls
+      limit?: number;  // Default 200, max 500
+    }
+  ): Promise<EnrichWithDetailsResult & { originalCount?: number }> {
+    const { data } = await api.post('/patent-families/enrich-with-details', {
+      patentIds,
+      ...options,
+    });
+    return data;
+  },
+};
+
+// =============================================================================
+// Patent Family V2 (Iterative Expansion) Types
+// =============================================================================
+
+export interface ScoringWeightsV2 {
+  taxonomicOverlap: number;
+  commonPriorArt: number;
+  commonForwardCites: number;
+  competitorOverlap: number;
+  portfolioAffiliate: number;
+  citationSectorAlignment: number;
+  multiPathConnectivity: number;
+  assigneeRelationship: number;
+  temporalProximity: number;
+  depthDecayRate: number;
+}
+
+export interface DimensionScoresV2 {
+  taxonomicOverlap: number;
+  commonPriorArt: number;
+  commonForwardCites: number;
+  competitorOverlap: number;
+  portfolioAffiliate: number;
+  citationSectorAlignment: number;
+  multiPathConnectivity: number;
+  assigneeRelationship: number;
+  temporalProximity: number;
+}
+
+export interface CandidateScoreV2 {
+  patentId: string;
+  dimensions: DimensionScoresV2;
+  compositeScore: number;
+  rawWeightedScore: number;
+  generationDistance: number;
+  depthMultiplier: number;
+  dataCompleteness: number;
+}
+
+export interface ScoredCandidateV2 {
+  patentId: string;
+  title?: string;
+  assignee?: string;
+  score: CandidateScoreV2;
+  generation: number;
+  relation: string;
+  inPortfolio: boolean;
+  isCompetitor: boolean;
+  competitorName?: string;
+  isAffiliate: boolean;
+  sector?: string;
+  superSector?: string;
+  filingDate?: string;
+  remainingYears?: number;
+  forwardCitationCount?: number;
+  discoveredVia: string[];
+  dataStatus: string;
+  zone: 'member' | 'expansion' | 'rejected';
+}
+
+export interface ExpansionResultV2 {
+  candidates: ScoredCandidateV2[];
+  stats: {
+    totalDiscovered: number;
+    aboveMembership: number;
+    inExpansionZone: number;
+    belowExpansion: number;
+    pruned: number;
+    direction: string;
+    generationDepth: number;
+  };
+  scoreDistribution: number[];
+  warnings: string[];
+}
+
+export interface ExpansionHistoryStep {
+  stepNumber: number;
+  direction: string;
+  generationDepth: number;
+  candidatesEvaluated: number;
+  autoIncluded: number;
+  expansionZone: number;
+  autoRejected: number;
+  createdAt: string;
+}
+
+export interface ExplorationStateV2 {
+  id: string;
+  name?: string;
+  seedPatentIds: string[];
+  weights: ScoringWeightsV2;
+  membershipThreshold: number;
+  expansionThreshold: number;
+  currentGeneration: number;
+  members: ScoredCandidateV2[];
+  candidates: ScoredCandidateV2[];
+  excluded: ScoredCandidateV2[];
+  expansionHistory: ExpansionHistoryStep[];
+  status: string;
+  memberCount: number;
+  candidateCount: number;
+}
+
+export interface ScoringPresetV2 {
+  label: string;
+  description: string;
+  weights: ScoringWeightsV2;
+}
+
+export interface ExplorationSummaryV2 {
+  id: string;
+  name?: string;
+  seedPatentId: string;
+  seedPatentIds: string[];
+  version: number;
+  status: string;
+  currentGeneration: number;
+  memberCount: number;
+  candidateCount: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { members: number };
+}
+
+// Patent Family V2 API
+export const patentFamilyV2Api = {
+  async listExplorations(): Promise<ExplorationSummaryV2[]> {
+    const { data } = await api.get('/patent-families/explorations');
+    // Filter to v2 only (version === 2)
+    return (data as ExplorationSummaryV2[]).filter(e => e.version === 2);
+  },
+
+  async deleteExploration(id: string): Promise<void> {
+    await api.delete(`/patent-families/explorations/${id}`);
+  },
+
+  async getPresets(): Promise<Record<string, ScoringPresetV2>> {
+    const { data } = await api.get('/patent-families/v2/presets');
+    return data;
+  },
+
+  async createExploration(params: {
+    seedPatentIds: string[];
+    name?: string;
+    weights?: ScoringWeightsV2;
+    membershipThreshold?: number;
+    expansionThreshold?: number;
+  }): Promise<ExplorationStateV2> {
+    const { data } = await api.post('/patent-families/v2/explorations', params);
+    return data;
+  },
+
+  async getExploration(id: string): Promise<ExplorationStateV2> {
+    const { data } = await api.get(`/patent-families/v2/explorations/${id}`);
+    return data;
+  },
+
+  async expand(id: string, params: {
+    direction: 'forward' | 'backward' | 'both';
+    weights?: ScoringWeightsV2;
+    membershipThreshold?: number;
+    expansionThreshold?: number;
+    maxCandidates?: number;
+  }): Promise<ExpansionResultV2> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/expand`, params);
+    return data;
+  },
+
+  async expandSiblings(id: string, params: {
+    direction: 'forward' | 'backward' | 'both';
+    weights?: ScoringWeightsV2;
+    membershipThreshold?: number;
+    expansionThreshold?: number;
+    maxCandidates?: number;
+  }): Promise<ExpansionResultV2> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/expand-siblings`, params);
+    return data;
+  },
+
+  async rescore(id: string, params: {
+    weights: ScoringWeightsV2;
+    membershipThreshold: number;
+    expansionThreshold: number;
+  }): Promise<ExpansionResultV2> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/rescore`, params);
+    return data;
+  },
+
+  async updateCandidates(id: string, updates: Array<{ patentId: string; status: 'member' | 'candidate' | 'excluded' }>): Promise<{
+    updated: number;
+    memberCount: number;
+    candidateCount: number;
+  }> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/candidates`, { updates });
+    return data;
+  },
+
+  async save(id: string, params: { name: string; description?: string }): Promise<{ message: string }> {
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/save`, params);
+    return data;
+  },
+
+  async createFocusArea(id: string, params: {
+    name: string;
+    description?: string;
+    patentIds?: string[];
+    includeExternalPatents?: boolean;
+  }): Promise<{ focusArea: { id: string; name: string; patentCount: number }; added: number }> {
+    // When explicit patentIds provided, use the generic endpoint that accepts them
+    if (params.patentIds && params.patentIds.length > 0) {
+      const { data } = await api.post(`/patent-families/explorations/${id}/create-focus-area`, params);
+      return data;
+    }
+    // Otherwise use v2 endpoint that auto-selects server-side members
+    const { data } = await api.post(`/patent-families/v2/explorations/${id}/create-focus-area`, params);
     return data;
   },
 };
@@ -1827,6 +2400,73 @@ export interface ScoredPatent {
   executedAt?: string;
   templateVersion?: number;
   metrics: ScoredPatentMetric[];
+  // Enriched fields from loadPatents
+  v2Score?: number;
+  v3Score?: number;
+  baseScore?: number;
+  remainingYears?: number;
+  forwardCitations?: number;
+  superSector?: string;
+  primarySector?: string;
+  // LLM narrative fields
+  llmSummary?: string | null;
+  llmPriorArtProblem?: string | null;
+  llmTechnicalSolution?: string | null;
+  // Generic LLM metric scores
+  eligibilityScore?: number | null;
+  validityScore?: number | null;
+  enforcementClarity?: number | null;
+  designAroundDifficulty?: number | null;
+  claimBreadth?: number | null;
+  // Competitor data
+  competitorCount?: number;
+  competitorNames?: string[];
+}
+
+export interface ScoringQuestionWithLevel {
+  fieldName: string;
+  displayName: string;
+  weight: number;
+  question: string;
+  reasoningPrompt?: string;
+  sourceLevel: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
+}
+
+export interface MergedSectorTemplate {
+  sectorName: string;
+  superSectorName: string;
+  questionCount: number;
+  totalWeight: number;
+  inheritanceChain: string[];
+  questions: ScoringQuestionWithLevel[];
+}
+
+export interface PatentSectorScoreQuestion {
+  fieldName: string;
+  displayName: string;
+  weight: number;
+  sourceLevel: string;
+  score: number | null;
+  reasoning: string | null;
+  confidence: number | null;
+}
+
+export interface PatentSectorScore {
+  sectorName: string;
+  sectorDisplayName: string;
+  superSector: string | null;
+  compositeScore: number;
+  withClaims: boolean;
+  executedAt: string;
+  templateVersion: number;
+  rankInSector: number | null;
+  normalizedScore: number | null;
+  questions: PatentSectorScoreQuestion[];
+}
+
+export interface PatentSectorScoresResponse {
+  patentId: string;
+  sectors: PatentSectorScore[];
 }
 
 export interface SectorScoresResponse {
@@ -1905,10 +2545,27 @@ export const scoringTemplatesApi = {
   },
 
   /**
-   * Get merged template with inherited questions
+   * Get merged template with inherited questions (super-sector level)
    */
   async getMergedTemplate(superSectorName: string): Promise<MergedTemplate> {
     const { data } = await api.get(`/scoring-templates/config/merged/${superSectorName}`);
+    return data;
+  },
+
+  /**
+   * Get fully merged template for a sector (portfolio + super-sector + sector)
+   * with sourceLevel annotations on each question
+   */
+  async getMergedSectorTemplate(sectorName: string): Promise<MergedSectorTemplate> {
+    const { data } = await api.get(`/scoring-templates/config/merged-sector/${sectorName}`);
+    return data;
+  },
+
+  /**
+   * Get all sector scores for a patent (used by PatentDetailPage sector-scoring tab)
+   */
+  async getPatentSectorScores(patentId: string): Promise<PatentSectorScoresResponse> {
+    const { data } = await api.get(`/scoring-templates/scores/patent/${patentId}/all-sectors`);
     return data;
   },
 

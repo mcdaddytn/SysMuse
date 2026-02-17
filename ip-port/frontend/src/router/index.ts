@@ -14,6 +14,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Patent Summary' }
       },
       {
+        path: 'aggregates',
+        name: 'aggregates',
+        component: () => import('@/pages/AggregatesPage.vue'),
+        meta: { title: 'Aggregate View' }
+      },
+      {
         path: 'base-scoring',
         name: 'base-scoring',
         component: () => import('@/pages/BaseScoringPage.vue'),
@@ -35,7 +41,7 @@ const routes: RouteRecordRaw[] = [
         path: 'sectors',
         name: 'sectors',
         component: () => import('@/pages/SectorRankingsPage.vue'),
-        meta: { title: 'Sector Rankings' }
+        meta: { title: 'Sector Scores' }
       },
       {
         path: 'sector-management',
@@ -84,6 +90,12 @@ const routes: RouteRecordRaw[] = [
         name: 'llm-scores',
         component: () => import('@/pages/SectorScoresPage.vue'),
         meta: { title: 'LLM Sector Scores' }
+      },
+      {
+        path: 'patent-families',
+        name: 'patent-families',
+        component: () => import('@/pages/PatentFamilyExplorerPage.vue'),
+        meta: { title: 'Patent Family Explorer' }
       }
     ]
   },

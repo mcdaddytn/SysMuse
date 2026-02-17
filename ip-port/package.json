@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "dev": "tsx watch src/api/server.ts",
     "test:patentsview": "tsx examples/test-patentsview.ts",
     "test:filewrapper": "tsx examples/test-file-wrapper.ts",
     "test:ptab": "tsx examples/test-ptab.ts",

@@ -155,10 +155,10 @@ export class BaseAPIClient {
       
       return data as T;
 
-    } catch (error) {
+    } catch (error: unknown) {
       clearTimeout(timeout);
 
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`Request timeout after ${this.config.timeout}ms: ${endpoint}`);
       }
 

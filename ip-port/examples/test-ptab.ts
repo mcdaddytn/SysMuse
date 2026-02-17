@@ -241,10 +241,10 @@ async function testPTABAPI() {
 
     console.log('=== All PTAB API Tests Passed ✓ ===');
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('\n✗ Error during testing:', error);
-    
-    if (error.message?.includes('USPTO_ODP_API_KEY')) {
+
+    if (error instanceof Error && error.message?.includes('USPTO_ODP_API_KEY')) {
       console.error('\nℹ Please set USPTO_ODP_API_KEY in your .env file');
       console.error('  1. Create USPTO.gov account');
       console.error('  2. Complete ID.me verification');

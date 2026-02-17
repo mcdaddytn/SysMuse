@@ -12,7 +12,7 @@
  * Requires: USPTO ODP API Key (with ID.me verification)
  */
 
-import { BaseAPIClient, APIConfig, buildQueryString } from './base-client.js';
+import { BaseAPIClient, buildQueryString } from './base-client.js';
 
 const ODP_BASE_URL = 'https://api.uspto.gov/api/v1/patent';
 
@@ -34,8 +34,11 @@ export interface ApplicationSearchQuery {
 
 export interface ApplicationBiblioResponse {
   count: number;
+  recordTotalQuantity?: number;
   requestIdentifier?: string;
   patentFileWrapperDataBag: PatentFileWrapperRecord[];
+  // Alias for patentFileWrapperDataBag for backward compatibility
+  applications?: PatentFileWrapperRecord[];
 }
 
 export interface PatentFileWrapperRecord {
@@ -390,7 +393,7 @@ export class FileWrapperClient extends BaseAPIClient {
    * Get prosecution timeline - combines transactions and key documents
    */
   async getProsecutionTimeline(applicationNumber: string): Promise<{
-    application: ApplicationBiblio;
+    application: PatentFileWrapperRecord | null;
     transactions: Transaction[];
     keyDocuments: FileHistoryDocument[];
   }> {
@@ -472,16 +475,17 @@ export class FileWrapperClient extends BaseAPIClient {
     isPatented: boolean;
   }> {
     const app = await this.getApplication(applicationNumber);
+    const meta = app?.applicationMetaData;
 
-    const status = app.applicationStatusDescriptionText || app.applicationStatusCode || 'Unknown';
-    const statusDate = app.applicationStatusDate || '';
+    const status = meta?.applicationStatusDescriptionText || String(meta?.applicationStatusCode || '') || 'Unknown';
+    const statusDate = meta?.applicationStatusDate || '';
 
     return {
       status,
       statusDate,
       isPending: status.toLowerCase().includes('pending'),
       isAbandoned: status.toLowerCase().includes('abandon'),
-      isPatented: !!app.patentNumber,
+      isPatented: !!(meta as Record<string, unknown>)?.patentNumber,
     };
   }
 
@@ -491,7 +495,7 @@ export class FileWrapperClient extends BaseAPIClient {
   async *searchPaginated(
     query: ApplicationSearchQuery,
     pageSize: number = 100
-  ): AsyncGenerator<ApplicationBiblio[], void, unknown> {
+  ): AsyncGenerator<PatentFileWrapperRecord[], void, unknown> {
     let page = 0;
     let hasMore = true;
 
@@ -502,15 +506,17 @@ export class FileWrapperClient extends BaseAPIClient {
         size: pageSize,
       });
 
-      if (response.applications.length === 0) {
+      const applications = response.applications || response.patentFileWrapperDataBag || [];
+      if (applications.length === 0) {
         break;
       }
 
-      yield response.applications;
+      yield applications;
 
       // Check if we've retrieved all results
       const totalRetrieved = (page + 1) * pageSize;
-      hasMore = totalRetrieved < response.recordTotalQuantity;
+      const total = response.recordTotalQuantity ?? response.count ?? 0;
+      hasMore = totalRetrieved < total;
       page++;
     }
   }

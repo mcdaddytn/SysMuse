@@ -2,266 +2,253 @@
 
 This guide covers migrating the IP Portfolio system to a new machine, preserving all data and scoring results.
 
-## Overview
+## System Data Inventory
 
-**What needs to be migrated:**
-- PostgreSQL database (~40 MB compressed) - Contains all scoring results, sector definitions, templates
-- Output files (~760 MB) - Cached candidates, exports, analysis results
-- Config files (~19 MB) - Scoring templates, sector configurations
-- Environment variables - API keys and settings
+### What lives in the project directory (`ip-port/`)
 
-**What does NOT need to be migrated (available from git):**
-- Source code - Pull from git repository
-- Scripts - Part of source code, pull from git
-- Node modules - Reinstall with `npm install`
-- Docker images - Pull automatically
+| Component | Size | Description |
+|-----------|------|-------------|
+| `cache/` | ~3.3 GB | Downloaded/computed data from APIs and scoring |
+| `output/` | ~181 MB | Candidates files, exports, analysis results |
+| `config/` | ~652 KB | Scoring templates, sector configs, affiliates |
+| `.env` | 4 KB | API keys, DB URL, data paths |
+| PostgreSQL DB | ~40 MB compressed | Sectors, templates, sector scores, snapshots |
 
-## Prerequisites on Target Machine
+#### Cache directory breakdown
 
-1. **Docker Desktop** installed and running
-2. **Node.js 18+** installed
-3. **Git** installed
-4. Access to the git repository
+| Directory | Size | Files | Contents |
+|-----------|------|-------|----------|
+| `cache/api/patentsview/` | 2.8 GB | 5 dirs | PatentsView API responses (patent details, citations, forward citations) |
+| `cache/patent-families/` | 251 MB | ~64k | Parent patent lookups and enrichment details |
+| `cache/citation-classification/` | 122 MB | ~29k | Competitor/affiliate classification per patent |
+| `cache/llm-scores/` | 68 MB | ~17.5k | Portfolio-level LLM structured analysis (eligibility, validity, etc.) |
+| `cache/prosecution-scores/` | 45 MB | ~11.5k | Prosecution quality scores from file-wrapper data |
+| `cache/ipr-scores/` | 42 MB | ~10.7k | IPR/PTAB risk scores |
+| `cache/api/file-wrapper/` | 2.7 MB | ~689 | USPTO file-wrapper API responses |
+| `cache/api/ptab/` | 2.8 MB | ~706 | USPTO PTAB API responses |
 
-## Step-by-Step Migration
+All cache data is derived from API calls. It can theoretically be regenerated but would cost significant time and API credits. **Always migrate cache data.**
 
-### Step 1: Export Database on Source Machine
+### What lives on the external SSD (`/Volumes/GLSSD2/`)
 
-```bash
-cd /path/to/ip-port
+| Path | Description |
+|------|-------------|
+| `data/uspto/export/` | **Active** — Patent grant XML files extracted for our portfolio. Used at runtime for claims text extraction. Populated by external Java bulk-extract tool. |
+| `data/uspto/bulkdata/` | **Archive** — Full USPTO bulk data ZIP files by year (2005–present). Source data for the Java extractor. Not needed at runtime. |
+| `data/uspto/cpc/` | **Reference** — CPC scheme and definition XML files. Used for sector taxonomy mapping and CPC code descriptions. |
+| `ip-port/` | **Backup** — Previous backup of db, config, output (from Feb 10). Needs updating. |
 
-# Make export script executable
-chmod +x scripts/db-export.sh
+#### USPTO Export Directory (claims data pipeline)
 
-# Export database to external drive (or local db-backup/)
-./scripts/db-export.sh /Volumes/YourDrive/ip-port/db-backup
+The `data/uspto/export/` directory is actively used by the system to extract patent claims text for LLM scoring with claims. The pipeline:
 
-# This creates: ip_portfolio_backup_YYYYMMDD_HHMMSS.sql.gz
+1. New patents are added to the portfolio
+2. Patent IDs are extracted (e.g., via `scripts/export-patents-missing-claims.sh`)
+3. A **separate Java program** (not part of this repo) reads the USPTO bulk data ZIPs and extracts the relevant patent XML into `data/uspto/export/`
+4. The system reads from `export/` at runtime via `USPTO_PATENT_GRANT_XML_DIR` env var
+5. Only patents in the export directory can be scored "with claims"
+
+The Java extractor only needs to run when new patents are added. Once extracted, the bulkdata ZIPs are not needed at runtime.
+
+### What does NOT need to be migrated (comes from git)
+- Source code, scripts, docs
+- Node modules — `npm install` on target
+- Docker images — pulled automatically
+- Prisma client — `npx prisma generate` on target
+
+## Migration Process
+
+### Overview
+
+The migration uses a physical SSD to transfer all data:
+
+```
+Source Machine                    SSD Drive                      Target Machine
+─────────────                    ─────────                      ──────────────
+ip-port/cache/     ──rsync──►    ip-port/cache/     ──rsync──►  ip-port/cache/
+ip-port/output/    ──rsync──►    ip-port/output/    ──rsync──►  ip-port/output/
+ip-port/config/    ──rsync──►    ip-port/config/    ──rsync──►  ip-port/config/
+ip-port/.env       ──copy──►     ip-port/.env       ──edit──►   ip-port/.env
+PostgreSQL DB      ──pg_dump──►  ip-port/db-backup/ ──import──► PostgreSQL DB
+data/uspto/        ──rsync──►    data/uspto/        (already on SSD or copy)
 ```
 
-### Step 2: Copy Files to External Drive
+### Step 1: Export to SSD (Source Machine)
 
-Copy these directories/files to your external drive:
+Run the backup script from the project root:
 
 ```bash
-# Set your external drive path
-EXTERNAL_DRIVE="/Volumes/YourDrive"  # Adjust to your drive path
-BUNDLE_DIR="$EXTERNAL_DRIVE/ip-port"
-mkdir -p "$BUNDLE_DIR/db-backup"
-
-# Copy database backup (if not already exported there)
-cp db-backup/*.sql.gz "$BUNDLE_DIR/db-backup/"
-
-# Copy output files (cached data, exports)
-cp -r output "$BUNDLE_DIR/"
-
-# Copy config files (scoring templates)
-cp -r config "$BUNDLE_DIR/"
-
-# Copy environment file
-cp .env "$BUNDLE_DIR/" 2>/dev/null || echo "No .env file (will need to recreate)"
+./scripts/backup-to-drive.sh /Volumes/GLSSD2
 ```
 
-**Note:** Scripts are NOT copied - they are part of the source code and come from git.
+This will:
+- Dump the PostgreSQL database
+- Rsync cache, output, config directories (incremental — only changed files)
+- Copy .env
+- Write a manifest with counts and git state
+
+Or do it manually:
+
+```bash
+DRIVE="/Volumes/GLSSD2"
+DEST="$DRIVE/ip-port"
+
+# 1. Database dump
+mkdir -p "$DEST/db-backup"
+docker exec ip-port-postgres pg_dump -U ip_admin -d ip_portfolio \
+  --no-owner --no-privileges --if-exists --clean \
+  > "$DEST/db-backup/ip_portfolio_backup_$(date +%Y%m%d).sql"
+gzip -f "$DEST/db-backup/ip_portfolio_backup_$(date +%Y%m%d).sql"
+
+# 2. Cache (rsync = only copy changes, much faster after first run)
+rsync -av --delete cache/ "$DEST/cache/"
+
+# 3. Output
+rsync -av --delete output/ "$DEST/output/"
+
+# 4. Config
+rsync -av --delete config/ "$DEST/config/"
+
+# 5. Environment
+cp .env "$DEST/.env"
+```
+
+### Step 2: Verify SSD Contents
+
+After export, confirm:
+```bash
+ls -la /Volumes/GLSSD2/ip-port/
+# Should have: cache/ config/ db-backup/ output/ .env
+
+ls /Volumes/GLSSD2/data/uspto/
+# Should have: bulkdata/ cpc/ export/
+```
 
 ### Step 3: Set Up Target Machine
 
-On the new laptop:
-
 ```bash
-# 1. Clone the repository
+# 1. Prerequisites
+#    - Docker Desktop installed and running
+#    - Node.js 20+ installed
+#    - Git installed
+
+# 2. Clone repo
 git clone <your-repo-url> ip-port
 cd ip-port
 
-# 2. Install dependencies
+# 3. Install dependencies
 npm install
+cd frontend && npm install && cd ..
 
-# 3. Start Docker Desktop (if not running)
-open -a Docker  # macOS
-
-# 4. If this machine had a previous installation, remove old database volume
-docker-compose down
-docker volume rm ip-port-pgdata 2>/dev/null
-
-# 5. Start PostgreSQL container (creates fresh database with correct user)
+# 4. Start Docker
 docker-compose up -d postgres
-
-# Wait for PostgreSQL to be ready
-sleep 15
-
-# 6. Verify database is ready (should return "1")
-docker exec -u postgres ip-port-postgres psql -U ip_admin -d ip_portfolio -c "SELECT 1"
+sleep 15  # Wait for PostgreSQL to be ready
 ```
 
-### Step 4: Import Data on Target Machine
+### Step 4: Import from SSD (Target Machine)
 
 ```bash
-# Mount your external drive and navigate to ip-port project directory
+DRIVE="/Volumes/GLSSD2"  # Or wherever SSD is mounted
+SRC="$DRIVE/ip-port"
 
-# 1. Set paths
-EXTERNAL_DRIVE="/Volumes/YourDrive"  # Adjust to your drive path
-BUNDLE_DIR="$EXTERNAL_DRIVE/ip-port"
+# 1. Copy data directories
+rsync -av "$SRC/cache/" cache/
+rsync -av "$SRC/output/" output/
+rsync -av "$SRC/config/" config/
 
-# 2. Copy output files
-cp -r "$BUNDLE_DIR/output/"* output/
+# 2. Copy and edit .env
+cp "$SRC/.env" .env
+# EDIT .env: Update paths if drive mount point differs
+# - USPTO_PATENT_GRANT_XML_DIR
+# - CPC_SCHEME_XML_DIR
+# - CPC_DEFINITION_XML_DIR
+# - ANTHROPIC_API_KEY (may want different key per machine)
 
-# 3. Copy config files
-cp -r "$BUNDLE_DIR/config/"* config/
+# 3. Import database
+BACKUP=$(ls -t "$SRC/db-backup/"*.sql.gz | head -1)
+echo "Importing: $BACKUP"
+gunzip -c "$BACKUP" | docker exec -i ip-port-postgres psql -U ip_admin -d ip_portfolio
 
-# 4. Copy environment file
-cp "$BUNDLE_DIR/.env" .env
-
-# 5. Import database (find your backup file name)
-BACKUP_FILE=$(ls "$BUNDLE_DIR/db-backup/"*.sql.gz | head -1)
-echo "Importing: $BACKUP_FILE"
-
-# 5a. Decompress the backup
-gunzip -k "$BACKUP_FILE"
-SQL_FILE="${BACKUP_FILE%.gz}"
-
-# 5b. Copy SQL file into the container
-docker cp "$SQL_FILE" ip-port-postgres:/tmp/backup.sql
-
-# 5c. Fix permissions (file is copied as root, postgres user needs to read it)
-docker exec ip-port-postgres chmod 644 /tmp/backup.sql
-
-# 5d. Run the import inside the container
-# NOTE: Must use "-u postgres" to run as postgres OS user
-docker exec -u postgres ip-port-postgres psql -U ip_admin -d ip_portfolio -f /tmp/backup.sql
-
-# 5e. Clean up
-docker exec ip-port-postgres rm /tmp/backup.sql
+# 4. Generate Prisma client
+npx prisma generate
 ```
 
-### Step 5: Verify Migration
+### Step 5: Verify
 
 ```bash
-# 1. Verify database import (check record counts)
-docker exec -u postgres ip-port-postgres psql -U ip_admin -d ip_portfolio -c "
+# Check database
+docker exec ip-port-postgres psql -U ip_admin -d ip_portfolio -c "
 SELECT
-  (SELECT COUNT(*) FROM patent_sub_sector_scores) as scores,
+  (SELECT COUNT(*) FROM super_sectors) as super_sectors,
   (SELECT COUNT(*) FROM sectors) as sectors,
-  (SELECT COUNT(*) FROM sub_sectors) as sub_sectors,
-  (SELECT COUNT(*) FROM super_sectors) as super_sectors;
+  (SELECT COUNT(*) FROM patent_sub_sector_scores) as sector_scores,
+  (SELECT COUNT(*) FROM score_snapshots WHERE is_active = true) as active_snapshots;
 "
 
-# 2. Check scoring data by super-sector
-docker exec -u postgres ip-port-postgres psql -U ip_admin -d ip_portfolio -c "
-SELECT
-  sup.name,
-  COUNT(*) as total_scores,
-  SUM(CASE WHEN psss.with_claims THEN 1 ELSE 0 END) as with_claims
-FROM patent_sub_sector_scores psss
-JOIN sub_sectors ss ON psss.sub_sector_id = ss.id
-JOIN sectors s ON ss.sector_id = s.id
-JOIN super_sectors sup ON s.super_sector_id = sup.id
-GROUP BY sup.name
-ORDER BY sup.name;
-"
-
-# 3. Start the API server
+# Start API server
 npm run dev
 
-# 4. In another terminal, verify API responses
-curl http://localhost:3001/api/scoring-templates/llm/super-sector-progress/WIRELESS
-curl http://localhost:3001/api/scoring-templates/llm/super-sector-progress/SECURITY
+# In another terminal, start frontend
+cd frontend && npm run dev
+
+# Open http://localhost:3000
 ```
 
-## Environment Variables
+### Step 6: Ensure USPTO Data Accessible
 
-Make sure your `.env` file contains:
+The system needs access to the USPTO export directory for claims extraction. Options:
+
+**Option A: Keep SSD connected** — If the SSD stays plugged in, just verify .env paths match the mount point.
+
+**Option B: Copy to local drive** — Copy `data/uspto/export/` to the target machine's local disk and update `USPTO_PATENT_GRANT_XML_DIR` in .env.
+
+**Option C: Copy to another external drive** — Copy to any accessible drive and update .env paths.
+
+The `bulkdata/` directory is only needed when running the Java extractor for new patents. The `cpc/` directory is only needed for CPC enrichment operations.
+
+## Environment Variables Reference
 
 ```env
-# Database (Docker handles this, but useful for reference)
-DATABASE_URL="postgresql://ip_admin:ip_admin_password@localhost:5432/ip_portfolio"
+# Database (Docker default)
+DATABASE_URL="postgresql://ip_admin:ip_dev_password@localhost:5432/ip_portfolio?schema=public"
+DB_PASSWORD=ip_dev_password
 
 # API Keys
-ANTHROPIC_API_KEY=your_anthropic_key_here
+ANTHROPIC_API_KEY=sk-ant-...       # LLM scoring
+PATENTSVIEW_API_KEY=...            # Patent data lookups
+USPTO_ODP_API_KEY=...              # USPTO Open Data Portal
 
-# USPTO data directory (adjust for new machine if different)
-USPTO_PATENT_GRANT_XML_DIR=/path/to/uspto/xml/files
+# USPTO Data Paths (adjust to match drive mount point)
+USPTO_PATENT_GRANT_XML_DIR=/Volumes/GLSSD2/data/uspto/export
+CPC_SCHEME_XML_DIR=/Volumes/GLSSD2/data/uspto/cpc/CPCSchemeXML202601
+CPC_DEFINITION_XML_DIR=/Volumes/GLSSD2/data/uspto/cpc/FullCPCDefinitionXML202601
+
+# LLM Config
+LLM_MODEL=claude-sonnet-4-20250514
+LLM_BATCH_SIZE=5
 ```
 
 ## Troubleshooting
 
 ### "role does not exist" errors
-
-When running psql commands, you may see errors like:
-- `FATAL: role "root" does not exist`
-- `FATAL: role "postgres" does not exist`
-
-**Solution:** Always use `-u postgres` flag with docker exec:
+Always use the correct user flag with docker exec:
 ```bash
-# WRONG - will fail
 docker exec ip-port-postgres psql -U ip_admin -d ip_portfolio -c "SELECT 1"
-
-# CORRECT - run as postgres OS user
-docker exec -u postgres ip-port-postgres psql -U ip_admin -d ip_portfolio -c "SELECT 1"
 ```
 
-### "ip_admin does not exist" or old database data
-
-If the target machine had a previous installation, the Docker volume may contain old data:
+### Old database data from previous install
 ```bash
-# Stop container and remove old volume
 docker-compose down
 docker volume rm ip-port-pgdata
-
-# Start fresh
 docker-compose up -d postgres
 sleep 15
-```
-
-### Database connection issues
-```bash
-# Check if PostgreSQL is running
-docker ps | grep postgres
-
-# Check container logs for errors
-docker logs ip-port-postgres --tail 50
-
-# Restart if needed
-docker-compose down
-docker-compose up -d postgres
+# Then re-import
 ```
 
 ### Missing tables after import
 ```bash
-# Run Prisma migrations
 npx prisma migrate deploy
 ```
 
-### Port already in use
-```bash
-# Check what's using port 3001
-lsof -i :3001
-
-# Or change port in package.json scripts
-```
-
-## Data Sizes (Reference)
-
-| Component | Size | Notes |
-|-----------|------|-------|
-| Database | ~40 MB (compressed) | All scoring results, sector data |
-| Output files | ~760 MB | Cached candidates, exports, analysis results |
-| Config files | ~19 MB | Scoring templates, sector configs |
-| Node modules | ~500 MB | Reinstalled via npm install (not migrated) |
-| **Total bundle** | **~820 MB** | What you copy to external drive |
-
-## Files Checklist
-
-Before migrating, ensure you have on external drive:
-
-- [ ] `db-backup/ip_portfolio_backup_*.sql.gz` - Database export
-- [ ] `output/` directory - All output files
-- [ ] `config/` directory - Scoring templates
-- [ ] `.env` file - Environment variables
-
-After migrating, verify:
-
-- [ ] Docker Desktop running
-- [ ] PostgreSQL container running (`docker ps | grep postgres`)
-- [ ] Database imported successfully (check record counts)
-- [ ] API server starts without errors (`npm run dev`)
-- [ ] Scoring data visible in API responses
+### Claims not found for patents
+Check that `USPTO_PATENT_GRANT_XML_DIR` in .env points to a valid directory containing extracted patent XML files. If patents are missing, extract them using the Java bulk-extract tool from the `bulkdata/` ZIPs.

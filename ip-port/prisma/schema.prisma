@@ -864,23 +864,37 @@ model EntityAnalysisResult {
 model PatentFamilyExploration {
   id                  String   @id @default(cuid())
 
-  // Seed patent
+  // Seed patent(s) — v1 uses seedPatentId, v2 uses seedPatentIds
   seedPatentId        String   @map("seed_patent_id")
+  seedPatentIds       String[] @default([]) @map("seed_patent_ids")
 
   name                String?                        // User-provided or auto-generated
   description         String?
 
-  // Exploration parameters — depth/breadth
+  // v1 exploration parameters — depth/breadth
   maxAncestorDepth    Int      @default(2) @map("max_ancestor_depth")
   maxDescendantDepth  Int      @default(2) @map("max_descendant_depth")
   includeSiblings     Boolean  @default(true) @map("include_siblings")
   includeCousins      Boolean  @default(false) @map("include_cousins")
 
-  // Limiting filters — constrain which patents are included
+  // v1 limiting filters
   limitToSectors      String[] @map("limit_to_sectors")
   limitToCpcPrefixes  String[] @map("limit_to_cpc_prefixes")
   limitToFocusAreas   String[] @map("limit_to_focus_areas")
   requireInPortfolio  Boolean  @default(false) @map("require_in_portfolio")
+
+  // v2 scoring configuration (persisted for resumability)
+  version             Int      @default(1)             // 1=legacy BFS, 2=scored expansion
+  weights             Json?                            // ScoringWeights object
+  membershipThreshold Float?   @map("membership_threshold")
+  expansionThreshold  Float?   @map("expansion_threshold")
+  portfolioWeighting  Json?    @map("portfolio_weighting")  // { enabled, boostWeight, sectorStrengths }
+  seedAggregate       Json?    @map("seed_aggregate")       // Cached aggregate for fast rescore
+
+  // v2 state
+  currentGeneration   Int      @default(0) @map("current_generation")
+  memberCount         Int      @default(0) @map("member_count")
+  candidateCount      Int      @default(0) @map("candidate_count")
 
   // Execution state
   status              WorkflowStatus @default(PENDING)
@@ -891,6 +905,7 @@ model PatentFamilyExploration {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   members             PatentFamilyMember[]
+  expansionSteps      PatentFamilyExpansionStep[]
 
   @@map("patent_family_explorations")
   @@index([seedPatentId])
@@ -904,18 +919,68 @@ model PatentFamilyMember {
 
   patentId        String   @map("patent_id")
 
+  // v2 status: "member" (accepted), "candidate" (neutral), "excluded"
+  status          String   @default("candidate")
+
   // Relationship to seed
   relationToSeed  String   @map("relation_to_seed")  // "seed", "parent", "grandparent",
                                                        // "child", "grandchild", "sibling", "cousin"
-  generationDepth Int      @map("generation_depth")   // 0=seed, 1=parent/child, 2=grandparent, etc.
+  generationDepth Int      @map("generation_depth")   // 0=seed, -1=parent, 1=child, etc.
+  discoveredVia   String[] @default([]) @map("discovered_via")    // Patent IDs that led to discovery
+  discoveredAtStep Int?    @map("discovered_at_step") // Which expansion step found this
+
+  // v2 scoring (cached dimension scores for fast rescore)
+  dimensionScores Json?    @map("dimension_scores")   // { taxonomicOverlap: 0.85, ... }
+  compositeScore  Float?   @map("composite_score")
+  dataCompleteness Float?  @map("data_completeness")
+
+  // Patent data snapshot (avoid re-fetching for display)
   inPortfolio     Boolean  @default(false) @map("in_portfolio")
+  title           String?
+  assignee        String?
+  sector          String?
+  superSector     String?  @map("super_sector")
+  filingDate      String?  @map("filing_date")
+  remainingYears  Float?   @map("remaining_years")
+  isCompetitor    Boolean  @default(false) @map("is_competitor")
+  competitorName  String?  @map("competitor_name")
 
   createdAt       DateTime @default(now()) @map("created_at")
 
   @@unique([explorationId, patentId])
   @@map("patent_family_members")
   @@index([explorationId])
+  @@index([explorationId, status])
+  @@index([compositeScore])
   @@index([patentId])
+}
+
+model PatentFamilyExpansionStep {
+  id                  String   @id @default(cuid())
+
+  explorationId       String   @map("exploration_id")
+  exploration         PatentFamilyExploration @relation(fields: [explorationId], references: [id], onDelete: Cascade)
+
+  stepNumber          Int      @map("step_number")
+  direction           String   // "forward", "backward", "both", "siblings_backward", "siblings_forward", "siblings_both"
+  generationDepth     Int      @map("generation_depth")
+
+  // Results
+  candidatesEvaluated Int      @map("candidates_evaluated")
+  autoIncluded        Int      @default(0) @map("auto_included")
+  expansionZone       Int      @default(0) @map("expansion_zone")
+  autoRejected        Int      @default(0) @map("auto_rejected")
+  userAccepted        Int      @default(0) @map("user_accepted")
+  userExcluded        Int      @default(0) @map("user_excluded")
+
+  // Config at time of step
+  weightsUsed         Json     @map("weights_used")
+  thresholdsUsed      Json     @map("thresholds_used")  // { membership, expansion }
+
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@map("patent_family_expansion_steps")
+  @@index([explorationId])
 }
 
 // =============================================================================
@@ -1026,4 +1091,68 @@ model PatentSubSectorScore {
   @@index([patentId])
   @@index([compositeScore])
   @@index([normalizedScore])
+}
+
+// =============================================================================
+// SCORE SNAPSHOTS
+// Persisted V2/V3 scoring results for use across the application.
+// Scores are computed on-demand in scoring pages, then saved here for:
+// - Filtering/aggregating in Portfolio and Aggregates pages
+// - Consistent scoring across sessions
+// - Historical comparison
+// =============================================================================
+
+model ScoreSnapshot {
+  id              String   @id @default(cuid())
+
+  // Snapshot identity
+  name            String
+  description     String?
+  scoreType       ScoreType @map("score_type")  // V2 or V3
+
+  // Scoring configuration used (full config for reproducibility)
+  config          Json                          // V2EnhancedConfig or V3ConsensusConfig
+
+  // Status
+  isActive        Boolean  @default(false) @map("is_active")  // Is this the "current" snapshot for its type?
+
+  // Stats
+  patentCount     Int      @default(0) @map("patent_count")
+  llmDataCount    Int      @default(0) @map("llm_data_count")  // Patents with LLM data
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  scores          PatentScoreEntry[]
+
+  @@map("score_snapshots")
+  @@index([scoreType])
+  @@index([isActive])
+}
+
+model PatentScoreEntry {
+  id              String   @id @default(cuid())
+
+  snapshotId      String   @map("snapshot_id")
+  snapshot        ScoreSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  patentId        String   @map("patent_id")
+  score           Float
+  rank            Int
+
+  // Optional: store raw metric values for transparency
+  rawMetrics      Json?    @map("raw_metrics")
+  normalizedMetrics Json?  @map("normalized_metrics")
+
+  @@unique([snapshotId, patentId])
+  @@map("patent_score_entries")
+  @@index([snapshotId])
+  @@index([patentId])
+  @@index([score])
+  @@index([rank])
+}
+
+enum ScoreType {
+  V2
+  V3
 }

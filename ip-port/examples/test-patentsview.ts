@@ -153,10 +153,10 @@ async function testPatentsViewAPI() {
 
     console.log('=== All PatentsView API Tests Passed ✓ ===');
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('\n✗ Error during testing:', error);
-    
-    if (error.message?.includes('PATENTSVIEW_API_KEY')) {
+
+    if (error instanceof Error && error.message?.includes('PATENTSVIEW_API_KEY')) {
       console.error('\nℹ Please set PATENTSVIEW_API_KEY in your .env file');
       console.error('  Request an API key at: https://patentsview-support.atlassian.net/servicedesk/customer/portal/1/group/1/create/18');
     }

@@ -1,0 +1,44 @@
+/*
+ * Always-visible scrollbars for data grids.
+ * macOS overlay scrollbars hide by default; `overflow: scroll` forces them visible.
+ * Custom ::-webkit-scrollbar styles override macOS overlay behavior.
+ */
+
+/* Target Quasar q-table's internal scroll container and our wrapper */
+.q-table__middle,
+.table-scroll-container {
+  overflow: scroll !important;
+  /* Firefox: always show, full-size scrollbar */
+  scrollbar-width: auto;
+  scrollbar-color: #999 #e8e8e8;
+}
+
+/* Webkit/Chrome/Safari: always-visible styled scrollbars */
+.q-table__middle::-webkit-scrollbar,
+.table-scroll-container::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  -webkit-appearance: none;
+}
+
+.q-table__middle::-webkit-scrollbar-track,
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #e8e8e8;
+}
+
+.q-table__middle::-webkit-scrollbar-thumb,
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #999;
+  border: 3px solid #e8e8e8;
+  border-radius: 8px;
+}
+
+.q-table__middle::-webkit-scrollbar-thumb:hover,
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.q-table__middle::-webkit-scrollbar-corner,
+.table-scroll-container::-webkit-scrollbar-corner {
+  background: #e8e8e8;
+}

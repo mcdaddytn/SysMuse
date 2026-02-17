@@ -291,7 +291,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   console.log('\nCompanies by Strategy:');
   const strategySummary = matcher.getStrategySummary();
-  for (const [id, summary] of Object.entries(strategySummary)) {
+  for (const [, summary] of Object.entries(strategySummary)) {
     console.log(`  ${summary.strategyName}: ${summary.companyCount} companies`);
     console.log(`    ${summary.companies.slice(0, 5).join(', ')}${summary.companies.length > 5 ? '...' : ''}`);
   }

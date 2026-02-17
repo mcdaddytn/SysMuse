@@ -28,10 +28,104 @@ import {
   V2EnhancedConfig,
 } from '../services/scoring-service.js';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
-import { clearPatentsCache, invalidateEnrichmentCache } from './patents.routes.js';
+import { clearPatentsCache, invalidateEnrichmentCache, clearAndReloadSnapshotScores } from './patents.routes.js';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// =============================================================================
+// SNAPSHOT SCORE LOOKUP (exported for use in patents.routes.ts)
+// =============================================================================
+
+// Cache for active snapshot scores
+let v2ScoreCache: Map<string, number> | null = null;
+let v3ScoreCache: Map<string, number> | null = null;
+let scoreCacheExpiry = 0;
+const SCORE_CACHE_TTL = 60 * 1000; // 1 minute
+
+/**
+ * Load scores from active V2 snapshot into cache
+ */
+async function loadActiveV2Scores(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (v2ScoreCache && now < scoreCacheExpiry) {
+    return v2ScoreCache;
+  }
+
+  v2ScoreCache = new Map();
+
+  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
+    where: { scoreType: 'V2', isActive: true },
+    select: { id: true },
+  });
+
+  if (activeSnapshot) {
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: activeSnapshot.id },
+      select: { patentId: true, score: true },
+    });
+    for (const s of scores) {
+      v2ScoreCache.set(s.patentId, s.score);
+    }
+  }
+
+  scoreCacheExpiry = now + SCORE_CACHE_TTL;
+  return v2ScoreCache;
+}
+
+/**
+ * Load scores from active V3 snapshot into cache
+ */
+async function loadActiveV3Scores(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (v3ScoreCache && now < scoreCacheExpiry) {
+    return v3ScoreCache;
+  }
+
+  v3ScoreCache = new Map();
+
+  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
+    where: { scoreType: 'V3', isActive: true },
+    select: { id: true },
+  });
+
+  if (activeSnapshot) {
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: activeSnapshot.id },
+      select: { patentId: true, score: true },
+    });
+    for (const s of scores) {
+      v3ScoreCache.set(s.patentId, s.score);
+    }
+  }
+
+  scoreCacheExpiry = now + SCORE_CACHE_TTL;
+  return v3ScoreCache;
+}
+
+/**
+ * Get V2 and V3 scores from active snapshots
+ * Returns maps of patent_id -> score for both types
+ */
+export async function getActiveSnapshotScores(): Promise<{
+  v2Scores: Map<string, number>;
+  v3Scores: Map<string, number>;
+}> {
+  const [v2Scores, v3Scores] = await Promise.all([
+    loadActiveV2Scores(),
+    loadActiveV3Scores(),
+  ]);
+  return { v2Scores, v3Scores };
+}
+
+/**
+ * Clear snapshot score cache (call when snapshots are modified)
+ */
+export function clearSnapshotScoreCache(): void {
+  v2ScoreCache = null;
+  v3ScoreCache = null;
+  scoreCacheExpiry = 0;
+}
 
 // Cached sector lookup map (name -> {displayName, damagesRating, damagesLabel})
 let sectorCache: Map<string, { displayName: string; damagesRating: number; damagesLabel: string }> | null = null;
@@ -153,9 +247,12 @@ function calculateV2Score(patent: Patent, weights: ScoreWeights): number {
 
 /**
  * GET /api/scores/v2
- * Get v2 scored rankings with custom weights
+ * @deprecated Use /api/scores/v2-enhanced instead. This Basic V2 endpoint uses a simplified
+ * 3-factor formula (citations, years, competitor). V2 Enhanced uses 12+ factors including
+ * LLM-derived metrics and is the standard scoring system.
  */
 router.get('/v2', (req: Request, res: Response) => {
+  console.warn('[DEPRECATED] /api/scores/v2 called - use /api/scores/v2-enhanced instead');
   try {
     const {
       citation = DEFAULT_WEIGHTS.citation.toString(),
@@ -551,9 +648,9 @@ router.get('/sectors', async (req: Request, res: Response) => {
  * POST /api/scores/reload
  * Clear scoring caches and reload data
  */
-router.post('/reload', (_req: Request, res: Response) => {
+router.post('/reload', async (_req: Request, res: Response) => {
   clearScoringCache();
-  clearPatentsCache();
+  await clearPatentsCache();
   invalidateEnrichmentCache();
   patentsMap = null;
   res.json({ message: 'All caches cleared (scoring + patent data + LLM + enrichment)' });
@@ -632,6 +729,292 @@ router.get('/weights/presets', (_req: Request, res: Response) => {
     { name: 'Competitor Focus', weights: { citation: 30, years: 30, competitor: 40 } },
     { name: 'Balanced', weights: { citation: 33, years: 33, competitor: 34 } }
   ]);
+});
+
+// =============================================================================
+// SCORE SNAPSHOTS
+// Persist V2/V3 scoring results for use across the application
+// =============================================================================
+
+/**
+ * GET /api/scores/snapshots
+ * List all saved score snapshots
+ */
+router.get('/snapshots', async (_req: Request, res: Response) => {
+  try {
+    const snapshots = await prisma.scoreSnapshot.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        scoreType: true,
+        isActive: true,
+        patentCount: true,
+        llmDataCount: true,
+        createdAt: true,
+        config: true,
+      },
+    });
+    res.json(snapshots);
+  } catch (error) {
+    console.error('Error listing snapshots:', error);
+    res.status(500).json({ error: 'Failed to list snapshots' });
+  }
+});
+
+/**
+ * GET /api/scores/snapshots/active
+ * Get currently active snapshots (one per score type)
+ */
+router.get('/snapshots/active', async (_req: Request, res: Response) => {
+  try {
+    const activeSnapshots = await prisma.scoreSnapshot.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        scoreType: true,
+        patentCount: true,
+        createdAt: true,
+      },
+    });
+
+    // Return as object keyed by score type
+    const result: Record<string, any> = {
+      V2: null,
+      V3: null,
+    };
+    for (const snap of activeSnapshots) {
+      result[snap.scoreType] = snap;
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error getting active snapshots:', error);
+    res.status(500).json({ error: 'Failed to get active snapshots' });
+  }
+});
+
+/**
+ * POST /api/scores/snapshots
+ * Save a new score snapshot
+ *
+ * Request body:
+ *   name: string - Name for this snapshot
+ *   description?: string - Optional description
+ *   scoreType: 'V2' | 'V3'
+ *   config: object - Full scoring configuration (V2EnhancedConfig or V3ConsensusConfig)
+ *   scores: Array<{ patent_id, score, rank, raw_metrics?, normalized_metrics? }>
+ *   setActive?: boolean - Whether to set this as the active snapshot for its type
+ */
+router.post('/snapshots', async (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      description,
+      scoreType,
+      config,
+      scores,
+      setActive = false,
+    } = req.body;
+
+    if (!name || !scoreType || !config || !scores) {
+      res.status(400).json({ error: 'Missing required fields: name, scoreType, config, scores' });
+      return;
+    }
+
+    if (scoreType !== 'V2' && scoreType !== 'V3') {
+      res.status(400).json({ error: 'scoreType must be V2 or V3' });
+      return;
+    }
+
+    // Count patents with LLM data
+    const llmDataCount = scores.filter((s: any) =>
+      s.raw_metrics?.eligibility_score !== undefined ||
+      s.raw_metrics?.validity_score !== undefined
+    ).length;
+
+    // If setActive, deactivate other snapshots of this type
+    if (setActive) {
+      await prisma.scoreSnapshot.updateMany({
+        where: { scoreType, isActive: true },
+        data: { isActive: false },
+      });
+    }
+
+    // Create the snapshot with scores
+    const snapshot = await prisma.scoreSnapshot.create({
+      data: {
+        name,
+        description,
+        scoreType,
+        config,
+        isActive: setActive,
+        patentCount: scores.length,
+        llmDataCount,
+        scores: {
+          create: scores.map((s: any) => ({
+            patentId: s.patent_id,
+            score: s.score,
+            rank: s.rank,
+            rawMetrics: s.raw_metrics || null,
+            normalizedMetrics: s.normalized_metrics || null,
+          })),
+        },
+      },
+      include: {
+        _count: { select: { scores: true } },
+      },
+    });
+
+    // If set as active, clear all caches so scores are immediately available
+    if (setActive) {
+      clearSnapshotScoreCache();
+      await clearAndReloadSnapshotScores();
+    }
+
+    res.json({
+      id: snapshot.id,
+      name: snapshot.name,
+      scoreType: snapshot.scoreType,
+      isActive: snapshot.isActive,
+      patentCount: snapshot._count.scores,
+      createdAt: snapshot.createdAt,
+    });
+  } catch (error) {
+    console.error('Error creating snapshot:', error);
+    res.status(500).json({ error: 'Failed to create snapshot' });
+  }
+});
+
+/**
+ * PUT /api/scores/snapshots/:id/activate
+ * Set a snapshot as the active snapshot for its score type
+ */
+router.put('/snapshots/:id/activate', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get the snapshot to find its score type
+    const snapshot = await prisma.scoreSnapshot.findUnique({
+      where: { id },
+      select: { scoreType: true },
+    });
+
+    if (!snapshot) {
+      res.status(404).json({ error: 'Snapshot not found' });
+      return;
+    }
+
+    // Deactivate all snapshots of this type, then activate the target
+    await prisma.$transaction([
+      prisma.scoreSnapshot.updateMany({
+        where: { scoreType: snapshot.scoreType, isActive: true },
+        data: { isActive: false },
+      }),
+      prisma.scoreSnapshot.update({
+        where: { id },
+        data: { isActive: true },
+      }),
+    ]);
+
+    // Invalidate caches so new scores are used
+    clearSnapshotScoreCache();
+    await clearAndReloadSnapshotScores();
+
+    res.json({ success: true, message: `Snapshot ${id} is now active` });
+  } catch (error) {
+    console.error('Error activating snapshot:', error);
+    res.status(500).json({ error: 'Failed to activate snapshot' });
+  }
+});
+
+/**
+ * PUT /api/scores/snapshots/:id/deactivate
+ * Deactivate a snapshot (no active snapshot for this type)
+ */
+router.put('/snapshots/:id/deactivate', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.scoreSnapshot.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    // Invalidate caches
+    clearSnapshotScoreCache();
+    await clearAndReloadSnapshotScores();
+
+    res.json({ success: true, message: `Snapshot ${id} deactivated` });
+  } catch (error) {
+    console.error('Error deactivating snapshot:', error);
+    res.status(500).json({ error: 'Failed to deactivate snapshot' });
+  }
+});
+
+/**
+ * DELETE /api/scores/snapshots/:id
+ * Delete a snapshot and all its scores
+ */
+router.delete('/snapshots/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Cascade delete will remove associated PatentScoreEntry records
+    await prisma.scoreSnapshot.delete({
+      where: { id },
+    });
+
+    // Invalidate caches if it was active
+    clearSnapshotScoreCache();
+    await clearAndReloadSnapshotScores();
+
+    res.json({ success: true, message: `Snapshot ${id} deleted` });
+  } catch (error) {
+    console.error('Error deleting snapshot:', error);
+    res.status(500).json({ error: 'Failed to delete snapshot' });
+  }
+});
+
+/**
+ * GET /api/scores/snapshots/:id/scores
+ * Get all scores from a specific snapshot (for debugging/export)
+ */
+router.get('/snapshots/:id/scores', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { limit = '1000', offset = '0' } = req.query;
+
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: id },
+      orderBy: { rank: 'asc' },
+      take: parseInt(limit as string),
+      skip: parseInt(offset as string),
+      select: {
+        patentId: true,
+        score: true,
+        rank: true,
+        rawMetrics: true,
+        normalizedMetrics: true,
+      },
+    });
+
+    const total = await prisma.patentScoreEntry.count({
+      where: { snapshotId: id },
+    });
+
+    res.json({
+      scores,
+      total,
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string),
+    });
+  } catch (error) {
+    console.error('Error getting snapshot scores:', error);
+    res.status(500).json({ error: 'Failed to get snapshot scores' });
+  }
 });
 
 export default router;

@@ -10,13 +10,129 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
 import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
-import { loadAllClassifications, scoreAllPatents, getDefaultProfileId } from '../services/scoring-service.js';
+import { loadAllClassifications } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
 
 const prisma = new PrismaClient();
 
 const router = Router();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Active Snapshot Score Cache
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Cache for active snapshot scores (loaded from database)
+let snapshotV2Scores: Map<string, number> | null = null;
+let snapshotV3Scores: Map<string, number> | null = null;
+let snapshotScoreCacheExpiry = 0;
+const SNAPSHOT_SCORE_CACHE_TTL = 60 * 1000; // 1 minute
+
+/**
+ * Load active V2 snapshot scores from database
+ */
+async function loadActiveV2SnapshotScores(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+
+  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
+    where: { scoreType: 'V2', isActive: true },
+    select: { id: true },
+  });
+
+  if (activeSnapshot) {
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: activeSnapshot.id },
+      select: { patentId: true, score: true },
+    });
+    for (const s of scores) {
+      map.set(s.patentId, s.score);
+    }
+    console.log(`[Patents] Loaded ${map.size} V2 snapshot scores`);
+  }
+
+  return map;
+}
+
+/**
+ * Load active V3 snapshot scores from database
+ */
+async function loadActiveV3SnapshotScores(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+
+  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
+    where: { scoreType: 'V3', isActive: true },
+    select: { id: true },
+  });
+
+  if (activeSnapshot) {
+    const scores = await prisma.patentScoreEntry.findMany({
+      where: { snapshotId: activeSnapshot.id },
+      select: { patentId: true, score: true },
+    });
+    for (const s of scores) {
+      map.set(s.patentId, s.score);
+    }
+    console.log(`[Patents] Loaded ${map.size} V3 snapshot scores`);
+  }
+
+  return map;
+}
+
+/**
+ * Preload active snapshot scores (call at startup and when caches are cleared)
+ */
+export async function preloadSnapshotScores(): Promise<void> {
+  try {
+    const [v2, v3] = await Promise.all([
+      loadActiveV2SnapshotScores(),
+      loadActiveV3SnapshotScores(),
+    ]);
+    snapshotV2Scores = v2;
+    snapshotV3Scores = v3;
+    snapshotScoreCacheExpiry = Date.now() + SNAPSHOT_SCORE_CACHE_TTL;
+    console.log(`[Patents] Snapshot scores preloaded: V2=${v2.size}, V3=${v3.size}`);
+  } catch (err) {
+    console.error('[Patents] Failed to preload snapshot scores:', err);
+  }
+}
+
+/**
+ * Clear snapshot score cache (call when snapshots are modified)
+ */
+export function clearSnapshotScoreCache(): void {
+  snapshotV2Scores = null;
+  snapshotV3Scores = null;
+  snapshotScoreCacheExpiry = 0;
+  console.log('[Patents] Snapshot score cache cleared');
+}
+
+/**
+ * Clear snapshot score cache AND reload from DB (awaitable).
+ * Call from save/activate/deactivate endpoints to ensure fresh scores
+ * are available before responding. Also invalidates the patents cache
+ * so the next loadPatents() call rebuilds with fresh scores.
+ */
+export async function clearAndReloadSnapshotScores(): Promise<void> {
+  clearSnapshotScoreCache();
+  patentsCache = null;
+  lastLoadTime = 0;
+  await preloadSnapshotScores();
+}
+
+/**
+ * Get cached snapshot scores (returns null if not loaded or expired)
+ */
+function getSnapshotScores(): { v2: Map<string, number> | null; v3: Map<string, number> | null } {
+  const now = Date.now();
+  if (now > snapshotScoreCacheExpiry) {
+    // Cache expired, trigger async refresh but return current (possibly stale) data
+    preloadSnapshotScores().catch(console.error);
+  }
+  return { v2: snapshotV2Scores, v3: snapshotV3Scores };
+}
+
+// Preload snapshot scores at module load
+preloadSnapshotScores().catch(console.error);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enrichment cache set cache (avoids re-reading directories on every request)
@@ -267,39 +383,22 @@ interface CandidatesFile {
   candidates: Patent[];
 }
 
-// V2 scoring defaults (same as scores.routes.ts)
-const DEFAULT_V2_WEIGHTS = { citation: 50, years: 30, competitor: 20 };
-
-/**
- * Calculate v2 score with default weights (same formula as scores.routes.ts)
- */
-function calculateV2Score(forwardCitations: number, remainingYears: number, competitorCites: number): number {
-  const totalWeight = DEFAULT_V2_WEIGHTS.citation + DEFAULT_V2_WEIGHTS.years + DEFAULT_V2_WEIGHTS.competitor;
-  const citationNorm = DEFAULT_V2_WEIGHTS.citation / totalWeight;
-  const yearsNorm = DEFAULT_V2_WEIGHTS.years / totalWeight;
-  const competitorNorm = DEFAULT_V2_WEIGHTS.competitor / totalWeight;
-
-  const citationScore = Math.log10(forwardCitations + 1) * 30 * citationNorm;
-  const yearsScore = Math.min(remainingYears / 20, 1) * 100 * yearsNorm;
-  const competitorScore = competitorCites * 15 * competitorNorm;
-
-  return Math.round((citationScore + yearsScore + competitorScore) * 100) / 100;
-}
-
 // Cache the loaded data
 let patentsCache: Patent[] | null = null;
 let lastLoadTime: number = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Clear all patent-related caches (called from reload endpoint)
+ * Clear all patent-related caches (called from reload endpoint and snapshot operations)
  */
-export function clearPatentsCache(): void {
+export async function clearPatentsCache(): Promise<void> {
   patentsCache = null;
   lastLoadTime = 0;
   fullLlmCache = null;
   fullLlmCacheLoadTime = 0;
   cpcDescriptionsCache = null;
+  // Clear snapshot score cache and reload from DB before returning
+  await clearAndReloadSnapshotScores();
   console.log('[Patents] Caches cleared');
 }
 
@@ -336,13 +435,18 @@ export function loadPatents(): Patent[] {
   // Load enrichment data
   const llmData = loadAllFullLlmData();
 
-  // Load V3 scores (uses default profile)
-  let v3ScoresMap: Map<string, number> = new Map();
-  try {
-    const v3Scored = scoreAllPatents(getDefaultProfileId());
-    v3ScoresMap = new Map(v3Scored.map(s => [s.patent_id, s.score]));
-  } catch (e) {
-    console.warn('[Patents] Could not load v3 scores:', e);
+  // Get snapshot scores (from active database snapshots if available)
+  // V2 and V3 scores require active snapshots - no fallback computation
+  // Patents without snapshot scores show 0 and fall to bottom when sorting
+  const snapshotScores = getSnapshotScores();
+  const hasV2Snapshot = snapshotScores.v2 && snapshotScores.v2.size > 0;
+  const hasV3Snapshot = snapshotScores.v3 && snapshotScores.v3.size > 0;
+
+  if (hasV2Snapshot) {
+    console.log(`[Patents] Using active V2 snapshot scores (${snapshotScores.v2!.size} patents)`);
+  }
+  if (hasV3Snapshot) {
+    console.log(`[Patents] Using active V3 snapshot scores (${snapshotScores.v3!.size} patents)`);
   }
 
   // Enrich patents with affiliate, super_sector, citation classification, LLM data, and computed scores
@@ -351,11 +455,15 @@ export function loadPatents(): Patent[] {
     const llm = llmData.get(p.patent_id);
     const competitorCites = classification?.competitor_citations ?? 0;
 
-    // Compute v2 score with default weights
-    const v2Score = calculateV2Score(p.forward_citations, p.remaining_years, competitorCites);
+    // Get V2 score from snapshot only (no fallback - patents without V2 Enhanced scores show 0)
+    const v2Score = hasV2Snapshot && snapshotScores.v2!.has(p.patent_id)
+      ? snapshotScores.v2!.get(p.patent_id)!
+      : 0;
 
-    // Get pre-computed v3 score
-    const v3Score = v3ScoresMap.get(p.patent_id) ?? 0;
+    // Get V3 score from snapshot only (no fallback - patents without V3 scores show 0)
+    const v3Score = hasV3Snapshot && snapshotScores.v3!.has(p.patent_id)
+      ? snapshotScores.v3!.get(p.patent_id)!
+      : 0;
 
     return {
       ...p,
@@ -421,7 +529,10 @@ export function loadPatents(): Patent[] {
 
   lastLoadTime = now;
 
-  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation/v2/v3 enrichment`);
+  const scoreSource = hasV2Snapshot || hasV3Snapshot
+    ? ` (V2:${hasV2Snapshot ? 'snapshot' : 'calc'}, V3:${hasV3Snapshot ? 'snapshot' : 'calc'})`
+    : '';
+  console.log(`[Patents] Loaded ${patentsCache.length} patents with affiliate/sector/citation/v2/v3 enrichment${scoreSource}`);
   return patentsCache;
 }
 
@@ -589,6 +700,102 @@ function applyFilters(patents: Patent[], filters: Record<string, string | string
   // Active only filter (remaining_years > 0, legacy, subsumed by yearsMin)
   if (filters.activeOnly === 'true') {
     result = result.filter(p => p.remaining_years > 0);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NEW FILTERS - Phase 2: One-to-many and additional field filters
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Competitor names filter (one-to-many: any match)
+  if (filters.competitorNames) {
+    const nameList = Array.isArray(filters.competitorNames)
+      ? filters.competitorNames
+      : [filters.competitorNames];
+    const lowerNames = nameList.map(n => n.toLowerCase());
+    result = result.filter(p => {
+      const patentCompetitors = p.competitor_names || [];
+      return patentCompetitors.some(c =>
+        lowerNames.some(n => c.toLowerCase().includes(n))
+      );
+    });
+  }
+
+  // CPC codes filter (one-to-many: prefix match)
+  if (filters.cpcCodes) {
+    const cpcList = Array.isArray(filters.cpcCodes)
+      ? filters.cpcCodes
+      : [filters.cpcCodes];
+    const upperCodes = cpcList.map(c => c.toUpperCase());
+    result = result.filter(p => {
+      const patentCpcs = p.cpc_codes || [];
+      return patentCpcs.some(cpc =>
+        upperCodes.some(filter => cpc.toUpperCase().startsWith(filter))
+      );
+    });
+  }
+
+  // Sub-sector filter
+  if (filters.subSectors) {
+    const subSectorList = Array.isArray(filters.subSectors)
+      ? filters.subSectors
+      : [filters.subSectors];
+    result = result.filter(p =>
+      subSectorList.some(s => p.primary_sub_sector_name === s)
+    );
+  }
+
+  // Has LLM data filter
+  if (filters.hasLlmData === 'true') {
+    result = result.filter(p => p.llm_summary && p.llm_summary.length > 0);
+  } else if (filters.hasLlmData === 'false') {
+    result = result.filter(p => !p.llm_summary || p.llm_summary.length === 0);
+  }
+
+  // Is Expired filter (patents with remaining_years <= 0)
+  if (filters.isExpired === 'true') {
+    result = result.filter(p => p.remaining_years <= 0);
+  } else if (filters.isExpired === 'false') {
+    result = result.filter(p => p.remaining_years > 0);
+  }
+
+  // V2 Score range filter (omits patents without v2_score)
+  if (filters.v2ScoreMin) {
+    const min = parseFloat(filters.v2ScoreMin as string);
+    result = result.filter(p => p.v2_score != null && p.v2_score >= min);
+  }
+  if (filters.v2ScoreMax) {
+    const max = parseFloat(filters.v2ScoreMax as string);
+    result = result.filter(p => p.v2_score != null && p.v2_score <= max);
+  }
+
+  // V3 Score range filter (omits patents without v3_score)
+  if (filters.v3ScoreMin) {
+    const min = parseFloat(filters.v3ScoreMin as string);
+    result = result.filter(p => p.v3_score != null && p.v3_score >= min);
+  }
+  if (filters.v3ScoreMax) {
+    const max = parseFloat(filters.v3ScoreMax as string);
+    result = result.filter(p => p.v3_score != null && p.v3_score <= max);
+  }
+
+  // Affiliate citations range filter
+  if (filters.affiliateCitesMin) {
+    const min = parseFloat(filters.affiliateCitesMin as string);
+    result = result.filter(p => (p.affiliate_citations ?? 0) >= min);
+  }
+  if (filters.affiliateCitesMax) {
+    const max = parseFloat(filters.affiliateCitesMax as string);
+    result = result.filter(p => (p.affiliate_citations ?? 0) <= max);
+  }
+
+  // Neutral citations range filter
+  if (filters.neutralCitesMin) {
+    const min = parseFloat(filters.neutralCitesMin as string);
+    result = result.filter(p => (p.neutral_citations ?? 0) >= min);
+  }
+  if (filters.neutralCitesMax) {
+    const max = parseFloat(filters.neutralCitesMax as string);
+    result = result.filter(p => (p.neutral_citations ?? 0) <= max);
   }
 
   return result;
@@ -1115,6 +1322,229 @@ router.get('/assignees', (_req: Request, res: Response) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2: New filter option endpoints for flexible filtering
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/patents/competitor-names
+ * Get list of unique competitor names with citation counts
+ */
+router.get('/competitor-names', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const competitorCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      const competitors = p.competitor_names || [];
+      competitors.forEach(name => {
+        competitorCounts[name] = (competitorCounts[name] || 0) + 1;
+      });
+    });
+
+    const competitorNames = Object.entries(competitorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    res.json(competitorNames);
+  } catch (error) {
+    console.error('Error getting competitor names:', error);
+    res.status(500).json({ error: 'Failed to get competitor names' });
+  }
+});
+
+/**
+ * GET /api/patents/cpc-codes
+ * Get list of unique CPC codes with patent counts
+ * Optional query param: level=section|class|subclass|group (default: subclass)
+ */
+router.get('/cpc-codes', (req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+    const level = (req.query.level as string) || 'subclass';
+
+    // CPC level extraction
+    // Examples: H04L63/00 -> H (section), H04 (class), H04L (subclass), H04L63 (group)
+    function extractLevel(cpc: string, lvl: string): string {
+      switch (lvl) {
+        case 'section': return cpc.slice(0, 1);      // H
+        case 'class': return cpc.slice(0, 3);        // H04
+        case 'subclass': return cpc.slice(0, 4);     // H04L
+        case 'group': return cpc.split('/')[0];      // H04L63
+        default: return cpc.slice(0, 4);
+      }
+    }
+
+    const cpcCounts: Record<string, number> = {};
+    patents.forEach(p => {
+      const cpcs = p.cpc_codes || [];
+      const seen = new Set<string>();
+      cpcs.forEach(cpc => {
+        const key = extractLevel(cpc, level);
+        if (!seen.has(key)) {
+          seen.add(key);
+          cpcCounts[key] = (cpcCounts[key] || 0) + 1;
+        }
+      });
+    });
+
+    const cpcCodes = Object.entries(cpcCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, count]) => ({
+        code,
+        count,
+        description: resolveCpcDescription(code)
+      }));
+
+    res.json(cpcCodes);
+  } catch (error) {
+    console.error('Error getting CPC codes:', error);
+    res.status(500).json({ error: 'Failed to get CPC codes' });
+  }
+});
+
+/**
+ * GET /api/patents/sub-sectors
+ * Get list of unique sub-sectors with patent counts
+ */
+router.get('/sub-sectors', (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
+    patents.forEach(p => {
+      const subSector = (p as any).primary_sub_sector_name;
+      if (subSector) {
+        if (!subSectorCounts[subSector]) {
+          subSectorCounts[subSector] = { count: 0, sector: p.primary_sector };
+        }
+        subSectorCounts[subSector].count++;
+      }
+    });
+
+    const subSectors = Object.entries(subSectorCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        sector: data.sector
+      }));
+
+    res.json(subSectors);
+  } catch (error) {
+    console.error('Error getting sub-sectors:', error);
+    res.status(500).json({ error: 'Failed to get sub-sectors' });
+  }
+});
+
+/**
+ * GET /api/patents/filter-options
+ * Get all available filter options in a single call (for FlexFilterBuilder)
+ */
+router.get('/filter-options', async (_req: Request, res: Response) => {
+  try {
+    const patents = loadPatents();
+
+    // Affiliates
+    const affiliateCounts: Record<string, number> = {};
+    // Super-sectors
+    const superSectorCounts: Record<string, number> = {};
+    // Primary sectors
+    const primarySectorCounts: Record<string, number> = {};
+    // Competitor names
+    const competitorCounts: Record<string, number> = {};
+    // CPC codes (subclass level)
+    const cpcCounts: Record<string, number> = {};
+    // Sub-sectors
+    const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
+    // Score range
+    let scoreMin = Infinity, scoreMax = -Infinity;
+    // Years range
+    let yearsMin = Infinity, yearsMax = -Infinity;
+    // Counts
+    let withLlmData = 0, withCompetitors = 0, expired = 0;
+
+    patents.forEach(p => {
+      // Affiliates
+      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
+      // Super-sectors
+      superSectorCounts[p.super_sector] = (superSectorCounts[p.super_sector] || 0) + 1;
+      // Primary sectors
+      const sector = p.primary_sector || 'unknown';
+      primarySectorCounts[sector] = (primarySectorCounts[sector] || 0) + 1;
+      // Competitors
+      (p.competitor_names || []).forEach(name => {
+        competitorCounts[name] = (competitorCounts[name] || 0) + 1;
+      });
+      // CPC codes (subclass)
+      const seen = new Set<string>();
+      (p.cpc_codes || []).forEach(cpc => {
+        const key = cpc.slice(0, 4);
+        if (!seen.has(key)) {
+          seen.add(key);
+          cpcCounts[key] = (cpcCounts[key] || 0) + 1;
+        }
+      });
+      // Sub-sectors
+      const subSector = (p as any).primary_sub_sector_name;
+      if (subSector) {
+        if (!subSectorCounts[subSector]) {
+          subSectorCounts[subSector] = { count: 0, sector: p.primary_sector };
+        }
+        subSectorCounts[subSector].count++;
+      }
+      // Score range
+      if (p.score < scoreMin) scoreMin = p.score;
+      if (p.score > scoreMax) scoreMax = p.score;
+      // Years range
+      if (p.remaining_years < yearsMin) yearsMin = p.remaining_years;
+      if (p.remaining_years > yearsMax) yearsMax = p.remaining_years;
+      // LLM data
+      if (p.has_llm_data) withLlmData++;
+      // Competitors
+      if ((p.competitor_count ?? 0) > 0) withCompetitors++;
+      // Expired
+      if (p.remaining_years <= 0) expired++;
+    });
+
+    res.json({
+      affiliates: Object.entries(affiliateCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+      superSectors: Object.entries(superSectorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+      primarySectors: Object.entries(primarySectorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => ({ name, count })),
+      competitorNames: Object.entries(competitorCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 100)  // Top 100 competitors
+        .map(([name, count]) => ({ name, count })),
+      cpcCodes: Object.entries(cpcCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 100)  // Top 100 CPC subclasses
+        .map(([code, count]) => ({ code, count, description: resolveCpcDescription(code) })),
+      subSectors: Object.entries(subSectorCounts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, data]) => ({ name, count: data.count, sector: data.sector })),
+      ranges: {
+        score: { min: scoreMin === Infinity ? 0 : scoreMin, max: scoreMax === -Infinity ? 100 : scoreMax },
+        years: { min: yearsMin === Infinity ? 0 : yearsMin, max: yearsMax === -Infinity ? 20 : yearsMax }
+      },
+      counts: {
+        total: patents.length,
+        withLlmData,
+        withCompetitors,
+        expired
+      }
+    });
+  } catch (error) {
+    console.error('Error getting filter options:', error);
+    res.status(500).json({ error: 'Failed to get filter options' });
+  }
+});
+
 /**
  * GET /api/patents/cpc-descriptions
  * Get CPC code descriptions mapping
@@ -1326,6 +1756,324 @@ router.get('/export', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error exporting patents:', error);
     res.status(500).json({ error: 'Failed to export patents' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3: Aggregation endpoint for analytics
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/patents/aggregate
+ * Aggregate patents with groupBy and aggregation functions
+ *
+ * Body: {
+ *   groupBy: string | string[],       // Field(s) to group by
+ *   aggregations: [{ field, op }],    // Operations: count, sum, avg, min, max
+ *   explodeArrays?: boolean,          // If true, explode array fields (e.g., competitor_names)
+ *   filters?: Record<string, any>,    // Same filters as GET /api/patents
+ *   sortBy?: string,                  // Sort by aggregation result field
+ *   sortDesc?: boolean,               // Sort descending
+ *   limit?: number                    // Limit results
+ * }
+ */
+router.post('/aggregate', (req: Request, res: Response) => {
+  try {
+    const {
+      groupBy,
+      aggregations = [],
+      explodeArrays = false,
+      filters = {},
+      sortBy = 'count',
+      sortDesc = true,
+      limit = 100
+    } = req.body;
+
+    if (!groupBy) {
+      return res.status(400).json({ error: 'groupBy is required' });
+    }
+
+    // Normalize groupBy to array
+    const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
+
+    // Load and filter patents
+    let patents = loadPatents();
+    patents = applyFilters(patents, filters);
+
+    // Fields that are arrays and can be exploded
+    const arrayFields = new Set(['competitor_names', 'cpc_codes']);
+
+    // Build groups
+    interface AggGroup {
+      key: Record<string, string>;
+      patents: typeof patents;
+    }
+
+    const groups = new Map<string, AggGroup>();
+
+    for (const patent of patents) {
+      // Get group key values
+      const keyValues: Record<string, string>[] = [{}];
+
+      for (const field of groupByFields) {
+        const val = (patent as any)[field];
+        const newKeyValues: Record<string, string>[] = [];
+
+        if (explodeArrays && arrayFields.has(field) && Array.isArray(val)) {
+          // Explode: create a row for each array element
+          if (val.length === 0) {
+            // No values - use placeholder
+            for (const existing of keyValues) {
+              newKeyValues.push({ ...existing, [field]: '(none)' });
+            }
+          } else {
+            for (const existing of keyValues) {
+              for (const item of val) {
+                newKeyValues.push({ ...existing, [field]: String(item) });
+              }
+            }
+          }
+        } else {
+          // Normal: single value or array as string
+          const strVal = Array.isArray(val) ? val.join(', ') : String(val ?? '(none)');
+          for (const existing of keyValues) {
+            newKeyValues.push({ ...existing, [field]: strVal });
+          }
+        }
+
+        keyValues.length = 0;
+        keyValues.push(...newKeyValues);
+      }
+
+      // Add patent to each group
+      for (const keyObj of keyValues) {
+        const keyStr = JSON.stringify(keyObj);
+        if (!groups.has(keyStr)) {
+          groups.set(keyStr, { key: keyObj, patents: [] });
+        }
+        groups.get(keyStr)!.patents.push(patent);
+      }
+    }
+
+    // Compute aggregations for each group
+    interface AggResult {
+      [key: string]: string | number;
+    }
+
+    const results: AggResult[] = [];
+
+    for (const group of groups.values()) {
+      const result: AggResult = { ...group.key, count: group.patents.length };
+
+      for (const agg of aggregations) {
+        const { field, op } = agg;
+        const values = group.patents
+          .map(p => (p as any)[field])
+          .filter(v => v != null && typeof v === 'number') as number[];
+
+        const aggKey = `${field}_${op}`;
+
+        switch (op) {
+          case 'sum':
+            result[aggKey] = values.reduce((a, b) => a + b, 0);
+            break;
+          case 'avg':
+            result[aggKey] = values.length > 0
+              ? Math.round(values.reduce((a, b) => a + b, 0) / values.length * 100) / 100
+              : 0;
+            break;
+          case 'min':
+            result[aggKey] = values.length > 0 ? Math.min(...values) : 0;
+            break;
+          case 'max':
+            result[aggKey] = values.length > 0 ? Math.max(...values) : 0;
+            break;
+          case 'count_nonnull':
+            result[aggKey] = values.length;
+            break;
+        }
+      }
+
+      results.push(result);
+    }
+
+    // Sort results
+    results.sort((a, b) => {
+      const aVal = a[sortBy] ?? 0;
+      const bVal = b[sortBy] ?? 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDesc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+      }
+      return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
+    });
+
+    // Limit results
+    const limitedResults = results.slice(0, limit);
+
+    res.json({
+      groupBy: groupByFields,
+      aggregations,
+      explodeArrays,
+      totalGroups: results.length,
+      filteredPatents: patents.length,
+      results: limitedResults
+    });
+  } catch (error) {
+    console.error('Error aggregating patents:', error);
+    res.status(500).json({ error: 'Failed to aggregate patents' });
+  }
+});
+
+/**
+ * GET /api/patents/aggregate/export
+ * Export aggregation results as CSV
+ */
+router.post('/aggregate/export', (req: Request, res: Response) => {
+  try {
+    const {
+      groupBy,
+      aggregations = [],
+      explodeArrays = false,
+      filters = {},
+      sortBy = 'count',
+      sortDesc = true
+    } = req.body;
+
+    if (!groupBy) {
+      return res.status(400).json({ error: 'groupBy is required' });
+    }
+
+    // Normalize groupBy to array
+    const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
+
+    // Load and filter patents
+    let patents = loadPatents();
+    patents = applyFilters(patents, filters);
+
+    // Same grouping logic as /aggregate
+    const arrayFields = new Set(['competitor_names', 'cpc_codes']);
+    const groups = new Map<string, { key: Record<string, string>; patents: typeof patents }>();
+
+    for (const patent of patents) {
+      const keyValues: Record<string, string>[] = [{}];
+
+      for (const field of groupByFields) {
+        const val = (patent as any)[field];
+        const newKeyValues: Record<string, string>[] = [];
+
+        if (explodeArrays && arrayFields.has(field) && Array.isArray(val)) {
+          if (val.length === 0) {
+            for (const existing of keyValues) {
+              newKeyValues.push({ ...existing, [field]: '(none)' });
+            }
+          } else {
+            for (const existing of keyValues) {
+              for (const item of val) {
+                newKeyValues.push({ ...existing, [field]: String(item) });
+              }
+            }
+          }
+        } else {
+          const strVal = Array.isArray(val) ? val.join(', ') : String(val ?? '(none)');
+          for (const existing of keyValues) {
+            newKeyValues.push({ ...existing, [field]: strVal });
+          }
+        }
+
+        keyValues.length = 0;
+        keyValues.push(...newKeyValues);
+      }
+
+      for (const keyObj of keyValues) {
+        const keyStr = JSON.stringify(keyObj);
+        if (!groups.has(keyStr)) {
+          groups.set(keyStr, { key: keyObj, patents: [] });
+        }
+        groups.get(keyStr)!.patents.push(patent);
+      }
+    }
+
+    // Compute aggregations
+    interface AggResult {
+      [key: string]: string | number;
+    }
+
+    const results: AggResult[] = [];
+
+    for (const group of groups.values()) {
+      const result: AggResult = { ...group.key, count: group.patents.length };
+
+      for (const agg of aggregations) {
+        const { field, op } = agg;
+        const values = group.patents
+          .map(p => (p as any)[field])
+          .filter(v => v != null && typeof v === 'number') as number[];
+
+        const aggKey = `${field}_${op}`;
+
+        switch (op) {
+          case 'sum':
+            result[aggKey] = values.reduce((a, b) => a + b, 0);
+            break;
+          case 'avg':
+            result[aggKey] = values.length > 0
+              ? Math.round(values.reduce((a, b) => a + b, 0) / values.length * 100) / 100
+              : 0;
+            break;
+          case 'min':
+            result[aggKey] = values.length > 0 ? Math.min(...values) : 0;
+            break;
+          case 'max':
+            result[aggKey] = values.length > 0 ? Math.max(...values) : 0;
+            break;
+          case 'count_nonnull':
+            result[aggKey] = values.length;
+            break;
+        }
+      }
+
+      results.push(result);
+    }
+
+    // Sort
+    results.sort((a, b) => {
+      const aVal = a[sortBy] ?? 0;
+      const bVal = b[sortBy] ?? 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDesc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+      }
+      return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
+    });
+
+    // Build CSV
+    if (results.length === 0) {
+      return res.status(400).json({ error: 'No results to export' });
+    }
+
+    const columns = Object.keys(results[0]);
+
+    function escapeCSV(val: unknown): string {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }
+
+    const header = columns.map(c => escapeCSV(c)).join(',');
+    const rows = results.map(row =>
+      columns.map(col => escapeCSV(row[col])).join(',')
+    );
+
+    const csv = [header, ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="patent-aggregate-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting aggregation:', error);
+    res.status(500).json({ error: 'Failed to export aggregation' });
   }
 });
 
@@ -1673,7 +2421,7 @@ router.post('/enrich-cpc-designation', async (req: Request, res: Response) => {
 
     // Clear patents cache so next load picks up enriched data
     if (!dryRun) {
-      clearPatentsCache();
+      await clearPatentsCache();
     }
 
     res.json({

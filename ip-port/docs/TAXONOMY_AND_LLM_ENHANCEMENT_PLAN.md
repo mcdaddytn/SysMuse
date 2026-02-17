@@ -13,7 +13,7 @@ This document captures the strategic roadmap for evolving IP Port from a single-
 - System enhancements: multi-portfolio support, product entity, admin tools, data layer (Sections 9-13)
 - Pragmatic development phases prioritizing proof-of-concept litigation analysis (Section 14)
 
-The guiding principle is **pre-screening at minimal cost**: the system's job is to identify high-confidence litigation opportunities before committing expensive resources (attorneys, 3rd party vendors like Patlytics at ~$25/patent, discovery costs).
+The guiding principle is **pre-screening at minimal cost**: the system's job is to identify high-confidence litigation opportunities before committing expensive resources (attorneys, 3rd party vendors like Patlytics at ~$25/patent for up to 20 product searches, discovery costs).
 
 Additional requirements will be added as initiatives are further defined.
 
@@ -142,10 +142,22 @@ Products/Companies: [Ericsson RAN, Cisco Catalyst AP, Qualcomm modem chips]
 
 The LLM can infer tech component mappings from patent claims with high confidence. Tech stack membership is general knowledge. Product-to-tech-stack mapping leverages the LLM's training data on publicly available product specifications, teardowns, and standards participation.
 
+### Incremental Question Testing Approach
+
+**Principle:** Add new questions but defer incorporating them into composite scores until validated.
+
+1. Add new questions to templates with **weight 0** (scored but not counted in composite)
+2. Run on a small batch (50-100 patents in the POC sector) to evaluate quality
+3. Review LLM answers — are they informative? Consistent? Do they differentiate patents?
+4. Once validated, assign weights and incorporate into composite score for new scoring runs
+5. Use top-N renormalization (Section 6) to extend to the broader portfolio without full reruns
+
+This prevents a new untested question from distorting the established ranking while still collecting data.
+
 ### New Question Categories
 
 #### Portfolio-Level Additions (apply to all patents)
-| Question | Suggested Weight | What It Captures |
+| Question | Suggested Weight (after validation) | What It Captures |
 |----------|-----------------|------------------|
 | **Product Mapping Probability** | 0.12 | "Estimate probability claims read on commercially available products. Name likely product categories and companies." |
 | **Licensing Revenue Potential** | 0.10 | "Is this high-volume consumer, infrastructure, or niche? Rate commercial significance." |
@@ -223,12 +235,28 @@ Use a cheap model (Haiku or Gemini Flash, ~$30 for 29k patents) to:
 
 This creates a taxonomy that goes beyond CPC code aggregation — incorporating technology function, market application, and competitive landscape groupings.
 
+### Multiple Taxonomy Support
+
+The current super-sector → sector → sub-sector hierarchy represents **one taxonomy** — primarily CPC-code-derived. The system should support **multiple taxonomies** that can coexist:
+
+| Taxonomy Type | Basis | Purpose |
+|---|---|---|
+| **CPC-derived** (current) | CPC code groupings | Default technical classification |
+| **Product-based** | Technology component → product mapping | "Which products use this technology?" |
+| **Competitor-based** | Competitor filing patterns | "Where is Qualcomm filing?" |
+| **Litigation-oriented** | Claim scope + market overlap | "Where are the strongest licensing opportunities?" |
+| **User-contributed** | Expert knowledge, manual curation | Custom groupings for specific analyses |
+
+Each patent can be classified under multiple taxonomies simultaneously. Scoring templates can be associated with any taxonomy — not just the CPC-derived one.
+
+**Future consideration:** Taxonomy governance through expert voting. Subject matter experts could use slider-based ontological voting interfaces to collaboratively refine taxonomy boundaries and resolve classification disputes. This is a later-phase capability but the data model should not preclude it.
+
 ---
 
 ## 5. Competitor Portfolio Analysis Initiative
 
 ### Vision
-Analyze competitor patent portfolios to understand where they are "playing" in the same technology spaces. Large competitors (Qualcomm, Intel, Samsung, etc.) file patents strategically to:
+Analyze competitor patent portfolios to understand where they are "playing" in the same technology spaces. Competitors (Netflix, Amazon, Google/YouTube, etc. for VIDEO_STREAMING; Qualcomm, Samsung, Intel for later WIRELESS/SEMICONDUCTOR phases) file patents strategically to:
 - Build defensive positions against licensing claims
 - Create cross-licensing leverage
 - Signal their technology investment areas
@@ -272,6 +300,26 @@ When competitors are identified per sector, the taxonomy and LLM questions can b
 4. **Progress tracking**: Track which patents have been scored at which tier, with which model, when
 5. **Cost tracking**: Persistent token usage and cost per scoring run, per model, per tier
 6. **Re-scoring support**: When templates change, identify which patents need re-scoring and prioritize
+
+### Top-N Scoring with Renormalization
+
+**Principle:** Avoid expensive full-portfolio reruns. Expand information incrementally.
+
+When new questions or models are introduced:
+1. **Score top-N patents** per sector with the new questions/model (e.g., top 100-200 by existing composite)
+2. **Renormalize lower patents**: Use statistical mapping to adjust lower-ranked patents' estimated scores based on how top-N scores shifted. This keeps relative rankings approximately stable without paying for full reruns.
+3. **Expand coverage over time**: As new patents enter the system or as overnight batch capacity allows, gradually extend new scoring to more of the portfolio
+4. **Flag renormalized vs. directly-scored**: UI should distinguish between patents scored with the current template vs. those with renormalized estimates
+
+This approach means adding new questions doesn't force a $300+ rerun. New questions can be tested on small batches first, evaluated for quality, and only incorporated into the composite score formula after validation.
+
+### Data Archiving
+
+Before any bulk re-scoring or template change:
+1. **Archive current scores** with timestamp and template version to a dated archive directory
+2. **Maintain revert capability**: If new scoring produces worse results, revert to archived scores
+3. **Archive format**: Copy `cache/llm-scores/` → `cache/archives/llm-scores-{date}-{templateVersion}/`
+4. **Keep at least 2 previous versions** before pruning old archives
 
 ### Batch Processing Design
 ```
@@ -343,15 +391,15 @@ Litigation Opportunity Pipeline
 
 ### What "Success" Looks Like for Proof of Concept
 
-Demonstrate the following workflow end-to-end for 2-3 target competitors:
+Demonstrate the following workflow end-to-end in **VIDEO_STREAMING** against Netflix and Amazon:
 
-1. Import competitor's top-N patents in overlapping sectors
+1. Import competitor's top-N patents in VIDEO_STREAMING sectors
 2. Identify technology subsectors with dense overlap between portfolios
 3. Detect patent family entanglements (cross-citations, parallel filings, design-around patterns)
 4. Export high-potential clusters to focus areas
 5. Run custom LLM analysis synthesizing all available data into litigation opportunity assessment
 6. Produce a ranked list of opportunities with confidence levels and recommended next steps
-7. Select top opportunities for 3rd party product mapping validation (Patlytics)
+7. Validate top opportunities with Patlytics product mapping (150 free credits available)
 
 ---
 
@@ -446,10 +494,22 @@ Product
 
 Support importing product data from paid analysis services:
 
-- **Patlytics** (~$25/patent for up to 20 products): Produces product-to-patent mapping with claim chart stubs
+- **Patlytics** (~$25/patent for up to 20 product searches): Produces product-to-patent mapping with claim chart stubs. **150 free credits available for POC.**
 - **Import formats**: .xlsx, .csv, .pdf
 - **PDF analysis**: Use LLM to extract product specifications, technology components, and tech stack information from product documentation PDFs
 - **Link to patents**: Associate imported products with patents in our system; use LLM to infer tech component overlap
+
+### Other Product Information Sources
+
+Beyond paid vendors, product information can be assembled from publicly available sources:
+
+- **iFixit**: Detailed teardowns of consumer electronics revealing component suppliers and technologies
+- **FCC filings**: RF test reports with chipset identification for wireless devices
+- **Product datasheets**: Manufacturer-published specifications listing technology components
+- **Standards participation records**: 3GPP, IEEE, IETF contributor disclosures linking companies to technologies
+- **Industry teardown services**: TechInsights, System Plus (higher cost, professional grade)
+
+LLM world knowledge can also infer product-technology relationships from its training data, filling gaps where formal documentation is unavailable. These inferences should be tagged with confidence levels and validated against external data as it becomes available.
 
 ### Product Analysis Workflow
 
@@ -463,7 +523,7 @@ Support importing product data from paid analysis services:
 
 ### Strategic Use of External Vendors
 
-External vendors are expensive ($25/patent × 20 products = $500 per patent analysis). The system's job is to **pre-screen** so we only send the highest-confidence opportunities:
+External vendors are expensive (~$25/patent for up to 20 product searches per patent). We have **150 free Patlytics credits for POC** — use them wisely on the highest-confidence candidates. The system's job is to **pre-screen** so we only send the highest-confidence opportunities:
 
 1. System identifies top-N candidate patents per sector (design-around, product mapping, evidence of use)
 2. Human review narrows to top candidates worth external validation
@@ -560,11 +620,11 @@ As the system grows from single-portfolio to multi-portfolio with products, comp
 
 ### When to Build a Unified Data Layer
 
-**Not yet** — but design decisions now should anticipate it:
+**Deferred to Phase 7** — but design decisions now should anticipate it:
 
 - **Phase 1-2**: Continue with current storage but add clear service interfaces (e.g., `PatentDataService.getPatent(id)` that checks candidates → cache → PatentsView API → null)
-- **Phase 3**: When multi-portfolio lands, the single candidates file becomes a bottleneck. Migrate patent master data to PostgreSQL.
-- **Phase 4+**: Full data service layer with:
+- **Phase 3-5**: If multi-portfolio creates immediate pain with the single candidates file, consider early migration of patent master data to PostgreSQL. Otherwise defer.
+- **Phase 7+**: Full data service layer with:
   - Unified patent lookup across all sources
   - Import/export pipeline for external system integration
   - Redis caching for hot data (sector scores, portfolio stats)
@@ -596,47 +656,60 @@ The data service layer work is a prelude to server deployment:
 
 These phases are organized around **proof of concept with litigation analysis** as the priority. Each phase should validate the approach before investing in the next. Pivots are expected based on findings.
 
+### POC Scope: VIDEO_STREAMING Sector
+
+The POC targets **VIDEO_STREAMING** — chosen because:
+- **Attorney priority**: Already flagged for litigation review
+- **Manageable scale**: ~1,857 sector-scored patents (vs 5,000+ in WIRELESS)
+- **Clear competitors**: Netflix, Amazon (Prime Video/AWS Elemental), Disney+/Hulu, YouTube/Google, Apple TV+, Roku, Comcast/NBCUniversal
+- **Well-defined technology landscape**: Codec, DRM, CDN, adaptive bitrate, recommendation, ad-insertion
+- **Revenue exposure**: Streaming is a massive and growing market with clear per-subscriber licensing models
+
+Samsung/Qualcomm wireless analysis is deferred — too many patents for initial POC and requires deeper taxonomy work first.
+
 ### Phase 0: Quick Wins & Rename (1-2 days)
 **Goal:** Visible progress, remove friction.
 
 - [ ] Rename "Patent Workstation" to "IP Port" in toolbar and browser title
 - [ ] Add new portfolio-level LLM questions (Product Mapping Probability, Evidence of Use Detectability, Licensing Revenue Potential, Tech Component Classification)
-- [ ] Update `portfolio-default.json` template; re-score a sample sector to validate
+- [ ] **Do NOT incorporate new questions into composite score yet** — run on a small batch (50-100 patents in VIDEO_STREAMING), evaluate quality, then decide on weight integration
+- [ ] Update `portfolio-default.json` template with new questions at weight 0 (scored but not counted) for testing
 
-### Phase 1: Multi-Portfolio Foundation (3-5 days)
-**Goal:** Support competitor portfolios at a basic level.
+### Phase 1: VIDEO_STREAMING Deep Dive & Multi-Portfolio Foundation (3-5 days)
+**Goal:** Demonstrate end-to-end litigation analysis in VIDEO_STREAMING.
 
 - [ ] Add `Portfolio` model to Prisma schema (name, type, affiliates)
 - [ ] Migrate Broadcom affiliates from static JSON to database
 - [ ] Build Admin page skeleton with Portfolio and Affiliate management
-- [ ] LLM-assisted affiliate discovery: given company name, suggest acquisitions and subsidiaries
+- [ ] LLM-assisted affiliate discovery for VIDEO_STREAMING competitors (Netflix, Amazon, etc.)
 - [ ] PatentsView assignee search: find patent counts per affiliate pattern
-- [ ] Import competitor patent basics (title, abstract, CPC, assignee, dates) for top-N
+- [ ] Import top 50-100 competitor patents in VIDEO_STREAMING sectors (Netflix, Amazon first)
+- [ ] Archive current LLM scores before any re-scoring runs
 
-**POC Target:** Import top 50-100 patents for 2 key competitors (e.g., Qualcomm, Samsung) in 2-3 high-overlap sectors.
+**POC Target:** Import competitor patents for Netflix and Amazon in VIDEO_STREAMING; see them alongside our patents in the sector view.
 
-### Phase 2: Sector Overlap Detection (3-5 days)
-**Goal:** Find the battleground sectors.
+### Phase 2: Sector Overlap Detection — VIDEO_STREAMING Focus (3-5 days)
+**Goal:** Find the battleground subsectors within VIDEO_STREAMING.
 
 - [ ] Run competitor patents through sector classification (Haiku/Flash, cheap)
-- [ ] Compute sector overlap matrix (our patents vs competitor patents per sector)
-- [ ] Identify density hotspots — sectors with high patent count from both portfolios
-- [ ] Citation overlap analysis — cross-citations between portfolios
+- [ ] Compute sector overlap matrix within VIDEO_STREAMING subsectors
+- [ ] Identify density hotspots — subsectors with high patent count from both portfolios
+- [ ] Citation overlap analysis — cross-citations between our VIDEO_STREAMING patents and competitors'
 - [ ] Family expansion comparison — parallel family activity in same subsectors
-- [ ] Build overlap visualization in the Sector Rankings or a new Competitive Landscape view
+- [ ] Build overlap visualization in Sector Rankings or a new Competitive Landscape view
 
-**POC Target:** Identify 3-5 "battleground" sectors with strong overlap and rich data for analysis.
+**POC Target:** Identify 2-3 VIDEO_STREAMING subsectors (e.g., adaptive-bitrate, DRM, codec-optimization) with strong overlap and rich data for litigation analysis.
 
-### Phase 3: Focus Area Pipeline (3-5 days)
-**Goal:** Turn overlap hotspots into actionable analysis.
+### Phase 3: Focus Area Pipeline — Litigation Opportunities (3-5 days)
+**Goal:** Turn VIDEO_STREAMING overlap hotspots into actionable analysis.
 
 - [ ] Auto-create focus groups from overlap hotspots (our top patents + competitor nearby patents)
 - [ ] Build litigation-oriented prompt templates (Competitive Landscape Synthesis, Design-Around Assessment, 3rd Party Screening)
-- [ ] Run custom LLM analysis on focus areas using Opus for highest quality
+- [ ] Run custom LLM analysis on focus areas using Opus Batch for highest quality
 - [ ] Produce ranked litigation opportunity list with confidence levels
-- [ ] Export format for attorney review
+- [ ] Export format for attorney review (CSV + markdown initially; PDF/DOCX later)
 
-**POC Target:** Produce 2-3 litigation opportunity assessments with enough detail to evaluate whether they warrant Patlytics validation (~$500-1,500 per opportunity).
+**POC Target:** Produce 2-3 VIDEO_STREAMING litigation opportunity assessments. If compelling, validate top candidates with Patlytics (up to 150 free credits available).
 
 ### Phase 4: Product Layer & External Integration (5-7 days)
 **Goal:** Add products to the analysis.
@@ -645,34 +718,38 @@ These phases are organized around **proof of concept with litigation analysis** 
 - [ ] Build product import from .xlsx/.csv (Patlytics exports)
 - [ ] PDF document analysis: extract tech specs and components from product datasheets
 - [ ] LLM tech stack inference: product → components → patent claim mapping
+- [ ] Incorporate product data from public sources (iFixit teardowns, FCC filings, published specs)
 - [ ] Link products to patents and companies in the system
 - [ ] Enhance focus area LLM templates with product data context
 
-**POC Target:** Import product data for 1-2 validated litigation targets; demonstrate patent-product mapping within the system.
+**POC Target:** Import product data for 1-2 validated VIDEO_STREAMING litigation targets; demonstrate patent-product mapping within the system.
 
 ### Phase 5: Enrichment & Scoring Pipeline Upgrade (5-7 days)
 **Goal:** Scale the analysis capability.
 
 - [ ] Multi-model support in scoring service (model selection per tier)
-- [ ] Anthropic Batch API integration for overnight scoring
-- [ ] Priority-based scoring (V2 scores → sector scores → triage scores)
+- [ ] Anthropic Batch API integration for overnight scoring (prefer Anthropic — 1M context for synthesis jobs)
+- [ ] Top-N scoring with renormalization for lower patents (avoid full-portfolio reruns)
 - [ ] Persistent cost tracking per scoring run
+- [ ] Data archiving before bulk re-scoring (revert capability)
 - [ ] Re-scoring detection when templates change
-- [ ] Subsector templates for top 5 largest sectors with litigation-oriented questions
+- [ ] Subsector templates for VIDEO_STREAMING sectors with litigation-oriented questions
+- [ ] Gradually extend to other super-sectors based on POC learnings
 
-### Phase 6: Taxonomy Deepening & Data Layer (5-7 days)
-**Goal:** Improve classification granularity and prepare for scale.
+### Phase 6: Taxonomy Deepening (5-7 days)
+**Goal:** Improve classification granularity across the portfolio.
 
 - [ ] LLM-assisted subsector classification of full portfolio
 - [ ] Misfit sector reorganization (rf-acoustic, audio, power-management, etc.)
-- [ ] Custom taxonomy groupings beyond CPC codes
-- [ ] Unified data service layer (`PatentDataService`, `PortfolioService`, `ProductService`)
+- [ ] Multiple taxonomy support (CPC-derived, product-based, competitor-based, custom)
 - [ ] Multi-model ensemble testing on sample sets
 - [ ] Competitor-informed LLM questions at sector/subsector level
+- [ ] Expand competitor analysis to WIRELESS sector (Samsung, Qualcomm) once taxonomy is deeper
 
-### Phase 7: Production Readiness (ongoing)
-**Goal:** Server deployment preparation.
+### Phase 7: Data Service Layer & Production Readiness (deferred)
+**Goal:** Prepare for scale and server deployment. Timeline TBD based on POC results.
 
+- [ ] Unified data service layer (`PatentDataService`, `PortfolioService`, `ProductService`)
 - [ ] Migrate patent master data from JSON to PostgreSQL
 - [ ] Redis caching for hot paths
 - [ ] Import/export pipeline for external systems
@@ -684,9 +761,11 @@ These phases are organized around **proof of concept with litigation analysis** 
 
 | After Phase | Validate | Pivot If |
 |---|---|---|
-| 1 | Can we import competitor patents and see them in the system? | Multi-portfolio model is wrong — simplify |
-| 2 | Do overlap hotspots correlate with known litigation areas? | Sector taxonomy too coarse — deepen first |
-| 3 | Do LLM assessments produce actionable litigation intelligence? | LLM questions need refactoring — iterate templates |
+| 0 | Do new LLM questions produce meaningful answers on VIDEO_STREAMING sample? | Questions need refactoring before broader rollout |
+| 1 | Can we import Netflix/Amazon patents and see them in VIDEO_STREAMING sectors? | Multi-portfolio model is wrong — simplify |
+| 2 | Do VIDEO_STREAMING overlap hotspots correlate with known litigation areas? | Sector taxonomy too coarse — deepen subsectors first |
+| 3 | Do LLM assessments produce actionable litigation intelligence for attorneys? | LLM questions need refactoring — iterate templates |
+| 3 | Are Patlytics results worth the $25/patent? (test with free credits) | External vendor data too sparse — focus on LLM-only analysis |
 | 4 | Does product data meaningfully improve litigation confidence? | Product data too sparse — focus on patent-only analysis |
 | 5 | Does tiered scoring improve cost/quality ratio? | Single model sufficient — simplify pipeline |
 
@@ -710,15 +789,27 @@ These phases are organized around **proof of concept with litigation analysis** 
 
 ---
 
-## 16. Open Questions
+## 16. Resolved Questions
 
-1. **First competitor targets**: Which 2-3 competitors for Phase 1 POC? Qualcomm and Samsung are likely candidates given wireless/semiconductor overlap.
-2. **Subsector granularity target**: How many subsectors per sector is useful vs. noise? 3-5 per large sector?
-3. **Re-scoring budget**: When templates change, do we re-score all affected patents or just top-N?
-4. **Multi-model integration priority**: Which non-Anthropic model to integrate first for testing? (o3 is most interesting for reasoning quality at 0.13x cost)
-5. **Tech stack database**: Build from LLM inference, or seed from external data sources?
-6. **Taxonomy governance**: Automated thresholds for split/merge or manual?
-7. **Patlytics budget**: How many patents can we send to Patlytics in the POC phase? (~$25/patent × 20 products)
-8. **Attorney interface**: What export format do attorneys prefer for opportunity review? PDF, DOCX, structured web view?
-9. **Data service priority**: Build unified data layer in Phase 6, or earlier if multi-portfolio creates immediate pain?
-10. **Production timeline**: When does server deployment need to happen? This affects how much infrastructure investment to make early.
+These questions were raised during planning and resolved during requirements gathering.
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | **First competitor targets** | **VIDEO_STREAMING competitors**: Netflix, Amazon (Prime Video + AWS Elemental). Samsung/Qualcomm wireless deferred — too many patents for initial POC. |
+| 2 | **Subsector granularity target** | 3-5 per large sector. Start with VIDEO_STREAMING subsectors, validate before expanding. |
+| 3 | **Re-scoring budget** | **Top-N with renormalization.** Score top 100-200 per sector with new questions/models; renormalize lower patents statistically. Avoid full-portfolio reruns. Archive before re-scoring for revert capability. |
+| 4 | **Multi-model integration priority** | **Prefer Anthropic models** — Haiku for triage, Sonnet for standard, Opus Batch for deep. 1M context (Sonnet 4.5) valuable for synthesis jobs. Non-Anthropic models (o3, Gemini) are Phase 6+ experiments. |
+| 5 | **Tech stack database** | **LLM inference first**, supplemented with external data as discovered (iFixit, FCC filings, product datasheets). No formal tech stack DB needed initially — infer from patent claims + LLM world knowledge. |
+| 6 | **Taxonomy governance** | Start manual, with LLM-assisted suggestions. Future: expert ontological voting with slider-based interfaces for collaborative taxonomy refinement. System should support multiple coexisting taxonomies. |
+| 7 | **Patlytics budget** | **150 free credits for POC.** $25/patent for up to 20 product searches per patent (NOT $25 per product search). Use free credits on highest-confidence VIDEO_STREAMING candidates after Phase 3 analysis. |
+| 8 | **Attorney interface** | **CSV + markdown for POC.** PDF/DOCX export is later-phase. Attorneys can review markdown in any viewer and CSV in Excel for sorting/filtering. |
+| 9 | **Data service priority** | **Deferred to Phase 7.** Build clear service interfaces in Phase 1-2 but don't invest in a unified data layer until POC validates the approach. |
+| 10 | **Production timeline** | **Deferred.** Focus on POC value delivery first. Production deployment timing depends on POC results and business decision to scale. |
+
+## 17. Open Questions (New)
+
+1. **VIDEO_STREAMING subsector proposal**: What are the right 4-6 subsectors for VIDEO_STREAMING? Candidates: codec-optimization, adaptive-bitrate, DRM-content-protection, CDN-delivery, recommendation-personalization, ad-insertion.
+2. **New question weight integration**: After testing new questions on a batch, what's the threshold for incorporating into composite score? (e.g., correlation with attorney assessments, score variance, information gain)
+3. **Competitor patent sourcing**: PatentsView for basic data, but what about claims text? Need USPTO bulk XML coverage for competitor patents or use LLM to work from abstracts only?
+4. **Affiliate pattern accuracy**: How to validate that assignee regex patterns correctly capture all of a competitor's patents without false positives?
+5. **Renormalization method**: Linear regression from top-N rescored patents, or a more sophisticated approach? Need to define the statistical mapping.

@@ -2400,6 +2400,42 @@ export interface ScoredPatent {
   executedAt?: string;
   templateVersion?: number;
   metrics: ScoredPatentMetric[];
+  // Enriched fields from loadPatents
+  v2Score?: number;
+  v3Score?: number;
+  baseScore?: number;
+  remainingYears?: number;
+  forwardCitations?: number;
+  superSector?: string;
+  primarySector?: string;
+  // LLM narrative fields
+  llmSummary?: string | null;
+  llmPriorArtProblem?: string | null;
+  llmTechnicalSolution?: string | null;
+  // Generic LLM metric scores
+  eligibilityScore?: number | null;
+  validityScore?: number | null;
+  enforcementClarity?: number | null;
+  designAroundDifficulty?: number | null;
+  claimBreadth?: number | null;
+}
+
+export interface ScoringQuestionWithLevel {
+  fieldName: string;
+  displayName: string;
+  weight: number;
+  question: string;
+  reasoningPrompt?: string;
+  sourceLevel: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
+}
+
+export interface MergedSectorTemplate {
+  sectorName: string;
+  superSectorName: string;
+  questionCount: number;
+  totalWeight: number;
+  inheritanceChain: string[];
+  questions: ScoringQuestionWithLevel[];
 }
 
 export interface SectorScoresResponse {
@@ -2478,10 +2514,19 @@ export const scoringTemplatesApi = {
   },
 
   /**
-   * Get merged template with inherited questions
+   * Get merged template with inherited questions (super-sector level)
    */
   async getMergedTemplate(superSectorName: string): Promise<MergedTemplate> {
     const { data } = await api.get(`/scoring-templates/config/merged/${superSectorName}`);
+    return data;
+  },
+
+  /**
+   * Get fully merged template for a sector (portfolio + super-sector + sector)
+   * with sourceLevel annotations on each question
+   */
+  async getMergedSectorTemplate(sectorName: string): Promise<MergedSectorTemplate> {
+    const { data } = await api.get(`/scoring-templates/config/merged-sector/${sectorName}`);
     return data;
   },
 

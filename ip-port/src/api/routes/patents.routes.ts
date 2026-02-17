@@ -107,6 +107,19 @@ export function clearSnapshotScoreCache(): void {
 }
 
 /**
+ * Clear snapshot score cache AND reload from DB (awaitable).
+ * Call from save/activate/deactivate endpoints to ensure fresh scores
+ * are available before responding. Also invalidates the patents cache
+ * so the next loadPatents() call rebuilds with fresh scores.
+ */
+export async function clearAndReloadSnapshotScores(): Promise<void> {
+  clearSnapshotScoreCache();
+  patentsCache = null;
+  lastLoadTime = 0;
+  await preloadSnapshotScores();
+}
+
+/**
  * Get cached snapshot scores (returns null if not loaded or expired)
  */
 function getSnapshotScores(): { v2: Map<string, number> | null; v3: Map<string, number> | null } {
@@ -376,17 +389,16 @@ let lastLoadTime: number = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Clear all patent-related caches (called from reload endpoint)
+ * Clear all patent-related caches (called from reload endpoint and snapshot operations)
  */
-export function clearPatentsCache(): void {
+export async function clearPatentsCache(): Promise<void> {
   patentsCache = null;
   lastLoadTime = 0;
   fullLlmCache = null;
   fullLlmCacheLoadTime = 0;
   cpcDescriptionsCache = null;
-  // Also clear snapshot score cache and trigger refresh
-  clearSnapshotScoreCache();
-  preloadSnapshotScores().catch(console.error);
+  // Clear snapshot score cache and reload from DB before returning
+  await clearAndReloadSnapshotScores();
   console.log('[Patents] Caches cleared');
 }
 
@@ -2409,7 +2421,7 @@ router.post('/enrich-cpc-designation', async (req: Request, res: Response) => {
 
     // Clear patents cache so next load picks up enriched data
     if (!dryRun) {
-      clearPatentsCache();
+      await clearPatentsCache();
     }
 
     res.json({

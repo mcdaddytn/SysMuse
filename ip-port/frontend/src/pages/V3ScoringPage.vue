@@ -70,7 +70,18 @@ const setAsActive = ref(true);
 const saving = ref(false);
 
 // State - Filters
-const topNOptions = [60, 100, 250, 500, 1000];
+const topNOptions = [
+  { label: '60', value: 60 },
+  { label: '100', value: 100 },
+  { label: '250', value: 250 },
+  { label: '500', value: 500 },
+  { label: '1000', value: 1000 },
+  { label: '2500', value: 2500 },
+  { label: '5000', value: 5000 },
+  { label: '7500', value: 7500 },
+  { label: '10000', value: 10000 },
+  { label: 'All', value: 0 },
+];
 const topN = ref(100);
 const llmEnhancedOnly = ref(true);
 
@@ -327,8 +338,10 @@ async function recalculate() {
       // Sort by consensus score and assign ranks
       consensusResults.sort((a, b) => b.consensus_score - a.consensus_score);
 
-      // Apply topN limit
-      const limitedResults = consensusResults.slice(0, topN.value);
+      // Apply topN limit (0 means all)
+      const limitedResults = topN.value === 0
+        ? consensusResults
+        : consensusResults.slice(0, topN.value);
 
       // Calculate rank changes
       const prevRankMap = new Map(previousRankings.value.map(r => [r.patent_id, r.rank]));
@@ -603,7 +616,7 @@ function exportCSV() {
     `# V3 Consensus Scoring Export`,
     `# Generated: ${new Date().toISOString()}`,
     `# View Mode: ${viewMode.value}`,
-    `# Top N: ${topN.value}`,
+    `# Top N: ${topN.value === 0 ? 'All' : topN.value}`,
     `# Complete Data Only: ${llmEnhancedOnly.value}`,
     `# Role Weights: ${roles.value.map(r => `${r.roleName}=${r.consensusWeight}%`).join(', ')}`,
   ];
@@ -655,7 +668,8 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `v3-consensus-top${topN.value}-${date}.csv`;
+  const topNLabel = topN.value === 0 ? 'all' : `top${topN.value}`;
+  link.download = `v3-consensus-${topNLabel}-${date}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -736,6 +750,10 @@ onMounted(async () => {
               <q-select
                 v-model="topN"
                 :options="topNOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
                 label="Top N"
                 dense
                 outlined
@@ -910,10 +928,10 @@ onMounted(async () => {
                 dense
                 size="sm"
                 icon="save"
-                label="Save"
+                label="Save Scores"
                 color="primary"
                 :disable="patents.length === 0"
-                @click="showSaveDialog = true"
+                @click.stop="showSaveDialog = true"
               />
             </div>
 

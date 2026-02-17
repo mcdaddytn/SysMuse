@@ -37,6 +37,7 @@ export interface ScoringQuestion {
   weight: number;              // Default weight (0-1)
   requiresReasoning: boolean;
   reasoningPrompt?: string;
+  sourceLevel?: 'portfolio' | 'super_sector' | 'sector' | 'sub_sector';
 }
 
 export interface MetricScore {
@@ -669,19 +670,19 @@ export function getMergedTemplateForSector(sectorName: string, superSectorName: 
   if (sectorTemplate?.contextDescription) contextParts.push(sectorTemplate.contextDescription);
   const contextDescription = contextParts.join('\n\n');
 
-  // Merge questions (more specific overrides less specific)
+  // Merge questions (more specific overrides less specific), annotating sourceLevel
   const mergedQuestions = new Map<string, ScoringQuestion>();
   for (const q of portfolioDefault.questions) {
-    mergedQuestions.set(q.fieldName, { ...q });
+    mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'portfolio' as const });
   }
   if (superSectorTemplate) {
     for (const q of superSectorTemplate.questions) {
-      mergedQuestions.set(q.fieldName, { ...q });
+      mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'super_sector' as const });
     }
   }
   if (sectorTemplate) {
     for (const q of sectorTemplate.questions) {
-      mergedQuestions.set(q.fieldName, { ...q });
+      mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'sector' as const });
     }
   }
 
@@ -733,11 +734,11 @@ export function getMergedTemplateForSuperSector(superSectorName: string): Merged
 
   const mergedQuestions = new Map<string, ScoringQuestion>();
   for (const q of portfolioDefault.questions) {
-    mergedQuestions.set(q.fieldName, { ...q });
+    mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'portfolio' as const });
   }
   if (superSectorTemplate) {
     for (const q of superSectorTemplate.questions) {
-      mergedQuestions.set(q.fieldName, { ...q });
+      mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'super_sector' as const });
     }
   }
 

@@ -28,7 +28,7 @@ import {
   V2EnhancedConfig,
 } from '../services/scoring-service.js';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
-import { clearPatentsCache, invalidateEnrichmentCache } from './patents.routes.js';
+import { clearPatentsCache, invalidateEnrichmentCache, clearAndReloadSnapshotScores } from './patents.routes.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -648,9 +648,9 @@ router.get('/sectors', async (req: Request, res: Response) => {
  * POST /api/scores/reload
  * Clear scoring caches and reload data
  */
-router.post('/reload', (_req: Request, res: Response) => {
+router.post('/reload', async (_req: Request, res: Response) => {
   clearScoringCache();
-  clearPatentsCache();
+  await clearPatentsCache();
   invalidateEnrichmentCache();
   patentsMap = null;
   res.json({ message: 'All caches cleared (scoring + patent data + LLM + enrichment)' });
@@ -868,6 +868,12 @@ router.post('/snapshots', async (req: Request, res: Response) => {
       },
     });
 
+    // If set as active, clear all caches so scores are immediately available
+    if (setActive) {
+      clearSnapshotScoreCache();
+      await clearAndReloadSnapshotScores();
+    }
+
     res.json({
       id: snapshot.id,
       name: snapshot.name,
@@ -914,8 +920,8 @@ router.put('/snapshots/:id/activate', async (req: Request, res: Response) => {
     ]);
 
     // Invalidate caches so new scores are used
-    clearPatentsCache();
     clearSnapshotScoreCache();
+    await clearAndReloadSnapshotScores();
 
     res.json({ success: true, message: `Snapshot ${id} is now active` });
   } catch (error) {
@@ -938,8 +944,8 @@ router.put('/snapshots/:id/deactivate', async (req: Request, res: Response) => {
     });
 
     // Invalidate caches
-    clearPatentsCache();
     clearSnapshotScoreCache();
+    await clearAndReloadSnapshotScores();
 
     res.json({ success: true, message: `Snapshot ${id} deactivated` });
   } catch (error) {
@@ -962,8 +968,8 @@ router.delete('/snapshots/:id', async (req: Request, res: Response) => {
     });
 
     // Invalidate caches if it was active
-    clearPatentsCache();
     clearSnapshotScoreCache();
+    await clearAndReloadSnapshotScores();
 
     res.json({ success: true, message: `Snapshot ${id} deleted` });
   } catch (error) {

@@ -41,7 +41,7 @@ const routes: RouteRecordRaw[] = [
         path: 'sectors',
         name: 'sectors',
         component: () => import('@/pages/SectorRankingsPage.vue'),
-        meta: { title: 'Sector Rankings' }
+        meta: { title: 'Sector Scores' }
       },
       {
         path: 'sector-management',

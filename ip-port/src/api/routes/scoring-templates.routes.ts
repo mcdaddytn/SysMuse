@@ -21,8 +21,10 @@ import {
   normalizeSectorScores,
   listTemplateConfigFiles,
   getMergedQuestionsForSuperSector,
+  getMergedTemplateForSector,
   CreateTemplateInput
 } from '../services/scoring-template-service.js';
+import { loadPatents } from './patents.routes.js';
 import {
   scorePatent,
   scoreSubSector,
@@ -88,6 +90,49 @@ router.get('/config/merged/:superSectorName', async (req: Request, res: Response
     });
   } catch (error) {
     console.error('[ScoringTemplates] Merged config error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/config/merged-sector/:sectorName
+ * Get fully merged template for a sector (portfolio + super-sector + sector)
+ * with sourceLevel annotations on each question
+ */
+router.get('/config/merged-sector/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+
+    // Look up the sector to find its superSector
+    const sector = await prisma.sector.findFirst({
+      where: { name: sectorName },
+      include: { superSector: true }
+    });
+
+    if (!sector) {
+      return res.status(404).json({ error: `Sector not found: ${sectorName}` });
+    }
+
+    const superSectorName = sector.superSector?.name || '';
+    const merged = getMergedTemplateForSector(sectorName, superSectorName);
+
+    res.json({
+      sectorName,
+      superSectorName,
+      questionCount: merged.questions.length,
+      totalWeight: Math.round(merged.questions.reduce((s, q) => s + q.weight, 0) * 100) / 100,
+      inheritanceChain: merged.inheritanceChain,
+      questions: merged.questions.map(q => ({
+        fieldName: q.fieldName,
+        displayName: q.displayName,
+        weight: q.weight,
+        question: q.question,
+        reasoningPrompt: q.reasoningPrompt,
+        sourceLevel: q.sourceLevel || 'portfolio',
+      }))
+    });
+  } catch (error) {
+    console.error('[ScoringTemplates] Merged sector config error:', error);
     res.status(500).json({ error: (error as Error).message });
   }
 });
@@ -738,44 +783,18 @@ router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response)
       skip: offsetNum
     });
 
-    // Enrich with patent titles from candidates file
-    const fs = await import('fs');
-    const path = await import('path');
-    const possiblePaths = [
-      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json'),
-      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-24.json'),
-    ];
+    // Enrich with patent data from loadPatents (cached, enriched with V2/V3/LLM data)
+    const allPatents = loadPatents();
+    const patentIds = new Set(scores.map(s => s.patentId));
+    const patentMap = new Map(
+      allPatents
+        .filter((p: any) => patentIds.has(p.patent_id))
+        .map((p: any) => [p.patent_id, p])
+    );
 
-    let candidatesPath: string | null = null;
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        candidatesPath = p;
-        break;
-      }
-    }
-
-    type PatentCandidate = {
-      patent_id: string;
-      patent_title?: string;
-      patent_date?: string;
-      assignee?: string;
-    };
-
-    let patentMap = new Map<string, PatentCandidate>();
-    if (candidatesPath) {
-      const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
-      const candidates: PatentCandidate[] = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
-      const patentIds = scores.map(s => s.patentId);
-      patentMap = new Map(
-        candidates
-          .filter((p: PatentCandidate) => patentIds.includes(p.patent_id))
-          .map((p: PatentCandidate) => [p.patent_id, p])
-      );
-    }
-
-    // Format response with metrics expanded
+    // Format response with metrics expanded + enriched fields
     const results = scores.map(score => {
-      const patent = patentMap.get(score.patentId);
+      const patent: any = patentMap.get(score.patentId);
       const metrics = score.metrics as Record<string, { score: number; reasoning: string; confidence?: number }> || {};
 
       return {
@@ -787,6 +806,24 @@ router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response)
         withClaims: score.withClaims,
         executedAt: score.executedAt,
         templateVersion: score.templateVersion,
+        // Enriched fields from loadPatents
+        v2Score: patent?.v2_score ?? 0,
+        v3Score: patent?.v3_score ?? 0,
+        baseScore: patent?.score ?? 0,
+        remainingYears: patent?.remaining_years ?? 0,
+        forwardCitations: patent?.forward_citations ?? 0,
+        superSector: patent?.super_sector,
+        primarySector: patent?.primary_sector,
+        // LLM narrative fields
+        llmSummary: patent?.llm_summary || null,
+        llmPriorArtProblem: patent?.llm_prior_art_problem || null,
+        llmTechnicalSolution: patent?.llm_technical_solution || null,
+        // Generic LLM metric scores
+        eligibilityScore: patent?.eligibility_score ?? null,
+        validityScore: patent?.validity_score ?? null,
+        enforcementClarity: patent?.enforcement_clarity ?? null,
+        designAroundDifficulty: patent?.design_around_difficulty ?? null,
+        claimBreadth: patent?.claim_breadth ?? null,
         metrics: Object.entries(metrics).map(([fieldName, data]) => ({
           fieldName,
           displayName: fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),

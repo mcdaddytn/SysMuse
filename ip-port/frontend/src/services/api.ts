@@ -2418,6 +2418,9 @@ export interface ScoredPatent {
   enforcementClarity?: number | null;
   designAroundDifficulty?: number | null;
   claimBreadth?: number | null;
+  // Competitor data
+  competitorCount?: number;
+  competitorNames?: string[];
 }
 
 export interface ScoringQuestionWithLevel {
@@ -2436,6 +2439,34 @@ export interface MergedSectorTemplate {
   totalWeight: number;
   inheritanceChain: string[];
   questions: ScoringQuestionWithLevel[];
+}
+
+export interface PatentSectorScoreQuestion {
+  fieldName: string;
+  displayName: string;
+  weight: number;
+  sourceLevel: string;
+  score: number | null;
+  reasoning: string | null;
+  confidence: number | null;
+}
+
+export interface PatentSectorScore {
+  sectorName: string;
+  sectorDisplayName: string;
+  superSector: string | null;
+  compositeScore: number;
+  withClaims: boolean;
+  executedAt: string;
+  templateVersion: number;
+  rankInSector: number | null;
+  normalizedScore: number | null;
+  questions: PatentSectorScoreQuestion[];
+}
+
+export interface PatentSectorScoresResponse {
+  patentId: string;
+  sectors: PatentSectorScore[];
 }
 
 export interface SectorScoresResponse {
@@ -2527,6 +2558,14 @@ export const scoringTemplatesApi = {
    */
   async getMergedSectorTemplate(sectorName: string): Promise<MergedSectorTemplate> {
     const { data } = await api.get(`/scoring-templates/config/merged-sector/${sectorName}`);
+    return data;
+  },
+
+  /**
+   * Get all sector scores for a patent (used by PatentDetailPage sector-scoring tab)
+   */
+  async getPatentSectorScores(patentId: string): Promise<PatentSectorScoresResponse> {
+    const { data } = await api.get(`/scoring-templates/scores/patent/${patentId}/all-sectors`);
     return data;
   },
 

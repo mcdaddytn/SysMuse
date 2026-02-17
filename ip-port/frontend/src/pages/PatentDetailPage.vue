@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Patent } from '@/types';
+import type { PatentSectorScoresResponse } from '@/services/api';
+import { scoringTemplatesApi } from '@/services/api';
 import PatentFamilyPanel from '@/components/patent/PatentFamilyPanel.vue';
 
 const route = useRoute();
@@ -54,6 +56,10 @@ const loadingLlm = ref(false);
 // Backward citations data
 const backwardCitations = ref<any>(null);
 const loadingBackward = ref(false);
+
+// Sector scoring data
+const sectorScores = ref<PatentSectorScoresResponse | null>(null);
+const loadingSectorScoring = ref(false);
 
 // CPC descriptions (enhanced with hierarchy)
 interface CpcInfo {
@@ -196,6 +202,19 @@ async function loadLlm() {
   }
 }
 
+// Load sector scoring data
+async function loadSectorScoring() {
+  if (sectorScores.value || loadingSectorScoring.value) return;
+  loadingSectorScoring.value = true;
+  try {
+    sectorScores.value = await scoringTemplatesApi.getPatentSectorScores(patentId.value);
+  } catch (err) {
+    console.error('Failed to load sector scores:', err);
+  } finally {
+    loadingSectorScoring.value = false;
+  }
+}
+
 // Load backward citations
 async function loadBackwardCitations() {
   if (backwardCitations.value || loadingBackward.value) return;
@@ -256,11 +275,23 @@ function onTabChange(tab: string) {
   if (tab === 'prosecution') loadProsecution();
   if (tab === 'ptab') loadPtab();
   if (tab === 'llm') loadLlm();
+  if (tab === 'sector-scoring') loadSectorScoring();
 }
 
 onMounted(async () => {
+  // Accept ?tab= query param to open to a specific tab
+  const tabParam = route.query.tab as string;
+  if (tabParam) {
+    activeTab.value = tabParam;
+  }
+
   await loadPatent();
   loadCpcDescriptions();
+
+  // Trigger lazy-load for the initial tab if it's not overview
+  if (activeTab.value !== 'overview') {
+    onTabChange(activeTab.value);
+  }
 });
 
 function goBack() {
@@ -328,6 +359,7 @@ function openCpcLink(code: string) {
         <q-tab name="prosecution" label="Prosecution" icon="gavel" />
         <q-tab name="ptab" label="PTAB/IPR" icon="balance" />
         <q-tab name="llm" label="LLM Analysis" icon="psychology" />
+        <q-tab name="sector-scoring" label="Sector Scoring" icon="analytics" />
         <q-tab name="family" label="Family" icon="account_tree" />
         <q-tab name="vendor" label="Vendor Data" icon="integration_instructions" />
       </q-tabs>
@@ -1257,6 +1289,111 @@ function openCpcLink(code: string) {
               </div>
             </q-card-section>
           </q-card>
+        </template>
+      </q-tab-panel>
+
+      <!-- Sector Scoring -->
+      <q-tab-panel name="sector-scoring">
+        <!-- Loading -->
+        <div v-if="loadingSectorScoring" class="flex flex-center q-pa-lg">
+          <q-spinner color="primary" size="2em" />
+          <span class="q-ml-sm text-grey">Loading sector scoring data...</span>
+        </div>
+
+        <!-- No Scores -->
+        <q-card v-else-if="!sectorScores?.sectors?.length">
+          <q-card-section class="text-center q-pa-xl">
+            <q-icon name="analytics" color="grey-4" size="3em" class="q-mb-md" />
+            <div class="text-body1 text-grey-7">
+              No sector-specific LLM scores found for this patent.
+            </div>
+            <div class="text-caption text-grey-5 q-mt-sm">
+              Sector scoring is generated via the LLM scoring pipeline.
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- Has Sector Scores -->
+        <template v-else>
+          <div
+            v-for="sector in sectorScores!.sectors"
+            :key="sector.sectorName"
+            class="q-mb-lg"
+          >
+            <!-- Sector header card -->
+            <q-card flat bordered class="q-mb-sm">
+              <q-card-section class="q-py-sm">
+                <div class="row items-center">
+                  <div class="col">
+                    <div class="row items-center q-gutter-sm">
+                      <span class="text-subtitle1 text-weight-bold">{{ sector.sectorDisplayName }}</span>
+                      <q-chip v-if="sector.superSector" dense size="sm" color="grey-3" text-color="grey-8">
+                        {{ sector.superSector }}
+                      </q-chip>
+                    </div>
+                  </div>
+                  <div class="row items-center q-gutter-md">
+                    <q-badge
+                      :color="sector.compositeScore >= 60 ? 'positive' : sector.compositeScore >= 45 ? 'primary' : sector.compositeScore >= 30 ? 'warning' : 'grey'"
+                      class="text-body1 q-pa-sm"
+                    >
+                      {{ sector.compositeScore.toFixed(1) }}
+                    </q-badge>
+                    <div v-if="sector.rankInSector" class="text-caption text-grey-6">
+                      Rank #{{ sector.rankInSector }}
+                    </div>
+                    <q-chip
+                      dense
+                      size="sm"
+                      :color="sector.withClaims ? 'positive' : 'grey-4'"
+                      :text-color="sector.withClaims ? 'white' : 'grey-8'"
+                    >
+                      {{ sector.withClaims ? 'With Claims' : 'No Claims' }}
+                    </q-chip>
+                    <div class="text-caption text-grey-5">
+                      v{{ sector.templateVersion }}
+                      &middot; {{ new Date(sector.executedAt).toLocaleDateString() }}
+                    </div>
+                  </div>
+                </div>
+              </q-card-section>
+            </q-card>
+
+            <!-- Questions with scores and reasoning -->
+            <q-list separator bordered class="rounded-borders">
+              <q-expansion-item
+                v-for="q in sector.questions"
+                :key="q.fieldName"
+                expand-separator
+                dense
+              >
+                <template #header>
+                  <q-item-section avatar style="min-width: 42px;">
+                    <q-badge
+                      v-if="q.score != null"
+                      :color="q.score >= 7 ? 'positive' : q.score >= 5 ? 'primary' : q.score >= 3 ? 'warning' : 'negative'"
+                      :label="q.score + '/10'"
+                      class="text-weight-bold"
+                    />
+                    <span v-else class="text-grey-4">-</span>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ q.displayName }}</q-item-label>
+                    <q-item-label caption>
+                      Weight: {{ (q.weight * 100).toFixed(0) }}%
+                      &middot; {{ q.sourceLevel.replace('_', '-') }}
+                    </q-item-label>
+                  </q-item-section>
+                </template>
+                <q-card>
+                  <q-card-section class="bg-grey-1">
+                    <div class="text-subtitle2 q-mb-xs">Reasoning</div>
+                    <div class="text-body2" style="white-space: pre-wrap;">{{ q.reasoning || 'No reasoning provided' }}</div>
+                  </q-card-section>
+                </q-card>
+              </q-expansion-item>
+            </q-list>
+          </div>
         </template>
       </q-tab-panel>
 

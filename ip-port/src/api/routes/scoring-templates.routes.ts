@@ -370,6 +370,91 @@ router.get('/scores/patent/:patentId', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/scoring-templates/scores/patent/:patentId/all-sectors
+ * Get all sector scores for a patent — used by the Sector Scoring tab on PatentDetailPage.
+ * Returns each sector the patent has been scored in, with full metric breakdown and template info.
+ */
+router.get('/scores/patent/:patentId/all-sectors', async (req: Request, res: Response) => {
+  try {
+    const { patentId } = req.params;
+
+    // Get all scores for this patent across all sectors
+    const scores = await prisma.patentSubSectorScore.findMany({
+      where: { patentId },
+      orderBy: { compositeScore: 'desc' },
+    });
+
+    if (scores.length === 0) {
+      return res.json({ patentId, sectors: [] });
+    }
+
+    // For each score, resolve the sector/template info
+    const sectors = await Promise.all(scores.map(async (score) => {
+      const sectorName = score.templateConfigId || score.subSectorId;
+
+      // Look up sector display name
+      const sector = await prisma.sector.findFirst({
+        where: { name: sectorName },
+        include: { superSector: true },
+      });
+
+      // Get merged template for this sector to get question details
+      let template = null;
+      try {
+        template = await getMergedTemplateForSector(
+          sectorName,
+          sector?.superSector?.name
+        );
+      } catch { /* template may not exist */ }
+
+      const metrics = score.metrics as Record<string, { score: number; reasoning: string; confidence?: number }> || {};
+
+      // Build question list with scores/reasoning, ordered by template weight
+      const questions = template
+        ? template.questions.map(q => {
+            const m = metrics[q.fieldName];
+            return {
+              fieldName: q.fieldName,
+              displayName: q.displayName,
+              weight: q.weight,
+              sourceLevel: q.sourceLevel || 'portfolio',
+              score: m?.score ?? null,
+              reasoning: m?.reasoning || null,
+              confidence: m?.confidence ?? null,
+            };
+          })
+        : Object.entries(metrics).map(([fieldName, data]) => ({
+            fieldName,
+            displayName: fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            weight: 1,
+            sourceLevel: 'unknown' as const,
+            score: data.score,
+            reasoning: data.reasoning,
+            confidence: data.confidence ?? null,
+          }));
+
+      return {
+        sectorName,
+        sectorDisplayName: sector?.displayName || sectorName,
+        superSector: sector?.superSector?.name || null,
+        compositeScore: score.compositeScore,
+        withClaims: score.withClaims,
+        executedAt: score.executedAt,
+        templateVersion: score.templateVersion,
+        rankInSector: score.rankInSector,
+        normalizedScore: score.normalizedScore,
+        questions,
+      };
+    }));
+
+    res.json({ patentId, sectors });
+  } catch (error) {
+    console.error('[ScoringTemplates] Get all patent sector scores error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
  * POST /api/scoring-templates/scores/normalize/sub-sector/:subSectorId
  * Recalculate ranks and normalized scores for a sub-sector
  */
@@ -824,6 +909,9 @@ router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response)
         enforcementClarity: patent?.enforcement_clarity ?? null,
         designAroundDifficulty: patent?.design_around_difficulty ?? null,
         claimBreadth: patent?.claim_breadth ?? null,
+        // Competitor data
+        competitorCount: patent?.competitor_count ?? 0,
+        competitorNames: patent?.competitor_names ?? [],
         metrics: Object.entries(metrics).map(([fieldName, data]) => ({
           fieldName,
           displayName: fieldName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),

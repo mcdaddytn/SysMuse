@@ -59,11 +59,6 @@ function getBadgeColor(score: number): string {
   return 'grey';
 }
 
-function truncate(text: string | undefined | null, max: number): string {
-  if (!text) return '';
-  return text.length > max ? text.substring(0, max) + '...' : text;
-}
-
 function formatWeight(w: number): string {
   return (w * 100).toFixed(0) + '%';
 }
@@ -149,22 +144,6 @@ function formatWeight(w: number): string {
       </div>
     </template>
 
-    <!-- LLM narrative (if available) -->
-    <template v-if="patent.llmSummary || patent.llmPriorArtProblem || patent.llmTechnicalSolution">
-      <q-separator dark class="q-my-sm" />
-      <div v-if="patent.llmSummary" class="q-mb-xs">
-        <div class="text-caption text-grey-5 text-weight-bold">Summary</div>
-        <div class="text-caption tooltip-clamp">{{ truncate(patent.llmSummary, 200) }}</div>
-      </div>
-      <div v-if="patent.llmPriorArtProblem" class="q-mb-xs">
-        <div class="text-caption text-grey-5 text-weight-bold">Prior Art Problem</div>
-        <div class="text-caption tooltip-clamp">{{ truncate(patent.llmPriorArtProblem, 200) }}</div>
-      </div>
-      <div v-if="patent.llmTechnicalSolution">
-        <div class="text-caption text-grey-5 text-weight-bold">Technical Solution</div>
-        <div class="text-caption tooltip-clamp">{{ truncate(patent.llmTechnicalSolution, 200) }}</div>
-      </div>
-    </template>
 
     <!-- Generic metrics row -->
     <template v-if="patent.eligibilityScore != null || patent.validityScore != null">
@@ -192,23 +171,15 @@ function formatWeight(w: number): string {
 
 <style scoped>
 .tooltip-content {
-  padding: 12px;
-  min-width: 380px;
+  padding: 14px;
+  min-width: 400px;
   max-width: 550px;
-  max-height: 550px;
+  max-height: 700px;
   overflow-y: auto;
+  font-size: 0.95em;
 }
 
 .tooltip-title {
-  line-height: 1.3;
-  max-height: 2.6em;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.tooltip-clamp {
   line-height: 1.3;
   max-height: 2.6em;
   overflow: hidden;
@@ -221,8 +192,8 @@ function formatWeight(w: number): string {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8em;
-  padding: 1px 0;
+  font-size: 0.95em;
+  padding: 2px 0;
 }
 
 .question-name {

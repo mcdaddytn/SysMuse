@@ -206,6 +206,7 @@ Currently a single 1-10 question at portfolio level. Should be decomposed into a
 | `power-management` (217) | COMPUTING | Power management is circuit design, not computing. Targets TI, Infineon, Analog Devices. | Move to SEMICONDUCTOR |
 | `fintech-business` (143) | COMPUTING | Business methods/fintech have totally different litigation landscape than computing hardware. | Consider standalone super-sector or merge strategy |
 | `streaming-multimedia` (35) | NETWORKING | Too small and overlaps with VIDEO_STREAMING. | Merge into VIDEO_STREAMING or network-protocols |
+| G09G display patents (~400) | VIDEO_STREAMING | Display controller circuits, not streaming technology. Low scores (22-26), high competitor counts (2.3-2.8) — different profile than actual streaming patents. | Move to computing-ui or optics/photonics |
 
 #### Super-Sectors Needing Expansion
 | Super-Sector | Issue | Recommendation |
@@ -250,6 +251,20 @@ The current super-sector → sector → sub-sector hierarchy represents **one ta
 Each patent can be classified under multiple taxonomies simultaneously. Scoring templates can be associated with any taxonomy — not just the CPC-derived one.
 
 **Future consideration:** Taxonomy governance through expert voting. Subject matter experts could use slider-based ontological voting interfaces to collaboratively refine taxonomy boundaries and resolve classification disputes. This is a later-phase capability but the data model should not preclude it.
+
+### Multi-Classification Design Principle
+
+**Design principle (do not complicate early implementation, but preserve in data model):**
+
+Just as patents have multiple CPC codes, any object in the system can have multiple classifications from the same or different taxonomy schemes:
+
+- **Primary classification**: Used for most analysis, scoring, and display. Keeps things simple and costs down.
+- **Secondary/tertiary classifications**: Available for cross-cutting analysis when needed (e.g., a patent primarily in `video-codec` but secondarily relevant to `wireless-transmission` due to wireless video applications).
+- **Cross-scheme classifications**: A patent can be classified under the CPC-derived taxonomy AND the product-based taxonomy AND a competitor-based taxonomy simultaneously.
+
+The data model should use a **many-to-many relationship with rank/priority** (e.g., `patent_classifications` table with `taxonomy_id`, `category_id`, `rank: primary|secondary|tertiary`) rather than a single `sector_id` foreign key. Most queries filter on `rank = 'primary'` for cost efficiency, but the full classification set is available when deeper analysis requires it.
+
+This principle applies broadly — not just to patents but to any classifiable entity (products, companies, focus areas). It should not add complexity to the POC implementation but must remain a supported path in the schema design.
 
 ---
 
@@ -642,6 +657,30 @@ Create a skills document that enables Claude Code to query the data layer for ad
 
 This allows the system to be used as a research tool beyond the GUI — analysts can ask complex questions that combine data from multiple sources.
 
+### Service Decomposition for Reuse
+
+**Design principle:** As the data service layer develops, split reusable components into independent, testable services that can be maintained separately and used across other systems.
+
+Many capabilities being built for IP Port are general-purpose and applicable to other systems doing LLM analysis of legal documents, patent/product analysis, and structured evaluation:
+
+| Component | Reuse Potential | Current Location |
+|---|---|---|
+| **LLM Workflow Engine** | Prompt template execution, dependency graphs, tournament/chained patterns | `src/api/services/llm-workflow-service.ts` |
+| **Prompt Template System** | PER_PATENT/COLLECTIVE modes, variable substitution, response parsing | `src/api/services/prompt-template-service.ts` |
+| **Facet Calculation/Scoring** | Numeric/categorical/boolean scoring with aggregation | `src/api/services/facet-service.ts` |
+| **Scoring Template Hierarchy** | Multi-level template inheritance with weight renormalization | `src/api/services/scoring-template-service.ts` |
+| **LLM Scoring Service** | Structured question scoring with JSON response parsing | `src/api/services/llm-scoring-service.ts` |
+| **Batch Processing Framework** | Concurrency control, rate limiting, progress tracking | Spread across services |
+| **Taxonomy Classification** | Multi-taxonomy assignment, hierarchy management | DB + scoring templates |
+
+**Target architecture:** Each component should be:
+- Independently importable (clear module boundaries, minimal cross-dependencies)
+- Separately testable (unit tests that don't require the full application context)
+- Schema-segregated where practical (own Prisma models or schema segments)
+- Documented with clear interfaces for external consumers
+
+This is a gradual refactor, not a big-bang rewrite. As services are touched during POC phases, incrementally improve their boundaries and interfaces. The goal is that by Phase 7, these components are extractable for use in other SysMuse systems.
+
 ### Production Deployment Prelude
 
 The data service layer work is a prelude to server deployment:
@@ -806,10 +845,214 @@ These questions were raised during planning and resolved during requirements gat
 | 9 | **Data service priority** | **Deferred to Phase 7.** Build clear service interfaces in Phase 1-2 but don't invest in a unified data layer until POC validates the approach. |
 | 10 | **Production timeline** | **Deferred.** Focus on POC value delivery first. Production deployment timing depends on POC results and business decision to scale. |
 
-## 17. Open Questions (New)
+## 17. Resolved Questions (Round 2)
 
-1. **VIDEO_STREAMING subsector proposal**: What are the right 4-6 subsectors for VIDEO_STREAMING? Candidates: codec-optimization, adaptive-bitrate, DRM-content-protection, CDN-delivery, recommendation-personalization, ad-insertion.
-2. **New question weight integration**: After testing new questions on a batch, what's the threshold for incorporating into composite score? (e.g., correlation with attorney assessments, score variance, information gain)
-3. **Competitor patent sourcing**: PatentsView for basic data, but what about claims text? Need USPTO bulk XML coverage for competitor patents or use LLM to work from abstracts only?
-4. **Affiliate pattern accuracy**: How to validate that assignee regex patterns correctly capture all of a competitor's patents without false positives?
-5. **Renormalization method**: Linear regression from top-N rescored patents, or a more sophisticated approach? Need to define the statistical mapping.
+| # | Question | Resolution |
+|---|---|---|
+| 1 | **VIDEO_STREAMING subsector proposal** | Highest-scoring sectors from aggregate view are **video-codec**, **video-server-cdn**, **video-drm** (in order). Break those out into subsectors. Also include **recommendation-personalization** and **ad-insertion** if represented in portfolio (need to check which sectors they currently fall into). |
+| 2 | **New question weight integration** | No attorney assessments available initially. Use **automated methods**: score variance (does the question differentiate patents?) and information gain (does it add signal beyond existing questions?). Start with **smaller weights than logically ideal** given sparse population — new questions can help disambiguate closely-scored patents without dominating the composite. |
+| 3 | **Competitor patent sourcing** | **PatentsView for basic data, claims on-demand.** After basic scoring and before LLM enrichment at portfolio level, export patent IDs. User runs Java XML extraction program to add individual patent claims to the exports directory. No need for bulk XML download of competitor patents upfront. |
+| 4 | **Affiliate pattern accuracy** | **Manual parallel research.** As competitors are added, user will do parallel validation to confirm assignee patterns look correct. No automated validation needed for POC. |
+| 5 | **Renormalization method** | Compare before/after scores for top-N rescored patents to measure variance. Apply sound statistical technique to sub-N patents. **Important constraint:** greater scrutiny (better model, more questions) sometimes *lowers* ratings — do not let renormalization artificially bump lower patents into top-N. Eventually rerun LLM on valuable patents for fair direct scoring. |
+
+## 18. Resolved Questions (Round 3)
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | **VIDEO_STREAMING sector mapping** | Recommendation and ad-insertion patents are **not well represented** in the Broadcom portfolio. `video-client-processing` is closest; some `video-server-cdn` patents may tangentially support ad-insertion infrastructure. Do not force these as subsectors — look for other breakouts that reflect actual portfolio strength. |
+| 2 | **Service boundary timing** | **Deferred to data service layer / production prep phase.** During POC phases, **document proposed refactors** as services are touched so they can be reviewed incrementally. Actual decomposition happens when preparing for production release. |
+| 3 | **Multi-classification schema** | **Implement from the start.** As subsector breakouts begin, patents frequently have multiple CPC codes — some independent, some dependent. Primary classification may need to be revisited based on analysis needs or limited dataset convenience. Retaining all classifications prevents data loss and supports future reclassification. |
+
+## 19. Current CPC-to-Sector Classification (Reference)
+
+Understanding the existing classification system is critical for multi-classification work and for onboarding new portfolio patents.
+
+### How It Works Today
+
+**Two parallel classification systems exist:**
+
+| System | Config Source | Priority |
+|---|---|---|
+| **File-based** (primary) | `config/sector-breakout-v2.json` | Used by default; fast, no DB dependency |
+| **DB-driven** (secondary) | `SectorRule` table via `sector-assignment-service.ts` | More expressive rules; falls back to file-based if DB is empty |
+
+**Classification flow:**
+1. Patent's CPC codes (from USPTO/PatentsView data) are matched against CPC prefix patterns
+2. Patterns are sorted **longest-first** (most specific CPC code wins)
+3. **First matching CPC code determines primary sector** — remaining CPC codes are not considered
+4. Primary sector is mapped to super-sector via `config/super-sectors.json`
+
+**Key files:**
+| File | Role |
+|---|---|
+| `src/api/utils/sector-mapper.ts` | `getPrimarySector()`, `getSuperSector()` — core sync classification |
+| `src/api/services/sector-assignment-service.ts` | DB-driven rules with CPC prefix, keyword, phrase, boolean match types |
+| `config/sector-breakout-v2.json` | ~47 sectors with CPC prefix patterns |
+| `config/super-sectors.json` | 9 super-sectors grouping sectors |
+| `scripts/assign-sectors-v2.ts` | Batch assignment script |
+
+### What Gets Lost Today
+
+When a patent has CPC codes spanning multiple sectors (e.g., `H04L63/1416` → network-threat-protection AND `G06F9/45` → virtualization), only the first match is kept. The secondary classification is **discarded**. This means:
+- Cross-domain patents lose their secondary technology characterization
+- Reclassification requires re-running the mapper and may produce different results if CPC pattern order changes
+- No way to query "which patents are relevant to BOTH security and virtualization?"
+
+### What Needs to Change for Multi-Classification
+
+When implementing the `patent_classifications` many-to-many table:
+1. Run **all** CPC codes through the mapper (not stop at first match)
+2. Store each match with rank: `primary` (first/most-specific match), `secondary`, `tertiary`
+3. Determine primary ranking by: CPC code specificity (longest match), then CPC code order from USPTO data
+4. Preserve raw CPC-to-sector mappings so reclassification is reproducible
+5. Ensure new portfolio patents go through the same multi-classification pipeline
+
+### Exhaustiveness & Catch-All Handling
+
+The current system guarantees every patent gets classified:
+- **Unmatched CPC codes** → `getPrimarySector()` returns `'general'` (line 111 of `sector-mapper.ts`)
+- **`general` sector** → maps to **COMPUTING** super-sector via `unmappedSectorDefault` in `super-sectors.json`
+- **~47 named sectors** with specific CPC patterns; everything else falls to `general`
+
+This catch-all pattern must be replicated at the subsector level when subsectors are introduced (see Section 20).
+
+**Note:** The current primary classification logic (first-CPC-match-wins) has been adequate so far but may need revisiting as we add subsectors where patent CPC code overlap is more common.
+
+## 20. Resolved Questions (Round 4)
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | **VIDEO_STREAMING subsector alternatives** | Codec-transcoding and streaming-protocols are good candidates. CDN category could break out routing vs. caching. **Use CPC code distribution** within existing sectors to find natural breakouts rather than forcing categories. Always include a **catch-all/general subsector** per sector for patents that don't fit specific subsectors — analyze this remainder category later for further breakouts. |
+| 2 | **CPC-dependent vs. independent codes** | Currently using independent codes as primary (less frequent, selected first). Better approach: **evaluate by prevalence within our portfolio** — favor independent CPC codes that occur sufficiently to help define subsectors with fewer mapping rules. This is exploratory — hence the need for multiple taxonomies. Start simple with best-guess primary, retain all classifications for future reclassification. |
+| 3 | **Subsector CPC analysis** | Detailed analysis completed from aggregate view data — see Section 21 for full VIDEO_STREAMING subsector proposals based on CPC distribution. |
+| 4 | **General sector cleanup** | The `general` catch-all sector's contents are not visible in current UI. Analyze using aggregate service when convenient. Can aggregate CPC codes to find natural groupings with good membership numbers. Defer to subsector work phase. |
+
+### Catch-All Subsector Pattern
+
+When breaking sectors into subsectors, **every sector must have a catch-all subsector** (e.g., `video-codec-general`, `video-server-cdn-other`) that captures patents whose CPC codes don't match any specific subsector pattern. This ensures:
+
+- **Exhaustive coverage**: Every patent in a sector belongs to exactly one subsector
+- **Incremental refinement**: The catch-all can be analyzed later to find additional breakouts
+- **No data loss**: Patents are never dropped from analysis because they don't fit a named subsector
+
+This follows the existing pattern at sector level: `getPrimarySector()` returns `'general'` for unmatched patents, which maps to the COMPUTING super-sector. The same principle applies at each level of the hierarchy.
+
+### CPC Classification Strategy for Subsectors
+
+The current sector classification uses a **first-match-wins** approach: sort CPC patterns by specificity (longest first), first CPC code that matches determines the sector. This works at the sector level where technology domains are broad.
+
+At the **subsector level**, where CPC code overlap is more common, a prevalence-based strategy may be more effective:
+
+1. For each patent's CPC codes, identify all matching subsectors
+2. Score each match by: CPC code independence (independent > dependent), portfolio prevalence of that CPC code, and pattern specificity
+3. Assign primary subsector based on best score; retain others as secondary/tertiary
+4. Favor independent CPC codes that define subsectors with fewer overall mapping rules (simpler taxonomy)
+
+This is a later-phase refinement — initial subsector assignment can use the existing first-match approach, with the multi-classification table preserving all matches for reclassification.
+
+### Known UI Issue
+
+The Sector Scores page has a navigation bug: when expanding into the patent grid, the **next/previous pagination controls don't work properly**, and scrolling within the expanded grid is broken. This needs fixing before subsector analysis can be done effectively in the UI. (See also: Chrome scrollbar issue in `docs/SESSION_CONTEXT.md`.)
+
+---
+
+## 21. VIDEO_STREAMING Subsector Proposals (CPC Analysis)
+
+Based on aggregate view data from the VIDEO_STREAMING super-sector, here are proposed subsector breakouts derived from CPC code distribution. CPC definitions sourced from the Cooperative Patent Classification scheme; local CPC data available at `/Volumes/GLSSD2/data/uspto/cpc`.
+
+### Observations
+
+**Three dominant CPC families in VIDEO_STREAMING:**
+- **H04N19/\*** — Video coding/compression (codec patents). Highest scores in the portfolio (avg 30-50).
+- **H04N21/\*** — Selective content distribution / interactive TV / VOD (streaming infrastructure). Moderate scores (avg 20-27).
+- **G09G\*** — Display control circuits. Present in VIDEO_STREAMING with lower scores (avg 22-26) and high competitor counts (2.3-2.8). **Possible misfit** — these may be display controller patents that co-occur with video CPC codes but are fundamentally different technology. Worth evaluating whether they belong in VIDEO_STREAMING or should move to INTERFACE or COMPUTING.
+
+Other families present: H04N5 (TV signal processing), H04N7 (television systems), H04L65 (real-time streaming protocols), G06T9 (image coding), G11B20 (recording signal processing).
+
+### video-codec Subsector Proposals
+
+The codec sector has the **highest scoring patents** in VIDEO_STREAMING and the clearest CPC-based clustering.
+
+| Proposed Subsector | Key CPC Codes | Est. Patents | Avg Score | Technology Focus |
+|---|---|---|---|---|
+| **codec-prediction-transform** | H04N19/61, /51, /44, /60 | ~290 | 35-42 | Core hybrid coding: motion estimation + transform (DCT). The fundamental approach used in H.264/HEVC/VVC. Broadest patent claims. |
+| **codec-adaptive-quantization** | H04N19/176, /124, /159, /157, /117 | ~190 | 33-51 | Adaptive coding decisions: block-level adaptation, quantization parameter control, prediction mode selection. **Highest average scores** — these are the decision-making patents that optimize quality. |
+| **codec-filtering-quality** | H04N19/82, /86, /85 | ~97 | 44-47 | In-loop filtering, artifact reduction, pre/post-processing. **Very high scores and high litigation value** — filter patents are hard to design around in standards-compliant decoders. |
+| **codec-entropy-syntax** | H04N19/91, /70, /13 | ~102 | 38-42 | Entropy coding (CABAC/CAVLC), bitstream syntax structure. Standards-essential for any compliant implementation. |
+| **codec-implementation** | H04N19/42, /423, /433, /436, /40 | ~176 | 28-41 | Hardware implementation, memory management, parallel processing, transcoding. Lower scores on average but relevant to chip-level infringement (Qualcomm, MediaTek, Apple). |
+| **codec-general** | Other H04N19/* | catch-all | — | Remaining codec patents; analyze later for further breakouts. |
+
+**Litigation notes:**
+- `codec-filtering-quality` and `codec-adaptive-quantization` have the highest scores and are the hardest to design around — standards mandate specific filtering and quantization behaviors.
+- `codec-implementation` patents target chip vendors specifically (different litigation profile than algorithm patents).
+- The codec sector overall has the lowest competitor count averages (0.6-1.3), suggesting less defensive patenting by competitors — potentially more room for licensing.
+
+### video-server-cdn Subsector Proposals
+
+The CDN sector is the largest by patent count in VIDEO_STREAMING. CPC codes cluster around H04N21 subgroups.
+
+| Proposed Subsector | Key CPC Codes | Est. Patents | Avg Score | Technology Focus |
+|---|---|---|---|---|
+| **cdn-transport-protocol** | H04N21/6125, /2408, H04N7/17318, /163, H04L65/80, /612, H04L12/28* | ~250 | 21-29 | Internet transmission, transport protocols, real-time streaming (RTP/RTCP), server monitoring, multicast/broadcast. Core CDN delivery technology. |
+| **cdn-client-processing** | H04N21/43615, /4305, /434, /4334, /436, /426, /44004 | ~220 | 20-25 | Client-side: home network interfacing, clock sync, demultiplexing, local storage/caching, buffer management. Targets STB/smart TV manufacturers. |
+| **cdn-ui-interaction** | H04N21/482, /4826, /4828, /47, /47202, /47214, /458, /4316 | ~200 | 22-25 | Program selection, recommendations, VOD request, EPG, UI overlays. Targets streaming app developers (Netflix, YouTube, etc.). |
+| **cdn-rights-drm** | H04N21/6582, /6581, /6587, /812, /8146, /814, /2383, /2385 | ~150 | 22-27 | DRM at transport level, rights management, ad insertion infrastructure, bandwidth allocation. Overlaps with video-drm sector — may need cross-referencing. |
+| **cdn-metadata-billing** | H04N21/2543, /2668, /2343, /2741, /25*, /26* | ~180 | 22-26 | Content metadata, billing/subscription, targeted content delivery, content management. Targets OTT platform operators. |
+| **cdn-general** | Other H04N21/* | catch-all | — | Remaining CDN patents. |
+
+**Litigation notes:**
+- `cdn-ui-interaction` is the most directly relevant to streaming service operators (Netflix, Amazon, YouTube) — EPG, recommendations, and VOD are core UX features.
+- `cdn-transport-protocol` targets CDN infrastructure (Akamai, AWS CloudFront, Google Cloud CDN).
+- `cdn-rights-drm` overlaps with the separate video-drm sector — need to decide on boundaries.
+
+### video-drm Subsector Consideration
+
+Video-drm is smaller in the portfolio. Likely too small to subsector initially. Keep as a single sector but note overlaps with `cdn-rights-drm` subsector above. May eventually merge or split based on analysis.
+
+### Potential Misfits
+
+| CPC Family | Count in VIDEO_STREAMING | Issue |
+|---|---|---|
+| **G09G\*** (display control) | ~400+ patents | Low scores (22-26), high competitor counts (2.3-2.8). Display controller technology, not streaming. May belong in INTERFACE or COMPUTING. |
+| **H04N5/\*** (TV signal processing) | ~200+ patents | Legacy TV circuitry, sync, cameras. Some relevant (H04N5/44504 = satellite/cable tuners) but many are legacy. |
+| **G11B20/\*** (recording) | ~50 patents | Signal processing for recording media. Low scores, low competitor overlap. Possible STORAGE misfit. |
+
+These should be evaluated during taxonomy deepening (Phase 6) — some may need reclassification.
+
+### Reference: CPC Code Definitions (Key Prefixes)
+
+| CPC Prefix | Technology Area |
+|---|---|
+| **H04N19/61** | Transform + predictive hybrid coding (core H.264/HEVC/VVC approach) |
+| **H04N19/176** | Adaptive coding at block/macroblock level |
+| **H04N19/44** | Video decoders |
+| **H04N19/51** | Motion estimation/compensation |
+| **H04N19/82** | In-loop filtering (deblocking, interpolation) |
+| **H04N19/86** | Coding artifact reduction |
+| **H04N19/91** | Entropy coding (VLC, arithmetic/CABAC) |
+| **H04N19/70** | Bitstream syntax structure |
+| **H04N19/42** | Codec implementation details/hardware |
+| **H04N19/40** | Video transcoding |
+| **H04N21/43615** | Home network interfacing |
+| **H04N21/4622** | Multi-source content retrieval |
+| **H04N21/482** | Program selection / EPG / browsing |
+| **H04N21/6125** | Internet transmission |
+| **H04N21/812** | Advertisement content generation |
+| **H04N21/2543** | Billing / subscription |
+| **H04L65/80** | Real-time streaming protocols |
+| **G09G5/\*** | Display control circuits (possible misfit) |
+
+**Local CPC scheme data:** `/Volumes/GLSSD2/data/uspto/cpc`
+
+## 22. Resolved Questions (Round 5)
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | **G09G display patents** | Move to **computing-ui** (no INTERFACE sector exists). Optics/photonics is another possibility. These are display controller patents, not streaming technology. Reclassify during Phase 6 taxonomy work. |
+| 2 | **cdn-rights-drm boundary** | **Split** transport-level DRM (cdn-rights-drm) from content-level DRM (video-drm) if sufficient patents exist in each with disparate competitor profiles. If the competitor sets overlap heavily, consolidate instead. |
+| 3 | **General sector contents** | ~111 patents — a junk drawer of non-tech-portfolio CPC codes: welding (B23K), medical devices (A61B), batteries (H01M), combustion (F23D), electroplating (C25D), fasteners (F16B), exercise equipment (A63B), etc. **Not worth deep analysis** given tiny fraction of portfolio. Notable: 55 patents with "(none)" CPC codes have high avg scores (49.19) — possibly Broadcom business method or design patents lacking CPC classification. Low priority for reclassification. |
+
+## 23. Open Questions
+
+1. **55 patents with no CPC codes**: These have the highest average score (49.19) in the general sector. What are these? Business method patents? Design patents? Worth a quick look to ensure they're not misclassified high-value assets.
+2. **computing-ui sector scope**: If G09G display patents move from VIDEO_STREAMING to computing-ui, does the existing computing sector structure accommodate them, or do we need a new sector?

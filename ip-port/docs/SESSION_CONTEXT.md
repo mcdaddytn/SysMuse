@@ -1,4 +1,4 @@
-# Session Context — February 15, 2026
+# Session Context — February 18, 2026
 
 ## Current State Summary
 
@@ -6,85 +6,92 @@
 
 | Component | Status | Port |
 |-----------|--------|------|
-| API Server | `npm run dev` | 3001 |
-| Frontend | `npm run dev` (in frontend/) | 3000 |
+| API Server | `npm run dev` (from root) | 3001 |
+| Frontend | `npm run dev` (from frontend/) | 3000 |
 | PostgreSQL | Docker | 5432 |
 | Elasticsearch | Docker | 9200/9300 |
 
----
+### Active Development Queue
 
-## Completed Phases
+**Primary roadmap:** `DEVELOPMENT_QUEUE_V3.md` (extracted from `TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md`)
 
-### Phase 1 — Portfolio Page & Infrastructure (Feb 14)
-- Server command fix (`npm run dev` in both root and frontend)
-- Portfolio page scroll layout (sticky headers, frozen columns, always-visible scrollbars)
-- Prompt templates structured questions fix
-- Competitors column
-- CPC tooltips composable (`useCpcDescriptions.ts`)
-
-### Phase 2 — Filtering Enhancements (Feb 14)
-- FlexFilterBuilder component with dynamic filter types
-- Backend filters: competitorNames, cpcCodes, subSectors, hasLlmData, score ranges, etc.
-- Filter options API endpoints
-- PortfolioPage integration (replaced fixed filter bar)
-
-### Phase 3 — Aggregates Page (Feb 14)
-- Backend `POST /api/patents/aggregate` endpoint with group-by and aggregation ops
-- AggregatesPage.vue with group-by selector, aggregation builder, results table, CSV export
-
-### Phase 4 — Patent Family Explorer V2 Frontend (Feb 14-15)
-Full plan: `/Users/gmac/.claude/plans/purring-watching-llama.md`
-
-**Core implementation:**
-- V2 types + `patentFamilyV2Api` API client in `frontend/src/services/api.ts`
-- Full rewrite of `PatentFamilyExplorerPage.vue` (~1650 lines)
-- Seeds input, 9 weighted scoring sliders with presets, thresholds, expansion controls
-- Zone tab selector (All/Members/Candidates/Excluded), results grid, save/focus-area dialogs
-
-**Stage 1 — Saved Explorations + Enrichment:**
-- Load/resume saved explorations list
-- Enrichment with IPR & prosecution data
-
-**Stage 2 — Flexible Column Display:**
-- 27 columns across 5 groups (core, family, scoring, dimensions, litigation)
-- Column selector dialog, localStorage-persisted visibility
-- Scoring weights collapsed by default
-
-**Stage 3 — Selection Model:**
-- Checkbox selection, auto-select members after create/expand/rescore
-- Create Focus Area from selected patents
-
-**Stage 4 — Shared Grid Infrastructure:**
-- `useGridColumns` composable: `frontend/src/composables/useGridColumns.ts`
-- `GenericColumnSelector`: `frontend/src/components/grid/GenericColumnSelector.vue`
-- Refactored `ColumnSelector.vue` to thin wrapper
-- Extended `ColumnGroup` type in `types/index.ts`
+| Phase | Status | Summary |
+|-------|--------|---------|
+| Phase 0 | Not started | Quick wins & rename to "IP Port" |
+| Phase 1 | Not started | VIDEO_STREAMING deep dive & multi-portfolio foundation |
+| Phase 2 | Not started | Sector overlap detection |
+| Phase 3 | Not started | Focus area pipeline — litigation opportunities |
+| Phase 4 | Not started | Product layer & external integration |
+| Phase 5 | **Partially complete** | Enrichment & scoring pipeline upgrade |
+| Phase 6 | Not started | Taxonomy deepening |
+| Phase 7 | Deferred | Data service layer & production readiness |
 
 ---
 
-## Bug Fixes Applied (Feb 15)
+## What Was Completed (Feb 14-18)
 
-1. **Column badge removed** — Floating count badge on Columns button was blocking text
-2. **Scrollbar CSS** — Each page has its own inline scoped scrollbar CSS (DO NOT use global CSS file):
-   - **Critical: `overflow: scroll !important`** (not `auto`) — forces scrollbars always visible on macOS
-   - **16px scrollbar width/height + `-webkit-appearance: none`** — overrides macOS overlay in Chrome and Safari
-   - **Firefox: `scrollbar-width: auto`** (not `thin`) — keeps scrollbars visible
-   - Removed `grid-scrollbars.css` global import from main.ts (it conflicted with scoped `:deep(.q-table__middle) { overflow: visible }`)
-   - Applied inline to: PortfolioPage, PatentFamilyExplorerPage, FocusAreaDetailPage
-3. **PatentFamilyExplorerPage scroll container** — Added `.table-wrapper` + `.table-scroll-container` with:
-   - Fixed height: `calc(100vh - 340px)`
-   - `hide-pagination` on q-table, separate pagination bar outside scroll area
-   - Sticky headers, frozen checkbox + status columns (sticky left)
-   - q-table scroll overrides (`:deep(.q-table__container)` overflow visible)
-4. **IPR/Prosecution cache fix** — `checkPatentIPR()` and `checkPatentProsecution()` in `patent-family-service.ts` now check BOTH cache locations:
-   - `cache/ipr-scores/` (~10,745 files) + `cache/api/ptab/` (~455)
-   - `cache/prosecution-scores/` (~11,576 files) + `cache/api/file-wrapper/` (~454)
-5. **Enrichment UX simplified** — Split button with 3 options (Members, Current Page, All). "Current Page" now uses actual paginated page (e.g., 50 patents), not entire zone.
-6. **Enrichment batching** — Frontend batches in groups of 500 to avoid backend 200-patent truncation limit.
-7. **Exploration state preserved on navigation** — Exploration ID in URL query param. On back-navigation, auto-loads.
-8. **Auto-enrichment on load** — `autoEnrich()` runs silently with `cacheOnly: true` when creating or loading an exploration. Only reads from local file cache (no API calls), fast for any number of patents.
-9. **"Open" button** — Renamed from "New", repositioned next to title badges.
-10. **Prosecution column display** — Shows badge with "N OA" (office action count), color-coded (orange if rejections, green if clean), with tooltip showing status + details.
+### Batch LLM Scoring System (Phase 5 items — Feb 17-18)
+
+Full 7-step implementation plan completed:
+
+1. **Token/model tracking** — `processBatchResults()` now persists `llmModel` and `tokensUsed` to DB per patent score
+2. **Cancel & refresh-all endpoints** — `DELETE /llm/batch-cancel/:batchId`, `POST /llm/batch-refresh-all`
+3. **Frontend API layer** — `scoringTemplatesApi` extended with batch, snapshot, and comparison methods
+4. **SectorManagementPage batch UI** — Batch-default scoring with model dropdown, batch job status panel with polling/process/cancel
+5. **Score snapshots** — `POST /llm/snapshot`, `GET /llm/snapshots`, `GET /llm/snapshot/:id/compare` with LLM enum in Prisma
+6. **Multi-model comparison** — `POST /llm/compare-models/:sectorName` with side-by-side results table
+7. **JobQueuePage batch tab** — "LLM Batch Scoring" tab showing all batch jobs across sectors
+
+**Key decisions:**
+- **Sonnet 4 confirmed as default model** — comparable scores to Opus 4.6 at 1/6th the cost
+- Batch API saves 50% vs realtime — overnight scoring of 1,857 VIDEO_STREAMING patents took ~3 min
+- Haiku produces significantly different scores — not suitable as a direct replacement for sector scoring
+
+### Bugs Found & Fixed (Feb 17-18)
+
+1. **Sector progress showing 200%** — Duplicate `PatentSubSectorScore` rows from old realtime scoring (CUID `sub_sector_id`) vs batch scoring (sector name as `sub_sector_id`). Fixed with `DISTINCT ON (patent_id)` subquery.
+2. **Snapshot creation unique constraint** — Same patent appeared in multiple score rows. Fixed with patentId deduplication (keep most recent by `updatedAt`).
+3. **Snapshot comparison broken variable** — `currentScores.length` referenced after renaming to `allCurrentScores`. Fixed to `currentMap.size`.
+4. **`isLlmBatchProcessable` wrong check** — Checked `!job.completedAt` instead of `!job.results.processed`. Fixed.
+5. **Prisma LLM enum not recognized** — Required `npx prisma generate` after adding `LLM` to `ScoreType` enum.
+
+### Earlier Work (Feb 14-15)
+
+- Phase 1-4 of original dev queue: Portfolio page, filtering, aggregates, Patent Family Explorer V2
+- Shared grid infrastructure (`useGridColumns` composable, `GenericColumnSelector`)
+- Enrichment pipeline with dual-cache lookups and auto-enrich on exploration load
+- See `FAMILY_EXPANSION_V2_ANALYSIS.md` and `FAMILY_EXPANSION_V2_IMPLEMENTATION_PLAN.md` for details
+
+---
+
+## Important Notes for Next Session
+
+### Sub-Sector Templates Do NOT Exist for VIDEO_STREAMING
+
+Despite multiple discussions about breaking out VIDEO_STREAMING into subsectors with custom LLM questions, **this work has not been done**. Current state:
+- `config/scoring-templates/sectors/`: 6 video sector templates (video-broadcast, video-client-processing, video-codec, video-drm-conditional, video-server-cdn, video-storage) — each has 5 custom questions
+- `config/scoring-templates/sub-sectors/`: 14 templates but NONE for video (only adc-dac, amplifiers, baseband-equalization, etc.)
+- DB sub-sectors are just CPC codes, not custom breakdowns
+- Detailed subsector proposals with CPC analysis exist in `TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md` Section 21
+
+**Do NOT re-score large sectors without first creating sub-sector question breakdowns.** Budget should go toward tailored questions at subsector level.
+
+### GUI Redesign Needed
+
+Sector management and LLM batch scoring experience needs redesign:
+- Scoring/batch functionality split across SectorManagementPage and JobQueuePage
+- Model comparison results not persisted or easily retrievable
+- Sub-sector creation and question authoring need a dedicated workflow
+- User will submit new design requirements
+
+### Scoring Template Hierarchy
+
+```
+portfolio-default.json (7 questions, applies to all patents)
+    └── super-sectors/{name}.json (3-4 additional questions per super-sector)
+           └── sectors/{name}.json (4-6 additional questions per sector)
+                  └── sub-sectors/{id}.json (if exists — currently sparse, none for video)
+```
 
 ---
 
@@ -92,50 +99,13 @@ Full plan: `/Users/gmac/.claude/plans/purring-watching-llama.md`
 
 **Status**: UNRESOLVED — scrollbars work in Safari but NOT in Chrome.
 
-**Working reference**: Commit `37bf802` ("Fixed scrolling patent summary", 2/14 2:03 PM) — scrollbars were confirmed working in Chrome after this commit.
+**Working reference**: Commit `37bf802` ("Fixed scrolling patent summary", 2/14 2:03 PM)
 
-**What we know**:
-- The CSS in the current codebase is functionally identical to commit `37bf802` (verified via diff)
-- Safari renders the custom `::-webkit-scrollbar` styles correctly — scrollbars always visible
-- Chrome does NOT render them — shows macOS overlay behavior (vertical only while scrolling, no horizontal)
-- Quasar CSS (`quasar.css`) does not have conflicting scrollbar rules on `.q-table__middle`
-- No other CSS files in the project affect scrollbars
-- The global `grid-scrollbars.css` was removed (it conflicted with scoped `:deep(.q-table__middle)` rules)
-- Vite HMR confirmed serving the correct CSS with scrollbar rules
-
-**CSS pattern that should work** (from commit `37bf802`, scoped in each page):
-```css
-.table-scroll-container {
-  overflow: scroll !important;
-}
-.table-scroll-container::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
-  -webkit-appearance: none;  /* added later for Chrome */
-}
-.table-scroll-container::-webkit-scrollbar-track {
-  background: #e8e8e8;
-}
-.table-scroll-container::-webkit-scrollbar-thumb {
-  background: #999;
-  border: 3px solid #e8e8e8;
-  border-radius: 8px;
-}
-.table-scroll-container {
-  scrollbar-width: auto;
-  scrollbar-color: #999 #e8e8e8;
-}
-```
-
-**Things to investigate next**:
-1. Chrome version / flags — check `chrome://flags` for overlay scrollbar settings
-2. Chrome DevTools — inspect `.table-scroll-container` element, check Computed styles for `overflow` and whether `::-webkit-scrollbar` rules appear in the Styles pane
-3. Try adding `scrollbar-gutter: stable both-edges` as an alternative approach
-4. Try `overflow: overlay` (deprecated but Chrome may respond to it)
-5. Check if Chrome is treating scoped `[data-v-xxx]::-webkit-scrollbar` differently than unscoped — try moving scrollbar CSS to `<style>` (unscoped) section
-6. Compare Chrome version to when it was working (Feb 14)
-7. Check if `min-height: 0; min-width: 0;` on `.table-scroll-container` (added after 37bf802) somehow affects Chrome's scrollbar rendering
-8. Try reverting PortfolioPage.vue to exact `37bf802` version with `git checkout 37bf802 -- ip-port/frontend/src/pages/PortfolioPage.vue` and test in Chrome
+The CSS is functionally identical to the working commit. Safari renders correctly, Chrome does not. See previous session context for full investigation notes and next steps. Key items to try:
+1. Chrome DevTools — inspect computed styles for `::-webkit-scrollbar` rules
+2. Try `scrollbar-gutter: stable both-edges`
+3. Check if scoped `[data-v-xxx]::-webkit-scrollbar` treated differently in Chrome
+4. Try reverting PortfolioPage.vue to exact `37bf802` version
 
 ---
 
@@ -143,65 +113,40 @@ Full plan: `/Users/gmac/.claude/plans/purring-watching-llama.md`
 
 | File | Purpose |
 |------|---------|
-| `frontend/src/services/api.ts` | V2 types, `patentFamilyV2Api` client (~1815 lines) |
-| `frontend/src/pages/PatentFamilyExplorerPage.vue` | V2 explorer page (~1650 lines) |
+| `docs/DEVELOPMENT_QUEUE_V3.md` | Active development queue (Phases 0-7) |
+| `docs/TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md` | Master requirements document |
+| `docs/scoring-and-enrichment-guide.md` | How-to for batch scoring, models, snapshots |
+| `src/api/services/llm-scoring-service.ts` | Batch API, model comparison, scoring service |
+| `src/api/routes/scoring-templates.routes.ts` | Scoring endpoints including batch, snapshot, comparison |
+| `frontend/src/services/api.ts` | Frontend API client with batch/snapshot/comparison methods |
+| `frontend/src/pages/SectorManagementPage.vue` | Sector scoring with batch UI, snapshots, model comparison |
+| `frontend/src/pages/JobQueuePage.vue` | Job queue with LLM Batch Scoring tab |
+| `frontend/src/pages/PatentFamilyExplorerPage.vue` | V2 explorer (~1650 lines) |
 | `frontend/src/pages/PortfolioPage.vue` | Patent summary with flex filters |
 | `frontend/src/pages/FocusAreaDetailPage.vue` | Focus area detail (~2750 lines) |
-| `frontend/src/composables/useGridColumns.ts` | Reusable column visibility composable |
-| `frontend/src/components/grid/GenericColumnSelector.vue` | Props-driven column selector dialog |
-| `frontend/src/components/grid/ColumnSelector.vue` | Thin wrapper for patents store |
-| `frontend/src/components/filters/FlexFilterBuilder.vue` | Dynamic filter builder |
-| `frontend/src/assets/grid-scrollbars.css` | Global always-visible scrollbar styles |
-| `frontend/src/types/index.ts` | ColumnGroup, GridColumnMeta, GridColumnGroup types |
-| `src/api/services/patent-family-service.ts` | Backend enrichment with dual-cache lookups |
-| `src/api/routes/patent-families.routes.ts` | V2 endpoints + enrichment routes |
-| `src/api/services/family-expansion-v2-service.ts` | V2 expansion service |
-| `src/api/services/family-expansion-scorer.ts` | 9-dimension scoring with presets |
+| `config/scoring-templates/` | Template hierarchy (portfolio → super-sector → sector → sub-sector) |
+| `cache/batch-jobs/` | Batch job metadata JSON files |
 
 ---
 
-## Known Issues / Future Work
+## Cache & Data Locations
 
-### From User Feedback (not yet addressed)
-1. **Multi-seed scoring** — How to handle multiple seeds' sectors in scoring (averaging, union, etc.). Needs design discussion.
-2. **Flexible filtering on grids** — Need filters for relationship type (child, sibling, cousin) in family explorer. FocusAreaDetailPage has old static filtering.
-3. **Affiliate admin** — Admin UI for managing multi-assignee affiliates.
-4. **Rate limiting (429)** — PatentsView API throttling during sibling expansion. May need request batching/queuing.
-
-### Technical Debt
-- FocusAreaDetailPage could benefit from `useGridColumns` composable
-- Consider extracting scroll container pattern into shared component
-- Filter presets (save/load filter configurations) — Phase 2.6 remaining
-
----
-
-## Architecture Notes
-
-### Scoring System
-- 9 weighted dimensions + depthDecayRate
-- Three zones: member (>= membershipThreshold), candidate (>= expansionThreshold), excluded (< expansionThreshold)
-- Debounced rescore (300ms) via deep watch on weights + thresholds
-- DEFAULT_WEIGHTS defined in PatentFamilyExplorerPage.vue
-
-### Cache Locations (backend)
 | Cache | Path | ~Count | Source |
 |-------|------|--------|--------|
 | Prosecution scores | `cache/prosecution-scores/` | 11,576 | Prosecution scoring pipeline |
 | IPR scores | `cache/ipr-scores/` | 10,745 | IPR scoring pipeline |
 | File wrapper | `cache/api/file-wrapper/` | 454 | enrichWithDetails API |
 | PTAB | `cache/api/ptab/` | 455 | enrichWithDetails API |
-
-### State Management
-- PatentFamilyExplorerPage: local `ref()` + `computed()` (no Pinia)
-- PortfolioPage / FocusAreaDetailPage: `usePatentsStore` (Pinia)
-- Column visibility: localStorage via `useGridColumns` composable
+| LLM scores | `cache/llm-scores/` | ~17,529 | LLM scoring pipeline |
+| Batch jobs | `cache/batch-jobs/` | ~8 | Batch API metadata |
+| Batch results | `cache/batch-results/` | varies | Batch API result files |
 
 ---
 
 ## Commands Reference
 
 ```bash
-# Start server (from project root)
+# Start API server (from project root)
 npm run dev
 
 # Start frontend (from frontend directory)
@@ -209,8 +154,21 @@ cd frontend && npm run dev
 
 # Start Docker services
 docker-compose up -d postgres elasticsearch
+
+# Prisma operations
+npx prisma generate    # Regenerate client after schema changes
+npx prisma migrate dev # Run pending migrations
 ```
 
 ---
 
-*Last Updated: 2026-02-15*
+## Doc Organization
+
+- **Active docs:** `docs/` — current design docs and guides (Feb 2026+)
+- **Archived docs:** `docs/archive/` — pre-February 2026 docs (still available for reference)
+- **Master roadmap:** `docs/TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md`
+- **Dev queue:** `docs/DEVELOPMENT_QUEUE_V3.md`
+
+---
+
+*Last Updated: 2026-02-18*

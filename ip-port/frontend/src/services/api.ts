@@ -2534,6 +2534,103 @@ export interface SubSectorInfo {
   scoredCount: number;
 }
 
+// ─── Batch Job Types ───────────────────────────────────────────────────────
+
+export interface BatchJobMetadata {
+  batchId: string;
+  sectorName: string;
+  superSector: string;
+  patentCount: number;
+  model: string;
+  templateInheritanceChain: string[];
+  questionCount: number;
+  withClaims: boolean;
+  submittedAt: string;
+  status: 'submitted' | 'in_progress' | 'ended' | 'failed';
+  completedAt: string | null;
+  results: {
+    succeeded: number;
+    errored: number;
+    expired: number;
+    canceled: number;
+    processed: boolean;
+    processedAt: string | null;
+  };
+}
+
+export interface BatchStatusResponse {
+  batchId: string;
+  status: string;
+  requestCounts: {
+    processing: number;
+    succeeded: number;
+    errored: number;
+    canceled: number;
+    expired: number;
+  };
+  createdAt: string;
+  endedAt: string | null;
+  metadata: BatchJobMetadata | null;
+}
+
+// ─── LLM Snapshot Types ──────────────────────────────────────────────────────
+
+export interface LlmSnapshotSummary {
+  id: string;
+  name: string;
+  description?: string;
+  scoreType: string;
+  config?: Record<string, unknown>;
+  isActive?: boolean;
+  patentCount: number;
+  llmDataCount?: number;
+  createdAt: string;
+}
+
+export interface LlmSnapshotComparison {
+  snapshotId: string;
+  snapshotName: string;
+  sectorName: string;
+  snapshotDate: string;
+  summary: {
+    snapshotPatents: number;
+    currentPatents: number;
+    matchedPatents: number;
+    avgDelta: number;
+    improved: number;
+    degraded: number;
+    unchanged: number;
+  };
+  topMovers: Array<{
+    patentId: string;
+    snapshotScore: number;
+    currentScore: number | null;
+    delta: number;
+  }>;
+}
+
+// ─── Model Comparison Types ──────────────────────────────────────────────────
+
+export interface ModelComparisonResult {
+  sectorName: string;
+  models: string[];
+  sampleSize: number;
+  results: Array<{
+    patentId: string;
+    patentTitle: string;
+    scores: Record<string, {
+      compositeScore: number;
+      metrics: Record<string, { score: number; reasoning: string; confidence?: number }>;
+      tokenUsage: { input: number; output: number };
+    }>;
+  }>;
+  summary: Record<string, {
+    avgScore: number;
+    totalTokens: number;
+    estimatedCostPer1k: number;
+  }>;
+}
+
 // Scoring Templates API
 export const scoringTemplatesApi = {
   /**
@@ -2745,6 +2842,101 @@ export const scoringTemplatesApi = {
     claims: Array<{ number: number; text: string; isIndependent: boolean }>;
   }> {
     const { data } = await api.get(`/scoring-templates/claims/preview/${patentId}`);
+    return data;
+  },
+
+  // ─── Batch API Scoring ─────────────────────────────────────────────────────
+
+  /**
+   * Submit a batch scoring job for a sector (returns immediately with batchId)
+   */
+  async batchScoreSector(
+    sectorName: string,
+    options?: { useClaims?: boolean; rescore?: boolean; topN?: number; model?: string }
+  ): Promise<{ success: boolean; message: string; batchId: string; requestCount: number; sectorName: string }> {
+    const params = new URLSearchParams();
+    if (options?.useClaims) params.append('useClaims', 'true');
+    if (options?.rescore) params.append('rescore', 'true');
+    if (options?.topN) params.append('limit', options.topN.toString());
+    if (options?.model) params.append('model', options.model);
+    const { data } = await api.post(`/scoring-templates/llm/batch-score-sector/${sectorName}?${params}`);
+    return data;
+  },
+
+  /**
+   * Get status of a batch job
+   */
+  async getBatchStatus(batchId: string): Promise<BatchStatusResponse> {
+    const { data } = await api.get(`/scoring-templates/llm/batch-status/${batchId}`);
+    return data;
+  },
+
+  /**
+   * Process completed batch results (parse + save to DB)
+   */
+  async processBatchResults(batchId: string): Promise<{ success: boolean; batchId: string; processed: number; failed: number; errors: string[] }> {
+    const { data } = await api.post(`/scoring-templates/llm/batch-process/${batchId}`);
+    return data;
+  },
+
+  /**
+   * List all batch jobs
+   */
+  async getBatchJobs(): Promise<{ totalJobs: number; jobs: BatchJobMetadata[] }> {
+    const { data } = await api.get('/scoring-templates/llm/batch-jobs');
+    return data;
+  },
+
+  /**
+   * Cancel a batch job
+   */
+  async cancelBatch(batchId: string): Promise<{ success: boolean; batchId: string; status: string }> {
+    const { data } = await api.delete(`/scoring-templates/llm/batch-cancel/${batchId}`);
+    return data;
+  },
+
+  /**
+   * Refresh all active batch job statuses
+   */
+  async refreshAllBatchStatuses(): Promise<{ totalJobs: number; jobs: BatchJobMetadata[] }> {
+    const { data } = await api.post('/scoring-templates/llm/batch-refresh-all');
+    return data;
+  },
+
+  // ─── LLM Score Snapshots ───────────────────────────────────────────────────
+
+  /**
+   * Create a snapshot of current LLM scores for a sector
+   */
+  async createLlmSnapshot(sectorName: string, options?: { name?: string; description?: string }): Promise<LlmSnapshotSummary> {
+    const { data } = await api.post('/scoring-templates/llm/snapshot', { sectorName, ...options });
+    return data;
+  },
+
+  /**
+   * List LLM score snapshots
+   */
+  async getLlmSnapshots(sectorName?: string): Promise<LlmSnapshotSummary[]> {
+    const params = sectorName ? { sectorName } : {};
+    const { data } = await api.get('/scoring-templates/llm/snapshots', { params });
+    return data;
+  },
+
+  /**
+   * Compare a snapshot to current scores
+   */
+  async compareLlmSnapshot(snapshotId: string): Promise<LlmSnapshotComparison> {
+    const { data } = await api.get(`/scoring-templates/llm/snapshot/${snapshotId}/compare`);
+    return data;
+  },
+
+  // ─── Multi-Model Comparison ────────────────────────────────────────────────
+
+  /**
+   * Run multi-model comparison on a sample of patents
+   */
+  async compareModels(sectorName: string, options: { models: string[]; sampleSize: number }): Promise<ModelComparisonResult> {
+    const { data } = await api.post(`/scoring-templates/llm/compare-models/${sectorName}`, options, { timeout: 600000 });
     return data;
   },
 };

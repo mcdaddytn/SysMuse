@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
 import {
-  patentApi, enrichmentApi, batchJobsApi,
+  patentApi, enrichmentApi, batchJobsApi, scoringTemplatesApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
-  type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse
+  type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
+  type BatchJobMetadata
 } from '@/services/api';
 
 const activeTab = ref('enrichment');
@@ -393,6 +394,103 @@ const metricDescriptions: Record<string, string> = {
   'Families': 'Patents with backward citation data from patent families pipeline',
 };
 
+// ─── LLM Batch Scoring ──────────────────────────────────────────────────────
+const llmBatchJobs = ref<BatchJobMetadata[]>([]);
+const llmBatchLoading = ref(false);
+const llmBatchError = ref<string | null>(null);
+const llmBatchProcessingId = ref<string | null>(null);
+const llmBatchCancellingId = ref<string | null>(null);
+let llmBatchPollInterval: ReturnType<typeof setInterval> | null = null;
+
+async function loadLlmBatchJobs() {
+  llmBatchLoading.value = true;
+  llmBatchError.value = null;
+  try {
+    const result = await scoringTemplatesApi.refreshAllBatchStatuses();
+    llmBatchJobs.value = result.jobs;
+  } catch (err) {
+    llmBatchError.value = err instanceof Error ? err.message : 'Failed to load LLM batch jobs';
+  } finally {
+    llmBatchLoading.value = false;
+  }
+}
+
+async function processLlmBatchResults(batchId: string) {
+  llmBatchProcessingId.value = batchId;
+  try {
+    await scoringTemplatesApi.processBatchResults(batchId);
+    await loadLlmBatchJobs();
+  } catch (err) {
+    console.error('Failed to process batch results:', err);
+  } finally {
+    llmBatchProcessingId.value = null;
+  }
+}
+
+async function cancelLlmBatch(batchId: string) {
+  if (!confirm('Cancel this LLM batch job?')) return;
+  llmBatchCancellingId.value = batchId;
+  try {
+    await scoringTemplatesApi.cancelBatch(batchId);
+    await loadLlmBatchJobs();
+  } catch (err) {
+    console.error('Failed to cancel batch:', err);
+  } finally {
+    llmBatchCancellingId.value = null;
+  }
+}
+
+function startLlmBatchPoll() {
+  stopLlmBatchPoll();
+  llmBatchPollInterval = setInterval(() => {
+    const hasActive = llmBatchJobs.value.some(j => j.status === 'submitted' || j.status === 'in_progress');
+    if (hasActive) {
+      loadLlmBatchJobs();
+    }
+  }, 30000);
+}
+
+function stopLlmBatchPoll() {
+  if (llmBatchPollInterval) {
+    clearInterval(llmBatchPollInterval);
+    llmBatchPollInterval = null;
+  }
+}
+
+function llmBatchStatusColor(status: string): string {
+  switch (status) {
+    case 'submitted': return 'blue-grey';
+    case 'in_progress': return 'blue';
+    case 'ended': return 'positive';
+    case 'failed': return 'negative';
+    default: return 'grey';
+  }
+}
+
+function truncateBatchId(batchId: string): string {
+  return batchId.length > 16 ? batchId.slice(0, 16) + '...' : batchId;
+}
+
+function llmModelLabel(model: string): string {
+  if (model.includes('haiku')) return 'Haiku';
+  if (model.includes('opus')) return 'Opus';
+  if (model.includes('sonnet')) return 'Sonnet';
+  return model;
+}
+
+function isLlmBatchProcessable(job: BatchJobMetadata): boolean {
+  return job.status === 'ended' && job.results.succeeded > 0 && !job.results.processed;
+}
+
+function isLlmBatchActive(job: BatchJobMetadata): boolean {
+  return job.status === 'submitted' || job.status === 'in_progress';
+}
+
+function formatLlmDate(dateStr: string | null): string {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString();
+}
+
 // Watch for tab changes to refresh data
 watch(activeTab, (newTab) => {
   if (newTab === 'sectors') {
@@ -401,6 +499,13 @@ watch(activeTab, (newTab) => {
     loadEnrichmentSummary();
   } else if (newTab === 'jobs') {
     loadBatchJobs();
+  } else if (newTab === 'llm-batch') {
+    loadLlmBatchJobs();
+    startLlmBatchPoll();
+  }
+  // Stop LLM polling when leaving the tab
+  if (newTab !== 'llm-batch') {
+    stopLlmBatchPoll();
   }
 });
 
@@ -434,6 +539,7 @@ onUnmounted(() => {
   if (etaUpdateInterval) {
     clearInterval(etaUpdateInterval);
   }
+  stopLlmBatchPoll();
 });
 </script>
 
@@ -447,6 +553,7 @@ onUnmounted(() => {
       <q-tab name="enrichment" label="Enrichment Overview" icon="analytics" />
       <q-tab name="sectors" label="Sector Enrichment" icon="category" />
       <q-tab name="jobs" label="Job Queue" icon="queue" />
+      <q-tab name="llm-batch" label="LLM Batch Scoring" icon="psychology" />
     </q-tabs>
 
     <q-tab-panels v-model="activeTab" animated>
@@ -824,6 +931,132 @@ onUnmounted(() => {
             </q-item>
           </q-list>
         </q-card>
+      </q-tab-panel>
+
+      <!-- ═══ LLM Batch Scoring Tab ═══ -->
+      <q-tab-panel name="llm-batch" class="q-pa-none">
+        <div class="row items-center q-mb-md">
+          <div class="text-subtitle1 q-mr-md">Anthropic Batch API Jobs</div>
+          <q-space />
+          <q-btn flat icon="refresh" label="Refresh" :loading="llmBatchLoading" @click="loadLlmBatchJobs" />
+        </div>
+
+        <q-banner v-if="llmBatchError" class="bg-negative text-white q-mb-md">
+          {{ llmBatchError }}
+        </q-banner>
+
+        <div v-if="llmBatchLoading && llmBatchJobs.length === 0" class="row justify-center q-pa-xl">
+          <q-spinner size="lg" color="primary" />
+        </div>
+
+        <q-card flat bordered v-else-if="llmBatchJobs.length > 0">
+          <q-table
+            :rows="llmBatchJobs"
+            :columns="[
+              { name: 'sector', label: 'Sector', field: 'sectorName', align: 'left', sortable: true },
+              { name: 'model', label: 'Model', field: 'model', align: 'left', sortable: true },
+              { name: 'patents', label: 'Patents', field: 'patentCount', align: 'right', sortable: true },
+              { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
+              { name: 'results', label: 'Results', field: 'results', align: 'center' },
+              { name: 'submitted', label: 'Submitted', field: 'submittedAt', align: 'left', sortable: true },
+              { name: 'completed', label: 'Completed', field: 'completedAt', align: 'left', sortable: true },
+              { name: 'actions', label: 'Actions', field: 'actions', align: 'center' }
+            ]"
+            row-key="batchId"
+            flat
+            bordered
+            dense
+            :pagination="{ rowsPerPage: 20, sortBy: 'submitted', descending: true }"
+          >
+            <template v-slot:body-cell-sector="props">
+              <q-td :props="props">
+                <span class="text-weight-medium">{{ props.row.sectorName }}</span>
+                <div class="text-caption text-grey-6">{{ props.row.superSector }}</div>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-model="props">
+              <q-td :props="props">
+                <q-chip dense size="sm" :color="props.row.model.includes('haiku') ? 'teal' : props.row.model.includes('opus') ? 'deep-purple' : 'blue'" text-color="white">
+                  {{ llmModelLabel(props.row.model) }}
+                </q-chip>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-status="props">
+              <q-td :props="props">
+                <q-badge :color="llmBatchStatusColor(props.row.status)">
+                  {{ props.row.status }}
+                </q-badge>
+                <q-spinner v-if="isLlmBatchActive(props.row)" size="xs" color="blue" class="q-ml-xs" />
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-results="props">
+              <q-td :props="props">
+                <span v-if="props.row.results.succeeded > 0" class="text-positive q-mr-xs">{{ props.row.results.succeeded }} ok</span>
+                <span v-if="props.row.results.errored > 0" class="text-negative q-mr-xs">{{ props.row.results.errored }} err</span>
+                <span v-if="props.row.results.expired > 0" class="text-warning q-mr-xs">{{ props.row.results.expired }} exp</span>
+                <q-badge v-if="props.row.results.processed" color="positive" class="q-ml-xs">saved</q-badge>
+                <span v-if="props.row.results.succeeded === 0 && props.row.results.errored === 0 && props.row.results.expired === 0" class="text-grey">-</span>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-submitted="props">
+              <q-td :props="props">
+                {{ formatLlmDate(props.row.submittedAt) }}
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-completed="props">
+              <q-td :props="props">
+                {{ formatLlmDate(props.row.completedAt) }}
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-actions="props">
+              <q-td :props="props">
+                <div class="row q-gutter-xs no-wrap">
+                  <q-btn
+                    v-if="isLlmBatchProcessable(props.row)"
+                    flat dense
+                    color="primary"
+                    icon="download_done"
+                    label="Process"
+                    :loading="llmBatchProcessingId === props.row.batchId"
+                    @click="processLlmBatchResults(props.row.batchId)"
+                  >
+                    <q-tooltip>Process batch results into DB</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    v-if="isLlmBatchActive(props.row)"
+                    flat dense
+                    color="negative"
+                    icon="cancel"
+                    :loading="llmBatchCancellingId === props.row.batchId"
+                    @click="cancelLlmBatch(props.row.batchId)"
+                  >
+                    <q-tooltip>Cancel batch</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    flat dense
+                    color="grey"
+                    icon="content_copy"
+                    @click="navigator.clipboard.writeText(props.row.batchId)"
+                  >
+                    <q-tooltip>Copy batch ID: {{ props.row.batchId }}</q-tooltip>
+                  </q-btn>
+                </div>
+              </q-td>
+            </template>
+          </q-table>
+        </q-card>
+
+        <div v-else class="text-center text-grey q-pa-xl">
+          <q-icon size="3em" name="psychology" class="q-mb-md" />
+          <div class="text-h6">No LLM batch jobs found</div>
+          <div class="text-caption">Submit batch scoring jobs from the Sector Management page</div>
+        </div>
       </q-tab-panel>
     </q-tab-panels>
 

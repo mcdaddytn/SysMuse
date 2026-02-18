@@ -63,6 +63,8 @@ export interface ScoreCalculationResult {
   templateConfigId?: string;       // JSON config template ID (e.g., "rf-acoustic")
   templateVersion: number;
   withClaims?: boolean;           // Whether claims were included in scoring context
+  llmModel?: string;              // Model used for scoring (e.g., "claude-sonnet-4-20250514")
+  tokensUsed?: number;            // Total tokens (input + output) used
 }
 
 // ============================================================================
@@ -348,6 +350,8 @@ export async function savePatentScore(
       templateConfigId: result.templateConfigId || null,
       templateVersion: result.templateVersion,
       withClaims: result.withClaims || false,
+      llmModel: result.llmModel || null,
+      tokensUsed: result.tokensUsed || null,
       executedAt: new Date()
     },
     update: {
@@ -357,6 +361,8 @@ export async function savePatentScore(
       templateConfigId: result.templateConfigId || null,
       templateVersion: result.templateVersion,
       withClaims: result.withClaims || false,
+      llmModel: result.llmModel || null,
+      tokensUsed: result.tokensUsed || null,
       executedAt: new Date(),
       updatedAt: new Date()
     }

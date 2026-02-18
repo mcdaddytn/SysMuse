@@ -1155,4 +1155,5 @@ model PatentScoreEntry {
 enum ScoreType {
   V2
   V3
+  LLM
 }

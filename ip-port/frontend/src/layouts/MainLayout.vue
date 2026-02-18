@@ -80,7 +80,7 @@ function logout() {
         />
 
         <q-toolbar-title>
-          <span class="text-weight-bold">Patent Workstation</span>
+          <span class="text-weight-bold">IP Port</span>
         </q-toolbar-title>
 
         <!-- User Menu -->

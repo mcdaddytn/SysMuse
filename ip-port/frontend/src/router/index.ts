@@ -116,7 +116,7 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   // TODO: Check authentication
   // For now, allow all routes
-  document.title = `${to.meta.title || 'Patent Summary'} - Patent Workstation`;
+  document.title = `${to.meta.title || 'Patent Summary'} - IP Port`;
   next();
 });
 

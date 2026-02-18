@@ -321,6 +321,39 @@ Be objective and critical. Follow the scoring guidelines above.`;
 }
 
 // ============================================================================
+// Response Parsing (shared by realtime and batch scoring)
+// ============================================================================
+
+/**
+ * Parse an LLM scoring response into MetricScore records.
+ * Used by both realtime scorePatent() and batch processBatchResults().
+ */
+export function parseScoreResponse(
+  responseText: string,
+  questions: ScoringQuestion[]
+): { metrics: Record<string, MetricScore>; compositeScore: number } {
+  const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+  if (!jsonMatch) {
+    throw new Error('Could not find JSON in response');
+  }
+
+  const parsed = JSON.parse(jsonMatch[1]);
+  const scores = parsed.scores as Record<string, { score: number; reasoning: string; confidence?: string }>;
+
+  const metrics: Record<string, MetricScore> = {};
+  for (const [fieldName, data] of Object.entries(scores)) {
+    metrics[fieldName] = {
+      score: data.score,
+      reasoning: data.reasoning,
+      confidence: data.confidence === 'high' ? 1.0 : data.confidence === 'medium' ? 0.7 : 0.5
+    };
+  }
+
+  const compositeScore = calculateCompositeScore(metrics, questions);
+  return { metrics, compositeScore };
+}
+
+// ============================================================================
 // LLM Scoring
 // ============================================================================
 
@@ -395,27 +428,7 @@ export async function scorePatent(
       throw new Error('Unexpected response type');
     }
 
-    // Extract JSON from response
-    const jsonMatch = content.text.match(/```json\s*([\s\S]*?)\s*```/);
-    if (!jsonMatch) {
-      throw new Error('Could not find JSON in response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[1]);
-    const scores = parsed.scores as Record<string, { score: number; reasoning: string; confidence?: string }>;
-
-    // Convert to MetricScore format
-    const metrics: Record<string, MetricScore> = {};
-    for (const [fieldName, data] of Object.entries(scores)) {
-      metrics[fieldName] = {
-        score: data.score,
-        reasoning: data.reasoning,
-        confidence: data.confidence === 'high' ? 1.0 : data.confidence === 'medium' ? 0.7 : 0.5
-      };
-    }
-
-    // Calculate composite score
-    const compositeScore = calculateCompositeScore(metrics, template.questions);
+    const { metrics, compositeScore } = parseScoreResponse(content.text, template.questions);
 
     // Save to database if requested
     if (saveToDb) {
@@ -448,7 +461,9 @@ export async function scorePatent(
         templateId,
         templateConfigId,
         templateVersion,
-        withClaims: contextOptions.includeClaims !== 'none'
+        withClaims: contextOptions.includeClaims !== 'none',
+        llmModel: model,
+        tokensUsed: response.usage.input_tokens + response.usage.output_tokens
       };
 
       await savePatentScore(result);
@@ -1139,4 +1154,466 @@ export async function getComparisonTestSet(
       cpc_codes: candidate?.cpc_codes || [],
     };
   });
+}
+
+// ============================================================================
+// Batch API Scoring (Anthropic Message Batches — 50% cost savings)
+// ============================================================================
+
+const BATCH_JOBS_DIR = path.join(process.cwd(), 'cache', 'batch-jobs');
+
+export interface BatchJobMetadata {
+  batchId: string;
+  sectorName: string;
+  superSector: string;
+  patentCount: number;
+  model: string;
+  templateInheritanceChain: string[];
+  questionCount: number;
+  withClaims: boolean;
+  submittedAt: string;
+  status: 'submitted' | 'in_progress' | 'ended' | 'failed';
+  completedAt: string | null;
+  results: {
+    succeeded: number;
+    errored: number;
+    expired: number;
+    canceled: number;
+    processed: boolean;
+    processedAt: string | null;
+  };
+}
+
+function ensureBatchJobsDir(): void {
+  if (!fs.existsSync(BATCH_JOBS_DIR)) {
+    fs.mkdirSync(BATCH_JOBS_DIR, { recursive: true });
+  }
+}
+
+function saveBatchMetadata(metadata: BatchJobMetadata): void {
+  ensureBatchJobsDir();
+  const filePath = path.join(BATCH_JOBS_DIR, `${metadata.batchId}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(metadata, null, 2));
+}
+
+function loadBatchMetadata(batchId: string): BatchJobMetadata | null {
+  const filePath = path.join(BATCH_JOBS_DIR, `${batchId}.json`);
+  if (!fs.existsSync(filePath)) return null;
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+}
+
+/**
+ * Submit a batch scoring job for a sector via the Anthropic Batch API.
+ * Returns immediately with a batchId — results arrive within 24h at 50% cost.
+ */
+export async function submitBatchScoring(
+  sectorName: string,
+  options: {
+    limit?: number;
+    model?: string;
+    rescore?: boolean;
+    contextOptions?: ContextOptions;
+    minYear?: number;
+    minScore?: number;
+    excludeDesign?: boolean;
+    prioritizeBy?: 'base' | 'v2';
+    v2Weights?: V2Weights;
+  } = {}
+): Promise<{ batchId: string; requestCount: number; sectorName: string }> {
+  const {
+    limit = 2000,
+    model = 'claude-sonnet-4-20250514',
+    rescore = false,
+    contextOptions = DEFAULT_CONTEXT_OPTIONS,
+    minYear,
+    minScore,
+    excludeDesign = true,
+    prioritizeBy = 'base',
+    v2Weights
+  } = options;
+
+  console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}`);
+
+  // 1. Get patents
+  const patents = await getPatentsForSectorScoring(sectorName, {
+    limit,
+    onlyUnscored: !rescore,
+    minYear,
+    minScore,
+    excludeDesign,
+    prioritizeBy,
+    v2Weights
+  });
+
+  if (patents.length === 0) {
+    throw new Error(`No ${rescore ? '' : 'unscored '}patents found in sector: ${sectorName}`);
+  }
+
+  console.log(`[Batch] Found ${patents.length} patents to score`);
+
+  // 2. Get merged template
+  const superSector = patents[0]?.super_sector || 'WIRELESS';
+  const template = getMergedTemplateForSector(sectorName, superSector);
+  console.log(`[Batch] Using template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
+
+  // 3. Enrich patents
+  const enrichedPatents = await enrichPatentBatch(patents, contextOptions);
+  const enrichedCount = enrichedPatents.filter(p => p.abstract).length;
+  console.log(`[Batch] ${enrichedCount}/${patents.length} patents have abstracts`);
+
+  // 4. Build batch requests
+  const requests = enrichedPatents.map(patent => ({
+    custom_id: `score_${sectorName}_${patent.patent_id}`,
+    params: {
+      model,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: 'user' as const,
+          content: buildScoringPrompt(patent, template)
+        }
+      ]
+    }
+  }));
+
+  console.log(`[Batch] Submitting ${requests.length} requests to Anthropic Batch API...`);
+
+  // 5. Submit to Anthropic Batch API
+  const batch = await anthropic.messages.batches.create({ requests });
+
+  console.log(`[Batch] Submitted! Batch ID: ${batch.id}`);
+
+  // 6. Save metadata
+  const metadata: BatchJobMetadata = {
+    batchId: batch.id,
+    sectorName,
+    superSector,
+    patentCount: requests.length,
+    model,
+    templateInheritanceChain: template.inheritanceChain,
+    questionCount: template.questions.length,
+    withClaims: contextOptions.includeClaims !== 'none',
+    submittedAt: new Date().toISOString(),
+    status: 'submitted',
+    completedAt: null,
+    results: {
+      succeeded: 0,
+      errored: 0,
+      expired: 0,
+      canceled: 0,
+      processed: false,
+      processedAt: null
+    }
+  };
+  saveBatchMetadata(metadata);
+
+  return {
+    batchId: batch.id,
+    requestCount: requests.length,
+    sectorName
+  };
+}
+
+/**
+ * Check the status of a batch scoring job.
+ */
+export async function checkBatchStatus(batchId: string): Promise<{
+  batchId: string;
+  status: string;
+  requestCounts: {
+    processing: number;
+    succeeded: number;
+    errored: number;
+    canceled: number;
+    expired: number;
+  };
+  createdAt: string;
+  endedAt: string | null;
+  metadata: BatchJobMetadata | null;
+}> {
+  const batch = await anthropic.messages.batches.retrieve(batchId);
+  const metadata = loadBatchMetadata(batchId);
+
+  // Update local metadata status if changed
+  if (metadata && batch.processing_status !== metadata.status) {
+    metadata.status = batch.processing_status as BatchJobMetadata['status'];
+    if (batch.ended_at) {
+      metadata.completedAt = batch.ended_at;
+    }
+    saveBatchMetadata(metadata);
+  }
+
+  return {
+    batchId: batch.id,
+    status: batch.processing_status,
+    requestCounts: batch.request_counts,
+    createdAt: batch.created_at,
+    endedAt: batch.ended_at,
+    metadata
+  };
+}
+
+/**
+ * Process completed batch results — parse scores and save to DB.
+ * Idempotent: safe to call multiple times.
+ */
+export async function processBatchResults(batchId: string): Promise<{
+  processed: number;
+  failed: number;
+  errors: string[];
+}> {
+  const metadata = loadBatchMetadata(batchId);
+  if (!metadata) {
+    throw new Error(`No metadata found for batch ${batchId}. Was it submitted from this machine?`);
+  }
+
+  // Verify batch is complete
+  const status = await checkBatchStatus(batchId);
+  if (status.status !== 'ended') {
+    throw new Error(`Batch ${batchId} is still ${status.status}. Wait for it to complete.`);
+  }
+
+  console.log(`[Batch] Processing results for batch ${batchId} (${metadata.sectorName}, ${metadata.patentCount} patents)`);
+
+  // Get template for score calculation
+  const template = getMergedTemplateForSector(metadata.sectorName, metadata.superSector);
+
+  let processed = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  // Stream results from the batch
+  const resultsIterator = await anthropic.messages.batches.results(batchId);
+  for await (const result of resultsIterator) {
+    const customId = result.custom_id;
+    // Parse custom_id: "score_sectorName_patentId"
+    // Patent IDs never contain underscores, but sector names do (e.g. video-codec).
+    // Format: score_{sectorName}_{patentId} — split from the right to get patentId
+    const lastUnderscore = customId.lastIndexOf('_');
+    const patentId = customId.substring(lastUnderscore + 1);
+
+    if (result.result.type === 'succeeded') {
+      try {
+        const message = result.result.message;
+        const content = message.content[0];
+        if (content.type !== 'text') {
+          throw new Error('Unexpected response type');
+        }
+
+        const { metrics, compositeScore } = parseScoreResponse(content.text, template.questions);
+
+        // Extract token usage from batch result
+        const tokensUsed = message.usage
+          ? message.usage.input_tokens + message.usage.output_tokens
+          : undefined;
+
+        // Save to DB
+        const scoreResult: ScoreCalculationResult = {
+          patentId,
+          subSectorId: metadata.sectorName,
+          metrics,
+          compositeScore,
+          templateConfigId: metadata.templateInheritanceChain[metadata.templateInheritanceChain.length - 1],
+          templateVersion: 1,
+          withClaims: metadata.withClaims,
+          llmModel: metadata.model,
+          tokensUsed
+        };
+
+        await savePatentScore(scoreResult);
+        processed++;
+
+        if (processed % 50 === 0) {
+          console.log(`[Batch] Processed ${processed} results...`);
+        }
+      } catch (err) {
+        failed++;
+        errors.push(`${patentId}: ${(err as Error).message}`);
+      }
+    } else {
+      failed++;
+      const errorType = result.result.type;
+      errors.push(`${patentId}: batch result type=${errorType}`);
+    }
+  }
+
+  console.log(`[Batch] Complete: ${processed} processed, ${failed} failed`);
+
+  // Update metadata
+  if (metadata) {
+    metadata.results = {
+      succeeded: processed,
+      errored: failed,
+      expired: 0,
+      canceled: 0,
+      processed: true,
+      processedAt: new Date().toISOString()
+    };
+    saveBatchMetadata(metadata);
+  }
+
+  return { processed, failed, errors };
+}
+
+/**
+ * List all batch jobs from local tracking files.
+ */
+export function listBatchJobs(): BatchJobMetadata[] {
+  ensureBatchJobsDir();
+  const files = fs.readdirSync(BATCH_JOBS_DIR).filter(f => f.endsWith('.json'));
+  return files
+    .map(f => JSON.parse(fs.readFileSync(path.join(BATCH_JOBS_DIR, f), 'utf-8')) as BatchJobMetadata)
+    .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+}
+
+/**
+ * Cancel a batch scoring job via the Anthropic API.
+ */
+export async function cancelBatch(batchId: string): Promise<{ batchId: string; status: string }> {
+  const metadata = loadBatchMetadata(batchId);
+  if (!metadata) {
+    throw new Error(`No metadata found for batch ${batchId}`);
+  }
+
+  console.log(`[Batch] Cancelling batch: ${batchId}`);
+  const batch = await anthropic.messages.batches.cancel(batchId);
+
+  // Update local metadata
+  metadata.status = batch.processing_status as BatchJobMetadata['status'];
+  if (batch.ended_at) {
+    metadata.completedAt = batch.ended_at;
+  }
+  saveBatchMetadata(metadata);
+
+  return { batchId: batch.id, status: batch.processing_status };
+}
+
+/**
+ * Refresh status of all non-ended batch jobs from the Anthropic API.
+ * Returns the full updated list of all jobs.
+ */
+export async function refreshAllBatchStatuses(): Promise<BatchJobMetadata[]> {
+  const jobs = listBatchJobs();
+  const activeStatuses = new Set(['submitted', 'in_progress']);
+
+  let refreshed = 0;
+  for (const job of jobs) {
+    if (activeStatuses.has(job.status)) {
+      try {
+        await checkBatchStatus(job.batchId);
+        refreshed++;
+      } catch (err) {
+        console.error(`[Batch] Failed to refresh status for ${job.batchId}:`, err);
+      }
+    }
+  }
+
+  console.log(`[Batch] Refreshed ${refreshed} active batch jobs`);
+
+  // Return fresh list after updates
+  return listBatchJobs();
+}
+
+/**
+ * Score a sample of patents through multiple models for comparison.
+ * Returns per-patent scores by model + summary stats.
+ */
+export async function compareModels(
+  sectorName: string,
+  options: {
+    models: string[];
+    sampleSize?: number;
+  }
+): Promise<{
+  sectorName: string;
+  models: string[];
+  sampleSize: number;
+  results: Array<{
+    patentId: string;
+    patentTitle: string;
+    scores: Record<string, { compositeScore: number; metrics: Record<string, MetricScore>; tokenUsage: { input: number; output: number } }>;
+  }>;
+  summary: Record<string, { avgScore: number; totalTokens: number; estimatedCostPer1k: number }>;
+}> {
+  const { models, sampleSize = 10 } = options;
+
+  // Get stratified sample from scored patents
+  const testSet = await getComparisonTestSet(sectorName, { count: sampleSize });
+  if (testSet.length === 0) {
+    throw new Error(`No scored patents found in sector: ${sectorName}`);
+  }
+
+  console.log(`[Compare Models] Scoring ${testSet.length} patents across ${models.length} models`);
+
+  // Get template
+  const superSector = testSet[0]?.super_sector || 'WIRELESS';
+  const template = getMergedTemplateForSector(sectorName, superSector);
+
+  const results: Array<{
+    patentId: string;
+    patentTitle: string;
+    scores: Record<string, { compositeScore: number; metrics: Record<string, MetricScore>; tokenUsage: { input: number; output: number } }>;
+  }> = [];
+
+  const modelTotals: Record<string, { totalScore: number; totalTokens: number; count: number }> = {};
+  for (const model of models) {
+    modelTotals[model] = { totalScore: 0, totalTokens: 0, count: 0 };
+  }
+
+  for (const patent of testSet) {
+    const patentScores: Record<string, { compositeScore: number; metrics: Record<string, MetricScore>; tokenUsage: { input: number; output: number } }> = {};
+
+    for (const model of models) {
+      try {
+        const result = await scorePatent(patent, {
+          model,
+          saveToDb: false,
+          template,
+        });
+
+        if (result.success && result.metrics && result.compositeScore !== undefined) {
+          patentScores[model] = {
+            compositeScore: result.compositeScore,
+            metrics: result.metrics,
+            tokenUsage: result.tokenUsage || { input: 0, output: 0 },
+          };
+          modelTotals[model].totalScore += result.compositeScore;
+          modelTotals[model].totalTokens += (result.tokenUsage?.input || 0) + (result.tokenUsage?.output || 0);
+          modelTotals[model].count++;
+        }
+      } catch (err) {
+        console.error(`[Compare Models] Error scoring ${patent.patent_id} with ${model}:`, err);
+      }
+
+      // Small delay between model calls
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    results.push({
+      patentId: patent.patent_id,
+      patentTitle: patent.patent_title,
+      scores: patentScores,
+    });
+
+    console.log(`[Compare Models] Completed ${results.length}/${testSet.length}`);
+  }
+
+  // Build summary
+  const summary: Record<string, { avgScore: number; totalTokens: number; estimatedCostPer1k: number }> = {};
+  const costPer1kTokens: Record<string, number> = {
+    'claude-sonnet-4-20250514': 0.009,  // $3/MTok input + $15/MTok output avg
+    'claude-haiku-4-5-20251001': 0.002,  // $0.80/MTok input + $4/MTok output avg
+    'claude-opus-4-6': 0.045,           // $15/MTok input + $75/MTok output avg
+  };
+
+  for (const model of models) {
+    const totals = modelTotals[model];
+    summary[model] = {
+      avgScore: totals.count > 0 ? Math.round((totals.totalScore / totals.count) * 100) / 100 : 0,
+      totalTokens: totals.totalTokens,
+      estimatedCostPer1k: (costPer1kTokens[model] || 0.01) * (totals.count > 0 ? totals.totalTokens / totals.count : 0),
+    };
+  }
+
+  return { sectorName, models, sampleSize: testSet.length, results, summary };
 }

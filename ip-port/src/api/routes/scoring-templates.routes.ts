@@ -35,6 +35,13 @@ import {
   comparePatentScoring,
   runComparisonTest,
   getComparisonTestSet,
+  submitBatchScoring,
+  checkBatchStatus,
+  processBatchResults,
+  listBatchJobs,
+  cancelBatch,
+  refreshAllBatchStatuses,
+  compareModels,
   CLAIMS_CONTEXT_OPTIONS,
   DEFAULT_CONTEXT_OPTIONS
 } from '../services/llm-scoring-service.js';
@@ -1066,6 +1073,362 @@ router.get('/llm/preview/:subSectorId', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[LLM Scoring] Preview error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
+// BATCH API SCORING (Anthropic Message Batches — 50% cost savings)
+// =============================================================================
+
+/**
+ * POST /api/scoring-templates/llm/batch-score-sector/:sectorName
+ * Submit a batch scoring job for a sector. Returns immediately with batchId.
+ * Same query params as score-sector (limit, model, useClaims, rescore, etc.)
+ */
+router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { limit, model, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
+
+    const contextOptions = useClaims === 'true' ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
+
+    console.log(`[Batch] Submitting batch scoring for: ${sectorName}`);
+
+    const v2Weights = prioritizeBy === 'v2' ? {
+      citation: v2Citation ? parseInt(v2Citation as string) : 50,
+      years: v2Years ? parseInt(v2Years as string) : 30,
+      competitor: v2Competitor ? parseInt(v2Competitor as string) : 20
+    } : undefined;
+
+    const result = await submitBatchScoring(sectorName, {
+      limit: limit ? parseInt(limit as string) : 2000,
+      model: model as string || undefined,
+      rescore: rescore === 'true',
+      contextOptions,
+      minYear: minYear ? parseInt(minYear as string) : undefined,
+      minScore: minScore ? parseFloat(minScore as string) : undefined,
+      excludeDesign: excludeDesign !== 'false',
+      prioritizeBy: (prioritizeBy as 'base' | 'v2') || 'base',
+      v2Weights
+    });
+
+    res.json({
+      success: true,
+      message: `Batch submitted for ${sectorName}. Results will be ready within 24h at 50% cost.`,
+      ...result
+    });
+  } catch (error) {
+    console.error('[Batch] Submit error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/batch-status/:batchId
+ * Check the status of a batch scoring job
+ */
+router.get('/llm/batch-status/:batchId', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+    const result = await checkBatchStatus(batchId);
+    res.json(result);
+  } catch (error) {
+    console.error('[Batch] Status error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/llm/batch-process/:batchId
+ * Process completed batch results — parse scores and save to DB.
+ * Idempotent: safe to call multiple times.
+ */
+router.post('/llm/batch-process/:batchId', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+
+    console.log(`[Batch] Processing results for batch: ${batchId}`);
+    const result = await processBatchResults(batchId);
+
+    res.json({
+      success: true,
+      batchId,
+      ...result
+    });
+  } catch (error) {
+    console.error('[Batch] Process error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/batch-jobs
+ * List all batch jobs from local tracking files
+ */
+router.get('/llm/batch-jobs', async (_req: Request, res: Response) => {
+  try {
+    const jobs = listBatchJobs();
+    res.json({
+      totalJobs: jobs.length,
+      jobs
+    });
+  } catch (error) {
+    console.error('[Batch] List jobs error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * DELETE /api/scoring-templates/llm/batch-cancel/:batchId
+ * Cancel a running batch job
+ */
+router.delete('/llm/batch-cancel/:batchId', async (req: Request, res: Response) => {
+  try {
+    const { batchId } = req.params;
+    console.log(`[Batch] Cancelling batch: ${batchId}`);
+    const result = await cancelBatch(batchId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[Batch] Cancel error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/llm/batch-refresh-all
+ * Refresh status of all active batch jobs and return updated list
+ */
+router.post('/llm/batch-refresh-all', async (_req: Request, res: Response) => {
+  try {
+    const jobs = await refreshAllBatchStatuses();
+    res.json({
+      totalJobs: jobs.length,
+      jobs
+    });
+  } catch (error) {
+    console.error('[Batch] Refresh all error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/scoring-templates/llm/compare-models/:sectorName
+ * Run multi-model comparison on a sample of patents
+ * Body: { models: string[], sampleSize: number }
+ */
+router.post('/llm/compare-models/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { models, sampleSize } = req.body;
+
+    if (!models || !Array.isArray(models) || models.length < 2) {
+      return res.status(400).json({ error: 'models must be an array with at least 2 model IDs' });
+    }
+
+    console.log(`[Compare Models] Starting comparison for ${sectorName}: ${models.join(', ')} (${sampleSize || 10} patents)`);
+
+    const result = await compareModels(sectorName, { models, sampleSize });
+    res.json(result);
+  } catch (error) {
+    console.error('[Compare Models] Error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
+// LLM SCORE SNAPSHOTS
+// =============================================================================
+
+/**
+ * POST /api/scoring-templates/llm/snapshot
+ * Create a snapshot of current LLM scores for a sector
+ */
+router.post('/llm/snapshot', async (req: Request, res: Response) => {
+  try {
+    const { sectorName, name, description } = req.body;
+
+    if (!sectorName) {
+      return res.status(400).json({ error: 'sectorName is required' });
+    }
+
+    // Get sector info
+    const sector = await prisma.sector.findFirst({
+      where: { name: sectorName },
+      include: { superSector: true }
+    });
+
+    if (!sector) {
+      return res.status(404).json({ error: `Sector not found: ${sectorName}` });
+    }
+
+    // Get all current scores for this sector
+    const scores = await prisma.patentSubSectorScore.findMany({
+      where: { templateConfigId: sectorName },
+      orderBy: { compositeScore: 'desc' }
+    });
+
+    if (scores.length === 0) {
+      return res.status(400).json({ error: `No scores found for sector: ${sectorName}` });
+    }
+
+    // Get template info
+    const superSectorName = sector.superSector?.name || '';
+    let templateInfo = {};
+    try {
+      const template = getMergedTemplateForSector(sectorName, superSectorName);
+      templateInfo = { sectorName, model: scores[0]?.llmModel, templateChain: template.inheritanceChain };
+    } catch { /* template may not exist */ }
+
+    // Create snapshot
+    const snapshot = await prisma.scoreSnapshot.create({
+      data: {
+        name: name || `${sectorName} LLM Snapshot ${new Date().toISOString().split('T')[0]}`,
+        description: description || `LLM scores for ${sectorName} (${scores.length} patents)`,
+        scoreType: 'LLM',
+        config: templateInfo,
+        patentCount: scores.length,
+        llmDataCount: scores.length,
+        scores: {
+          create: scores.map((score, idx) => ({
+            patentId: score.patentId,
+            score: score.compositeScore,
+            rank: idx + 1,
+            rawMetrics: score.metrics as object,
+          }))
+        }
+      },
+      include: { _count: { select: { scores: true } } }
+    });
+
+    res.json({
+      id: snapshot.id,
+      name: snapshot.name,
+      description: snapshot.description,
+      scoreType: snapshot.scoreType,
+      patentCount: snapshot.patentCount,
+      createdAt: snapshot.createdAt,
+    });
+  } catch (error) {
+    console.error('[LLM Snapshot] Create error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/snapshots
+ * List LLM score snapshots, optionally filtered by sectorName
+ */
+router.get('/llm/snapshots', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.query;
+
+    const snapshots = await prisma.scoreSnapshot.findMany({
+      where: {
+        scoreType: 'LLM',
+        ...(sectorName ? { config: { path: ['sectorName'], equals: sectorName as string } } : {})
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        scoreType: true,
+        config: true,
+        isActive: true,
+        patentCount: true,
+        llmDataCount: true,
+        createdAt: true,
+      }
+    });
+
+    res.json(snapshots);
+  } catch (error) {
+    console.error('[LLM Snapshot] List error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/scoring-templates/llm/snapshot/:id/compare
+ * Compare a snapshot to current scores — returns deltas per patent + summary
+ */
+router.get('/llm/snapshot/:id/compare', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Load snapshot with scores
+    const snapshot = await prisma.scoreSnapshot.findUnique({
+      where: { id },
+      include: { scores: true }
+    });
+
+    if (!snapshot) {
+      return res.status(404).json({ error: 'Snapshot not found' });
+    }
+
+    const config = snapshot.config as Record<string, unknown>;
+    const sectorName = config.sectorName as string;
+
+    if (!sectorName) {
+      return res.status(400).json({ error: 'Snapshot does not have a sectorName in config' });
+    }
+
+    // Get current scores for this sector
+    const currentScores = await prisma.patentSubSectorScore.findMany({
+      where: { templateConfigId: sectorName }
+    });
+    const currentMap = new Map(currentScores.map(s => [s.patentId, s.compositeScore]));
+
+    // Compare
+    let improved = 0;
+    let degraded = 0;
+    let unchanged = 0;
+    let totalDelta = 0;
+    const deltas: Array<{ patentId: string; snapshotScore: number; currentScore: number | null; delta: number }> = [];
+
+    for (const entry of snapshot.scores) {
+      const current = currentMap.get(entry.patentId);
+      const delta = current !== undefined ? current - entry.score : 0;
+
+      deltas.push({
+        patentId: entry.patentId,
+        snapshotScore: entry.score,
+        currentScore: current ?? null,
+        delta: Math.round(delta * 100) / 100,
+      });
+
+      if (current !== undefined) {
+        totalDelta += delta;
+        if (delta > 0.5) improved++;
+        else if (delta < -0.5) degraded++;
+        else unchanged++;
+      }
+    }
+
+    // Sort by absolute delta descending
+    deltas.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+    const matched = deltas.filter(d => d.currentScore !== null).length;
+
+    res.json({
+      snapshotId: id,
+      snapshotName: snapshot.name,
+      sectorName,
+      snapshotDate: snapshot.createdAt,
+      summary: {
+        snapshotPatents: snapshot.scores.length,
+        currentPatents: currentScores.length,
+        matchedPatents: matched,
+        avgDelta: matched > 0 ? Math.round((totalDelta / matched) * 100) / 100 : 0,
+        improved,
+        degraded,
+        unchanged,
+      },
+      topMovers: deltas.slice(0, 20),
+    });
+  } catch (error) {
+    console.error('[LLM Snapshot] Compare error:', error);
     res.status(500).json({ error: (error as Error).message });
   }
 });

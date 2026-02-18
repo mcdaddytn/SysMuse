@@ -1052,7 +1052,13 @@ These should be evaluated during taxonomy deepening (Phase 6) — some may need 
 | 2 | **cdn-rights-drm boundary** | **Split** transport-level DRM (cdn-rights-drm) from content-level DRM (video-drm) if sufficient patents exist in each with disparate competitor profiles. If the competitor sets overlap heavily, consolidate instead. |
 | 3 | **General sector contents** | ~111 patents — a junk drawer of non-tech-portfolio CPC codes: welding (B23K), medical devices (A61B), batteries (H01M), combustion (F23D), electroplating (C25D), fasteners (F16B), exercise equipment (A63B), etc. **Not worth deep analysis** given tiny fraction of portfolio. Notable: 55 patents with "(none)" CPC codes have high avg scores (49.19) — possibly Broadcom business method or design patents lacking CPC classification. Low priority for reclassification. |
 
-## 23. Open Questions
+## 23. Resolved Questions (Round 6)
 
-1. **55 patents with no CPC codes**: These have the highest average score (49.19) in the general sector. What are these? Business method patents? Design patents? Worth a quick look to ensure they're not misclassified high-value assets.
-2. **computing-ui sector scope**: If G09G display patents move from VIDEO_STREAMING to computing-ui, does the existing computing sector structure accommodate them, or do we need a new sector?
+| # | Question | Resolution |
+|---|---|---|
+| 1 | **55 patents with no CPC codes** | Almost entirely **design patents** (Symantec/VMware GUI designs, D-prefixed patent IDs) plus a handful of expired LSI Logic manufacturing/chemical process patents. High base scores are misleading — the LLM scoring doesn't differentiate design patents well. Not misclassified high-value assets. **Disregard for now.** A few utility patents mixed in (anti-skimming CA Inc., thermal mgmt Avago, video decoding Broadcom RE48845) could be worth spot-checking but not a priority. |
+| 2 | **computing-ui sector scope** | **computing-ui already exists** with 862 patents in the COMPUTING super-sector. G09G display patents from VIDEO_STREAMING can move there directly. computing-ui is itself a candidate for subsector breakout later, but that's a separate effort — focus remains on VIDEO_STREAMING subsectors for POC. |
+
+## 24. Open Questions
+
+*(None currently — all questions resolved through rounds 1-6. New questions will arise as implementation begins.)*

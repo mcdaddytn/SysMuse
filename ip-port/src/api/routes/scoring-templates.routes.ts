@@ -796,13 +796,18 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
     }
 
     // Get scoring stats from patent_sub_sector_scores using template_config_id
+    // Use DISTINCT ON to deduplicate patents (may have multiple scores from old + new flows)
     const stats = await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
       SELECT
         COUNT(*) as scored,
         SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
         AVG(composite_score) as avg_score
-      FROM patent_sub_sector_scores
-      WHERE template_config_id = ${sectorName}
+      FROM (
+        SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score
+        FROM patent_sub_sector_scores
+        WHERE template_config_id = ${sectorName}
+        ORDER BY patent_id, updated_at DESC
+      ) deduped
     `;
 
     const scored = Number(stats[0]?.scored || 0);
@@ -1262,11 +1267,19 @@ router.post('/llm/snapshot', async (req: Request, res: Response) => {
       return res.status(404).json({ error: `Sector not found: ${sectorName}` });
     }
 
-    // Get all current scores for this sector
-    const scores = await prisma.patentSubSectorScore.findMany({
+    // Get all current scores for this sector, deduplicated by patentId (keep most recent)
+    const allScores = await prisma.patentSubSectorScore.findMany({
       where: { templateConfigId: sectorName },
-      orderBy: { compositeScore: 'desc' }
+      orderBy: { updatedAt: 'desc' }
     });
+
+    // Deduplicate: keep first (most recent) per patentId
+    const seenPatents = new Set<string>();
+    const scores = allScores.filter(s => {
+      if (seenPatents.has(s.patentId)) return false;
+      seenPatents.add(s.patentId);
+      return true;
+    }).sort((a, b) => b.compositeScore - a.compositeScore);
 
     if (scores.length === 0) {
       return res.status(400).json({ error: `No scores found for sector: ${sectorName}` });
@@ -1374,11 +1387,17 @@ router.get('/llm/snapshot/:id/compare', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Snapshot does not have a sectorName in config' });
     }
 
-    // Get current scores for this sector
-    const currentScores = await prisma.patentSubSectorScore.findMany({
-      where: { templateConfigId: sectorName }
+    // Get current scores for this sector, deduplicated by patentId (keep most recent)
+    const allCurrentScores = await prisma.patentSubSectorScore.findMany({
+      where: { templateConfigId: sectorName },
+      orderBy: { updatedAt: 'desc' }
     });
-    const currentMap = new Map(currentScores.map(s => [s.patentId, s.compositeScore]));
+    const currentMap = new Map<string, number>();
+    for (const s of allCurrentScores) {
+      if (!currentMap.has(s.patentId)) {
+        currentMap.set(s.patentId, s.compositeScore);
+      }
+    }
 
     // Compare
     let improved = 0;
@@ -1418,7 +1437,7 @@ router.get('/llm/snapshot/:id/compare', async (req: Request, res: Response) => {
       snapshotDate: snapshot.createdAt,
       summary: {
         snapshotPatents: snapshot.scores.length,
-        currentPatents: currentScores.length,
+        currentPatents: currentMap.size,
         matchedPatents: matched,
         avgDelta: matched > 0 ? Math.round((totalDelta / matched) * 100) / 100 : 0,
         improved,

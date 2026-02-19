@@ -15,6 +15,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as readline from 'readline';
 import { createReadStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { createWriteStream } from 'fs';
@@ -198,7 +199,8 @@ function extractDocNumber(patentXml: string): string | null {
 
 /**
  * Scan a large weekly XML file and extract individual patent XMLs for target patents.
- * Uses streaming to handle files >512MB that exceed Node.js string limits.
+ * Uses readline for line-by-line processing — never holds more than one patent in memory.
+ * Handles files of any size (tested with 1GB+ USPTO weekly XMLs).
  * The bulk XML is multiple XML documents concatenated — split on <?xml declarations.
  */
 async function extractIndividualPatents(
@@ -210,64 +212,96 @@ async function extractIndividualPatents(
   const alreadyExist: string[] = [];
 
   return new Promise((resolve, reject) => {
-    const stream = createReadStream(xmlPath, { encoding: 'utf-8', highWaterMark: 64 * 1024 });
-    let currentChunk = '';
-    const XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>';
+    const stream = createReadStream(xmlPath);
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
-    function processPatent(patentXml: string) {
-      if (targetPatentIds.size === 0) return; // All found
+    // For target patents: accumulate full content for writing to disk.
+    // For non-targets: stop accumulating after header check to save memory.
+    let patentLines: string[] | null = null;
+    let header = '';
+    let headerChecked = false;
+    let isTarget = false;
+    let targetDocNumber = '';
 
-      const docNumber = extractDocNumber(patentXml);
-      if (!docNumber) return;
-
-      const normalized = normalizeDocNumber(docNumber);
-
-      if (targetPatentIds.has(normalized) || targetPatentIds.has(docNumber)) {
+    function flushPatent() {
+      if (isTarget && patentLines && patentLines.length > 0) {
+        const docNumber = targetDocNumber;
+        const normalized = normalizeDocNumber(docNumber);
         const outputPath = path.join(exportDir, `US${docNumber}.xml`);
-
         if (fs.existsSync(outputPath)) {
           alreadyExist.push(normalized);
         } else {
-          fs.writeFileSync(outputPath, patentXml, 'utf-8');
+          fs.writeFileSync(outputPath, patentLines.join('\n'), 'utf-8');
           extracted.push(normalized);
         }
-
         targetPatentIds.delete(normalized);
         targetPatentIds.delete(docNumber);
       }
+      patentLines = null;
+      header = '';
+      headerChecked = false;
+      isTarget = false;
+      targetDocNumber = '';
     }
 
-    stream.on('data', (data: string) => {
-      currentChunk += data;
+    rl.on('line', (line: string) => {
+      // Detect patent boundary: new <?xml declaration
+      if (line.startsWith('<?xml')) {
+        flushPatent();
 
-      // Split on XML declarations, keeping delimiter with following content
-      let declIdx: number;
-      while ((declIdx = currentChunk.indexOf(XML_DECL, 1)) !== -1) {
-        const patent = currentChunk.substring(0, declIdx);
-        currentChunk = currentChunk.substring(declIdx);
-
-        if (patent.trim().startsWith('<?xml')) {
-          processPatent(patent);
+        if (targetPatentIds.size === 0) {
+          rl.close();
+          stream.destroy();
+          return;
         }
 
-        // Early exit if all targets found
-        if (targetPatentIds.size === 0) {
-          stream.destroy();
-          resolve({ extracted, alreadyExist });
-          return;
+        // Start new patent
+        patentLines = [line];
+        header = line + '\n';
+        return;
+      }
+
+      // Skip lines if we determined this patent is not a target
+      if (patentLines === null) return;
+
+      // If already confirmed target, just accumulate lines
+      if (isTarget) {
+        patentLines.push(line);
+        return;
+      }
+
+      // Still checking header — accumulate until we can determine target status
+      if (!headerChecked) {
+        patentLines.push(line);
+        header += line + '\n';
+
+        if (header.length >= 1500 || header.includes('</publication-reference>')) {
+          headerChecked = true;
+          const docNumber = extractDocNumber(header);
+          if (docNumber) {
+            const normalized = normalizeDocNumber(docNumber);
+            if (targetPatentIds.has(normalized) || targetPatentIds.has(docNumber)) {
+              isTarget = true;
+              targetDocNumber = docNumber;
+              return;
+            }
+          }
+          // Not a target — stop accumulating
+          patentLines = null;
         }
       }
     });
 
-    stream.on('end', () => {
-      // Process final chunk
-      if (currentChunk.trim().startsWith('<?xml')) {
-        processPatent(currentChunk);
-      }
+    rl.on('close', () => {
+      flushPatent();
       resolve({ extracted, alreadyExist });
     });
 
-    stream.on('error', reject);
+    rl.on('error', reject);
+    stream.on('error', (err) => {
+      rl.close();
+      reject(err);
+    });
   });
 }
 

@@ -45,6 +45,31 @@ const discovering = ref(false);
 const discoverSuggestions = ref<Array<{ name: string; slug: string; sectors: string[]; notes: string }>>([]);
 const showDiscoverDialog = ref(false);
 
+// Discover affiliates
+const discoveringAffiliates = ref(false);
+const affiliateSuggestions = ref<AffiliateSuggestion[]>([]);
+const showDiscoverAffiliatesDialog = ref(false);
+
+// Validate patterns
+const validating = ref(false);
+const validationResults = ref<Array<{ pattern: string; totalCount: number; filteredCount: number | null; sampleAssignees: string[] }>>([]);
+const validationAffiliateName = ref('');
+const validationCpcPrefixes = ref('H04N');
+const showValidateDialog = ref(false);
+
+// Create portfolio dialog
+const showCreatePortfolioDialog = ref(false);
+const newPortfolio = ref({ name: '', displayName: '', description: '' });
+
+// Import patents dialog
+const showImportDialog = ref(false);
+const importPortfolioId = ref('');
+const importPortfolioName = ref('');
+const importCpcPrefixes = ref('H04N, H04L');
+const importMaxPatents = ref(1000);
+const importing = ref(false);
+const importResult = ref<{ imported: number; alreadyExists: number; failed: number; totalInPortfolio: number } | null>(null);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
 // ─────────────────────────────────────────────────────────────────────────────
@@ -278,6 +303,112 @@ async function acceptCompetitorSuggestion(suggestion: { name: string; slug: stri
   }
 }
 
+async function createPortfolio() {
+  if (!selectedCompanyId.value) return;
+  try {
+    const slug = newPortfolio.value.name || newPortfolio.value.displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    await portfolioApi.create({
+      name: slug,
+      displayName: newPortfolio.value.displayName,
+      description: newPortfolio.value.description || undefined,
+      companyId: selectedCompanyId.value,
+    });
+    showCreatePortfolioDialog.value = false;
+    newPortfolio.value = { name: '', displayName: '', description: '' };
+    await loadCompanyDetail(selectedCompanyId.value);
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  }
+}
+
+async function openImportDialog(portfolio: { id: string; displayName: string }) {
+  importPortfolioId.value = portfolio.id;
+  importPortfolioName.value = portfolio.displayName;
+  importResult.value = null;
+  showImportDialog.value = true;
+}
+
+async function importPatents() {
+  if (!importPortfolioId.value) return;
+  importing.value = true;
+  importResult.value = null;
+  try {
+    const cpcPrefixes = importCpcPrefixes.value.split(',').map(s => s.trim()).filter(Boolean);
+    const result = await portfolioApi.importPatents(importPortfolioId.value, {
+      cpcPrefixes: cpcPrefixes.length ? cpcPrefixes : undefined,
+      maxPatents: importMaxPatents.value,
+    });
+    importResult.value = result;
+    // Refresh company detail to update portfolio patent count
+    if (selectedCompanyId.value) {
+      await loadCompanyDetail(selectedCompanyId.value);
+    }
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    importing.value = false;
+  }
+}
+
+async function discoverAffiliates() {
+  if (!selectedCompanyId.value) return;
+  discoveringAffiliates.value = true;
+  affiliateSuggestions.value = [];
+  try {
+    const result = await companyApi.discoverAffiliates(selectedCompanyId.value);
+    affiliateSuggestions.value = result.suggestions;
+    showDiscoverAffiliatesDialog.value = true;
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    discoveringAffiliates.value = false;
+  }
+}
+
+async function acceptAffiliateSuggestion(suggestion: AffiliateSuggestion) {
+  if (!selectedCompanyId.value) return;
+  try {
+    await companyApi.addAffiliate(selectedCompanyId.value, {
+      name: suggestion.name,
+      displayName: suggestion.displayName,
+      acquiredYear: suggestion.acquiredYear || undefined,
+      notes: suggestion.notes || undefined,
+      patterns: suggestion.patterns,
+    });
+    affiliateSuggestions.value = affiliateSuggestions.value.filter(s => s.name !== suggestion.name);
+    await loadCompanyDetail(selectedCompanyId.value);
+    await loadCompanies();
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  }
+}
+
+async function validateAffiliatePatterns(affiliate: AffiliateDetail) {
+  if (!selectedCompanyId.value) return;
+  const patterns = affiliate.patterns.map(p => p.pattern);
+  if (!patterns.length) {
+    error.value = 'No patterns to validate';
+    return;
+  }
+  validating.value = true;
+  validationResults.value = [];
+  validationAffiliateName.value = affiliate.displayName;
+  showValidateDialog.value = true;
+  try {
+    const cpcPrefixes = validationCpcPrefixes.value.split(',').map(s => s.trim()).filter(Boolean);
+    const result = await companyApi.validatePatterns(
+      selectedCompanyId.value,
+      patterns,
+      cpcPrefixes.length ? cpcPrefixes : undefined,
+    );
+    validationResults.value = result.results;
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    validating.value = false;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Watchers & Lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
@@ -391,6 +522,11 @@ onMounted(() => loadCompanies());
                   </div>
                 </div>
                 <q-space />
+                <q-btn flat dense icon="auto_awesome" color="accent" class="q-mr-xs"
+                  :loading="discoveringAffiliates"
+                  @click="discoverAffiliates">
+                  <q-tooltip>Discover Affiliates (LLM)</q-tooltip>
+                </q-btn>
                 <q-btn flat dense icon="person_add" color="primary" class="q-mr-sm"
                   @click="showAddAffiliateDialog = true">
                   <q-tooltip>Add Affiliate</q-tooltip>
@@ -400,12 +536,17 @@ onMounted(() => loadCompanies());
           </q-card>
 
           <!-- Portfolios -->
-          <q-card v-if="companyDetail?.portfolios?.length" flat bordered class="q-mb-md">
-            <q-card-section class="q-pb-sm">
+          <q-card flat bordered class="q-mb-md">
+            <q-card-section class="row items-center q-pb-sm">
               <div class="text-subtitle1 text-weight-medium">Portfolios</div>
+              <q-space />
+              <q-btn flat dense icon="add" size="sm" color="primary"
+                @click="showCreatePortfolioDialog = true">
+                <q-tooltip>Create Portfolio</q-tooltip>
+              </q-btn>
             </q-card-section>
             <q-separator />
-            <q-list dense separator>
+            <q-list v-if="companyDetail?.portfolios?.length" dense separator>
               <q-item v-for="p in companyDetail.portfolios" :key="p.id">
                 <q-item-section>
                   <q-item-label>{{ p.displayName }}</q-item-label>
@@ -414,13 +555,20 @@ onMounted(() => loadCompanies());
                     &middot; {{ p._count?.patents ?? p.patentCount ?? 0 }} patents
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side>
-                  <q-badge :color="p.dataSourceType === 'JSON_PIPELINE' ? 'primary' : 'secondary'" outline>
+                <q-item-section side class="row no-wrap items-center">
+                  <q-btn flat dense round icon="download" size="xs" color="primary"
+                    @click="openImportDialog(p)">
+                    <q-tooltip>Import Patents from PatentsView</q-tooltip>
+                  </q-btn>
+                  <q-badge :color="p.dataSourceType === 'JSON_PIPELINE' ? 'primary' : 'secondary'" outline class="q-ml-xs">
                     {{ p.dataSourceType === 'JSON_PIPELINE' ? 'ES' : 'DB' }}
                   </q-badge>
                 </q-item-section>
               </q-item>
             </q-list>
+            <q-card-section v-else class="text-grey text-center">
+              No portfolios yet. Create one to start importing patents.
+            </q-card-section>
           </q-card>
 
           <!-- Affiliates Tree -->
@@ -444,6 +592,11 @@ onMounted(() => loadCompanies());
                     {{ group.acquiredYear }}
                   </q-badge>
                   <q-space />
+                  <q-btn flat dense round icon="fact_check" size="xs" color="accent"
+                    @click="validateAffiliatePatterns(group)"
+                    :disable="!group.patterns.length">
+                    <q-tooltip>Validate Patterns (PatentsView)</q-tooltip>
+                  </q-btn>
                   <q-btn flat dense round icon="add" size="xs" color="primary"
                     @click="patternAffiliateId = group.id; showAddPatternDialog = true">
                     <q-tooltip>Add Pattern</q-tooltip>
@@ -472,6 +625,11 @@ onMounted(() => loadCompanies());
                       {{ child.acquiredYear }}
                     </q-badge>
                     <q-space />
+                    <q-btn flat dense round icon="fact_check" size="xs" color="accent"
+                      @click="validateAffiliatePatterns(child)"
+                      :disable="!child.patterns.length">
+                      <q-tooltip>Validate Patterns</q-tooltip>
+                    </q-btn>
                     <q-btn flat dense round icon="add" size="xs" color="primary"
                       @click="patternAffiliateId = child.id; showAddPatternDialog = true">
                       <q-tooltip>Add Pattern</q-tooltip>
@@ -669,6 +827,125 @@ onMounted(() => loadCompanies());
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Close" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Discover Affiliates Results -->
+    <q-dialog v-model="showDiscoverAffiliatesDialog" full-width>
+      <q-card>
+        <q-card-section class="text-h6">
+          Discovered Affiliates for "{{ selectedCompany?.displayName }}"
+        </q-card-section>
+        <q-card-section>
+          <q-list v-if="affiliateSuggestions.length" separator>
+            <q-item v-for="(s, i) in affiliateSuggestions" :key="i" class="q-py-sm">
+              <q-item-section>
+                <q-item-label class="text-weight-medium">{{ s.displayName }}</q-item-label>
+                <q-item-label caption>
+                  <span v-if="s.acquiredYear" class="q-mr-sm">Acquired {{ s.acquiredYear }}</span>
+                  <span v-if="s.patterns.length">Patterns: {{ s.patterns.join(', ') }}</span>
+                </q-item-label>
+                <q-item-label v-if="s.notes" caption class="text-grey-6">{{ s.notes }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn flat dense color="primary" label="Accept" @click="acceptAffiliateSuggestion(s)" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <div v-else class="text-grey text-center">No new affiliates discovered.</div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Close" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Validate Patterns Results -->
+    <q-dialog v-model="showValidateDialog" full-width>
+      <q-card>
+        <q-card-section class="row items-center">
+          <div class="text-h6">Pattern Validation: {{ validationAffiliateName }}</div>
+          <q-space />
+          <q-input v-model="validationCpcPrefixes" dense outlined label="CPC Prefixes (comma-separated)"
+            style="width: 280px" hint="e.g. H04N, H04L" />
+        </q-card-section>
+        <q-card-section>
+          <q-spinner v-if="validating" size="2em" class="q-mb-md" />
+          <q-markup-table v-else-if="validationResults.length" flat bordered dense separator="cell">
+            <thead>
+              <tr>
+                <th class="text-left">Pattern</th>
+                <th class="text-right">Total Patents</th>
+                <th class="text-right">CPC Filtered</th>
+                <th class="text-left">Sample Assignee Names</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in validationResults" :key="r.pattern">
+                <td class="text-weight-medium">{{ r.pattern }}</td>
+                <td class="text-right">{{ r.totalCount.toLocaleString() }}</td>
+                <td class="text-right">{{ r.filteredCount !== null ? r.filteredCount.toLocaleString() : '—' }}</td>
+                <td>
+                  <q-chip v-for="name in r.sampleAssignees" :key="name" dense size="xs" color="grey-3">
+                    {{ name }}
+                  </q-chip>
+                  <span v-if="!r.sampleAssignees.length" class="text-grey">No results</span>
+                </td>
+              </tr>
+            </tbody>
+          </q-markup-table>
+          <div v-else class="text-grey text-center">No validation results.</div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Close" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Create Portfolio -->
+    <q-dialog v-model="showCreatePortfolioDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section class="text-h6">Create Portfolio</q-card-section>
+        <q-card-section>
+          <q-input v-model="newPortfolio.displayName" label="Display Name" dense outlined class="q-mb-sm"
+            hint="e.g., Netflix Video" autofocus />
+          <q-input v-model="newPortfolio.name" label="Slug (auto-generated if empty)" dense outlined class="q-mb-sm"
+            hint="e.g., netflix-video" />
+          <q-input v-model="newPortfolio.description" label="Description" dense outlined />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" label="Create" @click="createPortfolio"
+            :disable="!newPortfolio.displayName" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Import Patents -->
+    <q-dialog v-model="showImportDialog">
+      <q-card style="min-width: 500px">
+        <q-card-section class="text-h6">Import Patents: {{ importPortfolioName }}</q-card-section>
+        <q-card-section>
+          <div class="text-caption text-grey q-mb-md">
+            Imports patents from PatentsView using this company's affiliate patterns.
+          </div>
+          <q-input v-model="importCpcPrefixes" label="CPC Prefixes (comma-separated)" dense outlined class="q-mb-sm"
+            hint="Leave empty for all patents, or filter e.g. H04N, H04L" />
+          <q-input v-model.number="importMaxPatents" label="Max Patents" dense outlined type="number" class="q-mb-sm"
+            hint="Maximum number of patents to import (default 1000)" />
+          <div v-if="importResult" class="q-mt-md">
+            <q-banner class="bg-green-1 text-green-8" rounded>
+              Imported {{ importResult.imported }} new patents
+              ({{ importResult.alreadyExists }} already existed, {{ importResult.failed }} failed).
+              Portfolio now has {{ importResult.totalInPortfolio }} patents total.
+            </q-banner>
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Close" v-close-popup />
+          <q-btn color="primary" label="Import" @click="importPatents"
+            :loading="importing" :disable="importing" />
         </q-card-actions>
       </q-card>
     </q-dialog>

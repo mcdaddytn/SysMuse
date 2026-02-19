@@ -3259,6 +3259,25 @@ export const companyApi = {
   async removePattern(companyId: string, affiliateId: string, patternId: string): Promise<void> {
     await api.delete(`/companies/${companyId}/affiliates/${affiliateId}/patterns/${patternId}`);
   },
+
+  // Affiliate discovery (LLM)
+  async discoverAffiliates(companyId: string, companyName?: string): Promise<{
+    suggestions: AffiliateSuggestion[];
+    companyName: string;
+    existingCount: number;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/discover-affiliates`, { companyName }, { timeout: 120000 });
+    return data;
+  },
+
+  // Pattern validation (PatentsView)
+  async validatePatterns(companyId: string, patterns: string[], cpcPrefixes?: string[]): Promise<{
+    results: Array<{ pattern: string; totalCount: number; filteredCount: number | null; sampleAssignees: string[] }>;
+    cpcPrefixes: string[] | null;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/validate-patterns`, { patterns, cpcPrefixes }, { timeout: 60000 });
+    return data;
+  },
 };
 
 export default api;

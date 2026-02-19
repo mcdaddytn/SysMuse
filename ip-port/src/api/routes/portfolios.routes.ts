@@ -397,7 +397,7 @@ router.get('/:id/patent-counts', async (req: Request, res: Response) => {
       for (const pat of affiliate.patterns) {
         try {
           const baseQuery: Record<string, unknown> = {
-            _and: [{ assignees: { assignee_organization: { _contains: pat.pattern } } }],
+            _and: [{ _contains: { 'assignees.assignee_organization': pat.pattern } }],
           };
 
           const result = await pvClient.searchPatents({
@@ -410,8 +410,8 @@ router.get('/:id/patent-counts', async (req: Request, res: Response) => {
           if (cpcPrefix) {
             const cpcQuery: Record<string, unknown> = {
               _and: [
-                { assignees: { assignee_organization: { _contains: pat.pattern } } },
-                { cpcs: { cpc_group_id: { _begins: cpcPrefix } } },
+                { _contains: { 'assignees.assignee_organization': pat.pattern } },
+                { _begins: { 'cpc_current.cpc_group_id': cpcPrefix } },
               ],
             };
             const cpcResult = await pvClient.searchPatents({
@@ -466,7 +466,7 @@ router.post('/:id/hydrate', async (req: Request, res: Response) => {
 /** POST /api/portfolios/:id/import-patents — import patents from PatentsView */
 router.post('/:id/import-patents', async (req: Request, res: Response) => {
   try {
-    const { cpcPrefixes, maxPatents = 100 } = req.body;
+    const { cpcPrefixes, maxPatents = 1000 } = req.body;
     const portfolioId = req.params.id;
 
     // Verify portfolio exists, get company affiliates
@@ -489,85 +489,89 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     let alreadyExists = 0;
     let failed = 0;
     const newPatentIds: string[] = [];
+    const seenPatentIds = new Set<string>();
 
     const patentFields = [
       'patent_id', 'patent_title', 'patent_date', 'patent_type',
       'assignees.assignee_organization',
-      'cpcs.cpc_group_id', 'cpcs.cpc_subgroup_id',
+      'cpc_current.cpc_group_id', 'cpc_current.cpc_subgroup_id',
     ];
 
     for (const affiliate of portfolio.company.affiliates) {
       for (const pat of affiliate.patterns) {
+        if (seenPatentIds.size >= maxPatents) break;
         try {
           const queryParts: Record<string, unknown>[] = [
-            { assignees: { assignee_organization: { _contains: pat.pattern } } },
+            { _contains: { 'assignees.assignee_organization': pat.pattern } },
           ];
 
           if (cpcPrefixes?.length) {
             const cpcOr = cpcPrefixes.map((prefix: string) => ({
-              cpcs: { cpc_group_id: { _begins: prefix } },
+              _begins: { 'cpc_current.cpc_group_id': prefix },
             }));
-            queryParts.push({ _or: cpcOr });
+            queryParts.push(cpcOr.length === 1 ? cpcOr[0] : { _or: cpcOr });
           }
 
           const query = queryParts.length === 1 ? queryParts[0] : { _and: queryParts };
 
-          const result = await pvClient.searchPatents({
-            query,
-            fields: patentFields,
-            options: { size: Math.min(maxPatents, 100) },
-            sort: [{ patent_date: 'desc' }],
-          });
+          // Paginate through all results
+          const pageSize = 100;
+          for await (const patents of pvClient.searchPaginated(
+            { query, fields: patentFields, sort: [{ patent_date: 'desc' }] },
+            pageSize
+          )) {
+            for (const p of patents) {
+              if (seenPatentIds.size >= maxPatents) break;
+              const patentId = p.patent_id;
+              if (seenPatentIds.has(patentId)) continue;
+              seenPatentIds.add(patentId);
 
-          if (!result.patents) continue;
+              try {
+                // Upsert Patent row with basic data
+                await prisma.patent.upsert({
+                  where: { patentId },
+                  create: {
+                    patentId,
+                    title: p.patent_title || '',
+                    grantDate: p.patent_date || null,
+                    assignee: p.assignees?.[0]?.assignee_organization || '',
+                    affiliate: affiliate.name,
+                  },
+                  update: {},  // Don't overwrite if already exists with richer data
+                });
 
-          for (const p of result.patents) {
-            const patentId = p.patent_id;
-            try {
-              // Upsert Patent row with basic data
-              await prisma.patent.upsert({
-                where: { patentId },
-                create: {
-                  patentId,
-                  title: p.patent_title || '',
-                  grantDate: p.patent_date || null,
-                  assignee: p.assignees?.[0]?.assignee_organization || '',
-                  affiliate: affiliate.name,
-                },
-                update: {},  // Don't overwrite if already exists with richer data
-              });
+                // Upsert CPC codes from search results
+                const cpcCodes = (p.cpc_current || p.cpcs || [])
+                  .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
+                  .filter(Boolean);
+                for (const code of cpcCodes) {
+                  await prisma.patentCpc.upsert({
+                    where: { patentId_cpcCode: { patentId, cpcCode: code } },
+                    create: { patentId, cpcCode: code },
+                    update: {},
+                  }).catch(() => {}); // Ignore race conditions
+                }
 
-              // Upsert CPC codes from search results
-              const cpcCodes = (p.cpcs || [])
-                .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
-                .filter(Boolean);
-              for (const code of cpcCodes) {
-                await prisma.patentCpc.upsert({
-                  where: { patentId_cpcCode: { patentId, cpcCode: code } },
-                  create: { patentId, cpcCode: code },
+                // Link to portfolio
+                const link = await prisma.portfolioPatent.upsert({
+                  where: { portfolioId_patentId: { portfolioId, patentId } },
                   update: {},
-                }).catch(() => {}); // Ignore race conditions
-              }
+                  create: {
+                    portfolioId,
+                    patentId,
+                    source: 'PATENTSVIEW_IMPORT',
+                  },
+                });
 
-              // Link to portfolio
-              const link = await prisma.portfolioPatent.upsert({
-                where: { portfolioId_patentId: { portfolioId, patentId } },
-                update: {},
-                create: {
-                  portfolioId,
-                  patentId,
-                  source: 'PATENTSVIEW_IMPORT',
-                },
-              });
-
-              // Track if this was a new insert (vs existing)
-              if (link) {
-                newPatentIds.push(patentId);
-                imported++;
+                if (link) {
+                  newPatentIds.push(patentId);
+                  imported++;
+                }
+              } catch {
+                alreadyExists++;
               }
-            } catch {
-              alreadyExists++;
             }
+            if (seenPatentIds.size >= maxPatents) break;
           }
         } catch (err) {
           console.warn(`[Import] Error for pattern "${pat.pattern}":`, (err as Error).message);

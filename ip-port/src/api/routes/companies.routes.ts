@@ -222,6 +222,166 @@ Only return NEW companies not in the known list. Return raw JSON array, no markd
   }
 });
 
+/** POST /api/companies/:id/discover-affiliates — LLM-assisted affiliate discovery */
+router.post('/:id/discover-affiliates', async (req: Request, res: Response) => {
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: req.params.id },
+      include: {
+        affiliates: { include: { patterns: true } },
+      },
+    });
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const { companyName } = req.body;
+    const nameToSearch = companyName || company.displayName;
+
+    const existingAffiliates = company.affiliates.map(a => ({
+      name: a.displayName,
+      patterns: a.patterns.map(p => p.pattern),
+    }));
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
+      messages: [{
+        role: 'user',
+        content: `I need to find all USPTO assignee name variants and subsidiaries for "${nameToSearch}" to import their patent portfolio.
+
+Search the web for "${nameToSearch}" subsidiaries, acquisitions, and patent assignee information. Then:
+
+For the parent company and each known subsidiary/acquisition:
+1. List the exact assignee name strings used in USPTO records (e.g., "Netflix, Inc.", "Netflix Inc", "NETFLIX INC")
+2. Include any subsidiaries, acquired companies, or divisions that file patents separately
+3. For acquisitions, include the year acquired if known
+
+Already configured affiliates: ${existingAffiliates.length ? existingAffiliates.map(a => `${a.name} (patterns: ${a.patterns.join(', ')})`).join('; ') : 'None'}
+
+Return a JSON array of NEW entities not already configured:
+[{
+  "name": "slug-name",
+  "displayName": "Human Readable Name",
+  "acquiredYear": 2019,
+  "patterns": ["Pattern 1", "Pattern 2"],
+  "notes": "Brief context about this entity"
+}]
+
+For the parent company itself (if not already configured), use acquiredYear: null.
+Include all known assignee name variants as separate patterns.
+Return raw JSON array, no markdown.`,
+      }],
+    });
+
+    // Extract text from response (may include web search tool_use blocks)
+    const textBlocks = message.content.filter(b => b.type === 'text');
+    const responseText = textBlocks.map(b => (b as any).text).join('');
+    let suggestions;
+    try {
+      suggestions = JSON.parse(responseText);
+    } catch {
+      // Try to extract JSON array from response text (model may include preamble)
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    }
+
+    res.json({ suggestions, companyName: nameToSearch, existingCount: existingAffiliates.length });
+  } catch (err: unknown) {
+    console.error('[Companies] Discover affiliates error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/companies/:id/validate-patterns — test assignee patterns against PatentsView */
+router.post('/:id/validate-patterns', async (req: Request, res: Response) => {
+  try {
+    const company = await prisma.company.findUnique({ where: { id: req.params.id } });
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const { patterns, cpcPrefixes } = req.body as { patterns: string[]; cpcPrefixes?: string[] };
+    if (!patterns?.length) {
+      return res.status(400).json({ error: 'patterns array is required' });
+    }
+
+    const { createPatentsViewClient } = await import('../../../clients/patentsview-client.js');
+    const pvClient = createPatentsViewClient();
+
+    const results: Array<{
+      pattern: string;
+      totalCount: number;
+      filteredCount: number | null;
+      sampleAssignees: string[];
+    }> = [];
+
+    for (const pattern of patterns) {
+      try {
+        // Total count for this pattern
+        const baseQuery = {
+          _and: [{ _contains: { 'assignees.assignee_organization': pattern } }],
+        };
+        const totalResult = await pvClient.searchPatents({
+          query: baseQuery,
+          fields: ['patent_id', 'assignees.assignee_organization'],
+          options: { size: 25 },
+        });
+        const totalCount = totalResult.total_hits || 0;
+
+        // Collect sample assignee names from results
+        const assigneeNames = new Set<string>();
+        for (const patent of totalResult.patents || []) {
+          for (const assignee of patent.assignees || []) {
+            if (assignee.assignee_organization) {
+              assigneeNames.add(assignee.assignee_organization);
+            }
+          }
+        }
+
+        // Filtered count with CPC prefixes
+        let filteredCount: number | null = null;
+        if (cpcPrefixes?.length) {
+          const cpcFilters = cpcPrefixes.map(prefix => ({
+            _begins: { 'cpc_current.cpc_group_id': prefix },
+          }));
+          const cpcQuery = {
+            _and: [
+              { _contains: { 'assignees.assignee_organization': pattern } },
+              ...(cpcFilters.length === 1 ? cpcFilters : [{ _or: cpcFilters }]),
+            ],
+          };
+          const cpcResult = await pvClient.searchPatents({
+            query: cpcQuery,
+            fields: ['patent_id'],
+            options: { size: 1 },
+          });
+          filteredCount = cpcResult.total_hits || 0;
+        }
+
+        results.push({
+          pattern,
+          totalCount,
+          filteredCount,
+          sampleAssignees: [...assigneeNames].slice(0, 10),
+        });
+      } catch (err) {
+        console.warn(`[ValidatePatterns] Error for pattern "${pattern}":`, (err as Error).message);
+        results.push({ pattern, totalCount: 0, filteredCount: null, sampleAssignees: [] });
+      }
+    }
+
+    res.json({ results, cpcPrefixes: cpcPrefixes || null });
+  } catch (err: unknown) {
+    console.error('[Companies] Validate patterns error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // =============================================================================
 // AFFILIATE CRUD (under company)
 // =============================================================================

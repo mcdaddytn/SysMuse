@@ -13,6 +13,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // ============================================================================
 // Types
@@ -511,6 +514,115 @@ export function analyzeCpcCooccurrence(
   }
 
   return cpcStats;
+}
+
+// ============================================================================
+// DB-Backed CPC Enrichment
+// ============================================================================
+
+export interface CpcEnrichmentResult {
+  patentId: string;
+  cpcsWritten: number;
+  inventiveCount: number;
+  primaryCpcUpdated: boolean;
+  error?: string;
+}
+
+/**
+ * Enrich a single patent's CPC records in the database from its XML file.
+ * - Upserts each CPC into PatentCpc with isInventive designation
+ * - Updates Patent.primaryCpc using inventive-aware logic
+ */
+export async function enrichPatentCpcFromXml(
+  patentId: string,
+  exportDir: string
+): Promise<CpcEnrichmentResult> {
+  const xmlPath = findXmlPath(patentId, exportDir);
+  if (!xmlPath) {
+    return { patentId, cpcsWritten: 0, inventiveCount: 0, primaryCpcUpdated: false, error: 'XML file not found' };
+  }
+
+  const cpcData = parsePatentXml(xmlPath);
+  if (cpcData.parseError) {
+    return { patentId, cpcsWritten: 0, inventiveCount: 0, primaryCpcUpdated: false, error: cpcData.parseError };
+  }
+
+  if (cpcData.cpcClassifications.length === 0) {
+    return { patentId, cpcsWritten: 0, inventiveCount: 0, primaryCpcUpdated: false };
+  }
+
+  // Upsert each CPC code with its inventive designation
+  let cpcsWritten = 0;
+  for (const cpc of cpcData.cpcClassifications) {
+    await prisma.patentCpc.upsert({
+      where: { patentId_cpcCode: { patentId, cpcCode: cpc.code } },
+      create: {
+        patentId,
+        cpcCode: cpc.code,
+        isInventive: cpc.designation === 'I',
+      },
+      update: {
+        isInventive: cpc.designation === 'I',
+      },
+    });
+    cpcsWritten++;
+  }
+
+  // Update Patent.primaryCpc using inventive-aware logic
+  const newPrimaryCpc = cpcData.primaryCpc?.code || null;
+  if (newPrimaryCpc) {
+    await prisma.patent.update({
+      where: { patentId },
+      data: { primaryCpc: newPrimaryCpc },
+    });
+  }
+
+  return {
+    patentId,
+    cpcsWritten,
+    inventiveCount: cpcData.inventiveCpcs.length,
+    primaryCpcUpdated: !!newPrimaryCpc,
+  };
+}
+
+/**
+ * Batch enrich CPC data for multiple patents from their XML files.
+ */
+export async function enrichPatentCpcBatch(
+  patentIds: string[],
+  exportDir: string,
+  progressCallback?: (current: number, total: number) => void
+): Promise<{
+  processed: number;
+  enriched: number;
+  errors: number;
+  totalCpcsWritten: number;
+  totalInventive: number;
+}> {
+  let processed = 0;
+  let enriched = 0;
+  let errors = 0;
+  let totalCpcsWritten = 0;
+  let totalInventive = 0;
+
+  for (let i = 0; i < patentIds.length; i++) {
+    const result = await enrichPatentCpcFromXml(patentIds[i], exportDir);
+    processed++;
+
+    if (result.error) {
+      errors++;
+    } else if (result.cpcsWritten > 0) {
+      enriched++;
+      totalCpcsWritten += result.cpcsWritten;
+      totalInventive += result.inventiveCount;
+    }
+
+    if (progressCallback && (i + 1) % 50 === 0) {
+      progressCallback(i + 1, patentIds.length);
+    }
+  }
+
+  return { processed, enriched, errors, totalCpcsWritten, totalInventive };
 }
 
 // ============================================================================

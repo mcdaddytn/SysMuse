@@ -8,6 +8,7 @@
 import { PrismaClient, SectorRuleType } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { assignPrimaryCpc, type CpcStrategyName, type CpcStrategyInput } from './cpc-assignment-strategy.js';
 
 const prisma = new PrismaClient();
 
@@ -28,6 +29,8 @@ interface SectorRuleRow {
 interface PatentInput {
   patent_id: string;
   cpc_codes?: string[];
+  /** CPC codes with inventive designation (when available from XML) */
+  cpc_with_designation?: Array<{ code: string; isInventive: boolean; isMainCpc?: boolean }>;
   patent_title?: string;
   abstract?: string | null;
 }
@@ -110,9 +113,15 @@ export function clearRuleCache(): void {
 export async function assignSector(patent: PatentInput): Promise<SectorAssignment> {
   const rules = await loadSectorRules();
   const cpcCodes = patent.cpc_codes || [];
+  const cpcWithDesignation = patent.cpc_with_designation || [];
   const titleLower = (patent.patent_title || '').toLowerCase();
   const abstractLower = (patent.abstract || '').toLowerCase();
   const textContent = `${titleLower} ${abstractLower}`;
+
+  // Build inventive CPC set for weighting
+  const inventiveCpcSet = new Set(
+    cpcWithDesignation.filter(c => c.isInventive).map(c => c.code.replace(/\//g, ''))
+  );
 
   // Collect all matching rules with their details
   const matches: Array<SectorRuleRow & { matchStrength: number }> = [];
@@ -132,7 +141,17 @@ export async function assignSector(patent: PatentInput): Promise<SectorAssignmen
     }
 
     if (matchCpcRule(rule, cpcCodes)) {
-      matches.push({ ...rule, matchStrength: 1.0 });
+      // Weight inventive CPC matches higher than additional
+      const matchedViaInventive = inventiveCpcSet.size > 0 &&
+        cpcCodes.some(cpc => {
+          const normalized = cpc.replace(/\//g, '');
+          if (!inventiveCpcSet.has(normalized)) return false;
+          const expr = rule.expression.replace('/', '');
+          return rule.ruleType === 'CPC_SUBGROUP'
+            ? normalized === expr
+            : normalized.startsWith(expr);
+        });
+      matches.push({ ...rule, matchStrength: matchedViaInventive ? 1.0 : 0.5 });
     }
   }
 
@@ -591,16 +610,17 @@ export async function reassignPortfolioPatents(
   options: {
     portfolioId?: string;
     dryRun?: boolean;
+    cpcStrategy?: CpcStrategyName;
     progressCallback?: (current: number, total: number) => void;
   } = {}
 ): Promise<PortfolioReassignmentResult> {
   const startTime = Date.now();
-  const { portfolioId, dryRun = false, progressCallback } = options;
+  const { portfolioId, dryRun = false, cpcStrategy, progressCallback } = options;
 
   // Clear rule cache to ensure fresh rules
   clearRuleCache();
 
-  // Load patents with their CPC codes
+  // Load patents with their CPC codes (including inventive designation)
   const whereClause = portfolioId
     ? { portfolios: { some: { portfolioId } } }
     : {};
@@ -613,11 +633,11 @@ export async function reassignPortfolioPatents(
       abstract: true,
       primarySector: true,
       superSector: true,
-      cpcCodes: { select: { cpcCode: true } },
+      cpcCodes: { select: { cpcCode: true, isInventive: true } },
     },
   });
 
-  console.log(`[ReassignPortfolio] Processing ${patents.length} patents${portfolioId ? ` in portfolio ${portfolioId}` : ' (all)'}`);
+  console.log(`[ReassignPortfolio] Processing ${patents.length} patents${portfolioId ? ` in portfolio ${portfolioId}` : ' (all)'}${cpcStrategy ? ` with strategy=${cpcStrategy}` : ''}`);
 
   const sectorCounts: Record<string, number> = {};
   const superSectorCounts: Record<string, number> = {};
@@ -627,16 +647,33 @@ export async function reassignPortfolioPatents(
   let noMatch = 0;
 
   // Batch updates for efficiency
-  const updates: Array<{ patentId: string; primarySector: string; superSector: string }> = [];
+  const updates: Array<{ patentId: string; primarySector: string; superSector: string; primaryCpc?: string }> = [];
 
   for (let i = 0; i < patents.length; i++) {
     const patent = patents[i];
     const cpcCodes = patent.cpcCodes.map(c => c.cpcCode);
+    const cpcWithDesignation = patent.cpcCodes.map(c => ({
+      code: c.cpcCode,
+      isInventive: c.isInventive,
+    }));
     const oldSector = patent.primarySector || 'unknown';
+
+    // If a CPC strategy is specified, update primaryCpc first
+    let newPrimaryCpc: string | undefined;
+    if (cpcStrategy && cpcWithDesignation.length > 0) {
+      const stratResult = await assignPrimaryCpc(
+        { patentId: patent.patentId, cpcCodes: cpcWithDesignation, portfolioId },
+        cpcStrategy
+      );
+      if (stratResult.primaryCpc) {
+        newPrimaryCpc = stratResult.primaryCpc;
+      }
+    }
 
     const assignment = await assignSector({
       patent_id: patent.patentId,
       cpc_codes: cpcCodes,
+      cpc_with_designation: cpcWithDesignation,
       patent_title: patent.title,
       abstract: patent.abstract,
     });
@@ -662,7 +699,7 @@ export async function reassignPortfolioPatents(
     sectorCounts[newSector] = (sectorCounts[newSector] || 0) + 1;
     superSectorCounts[newSuperSector] = (superSectorCounts[newSuperSector] || 0) + 1;
 
-    updates.push({ patentId: patent.patentId, primarySector: newSector, superSector: newSuperSector });
+    updates.push({ patentId: patent.patentId, primarySector: newSector, superSector: newSuperSector, primaryCpc: newPrimaryCpc });
 
     if (progressCallback && (i + 1) % 100 === 0) {
       progressCallback(i + 1, patents.length);
@@ -678,7 +715,11 @@ export async function reassignPortfolioPatents(
       await prisma.$transaction(
         batch.map(u => prisma.patent.update({
           where: { patentId: u.patentId },
-          data: { primarySector: u.primarySector, superSector: u.superSector },
+          data: {
+            primarySector: u.primarySector,
+            superSector: u.superSector,
+            ...(u.primaryCpc ? { primaryCpc: u.primaryCpc } : {}),
+          },
         }))
       );
     }

@@ -2032,6 +2032,8 @@ export interface BatchJob {
   estimatedRate?: number;
   actualRate?: number;
   estimatedCompletion?: string;
+  model?: string;
+  batchMode?: boolean;
 }
 
 export interface BatchJobsResponse {
@@ -2090,6 +2092,8 @@ export const batchJobsApi = {
     topN?: number;  // For super-sector/sector: limit to top N patents by score
     portfolioId?: string | null;
     useClaims?: boolean;  // When true, LLM jobs require XML data
+    model?: string;       // LLM model override
+    batchMode?: boolean;  // true = Batch API (50% off), false = realtime
   }): Promise<StartJobsResponse> {
     const { data } = await api.post('/batch-jobs', params);
     return data;

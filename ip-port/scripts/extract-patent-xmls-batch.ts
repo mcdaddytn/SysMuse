@@ -16,6 +16,7 @@ dotenv.config();
 
 import { PrismaClient } from '@prisma/client';
 import { extractPatentXmls, type ExtractionRequest } from '../src/api/services/patent-xml-extractor-service.js';
+import { enrichPatentCpcBatch } from '../src/api/services/patent-xml-parser-service.js';
 
 const prisma = new PrismaClient();
 
@@ -90,6 +91,18 @@ async function main() {
       data: { hasXmlData: true },
     });
     console.log(`Updated ${updateResult.count} patent records`);
+
+    // Enrich CPC designations (inventive vs additional) from XML
+    console.log(`\nEnriching CPC designations for ${successIds.size} patents...`);
+    const cpcResult = await enrichPatentCpcBatch(
+      Array.from(successIds),
+      exportDir,
+      (current, total) => console.log(`  CPC enrichment: ${current}/${total}`)
+    );
+    console.log(`CPC enrichment: ${cpcResult.enriched} enriched, ${cpcResult.totalCpcsWritten} CPCs written, ${cpcResult.totalInventive} inventive`);
+    if (cpcResult.errors > 0) {
+      console.log(`  CPC errors: ${cpcResult.errors}`);
+    }
   }
 
   // Summary

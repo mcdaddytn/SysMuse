@@ -54,7 +54,7 @@ const showDiscoverAffiliatesDialog = ref(false);
 const validating = ref(false);
 const validationResults = ref<Array<{ pattern: string; totalCount: number; filteredCount: number | null; sampleAssignees: string[] }>>([]);
 const validationAffiliateName = ref('');
-const validationCpcPrefixes = ref('H04N');
+const validationCpcPrefixes = ref('');
 const showValidateDialog = ref(false);
 
 // Create portfolio dialog
@@ -329,6 +329,8 @@ async function createPortfolio() {
 async function openImportDialog(portfolio: { id: string; displayName: string }) {
   importPortfolioId.value = portfolio.id;
   importPortfolioName.value = portfolio.displayName;
+  importCpcPrefixes.value = '';
+  importMaxPatents.value = 1000;
   importResult.value = null;
   showImportDialog.value = true;
 }
@@ -446,6 +448,7 @@ async function validateAffiliatePatterns(affiliate: AffiliateDetail) {
   validating.value = true;
   validationResults.value = [];
   validationAffiliateName.value = affiliate.displayName;
+  validationCpcPrefixes.value = '';
   showValidateDialog.value = true;
   try {
     const cpcPrefixes = validationCpcPrefixes.value.split(',').map(s => s.trim()).filter(Boolean);

@@ -241,15 +241,17 @@ router.post('/reassign-patents', async (req: Request, res: Response) => {
  */
 router.post('/reassign-portfolio', async (req: Request, res: Response) => {
   try {
-    const { portfolioId, dryRun } = req.body;
+    const { portfolioId, dryRun, cpcStrategy } = req.body;
 
     console.log('[Sectors] Starting portfolio patent reassignment...');
     console.log(`  Portfolio: ${portfolioId || 'all'}`);
     console.log(`  Dry run: ${dryRun || false}`);
+    if (cpcStrategy) console.log(`  CPC strategy: ${cpcStrategy}`);
 
     const result = await reassignPortfolioPatents({
       portfolioId,
       dryRun,
+      cpcStrategy,
       progressCallback: (current, total) => {
         console.log(`  Progress: ${current}/${total} patents (${Math.round(100 * current / total)}%)`);
       },

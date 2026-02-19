@@ -2,8 +2,11 @@ import { Router, Request, Response } from 'express';
 import { exec, spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
 import { invalidateEnrichmentCache } from './patents.routes.js';
 import { clearScoringCache } from '../services/scoring-service.js';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 
@@ -85,95 +88,94 @@ function parseTierValue(targetValue: string): number {
   return parseInt(targetValue.replace(/,/g, '')) || 6000;
 }
 
-// Analyze gaps for a given target
+// Analyze gaps for a given target using Postgres
 // topN: for super-sector/sector, only analyze top N patents by score (0 = all)
-function analyzeGaps(targetType: TargetType, targetValue: string, topN: number = 0): Record<CoverageType, { total: number; gap: number; ids: string[] }> {
-  try {
-    const tierTopN = targetType === 'tier' ? parseTierValue(targetValue) : 6000;
+// portfolioId: optional — scope to a specific portfolio
+async function analyzeGaps(
+  targetType: TargetType,
+  targetValue: string,
+  topN: number = 0,
+  portfolioId?: string
+): Promise<Record<CoverageType, { total: number; gap: number; ids: string[] }>> {
+  const empty = {
+    llm: { total: 0, gap: 0, ids: [] as string[] },
+    prosecution: { total: 0, gap: 0, ids: [] as string[] },
+    ipr: { total: 0, gap: 0, ids: [] as string[] },
+    family: { total: 0, gap: 0, ids: [] as string[] },
+  };
 
-    // Build sector matching condition that handles legacy uppercase names
-    let sectorCondition = `p.super_sector === '${targetValue}'`;
-    if (targetValue === 'Video & Streaming') {
-      sectorCondition = `(p.super_sector === 'Video & Streaming' || p.super_sector === 'VIDEO_STREAMING')`;
-    } else if (targetValue === 'SDN & Network Infrastructure') {
-      sectorCondition = `(p.super_sector === 'SDN & Network Infrastructure' || p.super_sector === 'SDN_NETWORK')`;
-    } else if (targetValue === 'Computing & Data') {
-      sectorCondition = `(p.super_sector === 'Computing & Data' || p.super_sector === 'COMPUTING')`;
-    } else if (targetValue === 'Virtualization & Cloud') {
-      sectorCondition = `(p.super_sector === 'Virtualization & Cloud' || p.super_sector === 'VIRTUALIZATION')`;
-    } else if (targetValue === 'Imaging & Optics') {
-      sectorCondition = `(p.super_sector === 'Imaging & Optics' || p.super_sector === 'IMAGING')`;
-    } else if (targetValue === 'Wireless & RF') {
-      sectorCondition = `(p.super_sector === 'Wireless & RF' || p.super_sector === 'WIRELESS')`;
-    } else if (targetValue === 'Semiconductor') {
-      sectorCondition = `(p.super_sector === 'Semiconductor' || p.super_sector === 'SEMICONDUCTOR')`;
-    } else if (targetValue === 'Security') {
-      sectorCondition = `(p.super_sector === 'Security' || p.super_sector === 'SECURITY')`;
-    } else if (targetValue === 'Audio') {
-      sectorCondition = `(p.super_sector === 'Audio' || p.super_sector === 'AUDIO')`;
-    } else if (targetValue === 'AI & Machine Learning') {
-      sectorCondition = `(p.super_sector === 'AI & Machine Learning' || p.super_sector === 'AI_ML')`;
+  try {
+    // Build where clause based on target type
+    const where: Record<string, any> = {};
+
+    // Portfolio scoping via PortfolioPatent join
+    if (portfolioId) {
+      where.portfolios = { some: { portfolioId } };
     }
 
-    // For super-sector/sector, optionally limit to top N by score
-    const sectorTopN = topN > 0 ? topN : 999999;
+    if (targetType === 'super-sector') {
+      where.superSector = targetValue;
+    } else if (targetType === 'sector') {
+      where.primarySector = targetValue;
+    }
+    // For 'tier', we take top N by baseScore (no sector filter)
 
-    const script = `
-      const fs = require('fs');
-      const candidatesFile = fs.readdirSync('output')
-        .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
-        .sort().pop();
-      const data = JSON.parse(fs.readFileSync('output/' + candidatesFile, 'utf-8'));
+    // Determine how many patents to take
+    let take: number | undefined;
+    if (targetType === 'tier') {
+      take = parseTierValue(targetValue);
+    } else if (topN > 0) {
+      take = topN;
+    }
 
-      let patents;
-      if ('${targetType}' === 'tier') {
-        patents = data.candidates.sort((a, b) => b.score - a.score).slice(0, ${tierTopN});
-      } else if ('${targetType}' === 'super-sector') {
-        patents = data.candidates
-          .filter(p => ${sectorCondition})
-          .sort((a, b) => b.score - a.score)
-          .slice(0, ${sectorTopN});
-      } else {
-        patents = data.candidates
-          .filter(p => p.primary_sector === '${targetValue}')
-          .sort((a, b) => b.score - a.score)
-          .slice(0, ${sectorTopN});
-      }
-
-      function getCacheSet(dir) {
-        if (!fs.existsSync(dir)) return new Set();
-        return new Set(fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')));
-      }
-
-      const llmSet = getCacheSet('cache/llm-scores');
-      const prosSet = getCacheSet('cache/prosecution-scores');
-      const iprSet = getCacheSet('cache/ipr-scores');
-      const familySet = getCacheSet('cache/patent-families/parents');
-
-      const ids = patents.map(p => p.patent_id);
-      const result = {
-        llm: { total: ids.length, gap: ids.filter(id => !llmSet.has(id)).length, ids: ids.filter(id => !llmSet.has(id)) },
-        prosecution: { total: ids.length, gap: ids.filter(id => !prosSet.has(id)).length, ids: ids.filter(id => !prosSet.has(id)) },
-        ipr: { total: ids.length, gap: ids.filter(id => !iprSet.has(id)).length, ids: ids.filter(id => !iprSet.has(id)) },
-        family: { total: ids.length, gap: ids.filter(id => !familySet.has(id)).length, ids: ids.filter(id => !familySet.has(id)) },
-      };
-      console.log(JSON.stringify(result));
-    `;
-
-    const result = execSync(`node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
-      encoding: 'utf-8',
-      cwd: process.cwd(),
+    // Query patents ordered by baseScore descending
+    const patents = await prisma.patent.findMany({
+      where,
+      select: {
+        patentId: true,
+        hasLlmData: true,
+        hasProsecutionData: true,
+      },
+      orderBy: { baseScore: 'desc' },
+      ...(take ? { take } : {}),
     });
 
-    return JSON.parse(result.trim());
+    const ids = patents.map(p => p.patentId);
+
+    // LLM and prosecution gaps come from Postgres flags
+    const llmGapIds = patents.filter(p => !p.hasLlmData).map(p => p.patentId);
+    const prosGapIds = patents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
+
+    // IPR and family gaps still use file-based cache
+    function getCacheSet(dir: string): Set<string> {
+      const fullPath = path.join(process.cwd(), dir);
+      if (!fs.existsSync(fullPath)) return new Set();
+      try {
+        return new Set(
+          fs.readdirSync(fullPath)
+            .filter(f => f.endsWith('.json'))
+            .map(f => f.replace('.json', ''))
+        );
+      } catch {
+        return new Set();
+      }
+    }
+
+    const iprSet = getCacheSet('cache/ipr-scores');
+    const familySet = getCacheSet('cache/patent-families/parents');
+
+    const iprGapIds = ids.filter(id => !iprSet.has(id));
+    const familyGapIds = ids.filter(id => !familySet.has(id));
+
+    return {
+      llm: { total: ids.length, gap: llmGapIds.length, ids: llmGapIds },
+      prosecution: { total: ids.length, gap: prosGapIds.length, ids: prosGapIds },
+      ipr: { total: ids.length, gap: iprGapIds.length, ids: iprGapIds },
+      family: { total: ids.length, gap: familyGapIds.length, ids: familyGapIds },
+    };
   } catch (e) {
     console.error('Failed to analyze gaps:', e);
-    return {
-      llm: { total: 0, gap: 0, ids: [] },
-      prosecution: { total: 0, gap: 0, ids: [] },
-      ipr: { total: 0, gap: 0, ids: [] },
-      family: { total: 0, gap: 0, ids: [] },
-    };
+    return empty;
   }
 }
 
@@ -297,14 +299,15 @@ router.get('/', (_req: Request, res: Response) => {
  * POST /api/batch-jobs
  * Start enrichment jobs for selected coverage types
  */
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const {
       targetType,
       targetValue,
       coverageTypes = ['llm', 'prosecution', 'ipr', 'family'],
       maxHours = 4,
-      topN = 0  // For super-sector/sector: limit to top N patents by score (0 = all)
+      topN = 0,  // For super-sector/sector: limit to top N patents by score (0 = all)
+      portfolioId,  // Optional: scope to a specific portfolio
     } = req.body;
 
     if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
@@ -325,7 +328,7 @@ router.post('/', (req: Request, res: Response) => {
 
     // Analyze gaps to determine what needs to be done
     // For super-sector/sector, topN limits analysis to top N patents by score
-    const gaps = analyzeGaps(targetType, targetValue, topN);
+    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
 
     // Create a group ID to link related jobs
     const groupId = `group-${Date.now()}`;
@@ -510,17 +513,18 @@ router.get('/:id/log', (req: Request, res: Response) => {
  * GET /api/batch-jobs/gaps
  * Analyze enrichment gaps for a target
  */
-router.get('/gaps', (req: Request, res: Response) => {
+router.get('/gaps', async (req: Request, res: Response) => {
   try {
     const targetType = req.query.targetType as TargetType;
     const targetValue = req.query.targetValue as string;
     const topN = parseInt(req.query.topN as string) || 0;
+    const portfolioId = req.query.portfolioId as string | undefined;
 
     if (!targetType || !targetValue) {
       return res.status(400).json({ error: 'targetType and targetValue are required' });
     }
 
-    const gaps = analyzeGaps(targetType, targetValue, topN);
+    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
 
     res.json({
       targetType,

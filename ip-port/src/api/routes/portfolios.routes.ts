@@ -309,6 +309,14 @@ router.post('/create-from-patents', async (req: Request, res: Response) => {
       data: { patentCount, affiliateCount },
     });
 
+    // Step 5: Auto-hydrate — fill missing fields (abstract, CPC codes, forward citations)
+    const allPatentIds = suggestedAffiliates.flatMap((c: any) => c.patents.map((p: any) => p.patentId));
+    import('../services/patent-hydration-service.js').then(({ hydratePatents }) =>
+      hydratePatents(allPatentIds, { companyId: resolvedCompanyId }).catch(err =>
+        console.error('[AutoHydrate] Background hydration failed:', err)
+      )
+    );
+
     res.status(201).json({
       portfolio: { id: portfolio.id, name: portfolio.name, displayName: portfolio.displayName },
       affiliates: affiliateResults,
@@ -434,7 +442,24 @@ router.get('/:id/patent-counts', async (req: Request, res: Response) => {
 });
 
 // =============================================================================
-// IMPORT PATENTS (PatentsView → PortfolioPatent records)
+// HYDRATE PATENTS (fill bare Patent rows from PatentsView)
+// =============================================================================
+
+/** POST /api/portfolios/:id/hydrate — hydrate bare patents in a portfolio */
+router.post('/:id/hydrate', async (req: Request, res: Response) => {
+  try {
+    const { force } = req.body || {};
+    const { hydratePortfolio } = await import('../services/patent-hydration-service.js');
+    const result = await hydratePortfolio(req.params.id, { force });
+    res.json(result);
+  } catch (err: unknown) {
+    console.error('[Portfolios] Hydrate error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
+// IMPORT PATENTS (PatentsView → Patent + PortfolioPatent records)
 // Uses company affiliates for pattern matching
 // =============================================================================
 
@@ -461,8 +486,9 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     const pvClient = createPatentsViewClient();
 
     let imported = 0;
-    let alreadyCached = 0;
+    let alreadyExists = 0;
     let failed = 0;
+    const newPatentIds: string[] = [];
 
     const patentFields = [
       'patent_id', 'patent_title', 'patent_date', 'patent_type',
@@ -498,27 +524,49 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
           for (const p of result.patents) {
             const patentId = p.patent_id;
             try {
-              await prisma.portfolioPatent.upsert({
-                where: { portfolioId_patentId: { portfolioId, patentId } },
-                update: {
-                  patentTitle: p.patent_title || null,
-                  patentDate: p.patent_date || null,
-                  assignee: p.assignees?.[0]?.assignee_organization || null,
-                  affiliateName: affiliate.name,
+              // Upsert Patent row with basic data
+              await prisma.patent.upsert({
+                where: { patentId },
+                create: {
+                  patentId,
+                  title: p.patent_title || '',
+                  grantDate: p.patent_date || null,
+                  assignee: p.assignees?.[0]?.assignee_organization || '',
+                  affiliate: affiliate.name,
                 },
+                update: {},  // Don't overwrite if already exists with richer data
+              });
+
+              // Upsert CPC codes from search results
+              const cpcCodes = (p.cpcs || [])
+                .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
+                .filter(Boolean);
+              for (const code of cpcCodes) {
+                await prisma.patentCpc.upsert({
+                  where: { patentId_cpcCode: { patentId, cpcCode: code } },
+                  create: { patentId, cpcCode: code },
+                  update: {},
+                }).catch(() => {}); // Ignore race conditions
+              }
+
+              // Link to portfolio
+              const link = await prisma.portfolioPatent.upsert({
+                where: { portfolioId_patentId: { portfolioId, patentId } },
+                update: {},
                 create: {
                   portfolioId,
                   patentId,
                   source: 'PATENTSVIEW_IMPORT',
-                  patentTitle: p.patent_title || null,
-                  patentDate: p.patent_date || null,
-                  assignee: p.assignees?.[0]?.assignee_organization || null,
-                  affiliateName: affiliate.name,
                 },
               });
-              imported++;
+
+              // Track if this was a new insert (vs existing)
+              if (link) {
+                newPatentIds.push(patentId);
+                imported++;
+              }
             } catch {
-              alreadyCached++;
+              alreadyExists++;
             }
           }
         } catch (err) {
@@ -532,7 +580,16 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     const patentCount = await prisma.portfolioPatent.count({ where: { portfolioId } });
     await prisma.portfolio.update({ where: { id: portfolioId }, data: { patentCount } });
 
-    res.json({ imported, alreadyCached, failed, totalInPortfolio: patentCount });
+    // Background-hydrate new patents to fill abstract, filing date, forward citations, etc.
+    if (newPatentIds.length > 0) {
+      import('../services/patent-hydration-service.js').then(({ hydratePatents }) =>
+        hydratePatents(newPatentIds, { companyId: portfolio.companyId }).catch(err =>
+          console.error('[Import] Background hydration failed:', err)
+        )
+      );
+    }
+
+    res.json({ imported, alreadyExists, failed, totalInPortfolio: patentCount });
   } catch (err: unknown) {
     console.error('[Portfolios] Import error:', err);
     res.status(500).json({ error: (err as Error).message });

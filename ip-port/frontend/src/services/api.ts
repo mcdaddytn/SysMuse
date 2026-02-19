@@ -99,8 +99,10 @@ export const patentApi = {
     return data;
   },
 
-  async getEnrichmentSummary(tierSize = 5000): Promise<EnrichmentSummary> {
-    const { data } = await api.get('/patents/enrichment-summary', { params: { tierSize } });
+  async getEnrichmentSummary(tierSize = 5000, portfolioId?: string | null): Promise<EnrichmentSummary> {
+    const params: Record<string, unknown> = { tierSize };
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/patents/enrichment-summary', { params });
     return data;
   },
 
@@ -2046,8 +2048,10 @@ export interface StartJobsResponse {
 
 // Sector Enrichment API (extension of patentApi)
 export const enrichmentApi = {
-  async getSectorEnrichment(topPerSector = 500): Promise<SectorEnrichmentSummary> {
-    const { data } = await api.get('/patents/sector-enrichment', { params: { topPerSector } });
+  async getSectorEnrichment(topPerSector = 500, portfolioId?: string | null): Promise<SectorEnrichmentSummary> {
+    const params: Record<string, unknown> = { topPerSector };
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/patents/sector-enrichment', { params });
     return data;
   },
 };
@@ -2059,8 +2063,11 @@ export const batchJobsApi = {
     return data;
   },
 
-  async getGaps(targetType: TargetType, targetValue: string, topN?: number): Promise<GapsResponse> {
-    const { data } = await api.get('/batch-jobs/gaps', { params: { targetType, targetValue, topN } });
+  async getGaps(targetType: TargetType, targetValue: string, topN?: number, portfolioId?: string | null): Promise<GapsResponse> {
+    const params: Record<string, unknown> = { targetType, targetValue };
+    if (topN) params.topN = topN;
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/batch-jobs/gaps', { params });
     return data;
   },
 
@@ -2070,6 +2077,7 @@ export const batchJobsApi = {
     coverageTypes: CoverageType[];
     maxHours?: number;
     topN?: number;  // For super-sector/sector: limit to top N patents by score
+    portfolioId?: string | null;
   }): Promise<StartJobsResponse> {
     const { data } = await api.post('/batch-jobs', params);
     return data;
@@ -3029,8 +3037,16 @@ export interface PatentCountResult {
 
 export interface ImportResult {
   imported: number;
-  alreadyCached: number;
+  alreadyExists: number;
   failed: number;
+  totalInPortfolio: number;
+}
+
+export interface HydrationResult {
+  hydrated: number;
+  alreadyComplete: number;
+  notFound: number;
+  failedIds: string[];
   totalInPortfolio: number;
 }
 
@@ -3126,6 +3142,12 @@ export const portfolioApi = {
   // Import patents
   async importPatents(portfolioId: string, options?: { cpcPrefixes?: string[]; maxPatents?: number }): Promise<ImportResult> {
     const { data } = await api.post(`/portfolios/${portfolioId}/import-patents`, options || {}, { timeout: 300000 });
+    return data;
+  },
+
+  // Hydrate bare patents with PatentsView data
+  async hydratePatents(portfolioId: string, options?: { force?: boolean }): Promise<HydrationResult> {
+    const { data } = await api.post(`/portfolios/${portfolioId}/hydrate`, options || {}, { timeout: 300000 });
     return data;
   },
 

@@ -3,10 +3,10 @@ import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { usePortfolioStore } from '@/stores/portfolio';
 import {
-  patentApi, enrichmentApi, batchJobsApi, scoringTemplatesApi,
+  patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
   type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
-  type BatchJobMetadata
+  type BatchJobMetadata, type HydrationResult
 } from '@/services/api';
 
 const portfolioStore = usePortfolioStore();
@@ -39,7 +39,7 @@ async function loadEnrichmentSummary() {
   enrichmentLoading.value = true;
   enrichmentError.value = null;
   try {
-    enrichmentData.value = await patentApi.getEnrichmentSummary(selectedTierSize.value);
+    enrichmentData.value = await patentApi.getEnrichmentSummary(selectedTierSize.value, portfolioStore.selectedPortfolioId);
   } catch (err) {
     enrichmentError.value = err instanceof Error ? err.message : 'Failed to load enrichment summary';
   } finally {
@@ -83,7 +83,7 @@ async function loadSectorEnrichment() {
   sectorEnrichmentLoading.value = true;
   sectorEnrichmentError.value = null;
   try {
-    sectorEnrichmentData.value = await enrichmentApi.getSectorEnrichment(selectedTopPerSector.value);
+    sectorEnrichmentData.value = await enrichmentApi.getSectorEnrichment(selectedTopPerSector.value, portfolioStore.selectedPortfolioId);
   } catch (err) {
     sectorEnrichmentError.value = err instanceof Error ? err.message : 'Failed to load sector enrichment';
   } finally {
@@ -179,7 +179,7 @@ async function loadGaps() {
   if (!newJobTargetValue.value) return;
   loadingGaps.value = true;
   try {
-    gapsData.value = await batchJobsApi.getGaps(newJobTargetType.value, newJobTargetValue.value);
+    gapsData.value = await batchJobsApi.getGaps(newJobTargetType.value, newJobTargetValue.value, undefined, portfolioStore.selectedPortfolioId);
   } catch (err) {
     console.error('Failed to load gaps:', err);
     gapsData.value = null;
@@ -207,7 +207,8 @@ async function startNewJob() {
       targetType: newJobTargetType.value,
       targetValue: newJobTargetValue.value,
       coverageTypes: newJobCoverageTypes.value,
-      maxHours: newJobMaxHours.value
+      maxHours: newJobMaxHours.value,
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
     showNewJobDialog.value = false;
     await loadBatchJobs();
@@ -240,7 +241,7 @@ async function openEnrichDialog(targetType: TargetType, targetValue: string, top
   // Load gaps (pass topN for super-sector/sector to limit to top N patents)
   enrichDialogLoading.value = true;
   try {
-    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue, topN > 0 ? topN : undefined);
+    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue, topN > 0 ? topN : undefined, portfolioStore.selectedPortfolioId);
   } catch (err) {
     console.error('Failed to load gaps:', err);
   } finally {
@@ -256,7 +257,8 @@ async function startEnrichFromDialog() {
       targetValue: enrichDialogTargetValue.value,
       coverageTypes: enrichDialogCoverageTypes.value,
       maxHours: 4,
-      topN: enrichDialogTopN.value > 0 ? enrichDialogTopN.value : undefined
+      topN: enrichDialogTopN.value > 0 ? enrichDialogTopN.value : undefined,
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
     showEnrichDialog.value = false;
     activeTab.value = 'jobs';
@@ -495,6 +497,90 @@ function formatLlmDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleString();
 }
 
+// ─── Portfolio Info Bar (Hydrate / Import) ────────────────────────────────────
+const portfolioPatentCount = ref(0);
+const portfolioBareCount = ref(0);
+const portfolioInfoLoading = ref(false);
+const hydrating = ref(false);
+const hydrationResult = ref<HydrationResult | null>(null);
+const importing = ref(false);
+const importResult = ref<{ imported: number; totalInPortfolio: number } | null>(null);
+
+async function loadPortfolioInfo() {
+  const pid = portfolioStore.selectedPortfolioId;
+  if (!pid) {
+    portfolioPatentCount.value = 0;
+    portfolioBareCount.value = 0;
+    return;
+  }
+  portfolioInfoLoading.value = true;
+  try {
+    // Get patent count from portfolio detail
+    const detail = await portfolioApi.get(pid);
+    portfolioPatentCount.value = detail._count?.patents ?? 0;
+
+    // Get bare patent count: patents in this portfolio with empty title
+    const result = await patentApi.getPatents(
+      { page: 1, rowsPerPage: 1, sortBy: 'score', descending: true },
+      { title: '' },
+      pid,
+    );
+    // This is approximate — we use the total that have empty title filter
+    // Actually, let's just use the hydration endpoint info after first run
+    portfolioBareCount.value = 0; // Will be calculated server-side during hydrate
+  } catch (err) {
+    console.error('Failed to load portfolio info:', err);
+  } finally {
+    portfolioInfoLoading.value = false;
+  }
+}
+
+async function doHydrate() {
+  const pid = portfolioStore.selectedPortfolioId;
+  if (!pid) return;
+  hydrating.value = true;
+  hydrationResult.value = null;
+  try {
+    hydrationResult.value = await portfolioApi.hydratePatents(pid);
+    // Reload enrichment data after hydration
+    loadEnrichmentSummary();
+    loadSectorEnrichment();
+    loadPortfolioInfo();
+  } catch (err) {
+    console.error('Hydration failed:', err);
+  } finally {
+    hydrating.value = false;
+  }
+}
+
+async function doImport() {
+  const pid = portfolioStore.selectedPortfolioId;
+  if (!pid) return;
+  importing.value = true;
+  importResult.value = null;
+  try {
+    const result = await portfolioApi.importPatents(pid, { maxPatents: 100 });
+    importResult.value = { imported: result.imported, totalInPortfolio: result.totalInPortfolio };
+    // Reload everything after import
+    loadEnrichmentSummary();
+    loadSectorEnrichment();
+    loadPortfolioInfo();
+  } catch (err) {
+    console.error('Import failed:', err);
+  } finally {
+    importing.value = false;
+  }
+}
+
+// ─── Watch portfolio selection ────────────────────────────────────────────────
+watch(() => portfolioStore.selectedPortfolioId, () => {
+  hydrationResult.value = null;
+  importResult.value = null;
+  loadEnrichmentSummary();
+  loadSectorEnrichment();
+  loadPortfolioInfo();
+});
+
 // Watch for tab changes to refresh data
 watch(activeTab, (newTab) => {
   if (newTab === 'sectors') {
@@ -518,6 +604,7 @@ onMounted(() => {
   loadEnrichmentSummary();
   loadSectorEnrichment();
   loadBatchJobs();
+  loadPortfolioInfo();
 
   // Auto-refresh every 15 seconds based on active tab
   jobsRefreshInterval = setInterval(() => {
@@ -553,6 +640,46 @@ onUnmounted(() => {
       <div class="text-h5 q-mr-md">Jobs &amp; Enrichment</div>
       <PortfolioSelector class="q-mr-md" />
     </div>
+
+    <!-- Portfolio Actions Bar -->
+    <q-card v-if="portfolioStore.selectedPortfolio" flat bordered class="q-mb-md">
+      <q-card-section class="q-py-sm">
+        <div class="row items-center q-gutter-md">
+          <span class="text-weight-medium">
+            {{ portfolioStore.selectedPortfolio.displayName }}
+            <span class="text-grey-6">({{ portfolioPatentCount }} patents)</span>
+          </span>
+          <q-btn
+            flat dense
+            color="primary"
+            icon="cloud_download"
+            label="Hydrate Patents"
+            :loading="hydrating"
+            @click="doHydrate"
+          >
+            <q-tooltip>Fetch missing patent data (title, abstract, CPC codes) from PatentsView API</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat dense
+            color="secondary"
+            icon="add_circle"
+            label="Import from PatentsView"
+            :loading="importing"
+            @click="doImport"
+          >
+            <q-tooltip>Search PatentsView by company affiliates and import new patents</q-tooltip>
+          </q-btn>
+          <q-spinner v-if="portfolioInfoLoading" size="xs" color="grey" />
+          <q-chip v-if="hydrationResult" dense color="positive" text-color="white" icon="check">
+            {{ hydrationResult.hydrated }} hydrated, {{ hydrationResult.alreadyComplete }} already complete
+            <span v-if="hydrationResult.notFound > 0">, {{ hydrationResult.notFound }} not found</span>
+          </q-chip>
+          <q-chip v-if="importResult" dense color="positive" text-color="white" icon="check">
+            {{ importResult.imported }} imported ({{ importResult.totalInPortfolio }} total)
+          </q-chip>
+        </div>
+      </q-card-section>
+    </q-card>
 
     <q-tabs v-model="activeTab" class="q-mb-md" align="left" active-color="primary">
       <q-tab name="enrichment" label="Enrichment Overview" icon="analytics" />

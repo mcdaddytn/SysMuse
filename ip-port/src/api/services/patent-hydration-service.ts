@@ -4,15 +4,21 @@
  * Fetches basic patent data from PatentsView API and writes it to the
  * Postgres Patent table. Used to fill in "bare" Patent rows that were
  * created with just a patentId (e.g., during migration or import).
+ *
+ * Also computes:
+ *   - primarySector / superSector from CPC codes
+ *   - baseScore using multi-factor formula (citations + time + velocity × sector × expired)
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { getPrimarySector, getSuperSector, getSuperSectorDisplayName } from '../utils/sector-mapper.js';
 
 const prisma = new PrismaClient();
 
 const PATENTSVIEW_CACHE_DIR = path.join(process.cwd(), 'cache/api/patentsview/patent');
+const CONFIG_DIR = path.join(process.cwd(), 'config');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -45,6 +51,77 @@ function calculateRemainingYears(dateStr: string | null): { remainingYears: numb
   const years = diffMs / (365.25 * 24 * 60 * 60 * 1000);
   const rounded = Math.round(Math.max(0, years) * 10) / 10;
   return { remainingYears: rounded, isExpired: rounded <= 0 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Base Score Calculation
+// Same formula as scripts/recalculate-base-scores.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+let sectorDamagesCache: Map<string, number> | null = null;
+
+function loadSectorDamages(): Map<string, number> {
+  if (sectorDamagesCache) return sectorDamagesCache;
+  sectorDamagesCache = new Map();
+  try {
+    const configPath = path.join(CONFIG_DIR, 'sector-damages.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    for (const [sectorKey, data] of Object.entries(config.sectors as Record<string, { damages_rating: number }>)) {
+      sectorDamagesCache.set(sectorKey, data.damages_rating || 1);
+    }
+  } catch {
+    // Use defaults
+  }
+  return sectorDamagesCache;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function calculateBaseScore(params: {
+  forwardCitations: number;
+  remainingYears: number;
+  grantDate: string | null;
+  primarySector: string | null;
+}): number {
+  const { forwardCitations, remainingYears, grantDate, primarySector } = params;
+
+  // Years since grant (for velocity calculation)
+  let yearsSinceGrant = 10; // default
+  if (grantDate) {
+    const grant = new Date(grantDate);
+    if (!isNaN(grant.getTime())) {
+      const years = (Date.now() - grant.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      yearsSinceGrant = Math.max(years, 0.5);
+    }
+  }
+
+  // Component 1: Citation Score (log-scaled)
+  const citationScore = Math.log10(forwardCitations + 1) * 40;
+
+  // Component 2: Time Score (remaining years factor)
+  const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
+  const timeScore = timeFactor * 25;
+
+  // Component 3: Velocity Score (citations per year)
+  const citationsPerYear = forwardCitations / yearsSinceGrant;
+  const velocityScore = Math.log10(citationsPerYear + 1) * 20;
+
+  // Component 4: Sector Multiplier
+  let sectorMultiplier = 1.0;
+  if (primarySector) {
+    const damages = loadSectorDamages();
+    const rating = damages.get(primarySector) || 1;
+    sectorMultiplier = 0.8 + (rating - 1) * 0.233;
+  }
+
+  // Component 5: Expired Multiplier
+  const expiredMultiplier = remainingYears <= 0 ? 0.1 : 1.0;
+
+  const rawScore = citationScore + timeScore + velocityScore;
+  const finalScore = rawScore * sectorMultiplier * expiredMultiplier;
+  return Math.round(finalScore * 100) / 100;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,34 +272,42 @@ export async function hydratePatents(
         }
       }
 
+      // Compute sector from CPC codes
+      const primarySector = getPrimarySector(cpcCodes) || null;
+      const superSectorKey = primarySector ? getSuperSector(primarySector) : null;
+      const superSector = superSectorKey ? getSuperSectorDisplayName(superSectorKey) : null;
+      const primaryCpc = cpcCodes[0] || null;
+
+      // Compute base score
+      const baseScore = calculateBaseScore({
+        forwardCitations,
+        remainingYears,
+        grantDate,
+        primarySector,
+      });
+
       // Upsert Patent row
+      const patentData = {
+        title: pvData.patent_title || '',
+        abstract: pvData.patent_abstract || null,
+        grantDate,
+        filingDate,
+        assignee: assigneeOrg,
+        inventors,
+        forwardCitations,
+        remainingYears,
+        isExpired,
+        baseScore,
+        primarySector,
+        superSector,
+        primaryCpc,
+        ...(affiliate && { affiliate }),
+      };
+
       await prisma.patent.upsert({
         where: { patentId },
-        create: {
-          patentId,
-          title: pvData.patent_title || '',
-          abstract: pvData.patent_abstract || null,
-          grantDate,
-          filingDate,
-          assignee: assigneeOrg,
-          inventors,
-          forwardCitations,
-          remainingYears,
-          isExpired,
-          ...(affiliate && { affiliate }),
-        },
-        update: {
-          title: pvData.patent_title || '',
-          abstract: pvData.patent_abstract || null,
-          grantDate,
-          filingDate,
-          assignee: assigneeOrg,
-          inventors,
-          forwardCitations,
-          remainingYears,
-          isExpired,
-          ...(affiliate && { affiliate }),
-        },
+        create: { patentId, ...patentData },
+        update: patentData,
       });
 
       // Upsert CPC codes

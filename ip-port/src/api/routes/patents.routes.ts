@@ -708,9 +708,12 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       });
     }
 
-    // Count totals for LLM/prosecution from Postgres
+    // Count totals scoped to the patent list (not global cache sets)
+    const allIds = sorted.map(p => p.patent_id);
     const llmTotal = patents.filter(p => p.has_llm_data).length;
     const prosTotal = patents.filter(p => p.has_prosecution_data).length;
+    const iprTotal = allIds.filter(id => iprSet.has(id)).length;
+    const familyTotal = allIds.filter(id => familySet.has(id)).length;
 
     res.json({
       totalPatents: sorted.length,
@@ -718,8 +721,8 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       enrichmentTotals: {
         llm: llmTotal,
         prosecution: prosTotal,
-        ipr: iprSet.size,
-        family: familySet.size,
+        ipr: iprTotal,
+        family: familyTotal,
       },
       tiers,
     });

@@ -342,11 +342,13 @@ export interface V2EnhancedMetric {
 export const v2EnhancedApi = {
   async getScores(
     config: Partial<V2EnhancedConfig>,
-    previousRankings?: Array<{ patent_id: string; rank: number }>
+    previousRankings?: Array<{ patent_id: string; rank: number }>,
+    portfolioId?: string | null
   ): Promise<V2EnhancedResponse> {
     const { data } = await api.post('/scores/v2-enhanced', {
       ...config,
       previousRankings,
+      ...(portfolioId && { portfolioId }),
     });
     return data;
   },

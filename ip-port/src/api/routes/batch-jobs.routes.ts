@@ -78,6 +78,58 @@ function saveJobs(): void {
   }
 }
 
+/**
+ * Sync Postgres hasLlmData/hasProsecutionData flags from file cache.
+ * Called after batch jobs complete so the enrichment summary reads correct values.
+ */
+async function syncEnrichmentFlags(): Promise<void> {
+  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
+  const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
+
+  const llmSet = fs.existsSync(llmDir)
+    ? new Set(fs.readdirSync(llmDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+  const prosSet = fs.existsSync(prosDir)
+    ? new Set(fs.readdirSync(prosDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+
+  // Find patents where flag is false but cache file exists
+  const stale = await prisma.patent.findMany({
+    where: {
+      OR: [
+        { hasLlmData: false },
+        { hasProsecutionData: false },
+      ],
+    },
+    select: { patentId: true, hasLlmData: true, hasProsecutionData: true },
+  });
+
+  let llmUpdated = 0;
+  let prosUpdated = 0;
+
+  for (const p of stale) {
+    const updates: Record<string, boolean> = {};
+    if (!p.hasLlmData && llmSet.has(p.patentId)) {
+      updates.hasLlmData = true;
+      llmUpdated++;
+    }
+    if (!p.hasProsecutionData && prosSet.has(p.patentId)) {
+      updates.hasProsecutionData = true;
+      prosUpdated++;
+    }
+    if (Object.keys(updates).length > 0) {
+      await prisma.patent.update({
+        where: { patentId: p.patentId },
+        data: updates,
+      });
+    }
+  }
+
+  if (llmUpdated > 0 || prosUpdated > 0) {
+    console.log(`[BatchJobs] Synced enrichment flags: ${llmUpdated} LLM, ${prosUpdated} prosecution`);
+  }
+}
+
 // Parse tier value - handles both "5000" (legacy) and "4001-5000" (range) formats
 function parseTierValue(targetValue: string): number {
   if (targetValue.includes('-')) {
@@ -261,13 +313,18 @@ router.get('/', (_req: Request, res: Response) => {
       return j;
     });
 
-    // Invalidate caches when jobs complete (throttled to once per 10 seconds)
+    // Invalidate caches and sync Postgres flags when jobs complete (throttled to once per 10 seconds)
     const now = Date.now();
     if (jobsJustCompleted && now - lastCacheInvalidation > 10000) {
       console.log('[BatchJobs] Jobs completed - invalidating enrichment and scoring caches');
       invalidateEnrichmentCache();
       clearScoringCache();
       lastCacheInvalidation = now;
+
+      // Sync Postgres hasLlmData/hasProsecutionData flags from file cache
+      syncEnrichmentFlags().catch(err =>
+        console.error('[BatchJobs] Failed to sync enrichment flags:', err)
+      );
     }
 
     // Save any status updates
@@ -538,6 +595,21 @@ router.get('/gaps', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error analyzing gaps:', error);
     res.status(500).json({ error: 'Failed to analyze gaps' });
+  }
+});
+
+/**
+ * POST /api/batch-jobs/sync-flags
+ * Manually sync Postgres enrichment flags from file cache
+ */
+router.post('/sync-flags', async (req: Request, res: Response) => {
+  try {
+    await syncEnrichmentFlags();
+    invalidateEnrichmentCache();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error syncing flags:', error);
+    res.status(500).json({ error: 'Failed to sync enrichment flags' });
   }
 });
 

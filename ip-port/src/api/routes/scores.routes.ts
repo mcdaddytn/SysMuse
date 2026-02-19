@@ -472,7 +472,7 @@ router.get('/v3', (req: Request, res: Response) => {
  *   llmEnhancedOnly - Only include patents with LLM data (default: true)
  *   previousRankings - Optional array of {patent_id, rank} for rank change calculation
  */
-router.post('/v2-enhanced', (req: Request, res: Response) => {
+router.post('/v2-enhanced', async (req: Request, res: Response) => {
   try {
     const {
       weights = {},
@@ -481,6 +481,7 @@ router.post('/v2-enhanced', (req: Request, res: Response) => {
       topN = 100,
       llmEnhancedOnly = true,
       previousRankings,
+      portfolioId,
     } = req.body;
 
     const config: V2EnhancedConfig = {
@@ -500,7 +501,7 @@ router.post('/v2-enhanced', (req: Request, res: Response) => {
       );
     }
 
-    const scored = scoreWithCustomConfig(config, prevRankMap);
+    const scored = await scoreWithCustomConfig(config, prevRankMap, portfolioId || undefined);
 
     res.json({
       data: scored,

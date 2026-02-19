@@ -259,7 +259,7 @@ async function recalculate() {
       }
 
       const config = buildV2ConfigFromPreset(role.v2PresetId);
-      const response = await v2EnhancedApi.getScores(config, previousRankings.value);
+      const response = await v2EnhancedApi.getScores(config, previousRankings.value, portfolioStore.selectedPortfolioId);
 
       // Map to consensus format
       patents.value = response.data.map(p => ({
@@ -291,7 +291,7 @@ async function recalculate() {
         if (role.consensusWeight <= 0) continue;
 
         const config = buildV2ConfigFromPreset(role.v2PresetId);
-        const response = await v2EnhancedApi.getScores(config, []);
+        const response = await v2EnhancedApi.getScores(config, [], portfolioStore.selectedPortfolioId);
 
         const scoreMap = new Map<string, { score: number; data: V2EnhancedScoredPatent }>();
         for (const p of response.data) {
@@ -691,6 +691,12 @@ function onRoleChange() {
 // Watch filter changes
 watch([topN, llmEnhancedOnly], () => {
   hasUnsavedChanges.value = true;
+});
+
+// Reload when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, () => {
+  previousRankings.value = [];
+  recalculate();
 });
 
 // Watch view mode changes

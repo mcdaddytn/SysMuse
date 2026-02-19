@@ -32,6 +32,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -631,6 +634,45 @@ function loadCandidates(): any[] {
 }
 
 /**
+ * Load candidates from Postgres for a specific portfolio.
+ * Returns objects with the same shape as the JSON file candidates.
+ */
+async function loadCandidatesFromPostgres(portfolioId: string): Promise<any[]> {
+  const patents = await prisma.patent.findMany({
+    where: {
+      portfolios: { some: { portfolioId } },
+    },
+    select: {
+      patentId: true,
+      title: true,
+      grantDate: true,
+      assignee: true,
+      forwardCitations: true,
+      remainingYears: true,
+      baseScore: true,
+      primarySector: true,
+      superSector: true,
+      primaryCpc: true,
+    },
+    orderBy: { baseScore: 'desc' },
+  });
+
+  return patents.map(p => ({
+    patent_id: p.patentId,
+    patent_title: p.title || '',
+    patent_date: p.grantDate || '',
+    assignee: p.assignee || '',
+    forward_citations: p.forwardCitations ?? 0,
+    remaining_years: p.remainingYears ?? 0,
+    score: p.baseScore ?? 0,
+    primary_sector: p.primarySector || '',
+    super_sector: p.superSector || '',
+    primary_cpc: p.primaryCpc || '',
+    cpc_codes: [],
+  }));
+}
+
+/**
  * Clear caches (for testing or reload)
  */
 export function clearScoringCache(): void {
@@ -1089,11 +1131,14 @@ export const V2_ENHANCED_PRESETS = [
 /**
  * Score patents with V2 Enhanced custom configuration
  */
-export function scoreWithCustomConfig(
+export async function scoreWithCustomConfig(
   config: V2EnhancedConfig,
-  previousRankings?: Map<string, number>
-): V2EnhancedScoredPatent[] {
-  const candidates = loadCandidates();
+  previousRankings?: Map<string, number>,
+  portfolioId?: string
+): Promise<V2EnhancedScoredPatent[]> {
+  const candidates = portfolioId
+    ? await loadCandidatesFromPostgres(portfolioId)
+    : loadCandidates();
   const classifications = loadAllClassifications();
   const llmScores = loadAllLlmScores();
   const iprScores = loadAllIprScores();

@@ -561,7 +561,7 @@ async function recalculate() {
   error.value = null;
 
   try {
-    const response = await v2EnhancedApi.getScores(currentConfig.value, previousRankings.value);
+    const response = await v2EnhancedApi.getScores(currentConfig.value, previousRankings.value, portfolioStore.selectedPortfolioId);
 
     patents.value = response.data;
     total.value = response.total;
@@ -719,6 +719,12 @@ function formatRawMetric(key: string, value: number | undefined): string {
 // Watch for filter changes
 watch([topN, llmEnhancedOnly], () => {
   hasUnsavedChanges.value = true;
+});
+
+// Reload when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, () => {
+  previousRankings.value = [];
+  recalculate();
 });
 
 // Initialize

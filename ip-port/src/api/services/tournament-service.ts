@@ -253,7 +253,7 @@ export async function loadInputPatents(input: TournamentInput): Promise<string[]
       llmEnhancedOnly: input.llmEnhancedOnly,
     };
 
-    const scored = scoreWithCustomConfig(config);
+    const scored = await scoreWithCustomConfig(config);
     return scored.map(p => p.patent_id);
   }
 

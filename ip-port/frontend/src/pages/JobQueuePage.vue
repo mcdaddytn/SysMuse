@@ -586,6 +586,15 @@ const hydrating = ref(false);
 const hydrationResult = ref<HydrationResult | null>(null);
 const importing = ref(false);
 const importResult = ref<{ imported: number; totalInPortfolio: number } | null>(null);
+const showImportDialog = ref(false);
+const importMaxPatents = ref(1000);
+const importMaxOptions = [
+  { value: 500, label: '500' },
+  { value: 1000, label: '1,000' },
+  { value: 2000, label: '2,000' },
+  { value: 5000, label: '5,000' },
+  { value: 10000, label: '10,000' },
+];
 
 async function loadPortfolioInfo() {
   const pid = portfolioStore.selectedPortfolioId;
@@ -637,10 +646,11 @@ async function doHydrate() {
 async function doImport() {
   const pid = portfolioStore.selectedPortfolioId;
   if (!pid) return;
+  showImportDialog.value = false;
   importing.value = true;
   importResult.value = null;
   try {
-    const result = await portfolioApi.importPatents(pid, { maxPatents: 100 });
+    const result = await portfolioApi.importPatents(pid, { maxPatents: importMaxPatents.value });
     importResult.value = { imported: result.imported, totalInPortfolio: result.totalInPortfolio };
     // Reload everything after import
     loadEnrichmentSummary();
@@ -747,7 +757,7 @@ onUnmounted(() => {
             icon="add_circle"
             label="Import from PatentsView"
             :loading="importing"
-            @click="doImport"
+            @click="showImportDialog = true"
           >
             <q-tooltip>Search PatentsView by company affiliates and import new patents</q-tooltip>
           </q-btn>
@@ -1519,6 +1529,33 @@ onUnmounted(() => {
             icon="description"
             @click="submitXmlExtractionFirst"
           />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ═══ Import Dialog ═══ -->
+    <q-dialog v-model="showImportDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Import from PatentsView</div>
+          <div class="text-caption text-grey-7 q-mt-xs">
+            Searches PatentsView by company affiliates and imports new patents into the portfolio.
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <q-select
+            v-model="importMaxPatents"
+            :options="importMaxOptions"
+            emit-value
+            map-options
+            label="Max patents to import"
+            outlined
+            dense
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" label="Import" icon="cloud_download" @click="doImport" />
         </q-card-actions>
       </q-card>
     </q-dialog>

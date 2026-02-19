@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import {
   patentApi, enrichmentApi, batchJobsApi, scoringTemplatesApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
@@ -547,6 +548,7 @@ onUnmounted(() => {
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5 q-mr-md">Jobs &amp; Enrichment</div>
+      <PortfolioSelector class="q-mr-md" />
     </div>
 
     <q-tabs v-model="activeTab" class="q-mb-md" align="left" active-color="primary">

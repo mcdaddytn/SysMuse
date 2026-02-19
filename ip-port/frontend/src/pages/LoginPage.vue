@@ -21,7 +21,7 @@ async function login() {
   <q-page class="flex flex-center">
     <q-card style="min-width: 350px">
       <q-card-section class="bg-primary text-white">
-        <div class="text-h6">Patent Portfolio Workstation</div>
+        <div class="text-h6">IP Port</div>
         <div class="text-subtitle2">Sign in to continue</div>
       </q-card-section>
 

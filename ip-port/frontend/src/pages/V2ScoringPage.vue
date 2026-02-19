@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import {
   v2EnhancedApi,
   snapshotApi,
@@ -729,6 +730,7 @@ onMounted(async () => {
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5">V2 Enhanced Scoring</div>
+      <PortfolioSelector class="q-mx-md" />
       <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>

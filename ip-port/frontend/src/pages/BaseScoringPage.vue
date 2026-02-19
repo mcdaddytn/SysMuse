@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { patentApi } from '@/services/api';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import type { Patent } from '@/types';
 
 const router = useRouter();
@@ -89,6 +90,7 @@ onMounted(async () => {
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5">Base Score Rankings</div>
+      <PortfolioSelector class="q-mx-md" />
       <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>

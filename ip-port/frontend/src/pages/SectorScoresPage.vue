@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import type { SectorScoringProgress, ScoredPatent, SuperSectorProgress } from '@/services/api';
 import type { SuperSectorDetail } from '@/types';
 
@@ -226,6 +227,7 @@ watch(scoresPagination, async () => {
             icon="arrow_back"
             @click="goBack"
           />
+          <PortfolioSelector class="q-mr-md" />
           <div>
             <div class="text-h5">
               <template v-if="viewMode === 'summary'">LLM Sector Scores</template>

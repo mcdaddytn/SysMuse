@@ -96,6 +96,12 @@ const routes: RouteRecordRaw[] = [
         name: 'patent-families',
         component: () => import('@/pages/PatentFamilyExplorerPage.vue'),
         meta: { title: 'Patent Family Explorer' }
+      },
+      {
+        path: 'admin',
+        name: 'admin',
+        component: () => import('@/pages/AdminPage.vue'),
+        meta: { title: 'Admin' }
       }
     ]
   },

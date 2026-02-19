@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import type { SectorScoringProgress, SubSector, BatchJobMetadata, LlmSnapshotSummary, LlmSnapshotComparison, ModelComparisonResult } from '@/services/api';
 import type { SuperSectorDetail, SectorDetail, SectorRule, SectorRuleType, RulePreviewResult } from '@/types';
 import { useCpcDescriptions } from '@/composables/useCpcDescriptions';
@@ -764,7 +765,10 @@ watch(selectedSectorId, () => {
     <!-- Header -->
     <div class="row items-center q-mb-md">
       <div class="col">
-        <div class="text-h5">Sector Management</div>
+        <div class="row items-center q-gutter-sm q-mb-none">
+      <div class="text-h5">Sector Management</div>
+      <PortfolioSelector />
+    </div>
         <div class="text-caption text-grey-7">
           {{ superSectors.length }} super-sectors &middot;
           {{ superSectors.reduce((s, ss) => s + ss.sectors.length, 0) }} sectors &middot;

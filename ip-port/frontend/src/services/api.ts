@@ -2941,4 +2941,290 @@ export const scoringTemplatesApi = {
   },
 };
 
+// =============================================================================
+// Portfolio Management API
+// =============================================================================
+
+export type DataSourceType = 'JSON_PIPELINE' | 'DB_RECORDS';
+
+export interface CompanySummary {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  website: string | null;
+  _count: { affiliates: number; portfolios: number; competitorsOf: number };
+}
+
+export interface CompanyDetail extends CompanySummary {
+  affiliates: AffiliateDetail[];
+  portfolios: Array<PortfolioSummary & { _count: { patents: number } }>;
+}
+
+export interface CompetitorRelationship {
+  id: string;
+  companyId: string;
+  competitorId: string;
+  sectors: string[];
+  discoverySource: string;
+  strength: number | null;
+  notes: string | null;
+  competitor: CompanySummary;
+}
+
+export interface PortfolioSummary {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  dataSourceType: DataSourceType;
+  companyId: string;
+  company?: { id: string; name: string; displayName: string };
+  patentCount: number;
+  affiliateCount: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { patents: number };
+}
+
+export interface AffiliatePattern {
+  id: string;
+  affiliateId: string;
+  pattern: string;
+  isExact: boolean;
+}
+
+export interface AffiliateDetail {
+  id: string;
+  companyId: string;
+  name: string;
+  displayName: string;
+  acquiredYear: number | null;
+  parentId: string | null;
+  notes: string | null;
+  patterns: AffiliatePattern[];
+  children: Array<{ id: string; name: string }>;
+}
+
+export interface PortfolioDetail extends PortfolioSummary {
+  company: {
+    id: string;
+    name: string;
+    displayName: string;
+    affiliates: AffiliateDetail[];
+  };
+}
+
+export interface PatentCountResult {
+  affiliateId: string;
+  affiliateName: string;
+  totalCount: number;
+  filteredCount: number | null;
+}
+
+export interface ImportResult {
+  imported: number;
+  alreadyCached: number;
+  failed: number;
+  totalInPortfolio: number;
+}
+
+export interface PortfolioPatentRecord {
+  id: string;
+  portfolioId: string;
+  patentId: string;
+  source: string;
+  importedAt: string;
+  patentTitle: string | null;
+  patentDate: string | null;
+  assignee: string | null;
+  affiliateName: string | null;
+}
+
+export interface AffiliateSuggestion {
+  name: string;
+  displayName: string;
+  acquiredYear: number | null;
+  patterns: string[];
+  notes: string;
+}
+
+export interface AnalyzePatentsResult {
+  totalRequested: number;
+  resolved: number;
+  fetchedFromPatentsView: number;
+  stillUnresolved: number;
+  unresolvedIds: string[];
+  suggestedAffiliates: Array<{
+    assignee: string;
+    suggestedName: string;
+    patentCount: number;
+    patents: Array<{ patentId: string; title: string; date: string }>;
+  }>;
+}
+
+export interface CreateFromPatentsResult {
+  portfolio: { id: string; name: string; displayName: string };
+  stats: {
+    totalPatentIds: number;
+    resolved: number;
+    fetchedFromPatentsView: number;
+    stillUnresolved: number;
+    patentRecordsCreated: number;
+  };
+  affiliates: Array<{ name: string; displayName: string; patternCount: number; patentCount: number }>;
+  assigneeClusters: Record<string, { count: number; patents: string[] }>;
+}
+
+export const portfolioApi = {
+  // Portfolio CRUD
+  async list(companyId?: string): Promise<PortfolioSummary[]> {
+    const params = companyId ? { companyId } : {};
+    const { data } = await api.get('/portfolios', { params });
+    return data;
+  },
+
+  async get(id: string): Promise<PortfolioDetail> {
+    const { data } = await api.get(`/portfolios/${id}`);
+    return data;
+  },
+
+  async create(body: { name: string; displayName: string; description?: string; companyId: string; dataSourceType?: DataSourceType }): Promise<PortfolioSummary> {
+    const { data } = await api.post('/portfolios', body);
+    return data;
+  },
+
+  async update(id: string, body: { displayName?: string; description?: string; dataSourceType?: DataSourceType }): Promise<PortfolioSummary> {
+    const { data } = await api.put(`/portfolios/${id}`, body);
+    return data;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.delete(`/portfolios/${id}`);
+  },
+
+  // Patent counts (uses company affiliates)
+  async getPatentCounts(portfolioId: string, cpcPrefix?: string): Promise<{ counts: PatentCountResult[]; cpcPrefix: string | null }> {
+    const params = cpcPrefix ? { cpcPrefix } : {};
+    const { data } = await api.get(`/portfolios/${portfolioId}/patent-counts`, { params });
+    return data;
+  },
+
+  // Patent list (for DB_RECORDS portfolios)
+  async getPatents(portfolioId: string, page = 1, limit = 50): Promise<{
+    patents: PortfolioPatentRecord[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> {
+    const { data } = await api.get(`/portfolios/${portfolioId}/patents`, { params: { page, limit } });
+    return data;
+  },
+
+  // Import patents
+  async importPatents(portfolioId: string, options?: { cpcPrefixes?: string[]; maxPatents?: number }): Promise<ImportResult> {
+    const { data } = await api.post(`/portfolios/${portfolioId}/import-patents`, options || {}, { timeout: 300000 });
+    return data;
+  },
+
+  // Analyze patents — preview assignee clusters before creating portfolio
+  async analyzePatents(patentIds: string[]): Promise<AnalyzePatentsResult> {
+    const { data } = await api.post('/portfolios/analyze-patents', { patentIds }, { timeout: 120000 });
+    return data;
+  },
+
+  // Create portfolio from pre-analyzed data (output of analyze-patents)
+  async createFromPatents(body: {
+    name: string;
+    displayName: string;
+    description?: string;
+    companyId?: string;
+    analyzedData: AnalyzePatentsResult;
+  }): Promise<CreateFromPatentsResult> {
+    const { data } = await api.post('/portfolios/create-from-patents', body, { timeout: 120000 });
+    return data;
+  },
+};
+
+// =============================================================================
+// Company Management API
+// =============================================================================
+
+export const companyApi = {
+  async list(): Promise<CompanySummary[]> {
+    const { data } = await api.get('/companies');
+    return data;
+  },
+
+  async get(id: string): Promise<CompanyDetail> {
+    const { data } = await api.get(`/companies/${id}`);
+    return data;
+  },
+
+  async create(body: { name: string; displayName: string; description?: string; website?: string }): Promise<CompanySummary> {
+    const { data } = await api.post('/companies', body);
+    return data;
+  },
+
+  async update(id: string, body: { displayName?: string; description?: string; website?: string }): Promise<CompanySummary> {
+    const { data } = await api.put(`/companies/${id}`, body);
+    return data;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.delete(`/companies/${id}`);
+  },
+
+  // Competitors
+  async getCompetitors(companyId: string): Promise<CompetitorRelationship[]> {
+    const { data } = await api.get(`/companies/${companyId}/competitors`);
+    return data;
+  },
+
+  async addCompetitor(companyId: string, body: { competitorId: string; sectors?: string[]; discoverySource?: string; notes?: string }): Promise<CompetitorRelationship> {
+    const { data } = await api.post(`/companies/${companyId}/competitors`, body);
+    return data;
+  },
+
+  async removeCompetitor(companyId: string, competitorId: string): Promise<void> {
+    await api.delete(`/companies/${companyId}/competitors/${competitorId}`);
+  },
+
+  async discoverCompetitors(companyId: string, companyName?: string): Promise<{
+    suggestions: Array<{ name: string; slug: string; sectors: string[]; notes: string }>;
+    companyName: string;
+    existingCount: number;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/discover-competitors`, { companyName }, { timeout: 30000 });
+    return data;
+  },
+
+  // Affiliates (under company)
+  async addAffiliate(companyId: string, body: {
+    name: string; displayName: string; acquiredYear?: number; parentId?: string; notes?: string; patterns?: string[];
+  }): Promise<AffiliateDetail> {
+    const { data } = await api.post(`/companies/${companyId}/affiliates`, body);
+    return data;
+  },
+
+  async updateAffiliate(companyId: string, affiliateId: string, body: {
+    displayName?: string; acquiredYear?: number; parentId?: string | null; notes?: string;
+  }): Promise<AffiliateDetail> {
+    const { data } = await api.put(`/companies/${companyId}/affiliates/${affiliateId}`, body);
+    return data;
+  },
+
+  async removeAffiliate(companyId: string, affiliateId: string): Promise<void> {
+    await api.delete(`/companies/${companyId}/affiliates/${affiliateId}`);
+  },
+
+  // Patterns (under company affiliates)
+  async addPattern(companyId: string, affiliateId: string, pattern: string, isExact = false): Promise<AffiliatePattern> {
+    const { data } = await api.post(`/companies/${companyId}/affiliates/${affiliateId}/patterns`, { pattern, isExact });
+    return data;
+  },
+
+  async removePattern(companyId: string, affiliateId: string, patternId: string): Promise<void> {
+    await api.delete(`/companies/${companyId}/affiliates/${affiliateId}/patterns/${patternId}`);
+  },
+};
+
 export default api;

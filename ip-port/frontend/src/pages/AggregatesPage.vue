@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { snapshotApi, type ActiveSnapshots } from '@/services/api';
 
 // Group by field options
@@ -234,6 +235,7 @@ onMounted(async () => {
     <!-- Header -->
     <div class="row items-center q-mb-md">
       <div class="text-h5 q-mr-md">Aggregate View</div>
+      <PortfolioSelector class="q-mr-md" />
       <q-badge color="primary" class="q-mr-md">
         {{ filteredPatents.toLocaleString() }} patents
       </q-badge>

@@ -82,7 +82,8 @@
     "enrich:classify": "tsx scripts/classify-citations.ts",
     "enrich:llm": "tsx scripts/run-llm-top-patents.ts",
     "api:dev": "tsx watch src/api/server.ts",
-    "api:start": "tsx src/api/server.ts"
+    "api:start": "tsx src/api/server.ts",
+    "kill": "lsof -ti:3000,3001 | xargs kill -9 2>/dev/null; echo 'Killed processes on ports 3000 and 3001'"
   },
   "keywords": [
     "uspto",

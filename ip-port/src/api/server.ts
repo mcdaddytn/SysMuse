@@ -21,6 +21,8 @@ import batchJobsRouter from './routes/batch-jobs.routes.js';
 import tournamentsRouter from './routes/tournaments.routes.js';
 import cpcRouter from './routes/cpc.routes.js';
 import scoringTemplatesRouter from './routes/scoring-templates.routes.js';
+import portfoliosRouter from './routes/portfolios.routes.js';
+import companiesRouter from './routes/companies.routes.js';
 
 dotenv.config();
 
@@ -64,6 +66,8 @@ app.use('/api/batch-jobs', batchJobsRouter);
 app.use('/api/tournaments', tournamentsRouter);
 app.use('/api/cpc', cpcRouter);
 app.use('/api/scoring-templates', scoringTemplatesRouter);
+app.use('/api/portfolios', portfoliosRouter);
+app.use('/api/companies', companiesRouter);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

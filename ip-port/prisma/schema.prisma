@@ -99,6 +99,169 @@ enum AccessLevel {
 }
 
 // =============================================================================
+// COMPANIES, PORTFOLIOS & AFFILIATES
+// Company-centric model: companies own affiliates and portfolios.
+// Competitor relationships are per-company and directed.
+// =============================================================================
+
+enum DataSourceType {
+  JSON_PIPELINE    // Broadcom — loaded from output/*.json into ES
+  DB_RECORDS       // Chelsio, competitors — PortfolioPatent table
+}
+
+enum CompetitorDiscoverySource {
+  MANUAL
+  CITATION_OVERLAP
+  TERM_EXTRACTION
+  LLM_SUGGESTED
+  HYBRID_CLUSTER
+}
+
+enum PatentSource {
+  CANDIDATES_FILE     // Loaded from output/portfolio-candidates-*.json
+  PATENTSVIEW_IMPORT  // Imported via PatentsView API
+  MANUAL              // Manually added
+  FAMILY_EXPANSION    // Discovered via family exploration
+}
+
+model Company {
+  id              String    @id @default(cuid())
+
+  name            String    @unique                // e.g., "broadcom", "netflix" (lowercase slug)
+  displayName     String    @map("display_name")   // e.g., "Broadcom Inc.", "Netflix"
+  description     String?
+  website         String?
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  affiliates      Affiliate[]
+  portfolios      Portfolio[]
+  competitorsOf   CompetitorRelationship[] @relation("CompetitorFrom")
+  competitorTo    CompetitorRelationship[] @relation("CompetitorTo")
+
+  @@map("companies")
+}
+
+model CompetitorRelationship {
+  id              String    @id @default(cuid())
+
+  companyId       String    @map("company_id")
+  company         Company   @relation("CompetitorFrom", fields: [companyId], references: [id], onDelete: Cascade)
+
+  competitorId    String    @map("competitor_id")
+  competitor      Company   @relation("CompetitorTo", fields: [competitorId], references: [id], onDelete: Cascade)
+
+  sectors         String[]                // Which sectors they compete in
+  discoverySource CompetitorDiscoverySource @default(MANUAL) @map("discovery_source")
+  strength        Float?                  // Citation overlap strength (0-1)
+  notes           String?
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@unique([companyId, competitorId])
+  @@map("competitor_relationships")
+  @@index([companyId])
+  @@index([competitorId])
+}
+
+model Portfolio {
+  id              String         @id @default(cuid())
+
+  name            String         @unique                // e.g., "broadcom-core", "chelsio"
+  displayName     String         @map("display_name")   // e.g., "Broadcom Core", "Chelsio"
+  description     String?
+  dataSourceType  DataSourceType @default(DB_RECORDS) @map("data_source_type")
+
+  // Owner company
+  companyId       String         @map("company_id")
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Cached stats
+  patentCount     Int            @default(0) @map("patent_count")
+  affiliateCount  Int            @default(0) @map("affiliate_count")
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  patents         PortfolioPatent[]
+  sectorRules     SectorRule[]
+
+  @@map("portfolios")
+  @@index([companyId])
+}
+
+model Affiliate {
+  id              String    @id @default(cuid())
+
+  companyId       String    @map("company_id")
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name            String                // e.g., "Avago", "Nicira"
+  displayName     String    @map("display_name")  // e.g., "Avago Technologies"
+  acquiredYear    Int?      @map("acquired_year")
+  notes           String?
+
+  // Self-referential hierarchy (e.g., Nicira → VMware → Broadcom)
+  parentId        String?   @map("parent_id")
+  parent          Affiliate? @relation("AffiliateHierarchy", fields: [parentId], references: [id])
+  children        Affiliate[] @relation("AffiliateHierarchy")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  patterns        AffiliatePattern[]
+
+  @@unique([companyId, name])
+  @@map("affiliates")
+  @@index([companyId])
+}
+
+model AffiliatePattern {
+  id              String    @id @default(cuid())
+
+  affiliateId     String    @map("affiliate_id")
+  affiliate       Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  pattern         String                // Assignee string to match (e.g., "Avago Technologies General IP")
+  isExact         Boolean   @default(false) @map("is_exact")  // true = exact match, false = contains
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([affiliateId, pattern])
+  @@map("affiliate_patterns")
+  @@index([affiliateId])
+}
+
+model PortfolioPatent {
+  id              String       @id @default(cuid())
+
+  portfolioId     String       @map("portfolio_id")
+  portfolio       Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  patentId        String       @map("patent_id")       // e.g., "US-10123456-B2"
+  source          PatentSource @default(PATENTSVIEW_IMPORT)
+  importedAt      DateTime     @default(now()) @map("imported_at")
+
+  // Snapshot fields (denormalized for fast display without cache lookups)
+  patentTitle     String?      @map("patent_title")
+  patentDate      String?      @map("patent_date")
+  assignee        String?
+  affiliateName   String?      @map("affiliate_name")
+
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@unique([portfolioId, patentId])
+  @@map("portfolio_patents")
+  @@index([portfolioId])
+  @@index([patentId])
+}
+
+// =============================================================================
 // FOCUS GROUPS & FOCUS AREAS
 // =============================================================================
 
@@ -547,6 +710,7 @@ model SectorRule {
 
   scope         SectorRuleScope @default(LIBRARY)
   portfolioId   String?  @map("portfolio_id")  // Non-null for portfolio overrides
+  portfolio     Portfolio? @relation(fields: [portfolioId], references: [id])
 
   description   String?
   isActive      Boolean  @default(true) @map("is_active")

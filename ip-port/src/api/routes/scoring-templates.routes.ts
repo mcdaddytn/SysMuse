@@ -1095,10 +1095,11 @@ router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Res
   try {
     const { sectorName } = req.params;
     const { limit, model, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
+    const { portfolioId } = req.body || {};
 
     const contextOptions = useClaims === 'true' ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
 
-    console.log(`[Batch] Submitting batch scoring for: ${sectorName}`);
+    console.log(`[Batch] Submitting batch scoring for: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''}`);
 
     const v2Weights = prioritizeBy === 'v2' ? {
       citation: v2Citation ? parseInt(v2Citation as string) : 50,
@@ -1107,6 +1108,7 @@ router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Res
     } : undefined;
 
     const result = await submitBatchScoring(sectorName, {
+      portfolioId,
       limit: limit ? parseInt(limit as string) : 2000,
       model: model as string || undefined,
       rescore: rescore === 'true',

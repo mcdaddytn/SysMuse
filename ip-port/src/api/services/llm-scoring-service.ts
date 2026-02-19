@@ -728,6 +728,7 @@ function calculateV2Score(patent: any, weights: V2Weights): number {
 export async function getPatentsForSectorScoring(
   sectorName: string,
   options: {
+    portfolioId?: string;
     limit?: number;
     onlyUnscored?: boolean;
     minYear?: number;
@@ -737,31 +738,71 @@ export async function getPatentsForSectorScoring(
     v2Weights?: V2Weights;
   } = {}
 ): Promise<PatentForScoring[]> {
-  const { limit = 500, onlyUnscored = true, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights = DEFAULT_V2_WEIGHTS } = options;
+  const { portfolioId, limit = 500, onlyUnscored = true, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights = DEFAULT_V2_WEIGHTS } = options;
 
-  // Load candidates file
-  const possiblePaths = [
-    path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json'),
-    path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-24.json'),
-  ];
+  let filtered: any[];
 
-  let candidatesPath: string | null = null;
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      candidatesPath = p;
-      break;
+  if (portfolioId) {
+    // ── PostgreSQL path: load from database ──
+    console.log(`[LLM Scoring] Loading patents from portfolio ${portfolioId}, sector: ${sectorName}`);
+
+    const dbPatents = await prisma.patent.findMany({
+      where: {
+        primarySector: sectorName,
+        portfolios: { some: { portfolioId } },
+      },
+      select: {
+        patentId: true,
+        title: true,
+        abstract: true,
+        grantDate: true,
+        baseScore: true,
+        primarySector: true,
+        superSector: true,
+        primarySubSectorId: true,
+        primarySubSectorName: true,
+        cpcCodes: { select: { cpcCode: true } },
+      },
+    });
+
+    // Map DB fields to the common format used by filtering/sorting below
+    filtered = dbPatents.map(p => ({
+      patent_id: p.patentId,
+      patent_title: p.title,
+      abstract: p.abstract,
+      patent_date: p.grantDate,
+      score: p.baseScore ?? 0,
+      primary_sector: p.primarySector,
+      super_sector: p.superSector,
+      primary_sub_sector_id: p.primarySubSectorId,
+      primary_sub_sector_name: p.primarySubSectorName,
+      cpc_codes: p.cpcCodes.map(c => c.cpcCode),
+    }));
+
+    console.log(`[LLM Scoring] Found ${filtered.length} patents in sector ${sectorName} from portfolio`);
+  } else {
+    // ── Legacy file path: load from candidates file ──
+    const possiblePaths = [
+      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-25.json'),
+      path.join(process.cwd(), 'output', 'streaming-candidates-2026-01-24.json'),
+    ];
+
+    let candidatesPath: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        candidatesPath = p;
+        break;
+      }
     }
+
+    if (!candidatesPath) {
+      throw new Error('Candidates file not found. Provide a portfolioId to load from database instead.');
+    }
+
+    const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
+    const candidates = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
+    filtered = candidates.filter((p: any) => p.primary_sector === sectorName);
   }
-
-  if (!candidatesPath) {
-    throw new Error('Candidates file not found');
-  }
-
-  const fileContent = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
-  const candidates = Array.isArray(fileContent) ? fileContent : fileContent.candidates;
-
-  // Filter to this sector
-  let filtered = candidates.filter((p: any) => p.primary_sector === sectorName);
 
   // Filter by minimum year if specified
   if (minYear) {
@@ -1166,6 +1207,7 @@ export interface BatchJobMetadata {
   batchId: string;
   sectorName: string;
   superSector: string;
+  portfolioId?: string;
   patentCount: number;
   model: string;
   templateInheritanceChain: string[];
@@ -1209,6 +1251,7 @@ function loadBatchMetadata(batchId: string): BatchJobMetadata | null {
 export async function submitBatchScoring(
   sectorName: string,
   options: {
+    portfolioId?: string;
     limit?: number;
     model?: string;
     rescore?: boolean;
@@ -1221,6 +1264,7 @@ export async function submitBatchScoring(
   } = {}
 ): Promise<{ batchId: string; requestCount: number; sectorName: string }> {
   const {
+    portfolioId,
     limit = 2000,
     model = 'claude-sonnet-4-20250514',
     rescore = false,
@@ -1232,10 +1276,11 @@ export async function submitBatchScoring(
     v2Weights
   } = options;
 
-  console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}`);
+  console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''}`);
 
   // 1. Get patents
   const patents = await getPatentsForSectorScoring(sectorName, {
+    portfolioId,
     limit,
     onlyUnscored: !rescore,
     minYear,
@@ -1288,6 +1333,7 @@ export async function submitBatchScoring(
     batchId: batch.id,
     sectorName,
     superSector,
+    ...(portfolioId && { portfolioId }),
     patentCount: requests.length,
     model,
     templateInheritanceChain: template.inheritanceChain,

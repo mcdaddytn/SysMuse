@@ -17,6 +17,7 @@ import {
   recalculatePatentCounts,
   recalculateSectorPatentCount,
   reassignAllPatents,
+  reassignPortfolioPatents,
   clearRuleCache,
 } from '../services/sector-assignment-service.js';
 import {
@@ -225,6 +226,54 @@ router.post('/reassign-patents', async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     console.error('[Sectors] Reassign-patents error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/sectors/reassign-portfolio
+ * Assign sectors to database-backed portfolio patents using CPC rules.
+ * Body: { portfolioId?: string, dryRun?: boolean }
+ *   - portfolioId: scope to a specific portfolio (omit for all DB patents)
+ *   - dryRun: if true, returns assignments without writing to DB
+ *
+ * Returns sector counts + taxonomy gap report (unmatched CPC prefixes).
+ */
+router.post('/reassign-portfolio', async (req: Request, res: Response) => {
+  try {
+    const { portfolioId, dryRun } = req.body;
+
+    console.log('[Sectors] Starting portfolio patent reassignment...');
+    console.log(`  Portfolio: ${portfolioId || 'all'}`);
+    console.log(`  Dry run: ${dryRun || false}`);
+
+    const result = await reassignPortfolioPatents({
+      portfolioId,
+      dryRun,
+      progressCallback: (current, total) => {
+        console.log(`  Progress: ${current}/${total} patents (${Math.round(100 * current / total)}%)`);
+      },
+    });
+
+    clearRuleCache();
+    clearSectorCache();
+
+    res.json({
+      message: dryRun
+        ? 'Dry run completed (no changes saved)'
+        : `Assigned sectors to ${result.assigned} patents (${result.noMatch} unmatched)`,
+      ...result,
+      taxonomyGaps: Object.keys(result.unmatchedCpcPrefixes).length > 0
+        ? {
+            message: `${result.noMatch} patents couldn't be classified. Top unmatched CPC prefixes listed below — consider expanding taxonomy.`,
+            prefixes: Object.entries(result.unmatchedCpcPrefixes)
+              .sort((a, b) => b[1] - a[1])
+              .map(([prefix, count]) => ({ prefix, count })),
+          }
+        : null,
+    });
+  } catch (err: unknown) {
+    console.error('[Sectors] Reassign-portfolio error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

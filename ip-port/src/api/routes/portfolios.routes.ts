@@ -585,11 +585,22 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     await prisma.portfolio.update({ where: { id: portfolioId }, data: { patentCount } });
 
     // Background-hydrate new patents to fill abstract, filing date, forward citations, etc.
+    // Then auto-assign sectors once hydration completes (needs title/abstract for keyword rules).
     if (newPatentIds.length > 0) {
       import('../services/patent-hydration-service.js').then(({ hydratePatents }) =>
-        hydratePatents(newPatentIds, { companyId: portfolio.companyId }).catch(err =>
-          console.error('[Import] Background hydration failed:', err)
-        )
+        hydratePatents(newPatentIds, { companyId: portfolio.companyId })
+          .then(() => {
+            // Auto-assign sectors after hydration completes
+            return import('../services/sector-assignment-service.js').then(({ reassignPortfolioPatents }) =>
+              reassignPortfolioPatents({ portfolioId })
+            );
+          })
+          .then((result) => {
+            console.log(`[Import] Auto-sector assignment: ${result.assigned} assigned, ${result.noMatch} unmatched`);
+          })
+          .catch(err =>
+            console.error('[Import] Background hydration/sector-assignment failed:', err)
+          )
       );
     }
 

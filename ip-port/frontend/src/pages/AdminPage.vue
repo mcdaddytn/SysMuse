@@ -65,10 +65,11 @@ const newPortfolio = ref({ name: '', displayName: '', description: '' });
 const showImportDialog = ref(false);
 const importPortfolioId = ref('');
 const importPortfolioName = ref('');
-const importCpcPrefixes = ref('H04N, H04L');
+const importCpcPrefixes = ref('');
 const importMaxPatents = ref(1000);
 const importing = ref(false);
 const importResult = ref<{ imported: number; alreadyExists: number; failed: number; totalInPortfolio: number } | null>(null);
+const importNotification = ref<string | null>(null);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
@@ -316,6 +317,7 @@ async function createPortfolio() {
     showCreatePortfolioDialog.value = false;
     newPortfolio.value = { name: '', displayName: '', description: '' };
     await loadCompanyDetail(selectedCompanyId.value);
+    await loadCompanies();
   } catch (err: unknown) {
     error.value = (err as Error).message;
   }
@@ -338,7 +340,12 @@ async function importPatents() {
       cpcPrefixes: cpcPrefixes.length ? cpcPrefixes : undefined,
       maxPatents: importMaxPatents.value,
     });
+    showImportDialog.value = false;
     importResult.value = result;
+    // Show result as a temporary notification
+    error.value = null;
+    importNotification.value = `Imported ${result.imported} new patents (${result.alreadyExists} already existed). Portfolio now has ${result.totalInPortfolio} total. Hydration running in background.`;
+    setTimeout(() => { importNotification.value = null; }, 10000);
     // Refresh company detail to update portfolio patent count
     if (selectedCompanyId.value) {
       await loadCompanyDetail(selectedCompanyId.value);
@@ -551,18 +558,14 @@ onMounted(() => loadCompanies());
                 <q-item-section>
                   <q-item-label>{{ p.displayName }}</q-item-label>
                   <q-item-label caption>
-                    {{ p.dataSourceType === 'JSON_PIPELINE' ? 'ElasticSearch' : 'DB Records' }}
-                    &middot; {{ p._count?.patents ?? p.patentCount ?? 0 }} patents
+                    {{ p._count?.patents ?? p.patentCount ?? 0 }} patents
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side class="row no-wrap items-center">
+                <q-item-section side>
                   <q-btn flat dense round icon="download" size="xs" color="primary"
                     @click="openImportDialog(p)">
                     <q-tooltip>Import Patents from PatentsView</q-tooltip>
                   </q-btn>
-                  <q-badge :color="p.dataSourceType === 'JSON_PIPELINE' ? 'primary' : 'secondary'" outline class="q-ml-xs">
-                    {{ p.dataSourceType === 'JSON_PIPELINE' ? 'ES' : 'DB' }}
-                  </q-badge>
                 </q-item-section>
               </q-item>
             </q-list>
@@ -934,13 +937,6 @@ onMounted(() => loadCompanies());
             hint="Leave empty for all patents, or filter e.g. H04N, H04L" />
           <q-input v-model.number="importMaxPatents" label="Max Patents" dense outlined type="number" class="q-mb-sm"
             hint="Maximum number of patents to import (default 1000)" />
-          <div v-if="importResult" class="q-mt-md">
-            <q-banner class="bg-green-1 text-green-8" rounded>
-              Imported {{ importResult.imported }} new patents
-              ({{ importResult.alreadyExists }} already existed, {{ importResult.failed }} failed).
-              Portfolio now has {{ importResult.totalInPortfolio }} patents total.
-            </q-banner>
-          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Close" v-close-popup />
@@ -949,6 +945,14 @@ onMounted(() => loadCompanies());
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Import success notification -->
+    <q-banner v-if="importNotification" class="bg-green-1 text-green-8 q-mt-md" rounded>
+      {{ importNotification }}
+      <template v-slot:action>
+        <q-btn flat dense label="Dismiss" @click="importNotification = null" />
+      </template>
+    </q-banner>
 
     <!-- Error banner -->
     <q-banner v-if="error" class="bg-red-1 text-red-8 q-mt-md" rounded>

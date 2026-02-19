@@ -71,6 +71,9 @@ const importing = ref(false);
 const importResult = ref<{ imported: number; alreadyExists: number; failed: number; totalInPortfolio: number } | null>(null);
 const importNotification = ref<string | null>(null);
 
+// Extract XMLs
+const extracting = ref(false);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,6 +360,49 @@ async function importPatents() {
   }
 }
 
+async function extractXmls(portfolio: { id: string; displayName: string }) {
+  extracting.value = true;
+  try {
+    const startResult = await portfolioApi.extractXmls(portfolio.id);
+    if (startResult.status === 'running') {
+      importNotification.value = `XML extraction for "${portfolio.displayName}" already in progress...`;
+    } else {
+      importNotification.value = `XML extraction for "${portfolio.displayName}" started (${startResult.totalPatents} patents). This may take several minutes...`;
+    }
+
+    // Poll for completion
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await portfolioApi.getExtractXmlsStatus(portfolio.id);
+        if (status.status === 'completed') {
+          clearInterval(pollInterval);
+          extracting.value = false;
+          const r = status.result!;
+          importNotification.value = `XML extraction complete: ${r.extracted} extracted, ${r.alreadyExist} already existed, ${r.notFound} not found.`;
+          setTimeout(() => { importNotification.value = null; }, 15000);
+        } else if (status.status === 'failed') {
+          clearInterval(pollInterval);
+          extracting.value = false;
+          error.value = `Extraction failed: ${status.error}`;
+          importNotification.value = null;
+        } else {
+          // Still running — show latest log
+          const lastLog = status.logs[status.logs.length - 1];
+          if (lastLog) importNotification.value = `Extracting XMLs: ${lastLog}`;
+        }
+      } catch {
+        // Poll error — keep trying
+      }
+    }, 5000);
+
+    // Safety timeout: stop polling after 30 minutes
+    setTimeout(() => { clearInterval(pollInterval); extracting.value = false; }, 30 * 60 * 1000);
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+    extracting.value = false;
+  }
+}
+
 async function discoverAffiliates() {
   if (!selectedCompanyId.value) return;
   discoveringAffiliates.value = true;
@@ -561,10 +607,15 @@ onMounted(() => loadCompanies());
                     {{ p._count?.patents ?? p.patentCount ?? 0 }} patents
                   </q-item-label>
                 </q-item-section>
-                <q-item-section side>
+                <q-item-section side class="row no-wrap items-center q-gutter-xs">
                   <q-btn flat dense round icon="download" size="xs" color="primary"
                     @click="openImportDialog(p)">
                     <q-tooltip>Import Patents from PatentsView</q-tooltip>
+                  </q-btn>
+                  <q-btn flat dense round icon="description" size="xs" color="accent"
+                    :loading="extracting"
+                    @click="extractXmls(p)">
+                    <q-tooltip>Extract XMLs (for claims)</q-tooltip>
                   </q-btn>
                 </q-item-section>
               </q-item>

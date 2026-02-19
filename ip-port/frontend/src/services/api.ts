@@ -3153,6 +3153,23 @@ export const portfolioApi = {
     return data;
   },
 
+  // Extract patent XMLs from USPTO bulk ZIPs (needed for claims) — starts background job
+  async extractXmls(portfolioId: string): Promise<{ status: string; totalPatents?: number; message: string }> {
+    const { data } = await api.post(`/portfolios/${portfolioId}/extract-xmls`, {}, { timeout: 30000 });
+    return data;
+  },
+
+  // Poll extraction job status
+  async getExtractXmlsStatus(portfolioId: string): Promise<{
+    status: 'none' | 'running' | 'completed' | 'failed';
+    logs: string[];
+    result?: { totalRequested: number; extracted: number; alreadyExist: number; notFound: number; errors: string[] };
+    error?: string;
+  }> {
+    const { data } = await api.get(`/portfolios/${portfolioId}/extract-xmls/status`);
+    return data;
+  },
+
   // Hydrate bare patents with PatentsView data
   async hydratePatents(portfolioId: string, options?: { force?: boolean }): Promise<HydrationResult> {
     const { data } = await api.post(`/portfolios/${portfolioId}/hydrate`, options || {}, { timeout: 300000 });

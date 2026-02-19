@@ -600,4 +600,92 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
   }
 });
 
+// =============================================================================
+// EXTRACT PATENT XMLs (USPTO bulk data → individual XML files for claims)
+// =============================================================================
+
+// In-memory extraction job tracking
+const extractionJobs = new Map<string, {
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  logs: string[];
+  result?: any;
+  error?: string;
+}>();
+
+/** POST /api/portfolios/:id/extract-xmls — start XML extraction (async background job) */
+router.post('/:id/extract-xmls', async (req: Request, res: Response) => {
+  try {
+    const portfolioId = req.params.id;
+
+    // Check for already-running job
+    const existing = extractionJobs.get(portfolioId);
+    if (existing?.status === 'running') {
+      return res.json({ status: 'running', message: 'Extraction already in progress', logs: existing.logs });
+    }
+
+    // Get all patents in this portfolio with grant dates
+    const portfolioPatents = await prisma.portfolioPatent.findMany({
+      where: { portfolioId },
+      include: { patent: { select: { patentId: true, grantDate: true } } },
+    });
+
+    if (!portfolioPatents.length) {
+      return res.json({ status: 'failed', error: 'No patents in portfolio' });
+    }
+
+    const requests = portfolioPatents
+      .filter(pp => pp.patent.grantDate)
+      .map(pp => ({
+        patentId: pp.patent.patentId,
+        grantDate: pp.patent.grantDate!,
+      }));
+
+    if (!requests.length) {
+      return res.json({ status: 'failed', error: 'No patents have grant dates — hydrate first' });
+    }
+
+    // Start background job
+    const job = { status: 'running' as const, startedAt: new Date().toISOString(), logs: [] as string[] };
+    extractionJobs.set(portfolioId, job);
+
+    // Respond immediately
+    res.json({ status: 'started', totalPatents: requests.length, message: 'Extraction started in background' });
+
+    // Run extraction in background (detached from request lifecycle)
+    import('../services/patent-xml-extractor-service.js').then(async ({ extractPatentXmls }) => {
+      try {
+        const result = await extractPatentXmls(requests, (msg) => {
+          job.logs.push(msg);
+          console.log(`[ExtractXMLs] ${msg}`);
+        });
+        job.status = 'completed';
+        (job as any).result = result;
+      } catch (err) {
+        job.status = 'failed';
+        (job as any).error = (err as Error).message;
+        console.error('[ExtractXMLs] Job failed:', err);
+      }
+    });
+  } catch (err: unknown) {
+    console.error('[Portfolios] Extract XMLs error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /api/portfolios/:id/extract-xmls/status — poll extraction job status */
+router.get('/:id/extract-xmls/status', async (req: Request, res: Response) => {
+  const job = extractionJobs.get(req.params.id);
+  if (!job) {
+    return res.json({ status: 'none', message: 'No extraction job found' });
+  }
+  res.json({
+    status: job.status,
+    startedAt: job.startedAt,
+    logs: job.logs,
+    result: (job as any).result || null,
+    error: (job as any).error || null,
+  });
+});
+
 export default router;

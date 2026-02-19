@@ -284,6 +284,7 @@ model Patent {
   hasLlmData        Boolean  @default(false) @map("has_llm_data")
   hasCitationData   Boolean  @default(false) @map("has_citation_data")
   hasProsecutionData Boolean @default(false) @map("has_prosecution_data")
+  hasXmlData         Boolean  @default(false) @map("has_xml_data")
 
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

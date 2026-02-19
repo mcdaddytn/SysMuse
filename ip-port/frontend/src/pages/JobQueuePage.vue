@@ -149,11 +149,16 @@ const groupedJobs = computed(() => {
 const showNewJobDialog = ref(false);
 const newJobTargetType = ref<TargetType>('tier');
 const newJobTargetValue = ref('6000');
-const newJobCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family']);
+const newJobCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family', 'xml']);
 const newJobMaxHours = ref(4);
+const newJobUseClaims = ref(false);
 const startingJob = ref(false);
 const gapsData = ref<GapsResponse | null>(null);
 const loadingGaps = ref(false);
+
+// Claims-gate dialog
+const showClaimsGateDialog = ref(false);
+const claimsGateInfo = ref<{ total: number; missing: number; suggestion: string } | null>(null);
 
 const targetTypeOptions = [
   { value: 'tier', label: 'Tier (Top N patents)' },
@@ -165,7 +170,8 @@ const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: st
   { value: 'llm', label: 'LLM Analysis', color: 'blue' },
   { value: 'prosecution', label: 'Prosecution History', color: 'purple' },
   { value: 'ipr', label: 'IPR / PTAB', color: 'orange' },
-  { value: 'family', label: 'Patent Families', color: 'teal' }
+  { value: 'family', label: 'Patent Families', color: 'teal' },
+  { value: 'xml', label: 'XML Extraction', color: 'positive' }
 ];
 
 const superSectorOptions = [
@@ -209,15 +215,52 @@ async function startNewJob() {
       coverageTypes: newJobCoverageTypes.value,
       maxHours: newJobMaxHours.value,
       portfolioId: portfolioStore.selectedPortfolioId,
+      useClaims: newJobUseClaims.value,
     });
     showNewJobDialog.value = false;
     await loadBatchJobs();
   } catch (err: unknown) {
-    const error = err as { response?: { data?: { error?: string } } };
-    alert(error.response?.data?.error || 'Failed to start jobs');
+    const error = err as { response?: { data?: { error?: string; xmlGap?: { total: number; missing: number }; suggestion?: string } } };
+    if (error.response?.data?.error === 'claims_gate') {
+      claimsGateInfo.value = {
+        total: error.response.data.xmlGap?.total ?? 0,
+        missing: error.response.data.xmlGap?.missing ?? 0,
+        suggestion: error.response.data.suggestion ?? '',
+      };
+      showClaimsGateDialog.value = true;
+    } else {
+      alert(error.response?.data?.error || 'Failed to start jobs');
+    }
   } finally {
     startingJob.value = false;
   }
+}
+
+async function submitXmlExtractionFirst() {
+  showClaimsGateDialog.value = false;
+  startingJob.value = true;
+  try {
+    await batchJobsApi.startJobs({
+      targetType: newJobTargetType.value,
+      targetValue: newJobTargetValue.value,
+      coverageTypes: ['xml'],
+      portfolioId: portfolioStore.selectedPortfolioId,
+    });
+    showNewJobDialog.value = false;
+    activeTab.value = 'jobs';
+    await loadBatchJobs();
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { error?: string } } };
+    alert(error.response?.data?.error || 'Failed to start XML extraction');
+  } finally {
+    startingJob.value = false;
+  }
+}
+
+async function submitWithoutClaims() {
+  showClaimsGateDialog.value = false;
+  newJobUseClaims.value = false;
+  await startNewJob();
 }
 
 // ─── Contextual Enrich Dialogs ───────────────────────────────────────────────
@@ -225,7 +268,7 @@ const showEnrichDialog = ref(false);
 const enrichDialogTargetType = ref<TargetType>('tier');
 const enrichDialogTargetValue = ref('');
 const enrichDialogTopN = ref<number>(0);  // 0 = all patents in sector
-const enrichDialogCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family']);
+const enrichDialogCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family', 'xml']);
 const enrichDialogGaps = ref<GapsResponse | null>(null);
 const enrichDialogLoading = ref(false);
 const enrichDialogStarting = ref(false);
@@ -234,7 +277,7 @@ async function openEnrichDialog(targetType: TargetType, targetValue: string, top
   enrichDialogTargetType.value = targetType;
   enrichDialogTargetValue.value = targetValue;
   enrichDialogTopN.value = topN;
-  enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'ipr', 'family'];
+  enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'ipr', 'family', 'xml'];
   enrichDialogGaps.value = null;
   showEnrichDialog.value = true;
 
@@ -723,7 +766,7 @@ onUnmounted(() => {
                 <div class="text-grey-6">Total Patents</div>
               </q-card-section>
             </q-card>
-            <q-card v-for="(label, key) in { llm: 'LLM', prosecution: 'Prosecution', ipr: 'IPR', family: 'Families' }" :key="key" class="col">
+            <q-card v-for="(label, key) in { llm: 'LLM', prosecution: 'Prosecution', ipr: 'IPR', family: 'Families', xml: 'XML' }" :key="key" class="col">
               <q-card-section>
                 <div class="row items-center justify-between q-mb-xs">
                   <span class="text-weight-medium">{{ label }}</span>
@@ -803,6 +846,15 @@ onUnmounted(() => {
                         </div>
                       </td>
                     </tr>
+                    <tr>
+                      <td class="metric-col text-weight-bold">XML</td>
+                      <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-xml'">
+                        <div class="enrichment-cell">
+                          <q-linear-progress :value="tier.enrichment.xmlPct / 100" :color="coverageColor(tier.enrichment.xmlPct)" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ tier.enrichment.xmlPct }}%</span>
+                        </div>
+                      </td>
+                    </tr>
                     <!-- Enrich Actions Row -->
                     <tr class="section-separator">
                       <td class="metric-col text-weight-bold">Actions</td>
@@ -873,6 +925,7 @@ onUnmounted(() => {
                   { name: 'pros', label: 'Prosecution', field: (row: any) => row.enrichment.prosecutionPct, align: 'center', sortable: true },
                   { name: 'ipr', label: 'IPR', field: (row: any) => row.enrichment.iprPct, align: 'center', sortable: true },
                   { name: 'family', label: 'Families', field: (row: any) => row.enrichment.familyPct, align: 'center', sortable: true },
+                  { name: 'xml', label: 'XML', field: (row: any) => row.enrichment.xmlPct, align: 'center', sortable: true },
                   { name: 'actions', label: '', field: 'actions', align: 'center' }
                 ]"
                 row-key="name"
@@ -910,6 +963,14 @@ onUnmounted(() => {
                     <div class="enrichment-cell-small">
                       <q-linear-progress :value="props.row.enrichment.familyPct / 100" :color="coverageColor(props.row.enrichment.familyPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.familyPct }}%</span>
+                    </div>
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-xml="props">
+                  <q-td :props="props">
+                    <div class="enrichment-cell-small">
+                      <q-linear-progress :value="props.row.enrichment.xmlPct / 100" :color="coverageColor(props.row.enrichment.xmlPct)" size="12px" rounded />
+                      <span class="text-caption">{{ props.row.enrichment.xmlPct }}%</span>
                     </div>
                   </q-td>
                 </template>
@@ -1240,6 +1301,17 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Use Claims toggle (shown when LLM is selected) -->
+          <q-toggle
+            v-if="newJobCoverageTypes.includes('llm')"
+            v-model="newJobUseClaims"
+            label="Use Claims for LLM Scoring"
+            color="blue"
+            class="q-mt-sm"
+          >
+            <q-tooltip>When enabled, LLM scoring will include patent claims from extracted XMLs. Requires XML extraction to be complete.</q-tooltip>
+          </q-toggle>
+
           <!-- Gap Preview -->
           <q-card v-if="gapsData" flat bordered class="q-mt-md">
             <q-card-section class="q-pa-sm">
@@ -1306,6 +1378,37 @@ onUnmounted(() => {
             :loading="enrichDialogStarting"
             :disable="enrichDialogCoverageTypes.length === 0"
             @click="startEnrichFromDialog"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ═══ Claims-Gate Dialog ═══ -->
+    <q-dialog v-model="showClaimsGateDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6 text-negative">XML Data Required</div>
+        </q-card-section>
+        <q-card-section v-if="claimsGateInfo">
+          <p>
+            <strong>{{ claimsGateInfo.missing }}</strong> of {{ claimsGateInfo.total }} patents are missing XML data.
+            LLM scoring with claims requires all patents to have extracted XMLs.
+          </p>
+          <p class="text-grey-7">{{ claimsGateInfo.suggestion }}</p>
+        </q-card-section>
+        <q-card-actions align="right" class="q-gutter-sm">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            outline
+            color="grey-7"
+            label="Score Without Claims"
+            @click="submitWithoutClaims"
+          />
+          <q-btn
+            color="positive"
+            label="Extract XMLs First"
+            icon="description"
+            @click="submitXmlExtractionFirst"
           />
         </q-card-actions>
       </q-card>

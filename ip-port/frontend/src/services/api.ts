@@ -156,6 +156,7 @@ export interface EnrichmentTierData {
     prosecution: number; prosecutionPct: number;
     ipr: number; iprPct: number;
     family: number; familyPct: number;
+    xml: number; xmlPct: number;
   };
   topAffiliates: Array<{ name: string; count: number; pct: number }>;
   topSuperSectors: Array<{ name: string; count: number; pct: number }>;
@@ -164,7 +165,7 @@ export interface EnrichmentTierData {
 export interface EnrichmentSummary {
   totalPatents: number;
   tierSize: number;
-  enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number };
+  enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number; xml: number };
   tiers: EnrichmentTierData[];
 }
 
@@ -1991,12 +1992,14 @@ export interface SectorEnrichmentData {
     prosecution: number; prosecutionPct: number;
     ipr: number; iprPct: number;
     family: number; familyPct: number;
+    xml: number; xmlPct: number;
   };
   gaps: {
     llm: number;
     prosecution: number;
     ipr: number;
     family: number;
+    xml: number;
   };
 }
 
@@ -2007,7 +2010,7 @@ export interface SectorEnrichmentSummary {
 }
 
 // Batch Job types
-export type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
+export type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family' | 'xml';
 export type TargetType = 'tier' | 'super-sector' | 'sector';
 
 export interface BatchJob {
@@ -2086,6 +2089,7 @@ export const batchJobsApi = {
     maxHours?: number;
     topN?: number;  // For super-sector/sector: limit to top N patents by score
     portfolioId?: string | null;
+    useClaims?: boolean;  // When true, LLM jobs require XML data
   }): Promise<StartJobsResponse> {
     const { data } = await api.post('/batch-jobs', params);
     return data;

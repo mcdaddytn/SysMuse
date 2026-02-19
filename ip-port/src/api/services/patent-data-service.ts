@@ -1084,6 +1084,7 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
   has_llm_data: boolean;
   has_citation_data: boolean;
   has_prosecution_data: boolean;
+  has_xml_data: boolean;
 }>> {
   const where: Prisma.PatentWhereInput = portfolioId
     ? { portfolios: { some: { portfolioId } } }
@@ -1102,6 +1103,7 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
       hasLlmData: true,
       hasCitationData: true,
       hasProsecutionData: true,
+      hasXmlData: true,
       citations: { select: { competitorCitations: true } },
     },
   });
@@ -1117,5 +1119,6 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
     has_llm_data: p.hasLlmData,
     has_citation_data: p.hasCitationData,
     has_prosecution_data: p.hasProsecutionData,
+    has_xml_data: p.hasXmlData,
   }));
 }

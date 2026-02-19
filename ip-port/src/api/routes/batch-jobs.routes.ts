@@ -14,7 +14,7 @@ const router = Router();
 let lastCacheInvalidation = 0;
 
 // Coverage types that can be run independently
-type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
+type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family' | 'xml';
 type TargetType = 'tier' | 'super-sector' | 'sector';
 
 interface BatchJob {
@@ -49,6 +49,7 @@ const DEFAULT_RATES: Record<CoverageType, number> = {
   prosecution: 600,
   ipr: 600,
   family: 500,
+  xml: 2000, // Local disk extraction, very fast
 };
 
 function loadJobs(): void {
@@ -85,6 +86,7 @@ function saveJobs(): void {
 async function syncEnrichmentFlags(): Promise<void> {
   const llmDir = path.join(process.cwd(), 'cache/llm-scores');
   const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
+  const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
 
   const llmSet = fs.existsSync(llmDir)
     ? new Set(fs.readdirSync(llmDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
@@ -93,19 +95,31 @@ async function syncEnrichmentFlags(): Promise<void> {
     ? new Set(fs.readdirSync(prosDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
     : new Set<string>();
 
-  // Find patents where flag is false but cache file exists
+  // Build XML set: files like US10002051.xml → "10002051"
+  const xmlSet = new Set<string>();
+  if (xmlDir && fs.existsSync(xmlDir)) {
+    for (const f of fs.readdirSync(xmlDir)) {
+      if (f.startsWith('US') && f.endsWith('.xml')) {
+        xmlSet.add(f.replace(/^US/, '').replace(/\.xml$/, ''));
+      }
+    }
+  }
+
+  // Find patents where any flag is false but cache file exists
   const stale = await prisma.patent.findMany({
     where: {
       OR: [
         { hasLlmData: false },
         { hasProsecutionData: false },
+        { hasXmlData: false },
       ],
     },
-    select: { patentId: true, hasLlmData: true, hasProsecutionData: true },
+    select: { patentId: true, hasLlmData: true, hasProsecutionData: true, hasXmlData: true },
   });
 
   let llmUpdated = 0;
   let prosUpdated = 0;
+  let xmlUpdated = 0;
 
   for (const p of stale) {
     const updates: Record<string, boolean> = {};
@@ -117,6 +131,10 @@ async function syncEnrichmentFlags(): Promise<void> {
       updates.hasProsecutionData = true;
       prosUpdated++;
     }
+    if (!p.hasXmlData && xmlSet.has(p.patentId)) {
+      updates.hasXmlData = true;
+      xmlUpdated++;
+    }
     if (Object.keys(updates).length > 0) {
       await prisma.patent.update({
         where: { patentId: p.patentId },
@@ -125,8 +143,8 @@ async function syncEnrichmentFlags(): Promise<void> {
     }
   }
 
-  if (llmUpdated > 0 || prosUpdated > 0) {
-    console.log(`[BatchJobs] Synced enrichment flags: ${llmUpdated} LLM, ${prosUpdated} prosecution`);
+  if (llmUpdated > 0 || prosUpdated > 0 || xmlUpdated > 0) {
+    console.log(`[BatchJobs] Synced enrichment flags: ${llmUpdated} LLM, ${prosUpdated} prosecution, ${xmlUpdated} XML`);
   }
 }
 
@@ -154,6 +172,7 @@ async function analyzeGaps(
     prosecution: { total: 0, gap: 0, ids: [] as string[] },
     ipr: { total: 0, gap: 0, ids: [] as string[] },
     family: { total: 0, gap: 0, ids: [] as string[] },
+    xml: { total: 0, gap: 0, ids: [] as string[] },
   };
 
   try {
@@ -187,6 +206,7 @@ async function analyzeGaps(
         patentId: true,
         hasLlmData: true,
         hasProsecutionData: true,
+        hasXmlData: true,
       },
       orderBy: { baseScore: 'desc' },
       ...(take ? { take } : {}),
@@ -194,9 +214,10 @@ async function analyzeGaps(
 
     const ids = patents.map(p => p.patentId);
 
-    // LLM and prosecution gaps come from Postgres flags
+    // LLM, prosecution, and XML gaps come from Postgres flags
     const llmGapIds = patents.filter(p => !p.hasLlmData).map(p => p.patentId);
     const prosGapIds = patents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
+    const xmlGapIds = patents.filter(p => !p.hasXmlData).map(p => p.patentId);
 
     // IPR and family gaps still use file-based cache
     function getCacheSet(dir: string): Set<string> {
@@ -224,6 +245,7 @@ async function analyzeGaps(
       prosecution: { total: ids.length, gap: prosGapIds.length, ids: prosGapIds },
       ipr: { total: ids.length, gap: iprGapIds.length, ids: iprGapIds },
       family: { total: ids.length, gap: familyGapIds.length, ids: familyGapIds },
+      xml: { total: ids.length, gap: xmlGapIds.length, ids: xmlGapIds },
     };
   } catch (e) {
     console.error('Failed to analyze gaps:', e);
@@ -243,6 +265,8 @@ function getEnrichmentCommand(coverageType: CoverageType, batchFile: string, log
     case 'family':
       // Family script uses comma-separated IDs
       return `npx tsx scripts/enrich-citations.ts --patent-ids "$(cat ${batchFile} | jq -r '.[]' | tr '\\n' ',' | sed 's/,$//')" > ${logFile} 2>&1`;
+    case 'xml':
+      return `npx tsx scripts/extract-patent-xmls-batch.ts ${batchFile} > ${logFile} 2>&1`;
     default:
       throw new Error(`Unknown coverage type: ${coverageType}`);
   }
@@ -252,7 +276,7 @@ function getEnrichmentCommand(coverageType: CoverageType, batchFile: string, log
 function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: string }> {
   try {
     const result = execSync(
-      'ps aux | grep -E "run-llm-analysis|check-prosecution|check-ipr|enrich-citations" | grep -v grep',
+      'ps aux | grep -E "run-llm-analysis|check-prosecution|check-ipr|enrich-citations|extract-patent-xmls" | grep -v grep',
       { encoding: 'utf-8' }
     );
 
@@ -264,6 +288,7 @@ function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: strin
       else if (line.includes('check-prosecution')) type = 'prosecution';
       else if (line.includes('check-ipr')) type = 'ipr';
       else if (line.includes('enrich-citations')) type = 'family';
+      else if (line.includes('extract-patent-xmls')) type = 'xml';
       return { pid, type, cmd: parts.slice(10).join(' ') };
     });
   } catch {
@@ -365,6 +390,7 @@ router.post('/', async (req: Request, res: Response) => {
       maxHours = 4,
       topN = 0,  // For super-sector/sector: limit to top N patents by score (0 = all)
       portfolioId,  // Optional: scope to a specific portfolio
+      useClaims = false,  // When true, LLM jobs require XML data to be available
     } = req.body;
 
     if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
@@ -376,7 +402,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Validate coverage types
-    const validTypes: CoverageType[] = ['llm', 'prosecution', 'ipr', 'family'];
+    const validTypes: CoverageType[] = ['llm', 'prosecution', 'ipr', 'family', 'xml'];
     const selectedTypes = coverageTypes.filter((t: string) => validTypes.includes(t as CoverageType)) as CoverageType[];
 
     if (selectedTypes.length === 0) {
@@ -386,6 +412,19 @@ router.post('/', async (req: Request, res: Response) => {
     // Analyze gaps to determine what needs to be done
     // For super-sector/sector, topN limits analysis to top N patents by score
     const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
+
+    // Claims-gate: reject LLM jobs when useClaims=true but XMLs are missing
+    if (useClaims && selectedTypes.includes('llm')) {
+      const xmlGap = gaps.xml;
+      if (xmlGap.gap > 0) {
+        return res.status(400).json({
+          error: 'claims_gate',
+          message: `Cannot run LLM scoring with claims: ${xmlGap.gap} patents missing XML data. Extract XMLs first or submit without useClaims.`,
+          xmlGap: { total: xmlGap.total, missing: xmlGap.gap },
+          suggestion: 'Submit XML extraction jobs first, then resubmit LLM jobs with claims.',
+        });
+      }
+    }
 
     // Create a group ID to link related jobs
     const groupId = `group-${Date.now()}`;

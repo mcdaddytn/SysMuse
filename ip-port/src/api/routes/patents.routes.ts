@@ -626,6 +626,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
         prosecution: number; prosecutionPct: number;
         ipr: number; iprPct: number;
         family: number; familyPct: number;
+        xml: number; xmlPct: number;
       };
       topAffiliates: Array<{ name: string; count: number; pct: number }>;
       topSuperSectors: Array<{ name: string; count: number; pct: number }>;
@@ -642,11 +643,12 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       const fc = tierPatents.map(p => p.forward_citations ?? 0);
       const cc = tierPatents.map(p => p.competitor_citations ?? 0);
 
-      // Use Postgres flags for LLM/prosecution, file cache for IPR/family
+      // Use Postgres flags for LLM/prosecution/XML, file cache for IPR/family
       const llmCount = tierPatents.filter(p => p.has_llm_data).length;
       const prosCount = tierPatents.filter(p => p.has_prosecution_data).length;
       const iprCount = ids.filter(id => iprSet.has(id)).length;
       const familyCount = ids.filter(id => familySet.has(id)).length;
+      const xmlCount = tierPatents.filter(p => p.has_xml_data).length;
 
       // Affiliate breakdown
       const affCounts: Record<string, number> = {};
@@ -703,6 +705,8 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
           iprPct: Math.round(iprCount / tierPatents.length * 1000) / 10,
           family: familyCount,
           familyPct: Math.round(familyCount / tierPatents.length * 1000) / 10,
+          xml: xmlCount,
+          xmlPct: Math.round(xmlCount / tierPatents.length * 1000) / 10,
         },
         topAffiliates,
         topSuperSectors,
@@ -715,6 +719,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
     const prosTotal = patents.filter(p => p.has_prosecution_data).length;
     const iprTotal = allIds.filter(id => iprSet.has(id)).length;
     const familyTotal = allIds.filter(id => familySet.has(id)).length;
+    const xmlTotal = patents.filter(p => p.has_xml_data).length;
 
     res.json({
       totalPatents: sorted.length,
@@ -724,6 +729,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
         prosecution: prosTotal,
         ipr: iprTotal,
         family: familyTotal,
+        xml: xmlTotal,
       },
       tiers,
     });
@@ -763,11 +769,12 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const top = topPerSector === Infinity ? sorted : sorted.slice(0, topPerSector);
         const ids = top.map(p => p.patent_id);
 
-        // Use Postgres flags for LLM/prosecution, file cache for IPR/family
+        // Use Postgres flags for LLM/prosecution/XML, file cache for IPR/family
         const llmCount = top.filter(p => p.has_llm_data).length;
         const prosCount = top.filter(p => p.has_prosecution_data).length;
         const iprCount = ids.filter(id => iprSet.has(id)).length;
         const familyCount = ids.filter(id => familySet.has(id)).length;
+        const xmlCount = top.filter(p => p.has_xml_data).length;
 
         const checked = top.length;
         const scoreMin = top[top.length - 1]?.score ?? 0;
@@ -778,6 +785,7 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const prosGap = top.filter(p => !p.has_prosecution_data).length;
         const iprGap = ids.filter(id => !iprSet.has(id)).length;
         const familyGap = ids.filter(id => !familySet.has(id)).length;
+        const xmlGap = top.filter(p => !p.has_xml_data).length;
 
         return {
           name,
@@ -793,12 +801,15 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
             iprPct: Math.round(iprCount / checked * 1000) / 10,
             family: familyCount,
             familyPct: Math.round(familyCount / checked * 1000) / 10,
+            xml: xmlCount,
+            xmlPct: Math.round(xmlCount / checked * 1000) / 10,
           },
           gaps: {
             llm: llmGap,
             prosecution: prosGap,
             ipr: iprGap,
             family: familyGap,
+            xml: xmlGap,
           },
         };
       })

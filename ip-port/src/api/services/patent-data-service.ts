@@ -168,6 +168,24 @@ const SCORE_FIELD_MAP: Record<string, { dtoKey: string; valueType: 'rating' | 't
 // Core query methods
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Snapshot score maps for overlaying V2/V3 scores from active snapshots */
+export interface SnapshotScoreMaps {
+  v2: Map<string, number>;
+  v3: Map<string, number>;
+}
+
+/** Overlay snapshot scores onto DTOs (replaces compositeScore-based v2/v3) */
+function applySnapshotScores(data: PatentDTO[], scores: SnapshotScoreMaps): PatentDTO[] {
+  const hasV2 = scores.v2.size > 0;
+  const hasV3 = scores.v3.size > 0;
+  if (!hasV2 && !hasV3) return data;
+  return data.map(d => ({
+    ...d,
+    v2_score: hasV2 ? (scores.v2.get(d.patent_id) ?? 0) : (d.v2_score ?? 0),
+    v3_score: hasV3 ? (scores.v3.get(d.patent_id) ?? 0) : (d.v3_score ?? 0),
+  }));
+}
+
 /**
  * Get patents with pagination, filtering, and sorting.
  * Optionally scoped to a portfolio.
@@ -177,8 +195,9 @@ export async function getPatents(options: {
   focusAreaId?: string;
   pagination: PaginationOptions;
   filters?: PatentFilters;
+  snapshotScores?: SnapshotScoreMaps;
 }): Promise<GetPatentsResult> {
-  const { portfolioId, focusAreaId, pagination, filters } = options;
+  const { portfolioId, focusAreaId, pagination, filters, snapshotScores } = options;
   const { page, limit, sortBy, descending } = pagination;
 
   // Build WHERE clause
@@ -208,6 +227,11 @@ export async function getPatents(options: {
 
   // Map to DTOs
   let data = patents.map(mapPatentToDTO);
+
+  // Overlay active snapshot scores (portfolio-scoped)
+  if (snapshotScores) {
+    data = applySnapshotScores(data, snapshotScores);
+  }
 
   // If sorted by a score field, we need to do post-sort since the EAV JOIN
   // doesn't map cleanly to Prisma orderBy
@@ -742,8 +766,9 @@ export async function getAllPatents(options: {
   filters?: PatentFilters;
   sortBy?: string;
   descending?: boolean;
+  snapshotScores?: SnapshotScoreMaps;
 }): Promise<PatentDTO[]> {
-  const { portfolioId, filters, sortBy = 'score', descending = true } = options;
+  const { portfolioId, filters, sortBy = 'score', descending = true, snapshotScores } = options;
   const where = buildWhereClause(portfolioId, undefined, filters);
 
   const scoreSortField = getScoreSortField(sortBy);
@@ -761,6 +786,11 @@ export async function getAllPatents(options: {
   });
 
   let data = patents.map(mapPatentToDTO);
+
+  // Overlay active snapshot scores (portfolio-scoped)
+  if (snapshotScores) {
+    data = applySnapshotScores(data, snapshotScores);
+  }
 
   if (scoreSortField) {
     data = sortByScoreField(data, sortBy, descending);

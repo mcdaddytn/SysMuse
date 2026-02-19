@@ -26,6 +26,8 @@ watch(() => portfolioStore.selectedPortfolioId, async (newId) => {
   if (!newId) return;
   patentsStore.setPortfolioId(newId);
   await patentsStore.loadPatents();
+  // Reload active snapshots for the new portfolio
+  activeSnapshots.value = await snapshotApi.getActive(newId).catch(() => ({ V2: null, V3: null }));
 });
 
 // Active snapshots state
@@ -269,7 +271,7 @@ onMounted(async () => {
       patentsStore.setPortfolioId(portfolioStore.selectedPortfolioId);
       await patentsStore.loadPatents();
     })(),
-    snapshotApi.getActive().catch(() => ({ V2: null, V3: null })),
+    snapshotApi.getActive(portfolioStore.selectedPortfolioId).catch(() => ({ V2: null, V3: null })),
   ]);
 
   activeSnapshots.value = snapshots;

@@ -227,7 +227,7 @@ onMounted(async () => {
   // Load active snapshots and run aggregation in parallel
   const [, snapshots] = await Promise.all([
     runAggregation(),
-    snapshotApi.getActive().catch(() => ({ V2: null, V3: null })),
+    snapshotApi.getActive(portfolioStore.selectedPortfolioId).catch(() => ({ V2: null, V3: null })),
   ]);
   activeSnapshots.value = snapshots;
 });

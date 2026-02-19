@@ -377,6 +377,7 @@ export interface ScoreSnapshot {
   scoreType: ScoreType;
   config: V2EnhancedConfig | Record<string, unknown>;
   isActive: boolean;
+  portfolioId?: string | null;
   patentCount: number;
   llmDataCount: number;
   createdAt: string;
@@ -400,22 +401,27 @@ export interface SaveSnapshotRequest {
     normalized_metrics?: Record<string, number>;
   }>;
   setActive?: boolean;
+  portfolioId?: string | null;
 }
 
 export const snapshotApi = {
   /**
-   * List all saved score snapshots
+   * List score snapshots, optionally filtered by portfolio
    */
-  async list(): Promise<ScoreSnapshot[]> {
-    const { data } = await api.get('/scores/snapshots');
+  async list(portfolioId?: string | null): Promise<ScoreSnapshot[]> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/scores/snapshots', { params });
     return data;
   },
 
   /**
-   * Get currently active snapshots (one per score type)
+   * Get currently active snapshots for a portfolio (one per score type)
    */
-  async getActive(): Promise<ActiveSnapshots> {
-    const { data } = await api.get('/scores/snapshots/active');
+  async getActive(portfolioId?: string | null): Promise<ActiveSnapshots> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/scores/snapshots/active', { params });
     return data;
   },
 

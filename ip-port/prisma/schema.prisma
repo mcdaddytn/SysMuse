@@ -183,6 +183,7 @@ model Portfolio {
   // Relations
   patents         PortfolioPatent[]
   sectorRules     SectorRule[]
+  scoreSnapshots  ScoreSnapshot[]
 
   @@map("portfolios")
   @@index([companyId])
@@ -1413,11 +1414,15 @@ model ScoreSnapshot {
   description     String?
   scoreType       ScoreType @map("score_type")  // V2 or V3
 
+  // Portfolio scoping (null = legacy global snapshots)
+  portfolioId     String?  @map("portfolio_id")
+  portfolio       Portfolio? @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
   // Scoring configuration used (full config for reproducibility)
   config          Json                          // V2EnhancedConfig or V3ConsensusConfig
 
-  // Status
-  isActive        Boolean  @default(false) @map("is_active")  // Is this the "current" snapshot for its type?
+  // Status — one active per (portfolioId, scoreType)
+  isActive        Boolean  @default(false) @map("is_active")
 
   // Stats
   patentCount     Int      @default(0) @map("patent_count")
@@ -1431,6 +1436,7 @@ model ScoreSnapshot {
   @@map("score_snapshots")
   @@index([scoreType])
   @@index([isActive])
+  @@index([portfolioId])
 }
 
 model PatentScoreEntry {

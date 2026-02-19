@@ -482,9 +482,10 @@ function resetRankMovements() {
 async function loadSavedScores() {
   savedScoresLoading.value = true;
   try {
+    const pid = portfolioStore.selectedPortfolioId;
     const [allSnapshots, activeSnapshots] = await Promise.all([
-      snapshotApi.list(),
-      snapshotApi.getActive(),
+      snapshotApi.list(pid),
+      snapshotApi.getActive(pid),
     ]);
     // Filter to V3 only
     savedScores.value = allSnapshots.filter(s => s.scoreType === 'V3');
@@ -524,6 +525,7 @@ async function saveScores() {
       config,
       scores,
       setActive: setAsActive.value,
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
 
     $q.notify({
@@ -697,6 +699,7 @@ watch([topN, llmEnhancedOnly], () => {
 watch(() => portfolioStore.selectedPortfolioId, () => {
   previousRankings.value = [];
   recalculate();
+  loadSavedScores();
 });
 
 // Watch view mode changes

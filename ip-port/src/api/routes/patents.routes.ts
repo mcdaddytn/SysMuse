@@ -15,6 +15,7 @@ import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, reg
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
 import * as patentDataService from '../services/patent-data-service.js';
 import type { PatentFilters, PaginationOptions } from '../services/patent-data-service.js';
+import { getActiveSnapshotScores } from './scores.routes.js';
 
 const prisma = new PrismaClient();
 
@@ -855,11 +856,15 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
+    // Look up active snapshot scores for this portfolio
+    const snapshotScores = await getActiveSnapshotScores(portfolioId as string | undefined);
+
     const result = await patentDataService.getPatents({
       portfolioId: portfolioId as string | undefined,
       focusAreaId: focusAreaId as string | undefined,
       pagination: { page: pageNum, limit: limitNum, sortBy: sortBy as string, descending: isDescending },
       filters,
+      snapshotScores: { v2: snapshotScores.v2Scores, v3: snapshotScores.v3Scores },
     });
 
     res.json(result);
@@ -1172,11 +1177,13 @@ router.get('/export', async (req: Request, res: Response) => {
     if (filterParams.activeOnly) filters.activeOnly = filterParams.activeOnly as string;
     if (filterParams.hasCompetitorCites) filters.hasCompetitorCites = filterParams.hasCompetitorCites as string;
 
+    const exportSnapshotScores = await getActiveSnapshotScores(portfolioId as string | undefined);
     const patents = await patentDataService.getAllPatents({
       portfolioId: portfolioId as string | undefined,
       filters,
       sortBy: sortBy as string,
       descending: isDescending,
+      snapshotScores: { v2: exportSnapshotScores.v2Scores, v3: exportSnapshotScores.v3Scores },
     });
 
     // Determine columns to export
@@ -1302,8 +1309,13 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     // Normalize groupBy to array
     const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
 
-    // Load patents from Postgres with filters
-    const patents = await patentDataService.getAllPatents({ portfolioId, filters });
+    // Load patents from Postgres with snapshot scores
+    const aggSnapshotScores = await getActiveSnapshotScores(portfolioId);
+    const patents = await patentDataService.getAllPatents({
+      portfolioId,
+      filters,
+      snapshotScores: { v2: aggSnapshotScores.v2Scores, v3: aggSnapshotScores.v3Scores },
+    });
 
     // Fields that are arrays and can be exploded
     const arrayFields = new Set(['competitor_names', 'cpc_codes']);
@@ -1437,7 +1449,12 @@ router.post('/aggregate/export', async (req: Request, res: Response) => {
 
     const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
 
-    const patents = await patentDataService.getAllPatents({ portfolioId, filters });
+    const aggExpSnapshotScores = await getActiveSnapshotScores(portfolioId);
+    const patents = await patentDataService.getAllPatents({
+      portfolioId,
+      filters,
+      snapshotScores: { v2: aggExpSnapshotScores.v2Scores, v3: aggExpSnapshotScores.v3Scores },
+    });
 
     // Same grouping logic as /aggregate
     const arrayFields = new Set(['competitor_names', 'cpc_codes']);

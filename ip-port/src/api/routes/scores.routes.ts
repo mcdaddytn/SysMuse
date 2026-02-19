@@ -37,25 +37,33 @@ const prisma = new PrismaClient();
 // SNAPSHOT SCORE LOOKUP (exported for use in patents.routes.ts)
 // =============================================================================
 
-// Cache for active snapshot scores
-let v2ScoreCache: Map<string, number> | null = null;
-let v3ScoreCache: Map<string, number> | null = null;
-let scoreCacheExpiry = 0;
+// Per-portfolio cache for active snapshot scores
+// Key: portfolioId (or '__global__' for unscoped)
+const snapshotScoreCaches = new Map<string, {
+  v2: Map<string, number>;
+  v3: Map<string, number>;
+  expiry: number;
+}>();
 const SCORE_CACHE_TTL = 60 * 1000; // 1 minute
 
 /**
- * Load scores from active V2 snapshot into cache
+ * Load scores from active snapshot for a specific portfolio and score type
  */
-async function loadActiveV2Scores(): Promise<Map<string, number>> {
-  const now = Date.now();
-  if (v2ScoreCache && now < scoreCacheExpiry) {
-    return v2ScoreCache;
+async function loadActiveScoresForPortfolio(
+  scoreType: 'V2' | 'V3',
+  portfolioId?: string | null
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+
+  const where: Record<string, any> = { scoreType, isActive: true };
+  if (portfolioId) {
+    where.portfolioId = portfolioId;
+  } else {
+    where.portfolioId = null;
   }
 
-  v2ScoreCache = new Map();
-
   const activeSnapshot = await prisma.scoreSnapshot.findFirst({
-    where: { scoreType: 'V2', isActive: true },
+    where,
     select: { id: true },
   });
 
@@ -65,56 +73,35 @@ async function loadActiveV2Scores(): Promise<Map<string, number>> {
       select: { patentId: true, score: true },
     });
     for (const s of scores) {
-      v2ScoreCache.set(s.patentId, s.score);
+      map.set(s.patentId, s.score);
     }
   }
 
-  scoreCacheExpiry = now + SCORE_CACHE_TTL;
-  return v2ScoreCache;
+  return map;
 }
 
 /**
- * Load scores from active V3 snapshot into cache
- */
-async function loadActiveV3Scores(): Promise<Map<string, number>> {
-  const now = Date.now();
-  if (v3ScoreCache && now < scoreCacheExpiry) {
-    return v3ScoreCache;
-  }
-
-  v3ScoreCache = new Map();
-
-  const activeSnapshot = await prisma.scoreSnapshot.findFirst({
-    where: { scoreType: 'V3', isActive: true },
-    select: { id: true },
-  });
-
-  if (activeSnapshot) {
-    const scores = await prisma.patentScoreEntry.findMany({
-      where: { snapshotId: activeSnapshot.id },
-      select: { patentId: true, score: true },
-    });
-    for (const s of scores) {
-      v3ScoreCache.set(s.patentId, s.score);
-    }
-  }
-
-  scoreCacheExpiry = now + SCORE_CACHE_TTL;
-  return v3ScoreCache;
-}
-
-/**
- * Get V2 and V3 scores from active snapshots
+ * Get V2 and V3 scores from active snapshots for a specific portfolio
  * Returns maps of patent_id -> score for both types
  */
-export async function getActiveSnapshotScores(): Promise<{
+export async function getActiveSnapshotScores(portfolioId?: string | null): Promise<{
   v2Scores: Map<string, number>;
   v3Scores: Map<string, number>;
 }> {
+  const cacheKey = portfolioId || '__global__';
+  const now = Date.now();
+  const cached = snapshotScoreCaches.get(cacheKey);
+
+  if (cached && now < cached.expiry) {
+    return { v2Scores: cached.v2, v3Scores: cached.v3 };
+  }
+
   const [v2Scores, v3Scores] = await Promise.all([
-    loadActiveV2Scores(),
-    loadActiveV3Scores(),
+    loadActiveScoresForPortfolio('V2', portfolioId),
+    loadActiveScoresForPortfolio('V3', portfolioId),
   ]);
+
+  snapshotScoreCaches.set(cacheKey, { v2: v2Scores, v3: v3Scores, expiry: now + SCORE_CACHE_TTL });
   return { v2Scores, v3Scores };
 }
 
@@ -122,9 +109,7 @@ export async function getActiveSnapshotScores(): Promise<{
  * Clear snapshot score cache (call when snapshots are modified)
  */
 export function clearSnapshotScoreCache(): void {
-  v2ScoreCache = null;
-  v3ScoreCache = null;
-  scoreCacheExpiry = 0;
+  snapshotScoreCaches.clear();
 }
 
 // Cached sector lookup map (name -> {displayName, damagesRating, damagesLabel})
@@ -739,17 +724,26 @@ router.get('/weights/presets', (_req: Request, res: Response) => {
 
 /**
  * GET /api/scores/snapshots
- * List all saved score snapshots
+ * List saved score snapshots, optionally filtered by portfolio
+ * Query params: portfolioId (optional)
  */
-router.get('/snapshots', async (_req: Request, res: Response) => {
+router.get('/snapshots', async (req: Request, res: Response) => {
   try {
+    const { portfolioId } = req.query;
+    const where: Record<string, any> = {};
+    if (portfolioId) {
+      where.portfolioId = portfolioId as string;
+    }
+
     const snapshots = await prisma.scoreSnapshot.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         name: true,
         description: true,
         scoreType: true,
+        portfolioId: true,
         isActive: true,
         patentCount: true,
         llmDataCount: true,
@@ -766,16 +760,26 @@ router.get('/snapshots', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/scores/snapshots/active
- * Get currently active snapshots (one per score type)
+ * Get currently active snapshots (one per score type per portfolio)
+ * Query params: portfolioId (optional)
  */
-router.get('/snapshots/active', async (_req: Request, res: Response) => {
+router.get('/snapshots/active', async (req: Request, res: Response) => {
   try {
+    const { portfolioId } = req.query;
+    const where: Record<string, any> = { isActive: true };
+    if (portfolioId) {
+      where.portfolioId = portfolioId as string;
+    } else {
+      where.portfolioId = null;
+    }
+
     const activeSnapshots = await prisma.scoreSnapshot.findMany({
-      where: { isActive: true },
+      where,
       select: {
         id: true,
         name: true,
         scoreType: true,
+        portfolioId: true,
         patentCount: true,
         createdAt: true,
       },
@@ -818,6 +822,7 @@ router.post('/snapshots', async (req: Request, res: Response) => {
       config,
       scores,
       setActive = false,
+      portfolioId = null,
     } = req.body;
 
     if (!name || !scoreType || !config || !scores) {
@@ -836,10 +841,16 @@ router.post('/snapshots', async (req: Request, res: Response) => {
       s.raw_metrics?.validity_score !== undefined
     ).length;
 
-    // If setActive, deactivate other snapshots of this type
+    // If setActive, deactivate other snapshots of this type for the same portfolio
     if (setActive) {
+      const deactivateWhere: Record<string, any> = { scoreType, isActive: true };
+      if (portfolioId) {
+        deactivateWhere.portfolioId = portfolioId;
+      } else {
+        deactivateWhere.portfolioId = null;
+      }
       await prisma.scoreSnapshot.updateMany({
-        where: { scoreType, isActive: true },
+        where: deactivateWhere,
         data: { isActive: false },
       });
     }
@@ -851,6 +862,7 @@ router.post('/snapshots', async (req: Request, res: Response) => {
         description,
         scoreType,
         config,
+        portfolioId: portfolioId || null,
         isActive: setActive,
         patentCount: scores.length,
         llmDataCount,
@@ -879,6 +891,7 @@ router.post('/snapshots', async (req: Request, res: Response) => {
       id: snapshot.id,
       name: snapshot.name,
       scoreType: snapshot.scoreType,
+      portfolioId: snapshot.portfolioId,
       isActive: snapshot.isActive,
       patentCount: snapshot._count.scores,
       createdAt: snapshot.createdAt,
@@ -897,10 +910,10 @@ router.put('/snapshots/:id/activate', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Get the snapshot to find its score type
+    // Get the snapshot to find its score type and portfolio
     const snapshot = await prisma.scoreSnapshot.findUnique({
       where: { id },
-      select: { scoreType: true },
+      select: { scoreType: true, portfolioId: true },
     });
 
     if (!snapshot) {
@@ -908,10 +921,20 @@ router.put('/snapshots/:id/activate', async (req: Request, res: Response) => {
       return;
     }
 
-    // Deactivate all snapshots of this type, then activate the target
+    // Deactivate all snapshots of this type for the same portfolio, then activate target
+    const deactivateWhere: Record<string, any> = {
+      scoreType: snapshot.scoreType,
+      isActive: true,
+    };
+    if (snapshot.portfolioId) {
+      deactivateWhere.portfolioId = snapshot.portfolioId;
+    } else {
+      deactivateWhere.portfolioId = null;
+    }
+
     await prisma.$transaction([
       prisma.scoreSnapshot.updateMany({
-        where: { scoreType: snapshot.scoreType, isActive: true },
+        where: deactivateWhere,
         data: { isActive: false },
       }),
       prisma.scoreSnapshot.update({

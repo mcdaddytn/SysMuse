@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import {
   patentApi, enrichmentApi, batchJobsApi, scoringTemplatesApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
   type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
   type BatchJobMetadata
 } from '@/services/api';
+
+const portfolioStore = usePortfolioStore();
 
 const activeTab = ref('enrichment');
 

@@ -149,13 +149,16 @@ export const usePatentsStore = defineStore('patents', () => {
     )
   );
 
+  // Portfolio scoping — set this to restrict queries to a specific portfolio
+  const portfolioId = ref<string | null>(null);
+
   // Actions
   async function loadPatents() {
     loading.value = true;
     error.value = null;
 
     try {
-      const response = await patentApi.getPatents(pagination.value, filters.value);
+      const response = await patentApi.getPatents(pagination.value, filters.value, portfolioId.value);
       patents.value = response.data;
       totalCount.value = response.total;
     } catch (err) {
@@ -164,6 +167,10 @@ export const usePatentsStore = defineStore('patents', () => {
     } finally {
       loading.value = false;
     }
+  }
+
+  function setPortfolioId(id: string | null) {
+    portfolioId.value = id;
   }
 
   function updatePagination(newPagination: Partial<PaginationParams>) {
@@ -280,6 +287,7 @@ export const usePatentsStore = defineStore('patents', () => {
     filters,
     columns,
     columnGroups,
+    portfolioId,
 
     // Getters
     visibleColumns,
@@ -291,6 +299,7 @@ export const usePatentsStore = defineStore('patents', () => {
     updateFilters,
     setFilters,
     clearFilters,
+    setPortfolioId,
     toggleColumn,
     setColumnVisibility,
     toggleGroupColumns,

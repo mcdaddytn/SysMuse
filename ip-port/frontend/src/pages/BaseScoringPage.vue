@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { patentApi } from '@/services/api';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import type { Patent } from '@/types';
+
+const portfolioStore = usePortfolioStore();
 
 const router = useRouter();
 

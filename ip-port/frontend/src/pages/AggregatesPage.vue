@@ -2,7 +2,10 @@
 import { ref, computed, onMounted } from 'vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import { snapshotApi, type ActiveSnapshots } from '@/services/api';
+
+const portfolioStore = usePortfolioStore();
 
 // Group by field options
 interface GroupByOption {

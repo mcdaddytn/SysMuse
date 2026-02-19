@@ -3,7 +3,7 @@ import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
 import { usePortfolioStore } from '@/stores/portfolio';
-import { focusAreaApi, jobsApi, patentApi, portfolioApi, snapshotApi, type ActiveSnapshots, type PortfolioPatentRecord } from '@/services/api';
+import { focusAreaApi, jobsApi, patentApi, portfolioApi, snapshotApi, type ActiveSnapshots } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
@@ -21,42 +21,21 @@ const newFocusGroupDescription = ref('');
 const creatingFocusGroup = ref(false);
 const focusGroupError = ref<string | null>(null);
 
-// DB_RECORDS portfolio patent display
-const dbPatents = ref<PortfolioPatentRecord[]>([]);
-const dbPatentsLoading = ref(false);
-const dbPatentsTotal = ref(0);
-
-// Are we viewing a DB_RECORDS portfolio?
-const isDbView = computed(() => portfolioStore.isDbRecords);
-
-async function loadDbPatents() {
-  const portfolioId = portfolioStore.selectedPortfolioId;
-  if (!portfolioId || !isDbView.value) return;
-  dbPatentsLoading.value = true;
-  try {
-    const result = await portfolioApi.getPatents(portfolioId, 1, 500);
-    dbPatents.value = result.patents;
-    dbPatentsTotal.value = result.pagination.total;
-  } catch (err) {
-    console.error('Failed to load DB patents:', err);
-  } finally {
-    dbPatentsLoading.value = false;
-  }
-}
-
-// When portfolio selection changes, reload data
+// When portfolio selection changes, update the patents store and reload
 watch(() => portfolioStore.selectedPortfolioId, async (newId) => {
   if (!newId) return;
-  if (portfolioStore.isDbRecords) {
-    await loadDbPatents();
-  } else {
-    // JSON_PIPELINE — use existing patents store
-    await patentsStore.loadPatents();
-  }
+  patentsStore.setPortfolioId(newId);
+  await patentsStore.loadPatents();
 });
 
 // Active snapshots state
 const activeSnapshots = ref<ActiveSnapshots>({ V2: null, V3: null });
+
+// Pagination model delegates to the patents store (server-side pagination for all portfolios)
+const tablePagination = computed({
+  get: () => paginationModel.value,
+  set: (val) => { paginationModel.value = val; }
+});
 
 // Local state
 const searchText = ref('');
@@ -286,12 +265,9 @@ onMounted(async () => {
         patentsStore.updateFilters(queryFilters);
       }
 
-      // Load data based on selected portfolio type
-      if (portfolioStore.isDbRecords) {
-        await loadDbPatents();
-      } else {
-        await patentsStore.loadPatents();
-      }
+      // Set portfolio scope and load
+      patentsStore.setPortfolioId(portfolioStore.selectedPortfolioId);
+      await patentsStore.loadPatents();
     })(),
     snapshotApi.getActive().catch(() => ({ V2: null, V3: null })),
   ]);
@@ -307,63 +283,63 @@ onMounted(async () => {
       <div class="text-h5 q-mr-md">Patent Summary</div>
       <PortfolioSelector class="q-mr-md" />
       <q-badge color="primary" class="q-mr-md">
-        {{ isDbView ? dbPatentsTotal.toLocaleString() : patentsStore.totalCount.toLocaleString() }} patents
-      </q-badge>
-      <q-badge v-if="isDbView" color="info" outline class="q-mr-md">
-        DB Records
+        {{ patentsStore.totalCount.toLocaleString() }} patents
       </q-badge>
 
       <!-- Snapshot Status -->
-      <q-badge
-        v-if="activeSnapshots.V2"
-        color="positive"
-        class="q-mr-xs"
-      >
-        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
-        V2: {{ activeSnapshots.V2.name }}
-        <q-tooltip>
-          V2 scores from snapshot "{{ activeSnapshots.V2.name }}"
-          ({{ activeSnapshots.V2.patentCount.toLocaleString() }} patents,
-          {{ new Date(activeSnapshots.V2.createdAt).toLocaleDateString() }})
-        </q-tooltip>
-      </q-badge>
-      <q-badge
-        v-else
-        color="warning"
-        outline
-        class="q-mr-xs"
-      >
-        V2: calculated
-        <q-tooltip>V2 scores are calculated on-the-fly. Save a snapshot in V2 Scoring for consistent scores.</q-tooltip>
-      </q-badge>
+      <template>
+        <q-badge
+          v-if="activeSnapshots.V2"
+          color="positive"
+          class="q-mr-xs"
+        >
+          <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+          V2: {{ activeSnapshots.V2.name }}
+          <q-tooltip>
+            V2 scores from snapshot "{{ activeSnapshots.V2.name }}"
+            ({{ activeSnapshots.V2.patentCount.toLocaleString() }} patents,
+            {{ new Date(activeSnapshots.V2.createdAt).toLocaleDateString() }})
+          </q-tooltip>
+        </q-badge>
+        <q-badge
+          v-else
+          color="warning"
+          outline
+          class="q-mr-xs"
+        >
+          V2: calculated
+          <q-tooltip>V2 scores are calculated on-the-fly. Save a snapshot in V2 Scoring for consistent scores.</q-tooltip>
+        </q-badge>
 
-      <q-badge
-        v-if="activeSnapshots.V3"
-        color="positive"
-        class="q-mr-md"
-      >
-        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
-        V3: {{ activeSnapshots.V3.name }}
-        <q-tooltip>
-          V3 scores from snapshot "{{ activeSnapshots.V3.name }}"
-          ({{ activeSnapshots.V3.patentCount.toLocaleString() }} patents,
-          {{ new Date(activeSnapshots.V3.createdAt).toLocaleDateString() }})
-        </q-tooltip>
-      </q-badge>
-      <q-badge
-        v-else
-        color="warning"
-        outline
-        class="q-mr-md"
-      >
-        V3: calculated
-        <q-tooltip>V3 scores are calculated on-the-fly. Save a snapshot in V3 Scoring for consistent scores.</q-tooltip>
-      </q-badge>
+        <q-badge
+          v-if="activeSnapshots.V3"
+          color="positive"
+          class="q-mr-md"
+        >
+          <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+          V3: {{ activeSnapshots.V3.name }}
+          <q-tooltip>
+            V3 scores from snapshot "{{ activeSnapshots.V3.name }}"
+            ({{ activeSnapshots.V3.patentCount.toLocaleString() }} patents,
+            {{ new Date(activeSnapshots.V3.createdAt).toLocaleDateString() }})
+          </q-tooltip>
+        </q-badge>
+        <q-badge
+          v-else
+          color="warning"
+          outline
+          class="q-mr-md"
+        >
+          V3: calculated
+          <q-tooltip>V3 scores are calculated on-the-fly. Save a snapshot in V3 Scoring for consistent scores.</q-tooltip>
+        </q-badge>
+      </template>
 
       <q-space />
 
-      <!-- Search -->
+      <!-- Search (ES only) -->
       <q-input
+        
         v-model="searchText"
         dense
         outlined
@@ -386,8 +362,9 @@ onMounted(async () => {
         @click="showColumnSelector = true"
       />
 
-      <!-- Export -->
+      <!-- Export (ES only) -->
       <q-btn
+        
         flat
         icon="download"
         label="Export"
@@ -397,8 +374,9 @@ onMounted(async () => {
         <q-tooltip>Export all {{ patentsStore.totalCount.toLocaleString() }} filtered patents as CSV</q-tooltip>
       </q-btn>
 
-      <!-- Filter Toggle -->
+      <!-- Filter Toggle (ES only) -->
       <q-btn
+        
         flat
         :icon="showFilters ? 'filter_list_off' : 'filter_list'"
         :label="showFilters ? 'Hide Filters' : 'Filters'"
@@ -406,7 +384,7 @@ onMounted(async () => {
       />
     </div>
 
-    <!-- Flexible Filter Builder -->
+    <!-- Flexible Filter Builder (ES only) -->
     <q-slide-transition>
       <div v-show="showFilters" class="q-mb-md">
         <q-card flat bordered>
@@ -420,7 +398,7 @@ onMounted(async () => {
       </div>
     </q-slide-transition>
 
-    <!-- Active Filter Summary (shown when filters hidden) -->
+    <!-- Active Filter Summary (shown when filters hidden, ES only) -->
     <div v-if="!showFilters && patentsStore.hasFilters" class="q-mb-md">
       <div class="row q-gutter-sm items-center">
         <span class="text-caption text-grey-7">Active filters:</span>
@@ -429,68 +407,21 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- DB_RECORDS view: simple table for non-ES portfolios -->
-    <div v-if="isDbView">
-      <q-table
-        :rows="dbPatents"
-        :columns="[
-          { name: 'patentId', label: 'Patent ID', field: 'patentId', align: 'left', sortable: true },
-          { name: 'patentTitle', label: 'Title', field: 'patentTitle', align: 'left', sortable: true },
-          { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left', sortable: true },
-          { name: 'patentDate', label: 'Date', field: 'patentDate', align: 'left', sortable: true },
-          { name: 'affiliateName', label: 'Affiliate', field: 'affiliateName', align: 'left', sortable: true },
-          { name: 'source', label: 'Source', field: 'source', align: 'left' },
-        ]"
-        row-key="id"
-        :loading="dbPatentsLoading"
-        flat
-        bordered
-        :pagination="{ rowsPerPage: 50 }"
-        @row-click="(_evt: Event, row: PortfolioPatentRecord) => router.push({ name: 'patent-detail', params: { id: row.patentId } })"
-      >
-        <template v-slot:body-cell-patentId="props">
-          <q-td :props="props">
-            <router-link
-              :to="{ name: 'patent-detail', params: { id: props.row.patentId } }"
-              class="text-primary"
-              @click.stop
-            >
-              {{ props.row.patentId }}
-            </router-link>
-          </q-td>
-        </template>
-        <template v-slot:body-cell-patentTitle="props">
-          <q-td :props="props">
-            <div class="ellipsis" style="max-width: 400px">
-              {{ props.row.patentTitle || '--' }}
-              <q-tooltip v-if="props.row.patentTitle?.length > 60">{{ props.row.patentTitle }}</q-tooltip>
-            </div>
-          </q-td>
-        </template>
-        <template v-slot:no-data>
-          <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">
-            <q-icon size="2em" name="sentiment_dissatisfied" />
-            <span>No patents in this portfolio</span>
-          </div>
-        </template>
-      </q-table>
-    </div>
-
-    <!-- JSON_PIPELINE view: full ES-backed data table with fixed pagination -->
-    <div v-else class="table-wrapper">
+    <!-- Unified patent data table -->
+    <div class="table-wrapper">
       <div class="table-scroll-container">
         <q-table
           :rows="patentsStore.patents"
           :columns="tableColumns"
           row-key="patent_id"
-          v-model:pagination="paginationModel"
+          v-model:pagination="tablePagination"
           v-model:selected="selectedPatents"
           :loading="patentsStore.loading"
           selection="multiple"
           flat
           bordered
           binary-state-sort
-          hide-pagination
+          :hide-pagination="true"
           @row-click="onRowClick"
           @request="onRequest"
         >
@@ -793,7 +724,7 @@ onMounted(async () => {
         </q-table>
       </div>
 
-      <!-- Pagination Controls (always visible outside scroll area) -->
+      <!-- Pagination Controls (ES-backed server-side pagination only) -->
       <div class="pagination-bar q-pa-sm bg-grey-1 row items-center justify-between">
         <div class="text-caption text-grey-7">
           {{ patentsStore.totalCount.toLocaleString() }} total patents

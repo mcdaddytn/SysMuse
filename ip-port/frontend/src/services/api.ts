@@ -52,15 +52,19 @@ export interface PatentPreview {
 export const patentApi = {
   async getPatents(
     pagination: PaginationParams,
-    filters?: PortfolioFilters
+    filters?: PortfolioFilters,
+    portfolioId?: string | null,
   ): Promise<PaginatedResponse<Patent>> {
-    const params = {
+    const params: Record<string, unknown> = {
       page: pagination.page,
       limit: pagination.rowsPerPage,
       sortBy: pagination.sortBy,
       descending: pagination.descending,
-      ...filters
+      ...filters,
     };
+    if (portfolioId) {
+      params.portfolioId = portfolioId;
+    }
     const { data } = await api.get('/patents', { params });
     return data;
   },
@@ -2945,7 +2949,8 @@ export const scoringTemplatesApi = {
 // Portfolio Management API
 // =============================================================================
 
-export type DataSourceType = 'JSON_PIPELINE' | 'DB_RECORDS';
+// DataSourceType removed — all portfolios use DB now
+export type DataSourceType = 'JSON_PIPELINE' | 'DB_RECORDS'; // Kept for type compat, unused
 
 export interface CompanySummary {
   id: string;
@@ -2977,7 +2982,7 @@ export interface PortfolioSummary {
   name: string;
   displayName: string;
   description: string | null;
-  dataSourceType: DataSourceType;
+  dataSourceType?: DataSourceType; // Deprecated — field removed from DB
   companyId: string;
   company?: { id: string; name: string; displayName: string };
   patentCount: number;
@@ -3089,12 +3094,12 @@ export const portfolioApi = {
     return data;
   },
 
-  async create(body: { name: string; displayName: string; description?: string; companyId: string; dataSourceType?: DataSourceType }): Promise<PortfolioSummary> {
+  async create(body: { name: string; displayName: string; description?: string; companyId: string }): Promise<PortfolioSummary> {
     const { data } = await api.post('/portfolios', body);
     return data;
   },
 
-  async update(id: string, body: { displayName?: string; description?: string; dataSourceType?: DataSourceType }): Promise<PortfolioSummary> {
+  async update(id: string, body: { displayName?: string; description?: string }): Promise<PortfolioSummary> {
     const { data } = await api.put(`/portfolios/${id}`, body);
     return data;
   },
@@ -3110,12 +3115,11 @@ export const portfolioApi = {
     return data;
   },
 
-  // Patent list (for DB_RECORDS portfolios)
-  async getPatents(portfolioId: string, page = 1, limit = 50): Promise<{
-    patents: PortfolioPatentRecord[];
-    pagination: { page: number; limit: number; total: number; totalPages: number };
-  }> {
-    const { data } = await api.get(`/portfolios/${portfolioId}/patents`, { params: { page, limit } });
+  // Patent list — now returns full Patent data (same shape as patentApi.getPatents)
+  async getPatents(portfolioId: string, page = 1, limit = 50, sortBy = 'score', descending = true): Promise<PaginatedResponse<Patent>> {
+    const { data } = await api.get(`/portfolios/${portfolioId}/patents`, {
+      params: { page, limit, sortBy, descending },
+    });
     return data;
   },
 

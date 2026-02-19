@@ -68,7 +68,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 /** POST /api/portfolios — create portfolio (requires companyId) */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { name, displayName, description, companyId, dataSourceType } = req.body;
+    const { name, displayName, description, companyId } = req.body;
     if (!name || !displayName || !companyId) {
       return res.status(400).json({ error: 'name, displayName, and companyId are required' });
     }
@@ -78,7 +78,6 @@ router.post('/', async (req: Request, res: Response) => {
         displayName,
         description: description || null,
         companyId,
-        dataSourceType: dataSourceType || 'DB_RECORDS',
       },
     });
     res.status(201).json(portfolio);
@@ -91,13 +90,12 @@ router.post('/', async (req: Request, res: Response) => {
 /** PUT /api/portfolios/:id — update portfolio */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { displayName, description, dataSourceType } = req.body;
+    const { displayName, description } = req.body;
     const portfolio = await prisma.portfolio.update({
       where: { id: req.params.id },
       data: {
         ...(displayName !== undefined && { displayName }),
         ...(description !== undefined && { description }),
-        ...(dataSourceType !== undefined && { dataSourceType }),
       },
     });
     res.json(portfolio);
@@ -247,7 +245,6 @@ router.post('/create-from-patents', async (req: Request, res: Response) => {
         displayName,
         description: description || null,
         companyId: resolvedCompanyId,
-        dataSourceType: 'DB_RECORDS',
       },
     });
 
@@ -277,8 +274,21 @@ router.post('/create-from-patents', async (req: Request, res: Response) => {
         patentCount: cluster.patentCount,
       });
 
-      // Step 3: Create PortfolioPatent records for this affiliate's patents
+      // Step 3: Upsert Patent rows + PortfolioPatent join records
       for (const p of cluster.patents) {
+        // Ensure Patent row exists
+        await prisma.patent.upsert({
+          where: { patentId: p.patentId },
+          create: {
+            patentId: p.patentId,
+            title: p.title || '',
+            grantDate: p.date || null,
+            assignee: cluster.assignee,
+            affiliate: cluster.suggestedName,
+          },
+          update: {},
+        });
+        // Link to portfolio
         await prisma.portfolioPatent.upsert({
           where: { portfolioId_patentId: { portfolioId: portfolio.id, patentId: p.patentId } },
           update: {},
@@ -286,10 +296,6 @@ router.post('/create-from-patents', async (req: Request, res: Response) => {
             portfolioId: portfolio.id,
             patentId: p.patentId,
             source: 'MANUAL',
-            patentTitle: p.title || null,
-            patentDate: p.date || null,
-            assignee: cluster.assignee,
-            affiliateName: cluster.suggestedName,
           },
         });
       }
@@ -318,27 +324,24 @@ router.post('/create-from-patents', async (req: Request, res: Response) => {
 // PORTFOLIO PATENTS
 // =============================================================================
 
-/** GET /api/portfolios/:id/patents — list portfolio patents with pagination */
+/** GET /api/portfolios/:id/patents — list portfolio patents with pagination
+ *  Now returns full Patent data (same shape as /api/patents) scoped to this portfolio.
+ */
 router.get('/:id/patents', async (req: Request, res: Response) => {
   try {
+    const { getPatents } = await import('../services/patent-data-service.js');
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 500);
-    const offset = (page - 1) * limit;
+    const sortBy = (req.query.sortBy as string) || 'score';
+    const descending = req.query.descending !== 'false';
 
-    const [patents, total] = await Promise.all([
-      prisma.portfolioPatent.findMany({
-        where: { portfolioId: req.params.id },
-        orderBy: { importedAt: 'desc' },
-        skip: offset,
-        take: limit,
-      }),
-      prisma.portfolioPatent.count({ where: { portfolioId: req.params.id } }),
-    ]);
-
-    res.json({
-      patents,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    const result = await getPatents({
+      portfolioId: req.params.id,
+      pagination: { page, limit, sortBy, descending },
     });
+
+    res.json(result);
   } catch (err: unknown) {
     console.error('[Portfolios] List patents error:', err);
     res.status(500).json({ error: (err as Error).message });

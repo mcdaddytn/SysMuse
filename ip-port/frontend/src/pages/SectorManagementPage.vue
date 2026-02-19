@@ -2,12 +2,14 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import type { SectorScoringProgress, SubSector, BatchJobMetadata, LlmSnapshotSummary, LlmSnapshotComparison, ModelComparisonResult } from '@/services/api';
 import type { SuperSectorDetail, SectorDetail, SectorRule, SectorRuleType, RulePreviewResult } from '@/types';
 import { useCpcDescriptions } from '@/composables/useCpcDescriptions';
 
 // CPC description lookups for tooltips
 const { getDescription, formatTooltip, preloadCodes } = useCpcDescriptions();
+const portfolioStore = usePortfolioStore();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State

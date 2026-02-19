@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import {
   v2EnhancedApi,
   snapshotApi,
@@ -23,6 +24,7 @@ import type {
 
 const router = useRouter();
 const $q = useQuasar();
+const portfolioStore = usePortfolioStore();
 
 // LocalStorage keys
 const V3_PRESETS_KEY = 'v3-consensus-custom-presets';

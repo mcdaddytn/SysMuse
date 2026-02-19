@@ -104,11 +104,6 @@ enum AccessLevel {
 // Competitor relationships are per-company and directed.
 // =============================================================================
 
-enum DataSourceType {
-  JSON_PIPELINE    // Broadcom — loaded from output/*.json into ES
-  DB_RECORDS       // Chelsio, competitors — PortfolioPatent table
-}
-
 enum CompetitorDiscoverySource {
   MANUAL
   CITATION_OVERLAP
@@ -173,7 +168,6 @@ model Portfolio {
   name            String         @unique                // e.g., "broadcom-core", "chelsio"
   displayName     String         @map("display_name")   // e.g., "Broadcom Core", "Chelsio"
   description     String?
-  dataSourceType  DataSourceType @default(DB_RECORDS) @map("data_source_type")
 
   // Owner company
   companyId       String         @map("company_id")
@@ -243,22 +237,167 @@ model PortfolioPatent {
   portfolioId     String       @map("portfolio_id")
   portfolio       Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
-  patentId        String       @map("patent_id")       // e.g., "US-10123456-B2"
-  source          PatentSource @default(PATENTSVIEW_IMPORT)
-  importedAt      DateTime     @default(now()) @map("imported_at")
+  patentId        String       @map("patent_id")
+  patent          Patent       @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
 
-  // Snapshot fields (denormalized for fast display without cache lookups)
-  patentTitle     String?      @map("patent_title")
-  patentDate      String?      @map("patent_date")
-  assignee        String?
-  affiliateName   String?      @map("affiliate_name")
-
-  createdAt       DateTime     @default(now()) @map("created_at")
+  source          PatentSource @default(CANDIDATES_FILE)
+  addedAt         DateTime     @default(now()) @map("added_at")
 
   @@unique([portfolioId, patentId])
   @@map("portfolio_patents")
   @@index([portfolioId])
   @@index([patentId])
+}
+
+// =============================================================================
+// PATENT DATA — Core structured data for all patents (source of truth)
+// =============================================================================
+
+model Patent {
+  id                String   @id @default(cuid())
+  patentId          String   @unique @map("patent_id")  // "10002051" or "US-10123456-B2"
+  title             String   @default("")
+  abstract          String?  @db.Text
+  grantDate         String?  @map("grant_date")
+  filingDate        String?  @map("filing_date")
+  assignee          String   @default("")
+  inventors         String[] @default([])
+
+  // Computed/derived fields (refreshed by enrichment)
+  forwardCitations  Int      @default(0) @map("forward_citations")
+  remainingYears    Float?   @map("remaining_years")
+  isExpired         Boolean  @default(false) @map("is_expired")
+  baseScore         Float?   @map("base_score")
+
+  // Affiliate matching (denormalized for fast display)
+  affiliate         String?
+  superSector       String?  @map("super_sector")
+  primarySector     String?  @map("primary_sector")
+  primaryCpc        String?  @map("primary_cpc")
+
+  // Sub-sector assignment
+  primarySubSectorId   String? @map("primary_sub_sector_id")
+  primarySubSectorName String? @map("primary_sub_sector_name")
+
+  // Enrichment tracking
+  hasLlmData        Boolean  @default(false) @map("has_llm_data")
+  hasCitationData   Boolean  @default(false) @map("has_citation_data")
+  hasProsecutionData Boolean @default(false) @map("has_prosecution_data")
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  portfolios        PortfolioPatent[]
+  cpcCodes          PatentCpc[]
+  citations         PatentCitationAnalysis?
+  prosecution       PatentProsecution?
+  scores            PatentScore[]
+  compositeScores   PatentCompositeScore[]
+
+  @@map("patents")
+  @@index([primarySector])
+  @@index([superSector])
+  @@index([assignee])
+  @@index([baseScore])
+  @@index([isExpired])
+}
+
+model PatentCpc {
+  id          String  @id @default(cuid())
+  patentId    String  @map("patent_id")
+  patent      Patent  @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  cpcCode     String  @map("cpc_code")
+  isInventive Boolean @default(false) @map("is_inventive")
+
+  @@unique([patentId, cpcCode])
+  @@map("patent_cpc_codes")
+  @@index([patentId])
+  @@index([cpcCode])
+}
+
+model PatentCitationAnalysis {
+  id                    String   @id @default(cuid())
+  patentId              String   @unique @map("patent_id")
+  patent                Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+
+  competitorCitations   Int      @default(0) @map("competitor_citations")
+  affiliateCitations    Int      @default(0) @map("affiliate_citations")
+  neutralCitations      Int      @default(0) @map("neutral_citations")
+  competitorNames       String[] @map("competitor_names")
+  adjustedForwardCitations Float? @map("adjusted_forward_citations")
+  competitorDensity     Float?   @map("competitor_density")
+  classifiedAt          DateTime @default(now()) @map("classified_at")
+
+  @@map("patent_citation_analyses")
+}
+
+model PatentProsecution {
+  id                      String   @id @default(cuid())
+  patentId                String   @unique @map("patent_id")
+  patent                  Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+
+  applicationNumber       String?  @map("application_number")
+  officeActionsCount      Int      @default(0) @map("office_actions_count")
+  nonFinalRejections      Int      @default(0) @map("non_final_rejections")
+  finalRejections         Int      @default(0) @map("final_rejections")
+  allowances              Int      @default(0)
+  prosecutionQualityScore Int?     @map("prosecution_quality_score")
+  prosecutionCategory     String?  @map("prosecution_category")
+
+  @@map("patent_prosecution")
+}
+
+model PatentScore {
+  id          String   @id @default(cuid())
+  patentId    String   @map("patent_id")
+  patent      Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+
+  fieldName   String   @map("field_name")
+  displayName String?  @map("display_name")
+
+  // Value — one of these populated based on the question type
+  rating      Int?
+  floatValue  Float?   @map("float_value")
+  textValue   String?  @map("text_value")
+  reasoning   String?  @db.Text
+
+  // Provenance
+  source      String   @default("llm")
+  templateId  String?  @map("template_id")
+  llmModel    String?  @map("llm_model")
+  scoredAt    DateTime @default(now()) @map("scored_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([patentId, fieldName])
+  @@map("patent_scores")
+  @@index([patentId])
+  @@index([fieldName])
+  @@index([rating])
+}
+
+model PatentCompositeScore {
+  id          String   @id @default(cuid())
+  patentId    String   @map("patent_id")
+  patent      Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+
+  scoreName   String   @map("score_name")
+  value       Float
+  rank        Int?
+  percentile  Float?
+
+  config      Json?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([patentId, scoreName])
+  @@map("patent_composite_scores")
+  @@index([patentId])
+  @@index([scoreName])
+  @@index([value])
 }
 
 // =============================================================================

@@ -2,8 +2,11 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import type { SectorScoringProgress, ScoredPatent, SuperSectorProgress } from '@/services/api';
 import type { SuperSectorDetail } from '@/types';
+
+const portfolioStore = usePortfolioStore();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State

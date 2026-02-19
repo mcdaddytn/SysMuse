@@ -17,13 +17,9 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     portfolios.value.find(p => p.id === selectedPortfolioId.value) || null
   );
 
-  const isJsonPipeline = computed(() =>
-    selectedPortfolio.value?.dataSourceType === 'JSON_PIPELINE'
-  );
-
-  const isDbRecords = computed(() =>
-    selectedPortfolio.value?.dataSourceType === 'DB_RECORDS'
-  );
+  // Legacy compat — all portfolios now use DB. These always return the same values.
+  const isJsonPipeline = computed(() => false);
+  const isDbRecords = computed(() => false);
 
   // Group portfolios by company for the selector dropdown
   const portfoliosByCompany = computed(() => {

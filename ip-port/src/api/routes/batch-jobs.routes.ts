@@ -478,6 +478,8 @@ async function analyzeGaps(
         hasXmlData: true,
         hasCitationData: true,
         forwardCitations: true,
+        isQuarantined: true,
+        quarantine: true,
       },
       orderBy: [{ baseScore: 'desc' }, { grantDate: 'desc' }],
       ...(skip > 0 ? { skip } : {}),
@@ -489,12 +491,9 @@ async function analyzeGaps(
     // LLM, prosecution, and XML gaps come from Postgres flags
     const llmGapIds = patents.filter(p => !p.hasLlmData).map(p => p.patentId);
     const prosGapIds = patents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
-    // XML gap: exclude patents that can't be extracted from utility grant bulk XMLs:
-    // - pre-2005 (different format), design patents (D-prefix), reissue patents (RE-prefix)
-    const isXmlEligible = (p: { patentId: string; grantDate: string | null }) =>
-      !p.patentId.startsWith('D') && !p.patentId.startsWith('RE') &&
-      (!p.grantDate || p.grantDate >= '2005-01-01');
-    const xmlGapIds = patents.filter(p => !p.hasXmlData && isXmlEligible(p)).map(p => p.patentId);
+    // XML gap: use quarantine to exclude ineligible patents
+    const xmlEligible = patents.filter(p => !(p.quarantine as any)?.xml);
+    const xmlGapIds = xmlEligible.filter(p => !p.hasXmlData).map(p => p.patentId);
 
     // IPR, family, and citing gaps use file-based cache
     function getCacheSet(dir: string): Set<string> {
@@ -519,13 +518,19 @@ async function analyzeGaps(
     const familyGapIds = ids.filter(id => !familySet.has(id));
     const citingGapIds = ids.filter(id => !citingSet.has(id));
 
+    const quarantineCounts = {
+      total: patents.filter(p => p.isQuarantined).length,
+      xml: patents.filter(p => (p.quarantine as any)?.xml).length,
+    };
+
     return {
       llm: { total: ids.length, gap: llmGapIds.length, ids: llmGapIds },
       prosecution: { total: ids.length, gap: prosGapIds.length, ids: prosGapIds },
       ipr: { total: ids.length, gap: iprGapIds.length, ids: iprGapIds },
       family: { total: ids.length, gap: familyGapIds.length, ids: familyGapIds },
-      xml: { total: ids.length, gap: xmlGapIds.length, ids: xmlGapIds },
+      xml: { total: xmlEligible.length, gap: xmlGapIds.length, ids: xmlGapIds },
       citing: { total: ids.length, gap: citingGapIds.length, ids: citingGapIds },
+      quarantineCounts,
     };
   } catch (e) {
     console.error('Failed to analyze gaps:', e);
@@ -1177,6 +1182,105 @@ router.post('/sync-cpc-designations', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error syncing CPC designations:', error);
     res.status(500).json({ error: 'Failed to sync CPC designations' });
+  }
+});
+
+/**
+ * POST /api/batch-jobs/auto-quarantine
+ * Auto-detect patents that should be quarantined based on known rules.
+ * Sets quarantine JSON detail and isQuarantined flag.
+ */
+router.post('/auto-quarantine', async (req: Request, res: Response) => {
+  try {
+    const { portfolioId, dryRun } = req.body || {};
+
+    const where: Record<string, any> = {};
+    if (portfolioId) {
+      where.portfolios = { some: { portfolioId } };
+    }
+
+    const patents = await prisma.patent.findMany({
+      where,
+      select: {
+        patentId: true,
+        grantDate: true,
+        hasXmlData: true,
+        isQuarantined: true,
+        quarantine: true,
+      },
+    });
+
+    const updates: Array<{ patentId: string; quarantine: Record<string, string>; reasons: string[] }> = [];
+
+    for (const p of patents) {
+      const existing = (p.quarantine as Record<string, string>) || {};
+      const newQ = { ...existing };
+      const reasons: string[] = [];
+
+      // Design patent (D-prefix)
+      if (p.patentId.startsWith('D') && !existing.xml) {
+        newQ.xml = 'design-patent';
+        reasons.push('design-patent');
+      }
+      // Reissue patent (RE/H-prefix)
+      else if ((p.patentId.startsWith('RE') || p.patentId.startsWith('H')) && !existing.xml) {
+        newQ.xml = 'reissue-patent';
+        reasons.push('reissue-patent');
+      }
+      // Pre-2005 grant
+      else if (p.grantDate && p.grantDate < '2005-01-01' && !existing.xml) {
+        newQ.xml = 'pre-2005';
+        reasons.push('pre-2005');
+      }
+      // Recent, no bulk data available
+      else if (!p.hasXmlData && p.grantDate && p.grantDate >= '2024-01-01' && !existing.xml) {
+        newQ.xml = 'recent-no-bulk';
+        reasons.push('recent-no-bulk');
+      }
+
+      if (reasons.length > 0) {
+        updates.push({ patentId: p.patentId, quarantine: newQ, reasons });
+      }
+    }
+
+    const summary: Record<string, number> = {};
+    for (const u of updates) {
+      for (const r of u.reasons) {
+        summary[r] = (summary[r] || 0) + 1;
+      }
+    }
+
+    if (dryRun) {
+      return res.json({
+        dryRun: true,
+        totalScanned: patents.length,
+        wouldQuarantine: updates.length,
+        summary,
+        sampleIds: updates.slice(0, 20).map(u => ({ patentId: u.patentId, reasons: u.reasons })),
+      });
+    }
+
+    // Apply updates in batches
+    let applied = 0;
+    for (const u of updates) {
+      await prisma.patent.update({
+        where: { patentId: u.patentId },
+        data: {
+          quarantine: u.quarantine,
+          isQuarantined: true,
+        },
+      });
+      applied++;
+    }
+
+    res.json({
+      totalScanned: patents.length,
+      quarantined: applied,
+      summary,
+    });
+  } catch (error) {
+    console.error('Error in auto-quarantine:', error);
+    res.status(500).json({ error: 'Failed to auto-quarantine patents' });
   }
 });
 

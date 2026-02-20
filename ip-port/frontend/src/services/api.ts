@@ -158,6 +158,7 @@ export interface EnrichmentTierData {
     family: number; familyPct: number;
     xml: number; xmlPct: number;
   };
+  quarantineCounts?: { total: number; xml: number };
   topAffiliates: Array<{ name: string; count: number; pct: number }>;
   topSuperSectors: Array<{ name: string; count: number; pct: number }>;
 }
@@ -166,6 +167,7 @@ export interface EnrichmentSummary {
   totalPatents: number;
   tierSize: number;
   enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number; xml: number };
+  quarantineCounts?: { total: number; xml: number };
   tiers: EnrichmentTierData[];
 }
 
@@ -2114,6 +2116,57 @@ export const batchJobsApi = {
 
   async getJobLog(jobId: string, lines = 50): Promise<{ log: string }> {
     const { data } = await api.get(`/batch-jobs/${jobId}/log`, { params: { lines } });
+    return data;
+  },
+
+  async autoQuarantine(portfolioId?: string | null, dryRun = false) {
+    const { data } = await api.post('/batch-jobs/auto-quarantine', { portfolioId, dryRun });
+    return data;
+  },
+};
+
+// =============================================================================
+// Quarantine API
+// =============================================================================
+
+export interface QuarantineGroup {
+  coverageType: string;
+  reason: string;
+  count: number;
+  patents: Array<{
+    patentId: string;
+    title: string;
+    grantDate: string | null;
+    assignee: string;
+    affiliate: string | null;
+  }>;
+}
+
+export interface QuarantineSummary {
+  totalQuarantined: number;
+  groups: QuarantineGroup[];
+}
+
+export const quarantineApi = {
+  async getSummary(portfolioId?: string | null): Promise<QuarantineSummary> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/patents/quarantine-summary', { params });
+    return data;
+  },
+
+  async quarantine(patentId: string, coverageType: string, reason?: string) {
+    const { data } = await api.post(`/patents/${patentId}/quarantine`, { coverageType, reason: reason || 'manual' });
+    return data;
+  },
+
+  async unquarantine(patentId: string, coverageType: string) {
+    const { data } = await api.delete(`/patents/${patentId}/quarantine`, { data: { coverageType } });
+    return data;
+  },
+
+  async bulkQuarantine(patentIds: string[], coverageType: string, reason: string, action: 'quarantine' | 'unquarantine') {
+    const { data } = await api.post('/patents/bulk-quarantine', { patentIds, coverageType, reason, action });
     return data;
   },
 };

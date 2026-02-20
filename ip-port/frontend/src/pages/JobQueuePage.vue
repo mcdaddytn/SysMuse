@@ -4,10 +4,11 @@ import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { usePortfolioStore } from '@/stores/portfolio';
 import { useSuperSectors } from '@/composables/useSuperSectors';
 import {
-  patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi,
+  patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi, quarantineApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
   type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
-  type BatchJobMetadata, type HydrationResult, type ScoreSnapshot
+  type BatchJobMetadata, type HydrationResult, type ScoreSnapshot,
+  type QuarantineSummary, type QuarantineGroup
 } from '@/services/api';
 
 const portfolioStore = usePortfolioStore();
@@ -682,6 +683,97 @@ watch(() => portfolioStore.selectedPortfolioId, () => {
   loadPortfolioInfo();
 });
 
+// ─── Quarantine Tab ──────────────────────────────────────────────────────────
+const quarantineData = ref<QuarantineSummary | null>(null);
+const quarantineLoading = ref(false);
+const quarantineError = ref<string | null>(null);
+const quarantineAutoLoading = ref(false);
+const quarantineDryRunLoading = ref(false);
+const quarantineDryRunResult = ref<any>(null);
+
+const quarantineColumns = [
+  { name: 'patentId', label: 'Patent ID', field: 'patentId', align: 'left' as const, sortable: true },
+  { name: 'title', label: 'Title', field: 'title', align: 'left' as const, sortable: true },
+  { name: 'grantDate', label: 'Grant Date', field: 'grantDate', align: 'center' as const, sortable: true },
+  { name: 'assignee', label: 'Assignee', field: 'assignee', align: 'left' as const, sortable: true },
+  { name: 'actions', label: '', field: 'patentId', align: 'center' as const },
+];
+
+const QUARANTINE_REASON_META: Record<string, { label: string; icon: string; color: string; retryable: boolean }> = {
+  'design-patent': { label: 'Design Patent', icon: 'brush', color: 'blue-grey', retryable: false },
+  'reissue-patent': { label: 'Reissue Patent', icon: 'replay', color: 'blue-grey', retryable: false },
+  'pre-2005': { label: 'Pre-2005 Grant', icon: 'history', color: 'blue-grey', retryable: false },
+  'recent-no-bulk': { label: 'Recent — No Bulk Data', icon: 'schedule', color: 'orange', retryable: true },
+  'extraction-failed': { label: 'Extraction Failed', icon: 'error_outline', color: 'red', retryable: true },
+  'manual': { label: 'Manually Quarantined', icon: 'person', color: 'grey', retryable: false },
+};
+
+function getQuarantineLabel(reason: string): string {
+  return QUARANTINE_REASON_META[reason]?.label || reason;
+}
+function getQuarantineIcon(reason: string): string {
+  return QUARANTINE_REASON_META[reason]?.icon || 'shield';
+}
+function getQuarantineColor(reason: string): string {
+  return QUARANTINE_REASON_META[reason]?.color || 'grey';
+}
+function isRetryable(reason: string): boolean {
+  return QUARANTINE_REASON_META[reason]?.retryable || false;
+}
+
+async function loadQuarantineSummary() {
+  quarantineLoading.value = true;
+  quarantineError.value = null;
+  try {
+    quarantineData.value = await quarantineApi.getSummary(portfolioStore.selectedPortfolioId);
+  } catch (err) {
+    quarantineError.value = err instanceof Error ? err.message : 'Failed to load quarantine summary';
+  } finally {
+    quarantineLoading.value = false;
+  }
+}
+
+async function runAutoQuarantine(dryRun: boolean) {
+  if (dryRun) {
+    quarantineDryRunLoading.value = true;
+  } else {
+    quarantineAutoLoading.value = true;
+  }
+  try {
+    const result = await batchJobsApi.autoQuarantine(portfolioStore.selectedPortfolioId, dryRun);
+    if (dryRun) {
+      quarantineDryRunResult.value = result;
+    } else {
+      quarantineDryRunResult.value = null;
+      await loadQuarantineSummary();
+    }
+  } catch (err) {
+    quarantineError.value = err instanceof Error ? err.message : 'Auto-quarantine failed';
+  } finally {
+    quarantineAutoLoading.value = false;
+    quarantineDryRunLoading.value = false;
+  }
+}
+
+async function unquarantinePatent(patentId: string, coverageType: string) {
+  try {
+    await quarantineApi.unquarantine(patentId, coverageType);
+    await loadQuarantineSummary();
+  } catch (err) {
+    console.error('Failed to unquarantine:', err);
+  }
+}
+
+async function bulkUnquarantine(group: QuarantineGroup) {
+  try {
+    const patentIds = group.patents.map(p => p.patentId);
+    await quarantineApi.bulkQuarantine(patentIds, group.coverageType, group.reason, 'unquarantine');
+    await loadQuarantineSummary();
+  } catch (err) {
+    console.error('Failed to bulk unquarantine:', err);
+  }
+}
+
 // Watch for tab changes to refresh data
 watch(activeTab, (newTab) => {
   if (newTab === 'sectors') {
@@ -694,6 +786,8 @@ watch(activeTab, (newTab) => {
     loadLlmBatchJobs();
     loadAutoSnapshots();
     startLlmBatchPoll();
+  } else if (newTab === 'quarantine') {
+    loadQuarantineSummary();
   }
   // Stop LLM polling when leaving the tab
   if (newTab !== 'llm-batch') {
@@ -788,6 +882,7 @@ onUnmounted(() => {
       <q-tab name="sectors" label="Sector Enrichment" icon="category" />
       <q-tab name="jobs" label="Job Queue" icon="queue" />
       <q-tab name="llm-batch" label="LLM Batch Scoring" icon="psychology" />
+      <q-tab name="quarantine" label="Quarantine" icon="shield" />
     </q-tabs>
 
     <q-tab-panels v-model="activeTab" animated>
@@ -841,6 +936,9 @@ onUnmounted(() => {
                     <span class="text-caption text-white text-weight-bold">{{ enrichmentPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], enrichmentData.totalPatents) }}%</span>
                   </div>
                 </q-linear-progress>
+                <div v-if="key === 'xml' && enrichmentData.quarantineCounts?.xml" class="text-caption text-blue-grey q-mt-xs">
+                  {{ enrichmentData.quarantineCounts.xml }} quarantined
+                </div>
               </q-card-section>
             </q-card>
           </div>
@@ -911,6 +1009,9 @@ onUnmounted(() => {
                         <div class="enrichment-cell">
                           <q-linear-progress :value="tier.enrichment.xmlPct / 100" :color="coverageColor(tier.enrichment.xmlPct)" size="14px" rounded class="q-mb-xs" />
                           <span class="text-caption">{{ tier.enrichment.xmlPct }}%</span>
+                          <q-badge v-if="tier.quarantineCounts?.xml" color="blue-grey" class="q-ml-xs" dense>
+                            {{ tier.quarantineCounts.xml }} quarantined
+                          </q-badge>
                         </div>
                       </td>
                     </tr>
@@ -1377,6 +1478,110 @@ onUnmounted(() => {
             <div v-else class="text-grey text-caption">No auto-snapshots yet</div>
           </q-card-section>
         </q-card>
+      </q-tab-panel>
+
+      <!-- ═══ Quarantine Tab ═══ -->
+      <q-tab-panel name="quarantine" class="q-pa-none">
+        <div class="row items-center q-mb-md q-gutter-md">
+          <PortfolioSelector />
+          <q-btn
+            flat icon="auto_fix_high" label="Auto-Detect"
+            :loading="quarantineAutoLoading"
+            @click="runAutoQuarantine(false)"
+          />
+          <q-btn
+            flat icon="visibility" label="Dry Run"
+            :loading="quarantineDryRunLoading"
+            @click="runAutoQuarantine(true)"
+          />
+          <q-btn flat icon="refresh" label="Refresh" :loading="quarantineLoading" @click="loadQuarantineSummary" />
+        </div>
+
+        <!-- Dry run results -->
+        <q-banner v-if="quarantineDryRunResult" class="bg-blue-1 q-mb-md" rounded>
+          <div class="text-subtitle2">Dry Run Results</div>
+          <div>Scanned: {{ quarantineDryRunResult.totalScanned.toLocaleString() }} patents</div>
+          <div>Would quarantine: {{ quarantineDryRunResult.wouldQuarantine.toLocaleString() }}</div>
+          <div v-for="(count, reason) in quarantineDryRunResult.summary" :key="reason" class="q-ml-md">
+            {{ reason }}: {{ count }}
+          </div>
+          <template v-slot:action>
+            <q-btn flat label="Dismiss" @click="quarantineDryRunResult = null" />
+            <q-btn flat color="primary" label="Apply Now" @click="runAutoQuarantine(false)" />
+          </template>
+        </q-banner>
+
+        <div v-if="quarantineLoading" class="flex flex-center q-pa-xl">
+          <q-spinner size="lg" color="primary" />
+        </div>
+
+        <div v-else-if="quarantineData">
+          <!-- Summary cards -->
+          <div class="row q-gutter-md q-mb-lg">
+            <q-card v-for="group in quarantineData.groups" :key="`${group.coverageType}:${group.reason}`"
+              flat bordered class="col-auto" style="min-width: 200px">
+              <q-card-section class="q-pa-sm">
+                <div class="row items-center q-gutter-sm">
+                  <q-icon :name="getQuarantineIcon(group.reason)" :color="getQuarantineColor(group.reason)" size="sm" />
+                  <div>
+                    <div class="text-subtitle2">{{ getQuarantineLabel(group.reason) }}</div>
+                    <div class="text-caption text-grey">{{ group.coverageType }} &middot; {{ group.count }} patents</div>
+                  </div>
+                </div>
+              </q-card-section>
+            </q-card>
+            <q-card v-if="quarantineData.groups.length === 0" flat bordered class="col-12">
+              <q-card-section class="text-center text-grey">
+                <q-icon name="check_circle" size="xl" color="positive" class="q-mb-sm" />
+                <div>No quarantined patents</div>
+              </q-card-section>
+            </q-card>
+          </div>
+
+          <!-- Grouped patent tables -->
+          <q-card v-for="group in quarantineData.groups" :key="`table-${group.coverageType}:${group.reason}`"
+            flat bordered class="q-mb-md">
+            <q-card-section>
+              <div class="row items-center q-mb-sm">
+                <q-icon :name="getQuarantineIcon(group.reason)" :color="getQuarantineColor(group.reason)" size="sm" class="q-mr-sm" />
+                <span class="text-subtitle1 text-weight-medium">{{ getQuarantineLabel(group.reason) }}</span>
+                <q-badge class="q-ml-sm" :color="getQuarantineColor(group.reason)">{{ group.count }}</q-badge>
+                <q-space />
+                <q-btn v-if="isRetryable(group.reason)" flat dense size="sm"
+                  label="Retry All" icon="replay" color="primary" />
+                <q-btn flat dense size="sm" label="Unquarantine All" icon="shield"
+                  @click="bulkUnquarantine(group)" />
+              </div>
+              <q-table
+                flat dense
+                :rows="group.patents"
+                :columns="quarantineColumns"
+                :pagination="{ rowsPerPage: 10 }"
+                row-key="patentId"
+              >
+                <template v-slot:body-cell-patentId="props">
+                  <q-td :props="props">
+                    <router-link :to="{ name: 'patent-detail', params: { id: props.row.patentId } }" class="text-primary">
+                      US{{ props.row.patentId }}
+                    </router-link>
+                  </q-td>
+                </template>
+                <template v-slot:body-cell-actions="props">
+                  <q-td :props="props">
+                    <q-btn flat dense size="sm" icon="shield" color="orange"
+                      @click="unquarantinePatent(props.row.patentId, group.coverageType)">
+                      <q-tooltip>Unquarantine</q-tooltip>
+                    </q-btn>
+                  </q-td>
+                </template>
+              </q-table>
+            </q-card-section>
+          </q-card>
+        </div>
+
+        <div v-else-if="quarantineError" class="text-negative q-pa-md">
+          {{ quarantineError }}
+        </div>
       </q-tab-panel>
     </q-tab-panels>
 

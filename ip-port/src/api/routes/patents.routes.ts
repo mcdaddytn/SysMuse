@@ -692,13 +692,14 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       const prosCount = tierPatents.filter(p => p.has_prosecution_data).length;
       const iprCount = ids.filter(id => iprSet.has(id)).length;
       const familyCount = ids.filter(id => familySet.has(id)).length;
-      // XML: exclude patents ineligible for bulk XML extraction
-      // (pre-2005, design D-prefix, reissue RE-prefix)
-      const xmlEligible = tierPatents.filter(p =>
-        !p.patent_id.startsWith('D') && !p.patent_id.startsWith('RE') &&
-        (!p.grant_date || p.grant_date >= '2005-01-01'));
+      // XML: use quarantine to exclude ineligible patents
+      const xmlEligible = tierPatents.filter(p => !(p.quarantine as any)?.xml);
       const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
       const xmlDenominator = xmlEligible.length || 1; // avoid division by zero
+      const tierQuarantineCounts = {
+        total: tierPatents.filter(p => p.is_quarantined).length,
+        xml: tierPatents.filter(p => (p.quarantine as any)?.xml).length,
+      };
 
       // Affiliate breakdown
       const affCounts: Record<string, number> = {};
@@ -758,6 +759,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
           xml: xmlCount,
           xmlPct: Math.round(xmlCount / xmlDenominator * 1000) / 10,
         },
+        quarantineCounts: tierQuarantineCounts,
         topAffiliates,
         topSuperSectors,
       });
@@ -769,10 +771,12 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
     const prosTotal = patents.filter(p => p.has_prosecution_data).length;
     const iprTotal = allIds.filter(id => iprSet.has(id)).length;
     const familyTotal = allIds.filter(id => familySet.has(id)).length;
-    const xmlEligibleAll = patents.filter(p =>
-      !p.patent_id.startsWith('D') && !p.patent_id.startsWith('RE') &&
-      (!p.grant_date || p.grant_date >= '2005-01-01'));
+    const xmlEligibleAll = patents.filter(p => !(p.quarantine as any)?.xml);
     const xmlTotal = xmlEligibleAll.filter(p => p.has_xml_data).length;
+    const totalQuarantineCounts = {
+      total: patents.filter(p => p.is_quarantined).length,
+      xml: patents.filter(p => (p.quarantine as any)?.xml).length,
+    };
 
     res.json({
       totalPatents: sorted.length,
@@ -784,6 +788,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
         family: familyTotal,
         xml: xmlTotal,
       },
+      quarantineCounts: totalQuarantineCounts,
       tiers,
     });
   } catch (error) {
@@ -827,7 +832,9 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const prosCount = top.filter(p => p.has_prosecution_data).length;
         const iprCount = ids.filter(id => iprSet.has(id)).length;
         const familyCount = ids.filter(id => familySet.has(id)).length;
-        const xmlCount = top.filter(p => p.has_xml_data).length;
+        const xmlEligible = top.filter(p => !(p.quarantine as any)?.xml);
+        const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
+        const xmlDenominator = xmlEligible.length || 1;
 
         const checked = top.length;
         const scoreMin = top[top.length - 1]?.score ?? 0;
@@ -838,7 +845,12 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const prosGap = top.filter(p => !p.has_prosecution_data).length;
         const iprGap = ids.filter(id => !iprSet.has(id)).length;
         const familyGap = ids.filter(id => !familySet.has(id)).length;
-        const xmlGap = top.filter(p => !p.has_xml_data).length;
+        const xmlGap = xmlEligible.filter(p => !p.has_xml_data).length;
+
+        const sectorQuarantineCounts = {
+          total: top.filter(p => p.is_quarantined).length,
+          xml: top.filter(p => (p.quarantine as any)?.xml).length,
+        };
 
         return {
           name,
@@ -855,7 +867,7 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
             family: familyCount,
             familyPct: Math.round(familyCount / checked * 1000) / 10,
             xml: xmlCount,
-            xmlPct: Math.round(xmlCount / checked * 1000) / 10,
+            xmlPct: Math.round(xmlCount / xmlDenominator * 1000) / 10,
           },
           gaps: {
             llm: llmGap,
@@ -864,6 +876,7 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
             family: familyGap,
             xml: xmlGap,
           },
+          quarantineCounts: sectorQuarantineCounts,
         };
       })
       .sort((a, b) => b.totalPatents - a.totalPatents);
@@ -1293,6 +1306,8 @@ router.get('/export', async (req: Request, res: Response) => {
       { field: 'llm_standards_relevance', label: 'Standards' },
       { field: 'llm_market_segment', label: 'Market Segment' },
       { field: 'llm_detection_method', label: 'Detection Method' },
+      { field: 'is_quarantined', label: 'Quarantined' },
+      { field: 'patent_id_numeric', label: 'Patent Number (Numeric)' },
     ];
 
     let exportColumns = allColumns;
@@ -1640,6 +1655,75 @@ router.post('/aggregate/export', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error exporting aggregation:', error);
     res.status(500).json({ error: 'Failed to export aggregation' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Quarantine endpoints (must be before /:id routes to avoid param conflicts)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/patents/quarantine-summary
+ * Get quarantine summary grouped by reason, optionally scoped to a portfolio.
+ */
+router.get('/quarantine-summary', async (req: Request, res: Response) => {
+  try {
+    const portfolioId = req.query.portfolioId as string | undefined;
+
+    const where: Record<string, any> = { isQuarantined: true };
+    if (portfolioId) {
+      where.portfolios = { some: { portfolioId } };
+    }
+
+    const patents = await prisma.patent.findMany({
+      where,
+      select: {
+        patentId: true,
+        title: true,
+        grantDate: true,
+        assignee: true,
+        affiliate: true,
+        quarantine: true,
+        hasXmlData: true,
+      },
+    });
+
+    // Group by reason
+    const groups: Record<string, Array<{
+      patentId: string; title: string; grantDate: string | null;
+      assignee: string; affiliate: string | null;
+    }>> = {};
+
+    for (const p of patents) {
+      const q = p.quarantine as Record<string, string> | null;
+      if (!q) continue;
+      for (const [coverageType, reason] of Object.entries(q)) {
+        const key = `${coverageType}:${reason}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push({
+          patentId: p.patentId,
+          title: p.title,
+          grantDate: p.grantDate,
+          assignee: p.assignee,
+          affiliate: p.affiliate,
+        });
+      }
+    }
+
+    const summary = Object.entries(groups)
+      .map(([key, patents]) => {
+        const [coverageType, reason] = key.split(':');
+        return { coverageType, reason, count: patents.length, patents };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      totalQuarantined: patents.length,
+      groups: summary,
+    });
+  } catch (error) {
+    console.error('Error getting quarantine summary:', error);
+    res.status(500).json({ error: 'Failed to get quarantine summary' });
   }
 });
 
@@ -2112,6 +2196,137 @@ router.post('/invalidate-cache', (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error invalidating cache:', error);
     res.status(500).json({ error: 'Failed to invalidate cache' });
+  }
+});
+
+/**
+ * POST /api/patents/:id/quarantine
+ * Quarantine a patent for a specific coverage type.
+ */
+router.post('/:id/quarantine', async (req: Request, res: Response) => {
+  try {
+    const patentId = req.params.id;
+    const { coverageType, reason } = req.body;
+
+    if (!coverageType || !reason) {
+      return res.status(400).json({ error: 'coverageType and reason are required' });
+    }
+
+    const patent = await prisma.patent.findUnique({
+      where: { patentId },
+      select: { quarantine: true },
+    });
+
+    if (!patent) {
+      return res.status(404).json({ error: 'Patent not found' });
+    }
+
+    const existing = (patent.quarantine as Record<string, string>) || {};
+    const updated = { ...existing, [coverageType]: reason };
+
+    await prisma.patent.update({
+      where: { patentId },
+      data: { quarantine: updated, isQuarantined: true },
+    });
+
+    res.json({ success: true, quarantine: updated });
+  } catch (error) {
+    console.error('Error quarantining patent:', error);
+    res.status(500).json({ error: 'Failed to quarantine patent' });
+  }
+});
+
+/**
+ * DELETE /api/patents/:id/quarantine
+ * Remove quarantine for a specific coverage type.
+ */
+router.delete('/:id/quarantine', async (req: Request, res: Response) => {
+  try {
+    const patentId = req.params.id;
+    const { coverageType } = req.body;
+
+    if (!coverageType) {
+      return res.status(400).json({ error: 'coverageType is required' });
+    }
+
+    const patent = await prisma.patent.findUnique({
+      where: { patentId },
+      select: { quarantine: true },
+    });
+
+    if (!patent) {
+      return res.status(404).json({ error: 'Patent not found' });
+    }
+
+    const existing = (patent.quarantine as Record<string, string>) || {};
+    delete existing[coverageType];
+
+    const isQuarantined = Object.keys(existing).length > 0;
+
+    await prisma.patent.update({
+      where: { patentId },
+      data: {
+        quarantine: Object.keys(existing).length > 0 ? existing : null,
+        isQuarantined,
+      },
+    });
+
+    res.json({ success: true, quarantine: isQuarantined ? existing : null, isQuarantined });
+  } catch (error) {
+    console.error('Error unquarantining patent:', error);
+    res.status(500).json({ error: 'Failed to unquarantine patent' });
+  }
+});
+
+/**
+ * POST /api/patents/bulk-quarantine
+ * Bulk quarantine or unquarantine patents.
+ */
+router.post('/bulk-quarantine', async (req: Request, res: Response) => {
+  try {
+    const { patentIds, coverageType, reason, action } = req.body;
+
+    if (!patentIds?.length || !coverageType || !action) {
+      return res.status(400).json({ error: 'patentIds, coverageType, and action are required' });
+    }
+
+    if (action !== 'quarantine' && action !== 'unquarantine') {
+      return res.status(400).json({ error: 'action must be "quarantine" or "unquarantine"' });
+    }
+
+    const patents = await prisma.patent.findMany({
+      where: { patentId: { in: patentIds } },
+      select: { patentId: true, quarantine: true },
+    });
+
+    let updated = 0;
+    for (const p of patents) {
+      const existing = (p.quarantine as Record<string, string>) || {};
+
+      if (action === 'quarantine') {
+        existing[coverageType] = reason || 'manual';
+        await prisma.patent.update({
+          where: { patentId: p.patentId },
+          data: { quarantine: existing, isQuarantined: true },
+        });
+      } else {
+        delete existing[coverageType];
+        const isQuarantined = Object.keys(existing).length > 0;
+        await prisma.patent.update({
+          where: { patentId: p.patentId },
+          data: {
+            quarantine: Object.keys(existing).length > 0 ? existing : null,
+            isQuarantined,
+          },
+        });
+      }
+      updated++;
+    }
+
+    res.json({ success: true, updated });
+  } catch (error) {
+    console.error('Error in bulk quarantine:', error);
+    res.status(500).json({ error: 'Failed to bulk quarantine' });
   }
 });
 

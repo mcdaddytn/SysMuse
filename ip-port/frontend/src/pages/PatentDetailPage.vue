@@ -287,6 +287,40 @@ function openUSPTO() {
   window.open(`https://patents.google.com/patent/US${patentId.value}`, '_blank');
 }
 
+const QUARANTINE_REASON_LABELS: Record<string, string> = {
+  'design-patent': 'Design patent (D-prefix)',
+  'reissue-patent': 'Reissue patent (RE/H-prefix)',
+  'pre-2005': 'Pre-2005 grant date',
+  'recent-no-bulk': 'Recent — bulk data unavailable',
+  'extraction-failed': 'XML extraction failed',
+  'manual': 'Manually quarantined',
+};
+
+function formatQuarantineReasons(quarantine: Record<string, string> | null): string {
+  if (!quarantine) return 'Unknown reason';
+  return Object.entries(quarantine)
+    .map(([type, reason]) => `${type}: ${QUARANTINE_REASON_LABELS[reason] || reason}`)
+    .join(', ');
+}
+
+async function unquarantine() {
+  if (!patent.value) return;
+  const q = patent.value.quarantine as Record<string, string> | null;
+  if (!q) return;
+
+  for (const coverageType of Object.keys(q)) {
+    await fetch(`/api/patents/${patentId.value}/quarantine`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coverageType }),
+    });
+  }
+
+  // Refresh patent data
+  patent.value.is_quarantined = false;
+  patent.value.quarantine = null;
+}
+
 function openCpcLink(code: string) {
   // Open CPC code on USPTO classification site
   window.open(`https://www.uspto.gov/web/patents/classification/cpc/html/cpc-${code.charAt(0)}.html#${code}`, '_blank');
@@ -333,6 +367,14 @@ function openCpcLink(code: string) {
         <q-btn outline color="primary" icon="open_in_new" label="Google Patents" class="q-mr-sm" @click="openUSPTO" />
         <q-btn outline color="secondary" label="Queue Jobs" icon="queue" />
       </div>
+
+      <q-banner v-if="patent.is_quarantined" class="bg-orange-1 text-orange-9 q-mb-md" rounded>
+        <template v-slot:avatar><q-icon name="shield" color="orange" /></template>
+        This patent is quarantined: {{ formatQuarantineReasons(patent.quarantine) }}
+        <template v-slot:action>
+          <q-btn flat label="Unquarantine" color="orange" @click="unquarantine" />
+        </template>
+      </q-banner>
 
       <q-tabs v-model="activeTab" class="text-primary q-mb-md" @update:model-value="onTabChange">
         <q-tab name="overview" label="Overview" icon="info" />

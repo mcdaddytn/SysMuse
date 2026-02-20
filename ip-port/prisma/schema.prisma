@@ -287,6 +287,13 @@ model Patent {
   hasProsecutionData Boolean @default(false) @map("has_prosecution_data")
   hasXmlData         Boolean  @default(false) @map("has_xml_data")
 
+  // Quarantine tracking
+  isQuarantined     Boolean  @default(false) @map("is_quarantined")
+  quarantine        Json?    // Per-coverage detail: { "xml": "design-patent", ... }
+
+  // Numeric patent ID for sorting/matching (strips D/RE/H prefix + leading zeros)
+  patentIdNumeric   Int?     @map("patent_id_numeric")
+
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -304,6 +311,7 @@ model Patent {
   @@index([assignee])
   @@index([baseScore])
   @@index([isExpired])
+  @@index([isQuarantined])
 }
 
 model PatentCpc {

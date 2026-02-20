@@ -98,6 +98,22 @@ function onRowClick(_evt: Event, row: Patent) {
   router.push({ name: 'patent-detail', params: { id: row.patent_id } });
 }
 
+const QUARANTINE_REASON_LABELS: Record<string, string> = {
+  'design-patent': 'Design patent (D-prefix)',
+  'reissue-patent': 'Reissue patent (RE/H-prefix)',
+  'pre-2005': 'Pre-2005 grant date',
+  'recent-no-bulk': 'Recent — bulk data unavailable',
+  'extraction-failed': 'XML extraction failed',
+  'manual': 'Manually quarantined',
+};
+
+function formatQuarantineTooltip(quarantine: Record<string, string> | null): string {
+  if (!quarantine) return 'Quarantined';
+  return Object.entries(quarantine)
+    .map(([type, reason]) => `${type}: ${QUARANTINE_REASON_LABELS[reason] || reason}`)
+    .join('\n');
+}
+
 function onRequest(props: { pagination: typeof paginationModel.value }) {
   patentsStore.updatePagination({
     page: props.pagination.page,
@@ -693,6 +709,15 @@ onMounted(async () => {
             {{ Math.round(props.row.market_value_score) }}
           </q-badge>
           <span v-else class="text-grey-4">--</span>
+        </q-td>
+      </template>
+
+      <template v-slot:body-cell-is_quarantined="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.is_quarantined" color="orange" outline>
+            <q-icon name="shield" size="xs" class="q-mr-xs" />Q
+            <q-tooltip>{{ formatQuarantineTooltip(props.row.quarantine) }}</q-tooltip>
+          </q-badge>
         </q-td>
       </template>
 

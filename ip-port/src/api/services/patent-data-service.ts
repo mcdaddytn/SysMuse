@@ -111,6 +111,7 @@ export interface PatentFilters {
   neutralCitesMax?: number;
   hasLlmData?: string;
   isExpired?: string;
+  isQuarantined?: string;
   hasCompetitorCites?: string;
   activeOnly?: string;
 }
@@ -589,6 +590,13 @@ function buildWhereClause(
     conditions.push({ isExpired: false });
   }
 
+  // Is Quarantined
+  if (filters.isQuarantined === 'true') {
+    conditions.push({ isQuarantined: true });
+  } else if (filters.isQuarantined === 'false') {
+    conditions.push({ isQuarantined: false });
+  }
+
   // Has competitor cites
   if (filters.hasCompetitorCites === 'true') {
     conditions.push({ citations: { competitorCitations: { gt: 0 } } });
@@ -722,6 +730,13 @@ function mapPatentToDTO(patent: any): PatentDTO {
 
     // LLM data flag
     has_llm_data: patent.hasLlmData || false,
+
+    // Quarantine
+    is_quarantined: patent.isQuarantined || false,
+    quarantine: patent.quarantine || null,
+
+    // Numeric patent ID
+    patent_id_numeric: patent.patentIdNumeric ?? null,
   };
 
   // Map EAV scores to flat DTO fields
@@ -952,6 +967,7 @@ export async function getAllFilterOptions(portfolioId?: string) {
       remainingYears: true,
       hasLlmData: true,
       isExpired: true,
+      isQuarantined: true,
       primarySubSectorName: true,
     },
   });
@@ -979,7 +995,7 @@ export async function getAllFilterOptions(portfolioId?: string) {
   const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
   let scoreMin = Infinity, scoreMax = -Infinity;
   let yearsMin = Infinity, yearsMax = -Infinity;
-  let withLlmData = 0, withCompetitors = 0, expired = 0;
+  let withLlmData = 0, withCompetitors = 0, expired = 0, quarantined = 0;
 
   for (const p of patents) {
     const aff = p.affiliate || 'Unknown';
@@ -1008,6 +1024,7 @@ export async function getAllFilterOptions(portfolioId?: string) {
 
     if (p.hasLlmData) withLlmData++;
     if (p.isExpired) expired++;
+    if (p.isQuarantined) quarantined++;
   }
 
   // Competitor counts
@@ -1065,6 +1082,7 @@ export async function getAllFilterOptions(portfolioId?: string) {
       withLlmData,
       withCompetitors,
       expired,
+      quarantined,
     },
   };
 }
@@ -1086,6 +1104,8 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
   has_citation_data: boolean;
   has_prosecution_data: boolean;
   has_xml_data: boolean;
+  is_quarantined: boolean;
+  quarantine: any;
 }>> {
   const where: Prisma.PatentWhereInput = portfolioId
     ? { portfolios: { some: { portfolioId } } }
@@ -1106,6 +1126,8 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
       hasCitationData: true,
       hasProsecutionData: true,
       hasXmlData: true,
+      isQuarantined: true,
+      quarantine: true,
       citations: { select: { competitorCitations: true } },
     },
   });
@@ -1123,5 +1145,7 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
     has_citation_data: p.hasCitationData,
     has_prosecution_data: p.hasProsecutionData,
     has_xml_data: p.hasXmlData,
+    is_quarantined: p.isQuarantined,
+    quarantine: p.quarantine,
   }));
 }

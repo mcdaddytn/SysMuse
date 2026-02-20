@@ -40,6 +40,10 @@ export const usePatentsStore = defineStore('patents', () => {
     { name: 'remaining_years', label: 'Years Left', field: 'remaining_years', sortable: true, align: 'center', visible: true, group: 'core',
       format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
     { name: 'expiration_date', label: 'Expiration', field: 'expiration_date', sortable: true, align: 'center', visible: false, group: 'core' },
+    { name: 'is_quarantined', label: 'Quarantined', field: 'is_quarantined', sortable: true, align: 'center', visible: false, group: 'core',
+      description: 'Patent is quarantined from enrichment tracking' },
+    { name: 'patent_id_numeric', label: 'Patent #', field: 'patent_id_numeric', sortable: true, align: 'right', visible: false, group: 'core',
+      description: 'Numeric patent ID for sorting' },
 
     // Entity & Sector group
     { name: 'affiliate', label: 'Affiliate', field: 'affiliate', sortable: true, align: 'left', visible: true, group: 'entity' },

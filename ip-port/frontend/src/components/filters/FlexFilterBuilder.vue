@@ -43,6 +43,7 @@ const availableFilters: FilterField[] = [
   // Boolean filters
   { key: 'hasLlmData', label: 'Has LLM Data', type: 'boolean', icon: 'psychology', color: 'amber' },
   { key: 'isExpired', label: 'Is Expired', type: 'boolean', icon: 'event_busy', color: 'red' },
+  { key: 'isQuarantined', label: 'Quarantined', type: 'boolean', icon: 'shield', color: 'orange' },
 ];
 
 // Active filters (keys that user has added)
@@ -68,6 +69,7 @@ interface FilterOptions {
     withLlmData: number;
     withCompetitors: number;
     expired: number;
+    quarantined: number;
   };
 }
 
@@ -477,6 +479,9 @@ onMounted(() => {
       {{ filterOptions.counts.total.toLocaleString() }} total
       &middot; {{ filterOptions.counts.withLlmData.toLocaleString() }} with LLM data
       &middot; {{ filterOptions.counts.expired?.toLocaleString() || 0 }} expired
+      <template v-if="filterOptions.counts.quarantined">
+        &middot; {{ filterOptions.counts.quarantined.toLocaleString() }} quarantined
+      </template>
     </div>
   </div>
 </template>

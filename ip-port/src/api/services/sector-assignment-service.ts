@@ -182,7 +182,7 @@ export async function assignSector(patent: PatentInput): Promise<SectorAssignmen
   if (validMatches.length === 0) {
     return {
       primarySector: 'general',
-      superSector: 'COMPUTING',
+      superSector: 'UNCLASSIFIED',
       matchedRules: [],
       confidence: 0,
     };
@@ -199,7 +199,7 @@ export async function assignSector(patent: PatentInput): Promise<SectorAssignmen
 
   return {
     primarySector: best.sectorName,
-    superSector: best.superSectorName || 'COMPUTING',
+    superSector: best.superSectorName || 'UNCLASSIFIED',
     matchedRules: validMatches.map(m => ({
       ruleId: m.id,
       ruleType: m.ruleType,

@@ -2034,6 +2034,9 @@ export interface BatchJob {
   estimatedCompletion?: string;
   model?: string;
   batchMode?: boolean;
+  portfolioId?: string;
+  portfolioName?: string;
+  useClaims?: boolean;
 }
 
 export interface BatchJobsResponse {
@@ -3252,7 +3255,27 @@ export const companyApi = {
     companyName: string;
     existingCount: number;
   }> {
-    const { data } = await api.post(`/companies/${companyId}/discover-competitors`, { companyName }, { timeout: 30000 });
+    const { data } = await api.post(`/companies/${companyId}/discover-competitors`, { companyName }, { timeout: 120000 });
+    return data;
+  },
+
+  async discoverCompetitorsData(companyId: string, portfolioId: string): Promise<{
+    suggestions: Array<{
+      name: string;
+      slug: string;
+      sectors: string[];
+      notes: string;
+      strength: number;
+      citationCount: number;
+      patentsCited: number;
+      variants: string[];
+    }>;
+    portfolioId: string;
+    totalCitingPatentsAnalyzed: number;
+    patentsWithCitingData: number;
+    patentsWithoutCitingData: number;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/discover-competitors-data`, { portfolioId }, { timeout: 60000 });
     return data;
   },
 

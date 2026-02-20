@@ -184,6 +184,7 @@ model Portfolio {
   patents         PortfolioPatent[]
   sectorRules     SectorRule[]
   scoreSnapshots  ScoreSnapshot[]
+  batchJobs       BatchJob[]
 
   @@map("portfolios")
   @@index([companyId])
@@ -1466,4 +1467,60 @@ enum ScoreType {
   V2
   V3
   LLM
+}
+
+// =============================================================================
+// BATCH JOB TRACKING
+// Replaces logs/batch-jobs.json — survives server restarts
+// =============================================================================
+
+model BatchJob {
+  id              String   @id @default(cuid())
+
+  // Group related jobs (e.g., all coverage types for one enrichment run)
+  groupId         String?  @map("group_id")
+
+  // Target scope
+  targetType      String   @map("target_type")   // tier, super-sector, sector
+  targetValue     String   @map("target_value")   // "1-500", "VIDEO_STREAMING", etc.
+
+  // What this job does
+  coverageType    String   @map("coverage_type")  // llm, prosecution, ipr, family, xml
+
+  // Status
+  status          String   @default("pending")    // pending, running, completed, failed, cancelled
+  pid             Int?                             // OS process ID (for kill)
+  logFile         String?  @map("log_file")
+  error           String?
+
+  // Progress
+  totalPatents    Int      @default(0) @map("total_patents")
+  completedPatents Int     @default(0) @map("completed_patents")
+
+  // Rate tracking
+  estimatedRate   Float?   @map("estimated_rate")   // patents/hour
+  actualRate      Float?   @map("actual_rate")       // patents/hour
+  estimatedCompletion DateTime? @map("estimated_completion")
+
+  // LLM-specific
+  model           String?                           // claude-sonnet-4-20250514, etc.
+  batchMode       Boolean? @map("batch_mode")       // true=Batch API, false=realtime
+  useClaims       Boolean  @default(false) @map("use_claims")
+
+  // Portfolio context
+  portfolioId     String?  @map("portfolio_id")
+  portfolio       Portfolio? @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
+  portfolioName   String?  @map("portfolio_name")   // Denormalized for display after portfolio deletion
+
+  // Timestamps
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@map("batch_jobs")
+  @@index([groupId])
+  @@index([status])
+  @@index([coverageType])
+  @@index([portfolioId])
+  @@index([createdAt])
 }

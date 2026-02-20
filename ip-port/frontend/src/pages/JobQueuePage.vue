@@ -2,6 +2,7 @@
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { usePortfolioStore } from '@/stores/portfolio';
+import { useSuperSectors } from '@/composables/useSuperSectors';
 import {
   patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
@@ -10,6 +11,7 @@ import {
 } from '@/services/api';
 
 const portfolioStore = usePortfolioStore();
+const { superSectorOptions } = useSuperSectors();
 
 const activeTab = ref('enrichment');
 
@@ -180,12 +182,6 @@ const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: st
   { value: 'ipr', label: 'IPR / PTAB', color: 'orange' },
   { value: 'family', label: 'Patent Families', color: 'teal' },
   { value: 'xml', label: 'XML Extraction', color: 'positive' }
-];
-
-const superSectorOptions = [
-  'Video & Streaming', 'Semiconductor', 'Security', 'Virtualization & Cloud',
-  'SDN & Network Infrastructure', 'Computing & Data', 'Wireless & RF',
-  'Imaging & Optics', 'Audio', 'AI & Machine Learning'
 ];
 
 // Load gaps when dialog opens or target changes
@@ -441,6 +437,20 @@ function getGroupStatus(jobs: BatchJob[]): string {
   if (jobs.some(j => j.status === 'failed')) return 'failed';
   if (jobs.some(j => j.status === 'cancelled')) return 'cancelled';
   return 'pending';
+}
+
+function getGroupCoverageTypes(jobs: BatchJob[]): CoverageType[] {
+  return [...new Set(jobs.map(j => j.coverageType))];
+}
+
+function getGroupLlmInfo(jobs: BatchJob[]): string | null {
+  const llmJob = jobs.find(j => j.coverageType === 'llm');
+  if (!llmJob) return null;
+  const parts: string[] = [];
+  if (llmJob.model) parts.push(llmModelLabel(llmJob.model));
+  if (llmJob.batchMode === false) parts.push('realtime');
+  if (llmJob.useClaims) parts.push('+claims');
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 
 // Metric descriptions
@@ -1092,23 +1102,35 @@ onUnmounted(() => {
                 </q-item-section>
                 <q-item-section>
                   <q-item-label class="text-weight-medium">
+                    <span v-if="item.jobs[0]?.portfolioName" class="text-primary q-mr-sm">{{ item.jobs[0].portfolioName }}</span>
                     {{ item.jobs[0]?.targetType === 'tier' ? formatJobTarget(item.jobs[0]) : `${item.jobs[0]?.targetType}: ${item.jobs[0]?.targetValue}` }}
                   </q-item-label>
                   <q-item-label caption>
                     {{ item.jobs.length }} jobs | Started {{ formatDate(item.jobs[0]?.startedAt) }}
+                    <template v-if="item.jobs[0]?.progress">
+                      | {{ item.jobs[0].progress.total.toLocaleString() }} patents
+                    </template>
+                    <template v-if="getGroupLlmInfo(item.jobs)">
+                      | {{ getGroupLlmInfo(item.jobs) }}
+                    </template>
                   </q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-btn
-                    v-if="getGroupStatus(item.jobs) === 'running'"
-                    flat
-                    dense
-                    icon="stop"
-                    color="negative"
-                    @click="cancelJobGroup(item.groupId!)"
-                  >
-                    <q-tooltip>Cancel All</q-tooltip>
-                  </q-btn>
+                  <div class="row items-center q-gutter-xs">
+                    <q-chip v-for="type in getGroupCoverageTypes(item.jobs)" :key="type" dense size="sm" :color="getCoverageColor(type)" text-color="white">
+                      {{ type }}
+                    </q-chip>
+                    <q-btn
+                      v-if="getGroupStatus(item.jobs) === 'running'"
+                      flat
+                      dense
+                      icon="stop"
+                      color="negative"
+                      @click="cancelJobGroup(item.groupId!)"
+                    >
+                      <q-tooltip>Cancel All</q-tooltip>
+                    </q-btn>
+                  </div>
                 </q-item-section>
               </q-item>
 
@@ -1129,23 +1151,42 @@ onUnmounted(() => {
                       {{ job.status }}
                     </q-badge>
                     <q-spinner v-if="job.status === 'running'" size="xs" color="blue" class="q-ml-xs" />
-                    <span v-if="!item.isGroup" class="text-grey-7">
-                      {{ job.targetType === 'tier' ? formatJobTarget(job) : `${job.targetType}: ${job.targetValue}` }}
+                    <span v-if="!item.isGroup">
+                      <span v-if="job.portfolioName" class="text-primary q-mr-sm">{{ job.portfolioName }}</span>
+                      <span class="text-grey-7">
+                        {{ job.targetType === 'tier' ? formatJobTarget(job) : `${job.targetType}: ${job.targetValue}` }}
+                      </span>
                     </span>
                   </q-item-label>
                   <q-item-label caption>
-                    <span v-if="job.progress">{{ job.progress.total.toLocaleString() }} patents</span>
-                    <span v-if="job.model" class="q-ml-sm">| {{ llmModelLabel(job.model) }}</span>
-                    <span v-if="job.batchMode === false" class="q-ml-sm">| realtime</span>
-                    <span v-if="job.estimatedRate" class="q-ml-sm">| Est: {{ job.estimatedRate }}/hr</span>
-                    <span v-if="job.actualRate" class="q-ml-sm">| Actual: {{ job.actualRate }}/hr</span>
+                    <span v-if="job.progress && job.status === 'running' && job.progress.completed > 0">
+                      {{ job.progress.completed.toLocaleString() }} / {{ job.progress.total.toLocaleString() }} patents
+                      ({{ Math.round(job.progress.completed / job.progress.total * 100) }}%)
+                    </span>
+                    <span v-else-if="job.progress">{{ job.progress.total.toLocaleString() }} patents</span>
+                    <span v-if="job.model" class="q-ml-sm">
+                      | <q-badge dense :color="job.model.includes('opus') ? 'deep-purple' : job.model.includes('haiku') ? 'teal' : 'blue'" text-color="white" class="text-caption">{{ llmModelLabel(job.model) }}</q-badge>
+                    </span>
+                    <span v-if="job.batchMode === false" class="q-ml-sm">| <q-badge dense color="orange" text-color="white" class="text-caption">realtime</q-badge></span>
+                    <span v-if="job.useClaims" class="q-ml-sm">| +claims</span>
+                    <span v-if="job.status === 'running' && job.actualRate" class="q-ml-sm">| {{ job.actualRate.toLocaleString() }}/hr</span>
+                    <span v-else-if="job.status === 'running' && job.estimatedRate" class="q-ml-sm">| ~{{ job.estimatedRate.toLocaleString() }}/hr</span>
+                    <span v-if="job.status !== 'running' && job.actualRate" class="q-ml-sm">| {{ job.actualRate.toLocaleString() }}/hr</span>
                     <span v-if="job.status === 'running' && job.estimatedCompletion" class="q-ml-sm">
                       | ETA: {{ formatETA(job.estimatedCompletion) }}
                     </span>
                     <span v-if="job.completedAt" class="q-ml-sm">
-                      | Duration: {{ formatDuration(job.startedAt, job.completedAt) }}
+                      | {{ formatDuration(job.startedAt, job.completedAt) }}
                     </span>
                   </q-item-label>
+                  <q-linear-progress
+                    v-if="job.status === 'running' && job.progress && job.progress.completed > 0"
+                    :value="job.progress.completed / job.progress.total"
+                    color="blue"
+                    size="6px"
+                    rounded
+                    class="q-mt-xs"
+                  />
                 </q-item-section>
                 <q-item-section side>
                   <div class="row q-gutter-xs">

@@ -5,6 +5,8 @@
 
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -193,11 +195,12 @@ router.post('/:id/discover-competitors', async (req: Request, res: Response) => 
     const client = new Anthropic();
 
     const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
       messages: [{
         role: 'user',
-        content: `List the top competitors of "${nameToSearch}" in the technology/patent space. Focus on companies that would have overlapping patent portfolios.
+        content: `Search the web for competitors of "${nameToSearch}" in the technology/patent space. Focus on companies that would have overlapping patent portfolios — companies working in the same technology areas, filing similar patents, or competing in the same markets.
 
 Already known competitors: ${existingNames.slice(0, 30).join(', ')}${existingNames.length > 30 ? ` (and ${existingNames.length - 30} more)` : ''}
 
@@ -207,17 +210,160 @@ Only return NEW companies not in the known list. Return raw JSON array, no markd
       }],
     });
 
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+    // Extract text from response (may include web search tool_use blocks)
+    const textBlocks = message.content.filter(b => b.type === 'text');
+    const responseText = textBlocks.map(b => (b as any).text).join('');
     let suggestions;
     try {
       suggestions = JSON.parse(responseText);
     } catch {
-      suggestions = [];
+      // Try to extract JSON array from response text (model may include preamble)
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
     }
 
     res.json({ suggestions, companyName: nameToSearch, existingCount: existingNames.length });
   } catch (err: unknown) {
     console.error('[Companies] Discover competitors error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/companies/:id/discover-competitors-data — data-driven competitor discovery from citing patents */
+router.post('/:id/discover-competitors-data', async (req: Request, res: Response) => {
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: req.params.id },
+      include: {
+        affiliates: { include: { patterns: true } },
+      },
+    });
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const { portfolioId } = req.body;
+    if (!portfolioId) {
+      return res.status(400).json({ error: 'portfolioId is required' });
+    }
+
+    // Get all patents in the portfolio
+    const portfolioPatents = await prisma.portfolioPatent.findMany({
+      where: { portfolioId },
+      select: { patentId: true },
+    });
+
+    if (portfolioPatents.length === 0) {
+      return res.status(400).json({ error: 'Portfolio has no patents' });
+    }
+
+    // Build self/affiliate patterns to exclude
+    const selfPatterns = company.affiliates.flatMap(a =>
+      a.patterns.map(p => p.pattern.toLowerCase())
+    );
+    // Also add company name variants
+    selfPatterns.push(company.displayName.toLowerCase());
+    selfPatterns.push(company.name.toLowerCase());
+
+    // Common suffixes to strip for normalization
+    const SUFFIXES = /,?\s*\b(inc\.?|llc\.?|ltd\.?|l\.?t\.?d\.?|corp\.?|corporation|company|co\.?|plc|s\.?a\.?|a\.?g\.?|gmbh|n\.?v\.?|b\.?v\.?|s\.?r\.?l\.?|s\.?p\.?a\.?|pty\.?|pte\.?|limited)\s*$/i;
+
+    function normalizeName(name: string): string {
+      return name.replace(SUFFIXES, '').trim().replace(/\s+/g, ' ');
+    }
+
+    function isSelfOrAffiliate(assignee: string): boolean {
+      const lower = assignee.toLowerCase();
+      return selfPatterns.some(p => lower.includes(p) || p.includes(lower.replace(SUFFIXES, '').trim()));
+    }
+
+    // Read citing patent cache files
+    const citingDir = path.join(process.cwd(), 'cache/api/patentsview/citing-patent-details');
+    const assigneeMap = new Map<string, {
+      totalCitations: number;
+      patentsCited: Set<string>;
+      variants: Set<string>;
+    }>();
+
+    let patentsWithCitingData = 0;
+    let patentsWithoutCitingData = 0;
+    let totalCitingPatentsAnalyzed = 0;
+
+    for (const { patentId } of portfolioPatents) {
+      const cacheFile = path.join(citingDir, `${patentId}.json`);
+      if (!fs.existsSync(cacheFile)) {
+        patentsWithoutCitingData++;
+        continue;
+      }
+
+      patentsWithCitingData++;
+
+      let data: any;
+      try {
+        data = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+      } catch {
+        continue;
+      }
+
+      const citingPatents = data.citing_patents || [];
+      totalCitingPatentsAnalyzed += citingPatents.length;
+
+      for (const cp of citingPatents) {
+        for (const assignee of cp.assignees || []) {
+          const org = assignee.assignee_organization;
+          if (!org) continue;
+
+          // Skip self/affiliates
+          if (isSelfOrAffiliate(org)) continue;
+
+          const normalized = normalizeName(org).toLowerCase();
+          if (!normalized) continue;
+
+          let entry = assigneeMap.get(normalized);
+          if (!entry) {
+            entry = { totalCitations: 0, patentsCited: new Set(), variants: new Set() };
+            assigneeMap.set(normalized, entry);
+          }
+          entry.totalCitations++;
+          entry.patentsCited.add(patentId);
+          entry.variants.add(org);
+        }
+      }
+    }
+
+    // Sort by totalCitations descending, take top 30
+    const sorted = Array.from(assigneeMap.entries())
+      .sort((a, b) => b[1].totalCitations - a[1].totalCitations)
+      .slice(0, 30);
+
+    const maxCitations = sorted.length > 0 ? sorted[0][1].totalCitations : 1;
+
+    const suggestions = sorted.map(([slug, info]) => {
+      // Use most common variant as display name
+      const variantArr = Array.from(info.variants);
+      const displayName = variantArr.sort((a, b) => b.length - a.length)[0]; // longest variant usually most complete
+
+      return {
+        name: displayName,
+        slug,
+        sectors: [] as string[],
+        notes: `${info.totalCitations} citations across ${info.patentsCited.size} patents`,
+        strength: Math.round((info.totalCitations / maxCitations) * 100) / 100,
+        citationCount: info.totalCitations,
+        patentsCited: info.patentsCited.size,
+        variants: variantArr.slice(0, 5),
+      };
+    });
+
+    res.json({
+      suggestions,
+      portfolioId,
+      totalCitingPatentsAnalyzed,
+      patentsWithCitingData,
+      patentsWithoutCitingData,
+    });
+  } catch (err: unknown) {
+    console.error('[Companies] Discover competitors (data) error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

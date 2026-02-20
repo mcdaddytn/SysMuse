@@ -42,8 +42,11 @@ const competitorSearch = ref('');
 
 // Discover competitors
 const discovering = ref(false);
-const discoverSuggestions = ref<Array<{ name: string; slug: string; sectors: string[]; notes: string }>>([]);
+const discoveringData = ref(false);
+const discoverSuggestions = ref<Array<{ name: string; slug: string; sectors: string[]; notes: string; strength?: number; citationCount?: number; patentsCited?: number; variants?: string[] }>>([]);
 const showDiscoverDialog = ref(false);
+const discoverSource = ref<'llm' | 'data'>('llm');
+const discoverDataStats = ref<{ totalCiting: number; withData: number; withoutData: number } | null>(null);
 
 // Discover affiliates
 const discoveringAffiliates = ref(false);
@@ -268,6 +271,8 @@ async function discoverCompetitors() {
   if (!selectedCompanyId.value) return;
   discovering.value = true;
   discoverSuggestions.value = [];
+  discoverSource.value = 'llm';
+  discoverDataStats.value = null;
   try {
     const result = await companyApi.discoverCompetitors(selectedCompanyId.value);
     discoverSuggestions.value = result.suggestions;
@@ -279,7 +284,32 @@ async function discoverCompetitors() {
   }
 }
 
-async function acceptCompetitorSuggestion(suggestion: { name: string; slug: string; sectors: string[] }) {
+async function discoverCompetitorsFromData() {
+  if (!selectedCompanyId.value || !companyDetail.value?.portfolios?.length) return;
+  discoveringData.value = true;
+  discoverSuggestions.value = [];
+  discoverSource.value = 'data';
+  discoverDataStats.value = null;
+
+  // Use the first portfolio
+  const portfolio = companyDetail.value.portfolios[0];
+  try {
+    const result = await companyApi.discoverCompetitorsData(selectedCompanyId.value, portfolio.id);
+    discoverSuggestions.value = result.suggestions;
+    discoverDataStats.value = {
+      totalCiting: result.totalCitingPatentsAnalyzed,
+      withData: result.patentsWithCitingData,
+      withoutData: result.patentsWithoutCitingData,
+    };
+    showDiscoverDialog.value = true;
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    discoveringData.value = false;
+  }
+}
+
+async function acceptCompetitorSuggestion(suggestion: { name: string; slug: string; sectors: string[]; strength?: number; notes?: string }) {
   if (!selectedCompanyId.value) return;
   try {
     // Create the company if it doesn't exist
@@ -294,10 +324,12 @@ async function acceptCompetitorSuggestion(suggestion: { name: string; slug: stri
       company = found;
     }
     // Create competitor relationship
+    const source = discoverSource.value === 'data' ? 'CITATION_DATA' : 'LLM_SUGGESTED';
     await companyApi.addCompetitor(selectedCompanyId.value, {
       competitorId: company.id,
       sectors: suggestion.sectors,
-      discoverySource: 'LLM_SUGGESTED',
+      discoverySource: source,
+      notes: suggestion.notes || undefined,
     });
     discoverSuggestions.value = discoverSuggestions.value.filter(s => s.slug !== suggestion.slug);
     await loadCompetitors(selectedCompanyId.value);
@@ -731,9 +763,14 @@ onMounted(() => loadCompanies());
               <q-badge color="primary" class="q-ml-sm">{{ competitors.length }}</q-badge>
             </div>
             <q-space />
+            <q-btn flat dense icon="query_stats" color="teal" :loading="discoveringData"
+              @click="discoverCompetitorsFromData"
+              :disable="!companyDetail?.portfolios?.length">
+              <q-tooltip>Discover from Citations (data-driven)</q-tooltip>
+            </q-btn>
             <q-btn flat dense icon="auto_awesome" color="accent" :loading="discovering"
               @click="discoverCompetitors">
-              <q-tooltip>Discover Competitors (LLM)</q-tooltip>
+              <q-tooltip>Discover via AI (LLM + web search)</q-tooltip>
             </q-btn>
             <q-btn flat dense icon="add" color="primary"
               @click="showAddCompetitorDialog = true; competitorSearch = ''">
@@ -864,16 +901,42 @@ onMounted(() => loadCompanies());
       <q-card>
         <q-card-section class="text-h6">
           Discovered Competitors for "{{ selectedCompany?.displayName }}"
+          <q-badge :color="discoverSource === 'data' ? 'teal' : 'accent'" class="q-ml-sm">
+            {{ discoverSource === 'data' ? 'Citation Data' : 'AI Discovery' }}
+          </q-badge>
         </q-card-section>
+
+        <!-- Data stats banner -->
+        <q-banner v-if="discoverDataStats" class="bg-blue-1 q-mx-md q-mb-sm" rounded dense>
+          Analyzed {{ discoverDataStats.totalCiting.toLocaleString() }} citing patents
+          across {{ discoverDataStats.withData }} patents with data.
+          <span v-if="discoverDataStats.withoutData > 0" class="text-orange-8">
+            {{ discoverDataStats.withoutData }} patents have no citing data yet — run enrichment to improve results.
+          </span>
+        </q-banner>
+
         <q-card-section>
           <q-list v-if="discoverSuggestions.length" separator>
             <q-item v-for="(s, i) in discoverSuggestions" :key="i">
               <q-item-section>
-                <q-item-label>{{ s.name }}</q-item-label>
-                <q-item-label caption>
-                  Sectors: {{ s.sectors?.join(', ') || 'General' }}
+                <q-item-label>
+                  {{ s.name }}
+                  <q-badge v-if="s.strength" :color="s.strength > 0.5 ? 'red' : s.strength > 0.2 ? 'orange' : 'grey'" class="q-ml-sm">
+                    {{ Math.round(s.strength * 100) }}%
+                  </q-badge>
                 </q-item-label>
-                <q-item-label caption v-if="s.notes" class="text-grey-6">{{ s.notes }}</q-item-label>
+                <q-item-label caption>
+                  <template v-if="s.citationCount">
+                    {{ s.citationCount }} citations across {{ s.patentsCited }} patents
+                  </template>
+                  <template v-else>
+                    Sectors: {{ s.sectors?.join(', ') || 'General' }}
+                  </template>
+                </q-item-label>
+                <q-item-label caption v-if="s.notes && !s.citationCount" class="text-grey-6">{{ s.notes }}</q-item-label>
+                <q-item-label v-if="s.variants?.length" caption class="text-grey-5">
+                  Variants: {{ s.variants.join(', ') }}
+                </q-item-label>
               </q-item-section>
               <q-item-section side>
                 <q-btn flat dense color="primary" label="Accept" @click="acceptCompetitorSuggestion(s)" />

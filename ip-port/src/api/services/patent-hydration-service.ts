@@ -13,7 +13,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { getPrimarySector, getSuperSector, getSuperSectorDisplayName } from '../utils/sector-mapper.js';
+import { getPrimarySectorAsync, getSuperSectorAsync } from '../utils/sector-mapper.js';
 
 const prisma = new PrismaClient();
 
@@ -272,10 +272,9 @@ export async function hydratePatents(
         }
       }
 
-      // Compute sector from CPC codes
-      const primarySector = getPrimarySector(cpcCodes) || null;
-      const superSectorKey = primarySector ? getSuperSector(primarySector) : null;
-      const superSector = superSectorKey ? getSuperSectorDisplayName(superSectorKey) : null;
+      // Compute sector from CPC codes (uses DB rules first, config fallback)
+      const primarySector = await getPrimarySectorAsync(cpcCodes, pvData.patent_title, pvData.patent_abstract) || null;
+      const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
       const primaryCpc = cpcCodes[0] || null;
 
       // Compute base score

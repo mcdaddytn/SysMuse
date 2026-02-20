@@ -1,11 +1,224 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { usePortfolioStore } from '@/stores/portfolio';
 import { snapshotApi, type ActiveSnapshots } from '@/services/api';
 
 const portfolioStore = usePortfolioStore();
+
+// ─── Presets ──────────────────────────────────────────────────────────────────
+
+interface AggregatePresetConfig {
+  groupBy: string[];
+  aggregations: Array<{ field: string; op: string }>;
+  explodeArrays: boolean;
+  filters: Record<string, unknown>;
+  sortBy: string;
+  sortDesc: boolean;
+  limit: number;
+}
+
+interface AggregatePreset {
+  id: string;
+  name: string;
+  isBuiltIn?: boolean;
+  config: AggregatePresetConfig;
+}
+
+const PRESETS_STORAGE_KEY = 'aggregate-view-presets';
+const LAST_PRESET_KEY = 'aggregate-view-last-preset';
+
+const builtInPresets: AggregatePreset[] = [
+  {
+    id: 'sector-overview',
+    name: 'Sector Overview',
+    isBuiltIn: true,
+    config: {
+      groupBy: ['super_sector'],
+      aggregations: [
+        { field: 'score', op: 'avg' },
+        { field: 'v2_score', op: 'avg' },
+        { field: 'forward_citations', op: 'avg' },
+      ],
+      explodeArrays: false,
+      filters: {},
+      sortBy: 'count',
+      sortDesc: true,
+      limit: 100,
+    },
+  },
+  {
+    id: 'sector-detail',
+    name: 'Sector Detail',
+    isBuiltIn: true,
+    config: {
+      groupBy: ['super_sector', 'primary_sector'],
+      aggregations: [
+        { field: 'score', op: 'avg' },
+        { field: 'v2_score', op: 'avg' },
+      ],
+      explodeArrays: false,
+      filters: {},
+      sortBy: 'count',
+      sortDesc: true,
+      limit: 100,
+    },
+  },
+  {
+    id: 'competitor-landscape',
+    name: 'Competitor Landscape',
+    isBuiltIn: true,
+    config: {
+      groupBy: ['competitor_names'],
+      aggregations: [
+        { field: 'score', op: 'avg' },
+        { field: 'forward_citations', op: 'sum' },
+        { field: 'competitor_citations', op: 'sum' },
+      ],
+      explodeArrays: true,
+      filters: {},
+      sortBy: 'count',
+      sortDesc: true,
+      limit: 100,
+    },
+  },
+  {
+    id: 'tech-categories',
+    name: 'Tech Categories',
+    isBuiltIn: true,
+    config: {
+      groupBy: ['llm_technology_category'],
+      aggregations: [
+        { field: 'score', op: 'avg' },
+        { field: 'market_relevance_score', op: 'avg' },
+        { field: 'claim_breadth', op: 'avg' },
+      ],
+      explodeArrays: false,
+      filters: {},
+      sortBy: 'count',
+      sortDesc: true,
+      limit: 100,
+    },
+  },
+];
+
+const customPresets = ref<AggregatePreset[]>([]);
+const selectedPresetId = ref<string | null>(null);
+
+// Save dialog
+const showSavePresetDialog = ref(false);
+const savePresetName = ref('');
+
+// Manage dialog
+const showManagePresetsDialog = ref(false);
+
+const allPresets = computed(() => [...builtInPresets, ...customPresets.value]);
+
+const selectedPreset = computed(() =>
+  allPresets.value.find(p => p.id === selectedPresetId.value) || null
+);
+
+const isModified = computed(() => {
+  if (!selectedPreset.value) return false;
+  const c = selectedPreset.value.config;
+  return (
+    JSON.stringify(c.groupBy) !== JSON.stringify(selectedGroupBy.value) ||
+    JSON.stringify(c.aggregations) !== JSON.stringify(aggregations.value) ||
+    c.explodeArrays !== explodeArrays.value ||
+    JSON.stringify(c.filters) !== JSON.stringify(filters.value) ||
+    c.sortBy !== sortBy.value ||
+    c.sortDesc !== sortDesc.value ||
+    c.limit !== limit.value
+  );
+});
+
+function loadPresetsFromStorage() {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (raw) {
+      customPresets.value = JSON.parse(raw);
+    }
+  } catch {
+    customPresets.value = [];
+  }
+}
+
+function savePresetsToStorage() {
+  localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(customPresets.value));
+}
+
+function getCurrentConfig(): AggregatePresetConfig {
+  return {
+    groupBy: [...selectedGroupBy.value],
+    aggregations: aggregations.value.map(a => ({ ...a })),
+    explodeArrays: explodeArrays.value,
+    filters: { ...filters.value },
+    sortBy: sortBy.value,
+    sortDesc: sortDesc.value,
+    limit: limit.value,
+  };
+}
+
+function applyPreset(preset: AggregatePreset) {
+  const c = preset.config;
+  selectedGroupBy.value = [...c.groupBy];
+  aggregations.value = c.aggregations.map(a => ({ ...a }));
+  explodeArrays.value = c.explodeArrays;
+  filters.value = { ...c.filters };
+  sortBy.value = c.sortBy;
+  sortDesc.value = c.sortDesc;
+  limit.value = c.limit;
+  selectedPresetId.value = preset.id;
+  localStorage.setItem(LAST_PRESET_KEY, preset.id);
+  runAggregation();
+}
+
+function openSaveDialog() {
+  savePresetName.value = '';
+  showSavePresetDialog.value = true;
+}
+
+function savePreset() {
+  const name = savePresetName.value.trim();
+  if (!name) return;
+
+  const id = `custom-${Date.now()}`;
+  const preset: AggregatePreset = {
+    id,
+    name,
+    config: getCurrentConfig(),
+  };
+
+  customPresets.value.push(preset);
+  savePresetsToStorage();
+  selectedPresetId.value = id;
+  localStorage.setItem(LAST_PRESET_KEY, id);
+  showSavePresetDialog.value = false;
+}
+
+function updatePreset() {
+  const preset = customPresets.value.find(p => p.id === selectedPresetId.value);
+  if (!preset) return;
+  preset.config = getCurrentConfig();
+  savePresetsToStorage();
+}
+
+function deletePreset(id: string) {
+  customPresets.value = customPresets.value.filter(p => p.id !== id);
+  savePresetsToStorage();
+  if (selectedPresetId.value === id) {
+    selectedPresetId.value = null;
+  }
+}
+
+function renamePreset(id: string, newName: string) {
+  const preset = customPresets.value.find(p => p.id === id);
+  if (preset) {
+    preset.name = newName;
+    savePresetsToStorage();
+  }
+}
 
 // Group by field options
 interface GroupByOption {
@@ -224,6 +437,26 @@ function onFiltersUpdate(newFilters: Record<string, unknown>) {
 
 // Run initial aggregation
 onMounted(async () => {
+  // Load presets
+  loadPresetsFromStorage();
+
+  // Restore last-used preset
+  const lastId = localStorage.getItem(LAST_PRESET_KEY);
+  if (lastId) {
+    const preset = allPresets.value.find(p => p.id === lastId);
+    if (preset) {
+      const c = preset.config;
+      selectedGroupBy.value = [...c.groupBy];
+      aggregations.value = c.aggregations.map(a => ({ ...a }));
+      explodeArrays.value = c.explodeArrays;
+      filters.value = { ...c.filters };
+      sortBy.value = c.sortBy;
+      sortDesc.value = c.sortDesc;
+      limit.value = c.limit;
+      selectedPresetId.value = lastId;
+    }
+  }
+
   // Load active snapshots and run aggregation in parallel
   const [, snapshots] = await Promise.all([
     runAggregation(),
@@ -311,6 +544,60 @@ onMounted(async () => {
         @click="exportCSV"
       />
     </div>
+
+    <!-- Preset Bar -->
+    <q-card flat bordered class="q-mb-md">
+      <q-card-section class="q-py-sm">
+        <div class="row items-center q-gutter-sm">
+          <span class="text-subtitle2">Preset:</span>
+          <q-btn-group flat>
+            <q-btn
+              v-for="preset in allPresets"
+              :key="preset.id"
+              :label="preset.name"
+              :flat="selectedPresetId !== preset.id"
+              :color="selectedPresetId === preset.id ? 'primary' : 'grey-7'"
+              :outline="selectedPresetId === preset.id"
+              dense
+              no-caps
+              size="sm"
+              @click="applyPreset(preset)"
+            >
+              <q-badge v-if="selectedPresetId === preset.id && isModified" floating color="warning" rounded />
+            </q-btn>
+          </q-btn-group>
+          <q-space />
+          <q-btn
+            v-if="selectedPreset && !selectedPreset.isBuiltIn && isModified"
+            flat dense size="sm"
+            color="primary"
+            icon="save"
+            label="Update"
+            @click="updatePreset"
+          >
+            <q-tooltip>Save changes to "{{ selectedPreset.name }}"</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat dense size="sm"
+            color="primary"
+            icon="add"
+            label="Save As"
+            @click="openSaveDialog"
+          >
+            <q-tooltip>Save current configuration as a new preset</q-tooltip>
+          </q-btn>
+          <q-btn
+            v-if="customPresets.length > 0"
+            flat dense size="sm"
+            color="grey-7"
+            icon="settings"
+            @click="showManagePresetsDialog = true"
+          >
+            <q-tooltip>Manage presets</q-tooltip>
+          </q-btn>
+        </div>
+      </q-card-section>
+    </q-card>
 
     <!-- Configuration Panel -->
     <q-card flat bordered class="q-mb-md">
@@ -475,6 +762,70 @@ onMounted(async () => {
         </div>
       </template>
     </q-table>
+
+    <!-- Save Preset Dialog -->
+    <q-dialog v-model="showSavePresetDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">Save Preset</div>
+        </q-card-section>
+        <q-card-section>
+          <q-input
+            v-model="savePresetName"
+            label="Preset name"
+            outlined
+            dense
+            autofocus
+            @keyup.enter="savePreset"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn color="primary" label="Save" :disable="!savePresetName.trim()" @click="savePreset" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Manage Presets Dialog -->
+    <q-dialog v-model="showManagePresetsDialog">
+      <q-card style="min-width: 400px">
+        <q-card-section>
+          <div class="text-h6">Manage Presets</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <q-list separator>
+            <q-item v-for="preset in customPresets" :key="preset.id">
+              <q-item-section>
+                <q-item-label>{{ preset.name }}</q-item-label>
+                <q-item-label caption>
+                  Group by: {{ preset.config.groupBy.join(', ') }}
+                  | {{ preset.config.aggregations.length }} aggregation{{ preset.config.aggregations.length !== 1 ? 's' : '' }}
+                </q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn flat dense icon="edit" size="sm" color="grey-7" @click="() => {
+                    const newName = prompt('Rename preset:', preset.name);
+                    if (newName?.trim()) renamePreset(preset.id, newName.trim());
+                  }">
+                    <q-tooltip>Rename</q-tooltip>
+                  </q-btn>
+                  <q-btn flat dense icon="delete" size="sm" color="negative" @click="deletePreset(preset.id)">
+                    <q-tooltip>Delete</q-tooltip>
+                  </q-btn>
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <div v-if="customPresets.length === 0" class="text-grey text-center q-pa-md">
+            No custom presets
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Done" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 

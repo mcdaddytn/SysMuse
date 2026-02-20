@@ -9,7 +9,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
-import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
 import { loadAllClassifications } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
@@ -20,6 +19,10 @@ import { getActiveSnapshotScores } from './scores.routes.js';
 const prisma = new PrismaClient();
 
 const router = Router();
+
+// Pre-load super-sector lookup at module init (async, non-blocking)
+// This ensures the cache is warm before loadPatents() needs it synchronously.
+loadSuperSectorLookup().catch(() => {});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Active Snapshot Score Cache
@@ -472,7 +475,7 @@ export function loadPatents(): Patent[] {
       ...p,
       affiliate: normalizeAffiliate(p.assignee),
       super_sector: p.super_sector
-        ? getSuperSectorDisplayName(p.super_sector)
+        ? resolveSuperSectorDisplay(p.super_sector)
         : (p.sector ? inferSuperSector(p.sector) : 'Unknown'),
       primary_sector: (p as any).primary_sector,
       competitor_citations: competitorCites,
@@ -542,26 +545,60 @@ export function loadPatents(): Patent[] {
 // Register portfolio loader with patent-fetch-service for cross-module access
 registerPortfolioLoader(loadPatents);
 
+// ─── DB-cached super-sector lookup (replaces config reads) ──────────────────
+
+let superSectorLookupCache: {
+  nameToDisplay: Map<string, string>;     // canonical → display
+  sectorToSuperDisplay: Map<string, string>; // sector name → super-sector display name
+} | null = null;
+let superSectorLookupTime = 0;
+const SUPER_SECTOR_CACHE_TTL = 60_000; // 1 minute
+
+async function loadSuperSectorLookup() {
+  const now = Date.now();
+  if (superSectorLookupCache && (now - superSectorLookupTime) < SUPER_SECTOR_CACHE_TTL) {
+    return superSectorLookupCache;
+  }
+  const superSectors = await prisma.superSector.findMany({
+    include: { sectors: { select: { name: true } } },
+  });
+  const nameToDisplay = new Map<string, string>();
+  const sectorToSuperDisplay = new Map<string, string>();
+  for (const ss of superSectors) {
+    nameToDisplay.set(ss.name, ss.displayName);
+    for (const s of ss.sectors) {
+      sectorToSuperDisplay.set(s.name, ss.displayName);
+    }
+  }
+  superSectorLookupCache = { nameToDisplay, sectorToSuperDisplay };
+  superSectorLookupTime = now;
+  return superSectorLookupCache;
+}
+
 /**
- * Infer super-sector from primary sector name
- * This is a fallback when super_sector is not explicitly set
+ * Resolve any super-sector value (canonical or display) to display name.
+ * Sync — uses the pre-loaded cache from loadSuperSectorLookup().
+ */
+function resolveSuperSectorDisplay(value: string | null | undefined): string {
+  if (!value) return 'Unknown';
+  if (!superSectorLookupCache) return value;
+  // Try canonical → display
+  const display = superSectorLookupCache.nameToDisplay.get(value);
+  if (display) return display;
+  // Already a display name? Check if it's a known value
+  for (const d of superSectorLookupCache.nameToDisplay.values()) {
+    if (d === value) return value;
+  }
+  return value;
+}
+
+/**
+ * Infer super-sector display name from a primary sector name.
+ * Uses DB-cached lookup.
  */
 function inferSuperSector(sector: string): string {
-  // Try to load from super-sectors config
-  try {
-    const configPath = path.join(process.cwd(), 'config/super-sectors.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-
-    for (const [superSectorKey, superSectorData] of Object.entries(config.superSectors) as [string, any][]) {
-      if (superSectorData.sectors.includes(sector)) {
-        return superSectorData.displayName;
-      }
-    }
-  } catch (e) {
-    // Config not found, return Unknown
-  }
-
-  return 'Unknown';
+  if (!superSectorLookupCache) return 'Unknown';
+  return superSectorLookupCache.sectorToSuperDisplay.get(sector) || 'Unknown';
 }
 
 /**

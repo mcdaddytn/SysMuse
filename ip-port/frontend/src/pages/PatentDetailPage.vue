@@ -5,6 +5,9 @@ import type { Patent } from '@/types';
 import type { PatentSectorScoresResponse } from '@/services/api';
 import { scoringTemplatesApi } from '@/services/api';
 import PatentFamilyPanel from '@/components/patent/PatentFamilyPanel.vue';
+import { useSuperSectors } from '@/composables/useSuperSectors';
+
+const { getSectorColor, getDisplayName } = useSuperSectors();
 
 const route = useRoute();
 const router = useRouter();
@@ -99,24 +102,6 @@ const computedCompetitorDensity = computed(() => {
   return ((c.competitor_citations || 0) / ext * 100).toFixed(0) + '%';
 });
 
-// Super-sector color mapping
-const sectorColors: Record<string, string> = {
-  'Security': 'red-7',
-  'Virtualization & Cloud': 'purple-7',
-  'SDN & Network Infrastructure': 'blue-7',
-  'Wireless & RF': 'teal-7',
-  'Video & Streaming': 'orange-7',
-  'Computing & Data': 'grey-7',
-  'Semiconductor': 'indigo-7',
-  'Imaging & Optics': 'cyan-7',
-  'Audio': 'pink-7',
-  'AI & Machine Learning': 'green-7',
-  'Fault Tolerance & Reliability': 'amber-7'
-};
-
-function getSectorColor(sector: string): string {
-  return sectorColors[sector] || 'grey-6';
-}
 
 // Load patent from API
 async function loadPatent() {
@@ -339,7 +324,7 @@ function openCpcLink(code: string) {
               text-color="white"
               size="sm"
             >
-              {{ patent.super_sector }}
+              {{ getDisplayName(patent.super_sector) }}
             </q-chip>
           </div>
           <div class="text-subtitle1 text-grey-7">{{ patent.patent_title }}</div>

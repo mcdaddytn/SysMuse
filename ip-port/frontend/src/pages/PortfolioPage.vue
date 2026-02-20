@@ -8,6 +8,9 @@ import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import type { Patent } from '@/types';
+import { useSuperSectors } from '@/composables/useSuperSectors';
+
+const { getSectorColor, getDisplayName } = useSuperSectors();
 
 const router = useRouter();
 const route = useRoute();
@@ -59,24 +62,6 @@ function onFlexFiltersUpdate(filters: Record<string, unknown>) {
   patentsStore.setFilters({ ...filters, search });
 }
 
-// Super-sector color mapping
-const sectorColors: Record<string, string> = {
-  'Security': 'red-7',
-  'Virtualization & Cloud': 'purple-7',
-  'SDN & Network Infrastructure': 'blue-7',
-  'Wireless & RF': 'teal-7',
-  'Video & Streaming': 'orange-7',
-  'Computing & Data': 'grey-7',
-  'Semiconductor': 'indigo-7',
-  'Imaging & Optics': 'cyan-7',
-  'Audio': 'pink-7',
-  'AI & Machine Learning': 'green-7',
-  'Fault Tolerance & Reliability': 'amber-7'
-};
-
-function getSectorColor(sector: string): string {
-  return sectorColors[sector] || 'grey-6';
-}
 
 // Computed
 const tableColumns = computed(() =>
@@ -476,7 +461,7 @@ onMounted(async () => {
             size="sm"
             @click.stop="patentsStore.updateFilters({ superSectors: [props.row.super_sector] })"
           >
-            {{ props.row.super_sector }}
+            {{ getDisplayName(props.row.super_sector) }}
           </q-chip>
         </q-td>
       </template>

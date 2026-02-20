@@ -105,13 +105,14 @@ Full quarantine tracking for patents that can't be fully enriched (design, reiss
 
 ### Enrichment Coverage
 
-| Portfolio | Total | XML | LLM Scored | Quarantined | Sectors |
+| Portfolio | Total | USPTO Bulk | LLM Scored | Quarantined | Sectors |
 |---|---|---|---|---|---|
-| broadcom-core | 29,474 | 22% | 59% | ~3,500 | 100% |
-| zoom | 585 | 83% | **0%** | ~10 | 100% |
-| netflix | 385 | 73% | 100% | ~5 | 100% |
-| hulu | 100 | 93% | 100% | ~2 | 100% |
-| chelsio | 38 | 0% | 100% | 0 | 100% |
+| broadcom-core | 29,474 | 88% (25,948) | 59% (17,527) | ~3,500 | 100% |
+| roku | 1,207 | 97% (1,174) | 83% (1,000) | ~10 | 100% |
+| zoom | 585 | 91% (532) | **100% (585)** | ~10 | 100% |
+| netflix | 385 | 99% (381) | 100% (385) | ~5 | 100% |
+| hulu | 100 | 93% (93) | 100% (100) | ~2 | 100% |
+| chelsio | 38 | 0% | 100% (38) | 0 | 100% |
 
 *Quarantine counts are approximate per-portfolio; 3,579 total across all portfolios.*
 
@@ -131,11 +132,12 @@ Netflix/Hulu/Chelsio CPCs came from PatentsView (no inventive designation). Need
 
 ## Immediate Action Items
 
-1. **Run CPC backfill** for Netflix/Hulu (have XMLs but 0 inventive CPCs)
+1. **Run CPC inventive backfill** for Netflix/Hulu (have USPTO bulk data but 0 inventive CPC designations)
 2. **Take post-claims Netflix snapshot** and compare with pre-claims
-3. **Score Zoom** — 585 patents, 0% LLM coverage
+3. ~~Score Zoom~~ — DONE (585/585 LLM scored)
 4. **Investigate 1 Netflix error** in `computing-systems` sector
-5. **Phase 2 work** — sector overlap analysis, competitive landscape view
+5. **Test competitive citation features** — LLM-based + patent-data-based competitor scoring needed for new portfolios
+6. **Phase 2 work** — sector overlap matrix, density hotspots, competitive landscape view
 
 ---
 

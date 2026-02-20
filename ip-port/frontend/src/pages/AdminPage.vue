@@ -399,9 +399,9 @@ async function extractXmls(portfolio: { id: string; displayName: string }) {
   try {
     const startResult = await portfolioApi.extractXmls(portfolio.id);
     if (startResult.status === 'running') {
-      importNotification.value = `XML extraction for "${portfolio.displayName}" already in progress...`;
+      importNotification.value = `USPTO bulk extraction for "${portfolio.displayName}" already in progress...`;
     } else {
-      importNotification.value = `XML extraction for "${portfolio.displayName}" started (${startResult.totalPatents} patents). This may take several minutes...`;
+      importNotification.value = `USPTO bulk extraction for "${portfolio.displayName}" started (${startResult.totalPatents} patents). This may take several minutes...`;
     }
 
     // Poll for completion
@@ -412,7 +412,7 @@ async function extractXmls(portfolio: { id: string; displayName: string }) {
           clearInterval(pollInterval);
           extracting.value = false;
           const r = status.result!;
-          importNotification.value = `XML extraction complete: ${r.extracted} extracted, ${r.alreadyExist} already existed, ${r.notFound} not found.`;
+          importNotification.value = `USPTO bulk extraction complete: ${r.extracted} extracted, ${r.alreadyExist} already existed, ${r.notFound} not found.`;
           setTimeout(() => { importNotification.value = null; }, 15000);
         } else if (status.status === 'failed') {
           clearInterval(pollInterval);
@@ -422,7 +422,7 @@ async function extractXmls(portfolio: { id: string; displayName: string }) {
         } else {
           // Still running — show latest log
           const lastLog = status.logs[status.logs.length - 1];
-          if (lastLog) importNotification.value = `Extracting XMLs: ${lastLog}`;
+          if (lastLog) importNotification.value = `Extracting USPTO data: ${lastLog}`;
         }
       } catch {
         // Poll error — keep trying
@@ -650,7 +650,7 @@ onMounted(() => loadCompanies());
                   <q-btn flat dense round icon="description" size="xs" color="accent"
                     :loading="extracting"
                     @click="extractXmls(p)">
-                    <q-tooltip>Extract XMLs (for claims)</q-tooltip>
+                    <q-tooltip>Extract USPTO bulk data (for claims)</q-tooltip>
                   </q-btn>
                 </q-item-section>
               </q-item>

@@ -1169,7 +1169,7 @@ router.post('/sync-cpc-designations', async (req: Request, res: Response) => {
 
     console.log(`[BatchJobs] Backfilling CPC designations for ${needsEnrichment.length} patents...`);
     const result = await enrichPatentCpcBatch(needsEnrichment, xmlDir, (current, total) => {
-      if (current % 100 === 0) {
+      if (current % 500 === 0) {
         console.log(`  CPC backfill: ${current}/${total}`);
       }
     });
@@ -1177,6 +1177,7 @@ router.post('/sync-cpc-designations', async (req: Request, res: Response) => {
     res.json({
       message: `CPC designations backfilled`,
       checked: patentsWithXml.length,
+      needsEnrichment: needsEnrichment.length,
       ...result,
     });
   } catch (error) {

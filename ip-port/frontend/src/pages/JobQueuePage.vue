@@ -182,7 +182,7 @@ const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: st
   { value: 'prosecution', label: 'Prosecution History', color: 'purple' },
   { value: 'ipr', label: 'IPR / PTAB', color: 'orange' },
   { value: 'family', label: 'Patent Families', color: 'teal' },
-  { value: 'xml', label: 'XML Extraction', color: 'positive' }
+  { value: 'xml', label: 'USPTO Bulk Data', color: 'positive' }
 ];
 
 // Load gaps when dialog opens or target changes
@@ -258,7 +258,7 @@ async function submitXmlExtractionFirst() {
     await loadBatchJobs();
   } catch (err: unknown) {
     const error = err as { response?: { data?: { error?: string } } };
-    alert(error.response?.data?.error || 'Failed to start XML extraction');
+    alert(error.response?.data?.error || 'Failed to start USPTO bulk extraction');
   } finally {
     startingJob.value = false;
   }
@@ -708,7 +708,7 @@ const QUARANTINE_REASON_META: Record<string, { label: string; icon: string; colo
   'reissue-patent': { label: 'Reissue Patent', icon: 'replay', color: 'blue-grey', retryable: false },
   'pre-2005': { label: 'Pre-2005 Grant', icon: 'history', color: 'blue-grey', retryable: false },
   'recent-no-bulk': { label: 'Recent — No Bulk Data', icon: 'schedule', color: 'orange', retryable: true },
-  'extraction-failed': { label: 'Extraction Failed', icon: 'error_outline', color: 'red', retryable: true },
+  'extraction-failed': { label: 'USPTO Bulk Extraction Failed', icon: 'error_outline', color: 'red', retryable: true },
   'manual': { label: 'Manually Quarantined', icon: 'person', color: 'grey', retryable: false },
 };
 
@@ -924,7 +924,7 @@ onUnmounted(() => {
                 <div class="text-grey-6">Total Patents</div>
               </q-card-section>
             </q-card>
-            <q-card v-for="(label, key) in { llm: 'LLM', prosecution: 'Prosecution', ipr: 'IPR', family: 'Families', xml: 'XML' }" :key="key" class="col">
+            <q-card v-for="(label, key) in { llm: 'LLM', prosecution: 'Prosecution', ipr: 'IPR', family: 'Families', xml: 'USPTO Bulk' }" :key="key" class="col">
               <q-card-section>
                 <div class="row items-center justify-between q-mb-xs">
                   <span class="text-weight-medium">{{ label }}</span>
@@ -1008,7 +1008,7 @@ onUnmounted(() => {
                       </td>
                     </tr>
                     <tr>
-                      <td class="metric-col text-weight-bold">XML</td>
+                      <td class="metric-col text-weight-bold">USPTO Bulk</td>
                       <td v-for="tier in enrichmentData.tiers" :key="tier.tierLabel + '-xml'">
                         <div class="enrichment-cell">
                           <q-linear-progress :value="tier.enrichment.xmlPct / 100" :color="coverageColor(tier.enrichment.xmlPct)" size="14px" rounded class="q-mb-xs" />
@@ -1089,7 +1089,7 @@ onUnmounted(() => {
                   { name: 'pros', label: 'Prosecution', field: (row: any) => row.enrichment.prosecutionPct, align: 'center', sortable: true },
                   { name: 'ipr', label: 'IPR', field: (row: any) => row.enrichment.iprPct, align: 'center', sortable: true },
                   { name: 'family', label: 'Families', field: (row: any) => row.enrichment.familyPct, align: 'center', sortable: true },
-                  { name: 'xml', label: 'XML', field: (row: any) => row.enrichment.xmlPct, align: 'center', sortable: true },
+                  { name: 'xml', label: 'USPTO Bulk', field: (row: any) => row.enrichment.xmlPct, align: 'center', sortable: true },
                   { name: 'actions', label: '', field: 'actions', align: 'center' }
                 ]"
                 row-key="name"
@@ -1645,7 +1645,7 @@ onUnmounted(() => {
               color="blue"
               class="q-mt-sm"
             >
-              <q-tooltip>When enabled, LLM scoring will include patent claims from extracted XMLs. Requires XML extraction to be complete.</q-tooltip>
+              <q-tooltip>When enabled, LLM scoring will include patent claims from USPTO bulk data. Requires bulk data extraction to be complete.</q-tooltip>
             </q-toggle>
 
             <q-select
@@ -1756,12 +1756,12 @@ onUnmounted(() => {
     <q-dialog v-model="showClaimsGateDialog">
       <q-card style="min-width: 400px">
         <q-card-section>
-          <div class="text-h6 text-negative">XML Data Required</div>
+          <div class="text-h6 text-negative">USPTO Bulk Data Required</div>
         </q-card-section>
         <q-card-section v-if="claimsGateInfo">
           <p>
-            <strong>{{ claimsGateInfo.missing }}</strong> of {{ claimsGateInfo.total }} patents are missing XML data.
-            LLM scoring with claims requires all patents to have extracted XMLs.
+            <strong>{{ claimsGateInfo.missing }}</strong> of {{ claimsGateInfo.total }} patents are missing USPTO bulk data.
+            LLM scoring with claims requires bulk data extraction to be complete.
           </p>
           <p class="text-grey-7">{{ claimsGateInfo.suggestion }}</p>
         </q-card-section>
@@ -1775,7 +1775,7 @@ onUnmounted(() => {
           />
           <q-btn
             color="positive"
-            label="Extract XMLs First"
+            label="Extract USPTO Data First"
             icon="description"
             @click="submitXmlExtractionFirst"
           />

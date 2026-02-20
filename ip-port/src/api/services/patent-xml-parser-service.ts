@@ -526,6 +526,8 @@ export interface CpcEnrichmentResult {
   inventiveCount: number;
   primaryCpcUpdated: boolean;
   error?: string;
+  /** XML exists but has no CPC section (older format) — not an error, just a data limitation */
+  noCpcInXml?: boolean;
 }
 
 /**
@@ -544,6 +546,11 @@ export async function enrichPatentCpcFromXml(
 
   const cpcData = parsePatentXml(xmlPath);
   if (cpcData.parseError) {
+    // Distinguish "no CPC section in XML" (older format, expected) from actual parse errors
+    const isNoCpcSection = cpcData.parseError === 'No CPC classifications found';
+    if (isNoCpcSection) {
+      return { patentId, cpcsWritten: 0, inventiveCount: 0, primaryCpcUpdated: false, noCpcInXml: true };
+    }
     return { patentId, cpcsWritten: 0, inventiveCount: 0, primaryCpcUpdated: false, error: cpcData.parseError };
   }
 
@@ -596,12 +603,16 @@ export async function enrichPatentCpcBatch(
   processed: number;
   enriched: number;
   errors: number;
+  noCpcInXml: number;
+  xmlNotFound: number;
   totalCpcsWritten: number;
   totalInventive: number;
 }> {
   let processed = 0;
   let enriched = 0;
   let errors = 0;
+  let noCpcInXml = 0;
+  let xmlNotFound = 0;
   let totalCpcsWritten = 0;
   let totalInventive = 0;
 
@@ -609,7 +620,10 @@ export async function enrichPatentCpcBatch(
     const result = await enrichPatentCpcFromXml(patentIds[i], exportDir);
     processed++;
 
-    if (result.error) {
+    if (result.noCpcInXml) {
+      noCpcInXml++;
+    } else if (result.error) {
+      if (result.error === 'XML file not found') xmlNotFound++;
       errors++;
     } else if (result.cpcsWritten > 0) {
       enriched++;
@@ -622,7 +636,7 @@ export async function enrichPatentCpcBatch(
     }
   }
 
-  return { processed, enriched, errors, totalCpcsWritten, totalInventive };
+  return { processed, enriched, errors, noCpcInXml, xmlNotFound, totalCpcsWritten, totalInventive };
 }
 
 // ============================================================================

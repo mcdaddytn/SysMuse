@@ -103,7 +103,7 @@ const QUARANTINE_REASON_LABELS: Record<string, string> = {
   'reissue-patent': 'Reissue patent (RE/H-prefix)',
   'pre-2005': 'Pre-2005 grant date',
   'recent-no-bulk': 'Recent — bulk data unavailable',
-  'extraction-failed': 'XML extraction failed',
+  'extraction-failed': 'USPTO bulk extraction failed',
   'manual': 'Manually quarantined',
 };
 

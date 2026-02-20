@@ -681,6 +681,10 @@ watch(() => portfolioStore.selectedPortfolioId, () => {
   loadEnrichmentSummary();
   loadSectorEnrichment();
   loadPortfolioInfo();
+  if (activeTab.value === 'quarantine') {
+    quarantineDryRunResult.value = null;
+    loadQuarantineSummary();
+  }
 });
 
 // ─── Quarantine Tab ──────────────────────────────────────────────────────────

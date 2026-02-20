@@ -1,7 +1,7 @@
 # Development Queue V4 — Litigation Opportunity Platform
 
-*Reconciled from V3 + work completed Feb 18-19, 2026*
-*Last Updated: 2026-02-19*
+*Reconciled from V3 + work completed Feb 18-20, 2026*
+*Last Updated: 2026-02-20*
 
 ## Overview
 
@@ -139,6 +139,15 @@ Phases organized around **proof of concept with litigation analysis** as the pri
 - [x] Named presets for Aggregate View (4 built-in + custom save/load)
 - [x] Patent XML extraction with CPC enrichment hook
 
+### Completed (Feb 20) — Patent Quarantine System
+- [x] `isQuarantined` boolean + `quarantine` JSON + `patentIdNumeric` Int fields in Patent schema
+- [x] Auto-quarantine detection: design (77), reissue (15), pre-2005 (3,418), recent-no-bulk (69) = 3,579 total
+- [x] Quarantine-aware enrichment denominators — XML tiers now show 100% when all eligible work done
+- [x] Full CRUD: auto-quarantine, manual quarantine/unquarantine, bulk operations, quarantine-summary
+- [x] Frontend: Quarantine tab in JobQueuePage, filter in FlexFilterBuilder, badge in grids, banner in PatentDetailPage
+- [x] `patentIdNumeric` populated for all 31,789 patents (for future sorting/matching)
+- [x] GIN index on quarantine JSON, btree index on patentIdNumeric
+
 ### Remaining
 - [ ] Top-N scoring with renormalization for lower patents (avoid full-portfolio reruns)
 - [ ] Persistent cost tracking per scoring run (aggregate cost summaries)
@@ -208,14 +217,15 @@ The sector management and LLM batch scoring experience needs redesign:
 
 ---
 
-## Immediate Action Items (as of Feb 19)
+## Immediate Action Items (as of Feb 20)
 
 1. **Run CPC backfill** — `POST /api/batch-jobs/sync-cpc-designations` for Netflix/Hulu/Chelsio patents with XMLs
 2. **Take post-claims Netflix snapshot** — compare with pre-claims snapshot `cmltknetn0001n19ns60yahj2`
 3. **Score Zoom** — 585 patents, 0% LLM coverage, good XML coverage (83%)
-4. **Improve Job Queue display** — show portfolio, model, mode; fix naming
-5. **Reassign Chelsio** — currently uses non-standard taxonomy names
-6. **Investigate 1 Netflix error** — `computing-systems` sector, 1 of 5 failed
+4. **Investigate 1 Netflix error** — `computing-systems` sector, 1 of 5 failed
+5. **Phase 2 overlap analysis** — compute sector overlap matrix, identify density hotspots
+6. ~~Reassign Chelsio~~ — DONE (Feb 19)
+7. ~~Patent quarantine system~~ — DONE (Feb 20, 3,579 patents quarantined)
 
 ---
 

@@ -1076,6 +1076,7 @@ export async function getAllFilterOptions(portfolioId?: string) {
 export async function getPatentsForEnrichment(portfolioId?: string): Promise<Array<{
   patent_id: string;
   score: number;
+  grant_date: string | null;
   affiliate: string;
   super_sector: string;
   remaining_years: number;
@@ -1095,6 +1096,7 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
     select: {
       patentId: true,
       baseScore: true,
+      grantDate: true,
       affiliate: true,
       assignee: true,
       superSector: true,
@@ -1111,6 +1113,7 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
   return patents.map(p => ({
     patent_id: p.patentId,
     score: p.baseScore ?? 0,
+    grant_date: p.grantDate || null,
     affiliate: p.affiliate || p.assignee || 'Unknown',
     super_sector: p.superSector || 'Unknown',
     remaining_years: p.remainingYears ?? 0,

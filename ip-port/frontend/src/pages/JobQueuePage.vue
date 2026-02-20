@@ -919,7 +919,7 @@ onUnmounted(() => {
                       <td class="metric-col text-weight-bold">Actions</td>
                       <td v-for="(tier, idx) in enrichmentData.tiers" :key="tier.tierLabel + '-actions'">
                         <q-btn
-                          v-if="tier.enrichment.llmPct < 100 || tier.enrichment.prosecutionPct < 100"
+                          v-if="tier.enrichment.llmPct < 100 || tier.enrichment.prosecutionPct < 100 || tier.enrichment.xmlPct < 100"
                           flat
                           dense
                           color="primary"

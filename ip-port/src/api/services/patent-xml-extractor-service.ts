@@ -227,8 +227,10 @@ async function extractIndividualPatents(
       if (isTarget && patentLines && patentLines.length > 0) {
         const docNumber = targetDocNumber;
         const normalized = normalizeDocNumber(docNumber);
+        // Write using raw doc-number (preserves original), but also check normalized path
         const outputPath = path.join(exportDir, `US${docNumber}.xml`);
-        if (fs.existsSync(outputPath)) {
+        const normalizedPath = path.join(exportDir, `US${normalized}.xml`);
+        if (fs.existsSync(outputPath) || fs.existsSync(normalizedPath)) {
           alreadyExist.push(normalized);
         } else {
           fs.writeFileSync(outputPath, patentLines.join('\n'), 'utf-8');

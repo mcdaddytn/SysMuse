@@ -94,12 +94,13 @@ async function syncEnrichmentFlags(): Promise<void> {
     ? new Set(fs.readdirSync(prosDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
     : new Set<string>();
 
-  // Build XML set: files like US10002051.xml → "10002051"
+  // Build XML set: files like US10002051.xml → "10002051", US09959345.xml → "9959345"
   const xmlSet = new Set<string>();
   if (xmlDir && fs.existsSync(xmlDir)) {
     for (const f of fs.readdirSync(xmlDir)) {
       if (f.startsWith('US') && f.endsWith('.xml')) {
-        xmlSet.add(f.replace(/^US/, '').replace(/\.xml$/, ''));
+        const raw = f.replace(/^US/, '').replace(/\.xml$/, '');
+        xmlSet.add(raw.replace(/^0+/, '') || raw); // Strip leading zeros to match DB patent IDs
       }
     }
   }
@@ -406,14 +407,19 @@ async function createAutoSnapshot(job: BatchJobResponse): Promise<void> {
   console.log(`[BatchJobs] Auto-snapshot created: ${snapshotName}`);
 }
 
-// Parse tier value - handles both "5000" (legacy) and "4001-5000" (range) formats
-function parseTierValue(targetValue: string): number {
+// Parse tier range - handles both "500" (legacy) and "501-1000" (range) formats
+// Returns { skip, take } for proper partitioning
+function parseTierRange(targetValue: string): { skip: number; take: number } {
   if (targetValue.includes('-')) {
-    // Range format: "4001-5000" → use end value (5000)
+    // Range format: "501-1000" → skip 500, take 500
     const parts = targetValue.split('-').map(s => parseInt(s.replace(/,/g, '')));
-    return parts[1] || parts[0] || 6000;
+    const start = parts[0] || 1;
+    const end = parts[1] || parts[0] || 500;
+    return { skip: start - 1, take: end - start + 1 };
   }
-  return parseInt(targetValue.replace(/,/g, '')) || 6000;
+  // Legacy format: "500" → skip 0, take 500
+  const take = parseInt(targetValue.replace(/,/g, '')) || 500;
+  return { skip: 0, take };
 }
 
 // Analyze gaps for a given target using Postgres
@@ -448,28 +454,33 @@ async function analyzeGaps(
     } else if (targetType === 'sector') {
       where.primarySector = targetValue;
     }
-    // For 'tier', we take top N by baseScore (no sector filter)
+    // For 'tier', we partition by skip/take from the range
 
-    // Determine how many patents to take
+    // Determine skip + take for pagination
+    let skip = 0;
     let take: number | undefined;
     if (targetType === 'tier') {
-      take = parseTierValue(targetValue);
+      const range = parseTierRange(targetValue);
+      skip = range.skip;
+      take = range.take;
     } else if (topN > 0) {
       take = topN;
     }
 
-    // Query patents ordered by baseScore descending
+    // Order by baseScore when available, fall back to grantDate desc (most recent first)
     const patents = await prisma.patent.findMany({
       where,
       select: {
         patentId: true,
+        grantDate: true,
         hasLlmData: true,
         hasProsecutionData: true,
         hasXmlData: true,
         hasCitationData: true,
         forwardCitations: true,
       },
-      orderBy: { baseScore: 'desc' },
+      orderBy: [{ baseScore: 'desc' }, { grantDate: 'desc' }],
+      ...(skip > 0 ? { skip } : {}),
       ...(take ? { take } : {}),
     });
 
@@ -478,7 +489,12 @@ async function analyzeGaps(
     // LLM, prosecution, and XML gaps come from Postgres flags
     const llmGapIds = patents.filter(p => !p.hasLlmData).map(p => p.patentId);
     const prosGapIds = patents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
-    const xmlGapIds = patents.filter(p => !p.hasXmlData).map(p => p.patentId);
+    // XML gap: exclude patents that can't be extracted from utility grant bulk XMLs:
+    // - pre-2005 (different format), design patents (D-prefix), reissue patents (RE-prefix)
+    const isXmlEligible = (p: { patentId: string; grantDate: string | null }) =>
+      !p.patentId.startsWith('D') && !p.patentId.startsWith('RE') &&
+      (!p.grantDate || p.grantDate >= '2005-01-01');
+    const xmlGapIds = patents.filter(p => !p.hasXmlData && isXmlEligible(p)).map(p => p.patentId);
 
     // IPR, family, and citing gaps use file-based cache
     function getCacheSet(dir: string): Set<string> {

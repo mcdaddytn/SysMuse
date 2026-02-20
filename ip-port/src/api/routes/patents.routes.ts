@@ -628,8 +628,15 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
 
     const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
 
-    // Sort by score descending (same as the CLI script)
-    const sorted = [...patents].sort((a, b) => b.score - a.score);
+    // Sort by score descending, then by grant date descending (newest first as tiebreaker)
+    // This matches the sort order used in analyzeGaps() for consistent tier assignment
+    const sorted = [...patents].sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      // When scores are equal (including both 0/null), sort by grant date descending
+      const da = a.grant_date || '';
+      const db = b.grant_date || '';
+      return db.localeCompare(da);
+    });
 
     // Load enrichment cache sets for IPR/family (not in Postgres yet)
     const { iprSet, familySet } = getEnrichmentCacheSets();
@@ -685,7 +692,13 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       const prosCount = tierPatents.filter(p => p.has_prosecution_data).length;
       const iprCount = ids.filter(id => iprSet.has(id)).length;
       const familyCount = ids.filter(id => familySet.has(id)).length;
-      const xmlCount = tierPatents.filter(p => p.has_xml_data).length;
+      // XML: exclude patents ineligible for bulk XML extraction
+      // (pre-2005, design D-prefix, reissue RE-prefix)
+      const xmlEligible = tierPatents.filter(p =>
+        !p.patent_id.startsWith('D') && !p.patent_id.startsWith('RE') &&
+        (!p.grant_date || p.grant_date >= '2005-01-01'));
+      const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
+      const xmlDenominator = xmlEligible.length || 1; // avoid division by zero
 
       // Affiliate breakdown
       const affCounts: Record<string, number> = {};
@@ -743,7 +756,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
           family: familyCount,
           familyPct: Math.round(familyCount / tierPatents.length * 1000) / 10,
           xml: xmlCount,
-          xmlPct: Math.round(xmlCount / tierPatents.length * 1000) / 10,
+          xmlPct: Math.round(xmlCount / xmlDenominator * 1000) / 10,
         },
         topAffiliates,
         topSuperSectors,
@@ -756,7 +769,10 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
     const prosTotal = patents.filter(p => p.has_prosecution_data).length;
     const iprTotal = allIds.filter(id => iprSet.has(id)).length;
     const familyTotal = allIds.filter(id => familySet.has(id)).length;
-    const xmlTotal = patents.filter(p => p.has_xml_data).length;
+    const xmlEligibleAll = patents.filter(p =>
+      !p.patent_id.startsWith('D') && !p.patent_id.startsWith('RE') &&
+      (!p.grant_date || p.grant_date >= '2005-01-01'));
+    const xmlTotal = xmlEligibleAll.filter(p => p.has_xml_data).length;
 
     res.json({
       totalPatents: sorted.length,

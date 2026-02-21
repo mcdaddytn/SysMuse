@@ -77,6 +77,11 @@ const importNotification = ref<string | null>(null);
 // Extract XMLs
 const extracting = ref(false);
 
+// Describe affiliates/competitors (LLM)
+const describingAffiliates = ref(false);
+const describingCompetitors = ref(false);
+const togglingAllAffiliates = ref(false);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,6 +108,10 @@ const affiliateTree = computed(() => {
     childAffiliates: affiliates.filter(c => c.parentId === a.id),
   }));
 });
+
+const allAffiliatesActive = computed(() =>
+  companyDetail.value?.affiliates?.every(a => a.isActive) ?? true
+);
 
 // Filter competitor companies for the add competitor autocomplete
 const availableCompetitors = computed(() => {
@@ -208,6 +217,54 @@ async function addAffiliate() {
     await loadCompanies();
   } catch (err: unknown) {
     error.value = (err as Error).message;
+  }
+}
+
+async function toggleAffiliateActive(affiliate: AffiliateDetail) {
+  if (!selectedCompanyId.value) return;
+  try {
+    await companyApi.updateAffiliate(selectedCompanyId.value, affiliate.id, { isActive: !affiliate.isActive });
+    await loadCompanyDetail(selectedCompanyId.value);
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  }
+}
+
+async function toggleAllAffiliatesActive() {
+  if (!selectedCompanyId.value) return;
+  togglingAllAffiliates.value = true;
+  try {
+    await companyApi.bulkToggleAffiliatesActive(selectedCompanyId.value, !allAffiliatesActive.value);
+    await loadCompanyDetail(selectedCompanyId.value);
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    togglingAllAffiliates.value = false;
+  }
+}
+
+async function describeAffiliates() {
+  if (!selectedCompanyId.value) return;
+  describingAffiliates.value = true;
+  try {
+    await companyApi.describeAffiliates(selectedCompanyId.value);
+    await loadCompanyDetail(selectedCompanyId.value);
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    describingAffiliates.value = false;
+  }
+}
+
+async function describeCompetitors() {
+  if (!selectedCompanyId.value) return;
+  describingCompetitors.value = true;
+  try {
+    competitors.value = await companyApi.describeCompetitors(selectedCompanyId.value);
+  } catch (err: unknown) {
+    error.value = (err as Error).message;
+  } finally {
+    describingCompetitors.value = false;
   }
 }
 
@@ -460,6 +517,7 @@ async function acceptAffiliateSuggestion(suggestion: AffiliateSuggestion) {
       displayName: suggestion.displayName,
       acquiredYear: suggestion.acquiredYear || undefined,
       notes: suggestion.notes || undefined,
+      description: suggestion.description || undefined,
       patterns: suggestion.patterns,
     });
     affiliateSuggestions.value = affiliateSuggestions.value.filter(s => s.name !== suggestion.name);
@@ -662,8 +720,23 @@ onMounted(() => loadCompanies());
 
           <!-- Affiliates Tree -->
           <q-card flat bordered class="q-mb-md">
-            <q-card-section class="q-pb-sm">
+            <q-card-section class="row items-center q-pb-sm">
               <div class="text-subtitle1 text-weight-medium">Affiliates & Patterns</div>
+              <q-space />
+              <q-btn flat dense icon="auto_awesome" size="sm" color="accent"
+                :loading="describingAffiliates"
+                @click="describeAffiliates"
+                :disable="!companyDetail?.affiliates?.length">
+                <q-tooltip>Describe All (LLM + web search)</q-tooltip>
+              </q-btn>
+              <q-btn flat dense size="sm"
+                :icon="allAffiliatesActive ? 'toggle_on' : 'toggle_off'"
+                :color="allAffiliatesActive ? 'positive' : 'grey'"
+                :loading="togglingAllAffiliates"
+                @click="toggleAllAffiliatesActive"
+                :disable="!companyDetail?.affiliates?.length">
+                <q-tooltip>{{ allAffiliatesActive ? 'Deactivate All' : 'Activate All' }}</q-tooltip>
+              </q-btn>
             </q-card-section>
             <q-separator />
 
@@ -674,13 +747,27 @@ onMounted(() => loadCompanies());
             <div v-else-if="affiliateTree.length">
               <div v-for="group in affiliateTree" :key="group.id" class="q-pa-sm">
                 <!-- Top-level affiliate -->
-                <div class="row items-center q-pa-xs">
-                  <q-icon name="business" class="q-mr-sm text-grey-6" />
-                  <div class="text-weight-medium">{{ group.displayName }}</div>
+                <div class="row items-center q-pa-xs" :class="{ 'text-grey-5': !group.isActive }">
+                  <q-icon name="business" class="q-mr-sm" :class="group.isActive ? 'text-grey-6' : 'text-grey-4'" />
+                  <div class="text-weight-medium">
+                    {{ group.displayName }}
+                    <q-tooltip v-if="group.description || group.notes" anchor="top middle" self="bottom middle" max-width="400px">
+                      <div v-if="group.description">{{ group.description }}</div>
+                      <div v-if="group.notes" class="text-caption text-grey-4 q-mt-xs">{{ group.notes }}</div>
+                    </q-tooltip>
+                  </div>
                   <q-badge v-if="group.acquiredYear" color="grey-4" text-color="grey-8" class="q-ml-sm">
                     {{ group.acquiredYear }}
                   </q-badge>
+                  <q-badge v-if="!group.isActive" color="grey-4" text-color="grey-7" class="q-ml-sm">
+                    inactive
+                  </q-badge>
                   <q-space />
+                  <q-btn flat dense round :icon="group.isActive ? 'toggle_on' : 'toggle_off'" size="xs"
+                    :color="group.isActive ? 'positive' : 'grey'"
+                    @click="toggleAffiliateActive(group)">
+                    <q-tooltip>{{ group.isActive ? 'Deactivate (exclude from imports)' : 'Activate (include in imports)' }}</q-tooltip>
+                  </q-btn>
                   <q-btn flat dense round icon="fact_check" size="xs" color="accent"
                     @click="validateAffiliatePatterns(group)"
                     :disable="!group.patterns.length">
@@ -707,13 +794,27 @@ onMounted(() => loadCompanies());
 
                 <!-- Child affiliates -->
                 <div v-for="child in group.childAffiliates" :key="child.id" class="q-ml-lg">
-                  <div class="row items-center q-pa-xs">
+                  <div class="row items-center q-pa-xs" :class="{ 'text-grey-5': !child.isActive }">
                     <q-icon name="subdirectory_arrow_right" class="q-mr-sm text-grey-5" size="xs" />
-                    <div>{{ child.displayName }}</div>
+                    <div>
+                      {{ child.displayName }}
+                      <q-tooltip v-if="child.description || child.notes" anchor="top middle" self="bottom middle" max-width="400px">
+                        <div v-if="child.description">{{ child.description }}</div>
+                        <div v-if="child.notes" class="text-caption text-grey-4 q-mt-xs">{{ child.notes }}</div>
+                      </q-tooltip>
+                    </div>
                     <q-badge v-if="child.acquiredYear" color="grey-4" text-color="grey-8" class="q-ml-sm">
                       {{ child.acquiredYear }}
                     </q-badge>
+                    <q-badge v-if="!child.isActive" color="grey-4" text-color="grey-7" class="q-ml-sm">
+                      inactive
+                    </q-badge>
                     <q-space />
+                    <q-btn flat dense round :icon="child.isActive ? 'toggle_on' : 'toggle_off'" size="xs"
+                      :color="child.isActive ? 'positive' : 'grey'"
+                      @click="toggleAffiliateActive(child)">
+                      <q-tooltip>{{ child.isActive ? 'Deactivate' : 'Activate' }}</q-tooltip>
+                    </q-btn>
                     <q-btn flat dense round icon="fact_check" size="xs" color="accent"
                       @click="validateAffiliatePatterns(child)"
                       :disable="!child.patterns.length">
@@ -763,6 +864,11 @@ onMounted(() => loadCompanies());
               <q-badge color="primary" class="q-ml-sm">{{ competitors.length }}</q-badge>
             </div>
             <q-space />
+            <q-btn flat dense icon="description" color="blue-grey" :loading="describingCompetitors"
+              @click="describeCompetitors"
+              :disable="!competitors.length">
+              <q-tooltip>Describe All (LLM + web search)</q-tooltip>
+            </q-btn>
             <q-btn flat dense icon="query_stats" color="teal" :loading="discoveringData"
               @click="discoverCompetitorsFromData"
               :disable="!companyDetail?.portfolios?.length">
@@ -787,7 +893,13 @@ onMounted(() => loadCompanies());
           <q-list v-else-if="competitors.length" separator dense style="max-height: 600px; overflow-y: auto">
             <q-item v-for="r in competitors" :key="r.id">
               <q-item-section>
-                <q-item-label>{{ r.competitor.displayName }}</q-item-label>
+                <q-item-label>
+                  {{ r.competitor.displayName }}
+                  <q-tooltip v-if="r.notes" anchor="top middle" self="bottom middle" max-width="400px">
+                    {{ r.notes }}
+                    <div v-if="r.strength" class="text-caption q-mt-xs">Strength: {{ (r.strength * 100).toFixed(0) }}%</div>
+                  </q-tooltip>
+                </q-item-label>
                 <q-item-label caption>
                   <q-chip v-for="s in r.sectors" :key="s" dense size="xs" color="grey-3">{{ s }}</q-chip>
                   <span v-if="r.discoverySource !== 'MANUAL'" class="q-ml-xs text-grey-5">
@@ -933,7 +1045,7 @@ onMounted(() => loadCompanies());
                     Sectors: {{ s.sectors?.join(', ') || 'General' }}
                   </template>
                 </q-item-label>
-                <q-item-label caption v-if="s.notes && !s.citationCount" class="text-grey-6">{{ s.notes }}</q-item-label>
+                <q-item-label caption v-if="s.notes" class="text-grey-6">{{ s.notes }}</q-item-label>
                 <q-item-label v-if="s.variants?.length" caption class="text-grey-5">
                   Variants: {{ s.variants.join(', ') }}
                 </q-item-label>
@@ -966,6 +1078,7 @@ onMounted(() => loadCompanies());
                   <span v-if="s.acquiredYear" class="q-mr-sm">Acquired {{ s.acquiredYear }}</span>
                   <span v-if="s.patterns.length">Patterns: {{ s.patterns.join(', ') }}</span>
                 </q-item-label>
+                <q-item-label v-if="s.description" caption class="text-blue-grey-6">{{ s.description }}</q-item-label>
                 <q-item-label v-if="s.notes" caption class="text-grey-6">{{ s.notes }}</q-item-label>
               </q-item-section>
               <q-item-section side>

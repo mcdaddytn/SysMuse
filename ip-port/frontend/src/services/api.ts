@@ -3084,9 +3084,11 @@ export interface AffiliateDetail {
   companyId: string;
   name: string;
   displayName: string;
+  isActive: boolean;
   acquiredYear: number | null;
   parentId: string | null;
   notes: string | null;
+  description: string | null;
   patterns: AffiliatePattern[];
   children: Array<{ id: string; name: string }>;
 }
@@ -3140,6 +3142,7 @@ export interface AffiliateSuggestion {
   acquiredYear: number | null;
   patterns: string[];
   notes: string;
+  description?: string;
 }
 
 export interface AnalyzePatentsResult {
@@ -3334,14 +3337,14 @@ export const companyApi = {
 
   // Affiliates (under company)
   async addAffiliate(companyId: string, body: {
-    name: string; displayName: string; acquiredYear?: number; parentId?: string; notes?: string; patterns?: string[];
+    name: string; displayName: string; acquiredYear?: number; parentId?: string; notes?: string; description?: string; patterns?: string[];
   }): Promise<AffiliateDetail> {
     const { data } = await api.post(`/companies/${companyId}/affiliates`, body);
     return data;
   },
 
   async updateAffiliate(companyId: string, affiliateId: string, body: {
-    displayName?: string; acquiredYear?: number; parentId?: string | null; notes?: string;
+    displayName?: string; isActive?: boolean; acquiredYear?: number; parentId?: string | null; notes?: string;
   }): Promise<AffiliateDetail> {
     const { data } = await api.put(`/companies/${companyId}/affiliates/${affiliateId}`, body);
     return data;
@@ -3368,6 +3371,24 @@ export const companyApi = {
     existingCount: number;
   }> {
     const { data } = await api.post(`/companies/${companyId}/discover-affiliates`, { companyName }, { timeout: 120000 });
+    return data;
+  },
+
+  // Describe affiliates (LLM)
+  async describeAffiliates(companyId: string): Promise<AffiliateDetail[]> {
+    const { data } = await api.post(`/companies/${companyId}/describe-affiliates`, {}, { timeout: 120000 });
+    return data;
+  },
+
+  // Describe competitors (LLM)
+  async describeCompetitors(companyId: string): Promise<CompetitorRelationship[]> {
+    const { data } = await api.post(`/companies/${companyId}/describe-competitors`, {}, { timeout: 120000 });
+    return data;
+  },
+
+  // Bulk toggle affiliates active/inactive
+  async bulkToggleAffiliatesActive(companyId: string, isActive: boolean): Promise<{ count: number }> {
+    const { data } = await api.put(`/companies/${companyId}/affiliates-bulk-active`, { isActive });
     return data;
   },
 

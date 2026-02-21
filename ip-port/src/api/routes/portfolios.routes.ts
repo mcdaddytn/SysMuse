@@ -474,7 +474,12 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
       where: { id: portfolioId },
       include: {
         company: {
-          include: { affiliates: { include: { patterns: true } } },
+          include: {
+            affiliates: {
+              where: { isActive: true },
+              include: { patterns: true },
+            },
+          },
         },
       },
     });

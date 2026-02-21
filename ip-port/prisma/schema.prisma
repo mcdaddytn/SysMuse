@@ -198,8 +198,10 @@ model Affiliate {
 
   name            String                // e.g., "Avago", "Nicira"
   displayName     String    @map("display_name")  // e.g., "Avago Technologies"
+  isActive        Boolean   @default(true) @map("is_active")
   acquiredYear    Int?      @map("acquired_year")
   notes           String?
+  description     String?   // LLM-generated description of the affiliate's technology focus
 
   // Self-referential hierarchy (e.g., Nicira → VMware → Broadcom)
   parentId        String?   @map("parent_id")

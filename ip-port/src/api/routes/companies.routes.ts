@@ -204,7 +204,7 @@ router.post('/:id/discover-competitors', async (req: Request, res: Response) => 
 
 Already known competitors: ${existingNames.slice(0, 30).join(', ')}${existingNames.length > 30 ? ` (and ${existingNames.length - 30} more)` : ''}
 
-Return JSON array: [{ "name": "Company Name", "slug": "company-slug", "sectors": ["sector1"], "notes": "why they compete" }]
+Return JSON array: [{ "name": "Company Name", "slug": "company-slug", "sectors": ["sector1"], "notes": "1-2 sentences: what technology areas they compete in, what types of patent overlap exists" }]
 
 Only return NEW companies not in the known list. Return raw JSON array, no markdown.`,
       }],
@@ -415,7 +415,8 @@ Return a JSON array of NEW entities not already configured:
   "displayName": "Human Readable Name",
   "acquiredYear": 2019,
   "patterns": ["Pattern 1", "Pattern 2"],
-  "notes": "Brief context about this entity"
+  "notes": "Brief context about this entity",
+  "description": "1-2 sentence description of this entity's technology focus areas and what types of patents it files"
 }]
 
 For the parent company itself (if not already configured), use acquiredYear: null.
@@ -529,13 +530,198 @@ router.post('/:id/validate-patterns', async (req: Request, res: Response) => {
 });
 
 // =============================================================================
+// AFFILIATE & COMPETITOR DESCRIPTIONS (LLM)
+// =============================================================================
+
+/** POST /api/companies/:id/describe-affiliates — LLM-generated descriptions for all affiliates */
+router.post('/:id/describe-affiliates', async (req: Request, res: Response) => {
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: req.params.id },
+      include: { affiliates: { orderBy: { name: 'asc' } } },
+    });
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    if (!company.affiliates.length) {
+      return res.status(400).json({ error: 'No affiliates to describe' });
+    }
+
+    const affiliateList = company.affiliates
+      .map((a, i) => `${i + 1}. ${a.displayName}${a.acquiredYear ? ` (acquired ${a.acquiredYear})` : ''}${a.notes ? ` — ${a.notes}` : ''}`)
+      .join('\n');
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
+      messages: [{
+        role: 'user',
+        content: `For company "${company.displayName}", describe each of the following subsidiaries/affiliates.
+For each, provide a 1-2 sentence description of:
+- What the entity does / its technology focus areas
+- What types of patents it would file (technology domains)
+- When it was acquired (if known)
+
+Affiliates:
+${affiliateList}
+
+Return JSON array: [{ "name": "${company.affiliates[0].name}", "description": "..." }]
+Use the affiliate's slug name (the "name" field, not displayName). Return raw JSON array, no markdown.`,
+      }],
+    });
+
+    const textBlocks = message.content.filter(b => b.type === 'text');
+    const responseText = textBlocks.map(b => (b as any).text).join('');
+    let descriptions: Array<{ name: string; description: string }>;
+    try {
+      descriptions = JSON.parse(responseText);
+    } catch {
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      descriptions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    }
+
+    // Update each affiliate's description
+    const nameMap = new Map(descriptions.map(d => [d.name, d.description]));
+    for (const affiliate of company.affiliates) {
+      const desc = nameMap.get(affiliate.name);
+      if (desc) {
+        await prisma.affiliate.update({
+          where: { id: affiliate.id },
+          data: { description: desc },
+        });
+      }
+    }
+
+    // Return updated affiliates
+    const updated = await prisma.affiliate.findMany({
+      where: { companyId: company.id },
+      include: { patterns: true, children: { select: { id: true, name: true } } },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json(updated);
+  } catch (err: unknown) {
+    console.error('[Companies] Describe affiliates error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/companies/:id/describe-competitors — LLM-generated descriptions for competitors */
+router.post('/:id/describe-competitors', async (req: Request, res: Response) => {
+  try {
+    const company = await prisma.company.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const relationships = await prisma.competitorRelationship.findMany({
+      where: { companyId: req.params.id },
+      include: { competitor: true },
+      orderBy: { competitor: { displayName: 'asc' } },
+    });
+
+    if (!relationships.length) {
+      return res.status(400).json({ error: 'No competitors to describe' });
+    }
+
+    const competitorList = relationships
+      .map((r, i) => `${i + 1}. ${r.competitor.displayName}${r.sectors.length ? ` — sectors: ${r.sectors.join(', ')}` : ''}`)
+      .join('\n');
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
+      messages: [{
+        role: 'user',
+        content: `For company "${company.displayName}", describe each competitor's technology overlap.
+For each competitor, provide a 1-2 sentence description of:
+- What technology areas they compete in
+- What types of patents overlap with ${company.displayName}
+
+Competitors:
+${competitorList}
+
+Return JSON array: [{ "id": "${relationships[0].id}", "description": "..." }]
+Use the relationship ID provided. Return raw JSON array, no markdown.`,
+      }],
+    });
+
+    const textBlocks = message.content.filter(b => b.type === 'text');
+    const responseText = textBlocks.map(b => (b as any).text).join('');
+    let descriptions: Array<{ id: string; description: string }>;
+    try {
+      descriptions = JSON.parse(responseText);
+    } catch {
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      descriptions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    }
+
+    // Update each competitor relationship's notes
+    const idMap = new Map(descriptions.map(d => [d.id, d.description]));
+    for (const rel of relationships) {
+      const desc = idMap.get(rel.id);
+      if (desc) {
+        await prisma.competitorRelationship.update({
+          where: { id: rel.id },
+          data: { notes: desc },
+        });
+      }
+    }
+
+    // Return updated relationships
+    const updated = await prisma.competitorRelationship.findMany({
+      where: { companyId: req.params.id },
+      include: {
+        competitor: {
+          include: { _count: { select: { portfolios: true, affiliates: true } } },
+        },
+      },
+      orderBy: { competitor: { displayName: 'asc' } },
+    });
+
+    res.json(updated);
+  } catch (err: unknown) {
+    console.error('[Companies] Describe competitors error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** PUT /api/companies/:id/affiliates-bulk-active — toggle all affiliates active/inactive */
+router.put('/:id/affiliates-bulk-active', async (req: Request, res: Response) => {
+  try {
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive (boolean) is required' });
+    }
+    const result = await prisma.affiliate.updateMany({
+      where: { companyId: req.params.id },
+      data: { isActive },
+    });
+    res.json({ count: result.count, isActive });
+  } catch (err: unknown) {
+    console.error('[Companies] Bulk toggle affiliates error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
 // AFFILIATE CRUD (under company)
 // =============================================================================
 
 /** POST /api/companies/:id/affiliates — add affiliate with optional patterns */
 router.post('/:id/affiliates', async (req: Request, res: Response) => {
   try {
-    const { name, displayName, acquiredYear, parentId, notes, patterns } = req.body;
+    const { name, displayName, acquiredYear, parentId, notes, description, patterns } = req.body;
     if (!name || !displayName) {
       return res.status(400).json({ error: 'name and displayName are required' });
     }
@@ -548,6 +734,7 @@ router.post('/:id/affiliates', async (req: Request, res: Response) => {
         acquiredYear: acquiredYear || null,
         parentId: parentId || null,
         notes: notes || null,
+        description: description || null,
         patterns: patterns?.length
           ? { create: patterns.map((p: string) => ({ pattern: p, isExact: false })) }
           : undefined,
@@ -565,7 +752,7 @@ router.post('/:id/affiliates', async (req: Request, res: Response) => {
 /** PUT /api/companies/:id/affiliates/:aid — update affiliate */
 router.put('/:id/affiliates/:aid', async (req: Request, res: Response) => {
   try {
-    const { displayName, acquiredYear, parentId, notes } = req.body;
+    const { displayName, acquiredYear, parentId, notes, isActive } = req.body;
     const affiliate = await prisma.affiliate.update({
       where: { id: req.params.aid },
       data: {
@@ -573,6 +760,7 @@ router.put('/:id/affiliates/:aid', async (req: Request, res: Response) => {
         ...(acquiredYear !== undefined && { acquiredYear }),
         ...(parentId !== undefined && { parentId }),
         ...(notes !== undefined && { notes }),
+        ...(isActive !== undefined && { isActive }),
       },
       include: { patterns: true },
     });

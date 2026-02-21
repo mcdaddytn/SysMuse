@@ -466,10 +466,12 @@ function parseRange(val: string): { start: number; end: number } | null {
 
 function findOverlappingJobs(targetType: TargetType, targetValue: string, coverageTypes: CoverageType[]): BatchJob[] {
   if (!batchJobsData.value) return [];
+  const selectedPid = portfolioStore.selectedPortfolioId;
   return batchJobsData.value.jobs.filter(job => {
     if (job.status !== 'running' && job.status !== 'pending') return false;
     if (job.targetType !== targetType) return false;
     if (!coverageTypes.includes(job.coverageType)) return false;
+    if (selectedPid && job.portfolioId !== selectedPid) return false;
     if (targetType === 'tier') {
       const jobRange = parseRange(job.targetValue);
       const newRange = parseRange(targetValue);

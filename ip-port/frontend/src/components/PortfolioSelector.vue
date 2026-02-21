@@ -39,9 +39,7 @@ const selectedValue = computed({
 });
 
 onMounted(async () => {
-  if (store.portfolios.length === 0) {
-    await store.loadPortfolios();
-  }
+  await store.refreshIfStale();
 });
 </script>
 

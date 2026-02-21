@@ -105,6 +105,33 @@ async function main() {
     }
   }
 
+  // Quarantine patents where extraction failed (not found in bulk ZIPs)
+  const failedIds = patents
+    .filter(p => p.grantDate && !successIds.has(p.patentId))
+    .map(p => p.patentId);
+
+  let quarantined = 0;
+  if (failedIds.length > 0) {
+    console.log(`\nQuarantining ${failedIds.length} patents where extraction failed...`);
+    for (const pid of failedIds) {
+      // Read existing quarantine data, merge in xml reason
+      const existing = await prisma.patent.findUnique({
+        where: { patentId: pid },
+        select: { quarantine: true },
+      });
+      const q = (existing?.quarantine as Record<string, string>) || {};
+      if (!q.xml) {
+        q.xml = 'extraction-failed';
+        await prisma.patent.update({
+          where: { patentId: pid },
+          data: { quarantine: q, isQuarantined: true },
+        });
+        quarantined++;
+      }
+    }
+    console.log(`Quarantined ${quarantined} patents with reason 'extraction-failed'`);
+  }
+
   // Summary
   console.log('\n' + '='.repeat(60));
   console.log('EXTRACTION SUMMARY');
@@ -113,6 +140,9 @@ async function main() {
   console.log(`Extracted: ${result.extracted}`);
   console.log(`Already existed: ${result.alreadyExist}`);
   console.log(`Not found: ${result.notFound}`);
+  if (quarantined > 0) {
+    console.log(`Quarantined: ${quarantined} (extraction-failed)`);
+  }
   if (result.errors.length > 0) {
     console.log(`Errors: ${result.errors.length}`);
     for (const err of result.errors.slice(0, 10)) {

@@ -1238,6 +1238,12 @@ router.post('/auto-quarantine', async (req: Request, res: Response) => {
         newQ.xml = 'recent-no-bulk';
         reasons.push('recent-no-bulk');
       }
+      // Extraction attempted but patent not found in bulk ZIPs (2005-2023 range)
+      // Only apply when scoped to a portfolio (implies extraction has been run for it)
+      else if (portfolioId && !p.hasXmlData && p.grantDate && p.grantDate >= '2005-01-01' && p.grantDate < '2024-01-01' && !existing.xml) {
+        newQ.xml = 'extraction-failed';
+        reasons.push('extraction-failed');
+      }
 
       if (reasons.length > 0) {
         updates.push({ patentId: p.patentId, quarantine: newQ, reasons });

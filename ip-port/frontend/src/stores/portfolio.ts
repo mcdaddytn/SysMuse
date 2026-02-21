@@ -53,6 +53,8 @@ export const usePortfolioStore = defineStore('portfolio', () => {
   });
 
   // Actions
+  const lastLoadedAt = ref(0);
+
   async function loadPortfolios() {
     loading.value = true;
     error.value = null;
@@ -64,10 +66,17 @@ export const usePortfolioStore = defineStore('portfolio', () => {
           selectPortfolio(portfolios.value[0].id);
         }
       }
+      lastLoadedAt.value = Date.now();
     } catch (err: unknown) {
       error.value = (err as Error).message;
     } finally {
       loading.value = false;
+    }
+  }
+
+  async function refreshIfStale() {
+    if (Date.now() - lastLoadedAt.value > 30000) {
+      await loadPortfolios();
     }
   }
 
@@ -104,5 +113,6 @@ export const usePortfolioStore = defineStore('portfolio', () => {
     loadPortfolios,
     loadCompanies,
     selectPortfolio,
+    refreshIfStale,
   };
 });

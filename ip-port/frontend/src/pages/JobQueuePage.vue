@@ -148,6 +148,32 @@ const groupedJobs = computed(() => {
   return result;
 });
 
+// ─── Active Job Indicators ───────────────────────────────────────────────────
+const activeJobsByTier = computed(() => {
+  const map = new Map<number, BatchJob[]>();
+  if (!batchJobsData.value || !enrichmentData.value) return map;
+  const tierSize = selectedTierSize.value;
+  const numTiers = enrichmentData.value.tiers.length;
+  const selectedPid = portfolioStore.selectedPortfolioId;
+  for (const job of batchJobsData.value.jobs) {
+    if (job.targetType !== 'tier') continue;
+    if (job.status !== 'running' && job.status !== 'pending') continue;
+    if (selectedPid && job.portfolioId !== selectedPid) continue;
+    const jobRange = parseRange(job.targetValue);
+    if (!jobRange) continue;
+    for (let i = 0; i < numTiers; i++) {
+      const tierStart = i * tierSize + 1;
+      const tierEnd = (i + 1) * tierSize;
+      if (jobRange.start <= tierEnd && tierStart <= jobRange.end) {
+        if (!map.has(i)) map.set(i, []);
+        map.get(i)!.push(job);
+      }
+    }
+  }
+  return map;
+});
+const hasActiveJobs = computed(() => activeJobsByTier.value.size > 0);
+
 // ─── Start Job Dialog ────────────────────────────────────────────────────────
 const showNewJobDialog = ref(false);
 const newJobTargetType = ref<TargetType>('tier');
@@ -160,6 +186,11 @@ const newJobBatchMode = ref(true);
 const startingJob = ref(false);
 const gapsData = ref<GapsResponse | null>(null);
 const loadingGaps = ref(false);
+
+// Duplicate job warning
+const showDuplicateWarning = ref(false);
+const duplicateJobs = ref<BatchJob[]>([]);
+const pendingSubmitFn = ref<(() => Promise<void>) | null>(null);
 
 const llmModelOptions = [
   { value: null, label: 'Sonnet 4 (default)', hint: 'Best balance of quality and cost' },
@@ -212,6 +243,11 @@ watch(showNewJobDialog, (open) => {
 });
 
 async function startNewJob() {
+  if (checkDuplicatesAndSubmit(newJobTargetType.value, newJobTargetValue.value, newJobCoverageTypes.value, doStartNewJob)) return;
+  await doStartNewJob();
+}
+
+async function doStartNewJob() {
   startingJob.value = true;
   try {
     await batchJobsApi.startJobs({
@@ -300,6 +336,11 @@ async function openEnrichDialog(targetType: TargetType, targetValue: string, top
 }
 
 async function startEnrichFromDialog() {
+  if (checkDuplicatesAndSubmit(enrichDialogTargetType.value, enrichDialogTargetValue.value, enrichDialogCoverageTypes.value, doStartEnrichFromDialog)) return;
+  await doStartEnrichFromDialog();
+}
+
+async function doStartEnrichFromDialog() {
   enrichDialogStarting.value = true;
   try {
     await batchJobsApi.startJobs({
@@ -381,20 +422,20 @@ function getStatusColor(status: string) {
   }
 }
 
-// Format tier range for display (e.g., tierIndex=4, tierSize=1000 → "3,001-4,000")
+// Format tier range as raw string for backend use (e.g., tierIndex=4, tierSize=1000 → "3001-4000")
 function formatTierRange(tierIndex: number, tierSize: number): string {
   const end = tierIndex * tierSize;
   const start = end - tierSize + 1;
-  return `${start.toLocaleString()}-${end.toLocaleString()}`;
+  return `${start}-${end}`;
 }
 
 // Format job target for display
 function formatJobTarget(job: BatchJob): string {
   if (job.targetType === 'tier') {
-    // targetValue could be "5000" (legacy) or "4001-5000" (new format)
-    const val = job.targetValue;
+    // targetValue could be "5000" (legacy), "4001-5000", or "4,001-5,000" (old locale format)
+    const val = job.targetValue.replace(/,/g, '').replace(/\s*\(\d+\/\d+\)/, '');
     if (val.includes('-')) {
-      return `Tier ${val.replace('-', '-').split('-').map(n => parseInt(n).toLocaleString()).join('-')}`;
+      return `Tier ${val.split('-').map(n => parseInt(n).toLocaleString()).join('-')}`;
     }
     // Legacy format: just show "Top N"
     return `Top ${parseInt(val).toLocaleString()}`;
@@ -402,9 +443,63 @@ function formatJobTarget(job: BatchJob): string {
   return job.targetValue;
 }
 
+function getChunkLabel(job: BatchJob): string | null {
+  const match = job.targetValue.match(/\((\d+\/\d+)\)/);
+  return match ? match[1] : null;
+}
+
 function getCoverageColor(type: CoverageType): string {
   const opt = coverageTypeOptions.find(o => o.value === type);
   return opt?.color || 'grey';
+}
+
+function formatCoverageLabel(type: CoverageType): string {
+  return type === 'xml' ? 'Bulk' : type;
+}
+
+function parseRange(val: string): { start: number; end: number } | null {
+  const clean = val.replace(/,/g, '').replace(/\s*\(\d+\/\d+\)/, '');
+  if (!clean.includes('-')) return null;
+  const [s, e] = clean.split('-').map(n => parseInt(n));
+  return isNaN(s) || isNaN(e) ? null : { start: s, end: e };
+}
+
+function findOverlappingJobs(targetType: TargetType, targetValue: string, coverageTypes: CoverageType[]): BatchJob[] {
+  if (!batchJobsData.value) return [];
+  return batchJobsData.value.jobs.filter(job => {
+    if (job.status !== 'running' && job.status !== 'pending') return false;
+    if (job.targetType !== targetType) return false;
+    if (!coverageTypes.includes(job.coverageType)) return false;
+    if (targetType === 'tier') {
+      const jobRange = parseRange(job.targetValue);
+      const newRange = parseRange(targetValue);
+      if (!jobRange || !newRange) return job.targetValue.replace(/,/g, '') === targetValue.replace(/,/g, '');
+      return jobRange.start <= newRange.end && newRange.start <= jobRange.end;
+    }
+    return job.targetValue === targetValue;
+  });
+}
+
+function checkDuplicatesAndSubmit(
+  targetType: TargetType, targetValue: string, coverageTypes: CoverageType[],
+  submitFn: () => Promise<void>
+): boolean {
+  const overlapping = findOverlappingJobs(targetType, targetValue, coverageTypes);
+  if (overlapping.length > 0) {
+    duplicateJobs.value = overlapping;
+    pendingSubmitFn.value = submitFn;
+    showDuplicateWarning.value = true;
+    return true;
+  }
+  return false;
+}
+
+function confirmDuplicateSubmit() {
+  showDuplicateWarning.value = false;
+  if (pendingSubmitFn.value) {
+    pendingSubmitFn.value();
+    pendingSubmitFn.value = null;
+  }
 }
 
 function formatDate(dateStr?: string): string {
@@ -814,6 +909,7 @@ onMounted(() => {
       loadSectorEnrichment();
     } else if (activeTab.value === 'enrichment') {
       loadEnrichmentSummary();
+      loadBatchJobs();
     }
   }, 15000);
 
@@ -1019,6 +1115,36 @@ onUnmounted(() => {
                         </div>
                       </td>
                     </tr>
+                    <!-- Active Jobs Row -->
+                    <tr v-if="hasActiveJobs">
+                      <td class="metric-col text-weight-bold">
+                        <q-icon name="sync" color="blue" size="xs" class="q-mr-xs" />
+                        Active
+                      </td>
+                      <td v-for="(tier, idx) in enrichmentData.tiers" :key="tier.tierLabel + '-active'">
+                        <template v-if="activeJobsByTier.get(idx)?.length">
+                          <div class="row items-center justify-center q-gutter-xs" style="flex-wrap: nowrap">
+                            <q-spinner size="xs" color="blue" />
+                            <q-chip
+                              v-for="job in activeJobsByTier.get(idx)"
+                              :key="job.id"
+                              dense
+                              size="sm"
+                              :color="getCoverageColor(job.coverageType)"
+                              text-color="white"
+                              clickable
+                              @click="activeTab = 'jobs'"
+                            >
+                              {{ formatCoverageLabel(job.coverageType) }}
+                              <template v-if="job.progress && job.progress.completed > 0">
+                                &nbsp;{{ Math.round(job.progress.completed / job.progress.total * 100) }}%
+                              </template>
+                            </q-chip>
+                          </div>
+                        </template>
+                        <span v-else class="text-grey-4">&mdash;</span>
+                      </td>
+                    </tr>
                     <!-- Enrich Actions Row -->
                     <tr class="section-separator">
                       <td class="metric-col text-weight-bold">Actions</td>
@@ -1031,7 +1157,11 @@ onUnmounted(() => {
                           icon="play_arrow"
                           label="Enrich"
                           @click="openEnrichDialog('tier', formatTierRange(idx + 1, selectedTierSize))"
-                        />
+                        >
+                          <q-badge v-if="activeJobsByTier.get(idx)?.length" floating color="warning" rounded>
+                            <q-icon name="sync" size="10px" />
+                          </q-badge>
+                        </q-btn>
                         <q-icon v-else name="check_circle" color="positive" size="sm" />
                       </td>
                     </tr>
@@ -1141,7 +1271,7 @@ onUnmounted(() => {
                 <template v-slot:body-cell-actions="props">
                   <q-td :props="props">
                     <q-btn
-                      v-if="props.row.gaps.llm + props.row.gaps.prosecution > 0"
+                      v-if="props.row.gaps.llm + props.row.gaps.prosecution + props.row.gaps.ipr + props.row.gaps.family + props.row.gaps.xml > 0"
                       flat
                       dense
                       color="primary"
@@ -1223,7 +1353,7 @@ onUnmounted(() => {
                 <q-item-section side>
                   <div class="row items-center q-gutter-xs">
                     <q-chip v-for="type in getGroupCoverageTypes(item.jobs)" :key="type" dense size="sm" :color="getCoverageColor(type)" text-color="white">
-                      {{ type }}
+                      {{ formatCoverageLabel(type) }}
                     </q-chip>
                     <q-btn
                       v-if="getGroupStatus(item.jobs) === 'running'"
@@ -1247,7 +1377,7 @@ onUnmounted(() => {
               >
                 <q-item-section avatar>
                   <q-chip dense :color="getCoverageColor(job.coverageType)" text-color="white" size="sm">
-                    {{ job.coverageType }}
+                    {{ formatCoverageLabel(job.coverageType) }}
                   </q-chip>
                 </q-item-section>
                 <q-item-section>
@@ -1778,6 +1908,51 @@ onUnmounted(() => {
             label="Extract USPTO Data First"
             icon="description"
             @click="submitXmlExtractionFirst"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- ═══ Duplicate Job Warning Dialog ═══ -->
+    <q-dialog v-model="showDuplicateWarning">
+      <q-card style="min-width: 420px">
+        <q-card-section>
+          <div class="text-h6 text-warning">
+            <q-icon name="warning" class="q-mr-sm" />
+            Overlapping Jobs Detected
+          </div>
+        </q-card-section>
+        <q-card-section>
+          <p>The following jobs are already running or pending for the same target:</p>
+          <q-list dense separator class="q-mb-md">
+            <q-item v-for="job in duplicateJobs" :key="job.id">
+              <q-item-section avatar>
+                <q-badge :color="getStatusColor(job.status)">{{ job.status }}</q-badge>
+              </q-item-section>
+              <q-item-section>
+                <q-item-label>
+                  <q-chip dense size="sm" :color="getCoverageColor(job.coverageType)" text-color="white">
+                    {{ formatCoverageLabel(job.coverageType) }}
+                  </q-chip>
+                  <span class="q-ml-sm text-grey-7">{{ formatJobTarget(job) }}</span>
+                </q-item-label>
+                <q-item-label caption v-if="job.progress">
+                  {{ job.progress.completed.toLocaleString() }} / {{ job.progress.total.toLocaleString() }} patents
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <p class="text-caption text-grey-7">
+            Submitting duplicate jobs is usually harmless (gap analysis returns 0 for already-enriched patents) but wastes resources.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn
+            color="warning"
+            text-color="black"
+            label="Submit Anyway"
+            @click="confirmDuplicateSubmit"
           />
         </q-card-actions>
       </q-card>

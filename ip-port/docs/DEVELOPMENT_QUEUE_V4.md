@@ -217,6 +217,14 @@ The sector management and LLM batch scoring experience needs redesign:
 
 ---
 
+## Nice-to-Have Improvements (Backlog)
+
+- **CSV Export for Job Queue:** Client-side CSV generation from existing `batchJobsData` — export job ID, target, coverage type, status, progress, duration, rate. Use Blob + download link pattern.
+- **Accept All Button for Affiliate/Competitor Candidates:** In AdminPage's affiliate discovery and competitor candidate dialogs, add an "Accept All" button that adds all suggested candidates in one click (alongside existing individual accept buttons).
+- **Scrollable Candidate Lists:** Add `max-height: 60vh; overflow-y: auto` to affiliate/competitor candidate dialog list containers to prevent dialog overflow when many candidates are returned.
+
+---
+
 ## Immediate Action Items (as of Feb 20)
 
 1. **Run CPC backfill** — `POST /api/batch-jobs/sync-cpc-designations` for Netflix/Hulu/Chelsio patents with XMLs

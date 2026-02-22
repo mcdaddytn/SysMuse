@@ -472,6 +472,13 @@ function tierActiveProgress(tierIdx: number, coverageType: string): { completed:
   return total > 0 ? { completed, total } : null;
 }
 
+// Get quarantine-adjusted denominator for a coverage type
+function quarantineAdjustedTotal(total: number, key: string, quarantineCounts?: { total: number; xml: number; llm?: number }): number {
+  if (key === 'xml') return (total - (quarantineCounts?.xml || 0)) || 1;
+  if (key === 'llm') return (total - (quarantineCounts?.llm || 0)) || 1;
+  return total;
+}
+
 // Blend DB enrichment count with active job progress to get effective bar value (0-1)
 function effectiveBarValue(dbCount: number, patentTotal: number, active: { completed: number; total: number } | null): number {
   if (!active || patentTotal <= 0) return patentTotal > 0 ? dbCount / patentTotal : 0;
@@ -876,13 +883,15 @@ const quarantineColumns = [
   { name: 'actions', label: '', field: 'patentId', align: 'center' as const },
 ];
 
-const QUARANTINE_REASON_META: Record<string, { label: string; icon: string; color: string; retryable: boolean }> = {
-  'design-patent': { label: 'Design Patent', icon: 'brush', color: 'blue-grey', retryable: false },
-  'reissue-patent': { label: 'Reissue Patent', icon: 'replay', color: 'blue-grey', retryable: false },
-  'pre-2005': { label: 'Pre-2005 Grant', icon: 'history', color: 'blue-grey', retryable: false },
-  'recent-no-bulk': { label: 'Recent — No Bulk Data', icon: 'schedule', color: 'orange', retryable: true },
-  'extraction-failed': { label: 'USPTO Bulk Extraction Failed', icon: 'error_outline', color: 'red', retryable: true },
-  'manual': { label: 'Manually Quarantined', icon: 'person', color: 'grey', retryable: false },
+const QUARANTINE_REASON_META: Record<string, { label: string; icon: string; color: string; retryable: boolean; remedy: string }> = {
+  'design-patent': { label: 'Design Patent', icon: 'brush', color: 'blue-grey', retryable: false, remedy: 'Design patents have no claims text' },
+  'reissue-patent': { label: 'Reissue Patent', icon: 'replay', color: 'blue-grey', retryable: false, remedy: 'Reissue patents not in bulk XML' },
+  'pre-2005': { label: 'Pre-2005 Grant', icon: 'history', color: 'blue-grey', retryable: false, remedy: 'No bulk XML available for pre-2005 patents' },
+  'recent-no-bulk': { label: 'Recent — No Bulk Data', icon: 'schedule', color: 'orange', retryable: true, remedy: 'Bulk XML not yet published — check back after next USPTO release' },
+  'extraction-failed': { label: 'USPTO Bulk Extraction Failed', icon: 'error_outline', color: 'red', retryable: true, remedy: 'Re-run XML extraction or check bulk ZIP coverage' },
+  'no-abstract': { label: 'No Abstract', icon: 'description', color: 'amber', retryable: true, remedy: 'Run Hydrate on the portfolio to fetch abstract from PatentsView' },
+  'no-sector': { label: 'No Sector Assigned', icon: 'category', color: 'amber', retryable: true, remedy: 'Run Sector Assignment on the portfolio' },
+  'manual': { label: 'Manually Quarantined', icon: 'person', color: 'grey', retryable: false, remedy: 'Manually quarantined by user' },
 };
 
 function getQuarantineLabel(reason: string): string {
@@ -896,6 +905,9 @@ function getQuarantineColor(reason: string): string {
 }
 function isRetryable(reason: string): boolean {
   return QUARANTINE_REASON_META[reason]?.retryable || false;
+}
+function getQuarantineRemedy(reason: string): string {
+  return QUARANTINE_REASON_META[reason]?.remedy || '';
 }
 
 async function loadQuarantineSummary() {
@@ -1107,20 +1119,20 @@ onUnmounted(() => {
                   <span class="text-caption">{{ enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals].toLocaleString() }}</span>
                 </div>
                 <q-linear-progress
-                  :value="effectiveBarValue(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], key === 'xml' ? (enrichmentData.totalPatents - (enrichmentData.quarantineCounts?.xml || 0)) || 1 : enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null)"
-                  :color="coverageColor(effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], key === 'xml' ? (enrichmentData.totalPatents - (enrichmentData.quarantineCounts?.xml || 0)) || 1 : enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null))"
+                  :value="effectiveBarValue(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], quarantineAdjustedTotal(enrichmentData.totalPatents, key, enrichmentData.quarantineCounts), activeJobsByCoverage.get(key) || null)"
+                  :color="coverageColor(effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], quarantineAdjustedTotal(enrichmentData.totalPatents, key, enrichmentData.quarantineCounts), activeJobsByCoverage.get(key) || null))"
                   size="20px"
                   rounded
                 >
                   <div class="absolute-full flex flex-center">
                     <span class="text-caption text-white text-weight-bold">
-                      {{ effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], key === 'xml' ? (enrichmentData.totalPatents - (enrichmentData.quarantineCounts?.xml || 0)) || 1 : enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null) }}%
+                      {{ effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], quarantineAdjustedTotal(enrichmentData.totalPatents, key, enrichmentData.quarantineCounts), activeJobsByCoverage.get(key) || null) }}%
                       <template v-if="activeJobsByCoverage.get(key)?.total"> ({{ activeJobsByCoverage.get(key)!.completed.toLocaleString() }}/{{ activeJobsByCoverage.get(key)!.total.toLocaleString() }})</template>
                     </span>
                   </div>
                 </q-linear-progress>
-                <div v-if="key === 'xml' && enrichmentData.quarantineCounts?.xml" class="text-caption text-blue-grey q-mt-xs">
-                  {{ enrichmentData.quarantineCounts.xml }} quarantined
+                <div v-if="(key === 'xml' && enrichmentData.quarantineCounts?.xml) || (key === 'llm' && enrichmentData.quarantineCounts?.llm)" class="text-caption text-blue-grey q-mt-xs">
+                  {{ key === 'xml' ? enrichmentData.quarantineCounts?.xml : enrichmentData.quarantineCounts?.llm }} quarantined
                 </div>
               </q-card-section>
             </q-card>
@@ -1154,9 +1166,12 @@ onUnmounted(() => {
                       <td class="metric-col text-weight-bold">LLM</td>
                       <td v-for="(tier, idx) in enrichmentData.tiers" :key="tier.tierLabel + '-llm'">
                         <div class="enrichment-cell">
-                          <q-linear-progress :value="effectiveBarValue(tier.enrichment.llm, tier.count, tierActiveProgress(idx, 'llm'))" :color="coverageColor(effectiveBarPct(tier.enrichment.llm, tier.count, tierActiveProgress(idx, 'llm')))" size="14px" rounded class="q-mb-xs" />
-                          <span class="text-caption">{{ effectiveBarPct(tier.enrichment.llm, tier.count, tierActiveProgress(idx, 'llm')) }}%</span>
+                          <q-linear-progress :value="effectiveBarValue(tier.enrichment.llm, quarantineAdjustedTotal(tier.count, 'llm', tier.quarantineCounts), tierActiveProgress(idx, 'llm'))" :color="coverageColor(effectiveBarPct(tier.enrichment.llm, quarantineAdjustedTotal(tier.count, 'llm', tier.quarantineCounts), tierActiveProgress(idx, 'llm')))" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ effectiveBarPct(tier.enrichment.llm, quarantineAdjustedTotal(tier.count, 'llm', tier.quarantineCounts), tierActiveProgress(idx, 'llm')) }}%</span>
                           <span v-if="tierActiveProgress(idx, 'llm')" class="text-caption text-blue q-ml-xs">({{ tierActiveProgress(idx, 'llm')!.completed }}/{{ tierActiveProgress(idx, 'llm')!.total }})</span>
+                          <q-badge v-if="tier.quarantineCounts?.llm" color="blue-grey" class="q-ml-xs" dense>
+                            {{ tier.quarantineCounts.llm }} quarantined
+                          </q-badge>
                         </div>
                       </td>
                     </tr>
@@ -1319,8 +1334,8 @@ onUnmounted(() => {
                 <template v-slot:body-cell-llm="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.llm, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.llm, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null))" size="12px" rounded />
-                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.llm, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null) }}%<span v-if="props.row.gaps.llm > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('llm')" class="text-grey-6"> ({{ props.row.gaps.llm }})</span></span>
+                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.llm, quarantineAdjustedTotal(props.row.checkedPatents, 'llm', props.row.quarantineCounts), activeJobsBySuperSector.get(props.row.name)?.get('llm') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.llm, quarantineAdjustedTotal(props.row.checkedPatents, 'llm', props.row.quarantineCounts), activeJobsBySuperSector.get(props.row.name)?.get('llm') || null))" size="12px" rounded />
+                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.llm, quarantineAdjustedTotal(props.row.checkedPatents, 'llm', props.row.quarantineCounts), activeJobsBySuperSector.get(props.row.name)?.get('llm') || null) }}%<span v-if="props.row.gaps.llm > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('llm')" class="text-grey-6"> ({{ props.row.gaps.llm }})</span></span>
                       <span v-if="activeJobsBySuperSector.get(props.row.name)?.get('llm')" class="text-caption text-blue q-ml-xs">({{ activeJobsBySuperSector.get(props.row.name)!.get('llm')!.completed }}/{{ activeJobsBySuperSector.get(props.row.name)!.get('llm')!.total }})</span>
                     </div>
                   </q-td>
@@ -1753,6 +1768,7 @@ onUnmounted(() => {
                   <div>
                     <div class="text-subtitle2">{{ getQuarantineLabel(group.reason) }}</div>
                     <div class="text-caption text-grey">{{ group.coverageType }} &middot; {{ group.count }} patents</div>
+                    <div v-if="getQuarantineRemedy(group.reason)" class="text-caption text-blue-grey-6">{{ getQuarantineRemedy(group.reason) }}</div>
                   </div>
                 </div>
               </q-card-section>
@@ -1771,8 +1787,11 @@ onUnmounted(() => {
             <q-card-section>
               <div class="row items-center q-mb-sm">
                 <q-icon :name="getQuarantineIcon(group.reason)" :color="getQuarantineColor(group.reason)" size="sm" class="q-mr-sm" />
-                <span class="text-subtitle1 text-weight-medium">{{ getQuarantineLabel(group.reason) }}</span>
-                <q-badge class="q-ml-sm" :color="getQuarantineColor(group.reason)">{{ group.count }}</q-badge>
+                <div>
+                  <span class="text-subtitle1 text-weight-medium">{{ getQuarantineLabel(group.reason) }}</span>
+                  <q-badge class="q-ml-sm" :color="getQuarantineColor(group.reason)">{{ group.count }}</q-badge>
+                  <div v-if="getQuarantineRemedy(group.reason)" class="text-caption text-blue-grey-6">{{ getQuarantineRemedy(group.reason) }}</div>
+                </div>
                 <q-space />
                 <q-btn v-if="isRetryable(group.reason)" flat dense size="sm"
                   label="Retry All" icon="replay" color="primary" />

@@ -309,13 +309,97 @@ router.post('/create-from-patents', async (req: Request, res: Response) => {
       data: { patentCount, affiliateCount },
     });
 
-    // Step 5: Auto-hydrate — fill missing fields (abstract, CPC codes, forward citations)
+    // Step 5: Fetch full details and compute derived fields for all patents
     const allPatentIds = suggestedAffiliates.flatMap((c: any) => c.patents.map((p: any) => p.patentId));
-    import('../services/patent-hydration-service.js').then(({ hydratePatents }) =>
-      hydratePatents(allPatentIds, { companyId: resolvedCompanyId }).catch(err =>
-        console.error('[AutoHydrate] Background hydration failed:', err)
-      )
-    );
+    if (allPatentIds.length > 0) {
+      try {
+        const { createPatentsViewClient } = await import('../../../clients/patentsview-client.js');
+        const pvClient = createPatentsViewClient();
+        const { calculateRemainingYears, calculateBaseScore } = await import('../services/patent-hydration-service.js');
+        const { getPrimarySectorAsync, getSuperSectorAsync } = await import('../utils/sector-mapper.js');
+
+        // Batch-fetch full details
+        const batchSize = 100;
+        for (let i = 0; i < allPatentIds.length; i += batchSize) {
+          const batch = allPatentIds.slice(i, i + batchSize);
+          try {
+            const patents = await pvClient.getPatentsBatch(batch, [
+              'patent_id', 'patent_title', 'patent_abstract', 'patent_date', 'patent_type',
+              'patent_num_times_cited_by_us_patents', 'assignees', 'inventors', 'cpc_current', 'application',
+            ]);
+
+            for (const pvData of patents) {
+              try {
+                const assigneeOrg = pvData.assignees?.[0]?.assignee_organization || '';
+                const inventors = (pvData.inventors || []).map(
+                  (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
+                ).filter(Boolean);
+                const cpcData = pvData.cpc_current || pvData.cpc || [];
+                const cpcCodes: string[] = cpcData
+                  .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
+                  .filter(Boolean);
+                const filingDate = pvData.application?.[0]?.filing_date || null;
+                const grantDate = pvData.patent_date || null;
+                const forwardCitations = pvData.patent_num_times_cited_by_us_patents || 0;
+                const dateForExpiry = filingDate || grantDate;
+                const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
+                const primaryCpc = cpcCodes[0] || null;
+                const primarySector = await getPrimarySectorAsync(cpcCodes, pvData.patent_title, pvData.patent_abstract) || null;
+                const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
+                const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
+
+                await prisma.patent.update({
+                  where: { patentId: pvData.patent_id },
+                  data: {
+                    title: pvData.patent_title || '',
+                    abstract: pvData.patent_abstract || null,
+                    grantDate,
+                    filingDate,
+                    assignee: assigneeOrg,
+                    inventors,
+                    forwardCitations,
+                    remainingYears,
+                    isExpired,
+                    baseScore,
+                    primarySector,
+                    superSector,
+                    primaryCpc,
+                  },
+                });
+
+                for (const code of cpcCodes) {
+                  await prisma.patentCpc.upsert({
+                    where: { patentId_cpcCode: { patentId: pvData.patent_id, cpcCode: code } },
+                    create: { patentId: pvData.patent_id, cpcCode: code },
+                    update: {},
+                  }).catch(() => {});
+                }
+              } catch (err) {
+                console.error(`[CreateFromPatents] Failed to enrich patent ${pvData.patent_id}:`, err);
+              }
+            }
+          } catch (err) {
+            console.error(`[CreateFromPatents] Batch fetch failed:`, err);
+          }
+
+          // Rate limiting between batches
+          if (i + batchSize < allPatentIds.length) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+        }
+
+        // Run sector assignment as safety net
+        import('../services/sector-assignment-service.js').then(({ reassignPortfolioPatents }) =>
+          reassignPortfolioPatents({ portfolioId: portfolio.id })
+        ).then((result) => {
+          console.log(`[CreateFromPatents] Auto-sector assignment: ${result.assigned} assigned, ${result.noMatch} unmatched`);
+        }).catch(err =>
+          console.error('[CreateFromPatents] Sector-assignment failed:', err)
+        );
+      } catch (err) {
+        console.error('[CreateFromPatents] Enrichment failed:', err);
+      }
+    }
 
     res.status(201).json({
       portfolio: { id: portfolio.id, name: portfolio.name, displayName: portfolio.displayName },
@@ -497,10 +581,17 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     const seenPatentIds = new Set<string>();
 
     const patentFields = [
-      'patent_id', 'patent_title', 'patent_date', 'patent_type',
+      'patent_id', 'patent_title', 'patent_abstract', 'patent_date', 'patent_type',
+      'patent_num_times_cited_by_us_patents',
       'assignees.assignee_organization',
+      'inventors.inventor_name_first', 'inventors.inventor_name_last',
       'cpc_current.cpc_group_id', 'cpc_current.cpc_subgroup_id',
+      'application.filing_date',
     ];
+
+    // Import utilities for computing derived fields inline
+    const { calculateRemainingYears, calculateBaseScore } = await import('../services/patent-hydration-service.js');
+    const { getPrimarySectorAsync, getSuperSectorAsync } = await import('../utils/sector-mapper.js');
 
     for (const affiliate of portfolio.company.affiliates) {
       for (const pat of affiliate.patterns) {
@@ -532,23 +623,49 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
               seenPatentIds.add(patentId);
 
               try {
-                // Upsert Patent row with basic data
-                await prisma.patent.upsert({
-                  where: { patentId },
-                  create: {
-                    patentId,
-                    title: p.patent_title || '',
-                    grantDate: p.patent_date || null,
-                    assignee: p.assignees?.[0]?.assignee_organization || '',
-                    affiliate: affiliate.name,
-                  },
-                  update: {},  // Don't overwrite if already exists with richer data
-                });
-
-                // Upsert CPC codes from search results
+                // Compute all derived fields from search data
+                const assigneeOrg = p.assignees?.[0]?.assignee_organization || '';
+                const inventors = (p.inventors || []).map(
+                  (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
+                ).filter(Boolean);
                 const cpcCodes = (p.cpc_current || p.cpcs || [])
                   .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
                   .filter(Boolean);
+                const filingDate = p.application?.[0]?.filing_date || null;
+                const grantDate = p.patent_date || null;
+                const forwardCitations = p.patent_num_times_cited_by_us_patents || 0;
+                const dateForExpiry = filingDate || grantDate;
+                const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
+                const primaryCpc = cpcCodes[0] || null;
+                const primarySector = await getPrimarySectorAsync(cpcCodes, p.patent_title, p.patent_abstract) || null;
+                const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
+                const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
+
+                const patentData = {
+                  title: p.patent_title || '',
+                  abstract: p.patent_abstract || null,
+                  grantDate,
+                  filingDate,
+                  assignee: assigneeOrg,
+                  affiliate: affiliate.name,
+                  inventors,
+                  forwardCitations,
+                  remainingYears,
+                  isExpired,
+                  baseScore,
+                  primarySector,
+                  superSector,
+                  primaryCpc,
+                };
+
+                // Upsert Patent row with full data
+                await prisma.patent.upsert({
+                  where: { patentId },
+                  create: { patentId, ...patentData },
+                  update: patentData,
+                });
+
+                // Upsert CPC codes from search results
                 for (const code of cpcCodes) {
                   await prisma.patentCpc.upsert({
                     where: { patentId_cpcCode: { patentId, cpcCode: code } },
@@ -589,23 +706,15 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     const patentCount = await prisma.portfolioPatent.count({ where: { portfolioId } });
     await prisma.portfolio.update({ where: { id: portfolioId }, data: { patentCount } });
 
-    // Background-hydrate new patents to fill abstract, filing date, forward citations, etc.
-    // Then auto-assign sectors once hydration completes (needs title/abstract for keyword rules).
+    // Sectors are computed inline during import. Run reassignment as safety net
+    // to catch any patents that may have been missed or need rule-based overrides.
     if (newPatentIds.length > 0) {
-      import('../services/patent-hydration-service.js').then(({ hydratePatents }) =>
-        hydratePatents(newPatentIds, { companyId: portfolio.companyId })
-          .then(() => {
-            // Auto-assign sectors after hydration completes
-            return import('../services/sector-assignment-service.js').then(({ reassignPortfolioPatents }) =>
-              reassignPortfolioPatents({ portfolioId })
-            );
-          })
-          .then((result) => {
-            console.log(`[Import] Auto-sector assignment: ${result.assigned} assigned, ${result.noMatch} unmatched`);
-          })
-          .catch(err =>
-            console.error('[Import] Background hydration/sector-assignment failed:', err)
-          )
+      import('../services/sector-assignment-service.js').then(({ reassignPortfolioPatents }) =>
+        reassignPortfolioPatents({ portfolioId })
+      ).then((result) => {
+        console.log(`[Import] Auto-sector assignment: ${result.assigned} assigned, ${result.noMatch} unmatched`);
+      }).catch(err =>
+        console.error('[Import] Background sector-assignment failed:', err)
       );
     }
 

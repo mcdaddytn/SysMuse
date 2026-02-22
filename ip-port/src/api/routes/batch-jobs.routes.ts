@@ -492,7 +492,9 @@ async function analyzeGaps(
     const ids = patents.map(p => p.patentId);
 
     // LLM, prosecution, and XML gaps come from Postgres flags
-    const llmGapIds = patents.filter(p => !p.hasLlmData).map(p => p.patentId);
+    // LLM gap: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
+    const llmEligible = patents.filter(p => !(p.quarantine as any)?.llm);
+    const llmGapIds = llmEligible.filter(p => !p.hasLlmData).map(p => p.patentId);
     const prosGapIds = patents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
     // XML gap: use quarantine to exclude ineligible patents
     const xmlEligible = patents.filter(p => !(p.quarantine as any)?.xml);
@@ -524,10 +526,11 @@ async function analyzeGaps(
     const quarantineCounts = {
       total: patents.filter(p => p.isQuarantined).length,
       xml: patents.filter(p => (p.quarantine as any)?.xml).length,
+      llm: patents.filter(p => (p.quarantine as any)?.llm).length,
     };
 
     return {
-      llm: { total: ids.length, gap: llmGapIds.length, ids: llmGapIds },
+      llm: { total: llmEligible.length, gap: llmGapIds.length, ids: llmGapIds },
       prosecution: { total: ids.length, gap: prosGapIds.length, ids: prosGapIds },
       ipr: { total: ids.length, gap: iprGapIds.length, ids: iprGapIds },
       family: { total: ids.length, gap: familyGapIds.length, ids: familyGapIds },
@@ -834,21 +837,26 @@ router.post('/', async (req: Request, res: Response) => {
     // For super-sector/sector, topN limits analysis to top N patents by score
     const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
 
-    // Claims-gate: when useClaims=true, filter LLM gap to only patents WITH XML data
-    // (instead of rejecting the whole job, run on the subset that has claims available)
+    // Claims-gate: always filter LLM gap to only patents WITH XML data
+    // Claims are now always included in LLM context (independent claims by default)
     let claimsSkipped = 0;
-    if (useClaims && selectedTypes.includes('llm')) {
+    if (selectedTypes.includes('llm')) {
       const llmGapIds = gaps.llm.ids;
-      const xmlGapIdSet = new Set(gaps.xml.ids);
-      const withXml = llmGapIds.filter(id => !xmlGapIdSet.has(id));
+      // Find which LLM gap patents actually have XML data (claims available)
+      const patentsWithXml = await prisma.patent.findMany({
+        where: { patentId: { in: llmGapIds }, hasXmlData: true },
+        select: { patentId: true },
+      });
+      const withXmlSet = new Set(patentsWithXml.map(p => p.patentId));
+      const withXml = llmGapIds.filter(id => withXmlSet.has(id));
       claimsSkipped = llmGapIds.length - withXml.length;
 
       if (withXml.length === 0 && claimsSkipped > 0) {
         return res.status(400).json({
           error: 'claims_gate',
-          message: `Cannot run LLM scoring with claims: all ${claimsSkipped} patents are missing XML data. Extract XMLs first or submit without useClaims.`,
+          message: `Cannot run LLM scoring: all ${claimsSkipped} patents are missing XML data (claims required). Extract XMLs first.`,
           xmlGap: { total: gaps.xml.total, missing: gaps.xml.gap },
-          suggestion: 'Submit XML extraction jobs first, then resubmit LLM jobs with claims.',
+          suggestion: 'Submit XML extraction jobs first, then resubmit LLM jobs.',
         });
       }
 
@@ -1208,6 +1216,8 @@ router.post('/auto-quarantine', async (req: Request, res: Response) => {
       select: {
         patentId: true,
         grantDate: true,
+        abstract: true,
+        primarySector: true,
         hasXmlData: true,
         isQuarantined: true,
         quarantine: true,
@@ -1220,6 +1230,8 @@ router.post('/auto-quarantine', async (req: Request, res: Response) => {
       const existing = (p.quarantine as Record<string, string>) || {};
       const newQ = { ...existing };
       const reasons: string[] = [];
+
+      // ── XML quarantine rules ──
 
       // Design patent (D-prefix)
       if (p.patentId.startsWith('D') && !existing.xml) {
@@ -1246,6 +1258,19 @@ router.post('/auto-quarantine', async (req: Request, res: Response) => {
       else if (portfolioId && !p.hasXmlData && p.grantDate && p.grantDate >= '2005-01-01' && p.grantDate < '2024-01-01' && !existing.xml) {
         newQ.xml = 'extraction-failed';
         reasons.push('extraction-failed');
+      }
+
+      // ── LLM readiness quarantine rules ──
+
+      // No abstract available (patent not hydrated from PatentsView)
+      if (!p.abstract && !existing.llm) {
+        newQ.llm = 'no-abstract';
+        reasons.push('no-abstract');
+      }
+      // No sector assigned (can't select scoring template)
+      else if (!p.primarySector && !existing.llm) {
+        newQ.llm = 'no-sector';
+        reasons.push('no-sector');
       }
 
       if (reasons.length > 0) {

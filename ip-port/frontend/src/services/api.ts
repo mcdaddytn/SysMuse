@@ -159,7 +159,7 @@ export interface EnrichmentTierData {
     family: number; familyPct: number;
     xml: number; xmlPct: number;
   };
-  quarantineCounts?: { total: number; xml: number };
+  quarantineCounts?: { total: number; xml: number; llm?: number };
   topAffiliates: Array<{ name: string; count: number; pct: number }>;
   topSuperSectors: Array<{ name: string; count: number; pct: number }>;
 }
@@ -168,7 +168,7 @@ export interface EnrichmentSummary {
   totalPatents: number;
   tierSize: number;
   enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number; xml: number };
-  quarantineCounts?: { total: number; xml: number };
+  quarantineCounts?: { total: number; xml: number; llm?: number };
   tiers: EnrichmentTierData[];
 }
 
@@ -2004,7 +2004,7 @@ export interface SectorEnrichmentData {
     family: number;
     xml: number;
   };
-  quarantineCounts?: { total: number; xml: number };
+  quarantineCounts?: { total: number; xml: number; llm?: number };
 }
 
 export interface SectorEnrichmentSummary {

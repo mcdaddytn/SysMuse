@@ -40,7 +40,7 @@ export interface HydrationOptions {
 // Utility: calculate remaining years from filing date (20-year term)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function calculateRemainingYears(dateStr: string | null): { remainingYears: number; isExpired: boolean } {
+export function calculateRemainingYears(dateStr: string | null): { remainingYears: number; isExpired: boolean } {
   if (!dateStr) return { remainingYears: 0, isExpired: false };
   const filingDate = new Date(dateStr);
   if (isNaN(filingDate.getTime())) return { remainingYears: 0, isExpired: false };
@@ -79,7 +79,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function calculateBaseScore(params: {
+export function calculateBaseScore(params: {
   forwardCitations: number;
   remainingYears: number;
   grantDate: string | null;
@@ -143,10 +143,12 @@ export async function hydratePatents(
   const force = options?.force ?? false;
   const companyId = options?.companyId;
 
-  // Step 1: Query Patent table — identify bare rows
+  // Step 1: Query Patent table — identify rows needing hydration
+  // Check title, abstract, AND remainingYears: import creates rows with title
+  // but no abstract/filingDate/remainingYears, so title alone isn't sufficient.
   const existing = await prisma.patent.findMany({
     where: { patentId: { in: patentIds } },
-    select: { patentId: true, title: true },
+    select: { patentId: true, title: true, abstract: true, remainingYears: true },
   });
   const existingMap = new Map(existing.map(p => [p.patentId, p]));
 
@@ -157,8 +159,8 @@ export async function hydratePatents(
     const row = existingMap.get(id);
     if (!row) {
       toFetch.push(id); // Patent row doesn't exist at all
-    } else if (force || !row.title || row.title === '') {
-      toFetch.push(id); // Bare row
+    } else if (force || !row.title || row.title === '' || row.abstract === null || row.remainingYears === null) {
+      toFetch.push(id); // Partially hydrated or bare row
     } else {
       alreadyComplete++;
     }

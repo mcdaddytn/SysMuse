@@ -841,6 +841,23 @@ router.post('/snapshots', async (req: Request, res: Response) => {
       s.raw_metrics?.validity_score !== undefined
     ).length;
 
+    // Check for existing snapshot with same name + scoreType + portfolioId — replace it
+    let replaced = false;
+    const existingWhere: Record<string, any> = { name, scoreType };
+    if (portfolioId) {
+      existingWhere.portfolioId = portfolioId;
+    } else {
+      existingWhere.portfolioId = null;
+    }
+    const existing = await prisma.scoreSnapshot.findFirst({ where: existingWhere });
+    if (existing) {
+      // Delete old snapshot's scores first, then the snapshot itself
+      await prisma.patentScoreEntry.deleteMany({ where: { snapshotId: existing.id } });
+      await prisma.scoreSnapshot.delete({ where: { id: existing.id } });
+      replaced = true;
+      console.log(`[Snapshots] Replaced existing snapshot "${name}" (${existing.id})`);
+    }
+
     // If setActive, deactivate other snapshots of this type for the same portfolio
     if (setActive) {
       const deactivateWhere: Record<string, any> = { scoreType, isActive: true };
@@ -895,6 +912,7 @@ router.post('/snapshots', async (req: Request, res: Response) => {
       isActive: snapshot.isActive,
       patentCount: snapshot._count.scores,
       createdAt: snapshot.createdAt,
+      replaced,
     });
   } catch (error) {
     console.error('Error creating snapshot:', error);

@@ -79,14 +79,6 @@ export interface ContextOptions {
 export const DEFAULT_CONTEXT_OPTIONS: ContextOptions = {
   includeAbstract: true,
   includeLlmSummary: true,
-  includeClaims: 'none',
-  maxClaimTokens: 800,
-  maxClaims: 5,
-};
-
-export const CLAIMS_CONTEXT_OPTIONS: ContextOptions = {
-  includeAbstract: true,
-  includeLlmSummary: true,
   includeClaims: 'independent_only',
   maxClaimTokens: 800,
   maxClaims: 5,
@@ -975,12 +967,18 @@ export async function comparePatentScoring(
   const stats = getClaimsStats(patent.patent_id, xmlDir);
   const claimsTokens = stats?.estimatedTokens || 0;
 
+  // Explicit no-claims baseline for A/B comparison
+  const NO_CLAIMS_OPTIONS: ContextOptions = {
+    ...DEFAULT_CONTEXT_OPTIONS,
+    includeClaims: 'none',
+  };
+
   // Score with baseline context (no claims)
   console.log(`[Compare] Scoring ${patent.patent_id} with baseline context...`);
   const baselineScore = await scorePatent(patent, {
     model,
     saveToDb: false,  // Don't save comparison scores
-    contextOptions: DEFAULT_CONTEXT_OPTIONS
+    contextOptions: NO_CLAIMS_OPTIONS
   });
 
   // Score with claims context
@@ -988,7 +986,7 @@ export async function comparePatentScoring(
   const claimsScore = await scorePatent(patent, {
     model,
     saveToDb: false,
-    contextOptions: CLAIMS_CONTEXT_OPTIONS
+    contextOptions: DEFAULT_CONTEXT_OPTIONS
   });
 
   // Calculate deltas

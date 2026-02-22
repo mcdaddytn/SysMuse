@@ -530,7 +530,9 @@ async function saveScores() {
 
     $q.notify({
       type: 'positive',
-      message: `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
+      message: snapshot.replaced
+        ? `Replaced "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`
+        : `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
       caption: setAsActive.value ? 'Set as active V3 scores' : undefined,
     });
 

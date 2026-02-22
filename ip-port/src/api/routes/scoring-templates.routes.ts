@@ -42,7 +42,6 @@ import {
   cancelBatch,
   refreshAllBatchStatuses,
   compareModels,
-  CLAIMS_CONTEXT_OPTIONS,
   DEFAULT_CONTEXT_OPTIONS
 } from '../services/llm-scoring-service.js';
 import { getClaimsStats, extractClaimsText } from '../services/patent-xml-parser-service.js';
@@ -627,12 +626,9 @@ router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response)
     const { sectorName } = req.params;
     const { limit, model, concurrency, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
 
-    const contextOptions = useClaims === 'true' ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
+    const contextOptions = DEFAULT_CONTEXT_OPTIONS;
 
-    console.log(`[LLM Scoring] Starting sector scoring: ${sectorName}`);
-    if (useClaims === 'true') {
-      console.log(`[LLM Scoring] CLAIMS CONTEXT ENABLED - expect ~1.6x token usage`);
-    }
+    console.log(`[LLM Scoring] Starting sector scoring: ${sectorName} (claims: ${contextOptions.includeClaims})`);
     if (rescore === 'true') {
       console.log(`[LLM Scoring] RESCORE MODE - will overwrite existing scores`);
     }
@@ -1097,9 +1093,9 @@ router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Res
     const { limit, model, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
     const { portfolioId } = req.body || {};
 
-    const contextOptions = useClaims === 'true' ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
+    const contextOptions = DEFAULT_CONTEXT_OPTIONS;
 
-    console.log(`[Batch] Submitting batch scoring for: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''}`);
+    console.log(`[Batch] Submitting batch scoring for: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''} (claims: ${contextOptions.includeClaims})`);
 
     const v2Weights = prioritizeBy === 'v2' ? {
       citation: v2Citation ? parseInt(v2Citation as string) : 50,

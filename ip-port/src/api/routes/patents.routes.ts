@@ -695,7 +695,10 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       const cc = tierPatents.map(p => p.competitor_citations ?? 0);
 
       // Use Postgres flags for LLM/prosecution/XML, file cache for IPR/family
-      const llmCount = tierPatents.filter(p => p.has_llm_data).length;
+      // LLM: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
+      const llmEligible = tierPatents.filter(p => !(p.quarantine as any)?.llm);
+      const llmCount = llmEligible.filter(p => p.has_llm_data).length;
+      const llmDenominator = llmEligible.length || 1;
       const prosCount = tierPatents.filter(p => p.has_prosecution_data).length;
       const iprCount = ids.filter(id => iprSet.has(id)).length;
       const familyCount = ids.filter(id => familySet.has(id)).length;
@@ -706,6 +709,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       const tierQuarantineCounts = {
         total: tierPatents.filter(p => p.is_quarantined).length,
         xml: tierPatents.filter(p => (p.quarantine as any)?.xml).length,
+        llm: tierPatents.filter(p => (p.quarantine as any)?.llm).length,
       };
 
       // Affiliate breakdown
@@ -756,7 +760,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
         },
         enrichment: {
           llm: llmCount,
-          llmPct: Math.round(llmCount / tierPatents.length * 1000) / 10,
+          llmPct: Math.round(llmCount / llmDenominator * 1000) / 10,
           prosecution: prosCount,
           prosecutionPct: Math.round(prosCount / tierPatents.length * 1000) / 10,
           ipr: iprCount,
@@ -774,7 +778,8 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
 
     // Count totals scoped to the patent list (not global cache sets)
     const allIds = sorted.map(p => p.patent_id);
-    const llmTotal = patents.filter(p => p.has_llm_data).length;
+    const llmEligibleAll = patents.filter(p => !(p.quarantine as any)?.llm);
+    const llmTotal = llmEligibleAll.filter(p => p.has_llm_data).length;
     const prosTotal = patents.filter(p => p.has_prosecution_data).length;
     const iprTotal = allIds.filter(id => iprSet.has(id)).length;
     const familyTotal = allIds.filter(id => familySet.has(id)).length;
@@ -783,6 +788,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
     const totalQuarantineCounts = {
       total: patents.filter(p => p.is_quarantined).length,
       xml: patents.filter(p => (p.quarantine as any)?.xml).length,
+      llm: patents.filter(p => (p.quarantine as any)?.llm).length,
     };
 
     res.json({
@@ -845,7 +851,10 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const ids = top.map(p => p.patent_id);
 
         // Use Postgres flags for LLM/prosecution/XML, file cache for IPR/family
-        const llmCount = top.filter(p => p.has_llm_data).length;
+        // LLM: use quarantine to exclude LLM-ineligible patents
+        const llmEligible = top.filter(p => !(p.quarantine as any)?.llm);
+        const llmCount = llmEligible.filter(p => p.has_llm_data).length;
+        const llmDenominator = llmEligible.length || 1;
         const prosCount = top.filter(p => p.has_prosecution_data).length;
         const iprCount = ids.filter(id => iprSet.has(id)).length;
         const familyCount = ids.filter(id => familySet.has(id)).length;
@@ -858,7 +867,7 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const scoreMax = top[0]?.score ?? 0;
 
         // Gaps (patents needing enrichment)
-        const llmGap = top.filter(p => !p.has_llm_data).length;
+        const llmGap = llmEligible.filter(p => !p.has_llm_data).length;
         const prosGap = top.filter(p => !p.has_prosecution_data).length;
         const iprGap = ids.filter(id => !iprSet.has(id)).length;
         const familyGap = ids.filter(id => !familySet.has(id)).length;
@@ -867,6 +876,7 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const sectorQuarantineCounts = {
           total: top.filter(p => p.is_quarantined).length,
           xml: top.filter(p => (p.quarantine as any)?.xml).length,
+          llm: top.filter(p => (p.quarantine as any)?.llm).length,
         };
 
         return {
@@ -876,7 +886,7 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
           scoreRange: `${scoreMin.toFixed(1)} – ${scoreMax.toFixed(1)}`,
           enrichment: {
             llm: llmCount,
-            llmPct: Math.round(llmCount / checked * 1000) / 10,
+            llmPct: Math.round(llmCount / llmDenominator * 1000) / 10,
             prosecution: prosCount,
             prosecutionPct: Math.round(prosCount / checked * 1000) / 10,
             ipr: iprCount,

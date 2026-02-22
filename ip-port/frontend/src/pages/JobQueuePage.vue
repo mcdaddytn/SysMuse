@@ -62,6 +62,7 @@ const selectedTopPerSector = ref(savedTopPerSector !== null ? parseInt(savedTopP
 
 watch(selectedTopPerSector, (newVal) => {
   localStorage.setItem(TOP_PER_SECTOR_KEY, String(newVal));
+  loadSectorEnrichment();
 });
 
 const topPerSectorOptions = [
@@ -1106,14 +1107,14 @@ onUnmounted(() => {
                   <span class="text-caption">{{ enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals].toLocaleString() }}</span>
                 </div>
                 <q-linear-progress
-                  :value="effectiveBarValue(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null)"
-                  :color="coverageColor(effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null))"
+                  :value="effectiveBarValue(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], key === 'xml' ? (enrichmentData.totalPatents - (enrichmentData.quarantineCounts?.xml || 0)) || 1 : enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null)"
+                  :color="coverageColor(effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], key === 'xml' ? (enrichmentData.totalPatents - (enrichmentData.quarantineCounts?.xml || 0)) || 1 : enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null))"
                   size="20px"
                   rounded
                 >
                   <div class="absolute-full flex flex-center">
                     <span class="text-caption text-white text-weight-bold">
-                      {{ effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null) }}%
+                      {{ effectiveBarPct(enrichmentData.enrichmentTotals[key as keyof typeof enrichmentData.enrichmentTotals], key === 'xml' ? (enrichmentData.totalPatents - (enrichmentData.quarantineCounts?.xml || 0)) || 1 : enrichmentData.totalPatents, activeJobsByCoverage.get(key) || null) }}%
                       <template v-if="activeJobsByCoverage.get(key)?.total"> ({{ activeJobsByCoverage.get(key)!.completed.toLocaleString() }}/{{ activeJobsByCoverage.get(key)!.total.toLocaleString() }})</template>
                     </span>
                   </div>
@@ -1193,8 +1194,8 @@ onUnmounted(() => {
                       <td class="metric-col text-weight-bold">USPTO Bulk</td>
                       <td v-for="(tier, idx) in enrichmentData.tiers" :key="tier.tierLabel + '-xml'">
                         <div class="enrichment-cell">
-                          <q-linear-progress :value="effectiveBarValue(tier.enrichment.xml, tier.count, tierActiveProgress(idx, 'xml'))" :color="coverageColor(effectiveBarPct(tier.enrichment.xml, tier.count, tierActiveProgress(idx, 'xml')))" size="14px" rounded class="q-mb-xs" />
-                          <span class="text-caption">{{ effectiveBarPct(tier.enrichment.xml, tier.count, tierActiveProgress(idx, 'xml')) }}%</span>
+                          <q-linear-progress :value="effectiveBarValue(tier.enrichment.xml, (tier.count - (tier.quarantineCounts?.xml || 0)) || 1, tierActiveProgress(idx, 'xml'))" :color="coverageColor(effectiveBarPct(tier.enrichment.xml, (tier.count - (tier.quarantineCounts?.xml || 0)) || 1, tierActiveProgress(idx, 'xml')))" size="14px" rounded class="q-mb-xs" />
+                          <span class="text-caption">{{ effectiveBarPct(tier.enrichment.xml, (tier.count - (tier.quarantineCounts?.xml || 0)) || 1, tierActiveProgress(idx, 'xml')) }}%</span>
                           <span v-if="tierActiveProgress(idx, 'xml')" class="text-caption text-blue q-ml-xs">({{ tierActiveProgress(idx, 'xml')!.completed }}/{{ tierActiveProgress(idx, 'xml')!.total }})</span>
                           <q-badge v-if="tier.quarantineCounts?.xml" color="blue-grey" class="q-ml-xs" dense>
                             {{ tier.quarantineCounts.xml }} quarantined
@@ -1318,8 +1319,8 @@ onUnmounted(() => {
                 <template v-slot:body-cell-llm="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.llm, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.llm, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null))" size="12px" rounded />
-                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.llm, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null) }}%<span v-if="props.row.gaps.llm > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('llm')" class="text-grey-6"> ({{ props.row.gaps.llm }})</span></span>
+                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.llm, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.llm, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null))" size="12px" rounded />
+                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.llm, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('llm') || null) }}%<span v-if="props.row.gaps.llm > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('llm')" class="text-grey-6"> ({{ props.row.gaps.llm }})</span></span>
                       <span v-if="activeJobsBySuperSector.get(props.row.name)?.get('llm')" class="text-caption text-blue q-ml-xs">({{ activeJobsBySuperSector.get(props.row.name)!.get('llm')!.completed }}/{{ activeJobsBySuperSector.get(props.row.name)!.get('llm')!.total }})</span>
                     </div>
                   </q-td>
@@ -1327,8 +1328,8 @@ onUnmounted(() => {
                 <template v-slot:body-cell-pros="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.prosecution, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('prosecution') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.prosecution, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('prosecution') || null))" size="12px" rounded />
-                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.prosecution, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('prosecution') || null) }}%<span v-if="props.row.gaps.prosecution > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('prosecution')" class="text-grey-6"> ({{ props.row.gaps.prosecution }})</span></span>
+                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.prosecution, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('prosecution') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.prosecution, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('prosecution') || null))" size="12px" rounded />
+                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.prosecution, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('prosecution') || null) }}%<span v-if="props.row.gaps.prosecution > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('prosecution')" class="text-grey-6"> ({{ props.row.gaps.prosecution }})</span></span>
                       <span v-if="activeJobsBySuperSector.get(props.row.name)?.get('prosecution')" class="text-caption text-blue q-ml-xs">({{ activeJobsBySuperSector.get(props.row.name)!.get('prosecution')!.completed }}/{{ activeJobsBySuperSector.get(props.row.name)!.get('prosecution')!.total }})</span>
                     </div>
                   </q-td>
@@ -1336,8 +1337,8 @@ onUnmounted(() => {
                 <template v-slot:body-cell-ipr="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.ipr, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('ipr') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.ipr, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('ipr') || null))" size="12px" rounded />
-                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.ipr, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('ipr') || null) }}%<span v-if="props.row.gaps.ipr > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('ipr')" class="text-grey-6"> ({{ props.row.gaps.ipr }})</span></span>
+                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.ipr, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('ipr') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.ipr, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('ipr') || null))" size="12px" rounded />
+                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.ipr, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('ipr') || null) }}%<span v-if="props.row.gaps.ipr > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('ipr')" class="text-grey-6"> ({{ props.row.gaps.ipr }})</span></span>
                       <span v-if="activeJobsBySuperSector.get(props.row.name)?.get('ipr')" class="text-caption text-blue q-ml-xs">({{ activeJobsBySuperSector.get(props.row.name)!.get('ipr')!.completed }}/{{ activeJobsBySuperSector.get(props.row.name)!.get('ipr')!.total }})</span>
                     </div>
                   </q-td>
@@ -1345,8 +1346,8 @@ onUnmounted(() => {
                 <template v-slot:body-cell-family="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.family, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('family') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.family, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('family') || null))" size="12px" rounded />
-                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.family, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('family') || null) }}%<span v-if="props.row.gaps.family > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('family')" class="text-grey-6"> ({{ props.row.gaps.family }})</span></span>
+                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.family, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('family') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.family, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('family') || null))" size="12px" rounded />
+                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.family, props.row.checkedPatents, activeJobsBySuperSector.get(props.row.name)?.get('family') || null) }}%<span v-if="props.row.gaps.family > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('family')" class="text-grey-6"> ({{ props.row.gaps.family }})</span></span>
                       <span v-if="activeJobsBySuperSector.get(props.row.name)?.get('family')" class="text-caption text-blue q-ml-xs">({{ activeJobsBySuperSector.get(props.row.name)!.get('family')!.completed }}/{{ activeJobsBySuperSector.get(props.row.name)!.get('family')!.total }})</span>
                     </div>
                   </q-td>
@@ -1354,8 +1355,8 @@ onUnmounted(() => {
                 <template v-slot:body-cell-xml="props">
                   <q-td :props="props">
                     <div class="enrichment-cell-small">
-                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.xml, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('xml') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.xml, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('xml') || null))" size="12px" rounded />
-                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.xml, props.row.totalPatents, activeJobsBySuperSector.get(props.row.name)?.get('xml') || null) }}%<span v-if="props.row.gaps.xml > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('xml')" class="text-grey-6"> ({{ props.row.gaps.xml }})</span></span>
+                      <q-linear-progress :value="effectiveBarValue(props.row.enrichment.xml, (props.row.checkedPatents - (props.row.quarantineCounts?.xml || 0)) || 1, activeJobsBySuperSector.get(props.row.name)?.get('xml') || null)" :color="coverageColor(effectiveBarPct(props.row.enrichment.xml, (props.row.checkedPatents - (props.row.quarantineCounts?.xml || 0)) || 1, activeJobsBySuperSector.get(props.row.name)?.get('xml') || null))" size="12px" rounded />
+                      <span class="text-caption">{{ effectiveBarPct(props.row.enrichment.xml, (props.row.checkedPatents - (props.row.quarantineCounts?.xml || 0)) || 1, activeJobsBySuperSector.get(props.row.name)?.get('xml') || null) }}%<span v-if="props.row.gaps.xml > 0 && !activeJobsBySuperSector.get(props.row.name)?.get('xml')" class="text-grey-6"> ({{ props.row.gaps.xml }})</span></span>
                       <span v-if="activeJobsBySuperSector.get(props.row.name)?.get('xml')" class="text-caption text-blue q-ml-xs">({{ activeJobsBySuperSector.get(props.row.name)!.get('xml')!.completed }}/{{ activeJobsBySuperSector.get(props.row.name)!.get('xml')!.total }})</span>
                     </div>
                   </q-td>

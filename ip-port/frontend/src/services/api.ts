@@ -2004,6 +2004,7 @@ export interface SectorEnrichmentData {
     family: number;
     xml: number;
   };
+  quarantineCounts?: { total: number; xml: number };
 }
 
 export interface SectorEnrichmentSummary {

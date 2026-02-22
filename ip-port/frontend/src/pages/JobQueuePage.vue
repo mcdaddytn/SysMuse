@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onUnmounted, computed } from 'vue';
+import { Notify } from 'quasar';
 import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { usePortfolioStore } from '@/stores/portfolio';
 import { useSuperSectors } from '@/composables/useSuperSectors';
@@ -223,7 +224,7 @@ const newJobTargetType = ref<TargetType>('tier');
 const newJobTargetValue = ref('6000');
 const newJobCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ipr', 'family', 'xml']);
 const newJobMaxHours = ref(4);
-const newJobUseClaims = ref(false);
+// Claims are always included in LLM scoring (independent claims by default)
 const newJobModel = ref<string | null>(null);
 const newJobBatchMode = ref(true);
 const startingJob = ref(false);
@@ -241,9 +242,7 @@ const llmModelOptions = [
   { value: 'claude-haiku-3-5-sonnet-20241022', label: 'Haiku 3.5', hint: 'Fastest, cheapest' },
 ];
 
-// Claims-gate dialog
-const showClaimsGateDialog = ref(false);
-const claimsGateInfo = ref<{ total: number; missing: number; suggestion: string } | null>(null);
+// (Claims gate handled via soft-skip on backend — no dialog needed)
 
 const targetTypeOptions = [
   { value: 'tier', label: 'Tier (Top N patents)' },
@@ -293,60 +292,36 @@ async function startNewJob() {
 async function doStartNewJob() {
   startingJob.value = true;
   try {
-    await batchJobsApi.startJobs({
+    const result = await batchJobsApi.startJobs({
       targetType: newJobTargetType.value,
       targetValue: newJobTargetValue.value,
       coverageTypes: newJobCoverageTypes.value,
       maxHours: newJobMaxHours.value,
       portfolioId: portfolioStore.selectedPortfolioId,
-      useClaims: newJobUseClaims.value,
       ...(newJobModel.value ? { model: newJobModel.value } : {}),
       ...(newJobCoverageTypes.value.includes('llm') ? { batchMode: newJobBatchMode.value } : {}),
-    });
+    }) as any;
     showNewJobDialog.value = false;
     await loadBatchJobs();
-  } catch (err: unknown) {
-    const error = err as { response?: { data?: { error?: string; xmlGap?: { total: number; missing: number }; suggestion?: string } } };
-    if (error.response?.data?.error === 'claims_gate') {
-      claimsGateInfo.value = {
-        total: error.response.data.xmlGap?.total ?? 0,
-        missing: error.response.data.xmlGap?.missing ?? 0,
-        suggestion: error.response.data.suggestion ?? '',
-      };
-      showClaimsGateDialog.value = true;
-    } else {
-      alert(error.response?.data?.error || 'Failed to start jobs');
+    // Check if LLM was deferred (no XML data available yet)
+    if (result?.llmDeferred) {
+      Notify.create({
+        type: 'warning',
+        message: `LLM scoring deferred — ${result.llmDeferredCount} patents awaiting XML extraction`,
+        caption: 'Resubmit LLM after XML extraction completes',
+        timeout: 6000,
+      });
     }
-  } finally {
-    startingJob.value = false;
-  }
-}
-
-async function submitXmlExtractionFirst() {
-  showClaimsGateDialog.value = false;
-  startingJob.value = true;
-  try {
-    await batchJobsApi.startJobs({
-      targetType: newJobTargetType.value,
-      targetValue: newJobTargetValue.value,
-      coverageTypes: ['xml'],
-      portfolioId: portfolioStore.selectedPortfolioId,
-    });
-    showNewJobDialog.value = false;
-    activeTab.value = 'jobs';
-    await loadBatchJobs();
   } catch (err: unknown) {
-    const error = err as { response?: { data?: { error?: string } } };
-    alert(error.response?.data?.error || 'Failed to start USPTO bulk extraction');
+    const error = err as { response?: { data?: { error?: string; message?: string } } };
+    Notify.create({
+      type: 'negative',
+      message: error.response?.data?.message || error.response?.data?.error || 'Failed to start jobs',
+      timeout: 5000,
+    });
   } finally {
     startingJob.value = false;
   }
-}
-
-async function submitWithoutClaims() {
-  showClaimsGateDialog.value = false;
-  newJobUseClaims.value = false;
-  await startNewJob();
 }
 
 // ─── Contextual Enrich Dialogs ───────────────────────────────────────────────
@@ -393,20 +368,32 @@ async function startEnrichFromDialog() {
 async function doStartEnrichFromDialog() {
   enrichDialogStarting.value = true;
   try {
-    await batchJobsApi.startJobs({
+    const result = await batchJobsApi.startJobs({
       targetType: enrichDialogTargetType.value,
       targetValue: enrichDialogTargetValue.value,
       coverageTypes: enrichDialogCoverageTypes.value,
       maxHours: 4,
       topN: enrichDialogTopN.value > 0 ? enrichDialogTopN.value : undefined,
       portfolioId: portfolioStore.selectedPortfolioId,
-    });
+    }) as any;
     showEnrichDialog.value = false;
     activeTab.value = 'jobs';
     await loadBatchJobs();
+    if (result?.llmDeferred) {
+      Notify.create({
+        type: 'warning',
+        message: `LLM scoring deferred — ${result.llmDeferredCount} patents awaiting XML extraction`,
+        caption: 'Resubmit LLM after XML extraction completes',
+        timeout: 6000,
+      });
+    }
   } catch (err: unknown) {
-    const error = err as { response?: { data?: { error?: string } } };
-    alert(error.response?.data?.error || 'Failed to start enrichment');
+    const error = err as { response?: { data?: { error?: string; message?: string } } };
+    Notify.create({
+      type: 'negative',
+      message: error.response?.data?.message || error.response?.data?.error || 'Failed to start enrichment',
+      timeout: 5000,
+    });
   } finally {
     enrichDialogStarting.value = false;
   }
@@ -626,7 +613,7 @@ function getGroupLlmInfo(jobs: BatchJob[]): string | null {
   const parts: string[] = [];
   if (llmJob.model) parts.push(llmModelLabel(llmJob.model));
   if (llmJob.batchMode === false) parts.push('realtime');
-  if (llmJob.useClaims) parts.push('+claims');
+  // Claims are always included now
   return parts.length > 0 ? parts.join(', ') : null;
 }
 
@@ -1511,7 +1498,7 @@ onUnmounted(() => {
                       | <q-badge dense :color="job.model.includes('opus') ? 'deep-purple' : job.model.includes('haiku') ? 'teal' : 'blue'" text-color="white" class="text-caption">{{ llmModelLabel(job.model) }}</q-badge>
                     </span>
                     <span v-if="job.batchMode === false" class="q-ml-sm">| <q-badge dense color="orange" text-color="white" class="text-caption">realtime</q-badge></span>
-                    <span v-if="job.useClaims" class="q-ml-sm">| +claims</span>
+                    <!-- Claims are always included in LLM scoring -->
                     <span v-if="job.status === 'running' && job.actualRate" class="q-ml-sm">| {{ job.actualRate.toLocaleString() }}/hr</span>
                     <span v-else-if="job.status === 'running' && job.estimatedRate" class="q-ml-sm">| ~{{ job.estimatedRate.toLocaleString() }}/hr</span>
                     <span v-if="job.status !== 'running' && job.actualRate" class="q-ml-sm">| {{ job.actualRate.toLocaleString() }}/hr</span>
@@ -1881,15 +1868,6 @@ onUnmounted(() => {
 
           <!-- LLM-specific options (shown when LLM is selected) -->
           <template v-if="newJobCoverageTypes.includes('llm')">
-            <q-toggle
-              v-model="newJobUseClaims"
-              label="Use Claims for LLM Scoring"
-              color="blue"
-              class="q-mt-sm"
-            >
-              <q-tooltip>When enabled, LLM scoring will include patent claims from USPTO bulk data. Requires bulk data extraction to be complete.</q-tooltip>
-            </q-toggle>
-
             <q-select
               v-model="newJobModel"
               :options="llmModelOptions"
@@ -2010,37 +1988,6 @@ onUnmounted(() => {
             :loading="enrichDialogStarting"
             :disable="enrichDialogCoverageTypes.length === 0 || enrichDialogLoading"
             @click="startEnrichFromDialog"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
-    <!-- ═══ Claims-Gate Dialog ═══ -->
-    <q-dialog v-model="showClaimsGateDialog">
-      <q-card style="min-width: 400px">
-        <q-card-section>
-          <div class="text-h6 text-negative">USPTO Bulk Data Required</div>
-        </q-card-section>
-        <q-card-section v-if="claimsGateInfo">
-          <p>
-            <strong>{{ claimsGateInfo.missing }}</strong> of {{ claimsGateInfo.total }} patents are missing USPTO bulk data.
-            LLM scoring with claims requires bulk data extraction to be complete.
-          </p>
-          <p class="text-grey-7">{{ claimsGateInfo.suggestion }}</p>
-        </q-card-section>
-        <q-card-actions align="right" class="q-gutter-sm">
-          <q-btn flat label="Cancel" v-close-popup />
-          <q-btn
-            outline
-            color="grey-7"
-            label="Score Without Claims"
-            @click="submitWithoutClaims"
-          />
-          <q-btn
-            color="positive"
-            label="Extract USPTO Data First"
-            icon="description"
-            @click="submitXmlExtractionFirst"
           />
         </q-card-actions>
       </q-card>

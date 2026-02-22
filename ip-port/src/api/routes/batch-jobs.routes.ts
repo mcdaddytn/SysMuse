@@ -837,12 +837,13 @@ router.post('/', async (req: Request, res: Response) => {
     // For super-sector/sector, topN limits analysis to top N patents by score
     const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
 
-    // Claims-gate: always filter LLM gap to only patents WITH XML data
-    // Claims are now always included in LLM context (independent claims by default)
+    // Claims-gate: filter LLM gap to only patents WITH XML data (claims available)
+    // If no LLM-eligible patents have XML yet, skip LLM silently — XML extraction
+    // will run in parallel and LLM can be resubmitted once XML data is available.
     let claimsSkipped = 0;
+    let llmDeferred = false;
     if (selectedTypes.includes('llm')) {
       const llmGapIds = gaps.llm.ids;
-      // Find which LLM gap patents actually have XML data (claims available)
       const patentsWithXml = await prisma.patent.findMany({
         where: { patentId: { in: llmGapIds }, hasXmlData: true },
         select: { patentId: true },
@@ -852,19 +853,27 @@ router.post('/', async (req: Request, res: Response) => {
       claimsSkipped = llmGapIds.length - withXml.length;
 
       if (withXml.length === 0 && claimsSkipped > 0) {
-        return res.status(400).json({
-          error: 'claims_gate',
-          message: `Cannot run LLM scoring: all ${claimsSkipped} patents are missing XML data (claims required). Extract XMLs first.`,
-          xmlGap: { total: gaps.xml.total, missing: gaps.xml.gap },
-          suggestion: 'Submit XML extraction jobs first, then resubmit LLM jobs.',
-        });
-      }
-
-      // Update the LLM gap to only include patents with XML
-      gaps.llm.ids = withXml;
-      gaps.llm.gap = withXml.length;
-      if (claimsSkipped > 0) {
-        console.log(`[BatchJobs] Claims-gate: running LLM on ${withXml.length} patents with XML, skipping ${claimsSkipped} without XML`);
+        // No patents have XML yet — skip LLM, let other job types proceed
+        console.log(`[BatchJobs] Claims-gate: deferring LLM — all ${claimsSkipped} patents missing XML. Other job types will proceed.`);
+        const llmIdx = selectedTypes.indexOf('llm');
+        if (llmIdx !== -1) selectedTypes.splice(llmIdx, 1);
+        llmDeferred = true;
+        if (selectedTypes.length === 0) {
+          return res.status(200).json({
+            groupId: `group-${Date.now()}`,
+            jobs: [],
+            llmDeferred: true,
+            llmDeferredCount: claimsSkipped,
+            message: `LLM scoring deferred: all ${claimsSkipped} patents need XML extraction first.`,
+          });
+        }
+      } else {
+        // Some patents have XML — run LLM on those, skip the rest
+        gaps.llm.ids = withXml;
+        gaps.llm.gap = withXml.length;
+        if (claimsSkipped > 0) {
+          console.log(`[BatchJobs] Claims-gate: running LLM on ${withXml.length} patents with XML, skipping ${claimsSkipped} without XML`);
+        }
       }
     }
 
@@ -960,6 +969,7 @@ router.post('/', async (req: Request, res: Response) => {
         Object.entries(gaps).map(([k, v]) => [k, { total: v.total, gap: v.gap }])
       ),
       ...(claimsSkipped > 0 && { claimsSkipped }),
+      ...(llmDeferred && { llmDeferred: true, llmDeferredCount: claimsSkipped }),
     });
   } catch (error) {
     console.error('Error starting batch jobs:', error);

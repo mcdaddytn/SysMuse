@@ -3313,7 +3313,7 @@ export const companyApi = {
     companyName: string;
     existingCount: number;
   }> {
-    const { data } = await api.post(`/companies/${companyId}/discover-competitors`, { companyName }, { timeout: 120000 });
+    const { data } = await api.post(`/companies/${companyId}/discover-competitors`, { companyName }, { timeout: 300000 });
     return data;
   },
 
@@ -3372,19 +3372,19 @@ export const companyApi = {
     companyName: string;
     existingCount: number;
   }> {
-    const { data } = await api.post(`/companies/${companyId}/discover-affiliates`, { companyName }, { timeout: 120000 });
+    const { data } = await api.post(`/companies/${companyId}/discover-affiliates`, { companyName }, { timeout: 300000 });
     return data;
   },
 
   // Describe affiliates (LLM)
   async describeAffiliates(companyId: string): Promise<AffiliateDetail[]> {
-    const { data } = await api.post(`/companies/${companyId}/describe-affiliates`, {}, { timeout: 120000 });
+    const { data } = await api.post(`/companies/${companyId}/describe-affiliates`, {}, { timeout: 300000 });
     return data;
   },
 
   // Describe competitors (LLM)
   async describeCompetitors(companyId: string): Promise<CompetitorRelationship[]> {
-    const { data } = await api.post(`/companies/${companyId}/describe-competitors`, {}, { timeout: 120000 });
+    const { data } = await api.post(`/companies/${companyId}/describe-competitors`, {}, { timeout: 300000 });
     return data;
   },
 

@@ -53,6 +53,11 @@ const discoveringAffiliates = ref(false);
 const affiliateSuggestions = ref<AffiliateSuggestion[]>([]);
 const showDiscoverAffiliatesDialog = ref(false);
 
+// Bulk selection for discovery dialogs
+const selectedCompetitorIdxs = ref(new Set<number>());
+const selectedAffiliateIdxs = ref(new Set<number>());
+const acceptingBulk = ref(false);
+
 // Validate patterns
 const validating = ref(false);
 const validationResults = ref<Array<{ pattern: string; totalCount: number; filteredCount: number | null; sampleAssignees: string[] }>>([]);
@@ -330,6 +335,7 @@ async function discoverCompetitors() {
   discoverSuggestions.value = [];
   discoverSource.value = 'llm';
   discoverDataStats.value = null;
+  selectedCompetitorIdxs.value = new Set();
   try {
     const result = await companyApi.discoverCompetitors(selectedCompanyId.value);
     discoverSuggestions.value = result.suggestions;
@@ -347,6 +353,7 @@ async function discoverCompetitorsFromData() {
   discoverSuggestions.value = [];
   discoverSource.value = 'data';
   discoverDataStats.value = null;
+  selectedCompetitorIdxs.value = new Set();
 
   // Use the first portfolio
   const portfolio = companyDetail.value.portfolios[0];
@@ -498,6 +505,7 @@ async function discoverAffiliates() {
   if (!selectedCompanyId.value) return;
   discoveringAffiliates.value = true;
   affiliateSuggestions.value = [];
+  selectedAffiliateIdxs.value = new Set();
   try {
     const result = await companyApi.discoverAffiliates(selectedCompanyId.value);
     affiliateSuggestions.value = result.suggestions;
@@ -525,6 +533,63 @@ async function acceptAffiliateSuggestion(suggestion: AffiliateSuggestion) {
     await loadCompanies();
   } catch (err: unknown) {
     error.value = (err as Error).message;
+  }
+}
+
+function toggleAllCompetitors() {
+  if (selectedCompetitorIdxs.value.size === discoverSuggestions.value.length) {
+    selectedCompetitorIdxs.value = new Set();
+  } else {
+    selectedCompetitorIdxs.value = new Set(discoverSuggestions.value.map((_, i) => i));
+  }
+}
+
+function toggleAllAffiliates() {
+  if (selectedAffiliateIdxs.value.size === affiliateSuggestions.value.length) {
+    selectedAffiliateIdxs.value = new Set();
+  } else {
+    selectedAffiliateIdxs.value = new Set(affiliateSuggestions.value.map((_, i) => i));
+  }
+}
+
+function toggleCompetitorIdx(idx: number) {
+  const s = new Set(selectedCompetitorIdxs.value);
+  if (s.has(idx)) s.delete(idx); else s.add(idx);
+  selectedCompetitorIdxs.value = s;
+}
+
+function toggleAffiliateIdx(idx: number) {
+  const s = new Set(selectedAffiliateIdxs.value);
+  if (s.has(idx)) s.delete(idx); else s.add(idx);
+  selectedAffiliateIdxs.value = s;
+}
+
+async function acceptSelectedCompetitors() {
+  acceptingBulk.value = true;
+  try {
+    // Process in reverse index order to avoid index drift
+    const indices = [...selectedCompetitorIdxs.value].sort((a, b) => b - a);
+    for (const idx of indices) {
+      const s = discoverSuggestions.value[idx];
+      if (s) await acceptCompetitorSuggestion(s);
+    }
+    selectedCompetitorIdxs.value = new Set();
+  } finally {
+    acceptingBulk.value = false;
+  }
+}
+
+async function acceptSelectedAffiliates() {
+  acceptingBulk.value = true;
+  try {
+    const indices = [...selectedAffiliateIdxs.value].sort((a, b) => b - a);
+    for (const idx of indices) {
+      const s = affiliateSuggestions.value[idx];
+      if (s) await acceptAffiliateSuggestion(s);
+    }
+    selectedAffiliateIdxs.value = new Set();
+  } finally {
+    acceptingBulk.value = false;
   }
 }
 
@@ -573,10 +638,26 @@ onMounted(() => loadCompanies());
   <q-page padding>
     <div class="text-h5 q-mb-md">Company & Portfolio Admin</div>
 
+    <!-- Import success notification -->
+    <q-banner v-if="importNotification" class="bg-green-1 text-green-8 q-mb-md" rounded>
+      {{ importNotification }}
+      <template v-slot:action>
+        <q-btn flat dense label="Dismiss" @click="importNotification = null" />
+      </template>
+    </q-banner>
+
+    <!-- Error banner -->
+    <q-banner v-if="error" class="bg-red-1 text-red-8 q-mb-md" rounded>
+      {{ error }}
+      <template v-slot:action>
+        <q-btn flat dense label="Dismiss" @click="error = null" />
+      </template>
+    </q-banner>
+
     <div class="row q-col-gutter-md">
       <!-- ═══════════ LEFT PANEL: Company List ═══════════ -->
       <div class="col-12 col-md-3">
-        <q-card flat bordered>
+        <q-card flat bordered style="max-height: calc(100vh - 130px); overflow-y: auto">
           <q-card-section class="row items-center q-pb-sm">
             <div class="text-h6">Companies</div>
             <q-space />
@@ -595,6 +676,7 @@ onMounted(() => loadCompanies());
             <!-- Primary companies (have portfolios/affiliates) -->
             <q-item-label header class="text-caption text-grey-7">
               Primary ({{ primaryCompanies.length }})
+              <q-tooltip>Companies you manage with portfolios and affiliates</q-tooltip>
             </q-item-label>
             <q-list separator dense>
               <q-item
@@ -625,8 +707,9 @@ onMounted(() => loadCompanies());
             <!-- Competitor-only companies -->
             <q-item-label header class="text-caption text-grey-7">
               Competitors ({{ competitorCompanies.length }})
+              <q-tooltip>Companies added via competitor discovery relationships</q-tooltip>
             </q-item-label>
-            <q-list separator dense style="max-height: 400px; overflow-y: auto">
+            <q-list separator dense>
               <q-item
                 v-for="c in competitorCompanies"
                 :key="c.id"
@@ -646,7 +729,7 @@ onMounted(() => loadCompanies());
       </div>
 
       <!-- ═══════════ CENTER PANEL: Company Detail ═══════════ -->
-      <div class="col-12 col-md-5">
+      <div class="col-12 col-md-5" style="max-height: calc(100vh - 130px); overflow-y: auto">
         <q-card v-if="!selectedCompanyId" flat bordered>
           <q-card-section class="text-grey text-center q-py-xl">
             Select a company from the left panel
@@ -850,7 +933,7 @@ onMounted(() => loadCompanies());
       </div>
 
       <!-- ═══════════ RIGHT PANEL: Competitors ═══════════ -->
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-4" style="max-height: calc(100vh - 130px); overflow-y: auto">
         <q-card v-if="!selectedCompanyId" flat bordered>
           <q-card-section class="text-grey text-center q-py-xl">
             Select a company to view competitors
@@ -890,7 +973,7 @@ onMounted(() => loadCompanies());
             <q-spinner size="2em" />
           </q-card-section>
 
-          <q-list v-else-if="competitors.length" separator dense style="max-height: 600px; overflow-y: auto">
+          <q-list v-else-if="competitors.length" separator dense>
             <q-item v-for="r in competitors" :key="r.id">
               <q-item-section>
                 <q-item-label>
@@ -1028,8 +1111,17 @@ onMounted(() => loadCompanies());
         </q-banner>
 
         <q-card-section>
-          <q-list v-if="discoverSuggestions.length" separator>
+          <!-- Select all / none header -->
+          <div v-if="discoverSuggestions.length" class="row items-center q-mb-sm">
+            <q-btn flat dense size="sm" :label="selectedCompetitorIdxs.size === discoverSuggestions.length ? 'Select None' : 'Select All'"
+              @click="toggleAllCompetitors()" />
+            <span class="text-caption text-grey q-ml-sm">({{ selectedCompetitorIdxs.size }} selected)</span>
+          </div>
+          <q-list v-if="discoverSuggestions.length" separator style="max-height: 60vh; overflow-y: auto">
             <q-item v-for="(s, i) in discoverSuggestions" :key="i">
+              <q-item-section side>
+                <q-checkbox :model-value="selectedCompetitorIdxs.has(i)" @update:model-value="toggleCompetitorIdx(i)" dense />
+              </q-item-section>
               <q-item-section>
                 <q-item-label>
                   {{ s.name }}
@@ -1050,15 +1142,16 @@ onMounted(() => loadCompanies());
                   Variants: {{ s.variants.join(', ') }}
                 </q-item-label>
               </q-item-section>
-              <q-item-section side>
-                <q-btn flat dense color="primary" label="Accept" @click="acceptCompetitorSuggestion(s)" />
-              </q-item-section>
             </q-item>
           </q-list>
           <div v-else class="text-grey text-center">No new competitors discovered.</div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Close" v-close-popup />
+          <q-btn v-if="selectedCompetitorIdxs.size > 0" color="primary"
+            :label="`Accept Selected (${selectedCompetitorIdxs.size})`"
+            :loading="acceptingBulk"
+            @click="acceptSelectedCompetitors()" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1070,8 +1163,17 @@ onMounted(() => loadCompanies());
           Discovered Affiliates for "{{ selectedCompany?.displayName }}"
         </q-card-section>
         <q-card-section>
-          <q-list v-if="affiliateSuggestions.length" separator>
+          <!-- Select all / none header -->
+          <div v-if="affiliateSuggestions.length" class="row items-center q-mb-sm">
+            <q-btn flat dense size="sm" :label="selectedAffiliateIdxs.size === affiliateSuggestions.length ? 'Select None' : 'Select All'"
+              @click="toggleAllAffiliates()" />
+            <span class="text-caption text-grey q-ml-sm">({{ selectedAffiliateIdxs.size }} selected)</span>
+          </div>
+          <q-list v-if="affiliateSuggestions.length" separator style="max-height: 60vh; overflow-y: auto">
             <q-item v-for="(s, i) in affiliateSuggestions" :key="i" class="q-py-sm">
+              <q-item-section side>
+                <q-checkbox :model-value="selectedAffiliateIdxs.has(i)" @update:model-value="toggleAffiliateIdx(i)" dense />
+              </q-item-section>
               <q-item-section>
                 <q-item-label class="text-weight-medium">{{ s.displayName }}</q-item-label>
                 <q-item-label caption>
@@ -1081,15 +1183,16 @@ onMounted(() => loadCompanies());
                 <q-item-label v-if="s.description" caption class="text-blue-grey-6">{{ s.description }}</q-item-label>
                 <q-item-label v-if="s.notes" caption class="text-grey-6">{{ s.notes }}</q-item-label>
               </q-item-section>
-              <q-item-section side>
-                <q-btn flat dense color="primary" label="Accept" @click="acceptAffiliateSuggestion(s)" />
-              </q-item-section>
             </q-item>
           </q-list>
           <div v-else class="text-grey text-center">No new affiliates discovered.</div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Close" v-close-popup />
+          <q-btn v-if="selectedAffiliateIdxs.size > 0" color="primary"
+            :label="`Accept Selected (${selectedAffiliateIdxs.size})`"
+            :loading="acceptingBulk"
+            @click="acceptSelectedAffiliates()" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -1176,20 +1279,5 @@ onMounted(() => loadCompanies());
       </q-card>
     </q-dialog>
 
-    <!-- Import success notification -->
-    <q-banner v-if="importNotification" class="bg-green-1 text-green-8 q-mt-md" rounded>
-      {{ importNotification }}
-      <template v-slot:action>
-        <q-btn flat dense label="Dismiss" @click="importNotification = null" />
-      </template>
-    </q-banner>
-
-    <!-- Error banner -->
-    <q-banner v-if="error" class="bg-red-1 text-red-8 q-mt-md" rounded>
-      {{ error }}
-      <template v-slot:action>
-        <q-btn flat dense label="Dismiss" @click="error = null" />
-      </template>
-    </q-banner>
   </q-page>
 </template>

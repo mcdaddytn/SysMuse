@@ -13,6 +13,7 @@ import { loadAllClassifications } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
 import * as patentDataService from '../services/patent-data-service.js';
+import { syncEnrichmentFlags } from './batch-jobs.routes.js';
 import type { PatentFilters, PaginationOptions } from '../services/patent-data-service.js';
 import { getActiveSnapshotScores } from './scores.routes.js';
 
@@ -625,6 +626,12 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
   try {
     const tierSize = Math.min(10000, Math.max(500, parseInt(_req.query.tierSize as string) || 5000));
     const portfolioId = _req.query.portfolioId as string | undefined;
+    const forceRefresh = _req.query.forceRefresh === 'true';
+
+    // When forceRefresh, sync DB flags from file cache first
+    if (forceRefresh) {
+      await syncEnrichmentFlags();
+    }
 
     const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
 
@@ -639,7 +646,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
     });
 
     // Load enrichment cache sets for IPR/family (not in Postgres yet)
-    const { iprSet, familySet } = getEnrichmentCacheSets();
+    const { iprSet, familySet } = getEnrichmentCacheSets(forceRefresh);
 
     // Helper functions
     function median(values: number[]): number {
@@ -807,9 +814,14 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
     const rawTopPerSector = parseInt(_req.query.topPerSector as string);
     const topPerSector = rawTopPerSector === 0 ? Infinity : Math.max(100, rawTopPerSector || 500);
     const portfolioId = _req.query.portfolioId as string | undefined;
+    const forceRefresh = _req.query.forceRefresh === 'true';
+
+    if (forceRefresh) {
+      await syncEnrichmentFlags();
+    }
 
     const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
-    const { iprSet, familySet } = getEnrichmentCacheSets();
+    const { iprSet, familySet } = getEnrichmentCacheSets(forceRefresh);
 
     // Group by super_sector
     const bySector: Record<string, typeof patents> = {};
@@ -822,8 +834,13 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
     // Build sector summaries
     const sectors = Object.entries(bySector)
       .map(([name, sectorPatents]) => {
-        // Sort by score descending, take top N (or all if topPerSector is Infinity)
-        const sorted = [...sectorPatents].sort((a, b) => b.score - a.score);
+        // Sort by score descending, then grant date descending (matches analyzeGaps order)
+        const sorted = [...sectorPatents].sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          const aDate = a.grant_date || '';
+          const bDate = b.grant_date || '';
+          return bDate.localeCompare(aDate);
+        });
         const top = topPerSector === Infinity ? sorted : sorted.slice(0, topPerSector);
         const ids = top.map(p => p.patent_id);
 

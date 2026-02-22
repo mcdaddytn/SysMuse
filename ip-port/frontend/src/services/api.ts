@@ -99,9 +99,10 @@ export const patentApi = {
     return data;
   },
 
-  async getEnrichmentSummary(tierSize = 5000, portfolioId?: string | null): Promise<EnrichmentSummary> {
+  async getEnrichmentSummary(tierSize = 5000, portfolioId?: string | null, forceRefresh = false): Promise<EnrichmentSummary> {
     const params: Record<string, unknown> = { tierSize };
     if (portfolioId) params.portfolioId = portfolioId;
+    if (forceRefresh) params.forceRefresh = 'true';
     const { data } = await api.get('/patents/enrichment-summary', { params });
     return data;
   },
@@ -2066,9 +2067,10 @@ export interface StartJobsResponse {
 
 // Sector Enrichment API (extension of patentApi)
 export const enrichmentApi = {
-  async getSectorEnrichment(topPerSector = 500, portfolioId?: string | null): Promise<SectorEnrichmentSummary> {
+  async getSectorEnrichment(topPerSector = 500, portfolioId?: string | null, forceRefresh = false): Promise<SectorEnrichmentSummary> {
     const params: Record<string, unknown> = { topPerSector };
     if (portfolioId) params.portfolioId = portfolioId;
+    if (forceRefresh) params.forceRefresh = 'true';
     const { data } = await api.get('/patents/sector-enrichment', { params });
     return data;
   },

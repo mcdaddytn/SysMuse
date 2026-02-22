@@ -4,6 +4,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { invalidateEnrichmentCache } from './patents.routes.js';
+
+// Export for use by enrichment endpoints that need fresh data
+export { syncEnrichmentFlags };
 import { clearScoringCache } from '../services/scoring-service.js';
 import { enrichPatentCpcBatch } from '../services/patent-xml-parser-service.js';
 

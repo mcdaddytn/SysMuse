@@ -38,11 +38,11 @@ const tierSizeOptions = [
   { value: 5000, label: '5,000' }
 ];
 
-async function loadEnrichmentSummary() {
+async function loadEnrichmentSummary(forceRefresh = false) {
   enrichmentLoading.value = true;
   enrichmentError.value = null;
   try {
-    enrichmentData.value = await patentApi.getEnrichmentSummary(selectedTierSize.value, portfolioStore.selectedPortfolioId);
+    enrichmentData.value = await patentApi.getEnrichmentSummary(selectedTierSize.value, portfolioStore.selectedPortfolioId, forceRefresh);
   } catch (err) {
     enrichmentError.value = err instanceof Error ? err.message : 'Failed to load enrichment summary';
   } finally {
@@ -82,11 +82,11 @@ const sectorScopeTooltip = `Controls how many patents are evaluated per sector.
 
 For accurate portfolio-wide coverage, use "All (Full Coverage)" or the tier-based Enrichment Overview tab.`;
 
-async function loadSectorEnrichment() {
+async function loadSectorEnrichment(forceRefresh = false) {
   sectorEnrichmentLoading.value = true;
   sectorEnrichmentError.value = null;
   try {
-    sectorEnrichmentData.value = await enrichmentApi.getSectorEnrichment(selectedTopPerSector.value, portfolioStore.selectedPortfolioId);
+    sectorEnrichmentData.value = await enrichmentApi.getSectorEnrichment(selectedTopPerSector.value, portfolioStore.selectedPortfolioId, forceRefresh);
   } catch (err) {
     sectorEnrichmentError.value = err instanceof Error ? err.message : 'Failed to load sector enrichment';
   } finally {
@@ -328,6 +328,13 @@ async function openEnrichDialog(targetType: TargetType, targetValue: string, top
   enrichDialogLoading.value = true;
   try {
     enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue, topN > 0 ? topN : undefined, portfolioStore.selectedPortfolioId);
+    // Auto-select only types that have gaps (pre-check types with work to do)
+    if (enrichDialogGaps.value?.gaps) {
+      const typesWithGaps = coverageTypeOptions
+        .map(o => o.value)
+        .filter(t => (enrichDialogGaps.value!.gaps[t]?.gap ?? 0) > 0);
+      enrichDialogCoverageTypes.value = typesWithGaps.length > 0 ? typesWithGaps : [];
+    }
   } catch (err) {
     console.error('Failed to load gaps:', err);
   } finally {
@@ -878,9 +885,9 @@ async function bulkUnquarantine(group: QuarantineGroup) {
 // Watch for tab changes to refresh data
 watch(activeTab, (newTab) => {
   if (newTab === 'sectors') {
-    loadSectorEnrichment();
+    loadSectorEnrichment(true);
   } else if (newTab === 'enrichment') {
-    loadEnrichmentSummary();
+    loadEnrichmentSummary(true);
   } else if (newTab === 'jobs') {
     loadBatchJobs();
   } else if (newTab === 'llm-batch') {
@@ -904,13 +911,15 @@ onMounted(() => {
   loadPortfolioInfo();
 
   // Auto-refresh every 15 seconds based on active tab
+  // Force refresh enrichment data when there are active jobs (to pick up recently synced flags)
   jobsRefreshInterval = setInterval(() => {
+    const forceSync = hasActiveJobs.value;
     if (activeTab.value === 'jobs') {
       loadBatchJobs();
     } else if (activeTab.value === 'sectors') {
-      loadSectorEnrichment();
+      loadSectorEnrichment(forceSync);
     } else if (activeTab.value === 'enrichment') {
-      loadEnrichmentSummary();
+      loadEnrichmentSummary(forceSync);
       loadBatchJobs();
     }
   }, 15000);
@@ -1002,7 +1011,7 @@ onUnmounted(() => {
             style="min-width: 120px"
             @update:model-value="loadEnrichmentSummary"
           />
-          <q-btn flat icon="refresh" label="Refresh" :loading="enrichmentLoading" @click="loadEnrichmentSummary" />
+          <q-btn flat icon="refresh" label="Refresh" :loading="enrichmentLoading" @click="loadEnrichmentSummary(true)" />
         </div>
 
         <div v-if="enrichmentLoading && !enrichmentData" class="row justify-center q-pa-xl">
@@ -1194,7 +1203,7 @@ onUnmounted(() => {
               {{ sectorScopeTooltip }}
             </q-tooltip>
           </q-icon>
-          <q-btn flat icon="refresh" label="Refresh" :loading="sectorEnrichmentLoading" @click="loadSectorEnrichment" />
+          <q-btn flat icon="refresh" label="Refresh" :loading="sectorEnrichmentLoading" @click="loadSectorEnrichment(true)" />
         </div>
 
         <div v-if="sectorEnrichmentLoading && !sectorEnrichmentData" class="row justify-center q-pa-xl">
@@ -1235,6 +1244,7 @@ onUnmounted(() => {
                     <div class="enrichment-cell-small">
                       <q-linear-progress :value="props.row.enrichment.llmPct / 100" :color="coverageColor(props.row.enrichment.llmPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.llmPct }}%</span>
+                      <span v-if="props.row.gaps.llm > 0" class="text-caption text-grey-6"> ({{ props.row.gaps.llm }})</span>
                     </div>
                   </q-td>
                 </template>
@@ -1243,6 +1253,7 @@ onUnmounted(() => {
                     <div class="enrichment-cell-small">
                       <q-linear-progress :value="props.row.enrichment.prosecutionPct / 100" :color="coverageColor(props.row.enrichment.prosecutionPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.prosecutionPct }}%</span>
+                      <span v-if="props.row.gaps.prosecution > 0" class="text-caption text-grey-6"> ({{ props.row.gaps.prosecution }})</span>
                     </div>
                   </q-td>
                 </template>
@@ -1251,6 +1262,7 @@ onUnmounted(() => {
                     <div class="enrichment-cell-small">
                       <q-linear-progress :value="props.row.enrichment.iprPct / 100" :color="coverageColor(props.row.enrichment.iprPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.iprPct }}%</span>
+                      <span v-if="props.row.gaps.ipr > 0" class="text-caption text-grey-6"> ({{ props.row.gaps.ipr }})</span>
                     </div>
                   </q-td>
                 </template>
@@ -1259,6 +1271,7 @@ onUnmounted(() => {
                     <div class="enrichment-cell-small">
                       <q-linear-progress :value="props.row.enrichment.familyPct / 100" :color="coverageColor(props.row.enrichment.familyPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.familyPct }}%</span>
+                      <span v-if="props.row.gaps.family > 0" class="text-caption text-grey-6"> ({{ props.row.gaps.family }})</span>
                     </div>
                   </q-td>
                 </template>
@@ -1267,6 +1280,7 @@ onUnmounted(() => {
                     <div class="enrichment-cell-small">
                       <q-linear-progress :value="props.row.enrichment.xmlPct / 100" :color="coverageColor(props.row.enrichment.xmlPct)" size="12px" rounded />
                       <span class="text-caption">{{ props.row.enrichment.xmlPct }}%</span>
+                      <span v-if="props.row.gaps.xml > 0" class="text-caption text-grey-6"> ({{ props.row.gaps.xml }})</span>
                     </div>
                   </q-td>
                 </template>
@@ -1844,31 +1858,52 @@ onUnmounted(() => {
 
     <!-- ═══ Contextual Enrich Dialog ═══ -->
     <q-dialog v-model="showEnrichDialog">
-      <q-card style="min-width: 400px">
+      <q-card style="min-width: 440px">
         <q-card-section>
           <div class="text-h6">Enrich: {{ enrichDialogTargetType }} "{{ enrichDialogTargetValue }}"</div>
+          <div v-if="enrichDialogGaps" class="text-caption text-grey-7">
+            {{ enrichDialogGaps.gaps.llm?.total?.toLocaleString() || 0 }} patents in scope
+          </div>
         </q-card-section>
 
         <q-card-section>
-          <div class="text-subtitle2 q-mb-sm">Select Coverage Types</div>
-          <div class="column q-gutter-sm">
-            <q-checkbox
-              v-for="opt in coverageTypeOptions"
-              :key="opt.value"
-              v-model="enrichDialogCoverageTypes"
-              :val="opt.value"
-              :color="opt.color"
-            >
-              <span>{{ opt.label }}</span>
-              <span v-if="enrichDialogGaps" class="text-grey-6 q-ml-sm">
-                ({{ enrichDialogGaps.gaps[opt.value]?.gap.toLocaleString() || 0 }} gaps)
-              </span>
-            </q-checkbox>
-          </div>
-
-          <div v-if="enrichDialogLoading" class="text-center q-mt-md">
+          <div v-if="enrichDialogLoading" class="text-center q-pa-md">
             <q-spinner size="sm" /> Analyzing gaps...
           </div>
+          <template v-else-if="enrichDialogGaps">
+            <div class="text-subtitle2 q-mb-sm">Coverage Types to Run</div>
+            <div class="column q-gutter-xs">
+              <q-checkbox
+                v-for="opt in coverageTypeOptions"
+                :key="opt.value"
+                v-model="enrichDialogCoverageTypes"
+                :val="opt.value"
+                :color="(enrichDialogGaps.gaps[opt.value]?.gap ?? 0) > 0 ? opt.color : 'grey-5'"
+                :disable="(enrichDialogGaps.gaps[opt.value]?.gap ?? 0) === 0"
+              >
+                <span :class="{ 'text-grey-5': (enrichDialogGaps.gaps[opt.value]?.gap ?? 0) === 0 }">{{ opt.label }}</span>
+                <q-badge
+                  v-if="(enrichDialogGaps.gaps[opt.value]?.gap ?? 0) > 0"
+                  :color="opt.color"
+                  :label="`${enrichDialogGaps.gaps[opt.value].gap.toLocaleString()} gaps`"
+                  class="q-ml-sm"
+                />
+                <q-badge
+                  v-else
+                  color="grey-4"
+                  text-color="grey-7"
+                  label="complete"
+                  class="q-ml-sm"
+                />
+              </q-checkbox>
+            </div>
+            <div v-if="enrichDialogCoverageTypes.length > 0" class="text-caption text-grey-7 q-mt-md">
+              Will submit {{ enrichDialogCoverageTypes.length }} job{{ enrichDialogCoverageTypes.length > 1 ? 's' : '' }}
+            </div>
+            <div v-else class="text-caption text-positive q-mt-md">
+              All coverage types are complete for this scope.
+            </div>
+          </template>
         </q-card-section>
 
         <q-card-actions align="right">
@@ -1877,7 +1912,7 @@ onUnmounted(() => {
             color="primary"
             label="Start Enrichment"
             :loading="enrichDialogStarting"
-            :disable="enrichDialogCoverageTypes.length === 0"
+            :disable="enrichDialogCoverageTypes.length === 0 || enrichDialogLoading"
             @click="startEnrichFromDialog"
           />
         </q-card-actions>

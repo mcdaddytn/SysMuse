@@ -1,4 +1,4 @@
-# Session Context — February 20, 2026
+# Session Context — February 22, 2026
 
 ## Current State Summary
 
@@ -29,156 +29,156 @@
 
 ---
 
-## What Was Completed (Feb 20)
+## What Was Completed (Feb 22)
 
-### Patent Quarantine System
+### Claims Always Included — `useClaims` Flag Removed
 
-Full quarantine tracking for patents that can't be fully enriched (design, reissue, pre-2005, recent, extraction failures). Eliminates false "99%" enrichment tiers.
+**Problem:** `useClaims` parameter existed throughout the system (API routes, frontend toggles, batch job metadata, shell scripts) with a default of `false`. This caused repeated regressions where LLM scoring ran without claims despite multiple attempts to fix the default.
 
-**Schema changes:**
-- `isQuarantined` (Boolean) — fast filter across all grids
-- `quarantine` (JSON) — per-coverage-type reasons, e.g. `{ "xml": "design-patent" }`
-- `patentIdNumeric` (Int) — numeric patent ID for sorting/matching (populated for all 31,789 patents)
-- GIN index on quarantine JSON, btree index on patentIdNumeric
+**Fix:** Eliminated the flag entirely from all active code paths:
+- `DEFAULT_CONTEXT_OPTIONS.includeClaims` changed from `'none'` to `'independent_only'`
+- `CLAIMS_CONTEXT_OPTIONS` export removed (was identical to new default)
+- `useClaims` removed from: `batch-jobs.routes.ts` (request body, DB insert, API response), `scoring-templates.routes.ts` (query params), `api.ts` (types), `JobQueuePage.vue` (toggle removed), `SectorManagementPage.vue` (toggle removed), `batch-score-overnight.ts` (CLI flag removed)
+- `withClaims` on `PatentSubSectorScore` DB column kept as read-only historical indicator — always set to `true` going forward, useful for identifying old scores that need rescore
 
-**Backend:**
-- `patent-data-service.ts` — filter, buildWhereClause, mapDTO, getAllFilterOptions all quarantine-aware
-- `batch-jobs.routes.ts` — `analyzeGaps()` uses quarantine instead of hardcoded `isXmlEligible()`; `POST /api/batch-jobs/auto-quarantine` with dry run support
-- `patents.routes.ts` — enrichment-summary and sector-enrichment use quarantine-driven XML denominators; CRUD endpoints: quarantine-summary, quarantine/unquarantine (single + bulk); export includes quarantine columns
+**Files changed:** `llm-scoring-service.ts`, `batch-jobs.routes.ts`, `scoring-templates.routes.ts`, `api.ts`, `JobQueuePage.vue`, `SectorManagementPage.vue`, `batch-score-overnight.ts`
 
-**Frontend:**
-- `FlexFilterBuilder.vue` — isQuarantined boolean filter + count in summary
-- `patents.ts` store — quarantine + numeric ID columns
-- `PortfolioPage.vue` + `FocusAreaDetailPage.vue` — orange quarantine badge cell template
-- `PatentDetailPage.vue` — quarantine banner with unquarantine action
-- `JobQueuePage.vue` — new Quarantine tab (auto-detect, dry run, grouped tables, bulk unquarantine); XML enrichment badges show quarantine counts; responds to portfolio selector
-- `api.ts` — `quarantineApi` module + `autoQuarantine` on `batchJobsApi`
+### LLM Data Quality Gate — Quarantine Expansion
 
-**Applied auto-quarantine:**
+**Problem:** Patents missing abstracts or sector assignments were still scored by LLM with minimal context (just title + CPC), producing unreliable scores.
 
-| Reason | Count |
-|--------|-------|
-| pre-2005 | 3,418 |
-| design-patent | 77 |
-| recent-no-bulk | 69 |
-| reissue-patent | 15 |
-| **Total quarantined** | **3,579** |
-| **Active (not quarantined)** | **28,210** |
+**Changes:**
+- Auto-quarantine expanded with LLM readiness rules: `llm: "no-abstract"` and `llm: "no-sector"`
+- Gap analysis (`analyzeGaps()`) excludes LLM-quarantined patents from LLM denominators
+- Enrichment summary and sector enrichment endpoints use quarantine-adjusted LLM denominators
+- Frontend shows remedy text for each quarantine reason
+- `quarantineCounts` now includes `llm` count alongside `xml`
+
+### Claims Gate — Soft Skip Instead of Hard Block
+
+**Problem:** When submitting all 5 job types on a new portfolio (no XML extracted yet), the claims gate returned a 400 error blocking ALL job types — hydration, citation, XML, everything. User saw "localhost:3000 claims_gate" in a browser `alert()` popup.
+
+**Fix:** Changed from hard block to soft skip:
+- If no LLM-eligible patents have XML: removes LLM from the job list, proceeds with other types
+- If LLM is the only type and all patents lack XML: returns 200 with `llmDeferred: true`
+- Response includes `llmDeferred` and `llmDeferredCount` for frontend notification
+- Frontend shows Quasar `Notify` toast instead of browser `alert()` for all errors
+- Removed claims gate dialog, "Score Without Claims" button, and "Extract USPTO Data First" button
+- Enrichment dialog (`doStartEnrichFromDialog`) also updated to use Notify
+
+### Incremental LLM Cache Writes
+
+**Problem:** V3 LLM analysis only wrote per-patent cache files (`cache/llm-scores/{id}.json`) at the very end via `saveResults()`. During job execution, `syncEnrichmentFlags()` found nothing, so sector enrichment showed 0% progress.
+
+**Fix:** V3 analyzer (`services/llm-patent-analysis-v3.ts`) now writes per-patent cache files incrementally after each batch of 5 patents. Also added periodic flag sync (every 60s) while jobs are running.
+
+### Periodic Enrichment Flag Sync While Jobs Run
+
+**Problem:** `syncEnrichmentFlags()` only ran when jobs completed. Sector enrichment view didn't reflect LLM progress during long-running jobs.
+
+**Fix:** Added 60-second periodic sync in `GET /api/batch-jobs` handler while any jobs are running. Invalidates enrichment cache and syncs flags from file cache to Postgres.
+
+### Hydration Repair — All Portfolios Complete
+
+Ran `scripts/hydrate-all.ts` across all 15 portfolios:
+- **48,801 patents hydrated**, 800 not found on PatentsView
+- Broadcom (29,474) completed in ~37 min at ~76ms/patent
+- All portfolios now have abstract, filing_date, remaining_years, base_score populated
+
+### Rescore Analysis — CSV Exports
+
+Analyzed all 30,308 LLM-scored patents for context quality:
+
+| Context Quality | Count | % |
+|---|---|---|
+| Full (abstract + claims) | 26,821 | 88.5% |
+| Abstract only | 2,317 | 7.6% |
+| Claims only (no abstract) | 1,049 | 3.5% |
+| Minimal (title/sector/CPC only) | 121 | 0.4% |
+
+CSV exports in `output/`:
+- `rescore-summary-by-portfolio.csv`
+- `rescore-needed-no-abstract.csv` (1,170 patents)
+- `rescore-needed-no-claims.csv` (1,897 scores)
 
 ---
 
-## What Was Completed (Feb 19 — Sessions 1 & 2)
+## Known Architecture Debt
 
-### CPC Inventive Designation Pipeline
-- `enrichPatentCpcFromXml()` + batch wrapper + XML extraction hook
-- Backfill endpoint: `POST /api/batch-jobs/sync-cpc-designations`
-- 4 pluggable CPC assignment strategies (`cpc-assignment-strategy.ts`)
-- Sector assignment weights inventive CPCs (1.0) higher than additional (0.5)
+### File-Polling for Enrichment Status
 
-### Frontend Scoring UI
-- Model selector, batch mode toggle, auto-snapshots in JobQueuePage
-- Import dialog with configurable limits (up to 10,000)
-- Aggregate view presets (4 built-in + custom save/load)
+The LLM and prosecution pipelines write results to disk (`cache/llm-scores/`, `cache/prosecution-scores/`). A separate function (`syncEnrichmentFlags()`) periodically scans directory listings and updates Postgres `has_llm_data`/`has_prosecution_data` flags. This is indirect and fragile.
 
-### Infrastructure Improvements
-- Removed 500 batch size cap — auto-splits into multiple jobs
-- Job tracking moved to PostgreSQL (`batch_jobs` table)
-- Super-sectors fully DB-driven (`useSuperSectors.ts` composable)
-- Live job progress tracking with ETA
-- Fixed Chelsio taxonomy, backend config reads eliminated
+**Correct approach:** Enrichment pipelines should write directly to Postgres and the DB should be the single source of truth. File cache can exist for backward compatibility but shouldn't be the mechanism for tracking enrichment status.
 
-### Netflix Scoring
-- Pre-claims snapshot: `cmltknetn0001n19ns60yahj2` (385 patents)
-- With-claims scoring COMPLETE: 384/385 succeeded
+**Current asymmetry:**
+- LLM & Prosecution: file-first → poll → DB flag (async, indirect)
+- XML: direct DB update (correct)
+- IPR: file-only, no DB flag at all
+
+**Impact:** Sector enrichment views lag behind actual progress. Mitigated by the 60s periodic sync but not eliminated.
+
+### "V3" Naming
+
+`services/llm-patent-analysis-v3.ts` and `output/llm-analysis-v3/` use "V3" in the name but this is the LLM enrichment pipeline, not version-specific. The naming is confusing — "V2" and "V3" are scoring versions that consume LLM data, not the enrichment pipeline itself.
 
 ---
 
-## What Was Completed (Feb 17-18)
+## Cross-Portfolio Analysis (as of Feb 22)
 
-- Batch LLM scoring system (7-step implementation)
-- Portfolio import pipeline (Netflix 385, Hulu 100, Zoom 585, Chelsio 38)
-- Patent XML extraction TypeScript port with readline streaming
+### Portfolio Status
 
----
-
-## Cross-Portfolio Analysis (as of Feb 20)
-
-### Enrichment Coverage
-
-| Portfolio | Total | USPTO Bulk | LLM Scored | Quarantined | Sectors |
+| Portfolio | Total | Hydrated | USPTO XML | LLM Scored | Quarantined |
 |---|---|---|---|---|---|
-| broadcom-core | 29,474 | 88% (25,948) | 59% (17,527) | ~3,500 | 100% |
-| roku | 1,207 | 97% (1,174) | 83% (1,000) | ~10 | 100% |
-| zoom | 585 | 91% (532) | **100% (585)** | ~10 | 100% |
-| netflix | 385 | 99% (381) | 100% (385) | ~5 | 100% |
-| hulu | 100 | 93% (93) | 100% (100) | ~2 | 100% |
-| chelsio | 38 | 0% | 100% (38) | 0 | 100% |
-
-*Quarantine counts are approximate per-portfolio; 3,579 total across all portfolios.*
-
-### CPC Inventive Data
-
-| Portfolio | Patents w/ CPC | Inventive CPCs | Total CPCs |
-|---|---|---|---|
-| broadcom-core | 29,419 | 57,991 | 173,406 |
-| zoom | 570 | 1,738 | 4,247 |
-| netflix | 385 | **0** | 3,642 |
-| hulu | 96 | **0** | 778 |
-| chelsio | 38 | **0** | 172 |
-
-Netflix/Hulu/Chelsio CPCs came from PatentsView (no inventive designation). Need CPC backfill from XML.
-
----
-
-## Immediate Action Items
-
-1. **Run CPC inventive backfill** for Netflix/Hulu (have USPTO bulk data but 0 inventive CPC designations)
-2. **Take post-claims Netflix snapshot** and compare with pre-claims
-3. ~~Score Zoom~~ — DONE (585/585 LLM scored)
-4. **Investigate 1 Netflix error** in `computing-systems` sector
-5. **Test competitive citation features** — LLM-based + patent-data-based competitor scoring needed for new portfolios
-6. **Phase 2 work** — sector overlap matrix, density hotspots, competitive landscape view
+| Broadcom | 29,474 | 29,329 | ~26,000 | ~17,500 | ~3,500 |
+| Intel | 2,000+ | 2,000 | In progress | ~310 (running) | TBD |
+| Sony | 2,000 | 1,800 | TBD | TBD | TBD |
+| Apple | 2,000 | 2,000 | TBD | TBD | TBD |
+| Roku | 1,207 | 1,207 | 1,174 | 1,000 | ~10 |
+| LG Electronics | 1,000 | 1,000 | TBD | TBD | TBD |
+| NVIDIA | ~750 | 749 | TBD | TBD | TBD |
+| Cisco | 636 | 636 | TBD | TBD | TBD |
+| Zoom | 585 | 585 | 532 | 585 | ~10 |
+| Netflix | 385 | 385 | 381 | 385 | ~5 |
+| Paramount | 310 | 310 | TBD | TBD | TBD |
+| Hulu | 255 | 255 | 93 | 100 | ~2 |
+| Spotify | ~200 | TBD | TBD | TBD | TBD |
+| Qualcomm | ~200 | TBD | TBD | TBD | TBD |
+| Samsung | ~200 | TBD | TBD | TBD | TBD |
 
 ---
 
 ## Important Notes for Next Session
 
+### Claims Are Always On
+
+There is no toggle, parameter, or flag to disable claims. `DEFAULT_CONTEXT_OPTIONS.includeClaims` is `'independent_only'`. If a patent lacks XML data, it's simply skipped by the claims gate (soft skip) and picked up on the next enrichment run.
+
 ### Sub-Sector Templates Do NOT Exist for VIDEO_STREAMING
 
-Despite multiple discussions about breaking out VIDEO_STREAMING into subsectors with custom LLM questions, **this work has not been done**. Current state:
-- `config/scoring-templates/sectors/`: 6 video sector templates — each has 5 custom questions
-- `config/scoring-templates/sub-sectors/`: 14 templates but NONE for video
-- DB sub-sectors are just CPC codes, not custom breakdowns
-- Detailed subsector proposals in `TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md` Section 21
+**Do NOT re-score large sectors without first creating sub-sector question breakdowns.** See previous session context for details.
 
-**Do NOT re-score large sectors without first creating sub-sector question breakdowns.**
+### Quarantine System — Operational with LLM Rules
 
-### Quarantine System — Operational
+- Original XML quarantine: pre-2005, design-patent, reissue-patent, recent-no-bulk, extraction-failed
+- New LLM quarantine: no-abstract, no-sector
+- Auto-quarantine: `POST /api/batch-jobs/auto-quarantine` with `dryRun` support
+- Quarantine tab shows remedy text for each reason
 
-- 3,579 patents quarantined (auto-detected)
-- Enrichment tiers now show 100% when all eligible work is done
-- Quarantine tab in JobQueuePage for visibility and management
-- Quarantined patents still fully accessible — can be viewed, scored, added to focus areas
+### Enrichment Job Workflow
 
-### GUI Redesign Needed
+Submit all 5 types at once. They run in parallel:
+1. **Hydration** — fetches patent metadata from PatentsView
+2. **XML extraction** — extracts claims from USPTO bulk data
+3. **LLM scoring** — skips patents without XML (soft skip), catch up later
+4. **Prosecution history** — USPTO file wrapper data
+5. **Patent families** — citation enrichment
 
-Sector management and LLM batch scoring experience needs redesign:
-- Scoring/batch functionality split across SectorManagementPage and JobQueuePage
-- Model comparison results not persisted or easily retrievable
-- Sub-sector creation and question authoring need a dedicated workflow
+LLM dedup: gap analysis checks `has_llm_data` flag + `patent_sub_sector_scores` table. Running general tier + sector-specific LLM simultaneously is safe — no double scoring.
 
 ### Chrome Scrollbar Problem — UNRESOLVED
 
-Scrollbars work in Safari but NOT in Chrome. CSS is correct (verified via diff). See MEMORY.md for investigation notes.
-
-### Scoring Template Hierarchy
-
-```
-portfolio-default.json (7 questions, applies to all patents)
-    └── super-sectors/{name}.json (3-4 additional questions per super-sector)
-           └── sectors/{name}.json (4-6 additional questions per sector)
-                  └── sub-sectors/{id}.json (if exists — currently sparse, none for video)
-```
+Scrollbars work in Safari but NOT in Chrome. CSS is correct. See MEMORY.md.
 
 ---
 
@@ -186,23 +186,14 @@ portfolio-default.json (7 questions, applies to all patents)
 
 | File | Purpose |
 |------|---------|
-| `docs/DEVELOPMENT_QUEUE_V4.md` | Active development queue (Phases 0-7) |
-| `docs/TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md` | Master requirements document |
-| `docs/scoring-and-enrichment-guide.md` | How-to for batch scoring, models, snapshots |
-| `src/api/services/patent-data-service.ts` | Patent queries, filters, DTO mapping |
-| `src/api/services/patent-xml-parser-service.ts` | XML parsing + CPC enrichment |
-| `src/api/services/cpc-assignment-strategy.ts` | 4 CPC assignment strategies |
-| `src/api/services/sector-assignment-service.ts` | Sector assignment with inventive CPC weighting |
-| `src/api/services/llm-scoring-service.ts` | Batch API, model comparison, scoring service |
-| `src/api/routes/batch-jobs.routes.ts` | Batch job endpoints, auto-quarantine, gap analysis |
-| `src/api/routes/patents.routes.ts` | Patent CRUD, enrichment-summary, quarantine endpoints |
-| `frontend/src/services/api.ts` | Frontend API client (quarantineApi, batchJobsApi, etc.) |
-| `frontend/src/pages/JobQueuePage.vue` | Job queue + Quarantine tab |
-| `frontend/src/pages/PortfolioPage.vue` | Main patent grid with quarantine badge |
-| `frontend/src/pages/PatentDetailPage.vue` | Patent detail with quarantine banner |
-| `frontend/src/stores/patents.ts` | Column definitions (quarantine + numeric ID) |
-| `frontend/src/components/filters/FlexFilterBuilder.vue` | Filters including isQuarantined |
-| `config/scoring-templates/` | Template hierarchy |
+| `docs/DEVELOPMENT_QUEUE_V4.md` | Active development queue |
+| `src/api/services/llm-scoring-service.ts` | LLM scoring, context options (claims always on) |
+| `src/api/routes/batch-jobs.routes.ts` | Batch jobs, auto-quarantine, gap analysis, claims gate |
+| `src/api/routes/patents.routes.ts` | Enrichment summary, sector enrichment, quarantine CRUD |
+| `services/llm-patent-analysis-v3.ts` | V3 LLM enrichment pipeline (incremental cache writes) |
+| `frontend/src/pages/JobQueuePage.vue` | Job queue + Quarantine tab (no claims gate dialog) |
+| `frontend/src/pages/SectorManagementPage.vue` | Sector scoring (no claims toggle) |
+| `frontend/src/services/api.ts` | Frontend API types (no useClaims) |
 
 ---
 
@@ -210,47 +201,13 @@ portfolio-default.json (7 questions, applies to all patents)
 
 | Cache | Path | ~Count | Source |
 |-------|------|--------|--------|
-| Prosecution scores | `cache/prosecution-scores/` | 11,576 | Prosecution scoring pipeline |
-| IPR scores | `cache/ipr-scores/` | 10,745 | IPR scoring pipeline |
-| File wrapper | `cache/api/file-wrapper/` | 454 | enrichWithDetails API |
-| PTAB | `cache/api/ptab/` | 455 | enrichWithDetails API |
-| LLM scores | `cache/llm-scores/` | ~17,529 | LLM scoring pipeline |
-| Batch jobs | PostgreSQL `batch_jobs` table | ~30+ | Batch API metadata |
-| Batch results | `cache/batch-results/` | varies | Batch API result files |
+| LLM scores | `cache/llm-scores/` | ~31,450 | LLM enrichment pipeline |
+| Prosecution scores | `cache/prosecution-scores/` | ~11,576 | Prosecution scoring |
+| IPR scores | `cache/ipr-scores/` | ~10,745 | IPR scoring |
+| PatentsView | `cache/api/patentsview/patent/` | ~49,000 | Hydration pipeline |
+| Patent XMLs | `$USPTO_PATENT_GRANT_XML_DIR` | ~28,000 | USPTO bulk extraction |
+| Batch jobs | PostgreSQL `batch_jobs` table | ~100+ | Batch API metadata |
 
 ---
 
-## Commands Reference
-
-```bash
-# Start API server (from project root)
-npm run dev
-
-# Start frontend (from frontend directory)
-cd frontend && npm run dev
-
-# Start Docker services
-docker-compose up -d postgres elasticsearch
-
-# Schema changes
-./scripts/db.sh push && ./scripts/db.sh generate
-
-# Auto-quarantine (dry run)
-curl -X POST http://localhost:3001/api/batch-jobs/auto-quarantine -H 'Content-Type: application/json' -d '{"dryRun": true}'
-
-# CPC backfill for existing XMLs
-curl -X POST http://localhost:3001/api/batch-jobs/sync-cpc-designations
-```
-
----
-
-## Doc Organization
-
-- **Active docs:** `docs/` — current design docs and guides (Feb 2026+)
-- **Archived docs:** `docs/archive/` — pre-February 2026 docs
-- **Master roadmap:** `docs/TAXONOMY_AND_LLM_ENHANCEMENT_PLAN.md`
-- **Dev queue:** `docs/DEVELOPMENT_QUEUE_V4.md`
-
----
-
-*Last Updated: 2026-02-20*
+*Last Updated: 2026-02-22*

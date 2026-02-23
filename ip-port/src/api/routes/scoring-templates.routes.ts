@@ -22,6 +22,7 @@ import {
   listTemplateConfigFiles,
   getMergedQuestionsForSuperSector,
   getMergedTemplateForSector,
+  calculateCompositeScore,
   CreateTemplateInput
 } from '../services/scoring-template-service.js';
 import { loadPatents } from './patents.routes.js';
@@ -1160,14 +1161,13 @@ router.post('/llm/recompute-scores/:sectorName', async (req: Request, res: Respo
       return res.status(404).json({ error: `Sector not found: ${sectorName}` });
     }
 
-    // Get merged template with current weights
+    // Get merged template with current weights (full inheritance chain)
     const superSectorName = sector.superSector?.name || '';
     const merged = getMergedTemplateForSector(sectorName, superSectorName);
-    const weightMap = new Map(merged.questions.map(q => [q.fieldName, q.weight]));
-    const totalWeight = merged.questions.reduce((sum, q) => sum + q.weight, 0);
+    const scoredQuestions = merged.questions.filter(q => q.weight > 0 && q.answerType === 'numeric');
 
-    if (totalWeight === 0) {
-      return res.status(400).json({ error: 'Template has zero total weight' });
+    if (scoredQuestions.length === 0) {
+      return res.status(400).json({ error: 'Template has no scored questions' });
     }
 
     // Get all scores for this sector
@@ -1180,7 +1180,7 @@ router.post('/llm/recompute-scores/:sectorName', async (req: Request, res: Respo
       return res.json({ updated: 0, sectorName, message: 'No scores found for this sector' });
     }
 
-    // Recompute composite scores in memory, then bulk update
+    // Recompute composite scores using the same formula as initial scoring
     let updated = 0;
     const updates: Array<{ id: string; newScore: number }> = [];
 
@@ -1188,16 +1188,7 @@ router.post('/llm/recompute-scores/:sectorName', async (req: Request, res: Respo
       const metrics = score.metrics as Record<string, { score: number; reasoning?: string; confidence?: number }> | null;
       if (!metrics) continue;
 
-      let weightedSum = 0;
-      for (const [fieldName, weight] of weightMap) {
-        const metric = metrics[fieldName];
-        if (metric && typeof metric.score === 'number') {
-          weightedSum += metric.score * weight;
-        }
-      }
-
-      // Normalize to percentage scale (scores are 1-10, weights sum to ~1)
-      const newScore = Math.round(weightedSum * 100) / 100;
+      const newScore = calculateCompositeScore(metrics, merged.questions);
 
       if (Math.abs(newScore - score.compositeScore) > 0.001) {
         updates.push({ id: score.id, newScore });
@@ -1226,8 +1217,8 @@ router.post('/llm/recompute-scores/:sectorName', async (req: Request, res: Respo
       totalScores: scores.length,
       updated,
       unchanged: scores.length - updated,
-      templateQuestions: merged.questions.length,
-      weights: Object.fromEntries(weightMap),
+      templateQuestions: scoredQuestions.length,
+      weights: Object.fromEntries(scoredQuestions.map(q => [q.fieldName, q.weight])),
     });
   } catch (error) {
     console.error('[Recompute] Error:', error);

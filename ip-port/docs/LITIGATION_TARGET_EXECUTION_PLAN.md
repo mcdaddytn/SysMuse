@@ -330,3 +330,141 @@ Identify:
 **Total: ~1-2 days of user time, ~$40-75 in LLM costs**
 
 Steps 1-4 can be completed in a single session (~2 hours). Steps 5-9 can follow over subsequent sessions as findings sharpen the targeting.
+
+---
+
+## Execution Progress (Updated Feb 23)
+
+| Step | Status | Key Outcome |
+|------|--------|-------------|
+| 1. Update claim_breadth | COMPLETE | 4-criteria evaluation referencing actual claim language |
+| 2. Reweight template | COMPLETE | video-streaming.json v2: da=0.25, cb=0.20, ic=0.20, sr=0.15 |
+| 3. Recompute scores | COMPLETE | 6,009/6,352 scores updated, codec bias reduced |
+| 4. Review rankings | COMPLETE | T1: 50 patents (score+cites+active), T2: 243 (score 65+, codec-dominant) |
+| 5. Sub-sector breakout | SKIPPED | Deferred — reweighting provided sufficient differentiation for initial targeting |
+| 6. Focus areas | COMPLETE | 5 sub-focus-areas + parent (41 patents total) + Tier 1 (21 patents) |
+| 7. Prompt templates | COMPLETE | Per-patent (41 assessed) + collective v3 (17→21 Tier-1 analyzed) |
+| 8. Family expansion | COMPLETE | Two explorations: VVC family (3 siblings) + ABR family (9 related patents) |
+| 9. Export & review | NOT STARTED | Pending prosecution enrichment |
+
+**CORRECTION (Feb 23):** Original Tier 1 contained 3 competitor patents (12301876=Qualcomm, 9900608=Hulu, 11973996=Netflix). These were discovered during family expansion and removed. All focus areas corrected to Broadcom-only patents. Portfolio filter (`JOIN portfolio_patents WHERE portfolio = 'broadcom-core'`) now required on all ranking queries.
+
+### Tier-1 Results Summary (14 Broadcom-owned patents, corrected)
+
+**Tier 1 — Assert (4 patents, highest detectability + strongest claims):**
+
+| Patent | Lit Score | Detect | Strategy | Cluster | Primary Target |
+|--------|-----------|--------|----------|---------|----------------|
+| 10148907 | 6/10 | 7/10 | Direct | HDR Processing | Netflix, Apple TV+ |
+| 10574936 | 6/10 | 7/10 | Direct | HDR Processing | Netflix, Apple TV+ |
+| 9282328 | 6/10 | 7/10 | SEP/FRAND | Codec Standards | YouTube/Google |
+| 10798394 | 5/10 | 3/10 | SEP/FRAND | Codec Standards | YouTube, AWS |
+
+**Tier 2 — Strengthen (5 patents, SEP/FRAND + cross-license leverage):**
+
+| Patent | Lit Score | Detect | Strategy | Cluster | Primary Target |
+|--------|-----------|--------|----------|---------|----------------|
+| 9406252 | 6/10 | 7/10 | Direct | Adaptive Streaming | Netflix, YouTube |
+| 9351010 | 6/10 | 7/10 | Direct | Adaptive Streaming | Netflix, YouTube |
+| 9705948 | 5/10 | 7/10 | Direct | Adaptive Streaming | Netflix, YouTube |
+| 11284079 | 5/10 | 3/10 | SEP/FRAND | Codec Standards | YouTube, Netflix |
+| 10757440 | 5/10 | 3/10 | SEP/FRAND | Codec Standards | YouTube, Netflix |
+| 8897377 | 4/10 | 3/10 | Cross-License | Content Processing | Netflix, YouTube |
+
+**Tier 3 — Defensive (5 patents):**
+
+| Patent | Lit Score | Detect | Strategy | Cluster | Primary Target |
+|--------|-----------|--------|----------|---------|----------------|
+| 9042368 | 5/10 | 7/10 | Cross-License | ABR Coordination | Apple TV, Google Nest |
+| 8711934 | 5/10 | 3/10 | Cross-License | MPEG Timing | Apple FaceTime |
+| 8660178 | 4/10 | 3/10 | Cross-License | Rate Control | Netflix, YouTube |
+| 11949871 | 4/10 | 3/10 | Defensive | Codec Standards | YouTube, Netflix |
+
+### Recommended Assertion Strategy (from corrected collective analysis)
+
+**Three-pronged approach:**
+1. **HDR Streaming Dominance** (10148907 + 10574936 + 9282328) → Netflix, Apple TV+, Amazon via direct infringement + FRAND — highest detectability, fastest-growing premium segment
+2. **Codec Standards Lockdown** (10798394 + 11284079 + 9282328 + 10757440) → YouTube/Google, AWS via SEP/FRAND — comprehensive codec pipeline coverage
+3. **Adaptive Streaming Ecosystem** (9406252 + 9705948 + 9042368) → Netflix, YouTube via direct — end-to-end delivery coverage
+
+**Competitor vulnerability (corrected):** Netflix (6 patents, HIGH), YouTube/Google (5, HIGH), Apple (5, HIGH), Amazon (5, MEDIUM)
+
+---
+
+## Strategy Insights — Multi-Step Analysis Design
+
+### Proven Prompt Template Pattern
+
+1. **PER_PATENT** (Stage 1): Structured questions per patent — produces individual assessments with typed fields (scores, lists, enums)
+2. **COLLECTIVE** (Stage 2): Free-form synthesis with all patent data + Stage 1 results embedded — produces strategic analysis
+
+### Family Expansion Value for Litigation (4 use cases)
+
+1. **Reinforcement** — Siblings in same sub-sector thicken claim chains (harder to design around all of them)
+2. **Design-around intelligence** — Cousins achieving same function via different method reveal competitor escape routes
+3. **Prosecution preview** — Relatives' rejection/amendment patterns predict challenges our patent may face
+4. **Infringement probability** — Alternative implementations in related patents indicate whether products can avoid our claims
+
+### Enrichment Gap: Claim-Level Prosecution Detail
+
+**Current state:** Aggregate counts only (rejection count, RCE count, prosecution quality 1-5)
+**Needed:** Per-claim rejections, statutory grounds, examiner-cited prior art, amendment history, estoppel risk
+**Design:** See `DESIGN_CLAIM_LEVEL_PROSECUTION_ANALYSIS.md`
+**Priority:** HIGH — implement before scaling to additional super-sectors
+
+### Key Finding: Detectability Drives Litigation Value
+
+The single most differentiating metric is **detectability** (how easily infringement can be proven without internal product access):
+- CDN/streaming patents: 7/10 — behavior observable from stream analysis, public APIs
+- Codec internal patents: 3/10 — require internal product access or source code
+- This explains why CDN patents dominate Tier 1 despite lower composite scores than codec patents
+
+---
+
+## Family Expansion Results (Feb 23)
+
+### Exploration 1: VVC Affine Merge Family (seeds: 10148907, 10798394, 9282328)
+
+**Discovery:** 3 continuation siblings of patent 10798394 — all "Low complexity affine merge mode for VVC":
+
+| Patent | Grant | Life Left | LLM Score | Lit Score | Strategy |
+|--------|-------|-----------|-----------|-----------|----------|
+| 10798394 (seed) | 2020-10 | 14.6 yr | 63.38 | 4/10 | SEP/FRAND |
+| 11595673 | 2023-02 | 17.0 yr | 74.38 | 5/10 | SEP/FRAND |
+| 11882300 | 2024-01 | 17.8 yr | 67.69 | 5/10 | SEP/FRAND |
+| 12289460 | 2025-04 | 19.2 yr | 74.38 | 5/10 | SEP/FRAND |
+
+**Insight:** Continuations score *higher* than seed (74.38 vs 63.38) — tighter claims easier to map. 12289460 has longest remaining life in entire portfolio (19.2yr, enforcement through 2044). 4-patent family creates claim redundancy — extremely difficult to design around all variants.
+
+### Exploration 2: ABR Streaming Family (seeds: 9406252, 9351010, 9705948)
+
+**Discovery:** 9 related ABR streaming patents already in broadcom-core portfolio:
+
+| Patent | Title | Lit | Det | Strategy | Comp Cites |
+|--------|-------|-----|-----|----------|-----------|
+| 10326805 | Distributed ABR proxy system | 6/10 | 7/10 | DIRECT | 0 |
+| 9319289 | ABR server-side adaptation | 6/10 | 7/10 | DIRECT | 3 (Intel, Samsung) |
+| 9413806 | ABR proxy | 6/10 | 7/10 | DIRECT | 1 (Ericsson) |
+| 9241204 | Multiple ABR segment streams | 6/10 | 7/10 | SEP/FRAND | 1 (Ericsson) |
+| 9215080 | ABR multicast distribution | 5/10 | 7/10 | CROSS_LICENSE | 0 |
+| 9894125 | Redistributing ABR sources | 5/10 | 7/10 | CROSS_LICENSE | 1 (NBCUniversal) |
+| 10075741 | Layered local caching for ABR | 5/10 | 3/10 | CROSS_LICENSE | 0 |
+| 9693118 | ABR prioritization | 4/10 | 3/10 | CROSS_LICENSE | 0 |
+| 10523572 | Gateway ABR conversion | 3/10 | 3/10 | DEFENSIVE | 0 |
+
+**Insight:** Top 4 ABR patents match original Tier-1 scores (6/10 lit, 7/10 detect). Combined with the 3 original streaming seeds, Broadcom has **7 high-detectability streaming patents** — forming a comprehensive ABR infrastructure thicket covering proxy, distribution, adaptation, caching, and segment delivery.
+
+### Updated Tier 1 — 21 Broadcom Patents
+
+**VVC Continuation Family (4 patents):** 10798394, 11595673, 11882300, 12289460
+**HDR Processing (2):** 10148907, 10574936
+**HEVC Standards (1):** 9282328
+**Adaptive Streaming (7):** 9406252, 9351010, 9705948, 10326805, 9319289, 9413806, 9241204
+**Codec/Other (7):** 10757440, 11284079, 11949871, 8711934, 8660178, 8897377, 9042368
+
+### V3 Collective Strategy Summary
+
+**Crown jewel:** VVC affine merge family (4 patents through 2044) — lead with 12289460.
+**Highest detectability:** HDR pair (10148907 + 10574936) + ABR streaming thicket (7 patents).
+**Primary targets:** YouTube/Google (7 patents, HIGH), Netflix (6, HIGH), Amazon (5, MEDIUM), Apple (5, MEDIUM).
+**Three-pronged approach:** (1) VVC family → YouTube via FRAND, (2) HDR pair → Netflix/Apple via direct, (3) ABR thicket → Netflix/Amazon/AWS via direct.

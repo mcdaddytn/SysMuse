@@ -29,12 +29,12 @@
     {
       "fieldName": "claim_breadth",
       "displayName": "Claim Breadth",
-      "question": "Rate the breadth of the patent claims. Consider: How broadly do the claims cover the invention? Could they capture variations and alternative implementations?",
+      "question": "Rate the breadth of the patent claims based on the actual claim language provided. Consider: (1) How many independent claims exist? (2) How broad are the independent claims — do they use functional language, means-plus-function, or specific structural terms? (3) Do dependent claims cover meaningful alternative implementations? (4) Could the claims capture a competitor's implementation that achieves similar functionality through different means?",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
       "weight": 0.15,
       "requiresReasoning": true,
-      "reasoningPrompt": "Describe the scope of the claims."
+      "reasoningPrompt": "Analyze the specific claim language. Identify the broadest independent claim and explain what scope it covers."
     },
     {
       "fieldName": "design_around_difficulty",

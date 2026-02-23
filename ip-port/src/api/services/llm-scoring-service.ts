@@ -420,6 +420,7 @@ export async function scorePatent(
     skipEnrichment?: boolean;
     contextOptions?: ContextOptions;
     template?: MergedTemplate;  // Pre-resolved template (for batch scoring by sector)
+    sectorId?: string;  // Fallback ID for DB key when patent has no sub-sector
   } = {}
 ): Promise<ScoringResult> {
   const {
@@ -427,14 +428,15 @@ export async function scorePatent(
     saveToDb = true,
     skipEnrichment = false,
     contextOptions = DEFAULT_CONTEXT_OPTIONS,
-    template: providedTemplate
+    template: providedTemplate,
+    sectorId
   } = options;
 
   // Enrich patent with full data from file caches
   const enrichedPatent = skipEnrichment ? patent : await enrichPatentData(patent, contextOptions);
 
-  // Get sub-sector ID
-  const subSectorId = enrichedPatent.primary_sub_sector_id || patent.primary_sub_sector_id;
+  // Get sub-sector ID — fall back to sector name for sector-level scoring
+  const subSectorId = enrichedPatent.primary_sub_sector_id || patent.primary_sub_sector_id || sectorId;
   if (!subSectorId && !providedTemplate) {
     return {
       patentId: patent.patent_id,
@@ -462,17 +464,35 @@ export async function scorePatent(
   const prompt = buildScoringPrompt(enrichedPatent, template as MergedTemplate);
 
   try {
-    // Call Claude
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
+    // Call Claude with retry for rate limits / overloaded
+    let response: Anthropic.Message | null = null;
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        response = await anthropic.messages.create({
+          model,
+          max_tokens: 4096,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        });
+        break; // Success
+      } catch (apiError: any) {
+        const status = apiError?.status || apiError?.error?.status;
+        const isRetryable = status === 429 || status === 529 || apiError?.message?.includes('overloaded');
+        if (isRetryable && attempt < MAX_RETRIES) {
+          const delay = Math.pow(2, attempt + 1) * 5000; // 10s, 20s, 40s
+          console.log(`[LLM Scoring] Rate limited on ${patent.patent_id}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
         }
-      ]
-    });
+        throw apiError; // Non-retryable or exhausted retries
+      }
+    }
+    if (!response) throw new Error('No response after retries');
 
     // Parse response
     const content = response.content[0];
@@ -533,12 +553,14 @@ export async function scorePatent(
       }
     };
 
-  } catch (error) {
+  } catch (error: any) {
+    const errMsg = error?.message || error?.error?.message || JSON.stringify(error).substring(0, 300);
+    console.error(`[LLM Scoring] Error scoring ${enrichedPatent.patent_id}: ${errMsg}`);
     return {
       patentId: enrichedPatent.patent_id,
       subSectorId,
       success: false,
-      error: (error as Error).message
+      error: errMsg
     };
   }
 }
@@ -555,9 +577,10 @@ export async function scorePatentBatch(
     progressCallback?: (completed: number, total: number) => void;
     contextOptions?: ContextOptions;
     template?: MergedTemplate;  // Pre-resolved template (for sector batch scoring)
+    sectorId?: string;  // Fallback ID for DB key when patents have no sub-sector
   } = {}
 ): Promise<BatchScoringResult> {
-  const { concurrency = 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS, template } = options;
+  const { concurrency = 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS, template, sectorId } = options;
 
   const results: ScoringResult[] = [];
   let successful = 0;
@@ -577,9 +600,10 @@ export async function scorePatentBatch(
     const batch = enrichedPatents.slice(i, i + concurrency);
 
     const batchResults = await Promise.all(
-      batch.map(patent => scorePatent(patent, { ...options, skipEnrichment: true, contextOptions, template }))
+      batch.map(patent => scorePatent(patent, { ...options, skipEnrichment: true, contextOptions, template, sectorId: sectorId || patent.primary_sector }))
     );
 
+    let batchFailed = 0;
     for (const result of batchResults) {
       results.push(result);
       if (result.success) {
@@ -590,6 +614,7 @@ export async function scorePatentBatch(
         }
       } else {
         failed++;
+        batchFailed++;
       }
     }
 
@@ -597,9 +622,10 @@ export async function scorePatentBatch(
       progressCallback(results.length, patents.length);
     }
 
-    // Small delay between batches to avoid rate limits
+    // Delay between batches — increase if we're seeing failures (likely rate limited)
     if (i + concurrency < patents.length) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const delay = batchFailed > 0 ? 5000 : 500;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 
@@ -999,6 +1025,7 @@ export async function scoreSector(
     concurrency,
     contextOptions,
     template,
+    sectorId: sectorName,
     progressCallback: (completed, total) => {
       const pct = Math.round((completed / total) * 100);
       console.log(`[LLM Scoring] Sector ${sectorName}: ${completed}/${total} (${pct}%)`);

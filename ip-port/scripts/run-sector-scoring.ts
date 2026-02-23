@@ -43,8 +43,8 @@ function parseArgs(): { batchFile: string; model: string; concurrency: number } 
     model = args[modelIdx + 1];
   }
 
-  // Parse --concurrency flag or use env var (default: 5)
-  let concurrency = parseInt(process.env.LLM_CONCURRENCY || '5', 10);
+  // Parse --concurrency flag or use env var (default: 3)
+  let concurrency = parseInt(process.env.LLM_CONCURRENCY || '3', 10);
   const concIdx = args.indexOf('--concurrency');
   if (concIdx !== -1 && args[concIdx + 1]) {
     concurrency = parseInt(args[concIdx + 1], 10);
@@ -149,6 +149,7 @@ async function main() {
       concurrency,
       contextOptions: DEFAULT_CONTEXT_OPTIONS,
       template,
+      sectorId: sectorName,
       progressCallback: (completed, total) => {
         const globalCompleted = totalCompleted + completed;
         const pct = Math.round((globalCompleted / totalPatents) * 100);

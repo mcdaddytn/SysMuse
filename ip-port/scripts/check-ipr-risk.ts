@@ -43,6 +43,31 @@ async function invalidateServerCache(): Promise<void> {
     console.log('\n[Cache] Could not contact server to invalidate cache');
   }
 }
+
+// Buffer for inline enrichment flag updates
+const flagBuffer: string[] = [];
+const FLAG_BUFFER_SIZE = 10;
+
+async function flushFlagBuffer(): Promise<void> {
+  if (flagBuffer.length === 0) return;
+  const ids = flagBuffer.splice(0, flagBuffer.length);
+  try {
+    await fetch('http://localhost:3001/api/patents/set-enrichment-flag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patentIds: ids, flag: 'hasIprData' }),
+    });
+  } catch {
+    // Non-fatal — repair endpoint can backfill later
+  }
+}
+
+async function setFlagInline(patentId: string): Promise<void> {
+  flagBuffer.push(patentId);
+  if (flagBuffer.length >= FLAG_BUFFER_SIZE) {
+    await flushFlagBuffer();
+  }
+}
 const IPR_CACHE_DIR = path.join(process.cwd(), 'cache/ipr-scores');
 
 interface IPRRiskData {
@@ -349,6 +374,9 @@ async function main() {
     const cacheFile = path.join(IPR_CACHE_DIR, `${patentId}.json`);
     fs.writeFileSync(cacheFile, JSON.stringify(result, null, 2));
 
+    // Set DB flag inline (buffered, flushes every 10 patents)
+    await setFlagInline(patentId);
+
     if (result.has_ipr_history) {
       summary.with_ipr++;
       console.log(`    IPR FOUND: ${result.petitions_filed} petition(s), score=${result.ipr_risk_score}`);
@@ -405,6 +433,9 @@ async function main() {
       console.log(`  ... and ${withIPR.length - 10} more`);
     }
   }
+
+  // Flush any remaining buffered flag updates
+  await flushFlagBuffer();
 
   // Invalidate server cache so new results are visible immediately
   await invalidateServerCache();

@@ -72,7 +72,6 @@ const scoringProgress = ref<SectorScoringProgress | null>(null);
 const scoringLoading = ref(false);
 const startScoringLoading = ref(false);
 const scoringOptions = ref({
-  useClaims: true,
   rescore: false,
   topN: 500,
   model: 'claude-sonnet-4-20250514',
@@ -479,7 +478,6 @@ async function startScoring() {
   scoringError.value = null;
   try {
     const result = await scoringTemplatesApi.batchScoreSector(selectedSector.value.name, {
-      useClaims: scoringOptions.value.useClaims,
       rescore: scoringOptions.value.rescore,
       topN: scoringOptions.value.topN || undefined,
       model: scoringOptions.value.model,
@@ -1286,7 +1284,6 @@ watch(selectedSectorId, () => {
                       />
                     </div>
                     <div class="col-12 col-sm-4">
-                      <q-toggle v-model="scoringOptions.useClaims" label="Include Claims" />
                       <q-toggle v-model="scoringOptions.rescore" label="Rescore" />
                     </div>
                   </div>

@@ -2040,7 +2040,6 @@ export interface BatchJob {
   batchMode?: boolean;
   portfolioId?: string;
   portfolioName?: string;
-  useClaims?: boolean;
 }
 
 export interface BatchJobsResponse {
@@ -2099,7 +2098,6 @@ export const batchJobsApi = {
     maxHours?: number;
     topN?: number;  // For super-sector/sector: limit to top N patents by score
     portfolioId?: string | null;
-    useClaims?: boolean;  // When true, LLM jobs require XML data
     model?: string;       // LLM model override
     batchMode?: boolean;  // true = Batch API (50% off), false = realtime
   }): Promise<StartJobsResponse> {
@@ -2796,10 +2794,9 @@ export const scoringTemplatesApi = {
    */
   async scoreSector(
     sectorName: string,
-    options?: { useClaims?: boolean; rescore?: boolean; minYear?: number; topN?: number }
+    options?: { rescore?: boolean; minYear?: number; topN?: number }
   ): Promise<{ message: string; total: number }> {
     const params = new URLSearchParams();
-    if (options?.useClaims) params.append('useClaims', 'true');
     if (options?.rescore) params.append('rescore', 'true');
     if (options?.minYear) params.append('minYear', options.minYear.toString());
     if (options?.topN) params.append('topN', options.topN.toString());
@@ -2939,10 +2936,9 @@ export const scoringTemplatesApi = {
    */
   async batchScoreSector(
     sectorName: string,
-    options?: { useClaims?: boolean; rescore?: boolean; topN?: number; model?: string }
+    options?: { rescore?: boolean; topN?: number; model?: string }
   ): Promise<{ success: boolean; message: string; batchId: string; requestCount: number; sectorName: string }> {
     const params = new URLSearchParams();
-    if (options?.useClaims) params.append('useClaims', 'true');
     if (options?.rescore) params.append('rescore', 'true');
     if (options?.topN) params.append('limit', options.topN.toString());
     if (options?.model) params.append('model', options.model);

@@ -13,7 +13,7 @@ import { loadAllClassifications } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
 import * as patentDataService from '../services/patent-data-service.js';
-import { syncEnrichmentFlags } from './batch-jobs.routes.js';
+import { repairEnrichmentFlags } from './batch-jobs.routes.js';
 import type { PatentFilters, PaginationOptions } from '../services/patent-data-service.js';
 import { getActiveSnapshotScores } from './scores.routes.js';
 
@@ -142,65 +142,14 @@ function getSnapshotScores(): { v2: Map<string, number> | null; v3: Map<string, 
 preloadSnapshotScores().catch(console.error);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Enrichment cache set cache (avoids re-reading directories on every request)
+// Enrichment cache invalidation
+// All enrichment flags are now DB-backed (hasLlmData, hasProsecutionData,
+// hasXmlData, hasIprData, hasFamilyData). Directory scanning was removed.
+// This function is kept for callers that signal enrichment data has changed.
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface EnrichmentCacheData {
-  llmSet: Set<string>;
-  prosSet: Set<string>;
-  iprSet: Set<string>;
-  familySet: Set<string>;
-  lastUpdated: number;
-}
-
-let enrichmentCacheData: EnrichmentCacheData | null = null;
-const ENRICHMENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getCacheSetFromDir(dir: string): Set<string> {
-  if (!fs.existsSync(dir)) return new Set();
-  return new Set(
-    fs.readdirSync(dir)
-      .filter(f => f.endsWith('.json'))
-      .map(f => f.replace('.json', ''))
-  );
-}
-
-function getEnrichmentCacheSets(forceRefresh = false): EnrichmentCacheData {
-  const now = Date.now();
-
-  if (
-    !forceRefresh &&
-    enrichmentCacheData &&
-    now - enrichmentCacheData.lastUpdated < ENRICHMENT_CACHE_TTL_MS
-  ) {
-    return enrichmentCacheData;
-  }
-
-  console.log('[Patents] Loading enrichment cache sets...');
-  const startTime = Date.now();
-
-  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
-  const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
-  const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
-  const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
-
-  enrichmentCacheData = {
-    llmSet: getCacheSetFromDir(llmDir),
-    prosSet: getCacheSetFromDir(prosDir),
-    iprSet: getCacheSetFromDir(iprDir),
-    familySet: getCacheSetFromDir(familyDir),
-    lastUpdated: now,
-  };
-
-  const elapsed = Date.now() - startTime;
-  console.log(`[Patents] Enrichment cache sets loaded in ${elapsed}ms (llm: ${enrichmentCacheData.llmSet.size}, pros: ${enrichmentCacheData.prosSet.size}, ipr: ${enrichmentCacheData.iprSet.size}, family: ${enrichmentCacheData.familySet.size})`);
-
-  return enrichmentCacheData;
-}
 
 // Export for cache invalidation from other routes
 export function invalidateEnrichmentCache(): void {
-  enrichmentCacheData = null;
   console.log('[Patents] Enrichment cache invalidated');
 }
 
@@ -630,7 +579,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
 
     // When forceRefresh, sync DB flags from file cache first
     if (forceRefresh) {
-      await syncEnrichmentFlags();
+      await repairEnrichmentFlags();
     }
 
     const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
@@ -645,8 +594,7 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       return db.localeCompare(da);
     });
 
-    // Load enrichment cache sets for IPR/family (not in Postgres yet)
-    const { iprSet, familySet } = getEnrichmentCacheSets(forceRefresh);
+    // IPR/family now use DB flags (hasIprData, hasFamilyData) — no dir scans needed
 
     // Helper functions
     function median(values: number[]): number {
@@ -694,14 +642,14 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       const fc = tierPatents.map(p => p.forward_citations ?? 0);
       const cc = tierPatents.map(p => p.competitor_citations ?? 0);
 
-      // Use Postgres flags for LLM/prosecution/XML, file cache for IPR/family
+      // All enrichment flags now from Postgres
       // LLM: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
       const llmEligible = tierPatents.filter(p => !(p.quarantine as any)?.llm);
       const llmCount = llmEligible.filter(p => p.has_llm_data).length;
       const llmDenominator = llmEligible.length || 1;
       const prosCount = tierPatents.filter(p => p.has_prosecution_data).length;
-      const iprCount = ids.filter(id => iprSet.has(id)).length;
-      const familyCount = ids.filter(id => familySet.has(id)).length;
+      const iprCount = tierPatents.filter(p => p.has_ipr_data).length;
+      const familyCount = tierPatents.filter(p => p.has_family_data).length;
       // XML: use quarantine to exclude ineligible patents
       const xmlEligible = tierPatents.filter(p => !(p.quarantine as any)?.xml);
       const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
@@ -776,13 +724,12 @@ router.get('/enrichment-summary', async (_req: Request, res: Response) => {
       });
     }
 
-    // Count totals scoped to the patent list (not global cache sets)
-    const allIds = sorted.map(p => p.patent_id);
+    // Count totals scoped to the patent list
     const llmEligibleAll = patents.filter(p => !(p.quarantine as any)?.llm);
     const llmTotal = llmEligibleAll.filter(p => p.has_llm_data).length;
     const prosTotal = patents.filter(p => p.has_prosecution_data).length;
-    const iprTotal = allIds.filter(id => iprSet.has(id)).length;
-    const familyTotal = allIds.filter(id => familySet.has(id)).length;
+    const iprTotal = patents.filter(p => p.has_ipr_data).length;
+    const familyTotal = patents.filter(p => p.has_family_data).length;
     const xmlEligibleAll = patents.filter(p => !(p.quarantine as any)?.xml);
     const xmlTotal = xmlEligibleAll.filter(p => p.has_xml_data).length;
     const totalQuarantineCounts = {
@@ -823,11 +770,10 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
     const forceRefresh = _req.query.forceRefresh === 'true';
 
     if (forceRefresh) {
-      await syncEnrichmentFlags();
+      await repairEnrichmentFlags();
     }
 
     const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
-    const { iprSet, familySet } = getEnrichmentCacheSets(forceRefresh);
 
     // Group by super_sector
     const bySector: Record<string, typeof patents> = {};
@@ -850,14 +796,14 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         const top = topPerSector === Infinity ? sorted : sorted.slice(0, topPerSector);
         const ids = top.map(p => p.patent_id);
 
-        // Use Postgres flags for LLM/prosecution/XML, file cache for IPR/family
+        // All enrichment flags now from Postgres
         // LLM: use quarantine to exclude LLM-ineligible patents
         const llmEligible = top.filter(p => !(p.quarantine as any)?.llm);
         const llmCount = llmEligible.filter(p => p.has_llm_data).length;
         const llmDenominator = llmEligible.length || 1;
         const prosCount = top.filter(p => p.has_prosecution_data).length;
-        const iprCount = ids.filter(id => iprSet.has(id)).length;
-        const familyCount = ids.filter(id => familySet.has(id)).length;
+        const iprCount = top.filter(p => p.has_ipr_data).length;
+        const familyCount = top.filter(p => p.has_family_data).length;
         const xmlEligible = top.filter(p => !(p.quarantine as any)?.xml);
         const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
         const xmlDenominator = xmlEligible.length || 1;
@@ -869,8 +815,8 @@ router.get('/sector-enrichment', async (_req: Request, res: Response) => {
         // Gaps (patents needing enrichment)
         const llmGap = llmEligible.filter(p => !p.has_llm_data).length;
         const prosGap = top.filter(p => !p.has_prosecution_data).length;
-        const iprGap = ids.filter(id => !iprSet.has(id)).length;
-        const familyGap = ids.filter(id => !familySet.has(id)).length;
+        const iprGap = top.filter(p => !p.has_ipr_data).length;
+        const familyGap = top.filter(p => !p.has_family_data).length;
         const xmlGap = xmlEligible.filter(p => !p.has_xml_data).length;
 
         const sectorQuarantineCounts = {
@@ -2209,6 +2155,40 @@ router.post('/analyze-cpc-cooccurrence', async (_req: Request, res: Response) =>
   } catch (error) {
     console.error('Error analyzing CPC co-occurrence:', error);
     res.status(500).json({ error: 'Failed to analyze CPC co-occurrence' });
+  }
+});
+
+/**
+ * POST /api/patents/set-enrichment-flag
+ * Set a DB enrichment flag for a batch of patents.
+ * Called by scripts (prosecution, IPR, LLM, family) after writing cache files.
+ */
+router.post('/set-enrichment-flag', async (req: Request, res: Response) => {
+  try {
+    const { patentIds, flag } = req.body;
+    const validFlags = ['hasLlmData', 'hasProsecutionData', 'hasIprData', 'hasFamilyData', 'hasXmlData'] as const;
+    type ValidFlag = typeof validFlags[number];
+
+    if (!Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds must be a non-empty array' });
+    }
+    if (!validFlags.includes(flag as ValidFlag)) {
+      return res.status(400).json({ error: `flag must be one of: ${validFlags.join(', ')}` });
+    }
+
+    const result = await prisma.patent.updateMany({
+      where: { patentId: { in: patentIds }, [flag]: false },
+      data: { [flag]: true },
+    });
+
+    if (result.count > 0) {
+      invalidateEnrichmentCache();
+    }
+
+    res.json({ success: true, updated: result.count });
+  } catch (error) {
+    console.error('Error setting enrichment flag:', error);
+    res.status(500).json({ error: 'Failed to set enrichment flag' });
   }
 });
 

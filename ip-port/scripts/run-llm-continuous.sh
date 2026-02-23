@@ -87,7 +87,7 @@ while true; do
     LOG_FILE="$LOG_DIR/llm-batch-$batch_num-$(date +%Y%m%d-%H%M%S).log"
     echo "Log: $LOG_FILE"
 
-    npx tsx scripts/run-llm-analysis-v3.ts "$BATCH_FILE" > "$LOG_FILE" 2>&1
+    npx tsx scripts/run-sector-scoring.ts "$BATCH_FILE" > "$LOG_FILE" 2>&1
 
     # Check result and import immediately
     if grep -q "Total patents analyzed:" "$LOG_FILE"; then

@@ -367,6 +367,12 @@ export async function savePatentScore(
       updatedAt: new Date()
     }
   });
+
+  // Set hasLlmData flag inline (no-op if already true)
+  await prisma.patent.updateMany({
+    where: { patentId: result.patentId, hasLlmData: false },
+    data: { hasLlmData: true },
+  });
 }
 
 // ============================================================================

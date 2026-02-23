@@ -5,8 +5,8 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { invalidateEnrichmentCache } from './patents.routes.js';
 
-// Export for use by enrichment endpoints that need fresh data
-export { syncEnrichmentFlags };
+// Export for use by enrichment endpoints that need fresh data (repair tool)
+export { repairEnrichmentFlags };
 import { clearScoringCache } from '../services/scoring-service.js';
 import { enrichPatentCpcBatch } from '../services/patent-xml-parser-service.js';
 
@@ -42,12 +42,11 @@ interface BatchJobResponse {
   batchMode?: boolean | null;
   portfolioId?: string | null;
   portfolioName?: string | null;
-  useClaims?: boolean;
 }
 
 // Default rate estimates (patents per hour) - will be refined over time
 const DEFAULT_RATES: Record<CoverageType, number> = {
-  llm: 150, // ~5 patents per batch, ~20 sec/batch = 150/hour (conservative)
+  llm: 900, // ~5 concurrent Anthropic calls, ~8 sec/call = ~37/min = ~900/hr (per process, conservative)
   prosecution: 600,
   ipr: 600,
   family: 500,
@@ -77,17 +76,19 @@ function toResponse(job: any): BatchJobResponse {
     batchMode: job.batchMode,
     portfolioId: job.portfolioId,
     portfolioName: job.portfolioName,
-    useClaims: job.useClaims,
   };
 }
 
 /**
- * Sync Postgres hasLlmData/hasProsecutionData flags from file cache.
- * Called after batch jobs complete so the enrichment summary reads correct values.
+ * Repair Postgres enrichment flags from file cache.
+ * This is a repair/backfill tool — inline flag-setting is now the primary mechanism.
+ * Run manually after restoring from backup or to backfill new flag columns.
  */
-async function syncEnrichmentFlags(): Promise<void> {
+async function repairEnrichmentFlags(): Promise<void> {
   const llmDir = path.join(process.cwd(), 'cache/llm-scores');
   const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
+  const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
+  const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
   const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
 
   const llmSet = fs.existsSync(llmDir)
@@ -95,6 +96,12 @@ async function syncEnrichmentFlags(): Promise<void> {
     : new Set<string>();
   const prosSet = fs.existsSync(prosDir)
     ? new Set(fs.readdirSync(prosDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+  const iprSet = fs.existsSync(iprDir)
+    ? new Set(fs.readdirSync(iprDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+  const familySet = fs.existsSync(familyDir)
+    ? new Set(fs.readdirSync(familyDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
     : new Set<string>();
 
   // Build XML set: files like US10002051.xml → "10002051", US09959345.xml → "9959345"
@@ -115,14 +122,25 @@ async function syncEnrichmentFlags(): Promise<void> {
         { hasLlmData: false },
         { hasProsecutionData: false },
         { hasXmlData: false },
+        { hasIprData: false },
+        { hasFamilyData: false },
       ],
     },
-    select: { patentId: true, hasLlmData: true, hasProsecutionData: true, hasXmlData: true },
+    select: {
+      patentId: true,
+      hasLlmData: true,
+      hasProsecutionData: true,
+      hasXmlData: true,
+      hasIprData: true,
+      hasFamilyData: true,
+    },
   });
 
   let llmUpdated = 0;
   let prosUpdated = 0;
   let xmlUpdated = 0;
+  let iprUpdated = 0;
+  let familyUpdated = 0;
 
   for (const p of stale) {
     const updates: Record<string, boolean> = {};
@@ -138,6 +156,14 @@ async function syncEnrichmentFlags(): Promise<void> {
       updates.hasXmlData = true;
       xmlUpdated++;
     }
+    if (!p.hasIprData && iprSet.has(p.patentId)) {
+      updates.hasIprData = true;
+      iprUpdated++;
+    }
+    if (!p.hasFamilyData && familySet.has(p.patentId)) {
+      updates.hasFamilyData = true;
+      familyUpdated++;
+    }
     if (Object.keys(updates).length > 0) {
       await prisma.patent.update({
         where: { patentId: p.patentId },
@@ -146,8 +172,8 @@ async function syncEnrichmentFlags(): Promise<void> {
     }
   }
 
-  if (llmUpdated > 0 || prosUpdated > 0 || xmlUpdated > 0) {
-    console.log(`[BatchJobs] Synced enrichment flags: ${llmUpdated} LLM, ${prosUpdated} prosecution, ${xmlUpdated} XML`);
+  if (llmUpdated > 0 || prosUpdated > 0 || xmlUpdated > 0 || iprUpdated > 0 || familyUpdated > 0) {
+    console.log(`[BatchJobs] Repaired enrichment flags: ${llmUpdated} LLM, ${prosUpdated} prosecution, ${xmlUpdated} XML, ${iprUpdated} IPR, ${familyUpdated} family`);
   }
 }
 
@@ -479,6 +505,8 @@ async function analyzeGaps(
         hasLlmData: true,
         hasProsecutionData: true,
         hasXmlData: true,
+        hasIprData: true,
+        hasFamilyData: true,
         hasCitationData: true,
         forwardCitations: true,
         isQuarantined: true,
@@ -491,7 +519,7 @@ async function analyzeGaps(
 
     const ids = patents.map(p => p.patentId);
 
-    // LLM, prosecution, and XML gaps come from Postgres flags
+    // All enrichment gaps now come from Postgres flags
     // LLM gap: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
     const llmEligible = patents.filter(p => !(p.quarantine as any)?.llm);
     const llmGapIds = llmEligible.filter(p => !p.hasLlmData).map(p => p.patentId);
@@ -500,7 +528,10 @@ async function analyzeGaps(
     const xmlEligible = patents.filter(p => !(p.quarantine as any)?.xml);
     const xmlGapIds = xmlEligible.filter(p => !p.hasXmlData).map(p => p.patentId);
 
-    // IPR, family, and citing gaps use file-based cache
+    const iprGapIds = patents.filter(p => !p.hasIprData).map(p => p.patentId);
+    const familyGapIds = patents.filter(p => !p.hasFamilyData).map(p => p.patentId);
+
+    // Citing gaps still use file-based cache (no DB flag for this)
     function getCacheSet(dir: string): Set<string> {
       const fullPath = path.join(process.cwd(), dir);
       if (!fs.existsSync(fullPath)) return new Set();
@@ -515,12 +546,7 @@ async function analyzeGaps(
       }
     }
 
-    const iprSet = getCacheSet('cache/ipr-scores');
-    const familySet = getCacheSet('cache/patent-families/parents');
     const citingSet = getCacheSet('cache/api/patentsview/citing-patent-details');
-
-    const iprGapIds = ids.filter(id => !iprSet.has(id));
-    const familyGapIds = ids.filter(id => !familySet.has(id));
     const citingGapIds = ids.filter(id => !citingSet.has(id));
 
     const quarantineCounts = {
@@ -553,11 +579,9 @@ function getEnrichmentCommand(
 ): string {
   switch (coverageType) {
     case 'llm': {
-      let cmd = `npx tsx scripts/run-llm-analysis-v3.ts ${batchFile} > ${logFile} 2>&1`;
-      // Prepend environment variables for model and realtime mode
+      let cmd = `npx tsx scripts/run-sector-scoring.ts ${batchFile} > ${logFile} 2>&1`;
       const envVars: string[] = [];
       if (options?.model) envVars.push(`LLM_MODEL=${options.model}`);
-      if (options?.batchMode === false) envVars.push('LLM_REALTIME=1');
       if (envVars.length > 0) cmd = `${envVars.join(' ')} ${cmd}`;
       return cmd;
     }
@@ -579,7 +603,7 @@ function getEnrichmentCommand(
 function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: string }> {
   try {
     const result = execSync(
-      'ps aux | grep -E "run-llm-analysis|check-prosecution|check-ipr|enrich-citations|extract-patent-xmls" | grep -v grep',
+      'ps aux | grep -E "run-sector-scoring|run-llm-analysis|check-prosecution|check-ipr|enrich-citations|extract-patent-xmls" | grep -v grep',
       { encoding: 'utf-8' }
     );
 
@@ -587,7 +611,7 @@ function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: strin
       const parts = line.split(/\s+/);
       const pid = parseInt(parts[1]);
       let type = 'unknown';
-      if (line.includes('run-llm-analysis')) type = 'llm';
+      if (line.includes('run-sector-scoring') || line.includes('run-llm-analysis')) type = 'llm';
       else if (line.includes('check-prosecution')) type = 'prosecution';
       else if (line.includes('check-ipr')) type = 'ipr';
       else if (line.includes('enrich-citations')) type = 'family';
@@ -751,23 +775,15 @@ router.get('/', async (_req: Request, res: Response) => {
       }
     }
 
-    // Invalidate caches and sync Postgres flags when jobs complete (throttled to once per 10 seconds)
+    // Invalidate caches when jobs complete (throttled to once per 10 seconds)
+    // Note: enrichment flags are now set inline by scripts/services — no directory scanning needed
     const now = Date.now();
+
     if (jobsJustCompleted && now - lastCacheInvalidation > 10000) {
       console.log('[BatchJobs] Jobs completed - invalidating enrichment and scoring caches');
       invalidateEnrichmentCache();
       clearScoringCache();
       lastCacheInvalidation = now;
-
-      // Sync Postgres hasLlmData/hasProsecutionData flags from file cache
-      syncEnrichmentFlags().catch(err =>
-        console.error('[BatchJobs] Failed to sync enrichment flags:', err)
-      );
-
-      // Sync LLM score data from cache files into patent_scores EAV table
-      syncLlmScoresToDb().catch(err =>
-        console.error('[BatchJobs] Failed to sync LLM scores to DB:', err)
-      );
 
       // Auto-snapshot for large completed LLM jobs
       const justCompletedLlm = dbJobs.filter(j =>
@@ -812,7 +828,6 @@ router.post('/', async (req: Request, res: Response) => {
       maxHours = 4,
       topN = 0,  // For super-sector/sector: limit to top N patents by score (0 = all)
       portfolioId,  // Optional: scope to a specific portfolio
-      useClaims = false,  // When true, LLM jobs require XML data to be available
       model,       // Optional: LLM model override (e.g., 'claude-sonnet-4-20250514')
       batchMode,   // Optional: true = Batch API (50% off, ~24h), false = realtime
     } = req.body;
@@ -952,7 +967,6 @@ router.post('/', async (req: Request, res: Response) => {
             estimatedCompletion,
             model: coverageType === 'llm' ? (model || null) : null,
             batchMode: coverageType === 'llm' ? (batchMode ?? null) : null,
-            useClaims: useClaims || false,
             portfolioId: portfolioId || null,
             portfolioName: portfolioName || null,
           },
@@ -1119,16 +1133,18 @@ router.get('/gaps', async (req: Request, res: Response) => {
 
 /**
  * POST /api/batch-jobs/sync-flags
- * Manually sync Postgres enrichment flags from file cache
+ * Repair/backfill Postgres enrichment flags from file cache.
+ * Handles all flag types: LLM, prosecution, XML, IPR, family.
+ * Run after restoring from backup or to backfill new flag columns.
  */
 router.post('/sync-flags', async (req: Request, res: Response) => {
   try {
-    await syncEnrichmentFlags();
+    await repairEnrichmentFlags();
     invalidateEnrichmentCache();
     res.json({ success: true });
   } catch (error) {
-    console.error('Error syncing flags:', error);
-    res.status(500).json({ error: 'Failed to sync enrichment flags' });
+    console.error('Error repairing flags:', error);
+    res.status(500).json({ error: 'Failed to repair enrichment flags' });
   }
 });
 

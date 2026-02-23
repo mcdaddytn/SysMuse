@@ -611,7 +611,6 @@ router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Resp
  *   - limit: max patents to score (default 2000)
  *   - model: LLM model to use
  *   - concurrency: parallel requests (default 2)
- *   - useClaims: 'true' to include patent claims in context (1.6x cost)
  *   - rescore: 'true' to re-score already scored patents (overwrites existing scores)
  *   - minYear: filter to patents from this year or later (e.g., 2015)
  *   - minScore: filter to patents with base score >= this value (e.g., 3)
@@ -624,7 +623,7 @@ router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Resp
 router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
-    const { limit, model, concurrency, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
+    const { limit, model, concurrency, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
 
     const contextOptions = DEFAULT_CONTEXT_OPTIONS;
 
@@ -1085,12 +1084,12 @@ router.get('/llm/preview/:subSectorId', async (req: Request, res: Response) => {
 /**
  * POST /api/scoring-templates/llm/batch-score-sector/:sectorName
  * Submit a batch scoring job for a sector. Returns immediately with batchId.
- * Same query params as score-sector (limit, model, useClaims, rescore, etc.)
+ * Same query params as score-sector (limit, model, rescore, etc.)
  */
 router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
-    const { limit, model, useClaims, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
+    const { limit, model, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
     const { portfolioId } = req.body || {};
 
     const contextOptions = DEFAULT_CONTEXT_OPTIONS;

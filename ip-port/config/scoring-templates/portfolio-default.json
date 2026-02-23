@@ -125,6 +125,30 @@
       "weight": 0,
       "requiresReasoning": true,
       "reasoningPrompt": "List 2-4 specific technology components this patent addresses. Use standard technology terminology that maps to known product building blocks. Rate how clearly the patent maps to identifiable components (10 = maps directly to a well-known component, 1 = too abstract to map)."
+    },
+    {
+      "fieldName": "patent_summary",
+      "displayName": "Patent Summary",
+      "question": "Provide a concise 2-3 sentence summary of what this patent covers, suitable for a non-technical audience.",
+      "answerType": "text",
+      "weight": 0,
+      "requiresReasoning": false
+    },
+    {
+      "fieldName": "prior_art_problem",
+      "displayName": "Prior Art Problem",
+      "question": "What problem in prior art does this patent solve? Describe in 2-3 sentences.",
+      "answerType": "text",
+      "weight": 0,
+      "requiresReasoning": false
+    },
+    {
+      "fieldName": "technical_solution",
+      "displayName": "Technical Solution",
+      "question": "How does the patent's technical solution work? Describe in 2-3 sentences.",
+      "answerType": "text",
+      "weight": 0,
+      "requiresReasoning": false
     }
   ]
 }

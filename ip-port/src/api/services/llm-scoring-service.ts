@@ -117,9 +117,12 @@ function loadAbstract(patentId: string): string | null {
 }
 
 /**
- * Load LLM enrichment data from cache
+ * Load LLM enrichment data from cache.
+ * Checks file cache first (legacy ~31K patents), then falls back to
+ * PatentSubSectorScore.metrics for patents scored by the new pipeline.
  */
 function loadLlmData(patentId: string): { summary?: string; prior_art_problem?: string; technical_solution?: string } | null {
+  // 1. Try legacy file cache
   try {
     const cachePath = path.join(process.cwd(), 'cache/llm-scores', `${patentId}.json`);
     if (fs.existsSync(cachePath)) {
@@ -133,6 +136,30 @@ function loadLlmData(patentId: string): { summary?: string; prior_art_problem?: 
   } catch {
     // Cache file unreadable
   }
+
+  // 2. Fallback: check PatentSubSectorScore metrics for text questions from new pipeline
+  // This is sync-friendly because enrichment runs before scoring, so we check
+  // if a previous scoring pass already produced these text fields.
+  try {
+    // Use synchronous query pattern — read from file cache of DB scores
+    const dbCachePath = path.join(process.cwd(), 'cache/llm-scores-db', `${patentId}.json`);
+    if (fs.existsSync(dbCachePath)) {
+      const metrics = JSON.parse(fs.readFileSync(dbCachePath, 'utf-8'));
+      const summary = metrics.patent_summary?.reasoning;
+      const priorArt = metrics.prior_art_problem?.reasoning;
+      const techSolution = metrics.technical_solution?.reasoning;
+      if (summary || priorArt || techSolution) {
+        return {
+          summary: summary || null,
+          prior_art_problem: priorArt || null,
+          technical_solution: techSolution || null,
+        };
+      }
+    }
+  } catch {
+    // DB cache file unreadable
+  }
+
   return null;
 }
 
@@ -220,7 +247,11 @@ function buildScoringPrompt(
     ? ''
     : (templateOrQuestions.contextDescription || '');
 
-  const questionPrompts = questions.map((q, i) => {
+  // Separate numeric and text questions for different prompt formatting
+  const numericQuestions = questions.filter(q => q.answerType !== 'text');
+  const textQuestions = questions.filter(q => q.answerType === 'text');
+
+  const numericPrompts = numericQuestions.map((q, i) => {
     let prompt = `${i + 1}. **${q.displayName}** (fieldName: "${q.fieldName}")
    Question: ${q.question}`;
 
@@ -233,6 +264,11 @@ function buildScoringPrompt(
     }
 
     return prompt;
+  }).join('\n\n');
+
+  const textPrompts = textQuestions.map((q, i) => {
+    return `${numericQuestions.length + i + 1}. **${q.displayName}** (fieldName: "${q.fieldName}")
+   Question: ${q.question}`;
   }).join('\n\n');
 
   // Build context sections
@@ -285,13 +321,19 @@ ${patent.claims_text ? `\n## Key Claims\n${patent.claims_text}` : ''}
 
 ## Scoring Questions
 
-For each question below, provide:
+For each numeric question below, provide:
 1. A numeric score within the specified scale
 2. A brief reasoning explaining your score (2-3 sentences)
 3. A confidence level (high/medium/low)
 
-${questionPrompts}
+${numericPrompts}
+${textQuestions.length > 0 ? `
+## Text Questions
 
+For each text question below, provide a concise text response:
+
+${textPrompts}
+` : ''}
 ## Response Format
 
 Respond with a JSON object containing the scores. Use this exact structure:
@@ -299,12 +341,15 @@ Respond with a JSON object containing the scores. Use this exact structure:
 \`\`\`json
 {
   "scores": {
-    "${questions[0]?.fieldName || 'example_field'}": {
+    "${numericQuestions[0]?.fieldName || 'example_field'}": {
       "score": 7,
       "reasoning": "Brief explanation of the score...",
       "confidence": "high"
-    }
-    // ... one entry for each fieldName
+    }${textQuestions.length > 0 ? `,
+    "${textQuestions[0]?.fieldName || 'text_field'}": {
+      "text": "Your concise text response...",
+      "confidence": "high"
+    }` : ''}
   }
 }
 \`\`\`
@@ -330,15 +375,30 @@ export function parseScoreResponse(
   }
 
   const parsed = JSON.parse(jsonMatch[1]);
-  const scores = parsed.scores as Record<string, { score: number; reasoning: string; confidence?: string }>;
+  const scores = parsed.scores as Record<string, any>;
+
+  // Build a lookup for question types
+  const questionTypes = new Map(questions.map(q => [q.fieldName, q.answerType]));
 
   const metrics: Record<string, MetricScore> = {};
   for (const [fieldName, data] of Object.entries(scores)) {
-    metrics[fieldName] = {
-      score: data.score,
-      reasoning: data.reasoning,
-      confidence: data.confidence === 'high' ? 1.0 : data.confidence === 'medium' ? 0.7 : 0.5
-    };
+    const answerType = questionTypes.get(fieldName);
+
+    if (answerType === 'text') {
+      // Text questions: store text in reasoning, score = 0
+      metrics[fieldName] = {
+        score: 0,
+        reasoning: data.text || data.reasoning || '',
+        confidence: data.confidence === 'high' ? 1.0 : data.confidence === 'medium' ? 0.7 : 0.5
+      };
+    } else {
+      // Numeric questions: standard score + reasoning
+      metrics[fieldName] = {
+        score: data.score,
+        reasoning: data.reasoning,
+        confidence: data.confidence === 'high' ? 1.0 : data.confidence === 'medium' ? 0.7 : 0.5
+      };
+    }
   }
 
   const compositeScore = calculateCompositeScore(metrics, questions);

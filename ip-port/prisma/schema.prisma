@@ -288,6 +288,8 @@ model Patent {
   hasCitationData   Boolean  @default(false) @map("has_citation_data")
   hasProsecutionData Boolean @default(false) @map("has_prosecution_data")
   hasXmlData         Boolean  @default(false) @map("has_xml_data")
+  hasIprData         Boolean  @default(false) @map("has_ipr_data")
+  hasFamilyData      Boolean  @default(false) @map("has_family_data")
 
   // Quarantine tracking
   isQuarantined     Boolean  @default(false) @map("is_quarantined")
@@ -380,6 +382,7 @@ model PatentScore {
   templateId  String?  @map("template_id")
   llmModel    String?  @map("llm_model")
   scoredAt    DateTime @default(now()) @map("scored_at")
+  isStale     Boolean  @default(false) @map("is_stale")
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

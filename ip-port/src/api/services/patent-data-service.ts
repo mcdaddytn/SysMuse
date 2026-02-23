@@ -1104,6 +1104,8 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
   has_citation_data: boolean;
   has_prosecution_data: boolean;
   has_xml_data: boolean;
+  has_ipr_data: boolean;
+  has_family_data: boolean;
   is_quarantined: boolean;
   quarantine: any;
 }>> {
@@ -1126,6 +1128,8 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
       hasCitationData: true,
       hasProsecutionData: true,
       hasXmlData: true,
+      hasIprData: true,
+      hasFamilyData: true,
       isQuarantined: true,
       quarantine: true,
       citations: { select: { competitorCitations: true } },
@@ -1145,6 +1149,8 @@ export async function getPatentsForEnrichment(portfolioId?: string): Promise<Arr
     has_citation_data: p.hasCitationData,
     has_prosecution_data: p.hasProsecutionData,
     has_xml_data: p.hasXmlData,
+    has_ipr_data: p.hasIprData,
+    has_family_data: p.hasFamilyData,
     is_quarantined: p.isQuarantined,
     quarantine: p.quarantine,
   }));

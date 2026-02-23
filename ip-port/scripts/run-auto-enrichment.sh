@@ -234,7 +234,7 @@ run_enrichment_loop() {
             BATCH_SIZE=$(( LLM_NEED < 500 ? LLM_NEED : 500 ))
             echo "Starting LLM for $BATCH_SIZE patents..."
             echo "$GAPS" | jq -r ".llm.ids[:$BATCH_SIZE] | .[]" | jq -Rs 'split("\n") | map(select(length > 0))' > /tmp/auto-llm-batch.json
-            nohup npx tsx scripts/run-llm-analysis-v3.ts /tmp/auto-llm-batch.json > "$LOG_DIR/auto-llm-$(date +%Y%m%d-%H%M%S).log" 2>&1 &
+            nohup npx tsx scripts/run-sector-scoring.ts /tmp/auto-llm-batch.json > "$LOG_DIR/auto-llm-$(date +%Y%m%d-%H%M%S).log" 2>&1 &
             echo "  Started LLM job (PID: $!)"
         fi
 

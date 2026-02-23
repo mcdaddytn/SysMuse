@@ -20,7 +20,6 @@ import {
   processBatchResults,
   listBatchJobs,
   DEFAULT_CONTEXT_OPTIONS,
-  CLAIMS_CONTEXT_OPTIONS
 } from '../src/api/services/llm-scoring-service.js';
 
 const VIDEO_STREAMING_SECTORS = [
@@ -38,7 +37,6 @@ function parseArgs(): {
   rescore: boolean;
   limit: number;
   wait: boolean;
-  useClaims: boolean;
   model: string;
   status: boolean;
   process: boolean;
@@ -48,7 +46,6 @@ function parseArgs(): {
   let rescore = false;
   let limit = 2000;
   let wait = false;
-  let useClaims = false;
   let model = 'claude-sonnet-4-20250514';
   let status = false;
   let processResults = false;
@@ -64,8 +61,6 @@ function parseArgs(): {
       limit = parseInt(arg.split('=')[1]);
     } else if (arg === '--wait') {
       wait = true;
-    } else if (arg === '--use-claims') {
-      useClaims = true;
     } else if (arg.startsWith('--model=')) {
       model = arg.split('=')[1];
     } else if (arg === '--status') {
@@ -75,7 +70,7 @@ function parseArgs(): {
     }
   }
 
-  return { sectors, rescore, limit, wait, useClaims, model, status, process: processResults };
+  return { sectors, rescore, limit, wait, model, status, process: processResults };
 }
 
 async function showStatus(): Promise<void> {
@@ -150,14 +145,13 @@ async function submitJobs(config: ReturnType<typeof parseArgs>): Promise<void> {
     process.exit(1);
   }
 
-  const contextOptions = config.useClaims ? CLAIMS_CONTEXT_OPTIONS : DEFAULT_CONTEXT_OPTIONS;
+  const contextOptions = DEFAULT_CONTEXT_OPTIONS;
 
   console.log(`\n=== Batch Scoring Submission ===`);
   console.log(`Sectors: ${config.sectors.join(', ')}`);
   console.log(`Model: ${config.model}`);
   console.log(`Rescore: ${config.rescore}`);
   console.log(`Limit per sector: ${config.limit}`);
-  console.log(`Claims: ${config.useClaims}`);
   console.log('');
 
   const batchIds: string[] = [];

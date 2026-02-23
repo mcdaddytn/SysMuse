@@ -425,7 +425,12 @@ async function main() {
   console.log('Note: File Wrapper API only has applications from 2001+');
   console.log('');
 
-  const client = new FileWrapperClient({ apiKey });
+  const client = new FileWrapperClient({
+    apiKey,
+    rateLimit: process.env.API_RATE_LIMIT ? parseInt(process.env.API_RATE_LIMIT) : undefined,
+    retryAttempts: process.env.API_RETRY_ATTEMPTS ? parseInt(process.env.API_RETRY_ATTEMPTS) : undefined,
+    retryDelay: process.env.API_RETRY_DELAY ? parseInt(process.env.API_RETRY_DELAY) : undefined,
+  });
   const results: ProsecutionHistoryData[] = [];
   const summary = {
     total: idsToProcess.length,

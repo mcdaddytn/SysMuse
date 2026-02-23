@@ -466,7 +466,8 @@ export async function scorePatent(
   try {
     // Call Claude with retry for rate limits / overloaded
     let response: Anthropic.Message | null = null;
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = parseInt(process.env.LLM_MAX_RETRIES || '3');
+    const retryBaseDelay = parseInt(process.env.LLM_RETRY_BASE_DELAY || '5000');
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         response = await anthropic.messages.create({
@@ -484,7 +485,7 @@ export async function scorePatent(
         const status = apiError?.status || apiError?.error?.status;
         const isRetryable = status === 429 || status === 529 || apiError?.message?.includes('overloaded');
         if (isRetryable && attempt < MAX_RETRIES) {
-          const delay = Math.pow(2, attempt + 1) * 5000; // 10s, 20s, 40s
+          const delay = Math.pow(2, attempt + 1) * retryBaseDelay;
           console.log(`[LLM Scoring] Rate limited on ${patent.patent_id}, retrying in ${delay / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
           await new Promise(r => setTimeout(r, delay));
           continue;
@@ -580,7 +581,8 @@ export async function scorePatentBatch(
     sectorId?: string;  // Fallback ID for DB key when patents have no sub-sector
   } = {}
 ): Promise<BatchScoringResult> {
-  const { concurrency = 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS, template, sectorId } = options;
+  const envConcurrency = process.env.LLM_CONCURRENCY ? parseInt(process.env.LLM_CONCURRENCY) : undefined;
+  const { concurrency = envConcurrency || 3, progressCallback, contextOptions = DEFAULT_CONTEXT_OPTIONS, template, sectorId } = options;
 
   const results: ScoringResult[] = [];
   let successful = 0;
@@ -624,7 +626,8 @@ export async function scorePatentBatch(
 
     // Delay between batches — increase if we're seeing failures (likely rate limited)
     if (i + concurrency < patents.length) {
-      const delay = batchFailed > 0 ? 5000 : 500;
+      const successDelay = parseInt(process.env.LLM_INTER_BATCH_DELAY || '500');
+      const delay = batchFailed > 0 ? 5000 : successDelay;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }

@@ -7,7 +7,7 @@ import { useSuperSectors } from '@/composables/useSuperSectors';
 import {
   patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi, quarantineApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
-  type BatchJob, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
+  type BatchJob, type BatchJobSettings, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
   type BatchJobMetadata, type HydrationResult, type ScoreSnapshot,
   type QuarantineSummary, type QuarantineGroup
 } from '@/services/api';
@@ -231,6 +231,27 @@ const startingJob = ref(false);
 const gapsData = ref<GapsResponse | null>(null);
 const loadingGaps = ref(false);
 
+// Advanced settings (shared between New Job and Enrich dialogs — only one open at a time)
+const showAdvanced = ref(false);
+const advancedSettings = ref<BatchJobSettings>({
+  llmConcurrency: 3,
+  llmMaxRetries: 3,
+  llmRetryBaseDelay: 5000,
+  llmInterBatchDelay: 500,
+  apiRateLimit: 60,
+  apiRetryAttempts: 3,
+  apiRetryDelay: 1000,
+  batchSize: 500,
+});
+
+function resetAdvancedSettings() {
+  showAdvanced.value = false;
+  advancedSettings.value = {
+    llmConcurrency: 3, llmMaxRetries: 3, llmRetryBaseDelay: 5000, llmInterBatchDelay: 500,
+    apiRateLimit: 60, apiRetryAttempts: 3, apiRetryDelay: 1000, batchSize: 500,
+  };
+}
+
 // Duplicate job warning
 const showDuplicateWarning = ref(false);
 const duplicateJobs = ref<BatchJob[]>([]);
@@ -280,6 +301,7 @@ watch([newJobTargetType, newJobTargetValue], () => {
 
 watch(showNewJobDialog, (open) => {
   if (open) {
+    resetAdvancedSettings();
     loadGaps();
   }
 });
@@ -300,6 +322,7 @@ async function doStartNewJob() {
       portfolioId: portfolioStore.selectedPortfolioId,
       ...(newJobModel.value ? { model: newJobModel.value } : {}),
       ...(newJobCoverageTypes.value.includes('llm') ? { batchMode: newJobBatchMode.value } : {}),
+      ...(showAdvanced.value ? { settings: advancedSettings.value } : {}),
     }) as any;
     showNewJobDialog.value = false;
     await loadBatchJobs();
@@ -333,6 +356,8 @@ const enrichDialogCoverageTypes = ref<CoverageType[]>(['llm', 'prosecution', 'ip
 const enrichDialogGaps = ref<GapsResponse | null>(null);
 const enrichDialogLoading = ref(false);
 const enrichDialogStarting = ref(false);
+const enrichDialogModel = ref<string | null>(null);
+const enrichDialogBatchMode = ref(true);
 
 async function openEnrichDialog(targetType: TargetType, targetValue: string, topN: number = 0) {
   enrichDialogTargetType.value = targetType;
@@ -340,6 +365,9 @@ async function openEnrichDialog(targetType: TargetType, targetValue: string, top
   enrichDialogTopN.value = topN;
   enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'ipr', 'family', 'xml'];
   enrichDialogGaps.value = null;
+  enrichDialogModel.value = null;
+  enrichDialogBatchMode.value = true;
+  resetAdvancedSettings();
   showEnrichDialog.value = true;
 
   // Load gaps (pass topN for super-sector/sector to limit to top N patents)
@@ -375,6 +403,9 @@ async function doStartEnrichFromDialog() {
       maxHours: 4,
       topN: enrichDialogTopN.value > 0 ? enrichDialogTopN.value : undefined,
       portfolioId: portfolioStore.selectedPortfolioId,
+      ...(enrichDialogModel.value ? { model: enrichDialogModel.value } : {}),
+      ...(enrichDialogCoverageTypes.value.includes('llm') ? { batchMode: enrichDialogBatchMode.value } : {}),
+      ...(showAdvanced.value ? { settings: advancedSettings.value } : {}),
     }) as any;
     showEnrichDialog.value = false;
     activeTab.value = 'jobs';
@@ -1498,6 +1529,11 @@ onUnmounted(() => {
                       | <q-badge dense :color="job.model.includes('opus') ? 'deep-purple' : job.model.includes('haiku') ? 'teal' : 'blue'" text-color="white" class="text-caption">{{ llmModelLabel(job.model) }}</q-badge>
                     </span>
                     <span v-if="job.batchMode === false" class="q-ml-sm">| <q-badge dense color="orange" text-color="white" class="text-caption">realtime</q-badge></span>
+                    <template v-if="job.settings">
+                      <q-badge v-if="job.settings.llmConcurrency && job.settings.llmConcurrency !== 3" dense color="grey-6" text-color="white" class="text-caption q-ml-xs">{{ job.settings.llmConcurrency }}x</q-badge>
+                      <q-badge v-if="job.settings.apiRateLimit && job.settings.apiRateLimit !== 60" dense color="grey-6" text-color="white" class="text-caption q-ml-xs">{{ job.settings.apiRateLimit }}rpm</q-badge>
+                      <q-badge v-if="job.settings.batchSize && job.settings.batchSize !== 500" dense color="grey-6" text-color="white" class="text-caption q-ml-xs">batch:{{ job.settings.batchSize }}</q-badge>
+                    </template>
                     <!-- Claims are always included in LLM scoring -->
                     <span v-if="job.status === 'running' && job.actualRate" class="q-ml-sm">| {{ job.actualRate.toLocaleString() }}/hr</span>
                     <span v-else-if="job.status === 'running' && job.estimatedRate" class="q-ml-sm">| ~{{ job.estimatedRate.toLocaleString() }}/hr</span>
@@ -1866,40 +1902,131 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- LLM-specific options (shown when LLM is selected) -->
-          <template v-if="newJobCoverageTypes.includes('llm')">
-            <q-select
-              v-model="newJobModel"
-              :options="llmModelOptions"
-              option-value="value"
-              option-label="label"
-              emit-value
-              map-options
-              label="LLM Model"
-              outlined
-              dense
-              class="q-mt-sm"
-            >
-              <template v-slot:option="scope">
-                <q-item v-bind="scope.itemProps">
-                  <q-item-section>
-                    <q-item-label>{{ scope.opt.label }}</q-item-label>
-                    <q-item-label caption>{{ scope.opt.hint }}</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </template>
-            </q-select>
+          <!-- Advanced Settings -->
+          <q-expansion-item
+            v-model="showAdvanced"
+            label="Advanced Settings"
+            icon="tune"
+            header-class="text-grey-8"
+            dense
+            class="q-mt-sm"
+          >
+            <q-card flat>
+              <q-card-section class="q-gutter-sm q-pt-sm">
+                <!-- LLM Settings -->
+                <template v-if="newJobCoverageTypes.includes('llm')">
+                  <div class="text-caption text-weight-medium text-grey-8">LLM Scoring</div>
+                  <q-select
+                    v-model="newJobModel"
+                    :options="llmModelOptions"
+                    option-value="value"
+                    option-label="label"
+                    emit-value
+                    map-options
+                    label="LLM Model"
+                    outlined
+                    dense
+                  >
+                    <template v-slot:option="scope">
+                      <q-item v-bind="scope.itemProps">
+                        <q-item-section>
+                          <q-item-label>{{ scope.opt.label }}</q-item-label>
+                          <q-item-label caption>{{ scope.opt.hint }}</q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
+                  <q-toggle
+                    v-model="newJobBatchMode"
+                    color="blue"
+                  >
+                    <template v-slot:default>
+                      <span class="text-body2">{{ newJobBatchMode ? 'Batch API — ~50% cheaper, results in ~24h' : 'Realtime — full price, immediate results' }}</span>
+                    </template>
+                  </q-toggle>
+                  <div class="row q-gutter-sm q-mt-xs">
+                    <q-input
+                      v-model.number="advancedSettings.llmConcurrency"
+                      type="number"
+                      label="Concurrency"
+                      hint="Parallel API calls (1-10)"
+                      outlined dense
+                      :rules="[(v: number) => (v >= 1 && v <= 10) || '1-10']"
+                      style="max-width: 140px"
+                    />
+                    <q-input
+                      v-model.number="advancedSettings.llmMaxRetries"
+                      type="number"
+                      label="Max Retries"
+                      hint="0-5"
+                      outlined dense
+                      :rules="[(v: number) => (v >= 0 && v <= 5) || '0-5']"
+                      style="max-width: 120px"
+                    />
+                    <q-input
+                      v-model.number="advancedSettings.llmRetryBaseDelay"
+                      type="number"
+                      label="Retry Delay (ms)"
+                      hint="Base backoff delay"
+                      outlined dense
+                      style="max-width: 150px"
+                    />
+                    <q-input
+                      v-model.number="advancedSettings.llmInterBatchDelay"
+                      type="number"
+                      label="Batch Delay (ms)"
+                      hint="Delay between batches"
+                      outlined dense
+                      style="max-width: 150px"
+                    />
+                  </div>
+                </template>
 
-            <q-toggle
-              v-model="newJobBatchMode"
-              color="blue"
-              class="q-mt-sm"
-            >
-              <template v-slot:default>
-                <span>{{ newJobBatchMode ? 'Batch API — ~50% cheaper, results in ~24h' : 'Realtime — full price, immediate results' }}</span>
-              </template>
-            </q-toggle>
-          </template>
+                <!-- API Settings -->
+                <template v-if="newJobCoverageTypes.includes('prosecution') || newJobCoverageTypes.includes('ipr')">
+                  <div class="text-caption text-weight-medium text-grey-8 q-mt-sm">USPTO API</div>
+                  <div class="row q-gutter-sm">
+                    <q-input
+                      v-model.number="advancedSettings.apiRateLimit"
+                      type="number"
+                      label="Rate Limit"
+                      hint="Requests/min"
+                      outlined dense
+                      style="max-width: 130px"
+                    />
+                    <q-input
+                      v-model.number="advancedSettings.apiRetryAttempts"
+                      type="number"
+                      label="Retries"
+                      hint="0-5"
+                      outlined dense
+                      :rules="[(v: number) => (v >= 0 && v <= 5) || '0-5']"
+                      style="max-width: 110px"
+                    />
+                    <q-input
+                      v-model.number="advancedSettings.apiRetryDelay"
+                      type="number"
+                      label="Retry Delay (ms)"
+                      outlined dense
+                      style="max-width: 140px"
+                    />
+                  </div>
+                </template>
+
+                <!-- General -->
+                <div class="text-caption text-weight-medium text-grey-8 q-mt-sm">General</div>
+                <q-input
+                  v-model.number="advancedSettings.batchSize"
+                  type="number"
+                  label="Batch Size"
+                  hint="Patents per process (100-1000)"
+                  outlined dense
+                  :rules="[(v: number) => (v >= 100 && v <= 1000) || '100-1000']"
+                  style="max-width: 180px"
+                />
+              </q-card-section>
+            </q-card>
+          </q-expansion-item>
 
           <!-- Gap Preview -->
           <q-card v-if="gapsData" flat bordered class="q-mt-md">
@@ -1978,6 +2105,69 @@ onUnmounted(() => {
               All coverage types are complete for this scope.
             </div>
           </template>
+
+          <!-- Advanced Settings (shared component pattern) -->
+          <q-expansion-item
+            v-if="enrichDialogGaps && enrichDialogCoverageTypes.length > 0"
+            v-model="showAdvanced"
+            label="Advanced Settings"
+            icon="tune"
+            header-class="text-grey-8"
+            dense
+            class="q-mt-sm"
+          >
+            <q-card flat>
+              <q-card-section class="q-gutter-sm q-pt-sm">
+                <template v-if="enrichDialogCoverageTypes.includes('llm')">
+                  <div class="text-caption text-weight-medium text-grey-8">LLM Scoring</div>
+                  <q-select
+                    v-model="enrichDialogModel"
+                    :options="llmModelOptions"
+                    option-value="value"
+                    option-label="label"
+                    emit-value
+                    map-options
+                    label="LLM Model"
+                    outlined
+                    dense
+                  >
+                    <template v-slot:option="scope">
+                      <q-item v-bind="scope.itemProps">
+                        <q-item-section>
+                          <q-item-label>{{ scope.opt.label }}</q-item-label>
+                          <q-item-label caption>{{ scope.opt.hint }}</q-item-label>
+                        </q-item-section>
+                      </q-item>
+                    </template>
+                  </q-select>
+                  <q-toggle
+                    v-model="enrichDialogBatchMode"
+                    color="blue"
+                  >
+                    <template v-slot:default>
+                      <span class="text-body2">{{ enrichDialogBatchMode ? 'Batch API — ~50% cheaper, results in ~24h' : 'Realtime — full price, immediate results' }}</span>
+                    </template>
+                  </q-toggle>
+                  <div class="row q-gutter-sm q-mt-xs">
+                    <q-input v-model.number="advancedSettings.llmConcurrency" type="number" label="Concurrency" hint="Parallel API calls (1-10)" outlined dense :rules="[(v: number) => (v >= 1 && v <= 10) || '1-10']" style="max-width: 140px" />
+                    <q-input v-model.number="advancedSettings.llmMaxRetries" type="number" label="Max Retries" hint="0-5" outlined dense :rules="[(v: number) => (v >= 0 && v <= 5) || '0-5']" style="max-width: 120px" />
+                    <q-input v-model.number="advancedSettings.llmRetryBaseDelay" type="number" label="Retry Delay (ms)" hint="Base backoff delay" outlined dense style="max-width: 150px" />
+                    <q-input v-model.number="advancedSettings.llmInterBatchDelay" type="number" label="Batch Delay (ms)" hint="Delay between batches" outlined dense style="max-width: 150px" />
+                  </div>
+                </template>
+                <template v-if="enrichDialogCoverageTypes.includes('prosecution') || enrichDialogCoverageTypes.includes('ipr')">
+                  <div class="text-caption text-weight-medium text-grey-8 q-mt-sm">USPTO API</div>
+                  <div class="row q-gutter-sm">
+                    <q-input v-model.number="advancedSettings.apiRateLimit" type="number" label="Rate Limit" hint="Requests/min" outlined dense style="max-width: 130px" />
+                    <q-input v-model.number="advancedSettings.apiRetryAttempts" type="number" label="Retries" hint="0-5" outlined dense :rules="[(v: number) => (v >= 0 && v <= 5) || '0-5']" style="max-width: 110px" />
+                    <q-input v-model.number="advancedSettings.apiRetryDelay" type="number" label="Retry Delay (ms)" outlined dense style="max-width: 140px" />
+                  </div>
+                </template>
+                <div class="text-caption text-weight-medium text-grey-8 q-mt-sm">General</div>
+                <q-input v-model.number="advancedSettings.batchSize" type="number" label="Batch Size" hint="Patents per process (100-1000)" outlined dense :rules="[(v: number) => (v >= 100 && v <= 1000) || '100-1000']" style="max-width: 180px" />
+              </q-card-section>
+            </q-card>
+          </q-expansion-item>
         </q-card-section>
 
         <q-card-actions align="right">

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import type {
   ScoredPatent, SuperSectorProgress, MergedSectorTemplate
 } from '@/services/api';
@@ -9,6 +11,7 @@ import type { SuperSectorDetail } from '@/types';
 import SectorScoreTooltip from '@/components/SectorScoreTooltip.vue';
 
 const router = useRouter();
+const portfolioStore = usePortfolioStore();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -97,9 +100,10 @@ async function loadSuperSectors() {
 }
 
 async function loadAllSuperSectorProgress() {
+  const pid = portfolioStore.selectedPortfolioId;
   const promises = superSectors.value.map(async (ss) => {
     try {
-      const progress = await scoringTemplatesApi.getSuperSectorProgress(ss.name);
+      const progress = await scoringTemplatesApi.getSuperSectorProgress(ss.name, pid);
       superSectorProgressMap.value.set(ss.name, progress);
     } catch {
       // Ignore individual failures
@@ -147,7 +151,8 @@ async function loadSectorScores(sectorName: string, offset: number) {
     const result = await scoringTemplatesApi.getSectorScores(sectorName, {
       limit: 50,
       offset,
-      order: 'desc'
+      order: 'desc',
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
     sectorScoresCache.set(sectorName, {
       data: result.results,
@@ -223,6 +228,15 @@ onMounted(async () => {
   await loadSuperSectors();
   await loadAllSuperSectorProgress();
 });
+
+// Reload when portfolio changes — clear caches and re-fetch progress
+watch(() => portfolioStore.selectedPortfolioId, async () => {
+  sectorScoresCache.clear();
+  expandedSectors.clear();
+  superSectorProgressMap.value.clear();
+  superSectorProgressMap.value = new Map();
+  await loadAllSuperSectorProgress();
+});
 </script>
 
 <template>
@@ -230,10 +244,16 @@ onMounted(async () => {
     <!-- Page Header -->
     <div class="row items-center q-mb-md">
       <div class="col">
-        <div class="text-h5">Sector Scores</div>
-        <div class="text-caption text-grey-7">
-          {{ totalScored.toLocaleString() }} scored / {{ totalPatents.toLocaleString() }} total patents
-          across {{ superSectors.length }} super-sectors
+        <div class="row items-center q-gutter-sm">
+          <PortfolioSelector class="q-mr-md" />
+          <div>
+            <div class="text-h5">Sector Scores</div>
+            <div class="text-caption text-grey-7">
+              {{ totalScored.toLocaleString() }} scored / {{ totalPatents.toLocaleString() }} total patents
+              across {{ superSectors.length }} super-sectors
+              <span v-if="portfolioStore.selectedPortfolio" class="text-blue-7"> &mdash; {{ portfolioStore.selectedPortfolio.displayName || portfolioStore.selectedPortfolio.name }}</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="col-auto">

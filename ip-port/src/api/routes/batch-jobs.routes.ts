@@ -42,6 +42,7 @@ interface BatchJobResponse {
   batchMode?: boolean | null;
   portfolioId?: string | null;
   portfolioName?: string | null;
+  settings?: Record<string, unknown> | null;
 }
 
 // Default rate estimates (patents per hour) - will be refined over time
@@ -76,6 +77,7 @@ function toResponse(job: any): BatchJobResponse {
     batchMode: job.batchMode,
     portfolioId: job.portfolioId,
     portfolioName: job.portfolioName,
+    settings: job.settings as Record<string, unknown> | null,
   };
 }
 
@@ -575,22 +577,34 @@ function getEnrichmentCommand(
   coverageType: CoverageType,
   batchFile: string,
   logFile: string,
-  options?: { model?: string; batchMode?: boolean }
+  options?: { model?: string; batchMode?: boolean; settings?: Record<string, unknown> }
 ): string {
+  const envVars: string[] = [];
+
+  if (coverageType === 'llm') {
+    if (options?.model) envVars.push(`LLM_MODEL=${options.model}`);
+    if (options?.settings?.llmConcurrency) envVars.push(`LLM_CONCURRENCY=${options.settings.llmConcurrency}`);
+    if (options?.settings?.llmMaxRetries != null) envVars.push(`LLM_MAX_RETRIES=${options.settings.llmMaxRetries}`);
+    if (options?.settings?.llmRetryBaseDelay) envVars.push(`LLM_RETRY_BASE_DELAY=${options.settings.llmRetryBaseDelay}`);
+    if (options?.settings?.llmInterBatchDelay) envVars.push(`LLM_INTER_BATCH_DELAY=${options.settings.llmInterBatchDelay}`);
+  }
+
+  if (coverageType === 'prosecution' || coverageType === 'ipr') {
+    if (options?.settings?.apiRateLimit) envVars.push(`API_RATE_LIMIT=${options.settings.apiRateLimit}`);
+    if (options?.settings?.apiRetryAttempts != null) envVars.push(`API_RETRY_ATTEMPTS=${options.settings.apiRetryAttempts}`);
+    if (options?.settings?.apiRetryDelay) envVars.push(`API_RETRY_DELAY=${options.settings.apiRetryDelay}`);
+  }
+
+  const envPrefix = envVars.length > 0 ? `${envVars.join(' ')} ` : '';
+
   switch (coverageType) {
-    case 'llm': {
-      let cmd = `npx tsx scripts/run-sector-scoring.ts ${batchFile} > ${logFile} 2>&1`;
-      const envVars: string[] = [];
-      if (options?.model) envVars.push(`LLM_MODEL=${options.model}`);
-      if (envVars.length > 0) cmd = `${envVars.join(' ')} ${cmd}`;
-      return cmd;
-    }
+    case 'llm':
+      return `${envPrefix}npx tsx scripts/run-sector-scoring.ts ${batchFile} > ${logFile} 2>&1`;
     case 'prosecution':
-      return `npx tsx scripts/check-prosecution-history.ts ${batchFile} > ${logFile} 2>&1`;
+      return `${envPrefix}npx tsx scripts/check-prosecution-history.ts ${batchFile} > ${logFile} 2>&1`;
     case 'ipr':
-      return `npx tsx scripts/check-ipr-risk.ts ${batchFile} > ${logFile} 2>&1`;
+      return `${envPrefix}npx tsx scripts/check-ipr-risk.ts ${batchFile} > ${logFile} 2>&1`;
     case 'family':
-      // Family script uses comma-separated IDs
       return `npx tsx scripts/enrich-citations.ts --patent-ids "$(cat ${batchFile} | jq -r '.[]' | tr '\\n' ',' | sed 's/,$//')" > ${logFile} 2>&1`;
     case 'xml':
       return `npx tsx scripts/extract-patent-xmls-batch.ts ${batchFile} > ${logFile} 2>&1`;
@@ -830,6 +844,7 @@ router.post('/', async (req: Request, res: Response) => {
       portfolioId,  // Optional: scope to a specific portfolio
       model,       // Optional: LLM model override (e.g., 'claude-sonnet-4-20250514')
       batchMode,   // Optional: true = Batch API (50% off, ~24h), false = realtime
+      settings,    // Optional: advanced settings (concurrency, retries, rate limits)
     } = req.body;
 
     if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
@@ -906,7 +921,9 @@ router.post('/', async (req: Request, res: Response) => {
     const groupId = `group-${Date.now()}`;
     const createdJobs: BatchJobResponse[] = [];
 
-    const MAX_BATCH_SIZE = 500;
+    const MAX_BATCH_SIZE = settings?.batchSize
+      ? Math.max(100, Math.min(1000, parseInt(String(settings.batchSize))))
+      : 500;
     const logsDir = path.join(process.cwd(), 'logs');
     fs.mkdirSync(logsDir, { recursive: true });
 
@@ -938,9 +955,11 @@ router.post('/', async (req: Request, res: Response) => {
         const estimatedCompletion = new Date(Date.now() + estimatedHours * 3600000);
 
         // Start the job
-        const cmd = getEnrichmentCommand(coverageType, batchFile, logFile,
-          coverageType === 'llm' ? { model, batchMode } : undefined
-        );
+        const cmd = getEnrichmentCommand(coverageType, batchFile, logFile, {
+          model: coverageType === 'llm' ? model : undefined,
+          batchMode: coverageType === 'llm' ? batchMode : undefined,
+          settings,
+        });
         const child = spawn('bash', ['-c', cmd], {
           detached: true,
           stdio: 'ignore',
@@ -969,6 +988,7 @@ router.post('/', async (req: Request, res: Response) => {
             batchMode: coverageType === 'llm' ? (batchMode ?? null) : null,
             portfolioId: portfolioId || null,
             portfolioName: portfolioName || null,
+            settings: settings || undefined,
           },
         });
 

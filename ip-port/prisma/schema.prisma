@@ -1519,6 +1519,7 @@ model BatchJob {
   model           String?                           // claude-sonnet-4-20250514, etc.
   batchMode       Boolean? @map("batch_mode")       // true=Batch API, false=realtime
   useClaims       Boolean  @default(false) @map("use_claims")
+  settings        Json?    @map("settings")
 
   // Portfolio context
   portfolioId     String?  @map("portfolio_id")

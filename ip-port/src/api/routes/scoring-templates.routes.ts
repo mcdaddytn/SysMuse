@@ -779,6 +779,7 @@ JSON with scores (1-10) and reasoning for each field`;
 router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
+    const portfolioId = req.query.portfolioId as string | undefined;
 
     // Get sector info
     const sector = await prisma.sector.findFirst({
@@ -792,23 +793,41 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
 
     // Get scoring stats from patent_sub_sector_scores using template_config_id
     // Use DISTINCT ON to deduplicate patents (may have multiple scores from old + new flows)
-    const stats = await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
-      SELECT
-        COUNT(*) as scored,
-        SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
-        AVG(composite_score) as avg_score
-      FROM (
-        SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score
-        FROM patent_sub_sector_scores
-        WHERE template_config_id = ${sectorName}
-        ORDER BY patent_id, updated_at DESC
-      ) deduped
-    `;
+    const stats = portfolioId
+      ? await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+          SELECT
+            COUNT(*) as scored,
+            SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+            AVG(composite_score) as avg_score
+          FROM (
+            SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score
+            FROM patent_sub_sector_scores pss
+            INNER JOIN portfolio_patents pp ON pp.patent_id = pss.patent_id AND pp.portfolio_id = ${portfolioId}
+            WHERE pss.template_config_id = ${sectorName}
+            ORDER BY pss.patent_id, pss.updated_at DESC
+          ) deduped
+        `
+      : await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+          SELECT
+            COUNT(*) as scored,
+            SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+            AVG(composite_score) as avg_score
+          FROM (
+            SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score
+            FROM patent_sub_sector_scores
+            WHERE template_config_id = ${sectorName}
+            ORDER BY patent_id, updated_at DESC
+          ) deduped
+        `;
 
     const scored = Number(stats[0]?.scored || 0);
     const withClaims = Number(stats[0]?.with_claims || 0);
     const avgScore = stats[0]?.avg_score || 0;
-    const total = sector.patentCount || 0;
+    const total = portfolioId
+      ? await prisma.patent.count({
+          where: { primarySector: sectorName, portfolios: { some: { portfolioId } }, isQuarantined: false }
+        })
+      : (sector.patentCount || 0);
     const remaining = Math.max(0, total - scored);
     const percentComplete = total > 0 ? Math.round((scored / total) * 100) : 0;
 
@@ -846,11 +865,13 @@ router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response)
       limit = '100',
       offset = '0',
       sortBy = 'composite_score',
-      order = 'desc'
+      order = 'desc',
+      portfolioId
     } = req.query;
 
     const limitNum = Math.min(parseInt(limit as string) || 100, 500);
     const offsetNum = parseInt(offset as string) || 0;
+    const portfolioFilter = portfolioId as string | undefined;
 
     // Get sector info for display
     const sector = await prisma.sector.findFirst({
@@ -862,14 +883,30 @@ router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response)
       return res.status(404).json({ error: `Sector not found: ${sectorName}` });
     }
 
+    // Build where clause with optional portfolio filter
+    // PatentSubSectorScore has no `patent` relation, so filter via patentId subquery
+    let portfolioPatentIds: string[] | undefined;
+    if (portfolioFilter) {
+      const ppRows = await prisma.portfolioPatent.findMany({
+        where: { portfolioId: portfolioFilter, patent: { primarySector: sectorName, isQuarantined: false } },
+        select: { patentId: true },
+      });
+      portfolioPatentIds = ppRows.map(r => r.patentId);
+    }
+
+    const whereClause = {
+      templateConfigId: sectorName,
+      ...(portfolioPatentIds ? { patentId: { in: portfolioPatentIds } } : {}),
+    };
+
     // Get total count
     const totalCount = await prisma.patentSubSectorScore.count({
-      where: { templateConfigId: sectorName }
+      where: whereClause
     });
 
     // Get scores with pagination
     const scores = await prisma.patentSubSectorScore.findMany({
-      where: { templateConfigId: sectorName },
+      where: whereClause,
       orderBy: { compositeScore: order === 'asc' ? 'asc' : 'desc' },
       take: limitNum,
       skip: offsetNum
@@ -959,6 +996,7 @@ router.get('/llm/sector-scores/:sectorName', async (req: Request, res: Response)
 router.get('/llm/super-sector-progress/:superSectorName', async (req: Request, res: Response) => {
   try {
     const { superSectorName } = req.params;
+    const portfolioId = req.query.portfolioId as string | undefined;
 
     // Get super-sector and its sectors
     const superSector = await prisma.superSector.findFirst({
@@ -973,19 +1011,41 @@ router.get('/llm/super-sector-progress/:superSectorName', async (req: Request, r
     // Get scoring stats for each sector
     const sectorStats = await Promise.all(
       superSector.sectors.map(async (sector) => {
-        const stats = await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
-          SELECT
-            COUNT(*) as scored,
-            SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
-            AVG(composite_score) as avg_score
-          FROM patent_sub_sector_scores
-          WHERE template_config_id = ${sector.name}
-        `;
+        const stats = portfolioId
+          ? await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+              SELECT
+                COUNT(*) as scored,
+                SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+                AVG(composite_score) as avg_score
+              FROM (
+                SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score
+                FROM patent_sub_sector_scores pss
+                INNER JOIN portfolio_patents pp ON pp.patent_id = pss.patent_id AND pp.portfolio_id = ${portfolioId}
+                WHERE pss.template_config_id = ${sector.name}
+                ORDER BY pss.patent_id, pss.updated_at DESC
+              ) deduped
+            `
+          : await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+              SELECT
+                COUNT(*) as scored,
+                SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+                AVG(composite_score) as avg_score
+              FROM (
+                SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score
+                FROM patent_sub_sector_scores
+                WHERE template_config_id = ${sector.name}
+                ORDER BY patent_id, updated_at DESC
+              ) deduped
+            `;
 
         const scored = Number(stats[0]?.scored || 0);
         const withClaims = Number(stats[0]?.with_claims || 0);
         const avgScore = stats[0]?.avg_score || null;
-        const total = sector.patentCount || 0;
+        const total = portfolioId
+          ? await prisma.patent.count({
+              where: { primarySector: sector.name, portfolios: { some: { portfolioId } }, isQuarantined: false }
+            })
+          : (sector.patentCount || 0);
 
         return {
           sectorId: sector.id,

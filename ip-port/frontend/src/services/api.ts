@@ -2017,6 +2017,17 @@ export interface SectorEnrichmentSummary {
 export type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family' | 'xml';
 export type TargetType = 'tier' | 'super-sector' | 'sector';
 
+export interface BatchJobSettings {
+  llmConcurrency?: number;      // default 3, 1-10
+  llmMaxRetries?: number;       // default 3, 0-5
+  llmRetryBaseDelay?: number;   // default 5000ms
+  llmInterBatchDelay?: number;  // default 500ms
+  apiRateLimit?: number;        // req/min, default 60
+  apiRetryAttempts?: number;    // default 3
+  apiRetryDelay?: number;       // default 1000ms
+  batchSize?: number;           // chunk size, default 500, 100-1000
+}
+
 export interface BatchJob {
   id: string;
   groupId?: string;
@@ -2040,6 +2051,7 @@ export interface BatchJob {
   batchMode?: boolean;
   portfolioId?: string;
   portfolioName?: string;
+  settings?: BatchJobSettings;
 }
 
 export interface BatchJobsResponse {
@@ -2100,6 +2112,7 @@ export const batchJobsApi = {
     portfolioId?: string | null;
     model?: string;       // LLM model override
     batchMode?: boolean;  // true = Batch API (50% off), false = realtime
+    settings?: BatchJobSettings;
   }): Promise<StartJobsResponse> {
     const { data } = await api.post('/batch-jobs', params);
     return data;
@@ -2784,8 +2797,10 @@ export const scoringTemplatesApi = {
   /**
    * Get scoring progress for a sector
    */
-  async getSectorProgress(sectorName: string): Promise<SectorScoringProgress> {
-    const { data } = await api.get(`/scoring-templates/llm/sector-progress/${sectorName}`);
+  async getSectorProgress(sectorName: string, portfolioId?: string | null): Promise<SectorScoringProgress> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get(`/scoring-templates/llm/sector-progress/${sectorName}`, { params });
     return data;
   },
 
@@ -2867,12 +2882,14 @@ export const scoringTemplatesApi = {
     offset?: number;
     sortBy?: string;
     order?: 'asc' | 'desc';
+    portfolioId?: string | null;
   }): Promise<SectorScoresResponse> {
     const params = new URLSearchParams();
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.offset) params.append('offset', options.offset.toString());
     if (options?.sortBy) params.append('sortBy', options.sortBy);
     if (options?.order) params.append('order', options.order);
+    if (options?.portfolioId) params.append('portfolioId', options.portfolioId);
     const { data } = await api.get(`/scoring-templates/llm/sector-scores/${sectorName}?${params}`);
     return data;
   },
@@ -2880,8 +2897,10 @@ export const scoringTemplatesApi = {
   /**
    * Get aggregated progress for a super-sector
    */
-  async getSuperSectorProgress(superSectorName: string): Promise<SuperSectorProgress> {
-    const { data } = await api.get(`/scoring-templates/llm/super-sector-progress/${superSectorName}`);
+  async getSuperSectorProgress(superSectorName: string, portfolioId?: string | null): Promise<SuperSectorProgress> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get(`/scoring-templates/llm/super-sector-progress/${superSectorName}`, { params });
     return data;
   },
 
@@ -2936,13 +2955,15 @@ export const scoringTemplatesApi = {
    */
   async batchScoreSector(
     sectorName: string,
-    options?: { rescore?: boolean; topN?: number; model?: string }
+    options?: { rescore?: boolean; topN?: number; model?: string; portfolioId?: string | null }
   ): Promise<{ success: boolean; message: string; batchId: string; requestCount: number; sectorName: string }> {
     const params = new URLSearchParams();
     if (options?.rescore) params.append('rescore', 'true');
     if (options?.topN) params.append('limit', options.topN.toString());
     if (options?.model) params.append('model', options.model);
-    const { data } = await api.post(`/scoring-templates/llm/batch-score-sector/${sectorName}?${params}`);
+    const body: Record<string, unknown> = {};
+    if (options?.portfolioId) body.portfolioId = options.portfolioId;
+    const { data } = await api.post(`/scoring-templates/llm/batch-score-sector/${sectorName}?${params}`, body);
     return data;
   },
 

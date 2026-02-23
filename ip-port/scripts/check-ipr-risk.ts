@@ -354,7 +354,12 @@ async function main() {
   console.log(`Patents to check: ${idsToProcess.length}${skipExisting ? ` (${patentIds.length - idsToProcess.length} skipped)` : ''}`);
   console.log('');
 
-  const client = new PTABClient({ apiKey });
+  const client = new PTABClient({
+    apiKey,
+    rateLimit: process.env.API_RATE_LIMIT ? parseInt(process.env.API_RATE_LIMIT) : undefined,
+    retryAttempts: process.env.API_RETRY_ATTEMPTS ? parseInt(process.env.API_RETRY_ATTEMPTS) : undefined,
+    retryDelay: process.env.API_RETRY_DELAY ? parseInt(process.env.API_RETRY_DELAY) : undefined,
+  });
   const results: IPRRiskData[] = [];
   const summary = {
     total: idsToProcess.length,

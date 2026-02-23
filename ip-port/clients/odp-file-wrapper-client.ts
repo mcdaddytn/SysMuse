@@ -18,6 +18,9 @@ const ODP_BASE_URL = 'https://api.uspto.gov/api/v1/patent';
 
 export interface FileWrapperConfig {
   apiKey: string;
+  rateLimit?: number;       // requests per minute (default 60)
+  retryAttempts?: number;   // default 3
+  retryDelay?: number;      // ms, default 1000
 }
 
 export interface ApplicationSearchQuery {
@@ -212,10 +215,10 @@ export class FileWrapperClient extends BaseAPIClient {
       baseUrl: ODP_BASE_URL,
       apiKey: config.apiKey,
       rateLimit: {
-        requestsPerMinute: 60, // Conservative estimate - adjust based on actual limits
+        requestsPerMinute: config.rateLimit ?? 60,
       },
-      retryAttempts: 3,
-      retryDelay: 1000,
+      retryAttempts: config.retryAttempts ?? 3,
+      retryDelay: config.retryDelay ?? 1000,
     });
   }
 

@@ -103,9 +103,10 @@ async function loadAllProgress() {
     const progressMap = new Map<string, SectorScoringProgress>();
 
     // Load progress for each sector (batch for performance)
+    const pid = portfolioStore.selectedPortfolioId;
     const promises = allSectors.map(async (sector) => {
       try {
-        const progress = await scoringTemplatesApi.getSectorProgress(sector.name);
+        const progress = await scoringTemplatesApi.getSectorProgress(sector.name, pid);
         if (progress.scored > 0) {
           progressMap.set(sector.name, progress);
         }
@@ -127,7 +128,7 @@ async function loadSuperSectorDetail(superSectorName: string) {
   superSectorLoading.value = true;
   error.value = null;
   try {
-    superSectorDetail.value = await scoringTemplatesApi.getSuperSectorProgress(superSectorName);
+    superSectorDetail.value = await scoringTemplatesApi.getSuperSectorProgress(superSectorName, portfolioStore.selectedPortfolioId);
     selectedSuperSector.value = superSectorName;
     viewMode.value = 'super-sector';
   } catch (err) {
@@ -144,7 +145,8 @@ async function loadSectorScores(sectorName: string) {
     const result = await scoringTemplatesApi.getSectorScores(sectorName, {
       limit: scoresPagination.value.rowsPerPage,
       offset: (scoresPagination.value.page - 1) * scoresPagination.value.rowsPerPage,
-      order: scoresPagination.value.descending ? 'desc' : 'asc'
+      order: scoresPagination.value.descending ? 'desc' : 'asc',
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
     sectorScores.value = result.results;
     sectorScoresTotal.value = result.total;
@@ -214,6 +216,17 @@ watch(scoresPagination, async () => {
     await loadSectorScores(selectedSector.value);
   }
 }, { deep: true });
+
+// Reload data when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, async () => {
+  if (viewMode.value === 'summary') {
+    await loadAllProgress();
+  } else if (viewMode.value === 'super-sector' && selectedSuperSector.value) {
+    await loadSuperSectorDetail(selectedSuperSector.value);
+  } else if (viewMode.value === 'sector' && selectedSector.value) {
+    await loadSectorScores(selectedSector.value);
+  }
+});
 </script>
 
 <template>
@@ -241,6 +254,7 @@ watch(scoresPagination, async () => {
               <template v-if="viewMode === 'summary'">
                 {{ totalScored.toLocaleString() }} patents scored
                 ({{ totalWithClaims.toLocaleString() }} with claims)
+                <span v-if="portfolioStore.selectedPortfolio" class="text-blue-7"> &mdash; {{ portfolioStore.selectedPortfolio.displayName || portfolioStore.selectedPortfolio.name }}</span>
               </template>
               <template v-else-if="viewMode === 'super-sector' && superSectorDetail">
                 {{ superSectorDetail.totals.scored.toLocaleString() }} / {{ superSectorDetail.totals.total.toLocaleString() }} patents

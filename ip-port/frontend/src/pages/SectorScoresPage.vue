@@ -45,6 +45,9 @@ const scoresPagination = ref({
 const showPatentDetail = ref(false);
 const selectedPatent = ref<ScoredPatent | null>(null);
 
+// Recompute scores
+const recomputeLoading = ref(false);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +184,21 @@ async function exportSuperSector(superSectorName: string) {
 function showPatentDetails(patent: ScoredPatent) {
   selectedPatent.value = patent;
   showPatentDetail.value = true;
+}
+
+async function recomputeScores() {
+  if (!selectedSector.value) return;
+  recomputeLoading.value = true;
+  error.value = null;
+  try {
+    const result = await scoringTemplatesApi.recomputeSectorScores(selectedSector.value);
+    await loadSectorScores(selectedSector.value);
+    alert(`Recomputed: ${result.updated} of ${result.totalScores} scores updated.`);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Recompute failed';
+  } finally {
+    recomputeLoading.value = false;
+  }
 }
 
 function goBack() {
@@ -516,6 +534,20 @@ watch(() => portfolioStore.selectedPortfolioId, async () => {
           </div>
         </q-card-section>
       </q-card>
+
+      <!-- Recompute Scores -->
+      <div class="row justify-end q-mb-md">
+        <q-btn
+          flat
+          icon="calculate"
+          label="Recompute Scores"
+          color="secondary"
+          :loading="recomputeLoading"
+          @click="recomputeScores"
+        >
+          <q-tooltip>Recalculate composite scores from stored metrics using current template weights (no LLM calls)</q-tooltip>
+        </q-btn>
+      </div>
 
       <!-- Scores Table -->
       <q-card flat bordered>

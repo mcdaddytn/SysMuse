@@ -1138,6 +1138,104 @@ router.get('/llm/preview/:subSectorId', async (req: Request, res: Response) => {
 });
 
 // =============================================================================
+// RECOMPUTE SCORES (recalculate composite from stored metrics + new weights)
+// =============================================================================
+
+/**
+ * POST /api/scoring-templates/llm/recompute-scores/:sectorName
+ * Recalculates composite_score from stored metrics using current template weights.
+ * No LLM calls — pure math on existing data. Use after changing question weights.
+ */
+router.post('/llm/recompute-scores/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+
+    // Look up sector to get super-sector for template resolution
+    const sector = await prisma.sector.findFirst({
+      where: { name: sectorName },
+      include: { superSector: true }
+    });
+
+    if (!sector) {
+      return res.status(404).json({ error: `Sector not found: ${sectorName}` });
+    }
+
+    // Get merged template with current weights
+    const superSectorName = sector.superSector?.name || '';
+    const merged = getMergedTemplateForSector(sectorName, superSectorName);
+    const weightMap = new Map(merged.questions.map(q => [q.fieldName, q.weight]));
+    const totalWeight = merged.questions.reduce((sum, q) => sum + q.weight, 0);
+
+    if (totalWeight === 0) {
+      return res.status(400).json({ error: 'Template has zero total weight' });
+    }
+
+    // Get all scores for this sector
+    const scores = await prisma.patentSubSectorScore.findMany({
+      where: { templateConfigId: sectorName },
+      select: { id: true, metrics: true, compositeScore: true }
+    });
+
+    if (scores.length === 0) {
+      return res.json({ updated: 0, sectorName, message: 'No scores found for this sector' });
+    }
+
+    // Recompute composite scores in memory, then bulk update
+    let updated = 0;
+    const updates: Array<{ id: string; newScore: number }> = [];
+
+    for (const score of scores) {
+      const metrics = score.metrics as Record<string, { score: number; reasoning?: string; confidence?: number }> | null;
+      if (!metrics) continue;
+
+      let weightedSum = 0;
+      for (const [fieldName, weight] of weightMap) {
+        const metric = metrics[fieldName];
+        if (metric && typeof metric.score === 'number') {
+          weightedSum += metric.score * weight;
+        }
+      }
+
+      // Normalize to percentage scale (scores are 1-10, weights sum to ~1)
+      const newScore = Math.round(weightedSum * 100) / 100;
+
+      if (Math.abs(newScore - score.compositeScore) > 0.001) {
+        updates.push({ id: score.id, newScore });
+      }
+    }
+
+    // Bulk update using raw SQL for performance
+    if (updates.length > 0) {
+      // Build CASE expression for batch update
+      const cases = updates.map(u => `WHEN '${u.id}' THEN ${u.newScore}`).join(' ');
+      const ids = updates.map(u => `'${u.id}'`).join(',');
+
+      await prisma.$executeRawUnsafe(`
+        UPDATE patent_sub_sector_scores
+        SET composite_score = CASE id ${cases} END,
+            updated_at = NOW()
+        WHERE id IN (${ids})
+      `);
+      updated = updates.length;
+    }
+
+    console.log(`[Recompute] ${sectorName}: ${updated}/${scores.length} scores updated`);
+
+    res.json({
+      sectorName,
+      totalScores: scores.length,
+      updated,
+      unchanged: scores.length - updated,
+      templateQuestions: merged.questions.length,
+      weights: Object.fromEntries(weightMap),
+    });
+  } catch (error) {
+    console.error('[Recompute] Error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
 // BATCH API SCORING (Anthropic Message Batches — 50% cost savings)
 // =============================================================================
 

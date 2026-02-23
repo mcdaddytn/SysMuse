@@ -3034,6 +3034,24 @@ export const scoringTemplatesApi = {
     return data;
   },
 
+  // ─── Recompute Scores ────────────────────────────────────────────────────
+
+  /**
+   * Recompute composite scores from stored metrics using current template weights.
+   * No LLM calls — pure math recalculation.
+   */
+  async recomputeSectorScores(sectorName: string): Promise<{
+    sectorName: string;
+    totalScores: number;
+    updated: number;
+    unchanged: number;
+    templateQuestions: number;
+    weights: Record<string, number>;
+  }> {
+    const { data } = await api.post(`/scoring-templates/llm/recompute-scores/${sectorName}`);
+    return data;
+  },
+
   // ─── Multi-Model Comparison ────────────────────────────────────────────────
 
   /**

@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "rfa-baw-fbar",
+  "name": "BAW / FBAR Resonators & Filters",
+  "description": "Sub-sector template for Bulk Acoustic Wave (BAW) and Film Bulk Acoustic Resonator (FBAR) patents. Covers resonator structures, thin-film piezoelectric stacks, air-gap/solidly-mounted architectures, and BAW-based filter designs.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03H9/02*,H03H9/17*",
+  "sectorName": "rf-acoustic",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "rf-acoustic",
+  "version": 1,
+  "contextDescription": "BAW/FBAR is the dominant filter technology for 5G sub-6GHz bands. Broadcom (via Avago) holds the leading FBAR patent portfolio and is the #1 BAW filter supplier globally. Qualcomm acquired a BAW filter capability. Key targets include Qualcomm, Murata, Skyworks, Qorvo, and any smartphone OEM using their RF front-end modules. BAW/FBAR patents are in the 'Very High' damages tier because: (1) every 5G smartphone contains 5-15 BAW filters, (2) the technology is detectable via chip teardown, (3) switching costs are enormous, and (4) the supply chain is concentrated among ~5 vendors.",
+  "scoringGuidance": [
+    "Every 5G smartphone needs BAW filters — billions of devices/year infringement surface.",
+    "FBAR air-gap architecture patents are Broadcom's core IP — assess novelty over Agilent/HP legacy.",
+    "ScAlN (scandium-doped aluminum nitride) piezoelectric material patents are critical for next-gen BAW.",
+    "Temperature compensation (TC-BAW) patents enable premium filter performance.",
+    "Multiplexer integration patents (BAW-based quadplexers) are high-value for RF module consolidation."
+  ],
+  "questions": [
+    {
+      "fieldName": "resonator_architecture",
+      "displayName": "Resonator Architecture",
+      "question": "What BAW/FBAR resonator architecture does this patent cover? Score 8-10 for novel resonator structures (laterally-excited, contour-mode, stacked crystal), 5-7 for improvements to standard FBAR air-gap or SMR (solidly mounted resonator) architectures, 3-4 for general resonator concepts applicable to BAW, 1-2 for no specific resonator architecture.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the specific resonator type (FBAR, SMR, contour-mode) and structural innovations."
+    },
+    {
+      "fieldName": "piezoelectric_material",
+      "displayName": "Piezoelectric Material Innovation",
+      "question": "Does this patent involve piezoelectric material innovation for BAW? Score 8-10 for ScAlN (scandium aluminum nitride) or other high-coupling materials, 6-7 for AlN composition/doping optimization, 4-5 for electrode material innovations, 2-3 for standard AlN with no material novelty, 1 for no material aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "ScAlN is the next-generation piezo material enabling wider bandwidth BAW filters for 5G."
+    },
+    {
+      "fieldName": "filter_topology",
+      "displayName": "Filter Topology & Integration",
+      "question": "Does this patent address BAW filter topology (ladder, lattice) or integration into multiplexers/modules? Score 8-10 for novel multiplexer topologies (quadplexer, hexaplexer using BAW), 5-7 for filter design optimization (ladder/lattice configuration), 3-4 for single resonator focus without filter-level design, 1-2 for no filter topology aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Multiplexer integration is the trend — fewer discrete filters, more integrated modules."
+    },
+    {
+      "fieldName": "temperature_compensation",
+      "displayName": "Temperature Compensation",
+      "question": "Does this patent address temperature stability or compensation in BAW/FBAR? Score 8-10 for novel TC mechanisms (compensation layers, material engineering), 5-7 for temperature-aware design techniques, 3-4 for mentions temperature as a consideration, 1-2 for no temperature aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Temperature stability is critical for 5G filter specs — TC-BAW is premium segment."
+    },
+    {
+      "fieldName": "frequency_band_target",
+      "displayName": "5G Frequency Band Target",
+      "question": "Which frequency bands does this BAW technology target? Score 8-10 for 5G NR bands n77/n78/n79 (3.3-5.0 GHz) where BAW excels, 6-7 for WiFi 6E/7 (5-7 GHz), 4-5 for LTE bands (700 MHz - 2.7 GHz), 2-3 for general/unspecified bands, 1 for no frequency specificity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "5G sub-6 GHz bands (n77/n78) are BAW's sweet spot — SAW cannot reach these frequencies."
+    },
+    {
+      "fieldName": "teardown_detectability",
+      "displayName": "Teardown Detectability",
+      "question": "How detectable is this innovation via physical chip teardown or cross-section analysis? Score 8-10 for structural features visible in SEM/TEM cross-sections (layer stacks, electrode patterns, air gaps), 5-7 for material composition detectable via EDS/XRD analysis, 3-4 for process-level innovation requiring extensive reverse engineering, 1-2 for algorithm/design methodology only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "BAW patents are enforced via teardown analysis. Physical structures are the strongest evidence."
+    },
+    {
+      "fieldName": "manufacturing_process",
+      "displayName": "Manufacturing Process Innovation",
+      "question": "Does this patent cover manufacturing process innovation (thin-film deposition, etching, release, packaging)? Score 8-10 for novel fabrication steps that improve yield or enable new device structures, 5-7 for process optimization of existing flows, 3-4 for general MEMS fabrication, 1-2 for no manufacturing aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Manufacturing patents create barriers to entry and are infringed by every fab producing BAW devices."
+    }
+  ]
+}

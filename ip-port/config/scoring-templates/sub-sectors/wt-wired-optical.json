@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wt-wired-optical",
+  "name": "Wired & Optical Transmission",
+  "description": "Sub-sector template for wired and optical communication patents. Covers Ethernet PHY, SerDes, optical transceivers, coherent optics, PAM4 signaling, and high-speed interconnect technologies.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04B3/*,H04B10/*",
+  "sectorName": "wireless-transmission",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-transmission",
+  "version": 1,
+  "contextDescription": "Despite being in the WIRELESS super-sector, wired/optical transmission patents cover the critical backhaul and data center interconnect layer. Broadcom is the dominant Ethernet PHY and SerDes vendor. Every data center switch, server NIC, and carrier backhaul link uses these technologies. Key innovations: PAM4 signaling for 100G/400G/800G Ethernet, coherent optics for long-haul, SerDes for chip-to-chip links. Key targets: Broadcom competitors (Marvell, Intel, Cisco, Juniper), cloud providers (Google, Amazon, Microsoft). Damages potential is high due to data center volume.",
+  "scoringGuidance": [
+    "Data center Ethernet PHY is a Broadcom stronghold — every switch port uses Broadcom PHYs.",
+    "PAM4 signaling patents are essential for 100G+ Ethernet — widely deployed.",
+    "SerDes (serializer/deserializer) patents cover chip-to-chip links in every high-speed system.",
+    "Coherent optical patents cover long-haul and metro networks — high per-unit value.",
+    "Equalization (CTLE, DFE) patents are implemented in every high-speed receiver."
+  ],
+  "questions": [
+    {
+      "fieldName": "transmission_technology",
+      "displayName": "Transmission Technology",
+      "question": "What wired/optical transmission technology does this patent address? Score 8-10 for PAM4/PAM6 high-speed signaling or coherent optical modulation, 5-7 for SerDes or Ethernet PHY innovations, 3-4 for general wired communication, 1-2 for unrelated.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "PAM4 is the dominant signaling for 100G+ Ethernet — highest current commercial value."
+    },
+    {
+      "fieldName": "data_rate_target",
+      "displayName": "Data Rate Target",
+      "question": "What data rate does this technology target? Score 8-10 for 400G/800G/1.6T (next-gen data center), 6-7 for 100G/200G (current mainstream), 4-5 for 10G/25G/50G, 2-3 for 1G or below, 1 for no specific rate.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Higher data rates = newer technology = more licensing opportunity in data center upgrades."
+    },
+    {
+      "fieldName": "equalization_technique",
+      "displayName": "Equalization & Signal Integrity",
+      "question": "Does this patent address equalization or signal integrity (CTLE, DFE, FFE, crosstalk cancellation)? Score 8-10 for novel equalizer architectures or adaptive algorithms, 5-7 for standard equalization improvements, 3-4 for general signal integrity, 1-2 for no equalization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Equalization is mandatory in every high-speed link — CTLE+DFE are in every SerDes."
+    },
+    {
+      "fieldName": "standards_compliance",
+      "displayName": "Standards Compliance",
+      "question": "Does this patent align with IEEE Ethernet standards (802.3, 802.3bs/cd/ck/df) or ITU-T optical standards? Score 8-10 for direct implementation of standard-mandated behavior, 5-7 for standard-compatible, 3-4 for proprietary but standard-adjacent, 1-2 for no standards relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "IEEE 802.3 standards define Ethernet PHY behavior — essential patents have broad licensing scope."
+    },
+    {
+      "fieldName": "teardown_detectability",
+      "displayName": "Teardown Detectability",
+      "question": "How detectable is this innovation via chip teardown or protocol analysis? Score 8-10 for die-level architecture or signaling visible on the wire, 5-7 for circuit-level detectable via probing, 3-4 for firmware/algorithm, 1-2 for conceptual.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "PHY/SerDes die layouts are regularly analyzed in teardowns."
+    },
+    {
+      "fieldName": "deployment_volume",
+      "displayName": "Deployment Volume",
+      "question": "How widely deployed is the target application? Score 8-10 for data center switches/NICs (millions/year), 5-7 for carrier backhaul or metro optical, 3-4 for enterprise/campus, 1-2 for niche/specialty.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Data center volume is enormous — millions of switch ports per year."
+    }
+  ]
+}

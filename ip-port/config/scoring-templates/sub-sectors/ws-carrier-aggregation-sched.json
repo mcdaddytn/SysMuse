@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ws-carrier-aggregation-sched",
+  "name": "Carrier Aggregation Scheduling",
+  "description": "Sub-sector template for carrier aggregation (CA) scheduling and timing synchronization patents. Covers cross-carrier scheduling, component carrier activation/deactivation, dual connectivity (DC), and timing advance group management.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W72/02*,H04W56/*",
+  "sectorName": "wireless-scheduling",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-scheduling",
+  "version": 1,
+  "contextDescription": "Carrier aggregation is mandatory for LTE-Advanced and 5G NR high-throughput modes. Every flagship smartphone uses CA to bond multiple carriers (up to 16 in 5G). Cross-carrier scheduling and dynamic CC activation/deactivation are key differentiators. Dual Connectivity (EN-DC, NR-DC) adds further complexity by splitting traffic across LTE and NR simultaneously. Key targets: Qualcomm (modem IP), Apple (baseband), Samsung, MediaTek. CA patents have high SEP density — 3GPP TS 38.213 defines CA procedures.",
+  "scoringGuidance": [
+    "CA is used by every flagship smartphone — 5+ component carriers bonded together.",
+    "Cross-carrier scheduling (scheduling one CC from another's PDCCH) is highly standardized.",
+    "Dynamic CC activation/deactivation patents affect power consumption and battery life.",
+    "Dual Connectivity (EN-DC for NSA 5G, NR-DC for SA) patents have very broad reach.",
+    "Timing advance group (TAG) management across CCs is critical for CA operation."
+  ],
+  "questions": [
+    {
+      "fieldName": "ca_technique",
+      "displayName": "CA Technique",
+      "question": "What carrier aggregation technique does this patent address? Score 8-10 for cross-carrier scheduling or inter-band CA with novel resource management, 6-7 for dynamic CC activation/deactivation, 4-5 for intra-band CA or basic CA configuration, 2-3 for general multi-carrier concepts, 1 for unrelated.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Cross-carrier scheduling and inter-band CA are the most complex and valuable CA techniques."
+    },
+    {
+      "fieldName": "dual_connectivity",
+      "displayName": "Dual Connectivity",
+      "question": "Does this patent address dual connectivity (EN-DC, NR-DC, NE-DC)? Score 8-10 for novel DC traffic splitting or fast secondary cell group (SCG) management, 5-7 for DC-aware scheduling, 3-4 for multi-RAT concepts, 1-2 for no DC aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "EN-DC is used by virtually all NSA 5G deployments worldwide."
+    },
+    {
+      "fieldName": "timing_synchronization",
+      "displayName": "Timing & Synchronization",
+      "question": "Does this patent address timing advance group management, inter-carrier synchronization, or clock recovery across aggregated carriers? Score 8-10 for novel TAG management or timing alignment techniques, 5-7 for synchronization improvements, 3-4 for basic timing considerations, 1-2 for no timing aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Timing synchronization across CCs is mandatory for CA — every aggregated transmission requires it."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP CA/DC procedures (TS 38.213/36.213)? Score 8-10 for direct implementation of standardized CA behavior, 5-7 for enabling standard compliance, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CA is heavily standardized — identify specific 3GPP procedures and section numbers."
+    },
+    {
+      "fieldName": "power_efficiency",
+      "displayName": "Power Efficiency",
+      "question": "Does this patent address power efficiency in carrier aggregation (SCell dormancy, adaptive CC management)? Score 8-10 for novel power-saving CA techniques, 5-7 for CC deactivation optimization, 3-4 for general power awareness, 1-2 for no power aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CA power consumption is a major smartphone battery concern — power-efficient CA is high-value."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this CA innovation? Score 8-10 for behavior observable in RRC configuration or DCI (CA activation, cross-carrier scheduling), 5-7 for behavior inferable from throughput or conformance tests, 3-4 for internal processing, 1-2 for algorithm-level only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CA configuration is visible in RRC signaling — carrier activation/deactivation MAC CEs are detectable."
+    }
+  ]
+}

@@ -7,7 +7,7 @@ import { useSuperSectors } from '@/composables/useSuperSectors';
 import {
   patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi, quarantineApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
-  type BatchJob, type BatchJobSettings, type BatchJobsResponse, type CoverageType, type TargetType, type GapsResponse,
+  type BatchJob, type BatchJobSettings, type BatchJobsResponse, type CoverageType, type TargetType, type SortStrategy, type GapsResponse,
   type BatchJobMetadata, type HydrationResult, type ScoreSnapshot,
   type QuarantineSummary, type QuarantineGroup
 } from '@/services/api';
@@ -274,6 +274,7 @@ const targetTypeOptions = [
 const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: string }> = [
   { value: 'llm', label: 'LLM Analysis', color: 'blue' },
   { value: 'prosecution', label: 'Prosecution History', color: 'purple' },
+  { value: 'prosecution-detail', label: 'Prosecution Detail (Claims)', color: 'deep-purple' },
   { value: 'ipr', label: 'IPR / PTAB', color: 'orange' },
   { value: 'family', label: 'Patent Families', color: 'teal' },
   { value: 'xml', label: 'USPTO Bulk Data', color: 'positive' }
@@ -358,22 +359,32 @@ const enrichDialogLoading = ref(false);
 const enrichDialogStarting = ref(false);
 const enrichDialogModel = ref<string | null>(null);
 const enrichDialogBatchMode = ref(true);
+const enrichDialogSortBy = ref<SortStrategy>('base_score');
+
+const sortStrategyOptions = [
+  { value: 'base_score' as SortStrategy, label: 'Base Score', description: 'PatentsView composite (citations + recency + claim count)' },
+  { value: 'v2_composite' as SortStrategy, label: 'V2 Composite', description: 'Citations + remaining life + competitor exposure' },
+  { value: 'v3_snapshot' as SortStrategy, label: 'V3 Snapshot', description: 'Latest saved composite score snapshot' },
+  { value: 'newest_first' as SortStrategy, label: 'Newest First', description: 'Most recently granted patents first' },
+  { value: 'forward_citations' as SortStrategy, label: 'Forward Citations', description: 'Most cited patents first' },
+];
 
 async function openEnrichDialog(targetType: TargetType, targetValue: string, topN: number = 0) {
   enrichDialogTargetType.value = targetType;
   enrichDialogTargetValue.value = targetValue;
   enrichDialogTopN.value = topN;
-  enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'ipr', 'family', 'xml'];
+  enrichDialogCoverageTypes.value = ['llm', 'prosecution', 'prosecution-detail', 'ipr', 'family', 'xml'];
   enrichDialogGaps.value = null;
   enrichDialogModel.value = null;
   enrichDialogBatchMode.value = true;
+  enrichDialogSortBy.value = 'base_score';
   resetAdvancedSettings();
   showEnrichDialog.value = true;
 
   // Load gaps (pass topN for super-sector/sector to limit to top N patents)
   enrichDialogLoading.value = true;
   try {
-    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue, topN > 0 ? topN : undefined, portfolioStore.selectedPortfolioId);
+    enrichDialogGaps.value = await batchJobsApi.getGaps(targetType, targetValue, topN > 0 ? topN : undefined, portfolioStore.selectedPortfolioId, enrichDialogSortBy.value);
     // Auto-select only types that have gaps (pre-check types with work to do)
     if (enrichDialogGaps.value?.gaps) {
       const typesWithGaps = coverageTypeOptions
@@ -383,6 +394,32 @@ async function openEnrichDialog(targetType: TargetType, targetValue: string, top
     }
   } catch (err) {
     console.error('Failed to load gaps:', err);
+  } finally {
+    enrichDialogLoading.value = false;
+  }
+}
+
+async function onSortByChange() {
+  // Reload gaps with new sort strategy to get correct patent selection
+  const topN = enrichDialogTopN.value;
+  if (topN <= 0) return;
+  enrichDialogLoading.value = true;
+  try {
+    enrichDialogGaps.value = await batchJobsApi.getGaps(
+      enrichDialogTargetType.value,
+      enrichDialogTargetValue.value,
+      topN,
+      portfolioStore.selectedPortfolioId,
+      enrichDialogSortBy.value
+    );
+    if (enrichDialogGaps.value?.gaps) {
+      const typesWithGaps = coverageTypeOptions
+        .map(o => o.value)
+        .filter(t => (enrichDialogGaps.value!.gaps[t]?.gap ?? 0) > 0);
+      enrichDialogCoverageTypes.value = typesWithGaps.length > 0 ? typesWithGaps : [];
+    }
+  } catch (err) {
+    console.error('Failed to reload gaps with new sort:', err);
   } finally {
     enrichDialogLoading.value = false;
   }
@@ -402,6 +439,7 @@ async function doStartEnrichFromDialog() {
       coverageTypes: enrichDialogCoverageTypes.value,
       maxHours: 4,
       topN: enrichDialogTopN.value > 0 ? enrichDialogTopN.value : undefined,
+      sortBy: enrichDialogSortBy.value !== 'base_score' ? enrichDialogSortBy.value : undefined,
       portfolioId: portfolioStore.selectedPortfolioId,
       ...(enrichDialogModel.value ? { model: enrichDialogModel.value } : {}),
       ...(enrichDialogCoverageTypes.value.includes('llm') ? { batchMode: enrichDialogBatchMode.value } : {}),
@@ -550,8 +588,10 @@ function getCoverageColor(type: CoverageType): string {
   return opt?.color || 'grey';
 }
 
-function formatCoverageLabel(type: CoverageType): string {
-  return type === 'xml' ? 'Bulk' : type;
+function formatCoverageLabel(type: CoverageType | string): string {
+  if (type === 'xml') return 'Bulk';
+  if (type === 'prosecution-detail') return 'Pros-Detail';
+  return type;
 }
 
 function parseRange(val: string): { start: number; end: number } | null {
@@ -2072,6 +2112,33 @@ onUnmounted(() => {
             <q-spinner size="sm" /> Analyzing gaps...
           </div>
           <template v-else-if="enrichDialogGaps">
+            <!-- Sort strategy: only shown when topN is active (selecting a subset) -->
+            <div v-if="enrichDialogTopN > 0" class="q-mb-md">
+              <div class="text-subtitle2 q-mb-xs">Patent Selection Sort</div>
+              <q-select
+                v-model="enrichDialogSortBy"
+                :options="sortStrategyOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                outlined
+                dense
+                @update:model-value="onSortByChange"
+              >
+                <template v-slot:option="scope">
+                  <q-item v-bind="scope.itemProps">
+                    <q-item-section>
+                      <q-item-label>{{ scope.opt.label }}</q-item-label>
+                      <q-item-label caption>{{ scope.opt.description }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </template>
+              </q-select>
+              <div class="text-caption text-grey-6 q-mt-xs">
+                Determines which {{ enrichDialogTopN }} patents are selected for enrichment
+              </div>
+            </div>
             <div class="text-subtitle2 q-mb-sm">Coverage Types to Run</div>
             <div class="column q-gutter-xs">
               <q-checkbox

@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wi-network-monitoring-son",
+  "name": "Network Monitoring & SON",
+  "description": "Sub-sector template for network monitoring, self-organizing network (SON), and network management patents. Covers performance monitoring, fault detection, automatic parameter optimization, self-healing, and RAN intelligent controller (RIC) functions.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W24/*",
+  "sectorName": "wireless-infrastructure",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-infrastructure",
+  "version": 1,
+  "contextDescription": "SON and network monitoring automate the operation of cellular networks. Every operator uses SON functions for mobility optimization, coverage and capacity optimization, and fault detection. The O-RAN RIC (RAN Intelligent Controller) is the modern implementation of SON principles. Key targets: SON vendors (TEOCO, Amdocs, Cellwize), O-RAN xApp/rApp developers, and infrastructure vendors. AI/ML-driven SON is the emerging paradigm. Per-deployment value is high — SON reduces operational costs for carriers.",
+  "scoringGuidance": [
+    "Every cellular operator uses SON — it's essential for managing thousands of cells.",
+    "O-RAN RIC (xApps/rApps) is the modern evolution of SON — growing rapidly.",
+    "AI/ML-driven network optimization patents are highest-value in this space.",
+    "Self-healing (automatic fault detection and recovery) reduces downtime — high operator value.",
+    "Mobility optimization (handover parameter tuning) affects every connected device."
+  ],
+  "questions": [
+    {
+      "fieldName": "son_function",
+      "displayName": "SON Function",
+      "question": "What SON function does this patent address? Score 8-10 for AI/ML-driven SON or O-RAN RIC xApp/rApp, 5-7 for specific SON functions (MRO, MLB, CCO), 3-4 for basic network parameter optimization, 1-2 for manual network management.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "AI/ML-driven SON and O-RAN RIC are the highest-value areas."
+    },
+    {
+      "fieldName": "self_healing",
+      "displayName": "Self-Healing Capability",
+      "question": "Does this patent address automatic fault detection, diagnosis, or recovery (self-healing)? Score 8-10 for autonomous fault recovery without human intervention, 5-7 for automatic fault detection with suggested actions, 3-4 for monitoring and alerting, 1-2 for no self-healing aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Self-healing reduces OpEx significantly — operators value autonomous recovery."
+    },
+    {
+      "fieldName": "ric_alignment",
+      "displayName": "O-RAN RIC Alignment",
+      "question": "Does this patent align with O-RAN RIC architecture (near-RT RIC, non-RT RIC, xApp, rApp)? Score 8-10 for direct RIC function implementation, 5-7 for RIC-compatible concepts, 3-4 for general network intelligence, 1-2 for no RIC relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "O-RAN RIC is the standard platform for network intelligence — alignment means broad licensing."
+    },
+    {
+      "fieldName": "measurement_reporting",
+      "displayName": "Measurement & Reporting",
+      "question": "Does this patent address UE measurement reporting, network KPI collection, or MDT (minimization of drive tests)? Score 8-10 for novel measurement techniques or MDT innovations, 5-7 for KPI aggregation and analytics, 3-4 for basic measurement reporting, 1-2 for no measurement aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "MDT and UE measurements are standardized in 3GPP — exercised by every device."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this SON/monitoring innovation? Score 8-10 for observable in network behavior (parameter changes, KPI improvements), 5-7 for detectable in SON platform configuration, 3-4 for internal algorithm, 1-2 for theoretical only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SON effects are observable — network parameters that auto-optimize can be monitored."
+    },
+    {
+      "fieldName": "opex_reduction",
+      "displayName": "OpEx Reduction Impact",
+      "question": "How significantly does this patent reduce operator operational expenses? Score 8-10 for major OpEx reduction (>20% for specific operations), 5-7 for moderate improvement, 3-4 for marginal efficiency gain, 1-2 for no clear OpEx impact.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "OpEx reduction is the primary value driver for SON — quantify the impact."
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "rfa-waveguide",
+  "name": "Waveguide & Microwave Structures",
+  "description": "Sub-sector template for waveguide, microwave transmission line, and passive microwave component patents. Covers waveguide filters, transitions, substrate-integrated waveguide (SIW), and mmWave passive structures.",
+  "level": "sub_sector",
+  "subSectorPattern": "H01P/*",
+  "sectorName": "rf-acoustic",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "rf-acoustic",
+  "version": 1,
+  "contextDescription": "Waveguide patents cover passive microwave structures used in base stations, satellite communication, radar, and mmWave 5G systems. Substrate-integrated waveguide (SIW) is an emerging technology enabling waveguide performance in PCB-compatible form factors. Key applications: mmWave antenna feed networks, cavity filters for base stations, waveguide-to-microstrip transitions. Key targets: infrastructure vendors (Ericsson, Nokia, Samsung), mmWave module vendors, satellite companies. While lower volume than handset components, per-unit value is higher for infrastructure.",
+  "scoringGuidance": [
+    "Waveguide structures are used in every cellular base station (cavity filters, antenna feeds).",
+    "SIW (substrate-integrated waveguide) patents enable compact mmWave components.",
+    "mmWave 5G antenna modules use waveguide-based feed networks and transitions.",
+    "Cavity filter patents are relevant to base station RF filtering (but lower volume than handset).",
+    "Satellite communication uses waveguide structures extensively — growing market."
+  ],
+  "questions": [
+    {
+      "fieldName": "waveguide_type",
+      "displayName": "Waveguide Type",
+      "question": "What waveguide structure does this patent address? Score 8-10 for substrate-integrated waveguide (SIW) or novel planar waveguide architectures, 5-7 for rectangular/circular waveguide improvements, 3-4 for microstrip/stripline with waveguide characteristics, 1-2 for general transmission line.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SIW is the highest-value waveguide variant for modern applications — PCB-compatible."
+    },
+    {
+      "fieldName": "mmwave_application",
+      "displayName": "mmWave Application",
+      "question": "Is this patent applicable to mmWave frequencies (>24 GHz) for 5G NR or satellite? Score 8-10 for mmWave 5G antenna feed or mmWave filter/transition, 5-7 for general high-frequency application, 3-4 for mid-band, 1-2 for low-frequency only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "mmWave 5G and satellite communication are the growth markets for waveguide technology."
+    },
+    {
+      "fieldName": "passive_component",
+      "displayName": "Passive Component Type",
+      "question": "What passive component does this patent implement? Score 8-10 for waveguide filters or multiplexers (infrastructure value), 5-7 for transitions/couplers/power dividers, 3-4 for simple waveguide sections, 1-2 for no specific component.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Waveguide filters and multiplexers have the highest per-unit value."
+    },
+    {
+      "fieldName": "manufacturing_compatibility",
+      "displayName": "Manufacturing Compatibility",
+      "question": "Is this waveguide structure compatible with standard PCB/LTCC manufacturing? Score 8-10 for standard PCB-compatible (SIW, slot arrays), 5-7 for LTCC or advanced substrate, 3-4 for machined waveguide, 1-2 for exotic fabrication.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "PCB-compatible waveguide structures enable mass production — higher infringement volume."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this waveguide innovation in a commercial product? Score 8-10 for structure visible in X-ray or PCB layout analysis, 5-7 for detectable via module disassembly, 3-4 for internal structure requiring cross-section, 1-2 for design methodology only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Waveguide structures in modules can be detected via X-ray imaging without destructive analysis."
+    },
+    {
+      "fieldName": "performance_advantage",
+      "displayName": "Performance Advantage",
+      "question": "What performance advantage does this patent provide? Score 8-10 for significant loss reduction, bandwidth enhancement, or size reduction, 5-7 for moderate improvement in key metrics, 3-4 for incremental improvement, 1-2 for no clear advantage.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Loss, bandwidth, and size are the key metrics for waveguide structures."
+    }
+  ]
+}

@@ -17,6 +17,9 @@ import {
   ScoreCalculationResult,
   calculateCompositeScore,
   getMergedTemplateForSector,
+  getMergedTemplateForSubSector,
+  loadSubSectorTemplates,
+  matchSubSectorTemplate,
   MergedTemplate
 } from './scoring-template-service.js';
 import { extractClaimsText, getClaimsStats } from './patent-xml-parser-service.js';
@@ -1015,9 +1018,72 @@ export async function scoreSector(
     console.log(`[LLM Scoring] Using CLAIMS CONTEXT (${contextOptions.includeClaims})`);
   }
 
-  // Get the merged template for this sector (from JSON config files)
   // First patent gives us the super-sector context
   const superSector = patents[0]?.super_sector || 'WIRELESS';
+
+  // Group patents by sub-sector template (if any sub-sector templates exist for this sector)
+  const subSectorTemplates = loadSubSectorTemplates();
+  const sectorSubTemplates = Array.from(subSectorTemplates.values())
+    .filter(t => t.sectorName === sectorName && t.level === 'sub_sector');
+
+  if (sectorSubTemplates.length > 0) {
+    // Group patents by matching sub-sector template
+    const groups = new Map<string | null, PatentForScoring[]>();  // null = no sub-sector match
+    for (const patent of patents) {
+      const matched = matchSubSectorTemplate(sectorName, patent.cpc_codes || []);
+      const key = matched?.id || null;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(patent);
+    }
+
+    console.log(`[LLM Scoring] Sub-sector grouping for ${sectorName}:`);
+    for (const [subId, groupPatents] of groups) {
+      console.log(`  ${subId || '(sector-level)'}: ${groupPatents.length} patents`);
+    }
+
+    // Score each group with its template
+    const allResults: ScoringResult[] = [];
+    let totalTokens = { input: 0, output: 0 };
+    let totalCompleted = 0;
+
+    for (const [subSectorId, groupPatents] of groups) {
+      let template;
+      if (subSectorId) {
+        template = getMergedTemplateForSubSector(subSectorId, sectorName, superSector);
+      } else {
+        template = getMergedTemplateForSector(sectorName, superSector);
+      }
+      console.log(`[LLM Scoring] Scoring ${groupPatents.length} patents with template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
+
+      const result = await scorePatentBatch(groupPatents, {
+        model,
+        saveToDb: true,
+        concurrency,
+        contextOptions,
+        template,
+        sectorId: subSectorId || sectorName,
+        progressCallback: (completed, total) => {
+          const globalPct = Math.round(((totalCompleted + completed) / patents.length) * 100);
+          console.log(`[LLM Scoring] Sector ${sectorName} [${subSectorId || 'sector-level'}]: ${completed}/${total} (${globalPct}% overall)`);
+        }
+      });
+
+      allResults.push(...result.results);
+      totalTokens.input += result.totalTokens.input;
+      totalTokens.output += result.totalTokens.output;
+      totalCompleted += groupPatents.length;
+    }
+
+    return {
+      total: patents.length,
+      successful: allResults.filter(r => r.success).length,
+      failed: allResults.filter(r => !r.success).length,
+      results: allResults,
+      totalTokens
+    };
+  }
+
+  // No sub-sector templates — use sector-level template (existing behavior)
   const template = getMergedTemplateForSector(sectorName, superSector);
   console.log(`[LLM Scoring] Using template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
 

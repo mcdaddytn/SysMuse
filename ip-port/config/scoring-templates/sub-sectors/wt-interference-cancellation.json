@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wt-interference-cancellation",
+  "name": "Interference Cancellation & Mitigation",
+  "description": "Sub-sector template for interference cancellation, suppression, and mitigation patents. Covers successive interference cancellation (SIC), inter-cell interference coordination (ICIC), self-interference cancellation for full-duplex, and co-existence interference management.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04B1/12*,H04B1/71*",
+  "sectorName": "wireless-transmission",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-transmission",
+  "version": 1,
+  "contextDescription": "Interference is the fundamental limiter of wireless capacity. Every cellular device and base station implements interference management. Key techniques: SIC in the receiver, ICIC/eICIC at network level, self-interference cancellation for full-duplex. 5G NR dense deployments (small cells) make interference management critical. Key targets: Qualcomm (receiver algorithms), Intel, Samsung, all infrastructure vendors (Ericsson, Nokia). Full-duplex communication is a major research area where self-interference cancellation is the key enabler.",
+  "scoringGuidance": [
+    "Interference cancellation is performed in every cellular receiver — enormous infringement surface.",
+    "SIC (successive interference cancellation) patents are widely implemented in LTE-A receivers.",
+    "Inter-cell interference coordination (eICIC, FeICIC) patents affect every HetNet deployment.",
+    "Self-interference cancellation for full-duplex is high-value emerging technology.",
+    "Co-existence interference (WiFi/LTE, radar/5G) patents are relevant for shared spectrum."
+  ],
+  "questions": [
+    {
+      "fieldName": "cancellation_technique",
+      "displayName": "Cancellation Technique",
+      "question": "What interference cancellation technique does this patent use? Score 8-10 for self-interference cancellation (full-duplex) or advanced SIC with machine learning, 5-7 for standard SIC or MMSE-IRC, 3-4 for basic interference suppression, 1-2 for no specific technique.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Full-duplex self-interference cancellation is the highest-value emerging technique."
+    },
+    {
+      "fieldName": "network_level_icic",
+      "displayName": "Network-Level ICIC",
+      "question": "Does this patent address network-level interference coordination (ICIC, eICIC, CoMP)? Score 8-10 for novel coordinated scheduling across cells, 5-7 for enhanced ICIC (ABS patterns, power control), 3-4 for basic frequency reuse, 1-2 for receiver-only techniques.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "ICIC is mandatory in every HetNet deployment — small cells co-existing with macro cells."
+    },
+    {
+      "fieldName": "cancellation_domain",
+      "displayName": "Cancellation Domain",
+      "question": "In which domain does the interference cancellation operate? Score 8-10 for combined analog+digital cancellation (100+ dB), 6-7 for analog domain (RF/baseband), 4-5 for digital domain only, 2-3 for spatial domain (beamforming), 1 for no specific domain.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Combined analog+digital cancellation achieves the deepest cancellation for full-duplex."
+    },
+    {
+      "fieldName": "coexistence",
+      "displayName": "Spectrum Co-Existence",
+      "question": "Does this patent address co-existence interference between different systems (WiFi/LTE, radar/5G, CBRS)? Score 8-10 for dynamic spectrum sharing interference management, 5-7 for inter-system co-existence techniques, 3-4 for adjacent channel interference, 1-2 for single-system only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Shared spectrum (CBRS, 6 GHz WiFi/5G) makes co-existence increasingly important."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this interference cancellation innovation? Score 8-10 for observable in receiver performance metrics (SINR improvement) or network signaling (ICIC), 5-7 for detectable via chip teardown (cancellation circuits), 3-4 for firmware/algorithm level, 1-2 for theoretical only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Receiver IC architecture and ICIC signaling are both detectable — identify the evidence path."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP interference management procedures? Score 8-10 for direct implementation of standardized IC/ICIC behavior, 5-7 for enabling standard compliance, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "ICIC signaling is standardized in 3GPP — SIC receiver types are defined in UE categories."
+    }
+  ]
+}

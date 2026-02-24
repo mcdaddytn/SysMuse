@@ -18,8 +18,9 @@ const router = Router();
 let lastCacheInvalidation = 0;
 
 // Coverage types that can be run independently
-type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family' | 'xml' | 'citing';
+type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml' | 'citing';
 type TargetType = 'tier' | 'super-sector' | 'sector';
+type SortStrategy = 'base_score' | 'v2_composite' | 'v3_snapshot' | 'newest_first' | 'forward_citations';
 
 // API response shape (matches frontend BatchJob interface)
 interface BatchJobResponse {
@@ -49,6 +50,7 @@ interface BatchJobResponse {
 const DEFAULT_RATES: Record<CoverageType, number> = {
   llm: 900, // ~5 concurrent Anthropic calls, ~8 sec/call = ~37/min = ~900/hr (per process, conservative)
   prosecution: 600,
+  'prosecution-detail': 200, // Hybrid: API calls + LLM analysis per patent
   ipr: 600,
   family: 500,
   xml: 2000, // Local disk extraction, very fast
@@ -456,15 +458,18 @@ function parseTierRange(targetValue: string): { skip: number; take: number } {
 // Analyze gaps for a given target using Postgres
 // topN: for super-sector/sector, only analyze top N patents by score (0 = all)
 // portfolioId: optional — scope to a specific portfolio
+// sortBy: sort strategy for patent selection when topN > 0
 async function analyzeGaps(
   targetType: TargetType,
   targetValue: string,
   topN: number = 0,
-  portfolioId?: string
+  portfolioId?: string,
+  sortBy: SortStrategy = 'base_score'
 ): Promise<Record<CoverageType, { total: number; gap: number; ids: string[] }>> {
   const empty = {
     llm: { total: 0, gap: 0, ids: [] as string[] },
     prosecution: { total: 0, gap: 0, ids: [] as string[] },
+    'prosecution-detail': { total: 0, gap: 0, ids: [] as string[] },
     ipr: { total: 0, gap: 0, ids: [] as string[] },
     family: { total: 0, gap: 0, ids: [] as string[] },
     xml: { total: 0, gap: 0, ids: [] as string[] },
@@ -495,10 +500,31 @@ async function analyzeGaps(
       skip = range.skip;
       take = range.take;
     } else if (topN > 0) {
-      take = topN;
+      // For v2_composite and v3_snapshot, we fetch all then sort in memory
+      if (sortBy !== 'v2_composite' && sortBy !== 'v3_snapshot') {
+        take = topN;
+      }
     }
 
-    // Order by baseScore when available, fall back to grantDate desc (most recent first)
+    // Build orderBy based on sort strategy
+    const needsInMemorySort = topN > 0 && (sortBy === 'v2_composite' || sortBy === 'v3_snapshot');
+    let orderBy: any[];
+    switch (sortBy) {
+      case 'newest_first':
+        orderBy = [{ patentIdNumeric: 'desc' }];
+        break;
+      case 'forward_citations':
+        orderBy = [{ forwardCitations: 'desc' }, { baseScore: 'desc' }];
+        break;
+      case 'base_score':
+      default:
+        orderBy = [{ baseScore: 'desc' }, { grantDate: 'desc' }];
+        break;
+    }
+
+    // For v3_snapshot, include composite scores via join
+    const includeCompositeScores = sortBy === 'v3_snapshot';
+
     const patents = await prisma.patent.findMany({
       where,
       select: {
@@ -513,25 +539,65 @@ async function analyzeGaps(
         forwardCitations: true,
         isQuarantined: true,
         quarantine: true,
+        ...(sortBy === 'v2_composite' ? {
+          baseScore: true,
+          remainingYears: true,
+        } : {}),
+        ...(includeCompositeScores ? {
+          compositeScores: {
+            where: { scoreName: 'v3_snapshot' },
+            select: { value: true },
+            take: 1,
+          },
+          baseScore: true,
+        } : {}),
       },
-      orderBy: [{ baseScore: 'desc' }, { grantDate: 'desc' }],
+      orderBy: needsInMemorySort ? [{ baseScore: 'desc' }] : orderBy,
       ...(skip > 0 ? { skip } : {}),
       ...(take ? { take } : {}),
     });
 
-    const ids = patents.map(p => p.patentId);
+    // In-memory sort + slice for v2_composite and v3_snapshot
+    let sortedPatents = patents;
+    if (needsInMemorySort) {
+      if (sortBy === 'v2_composite') {
+        // V2 composite: log10(fwdCitations+1)*30*0.5 + min(remainingYears/20,1)*100*0.3 + baseScore*0.2
+        sortedPatents = [...patents].sort((a: any, b: any) => {
+          const v2a = Math.log10((a.forwardCitations || 0) + 1) * 15
+            + Math.min((a.remainingYears || 0) / 20, 1) * 30
+            + (a.baseScore || 0) * 0.2;
+          const v2b = Math.log10((b.forwardCitations || 0) + 1) * 15
+            + Math.min((b.remainingYears || 0) / 20, 1) * 30
+            + (b.baseScore || 0) * 0.2;
+          return v2b - v2a;
+        });
+      } else if (sortBy === 'v3_snapshot') {
+        sortedPatents = [...patents].sort((a: any, b: any) => {
+          const v3a = a.compositeScores?.[0]?.value ?? a.baseScore ?? 0;
+          const v3b = b.compositeScores?.[0]?.value ?? b.baseScore ?? 0;
+          return v3b - v3a;
+        });
+      }
+      if (topN > 0) {
+        sortedPatents = sortedPatents.slice(0, topN);
+      }
+    }
+
+    const ids = sortedPatents.map(p => p.patentId);
 
     // All enrichment gaps now come from Postgres flags
     // LLM gap: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
-    const llmEligible = patents.filter(p => !(p.quarantine as any)?.llm);
+    const llmEligible = sortedPatents.filter(p => !(p.quarantine as any)?.llm);
     const llmGapIds = llmEligible.filter(p => !p.hasLlmData).map(p => p.patentId);
-    const prosGapIds = patents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
+    const prosGapIds = sortedPatents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
+    // Prosecution-detail gap: requires hasProsecutionDetail flag (claim-level analysis)
+    const prosDetailGapIds = sortedPatents.filter(p => !(p as any).hasProsecutionDetail).map(p => p.patentId);
     // XML gap: use quarantine to exclude ineligible patents
-    const xmlEligible = patents.filter(p => !(p.quarantine as any)?.xml);
+    const xmlEligible = sortedPatents.filter(p => !(p.quarantine as any)?.xml);
     const xmlGapIds = xmlEligible.filter(p => !p.hasXmlData).map(p => p.patentId);
 
-    const iprGapIds = patents.filter(p => !p.hasIprData).map(p => p.patentId);
-    const familyGapIds = patents.filter(p => !p.hasFamilyData).map(p => p.patentId);
+    const iprGapIds = sortedPatents.filter(p => !p.hasIprData).map(p => p.patentId);
+    const familyGapIds = sortedPatents.filter(p => !p.hasFamilyData).map(p => p.patentId);
 
     // Citing gaps still use file-based cache (no DB flag for this)
     function getCacheSet(dir: string): Set<string> {
@@ -552,14 +618,15 @@ async function analyzeGaps(
     const citingGapIds = ids.filter(id => !citingSet.has(id));
 
     const quarantineCounts = {
-      total: patents.filter(p => p.isQuarantined).length,
-      xml: patents.filter(p => (p.quarantine as any)?.xml).length,
-      llm: patents.filter(p => (p.quarantine as any)?.llm).length,
+      total: sortedPatents.filter(p => p.isQuarantined).length,
+      xml: sortedPatents.filter(p => (p.quarantine as any)?.xml).length,
+      llm: sortedPatents.filter(p => (p.quarantine as any)?.llm).length,
     };
 
     return {
       llm: { total: llmEligible.length, gap: llmGapIds.length, ids: llmGapIds },
       prosecution: { total: ids.length, gap: prosGapIds.length, ids: prosGapIds },
+      'prosecution-detail': { total: ids.length, gap: prosDetailGapIds.length, ids: prosDetailGapIds },
       ipr: { total: ids.length, gap: iprGapIds.length, ids: iprGapIds },
       family: { total: ids.length, gap: familyGapIds.length, ids: familyGapIds },
       xml: { total: xmlEligible.length, gap: xmlGapIds.length, ids: xmlGapIds },
@@ -589,7 +656,7 @@ function getEnrichmentCommand(
     if (options?.settings?.llmInterBatchDelay) envVars.push(`LLM_INTER_BATCH_DELAY=${options.settings.llmInterBatchDelay}`);
   }
 
-  if (coverageType === 'prosecution' || coverageType === 'ipr') {
+  if (coverageType === 'prosecution' || coverageType === 'prosecution-detail' || coverageType === 'ipr') {
     if (options?.settings?.apiRateLimit) envVars.push(`API_RATE_LIMIT=${options.settings.apiRateLimit}`);
     if (options?.settings?.apiRetryAttempts != null) envVars.push(`API_RETRY_ATTEMPTS=${options.settings.apiRetryAttempts}`);
     if (options?.settings?.apiRetryDelay) envVars.push(`API_RETRY_DELAY=${options.settings.apiRetryDelay}`);
@@ -602,6 +669,8 @@ function getEnrichmentCommand(
       return `${envPrefix}npx tsx scripts/run-sector-scoring.ts ${batchFile} > ${logFile} 2>&1`;
     case 'prosecution':
       return `${envPrefix}npx tsx scripts/check-prosecution-history.ts ${batchFile} > ${logFile} 2>&1`;
+    case 'prosecution-detail':
+      return `${envPrefix}npx tsx scripts/enrich-prosecution-detail.ts ${batchFile} > ${logFile} 2>&1`;
     case 'ipr':
       return `${envPrefix}npx tsx scripts/check-ipr-risk.ts ${batchFile} > ${logFile} 2>&1`;
     case 'family':
@@ -617,7 +686,7 @@ function getEnrichmentCommand(
 function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: string }> {
   try {
     const result = execSync(
-      'ps aux | grep -E "run-sector-scoring|run-llm-analysis|check-prosecution|check-ipr|enrich-citations|extract-patent-xmls" | grep -v grep',
+      'ps aux | grep -E "run-sector-scoring|run-llm-analysis|check-prosecution|enrich-prosecution-detail|check-ipr|enrich-citations|extract-patent-xmls" | grep -v grep',
       { encoding: 'utf-8' }
     );
 
@@ -626,6 +695,7 @@ function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: strin
       const pid = parseInt(parts[1]);
       let type = 'unknown';
       if (line.includes('run-sector-scoring') || line.includes('run-llm-analysis')) type = 'llm';
+      else if (line.includes('enrich-prosecution-detail')) type = 'prosecution-detail';
       else if (line.includes('check-prosecution')) type = 'prosecution';
       else if (line.includes('check-ipr')) type = 'ipr';
       else if (line.includes('enrich-citations')) type = 'family';
@@ -841,6 +911,7 @@ router.post('/', async (req: Request, res: Response) => {
       coverageTypes = ['llm', 'prosecution', 'ipr', 'family'],
       maxHours = 4,
       topN = 0,  // For super-sector/sector: limit to top N patents by score (0 = all)
+      sortBy: sortByParam = 'base_score',  // Sort strategy for topN patent selection
       portfolioId,  // Optional: scope to a specific portfolio
       model,       // Optional: LLM model override (e.g., 'claude-sonnet-4-20250514')
       batchMode,   // Optional: true = Batch API (50% off, ~24h), false = realtime
@@ -856,7 +927,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Validate coverage types (citing is analysis-only, not a runnable job type)
-    const validTypes: CoverageType[] = ['llm', 'prosecution', 'ipr', 'family', 'xml'];
+    const validTypes: CoverageType[] = ['llm', 'prosecution', 'prosecution-detail', 'ipr', 'family', 'xml'];
     const selectedTypes = coverageTypes.filter((t: string) => validTypes.includes(t as CoverageType)) as CoverageType[];
 
     if (selectedTypes.length === 0) {
@@ -864,8 +935,9 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Analyze gaps to determine what needs to be done
-    // For super-sector/sector, topN limits analysis to top N patents by score
-    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
+    // For super-sector/sector, topN limits analysis to top N patents by sortBy strategy
+    const sortBy = (sortByParam as SortStrategy) || 'base_score';
+    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId, sortBy);
 
     // Claims-gate: filter LLM gap to only patents WITH XML data (claims available)
     // If no LLM-eligible patents have XML yet, skip LLM silently — XML extraction
@@ -1129,12 +1201,13 @@ router.get('/gaps', async (req: Request, res: Response) => {
     const targetValue = req.query.targetValue as string;
     const topN = parseInt(req.query.topN as string) || 0;
     const portfolioId = req.query.portfolioId as string | undefined;
+    const sortBy = (req.query.sortBy as SortStrategy) || 'base_score';
 
     if (!targetType || !targetValue) {
       return res.status(400).json({ error: 'targetType and targetValue are required' });
     }
 
-    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId);
+    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId, sortBy);
 
     res.json({
       targetType,

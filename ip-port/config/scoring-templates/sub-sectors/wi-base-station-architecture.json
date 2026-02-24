@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wi-base-station-architecture",
+  "name": "Base Station Architecture",
+  "description": "Sub-sector template for base station (eNB/gNB) architecture patents. Covers radio unit design, baseband processing, fronthaul/midhaul interfaces (eCPRI, ORAN), massive MIMO antenna systems, and disaggregated RAN architectures.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W88/*",
+  "sectorName": "wireless-infrastructure",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-infrastructure",
+  "version": 1,
+  "contextDescription": "Base station architecture patents cover the hardware and system design of cellular infrastructure. The industry is transitioning from monolithic base stations to disaggregated RAN (O-RAN) with separate radio unit (RU), distributed unit (DU), and centralized unit (CU). Massive MIMO (64T64R, 128T128R) is standard for 5G. Key targets: Ericsson, Nokia, Samsung, Huawei (outside US), and emerging O-RAN vendors (Mavenir, Parallel Wireless). Cloud-RAN and virtualized baseband processing are growing areas. Per-unit value is very high ($10K-$100K per base station).",
+  "scoringGuidance": [
+    "Every cellular base station implements these patents — millions deployed worldwide.",
+    "Massive MIMO antenna array patents are critical for 5G NR — 64+ antenna elements per panel.",
+    "O-RAN disaggregation patents affect the entire vendor ecosystem — high strategic value.",
+    "eCPRI fronthaul interface patents are essential for RU-DU connectivity.",
+    "Per-unit value is extremely high compared to handset patents ($10K-$100K per base station)."
+  ],
+  "questions": [
+    {
+      "fieldName": "architecture_type",
+      "displayName": "Architecture Type",
+      "question": "What base station architecture does this patent address? Score 8-10 for disaggregated RAN (O-RAN, CU/DU/RU split) or cloud-native RAN, 5-7 for massive MIMO antenna system design, 3-4 for traditional monolithic base station, 1-2 for no specific architecture.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "O-RAN and disaggregated RAN are the industry trends — highest future value."
+    },
+    {
+      "fieldName": "massive_mimo",
+      "displayName": "Massive MIMO",
+      "question": "Does this patent address massive MIMO antenna systems (antenna array design, beamforming architecture, calibration)? Score 8-10 for novel massive MIMO architecture (128+ elements) or hybrid beamforming, 5-7 for standard massive MIMO improvements, 3-4 for basic multi-antenna, 1-2 for no MIMO aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Massive MIMO is mandatory for 5G NR — every 5G base station uses it."
+    },
+    {
+      "fieldName": "fronthaul_interface",
+      "displayName": "Fronthaul/Midhaul Interface",
+      "question": "Does this patent address fronthaul or midhaul interfaces (eCPRI, CPRI evolution, functional split options)? Score 8-10 for novel fronthaul compression or split architecture, 5-7 for eCPRI improvements, 3-4 for general fronthaul design, 1-2 for no fronthaul aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "eCPRI fronthaul is a standardized interface — every disaggregated base station uses it."
+    },
+    {
+      "fieldName": "oran_alignment",
+      "displayName": "O-RAN Alignment",
+      "question": "How closely does this patent align with O-RAN Alliance specifications? Score 8-10 for direct implementation of O-RAN interfaces (O-RU, O-DU, O-CU), 5-7 for O-RAN compatible design, 3-4 for general open interface concepts, 1-2 for proprietary/closed architecture.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "O-RAN is the dominant industry trend for RAN disaggregation — high SEP potential."
+    },
+    {
+      "fieldName": "baseband_processing",
+      "displayName": "Baseband Processing",
+      "question": "Does this patent address baseband signal processing in the base station (LDPC/polar coding, FFT, precoding)? Score 8-10 for novel processing architectures or hardware acceleration, 5-7 for processing optimization, 3-4 for general signal processing, 1-2 for no baseband aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Baseband processing is compute-intensive — hardware acceleration is critical for 5G throughput."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this base station innovation? Score 8-10 for architecture visible in product documentation or O-RAN conformance, 5-7 for behavior observable via network signaling, 3-4 for internal hardware requiring physical access, 1-2 for algorithm-level only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Base station architecture is often documented in product specs and O-RAN conformance reports."
+    }
+  ]
+}

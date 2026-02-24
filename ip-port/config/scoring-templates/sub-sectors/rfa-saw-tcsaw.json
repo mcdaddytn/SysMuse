@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "rfa-saw-tcsaw",
+  "name": "SAW / TC-SAW Filters",
+  "description": "Sub-sector template for Surface Acoustic Wave (SAW) and Temperature-Compensated SAW (TC-SAW) filter patents. Covers IDT electrode design, waveguide structures, temperature compensation layers, and SAW-based filter/duplexer integration.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03H9/145*,H03H9/64*",
+  "sectorName": "rf-acoustic",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "rf-acoustic",
+  "version": 1,
+  "contextDescription": "SAW filters dominate the low-frequency RF filter market (below ~2.5 GHz). TC-SAW extends SAW to higher performance by adding temperature compensation layers (SiO2). Every smartphone uses 10-30 SAW/TC-SAW filters for LTE/sub-6 bands. Key vendors: Murata (dominant), TDK, Qualcomm (via TDK partnership), Skyworks, Qorvo. SAW technology competes with BAW at mid-frequencies (1.5-2.5 GHz). Key innovations: I.H.P. SAW (incredibly high performance), guided SAW, and multi-layer piezoelectric substrates.",
+  "scoringGuidance": [
+    "SAW filters are in every smartphone — 10-30 per device for different frequency bands.",
+    "TC-SAW patents are high-value because they enable premium filter performance at lower cost than BAW.",
+    "I.H.P. SAW and guided SAW patents represent next-generation technology.",
+    "IDT (interdigital transducer) electrode design patents are fundamental — every SAW device has IDTs.",
+    "Multi-layer piezoelectric substrates (bonded wafer) are enabling higher frequency SAW operation."
+  ],
+  "questions": [
+    {
+      "fieldName": "saw_variant",
+      "displayName": "SAW Variant",
+      "question": "What SAW technology variant does this patent address? Score 8-10 for I.H.P. SAW, guided SAW, or novel SAW architectures, 6-7 for TC-SAW (temperature compensated), 4-5 for standard SAW with IDT improvements, 2-3 for general acoustic wave, 1 for unrelated.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "I.H.P. SAW and guided SAW are the next-gen variants with highest technology value."
+    },
+    {
+      "fieldName": "temperature_compensation",
+      "displayName": "Temperature Compensation",
+      "question": "Does this patent address temperature stability in SAW devices (SiO2 layers, material engineering, TCF optimization)? Score 8-10 for novel temperature compensation techniques, 5-7 for TC-SAW layer optimization, 3-4 for temperature awareness, 1-2 for no temperature aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Temperature stability is the key differentiator for TC-SAW over standard SAW."
+    },
+    {
+      "fieldName": "idt_electrode_design",
+      "displayName": "IDT Electrode Design",
+      "question": "Does this patent address interdigital transducer (IDT) electrode design (weighting, apodization, electrode material, pitch optimization)? Score 8-10 for novel electrode architectures, 5-7 for electrode optimization, 3-4 for basic IDT configuration, 1-2 for no IDT aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "IDT design is fundamental to every SAW device — electrode patterns define performance."
+    },
+    {
+      "fieldName": "substrate_innovation",
+      "displayName": "Substrate Innovation",
+      "question": "Does this patent involve piezoelectric substrate innovation (lithium niobate, lithium tantalate, bonded wafer, thin-film piezo on silicon)? Score 8-10 for novel substrate architectures (bonded wafer, thin-film), 5-7 for substrate orientation/cut optimization, 3-4 for standard substrates, 1-2 for no substrate focus.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Bonded wafer and thin-film piezo substrates enable higher frequency SAW operation."
+    },
+    {
+      "fieldName": "teardown_detectability",
+      "displayName": "Teardown Detectability",
+      "question": "How detectable is this SAW innovation via physical analysis? Score 8-10 for IDT patterns visible in optical/SEM, 5-7 for layer stacks detectable via cross-section, 3-4 for material composition via EDS/XRD, 1-2 for design methodology only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SAW IDT patterns and layer stacks are readily visible in physical analysis."
+    },
+    {
+      "fieldName": "frequency_coverage",
+      "displayName": "Frequency Band Coverage",
+      "question": "Which frequency bands does this SAW technology target? Score 8-10 for bands where SAW competes with BAW (1.5-2.7 GHz), 5-7 for traditional SAW bands (700 MHz-1.5 GHz), 3-4 for sub-700 MHz, 1-2 for no frequency specificity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Higher frequency SAW patents have more competitive value — they overlap with BAW territory."
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ws-latency-scheduling",
+  "name": "Latency-Optimized Scheduling",
+  "description": "Sub-sector template for low-latency and URLLC scheduling patents. Covers mini-slot scheduling, preemption, slot aggregation, and priority-based resource allocation for time-critical communication.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W72/08*",
+  "sectorName": "wireless-scheduling",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-scheduling",
+  "version": 1,
+  "contextDescription": "Latency-optimized scheduling is central to 5G NR URLLC and time-sensitive networking. Mini-slot scheduling (2, 4, or 7 symbols instead of 14) enables sub-millisecond latency. Preemption allows URLLC traffic to interrupt eMBB transmissions. These mechanisms are critical for industrial automation, autonomous vehicles, remote surgery, and XR/AR applications. Key targets: Qualcomm, Ericsson, Nokia, Samsung, all 5G infrastructure vendors. 3GPP TS 38.214 defines mini-slot and preemption procedures.",
+  "scoringGuidance": [
+    "Mini-slot scheduling is mandatory for URLLC — every 5G NR gNB and URLLC UE implements it.",
+    "Preemption indication (DCI format 2_1) patents have broad infrastructure + device reach.",
+    "Slot aggregation and repetition patents improve reliability for URLLC.",
+    "Priority-based scheduling between eMBB and URLLC traffic is a key 5G feature.",
+    "Time-sensitive networking (TSN) integration with 5G scheduling is emerging high-value area."
+  ],
+  "questions": [
+    {
+      "fieldName": "mini_slot_scheduling",
+      "displayName": "Mini-Slot Scheduling",
+      "question": "Does this patent address mini-slot (sub-slot) scheduling for reduced latency? Score 8-10 for novel mini-slot resource allocation or dynamic mini-slot/slot switching, 5-7 for mini-slot aware scheduling, 3-4 for general sub-frame scheduling, 1-2 for slot-level only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Mini-slot scheduling enables sub-1ms latency in 5G NR — identify symbol-level granularity."
+    },
+    {
+      "fieldName": "preemption_mechanism",
+      "displayName": "Preemption Mechanism",
+      "question": "Does this patent address URLLC preemption of eMBB traffic (preemption indication, puncturing, resource reassignment)? Score 8-10 for novel preemption signaling or preemption-aware resource management, 5-7 for basic preemption handling, 3-4 for priority-based scheduling without preemption, 1-2 for no preemption aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Preemption is a novel 5G NR feature — eMBB traffic is interrupted for URLLC."
+    },
+    {
+      "fieldName": "reliability_mechanism",
+      "displayName": "Reliability Mechanism",
+      "question": "Does this patent address ultra-reliability (repetition, slot aggregation, diversity) in scheduling? Score 8-10 for novel HARQ-less reliability techniques or multi-TRP diversity scheduling, 5-7 for repetition/aggregation optimization, 3-4 for general HARQ improvements, 1-2 for no reliability aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "URLLC requires 99.999% reliability — scheduling must guarantee delivery."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP URLLC/latency procedures (TS 38.214/38.321)? Score 8-10 for direct implementation of standardized URLLC behavior, 5-7 for enabling standard compliance, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "URLLC scheduling is standardized in 3GPP Rel-15/16/17 — SEP potential is high."
+    },
+    {
+      "fieldName": "tsn_integration",
+      "displayName": "TSN / Industrial Integration",
+      "question": "Does this patent address integration with time-sensitive networking (TSN) or industrial automation scheduling? Score 8-10 for 5G-TSN bridge scheduling or deterministic communication, 5-7 for time-aware scheduling, 3-4 for general industrial awareness, 1-2 for no TSN/industrial aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "5G-TSN integration is an emerging market for industrial automation."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this latency scheduling innovation? Score 8-10 for behavior observable in DCI (mini-slot grants, preemption indication), 5-7 for behavior measurable via latency testing, 3-4 for internal scheduler logic, 1-2 for algorithm-level only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Mini-slot grants and preemption indications are observable in DCI over the air."
+    }
+  ]
+}

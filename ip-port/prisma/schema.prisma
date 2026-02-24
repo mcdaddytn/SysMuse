@@ -290,6 +290,7 @@ model Patent {
   hasXmlData         Boolean  @default(false) @map("has_xml_data")
   hasIprData         Boolean  @default(false) @map("has_ipr_data")
   hasFamilyData      Boolean  @default(false) @map("has_family_data")
+  hasProsecutionDetail Boolean @default(false) @map("has_prosecution_detail")
 
   // Quarantine tracking
   isQuarantined     Boolean  @default(false) @map("is_quarantined")
@@ -306,6 +307,7 @@ model Patent {
   cpcCodes          PatentCpc[]
   citations         PatentCitationAnalysis?
   prosecution       PatentProsecution?
+  prosecutionTimeline ProsecutionTimeline?
   scores            PatentScore[]
   compositeScores   PatentCompositeScore[]
 
@@ -1537,4 +1539,32 @@ model BatchJob {
   @@index([coverageType])
   @@index([portfolioId])
   @@index([createdAt])
+}
+
+// ============================================================================
+// Prosecution Timeline (claim-level analysis)
+// ============================================================================
+
+model ProsecutionTimeline {
+  id                String   @id @default(cuid())
+  patentId          String   @unique @map("patent_id")
+  patent            Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  applicationNum    String   @map("application_num")
+  totalActions      Int      @map("total_actions")
+  totalRejections   Int      @map("total_rejections")
+  totalRCEs         Int      @default(0) @map("total_rces")
+  timeToGrantMonths Int?     @map("time_to_grant_months")
+  prosecutionScore  Float    @map("prosecution_score")
+  officeActions     Json     @map("office_actions")       // OfficeActionAnalysis[]
+  responses         Json                                   // ApplicantResponseAnalysis[]
+  citedPriorArt     Json     @map("cited_prior_art")      // Merged prior art references
+  narrowedClaims    Json     @map("narrowed_claims")      // Claims narrowed during prosecution
+  estoppelArguments Json     @map("estoppel_arguments")   // Prosecution estoppel risks
+  survivedBases     Json     @map("survived_bases")       // Rejection bases overcome
+  analyzedAt        DateTime @map("analyzed_at")
+  llmModel          String   @map("llm_model")
+  documentCount     Int      @map("document_count")
+
+  @@map("prosecution_timelines")
+  @@index([patentId])
 }

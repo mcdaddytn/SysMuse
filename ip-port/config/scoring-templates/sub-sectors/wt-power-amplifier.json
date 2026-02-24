@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wt-power-amplifier",
+  "name": "Power Amplifiers",
+  "description": "Sub-sector template for RF power amplifier patents. Covers PA architecture (Doherty, envelope tracking, outphasing), GaN/GaAs/SiGe PA design, linearization (DPD), and PA module integration for wireless communication.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04B1/04*",
+  "sectorName": "wireless-transmission",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-transmission",
+  "version": 1,
+  "contextDescription": "Power amplifiers are the most power-hungry and performance-critical component in any wireless transmitter. Every smartphone, base station, and WiFi access point contains PAs. Key vendors: Qualcomm (integrated), Skyworks, Qorvo, Broadcom (FBAR-integrated PA modules). Key innovations: envelope tracking (ET) for efficiency, Doherty for base stations, GaN for 5G infrastructure, digital pre-distortion (DPD) for linearity. PA patents are highly detectable via teardown — die architecture and matching network are visible.",
+  "scoringGuidance": [
+    "Every wireless transmitter needs a PA — smartphones have 5-10 PA modules each.",
+    "Envelope tracking (ET) patents are critical — ET is now standard in flagship smartphones.",
+    "Doherty PA patents dominate base station market — every macro cell uses Doherty PAs.",
+    "GaN PA patents are high-value for 5G massive MIMO base stations.",
+    "DPD (digital pre-distortion) patents are implemented in every base station PA."
+  ],
+  "questions": [
+    {
+      "fieldName": "pa_architecture",
+      "displayName": "PA Architecture",
+      "question": "What PA architecture does this patent address? Score 8-10 for envelope tracking, Doherty, or outphasing architectures with novel improvements, 5-7 for class-AB/class-E/class-F with efficiency innovations, 3-4 for general PA design, 1-2 for no specific architecture.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Envelope tracking and Doherty are the two dominant PA architectures — identify which."
+    },
+    {
+      "fieldName": "semiconductor_technology",
+      "displayName": "Semiconductor Technology",
+      "question": "What semiconductor technology does this PA use? Score 8-10 for GaN-on-SiC (5G infrastructure) or advanced SiGe/SOI integration, 5-7 for GaAs HBT (smartphone) or GaN-on-Si, 3-4 for general CMOS PA, 1-2 for technology-agnostic.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "GaN for infrastructure, GaAs for handset — identify the target market from the technology."
+    },
+    {
+      "fieldName": "linearization",
+      "displayName": "Linearization / DPD",
+      "question": "Does this patent address PA linearization (DPD, predistortion, feedback linearization)? Score 8-10 for novel DPD algorithms or wideband linearization, 5-7 for standard DPD improvements, 3-4 for basic linearization, 1-2 for no linearization aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "DPD is mandatory in every base station PA — widely implemented."
+    },
+    {
+      "fieldName": "efficiency_innovation",
+      "displayName": "Efficiency Innovation",
+      "question": "Does this patent improve PA efficiency (back-off efficiency, peak efficiency, average efficiency)? Score 8-10 for >50% PAE at back-off or novel efficiency enhancement technique, 5-7 for meaningful efficiency improvement, 3-4 for general efficiency awareness, 1-2 for no efficiency aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "PA efficiency directly affects battery life (handset) and operating cost (base station)."
+    },
+    {
+      "fieldName": "module_integration",
+      "displayName": "Module Integration",
+      "question": "Does this patent address PA module integration (PA + filter + switch, front-end module)? Score 8-10 for novel PAMiD (PA module with integrated duplexer) or multi-band PA module, 5-7 for PA + matching network integration, 3-4 for PA die with output matching, 1-2 for standalone PA die.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Module integration is the trend — fewer discrete components, more integrated FEM."
+    },
+    {
+      "fieldName": "teardown_detectability",
+      "displayName": "Teardown Detectability",
+      "question": "How detectable is this PA innovation via chip/module teardown? Score 8-10 for die-level architecture visible in SEM (matching networks, topology), 5-7 for circuit techniques detectable via probing, 3-4 for firmware/calibration, 1-2 for conceptual only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "PA die and module architectures are routinely analyzed in TechInsights teardowns."
+    }
+  ]
+}

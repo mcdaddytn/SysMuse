@@ -538,6 +538,7 @@ interface TemplateConfigFile {
   superSectorName?: string;
   sectorName?: string;
   subSectorId?: string;
+  subSectorPattern?: string;   // CPC glob pattern for sub-sector matching (e.g., "H04W72/04*")
   inheritsFrom?: string;
   isDefault?: boolean;
   version: number;
@@ -766,6 +767,171 @@ export function getMergedTemplateForSuperSector(superSectorName: string): Merged
     name: superSectorTemplate?.name || portfolioDefault.name,
     description: superSectorTemplate?.description || portfolioDefault.description || '',
     level: superSectorTemplate ? 'super_sector' : 'portfolio',
+    inheritanceChain,
+    scoringGuidance,
+    contextDescription,
+    questions
+  };
+}
+
+// ============================================================================
+// Sub-Sector Template Loading & Matching
+// ============================================================================
+
+/**
+ * Load all sub-sector templates from config/scoring-templates/sub-sectors/
+ */
+export function loadSubSectorTemplates(): Map<string, TemplateConfigFile> {
+  const templates = new Map<string, TemplateConfigFile>();
+  const subSectorsDir = path.join(CONFIG_DIR, 'sub-sectors');
+
+  if (!fs.existsSync(subSectorsDir)) {
+    return templates;
+  }
+
+  const files = fs.readdirSync(subSectorsDir).filter(f => f.endsWith('.json'));
+
+  for (const file of files) {
+    const template = loadTemplateFromFile(path.join('sub-sectors', file));
+    templates.set(template.id, template);
+  }
+
+  return templates;
+}
+
+/**
+ * Match a CPC code against a sub-sector pattern.
+ * Patterns support: exact match, prefix wildcard (H04W72/04*), and comma-separated alternatives.
+ */
+export function matchesCpcPattern(cpcCode: string, pattern: string): boolean {
+  // Handle comma-separated patterns (e.g., "H03H9/02*,H03H9/17*")
+  const patterns = pattern.split(',').map(p => p.trim());
+  for (const p of patterns) {
+    if (p.endsWith('*')) {
+      // Prefix match: "H04W72/04*" matches "H04W72/0413"
+      const prefix = p.slice(0, -1);
+      if (cpcCode.startsWith(prefix)) return true;
+    } else if (p.endsWith('/*')) {
+      // Group match: "H04B5/*" matches any code starting with "H04B5/"
+      const prefix = p.slice(0, -1);
+      if (cpcCode.startsWith(prefix)) return true;
+    } else {
+      // Exact match
+      if (cpcCode === p) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Find the best-matching sub-sector template for a patent based on its CPC codes.
+ * Returns the sub-sector template ID or null if no match.
+ */
+export function matchSubSectorTemplate(
+  sectorName: string,
+  cpcCodes: string[]
+): TemplateConfigFile | null {
+  const subSectorTemplates = loadSubSectorTemplates();
+
+  // Filter to sub-sector templates belonging to this sector
+  const sectorSubTemplates = Array.from(subSectorTemplates.values())
+    .filter(t => t.sectorName === sectorName && t.level === 'sub_sector');
+
+  if (sectorSubTemplates.length === 0) return null;
+
+  // Find the template with the most CPC matches (best fit)
+  let bestMatch: TemplateConfigFile | null = null;
+  let bestMatchCount = 0;
+
+  for (const template of sectorSubTemplates) {
+    if (!template.subSectorPattern) continue;
+    const matchCount = cpcCodes.filter(cpc => matchesCpcPattern(cpc, template.subSectorPattern!)).length;
+    if (matchCount > bestMatchCount) {
+      bestMatchCount = matchCount;
+      bestMatch = template;
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
+ * Get fully merged template for a sub-sector, including all inherited guidance and questions.
+ * Inheritance chain: portfolio-default → super-sector → sector → sub-sector
+ */
+export function getMergedTemplateForSubSector(
+  subSectorId: string,
+  sectorName: string,
+  superSectorName: string
+): MergedTemplate {
+  const portfolioDefault = loadPortfolioDefaultTemplate();
+  const superSectorTemplates = loadSuperSectorTemplates();
+  const sectorTemplates = loadSectorTemplates();
+  const subSectorTemplates = loadSubSectorTemplates();
+
+  const superSectorTemplate = superSectorTemplates.get(superSectorName);
+  const sectorTemplate = sectorTemplates.get(sectorName);
+  const subSectorTemplate = subSectorTemplates.get(subSectorId);
+
+  // Build inheritance chain
+  const inheritanceChain: string[] = [portfolioDefault.id];
+  if (superSectorTemplate) inheritanceChain.push(superSectorTemplate.id);
+  if (sectorTemplate) inheritanceChain.push(sectorTemplate.id);
+  if (subSectorTemplate) inheritanceChain.push(subSectorTemplate.id);
+
+  // Merge scoring guidance (concatenate arrays from all levels)
+  const scoringGuidance: string[] = [
+    ...(portfolioDefault.scoringGuidance || []),
+    ...(superSectorTemplate?.scoringGuidance || []),
+    ...(sectorTemplate?.scoringGuidance || []),
+    ...(subSectorTemplate?.scoringGuidance || [])
+  ];
+
+  // Merge context descriptions
+  const contextParts: string[] = [];
+  if (portfolioDefault.contextDescription) contextParts.push(portfolioDefault.contextDescription);
+  if (superSectorTemplate?.contextDescription) contextParts.push(superSectorTemplate.contextDescription);
+  if (sectorTemplate?.contextDescription) contextParts.push(sectorTemplate.contextDescription);
+  if (subSectorTemplate?.contextDescription) contextParts.push(subSectorTemplate.contextDescription);
+  const contextDescription = contextParts.join('\n\n');
+
+  // Merge questions (more specific overrides less specific)
+  const mergedQuestions = new Map<string, ScoringQuestion>();
+  for (const q of portfolioDefault.questions) {
+    mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'portfolio' as const });
+  }
+  if (superSectorTemplate) {
+    for (const q of superSectorTemplate.questions) {
+      mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'super_sector' as const });
+    }
+  }
+  if (sectorTemplate) {
+    for (const q of sectorTemplate.questions) {
+      mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'sector' as const });
+    }
+  }
+  if (subSectorTemplate) {
+    for (const q of subSectorTemplate.questions) {
+      mergedQuestions.set(q.fieldName, { ...q, sourceLevel: 'sub_sector' as const });
+    }
+  }
+
+  // Normalize weights
+  const questions = Array.from(mergedQuestions.values());
+  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+  if (totalWeight > 0) {
+    for (const q of questions) {
+      q.weight = Math.round((q.weight / totalWeight) * 100) / 100;
+    }
+  }
+
+  const name = subSectorTemplate?.name || sectorTemplate?.name || superSectorTemplate?.name || portfolioDefault.name;
+  const description = subSectorTemplate?.description || sectorTemplate?.description || superSectorTemplate?.description || portfolioDefault.description || '';
+
+  return {
+    name,
+    description,
+    level: 'sub_sector',
     inheritanceChain,
     scoringGuidance,
     contextDescription,

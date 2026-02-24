@@ -2014,8 +2014,9 @@ export interface SectorEnrichmentSummary {
 }
 
 // Batch Job types
-export type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family' | 'xml';
+export type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml';
 export type TargetType = 'tier' | 'super-sector' | 'sector';
+export type SortStrategy = 'base_score' | 'v2_composite' | 'v3_snapshot' | 'newest_first' | 'forward_citations';
 
 export interface BatchJobSettings {
   llmConcurrency?: number;      // default 3, 1-10
@@ -2095,10 +2096,11 @@ export const batchJobsApi = {
     return data;
   },
 
-  async getGaps(targetType: TargetType, targetValue: string, topN?: number, portfolioId?: string | null): Promise<GapsResponse> {
+  async getGaps(targetType: TargetType, targetValue: string, topN?: number, portfolioId?: string | null, sortBy?: SortStrategy): Promise<GapsResponse> {
     const params: Record<string, unknown> = { targetType, targetValue };
     if (topN) params.topN = topN;
     if (portfolioId) params.portfolioId = portfolioId;
+    if (sortBy && sortBy !== 'base_score') params.sortBy = sortBy;
     const { data } = await api.get('/batch-jobs/gaps', { params });
     return data;
   },
@@ -2109,6 +2111,7 @@ export const batchJobsApi = {
     coverageTypes: CoverageType[];
     maxHours?: number;
     topN?: number;  // For super-sector/sector: limit to top N patents by score
+    sortBy?: SortStrategy;  // Sort strategy for topN patent selection
     portfolioId?: string | null;
     model?: string;       // LLM model override
     batchMode?: boolean;  // true = Batch API (50% off), false = realtime

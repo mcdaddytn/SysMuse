@@ -1886,6 +1886,36 @@ router.get('/:id/prosecution', (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/patents/:id/prosecution-detail
+ * Get claim-level prosecution analysis for a patent (from prosecution-analysis cache)
+ */
+router.get('/:id/prosecution-detail', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const cachePath = `./cache/prosecution-analysis/${id}.json`;
+
+    if (!fs.existsSync(cachePath)) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        message: 'Prosecution detail analysis not yet available for this patent.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+    res.json({
+      patent_id: id,
+      cached: true,
+      ...data,
+    });
+  } catch (error) {
+    console.error('Error getting prosecution detail:', error);
+    res.status(500).json({ error: 'Failed to get prosecution detail' });
+  }
+});
+
+/**
  * GET /api/patents/:id/ptab
  * Get PTAB/IPR data for a patent (from cache)
  */

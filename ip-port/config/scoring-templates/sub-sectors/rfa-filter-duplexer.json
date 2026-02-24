@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "rfa-filter-duplexer",
+  "name": "RF Filter & Duplexer Integration",
+  "description": "Sub-sector template for RF filter and duplexer/multiplexer integration patents. Covers duplexer design, quadplexer/hexaplexer topologies, filter bank architectures, and acoustic filter integration into RF front-end modules.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03H9/70*,H03H9/72*",
+  "sectorName": "rf-acoustic",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "rf-acoustic",
+  "version": 1,
+  "contextDescription": "RF filters and duplexers are the highest-volume acoustic components in smartphones. A modern 5G smartphone contains 50-100 acoustic filters organized into duplexers and multiplexers. The trend toward carrier aggregation requires N-plexers (quadplexer, hexaplexer) that combine multiple duplexers. Key vendors: Murata, Skyworks, Qorvo, Qualcomm, Broadcom. Filter integration into RF front-end modules (FEM) is the dominant architecture trend — single module containing PA + filters + switch. Damages potential is very high due to per-device filter count.",
+  "scoringGuidance": [
+    "50-100 acoustic filters per smartphone — enormous per-device infringement volume.",
+    "Multiplexer (quadplexer, hexaplexer) patents are highest-value — enable carrier aggregation.",
+    "Filter bank architecture patents cover the organization of filters in the RF front-end.",
+    "Co-design of filter + PA in a single module (PAMiD) is the integration trend.",
+    "Isolation and rejection performance patents are critical for adjacent band operation."
+  ],
+  "questions": [
+    {
+      "fieldName": "integration_topology",
+      "displayName": "Integration Topology",
+      "question": "What filter integration topology does this patent address? Score 8-10 for novel multiplexer topologies (quadplexer, hexaplexer, octaplexer), 5-7 for duplexer design or filter bank architecture, 3-4 for basic filter integration, 1-2 for standalone filter.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Higher-order multiplexers are the trend for carrier aggregation — identify the topology."
+    },
+    {
+      "fieldName": "module_integration",
+      "displayName": "Module-Level Integration",
+      "question": "Does this patent address filter integration into RF front-end modules (PAMiD, diversity module, antenna tuning)? Score 8-10 for novel PA+filter co-design or multi-technology module (BAW+SAW), 5-7 for filter+switch integration, 3-4 for basic module packaging, 1-2 for no module aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Module integration reduces smartphone size and cost — dominant industry trend."
+    },
+    {
+      "fieldName": "isolation_performance",
+      "displayName": "Isolation & Rejection",
+      "question": "Does this patent address filter/duplexer isolation or out-of-band rejection? Score 8-10 for novel isolation enhancement techniques (>55 dB), 5-7 for rejection optimization, 3-4 for general selectivity, 1-2 for no isolation focus.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Isolation is critical for CA — filters must prevent inter-band interference."
+    },
+    {
+      "fieldName": "ca_enablement",
+      "displayName": "Carrier Aggregation Enablement",
+      "question": "Does this patent specifically enable carrier aggregation filter configurations? Score 8-10 for novel CA filter combinations (e.g., B7+B41+B66 quadplexer), 5-7 for CA-aware filter design, 3-4 for multi-band capability, 1-2 for single-band only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CA drives the need for multiplexers — identify specific band combinations."
+    },
+    {
+      "fieldName": "teardown_detectability",
+      "displayName": "Teardown Detectability",
+      "question": "How detectable is this filter/duplexer innovation via physical analysis? Score 8-10 for module-level architecture visible in X-ray or decapsulation, 5-7 for filter topology via cross-section, 3-4 for material analysis, 1-2 for design methodology only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RF module teardowns routinely reveal filter topology and integration approach."
+    },
+    {
+      "fieldName": "manufacturing_yield",
+      "displayName": "Manufacturing & Yield",
+      "question": "Does this patent address manufacturing yield or test challenges for integrated filters? Score 8-10 for novel manufacturing techniques or yield improvement, 5-7 for test methodology, 3-4 for general fabrication, 1-2 for no manufacturing focus.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Manufacturing patents create barriers to entry for filter production."
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ws-uplink-scheduling",
+  "name": "Uplink Scheduling & Power Control",
+  "description": "Sub-sector template for uplink scheduling, grant-based/configured-grant transmission, and uplink power control patents. Covers SR/BSR procedures, configured grants for URLLC, and fractional power control.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W72/12*",
+  "sectorName": "wireless-scheduling",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-scheduling",
+  "version": 1,
+  "contextDescription": "Uplink scheduling controls how UEs transmit data to the base station. In LTE/5G NR, the gNB grants uplink resources via DCI. For URLLC, configured grants (Type 1/Type 2) allow periodic transmission without dynamic scheduling. Power control (open-loop + closed-loop) is mandatory per 3GPP TS 38.213. Key targets: Qualcomm (modem), Apple (baseband), all smartphone OEMs. Buffer status reports (BSR) and scheduling requests (SR) are exercised continuously by every connected device.",
+  "scoringGuidance": [
+    "Every connected UE performs uplink scheduling — BSR and SR are sent continuously.",
+    "Configured grant (semi-persistent scheduling) patents are critical for URLLC and industrial IoT.",
+    "Power control patents (TPC commands, path loss estimation) are mandatory in every UE — broad SEP surface.",
+    "Uplink multi-antenna (codebook-based precoding, SRS transmission) patents are high-value for 5G NR.",
+    "Grant-free access patents enable ultra-low latency industrial applications."
+  ],
+  "questions": [
+    {
+      "fieldName": "scheduling_mechanism",
+      "displayName": "Scheduling Mechanism",
+      "question": "What uplink scheduling mechanism does this patent address? Score 8-10 for configured grants (Type 1/2) or grant-free transmission, 5-7 for dynamic scheduling improvements (DCI-based grants), 3-4 for BSR/SR optimization, 1-2 for general uplink concepts.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Configured grants are the newest and most valuable UL scheduling mechanism for URLLC."
+    },
+    {
+      "fieldName": "power_control",
+      "displayName": "Power Control Innovation",
+      "question": "Does this patent address uplink power control (open-loop, closed-loop, TPC commands)? Score 8-10 for novel power control algorithms (fractional, multi-component), 5-7 for standard power control improvements, 3-4 for power-aware scheduling, 1-2 for no power control aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Power control is mandatory — every UE adjusts transmission power per gNB commands."
+    },
+    {
+      "fieldName": "multi_antenna_ul",
+      "displayName": "Multi-Antenna Uplink",
+      "question": "Does this patent address multi-antenna uplink transmission (codebook-based precoding, SRS, UL MIMO)? Score 8-10 for novel UL MIMO or SRS enhancement, 5-7 for codebook selection optimization, 3-4 for single-antenna with diversity, 1-2 for no multi-antenna aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "UL MIMO is increasingly important in 5G NR for throughput and coverage."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP standard uplink procedures (TS 38.321/38.213/38.214)? Score 8-10 for direct implementation of standardized UL behavior, 5-7 for enabling standard compliance, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "UL scheduling is heavily standardized — identify specific 3GPP procedures."
+    },
+    {
+      "fieldName": "urllc_support",
+      "displayName": "URLLC Support",
+      "question": "Does this patent enable ultra-reliable low-latency communication (URLLC) in the uplink? Score 8-10 for sub-ms UL latency techniques or reliability mechanisms, 5-7 for latency-aware scheduling, 3-4 for general QoS awareness, 1-2 for no URLLC aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "URLLC uplink is critical for industrial IoT, autonomous vehicles, and remote surgery."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this uplink scheduling innovation? Score 8-10 for behavior observable in UL signaling (PUSCH grants, UCI, SRS), 5-7 for behavior inferable from UL throughput or conformance testing, 3-4 for internal baseband processing, 1-2 for algorithm-level only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "UL grants and power control commands are observable in over-the-air captures."
+    }
+  ]
+}

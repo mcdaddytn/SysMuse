@@ -5,6 +5,7 @@ import type { Patent } from '@/types';
 import type { PatentSectorScoresResponse } from '@/services/api';
 import { scoringTemplatesApi } from '@/services/api';
 import PatentFamilyPanel from '@/components/patent/PatentFamilyPanel.vue';
+import ProsecutionTimelineTab from '@/components/patent/ProsecutionTimelineTab.vue';
 import { useSuperSectors } from '@/composables/useSuperSectors';
 
 const { getSectorColor, getDisplayName } = useSuperSectors();
@@ -384,6 +385,7 @@ function openCpcLink(code: string) {
           </q-badge>
         </q-tab>
         <q-tab name="prosecution" label="Prosecution" icon="gavel" />
+        <q-tab name="prosecution-detail" label="Claims Detail" icon="fact_check" />
         <q-tab name="ptab" label="PTAB/IPR" icon="balance" />
         <q-tab name="llm" label="LLM Analysis" icon="psychology" />
         <q-tab name="sector-scoring" label="Sector Scoring" icon="analytics" />
@@ -885,6 +887,11 @@ function openCpcLink(code: string) {
             </q-card-section>
           </q-card>
         </template>
+      </q-tab-panel>
+
+      <!-- Prosecution Detail (Claim-Level Analysis) -->
+      <q-tab-panel name="prosecution-detail">
+        <prosecution-timeline-tab :patent-id="patent.patent_id" />
       </q-tab-panel>
 
       <!-- PTAB -->

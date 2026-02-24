@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wt-rf-transceiver",
+  "name": "RF Transceiver Architecture",
+  "description": "Sub-sector template for RF transceiver patents. Covers transmitter and receiver architectures (direct-conversion, superheterodyne), LO generation, mixer design, and integrated transceiver SoCs for wireless communication.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04B1/04*,H04B1/06*",
+  "sectorName": "wireless-transmission",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-transmission",
+  "version": 1,
+  "contextDescription": "RF transceivers are in every wireless device — smartphones, WiFi routers, IoT sensors, and base stations. The transceiver converts baseband signals to/from RF. Broadcom, Qualcomm, Skyworks, and MediaTek are the dominant transceiver IC vendors. Direct-conversion (zero-IF) architecture dominates modern designs. Key innovations include wideband transceivers for 5G NR, calibration techniques (IQ imbalance, DC offset), and multi-band transceiver architectures. Detectable via chip teardown — transceiver die architecture is visible in SEM images.",
+  "scoringGuidance": [
+    "Every wireless device contains at least one RF transceiver — billions of devices/year.",
+    "Direct-conversion architecture patents dominate modern designs — high infringement surface.",
+    "IQ calibration and DC offset cancellation are implemented in every transceiver.",
+    "Multi-band transceivers (single chip covering 4G+5G) are particularly valuable.",
+    "Transceiver SoC integration patents cover the trend toward fewer, more integrated chips."
+  ],
+  "questions": [
+    {
+      "fieldName": "transceiver_architecture",
+      "displayName": "Transceiver Architecture",
+      "question": "What transceiver architecture does this patent address? Score 8-10 for novel integrated transceiver architectures (wideband direct-conversion, multi-band single-chip), 5-7 for improvements to existing architectures (calibration, linearity), 3-4 for component-level innovation (mixer, LNA, PA) in transceiver context, 1-2 for no specific architecture.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the specific transceiver architecture (direct-conversion, low-IF, superheterodyne) and innovations."
+    },
+    {
+      "fieldName": "calibration_technique",
+      "displayName": "Calibration & Compensation",
+      "question": "Does this patent address transceiver calibration (IQ imbalance, DC offset, LO leakage, gain/phase mismatch)? Score 8-10 for novel calibration algorithms or adaptive compensation, 5-7 for standard calibration improvements, 3-4 for general signal quality, 1-2 for no calibration aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Calibration is mandatory in every direct-conversion transceiver — high infringement frequency."
+    },
+    {
+      "fieldName": "multi_band_support",
+      "displayName": "Multi-Band Support",
+      "question": "Does this patent enable multi-band or wideband operation (covering LTE + 5G NR bands)? Score 8-10 for reconfigurable wideband transceiver covering sub-6 + mmWave, 5-7 for multi-band switching or tuning, 3-4 for dual-band, 1-2 for single-band only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Modern smartphones need transceivers covering 30+ bands — multi-band is essential."
+    },
+    {
+      "fieldName": "integration_level",
+      "displayName": "Integration Level",
+      "question": "What level of integration does this patent enable? Score 8-10 for full transceiver SoC (RF + baseband + PMU), 5-7 for multi-function RF front-end integration, 3-4 for component-level but with integration benefits, 1-2 for standalone component.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SoC integration is the trend — fewer chips, lower cost, smaller form factor."
+    },
+    {
+      "fieldName": "teardown_detectability",
+      "displayName": "Teardown Detectability",
+      "question": "How detectable is this transceiver innovation via chip teardown? Score 8-10 for die-level architecture visible in SEM/optical (block diagram, calibration loops), 5-7 for circuit techniques detectable via probing, 3-4 for algorithm-level requiring firmware analysis, 1-2 for conceptual only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Transceiver die layout is routinely analyzed in teardowns — high detectability."
+    },
+    {
+      "fieldName": "power_efficiency",
+      "displayName": "Power Efficiency",
+      "question": "Does this patent address transceiver power efficiency (low-power modes, adaptive biasing, duty cycling)? Score 8-10 for novel power management techniques, 5-7 for power-aware design, 3-4 for general efficiency, 1-2 for no power focus.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Transceiver power consumption directly affects smartphone battery life."
+    }
+  ]
+}

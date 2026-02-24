@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wi-cell-planning-deployment",
+  "name": "Cell Planning & Deployment",
+  "description": "Sub-sector template for cell planning, network deployment, and coverage optimization patents. Covers cell site selection, antenna configuration, coverage prediction, HetNet planning, and deployment automation tools.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W16/*",
+  "sectorName": "wireless-infrastructure",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-infrastructure",
+  "version": 1,
+  "contextDescription": "Cell planning determines where base stations are placed, how antennas are configured, and how coverage areas overlap. The transition to 5G densification (small cells, mmWave) makes planning more complex. Digital twin and AI-based planning tools are emerging. Key targets: network planning tool vendors (Atoll/Forsk, Planet/InfoVista), operators (AT&T, Verizon, T-Mobile), and infrastructure vendors providing planning as a service. Per-deployment value can be high when planning patents affect entire network rollouts.",
+  "scoringGuidance": [
+    "Every cellular network deployment uses planning tools — operators spend billions on deployment.",
+    "HetNet planning (macro + small cell + indoor) is increasingly complex and valuable.",
+    "AI/ML-based planning optimization is an emerging high-value area.",
+    "Coverage prediction models (propagation, ray-tracing) are fundamental to every planning tool.",
+    "mmWave cell planning has unique challenges (beam management, blockage) — novel solutions are valuable."
+  ],
+  "questions": [
+    {
+      "fieldName": "planning_technique",
+      "displayName": "Planning Technique",
+      "question": "What cell planning technique does this patent address? Score 8-10 for AI/ML-based planning optimization or digital twin network planning, 5-7 for HetNet cell planning or automated parameter optimization, 3-4 for traditional cell planning, 1-2 for no specific technique.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "AI-based planning and digital twin are the highest-value emerging techniques."
+    },
+    {
+      "fieldName": "densification",
+      "displayName": "Network Densification",
+      "question": "Does this patent address 5G network densification (small cell planning, indoor coverage, ultra-dense deployment)? Score 8-10 for novel small cell deployment optimization, 5-7 for indoor/outdoor planning integration, 3-4 for general cell density optimization, 1-2 for macro-only planning.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "5G densification is the dominant deployment challenge — operators need help with small cell placement."
+    },
+    {
+      "fieldName": "coverage_prediction",
+      "displayName": "Coverage Prediction Model",
+      "question": "Does this patent address propagation modeling or coverage prediction (ray-tracing, empirical models, terrain/building databases)? Score 8-10 for novel prediction methods (AI-enhanced, 3D ray-tracing), 5-7 for model improvements, 3-4 for standard model usage, 1-2 for no prediction aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Coverage prediction is fundamental — every planning tool needs accurate propagation models."
+    },
+    {
+      "fieldName": "automation_level",
+      "displayName": "Automation Level",
+      "question": "What level of automation does this patent enable? Score 8-10 for fully automated network planning/deployment, 5-7 for semi-automated optimization, 3-4 for tool-assisted manual planning, 1-2 for manual process only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Automation reduces OpEx — operators value automated planning highly."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this planning innovation in a deployed network? Score 8-10 for observable in network configuration (cell parameters, antenna tilt), 5-7 for detectable in planning tool outputs, 3-4 for algorithmic with indirect evidence, 1-2 for conceptual only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Network configurations are often visible — antenna parameters, cell IDs, power levels."
+    },
+    {
+      "fieldName": "operator_applicability",
+      "displayName": "Operator Applicability",
+      "question": "How broadly applicable is this planning patent across operators and deployment scenarios? Score 8-10 for technique applicable to any cellular deployment, 5-7 for specific to certain deployment types (dense urban, rural), 3-4 for specific technology generation, 1-2 for very narrow application.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Broader applicability = more potential licensees."
+    }
+  ]
+}

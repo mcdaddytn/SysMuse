@@ -807,12 +807,13 @@ export function matchesCpcPattern(cpcCode: string, pattern: string): boolean {
   // Handle comma-separated patterns (e.g., "H03H9/02*,H03H9/17*")
   const patterns = pattern.split(',').map(p => p.trim());
   for (const p of patterns) {
-    if (p.endsWith('*')) {
+    if (p.endsWith('/*')) {
+      // Class-level wildcard: "H01P/*" matches any code starting with "H01P"
+      // (CPC codes like H01P1/20372 have the group digit before the slash)
+      const classPrefix = p.slice(0, -2);  // "H01P/*" → "H01P"
+      if (cpcCode.startsWith(classPrefix)) return true;
+    } else if (p.endsWith('*')) {
       // Prefix match: "H04W72/04*" matches "H04W72/0413"
-      const prefix = p.slice(0, -1);
-      if (cpcCode.startsWith(prefix)) return true;
-    } else if (p.endsWith('/*')) {
-      // Group match: "H04B5/*" matches any code starting with "H04B5/"
       const prefix = p.slice(0, -1);
       if (cpcCode.startsWith(prefix)) return true;
     } else {

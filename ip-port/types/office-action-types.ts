@@ -6,8 +6,6 @@
  * produced by LLM analysis of office action documents.
  */
 
-import type { CitedReference, OfficeActionRejection } from './file-wrapper-types.js';
-
 // ============================================================================
 // API Response Types (from USPTO ODP Office Action APIs)
 // ============================================================================

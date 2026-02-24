@@ -206,8 +206,17 @@ export class OARejectionClient extends BaseAPIClient {
 
   private parseClaimNumbers(value: any): number[] {
     if (!value) return [];
+    // DS-API wraps CSV strings in arrays: ["1,2,3,4,5"] — unwrap and split
     if (Array.isArray(value)) {
-      return value.map(v => typeof v === 'number' ? v : parseInt(String(v))).filter(n => !isNaN(n));
+      return value.flatMap(v => {
+        if (typeof v === 'number') return [v];
+        const s = String(v);
+        if (s.includes(',') || s.includes(';')) {
+          return s.split(/[,;\s]+/).map(p => parseInt(p.trim())).filter(n => !isNaN(n));
+        }
+        const n = parseInt(s);
+        return isNaN(n) ? [] : [n];
+      });
     }
     if (typeof value === 'string') {
       return value.split(/[,;\s]+/).map(s => parseInt(s.trim())).filter(n => !isNaN(n));

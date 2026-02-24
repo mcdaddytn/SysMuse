@@ -2196,7 +2196,7 @@ router.post('/analyze-cpc-cooccurrence', async (_req: Request, res: Response) =>
 router.post('/set-enrichment-flag', async (req: Request, res: Response) => {
   try {
     const { patentIds, flag } = req.body;
-    const validFlags = ['hasLlmData', 'hasProsecutionData', 'hasIprData', 'hasFamilyData', 'hasXmlData'] as const;
+    const validFlags = ['hasLlmData', 'hasProsecutionData', 'hasProsecutionDetail', 'hasIprData', 'hasFamilyData', 'hasXmlData'] as const;
     type ValidFlag = typeof validFlags[number];
 
     if (!Array.isArray(patentIds) || patentIds.length === 0) {

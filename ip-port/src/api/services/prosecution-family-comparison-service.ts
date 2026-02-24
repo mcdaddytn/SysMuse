@@ -88,7 +88,9 @@ export function compareFamilyProsecution(familyPatentIds: string[]): FamilyProse
   const priorArtByRef = new Map<string, { ref: PriorArtReference; patents: Set<string>; totalClaims: number }>();
   for (const [pid, tl] of timelines) {
     for (const art of tl.citedPriorArt || []) {
-      const key = art.designation;
+      // Normalize: ensure space before suffix (A1/B1/B2), collapse whitespace
+      const key = art.designation.replace(/\s+/g, ' ').trim()
+        .replace(/(\d)(A\d|B\d)$/i, '$1 $2');
       if (!priorArtByRef.has(key)) {
         priorArtByRef.set(key, { ref: art, patents: new Set(), totalClaims: 0 });
       }

@@ -22,7 +22,12 @@ import {
   PatentForScoring,
   DEFAULT_CONTEXT_OPTIONS,
 } from '../src/api/services/llm-scoring-service.js';
-import { getMergedTemplateForSector } from '../src/api/services/scoring-template-service.js';
+import {
+  getMergedTemplateForSector,
+  getMergedTemplateForSubSector,
+  loadSubSectorTemplates,
+  matchSubSectorTemplate,
+} from '../src/api/services/scoring-template-service.js';
 
 const prisma = new PrismaClient();
 
@@ -123,12 +128,11 @@ async function main() {
   let totalCompleted = 0;
   const totalPatents = patents.length - noSector;
 
+  // Load sub-sector templates once for all sectors
+  const subSectorTemplates = loadSubSectorTemplates();
+
   for (const [sectorName, sectorPatents] of bySector) {
     const superSector = sectorPatents[0]?.superSector || 'UNKNOWN';
-
-    // Resolve template
-    const template = getMergedTemplateForSector(sectorName, superSector);
-    console.log(`\n[${sectorName}] ${sectorPatents.length} patents, template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
 
     // Map to PatentForScoring
     const forScoring: PatentForScoring[] = sectorPatents.map(p => ({
@@ -142,23 +146,74 @@ async function main() {
       cpc_codes: p.cpcCodes.map(c => c.cpcCode),
     }));
 
-    // Score the batch
-    const result = await scorePatentBatch(forScoring, {
-      model,
-      saveToDb: true,
-      concurrency,
-      contextOptions: DEFAULT_CONTEXT_OPTIONS,
-      template,
-      sectorId: sectorName,
-      progressCallback: (completed, total) => {
-        const globalCompleted = totalCompleted + completed;
-        const pct = Math.round((globalCompleted / totalPatents) * 100);
-        console.log(`Progress: ${globalCompleted}/${totalPatents} (${pct}%)`);
-      },
-    });
+    // Check for sub-sector templates for this sector
+    const sectorSubTemplates = Array.from(subSectorTemplates.values())
+      .filter(t => t.sectorName === sectorName && t.level === 'sub_sector');
 
-    totalCompleted += sectorPatents.length;
-    console.log(`[${sectorName}] Done: ${result.successful} succeeded, ${result.failed} failed, ${result.totalTokens.input + result.totalTokens.output} tokens`);
+    if (sectorSubTemplates.length > 0) {
+      // Group patents by matching sub-sector template using CPC codes
+      const groups = new Map<string | null, PatentForScoring[]>();
+      for (const patent of forScoring) {
+        const matched = matchSubSectorTemplate(sectorName, patent.cpc_codes || []);
+        const key = matched?.id || null;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(patent);
+      }
+
+      console.log(`\n[${sectorName}] ${sectorPatents.length} patents, ${sectorSubTemplates.length} sub-sector templates:`);
+      for (const [subId, groupPatents] of groups) {
+        console.log(`  ${subId || '(sector-level)'}: ${groupPatents.length} patents`);
+      }
+
+      // Score each sub-sector group with its specific template
+      for (const [subSectorId, groupPatents] of groups) {
+        let template;
+        if (subSectorId) {
+          template = getMergedTemplateForSubSector(subSectorId, sectorName, superSector);
+        } else {
+          template = getMergedTemplateForSector(sectorName, superSector);
+        }
+        console.log(`[${sectorName}] Scoring ${groupPatents.length} patents with template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
+
+        const result = await scorePatentBatch(groupPatents, {
+          model,
+          saveToDb: true,
+          concurrency,
+          contextOptions: DEFAULT_CONTEXT_OPTIONS,
+          template,
+          sectorId: sectorName,
+          progressCallback: (completed, total) => {
+            const globalCompleted = totalCompleted + completed;
+            const pct = Math.round((globalCompleted / totalPatents) * 100);
+            console.log(`Progress: ${globalCompleted}/${totalPatents} (${pct}%)`);
+          },
+        });
+
+        totalCompleted += groupPatents.length;
+        console.log(`[${sectorName}/${subSectorId || 'sector-level'}] Done: ${result.successful} succeeded, ${result.failed} failed, ${result.totalTokens.input + result.totalTokens.output} tokens`);
+      }
+    } else {
+      // No sub-sector templates — use sector-level template for all patents
+      const template = getMergedTemplateForSector(sectorName, superSector);
+      console.log(`\n[${sectorName}] ${sectorPatents.length} patents, template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
+
+      const result = await scorePatentBatch(forScoring, {
+        model,
+        saveToDb: true,
+        concurrency,
+        contextOptions: DEFAULT_CONTEXT_OPTIONS,
+        template,
+        sectorId: sectorName,
+        progressCallback: (completed, total) => {
+          const globalCompleted = totalCompleted + completed;
+          const pct = Math.round((globalCompleted / totalPatents) * 100);
+          console.log(`Progress: ${globalCompleted}/${totalPatents} (${pct}%)`);
+        },
+      });
+
+      totalCompleted += sectorPatents.length;
+      console.log(`[${sectorName}] Done: ${result.successful} succeeded, ${result.failed} failed, ${result.totalTokens.input + result.totalTokens.output} tokens`);
+    }
   }
 
   // Final progress line

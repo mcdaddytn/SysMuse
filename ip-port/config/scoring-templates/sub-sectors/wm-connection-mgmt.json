@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wm-connection-mgmt",
+  "name": "Connection Setup & Management",
+  "description": "Sub-sector template for connection establishment/release, dual connectivity setup, carrier aggregation signaling, RRC state transitions, and NAS procedures patents.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W76/*",
+  "sectorName": "wireless-mobility",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-mobility",
+  "version": 1,
+  "contextDescription": "Connection management covers the RRC procedures that establish, maintain, and release radio connections. In 5G NR, the RRC_INACTIVE state (Rel-15) enables fast resume without full connection setup. Dual connectivity (EN-DC for NSA 5G, NR-DC for SA) requires managing multiple cell groups simultaneously. Carrier aggregation SCell activation/deactivation is signaled via MAC-CE. NAS procedures (registration, service request) interface with RRC. 3GPP TS 38.331 defines NR RRC procedures; TS 36.331 for LTE. Every device connection starts with RRC setup — these patents have universal applicability.",
+  "scoringGuidance": [
+    "RRC setup/release is exercised by every device every time it connects — massive infringement surface.",
+    "Dual connectivity management patents are critical: EN-DC is the dominant 5G deployment mode.",
+    "RRC_INACTIVE state patents are high-value for 5G NR — reduces signaling and connection latency.",
+    "SCell activation/deactivation patents target carrier aggregation — exercised in every CA-capable device.",
+    "Signaling overhead reduction patents improve network efficiency and user experience."
+  ],
+  "questions": [
+    {
+      "fieldName": "connection_setup_efficiency",
+      "displayName": "Connection Setup Efficiency",
+      "question": "How does this patent improve connection establishment? Score 8-10 for fast setup for dual connectivity, conditional configuration, or early data transmission. 5-7 for improved RRC signaling procedures or setup optimization. 3-4 for minor setup improvements. 1-2 for standard setup procedure with no innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Connection setup delay directly impacts user experience. Fast setup techniques are high-value."
+    },
+    {
+      "fieldName": "dual_connectivity_mgmt",
+      "displayName": "Dual Connectivity Management",
+      "question": "Does this patent manage EN-DC, NR-DC, or multi-connectivity bearer handling? Score 8-10 for dynamic secondary cell group (SCG) management, split bearer optimization, or MCG/SCG coordination. 5-7 for basic DC setup/release procedures. 3-4 for DC awareness without specific management innovation. 1-2 for single connectivity only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "EN-DC is how most 5G devices connect today. SCG management is exercised continuously during 5G sessions."
+    },
+    {
+      "fieldName": "carrier_aggregation_signaling",
+      "displayName": "CA Signaling",
+      "question": "Does this patent optimize SCell activation/deactivation or CA configuration signaling? Score 8-10 for dynamic CA management, cross-carrier scheduling setup, or novel SCell procedures. 5-7 for basic SCell activation/deactivation improvements. 3-4 for CA mentioned without signaling innovation. 1-2 for no CA relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SCell activation via MAC-CE is exercised by every CA-capable device — standard signaling with broad infringement."
+    },
+    {
+      "fieldName": "state_transition_optimization",
+      "displayName": "State Transition Optimization",
+      "question": "Does this patent optimize RRC state transitions (Connected, Inactive, Idle)? Score 8-10 for novel RRC_INACTIVE usage, fast state transitions, or suspend/resume optimization. 5-7 for improved transition procedures or timer management. 3-4 for basic state management. 1-2 for standard behavior with no optimization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RRC_INACTIVE is new in 5G NR and enables fast resume — patents here are forward-looking and valuable."
+    },
+    {
+      "fieldName": "signaling_overhead_reduction",
+      "displayName": "Signaling Overhead Reduction",
+      "question": "How much does this patent reduce NAS/RRC signaling overhead? Score 8-10 for significant reduction via piggybacking, early data transmission, or consolidated signaling. 5-7 for moderate signaling optimization. 3-4 for minor overhead awareness. 1-2 for no signaling overhead innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Signaling overhead reduction improves network capacity — particularly valuable for massive IoT scenarios."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP RRC procedures (TS 38.331, TS 36.331)? Score 8-10 for direct implementation of mandatory UE/gNB RRC behavior. 5-7 for enabling standard compliance or extending standard procedures. 3-4 for standard-adjacent approaches. 1-2 for proprietary connection management.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RRC procedures are mandatory per 3GPP — identify specific IEs, messages, and procedures."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is this connection management behavior observable in signaling traces? Score 8-10 for behavior visible in RRC messages (RRCSetup, RRCReconfiguration, RRCResume). 5-7 for behavior inferable from connection timing or conformance testing. 3-4 for internal UE/gNB processing. 1-2 for algorithm-level logic only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RRC messages are fully logged in protocol captures — strongest evidence basis for infringement."
+    }
+  ]
+}

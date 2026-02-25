@@ -329,11 +329,61 @@ export function calculateCompositeScore(
 }
 
 /**
- * Save a patent's sub-sector score
+ * Compute a human-readable fingerprint from metrics keys.
+ * Returns sorted comma-joined fieldNames, e.g. "claim_breadth,market_relevance,technical_novelty"
+ */
+export function computeQuestionFingerprint(metrics: Record<string, unknown>): string {
+  return Object.keys(metrics).sort().join(',');
+}
+
+/**
+ * Save a patent's sub-sector score.
+ * Before overwriting, snapshots the existing score to cache/score-history/.
+ * Sets questionFingerprint and clears isStale on the new score.
  */
 export async function savePatentScore(
   result: ScoreCalculationResult
 ): Promise<void> {
+  // Compute fingerprint from the metrics being saved
+  const questionFingerprint = computeQuestionFingerprint(result.metrics);
+
+  // Snapshot existing score before overwriting (if one exists)
+  const existing = await prisma.patentSubSectorScore.findUnique({
+    where: {
+      patentId_subSectorId: {
+        patentId: result.patentId,
+        subSectorId: result.subSectorId
+      }
+    }
+  });
+
+  if (existing) {
+    try {
+      const historyDir = path.join(process.cwd(), 'cache', 'score-history', result.subSectorId);
+      if (!fs.existsSync(historyDir)) {
+        fs.mkdirSync(historyDir, { recursive: true });
+      }
+      const timestamp = existing.executedAt.toISOString().replace(/[:.]/g, '-');
+      const historyPath = path.join(historyDir, `${result.patentId}_${timestamp}.json`);
+      fs.writeFileSync(historyPath, JSON.stringify({
+        patentId: existing.patentId,
+        subSectorId: existing.subSectorId,
+        metrics: existing.metrics,
+        compositeScore: existing.compositeScore,
+        templateConfigId: existing.templateConfigId,
+        templateVersion: existing.templateVersion,
+        questionFingerprint: existing.questionFingerprint,
+        withClaims: existing.withClaims,
+        llmModel: existing.llmModel,
+        executedAt: existing.executedAt,
+        archivedAt: new Date().toISOString(),
+      }, null, 2));
+    } catch (err) {
+      // Non-fatal: log and continue
+      console.warn(`[savePatentScore] Failed to snapshot history for ${result.patentId}: ${err}`);
+    }
+  }
+
   await prisma.patentSubSectorScore.upsert({
     where: {
       patentId_subSectorId: {
@@ -352,6 +402,9 @@ export async function savePatentScore(
       withClaims: result.withClaims || false,
       llmModel: result.llmModel || null,
       tokensUsed: result.tokensUsed || null,
+      questionFingerprint,
+      isStale: false,
+      staleReason: null,
       executedAt: new Date()
     },
     update: {
@@ -363,6 +416,9 @@ export async function savePatentScore(
       withClaims: result.withClaims || false,
       llmModel: result.llmModel || null,
       tokensUsed: result.tokensUsed || null,
+      questionFingerprint,
+      isStale: false,
+      staleReason: null,
       executedAt: new Date(),
       updatedAt: new Date()
     }
@@ -1207,6 +1263,217 @@ export async function syncTemplatesFromConfig(): Promise<{
   }
 
   return { updated, created, errors };
+}
+
+// ============================================================================
+// Staleness Computation
+// ============================================================================
+
+export interface StalenessResult {
+  total: number;
+  stale: number;
+  fresh: number;
+  noFingerprint: number;
+  sectors: Array<{
+    sectorName: string;
+    subSectorId: string | null;
+    total: number;
+    stale: number;
+    fresh: number;
+    expectedFingerprint: string;
+    missingQuestions: string[];
+  }>;
+}
+
+/**
+ * Compute staleness for all scores in a sector.
+ * Compares each score's questionFingerprint against the current template's expected questions.
+ * Batch-updates isStale + staleReason for all affected rows.
+ */
+export async function computeStalenessForSector(
+  sectorName: string,
+  superSector: string,
+  options?: { portfolioId?: string; dryRun?: boolean }
+): Promise<StalenessResult> {
+  const { portfolioId, dryRun = false } = options || {};
+
+  // 1. Build the expected fingerprints for each sub-sector template variant
+  //    (sector-level template + each sub-sector template)
+  const subSectorTemplates = loadSubSectorTemplates();
+  const sectorSubTemplates = Array.from(subSectorTemplates.values())
+    .filter(t => t.sectorName === sectorName && t.level === 'sub_sector');
+
+  // Templates: null key = sector-level, string key = sub-sector template ID
+  const templateFingerprints = new Map<string | null, {
+    fingerprint: string;
+    fieldNames: Set<string>;
+    template: MergedTemplate;
+  }>();
+
+  // Sector-level template
+  const sectorTemplate = getMergedTemplateForSector(sectorName, superSector);
+  const sectorFieldNames = new Set(sectorTemplate.questions.map(q => q.fieldName));
+  const sectorFingerprint = Array.from(sectorFieldNames).sort().join(',');
+  templateFingerprints.set(null, {
+    fingerprint: sectorFingerprint,
+    fieldNames: sectorFieldNames,
+    template: sectorTemplate,
+  });
+
+  // Sub-sector templates
+  for (const subTemplate of sectorSubTemplates) {
+    const merged = getMergedTemplateForSubSector(subTemplate.id, sectorName, superSector);
+    const fieldNames = new Set(merged.questions.map(q => q.fieldName));
+    const fingerprint = Array.from(fieldNames).sort().join(',');
+    templateFingerprints.set(subTemplate.id, { fingerprint, fieldNames, template: merged });
+  }
+
+  // 2. Query all scores for this sector (optionally scoped by portfolio)
+  let whereClause: any = {
+    OR: [
+      { templateConfigId: sectorName },
+      // Also catch scores stored with sub-sector IDs for this sector
+      ...sectorSubTemplates.map(t => ({ subSectorId: t.id })),
+    ]
+  };
+
+  if (portfolioId) {
+    const portfolioPatents = await prisma.portfolioPatent.findMany({
+      where: { portfolioId },
+      select: { patentId: true },
+    });
+    const patentIds = portfolioPatents.map(p => p.patentId);
+    whereClause = { ...whereClause, patentId: { in: patentIds } };
+  }
+
+  const scores = await prisma.patentSubSectorScore.findMany({
+    where: whereClause,
+    select: {
+      id: true,
+      patentId: true,
+      subSectorId: true,
+      templateConfigId: true,
+      questionFingerprint: true,
+      metrics: true,
+      isStale: true,
+    },
+  });
+
+  // 3. Compare each score's fingerprint against the expected template
+  let staleCount = 0;
+  let freshCount = 0;
+  let noFingerprintCount = 0;
+  const sectorBreakdown = new Map<string, {
+    sectorName: string;
+    subSectorId: string | null;
+    total: number;
+    stale: number;
+    fresh: number;
+    expectedFingerprint: string;
+    missingQuestions: Set<string>;
+  }>();
+
+  const staleUpdates: Array<{ id: string; isStale: boolean; staleReason: string | null }> = [];
+
+  for (const score of scores) {
+    // Determine which template this score should match
+    // If templateConfigId == sectorName, it's sector-level.
+    // If subSectorId matches a sub-sector template, use that.
+    let expectedEntry = templateFingerprints.get(null); // default to sector-level
+    let matchedSubSectorId: string | null = null;
+
+    for (const [subId, entry] of templateFingerprints) {
+      if (subId && (score.subSectorId === subId || score.templateConfigId === subId)) {
+        expectedEntry = entry;
+        matchedSubSectorId = subId;
+        break;
+      }
+    }
+
+    if (!expectedEntry) continue;
+
+    const breakdownKey = matchedSubSectorId || sectorName;
+    if (!sectorBreakdown.has(breakdownKey)) {
+      sectorBreakdown.set(breakdownKey, {
+        sectorName,
+        subSectorId: matchedSubSectorId,
+        total: 0,
+        stale: 0,
+        fresh: 0,
+        expectedFingerprint: expectedEntry.fingerprint,
+        missingQuestions: new Set(),
+      });
+    }
+    const breakdown = sectorBreakdown.get(breakdownKey)!;
+    breakdown.total++;
+
+    // Derive fingerprint from stored metrics if questionFingerprint is NULL
+    let actualFingerprint = score.questionFingerprint;
+    if (!actualFingerprint && score.metrics && typeof score.metrics === 'object') {
+      actualFingerprint = Object.keys(score.metrics as object).sort().join(',');
+      noFingerprintCount++;
+    }
+
+    if (!actualFingerprint) {
+      // No metrics at all — definitely stale
+      staleCount++;
+      breakdown.stale++;
+      staleUpdates.push({ id: score.id, isStale: true, staleReason: 'no_fingerprint' });
+      continue;
+    }
+
+    // Compare: check if expected questions are a subset of actual
+    const actualFields = new Set(actualFingerprint.split(','));
+    const missingFields = Array.from(expectedEntry.fieldNames).filter(f => !actualFields.has(f));
+
+    if (missingFields.length > 0) {
+      staleCount++;
+      breakdown.stale++;
+      missingFields.forEach(f => breakdown.missingQuestions.add(f));
+      staleUpdates.push({
+        id: score.id,
+        isStale: true,
+        staleReason: `missing_questions:${missingFields.join(',')}`,
+      });
+    } else {
+      freshCount++;
+      breakdown.fresh++;
+      // Clear stale if it was previously set
+      if (score.isStale) {
+        staleUpdates.push({ id: score.id, isStale: false, staleReason: null });
+      }
+    }
+  }
+
+  // 4. Batch update (unless dryRun)
+  if (!dryRun && staleUpdates.length > 0) {
+    // Use individual updates in a transaction for correctness
+    // (raw SQL CASE would be faster but staleReason varies per row)
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < staleUpdates.length; i += BATCH_SIZE) {
+      const batch = staleUpdates.slice(i, i + BATCH_SIZE);
+      await prisma.$transaction(
+        batch.map(u =>
+          prisma.patentSubSectorScore.update({
+            where: { id: u.id },
+            data: { isStale: u.isStale, staleReason: u.staleReason },
+          })
+        )
+      );
+    }
+    console.log(`[Staleness] Updated ${staleUpdates.length} score rows for ${sectorName}`);
+  }
+
+  return {
+    total: scores.length,
+    stale: staleCount,
+    fresh: freshCount,
+    noFingerprint: noFingerprintCount,
+    sectors: Array.from(sectorBreakdown.values()).map(b => ({
+      ...b,
+      missingQuestions: Array.from(b.missingQuestions),
+    })),
+  };
 }
 
 // Note: Template questions are now loaded from JSON config files in /config/scoring-templates/

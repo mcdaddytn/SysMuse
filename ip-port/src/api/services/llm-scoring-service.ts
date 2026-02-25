@@ -88,6 +88,12 @@ export const DEFAULT_CONTEXT_OPTIONS: ContextOptions = {
 };
 
 /**
+ * Scoring filter for controlling which patents to score.
+ * Replaces the binary onlyUnscored/rescore flags.
+ */
+export type ScoringFilter = 'unscored' | 'stale' | 'unscored_or_stale' | 'all';
+
+/**
  * Comparison result for A/B testing
  */
 export interface ComparisonResult {
@@ -815,6 +821,7 @@ export async function getPatentsForSectorScoring(
     portfolioId?: string;
     limit?: number;
     onlyUnscored?: boolean;
+    scoringFilter?: ScoringFilter;
     minYear?: number;
     minScore?: number;
     excludeDesign?: boolean;
@@ -822,7 +829,17 @@ export async function getPatentsForSectorScoring(
     v2Weights?: V2Weights;
   } = {}
 ): Promise<PatentForScoring[]> {
-  const { portfolioId, limit = 500, onlyUnscored = true, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights = DEFAULT_V2_WEIGHTS } = options;
+  // Resolve scoringFilter from legacy flags for backward compatibility
+  let resolvedFilter: ScoringFilter;
+  if (options.scoringFilter) {
+    resolvedFilter = options.scoringFilter;
+  } else if (options.onlyUnscored === false) {
+    resolvedFilter = 'all';
+  } else {
+    resolvedFilter = 'unscored';
+  }
+
+  const { portfolioId, limit = 500, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights = DEFAULT_V2_WEIGHTS } = options;
 
   let filtered: any[];
 
@@ -913,13 +930,27 @@ export async function getPatentsForSectorScoring(
     }
   }
 
-  // Filter out already scored if requested
-  if (onlyUnscored) {
-    const scored = await prisma.patentSubSectorScore.findMany({
-      select: { patentId: true }
+  // Apply scoring filter
+  if (resolvedFilter !== 'all') {
+    const scores = await prisma.patentSubSectorScore.findMany({
+      select: { patentId: true, isStale: true }
     });
-    const scoredIds = new Set(scored.map(s => s.patentId));
-    filtered = filtered.filter((p: any) => !scoredIds.has(p.patent_id));
+
+    if (resolvedFilter === 'unscored') {
+      const scoredIds = new Set(scores.map(s => s.patentId));
+      filtered = filtered.filter((p: any) => !scoredIds.has(p.patent_id));
+    } else if (resolvedFilter === 'stale') {
+      const staleIds = new Set(scores.filter(s => s.isStale).map(s => s.patentId));
+      filtered = filtered.filter((p: any) => staleIds.has(p.patent_id));
+    } else if (resolvedFilter === 'unscored_or_stale') {
+      const scoredIds = new Set(scores.map(s => s.patentId));
+      const staleIds = new Set(scores.filter(s => s.isStale).map(s => s.patentId));
+      filtered = filtered.filter((p: any) => !scoredIds.has(p.patent_id) || staleIds.has(p.patent_id));
+    }
+
+    if (resolvedFilter !== 'unscored') {
+      console.log(`[LLM Scoring] Scoring filter: ${resolvedFilter} → ${filtered.length} patents after filter`);
+    }
   }
 
   // Sort by selected prioritization method
@@ -985,6 +1016,7 @@ export async function scoreSector(
     concurrency?: number;
     contextOptions?: ContextOptions;
     rescore?: boolean;  // If true, score patents even if already scored
+    scoringFilter?: ScoringFilter;
     minYear?: number;   // Filter to patents from this year or later
     minScore?: number;  // Filter to patents with base score >= this value
     excludeDesign?: boolean;  // Exclude design patents (D-prefix)
@@ -992,18 +1024,21 @@ export async function scoreSector(
     v2Weights?: V2Weights;  // Custom V2 weights when prioritizeBy='v2'
   } = {}
 ): Promise<BatchScoringResult> {
-  const { limit = 2000, model, concurrency = 4, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights } = options;
+  const { limit = 2000, model, concurrency = 4, contextOptions = DEFAULT_CONTEXT_OPTIONS, rescore = false, scoringFilter, minYear, minScore, excludeDesign = true, prioritizeBy = 'base', v2Weights } = options;
 
-  console.log(`[LLM Scoring] Starting sector scoring for: ${sectorName}`);
+  // Resolve scoringFilter: explicit param > legacy rescore flag
+  const effectiveFilter: ScoringFilter = scoringFilter || (rescore ? 'all' : 'unscored');
+
+  console.log(`[LLM Scoring] Starting sector scoring for: ${sectorName} (filter: ${effectiveFilter})`);
   if (prioritizeBy === 'v2') {
     console.log(`[LLM Scoring] Prioritizing by V2 score`);
   }
 
   // Get patents to score
-  const patents = await getPatentsForSectorScoring(sectorName, { limit, onlyUnscored: !rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Weights });
+  const patents = await getPatentsForSectorScoring(sectorName, { limit, scoringFilter: effectiveFilter, minYear, minScore, excludeDesign, prioritizeBy, v2Weights });
 
   if (patents.length === 0) {
-    console.log(`[LLM Scoring] No ${rescore ? '' : 'unscored '}patents found in sector: ${sectorName}`);
+    console.log(`[LLM Scoring] No patents found in sector: ${sectorName} (filter: ${effectiveFilter})`);
     return {
       total: 0,
       successful: 0,
@@ -1370,6 +1405,9 @@ export interface BatchJobMetadata {
   submittedAt: string;
   status: 'submitted' | 'in_progress' | 'ended' | 'failed';
   completedAt: string | null;
+  // Sub-sector template mapping: patentId → subSectorId (null = sector-level)
+  // Used by processBatchResults to pick the correct template per patent
+  patentSubSectorMap?: Record<string, string | null>;
   results: {
     succeeded: number;
     errored: number;
@@ -1409,6 +1447,7 @@ export async function submitBatchScoring(
     limit?: number;
     model?: string;
     rescore?: boolean;
+    scoringFilter?: ScoringFilter;
     contextOptions?: ContextOptions;
     minYear?: number;
     minScore?: number;
@@ -1422,6 +1461,7 @@ export async function submitBatchScoring(
     limit = 2000,
     model = 'claude-sonnet-4-20250514',
     rescore = false,
+    scoringFilter,
     contextOptions = DEFAULT_CONTEXT_OPTIONS,
     minYear,
     minScore,
@@ -1430,13 +1470,16 @@ export async function submitBatchScoring(
     v2Weights
   } = options;
 
-  console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''}`);
+  // Resolve scoringFilter: explicit param > legacy rescore flag
+  const effectiveFilter: ScoringFilter = scoringFilter || (rescore ? 'all' : 'unscored');
+
+  console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''} (filter: ${effectiveFilter})`);
 
   // 1. Get patents
   const patents = await getPatentsForSectorScoring(sectorName, {
     portfolioId,
     limit,
-    onlyUnscored: !rescore,
+    scoringFilter: effectiveFilter,
     minYear,
     minScore,
     excludeDesign,
@@ -1445,35 +1488,78 @@ export async function submitBatchScoring(
   });
 
   if (patents.length === 0) {
-    throw new Error(`No ${rescore ? '' : 'unscored '}patents found in sector: ${sectorName}`);
+    throw new Error(`No patents found in sector: ${sectorName} (filter: ${effectiveFilter})`);
   }
 
   console.log(`[Batch] Found ${patents.length} patents to score`);
 
-  // 2. Get merged template
   const superSector = patents[0]?.super_sector || 'WIRELESS';
-  const template = getMergedTemplateForSector(sectorName, superSector);
-  console.log(`[Batch] Using template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
 
-  // 3. Enrich patents
+  // 2. Enrich patents (before template grouping — need CPC codes for matching)
   const enrichedPatents = await enrichPatentBatch(patents, contextOptions);
   const enrichedCount = enrichedPatents.filter(p => p.abstract).length;
   console.log(`[Batch] ${enrichedCount}/${patents.length} patents have abstracts`);
 
-  // 4. Build batch requests
-  const requests = enrichedPatents.map(patent => ({
-    custom_id: `score_${sectorName}_${patent.patent_id}`,
-    params: {
-      model,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user' as const,
-          content: buildScoringPrompt(patent, template)
-        }
-      ]
+  // 3. Group patents by sub-sector template match (same logic as run-sector-scoring.ts)
+  const subSectorTemplates = loadSubSectorTemplates();
+  const sectorSubTemplates = Array.from(subSectorTemplates.values())
+    .filter(t => t.sectorName === sectorName && t.level === 'sub_sector');
+
+  // Map each patent to its matched sub-sector (or null for sector-level)
+  const patentSubSectorMap: Record<string, string | null> = {};
+  const groups = new Map<string | null, PatentForScoring[]>();
+
+  if (sectorSubTemplates.length > 0) {
+    for (const patent of enrichedPatents) {
+      const matched = matchSubSectorTemplate(sectorName, patent.cpc_codes || []);
+      const key = matched?.id || null;
+      patentSubSectorMap[patent.patent_id] = key;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(patent);
     }
-  }));
+    console.log(`[Batch] ${sectorSubTemplates.length} sub-sector templates for ${sectorName}:`);
+    for (const [subId, groupPatents] of groups) {
+      console.log(`  ${subId || '(sector-level)'}: ${groupPatents.length} patents`);
+    }
+  } else {
+    // No sub-sector templates — all patents use sector-level
+    groups.set(null, enrichedPatents);
+    for (const patent of enrichedPatents) {
+      patentSubSectorMap[patent.patent_id] = null;
+    }
+  }
+
+  // 4. Build batch requests with correct template per sub-sector group
+  const requests: Array<{ custom_id: string; params: { model: string; max_tokens: number; messages: Array<{ role: 'user'; content: string }> } }> = [];
+  let primaryTemplate: MergedTemplate | null = null;
+
+  for (const [subSectorId, groupPatents] of groups) {
+    let template: MergedTemplate;
+    if (subSectorId) {
+      template = getMergedTemplateForSubSector(subSectorId, sectorName, superSector);
+    } else {
+      template = getMergedTemplateForSector(sectorName, superSector);
+    }
+    if (!primaryTemplate) primaryTemplate = template;
+
+    console.log(`[Batch] Building prompts for ${groupPatents.length} patents with template: ${template.inheritanceChain.join(' → ')} (${template.questions.length} questions)`);
+
+    for (const patent of groupPatents) {
+      requests.push({
+        custom_id: `score_${sectorName}_${patent.patent_id}`,
+        params: {
+          model,
+          max_tokens: 4096,
+          messages: [
+            {
+              role: 'user' as const,
+              content: buildScoringPrompt(patent, template)
+            }
+          ]
+        }
+      });
+    }
+  }
 
   console.log(`[Batch] Submitting ${requests.length} requests to Anthropic Batch API...`);
 
@@ -1482,7 +1568,8 @@ export async function submitBatchScoring(
 
   console.log(`[Batch] Submitted! Batch ID: ${batch.id}`);
 
-  // 6. Save metadata
+  // 6. Save metadata (including per-patent sub-sector mapping for result processing)
+  const template = primaryTemplate || getMergedTemplateForSector(sectorName, superSector);
   const metadata: BatchJobMetadata = {
     batchId: batch.id,
     sectorName,
@@ -1496,6 +1583,7 @@ export async function submitBatchScoring(
     submittedAt: new Date().toISOString(),
     status: 'submitted',
     completedAt: null,
+    patentSubSectorMap,
     results: {
       succeeded: 0,
       errored: 0,
@@ -1575,8 +1663,21 @@ export async function processBatchResults(batchId: string): Promise<{
 
   console.log(`[Batch] Processing results for batch ${batchId} (${metadata.sectorName}, ${metadata.patentCount} patents)`);
 
-  // Get template for score calculation
-  const template = getMergedTemplateForSector(metadata.sectorName, metadata.superSector);
+  // Build template cache: sub-sector ID → template (for per-patent lookup)
+  const templateCache = new Map<string | null, MergedTemplate>();
+  const sectorTemplate = getMergedTemplateForSector(metadata.sectorName, metadata.superSector);
+  templateCache.set(null, sectorTemplate);
+
+  // Pre-load sub-sector templates if this batch used them
+  if (metadata.patentSubSectorMap) {
+    const subSectorIds = new Set(Object.values(metadata.patentSubSectorMap).filter(v => v !== null));
+    for (const subId of subSectorIds) {
+      if (subId && !templateCache.has(subId)) {
+        templateCache.set(subId, getMergedTemplateForSubSector(subId, metadata.sectorName, metadata.superSector));
+      }
+    }
+    console.log(`[Batch] Loaded ${templateCache.size} templates (1 sector-level + ${templateCache.size - 1} sub-sector)`);
+  }
 
   let processed = 0;
   let failed = 0;
@@ -1591,6 +1692,10 @@ export async function processBatchResults(batchId: string): Promise<{
     // Format: score_{sectorName}_{patentId} — split from the right to get patentId
     const lastUnderscore = customId.lastIndexOf('_');
     const patentId = customId.substring(lastUnderscore + 1);
+
+    // Look up the correct template for this patent (sub-sector or sector-level)
+    const subSectorId = metadata.patentSubSectorMap?.[patentId] ?? null;
+    const template = templateCache.get(subSectorId) || sectorTemplate;
 
     if (result.result.type === 'succeeded') {
       try {
@@ -1613,7 +1718,7 @@ export async function processBatchResults(batchId: string): Promise<{
           subSectorId: metadata.sectorName,
           metrics,
           compositeScore,
-          templateConfigId: metadata.templateInheritanceChain[metadata.templateInheritanceChain.length - 1],
+          templateConfigId: template.inheritanceChain[template.inheritanceChain.length - 1],
           templateVersion: 1,
           withClaims: metadata.withClaims,
           llmModel: metadata.model,

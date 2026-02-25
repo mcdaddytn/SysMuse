@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wm-idle-mobility",
+  "name": "Idle Mode Mobility & Paging",
+  "description": "Sub-sector template for paging optimization, cell reselection, tracking area management, access control, and RACH optimization patents covering idle and inactive mode mobility.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W8/*,H04W48/*",
+  "sectorName": "wireless-mobility",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-mobility",
+  "version": 1,
+  "contextDescription": "Idle mode mobility governs how UEs behave when not actively transmitting data — cell reselection, paging, and tracking area management. Paging is how the network reaches an idle UE; efficient paging reduces network load and UE power consumption. Cell reselection determines which cell an idle UE camps on. Tracking area updates (TAU) inform the network of UE location. 3GPP TS 38.304 defines NR idle mode procedures; TS 36.304 for LTE. Access control (barring, RACH optimization) manages network access during congestion. Every idle device performs cell reselection and responds to paging — universal infringement surface.",
+  "scoringGuidance": [
+    "Paging is received by every idle/inactive device — billions of devices process paging signals daily.",
+    "Cell reselection patents affect every device that moves between cells while idle — universal applicability.",
+    "Tracking area management patents reduce signaling load — important for massive IoT deployments.",
+    "Access barring patents are critical for network overload protection — exercised during emergencies and events.",
+    "RACH optimization patents improve initial access — exercised at every connection establishment."
+  ],
+  "questions": [
+    {
+      "fieldName": "paging_optimization",
+      "displayName": "Paging Optimization",
+      "question": "Does this patent optimize paging procedures? Score 8-10 for novel paging area management, group paging, paging occasion optimization, or PO/PF calculation improvements. 5-7 for improved paging reception or paging cause handling. 3-4 for basic paging with minor enhancements. 1-2 for no paging innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Paging is processed by every idle UE — paging occasion and RAN-based notification area patents have broad reach."
+    },
+    {
+      "fieldName": "cell_reselection_criteria",
+      "displayName": "Cell Reselection Criteria",
+      "question": "Does this patent improve cell reselection criteria or procedures? Score 8-10 for novel reselection priority schemes, speed-dependent reselection, or frequency-layer prioritization. 5-7 for improved reselection parameters or thresholds. 3-4 for basic reselection with standard criteria. 1-2 for no cell reselection innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Cell reselection criteria (SIB parameters) are broadcast to every UE — fundamental idle mode behavior."
+    },
+    {
+      "fieldName": "tracking_area_management",
+      "displayName": "Tracking Area Management",
+      "question": "Does this patent optimize tracking area updates or registration procedures? Score 8-10 for novel TA list management, combined 4G/5G registration, or RNA (RAN-based Notification Area) optimization. 5-7 for improved TAU procedures or timer optimization. 3-4 for basic tracking area awareness. 1-2 for no tracking area innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "TAU signaling load scales with device count — optimization is critical for massive IoT networks."
+    },
+    {
+      "fieldName": "access_control_innovation",
+      "displayName": "Access Control Innovation",
+      "question": "Does this patent improve access barring, access category management, or RACH procedures? Score 8-10 for novel unified access control (UAC), RACH-less handover, or 2-step RACH. 5-7 for improved access barring or RACH parameter optimization. 3-4 for basic RACH or barring procedures. 1-2 for no access control innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RACH is the first step for every connection — 2-step RACH and UAC are important 5G NR innovations."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP idle mode procedures (TS 38.304, TS 36.304)? Score 8-10 for direct implementation of mandatory UE idle mode behavior (cell reselection, paging reception). 5-7 for enabling standard compliance. 3-4 for standard-adjacent idle mode concepts. 1-2 for proprietary approach.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Idle mode procedures are mandatory per 3GPP — identify specific SIB parameters and procedures."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is this idle mode behavior observable through signaling? Score 8-10 for behavior visible in paging messages, system information broadcasts, or TAU signaling. 5-7 for behavior inferable from UE camping behavior or RACH patterns. 3-4 for internal UE cell reselection logic. 1-2 for algorithm-level design only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Paging and SIB are broadcast — observable by any device monitoring the channel."
+    }
+  ]
+}

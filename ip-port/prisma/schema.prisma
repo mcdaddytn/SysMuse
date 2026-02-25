@@ -1402,6 +1402,11 @@ model PatentSubSectorScore {
   tokensUsed      Int?     @map("tokens_used")
   withClaims      Boolean  @default(false) @map("with_claims")
 
+  // Staleness tracking
+  questionFingerprint  String?  @map("question_fingerprint")  // Sorted comma-joined metric fieldNames
+  isStale              Boolean  @default(false) @map("is_stale")
+  staleReason          String?  @map("stale_reason")
+
   executedAt      DateTime @map("executed_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -1412,6 +1417,7 @@ model PatentSubSectorScore {
   @@index([patentId])
   @@index([compositeScore])
   @@index([normalizedScore])
+  @@index([isStale])
 }
 
 // =============================================================================

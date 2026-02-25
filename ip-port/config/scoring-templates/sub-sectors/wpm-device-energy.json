@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wpm-device-energy",
+  "name": "Device Energy & P2P Power Management",
+  "description": "Sub-sector template for device-level power management, energy harvesting, P2P/sidelink power allocation, IoT power efficiency, and battery/energy storage integration patents.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W52/4*,G06F1/32*",
+  "sectorName": "wireless-power-mgmt",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-power-mgmt",
+  "version": 1,
+  "contextDescription": "Device-level energy management covers power state transitions beyond DRX, including deep sleep, hibernation, and energy harvesting. P2P/sidelink power allocation is important for D2D and relay scenarios. IoT protocols (NB-IoT, LTE-M, BLE) have extreme power constraints — devices must last years on a single battery. RF energy harvesting and wireless power transfer are emerging areas. Broadcom's IoT and connectivity chipsets (Wi-Fi, BLE, Zigbee) all implement device power state machines. Key targets: IoT chipset vendors, smartphone SoC vendors, wearable manufacturers.",
+  "scoringGuidance": [
+    "IoT power efficiency patents have massive device count: billions of IoT endpoints need multi-year battery life.",
+    "Power state management patents are exercised by every device with sleep/wake capability.",
+    "Energy harvesting patents are forward-looking but increasingly relevant for batteryless IoT.",
+    "P2P/sidelink power patents target V2X and relay — growing importance with Rel-17/18.",
+    "Battery management integration patents bridge the gap between wireless and power electronics."
+  ],
+  "questions": [
+    {
+      "fieldName": "energy_harvesting_method",
+      "displayName": "Energy Harvesting Method",
+      "question": "Does this patent address energy harvesting for wireless devices? Score 8-10 for RF energy harvesting, wireless power transfer, or ambient energy integration with communication. 5-7 for energy-aware protocol design considering harvested energy. 3-4 for general energy awareness. 1-2 for no energy harvesting aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RF energy harvesting enables batteryless IoT devices — emerging technology with high future value."
+    },
+    {
+      "fieldName": "power_state_management",
+      "displayName": "Power State Management",
+      "question": "Does this patent manage device power state transitions (active, sleep, deep sleep, hibernation, off)? Score 8-10 for novel multi-level power state machines or conditional state transitions. 5-7 for improved sleep/wake procedures beyond standard DRX. 3-4 for basic power state management. 1-2 for no power state innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Device power state machines are implemented in every wireless chipset — universal infringement surface."
+    },
+    {
+      "fieldName": "iot_protocol_efficiency",
+      "displayName": "IoT Protocol Efficiency",
+      "question": "Does this patent address power efficiency for IoT protocols (NB-IoT, LTE-M, LoRa, BLE, Zigbee)? Score 8-10 for protocol-specific power optimization enabling multi-year battery life. 5-7 for general IoT power-aware communication design. 3-4 for IoT mentioned but not power-specific. 1-2 for no IoT protocol relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "NB-IoT and BLE power optimization patents cover billions of deployed IoT devices."
+    },
+    {
+      "fieldName": "battery_technology_integration",
+      "displayName": "Battery Technology Integration",
+      "question": "Does this patent integrate with battery management IC, charge cycle optimization, or power delivery? Score 8-10 for novel battery-communication co-design or adaptive charging based on communication patterns. 5-7 for battery-aware protocol behavior. 3-4 for general battery considerations. 1-2 for no battery technology aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Battery management IC integration bridges wireless and power electronics — relevant for Broadcom's PMIC portfolio."
+    },
+    {
+      "fieldName": "peer_to_peer_power",
+      "displayName": "Peer-to-Peer Power",
+      "question": "Does this patent address D2D/sidelink power allocation or relay power management? Score 8-10 for novel sidelink power control or relay-specific power optimization. 5-7 for D2D-aware power management. 3-4 for general P2P with power consideration. 1-2 for no peer-to-peer power aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Sidelink power control is critical for V2X reliability — power must be managed without network assistance."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is this device energy management observable through device behavior or protocol analysis? Score 8-10 for behavior visible in device power profiles, protocol traces, or radio measurements. 5-7 for behavior inferable from device performance characteristics. 3-4 for internal chipset power management. 1-2 for algorithm-level design only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Device power behavior is measurable through current profiling and protocol analysis tools."
+    }
+  ]
+}

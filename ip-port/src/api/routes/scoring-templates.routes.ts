@@ -23,6 +23,7 @@ import {
   getMergedQuestionsForSuperSector,
   getMergedTemplateForSector,
   calculateCompositeScore,
+  computeStalenessForSector,
   CreateTemplateInput
 } from '../services/scoring-template-service.js';
 import { loadPatents } from './patents.routes.js';
@@ -33,6 +34,7 @@ import {
   getPatentsForScoring,
   getPatentsForSectorScoring,
   PatentForScoring,
+  ScoringFilter,
   comparePatentScoring,
   runComparisonTest,
   getComparisonTestSet,
@@ -504,6 +506,42 @@ router.post('/scores/normalize/sector/:sectorId', async (req: Request, res: Resp
 });
 
 // =============================================================================
+// STALENESS COMPUTATION
+// =============================================================================
+
+/**
+ * POST /api/scoring-templates/llm/compute-staleness/:sectorName
+ * Compute staleness for all scores in a sector by comparing questionFingerprint
+ * against the current template. Updates isStale + staleReason in DB.
+ * Body: { superSector: string, portfolioId?: string, dryRun?: boolean }
+ */
+router.post('/llm/compute-staleness/:sectorName', async (req: Request, res: Response) => {
+  try {
+    const { sectorName } = req.params;
+    const { superSector, portfolioId, dryRun } = req.body;
+
+    if (!superSector) {
+      // Try to look it up from the sector
+      const sector = await prisma.sector.findFirst({
+        where: { name: sectorName },
+        include: { superSector: true }
+      });
+      if (!sector?.superSector) {
+        return res.status(400).json({ error: 'superSector is required (or sector must exist in DB with a super-sector)' });
+      }
+      const result = await computeStalenessForSector(sectorName, sector.superSector.name, { portfolioId, dryRun });
+      return res.json({ sectorName, dryRun: !!dryRun, ...result });
+    }
+
+    const result = await computeStalenessForSector(sectorName, superSector, { portfolioId, dryRun });
+    res.json({ sectorName, dryRun: !!dryRun, ...result });
+  } catch (error) {
+    console.error('[Staleness] Compute error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// =============================================================================
 // TEMPLATE PREVIEW
 // =============================================================================
 
@@ -613,6 +651,7 @@ router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Resp
  *   - model: LLM model to use
  *   - concurrency: parallel requests (default 2)
  *   - rescore: 'true' to re-score already scored patents (overwrites existing scores)
+ *   - scoringFilter: 'unscored' | 'stale' | 'unscored_or_stale' | 'all' (overrides rescore)
  *   - minYear: filter to patents from this year or later (e.g., 2015)
  *   - minScore: filter to patents with base score >= this value (e.g., 3)
  *   - excludeDesign: exclude design patents (D-prefix), defaults to true
@@ -624,11 +663,12 @@ router.post('/llm/score-sub-sector/:subSectorId', async (req: Request, res: Resp
 router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
-    const { limit, model, concurrency, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
+    const { limit, model, concurrency, rescore, scoringFilter, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
 
     const contextOptions = DEFAULT_CONTEXT_OPTIONS;
 
-    console.log(`[LLM Scoring] Starting sector scoring: ${sectorName} (claims: ${contextOptions.includeClaims})`);
+    const effectiveFilter = scoringFilter as string || (rescore === 'true' ? 'all' : 'unscored');
+    console.log(`[LLM Scoring] Starting sector scoring: ${sectorName} (claims: ${contextOptions.includeClaims}, filter: ${effectiveFilter})`);
     if (rescore === 'true') {
       console.log(`[LLM Scoring] RESCORE MODE - will overwrite existing scores`);
     }
@@ -658,6 +698,7 @@ router.post('/llm/score-sector/:sectorName', async (req: Request, res: Response)
       concurrency: concurrency ? parseInt(concurrency as string) : 2,
       contextOptions,
       rescore: rescore === 'true',
+      scoringFilter: scoringFilter as any || undefined,
       minYear: minYear ? parseInt(minYear as string) : undefined,
       minScore: minScore ? parseFloat(minScore as string) : undefined,
       excludeDesign: excludeDesign !== 'false',
@@ -795,26 +836,28 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
     // Get scoring stats from patent_sub_sector_scores using template_config_id
     // Use DISTINCT ON to deduplicate patents (may have multiple scores from old + new flows)
     const stats = portfolioId
-      ? await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+      ? await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; stale: bigint; avg_score: number }>>`
           SELECT
             COUNT(*) as scored,
             SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+            SUM(CASE WHEN is_stale THEN 1 ELSE 0 END) as stale,
             AVG(composite_score) as avg_score
           FROM (
-            SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score
+            SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score, pss.is_stale
             FROM patent_sub_sector_scores pss
             INNER JOIN portfolio_patents pp ON pp.patent_id = pss.patent_id AND pp.portfolio_id = ${portfolioId}
             WHERE pss.template_config_id = ${sectorName}
             ORDER BY pss.patent_id, pss.updated_at DESC
           ) deduped
         `
-      : await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; avg_score: number }>>`
+      : await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; stale: bigint; avg_score: number }>>`
           SELECT
             COUNT(*) as scored,
             SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
+            SUM(CASE WHEN is_stale THEN 1 ELSE 0 END) as stale,
             AVG(composite_score) as avg_score
           FROM (
-            SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score
+            SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score, is_stale
             FROM patent_sub_sector_scores
             WHERE template_config_id = ${sectorName}
             ORDER BY patent_id, updated_at DESC
@@ -823,6 +866,7 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
 
     const scored = Number(stats[0]?.scored || 0);
     const withClaims = Number(stats[0]?.with_claims || 0);
+    const stale = Number(stats[0]?.stale || 0);
     const avgScore = stats[0]?.avg_score || 0;
     const total = portfolioId
       ? await prisma.patent.count({
@@ -830,6 +874,7 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
         })
       : (sector.patentCount || 0);
     const remaining = Math.max(0, total - scored);
+    const fresh = scored - stale;
     const percentComplete = total > 0 ? Math.round((scored / total) * 100) : 0;
 
     res.json({
@@ -840,6 +885,8 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
       total,
       scored,
       withClaims,
+      stale,
+      fresh,
       remaining,
       percentComplete,
       avgScore: avgScore ? Number(avgScore.toFixed(2)) : null
@@ -1238,12 +1285,13 @@ router.post('/llm/recompute-scores/:sectorName', async (req: Request, res: Respo
 router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Response) => {
   try {
     const { sectorName } = req.params;
-    const { limit, model, rescore, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
+    const { limit, model, rescore, scoringFilter, minYear, minScore, excludeDesign, prioritizeBy, v2Citation, v2Years, v2Competitor } = req.query;
     const { portfolioId } = req.body || {};
 
     const contextOptions = DEFAULT_CONTEXT_OPTIONS;
 
-    console.log(`[Batch] Submitting batch scoring for: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''} (claims: ${contextOptions.includeClaims})`);
+    const effectiveFilter = scoringFilter as string || (rescore === 'true' ? 'all' : 'unscored');
+    console.log(`[Batch] Submitting batch scoring for: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''} (claims: ${contextOptions.includeClaims}, filter: ${effectiveFilter})`);
 
     const v2Weights = prioritizeBy === 'v2' ? {
       citation: v2Citation ? parseInt(v2Citation as string) : 50,
@@ -1256,6 +1304,7 @@ router.post('/llm/batch-score-sector/:sectorName', async (req: Request, res: Res
       limit: limit ? parseInt(limit as string) : 2000,
       model: model as string || undefined,
       rescore: rescore === 'true',
+      scoringFilter: scoringFilter as any || undefined,
       contextOptions,
       minYear: minYear ? parseInt(minYear as string) : undefined,
       minScore: minScore ? parseFloat(minScore as string) : undefined,

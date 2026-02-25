@@ -1449,6 +1449,7 @@ function loadBatchMetadata(batchId: string): BatchJobMetadata | null {
 export async function submitBatchScoring(
   sectorName: string,
   options: {
+    patentIds?: string[];
     portfolioId?: string;
     limit?: number;
     model?: string;
@@ -1463,6 +1464,7 @@ export async function submitBatchScoring(
   } = {}
 ): Promise<{ batchId: string; requestCount: number; sectorName: string }> {
   const {
+    patentIds,
     portfolioId,
     limit = 2000,
     model = 'claude-sonnet-4-20250514',
@@ -1479,22 +1481,54 @@ export async function submitBatchScoring(
   // Resolve scoringFilter: explicit param > legacy rescore flag
   const effectiveFilter: ScoringFilter = scoringFilter || (rescore ? 'all' : 'unscored');
 
-  console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''} (filter: ${effectiveFilter})`);
+  let patents: PatentForScoring[];
 
-  // 1. Get patents
-  const patents = await getPatentsForSectorScoring(sectorName, {
-    portfolioId,
-    limit,
-    scoringFilter: effectiveFilter,
-    minYear,
-    minScore,
-    excludeDesign,
-    prioritizeBy,
-    v2Weights
-  });
+  if (patentIds && patentIds.length > 0) {
+    // Pre-selected patent IDs (from batch-jobs system) — query directly from DB
+    console.log(`[Batch] Preparing batch scoring for sector: ${sectorName} (${patentIds.length} pre-selected patents)`);
+
+    const dbPatents = await prisma.patent.findMany({
+      where: { patentId: { in: patentIds } },
+      select: {
+        patentId: true,
+        title: true,
+        abstract: true,
+        primarySector: true,
+        superSector: true,
+        primarySubSectorId: true,
+        primarySubSectorName: true,
+        cpcCodes: { select: { cpcCode: true } },
+      },
+    });
+
+    patents = dbPatents.map(p => ({
+      patent_id: p.patentId,
+      patent_title: p.title,
+      abstract: p.abstract,
+      primary_sector: p.primarySector || undefined,
+      super_sector: p.superSector || undefined,
+      primary_sub_sector_id: p.primarySubSectorId || undefined,
+      primary_sub_sector_name: p.primarySubSectorName || undefined,
+      cpc_codes: p.cpcCodes.map(c => c.cpcCode),
+    }));
+  } else {
+    // Discovery mode — query patents for sector scoring
+    console.log(`[Batch] Preparing batch scoring for sector: ${sectorName}${portfolioId ? ` (portfolio: ${portfolioId})` : ''} (filter: ${effectiveFilter})`);
+
+    patents = await getPatentsForSectorScoring(sectorName, {
+      portfolioId,
+      limit,
+      scoringFilter: effectiveFilter,
+      minYear,
+      minScore,
+      excludeDesign,
+      prioritizeBy,
+      v2Weights
+    });
+  }
 
   if (patents.length === 0) {
-    throw new Error(`No patents found in sector: ${sectorName} (filter: ${effectiveFilter})`);
+    throw new Error(`No patents found in sector: ${sectorName}${patentIds ? ' (from pre-selected IDs)' : ` (filter: ${effectiveFilter})`}`);
   }
 
   console.log(`[Batch] Found ${patents.length} patents to score`);

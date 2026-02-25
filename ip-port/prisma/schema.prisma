@@ -1526,6 +1526,7 @@ model BatchJob {
   // LLM-specific
   model           String?                           // claude-sonnet-4-20250514, etc.
   batchMode       Boolean? @map("batch_mode")       // true=Batch API, false=realtime
+  anthropicBatchId String? @map("anthropic_batch_id") // Anthropic Message Batches API ID (msgbatch_...)
   useClaims       Boolean  @default(false) @map("use_claims")
   settings        Json?    @map("settings")
 

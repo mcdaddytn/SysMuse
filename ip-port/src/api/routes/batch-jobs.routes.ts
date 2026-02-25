@@ -9,6 +9,7 @@ import { invalidateEnrichmentCache } from './patents.routes.js';
 export { repairEnrichmentFlags };
 import { clearScoringCache } from '../services/scoring-service.js';
 import { enrichPatentCpcBatch } from '../services/patent-xml-parser-service.js';
+import { checkBatchStatus, processBatchResults, cancelBatch } from '../services/llm-scoring-service.js';
 
 const prisma = new PrismaClient();
 
@@ -41,6 +42,7 @@ interface BatchJobResponse {
   estimatedCompletion?: string;
   model?: string | null;
   batchMode?: boolean | null;
+  anthropicBatchId?: string | null;
   portfolioId?: string | null;
   portfolioName?: string | null;
   settings?: Record<string, unknown> | null;
@@ -77,6 +79,7 @@ function toResponse(job: any): BatchJobResponse {
     estimatedCompletion: job.estimatedCompletion?.toISOString(),
     model: job.model,
     batchMode: job.batchMode,
+    anthropicBatchId: job.anthropicBatchId,
     portfolioId: job.portfolioId,
     portfolioName: job.portfolioName,
     settings: job.settings as Record<string, unknown> | null,
@@ -650,6 +653,7 @@ function getEnrichmentCommand(
 
   if (coverageType === 'llm') {
     if (options?.model) envVars.push(`LLM_MODEL=${options.model}`);
+    if (options?.batchMode) envVars.push('BATCH_MODE=true');
     if (options?.settings?.llmConcurrency) envVars.push(`LLM_CONCURRENCY=${options.settings.llmConcurrency}`);
     if (options?.settings?.llmMaxRetries != null) envVars.push(`LLM_MAX_RETRIES=${options.settings.llmMaxRetries}`);
     if (options?.settings?.llmRetryBaseDelay) envVars.push(`LLM_RETRY_BASE_DELAY=${options.settings.llmRetryBaseDelay}`);
@@ -743,6 +747,22 @@ function parseLogProgress(logFile: string): { completed: number; total: number }
 }
 
 /**
+ * Parse Anthropic batch IDs from a batch-mode job's log file.
+ * Looks for lines like: "BATCH_SUBMITTED: msgbatch_xxx (123 requests for sector-name)"
+ * Returns the first batch ID found, or null.
+ */
+function parseLogBatchId(logFile: string): string | null {
+  try {
+    if (!fs.existsSync(logFile)) return null;
+    const text = fs.readFileSync(logFile, 'utf-8');
+    const match = text.match(/BATCH_SUBMITTED:\s*(msgbatch_\S+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * On startup, check for any jobs marked as "running" in the DB whose PIDs no longer exist.
  * Mark them as completed (they finished while server was down).
  */
@@ -760,19 +780,32 @@ async function reconcileJobsOnStartup(): Promise<void> {
       if (job.pid) {
         const stillRunning = runningProcesses.some(p => p.pid === job.pid);
         if (!stillRunning) {
-          const startTime = job.startedAt?.getTime() ?? Date.now();
-          const hours = (Date.now() - startTime) / 3600000;
-          const actualRate = hours > 0 ? Math.round(job.totalPatents / hours) : 0;
+          // Check if this was a batch-mode job that submitted to Anthropic
+          const anthropicBatchId = job.batchMode && job.logFile
+            ? parseLogBatchId(job.logFile)
+            : null;
 
-          await prisma.batchJob.update({
-            where: { id: job.id },
-            data: {
-              status: 'completed',
-              completedAt: new Date(),
-              actualRate,
-            },
-          });
-          console.log(`[BatchJobs] Reconciled stale job ${job.id} (${job.coverageType}) → completed`);
+          if (anthropicBatchId) {
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: { status: 'batch_pending', anthropicBatchId },
+            });
+            console.log(`[BatchJobs] Reconciled batch job ${job.id} → batch_pending (${anthropicBatchId})`);
+          } else {
+            const startTime = job.startedAt?.getTime() ?? Date.now();
+            const hours = (Date.now() - startTime) / 3600000;
+            const actualRate = hours > 0 ? Math.round(job.totalPatents / hours) : 0;
+
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                actualRate,
+              },
+            });
+            console.log(`[BatchJobs] Reconciled stale job ${job.id} (${job.coverageType}) → completed`);
+          }
         }
       }
     }
@@ -796,7 +829,7 @@ router.get('/', async (_req: Request, res: Response) => {
       where: {
         OR: [
           { createdAt: { gte: cutoff } },
-          { status: { in: ['running', 'pending'] } },
+          { status: { in: ['running', 'pending', 'batch_pending'] } },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -811,27 +844,46 @@ router.get('/', async (_req: Request, res: Response) => {
       if (job.status === 'running' && job.pid) {
         const stillRunning = runningProcesses.some(p => p.pid === job.pid);
         if (!stillRunning) {
-          // Job finished — get final progress from log, then mark completed
-          const finalProgress = job.logFile ? parseLogProgress(job.logFile) : null;
-          const completedPatents = finalProgress?.completed ?? job.totalPatents;
-          const startTime = job.startedAt?.getTime() ?? Date.now();
-          const hours = (Date.now() - startTime) / 3600000;
-          const actualRate = hours > 0 ? Math.round(completedPatents / hours) : 0;
+          // Check if this was a batch-mode job that submitted to Anthropic Batch API
+          const anthropicBatchId = job.batchMode && job.logFile
+            ? parseLogBatchId(job.logFile)
+            : null;
 
-          await prisma.batchJob.update({
-            where: { id: job.id },
-            data: {
-              status: 'completed',
-              completedAt: new Date(),
-              completedPatents,
-              actualRate,
-            },
-          });
-          job.status = 'completed';
-          job.completedAt = new Date();
-          job.completedPatents = completedPatents;
-          job.actualRate = actualRate;
-          jobsJustCompleted = true;
+          if (anthropicBatchId) {
+            // Batch API submission script exited — transition to batch_pending
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'batch_pending',
+                anthropicBatchId,
+              },
+            });
+            job.status = 'batch_pending';
+            (job as any).anthropicBatchId = anthropicBatchId;
+            console.log(`[BatchJobs] Job ${job.id} submitted to Anthropic Batch API: ${anthropicBatchId}`);
+          } else {
+            // Normal realtime job finished — mark completed
+            const finalProgress = job.logFile ? parseLogProgress(job.logFile) : null;
+            const completedPatents = finalProgress?.completed ?? job.totalPatents;
+            const startTime = job.startedAt?.getTime() ?? Date.now();
+            const hours = (Date.now() - startTime) / 3600000;
+            const actualRate = hours > 0 ? Math.round(completedPatents / hours) : 0;
+
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                completedPatents,
+                actualRate,
+              },
+            });
+            job.status = 'completed';
+            job.completedAt = new Date();
+            job.completedPatents = completedPatents;
+            job.actualRate = actualRate;
+            jobsJustCompleted = true;
+          }
         } else if (job.logFile) {
           // Still running — parse log for live progress update
           const progress = parseLogProgress(job.logFile);
@@ -856,6 +908,59 @@ router.get('/', async (_req: Request, res: Response) => {
             job.estimatedCompletion = etaMs > 0 ? new Date(Date.now() + etaMs) : null;
           }
         }
+      }
+    }
+
+    // Poll Anthropic Batch API for batch_pending jobs (lightweight — just status check)
+    const batchPendingJobs = dbJobs.filter(j => j.status === 'batch_pending' && j.anthropicBatchId);
+    for (const job of batchPendingJobs) {
+      try {
+        const batchStatus = await checkBatchStatus(job.anthropicBatchId!);
+
+        if (batchStatus.status === 'ended') {
+          // Batch complete — process results and mark job as completed
+          console.log(`[BatchJobs] Anthropic batch ${job.anthropicBatchId} ended — processing results...`);
+          try {
+            const results = await processBatchResults(job.anthropicBatchId!);
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                completedPatents: results.processed,
+              },
+            });
+            job.status = 'completed';
+            job.completedAt = new Date();
+            job.completedPatents = results.processed;
+            jobsJustCompleted = true;
+            console.log(`[BatchJobs] Batch ${job.anthropicBatchId} processed: ${results.processed} scored, ${results.failed} failed`);
+          } catch (processErr) {
+            console.error(`[BatchJobs] Failed to process batch results for ${job.anthropicBatchId}:`, processErr);
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'failed',
+                error: `Batch result processing failed: ${(processErr as Error).message}`,
+              },
+            });
+            job.status = 'failed';
+          }
+        } else if (batchStatus.status === 'in_progress') {
+          // Update progress from Anthropic request counts
+          const counts = batchStatus.requestCounts;
+          const completed = counts.succeeded + counts.errored + counts.expired + counts.canceled;
+          if (completed > job.completedPatents) {
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: { completedPatents: completed },
+            });
+            job.completedPatents = completed;
+          }
+        }
+      } catch (err) {
+        // Non-fatal — Anthropic API may be temporarily unavailable
+        console.error(`[BatchJobs] Failed to check batch status for ${job.anthropicBatchId}:`, (err as Error).message);
       }
     }
 
@@ -888,6 +993,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const stats = {
       pending: responseJobs.filter(j => j.status === 'pending').length,
       running: responseJobs.filter(j => j.status === 'running').length,
+      batch_pending: responseJobs.filter(j => j.status === 'batch_pending').length,
       completed: responseJobs.filter(j => j.status === 'completed').length,
       failed: responseJobs.filter(j => j.status === 'failed').length,
     };
@@ -1096,8 +1202,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (job.status !== 'running') {
-      return res.status(400).json({ error: 'Job is not running' });
+    if (job.status !== 'running' && job.status !== 'batch_pending') {
+      return res.status(400).json({ error: 'Job is not running or pending' });
     }
 
     if (job.pid) {
@@ -1107,6 +1213,16 @@ router.delete('/:id', async (req: Request, res: Response) => {
         });
       } catch (e) {
         console.error('Failed to kill process:', e);
+      }
+    }
+
+    // Cancel Anthropic batch if this is a batch API job
+    if (job.anthropicBatchId) {
+      try {
+        await cancelBatch(job.anthropicBatchId);
+        console.log(`[BatchJobs] Cancelled Anthropic batch: ${job.anthropicBatchId}`);
+      } catch (e) {
+        console.error(`[BatchJobs] Failed to cancel Anthropic batch ${job.anthropicBatchId}:`, e);
       }
     }
 

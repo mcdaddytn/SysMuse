@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "oscillators",
+  "name": "Oscillators & Signal Generation",
+  "description": "Sub-sector template for oscillator patents (CPC H03B*) including voltage-controlled oscillators, crystal oscillators, ring oscillators, and LC tanks.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03B*",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "analog-circuits",
+  "version": 1,
+  "contextDescription": "Oscillator patents cover frequency generation, the foundation of all clocked and RF systems. Key types include voltage-controlled oscillators (VCOs), crystal oscillators (XOs/TCXOs), ring oscillators, LC oscillators, and relaxation oscillators. Every PLL contains an oscillator, every wireless transceiver needs a local oscillator, and every processor needs a clock reference. High-value targets include all wireless chipset vendors, clock IC vendors (SiTime, TI, Analog Devices), and RF module vendors (Skyworks, Qorvo).",
+  "scoringGuidance": [
+    "VCO phase noise is the fundamental limit on wireless system performance.",
+    "LC-VCO patents with wide tuning range target multi-band transceivers.",
+    "Ring oscillator patents target CMOS SoC integration where inductors are costly.",
+    "Low-power oscillator patents target IoT, wearable, and always-on applications.",
+    "Digitally-controlled oscillators (DCO) enable all-digital PLLs for advanced nodes."
+  ],
+  "questions": [
+    {
+      "fieldName": "oscillator_type",
+      "displayName": "Oscillator Type",
+      "question": "What oscillator type does this patent cover? Score by market impact: 1-3 for specialized (relaxation, Colpitts), 4-6 for common (ring oscillator, crystal), 7-10 for high-value (LC-VCO, DCO, MEMS oscillator).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the oscillator type and its role in electronic systems."
+    },
+    {
+      "fieldName": "phase_noise",
+      "displayName": "Phase Noise Performance",
+      "question": "Does this patent improve phase noise or spectral purity? Phase noise directly limits wireless link performance, radar resolution, and SerDes data rates.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess phase noise improvement and its system-level impact."
+    },
+    {
+      "fieldName": "tuning_range",
+      "displayName": "Tuning Range & Multi-Band",
+      "question": "Does this patent enable wide frequency tuning range or multi-band operation? Multi-band VCOs reduce die area and support more wireless standards.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify tuning range and multi-band capability."
+    },
+    {
+      "fieldName": "integration_scalability",
+      "displayName": "Integration & Scalability",
+      "question": "Is this oscillator designed for CMOS integration and process scalability? On-chip oscillators eliminate external components and enable SoC integration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess CMOS compatibility and ability to scale across process nodes."
+    }
+  ]
+}

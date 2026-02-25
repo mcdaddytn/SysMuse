@@ -10,6 +10,7 @@
  *
  * Environment variables:
  *   LLM_MODEL — override scoring model (e.g., claude-sonnet-4-20250514)
+ *   BATCH_MODE=true — submit to Anthropic Batch API (~50% cost, ~24h turnaround)
  */
 
 import * as fs from 'fs';
@@ -19,6 +20,7 @@ dotenv.config();
 import { PrismaClient } from '@prisma/client';
 import {
   scorePatentBatch,
+  submitBatchScoring,
   PatentForScoring,
   DEFAULT_CONTEXT_OPTIONS,
 } from '../src/api/services/llm-scoring-service.js';
@@ -31,7 +33,7 @@ import {
 
 const prisma = new PrismaClient();
 
-function parseArgs(): { batchFile: string; model: string; concurrency: number } {
+function parseArgs(): { batchFile: string; model: string; concurrency: number; batchMode: boolean } {
   const args = process.argv.slice(2);
 
   // Find batch file (first non-flag argument)
@@ -55,11 +57,14 @@ function parseArgs(): { batchFile: string; model: string; concurrency: number } 
     concurrency = parseInt(args[concIdx + 1], 10);
   }
 
-  return { batchFile, model, concurrency };
+  // Batch API mode (Anthropic Message Batches — 50% off, ~24h turnaround)
+  const batchMode = process.env.BATCH_MODE === 'true';
+
+  return { batchFile, model, concurrency, batchMode };
 }
 
 async function main() {
-  const { batchFile, model, concurrency } = parseArgs();
+  const { batchFile, model, concurrency, batchMode } = parseArgs();
 
   // 1. Read patent IDs from batch file
   if (!fs.existsSync(batchFile)) {
@@ -74,11 +79,15 @@ async function main() {
   }
 
   console.log('='.repeat(60));
-  console.log('Sector-Based LLM Scoring');
+  console.log(`Sector-Based LLM Scoring${batchMode ? ' (BATCH API MODE)' : ''}`);
   console.log('='.repeat(60));
   console.log(`Patents: ${patentIds.length}`);
   console.log(`Model: ${model}`);
-  console.log(`Concurrency: ${concurrency}`);
+  if (batchMode) {
+    console.log('Mode: Anthropic Batch API (~50% cost, ~24h turnaround)');
+  } else {
+    console.log(`Concurrency: ${concurrency}`);
+  }
   console.log(`Claims: ${DEFAULT_CONTEXT_OPTIONS.includeClaims}`);
   console.log('');
 
@@ -123,6 +132,31 @@ async function main() {
 
   console.log(`Sectors: ${[...bySector.keys()].join(', ')}`);
   console.log('');
+
+  // ── BATCH API MODE: submit to Anthropic and exit ──
+  if (batchMode) {
+    for (const [sectorName, sectorPatents] of bySector) {
+      const sectorPatentIds = sectorPatents.map(p => p.patentId);
+      console.log(`[${sectorName}] Submitting ${sectorPatentIds.length} patents to Anthropic Batch API...`);
+
+      try {
+        const result = await submitBatchScoring(sectorName, {
+          patentIds: sectorPatentIds,
+          model,
+          contextOptions: DEFAULT_CONTEXT_OPTIONS,
+        });
+        // This line is parsed by the batch-jobs GET handler to detect batch submissions
+        console.log(`BATCH_SUBMITTED: ${result.batchId} (${result.requestCount} requests for ${sectorName})`);
+      } catch (err) {
+        console.error(`[${sectorName}] Batch submission failed:`, err);
+      }
+    }
+
+    console.log('\nBatch submissions complete. Results will arrive within ~24 hours.');
+    console.log('Check status via GET /api/scoring-templates/llm/batch-status/:batchId');
+    await prisma.$disconnect();
+    return;
+  }
 
   // 4. Score each sector group
   let totalCompleted = 0;

@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ic-testing",
+  "name": "IC & Circuit Testing",
+  "description": "Sub-sector template for IC testing patents (CPC G01R31*) covering BIST, DFT, scan chain, functional test, and fault detection for integrated circuits.",
+  "level": "sub_sector",
+  "subSectorPattern": "G01R31*",
+  "sectorName": "test-measurement",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "test-measurement",
+  "version": 1,
+  "contextDescription": "IC testing patents cover how chips are verified during and after manufacturing. Key areas include scan-based testing (ATPG, scan chain), memory BIST, logic BIST, functional test, speed binning, and fault diagnosis. Every manufactured chip must be tested — these patents read on all semiconductor vendors. High-value targets include ATE vendors (Teradyne, Advantest), EDA vendors (Synopsys, Cadence for DFT tools), foundries (TSMC, Samsung), and all IDMs and fabless companies that design test logic into their chips.",
+  "scoringGuidance": [
+    "Scan-based test patents are used in virtually every digital chip designed today.",
+    "BIST patents read on all chips that include self-test — nearly universal in SoCs.",
+    "At-speed test patents are critical for high-performance processors and SerDes.",
+    "Fault diagnosis patents target both ATE vendors and fabs for yield improvement.",
+    "Low-power test patents address a growing problem as chip complexity increases."
+  ],
+  "questions": [
+    {
+      "fieldName": "test_technique",
+      "displayName": "Test Technique",
+      "question": "What IC test technique does this patent cover? Score by adoption: 1-3 for specialized/legacy methods, 4-6 for standard approaches (functional test, boundary scan), 7-10 for ubiquitous methods (scan chain, ATPG, BIST) used in every modern chip.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the test technique and how widely it is adopted in the industry."
+    },
+    {
+      "fieldName": "design_integration",
+      "displayName": "Design Integration (DFT)",
+      "question": "Is this a Design-for-Test technique built into the chip itself? DFT patents read on every chip that implements the technique, not just the test equipment. Score higher for techniques that are standard practice in chip design flows.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "DFT patents embedded in chip design have far more infringement targets than equipment-only patents."
+    },
+    {
+      "fieldName": "test_coverage",
+      "displayName": "Fault Coverage Impact",
+      "question": "Does this patent improve fault coverage, test time, or test cost? These are the key metrics that determine test value. Patents that reduce test time while maintaining coverage are highly valuable.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess impact on fault coverage, test time, or test cost."
+    },
+    {
+      "fieldName": "advanced_test",
+      "displayName": "Advanced Node/Speed Testing",
+      "question": "Is this patent relevant to testing challenges at advanced nodes or high speeds (at-speed test, delay fault, FinFET-specific)? Advanced testing problems create must-have solutions.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify advanced node or high-speed testing challenges addressed."
+    }
+  ]
+}

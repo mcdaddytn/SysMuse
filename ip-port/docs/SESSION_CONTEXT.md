@@ -1,8 +1,107 @@
-# Session Context — February 22, 2026
+# Session Context — February 25, 2026
 
-## Current State Summary
+## Current Focus: SEMICONDUCTOR Vendor Package Analysis
 
-### Infrastructure Status
+We are in the middle of building a vendor package for the **SEMICONDUCTOR** super-sector, following the same workflow used for VIDEO (completed Feb 24) and WIRELESS (completed Feb 25). The package supports two vendor workstreams:
+
+1. **Heat map analysis** — Patent lists for mapping against competitor product landscapes
+2. **Claims charts** — High-potential litigation candidates for detailed claim-by-claim analysis
+
+### What Was Completed Before Context Loss
+
+- **Semiconductor super-sector template v2** — Reweighted for litigation: design-around difficulty (25%), claim breadth (20%), implementation clarity (20%) up; manufacturing/integration demoted to 5% each
+- **`scripts/recompute-super-sector-scores.ts`** — Recalculates composite scores from stored metrics using current template weights (no LLM calls). Ran `--dry-run` on SEMICONDUCTOR.
+- **`scripts/export-vendor-package.ts`** — Generic vendor export for any super-sector
+- **Initial SEMICONDUCTOR export** — `output/vendor-exports/SEMICONDUCTOR-2026-02-25/` with 2,545 broadcom-core patents
+
+### Current SEMICONDUCTOR Data State
+
+**Overall:**
+| Metric | Count |
+|--------|-------|
+| Total SEMICONDUCTOR patents | 7,691 |
+| Quarantined | 2,085 |
+| Eligible (non-quarantined) | 5,606 |
+| Have USPTO XML | 3,890 |
+| have_llm_data flag set | 1,853 |
+
+**Broadcom-core scoring: 2,545 patents scored (100% of eligible broadcom SEMICONDUCTOR)**
+
+**Sector Breakdown (broadcom-core):**
+| Sector | Total | Scored | Avg Score | Top Score |
+|--------|-------|--------|-----------|-----------|
+| analog-circuits | 1,952 | 1,086 | 60.58 | 78.96 |
+| semiconductor | 1,387 | 623 | 54.69 | 70.48 |
+| audio | 487 | 131 | 59.74 | 73.40 |
+| memory-storage | 483 | 238 | 55.12 | 69.81 |
+| test-measurement | 463 | 217 | 48.00 | 78.34 |
+| semiconductor-modern | 433 | 98 | 54.40 | 70.03 |
+| pcb-packaging | 226 | 74 | 44.63 | 67.45 |
+| semiconductor-manufacturing | 71 | 30 | 59.54 | 71.60 |
+| magnetics-inductors | 60 | 16 | 62.37 | 72.39 |
+| lithography | 44 | 35 | 54.23 | 67.34 |
+
+**NOTE:** "Scored" column counts are from patent_sub_sector_scores table (2,545 total have scores), but "total" column is ALL patents in that sector across ALL portfolios. So analog-circuits has 1,952 total patents but only 1,086 broadcom-core scores.
+
+### Competitor Portfolios in SEMICONDUCTOR
+
+| Portfolio | Patents | LLM Scored |
+|-----------|---------|------------|
+| broadcom-core | 2,545 | 943 (flag) / 2,545 (actual scores) |
+| mediatek | 709 | 0 |
+| marvell | 598 | 0 |
+| samsung | 595 | 453 |
+| apple | 236 | 168 |
+| sony | 180 | 88 |
+| intel | 176 | 6 |
+| nvidia | 129 | 35 |
+| ericsson | 105 | 3 |
+| skyworks | 89 | 0 |
+| cisco | 80 | 0 |
+| qualcomm | 54 | 0 |
+
+**CRITICAL GAP:** Competitor landscape CSV is essentially empty — only broadcom-core has meaningful scores. MediaTek, Marvell, Samsung are top competitors with zero SEMICONDUCTOR scores.
+
+### Missing Semiconductor-Specific Competitors
+
+These companies are PRIMARY semiconductor competitors to Broadcom but **not yet imported** as portfolios:
+- **Texas Instruments (TI)** — analog/mixed-signal, direct competitor to analog-circuits
+- **Analog Devices (ADI)** — analog/mixed-signal, merged with Maxim
+- **ON Semiconductor (onsemi)** — power, analog
+- **Microchip Technology** — mixed signal, microcontrollers
+- **NXP Semiconductors** — automotive, connectivity, analog
+- **Renesas** — automotive, industrial
+- **Infineon** — power, automotive
+- **STMicroelectronics** — broad semiconductor
+- **Maxim Integrated** — now part of ADI, analog
+
+### Scoring Templates Available
+
+| Level | Template | Questions |
+|-------|----------|-----------|
+| Super-sector | `semiconductor.json` (v2, litigation-weighted) | 10 questions |
+| Sector | `semiconductor-general.json` | 4 questions (digital logic, processor) |
+| Sector | `semiconductor-manufacturing.json` | 3 questions (fab processes) |
+| Sector | `semiconductor-modern.json` | 3 questions (post-2023 CPC) |
+| Sub-sector | `semiconductor-manufacturing.json` (H01L21*) | 4 questions (wafer fab) |
+| Sub-sector | `semiconductor-test.json` (H01L22*) | 4 questions (metrology) |
+
+**Sub-sector gap:** No sub-sector templates for analog-circuits, audio, memory-storage, pcb-packaging, magnetics-inductors, lithography. These are needed before deeper scoring runs.
+
+---
+
+## Planned Next Steps for SEMICONDUCTOR Package
+
+1. **Score remaining broadcom-core patents** — 2,545 scored, but scoring gap exists across sectors (some sectors only partially scored)
+2. **Import semiconductor-specific competitors** — TI, ADI, onsemi at minimum via GUI Company→Discover Affiliates→Import Patents flow
+3. **Enrich competitor patents** — hydrate, XML extract, auto-quarantine, LLM score
+4. **Create sub-sector templates** for high-value sectors (analog-circuits is largest at 1,952 patents)
+5. **Use focus areas & family expansion** to identify crown jewels and sibling/cousin patents
+6. **Re-export vendor package** with competitive landscape populated
+
+---
+
+## Infrastructure Status
 
 | Component | Status | Port |
 |-----------|--------|------|
@@ -11,174 +110,48 @@
 | PostgreSQL | Docker | 5432 |
 | Elasticsearch | Docker | 9200/9300 |
 
-### Active Development Queue
-
-**Primary roadmap:** `DEVELOPMENT_QUEUE_V4.md` (reconciled from V3 + Feb 18-20 work)
-
-| Phase | Status | Summary |
-|-------|--------|---------|
-| Phase 0 | **Complete** | Quick wins & rename to "IP Port" |
-| Phase 1 | **Complete** | Multi-portfolio foundation, competitor imports, CPC plumbing |
-| Phase 2 | **In progress** | Sector overlap detection — data ready, analysis needed |
-| Phase 3 | Not started | Focus area pipeline — litigation opportunities |
-| Phase 4 | Not started | Product layer & external integration |
-| Phase 5 | **Mostly complete** | Enrichment & scoring pipeline upgrade |
-| Phase 5b | **Complete** | Patent quarantine system + numeric patent ID |
-| Phase 6 | Not started | Taxonomy deepening |
-| Phase 7 | Deferred | Data service layer & production readiness |
-
 ---
 
-## What Was Completed (Feb 22)
+## Previous Completions (Feb 22-25)
 
-### Claims Always Included — `useClaims` Flag Removed
+### Vendor Package Pipeline (Feb 24-25)
+- VIDEO super-sector vendor package completed Feb 24
+- WIRELESS super-sector vendor package completed Feb 25
+- Generic `export-vendor-package.ts` script created (works for any super-sector)
+- `recompute-super-sector-scores.ts` script for weight rebalancing without re-scoring
 
-**Problem:** `useClaims` parameter existed throughout the system (API routes, frontend toggles, batch job metadata, shell scripts) with a default of `false`. This caused repeated regressions where LLM scoring ran without claims despite multiple attempts to fix the default.
+### Score Versioning & Staleness (Feb 25)
+- `questionFingerprint`, `isStale`, `staleReason` on PatentSubSectorScore
+- `computeStalenessForSector()` compares fingerprints vs current templates
+- `scoringFilter` type: `'unscored' | 'stale' | 'unscored_or_stale' | 'all'`
+- Score history snapshots: `cache/score-history/{subSectorId}/{patentId}_{timestamp}.json`
 
-**Fix:** Eliminated the flag entirely from all active code paths:
-- `DEFAULT_CONTEXT_OPTIONS.includeClaims` changed from `'none'` to `'independent_only'`
-- `CLAIMS_CONTEXT_OPTIONS` export removed (was identical to new default)
-- `useClaims` removed from: `batch-jobs.routes.ts` (request body, DB insert, API response), `scoring-templates.routes.ts` (query params), `api.ts` (types), `JobQueuePage.vue` (toggle removed), `SectorManagementPage.vue` (toggle removed), `batch-score-overnight.ts` (CLI flag removed)
-- `withClaims` on `PatentSubSectorScore` DB column kept as read-only historical indicator — always set to `true` going forward, useful for identifying old scores that need rescore
+### Claims Always Included (Feb 22)
+- `useClaims` flag removed from all code paths — claims always on
+- `DEFAULT_CONTEXT_OPTIONS.includeClaims` = `'independent_only'`
 
-**Files changed:** `llm-scoring-service.ts`, `batch-jobs.routes.ts`, `scoring-templates.routes.ts`, `api.ts`, `JobQueuePage.vue`, `SectorManagementPage.vue`, `batch-score-overnight.ts`
-
-### LLM Data Quality Gate — Quarantine Expansion
-
-**Problem:** Patents missing abstracts or sector assignments were still scored by LLM with minimal context (just title + CPC), producing unreliable scores.
-
-**Changes:**
-- Auto-quarantine expanded with LLM readiness rules: `llm: "no-abstract"` and `llm: "no-sector"`
-- Gap analysis (`analyzeGaps()`) excludes LLM-quarantined patents from LLM denominators
-- Enrichment summary and sector enrichment endpoints use quarantine-adjusted LLM denominators
-- Frontend shows remedy text for each quarantine reason
-- `quarantineCounts` now includes `llm` count alongside `xml`
-
-### Claims Gate — Soft Skip Instead of Hard Block
-
-**Problem:** When submitting all 5 job types on a new portfolio (no XML extracted yet), the claims gate returned a 400 error blocking ALL job types — hydration, citation, XML, everything. User saw "localhost:3000 claims_gate" in a browser `alert()` popup.
-
-**Fix:** Changed from hard block to soft skip:
-- If no LLM-eligible patents have XML: removes LLM from the job list, proceeds with other types
-- If LLM is the only type and all patents lack XML: returns 200 with `llmDeferred: true`
-- Response includes `llmDeferred` and `llmDeferredCount` for frontend notification
-- Frontend shows Quasar `Notify` toast instead of browser `alert()` for all errors
-- Removed claims gate dialog, "Score Without Claims" button, and "Extract USPTO Data First" button
-- Enrichment dialog (`doStartEnrichFromDialog`) also updated to use Notify
-
-### Incremental LLM Cache Writes
-
-**Problem:** V3 LLM analysis only wrote per-patent cache files (`cache/llm-scores/{id}.json`) at the very end via `saveResults()`. During job execution, `syncEnrichmentFlags()` found nothing, so sector enrichment showed 0% progress.
-
-**Fix:** V3 analyzer (`services/llm-patent-analysis-v3.ts`) now writes per-patent cache files incrementally after each batch of 5 patents. Also added periodic flag sync (every 60s) while jobs are running.
-
-### Periodic Enrichment Flag Sync While Jobs Run
-
-**Problem:** `syncEnrichmentFlags()` only ran when jobs completed. Sector enrichment view didn't reflect LLM progress during long-running jobs.
-
-**Fix:** Added 60-second periodic sync in `GET /api/batch-jobs` handler while any jobs are running. Invalidates enrichment cache and syncs flags from file cache to Postgres.
-
-### Hydration Repair — All Portfolios Complete
-
-Ran `scripts/hydrate-all.ts` across all 15 portfolios:
-- **48,801 patents hydrated**, 800 not found on PatentsView
-- Broadcom (29,474) completed in ~37 min at ~76ms/patent
-- All portfolios now have abstract, filing_date, remaining_years, base_score populated
-
-### Rescore Analysis — CSV Exports
-
-Analyzed all 30,308 LLM-scored patents for context quality:
-
-| Context Quality | Count | % |
-|---|---|---|
-| Full (abstract + claims) | 26,821 | 88.5% |
-| Abstract only | 2,317 | 7.6% |
-| Claims only (no abstract) | 1,049 | 3.5% |
-| Minimal (title/sector/CPC only) | 121 | 0.4% |
-
-CSV exports in `output/`:
-- `rescore-summary-by-portfolio.csv`
-- `rescore-needed-no-abstract.csv` (1,170 patents)
-- `rescore-needed-no-claims.csv` (1,897 scores)
+### Quarantine System (Feb 20+)
+- XML quarantine: pre-2005, design-patent, reissue-patent, recent-no-bulk, extraction-failed
+- LLM quarantine: no-abstract, no-sector
+- Auto-quarantine: `POST /api/batch-jobs/auto-quarantine` with dryRun support
 
 ---
 
 ## Known Architecture Debt
 
 ### File-Polling for Enrichment Status
-
-The LLM and prosecution pipelines write results to disk (`cache/llm-scores/`, `cache/prosecution-scores/`). A separate function (`syncEnrichmentFlags()`) periodically scans directory listings and updates Postgres `has_llm_data`/`has_prosecution_data` flags. This is indirect and fragile.
-
-**Correct approach:** Enrichment pipelines should write directly to Postgres and the DB should be the single source of truth. File cache can exist for backward compatibility but shouldn't be the mechanism for tracking enrichment status.
-
-**Current asymmetry:**
 - LLM & Prosecution: file-first → poll → DB flag (async, indirect)
 - XML: direct DB update (correct)
 - IPR: file-only, no DB flag at all
+- Impact: Sector enrichment views lag behind actual progress
 
-**Impact:** Sector enrichment views lag behind actual progress. Mitigated by the 60s periodic sync but not eliminated.
-
-### "V3" Naming
-
-`services/llm-patent-analysis-v3.ts` and `output/llm-analysis-v3/` use "V3" in the name but this is the LLM enrichment pipeline, not version-specific. The naming is confusing — "V2" and "V3" are scoring versions that consume LLM data, not the enrichment pipeline itself.
-
----
-
-## Cross-Portfolio Analysis (as of Feb 22)
-
-### Portfolio Status
-
-| Portfolio | Total | Hydrated | USPTO XML | LLM Scored | Quarantined |
-|---|---|---|---|---|---|
-| Broadcom | 29,474 | 29,329 | ~26,000 | ~17,500 | ~3,500 |
-| Intel | 2,000+ | 2,000 | In progress | ~310 (running) | TBD |
-| Sony | 2,000 | 1,800 | TBD | TBD | TBD |
-| Apple | 2,000 | 2,000 | TBD | TBD | TBD |
-| Roku | 1,207 | 1,207 | 1,174 | 1,000 | ~10 |
-| LG Electronics | 1,000 | 1,000 | TBD | TBD | TBD |
-| NVIDIA | ~750 | 749 | TBD | TBD | TBD |
-| Cisco | 636 | 636 | TBD | TBD | TBD |
-| Zoom | 585 | 585 | 532 | 585 | ~10 |
-| Netflix | 385 | 385 | 381 | 385 | ~5 |
-| Paramount | 310 | 310 | TBD | TBD | TBD |
-| Hulu | 255 | 255 | 93 | 100 | ~2 |
-| Spotify | ~200 | TBD | TBD | TBD | TBD |
-| Qualcomm | ~200 | TBD | TBD | TBD | TBD |
-| Samsung | ~200 | TBD | TBD | TBD | TBD |
-
----
-
-## Important Notes for Next Session
-
-### Claims Are Always On
-
-There is no toggle, parameter, or flag to disable claims. `DEFAULT_CONTEXT_OPTIONS.includeClaims` is `'independent_only'`. If a patent lacks XML data, it's simply skipped by the claims gate (soft skip) and picked up on the next enrichment run.
-
-### Sub-Sector Templates Do NOT Exist for VIDEO_STREAMING
-
-**Do NOT re-score large sectors without first creating sub-sector question breakdowns.** See previous session context for details.
-
-### Quarantine System — Operational with LLM Rules
-
-- Original XML quarantine: pre-2005, design-patent, reissue-patent, recent-no-bulk, extraction-failed
-- New LLM quarantine: no-abstract, no-sector
-- Auto-quarantine: `POST /api/batch-jobs/auto-quarantine` with `dryRun` support
-- Quarantine tab shows remedy text for each reason
-
-### Enrichment Job Workflow
-
-Submit all 5 types at once. They run in parallel:
-1. **Hydration** — fetches patent metadata from PatentsView
-2. **XML extraction** — extracts claims from USPTO bulk data
-3. **LLM scoring** — skips patents without XML (soft skip), catch up later
-4. **Prosecution history** — USPTO file wrapper data
-5. **Patent families** — citation enrichment
-
-LLM dedup: gap analysis checks `has_llm_data` flag + `patent_sub_sector_scores` table. Running general tier + sector-specific LLM simultaneously is safe — no double scoring.
+### has_llm_data Flag Lag
+- broadcom-core shows 943 in has_llm_data but 2,545 actual scores exist
+- Flag sync via `syncEnrichmentFlags()` hasn't caught up
+- Actual scoring status is best checked via patent_sub_sector_scores table directly
 
 ### Chrome Scrollbar Problem — UNRESOLVED
-
-Scrollbars work in Safari but NOT in Chrome. CSS is correct. See MEMORY.md.
+Scrollbars work in Safari but NOT Chrome. See MEMORY.md.
 
 ---
 
@@ -186,14 +159,17 @@ Scrollbars work in Safari but NOT in Chrome. CSS is correct. See MEMORY.md.
 
 | File | Purpose |
 |------|---------|
-| `docs/DEVELOPMENT_QUEUE_V4.md` | Active development queue |
-| `src/api/services/llm-scoring-service.ts` | LLM scoring, context options (claims always on) |
-| `src/api/routes/batch-jobs.routes.ts` | Batch jobs, auto-quarantine, gap analysis, claims gate |
-| `src/api/routes/patents.routes.ts` | Enrichment summary, sector enrichment, quarantine CRUD |
-| `services/llm-patent-analysis-v3.ts` | V3 LLM enrichment pipeline (incremental cache writes) |
-| `frontend/src/pages/JobQueuePage.vue` | Job queue + Quarantine tab (no claims gate dialog) |
-| `frontend/src/pages/SectorManagementPage.vue` | Sector scoring (no claims toggle) |
-| `frontend/src/services/api.ts` | Frontend API types (no useClaims) |
+| `scripts/export-vendor-package.ts` | Generic vendor export for any super-sector |
+| `scripts/recompute-super-sector-scores.ts` | Recompute composites from stored metrics |
+| `config/scoring-templates/super-sectors/semiconductor.json` | SEMICONDUCTOR scoring template v2 |
+| `config/scoring-templates/sectors/semiconductor-*.json` | Sector-level scoring templates |
+| `config/scoring-templates/sub-sectors/semiconductor-*.json` | Sub-sector scoring templates |
+| `src/api/services/llm-scoring-service.ts` | LLM scoring, context options |
+| `src/api/services/scoring-template-service.ts` | Template inheritance & merging |
+| `src/api/routes/batch-jobs.routes.ts` | Batch jobs, gap analysis, claims gate |
+| `src/api/routes/scoring-templates.routes.ts` | Scoring & staleness endpoints |
+| `frontend/src/pages/SectorManagementPage.vue` | Sector scoring GUI |
+| `output/vendor-exports/SEMICONDUCTOR-2026-02-25/` | Current SEMICONDUCTOR export |
 
 ---
 
@@ -206,8 +182,8 @@ Scrollbars work in Safari but NOT in Chrome. CSS is correct. See MEMORY.md.
 | IPR scores | `cache/ipr-scores/` | ~10,745 | IPR scoring |
 | PatentsView | `cache/api/patentsview/patent/` | ~49,000 | Hydration pipeline |
 | Patent XMLs | `$USPTO_PATENT_GRANT_XML_DIR` | ~28,000 | USPTO bulk extraction |
-| Batch jobs | PostgreSQL `batch_jobs` table | ~100+ | Batch API metadata |
+| Score history | `cache/score-history/` | varies | Snapshot on recompute |
 
 ---
 
-*Last Updated: 2026-02-22*
+*Last Updated: 2026-02-25*

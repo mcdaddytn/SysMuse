@@ -930,9 +930,17 @@ export async function getPatentsForSectorScoring(
     }
   }
 
-  // Apply scoring filter
+  // Apply scoring filter (scoped to this sector + its sub-sector templates)
   if (resolvedFilter !== 'all') {
+    // Build the set of subSectorId values that belong to this sector
+    const sectorSubTemplates = loadSubSectorTemplates();
+    const subSectorIds = Array.from(sectorSubTemplates.values())
+      .filter(t => t.sectorName === sectorName && t.level === 'sub_sector')
+      .map(t => t.id);
+    const allSectorIds = [sectorName, ...subSectorIds];
+
     const scores = await prisma.patentSubSectorScore.findMany({
+      where: { subSectorId: { in: allSectorIds } },
       select: { patentId: true, isStale: true }
     });
 
@@ -948,9 +956,7 @@ export async function getPatentsForSectorScoring(
       filtered = filtered.filter((p: any) => !scoredIds.has(p.patent_id) || staleIds.has(p.patent_id));
     }
 
-    if (resolvedFilter !== 'unscored') {
-      console.log(`[LLM Scoring] Scoring filter: ${resolvedFilter} → ${filtered.length} patents after filter`);
-    }
+    console.log(`[LLM Scoring] Scoring filter: ${resolvedFilter} (sector scope: ${allSectorIds.length} IDs) → ${filtered.length} patents after filter`);
   }
 
   // Sort by selected prioritization method

@@ -833,7 +833,8 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
       return res.status(404).json({ error: `Sector not found: ${sectorName}` });
     }
 
-    // Get scoring stats from patent_sub_sector_scores using template_config_id
+    // Get scoring stats by joining through patents.primary_sector (canonical sector assignment)
+    // This works for both old pipeline (CUID sub_sector_ids) and new pipeline (sector name sub_sector_ids)
     // Use DISTINCT ON to deduplicate patents (may have multiple scores from old + new flows)
     const stats = portfolioId
       ? await prisma.$queryRaw<Array<{ scored: bigint; with_claims: bigint; stale: bigint; avg_score: number }>>`
@@ -845,8 +846,8 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
           FROM (
             SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score, pss.is_stale
             FROM patent_sub_sector_scores pss
+            INNER JOIN patents pat ON pat.patent_id = pss.patent_id AND pat.primary_sector = ${sectorName}
             INNER JOIN portfolio_patents pp ON pp.patent_id = pss.patent_id AND pp.portfolio_id = ${portfolioId}
-            WHERE pss.template_config_id = ${sectorName}
             ORDER BY pss.patent_id, pss.updated_at DESC
           ) deduped
         `
@@ -857,10 +858,10 @@ router.get('/llm/sector-progress/:sectorName', async (req: Request, res: Respons
             SUM(CASE WHEN is_stale THEN 1 ELSE 0 END) as stale,
             AVG(composite_score) as avg_score
           FROM (
-            SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score, is_stale
-            FROM patent_sub_sector_scores
-            WHERE template_config_id = ${sectorName}
-            ORDER BY patent_id, updated_at DESC
+            SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score, pss.is_stale
+            FROM patent_sub_sector_scores pss
+            INNER JOIN patents pat ON pat.patent_id = pss.patent_id AND pat.primary_sector = ${sectorName}
+            ORDER BY pss.patent_id, pss.updated_at DESC
           ) deduped
         `;
 
@@ -1068,8 +1069,8 @@ router.get('/llm/super-sector-progress/:superSectorName', async (req: Request, r
               FROM (
                 SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score
                 FROM patent_sub_sector_scores pss
+                INNER JOIN patents pat ON pat.patent_id = pss.patent_id AND pat.primary_sector = ${sector.name}
                 INNER JOIN portfolio_patents pp ON pp.patent_id = pss.patent_id AND pp.portfolio_id = ${portfolioId}
-                WHERE pss.template_config_id = ${sector.name}
                 ORDER BY pss.patent_id, pss.updated_at DESC
               ) deduped
             `
@@ -1079,10 +1080,10 @@ router.get('/llm/super-sector-progress/:superSectorName', async (req: Request, r
                 SUM(CASE WHEN with_claims THEN 1 ELSE 0 END) as with_claims,
                 AVG(composite_score) as avg_score
               FROM (
-                SELECT DISTINCT ON (patent_id) patent_id, with_claims, composite_score
-                FROM patent_sub_sector_scores
-                WHERE template_config_id = ${sector.name}
-                ORDER BY patent_id, updated_at DESC
+                SELECT DISTINCT ON (pss.patent_id) pss.patent_id, pss.with_claims, pss.composite_score
+                FROM patent_sub_sector_scores pss
+                INNER JOIN patents pat ON pat.patent_id = pss.patent_id AND pat.primary_sector = ${sector.name}
+                ORDER BY pss.patent_id, pss.updated_at DESC
               ) deduped
             `;
 

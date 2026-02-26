@@ -23,6 +23,7 @@ import cpcRouter from './routes/cpc.routes.js';
 import scoringTemplatesRouter from './routes/scoring-templates.routes.js';
 import portfoliosRouter from './routes/portfolios.routes.js';
 import companiesRouter from './routes/companies.routes.js';
+import { startBatchPolling } from './services/llm-scoring-service.js';
 
 dotenv.config();
 
@@ -85,6 +86,9 @@ app.listen(PORT, () => {
 ║  Health:     http://localhost:${PORT}/api/health                ║
 ╚═══════════════════════════════════════════════════════════════╝
   `);
+
+  // Start background polling for Anthropic batch results (every 2 minutes)
+  startBatchPolling(120_000);
 });
 
 export default app;

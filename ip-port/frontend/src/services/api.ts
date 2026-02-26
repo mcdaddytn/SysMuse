@@ -2641,6 +2641,8 @@ export interface BatchJobMetadata {
   batchId: string;
   sectorName: string;
   superSector: string;
+  portfolioId?: string;
+  portfolioName?: string;
   patentCount: number;
   model: string;
   templateInheritanceChain: string[];

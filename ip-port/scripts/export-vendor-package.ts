@@ -150,7 +150,7 @@ async function main() {
     await writeAssessmentExports(superSector, outputDir);
   }
 
-  const fileCount = includeAssessments ? 7 : 5;
+  const fileCount = fs.readdirSync(outputDir).filter(f => !f.startsWith('.')).length;
   console.log(`\nDone. ${fileCount} files written to ${outputDir}`);
   await prisma.$disconnect();
 }
@@ -493,6 +493,116 @@ async function writeAssessmentExports(superSector: string, outputDir: string) {
 
       fs.writeFileSync(path.join(outputDir, 'tier1-assessment-results.csv'), rows.join('\n'));
       console.log(`  → tier1-assessment-results.csv: ${files.length} patents`);
+    }
+  }
+
+  // Write vendor-friendly targets CSV (PatentId with US prefix + B2 suffix, target columns, notes)
+  if (perPatentTemplate) {
+    const resultDir = path.join(cacheBase, perPatentTemplate.id);
+    if (fs.existsSync(resultDir)) {
+      const files = fs.readdirSync(resultDir).filter(f => f.endsWith('.json') && f !== '_collective.json');
+
+      // First pass: find max target count across all patents
+      type TargetEntry = {
+        patentId: string;
+        title: string;
+        litScore: string;
+        strategy: string;
+        targets: string[];
+        notes: string;
+      };
+      const entries: TargetEntry[] = [];
+      let maxTargets = 0;
+
+      // Fetch patent titles
+      const patentIds = files.map(f => f.replace('.json', ''));
+      const patentRows = await prisma.patent.findMany({
+        where: { patentId: { in: patentIds } },
+        select: { patentId: true, title: true },
+      });
+      const titleMap = new Map(patentRows.map(p => [p.patentId, p.title || '']));
+
+      for (const file of files) {
+        const result = JSON.parse(fs.readFileSync(path.join(resultDir, file), 'utf-8'));
+        const data = result.response || result.fields || {};
+        const patentId = result.patentId || file.replace('.json', '');
+
+        // Parse target companies — split on commas, clean up, exclude portfolio owner
+        const ownerPatterns = /\b(broadcom|avago)\b/i;
+        const targetStr = (data.target_companies || '') as string;
+        const rawTargets = targetStr
+          .split(/,\s*/)
+          .map((t: string) => t.trim())
+          .filter((t: string) => t.length > 0 && !ownerPatterns.test(t));
+        // Clean target names: strip parenthetical notes, secondary/tertiary targets, trailing context
+        const targets = rawTargets
+          .map((t: string) => t
+            .replace(/\s*\(.*$/, '')           // Strip from first parenthesis onward
+            .replace(/\).*$/, '')              // Strip trailing close-paren fragments
+            .replace(/\.\s*.*$/, '')           // Strip from first period onward
+            .replace(/\s*[-–—].*$/, '')        // Strip from dash/em-dash context
+            .replace(/^(Primary|Secondary|Tertiary)\s+targets?:\s*/i, '') // Strip "Primary targets:" prefix
+            .trim())
+          .filter((t: string) => t.length > 0 && t.length < 50 && !/^(and|or|as|the|with|other|various)\b/i.test(t));
+        if (targets.length > maxTargets) maxTargets = targets.length;
+
+        // Build notes: associate each target company with their specific products
+        const productStr = (data.target_products || '') as string;
+        const notesParts: string[] = [];
+
+        // Parse products and try to associate with targets
+        // Products are typically "Company ProductName, Company ProductName2, ..."
+        for (const target of targets) {
+          // Find product mentions containing this company name
+          const companyProducts = productStr
+            .split(/,\s*(?=[A-Z])/)
+            .filter((p: string) => p.toLowerCase().includes(target.toLowerCase()) && !ownerPatterns.test(p))
+            .map((p: string) => p.trim());
+          if (companyProducts.length > 0) {
+            notesParts.push(`${target}: ${companyProducts.join(', ')}`);
+          }
+        }
+
+        // If we couldn't associate, just include all products as-is
+        if (notesParts.length === 0 && productStr.trim()) {
+          notesParts.push(productStr.trim());
+        }
+
+        entries.push({
+          patentId,
+          title: titleMap.get(patentId) || '',
+          litScore: data.overall_litigation_score ?? '',
+          strategy: data.assertion_strategy ?? '',
+          targets,
+          notes: notesParts.join('; '),
+        });
+      }
+
+      // Ensure at least 5 target columns
+      maxTargets = Math.max(maxTargets, 5);
+
+      // Build CSV
+      const targetHeaders = Array.from({ length: maxTargets }, (_, i) => `Target${i + 1}`);
+      const headers = ['PatentId', 'Title', 'LitScore', 'Strategy', ...targetHeaders, 'Notes'];
+      const rows = [headers.join(',')];
+
+      // Sort by litigation score descending
+      entries.sort((a, b) => Number(b.litScore || 0) - Number(a.litScore || 0));
+
+      for (const e of entries) {
+        const targetCells = Array.from({ length: maxTargets }, (_, i) => e.targets[i] || '');
+        rows.push(csvRow([
+          `US${e.patentId}B2`,
+          e.title,
+          e.litScore,
+          e.strategy,
+          ...targetCells,
+          e.notes,
+        ]));
+      }
+
+      fs.writeFileSync(path.join(outputDir, 'vendor-targets.csv'), rows.join('\n'));
+      console.log(`  → vendor-targets.csv: ${entries.length} patents, ${maxTargets} target columns`);
     }
   }
 

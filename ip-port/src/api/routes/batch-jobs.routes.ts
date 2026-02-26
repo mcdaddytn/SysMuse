@@ -9,7 +9,7 @@ import { invalidateEnrichmentCache } from './patents.routes.js';
 export { repairEnrichmentFlags };
 import { clearScoringCache } from '../services/scoring-service.js';
 import { enrichPatentCpcBatch } from '../services/patent-xml-parser-service.js';
-import { checkBatchStatus, processBatchResults, cancelBatch } from '../services/llm-scoring-service.js';
+import { checkBatchStatus, processBatchResults, cancelBatch, processAllCompletedBatches } from '../services/llm-scoring-service.js';
 
 const prisma = new PrismaClient();
 
@@ -17,6 +17,9 @@ const router = Router();
 
 // Track if we've invalidated caches since last job completion detection
 let lastCacheInvalidation = 0;
+
+// Throttle auto-processing of completed Anthropic batches (once per 60s)
+let lastBatchAutoProcess = 0;
 
 // Coverage types that can be run independently
 type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml' | 'citing';
@@ -964,9 +967,25 @@ router.get('/', async (_req: Request, res: Response) => {
       }
     }
 
+    // Auto-process completed Anthropic batches from cache/batch-jobs/ (throttled to once per 60s)
+    // This catches batches that aren't tracked in the DB (multiple batches per job)
+    const now = Date.now();
+    if (now - lastBatchAutoProcess > 60_000) {
+      lastBatchAutoProcess = now;
+      // Fire-and-forget — don't block the response
+      processAllCompletedBatches().then(result => {
+        if (result.processed > 0) {
+          console.log(`[BatchJobs] Auto-processed ${result.processed} patents from completed Anthropic batches`);
+          invalidateEnrichmentCache();
+          clearScoringCache();
+        }
+      }).catch(err => {
+        console.error('[BatchJobs] Auto-process error:', (err as Error).message);
+      });
+    }
+
     // Invalidate caches when jobs complete (throttled to once per 10 seconds)
     // Note: enrichment flags are now set inline by scripts/services — no directory scanning needed
-    const now = Date.now();
 
     if (jobsJustCompleted && now - lastCacheInvalidation > 10000) {
       console.log('[BatchJobs] Jobs completed - invalidating enrichment and scoring caches');

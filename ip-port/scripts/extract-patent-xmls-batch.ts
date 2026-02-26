@@ -15,7 +15,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { PrismaClient } from '@prisma/client';
-import { extractPatentXmls, type ExtractionRequest } from '../src/api/services/patent-xml-extractor-service.js';
+import { extractPatentXmls, findPatentXmlPath, type ExtractionRequest } from '../src/api/services/patent-xml-extractor-service.js';
 import { enrichPatentCpcBatch } from '../src/api/services/patent-xml-parser-service.js';
 
 const prisma = new PrismaClient();
@@ -71,14 +71,12 @@ async function main() {
 
   // Update hasXmlData for all patents that now have XML files
   // (includes both newly extracted and already-existing)
+  // Check both padded (US09959345.xml) and unpadded (US9959345.xml) filenames
   const successIds = new Set<string>();
-  // The result tracks extracted and alreadyExist counts but not individual IDs at top level.
-  // We'll check the export directory for each patent to confirm.
   const exportDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
   if (exportDir) {
     for (const p of patents) {
-      const xmlPath = `${exportDir}/US${p.patentId}.xml`;
-      if (fs.existsSync(xmlPath)) {
+      if (findPatentXmlPath(exportDir, p.patentId)) {
         successIds.add(p.patentId);
       }
     }
@@ -106,6 +104,7 @@ async function main() {
   }
 
   // Quarantine patents where extraction failed (not found in bulk ZIPs)
+  // Note: successIds uses findPatentXmlPath() which handles zero-padded filenames
   const failedIds = patents
     .filter(p => p.grantDate && !successIds.has(p.patentId))
     .map(p => p.patentId);

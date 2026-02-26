@@ -201,8 +201,18 @@ export async function getPatents(options: {
   const { portfolioId, focusAreaId, pagination, filters, snapshotScores } = options;
   const { page, limit, sortBy, descending } = pagination;
 
+  // Pre-resolve focus area patent IDs (can't pass a Promise into Prisma where clause)
+  let focusAreaPatentIds: string[] | undefined;
+  if (focusAreaId) {
+    const faPatents = await prisma.focusAreaPatent.findMany({
+      where: { focusAreaId },
+      select: { patentId: true },
+    });
+    focusAreaPatentIds = faPatents.map(fp => fp.patentId);
+  }
+
   // Build WHERE clause
-  const where = buildWhereClause(portfolioId, focusAreaId, filters);
+  const where = buildWhereClause(portfolioId, focusAreaPatentIds, filters);
 
   // Determine if we need to sort by a score/composite field
   const scoreSortField = getScoreSortField(sortBy);
@@ -420,7 +430,7 @@ export async function getCompetitorNames(portfolioId?: string) {
 
 function buildWhereClause(
   portfolioId?: string,
-  focusAreaId?: string,
+  focusAreaPatentIds?: string[],
   filters?: PatentFilters,
 ): Prisma.PatentWhereInput {
   const conditions: Prisma.PatentWhereInput[] = [];
@@ -430,16 +440,9 @@ function buildWhereClause(
     conditions.push({ portfolios: { some: { portfolioId } } });
   }
 
-  // Focus area scope
-  if (focusAreaId) {
-    // Get patent IDs from focus area — handled via subquery
-    conditions.push({
-      patentId: {
-        in: prisma.focusAreaPatent
-          .findMany({ where: { focusAreaId }, select: { patentId: true } })
-          .then(r => r.map(x => x.patentId)) as any, // Prisma handles this
-      },
-    });
+  // Focus area scope (pre-resolved patent IDs)
+  if (focusAreaPatentIds) {
+    conditions.push({ patentId: { in: focusAreaPatentIds } });
   }
 
   if (!filters) {

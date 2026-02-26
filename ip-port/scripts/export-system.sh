@@ -109,10 +109,10 @@ cat > "$EXPORT_DIR/manifest.json" << EOF
   "database_type": "postgresql",
   "database_export_size": "$DB_SIZE",
   "cache_counts": {
-    "llm_scores": $(ls cache/llm-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "prosecution_scores": $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "ipr_scores": $(ls cache/ipr-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "patent_families": $(ls cache/patent-families/parents/*.json 2>/dev/null | wc -l | tr -d ' ')
+    "llm_scores": $(find cache/llm-scores -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "prosecution_scores": $(find cache/prosecution-scores -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "ipr_scores": $(find cache/ipr-scores -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "patent_families": $(find cache/patent-families/parents -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
   },
   "git_info": {
     "commit": "$(git rev-parse HEAD 2>/dev/null || echo 'unknown')",

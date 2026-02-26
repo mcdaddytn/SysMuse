@@ -1403,6 +1403,7 @@ export interface BatchJobMetadata {
   sectorName: string;
   superSector: string;
   portfolioId?: string;
+  portfolioName?: string;
   patentCount: number;
   model: string;
   templateInheritanceChain: string[];
@@ -1422,6 +1423,18 @@ export interface BatchJobMetadata {
     processed: boolean;
     processedAt: string | null;
   };
+}
+
+async function resolvePortfolioName(portfolioId: string): Promise<string | undefined> {
+  try {
+    const portfolio = await prisma.portfolio.findUnique({
+      where: { id: portfolioId },
+      select: { displayName: true, name: true },
+    });
+    return portfolio?.displayName || portfolio?.name || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function ensureBatchJobsDir(): void {
@@ -1615,6 +1628,7 @@ export async function submitBatchScoring(
     sectorName,
     superSector,
     ...(portfolioId && { portfolioId }),
+    ...(portfolioId && { portfolioName: await resolvePortfolioName(portfolioId) }),
     patentCount: requests.length,
     model,
     templateInheritanceChain: template.inheritanceChain,
@@ -1857,6 +1871,126 @@ export async function refreshAllBatchStatuses(): Promise<BatchJobMetadata[]> {
 
   // Return fresh list after updates
   return listBatchJobs();
+}
+
+/**
+ * Automatically process all completed (ended) but unprocessed Anthropic batch results.
+ * Scans cache/batch-jobs/ for metadata files where status=ended and processed=false.
+ * Returns summary of what was processed.
+ *
+ * This is the auto-polling workhorse — safe to call frequently (idempotent).
+ */
+let _autoProcessRunning = false;
+export async function processAllCompletedBatches(): Promise<{
+  checked: number;
+  processed: number;
+  failed: number;
+  errors: string[];
+}> {
+  // Prevent concurrent runs
+  if (_autoProcessRunning) {
+    return { checked: 0, processed: 0, failed: 0, errors: [] };
+  }
+  _autoProcessRunning = true;
+
+  try {
+    const jobs = listBatchJobs();
+    const unprocessed = jobs.filter(j => j.status === 'ended' && !j.results?.processed);
+
+    if (unprocessed.length === 0) {
+      return { checked: jobs.length, processed: 0, failed: 0, errors: [] };
+    }
+
+    console.log(`[BatchAutoProcess] Found ${unprocessed.length} completed batches to process`);
+
+    let totalProcessed = 0;
+    let totalFailed = 0;
+    const allErrors: string[] = [];
+
+    for (const job of unprocessed) {
+      try {
+        const result = await processBatchResults(job.batchId);
+        totalProcessed += result.processed;
+        totalFailed += result.failed;
+        allErrors.push(...result.errors);
+        console.log(`[BatchAutoProcess] ${job.batchId} (${job.sectorName}): ${result.processed} scored, ${result.failed} failed`);
+      } catch (err) {
+        const msg = `${job.batchId}: ${(err as Error).message}`;
+        allErrors.push(msg);
+        console.error(`[BatchAutoProcess] Error processing ${job.batchId}:`, msg);
+      }
+    }
+
+    console.log(`[BatchAutoProcess] Done: ${totalProcessed} patents scored, ${totalFailed} failed across ${unprocessed.length} batches`);
+    return { checked: jobs.length, processed: totalProcessed, failed: totalFailed, errors: allErrors };
+  } finally {
+    _autoProcessRunning = false;
+  }
+}
+
+/**
+ * Refresh statuses of active batches AND auto-process any that have completed.
+ * Combines refreshAllBatchStatuses() + processAllCompletedBatches() in one call.
+ * Designed to be called periodically by a background timer.
+ */
+export async function pollAndProcessBatches(): Promise<{
+  refreshed: number;
+  processed: number;
+}> {
+  // Step 1: Refresh statuses of active (submitted/in_progress) batches
+  const jobs = listBatchJobs();
+  const activeStatuses = new Set(['submitted', 'in_progress']);
+  let refreshed = 0;
+
+  for (const job of jobs) {
+    if (activeStatuses.has(job.status)) {
+      try {
+        await checkBatchStatus(job.batchId);
+        refreshed++;
+      } catch (err) {
+        // Non-fatal — Anthropic API may be temporarily unavailable
+      }
+    }
+  }
+
+  // Step 2: Process any batches that are now ended
+  const result = await processAllCompletedBatches();
+
+  if (refreshed > 0 || result.processed > 0) {
+    console.log(`[BatchPoll] Refreshed ${refreshed} active batches, processed ${result.processed} patents`);
+  }
+
+  return { refreshed, processed: result.processed };
+}
+
+/**
+ * Start background polling for Anthropic batch results.
+ * Runs every intervalMs (default 2 minutes). Safe to call multiple times — only one timer runs.
+ */
+let _pollTimer: ReturnType<typeof setInterval> | null = null;
+export function startBatchPolling(intervalMs = 120_000): void {
+  if (_pollTimer) return; // Already running
+
+  console.log(`[BatchPoll] Starting background polling every ${intervalMs / 1000}s`);
+
+  _pollTimer = setInterval(async () => {
+    try {
+      await pollAndProcessBatches();
+    } catch (err) {
+      console.error('[BatchPoll] Background poll error:', (err as Error).message);
+    }
+  }, intervalMs);
+
+  // Don't block process exit
+  _pollTimer.unref();
+}
+
+export function stopBatchPolling(): void {
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+    console.log('[BatchPoll] Stopped background polling');
+  }
 }
 
 /**

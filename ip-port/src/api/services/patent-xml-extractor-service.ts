@@ -118,6 +118,24 @@ function normalizeDocNumber(docNumber: string): string {
   return docNumber.replace(/^[A-Z]+0*/i, '').replace(/^0+/, '');
 }
 
+/**
+ * Find the XML file for a patent ID, handling the zero-padding mismatch.
+ * The bulk XML uses raw doc-numbers (e.g., "09959345") while DB patent IDs
+ * strip leading zeros (e.g., "9959345"). Check both variants.
+ * Returns the found path or null.
+ */
+export function findPatentXmlPath(exportDir: string, patentId: string): string | null {
+  const basePath = path.join(exportDir, `US${patentId}.xml`);
+  if (fs.existsSync(basePath)) return basePath;
+  // Try zero-padded to 8 digits (common USPTO format for patents < 10M)
+  if (patentId.length < 8) {
+    const padded = patentId.padStart(8, '0');
+    const paddedPath = path.join(exportDir, `US${padded}.xml`);
+    if (fs.existsSync(paddedPath)) return paddedPath;
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ZIP / XML extraction
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,12 +337,11 @@ export async function extractPatentXmls(
   const exportDir = getExportDir();
   const log = progressCallback || (() => {});
 
-  // Skip patents whose XML already exists
+  // Skip patents whose XML already exists (check both padded and unpadded filenames)
   const needsExtraction: ExtractionRequest[] = [];
   let preExisting = 0;
   for (const req of requests) {
-    const xmlPath = path.join(exportDir, `US${req.patentId}.xml`);
-    if (fs.existsSync(xmlPath)) {
+    if (findPatentXmlPath(exportDir, req.patentId)) {
       preExisting++;
     } else {
       needsExtraction.push(req);

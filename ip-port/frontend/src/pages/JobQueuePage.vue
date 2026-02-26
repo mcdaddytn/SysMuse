@@ -73,7 +73,11 @@ const topPerSectorOptions = [
   { value: 100, label: 'Top 100' },
   { value: 250, label: 'Top 250' },
   { value: 500, label: 'Top 500' },
-  { value: 1000, label: 'Top 1,000' }
+  { value: 1000, label: 'Top 1,000' },
+  { value: 2000, label: 'Top 2,000' },
+  { value: 3000, label: 'Top 3,000' },
+  { value: 4000, label: 'Top 4,000' },
+  { value: 5000, label: 'Top 5,000' }
 ];
 
 const sectorScopeTooltip = `Controls how many patents are evaluated per sector.
@@ -1645,6 +1649,7 @@ onUnmounted(() => {
             :rows="llmBatchJobs"
             :columns="[
               { name: 'sector', label: 'Sector', field: 'sectorName', align: 'left', sortable: true },
+              { name: 'portfolio', label: 'Portfolio', field: 'portfolioName', align: 'left', sortable: true },
               { name: 'model', label: 'Model', field: 'model', align: 'left', sortable: true },
               { name: 'patents', label: 'Patents', field: 'patentCount', align: 'right', sortable: true },
               { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
@@ -1663,6 +1668,13 @@ onUnmounted(() => {
               <q-td :props="props">
                 <span class="text-weight-medium">{{ props.row.sectorName }}</span>
                 <div class="text-caption text-grey-6">{{ props.row.superSector }}</div>
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-portfolio="props">
+              <q-td :props="props">
+                <span v-if="props.row.portfolioName" class="text-weight-medium">{{ props.row.portfolioName }}</span>
+                <span v-else class="text-grey-5">-</span>
               </q-td>
             </template>
 

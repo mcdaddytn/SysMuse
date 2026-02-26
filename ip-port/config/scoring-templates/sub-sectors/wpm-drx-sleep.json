@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wpm-drx-sleep",
+  "name": "DRX & Sleep Mode Optimization",
+  "description": "Sub-sector template for discontinuous reception (DRX), sleep modes, wake-up signals, idle mode, and paging optimization patents. Covers Connected-mode DRX, Idle-mode DRX, extended DRX (eDRX), and wake-up signal (WUS) designs.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W52/02*",
+  "sectorName": "wireless-power-mgmt",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-power-mgmt",
+  "version": 1,
+  "contextDescription": "DRX is the primary mechanism for UE battery saving in LTE and 5G NR. Every connected device cycles between active and sleep states according to DRX timers configured by the network. 3GPP TS 38.321 defines Connected-mode DRX; TS 38.304 defines Idle-mode DRX. Wake-up signals (WUS) were introduced in Rel-15/16 to avoid unnecessary PDCCH monitoring. Sidelink DRX (for V2X/ProSe) is a new area in Rel-17. Broadcom's Wi-Fi chipsets and cellular modems both implement DRX — cross-technology DRX patents have broad applicability. Key targets: every smartphone, IoT device, and modem vendor.",
+  "scoringGuidance": [
+    "Every connected UE performs DRX — this is mandatory behavior with massive infringement surface.",
+    "Wake-up signal patents are high-value: Rel-16 WUS is now mandatory for many device categories.",
+    "Sidelink DRX (V2X) patents are forward-looking but increasingly important for automotive.",
+    "Cross-carrier DRX coordination patents are valuable for CA/DC deployments.",
+    "Battery lifetime quantification strengthens damages claims in litigation."
+  ],
+  "questions": [
+    {
+      "fieldName": "drx_cycle_innovation",
+      "displayName": "DRX Cycle Innovation",
+      "question": "Does this patent introduce novel DRX cycle configuration, timer management, or state transition logic? Score 8-10 for adaptive/conditional DRX cycles, dynamic timer adjustment, or novel on-duration/inactivity-timer management. 5-7 for static DRX configuration improvements or parameter optimization. 3-4 for basic DRX with minor variations. 1-2 for basic on/off sleep with no DRX-specific innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "DRX cycle parameters (on-duration, inactivity timer, long/short DRX cycle) are configured by the network. Novel timer logic is high-value."
+    },
+    {
+      "fieldName": "wake_up_mechanism",
+      "displayName": "Wake-Up Mechanism",
+      "question": "Does this patent define a novel wake-up signal (WUS), early indication, or triggering mechanism? Score 8-10 for PDCCH-based WUS, cross-carrier WUS, group WUS, or conditional wake-up. 5-7 for timer-based wake improvements or enhanced paging. 3-4 for standard paging monitoring. 1-2 for no wake-up innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Wake-up signals let UEs skip unnecessary PDCCH monitoring. WUS was introduced in Rel-15/16 and is now standard."
+    },
+    {
+      "fieldName": "sidelink_v2x_drx",
+      "displayName": "Sidelink/V2X DRX",
+      "question": "Does this patent address sidelink (V2X/D2D/ProSe) discontinuous reception? Score 8-10 for sidelink-specific DRX cycle design or V2X power saving. 5-7 for sidelink awareness in DRX or D2D sleep coordination. 3-4 for general proximity-based power saving. 1-2 for no sidelink relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Sidelink DRX (Rel-17) enables V2X devices to save power while maintaining safety-critical communication."
+    },
+    {
+      "fieldName": "cross_carrier_drx",
+      "displayName": "Cross-Carrier DRX",
+      "question": "Does this patent handle DRX across multiple carriers, frequency ranges (FR1+FR2), or bandwidth parts? Score 8-10 for coordinated multi-carrier DRX with independent timer management. 5-7 for per-carrier DRX with CA awareness. 3-4 for single carrier DRX mentioning multi-carrier context. 1-2 for single carrier only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Multi-carrier DRX coordination is essential for carrier aggregation and dual connectivity deployments."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP DRX procedures (TS 38.321 Connected-mode DRX, TS 38.304 Idle-mode DRX)? Score 8-10 for direct implementation of mandatory UE/gNB DRX behavior. 5-7 for enabling standard compliance or extending standard procedures. 3-4 for standard-adjacent approaches. 1-2 for proprietary power-saving approach.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "DRX is mandatory per 3GPP — identify specific standard sections and procedures."
+    },
+    {
+      "fieldName": "battery_lifetime_quantification",
+      "displayName": "Battery Lifetime Quantification",
+      "question": "Does the patent quantify or demonstrate measurable battery life improvement? Score 8-10 for >30% improvement with clear methodology or simulation results. 5-7 for measurable improvement stated with supporting data. 3-4 for qualitative battery benefit claims. 1-2 for no quantification of power savings.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Quantified battery improvements strengthen damages claims and demonstrate technical contribution."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is the DRX behavior observable in protocol traces (RRC, MAC-CE)? Score 8-10 for behavior visible in over-the-air signaling (DRX-Config IE, MAC-CE DRX commands). 5-7 for behavior inferable from UE monitoring patterns or conformance testing. 3-4 for internal modem behavior requiring device instrumentation. 1-2 for algorithm-level logic only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "DRX configuration is signaled via RRC (DRX-Config IE) and controlled via MAC-CE — highly observable."
+    }
+  ]
+}

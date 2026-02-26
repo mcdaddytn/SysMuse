@@ -106,17 +106,27 @@ cat > "$DEST/manifest.json" << MANIFEST
   },
   "cache": {
     "total_size": "$(du -sh "$DEST/cache/" 2>/dev/null | cut -f1)",
-    "llm_scores": $(ls cache/llm-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "prosecution_scores": $(ls cache/prosecution-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "ipr_scores": $(ls cache/ipr-scores/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "citation_classifications": $(ls cache/citation-classification/*.json 2>/dev/null | wc -l | tr -d ' '),
-    "patent_family_parents": $(ls cache/patent-families/parents/*.json 2>/dev/null | wc -l | tr -d ' ')
+    "llm_scores": $(find cache/llm-scores -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "prosecution_scores": $(find cache/prosecution-scores -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "ipr_scores": $(find cache/ipr-scores -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "citation_classifications": $(find cache/citation-classification -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "patent_family_parents": $(find cache/patent-families/parents -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "score_history": $(find cache/score-history -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "batch_jobs_metadata": $(find cache/batch-jobs -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "prosecution_documents": $(find cache/prosecution-documents -name '*.json' 2>/dev/null | wc -l | tr -d ' '),
+    "focus_area_prompts": $(find cache/focus-area-prompts -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
   },
   "output_size": "$(du -sh "$DEST/output/" 2>/dev/null | cut -f1)",
   "git": {
     "commit": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",
     "branch": "$(git branch --show-current 2>/dev/null || echo 'unknown')",
     "dirty_files": $(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+  },
+  "database_counts": {
+    "patents": $(docker exec "$POSTGRES_CONTAINER" psql -U ip_admin -d ip_portfolio -t -c "SELECT COUNT(*) FROM patents" 2>/dev/null | tr -d ' ' || echo 0),
+    "patent_sub_sector_scores": $(docker exec "$POSTGRES_CONTAINER" psql -U ip_admin -d ip_portfolio -t -c "SELECT COUNT(*) FROM patent_sub_sector_scores" 2>/dev/null | tr -d ' ' || echo 0),
+    "portfolios": $(docker exec "$POSTGRES_CONTAINER" psql -U ip_admin -d ip_portfolio -t -c "SELECT COUNT(*) FROM portfolios" 2>/dev/null | tr -d ' ' || echo 0),
+    "batch_jobs": $(docker exec "$POSTGRES_CONTAINER" psql -U ip_admin -d ip_portfolio -t -c "SELECT COUNT(*) FROM batch_jobs" 2>/dev/null | tr -d ' ' || echo 0)
   },
   "uspto_data": {
     "export_dir": "$(ls "$DRIVE/data/uspto/export/" 2>/dev/null | wc -l | tr -d ' ') files in $DRIVE/data/uspto/export/",

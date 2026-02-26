@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { useSuperSectors } from '@/composables/useSuperSectors';
 
 // Props
 const props = defineProps<{
@@ -42,6 +43,7 @@ const availableFilters: FilterField[] = [
   // Boolean filters
   { key: 'hasLlmData', label: 'Has LLM Data', type: 'boolean', icon: 'psychology', color: 'amber' },
   { key: 'isExpired', label: 'Is Expired', type: 'boolean', icon: 'event_busy', color: 'red' },
+  { key: 'isQuarantined', label: 'Quarantined', type: 'boolean', icon: 'shield', color: 'orange' },
 ];
 
 // Active filters (keys that user has added)
@@ -67,6 +69,7 @@ interface FilterOptions {
     withLlmData: number;
     withCompetitors: number;
     expired: number;
+    quarantined: number;
   };
 }
 
@@ -263,24 +266,7 @@ function clearAll() {
   });
 }
 
-// Super-sector colors
-const sectorColors: Record<string, string> = {
-  'Security': 'red-7',
-  'Virtualization & Cloud': 'purple-7',
-  'SDN & Network Infrastructure': 'blue-7',
-  'Wireless & RF': 'teal-7',
-  'Video & Streaming': 'orange-7',
-  'Computing & Data': 'grey-7',
-  'Semiconductor': 'indigo-7',
-  'Imaging & Optics': 'cyan-7',
-  'Audio': 'pink-7',
-  'AI & Machine Learning': 'green-7',
-  'Fault Tolerance & Reliability': 'amber-7'
-};
-
-function getSectorColor(sector: string): string {
-  return sectorColors[sector] || 'grey-6';
-}
+const { getSectorColor } = useSuperSectors();
 
 // Lifecycle
 onMounted(() => {
@@ -493,6 +479,9 @@ onMounted(() => {
       {{ filterOptions.counts.total.toLocaleString() }} total
       &middot; {{ filterOptions.counts.withLlmData.toLocaleString() }} with LLM data
       &middot; {{ filterOptions.counts.expired?.toLocaleString() || 0 }} expired
+      <template v-if="filterOptions.counts.quarantined">
+        &middot; {{ filterOptions.counts.quarantined.toLocaleString() }} quarantined
+      </template>
     </div>
   </div>
 </template>

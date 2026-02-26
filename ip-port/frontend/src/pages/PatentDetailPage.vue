@@ -5,6 +5,10 @@ import type { Patent } from '@/types';
 import type { PatentSectorScoresResponse } from '@/services/api';
 import { scoringTemplatesApi } from '@/services/api';
 import PatentFamilyPanel from '@/components/patent/PatentFamilyPanel.vue';
+import ProsecutionTimelineTab from '@/components/patent/ProsecutionTimelineTab.vue';
+import { useSuperSectors } from '@/composables/useSuperSectors';
+
+const { getSectorColor, getDisplayName } = useSuperSectors();
 
 const route = useRoute();
 const router = useRouter();
@@ -99,24 +103,6 @@ const computedCompetitorDensity = computed(() => {
   return ((c.competitor_citations || 0) / ext * 100).toFixed(0) + '%';
 });
 
-// Super-sector color mapping
-const sectorColors: Record<string, string> = {
-  'Security': 'red-7',
-  'Virtualization & Cloud': 'purple-7',
-  'SDN & Network Infrastructure': 'blue-7',
-  'Wireless & RF': 'teal-7',
-  'Video & Streaming': 'orange-7',
-  'Computing & Data': 'grey-7',
-  'Semiconductor': 'indigo-7',
-  'Imaging & Optics': 'cyan-7',
-  'Audio': 'pink-7',
-  'AI & Machine Learning': 'green-7',
-  'Fault Tolerance & Reliability': 'amber-7'
-};
-
-function getSectorColor(sector: string): string {
-  return sectorColors[sector] || 'grey-6';
-}
 
 // Load patent from API
 async function loadPatent() {
@@ -302,6 +288,40 @@ function openUSPTO() {
   window.open(`https://patents.google.com/patent/US${patentId.value}`, '_blank');
 }
 
+const QUARANTINE_REASON_LABELS: Record<string, string> = {
+  'design-patent': 'Design patent (D-prefix)',
+  'reissue-patent': 'Reissue patent (RE/H-prefix)',
+  'pre-2005': 'Pre-2005 grant date',
+  'recent-no-bulk': 'Recent — bulk data unavailable',
+  'extraction-failed': 'USPTO bulk extraction failed',
+  'manual': 'Manually quarantined',
+};
+
+function formatQuarantineReasons(quarantine: Record<string, string> | null): string {
+  if (!quarantine) return 'Unknown reason';
+  return Object.entries(quarantine)
+    .map(([type, reason]) => `${type}: ${QUARANTINE_REASON_LABELS[reason] || reason}`)
+    .join(', ');
+}
+
+async function unquarantine() {
+  if (!patent.value) return;
+  const q = patent.value.quarantine as Record<string, string> | null;
+  if (!q) return;
+
+  for (const coverageType of Object.keys(q)) {
+    await fetch(`/api/patents/${patentId.value}/quarantine`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coverageType }),
+    });
+  }
+
+  // Refresh patent data
+  patent.value.is_quarantined = false;
+  patent.value.quarantine = null;
+}
+
 function openCpcLink(code: string) {
   // Open CPC code on USPTO classification site
   window.open(`https://www.uspto.gov/web/patents/classification/cpc/html/cpc-${code.charAt(0)}.html#${code}`, '_blank');
@@ -339,7 +359,7 @@ function openCpcLink(code: string) {
               text-color="white"
               size="sm"
             >
-              {{ patent.super_sector }}
+              {{ getDisplayName(patent.super_sector) }}
             </q-chip>
           </div>
           <div class="text-subtitle1 text-grey-7">{{ patent.patent_title }}</div>
@@ -349,6 +369,14 @@ function openCpcLink(code: string) {
         <q-btn outline color="secondary" label="Queue Jobs" icon="queue" />
       </div>
 
+      <q-banner v-if="patent.is_quarantined" class="bg-orange-1 text-orange-9 q-mb-md" rounded>
+        <template v-slot:avatar><q-icon name="shield" color="orange" /></template>
+        This patent is quarantined: {{ formatQuarantineReasons(patent.quarantine) }}
+        <template v-slot:action>
+          <q-btn flat label="Unquarantine" color="orange" @click="unquarantine" />
+        </template>
+      </q-banner>
+
       <q-tabs v-model="activeTab" class="text-primary q-mb-md" @update:model-value="onTabChange">
         <q-tab name="overview" label="Overview" icon="info" />
         <q-tab name="citations" label="Citations" icon="format_quote">
@@ -357,6 +385,7 @@ function openCpcLink(code: string) {
           </q-badge>
         </q-tab>
         <q-tab name="prosecution" label="Prosecution" icon="gavel" />
+        <q-tab name="prosecution-detail" label="Claims Detail" icon="fact_check" />
         <q-tab name="ptab" label="PTAB/IPR" icon="balance" />
         <q-tab name="llm" label="LLM Analysis" icon="psychology" />
         <q-tab name="sector-scoring" label="Sector Scoring" icon="analytics" />
@@ -858,6 +887,11 @@ function openCpcLink(code: string) {
             </q-card-section>
           </q-card>
         </template>
+      </q-tab-panel>
+
+      <!-- Prosecution Detail (Claim-Level Analysis) -->
+      <q-tab-panel name="prosecution-detail">
+        <prosecution-timeline-tab :patent-id="patent.patent_id" />
       </q-tab-panel>
 
       <!-- PTAB -->

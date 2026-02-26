@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "sensors-measurement",
+  "name": "Sensors & Physical Measurement",
+  "description": "Sub-sector template for sensor and physical measurement patents (CPC G01D*, G01K*, G01R19*) covering temperature sensors, voltage/current measurement, and transducer signal conditioning.",
+  "level": "sub_sector",
+  "subSectorPattern": "G01D*,G01K*,G01R19*",
+  "sectorName": "test-measurement",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "test-measurement",
+  "version": 1,
+  "contextDescription": "Sensor and measurement patents cover on-chip and system-level monitoring of physical quantities. Key areas include temperature sensors (on-die thermal management), voltage/current monitors (power management), and sensor signal conditioning (IoT, automotive). On-chip sensors are in every modern processor for thermal throttling and power management. High-value targets include all processor/SoC vendors (Intel, AMD, Apple, Qualcomm), power management IC vendors (TI, Analog Devices, ON Semi), automotive sensor vendors (NXP, Infineon, Bosch), and IoT chipset vendors.",
+  "scoringGuidance": [
+    "On-die temperature sensors are in every modern processor — absolutely ubiquitous.",
+    "Voltage/current monitoring patents target power management in all electronic systems.",
+    "Sensor interface circuits (AFE) are the bridge between physical world and digital — critical for IoT.",
+    "High-accuracy measurement patents target industrial and automotive applications.",
+    "Low-power sensor circuits target wearable and always-on IoT devices."
+  ],
+  "questions": [
+    {
+      "fieldName": "sensor_type",
+      "displayName": "Sensor/Measurement Type",
+      "question": "What physical quantity does this patent measure or sense? Score by market prevalence: 1-3 for specialized (magnetic, pressure), 4-6 for common (light, humidity), 7-10 for ubiquitous (temperature, voltage/current — in every chip).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the measurement type and how many electronic systems require it."
+    },
+    {
+      "fieldName": "on_chip_integration",
+      "displayName": "On-Chip Integration",
+      "question": "Is this sensor/monitor designed for on-chip integration (on-die temperature, voltage droop detector)? On-chip sensors read on all SoC vendors vs external sensors that target fewer vendors.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess whether this is integrated on-chip or a standalone measurement device."
+    },
+    {
+      "fieldName": "accuracy_resolution",
+      "displayName": "Accuracy/Resolution",
+      "question": "Does this patent improve measurement accuracy, resolution, or calibration? Higher accuracy enables premium applications (medical, industrial, automotive).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify accuracy or resolution improvements and their application impact."
+    },
+    {
+      "fieldName": "automotive_iot",
+      "displayName": "Automotive/IoT Applicability",
+      "question": "Is this patent relevant to automotive sensing or IoT applications? These are high-growth markets with strong demand for sensor IP.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify automotive or IoT applications and growth potential."
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ws-ofdma-resource-block",
+  "name": "OFDMA Resource Block Scheduling",
+  "description": "Sub-sector template for OFDMA resource block allocation and scheduling patents. Covers physical resource block assignment, multi-user OFDMA scheduling, CSI-based resource allocation, and frequency-selective scheduling.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W72/04*",
+  "sectorName": "wireless-scheduling",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-scheduling",
+  "version": 1,
+  "contextDescription": "OFDMA resource block scheduling is the core physical-layer scheduling mechanism in LTE and 5G NR. Every base station must implement RB allocation. High-value targets include Qualcomm (modem IP), Apple (baseband integration), Samsung (infrastructure + devices), and Intel (former modem division). SEP potential is very high — 3GPP TS 36.213 and 38.214 define RB scheduling procedures. Key differentiators: multi-user pairing efficiency, CSI feedback utilization, sub-band granularity, and carrier aggregation scheduling across component carriers.",
+  "scoringGuidance": [
+    "OFDMA RB scheduling is mandatory in every LTE/5G device — enormous infringement surface.",
+    "Multi-user OFDMA (MU-OFDMA in WiFi 6/7, MU-MIMO scheduling in 5G) patents have the broadest impact.",
+    "CSI-based scheduling patents that reduce feedback overhead are particularly valuable for massive MIMO.",
+    "Carrier aggregation scheduling across multiple CCs is increasingly important for 5G-Advanced.",
+    "Patents covering both uplink and downlink scheduling have broader licensing scope."
+  ],
+  "questions": [
+    {
+      "fieldName": "scheduling_granularity",
+      "displayName": "Scheduling Granularity",
+      "question": "At what granularity does this patent perform resource scheduling? Score 8-10 for sub-PRB or symbol-level granularity (5G NR mini-slots), 5-7 for PRB-level scheduling across subframes, 3-4 for subband-level, 1-2 for wideband-only scheduling.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the scheduling granularity in time and frequency. Finer granularity enables better resource utilization."
+    },
+    {
+      "fieldName": "multi_user_capability",
+      "displayName": "Multi-User Capability",
+      "question": "Does this patent enable simultaneous multi-user scheduling (MU-OFDMA, MU-MIMO pairing)? Score 8-10 for dynamic MU pairing with interference management, 5-7 for basic multi-user scheduling, 3-4 for single-user scheduling with multi-user awareness, 1-2 for single-user only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Multi-user scheduling multiplies capacity and is central to 5G NR and WiFi 6/7."
+    },
+    {
+      "fieldName": "csi_feedback_integration",
+      "displayName": "CSI Feedback Integration",
+      "question": "How does this patent use channel state information (CSI) for scheduling decisions? Score 8-10 for novel CSI compression, prediction, or differential feedback mechanisms, 5-7 for standard CSI-based frequency-selective scheduling, 3-4 for CQI-only decisions, 1-2 for no CSI usage.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CSI feedback is the bottleneck for massive MIMO scheduling. Innovations here have high SEP value."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP standard procedures for resource scheduling (TS 36.213/38.214)? Score 8-10 for direct implementation of standardized scheduling procedures or mandatory UE/gNB behavior, 5-7 for techniques that enable standard compliance, 3-4 for standard-adjacent but implementation-specific, 1-2 for proprietary approaches with no standard relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SEP-aligned patents can be licensed to all implementers of the standard. Identify specific 3GPP procedures if possible."
+    },
+    {
+      "fieldName": "carrier_aggregation_scheduling",
+      "displayName": "Carrier Aggregation Scheduling",
+      "question": "Does this patent address scheduling across multiple component carriers (carrier aggregation)? Score 8-10 for cross-carrier scheduling optimization or dynamic CC activation, 5-7 for per-CC scheduling with CA awareness, 1-3 for single carrier only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Carrier aggregation is mandatory for LTE-Advanced and 5G NR high-throughput modes."
+    },
+    {
+      "fieldName": "uplink_downlink_scope",
+      "displayName": "Uplink/Downlink Scope",
+      "question": "Does this patent cover uplink scheduling, downlink scheduling, or both? Score 8-10 for unified UL/DL scheduling framework or TDD dynamic slot allocation, 5-7 for comprehensive single-direction scheduling, 3-4 for basic single-direction, 1-2 for very narrow scope.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Patents covering both directions have twice the licensing scope."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this scheduling innovation in a commercial product? Score 8-10 for behavior observable in over-the-air signaling (DCI formats, scheduling grants), 5-7 for behavior inferable from UE throughput patterns or standard conformance testing, 3-4 for internal baseband processing only detectable via chip analysis, 1-2 for algorithm-level with no external observability.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Detectability is critical for enforcement. Over-the-air observable scheduling decisions are easiest to prove."
+    }
+  ]
+}

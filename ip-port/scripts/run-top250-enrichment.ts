@@ -168,8 +168,8 @@ async function main() {
 
   // Run LLM V3 analysis
   if (runLLM && needsLLM.length > 0) {
-    console.log('\n--- Running LLM V3 Analysis ---');
-    await runCommand('npx', ['tsx', 'scripts/run-llm-analysis-v3.ts', llmInputFile],
+    console.log('\n--- Running LLM Sector Scoring ---');
+    await runCommand('npx', ['tsx', 'scripts/run-sector-scoring.ts', llmInputFile],
       `./output/llm-analysis-v3/enrichment-llm-${timestamp}.log`);
   }
 

@@ -52,15 +52,19 @@ export interface PatentPreview {
 export const patentApi = {
   async getPatents(
     pagination: PaginationParams,
-    filters?: PortfolioFilters
+    filters?: PortfolioFilters,
+    portfolioId?: string | null,
   ): Promise<PaginatedResponse<Patent>> {
-    const params = {
+    const params: Record<string, unknown> = {
       page: pagination.page,
       limit: pagination.rowsPerPage,
       sortBy: pagination.sortBy,
       descending: pagination.descending,
-      ...filters
+      ...filters,
     };
+    if (portfolioId) {
+      params.portfolioId = portfolioId;
+    }
     const { data } = await api.get('/patents', { params });
     return data;
   },
@@ -95,8 +99,11 @@ export const patentApi = {
     return data;
   },
 
-  async getEnrichmentSummary(tierSize = 5000): Promise<EnrichmentSummary> {
-    const { data } = await api.get('/patents/enrichment-summary', { params: { tierSize } });
+  async getEnrichmentSummary(tierSize = 5000, portfolioId?: string | null, forceRefresh = false): Promise<EnrichmentSummary> {
+    const params: Record<string, unknown> = { tierSize };
+    if (portfolioId) params.portfolioId = portfolioId;
+    if (forceRefresh) params.forceRefresh = 'true';
+    const { data } = await api.get('/patents/enrichment-summary', { params });
     return data;
   },
 
@@ -150,7 +157,9 @@ export interface EnrichmentTierData {
     prosecution: number; prosecutionPct: number;
     ipr: number; iprPct: number;
     family: number; familyPct: number;
+    xml: number; xmlPct: number;
   };
+  quarantineCounts?: { total: number; xml: number; llm?: number };
   topAffiliates: Array<{ name: string; count: number; pct: number }>;
   topSuperSectors: Array<{ name: string; count: number; pct: number }>;
 }
@@ -158,7 +167,8 @@ export interface EnrichmentTierData {
 export interface EnrichmentSummary {
   totalPatents: number;
   tierSize: number;
-  enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number };
+  enrichmentTotals: { llm: number; prosecution: number; ipr: number; family: number; xml: number };
+  quarantineCounts?: { total: number; xml: number; llm?: number };
   tiers: EnrichmentTierData[];
 }
 
@@ -336,11 +346,13 @@ export interface V2EnhancedMetric {
 export const v2EnhancedApi = {
   async getScores(
     config: Partial<V2EnhancedConfig>,
-    previousRankings?: Array<{ patent_id: string; rank: number }>
+    previousRankings?: Array<{ patent_id: string; rank: number }>,
+    portfolioId?: string | null
   ): Promise<V2EnhancedResponse> {
     const { data } = await api.post('/scores/v2-enhanced', {
       ...config,
       previousRankings,
+      ...(portfolioId && { portfolioId }),
     });
     return data;
   },
@@ -369,6 +381,7 @@ export interface ScoreSnapshot {
   scoreType: ScoreType;
   config: V2EnhancedConfig | Record<string, unknown>;
   isActive: boolean;
+  portfolioId?: string | null;
   patentCount: number;
   llmDataCount: number;
   createdAt: string;
@@ -392,22 +405,27 @@ export interface SaveSnapshotRequest {
     normalized_metrics?: Record<string, number>;
   }>;
   setActive?: boolean;
+  portfolioId?: string | null;
 }
 
 export const snapshotApi = {
   /**
-   * List all saved score snapshots
+   * List score snapshots, optionally filtered by portfolio
    */
-  async list(): Promise<ScoreSnapshot[]> {
-    const { data } = await api.get('/scores/snapshots');
+  async list(portfolioId?: string | null): Promise<ScoreSnapshot[]> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/scores/snapshots', { params });
     return data;
   },
 
   /**
-   * Get currently active snapshots (one per score type)
+   * Get currently active snapshots for a portfolio (one per score type)
    */
-  async getActive(): Promise<ActiveSnapshots> {
-    const { data } = await api.get('/scores/snapshots/active');
+  async getActive(portfolioId?: string | null): Promise<ActiveSnapshots> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/scores/snapshots/active', { params });
     return data;
   },
 
@@ -1977,13 +1995,16 @@ export interface SectorEnrichmentData {
     prosecution: number; prosecutionPct: number;
     ipr: number; iprPct: number;
     family: number; familyPct: number;
+    xml: number; xmlPct: number;
   };
   gaps: {
     llm: number;
     prosecution: number;
     ipr: number;
     family: number;
+    xml: number;
   };
+  quarantineCounts?: { total: number; xml: number; llm?: number };
 }
 
 export interface SectorEnrichmentSummary {
@@ -1993,8 +2014,20 @@ export interface SectorEnrichmentSummary {
 }
 
 // Batch Job types
-export type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
+export type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml';
 export type TargetType = 'tier' | 'super-sector' | 'sector';
+export type SortStrategy = 'base_score' | 'v2_composite' | 'v3_snapshot' | 'newest_first' | 'forward_citations';
+
+export interface BatchJobSettings {
+  llmConcurrency?: number;      // default 3, 1-10
+  llmMaxRetries?: number;       // default 3, 0-5
+  llmRetryBaseDelay?: number;   // default 5000ms
+  llmInterBatchDelay?: number;  // default 500ms
+  apiRateLimit?: number;        // req/min, default 60
+  apiRetryAttempts?: number;    // default 3
+  apiRetryDelay?: number;       // default 1000ms
+  batchSize?: number;           // chunk size, default 500, 100-1000
+}
 
 export interface BatchJob {
   id: string;
@@ -2015,6 +2048,11 @@ export interface BatchJob {
   estimatedRate?: number;
   actualRate?: number;
   estimatedCompletion?: string;
+  model?: string;
+  batchMode?: boolean;
+  portfolioId?: string;
+  portfolioName?: string;
+  settings?: BatchJobSettings;
 }
 
 export interface BatchJobsResponse {
@@ -2042,8 +2080,11 @@ export interface StartJobsResponse {
 
 // Sector Enrichment API (extension of patentApi)
 export const enrichmentApi = {
-  async getSectorEnrichment(topPerSector = 500): Promise<SectorEnrichmentSummary> {
-    const { data } = await api.get('/patents/sector-enrichment', { params: { topPerSector } });
+  async getSectorEnrichment(topPerSector = 500, portfolioId?: string | null, forceRefresh = false): Promise<SectorEnrichmentSummary> {
+    const params: Record<string, unknown> = { topPerSector };
+    if (portfolioId) params.portfolioId = portfolioId;
+    if (forceRefresh) params.forceRefresh = 'true';
+    const { data } = await api.get('/patents/sector-enrichment', { params });
     return data;
   },
 };
@@ -2055,8 +2096,12 @@ export const batchJobsApi = {
     return data;
   },
 
-  async getGaps(targetType: TargetType, targetValue: string, topN?: number): Promise<GapsResponse> {
-    const { data } = await api.get('/batch-jobs/gaps', { params: { targetType, targetValue, topN } });
+  async getGaps(targetType: TargetType, targetValue: string, topN?: number, portfolioId?: string | null, sortBy?: SortStrategy): Promise<GapsResponse> {
+    const params: Record<string, unknown> = { targetType, targetValue };
+    if (topN) params.topN = topN;
+    if (portfolioId) params.portfolioId = portfolioId;
+    if (sortBy && sortBy !== 'base_score') params.sortBy = sortBy;
+    const { data } = await api.get('/batch-jobs/gaps', { params });
     return data;
   },
 
@@ -2066,6 +2111,11 @@ export const batchJobsApi = {
     coverageTypes: CoverageType[];
     maxHours?: number;
     topN?: number;  // For super-sector/sector: limit to top N patents by score
+    sortBy?: SortStrategy;  // Sort strategy for topN patent selection
+    portfolioId?: string | null;
+    model?: string;       // LLM model override
+    batchMode?: boolean;  // true = Batch API (50% off), false = realtime
+    settings?: BatchJobSettings;
   }): Promise<StartJobsResponse> {
     const { data } = await api.post('/batch-jobs', params);
     return data;
@@ -2083,6 +2133,57 @@ export const batchJobsApi = {
 
   async getJobLog(jobId: string, lines = 50): Promise<{ log: string }> {
     const { data } = await api.get(`/batch-jobs/${jobId}/log`, { params: { lines } });
+    return data;
+  },
+
+  async autoQuarantine(portfolioId?: string | null, dryRun = false) {
+    const { data } = await api.post('/batch-jobs/auto-quarantine', { portfolioId, dryRun });
+    return data;
+  },
+};
+
+// =============================================================================
+// Quarantine API
+// =============================================================================
+
+export interface QuarantineGroup {
+  coverageType: string;
+  reason: string;
+  count: number;
+  patents: Array<{
+    patentId: string;
+    title: string;
+    grantDate: string | null;
+    assignee: string;
+    affiliate: string | null;
+  }>;
+}
+
+export interface QuarantineSummary {
+  totalQuarantined: number;
+  groups: QuarantineGroup[];
+}
+
+export const quarantineApi = {
+  async getSummary(portfolioId?: string | null): Promise<QuarantineSummary> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get('/patents/quarantine-summary', { params });
+    return data;
+  },
+
+  async quarantine(patentId: string, coverageType: string, reason?: string) {
+    const { data } = await api.post(`/patents/${patentId}/quarantine`, { coverageType, reason: reason || 'manual' });
+    return data;
+  },
+
+  async unquarantine(patentId: string, coverageType: string) {
+    const { data } = await api.delete(`/patents/${patentId}/quarantine`, { data: { coverageType } });
+    return data;
+  },
+
+  async bulkQuarantine(patentIds: string[], coverageType: string, reason: string, action: 'quarantine' | 'unquarantine') {
+    const { data } = await api.post('/patents/bulk-quarantine', { patentIds, coverageType, reason, action });
     return data;
   },
 };
@@ -2534,6 +2635,105 @@ export interface SubSectorInfo {
   scoredCount: number;
 }
 
+// ─── Batch Job Types ───────────────────────────────────────────────────────
+
+export interface BatchJobMetadata {
+  batchId: string;
+  sectorName: string;
+  superSector: string;
+  portfolioId?: string;
+  portfolioName?: string;
+  patentCount: number;
+  model: string;
+  templateInheritanceChain: string[];
+  questionCount: number;
+  withClaims: boolean;
+  submittedAt: string;
+  status: 'submitted' | 'in_progress' | 'ended' | 'failed';
+  completedAt: string | null;
+  results: {
+    succeeded: number;
+    errored: number;
+    expired: number;
+    canceled: number;
+    processed: boolean;
+    processedAt: string | null;
+  };
+}
+
+export interface BatchStatusResponse {
+  batchId: string;
+  status: string;
+  requestCounts: {
+    processing: number;
+    succeeded: number;
+    errored: number;
+    canceled: number;
+    expired: number;
+  };
+  createdAt: string;
+  endedAt: string | null;
+  metadata: BatchJobMetadata | null;
+}
+
+// ─── LLM Snapshot Types ──────────────────────────────────────────────────────
+
+export interface LlmSnapshotSummary {
+  id: string;
+  name: string;
+  description?: string;
+  scoreType: string;
+  config?: Record<string, unknown>;
+  isActive?: boolean;
+  patentCount: number;
+  llmDataCount?: number;
+  createdAt: string;
+}
+
+export interface LlmSnapshotComparison {
+  snapshotId: string;
+  snapshotName: string;
+  sectorName: string;
+  snapshotDate: string;
+  summary: {
+    snapshotPatents: number;
+    currentPatents: number;
+    matchedPatents: number;
+    avgDelta: number;
+    improved: number;
+    degraded: number;
+    unchanged: number;
+  };
+  topMovers: Array<{
+    patentId: string;
+    snapshotScore: number;
+    currentScore: number | null;
+    delta: number;
+  }>;
+}
+
+// ─── Model Comparison Types ──────────────────────────────────────────────────
+
+export interface ModelComparisonResult {
+  sectorName: string;
+  models: string[];
+  sampleSize: number;
+  results: Array<{
+    patentId: string;
+    patentTitle: string;
+    scores: Record<string, {
+      compositeScore: number;
+      metrics: Record<string, { score: number; reasoning: string; confidence?: number }>;
+      tokenUsage: { input: number; output: number };
+    }>;
+  }>;
+  summary: Record<string, {
+    avgScore: number;
+    totalTokens: number;
+    estimatedCostPer1k: number;
+  }>;
+}
+
 // Scoring Templates API
 export const scoringTemplatesApi = {
   /**
@@ -2602,8 +2802,10 @@ export const scoringTemplatesApi = {
   /**
    * Get scoring progress for a sector
    */
-  async getSectorProgress(sectorName: string): Promise<SectorScoringProgress> {
-    const { data } = await api.get(`/scoring-templates/llm/sector-progress/${sectorName}`);
+  async getSectorProgress(sectorName: string, portfolioId?: string | null): Promise<SectorScoringProgress> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get(`/scoring-templates/llm/sector-progress/${sectorName}`, { params });
     return data;
   },
 
@@ -2612,10 +2814,9 @@ export const scoringTemplatesApi = {
    */
   async scoreSector(
     sectorName: string,
-    options?: { useClaims?: boolean; rescore?: boolean; minYear?: number; topN?: number }
+    options?: { rescore?: boolean; minYear?: number; topN?: number }
   ): Promise<{ message: string; total: number }> {
     const params = new URLSearchParams();
-    if (options?.useClaims) params.append('useClaims', 'true');
     if (options?.rescore) params.append('rescore', 'true');
     if (options?.minYear) params.append('minYear', options.minYear.toString());
     if (options?.topN) params.append('topN', options.topN.toString());
@@ -2686,12 +2887,14 @@ export const scoringTemplatesApi = {
     offset?: number;
     sortBy?: string;
     order?: 'asc' | 'desc';
+    portfolioId?: string | null;
   }): Promise<SectorScoresResponse> {
     const params = new URLSearchParams();
     if (options?.limit) params.append('limit', options.limit.toString());
     if (options?.offset) params.append('offset', options.offset.toString());
     if (options?.sortBy) params.append('sortBy', options.sortBy);
     if (options?.order) params.append('order', options.order);
+    if (options?.portfolioId) params.append('portfolioId', options.portfolioId);
     const { data } = await api.get(`/scoring-templates/llm/sector-scores/${sectorName}?${params}`);
     return data;
   },
@@ -2699,8 +2902,10 @@ export const scoringTemplatesApi = {
   /**
    * Get aggregated progress for a super-sector
    */
-  async getSuperSectorProgress(superSectorName: string): Promise<SuperSectorProgress> {
-    const { data } = await api.get(`/scoring-templates/llm/super-sector-progress/${superSectorName}`);
+  async getSuperSectorProgress(superSectorName: string, portfolioId?: string | null): Promise<SuperSectorProgress> {
+    const params: Record<string, string> = {};
+    if (portfolioId) params.portfolioId = portfolioId;
+    const { data } = await api.get(`/scoring-templates/llm/super-sector-progress/${superSectorName}`, { params });
     return data;
   },
 
@@ -2745,6 +2950,497 @@ export const scoringTemplatesApi = {
     claims: Array<{ number: number; text: string; isIndependent: boolean }>;
   }> {
     const { data } = await api.get(`/scoring-templates/claims/preview/${patentId}`);
+    return data;
+  },
+
+  // ─── Batch API Scoring ─────────────────────────────────────────────────────
+
+  /**
+   * Submit a batch scoring job for a sector (returns immediately with batchId)
+   */
+  async batchScoreSector(
+    sectorName: string,
+    options?: { rescore?: boolean; topN?: number; model?: string; portfolioId?: string | null }
+  ): Promise<{ success: boolean; message: string; batchId: string; requestCount: number; sectorName: string }> {
+    const params = new URLSearchParams();
+    if (options?.rescore) params.append('rescore', 'true');
+    if (options?.topN) params.append('limit', options.topN.toString());
+    if (options?.model) params.append('model', options.model);
+    const body: Record<string, unknown> = {};
+    if (options?.portfolioId) body.portfolioId = options.portfolioId;
+    const { data } = await api.post(`/scoring-templates/llm/batch-score-sector/${sectorName}?${params}`, body);
+    return data;
+  },
+
+  /**
+   * Get status of a batch job
+   */
+  async getBatchStatus(batchId: string): Promise<BatchStatusResponse> {
+    const { data } = await api.get(`/scoring-templates/llm/batch-status/${batchId}`);
+    return data;
+  },
+
+  /**
+   * Process completed batch results (parse + save to DB)
+   */
+  async processBatchResults(batchId: string): Promise<{ success: boolean; batchId: string; processed: number; failed: number; errors: string[] }> {
+    const { data } = await api.post(`/scoring-templates/llm/batch-process/${batchId}`);
+    return data;
+  },
+
+  /**
+   * List all batch jobs
+   */
+  async getBatchJobs(): Promise<{ totalJobs: number; jobs: BatchJobMetadata[] }> {
+    const { data } = await api.get('/scoring-templates/llm/batch-jobs');
+    return data;
+  },
+
+  /**
+   * Cancel a batch job
+   */
+  async cancelBatch(batchId: string): Promise<{ success: boolean; batchId: string; status: string }> {
+    const { data } = await api.delete(`/scoring-templates/llm/batch-cancel/${batchId}`);
+    return data;
+  },
+
+  /**
+   * Refresh all active batch job statuses
+   */
+  async refreshAllBatchStatuses(): Promise<{ totalJobs: number; jobs: BatchJobMetadata[] }> {
+    const { data } = await api.post('/scoring-templates/llm/batch-refresh-all');
+    return data;
+  },
+
+  // ─── LLM Score Snapshots ───────────────────────────────────────────────────
+
+  /**
+   * Create a snapshot of current LLM scores for a sector
+   */
+  async createLlmSnapshot(sectorName: string, options?: { name?: string; description?: string }): Promise<LlmSnapshotSummary> {
+    const { data } = await api.post('/scoring-templates/llm/snapshot', { sectorName, ...options });
+    return data;
+  },
+
+  /**
+   * List LLM score snapshots
+   */
+  async getLlmSnapshots(sectorName?: string): Promise<LlmSnapshotSummary[]> {
+    const params = sectorName ? { sectorName } : {};
+    const { data } = await api.get('/scoring-templates/llm/snapshots', { params });
+    return data;
+  },
+
+  /**
+   * Compare a snapshot to current scores
+   */
+  async compareLlmSnapshot(snapshotId: string): Promise<LlmSnapshotComparison> {
+    const { data } = await api.get(`/scoring-templates/llm/snapshot/${snapshotId}/compare`);
+    return data;
+  },
+
+  // ─── Recompute Scores ────────────────────────────────────────────────────
+
+  /**
+   * Recompute composite scores from stored metrics using current template weights.
+   * No LLM calls — pure math recalculation.
+   */
+  async recomputeSectorScores(sectorName: string): Promise<{
+    sectorName: string;
+    totalScores: number;
+    updated: number;
+    unchanged: number;
+    templateQuestions: number;
+    weights: Record<string, number>;
+  }> {
+    const { data } = await api.post(`/scoring-templates/llm/recompute-scores/${sectorName}`);
+    return data;
+  },
+
+  // ─── Multi-Model Comparison ────────────────────────────────────────────────
+
+  /**
+   * Run multi-model comparison on a sample of patents
+   */
+  async compareModels(sectorName: string, options: { models: string[]; sampleSize: number }): Promise<ModelComparisonResult> {
+    const { data } = await api.post(`/scoring-templates/llm/compare-models/${sectorName}`, options, { timeout: 600000 });
+    return data;
+  },
+};
+
+// =============================================================================
+// Portfolio Management API
+// =============================================================================
+
+// DataSourceType removed — all portfolios use DB now
+export type DataSourceType = 'JSON_PIPELINE' | 'DB_RECORDS'; // Kept for type compat, unused
+
+export interface CompanySummary {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  website: string | null;
+  _count: { affiliates: number; portfolios: number; competitorsOf: number };
+}
+
+export interface CompanyDetail extends CompanySummary {
+  affiliates: AffiliateDetail[];
+  portfolios: Array<PortfolioSummary & { _count: { patents: number } }>;
+}
+
+export interface CompetitorRelationship {
+  id: string;
+  companyId: string;
+  competitorId: string;
+  sectors: string[];
+  discoverySource: string;
+  strength: number | null;
+  notes: string | null;
+  competitor: CompanySummary;
+}
+
+export interface PortfolioSummary {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  dataSourceType?: DataSourceType; // Deprecated — field removed from DB
+  companyId: string;
+  company?: { id: string; name: string; displayName: string };
+  patentCount: number;
+  affiliateCount: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { patents: number };
+}
+
+export interface AffiliatePattern {
+  id: string;
+  affiliateId: string;
+  pattern: string;
+  isExact: boolean;
+}
+
+export interface AffiliateDetail {
+  id: string;
+  companyId: string;
+  name: string;
+  displayName: string;
+  isActive: boolean;
+  acquiredYear: number | null;
+  parentId: string | null;
+  notes: string | null;
+  description: string | null;
+  patterns: AffiliatePattern[];
+  children: Array<{ id: string; name: string }>;
+}
+
+export interface PortfolioDetail extends PortfolioSummary {
+  company: {
+    id: string;
+    name: string;
+    displayName: string;
+    affiliates: AffiliateDetail[];
+  };
+}
+
+export interface PatentCountResult {
+  affiliateId: string;
+  affiliateName: string;
+  totalCount: number;
+  filteredCount: number | null;
+}
+
+export interface ImportResult {
+  imported: number;
+  alreadyExists: number;
+  failed: number;
+  totalInPortfolio: number;
+}
+
+export interface HydrationResult {
+  hydrated: number;
+  alreadyComplete: number;
+  notFound: number;
+  failedIds: string[];
+  totalInPortfolio: number;
+}
+
+export interface PortfolioPatentRecord {
+  id: string;
+  portfolioId: string;
+  patentId: string;
+  source: string;
+  importedAt: string;
+  patentTitle: string | null;
+  patentDate: string | null;
+  assignee: string | null;
+  affiliateName: string | null;
+}
+
+export interface AffiliateSuggestion {
+  name: string;
+  displayName: string;
+  acquiredYear: number | null;
+  patterns: string[];
+  notes: string;
+  description?: string;
+}
+
+export interface AnalyzePatentsResult {
+  totalRequested: number;
+  resolved: number;
+  fetchedFromPatentsView: number;
+  stillUnresolved: number;
+  unresolvedIds: string[];
+  suggestedAffiliates: Array<{
+    assignee: string;
+    suggestedName: string;
+    patentCount: number;
+    patents: Array<{ patentId: string; title: string; date: string }>;
+  }>;
+}
+
+export interface CreateFromPatentsResult {
+  portfolio: { id: string; name: string; displayName: string };
+  stats: {
+    totalPatentIds: number;
+    resolved: number;
+    fetchedFromPatentsView: number;
+    stillUnresolved: number;
+    patentRecordsCreated: number;
+  };
+  affiliates: Array<{ name: string; displayName: string; patternCount: number; patentCount: number }>;
+  assigneeClusters: Record<string, { count: number; patents: string[] }>;
+}
+
+export const portfolioApi = {
+  // Portfolio CRUD
+  async list(companyId?: string): Promise<PortfolioSummary[]> {
+    const params = companyId ? { companyId } : {};
+    const { data } = await api.get('/portfolios', { params });
+    return data;
+  },
+
+  async get(id: string): Promise<PortfolioDetail> {
+    const { data } = await api.get(`/portfolios/${id}`);
+    return data;
+  },
+
+  async create(body: { name: string; displayName: string; description?: string; companyId: string }): Promise<PortfolioSummary> {
+    const { data } = await api.post('/portfolios', body);
+    return data;
+  },
+
+  async update(id: string, body: { displayName?: string; description?: string }): Promise<PortfolioSummary> {
+    const { data } = await api.put(`/portfolios/${id}`, body);
+    return data;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.delete(`/portfolios/${id}`);
+  },
+
+  // Patent counts (uses company affiliates)
+  async getPatentCounts(portfolioId: string, cpcPrefix?: string): Promise<{ counts: PatentCountResult[]; cpcPrefix: string | null }> {
+    const params = cpcPrefix ? { cpcPrefix } : {};
+    const { data } = await api.get(`/portfolios/${portfolioId}/patent-counts`, { params });
+    return data;
+  },
+
+  // Patent list — now returns full Patent data (same shape as patentApi.getPatents)
+  async getPatents(portfolioId: string, page = 1, limit = 50, sortBy = 'score', descending = true): Promise<PaginatedResponse<Patent>> {
+    const { data } = await api.get(`/portfolios/${portfolioId}/patents`, {
+      params: { page, limit, sortBy, descending },
+    });
+    return data;
+  },
+
+  // Import patents
+  async importPatents(portfolioId: string, options?: { cpcPrefixes?: string[]; maxPatents?: number }): Promise<ImportResult> {
+    const { data } = await api.post(`/portfolios/${portfolioId}/import-patents`, options || {}, { timeout: 300000 });
+    return data;
+  },
+
+  // Extract patent XMLs from USPTO bulk ZIPs (needed for claims) — starts background job
+  async extractXmls(portfolioId: string): Promise<{ status: string; totalPatents?: number; message: string }> {
+    const { data } = await api.post(`/portfolios/${portfolioId}/extract-xmls`, {}, { timeout: 30000 });
+    return data;
+  },
+
+  // Poll extraction job status
+  async getExtractXmlsStatus(portfolioId: string): Promise<{
+    status: 'none' | 'running' | 'completed' | 'failed';
+    logs: string[];
+    result?: { totalRequested: number; extracted: number; alreadyExist: number; notFound: number; errors: string[] };
+    error?: string;
+  }> {
+    const { data } = await api.get(`/portfolios/${portfolioId}/extract-xmls/status`);
+    return data;
+  },
+
+  // Hydrate bare patents with PatentsView data
+  async hydratePatents(portfolioId: string, options?: { force?: boolean }): Promise<HydrationResult> {
+    const { data } = await api.post(`/portfolios/${portfolioId}/hydrate`, options || {}, { timeout: 300000 });
+    return data;
+  },
+
+  // Analyze patents — preview assignee clusters before creating portfolio
+  async analyzePatents(patentIds: string[]): Promise<AnalyzePatentsResult> {
+    const { data } = await api.post('/portfolios/analyze-patents', { patentIds }, { timeout: 120000 });
+    return data;
+  },
+
+  // Create portfolio from pre-analyzed data (output of analyze-patents)
+  async createFromPatents(body: {
+    name: string;
+    displayName: string;
+    description?: string;
+    companyId?: string;
+    analyzedData: AnalyzePatentsResult;
+  }): Promise<CreateFromPatentsResult> {
+    const { data } = await api.post('/portfolios/create-from-patents', body, { timeout: 120000 });
+    return data;
+  },
+};
+
+// =============================================================================
+// Company Management API
+// =============================================================================
+
+export const companyApi = {
+  async list(): Promise<CompanySummary[]> {
+    const { data } = await api.get('/companies');
+    return data;
+  },
+
+  async get(id: string): Promise<CompanyDetail> {
+    const { data } = await api.get(`/companies/${id}`);
+    return data;
+  },
+
+  async create(body: { name: string; displayName: string; description?: string; website?: string }): Promise<CompanySummary> {
+    const { data } = await api.post('/companies', body);
+    return data;
+  },
+
+  async update(id: string, body: { displayName?: string; description?: string; website?: string }): Promise<CompanySummary> {
+    const { data } = await api.put(`/companies/${id}`, body);
+    return data;
+  },
+
+  async remove(id: string): Promise<void> {
+    await api.delete(`/companies/${id}`);
+  },
+
+  // Competitors
+  async getCompetitors(companyId: string): Promise<CompetitorRelationship[]> {
+    const { data } = await api.get(`/companies/${companyId}/competitors`);
+    return data;
+  },
+
+  async addCompetitor(companyId: string, body: { competitorId: string; sectors?: string[]; discoverySource?: string; notes?: string }): Promise<CompetitorRelationship> {
+    const { data } = await api.post(`/companies/${companyId}/competitors`, body);
+    return data;
+  },
+
+  async removeCompetitor(companyId: string, competitorId: string): Promise<void> {
+    await api.delete(`/companies/${companyId}/competitors/${competitorId}`);
+  },
+
+  async discoverCompetitors(companyId: string, companyName?: string): Promise<{
+    suggestions: Array<{ name: string; slug: string; sectors: string[]; notes: string }>;
+    companyName: string;
+    existingCount: number;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/discover-competitors`, { companyName }, { timeout: 300000 });
+    return data;
+  },
+
+  async discoverCompetitorsData(companyId: string, portfolioId: string): Promise<{
+    suggestions: Array<{
+      name: string;
+      slug: string;
+      sectors: string[];
+      notes: string;
+      strength: number;
+      citationCount: number;
+      patentsCited: number;
+      variants: string[];
+    }>;
+    portfolioId: string;
+    totalCitingPatentsAnalyzed: number;
+    patentsWithCitingData: number;
+    patentsWithoutCitingData: number;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/discover-competitors-data`, { portfolioId }, { timeout: 60000 });
+    return data;
+  },
+
+  // Affiliates (under company)
+  async addAffiliate(companyId: string, body: {
+    name: string; displayName: string; acquiredYear?: number; parentId?: string; notes?: string; description?: string; patterns?: string[];
+  }): Promise<AffiliateDetail> {
+    const { data } = await api.post(`/companies/${companyId}/affiliates`, body);
+    return data;
+  },
+
+  async updateAffiliate(companyId: string, affiliateId: string, body: {
+    displayName?: string; isActive?: boolean; acquiredYear?: number; parentId?: string | null; notes?: string;
+  }): Promise<AffiliateDetail> {
+    const { data } = await api.put(`/companies/${companyId}/affiliates/${affiliateId}`, body);
+    return data;
+  },
+
+  async removeAffiliate(companyId: string, affiliateId: string): Promise<void> {
+    await api.delete(`/companies/${companyId}/affiliates/${affiliateId}`);
+  },
+
+  // Patterns (under company affiliates)
+  async addPattern(companyId: string, affiliateId: string, pattern: string, isExact = false): Promise<AffiliatePattern> {
+    const { data } = await api.post(`/companies/${companyId}/affiliates/${affiliateId}/patterns`, { pattern, isExact });
+    return data;
+  },
+
+  async removePattern(companyId: string, affiliateId: string, patternId: string): Promise<void> {
+    await api.delete(`/companies/${companyId}/affiliates/${affiliateId}/patterns/${patternId}`);
+  },
+
+  // Affiliate discovery (LLM)
+  async discoverAffiliates(companyId: string, companyName?: string): Promise<{
+    suggestions: AffiliateSuggestion[];
+    companyName: string;
+    existingCount: number;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/discover-affiliates`, { companyName }, { timeout: 300000 });
+    return data;
+  },
+
+  // Describe affiliates (LLM)
+  async describeAffiliates(companyId: string): Promise<AffiliateDetail[]> {
+    const { data } = await api.post(`/companies/${companyId}/describe-affiliates`, {}, { timeout: 300000 });
+    return data;
+  },
+
+  // Describe competitors (LLM)
+  async describeCompetitors(companyId: string): Promise<CompetitorRelationship[]> {
+    const { data } = await api.post(`/companies/${companyId}/describe-competitors`, {}, { timeout: 300000 });
+    return data;
+  },
+
+  // Bulk toggle affiliates active/inactive
+  async bulkToggleAffiliatesActive(companyId: string, isActive: boolean): Promise<{ count: number }> {
+    const { data } = await api.put(`/companies/${companyId}/affiliates-bulk-active`, { isActive });
+    return data;
+  },
+
+  // Pattern validation (PatentsView)
+  async validatePatterns(companyId: string, patterns: string[], cpcPrefixes?: string[]): Promise<{
+    results: Array<{ pattern: string; totalCount: number; filteredCount: number | null; sampleAssignees: string[] }>;
+    cpcPrefixes: string[] | null;
+  }> {
+    const { data } = await api.post(`/companies/${companyId}/validate-patterns`, { patterns, cpcPrefixes }, { timeout: 60000 });
     return data;
   },
 };

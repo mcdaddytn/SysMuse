@@ -592,6 +592,42 @@ export async function analyzeSubSectorPotential(
 }
 
 // ============================================================================
+// DB-Backed Inventive CPC Lookup
+// ============================================================================
+
+/**
+ * Get inventive CPC codes for a patent from the database.
+ * Returns empty array if the patent is not in the DB or has no inventive CPCs.
+ */
+async function getDbInventiveCpcs(patentId: string): Promise<string[]> {
+  const cpcs = await prisma.patentCpc.findMany({
+    where: { patentId, isInventive: true },
+    select: { cpcCode: true },
+  });
+  return cpcs.map(c => c.cpcCode);
+}
+
+/**
+ * Batch-load inventive CPC codes for multiple patents from the database.
+ * Returns a Map of patentId -> inventive CPC codes.
+ */
+async function getDbInventiveCpcsBatch(patentIds: string[]): Promise<Map<string, string[]>> {
+  const cpcs = await prisma.patentCpc.findMany({
+    where: { patentId: { in: patentIds }, isInventive: true },
+    select: { patentId: true, cpcCode: true },
+  });
+
+  const result = new Map<string, string[]>();
+  for (const cpc of cpcs) {
+    if (!result.has(cpc.patentId)) {
+      result.set(cpc.patentId, []);
+    }
+    result.get(cpc.patentId)!.push(cpc.cpcCode);
+  }
+  return result;
+}
+
+// ============================================================================
 // Primary Sub-Sector Assignment
 // ============================================================================
 
@@ -692,6 +728,13 @@ export async function assignPrimarySubSectors(
   const data = JSON.parse(fs.readFileSync(candidatesPath, 'utf-8'));
   const candidates = data.candidates || [];
 
+  // Pre-load DB-backed inventive CPCs for all candidate patent IDs
+  const candidateIds = candidates.map((p: any) => p.patent_id).filter(Boolean);
+  const dbInventiveCpcMap = await getDbInventiveCpcsBatch(candidateIds);
+  if (dbInventiveCpcMap.size > 0) {
+    console.log(`[SubSector Assignment] Loaded DB inventive CPCs for ${dbInventiveCpcMap.size} patents`);
+  }
+
   const result: AssignmentResult = {
     processed: 0,
     assigned: 0,
@@ -702,7 +745,8 @@ export async function assignPrimarySubSectors(
 
   for (let i = 0; i < candidates.length; i++) {
     const patent = candidates[i];
-    const assignment = findBestSubSector(patent, cpcToSubSectors, dateRangeSubSectors);
+    const dbCpcs = dbInventiveCpcMap.get(patent.patent_id);
+    const assignment = findBestSubSector(patent, cpcToSubSectors, dateRangeSubSectors, dbCpcs);
 
     // Store assignment on patent
     patent.primary_sub_sector_id = assignment.subSectorId;
@@ -739,19 +783,25 @@ export async function assignPrimarySubSectors(
 }
 
 /**
- * Find the best matching sub-sector for a patent
+ * Find the best matching sub-sector for a patent.
+ * Supports both legacy JSON patents (inventive_cpc_codes field) and
+ * DB-backed patents (dbInventiveCpcs injected by caller).
  */
 function findBestSubSector(
   patent: any,
   cpcToSubSectors: Map<string, SubSectorLookup[]>,
-  dateRangeSubSectors: SubSectorLookup[]
+  dateRangeSubSectors: SubSectorLookup[],
+  dbInventiveCpcs?: string[]
 ): SubSectorAssignment {
   const patentId = patent.patent_id;
   const patentDate = patent.patent_date || '';
   const patentYear = patentDate.substring(0, 4);
 
   // Get CPC codes to try, in priority order
-  const inventiveCpcs: string[] = patent.inventive_cpc_codes || [];
+  // Use DB-backed inventive CPCs when available, fall back to legacy JSON field
+  const inventiveCpcs: string[] = dbInventiveCpcs && dbInventiveCpcs.length > 0
+    ? dbInventiveCpcs
+    : (patent.inventive_cpc_codes || []);
   const primaryCpc: string | null = patent.primary_cpc || null;
   const allCpcs: string[] = patent.cpc_codes || [];
 

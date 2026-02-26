@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wi-network-topology",
+  "name": "Network Topology & Architecture",
+  "description": "Sub-sector template for wireless network topology patents. Covers mesh networks, relay architectures, heterogeneous networks (HetNet), device-to-device (D2D) communication, and non-terrestrial network (NTN) integration.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W84/*",
+  "sectorName": "wireless-infrastructure",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-infrastructure",
+  "version": 1,
+  "contextDescription": "Network topology patents cover how network nodes are organized and interconnect. The trend is toward heterogeneous, multi-tier architectures: macro + small cell + relay + IAB (Integrated Access and Backhaul). 5G-Advanced introduces non-terrestrial networks (NTN) with satellite integration. D2D (sidelink) communication enables V2X and public safety applications. Key targets: infrastructure vendors, mesh network companies (for enterprise/industrial), satellite operators (Starlink, OneWeb), and automotive (C-V2X). Topology patents often have broad architectural scope.",
+  "scoringGuidance": [
+    "HetNet topology patents affect every operator's densification strategy.",
+    "IAB (Integrated Access and Backhaul) is critical for 5G mmWave — self-backhauling small cells.",
+    "NTN (satellite) integration with terrestrial 5G is a high-growth area — 3GPP Rel-17+.",
+    "D2D/sidelink patents cover V2X (vehicle-to-everything) — major automotive market.",
+    "Mesh and relay patents are relevant to enterprise private 5G deployments."
+  ],
+  "questions": [
+    {
+      "fieldName": "topology_type",
+      "displayName": "Topology Type",
+      "question": "What network topology does this patent address? Score 8-10 for IAB (integrated access and backhaul) or NTN (satellite-terrestrial integration), 5-7 for HetNet or relay architectures, 3-4 for mesh or ad-hoc, 1-2 for traditional single-tier.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "IAB and NTN are the newest and highest-value topology innovations in 5G."
+    },
+    {
+      "fieldName": "d2d_sidelink",
+      "displayName": "D2D / Sidelink",
+      "question": "Does this patent address device-to-device (D2D) or sidelink communication (V2X, ProSe)? Score 8-10 for C-V2X or NR sidelink innovations, 5-7 for general D2D communication, 3-4 for proximity-based services, 1-2 for no D2D aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "V2X is a major market — every connected vehicle will use sidelink."
+    },
+    {
+      "fieldName": "ntn_satellite",
+      "displayName": "NTN / Satellite Integration",
+      "question": "Does this patent address non-terrestrial network integration (satellite-terrestrial, HAPS, drone-based)? Score 8-10 for novel NTN-terrestrial integration, 5-7 for satellite communication with 3GPP alignment, 3-4 for general aerial/satellite concepts, 1-2 for terrestrial only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "NTN is standardized in 3GPP Rel-17+ — satellite direct-to-device is a major trend."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP network architecture specifications (TS 23.501, TS 38.300)? Score 8-10 for direct implementation of standardized architecture, 5-7 for standard-compatible, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "3GPP defines network architecture — SEP-aligned topology patents affect all implementers."
+    },
+    {
+      "fieldName": "scalability",
+      "displayName": "Scalability",
+      "question": "How well does this topology scale (number of nodes, geographic coverage, user density)? Score 8-10 for massive scale (1000+ nodes, nationwide), 5-7 for metropolitan scale, 3-4 for enterprise/campus, 1-2 for point-to-point only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Higher scalability = more deployment scenarios = broader licensing scope."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this topology innovation in a deployed network? Score 8-10 for observable in network architecture (node types, interconnections), 5-7 for detectable via signaling analysis, 3-4 for internal network management, 1-2 for conceptual only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Network topology is often visible — cell types, relay nodes, and backhaul links can be observed."
+    }
+  ]
+}

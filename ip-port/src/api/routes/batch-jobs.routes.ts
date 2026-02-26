@@ -2,193 +2,688 @@ import { Router, Request, Response } from 'express';
 import { exec, spawn, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
 import { invalidateEnrichmentCache } from './patents.routes.js';
+
+// Export for use by enrichment endpoints that need fresh data (repair tool)
+export { repairEnrichmentFlags };
 import { clearScoringCache } from '../services/scoring-service.js';
+import { enrichPatentCpcBatch } from '../services/patent-xml-parser-service.js';
+import { checkBatchStatus, processBatchResults, cancelBatch, processAllCompletedBatches } from '../services/llm-scoring-service.js';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 
 // Track if we've invalidated caches since last job completion detection
 let lastCacheInvalidation = 0;
 
-// Coverage types that can be run independently
-type CoverageType = 'llm' | 'prosecution' | 'ipr' | 'family';
-type TargetType = 'tier' | 'super-sector' | 'sector';
+// Throttle auto-processing of completed Anthropic batches (once per 60s)
+let lastBatchAutoProcess = 0;
 
-interface BatchJob {
+// Coverage types that can be run independently
+type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml' | 'citing';
+type TargetType = 'tier' | 'super-sector' | 'sector';
+type SortStrategy = 'base_score' | 'v2_composite' | 'v3_snapshot' | 'newest_first' | 'forward_citations';
+
+// API response shape (matches frontend BatchJob interface)
+interface BatchJobResponse {
   id: string;
-  groupId?: string; // Links related jobs together
-  targetType: TargetType;
-  targetValue: string; // tier topN, sector name
-  coverageType: CoverageType;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  pid?: number;
+  groupId?: string;
+  targetType: string;
+  targetValue: string;
+  coverageType: string;
+  status: string;
+  pid?: number | null;
   startedAt?: string;
   completedAt?: string;
-  logFile?: string;
-  error?: string;
-  // Progress & rate tracking
-  progress?: {
-    total: number;
-    completed: number;
-  };
-  estimatedRate?: number; // patents per hour (set when queued)
-  actualRate?: number; // patents per hour (set when completed)
+  logFile?: string | null;
+  error?: string | null;
+  progress?: { total: number; completed: number };
+  estimatedRate?: number | null;
+  actualRate?: number | null;
   estimatedCompletion?: string;
+  model?: string | null;
+  batchMode?: boolean | null;
+  anthropicBatchId?: string | null;
+  portfolioId?: string | null;
+  portfolioName?: string | null;
+  settings?: Record<string, unknown> | null;
 }
-
-// In-memory job store (persisted to file for durability)
-const JOBS_FILE = 'logs/batch-jobs.json';
-let batchJobs: BatchJob[] = [];
 
 // Default rate estimates (patents per hour) - will be refined over time
 const DEFAULT_RATES: Record<CoverageType, number> = {
-  llm: 150, // ~5 patents per batch, ~20 sec/batch = 150/hour (conservative)
+  llm: 900, // ~5 concurrent Anthropic calls, ~8 sec/call = ~37/min = ~900/hr (per process, conservative)
   prosecution: 600,
+  'prosecution-detail': 200, // Hybrid: API calls + LLM analysis per patent
   ipr: 600,
   family: 500,
+  xml: 2000, // Local disk extraction, very fast
+  citing: 300, // PatentsView API calls for citing patent details
 };
 
-function loadJobs(): void {
-  try {
-    if (fs.existsSync(JOBS_FILE)) {
-      let loaded = JSON.parse(fs.readFileSync(JOBS_FILE, 'utf-8'));
-      // Filter out legacy jobs without coverageType
-      loaded = loaded.filter((j: BatchJob) => j.coverageType);
-      // Mark any "running" jobs as "completed" since we lost track on restart
-      batchJobs = loaded.map((j: BatchJob) => ({
-        ...j,
-        status: j.status === 'running' ? 'completed' : j.status
-      }));
+// Map DB record to API response format
+function toResponse(job: any): BatchJobResponse {
+  return {
+    id: job.id,
+    groupId: job.groupId || undefined,
+    targetType: job.targetType,
+    targetValue: job.targetValue,
+    coverageType: job.coverageType,
+    status: job.status,
+    pid: job.pid,
+    startedAt: job.startedAt?.toISOString(),
+    completedAt: job.completedAt?.toISOString(),
+    logFile: job.logFile,
+    error: job.error,
+    progress: { total: job.totalPatents, completed: job.completedPatents },
+    estimatedRate: job.estimatedRate,
+    actualRate: job.actualRate,
+    estimatedCompletion: job.estimatedCompletion?.toISOString(),
+    model: job.model,
+    batchMode: job.batchMode,
+    anthropicBatchId: job.anthropicBatchId,
+    portfolioId: job.portfolioId,
+    portfolioName: job.portfolioName,
+    settings: job.settings as Record<string, unknown> | null,
+  };
+}
+
+/**
+ * Repair Postgres enrichment flags from file cache.
+ * This is a repair/backfill tool — inline flag-setting is now the primary mechanism.
+ * Run manually after restoring from backup or to backfill new flag columns.
+ */
+async function repairEnrichmentFlags(): Promise<void> {
+  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
+  const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
+  const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
+  const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
+  const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
+
+  const llmSet = fs.existsSync(llmDir)
+    ? new Set(fs.readdirSync(llmDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+  const prosSet = fs.existsSync(prosDir)
+    ? new Set(fs.readdirSync(prosDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+  const iprSet = fs.existsSync(iprDir)
+    ? new Set(fs.readdirSync(iprDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+  const familySet = fs.existsSync(familyDir)
+    ? new Set(fs.readdirSync(familyDir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')))
+    : new Set<string>();
+
+  // Build XML set: files like US10002051.xml → "10002051", US09959345.xml → "9959345"
+  const xmlSet = new Set<string>();
+  if (xmlDir && fs.existsSync(xmlDir)) {
+    for (const f of fs.readdirSync(xmlDir)) {
+      if (f.startsWith('US') && f.endsWith('.xml')) {
+        const raw = f.replace(/^US/, '').replace(/\.xml$/, '');
+        xmlSet.add(raw.replace(/^0+/, '') || raw); // Strip leading zeros to match DB patent IDs
+      }
     }
-  } catch (e) {
-    console.error('Failed to load batch jobs:', e);
-    batchJobs = [];
+  }
+
+  // Find patents where any flag is false but cache file exists
+  const stale = await prisma.patent.findMany({
+    where: {
+      OR: [
+        { hasLlmData: false },
+        { hasProsecutionData: false },
+        { hasXmlData: false },
+        { hasIprData: false },
+        { hasFamilyData: false },
+      ],
+    },
+    select: {
+      patentId: true,
+      hasLlmData: true,
+      hasProsecutionData: true,
+      hasXmlData: true,
+      hasIprData: true,
+      hasFamilyData: true,
+    },
+  });
+
+  let llmUpdated = 0;
+  let prosUpdated = 0;
+  let xmlUpdated = 0;
+  let iprUpdated = 0;
+  let familyUpdated = 0;
+
+  for (const p of stale) {
+    const updates: Record<string, boolean> = {};
+    if (!p.hasLlmData && llmSet.has(p.patentId)) {
+      updates.hasLlmData = true;
+      llmUpdated++;
+    }
+    if (!p.hasProsecutionData && prosSet.has(p.patentId)) {
+      updates.hasProsecutionData = true;
+      prosUpdated++;
+    }
+    if (!p.hasXmlData && xmlSet.has(p.patentId)) {
+      updates.hasXmlData = true;
+      xmlUpdated++;
+    }
+    if (!p.hasIprData && iprSet.has(p.patentId)) {
+      updates.hasIprData = true;
+      iprUpdated++;
+    }
+    if (!p.hasFamilyData && familySet.has(p.patentId)) {
+      updates.hasFamilyData = true;
+      familyUpdated++;
+    }
+    if (Object.keys(updates).length > 0) {
+      await prisma.patent.update({
+        where: { patentId: p.patentId },
+        data: updates,
+      });
+    }
+  }
+
+  if (llmUpdated > 0 || prosUpdated > 0 || xmlUpdated > 0 || iprUpdated > 0 || familyUpdated > 0) {
+    console.log(`[BatchJobs] Repaired enrichment flags: ${llmUpdated} LLM, ${prosUpdated} prosecution, ${xmlUpdated} XML, ${iprUpdated} IPR, ${familyUpdated} family`);
   }
 }
 
-function saveJobs(): void {
-  try {
-    fs.mkdirSync(path.dirname(JOBS_FILE), { recursive: true });
-    fs.writeFileSync(JOBS_FILE, JSON.stringify(batchJobs, null, 2));
-  } catch (e) {
-    console.error('Failed to save batch jobs:', e);
+// ─────────────────────────────────────────────────────────────────────────────
+// Field definitions for LLM score import (matches migrate-patents-to-postgres.ts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RATING_FIELDS = [
+  'eligibility_score', 'validity_score', 'claim_breadth', 'claim_clarity_score',
+  'enforcement_clarity', 'design_around_difficulty', 'evidence_accessibility_score',
+  'market_relevance_score', 'trend_alignment_score', 'investigation_priority_score',
+  'confidence',
+];
+
+const TEXT_FIELDS = [
+  'technology_category', 'implementation_type', 'standards_relevance',
+  'market_segment', 'detection_method', 'implementation_complexity',
+  'claim_type_primary', 'geographic_scope', 'lifecycle_stage',
+];
+
+const LONG_TEXT_FIELDS = [
+  'summary', 'prior_art_problem', 'technical_solution',
+];
+
+const FLOAT_FIELDS = [
+  'legal_viability_score', 'enforcement_potential_score', 'market_value_score',
+];
+
+const DISPLAY_NAMES: Record<string, string> = {
+  eligibility_score: 'Eligibility Score',
+  validity_score: 'Validity Score',
+  claim_breadth: 'Claim Breadth',
+  claim_clarity_score: 'Claim Clarity',
+  enforcement_clarity: 'Enforcement Clarity',
+  design_around_difficulty: 'Design-Around Difficulty',
+  evidence_accessibility_score: 'Evidence Accessibility',
+  market_relevance_score: 'Market Relevance',
+  trend_alignment_score: 'Trend Alignment',
+  investigation_priority_score: 'Investigation Priority',
+  confidence: 'Confidence',
+  technology_category: 'Technology Category',
+  implementation_type: 'Implementation Type',
+  standards_relevance: 'Standards Relevance',
+  market_segment: 'Market Segment',
+  detection_method: 'Detection Method',
+  implementation_complexity: 'Implementation Complexity',
+  claim_type_primary: 'Claim Type (Primary)',
+  geographic_scope: 'Geographic Scope',
+  lifecycle_stage: 'Lifecycle Stage',
+  summary: 'LLM Summary',
+  prior_art_problem: 'Prior Art Problem',
+  technical_solution: 'Technical Solution',
+  legal_viability_score: 'Legal Viability Score',
+  enforcement_potential_score: 'Enforcement Potential Score',
+  market_value_score: 'Market Value Score',
+};
+
+/**
+ * Sync LLM score data from cache/llm-scores/ into the patent_scores EAV table.
+ * Only processes patents that have hasLlmData=true but no patent_scores rows.
+ * This bridges the gap between the file-based LLM analysis pipeline and the
+ * DB-backed patent data service.
+ */
+async function syncLlmScoresToDb(): Promise<{ imported: number; skipped: number; errors: number }> {
+  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
+  if (!fs.existsSync(llmDir)) {
+    return { imported: 0, skipped: 0, errors: 0 };
   }
+
+  // Find patents with hasLlmData=true but no patent_scores rows
+  const patentsNeedingSync = await prisma.$queryRaw<Array<{ patent_id: string }>>`
+    SELECT p.patent_id
+    FROM patents p
+    WHERE p.has_llm_data = true
+      AND NOT EXISTS (
+        SELECT 1 FROM patent_scores ps
+        WHERE ps.patent_id = p.patent_id
+      )
+  `;
+
+  if (patentsNeedingSync.length === 0) {
+    return { imported: 0, skipped: 0, errors: 0 };
+  }
+
+  console.log(`[BatchJobs] Syncing LLM scores to DB for ${patentsNeedingSync.length} patents...`);
+
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
+  const BATCH_SIZE = 100;
+
+  for (let i = 0; i < patentsNeedingSync.length; i += BATCH_SIZE) {
+    const batch = patentsNeedingSync.slice(i, i + BATCH_SIZE);
+    const ops: any[] = [];
+
+    for (const { patent_id: pid } of batch) {
+      const cacheFile = path.join(llmDir, `${pid}.json`);
+      if (!fs.existsSync(cacheFile)) {
+        skipped++;
+        continue;
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+      } catch {
+        errors++;
+        continue;
+      }
+
+      const source = data.source || 'imported';
+
+      // Rating fields (integer 1-5)
+      for (const field of RATING_FIELDS) {
+        if (data[field] != null) {
+          ops.push(
+            prisma.patentScore.upsert({
+              where: { patentId_fieldName: { patentId: pid, fieldName: field } },
+              create: {
+                patentId: pid,
+                fieldName: field,
+                displayName: DISPLAY_NAMES[field] || field,
+                rating: Math.round(Number(data[field])),
+                source,
+              },
+              update: {
+                rating: Math.round(Number(data[field])),
+                displayName: DISPLAY_NAMES[field] || field,
+              },
+            })
+          );
+        }
+      }
+
+      // Text fields
+      for (const field of TEXT_FIELDS) {
+        if (data[field]) {
+          ops.push(
+            prisma.patentScore.upsert({
+              where: { patentId_fieldName: { patentId: pid, fieldName: field } },
+              create: {
+                patentId: pid,
+                fieldName: field,
+                displayName: DISPLAY_NAMES[field] || field,
+                textValue: String(data[field]),
+                source,
+              },
+              update: {
+                textValue: String(data[field]),
+                displayName: DISPLAY_NAMES[field] || field,
+              },
+            })
+          );
+        }
+      }
+
+      // Long text fields (stored as reasoning)
+      for (const field of LONG_TEXT_FIELDS) {
+        if (data[field]) {
+          ops.push(
+            prisma.patentScore.upsert({
+              where: { patentId_fieldName: { patentId: pid, fieldName: field } },
+              create: {
+                patentId: pid,
+                fieldName: field,
+                displayName: DISPLAY_NAMES[field] || field,
+                reasoning: String(data[field]),
+                source,
+              },
+              update: {
+                reasoning: String(data[field]),
+                displayName: DISPLAY_NAMES[field] || field,
+              },
+            })
+          );
+        }
+      }
+
+      // Float fields (computed sub-scores)
+      for (const field of FLOAT_FIELDS) {
+        if (data[field] != null) {
+          ops.push(
+            prisma.patentScore.upsert({
+              where: { patentId_fieldName: { patentId: pid, fieldName: field } },
+              create: {
+                patentId: pid,
+                fieldName: field,
+                displayName: DISPLAY_NAMES[field] || field,
+                floatValue: Number(data[field]),
+                source,
+              },
+              update: {
+                floatValue: Number(data[field]),
+                displayName: DISPLAY_NAMES[field] || field,
+              },
+            })
+          );
+        }
+      }
+    }
+
+    if (ops.length > 0) {
+      // Split into transaction chunks to avoid OOM
+      const TX_LIMIT = 500;
+      for (let j = 0; j < ops.length; j += TX_LIMIT) {
+        await prisma.$transaction(ops.slice(j, j + TX_LIMIT));
+      }
+      imported += batch.length - skipped - errors;
+    }
+
+    if ((i + BATCH_SIZE) % 500 === 0 || i + BATCH_SIZE >= patentsNeedingSync.length) {
+      console.log(`[BatchJobs] LLM score sync progress: ${Math.min(i + BATCH_SIZE, patentsNeedingSync.length)}/${patentsNeedingSync.length}`);
+    }
+  }
+
+  console.log(`[BatchJobs] LLM score sync complete: ${imported} imported, ${skipped} skipped (no cache file), ${errors} errors`);
+  return { imported, skipped, errors };
 }
 
-// Parse tier value - handles both "5000" (legacy) and "4001-5000" (range) formats
-function parseTierValue(targetValue: string): number {
+/**
+ * Auto-create a ScoreSnapshot when a large LLM batch job completes.
+ * Snapshots are created with isActive=false and autoGenerated flag.
+ */
+async function createAutoSnapshot(job: BatchJobResponse): Promise<void> {
+  const patentCount = job.progress?.total ?? 0;
+  if (patentCount < 50) return;
+
+  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const sectorSlug = (job.targetValue || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const modelLabel = job.model
+    ? (job.model.includes('haiku') ? 'haiku' : job.model.includes('opus') ? 'opus' : 'sonnet4')
+    : 'sonnet4';
+  const snapshotName = `auto-${sectorSlug}-${modelLabel}-${dateStr}`;
+
+  // Check if this auto-snapshot already exists
+  const existing = await prisma.scoreSnapshot.findFirst({
+    where: { name: snapshotName },
+  });
+  if (existing) return;
+
+  await prisma.scoreSnapshot.create({
+    data: {
+      name: snapshotName,
+      description: `Auto-generated after LLM batch job (${patentCount} patents, ${job.targetType}: ${job.targetValue})`,
+      scoreType: 'LLM',
+      config: {
+        autoGenerated: true,
+        model: job.model || 'claude-sonnet-4-20250514',
+        batchMode: job.batchMode ?? true,
+        patentCount,
+        targetType: job.targetType,
+        targetValue: job.targetValue,
+        jobId: job.id,
+      },
+      isActive: false,
+      patentCount,
+    },
+  });
+
+  console.log(`[BatchJobs] Auto-snapshot created: ${snapshotName}`);
+}
+
+// Parse tier range - handles both "500" (legacy) and "501-1000" (range) formats
+// Returns { skip, take } for proper partitioning
+function parseTierRange(targetValue: string): { skip: number; take: number } {
   if (targetValue.includes('-')) {
-    // Range format: "4001-5000" → use end value (5000)
+    // Range format: "501-1000" → skip 500, take 500
     const parts = targetValue.split('-').map(s => parseInt(s.replace(/,/g, '')));
-    return parts[1] || parts[0] || 6000;
+    const start = parts[0] || 1;
+    const end = parts[1] || parts[0] || 500;
+    return { skip: start - 1, take: end - start + 1 };
   }
-  return parseInt(targetValue.replace(/,/g, '')) || 6000;
+  // Legacy format: "500" → skip 0, take 500
+  const take = parseInt(targetValue.replace(/,/g, '')) || 500;
+  return { skip: 0, take };
 }
 
-// Analyze gaps for a given target
+// Analyze gaps for a given target using Postgres
 // topN: for super-sector/sector, only analyze top N patents by score (0 = all)
-function analyzeGaps(targetType: TargetType, targetValue: string, topN: number = 0): Record<CoverageType, { total: number; gap: number; ids: string[] }> {
-  try {
-    const tierTopN = targetType === 'tier' ? parseTierValue(targetValue) : 6000;
+// portfolioId: optional — scope to a specific portfolio
+// sortBy: sort strategy for patent selection when topN > 0
+async function analyzeGaps(
+  targetType: TargetType,
+  targetValue: string,
+  topN: number = 0,
+  portfolioId?: string,
+  sortBy: SortStrategy = 'base_score'
+): Promise<Record<CoverageType, { total: number; gap: number; ids: string[] }>> {
+  const empty = {
+    llm: { total: 0, gap: 0, ids: [] as string[] },
+    prosecution: { total: 0, gap: 0, ids: [] as string[] },
+    'prosecution-detail': { total: 0, gap: 0, ids: [] as string[] },
+    ipr: { total: 0, gap: 0, ids: [] as string[] },
+    family: { total: 0, gap: 0, ids: [] as string[] },
+    xml: { total: 0, gap: 0, ids: [] as string[] },
+    citing: { total: 0, gap: 0, ids: [] as string[] },
+  };
 
-    // Build sector matching condition that handles legacy uppercase names
-    let sectorCondition = `p.super_sector === '${targetValue}'`;
-    if (targetValue === 'Video & Streaming') {
-      sectorCondition = `(p.super_sector === 'Video & Streaming' || p.super_sector === 'VIDEO_STREAMING')`;
-    } else if (targetValue === 'SDN & Network Infrastructure') {
-      sectorCondition = `(p.super_sector === 'SDN & Network Infrastructure' || p.super_sector === 'SDN_NETWORK')`;
-    } else if (targetValue === 'Computing & Data') {
-      sectorCondition = `(p.super_sector === 'Computing & Data' || p.super_sector === 'COMPUTING')`;
-    } else if (targetValue === 'Virtualization & Cloud') {
-      sectorCondition = `(p.super_sector === 'Virtualization & Cloud' || p.super_sector === 'VIRTUALIZATION')`;
-    } else if (targetValue === 'Imaging & Optics') {
-      sectorCondition = `(p.super_sector === 'Imaging & Optics' || p.super_sector === 'IMAGING')`;
-    } else if (targetValue === 'Wireless & RF') {
-      sectorCondition = `(p.super_sector === 'Wireless & RF' || p.super_sector === 'WIRELESS')`;
-    } else if (targetValue === 'Semiconductor') {
-      sectorCondition = `(p.super_sector === 'Semiconductor' || p.super_sector === 'SEMICONDUCTOR')`;
-    } else if (targetValue === 'Security') {
-      sectorCondition = `(p.super_sector === 'Security' || p.super_sector === 'SECURITY')`;
-    } else if (targetValue === 'Audio') {
-      sectorCondition = `(p.super_sector === 'Audio' || p.super_sector === 'AUDIO')`;
-    } else if (targetValue === 'AI & Machine Learning') {
-      sectorCondition = `(p.super_sector === 'AI & Machine Learning' || p.super_sector === 'AI_ML')`;
+  try {
+    // Build where clause based on target type
+    const where: Record<string, any> = {};
+
+    // Portfolio scoping via PortfolioPatent join
+    if (portfolioId) {
+      where.portfolios = { some: { portfolioId } };
     }
 
-    // For super-sector/sector, optionally limit to top N by score
-    const sectorTopN = topN > 0 ? topN : 999999;
+    if (targetType === 'super-sector') {
+      where.superSector = targetValue;
+    } else if (targetType === 'sector') {
+      where.primarySector = targetValue;
+    }
+    // For 'tier', we partition by skip/take from the range
 
-    const script = `
-      const fs = require('fs');
-      const candidatesFile = fs.readdirSync('output')
-        .filter(f => f.startsWith('streaming-candidates-') && f.endsWith('.json'))
-        .sort().pop();
-      const data = JSON.parse(fs.readFileSync('output/' + candidatesFile, 'utf-8'));
-
-      let patents;
-      if ('${targetType}' === 'tier') {
-        patents = data.candidates.sort((a, b) => b.score - a.score).slice(0, ${tierTopN});
-      } else if ('${targetType}' === 'super-sector') {
-        patents = data.candidates
-          .filter(p => ${sectorCondition})
-          .sort((a, b) => b.score - a.score)
-          .slice(0, ${sectorTopN});
-      } else {
-        patents = data.candidates
-          .filter(p => p.primary_sector === '${targetValue}')
-          .sort((a, b) => b.score - a.score)
-          .slice(0, ${sectorTopN});
+    // Determine skip + take for pagination
+    let skip = 0;
+    let take: number | undefined;
+    if (targetType === 'tier') {
+      const range = parseTierRange(targetValue);
+      skip = range.skip;
+      take = range.take;
+    } else if (topN > 0) {
+      // For v2_composite and v3_snapshot, we fetch all then sort in memory
+      if (sortBy !== 'v2_composite' && sortBy !== 'v3_snapshot') {
+        take = topN;
       }
+    }
 
-      function getCacheSet(dir) {
-        if (!fs.existsSync(dir)) return new Set();
-        return new Set(fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => f.replace('.json', '')));
-      }
+    // Build orderBy based on sort strategy
+    const needsInMemorySort = topN > 0 && (sortBy === 'v2_composite' || sortBy === 'v3_snapshot');
+    let orderBy: any[];
+    switch (sortBy) {
+      case 'newest_first':
+        orderBy = [{ patentIdNumeric: 'desc' }];
+        break;
+      case 'forward_citations':
+        orderBy = [{ forwardCitations: 'desc' }, { baseScore: 'desc' }];
+        break;
+      case 'base_score':
+      default:
+        orderBy = [{ baseScore: 'desc' }, { grantDate: 'desc' }];
+        break;
+    }
 
-      const llmSet = getCacheSet('cache/llm-scores');
-      const prosSet = getCacheSet('cache/prosecution-scores');
-      const iprSet = getCacheSet('cache/ipr-scores');
-      const familySet = getCacheSet('cache/patent-families/parents');
+    // For v3_snapshot, include composite scores via join
+    const includeCompositeScores = sortBy === 'v3_snapshot';
 
-      const ids = patents.map(p => p.patent_id);
-      const result = {
-        llm: { total: ids.length, gap: ids.filter(id => !llmSet.has(id)).length, ids: ids.filter(id => !llmSet.has(id)) },
-        prosecution: { total: ids.length, gap: ids.filter(id => !prosSet.has(id)).length, ids: ids.filter(id => !prosSet.has(id)) },
-        ipr: { total: ids.length, gap: ids.filter(id => !iprSet.has(id)).length, ids: ids.filter(id => !iprSet.has(id)) },
-        family: { total: ids.length, gap: ids.filter(id => !familySet.has(id)).length, ids: ids.filter(id => !familySet.has(id)) },
-      };
-      console.log(JSON.stringify(result));
-    `;
-
-    const result = execSync(`node -e "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
-      encoding: 'utf-8',
-      cwd: process.cwd(),
+    const patents = await prisma.patent.findMany({
+      where,
+      select: {
+        patentId: true,
+        grantDate: true,
+        hasLlmData: true,
+        hasProsecutionData: true,
+        hasXmlData: true,
+        hasIprData: true,
+        hasFamilyData: true,
+        hasCitationData: true,
+        forwardCitations: true,
+        isQuarantined: true,
+        quarantine: true,
+        ...(sortBy === 'v2_composite' ? {
+          baseScore: true,
+          remainingYears: true,
+        } : {}),
+        ...(includeCompositeScores ? {
+          compositeScores: {
+            where: { scoreName: 'v3_snapshot' },
+            select: { value: true },
+            take: 1,
+          },
+          baseScore: true,
+        } : {}),
+      },
+      orderBy: needsInMemorySort ? [{ baseScore: 'desc' }] : orderBy,
+      ...(skip > 0 ? { skip } : {}),
+      ...(take ? { take } : {}),
     });
 
-    return JSON.parse(result.trim());
+    // In-memory sort + slice for v2_composite and v3_snapshot
+    let sortedPatents = patents;
+    if (needsInMemorySort) {
+      if (sortBy === 'v2_composite') {
+        // V2 composite: log10(fwdCitations+1)*30*0.5 + min(remainingYears/20,1)*100*0.3 + baseScore*0.2
+        sortedPatents = [...patents].sort((a: any, b: any) => {
+          const v2a = Math.log10((a.forwardCitations || 0) + 1) * 15
+            + Math.min((a.remainingYears || 0) / 20, 1) * 30
+            + (a.baseScore || 0) * 0.2;
+          const v2b = Math.log10((b.forwardCitations || 0) + 1) * 15
+            + Math.min((b.remainingYears || 0) / 20, 1) * 30
+            + (b.baseScore || 0) * 0.2;
+          return v2b - v2a;
+        });
+      } else if (sortBy === 'v3_snapshot') {
+        sortedPatents = [...patents].sort((a: any, b: any) => {
+          const v3a = a.compositeScores?.[0]?.value ?? a.baseScore ?? 0;
+          const v3b = b.compositeScores?.[0]?.value ?? b.baseScore ?? 0;
+          return v3b - v3a;
+        });
+      }
+      if (topN > 0) {
+        sortedPatents = sortedPatents.slice(0, topN);
+      }
+    }
+
+    const ids = sortedPatents.map(p => p.patentId);
+
+    // All enrichment gaps now come from Postgres flags
+    // LLM gap: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
+    const llmEligible = sortedPatents.filter(p => !(p.quarantine as any)?.llm);
+    const llmGapIds = llmEligible.filter(p => !p.hasLlmData).map(p => p.patentId);
+    const prosGapIds = sortedPatents.filter(p => !p.hasProsecutionData).map(p => p.patentId);
+    // Prosecution-detail gap: requires hasProsecutionDetail flag (claim-level analysis)
+    const prosDetailGapIds = sortedPatents.filter(p => !(p as any).hasProsecutionDetail).map(p => p.patentId);
+    // XML gap: use quarantine to exclude ineligible patents
+    const xmlEligible = sortedPatents.filter(p => !(p.quarantine as any)?.xml);
+    const xmlGapIds = xmlEligible.filter(p => !p.hasXmlData).map(p => p.patentId);
+
+    const iprGapIds = sortedPatents.filter(p => !p.hasIprData).map(p => p.patentId);
+    const familyGapIds = sortedPatents.filter(p => !p.hasFamilyData).map(p => p.patentId);
+
+    // Citing gaps still use file-based cache (no DB flag for this)
+    function getCacheSet(dir: string): Set<string> {
+      const fullPath = path.join(process.cwd(), dir);
+      if (!fs.existsSync(fullPath)) return new Set();
+      try {
+        return new Set(
+          fs.readdirSync(fullPath)
+            .filter(f => f.endsWith('.json'))
+            .map(f => f.replace('.json', ''))
+        );
+      } catch {
+        return new Set();
+      }
+    }
+
+    const citingSet = getCacheSet('cache/api/patentsview/citing-patent-details');
+    const citingGapIds = ids.filter(id => !citingSet.has(id));
+
+    const quarantineCounts = {
+      total: sortedPatents.filter(p => p.isQuarantined).length,
+      xml: sortedPatents.filter(p => (p.quarantine as any)?.xml).length,
+      llm: sortedPatents.filter(p => (p.quarantine as any)?.llm).length,
+    };
+
+    return {
+      llm: { total: llmEligible.length, gap: llmGapIds.length, ids: llmGapIds },
+      prosecution: { total: ids.length, gap: prosGapIds.length, ids: prosGapIds },
+      'prosecution-detail': { total: ids.length, gap: prosDetailGapIds.length, ids: prosDetailGapIds },
+      ipr: { total: ids.length, gap: iprGapIds.length, ids: iprGapIds },
+      family: { total: ids.length, gap: familyGapIds.length, ids: familyGapIds },
+      xml: { total: xmlEligible.length, gap: xmlGapIds.length, ids: xmlGapIds },
+      citing: { total: ids.length, gap: citingGapIds.length, ids: citingGapIds },
+      quarantineCounts,
+    };
   } catch (e) {
     console.error('Failed to analyze gaps:', e);
-    return {
-      llm: { total: 0, gap: 0, ids: [] },
-      prosecution: { total: 0, gap: 0, ids: [] },
-      ipr: { total: 0, gap: 0, ids: [] },
-      family: { total: 0, gap: 0, ids: [] },
-    };
+    return empty;
   }
 }
 
 // Get script command for a coverage type
-function getEnrichmentCommand(coverageType: CoverageType, batchFile: string, logFile: string): string {
+function getEnrichmentCommand(
+  coverageType: CoverageType,
+  batchFile: string,
+  logFile: string,
+  options?: { model?: string; batchMode?: boolean; settings?: Record<string, unknown> }
+): string {
+  const envVars: string[] = [];
+
+  if (coverageType === 'llm') {
+    if (options?.model) envVars.push(`LLM_MODEL=${options.model}`);
+    if (options?.batchMode) envVars.push('BATCH_MODE=true');
+    if (options?.settings?.llmConcurrency) envVars.push(`LLM_CONCURRENCY=${options.settings.llmConcurrency}`);
+    if (options?.settings?.llmMaxRetries != null) envVars.push(`LLM_MAX_RETRIES=${options.settings.llmMaxRetries}`);
+    if (options?.settings?.llmRetryBaseDelay) envVars.push(`LLM_RETRY_BASE_DELAY=${options.settings.llmRetryBaseDelay}`);
+    if (options?.settings?.llmInterBatchDelay) envVars.push(`LLM_INTER_BATCH_DELAY=${options.settings.llmInterBatchDelay}`);
+  }
+
+  if (coverageType === 'prosecution' || coverageType === 'prosecution-detail' || coverageType === 'ipr') {
+    if (options?.settings?.apiRateLimit) envVars.push(`API_RATE_LIMIT=${options.settings.apiRateLimit}`);
+    if (options?.settings?.apiRetryAttempts != null) envVars.push(`API_RETRY_ATTEMPTS=${options.settings.apiRetryAttempts}`);
+    if (options?.settings?.apiRetryDelay) envVars.push(`API_RETRY_DELAY=${options.settings.apiRetryDelay}`);
+  }
+
+  const envPrefix = envVars.length > 0 ? `${envVars.join(' ')} ` : '';
+
   switch (coverageType) {
     case 'llm':
-      return `npx tsx scripts/run-llm-analysis-v3.ts ${batchFile} > ${logFile} 2>&1`;
+      return `${envPrefix}npx tsx scripts/run-sector-scoring.ts ${batchFile} > ${logFile} 2>&1`;
     case 'prosecution':
-      return `npx tsx scripts/check-prosecution-history.ts ${batchFile} > ${logFile} 2>&1`;
+      return `${envPrefix}npx tsx scripts/check-prosecution-history.ts ${batchFile} > ${logFile} 2>&1`;
+    case 'prosecution-detail':
+      return `${envPrefix}npx tsx scripts/enrich-prosecution-detail.ts ${batchFile} > ${logFile} 2>&1`;
     case 'ipr':
-      return `npx tsx scripts/check-ipr-risk.ts ${batchFile} > ${logFile} 2>&1`;
+      return `${envPrefix}npx tsx scripts/check-ipr-risk.ts ${batchFile} > ${logFile} 2>&1`;
     case 'family':
-      // Family script uses comma-separated IDs
       return `npx tsx scripts/enrich-citations.ts --patent-ids "$(cat ${batchFile} | jq -r '.[]' | tr '\\n' ',' | sed 's/,$//')" > ${logFile} 2>&1`;
+    case 'xml':
+      return `npx tsx scripts/extract-patent-xmls-batch.ts ${batchFile} > ${logFile} 2>&1`;
     default:
       throw new Error(`Unknown coverage type: ${coverageType}`);
   }
@@ -198,7 +693,7 @@ function getEnrichmentCommand(coverageType: CoverageType, batchFile: string, log
 function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: string }> {
   try {
     const result = execSync(
-      'ps aux | grep -E "run-llm-analysis|check-prosecution|check-ipr|enrich-citations" | grep -v grep',
+      'ps aux | grep -E "run-sector-scoring|run-llm-analysis|check-prosecution|enrich-prosecution-detail|check-ipr|enrich-citations|extract-patent-xmls" | grep -v grep',
       { encoding: 'utf-8' }
     );
 
@@ -206,10 +701,12 @@ function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: strin
       const parts = line.split(/\s+/);
       const pid = parseInt(parts[1]);
       let type = 'unknown';
-      if (line.includes('run-llm-analysis')) type = 'llm';
+      if (line.includes('run-sector-scoring') || line.includes('run-llm-analysis')) type = 'llm';
+      else if (line.includes('enrich-prosecution-detail')) type = 'prosecution-detail';
       else if (line.includes('check-prosecution')) type = 'prosecution';
       else if (line.includes('check-ipr')) type = 'ipr';
       else if (line.includes('enrich-citations')) type = 'family';
+      else if (line.includes('extract-patent-xmls')) type = 'xml';
       return { pid, type, cmd: parts.slice(10).join(' ') };
     });
   } catch {
@@ -217,76 +714,310 @@ function detectRunningProcesses(): Array<{ pid: number; type: string; cmd: strin
   }
 }
 
-// Initialize
-loadJobs();
+/**
+ * Parse the last progress line from a job's log file.
+ * Supports formats:
+ *   - "Progress: 25/100 (25%)"
+ *   - "  Progress: 25/100 (25%)"
+ *   - "Progress: 25/100 | ..."
+ * Returns { completed, total } or null if no progress found.
+ */
+function parseLogProgress(logFile: string): { completed: number; total: number } | null {
+  try {
+    if (!fs.existsSync(logFile)) return null;
+
+    // Read last 4KB of the file (enough to find the latest progress line)
+    const stat = fs.statSync(logFile);
+    const readSize = Math.min(stat.size, 4096);
+    const fd = fs.openSync(logFile, 'r');
+    const buffer = Buffer.alloc(readSize);
+    fs.readSync(fd, buffer, 0, readSize, Math.max(0, stat.size - readSize));
+    fs.closeSync(fd);
+
+    const text = buffer.toString('utf-8');
+    const lines = text.split('\n').reverse();
+
+    for (const line of lines) {
+      const match = line.match(/Progress:\s*(\d+)\s*\/\s*(\d+)/);
+      if (match) {
+        return { completed: parseInt(match[1]), total: parseInt(match[2]) };
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+  return null;
+}
+
+/**
+ * Parse Anthropic batch IDs from a batch-mode job's log file.
+ * Looks for lines like: "BATCH_SUBMITTED: msgbatch_xxx (123 requests for sector-name)"
+ * Returns the first batch ID found, or null.
+ */
+function parseLogBatchId(logFile: string): string | null {
+  try {
+    if (!fs.existsSync(logFile)) return null;
+    const text = fs.readFileSync(logFile, 'utf-8');
+    const match = text.match(/BATCH_SUBMITTED:\s*(msgbatch_\S+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * On startup, check for any jobs marked as "running" in the DB whose PIDs no longer exist.
+ * Mark them as completed (they finished while server was down).
+ */
+async function reconcileJobsOnStartup(): Promise<void> {
+  try {
+    const runningJobs = await prisma.batchJob.findMany({
+      where: { status: 'running' },
+    });
+
+    if (runningJobs.length === 0) return;
+
+    const runningProcesses = detectRunningProcesses();
+
+    for (const job of runningJobs) {
+      if (job.pid) {
+        const stillRunning = runningProcesses.some(p => p.pid === job.pid);
+        if (!stillRunning) {
+          // Check if this was a batch-mode job that submitted to Anthropic
+          const anthropicBatchId = job.batchMode && job.logFile
+            ? parseLogBatchId(job.logFile)
+            : null;
+
+          if (anthropicBatchId) {
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: { status: 'batch_pending', anthropicBatchId },
+            });
+            console.log(`[BatchJobs] Reconciled batch job ${job.id} → batch_pending (${anthropicBatchId})`);
+          } else {
+            const startTime = job.startedAt?.getTime() ?? Date.now();
+            const hours = (Date.now() - startTime) / 3600000;
+            const actualRate = hours > 0 ? Math.round(job.totalPatents / hours) : 0;
+
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                actualRate,
+              },
+            });
+            console.log(`[BatchJobs] Reconciled stale job ${job.id} (${job.coverageType}) → completed`);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[BatchJobs] Failed to reconcile jobs on startup:', e);
+  }
+}
+
+// Initialize — reconcile any stale "running" jobs
+reconcileJobsOnStartup();
 
 /**
  * GET /api/batch-jobs
  * List all batch jobs (recent + running)
  */
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
-    // Get jobs from last 7 days
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    let recentJobs = batchJobs.filter(j =>
-      (j.startedAt && j.startedAt > cutoff) || j.status === 'running' || j.status === 'pending'
-    );
-
-    // Update status of jobs that claim to be running
-    const runningProcesses = detectRunningProcesses();
-    let jobsJustCompleted = false;
-    recentJobs = recentJobs.map(j => {
-      if (j.status === 'running' && j.pid) {
-        const stillRunning = runningProcesses.some(p => p.pid === j.pid);
-        if (!stillRunning) {
-          // Job finished - calculate actual rate
-          const startTime = j.startedAt ? new Date(j.startedAt).getTime() : Date.now();
-          const endTime = Date.now();
-          const hours = (endTime - startTime) / 3600000;
-          const completed = j.progress?.completed || j.progress?.total || 0;
-          const actualRate = hours > 0 ? Math.round(completed / hours) : 0;
-
-          jobsJustCompleted = true;
-
-          return {
-            ...j,
-            status: 'completed' as const,
-            completedAt: new Date().toISOString(),
-            actualRate,
-          };
-        }
-      }
-      return j;
+    // Get jobs from last 7 days + any active ones
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const dbJobs = await prisma.batchJob.findMany({
+      where: {
+        OR: [
+          { createdAt: { gte: cutoff } },
+          { status: { in: ['running', 'pending', 'batch_pending'] } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
 
-    // Invalidate caches when jobs complete (throttled to once per 10 seconds)
+    // Check running jobs against OS processes
+    const runningProcesses = detectRunningProcesses();
+    let jobsJustCompleted = false;
+
+    for (const job of dbJobs) {
+      if (job.status === 'running' && job.pid) {
+        const stillRunning = runningProcesses.some(p => p.pid === job.pid);
+        if (!stillRunning) {
+          // Check if this was a batch-mode job that submitted to Anthropic Batch API
+          const anthropicBatchId = job.batchMode && job.logFile
+            ? parseLogBatchId(job.logFile)
+            : null;
+
+          if (anthropicBatchId) {
+            // Batch API submission script exited — transition to batch_pending
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'batch_pending',
+                anthropicBatchId,
+              },
+            });
+            job.status = 'batch_pending';
+            (job as any).anthropicBatchId = anthropicBatchId;
+            console.log(`[BatchJobs] Job ${job.id} submitted to Anthropic Batch API: ${anthropicBatchId}`);
+          } else {
+            // Normal realtime job finished — mark completed
+            const finalProgress = job.logFile ? parseLogProgress(job.logFile) : null;
+            const completedPatents = finalProgress?.completed ?? job.totalPatents;
+            const startTime = job.startedAt?.getTime() ?? Date.now();
+            const hours = (Date.now() - startTime) / 3600000;
+            const actualRate = hours > 0 ? Math.round(completedPatents / hours) : 0;
+
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                completedPatents,
+                actualRate,
+              },
+            });
+            job.status = 'completed';
+            job.completedAt = new Date();
+            job.completedPatents = completedPatents;
+            job.actualRate = actualRate;
+            jobsJustCompleted = true;
+          }
+        } else if (job.logFile) {
+          // Still running — parse log for live progress update
+          const progress = parseLogProgress(job.logFile);
+          if (progress && progress.completed > job.completedPatents) {
+            // Update DB and in-memory object with latest progress
+            const startTime = job.startedAt?.getTime() ?? Date.now();
+            const elapsedHours = (Date.now() - startTime) / 3600000;
+            const currentRate = elapsedHours > 0 ? progress.completed / elapsedHours : job.estimatedRate ?? 0;
+            const remaining = (progress.total || job.totalPatents) - progress.completed;
+            const etaMs = currentRate > 0 ? (remaining / currentRate) * 3600000 : 0;
+
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                completedPatents: progress.completed,
+                actualRate: Math.round(currentRate),
+                estimatedCompletion: etaMs > 0 ? new Date(Date.now() + etaMs) : null,
+              },
+            });
+            job.completedPatents = progress.completed;
+            job.actualRate = Math.round(currentRate);
+            job.estimatedCompletion = etaMs > 0 ? new Date(Date.now() + etaMs) : null;
+          }
+        }
+      }
+    }
+
+    // Poll Anthropic Batch API for batch_pending jobs (lightweight — just status check)
+    const batchPendingJobs = dbJobs.filter(j => j.status === 'batch_pending' && j.anthropicBatchId);
+    for (const job of batchPendingJobs) {
+      try {
+        const batchStatus = await checkBatchStatus(job.anthropicBatchId!);
+
+        if (batchStatus.status === 'ended') {
+          // Batch complete — process results and mark job as completed
+          console.log(`[BatchJobs] Anthropic batch ${job.anthropicBatchId} ended — processing results...`);
+          try {
+            const results = await processBatchResults(job.anthropicBatchId!);
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                completedPatents: results.processed,
+              },
+            });
+            job.status = 'completed';
+            job.completedAt = new Date();
+            job.completedPatents = results.processed;
+            jobsJustCompleted = true;
+            console.log(`[BatchJobs] Batch ${job.anthropicBatchId} processed: ${results.processed} scored, ${results.failed} failed`);
+          } catch (processErr) {
+            console.error(`[BatchJobs] Failed to process batch results for ${job.anthropicBatchId}:`, processErr);
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'failed',
+                error: `Batch result processing failed: ${(processErr as Error).message}`,
+              },
+            });
+            job.status = 'failed';
+          }
+        } else if (batchStatus.status === 'in_progress') {
+          // Update progress from Anthropic request counts
+          const counts = batchStatus.requestCounts;
+          const completed = counts.succeeded + counts.errored + counts.expired + counts.canceled;
+          if (completed > job.completedPatents) {
+            await prisma.batchJob.update({
+              where: { id: job.id },
+              data: { completedPatents: completed },
+            });
+            job.completedPatents = completed;
+          }
+        }
+      } catch (err) {
+        // Non-fatal — Anthropic API may be temporarily unavailable
+        console.error(`[BatchJobs] Failed to check batch status for ${job.anthropicBatchId}:`, (err as Error).message);
+      }
+    }
+
+    // Auto-process completed Anthropic batches from cache/batch-jobs/ (throttled to once per 60s)
+    // This catches batches that aren't tracked in the DB (multiple batches per job)
     const now = Date.now();
+    if (now - lastBatchAutoProcess > 60_000) {
+      lastBatchAutoProcess = now;
+      // Fire-and-forget — don't block the response
+      processAllCompletedBatches().then(result => {
+        if (result.processed > 0) {
+          console.log(`[BatchJobs] Auto-processed ${result.processed} patents from completed Anthropic batches`);
+          invalidateEnrichmentCache();
+          clearScoringCache();
+        }
+      }).catch(err => {
+        console.error('[BatchJobs] Auto-process error:', (err as Error).message);
+      });
+    }
+
+    // Invalidate caches when jobs complete (throttled to once per 10 seconds)
+    // Note: enrichment flags are now set inline by scripts/services — no directory scanning needed
+
     if (jobsJustCompleted && now - lastCacheInvalidation > 10000) {
       console.log('[BatchJobs] Jobs completed - invalidating enrichment and scoring caches');
       invalidateEnrichmentCache();
       clearScoringCache();
       lastCacheInvalidation = now;
+
+      // Auto-snapshot for large completed LLM jobs
+      const justCompletedLlm = dbJobs.filter(j =>
+        j.status === 'completed' &&
+        j.coverageType === 'llm' &&
+        j.totalPatents >= 50
+      );
+      for (const job of justCompletedLlm) {
+        createAutoSnapshot(toResponse(job)).catch(err =>
+          console.error('[BatchJobs] Failed to create auto-snapshot:', err)
+        );
+      }
     }
 
-    // Save any status updates
-    batchJobs = batchJobs.map(j => {
-      const updated = recentJobs.find(r => r.id === j.id);
-      return updated || j;
-    });
-    saveJobs();
+    const responseJobs = dbJobs.map(toResponse);
 
     // Stats
     const stats = {
-      pending: recentJobs.filter(j => j.status === 'pending').length,
-      running: recentJobs.filter(j => j.status === 'running').length,
-      completed: recentJobs.filter(j => j.status === 'completed').length,
-      failed: recentJobs.filter(j => j.status === 'failed').length,
+      pending: responseJobs.filter(j => j.status === 'pending').length,
+      running: responseJobs.filter(j => j.status === 'running').length,
+      batch_pending: responseJobs.filter(j => j.status === 'batch_pending').length,
+      completed: responseJobs.filter(j => j.status === 'completed').length,
+      failed: responseJobs.filter(j => j.status === 'failed').length,
     };
 
-    res.json({
-      jobs: recentJobs.slice(0, 100),
-      stats,
-    });
+    res.json({ jobs: responseJobs, stats });
   } catch (error) {
     console.error('Error listing batch jobs:', error);
     res.status(500).json({ error: 'Failed to list batch jobs' });
@@ -297,14 +1028,19 @@ router.get('/', (_req: Request, res: Response) => {
  * POST /api/batch-jobs
  * Start enrichment jobs for selected coverage types
  */
-router.post('/', (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const {
       targetType,
       targetValue,
       coverageTypes = ['llm', 'prosecution', 'ipr', 'family'],
       maxHours = 4,
-      topN = 0  // For super-sector/sector: limit to top N patents by score (0 = all)
+      topN = 0,  // For super-sector/sector: limit to top N patents by score (0 = all)
+      sortBy: sortByParam = 'base_score',  // Sort strategy for topN patent selection
+      portfolioId,  // Optional: scope to a specific portfolio
+      model,       // Optional: LLM model override (e.g., 'claude-sonnet-4-20250514')
+      batchMode,   // Optional: true = Batch API (50% off, ~24h), false = realtime
+      settings,    // Optional: advanced settings (concurrency, retries, rate limits)
     } = req.body;
 
     if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
@@ -315,8 +1051,8 @@ router.post('/', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'targetValue is required' });
     }
 
-    // Validate coverage types
-    const validTypes: CoverageType[] = ['llm', 'prosecution', 'ipr', 'family'];
+    // Validate coverage types (citing is analysis-only, not a runnable job type)
+    const validTypes: CoverageType[] = ['llm', 'prosecution', 'prosecution-detail', 'ipr', 'family', 'xml'];
     const selectedTypes = coverageTypes.filter((t: string) => validTypes.includes(t as CoverageType)) as CoverageType[];
 
     if (selectedTypes.length === 0) {
@@ -324,12 +1060,69 @@ router.post('/', (req: Request, res: Response) => {
     }
 
     // Analyze gaps to determine what needs to be done
-    // For super-sector/sector, topN limits analysis to top N patents by score
-    const gaps = analyzeGaps(targetType, targetValue, topN);
+    // For super-sector/sector, topN limits analysis to top N patents by sortBy strategy
+    const sortBy = (sortByParam as SortStrategy) || 'base_score';
+    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId, sortBy);
+
+    // Claims-gate: filter LLM gap to only patents WITH XML data (claims available)
+    // If no LLM-eligible patents have XML yet, skip LLM silently — XML extraction
+    // will run in parallel and LLM can be resubmitted once XML data is available.
+    let claimsSkipped = 0;
+    let llmDeferred = false;
+    if (selectedTypes.includes('llm')) {
+      const llmGapIds = gaps.llm.ids;
+      const patentsWithXml = await prisma.patent.findMany({
+        where: { patentId: { in: llmGapIds }, hasXmlData: true },
+        select: { patentId: true },
+      });
+      const withXmlSet = new Set(patentsWithXml.map(p => p.patentId));
+      const withXml = llmGapIds.filter(id => withXmlSet.has(id));
+      claimsSkipped = llmGapIds.length - withXml.length;
+
+      if (withXml.length === 0 && claimsSkipped > 0) {
+        // No patents have XML yet — skip LLM, let other job types proceed
+        console.log(`[BatchJobs] Claims-gate: deferring LLM — all ${claimsSkipped} patents missing XML. Other job types will proceed.`);
+        const llmIdx = selectedTypes.indexOf('llm');
+        if (llmIdx !== -1) selectedTypes.splice(llmIdx, 1);
+        llmDeferred = true;
+        if (selectedTypes.length === 0) {
+          return res.status(200).json({
+            groupId: `group-${Date.now()}`,
+            jobs: [],
+            llmDeferred: true,
+            llmDeferredCount: claimsSkipped,
+            message: `LLM scoring deferred: all ${claimsSkipped} patents need XML extraction first.`,
+          });
+        }
+      } else {
+        // Some patents have XML — run LLM on those, skip the rest
+        gaps.llm.ids = withXml;
+        gaps.llm.gap = withXml.length;
+        if (claimsSkipped > 0) {
+          console.log(`[BatchJobs] Claims-gate: running LLM on ${withXml.length} patents with XML, skipping ${claimsSkipped} without XML`);
+        }
+      }
+    }
+
+    // Resolve portfolio name for display
+    let portfolioName: string | undefined;
+    if (portfolioId) {
+      const portfolio = await prisma.portfolio.findUnique({
+        where: { id: portfolioId },
+        select: { name: true, displayName: true },
+      });
+      portfolioName = portfolio?.displayName || portfolio?.name || undefined;
+    }
 
     // Create a group ID to link related jobs
     const groupId = `group-${Date.now()}`;
-    const createdJobs: BatchJob[] = [];
+    const createdJobs: BatchJobResponse[] = [];
+
+    const MAX_BATCH_SIZE = settings?.batchSize
+      ? Math.max(100, Math.min(1000, parseInt(String(settings.batchSize))))
+      : 500;
+    const logsDir = path.join(process.cwd(), 'logs');
+    fs.mkdirSync(logsDir, { recursive: true });
 
     for (const coverageType of selectedTypes) {
       const gapInfo = gaps[coverageType];
@@ -339,55 +1132,66 @@ router.post('/', (req: Request, res: Response) => {
         continue;
       }
 
-      const jobId = `${coverageType}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      const batchFile = `/tmp/batch-${jobId}.json`;
-      const logsDir = path.join(process.cwd(), 'logs');
-      fs.mkdirSync(logsDir, { recursive: true });
-      const logFile = path.join(logsDir, `job-${jobId}.log`);
+      // Auto-split into chunks of MAX_BATCH_SIZE
+      const allIds = gapInfo.ids;
+      const chunkCount = Math.ceil(allIds.length / MAX_BATCH_SIZE);
 
-      // Write batch file with patent IDs (process up to 500 at a time)
-      const MAX_BATCH_SIZE = 500;
-      const batchIds = gapInfo.ids.slice(0, MAX_BATCH_SIZE);
-      const actualBatchSize = batchIds.length;
-      fs.writeFileSync(batchFile, JSON.stringify(batchIds));
+      for (let chunkIdx = 0; chunkIdx < chunkCount; chunkIdx++) {
+        const chunkStart = chunkIdx * MAX_BATCH_SIZE;
+        const batchIds = allIds.slice(chunkStart, chunkStart + MAX_BATCH_SIZE);
+        const actualBatchSize = batchIds.length;
 
-      // Calculate estimated completion based on actual batch size, not full gap
-      const rate = DEFAULT_RATES[coverageType];
-      const estimatedHours = actualBatchSize / rate;
-      const estimatedCompletion = new Date(Date.now() + estimatedHours * 3600000).toISOString();
+        const batchFile = `/tmp/batch-${Date.now()}-${Math.random().toString(36).substr(2, 5)}.json`;
+        const logFile = path.join(logsDir, `job-${Date.now()}-${Math.random().toString(36).substr(2, 3)}.log`);
 
-      // Start the job
-      const cmd = getEnrichmentCommand(coverageType, batchFile, logFile);
-      const child = spawn('bash', ['-c', cmd], {
-        detached: true,
-        stdio: 'ignore',
-        cwd: process.cwd(),
-      });
-      child.unref();
+        fs.writeFileSync(batchFile, JSON.stringify(batchIds));
 
-      const job: BatchJob = {
-        id: jobId,
-        groupId,
-        targetType,
-        targetValue,
-        coverageType,
-        status: 'running',
-        pid: child.pid,
-        startedAt: new Date().toISOString(),
-        logFile,
-        progress: {
-          total: actualBatchSize,  // Actual patents being processed, not full gap
-          completed: 0,
-        },
-        estimatedRate: rate,
-        estimatedCompletion,
-      };
+        // Calculate estimated completion
+        const rate = DEFAULT_RATES[coverageType];
+        const estimatedHours = actualBatchSize / rate;
+        const estimatedCompletion = new Date(Date.now() + estimatedHours * 3600000);
 
-      batchJobs.unshift(job);
-      createdJobs.push(job);
+        // Start the job
+        const cmd = getEnrichmentCommand(coverageType, batchFile, logFile, {
+          model: coverageType === 'llm' ? model : undefined,
+          batchMode: coverageType === 'llm' ? batchMode : undefined,
+          settings,
+        });
+        const child = spawn('bash', ['-c', cmd], {
+          detached: true,
+          stdio: 'ignore',
+          cwd: process.cwd(),
+        });
+        child.unref();
+
+        const chunkLabel = chunkCount > 1 ? ` (${chunkIdx + 1}/${chunkCount})` : '';
+
+        // Persist to DB
+        const dbJob = await prisma.batchJob.create({
+          data: {
+            groupId,
+            targetType,
+            targetValue: targetValue + chunkLabel,
+            coverageType,
+            status: 'running',
+            pid: child.pid ?? null,
+            startedAt: new Date(),
+            logFile,
+            totalPatents: actualBatchSize,
+            completedPatents: 0,
+            estimatedRate: rate,
+            estimatedCompletion,
+            model: coverageType === 'llm' ? (model || null) : null,
+            batchMode: coverageType === 'llm' ? (batchMode ?? null) : null,
+            portfolioId: portfolioId || null,
+            portfolioName: portfolioName || null,
+            settings: settings || undefined,
+          },
+        });
+
+        createdJobs.push(toResponse(dbJob));
+      }
     }
-
-    saveJobs();
 
     res.status(201).json({
       groupId,
@@ -395,6 +1199,8 @@ router.post('/', (req: Request, res: Response) => {
       gaps: Object.fromEntries(
         Object.entries(gaps).map(([k, v]) => [k, { total: v.total, gap: v.gap }])
       ),
+      ...(claimsSkipped > 0 && { claimsSkipped }),
+      ...(llmDeferred && { llmDeferred: true, llmDeferredCount: claimsSkipped }),
     });
   } catch (error) {
     console.error('Error starting batch jobs:', error);
@@ -406,17 +1212,17 @@ router.post('/', (req: Request, res: Response) => {
  * DELETE /api/batch-jobs/:id
  * Cancel a running job
  */
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const job = batchJobs.find(j => j.id === id);
+    const job = await prisma.batchJob.findUnique({ where: { id } });
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
 
-    if (job.status !== 'running') {
-      return res.status(400).json({ error: 'Job is not running' });
+    if (job.status !== 'running' && job.status !== 'batch_pending') {
+      return res.status(400).json({ error: 'Job is not running or pending' });
     }
 
     if (job.pid) {
@@ -429,11 +1235,22 @@ router.delete('/:id', (req: Request, res: Response) => {
       }
     }
 
-    job.status = 'cancelled';
-    job.completedAt = new Date().toISOString();
-    saveJobs();
+    // Cancel Anthropic batch if this is a batch API job
+    if (job.anthropicBatchId) {
+      try {
+        await cancelBatch(job.anthropicBatchId);
+        console.log(`[BatchJobs] Cancelled Anthropic batch: ${job.anthropicBatchId}`);
+      } catch (e) {
+        console.error(`[BatchJobs] Failed to cancel Anthropic batch ${job.anthropicBatchId}:`, e);
+      }
+    }
 
-    res.json({ job });
+    const updated = await prisma.batchJob.update({
+      where: { id },
+      data: { status: 'cancelled', completedAt: new Date() },
+    });
+
+    res.json({ job: toResponse(updated) });
   } catch (error) {
     console.error('Error cancelling job:', error);
     res.status(500).json({ error: 'Failed to cancel job' });
@@ -444,11 +1261,13 @@ router.delete('/:id', (req: Request, res: Response) => {
  * DELETE /api/batch-jobs/group/:groupId
  * Cancel all jobs in a group
  */
-router.delete('/group/:groupId', (req: Request, res: Response) => {
+router.delete('/group/:groupId', async (req: Request, res: Response) => {
   try {
     const { groupId } = req.params;
 
-    const groupJobs = batchJobs.filter(j => j.groupId === groupId && j.status === 'running');
+    const groupJobs = await prisma.batchJob.findMany({
+      where: { groupId, status: 'running' },
+    });
 
     for (const job of groupJobs) {
       if (job.pid) {
@@ -458,11 +1277,12 @@ router.delete('/group/:groupId', (req: Request, res: Response) => {
           console.error('Failed to kill process:', e);
         }
       }
-      job.status = 'cancelled';
-      job.completedAt = new Date().toISOString();
     }
 
-    saveJobs();
+    await prisma.batchJob.updateMany({
+      where: { groupId, status: 'running' },
+      data: { status: 'cancelled', completedAt: new Date() },
+    });
 
     res.json({ cancelled: groupJobs.length });
   } catch (error) {
@@ -475,12 +1295,12 @@ router.delete('/group/:groupId', (req: Request, res: Response) => {
  * GET /api/batch-jobs/:id/log
  * Get the last N lines of a job's log file
  */
-router.get('/:id/log', (req: Request, res: Response) => {
+router.get('/:id/log', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const lines = parseInt(req.query.lines as string) || 50;
 
-    const job = batchJobs.find(j => j.id === id);
+    const job = await prisma.batchJob.findUnique({ where: { id } });
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
@@ -510,17 +1330,19 @@ router.get('/:id/log', (req: Request, res: Response) => {
  * GET /api/batch-jobs/gaps
  * Analyze enrichment gaps for a target
  */
-router.get('/gaps', (req: Request, res: Response) => {
+router.get('/gaps', async (req: Request, res: Response) => {
   try {
     const targetType = req.query.targetType as TargetType;
     const targetValue = req.query.targetValue as string;
     const topN = parseInt(req.query.topN as string) || 0;
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const sortBy = (req.query.sortBy as SortStrategy) || 'base_score';
 
     if (!targetType || !targetValue) {
       return res.status(400).json({ error: 'targetType and targetValue are required' });
     }
 
-    const gaps = analyzeGaps(targetType, targetValue, topN);
+    const gaps = await analyzeGaps(targetType, targetValue, topN, portfolioId, sortBy);
 
     res.json({
       targetType,
@@ -534,6 +1356,220 @@ router.get('/gaps', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error analyzing gaps:', error);
     res.status(500).json({ error: 'Failed to analyze gaps' });
+  }
+});
+
+/**
+ * POST /api/batch-jobs/sync-flags
+ * Repair/backfill Postgres enrichment flags from file cache.
+ * Handles all flag types: LLM, prosecution, XML, IPR, family.
+ * Run after restoring from backup or to backfill new flag columns.
+ */
+router.post('/sync-flags', async (req: Request, res: Response) => {
+  try {
+    await repairEnrichmentFlags();
+    invalidateEnrichmentCache();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error repairing flags:', error);
+    res.status(500).json({ error: 'Failed to repair enrichment flags' });
+  }
+});
+
+/**
+ * POST /api/batch-jobs/sync-llm-scores
+ * Import LLM analysis data from cache/llm-scores/ into the patent_scores EAV table.
+ * Bridges the file-based LLM pipeline with the DB-backed patent data service.
+ */
+router.post('/sync-llm-scores', async (req: Request, res: Response) => {
+  try {
+    const result = await syncLlmScoresToDb();
+    invalidateEnrichmentCache();
+    clearScoringCache();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error syncing LLM scores:', error);
+    res.status(500).json({ error: 'Failed to sync LLM scores to database' });
+  }
+});
+
+/**
+ * POST /api/batch-jobs/sync-cpc-designations
+ * Backfill CPC inventive designations from existing XML files.
+ * For patents with hasXmlData=true, checks if PatentCpc records have
+ * isInventive set, and re-enriches from XML if not.
+ */
+router.post('/sync-cpc-designations', async (req: Request, res: Response) => {
+  try {
+    const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
+    if (!xmlDir) {
+      return res.status(400).json({ error: 'USPTO_PATENT_GRANT_XML_DIR not configured' });
+    }
+
+    // Find patents with XML data but no inventive CPC records
+    const patentsWithXml = await prisma.patent.findMany({
+      where: { hasXmlData: true },
+      select: {
+        patentId: true,
+        cpcCodes: {
+          where: { isInventive: true },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+
+    // Filter to patents that don't yet have any inventive CPCs
+    const needsEnrichment = patentsWithXml
+      .filter(p => p.cpcCodes.length === 0)
+      .map(p => p.patentId);
+
+    if (needsEnrichment.length === 0) {
+      return res.json({
+        message: 'All patents with XML data already have CPC designations',
+        checked: patentsWithXml.length,
+        enriched: 0,
+      });
+    }
+
+    console.log(`[BatchJobs] Backfilling CPC designations for ${needsEnrichment.length} patents...`);
+    const result = await enrichPatentCpcBatch(needsEnrichment, xmlDir, (current, total) => {
+      if (current % 500 === 0) {
+        console.log(`  CPC backfill: ${current}/${total}`);
+      }
+    });
+
+    res.json({
+      message: `CPC designations backfilled`,
+      checked: patentsWithXml.length,
+      needsEnrichment: needsEnrichment.length,
+      ...result,
+    });
+  } catch (error) {
+    console.error('Error syncing CPC designations:', error);
+    res.status(500).json({ error: 'Failed to sync CPC designations' });
+  }
+});
+
+/**
+ * POST /api/batch-jobs/auto-quarantine
+ * Auto-detect patents that should be quarantined based on known rules.
+ * Sets quarantine JSON detail and isQuarantined flag.
+ */
+router.post('/auto-quarantine', async (req: Request, res: Response) => {
+  try {
+    const { portfolioId, dryRun } = req.body || {};
+
+    const where: Record<string, any> = {};
+    if (portfolioId) {
+      where.portfolios = { some: { portfolioId } };
+    }
+
+    const patents = await prisma.patent.findMany({
+      where,
+      select: {
+        patentId: true,
+        grantDate: true,
+        abstract: true,
+        primarySector: true,
+        hasXmlData: true,
+        isQuarantined: true,
+        quarantine: true,
+      },
+    });
+
+    const updates: Array<{ patentId: string; quarantine: Record<string, string>; reasons: string[] }> = [];
+
+    for (const p of patents) {
+      const existing = (p.quarantine as Record<string, string>) || {};
+      const newQ = { ...existing };
+      const reasons: string[] = [];
+
+      // ── XML quarantine rules ──
+
+      // Design patent (D-prefix)
+      if (p.patentId.startsWith('D') && !existing.xml) {
+        newQ.xml = 'design-patent';
+        reasons.push('design-patent');
+      }
+      // Reissue patent (RE/H-prefix)
+      else if ((p.patentId.startsWith('RE') || p.patentId.startsWith('H')) && !existing.xml) {
+        newQ.xml = 'reissue-patent';
+        reasons.push('reissue-patent');
+      }
+      // Pre-2005 grant
+      else if (p.grantDate && p.grantDate < '2005-01-01' && !existing.xml) {
+        newQ.xml = 'pre-2005';
+        reasons.push('pre-2005');
+      }
+      // Recent, no bulk data available
+      else if (!p.hasXmlData && p.grantDate && p.grantDate >= '2024-01-01' && !existing.xml) {
+        newQ.xml = 'recent-no-bulk';
+        reasons.push('recent-no-bulk');
+      }
+      // Extraction attempted but patent not found in bulk ZIPs (2005-2023 range)
+      // Only apply when scoped to a portfolio (implies extraction has been run for it)
+      else if (portfolioId && !p.hasXmlData && p.grantDate && p.grantDate >= '2005-01-01' && p.grantDate < '2024-01-01' && !existing.xml) {
+        newQ.xml = 'extraction-failed';
+        reasons.push('extraction-failed');
+      }
+
+      // ── LLM readiness quarantine rules ──
+
+      // No abstract available (patent not hydrated from PatentsView)
+      if (!p.abstract && !existing.llm) {
+        newQ.llm = 'no-abstract';
+        reasons.push('no-abstract');
+      }
+      // No sector assigned (can't select scoring template)
+      else if (!p.primarySector && !existing.llm) {
+        newQ.llm = 'no-sector';
+        reasons.push('no-sector');
+      }
+
+      if (reasons.length > 0) {
+        updates.push({ patentId: p.patentId, quarantine: newQ, reasons });
+      }
+    }
+
+    const summary: Record<string, number> = {};
+    for (const u of updates) {
+      for (const r of u.reasons) {
+        summary[r] = (summary[r] || 0) + 1;
+      }
+    }
+
+    if (dryRun) {
+      return res.json({
+        dryRun: true,
+        totalScanned: patents.length,
+        wouldQuarantine: updates.length,
+        summary,
+        sampleIds: updates.slice(0, 20).map(u => ({ patentId: u.patentId, reasons: u.reasons })),
+      });
+    }
+
+    // Apply updates in batches
+    let applied = 0;
+    for (const u of updates) {
+      await prisma.patent.update({
+        where: { patentId: u.patentId },
+        data: {
+          quarantine: u.quarantine,
+          isQuarantined: true,
+        },
+      });
+      applied++;
+    }
+
+    res.json({
+      totalScanned: patents.length,
+      quarantined: applied,
+      summary,
+    });
+  } catch (error) {
+    console.error('Error in auto-quarantine:', error);
+    res.status(500).json({ error: 'Failed to auto-quarantine patents' });
   }
 });
 

@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "switching-logic",
+  "name": "Switching & Pulse Circuits",
+  "description": "Sub-sector template for switching and pulse circuit patents (CPC H03K*) including power switches, level shifters, pulse generators, and digital-analog interface circuits.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03K*",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "analog-circuits",
+  "version": 1,
+  "contextDescription": "Switching and pulse circuit patents cover the interface between analog and digital domains, power switching, and signal conditioning. Key areas include CMOS switches, level shifters, voltage regulators, power management switches, comparators, Schmitt triggers, and pulse width modulators. These circuits are in every SoC and power management IC. High-value targets include all SoC vendors, power management IC vendors (TI, Analog Devices, ON Semi, Infineon), and any chip with mixed-signal interfaces.",
+  "scoringGuidance": [
+    "Power MOSFET gate driver patents target every switch-mode power supply.",
+    "Level shifter patents are essential for multi-voltage-domain SoCs.",
+    "High-speed comparator patents are critical for data converters and clock circuits.",
+    "Low-leakage switch patents target mobile power management.",
+    "PWM controller patents are in every DC-DC converter and motor driver."
+  ],
+  "questions": [
+    {
+      "fieldName": "switch_type",
+      "displayName": "Switch/Circuit Type",
+      "question": "What switching circuit type does this patent cover? Score by volume: 1-3 for specialized (thyristor, relay driver), 4-6 for common (comparator, Schmitt trigger), 7-10 for ubiquitous (power switch, level shifter, PWM controller).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the switching circuit type and its prevalence in electronic systems."
+    },
+    {
+      "fieldName": "power_management_relevance",
+      "displayName": "Power Management Relevance",
+      "question": "Is this patent relevant to power management (DC-DC, LDO gate drive, power switching)? Power management IP is in every electronic device and targets TI, Analog Devices, ON Semi, Infineon.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify power management applications and target companies."
+    },
+    {
+      "fieldName": "voltage_domain",
+      "displayName": "Multi-Voltage Domain",
+      "question": "Does this patent address multi-voltage domain challenges (level shifting, voltage translation, isolation)? Modern SoCs have many voltage domains, making these circuits essential.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess relevance to multi-voltage SoC design challenges."
+    },
+    {
+      "fieldName": "switching_speed_efficiency",
+      "displayName": "Switching Speed/Efficiency",
+      "question": "Does this patent improve switching speed, transition time, or switching losses? Fast, efficient switching is critical for high-frequency converters and high-speed interfaces.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify switching performance improvements and their impact."
+    }
+  ]
+}

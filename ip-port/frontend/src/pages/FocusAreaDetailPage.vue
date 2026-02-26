@@ -8,6 +8,7 @@ import KeywordExtractionPanel from '@/components/KeywordExtractionPanel.vue';
 import { usePatentsStore } from '@/stores/patents';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import type { Patent } from '@/types';
+import { useSuperSectors } from '@/composables/useSuperSectors';
 
 const route = useRoute();
 const router = useRouter();
@@ -73,6 +74,22 @@ const fetchingData = ref(false);
 let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Parse patent IDs from input
+const QUARANTINE_REASON_LABELS: Record<string, string> = {
+  'design-patent': 'Design patent (D-prefix)',
+  'reissue-patent': 'Reissue patent (RE/H-prefix)',
+  'pre-2005': 'Pre-2005 grant date',
+  'recent-no-bulk': 'Recent — bulk data unavailable',
+  'extraction-failed': 'USPTO bulk extraction failed',
+  'manual': 'Manually quarantined',
+};
+
+function formatQuarantineTooltip(quarantine: Record<string, string> | null): string {
+  if (!quarantine) return 'Quarantined';
+  return Object.entries(quarantine)
+    .map(([type, reason]) => `${type}: ${QUARANTINE_REASON_LABELS[reason] || reason}`)
+    .join('\n');
+}
+
 function parsePatentIds(input: string): string[] {
   return input
     .split(/[\s,\n]+/)
@@ -408,24 +425,7 @@ const paginationModel = computed({
   }
 });
 
-// Super-sector color mapping (same as PortfolioPage)
-const sectorColors: Record<string, string> = {
-  'Security': 'red-7',
-  'Virtualization & Cloud': 'purple-7',
-  'SDN & Network Infrastructure': 'blue-7',
-  'Wireless & RF': 'teal-7',
-  'Video & Streaming': 'orange-7',
-  'Computing & Data': 'grey-7',
-  'Semiconductor': 'indigo-7',
-  'Imaging & Optics': 'cyan-7',
-  'Audio': 'pink-7',
-  'AI & Machine Learning': 'green-7',
-  'Fault Tolerance & Reliability': 'amber-7'
-};
-
-function getSectorColor(sector: string): string {
-  return sectorColors[sector] || 'grey-6';
-}
+const { getSectorColor, getDisplayName } = useSuperSectors();
 
 // Start editing
 function startEdit() {
@@ -1445,7 +1445,7 @@ onMounted(async () => {
                   size="sm"
                   @click.stop="selectedSuperSectors = [props.row.super_sector]; applyFaFilters()"
                 >
-                  {{ props.row.super_sector }}
+                  {{ getDisplayName(props.row.super_sector) }}
                 </q-chip>
               </q-td>
             </template>
@@ -1681,6 +1681,15 @@ onMounted(async () => {
             <template v-slot:body-cell-actions="props">
               <q-td :props="props">
                 <q-btn flat dense icon="delete" color="negative" @click.stop="removePatent(props.row.patent_id)" />
+              </q-td>
+            </template>
+
+            <template v-slot:body-cell-is_quarantined="props">
+              <q-td :props="props">
+                <q-badge v-if="props.row.is_quarantined" color="orange" outline>
+                  <q-icon name="shield" size="xs" class="q-mr-xs" />Q
+                  <q-tooltip>{{ formatQuarantineTooltip(props.row.quarantine) }}</q-tooltip>
+                </q-badge>
               </q-td>
             </template>
 

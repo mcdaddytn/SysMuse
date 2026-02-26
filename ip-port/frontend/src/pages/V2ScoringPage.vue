@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import {
   v2EnhancedApi,
   snapshotApi,
@@ -14,6 +16,7 @@ import {
 
 const router = useRouter();
 const $q = useQuasar();
+const portfolioStore = usePortfolioStore();
 
 // LocalStorage keys
 const PRESETS_KEY = 'v2-enhanced-custom-presets';
@@ -341,9 +344,10 @@ function resetRankMovements() {
 async function loadSavedScores() {
   savedScoresLoading.value = true;
   try {
+    const pid = portfolioStore.selectedPortfolioId;
     const [allSnapshots, activeSnapshots] = await Promise.all([
-      snapshotApi.list(),
-      snapshotApi.getActive(),
+      snapshotApi.list(pid),
+      snapshotApi.getActive(pid),
     ]);
     // Filter to V2 only
     savedScores.value = allSnapshots.filter(s => s.scoreType === 'V2');
@@ -376,11 +380,14 @@ async function saveScores() {
       config: currentConfig.value,
       scores,
       setActive: setAsActive.value,
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
 
     $q.notify({
       type: 'positive',
-      message: `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
+      message: snapshot.replaced
+        ? `Replaced "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`
+        : `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
       caption: setAsActive.value ? 'Set as active V2 snapshot' : undefined,
     });
 
@@ -558,7 +565,7 @@ async function recalculate() {
   error.value = null;
 
   try {
-    const response = await v2EnhancedApi.getScores(currentConfig.value, previousRankings.value);
+    const response = await v2EnhancedApi.getScores(currentConfig.value, previousRankings.value, portfolioStore.selectedPortfolioId);
 
     patents.value = response.data;
     total.value = response.total;
@@ -718,6 +725,13 @@ watch([topN, llmEnhancedOnly], () => {
   hasUnsavedChanges.value = true;
 });
 
+// Reload when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, () => {
+  previousRankings.value = [];
+  recalculate();
+  loadSavedScores();
+});
+
 // Initialize
 onMounted(async () => {
   await Promise.all([loadMetrics(), loadPresets(), loadSavedScores()]);
@@ -729,6 +743,7 @@ onMounted(async () => {
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5">V2 Enhanced Scoring</div>
+      <PortfolioSelector class="q-mx-md" />
       <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>

@@ -138,11 +138,11 @@ else
     echo "   Verifying..."
     docker exec "$POSTGRES_CONTAINER" psql -U ip_admin -d ip_portfolio -c "
     SELECT
-      (SELECT COUNT(*) FROM super_sectors) as super_sectors,
-      (SELECT COUNT(*) FROM sectors) as sectors,
+      (SELECT COUNT(*) FROM patents) as patents,
       (SELECT COUNT(*) FROM patent_sub_sector_scores) as sector_scores,
-      (SELECT COUNT(*) FROM score_snapshots WHERE is_active = true) as active_snapshots;
-    " 2>/dev/null || echo "   (verification query failed — may need prisma migrate deploy)"
+      (SELECT COUNT(*) FROM portfolios) as portfolios,
+      (SELECT COUNT(*) FROM batch_jobs) as batch_jobs;
+    " 2>/dev/null || echo "   (verification query failed — may need prisma db push)"
   else
     echo "   ERROR: Could not start PostgreSQL container."
     echo "   Import manually: gunzip -c $BACKUP_FILE | docker exec -i ip-port-postgres psql -U ip_admin -d ip_portfolio"

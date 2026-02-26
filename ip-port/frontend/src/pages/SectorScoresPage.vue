@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { sectorApi, scoringTemplatesApi } from '@/services/api';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import type { SectorScoringProgress, ScoredPatent, SuperSectorProgress } from '@/services/api';
 import type { SuperSectorDetail } from '@/types';
+
+const portfolioStore = usePortfolioStore();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -40,6 +44,9 @@ const scoresPagination = ref({
 // Patent detail dialog
 const showPatentDetail = ref(false);
 const selectedPatent = ref<ScoredPatent | null>(null);
+
+// Recompute scores
+const recomputeLoading = ref(false);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Computed
@@ -99,9 +106,10 @@ async function loadAllProgress() {
     const progressMap = new Map<string, SectorScoringProgress>();
 
     // Load progress for each sector (batch for performance)
+    const pid = portfolioStore.selectedPortfolioId;
     const promises = allSectors.map(async (sector) => {
       try {
-        const progress = await scoringTemplatesApi.getSectorProgress(sector.name);
+        const progress = await scoringTemplatesApi.getSectorProgress(sector.name, pid);
         if (progress.scored > 0) {
           progressMap.set(sector.name, progress);
         }
@@ -123,7 +131,7 @@ async function loadSuperSectorDetail(superSectorName: string) {
   superSectorLoading.value = true;
   error.value = null;
   try {
-    superSectorDetail.value = await scoringTemplatesApi.getSuperSectorProgress(superSectorName);
+    superSectorDetail.value = await scoringTemplatesApi.getSuperSectorProgress(superSectorName, portfolioStore.selectedPortfolioId);
     selectedSuperSector.value = superSectorName;
     viewMode.value = 'super-sector';
   } catch (err) {
@@ -140,7 +148,8 @@ async function loadSectorScores(sectorName: string) {
     const result = await scoringTemplatesApi.getSectorScores(sectorName, {
       limit: scoresPagination.value.rowsPerPage,
       offset: (scoresPagination.value.page - 1) * scoresPagination.value.rowsPerPage,
-      order: scoresPagination.value.descending ? 'desc' : 'asc'
+      order: scoresPagination.value.descending ? 'desc' : 'asc',
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
     sectorScores.value = result.results;
     sectorScoresTotal.value = result.total;
@@ -177,6 +186,21 @@ function showPatentDetails(patent: ScoredPatent) {
   showPatentDetail.value = true;
 }
 
+async function recomputeScores() {
+  if (!selectedSector.value) return;
+  recomputeLoading.value = true;
+  error.value = null;
+  try {
+    const result = await scoringTemplatesApi.recomputeSectorScores(selectedSector.value);
+    await loadSectorScores(selectedSector.value);
+    alert(`Recomputed: ${result.updated} of ${result.totalScores} scores updated.`);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Recompute failed';
+  } finally {
+    recomputeLoading.value = false;
+  }
+}
+
 function goBack() {
   if (viewMode.value === 'sector') {
     viewMode.value = 'super-sector';
@@ -210,6 +234,17 @@ watch(scoresPagination, async () => {
     await loadSectorScores(selectedSector.value);
   }
 }, { deep: true });
+
+// Reload data when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, async () => {
+  if (viewMode.value === 'summary') {
+    await loadAllProgress();
+  } else if (viewMode.value === 'super-sector' && selectedSuperSector.value) {
+    await loadSuperSectorDetail(selectedSuperSector.value);
+  } else if (viewMode.value === 'sector' && selectedSector.value) {
+    await loadSectorScores(selectedSector.value);
+  }
+});
 </script>
 
 <template>
@@ -226,6 +261,7 @@ watch(scoresPagination, async () => {
             icon="arrow_back"
             @click="goBack"
           />
+          <PortfolioSelector class="q-mr-md" />
           <div>
             <div class="text-h5">
               <template v-if="viewMode === 'summary'">LLM Sector Scores</template>
@@ -236,6 +272,7 @@ watch(scoresPagination, async () => {
               <template v-if="viewMode === 'summary'">
                 {{ totalScored.toLocaleString() }} patents scored
                 ({{ totalWithClaims.toLocaleString() }} with claims)
+                <span v-if="portfolioStore.selectedPortfolio" class="text-blue-7"> &mdash; {{ portfolioStore.selectedPortfolio.displayName || portfolioStore.selectedPortfolio.name }}</span>
               </template>
               <template v-else-if="viewMode === 'super-sector' && superSectorDetail">
                 {{ superSectorDetail.totals.scored.toLocaleString() }} / {{ superSectorDetail.totals.total.toLocaleString() }} patents
@@ -497,6 +534,20 @@ watch(scoresPagination, async () => {
           </div>
         </q-card-section>
       </q-card>
+
+      <!-- Recompute Scores -->
+      <div class="row justify-end q-mb-md">
+        <q-btn
+          flat
+          icon="calculate"
+          label="Recompute Scores"
+          color="secondary"
+          :loading="recomputeLoading"
+          @click="recomputeScores"
+        >
+          <q-tooltip>Recalculate composite scores from stored metrics using current template weights (no LLM calls)</q-tooltip>
+        </q-btn>
+      </div>
 
       <!-- Scores Table -->
       <q-card flat bordered>

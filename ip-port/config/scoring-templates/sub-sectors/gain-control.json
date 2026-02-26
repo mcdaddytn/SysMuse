@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "gain-control",
+  "name": "Gain Control & AGC",
+  "description": "Sub-sector template for gain control patents (CPC H03G*) including automatic gain control, variable gain amplifiers, and signal level management.",
+  "level": "sub_sector",
+  "subSectorPattern": "H03G*",
+  "sectorName": "analog-circuits",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "analog-circuits",
+  "version": 1,
+  "contextDescription": "Gain control patents cover automatic and manual signal level management in receivers, transmitters, and signal chains. Key areas include AGC loops, variable gain amplifiers (VGA), programmable gain amplifiers (PGA), digital step attenuators, and companding circuits. Every wireless receiver, audio system, and communication link needs gain control. High-value targets include all wireless chipset vendors (Qualcomm, MediaTek, Broadcom), audio codec vendors, and cable/fiber transceiver vendors.",
+  "scoringGuidance": [
+    "AGC is in every wireless receiver — WiFi, cellular, Bluetooth all require it.",
+    "Wide dynamic range AGC patents target advanced receiver architectures.",
+    "Digital VGA patents enable fine gain steps for calibration and beam-forming.",
+    "Fast-settling AGC patents target burst-mode communication (TDMA, WiFi packets).",
+    "Linear-in-dB gain control patents are fundamental and hard to design around."
+  ],
+  "questions": [
+    {
+      "fieldName": "agc_architecture",
+      "displayName": "AGC Architecture",
+      "question": "What gain control architecture does this patent cover? Score by market breadth: 1-3 for manual/fixed gain, 4-6 for application-specific AGC, 7-10 for fundamental AGC loop or VGA topology used across many systems.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the gain control architecture and how widely it applies across receiver and signal chain designs."
+    },
+    {
+      "fieldName": "dynamic_range",
+      "displayName": "Dynamic Range Improvement",
+      "question": "Does this patent improve dynamic range, gain accuracy, or gain step precision? Wide dynamic range is critical for modern receivers handling weak and strong signals simultaneously.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess dynamic range improvement and its impact on receiver performance."
+    },
+    {
+      "fieldName": "receiver_chain_integration",
+      "displayName": "Receiver Chain Integration",
+      "question": "Is this gain control integrated into a complete receiver signal chain (LNA→mixer→VGA→ADC)? Integrated gain control patents are harder to design around since they cover the interaction between stages.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess whether this covers standalone gain control or integrated receiver chain gain management."
+    },
+    {
+      "fieldName": "settling_speed",
+      "displayName": "Settling Speed",
+      "question": "Does this patent address fast gain settling for packet-based or burst-mode communication? Fast settling is critical for WiFi, 5G TDD, and other time-division systems.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify settling time improvements and applicable communication standards."
+    }
+  ]
+}

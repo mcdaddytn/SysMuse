@@ -29,12 +29,12 @@
     {
       "fieldName": "claim_breadth",
       "displayName": "Claim Breadth",
-      "question": "Rate the breadth of the patent claims. Consider: How broadly do the claims cover the invention? Could they capture variations and alternative implementations?",
+      "question": "Rate the breadth of the patent claims based on the actual claim language provided. Consider: (1) How many independent claims exist? (2) How broad are the independent claims — do they use functional language, means-plus-function, or specific structural terms? (3) Do dependent claims cover meaningful alternative implementations? (4) Could the claims capture a competitor's implementation that achieves similar functionality through different means?",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
       "weight": 0.15,
       "requiresReasoning": true,
-      "reasoningPrompt": "Describe the scope of the claims."
+      "reasoningPrompt": "Analyze the specific claim language. Identify the broadest independent claim and explain what scope it covers."
     },
     {
       "fieldName": "design_around_difficulty",
@@ -85,6 +85,70 @@
       "weight": 0.10,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify any unique characteristics, hidden strengths, or overlooked value that distinguishes this patent from others in its sector. What makes this a potential 'dark horse' that standard analysis might miss? Be specific about what unique value exists and why it matters."
+    },
+    {
+      "fieldName": "product_mapping_probability",
+      "displayName": "Product Mapping Probability",
+      "question": "Estimate the probability that this patent's claims read on commercially available products. Name likely product categories and specific companies whose products may implement the claimed technology. Consider publicly known product specifications, teardowns, and standards compliance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Name specific product categories and companies whose products likely implement this technology. Explain what evidence supports or undermines a product mapping."
+    },
+    {
+      "fieldName": "evidence_of_use_detectability",
+      "displayName": "Evidence of Use Detectability",
+      "question": "Can infringement of this patent be detected without internal product access? Could evidence be gathered from observable product behavior, published specifications, standards compliance testing, FCC filings, teardown reports, or other publicly available sources?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe what types of evidence could demonstrate use of the claimed technology and how accessible that evidence is. Distinguish between externally observable vs. requiring internal product access."
+    },
+    {
+      "fieldName": "licensing_revenue_potential",
+      "displayName": "Licensing Revenue Potential",
+      "question": "Rate the commercial significance of this patent for licensing. Consider: Does it cover high-volume consumer products, critical infrastructure, or niche applications? What is the potential per-unit royalty basis and market size?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess whether this patent covers high-volume consumer, infrastructure, or niche technology. Estimate the commercial significance and potential licensing revenue basis."
+    },
+    {
+      "fieldName": "tech_component_classification",
+      "displayName": "Tech Component Classification",
+      "question": "What fundamental technology components does this patent address? Map the claimed invention to known technology building blocks (e.g., 'beamforming algorithm', 'video codec entropy coder', 'TLS handshake protocol'). List the 2-4 most relevant technology components.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0,
+      "requiresReasoning": true,
+      "reasoningPrompt": "List 2-4 specific technology components this patent addresses. Use standard technology terminology that maps to known product building blocks. Rate how clearly the patent maps to identifiable components (10 = maps directly to a well-known component, 1 = too abstract to map)."
+    },
+    {
+      "fieldName": "patent_summary",
+      "displayName": "Patent Summary",
+      "question": "Provide a concise 2-3 sentence summary of what this patent covers, suitable for a non-technical audience.",
+      "answerType": "text",
+      "weight": 0,
+      "requiresReasoning": false
+    },
+    {
+      "fieldName": "prior_art_problem",
+      "displayName": "Prior Art Problem",
+      "question": "What problem in prior art does this patent solve? Describe in 2-3 sentences.",
+      "answerType": "text",
+      "weight": 0,
+      "requiresReasoning": false
+    },
+    {
+      "fieldName": "technical_solution",
+      "displayName": "Technical Solution",
+      "question": "How does the patent's technical solution work? Describe in 2-3 sentences.",
+      "answerType": "text",
+      "weight": 0,
+      "requiresReasoning": false
     }
   ]
 }

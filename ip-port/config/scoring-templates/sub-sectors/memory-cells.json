@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "memory-cells",
+  "name": "Memory Cells & Arrays",
+  "description": "Sub-sector template for memory cell and array patents (CPC G11C11*, G11C5*, H10B*) covering cell architectures, power management, and array layout.",
+  "level": "sub_sector",
+  "subSectorPattern": "G11C11*,G11C5*,H10B*",
+  "sectorName": "memory-storage",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "memory-storage",
+  "version": 1,
+  "contextDescription": "Memory cell patents cover the fundamental storage elements and array organizations. Key areas include SRAM bit cells (6T, 8T, 10T), DRAM cells (1T1C), flash cells (floating gate, charge trap), and emerging memories (MRAM, ReRAM, PCRAM). Also covers array power management, sense amplifiers, and memory macro layout. High-value targets include DRAM vendors (Samsung, SK Hynix, Micron), foundries embedding memory (TSMC, Samsung Foundry), and SoC vendors with large embedded SRAM. Broadcom's strength is in embedded SRAM design for networking ASICs.",
+  "scoringGuidance": [
+    "SRAM bit cell patents read on every SoC with cache — virtually all processors.",
+    "Sense amplifier patents are fundamental and used in all memory types.",
+    "Low-power memory cell patents target mobile and IoT SoCs.",
+    "Array power gating patents are critical for leakage management at advanced nodes.",
+    "Multi-port SRAM patents target networking ASICs and high-bandwidth applications."
+  ],
+  "questions": [
+    {
+      "fieldName": "cell_architecture",
+      "displayName": "Cell Architecture",
+      "question": "What memory cell architecture does this patent cover? Score by volume: 1-3 for emerging/specialty (ReRAM, PCRAM), 4-6 for standard (6T SRAM, 1T1C DRAM), 7-10 for improved cells with clear advantages or multi-port/specialty cells for high-value applications.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the memory cell type and what makes it novel or broadly applicable."
+    },
+    {
+      "fieldName": "sense_amplifier",
+      "displayName": "Sense Amplifier / Read Path",
+      "question": "Does this patent cover sense amplifier design or read path optimization? Sense amplifiers are in every memory array and are fundamental to performance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess sense amplifier improvements and their impact on memory speed/power."
+    },
+    {
+      "fieldName": "power_leakage",
+      "displayName": "Power & Leakage Management",
+      "question": "Does this patent address memory array power management, leakage reduction, or power gating? Critical at advanced nodes where leakage dominates.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify power/leakage management techniques and their node relevance."
+    },
+    {
+      "fieldName": "embedded_memory",
+      "displayName": "Embedded Memory Applicability",
+      "question": "Is this patent applicable to embedded memory (on-chip SRAM, eDRAM) in SoCs? Embedded memory is in every processor and ASIC, targeting all SoC vendors.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess applicability to embedded vs standalone memory products."
+    }
+  ]
+}

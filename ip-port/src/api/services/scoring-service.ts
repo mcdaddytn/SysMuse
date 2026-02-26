@@ -32,6 +32,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -484,8 +487,56 @@ export function loadAllLlmScores(): Map<string, LlmScores> {
     }
   }
 
-  console.log(`[Scoring] Loaded LLM scores for ${llmScoresCache.size} patents`);
+  console.log(`[Scoring] Loaded LLM scores for ${llmScoresCache.size} patents from file cache`);
   return llmScoresCache;
+}
+
+/**
+ * Load LLM scores from both file cache AND the patent_sub_sector_scores DB table.
+ * DB scores (from batch scoring with sector-specific templates) override file cache.
+ * Maps new template metric names to the V2 scoring metric names.
+ */
+export async function loadAllLlmScoresWithDb(): Promise<Map<string, LlmScores>> {
+  // Start with file cache
+  const scores = new Map(loadAllLlmScores());
+
+  // Overlay with DB scores (prefer withClaims=true, then most recent)
+  const dbScores = await prisma.patentSubSectorScore.findMany({
+    orderBy: { executedAt: 'desc' },
+    distinct: ['patentId'],
+    select: {
+      patentId: true,
+      metrics: true,
+      withClaims: true,
+    },
+  });
+
+  let dbOverrides = 0;
+  for (const row of dbScores) {
+    const m = row.metrics as Record<string, { score: number }>;
+    if (!m) continue;
+
+    // Map sector-template metric names → V2 Enhanced metric names
+    const mapped: LlmScores = {
+      patent_id: row.patentId,
+      eligibility_score: m.technical_novelty?.score ?? m.eligibility_score?.score ?? scores.get(row.patentId)?.eligibility_score ?? 0,
+      validity_score: m.unique_value?.score ?? m.validity_score?.score ?? scores.get(row.patentId)?.validity_score ?? 0,
+      claim_breadth: m.claim_breadth?.score ?? scores.get(row.patentId)?.claim_breadth ?? 0,
+      enforcement_clarity: m.implementation_clarity?.score ?? m.enforcement_clarity?.score ?? scores.get(row.patentId)?.enforcement_clarity ?? 0,
+      design_around_difficulty: m.design_around_difficulty?.score ?? scores.get(row.patentId)?.design_around_difficulty ?? 0,
+      market_relevance_score: m.market_relevance?.score ?? m.market_relevance_score?.score ?? scores.get(row.patentId)?.market_relevance_score,
+      source: row.withClaims ? 'db-with-claims' : 'db-no-claims',
+    };
+
+    scores.set(row.patentId, mapped);
+    dbOverrides++;
+  }
+
+  if (dbOverrides > 0) {
+    console.log(`[Scoring] Overlaid ${dbOverrides} DB scores (total: ${scores.size})`);
+  }
+
+  return scores;
 }
 
 /**
@@ -628,6 +679,45 @@ function loadCandidates(): any[] {
   const data = JSON.parse(fs.readFileSync(path.join(CANDIDATES_DIR, files[0]), 'utf-8'));
   candidatesCache = data.candidates;
   return candidatesCache!;
+}
+
+/**
+ * Load candidates from Postgres for a specific portfolio.
+ * Returns objects with the same shape as the JSON file candidates.
+ */
+async function loadCandidatesFromPostgres(portfolioId: string): Promise<any[]> {
+  const patents = await prisma.patent.findMany({
+    where: {
+      portfolios: { some: { portfolioId } },
+    },
+    select: {
+      patentId: true,
+      title: true,
+      grantDate: true,
+      assignee: true,
+      forwardCitations: true,
+      remainingYears: true,
+      baseScore: true,
+      primarySector: true,
+      superSector: true,
+      primaryCpc: true,
+    },
+    orderBy: { baseScore: 'desc' },
+  });
+
+  return patents.map(p => ({
+    patent_id: p.patentId,
+    patent_title: p.title || '',
+    patent_date: p.grantDate || '',
+    assignee: p.assignee || '',
+    forward_citations: p.forwardCitations ?? 0,
+    remaining_years: p.remainingYears ?? 0,
+    score: p.baseScore ?? 0,
+    primary_sector: p.primarySector || '',
+    super_sector: p.superSector || '',
+    primary_cpc: p.primaryCpc || '',
+    cpc_codes: [],
+  }));
 }
 
 /**
@@ -1089,13 +1179,19 @@ export const V2_ENHANCED_PRESETS = [
 /**
  * Score patents with V2 Enhanced custom configuration
  */
-export function scoreWithCustomConfig(
+export async function scoreWithCustomConfig(
   config: V2EnhancedConfig,
-  previousRankings?: Map<string, number>
-): V2EnhancedScoredPatent[] {
-  const candidates = loadCandidates();
+  previousRankings?: Map<string, number>,
+  portfolioId?: string
+): Promise<V2EnhancedScoredPatent[]> {
+  const candidates = portfolioId
+    ? await loadCandidatesFromPostgres(portfolioId)
+    : loadCandidates();
   const classifications = loadAllClassifications();
-  const llmScores = loadAllLlmScores();
+  // Use DB-backed LLM scores for portfolio queries (includes batch scoring results with claims)
+  const llmScores = portfolioId
+    ? await loadAllLlmScoresWithDb()
+    : loadAllLlmScores();
   const iprScores = loadAllIprScores();
   const prosecutionScores = loadAllProsecutionScores();
 

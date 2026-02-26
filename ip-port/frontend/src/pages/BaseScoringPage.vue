@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { patentApi } from '@/services/api';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import type { Patent } from '@/types';
+
+const portfolioStore = usePortfolioStore();
 
 const router = useRouter();
 
@@ -48,7 +52,8 @@ async function fetchPatents() {
         sortBy: 'score',
         descending: true
       },
-      { scoreMin: 0.01 } // Filter out zero-score patents
+      { scoreMin: 0.01 }, // Filter out zero-score patents
+      portfolioStore.selectedPortfolioId,
     );
 
     // Add rank based on pagination offset
@@ -79,6 +84,12 @@ function goToPatent(patentId: string) {
   router.push({ name: 'patent-detail', params: { id: patentId } });
 }
 
+// Reload when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, () => {
+  pagination.value.page = 1;
+  fetchPatents();
+});
+
 // Initialize
 onMounted(async () => {
   await fetchPatents();
@@ -89,6 +100,7 @@ onMounted(async () => {
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5">Base Score Rankings</div>
+      <PortfolioSelector class="q-mx-md" />
       <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>

@@ -40,6 +40,10 @@ export const usePatentsStore = defineStore('patents', () => {
     { name: 'remaining_years', label: 'Years Left', field: 'remaining_years', sortable: true, align: 'center', visible: true, group: 'core',
       format: (val: unknown) => typeof val === 'number' ? val.toFixed(1) : String(val) },
     { name: 'expiration_date', label: 'Expiration', field: 'expiration_date', sortable: true, align: 'center', visible: false, group: 'core' },
+    { name: 'is_quarantined', label: 'Quarantined', field: 'is_quarantined', sortable: true, align: 'center', visible: false, group: 'core',
+      description: 'Patent is quarantined from enrichment tracking' },
+    { name: 'patent_id_numeric', label: 'Patent #', field: 'patent_id_numeric', sortable: true, align: 'right', visible: false, group: 'core',
+      description: 'Numeric patent ID for sorting' },
 
     // Entity & Sector group
     { name: 'affiliate', label: 'Affiliate', field: 'affiliate', sortable: true, align: 'left', visible: true, group: 'entity' },
@@ -149,13 +153,16 @@ export const usePatentsStore = defineStore('patents', () => {
     )
   );
 
+  // Portfolio scoping — set this to restrict queries to a specific portfolio
+  const portfolioId = ref<string | null>(null);
+
   // Actions
   async function loadPatents() {
     loading.value = true;
     error.value = null;
 
     try {
-      const response = await patentApi.getPatents(pagination.value, filters.value);
+      const response = await patentApi.getPatents(pagination.value, filters.value, portfolioId.value);
       patents.value = response.data;
       totalCount.value = response.total;
     } catch (err) {
@@ -164,6 +171,10 @@ export const usePatentsStore = defineStore('patents', () => {
     } finally {
       loading.value = false;
     }
+  }
+
+  function setPortfolioId(id: string | null) {
+    portfolioId.value = id;
   }
 
   function updatePagination(newPagination: Partial<PaginationParams>) {
@@ -280,6 +291,7 @@ export const usePatentsStore = defineStore('patents', () => {
     filters,
     columns,
     columnGroups,
+    portfolioId,
 
     // Getters
     visibleColumns,
@@ -291,6 +303,7 @@ export const usePatentsStore = defineStore('patents', () => {
     updateFilters,
     setFilters,
     clearFilters,
+    setPortfolioId,
     toggleColumn,
     setColumnVisibility,
     toggleGroupColumns,

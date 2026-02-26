@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wpm-tx-power-control",
+  "name": "Transmit Power Control",
+  "description": "Sub-sector template for transmit power control patents including closed-loop TPC, open-loop power control, link adaptation, interference-aware power management, and power headroom reporting.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W52/2*,H04W52/3*,H04W52/5*",
+  "sectorName": "wireless-power-mgmt",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-power-mgmt",
+  "version": 1,
+  "contextDescription": "Transmit power control is fundamental to cellular networks — every UE and base station adjusts transmission power continuously. In LTE/5G NR, open-loop power control sets initial power based on path loss estimation, while closed-loop TPC commands from the gNB fine-tune UE transmit power. 3GPP TS 38.213 defines UL power control for NR; TS 36.213 for LTE. Power headroom reports (PHR) inform the network of UE power capability. In dual connectivity (EN-DC, NR-DC), power allocation across multiple connections is complex and patent-rich. Key targets: every modem vendor, every base station vendor.",
+  "scoringGuidance": [
+    "TPC is mandatory for every UE — universal infringement surface across all cellular devices.",
+    "Dual connectivity power allocation patents are high-value: EN-DC is the dominant 5G deployment mode.",
+    "Interference-aware power control (eICIC, ICIC) patents target HetNet deployments — broad applicability.",
+    "ML-based power optimization patents are forward-looking but increasingly relevant for O-RAN.",
+    "Power headroom reporting is exercised continuously — PHR patents have strong detectability."
+  ],
+  "questions": [
+    {
+      "fieldName": "tpc_algorithm_sophistication",
+      "displayName": "TPC Algorithm Sophistication",
+      "question": "What level of transmit power control innovation does this patent provide? Score 8-10 for novel closed-loop/open-loop hybrid algorithms, fractional power control, or multi-parameter TPC. 5-7 for improvements to standard TPC command processing or accumulation. 3-4 for basic open-loop or closed-loop power control. 1-2 for general power adjustment without TPC specificity.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "TPC commands (in DCI) adjust UE power every subframe. Novel accumulation logic or hybrid approaches are high-value."
+    },
+    {
+      "fieldName": "uplink_downlink_scope",
+      "displayName": "UL/DL Power Scope",
+      "question": "Does this patent address uplink power control, downlink power control, or a unified framework? Score 8-10 for unified UL/DL power management framework or joint optimization. 5-7 for uplink-specific power control (more complex, more patent activity). 3-4 for downlink power allocation. 1-2 for unspecified or general power concepts.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Uplink power control is more complex and patent-dense than downlink. Unified frameworks are rare and valuable."
+    },
+    {
+      "fieldName": "multi_connectivity_power",
+      "displayName": "Multi-Connectivity Power",
+      "question": "Does this patent address power allocation across dual connectivity (EN-DC, NR-DC) or carrier aggregation? Score 8-10 for dynamic power splitting across MCG/SCG or cross-carrier power management. 5-7 for CA-aware power control or per-component-carrier power. 3-4 for single connection power with awareness of multi-connectivity. 1-2 for single connection only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "EN-DC power sharing (PHR Type 3) is exercised by every NSA 5G device — very high infringement surface."
+    },
+    {
+      "fieldName": "interference_aware_power",
+      "displayName": "Interference-Aware Power",
+      "question": "Does power control integrate interference management (ICIC, eICIC, CoMP)? Score 8-10 for novel interference-aware power allocation or coordinated power control across cells. 5-7 for power control considering neighbor cell interference. 3-4 for interference mentioned as motivation. 1-2 for no interference management aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Interference management through power control is essential for HetNet and dense deployments."
+    },
+    {
+      "fieldName": "ml_ai_optimization",
+      "displayName": "ML/AI Optimization",
+      "question": "Does this patent use ML/AI-based power optimization versus traditional control theory? Score 8-10 for reinforcement learning or neural network-based power control. 5-7 for data-driven or adaptive algorithms beyond traditional control. 3-4 for statistical methods. 1-2 for purely analytical/formula-based approach.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "ML-based power control is emerging in O-RAN and Rel-18 — forward-looking but increasingly relevant."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP TPC command framework (TS 38.213, TS 36.213)? Score 8-10 for direct implementation of standardized power control procedures or PHR. 5-7 for enabling standard compliance. 3-4 for standard-adjacent power concepts. 1-2 for proprietary power management approach.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "TPC is heavily standardized in 3GPP — identify specific clauses and procedures."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is the power control behavior observable through protocol analysis? Score 8-10 for behavior visible in power headroom reports, TPC commands in DCI, or SRS measurements. 5-7 for behavior inferable from UE power profiles or conformance testing. 3-4 for internal baseband power algorithms. 1-2 for algorithm-level logic only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "TPC commands are in every DCI and PHR is mandatory reporting — highly observable in protocol captures."
+    }
+  ]
+}

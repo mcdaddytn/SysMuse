@@ -2,20 +2,90 @@
   "$schema": "../scoring-template.schema.json",
   "id": "video-streaming",
   "name": "Video Streaming Scoring",
-  "description": "Scoring template for Video Streaming super-sector patents. Includes streaming protocol relevance, codec efficiency, and CDN/delivery metrics.",
+  "description": "Scoring template for Video Streaming super-sector patents. Reweighted for litigation targeting: emphasizes claim breadth, design-around difficulty, and implementation clarity over narrow technology relevance.",
   "level": "super_sector",
   "superSectorName": "VIDEO_STREAMING",
   "inheritsFrom": "portfolio-default",
   "isDefault": true,
-  "version": 1,
+  "version": 2,
   "questions": [
+    {
+      "fieldName": "technical_novelty",
+      "displayName": "Technical Novelty",
+      "question": "Rate the technical novelty of this patent's core innovation. Consider: How different is this from prior art? Does it represent a significant departure from existing approaches?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this technically novel or incremental."
+    },
+    {
+      "fieldName": "claim_breadth",
+      "displayName": "Claim Breadth",
+      "question": "Rate the breadth of the patent claims based on the actual claim language provided. Consider: (1) How many independent claims exist? (2) How broad are the independent claims — do they use functional language, means-plus-function, or specific structural terms? (3) Do dependent claims cover meaningful alternative implementations? (4) Could the claims capture a competitor's implementation that achieves similar functionality through different means?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Analyze the specific claim language. Identify the broadest independent claim and explain what scope it covers."
+    },
+    {
+      "fieldName": "design_around_difficulty",
+      "displayName": "Design-Around Difficulty",
+      "question": "How difficult would it be for a competitor to design around this patent while achieving similar functionality?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.25,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this hard or easy to design around."
+    },
+    {
+      "fieldName": "market_relevance",
+      "displayName": "Market Relevance",
+      "question": "Rate the relevance of this technology to current market needs and industry trends.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the market context and relevance."
+    },
+    {
+      "fieldName": "implementation_clarity",
+      "displayName": "Implementation Clarity",
+      "question": "How clearly does the patent describe the implementation? Could infringement be easily detected in a product?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess detectability and clarity of implementation."
+    },
+    {
+      "fieldName": "standards_relevance",
+      "displayName": "Standards Relevance",
+      "question": "Is this patent related to any industry standards (IEEE, 3GPP, IETF, etc.)? Rate its standards essentiality.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any standards relationships."
+    },
+    {
+      "fieldName": "unique_value",
+      "displayName": "Unique/Hidden Value",
+      "question": "Beyond the standard metrics above, does this patent have unique or overlooked value that isn't captured by typical analysis? Consider: unusual claim scope, emerging technology applicability, underappreciated market timing, strategic defensive value, or any 'dark horse' characteristics that could make this patent more valuable than it appears.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.05,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any unique characteristics, hidden strengths, or overlooked value that distinguishes this patent from others in its sector. What makes this a potential 'dark horse' that standard analysis might miss? Be specific about what unique value exists and why it matters."
+    },
     {
       "fieldName": "streaming_protocol",
       "displayName": "Streaming Protocol Relevance",
       "question": "How relevant is this patent to streaming protocols and standards (HLS, DASH, CMAF, WebRTC, RTMP, etc.)? Consider standard essentiality and widespread adoption potential.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.15,
+      "weight": 0.08,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify relevant streaming protocols and standards, and explain how essential this patent might be to their implementation."
     },
@@ -25,7 +95,7 @@
       "question": "How does this patent relate to video codecs and compression (H.264/AVC, H.265/HEVC, VP9, AV1, VVC)? Rate its compression efficiency improvements or codec relevance.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.15,
+      "weight": 0.08,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify codec technologies involved and describe compression or quality improvements."
     },
@@ -35,7 +105,7 @@
       "question": "How does this patent address video delivery challenges? Consider CDN optimization, adaptive bitrate, edge computing, caching, and large-scale distribution.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.10,
+      "weight": 0.05,
       "requiresReasoning": true,
       "reasoningPrompt": "Describe delivery optimizations and scalability benefits."
     },
@@ -45,7 +115,7 @@
       "question": "How does this patent improve the end-user streaming experience? Consider latency reduction, quality of experience (QoE), buffering prevention, and playback smoothness.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.10,
+      "weight": 0.04,
       "requiresReasoning": true,
       "reasoningPrompt": "Describe user experience improvements and their measurable impact."
     }

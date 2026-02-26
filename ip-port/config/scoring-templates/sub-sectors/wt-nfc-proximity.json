@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wt-nfc-proximity",
+  "name": "NFC & Proximity Communication",
+  "description": "Sub-sector template for NFC (Near Field Communication), RFID, and short-range proximity communication patents. Covers contactless payment, device pairing, tag reading, and secure element interaction.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04B5/*",
+  "sectorName": "wireless-transmission",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-transmission",
+  "version": 1,
+  "contextDescription": "NFC/proximity patents cover the physical layer and protocol stack for near-field wireless communication. This is a high-detectability sub-sector: every contactless payment transaction (Apple Pay, Google Pay, Samsung Pay) exercises NFC patents. Key targets include Apple (iPhone NFC controller + secure element), NXP (NFC chip market leader), Samsung, Google, and payment networks (Visa, Mastercard). Device pairing patents also cover Bluetooth LE and WiFi Direct initial handshake. The market is expanding with digital car keys, transit passes, and identity verification.",
+  "scoringGuidance": [
+    "NFC payment patents are exercised billions of times daily — enormous infringement volume.",
+    "Apple's NFC controller integration is a prime target; Apple restricts third-party NFC access on iPhone.",
+    "Secure element patents (SIM-based, embedded SE, HCE) are critical for payment security.",
+    "Device pairing patents cover the initial handshake for Bluetooth, WiFi Direct, and NFC tap-to-pair.",
+    "Antenna coupling and power transfer patents cover the physical layer that every NFC device implements."
+  ],
+  "questions": [
+    {
+      "fieldName": "nfc_mode",
+      "displayName": "NFC Operating Mode",
+      "question": "Which NFC operating mode does this patent cover? Score 8-10 for card emulation mode (payment, transit — highest commercial value), 6-7 for reader/writer mode (tag interaction, ticketing), 4-5 for peer-to-peer mode (device pairing, data exchange), 2-3 for general proximity communication without NFC specificity, 1 for unrelated.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Card emulation mode is the highest-value NFC mode due to payment volume."
+    },
+    {
+      "fieldName": "payment_applicability",
+      "displayName": "Payment Applicability",
+      "question": "Is this patent directly applicable to contactless payment (Apple Pay, Google Pay, Samsung Pay, EMV Contactless)? Score 8-10 for patents covering payment transaction flow, tokenization, or secure element interaction during payment, 5-7 for patents enabling payment infrastructure (e.g., terminal-side NFC), 3-4 for general NFC that could be used in payments, 1-2 for no payment relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Contactless payment is the primary revenue driver for NFC patents. Identify specific payment protocol alignment."
+    },
+    {
+      "fieldName": "antenna_coupling",
+      "displayName": "Antenna Coupling & Power Transfer",
+      "question": "Does this patent address NFC antenna design, coupling optimization, or wireless power transfer in the near field? Score 8-10 for novel antenna architectures or coupling techniques that improve range/reliability, 5-7 for antenna matching or tuning techniques, 3-4 for general RF coupling, 1-2 for no antenna/coupling aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Antenna coupling patents are infringed by every NFC-enabled device. Detectable via teardown."
+    },
+    {
+      "fieldName": "secure_element_interaction",
+      "displayName": "Secure Element Interaction",
+      "question": "Does this patent involve secure element (SE) access, host card emulation (HCE), or trusted execution for NFC? Score 8-10 for SE access control or routing (which SE handles which AID), 5-7 for HCE implementations, 3-4 for general security in NFC, 1-2 for no secure element aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "SE routing is contentious — Apple controls SE access on iPhone, creating licensing leverage."
+    },
+    {
+      "fieldName": "device_pairing_handover",
+      "displayName": "Device Pairing & Handover",
+      "question": "Does this patent cover NFC-initiated device pairing, connection handover to Bluetooth/WiFi, or tap-to-pair functionality? Score 8-10 for seamless handover protocols (NFC tap triggers BT/WiFi connection), 5-7 for NFC-based pairing, 3-4 for general proximity-based pairing, 1-2 for no pairing aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Tap-to-pair is used in headphones, speakers, printers, and car Bluetooth."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this NFC innovation in a commercial product? Score 8-10 for behavior observable during a normal NFC transaction (payment tap, tag read), 5-7 for behavior detectable via NFC protocol analysis or chip teardown, 3-4 for firmware-level behavior only, 1-2 for internal algorithm with no external observability.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "NFC transactions are highly observable — every payment tap is evidence of use."
+    },
+    {
+      "fieldName": "standards_compliance",
+      "displayName": "Standards Compliance",
+      "question": "Does this patent align with NFC standards (ISO 14443, ISO 18092, NFC Forum specs, EMV Contactless)? Score 8-10 for patents implementing mandatory standard behavior, 5-7 for standard-adjacent or enabling technology, 3-4 for proprietary extensions compatible with standards, 1-2 for no standards relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Standards-essential NFC patents can be licensed to all compliant devices."
+    }
+  ]
+}

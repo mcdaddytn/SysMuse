@@ -2,14 +2,20 @@
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { usePatentsStore } from '@/stores/patents';
-import { focusAreaApi, jobsApi, patentApi, snapshotApi, type ActiveSnapshots } from '@/services/api';
+import { usePortfolioStore } from '@/stores/portfolio';
+import { focusAreaApi, jobsApi, patentApi, portfolioApi, snapshotApi, type ActiveSnapshots } from '@/services/api';
 import ColumnSelector from '@/components/grid/ColumnSelector.vue';
 import FlexFilterBuilder from '@/components/filters/FlexFilterBuilder.vue';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import type { Patent } from '@/types';
+import { useSuperSectors } from '@/composables/useSuperSectors';
+
+const { getSectorColor, getDisplayName } = useSuperSectors();
 
 const router = useRouter();
 const route = useRoute();
 const patentsStore = usePatentsStore();
+const portfolioStore = usePortfolioStore();
 
 // Focus Group creation
 const showCreateFocusGroupDialog = ref(false);
@@ -18,15 +24,23 @@ const newFocusGroupDescription = ref('');
 const creatingFocusGroup = ref(false);
 const focusGroupError = ref<string | null>(null);
 
-// View mode: portfolio vs all
-const viewMode = ref<'portfolio' | 'all'>('portfolio');
-const selectedPortfolio = ref('broadcom-core');
-const portfolioOptions = [
-  { value: 'broadcom-core', label: 'Broadcom Core' }
-];
+// When portfolio selection changes, update the patents store and reload
+watch(() => portfolioStore.selectedPortfolioId, async (newId) => {
+  if (!newId) return;
+  patentsStore.setPortfolioId(newId);
+  await patentsStore.loadPatents();
+  // Reload active snapshots for the new portfolio
+  activeSnapshots.value = await snapshotApi.getActive(newId).catch(() => ({ V2: null, V3: null }));
+});
 
 // Active snapshots state
 const activeSnapshots = ref<ActiveSnapshots>({ V2: null, V3: null });
+
+// Pagination model delegates to the patents store (server-side pagination for all portfolios)
+const tablePagination = computed({
+  get: () => paginationModel.value,
+  set: (val) => { paginationModel.value = val; }
+});
 
 // Local state
 const searchText = ref('');
@@ -48,24 +62,6 @@ function onFlexFiltersUpdate(filters: Record<string, unknown>) {
   patentsStore.setFilters({ ...filters, search });
 }
 
-// Super-sector color mapping
-const sectorColors: Record<string, string> = {
-  'Security': 'red-7',
-  'Virtualization & Cloud': 'purple-7',
-  'SDN & Network Infrastructure': 'blue-7',
-  'Wireless & RF': 'teal-7',
-  'Video & Streaming': 'orange-7',
-  'Computing & Data': 'grey-7',
-  'Semiconductor': 'indigo-7',
-  'Imaging & Optics': 'cyan-7',
-  'Audio': 'pink-7',
-  'AI & Machine Learning': 'green-7',
-  'Fault Tolerance & Reliability': 'amber-7'
-};
-
-function getSectorColor(sector: string): string {
-  return sectorColors[sector] || 'grey-6';
-}
 
 // Computed
 const tableColumns = computed(() =>
@@ -100,6 +96,22 @@ function onSearch() {
 
 function onRowClick(_evt: Event, row: Patent) {
   router.push({ name: 'patent-detail', params: { id: row.patent_id } });
+}
+
+const QUARANTINE_REASON_LABELS: Record<string, string> = {
+  'design-patent': 'Design patent (D-prefix)',
+  'reissue-patent': 'Reissue patent (RE/H-prefix)',
+  'pre-2005': 'Pre-2005 grant date',
+  'recent-no-bulk': 'Recent — bulk data unavailable',
+  'extraction-failed': 'USPTO bulk extraction failed',
+  'manual': 'Manually quarantined',
+};
+
+function formatQuarantineTooltip(quarantine: Record<string, string> | null): string {
+  if (!quarantine) return 'Quarantined';
+  return Object.entries(quarantine)
+    .map(([type, reason]) => `${type}: ${QUARANTINE_REASON_LABELS[reason] || reason}`)
+    .join('\n');
 }
 
 function onRequest(props: { pagination: typeof paginationModel.value }) {
@@ -225,6 +237,9 @@ function exploreFamilies() {
 
 // Lifecycle
 onMounted(async () => {
+  // Load portfolio store (populates selector)
+  await portfolioStore.loadPortfolios();
+
   // Load active snapshots and apply query filters in parallel
   const [, snapshots] = await Promise.all([
     (async () => {
@@ -253,10 +268,11 @@ onMounted(async () => {
         patentsStore.updateFilters(queryFilters);
       }
 
-      // Load patents
+      // Set portfolio scope and load
+      patentsStore.setPortfolioId(portfolioStore.selectedPortfolioId);
       await patentsStore.loadPatents();
     })(),
-    snapshotApi.getActive().catch(() => ({ V2: null, V3: null })),
+    snapshotApi.getActive(portfolioStore.selectedPortfolioId).catch(() => ({ V2: null, V3: null })),
   ]);
 
   activeSnapshots.value = snapshots;
@@ -268,86 +284,65 @@ onMounted(async () => {
     <!-- Header -->
     <div class="row items-center q-mb-md">
       <div class="text-h5 q-mr-md">Patent Summary</div>
-      <q-btn-toggle
-        v-model="viewMode"
-        toggle-color="primary"
-        dense
-        no-caps
-        rounded
-        class="q-mr-md"
-        :options="[
-          { value: 'portfolio', label: 'Portfolio' },
-          { value: 'all', label: 'All Patents' }
-        ]"
-      />
-      <q-select
-        v-if="viewMode === 'portfolio'"
-        v-model="selectedPortfolio"
-        :options="portfolioOptions"
-        outlined
-        dense
-        emit-value
-        map-options
-        option-value="value"
-        option-label="label"
-        class="q-mr-md"
-        style="min-width: 180px"
-      />
+      <PortfolioSelector class="q-mr-md" />
       <q-badge color="primary" class="q-mr-md">
         {{ patentsStore.totalCount.toLocaleString() }} patents
       </q-badge>
 
       <!-- Snapshot Status -->
-      <q-badge
-        v-if="activeSnapshots.V2"
-        color="positive"
-        class="q-mr-xs"
-      >
-        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
-        V2: {{ activeSnapshots.V2.name }}
-        <q-tooltip>
-          V2 scores from snapshot "{{ activeSnapshots.V2.name }}"
-          ({{ activeSnapshots.V2.patentCount.toLocaleString() }} patents,
-          {{ new Date(activeSnapshots.V2.createdAt).toLocaleDateString() }})
-        </q-tooltip>
-      </q-badge>
-      <q-badge
-        v-else
-        color="warning"
-        outline
-        class="q-mr-xs"
-      >
-        V2: calculated
-        <q-tooltip>V2 scores are calculated on-the-fly. Save a snapshot in V2 Scoring for consistent scores.</q-tooltip>
-      </q-badge>
+      <template>
+        <q-badge
+          v-if="activeSnapshots.V2"
+          color="positive"
+          class="q-mr-xs"
+        >
+          <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+          V2: {{ activeSnapshots.V2.name }}
+          <q-tooltip>
+            V2 scores from snapshot "{{ activeSnapshots.V2.name }}"
+            ({{ activeSnapshots.V2.patentCount.toLocaleString() }} patents,
+            {{ new Date(activeSnapshots.V2.createdAt).toLocaleDateString() }})
+          </q-tooltip>
+        </q-badge>
+        <q-badge
+          v-else
+          color="warning"
+          outline
+          class="q-mr-xs"
+        >
+          V2: calculated
+          <q-tooltip>V2 scores are calculated on-the-fly. Save a snapshot in V2 Scoring for consistent scores.</q-tooltip>
+        </q-badge>
 
-      <q-badge
-        v-if="activeSnapshots.V3"
-        color="positive"
-        class="q-mr-md"
-      >
-        <q-icon name="check_circle" size="xs" class="q-mr-xs" />
-        V3: {{ activeSnapshots.V3.name }}
-        <q-tooltip>
-          V3 scores from snapshot "{{ activeSnapshots.V3.name }}"
-          ({{ activeSnapshots.V3.patentCount.toLocaleString() }} patents,
-          {{ new Date(activeSnapshots.V3.createdAt).toLocaleDateString() }})
-        </q-tooltip>
-      </q-badge>
-      <q-badge
-        v-else
-        color="warning"
-        outline
-        class="q-mr-md"
-      >
-        V3: calculated
-        <q-tooltip>V3 scores are calculated on-the-fly. Save a snapshot in V3 Scoring for consistent scores.</q-tooltip>
-      </q-badge>
+        <q-badge
+          v-if="activeSnapshots.V3"
+          color="positive"
+          class="q-mr-md"
+        >
+          <q-icon name="check_circle" size="xs" class="q-mr-xs" />
+          V3: {{ activeSnapshots.V3.name }}
+          <q-tooltip>
+            V3 scores from snapshot "{{ activeSnapshots.V3.name }}"
+            ({{ activeSnapshots.V3.patentCount.toLocaleString() }} patents,
+            {{ new Date(activeSnapshots.V3.createdAt).toLocaleDateString() }})
+          </q-tooltip>
+        </q-badge>
+        <q-badge
+          v-else
+          color="warning"
+          outline
+          class="q-mr-md"
+        >
+          V3: calculated
+          <q-tooltip>V3 scores are calculated on-the-fly. Save a snapshot in V3 Scoring for consistent scores.</q-tooltip>
+        </q-badge>
+      </template>
 
       <q-space />
 
-      <!-- Search -->
+      <!-- Search (ES only) -->
       <q-input
+        
         v-model="searchText"
         dense
         outlined
@@ -370,8 +365,9 @@ onMounted(async () => {
         @click="showColumnSelector = true"
       />
 
-      <!-- Export -->
+      <!-- Export (ES only) -->
       <q-btn
+        
         flat
         icon="download"
         label="Export"
@@ -381,8 +377,9 @@ onMounted(async () => {
         <q-tooltip>Export all {{ patentsStore.totalCount.toLocaleString() }} filtered patents as CSV</q-tooltip>
       </q-btn>
 
-      <!-- Filter Toggle -->
+      <!-- Filter Toggle (ES only) -->
       <q-btn
+        
         flat
         :icon="showFilters ? 'filter_list_off' : 'filter_list'"
         :label="showFilters ? 'Hide Filters' : 'Filters'"
@@ -390,7 +387,7 @@ onMounted(async () => {
       />
     </div>
 
-    <!-- Flexible Filter Builder -->
+    <!-- Flexible Filter Builder (ES only) -->
     <q-slide-transition>
       <div v-show="showFilters" class="q-mb-md">
         <q-card flat bordered>
@@ -404,7 +401,7 @@ onMounted(async () => {
       </div>
     </q-slide-transition>
 
-    <!-- Active Filter Summary (shown when filters hidden) -->
+    <!-- Active Filter Summary (shown when filters hidden, ES only) -->
     <div v-if="!showFilters && patentsStore.hasFilters" class="q-mb-md">
       <div class="row q-gutter-sm items-center">
         <span class="text-caption text-grey-7">Active filters:</span>
@@ -413,21 +410,21 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Data Table with fixed pagination -->
+    <!-- Unified patent data table -->
     <div class="table-wrapper">
       <div class="table-scroll-container">
         <q-table
           :rows="patentsStore.patents"
           :columns="tableColumns"
           row-key="patent_id"
-          v-model:pagination="paginationModel"
+          v-model:pagination="tablePagination"
           v-model:selected="selectedPatents"
           :loading="patentsStore.loading"
           selection="multiple"
           flat
           bordered
           binary-state-sort
-          hide-pagination
+          :hide-pagination="true"
           @row-click="onRowClick"
           @request="onRequest"
         >
@@ -480,7 +477,7 @@ onMounted(async () => {
             size="sm"
             @click.stop="patentsStore.updateFilters({ superSectors: [props.row.super_sector] })"
           >
-            {{ props.row.super_sector }}
+            {{ getDisplayName(props.row.super_sector) }}
           </q-chip>
         </q-td>
       </template>
@@ -715,6 +712,15 @@ onMounted(async () => {
         </q-td>
       </template>
 
+      <template v-slot:body-cell-is_quarantined="props">
+        <q-td :props="props">
+          <q-badge v-if="props.row.is_quarantined" color="orange" outline>
+            <q-icon name="shield" size="xs" class="q-mr-xs" />Q
+            <q-tooltip>{{ formatQuarantineTooltip(props.row.quarantine) }}</q-tooltip>
+          </q-badge>
+        </q-td>
+      </template>
+
       <!-- No data -->
       <template v-slot:no-data>
         <div class="full-width row flex-center text-grey q-gutter-sm q-pa-xl">
@@ -730,7 +736,7 @@ onMounted(async () => {
         </q-table>
       </div>
 
-      <!-- Pagination Controls (always visible outside scroll area) -->
+      <!-- Pagination Controls (ES-backed server-side pagination only) -->
       <div class="pagination-bar q-pa-sm bg-grey-1 row items-center justify-between">
         <div class="text-caption text-grey-7">
           {{ patentsStore.totalCount.toLocaleString() }} total patents

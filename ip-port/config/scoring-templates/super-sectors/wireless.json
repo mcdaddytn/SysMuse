@@ -2,26 +2,97 @@
   "$schema": "../scoring-template.schema.json",
   "id": "wireless",
   "name": "Wireless Scoring",
-  "description": "Scoring template for Wireless super-sector patents. Covers RF components, communication protocols, antennas, and network infrastructure with questions that differentiate across diverse wireless technologies.",
+  "description": "Scoring template for Wireless super-sector patents. Reweighted for litigation targeting: emphasizes design-around difficulty, claim breadth, implementation clarity, and standards essentiality over narrow technology relevance.",
   "level": "super_sector",
   "superSectorName": "WIRELESS",
   "inheritsFrom": "portfolio-default",
   "isDefault": true,
-  "version": 3,
+  "version": 4,
   "scoringGuidance": [
     "This super-sector covers diverse wireless technologies: RF components (filters, amplifiers), communication protocols (modulation, scheduling), antennas, and network infrastructure.",
     "The super-sector questions are designed to differentiate across all wireless patent types.",
-    "Sector-specific questions will add more targeted evaluation for each technology area."
+    "Sector-specific questions will add more targeted evaluation for each technology area.",
+    "Litigation reweighting (v4): core IP strength metrics (design-around difficulty, claim breadth, implementation clarity) weighted up; narrow technology classification metrics weighted down."
   ],
   "contextDescription": "Wireless technology patents span from physical layer components (filters, amplifiers, antennas) through communication protocols (modulation, scheduling) to network infrastructure (base stations, access points). Key value drivers include standards essentiality, component ubiquity (every smartphone), and performance differentiation.",
   "questions": [
+    {
+      "fieldName": "technical_novelty",
+      "displayName": "Technical Novelty",
+      "question": "Rate the technical novelty of this patent's core innovation. Consider: How different is this from prior art? Does it represent a significant departure from existing approaches?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this technically novel or incremental."
+    },
+    {
+      "fieldName": "claim_breadth",
+      "displayName": "Claim Breadth",
+      "question": "Rate the breadth of the patent claims based on the actual claim language provided. Consider: (1) How many independent claims exist? (2) How broad are the independent claims — do they use functional language, means-plus-function, or specific structural terms? (3) Do dependent claims cover meaningful alternative implementations? (4) Could the claims capture a competitor's implementation that achieves similar functionality through different means?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Analyze the specific claim language. Identify the broadest independent claim and explain what scope it covers."
+    },
+    {
+      "fieldName": "design_around_difficulty",
+      "displayName": "Design-Around Difficulty",
+      "question": "How difficult would it be for a competitor to design around this patent while achieving similar functionality?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.25,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this hard or easy to design around."
+    },
+    {
+      "fieldName": "market_relevance",
+      "displayName": "Market Relevance",
+      "question": "Rate the relevance of this technology to current market needs and industry trends.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the market context and relevance."
+    },
+    {
+      "fieldName": "implementation_clarity",
+      "displayName": "Implementation Clarity",
+      "question": "How clearly does the patent describe the implementation? Could infringement be easily detected in a product?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess detectability and clarity of implementation."
+    },
+    {
+      "fieldName": "standards_relevance",
+      "displayName": "Standards Relevance",
+      "question": "Is this patent related to any industry standards (IEEE, 3GPP, IETF, etc.)? Rate its standards essentiality.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.15,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any standards relationships."
+    },
+    {
+      "fieldName": "unique_value",
+      "displayName": "Unique/Hidden Value",
+      "question": "Beyond the standard metrics above, does this patent have unique or overlooked value that isn't captured by typical analysis? Consider: unusual claim scope, emerging technology applicability, underappreciated market timing, strategic defensive value, or any 'dark horse' characteristics that could make this patent more valuable than it appears.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.05,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any unique characteristics, hidden strengths, or overlooked value that distinguishes this patent from others in its sector. What makes this a potential 'dark horse' that standard analysis might miss? Be specific about what unique value exists and why it matters."
+    },
     {
       "fieldName": "component_vs_system",
       "displayName": "Component vs System Innovation",
       "question": "Is this patent focused on a discrete component/device innovation or a system-level solution? Consider: Component-level includes filters, amplifiers, antennas, chips. System-level includes protocols, network architectures, resource management algorithms.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.12,
+      "weight": 0.08,
       "requiresReasoning": true,
       "reasoningPrompt": "Score 1-3 for pure component focus, 4-6 for hybrid component+system, 7-10 for pure system/protocol focus. Describe what type of innovation this represents."
     },
@@ -31,7 +102,7 @@
       "question": "What is the primary deployment target for this technology? Consider: Mobile device (smartphone, tablet), base station/access point, IoT/embedded device, infrastructure equipment (routers, gateways), or wearables.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.12,
+      "weight": 0.05,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify the deployment target(s). Score higher for high-volume targets (smartphones=8-10) or high-value infrastructure (base stations=7-9). Score lower for niche applications."
     },
@@ -41,7 +112,7 @@
       "question": "Which wireless technology generation does this patent align with? Consider: 4G LTE, 5G NR, 5G Advanced, WiFi 5/6/6E/7, Bluetooth 5.x, or emerging 6G concepts. Rate applicability to current and next-gen standards.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.12,
+      "weight": 0.05,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify specific wireless generations. Score 8-10 for current mainstream (5G, WiFi 6/7), 5-7 for still-relevant older gen (4G, WiFi 5), 3-5 for legacy, 1-2 if wireless generation is not applicable (e.g., general RF components)."
     },
@@ -51,7 +122,7 @@
       "question": "Could this patent be essential to implementing a wireless standard (3GPP, IEEE 802.11, Bluetooth SIG)? Consider: Does it cover functionality that all compliant implementations must include?",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.14,
+      "weight": 0.15,
       "requiresReasoning": true,
       "reasoningPrompt": "Score 9-10 for likely essential (mandatory standard feature), 6-8 for possibly essential (optional standard feature), 3-5 for standard-adjacent but not essential, 1-2 for not related to standards. Cite specific standards if applicable."
     }

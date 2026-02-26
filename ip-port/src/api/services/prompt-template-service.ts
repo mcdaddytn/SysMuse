@@ -74,7 +74,11 @@ const PATENT_FIELDS = [
   'eligibility_score', 'validity_score', 'claim_breadth',
   'enforcement_clarity', 'design_around_difficulty',
   'market_relevance_score', 'trend_alignment_score',
-  'investigation_priority_score', 'llm_confidence'
+  'investigation_priority_score', 'llm_confidence',
+  // Prosecution detail fields (from prosecution-analysis cache)
+  'prosecution_rejections', 'prosecution_cited_art',
+  'prosecution_narrowed_claims', 'prosecution_estoppel_risk',
+  'prosecution_survived'
 ];
 
 const FOCUS_AREA_FIELDS = ['name', 'description', 'patentIDs', 'patentCount', 'patentData'];
@@ -409,7 +413,80 @@ export function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData
     }
   }
 
+  // Enrich with prosecution analysis data
+  const prosDir = path.join(process.cwd(), 'cache/prosecution-analysis');
+  if (fs.existsSync(prosDir)) {
+    for (const pid of patentIds) {
+      const prosPath = path.join(prosDir, `${pid}.json`);
+      if (fs.existsSync(prosPath)) {
+        try {
+          const prosData = JSON.parse(fs.readFileSync(prosPath, 'utf-8'));
+          const existing = result.get(pid) || { patent_id: pid };
+          result.set(pid, {
+            ...existing,
+            prosecution_rejections: formatProsecutionRejections(prosData),
+            prosecution_cited_art: formatProsecutionCitedArt(prosData),
+            prosecution_narrowed_claims: formatProsecutionNarrowed(prosData),
+            prosecution_estoppel_risk: formatProsecutionEstoppel(prosData),
+            prosecution_survived: formatProsecutionSurvived(prosData),
+          });
+        } catch {
+          // skip invalid prosecution analysis files
+        }
+      }
+    }
+  }
+
   return result;
+}
+
+/**
+ * Format prosecution analysis fields as human-readable text for template substitution.
+ */
+function formatProsecutionRejections(data: any): string {
+  if (!data?.officeActions?.length) return 'No office actions found.';
+  const lines: string[] = [];
+  for (const oa of data.officeActions) {
+    const rejCounts: Record<string, number[]> = {};
+    for (const r of oa.claimRejections || []) {
+      const basis = r.statutoryBasis || 'unknown';
+      if (!rejCounts[basis]) rejCounts[basis] = [];
+      rejCounts[basis].push(r.claimNumber);
+    }
+    const rejSummary = Object.entries(rejCounts)
+      .map(([basis, claims]) => `§${basis}: claims ${claims.join(',')}`)
+      .join('; ');
+    lines.push(`${oa.mailDate} (${oa.actionType}): ${rejSummary || 'no specific rejections'}`);
+  }
+  return lines.join('\n');
+}
+
+function formatProsecutionCitedArt(data: any): string {
+  if (!data?.citedPriorArt?.length) return 'No prior art cited.';
+  return data.citedPriorArt.map((art: any) =>
+    `${art.designation} (${art.referenceType}) — claims ${(art.relevantClaims || []).join(',')}${art.relevanceDescription ? ': ' + art.relevanceDescription : ''}`
+  ).join('\n');
+}
+
+function formatProsecutionNarrowed(data: any): string {
+  if (!data?.narrowedClaims?.length) return 'No narrowing amendments.';
+  return data.narrowedClaims.map((a: any) =>
+    `Claim ${a.claimNumber}: ${a.narrowingDescription || a.amendmentType || 'narrowed'}`
+  ).join('\n');
+}
+
+function formatProsecutionEstoppel(data: any): string {
+  if (!data?.estoppelArguments?.length) return 'No significant estoppel risk.';
+  return data.estoppelArguments.map((e: any) =>
+    `[${e.severity}] Claim ${e.claimNumber}: ${e.description} → ${e.scopeImpact}`
+  ).join('\n');
+}
+
+function formatProsecutionSurvived(data: any): string {
+  if (!data?.survivedBases?.length) return 'No rejection bases survived.';
+  return data.survivedBases.map((s: any) =>
+    `§${s.statutoryBasis} (claims ${(s.claimNumbers || []).join(',')}): ${s.howOvercome} — ${s.description}`
+  ).join('\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

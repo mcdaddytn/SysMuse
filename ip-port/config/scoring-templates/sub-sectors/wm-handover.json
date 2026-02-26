@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wm-handover",
+  "name": "Handover & Cell Mobility",
+  "description": "Sub-sector template for inter-RAT, intra-RAT, conditional handover (CHO), DAPS, relay handover, measurement-based handover, and mobility optimization patents.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W36/*",
+  "sectorName": "wireless-mobility",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-mobility",
+  "version": 1,
+  "contextDescription": "Handover is the process of transferring a UE's connection from one cell to another while maintaining service continuity. In 5G NR, conditional handover (CHO, Rel-16) and Dual Active Protocol Stack (DAPS, Rel-16) enable zero-interruption mobility. Inter-RAT handover (LTE↔NR, WiFi↔cellular) is critical for NSA 5G deployments. 3GPP TS 38.300 defines NR mobility architecture; TS 38.331 defines HO procedures; TS 38.413 defines Xn-based handover. Measurement reports (L1-RSRP, L3 filtering) trigger handover decisions. Key targets: every UE vendor, every base station vendor, WiFi-cellular integration providers.",
+  "scoringGuidance": [
+    "Handover is exercised by every mobile device — every cell boundary crossing triggers HO procedures.",
+    "Conditional handover (CHO) patents are premium: Rel-16 CHO reduces HO failure rates significantly.",
+    "DAPS (Dual Active Protocol Stack) patents enable zero-interruption — the holy grail of mobility.",
+    "Inter-RAT handover patents (LTE↔5G, WiFi↔cellular) are critical for real-world multi-RAT deployments.",
+    "Measurement-based HO patents (L1-RSRP, beam measurement) are fundamental to every HO decision."
+  ],
+  "questions": [
+    {
+      "fieldName": "handover_technology_span",
+      "displayName": "Handover Technology Span",
+      "question": "What types of handover does this patent address? Score 8-10 for multi-RAT handover (LTE↔5G↔WiFi) or WiFi-cellular integration. 5-7 for inter-frequency handover or handover across different NR bands. 3-4 for intra-frequency handover. 1-2 for no specific handover type innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Multi-RAT handover is the most complex and patent-valuable type — exercised in every NSA 5G deployment."
+    },
+    {
+      "fieldName": "conditional_handover",
+      "displayName": "Conditional Handover",
+      "question": "Does this patent implement conditional handover (CHO) or Dual Active Protocol Stack (DAPS)? Score 8-10 for novel CHO configuration, execution criteria, DAPS optimization, or conditional procedures. 5-7 for CHO-aware mobility or CHO parameter optimization. 3-4 for legacy handover with awareness of conditional concepts. 1-2 for legacy break-before-make handover only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "CHO (Rel-16) and DAPS are the most important mobility innovations in 5G NR — high patent value."
+    },
+    {
+      "fieldName": "measurement_innovation",
+      "displayName": "Measurement Innovation",
+      "question": "Does this patent innovate on handover measurement (L1-RSRP, beam measurement, prediction)? Score 8-10 for ML-based HO prediction, L1 beam measurement innovation, or novel measurement events. 5-7 for improved measurement reporting or filtering. 3-4 for basic RSRP/RSRQ measurement usage. 1-2 for no measurement innovation.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Every handover starts with measurements — L1-RSRP and beam-level measurements are new in 5G NR."
+    },
+    {
+      "fieldName": "interruption_time",
+      "displayName": "Interruption Time",
+      "question": "Does this patent minimize handover interruption time? Score 8-10 for zero-interruption techniques (DAPS, make-before-break). 5-7 for reduced interruption through preparation optimization. 3-4 for standard interruption with minor improvements. 1-2 for break-before-make with no interruption optimization.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Handover interruption directly impacts user experience — zero-interruption is the 5G NR target."
+    },
+    {
+      "fieldName": "relay_multi_hop",
+      "displayName": "Relay/Multi-Hop",
+      "question": "Does this patent address relay-assisted handover or multi-hop mobility? Score 8-10 for IAB node handover, relay path switching, or multi-hop mobility management. 5-7 for relay awareness in handover decisions. 3-4 for indirect relay relevance. 1-2 for direct link handover only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "IAB (Integrated Access and Backhaul) relay handover is a growing area in 5G NR Rel-17/18."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP handover procedures (TS 38.300, TS 38.331, TS 38.413)? Score 8-10 for direct implementation of standardized HO procedure (MeasurementReport → HO Command → HO Complete). 5-7 for enabling standard compliance. 3-4 for standard-adjacent mobility. 1-2 for proprietary mobility approach.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Handover procedures are heavily standardized — identify specific 3GPP messages and procedures."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is this handover behavior observable in signaling traces? Score 8-10 for behavior visible in RRC/X2/Xn traces (MeasurementReport, HOCommand, HOComplete). 5-7 for behavior inferable from mobility KPIs or conformance testing. 3-4 for internal UE algorithm. 1-2 for algorithm-level logic only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Handover signaling (MeasReport, RRCReconfiguration) is fully captured in protocol logs."
+    }
+  ]
+}

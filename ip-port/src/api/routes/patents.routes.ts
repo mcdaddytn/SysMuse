@@ -9,14 +9,21 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { normalizeAffiliate, getAllAffiliates } from '../utils/affiliate-normalizer.js';
-import { getSuperSectorDisplayName, getAllSuperSectors } from '../utils/sector-mapper.js';
 import { loadAllClassifications } from '../services/scoring-service.js';
 import { resolvePatent, resolvePatents, resolvePatentPreview, hasPatentData, registerPortfolioLoader } from '../services/patent-fetch-service.js';
 import { enrichCandidatesWithCpcDesignation, parsePatentXml, analyzeCpcCooccurrence, findXmlPath } from '../services/patent-xml-parser-service.js';
+import * as patentDataService from '../services/patent-data-service.js';
+import { repairEnrichmentFlags } from './batch-jobs.routes.js';
+import type { PatentFilters, PaginationOptions } from '../services/patent-data-service.js';
+import { getActiveSnapshotScores } from './scores.routes.js';
 
 const prisma = new PrismaClient();
 
 const router = Router();
+
+// Pre-load super-sector lookup at module init (async, non-blocking)
+// This ensures the cache is warm before loadPatents() needs it synchronously.
+loadSuperSectorLookup().catch(() => {});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Active Snapshot Score Cache
@@ -135,65 +142,14 @@ function getSnapshotScores(): { v2: Map<string, number> | null; v3: Map<string, 
 preloadSnapshotScores().catch(console.error);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Enrichment cache set cache (avoids re-reading directories on every request)
+// Enrichment cache invalidation
+// All enrichment flags are now DB-backed (hasLlmData, hasProsecutionData,
+// hasXmlData, hasIprData, hasFamilyData). Directory scanning was removed.
+// This function is kept for callers that signal enrichment data has changed.
 // ─────────────────────────────────────────────────────────────────────────────
-
-interface EnrichmentCacheData {
-  llmSet: Set<string>;
-  prosSet: Set<string>;
-  iprSet: Set<string>;
-  familySet: Set<string>;
-  lastUpdated: number;
-}
-
-let enrichmentCacheData: EnrichmentCacheData | null = null;
-const ENRICHMENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getCacheSetFromDir(dir: string): Set<string> {
-  if (!fs.existsSync(dir)) return new Set();
-  return new Set(
-    fs.readdirSync(dir)
-      .filter(f => f.endsWith('.json'))
-      .map(f => f.replace('.json', ''))
-  );
-}
-
-function getEnrichmentCacheSets(forceRefresh = false): EnrichmentCacheData {
-  const now = Date.now();
-
-  if (
-    !forceRefresh &&
-    enrichmentCacheData &&
-    now - enrichmentCacheData.lastUpdated < ENRICHMENT_CACHE_TTL_MS
-  ) {
-    return enrichmentCacheData;
-  }
-
-  console.log('[Patents] Loading enrichment cache sets...');
-  const startTime = Date.now();
-
-  const llmDir = path.join(process.cwd(), 'cache/llm-scores');
-  const prosDir = path.join(process.cwd(), 'cache/prosecution-scores');
-  const iprDir = path.join(process.cwd(), 'cache/ipr-scores');
-  const familyDir = path.join(process.cwd(), 'cache/patent-families/parents');
-
-  enrichmentCacheData = {
-    llmSet: getCacheSetFromDir(llmDir),
-    prosSet: getCacheSetFromDir(prosDir),
-    iprSet: getCacheSetFromDir(iprDir),
-    familySet: getCacheSetFromDir(familyDir),
-    lastUpdated: now,
-  };
-
-  const elapsed = Date.now() - startTime;
-  console.log(`[Patents] Enrichment cache sets loaded in ${elapsed}ms (llm: ${enrichmentCacheData.llmSet.size}, pros: ${enrichmentCacheData.prosSet.size}, ipr: ${enrichmentCacheData.iprSet.size}, family: ${enrichmentCacheData.familySet.size})`);
-
-  return enrichmentCacheData;
-}
 
 // Export for cache invalidation from other routes
 export function invalidateEnrichmentCache(): void {
-  enrichmentCacheData = null;
   console.log('[Patents] Enrichment cache invalidated');
 }
 
@@ -469,7 +425,7 @@ export function loadPatents(): Patent[] {
       ...p,
       affiliate: normalizeAffiliate(p.assignee),
       super_sector: p.super_sector
-        ? getSuperSectorDisplayName(p.super_sector)
+        ? resolveSuperSectorDisplay(p.super_sector)
         : (p.sector ? inferSuperSector(p.sector) : 'Unknown'),
       primary_sector: (p as any).primary_sector,
       competitor_citations: competitorCites,
@@ -539,26 +495,60 @@ export function loadPatents(): Patent[] {
 // Register portfolio loader with patent-fetch-service for cross-module access
 registerPortfolioLoader(loadPatents);
 
+// ─── DB-cached super-sector lookup (replaces config reads) ──────────────────
+
+let superSectorLookupCache: {
+  nameToDisplay: Map<string, string>;     // canonical → display
+  sectorToSuperDisplay: Map<string, string>; // sector name → super-sector display name
+} | null = null;
+let superSectorLookupTime = 0;
+const SUPER_SECTOR_CACHE_TTL = 60_000; // 1 minute
+
+async function loadSuperSectorLookup() {
+  const now = Date.now();
+  if (superSectorLookupCache && (now - superSectorLookupTime) < SUPER_SECTOR_CACHE_TTL) {
+    return superSectorLookupCache;
+  }
+  const superSectors = await prisma.superSector.findMany({
+    include: { sectors: { select: { name: true } } },
+  });
+  const nameToDisplay = new Map<string, string>();
+  const sectorToSuperDisplay = new Map<string, string>();
+  for (const ss of superSectors) {
+    nameToDisplay.set(ss.name, ss.displayName);
+    for (const s of ss.sectors) {
+      sectorToSuperDisplay.set(s.name, ss.displayName);
+    }
+  }
+  superSectorLookupCache = { nameToDisplay, sectorToSuperDisplay };
+  superSectorLookupTime = now;
+  return superSectorLookupCache;
+}
+
 /**
- * Infer super-sector from primary sector name
- * This is a fallback when super_sector is not explicitly set
+ * Resolve any super-sector value (canonical or display) to display name.
+ * Sync — uses the pre-loaded cache from loadSuperSectorLookup().
+ */
+function resolveSuperSectorDisplay(value: string | null | undefined): string {
+  if (!value) return 'Unknown';
+  if (!superSectorLookupCache) return value;
+  // Try canonical → display
+  const display = superSectorLookupCache.nameToDisplay.get(value);
+  if (display) return display;
+  // Already a display name? Check if it's a known value
+  for (const d of superSectorLookupCache.nameToDisplay.values()) {
+    if (d === value) return value;
+  }
+  return value;
+}
+
+/**
+ * Infer super-sector display name from a primary sector name.
+ * Uses DB-cached lookup.
  */
 function inferSuperSector(sector: string): string {
-  // Try to load from super-sectors config
-  try {
-    const configPath = path.join(process.cwd(), 'config/super-sectors.json');
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-
-    for (const [superSectorKey, superSectorData] of Object.entries(config.superSectors) as [string, any][]) {
-      if (superSectorData.sectors.includes(sector)) {
-        return superSectorData.displayName;
-      }
-    }
-  } catch (e) {
-    // Config not found, return Unknown
-  }
-
-  return 'Unknown';
+  if (!superSectorLookupCache) return 'Unknown';
+  return superSectorLookupCache.sectorToSuperDisplay.get(sector) || 'Unknown';
 }
 
 /**
@@ -578,270 +568,33 @@ function loadAbstract(patentId: string): string | null {
 }
 
 /**
- * Apply filters to patents array
- */
-function applyFilters(patents: Patent[], filters: Record<string, string | string[] | undefined>): Patent[] {
-  let result = patents;
-
-  // Search filter (searches patent_id, title, assignee, affiliate)
-  if (filters.search) {
-    const searchLower = (filters.search as string).toLowerCase();
-    result = result.filter(p =>
-      p.patent_id.toLowerCase().includes(searchLower) ||
-      p.patent_title.toLowerCase().includes(searchLower) ||
-      p.assignee.toLowerCase().includes(searchLower) ||
-      p.affiliate.toLowerCase().includes(searchLower)
-    );
-  }
-
-  // Affiliate filter (normalized entity names)
-  if (filters.affiliates) {
-    const affiliateList = Array.isArray(filters.affiliates)
-      ? filters.affiliates
-      : [filters.affiliates];
-    result = result.filter(p =>
-      affiliateList.some(a => p.affiliate.toLowerCase() === a.toLowerCase())
-    );
-  }
-
-  // Assignee filter (raw USPTO names)
-  if (filters.assignees) {
-    const assigneeList = Array.isArray(filters.assignees)
-      ? filters.assignees
-      : [filters.assignees];
-    result = result.filter(p =>
-      assigneeList.some(a => p.assignee.toLowerCase().includes(a.toLowerCase()))
-    );
-  }
-
-  // Super-sector filter
-  if (filters.superSectors) {
-    const sectorList = Array.isArray(filters.superSectors)
-      ? filters.superSectors
-      : [filters.superSectors];
-    result = result.filter(p =>
-      sectorList.some(s => p.super_sector.toLowerCase() === s.toLowerCase())
-    );
-  }
-
-  // Date range filter
-  if (filters.dateStart) {
-    result = result.filter(p => p.patent_date >= filters.dateStart!);
-  }
-  if (filters.dateEnd) {
-    result = result.filter(p => p.patent_date <= filters.dateEnd!);
-  }
-
-  // Score range filter (supports different score fields: score, v2_score, v3_score)
-  const scoreField = (filters.scoreField as string) || 'score';
-  if (filters.scoreMin) {
-    const min = parseFloat(filters.scoreMin as string);
-    result = result.filter(p => {
-      const val = (p as any)[scoreField];
-      return val !== undefined && val !== null && val >= min;
-    });
-  }
-  if (filters.scoreMax) {
-    const max = parseFloat(filters.scoreMax as string);
-    result = result.filter(p => {
-      const val = (p as any)[scoreField];
-      return val !== undefined && val !== null && val <= max;
-    });
-  }
-
-  // Remaining years filter
-  if (filters.yearsMin) {
-    const min = parseFloat(filters.yearsMin as string);
-    result = result.filter(p => p.remaining_years >= min);
-  }
-  if (filters.yearsMax) {
-    const max = parseFloat(filters.yearsMax as string);
-    result = result.filter(p => p.remaining_years <= max);
-  }
-
-  // Primary sector filter (single or array)
-  if (filters.primarySectors) {
-    const sectorList = Array.isArray(filters.primarySectors)
-      ? filters.primarySectors
-      : [filters.primarySectors];
-    result = result.filter(p =>
-      sectorList.some(s => p.primary_sector === s)
-    );
-  } else if (filters.sector) {
-    const sectorFilter = filters.sector as string;
-    result = result.filter(p => p.primary_sector === sectorFilter);
-  }
-
-  // Competitor citations range filter
-  if (filters.competitorCitesMin) {
-    const min = parseFloat(filters.competitorCitesMin as string);
-    result = result.filter(p => (p.competitor_citations ?? 0) >= min);
-  }
-  if (filters.competitorCitesMax) {
-    const max = parseFloat(filters.competitorCitesMax as string);
-    result = result.filter(p => (p.competitor_citations ?? 0) <= max);
-  }
-
-  // Forward citations range filter
-  if (filters.forwardCitesMin) {
-    const min = parseFloat(filters.forwardCitesMin as string);
-    result = result.filter(p => p.forward_citations >= min);
-  }
-  if (filters.forwardCitesMax) {
-    const max = parseFloat(filters.forwardCitesMax as string);
-    result = result.filter(p => p.forward_citations <= max);
-  }
-
-  // Has competitor citations filter (legacy, subsumed by competitorCitesMin)
-  if (filters.hasCompetitorCites === 'true') {
-    result = result.filter(p => (p.competitor_citations ?? 0) > 0);
-  }
-
-  // Active only filter (remaining_years > 0, legacy, subsumed by yearsMin)
-  if (filters.activeOnly === 'true') {
-    result = result.filter(p => p.remaining_years > 0);
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // NEW FILTERS - Phase 2: One-to-many and additional field filters
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // Competitor names filter (one-to-many: any match)
-  if (filters.competitorNames) {
-    const nameList = Array.isArray(filters.competitorNames)
-      ? filters.competitorNames
-      : [filters.competitorNames];
-    const lowerNames = nameList.map(n => n.toLowerCase());
-    result = result.filter(p => {
-      const patentCompetitors = p.competitor_names || [];
-      return patentCompetitors.some(c =>
-        lowerNames.some(n => c.toLowerCase().includes(n))
-      );
-    });
-  }
-
-  // CPC codes filter (one-to-many: prefix match)
-  if (filters.cpcCodes) {
-    const cpcList = Array.isArray(filters.cpcCodes)
-      ? filters.cpcCodes
-      : [filters.cpcCodes];
-    const upperCodes = cpcList.map(c => c.toUpperCase());
-    result = result.filter(p => {
-      const patentCpcs = p.cpc_codes || [];
-      return patentCpcs.some(cpc =>
-        upperCodes.some(filter => cpc.toUpperCase().startsWith(filter))
-      );
-    });
-  }
-
-  // Sub-sector filter
-  if (filters.subSectors) {
-    const subSectorList = Array.isArray(filters.subSectors)
-      ? filters.subSectors
-      : [filters.subSectors];
-    result = result.filter(p =>
-      subSectorList.some(s => p.primary_sub_sector_name === s)
-    );
-  }
-
-  // Has LLM data filter
-  if (filters.hasLlmData === 'true') {
-    result = result.filter(p => p.llm_summary && p.llm_summary.length > 0);
-  } else if (filters.hasLlmData === 'false') {
-    result = result.filter(p => !p.llm_summary || p.llm_summary.length === 0);
-  }
-
-  // Is Expired filter (patents with remaining_years <= 0)
-  if (filters.isExpired === 'true') {
-    result = result.filter(p => p.remaining_years <= 0);
-  } else if (filters.isExpired === 'false') {
-    result = result.filter(p => p.remaining_years > 0);
-  }
-
-  // V2 Score range filter (omits patents without v2_score)
-  if (filters.v2ScoreMin) {
-    const min = parseFloat(filters.v2ScoreMin as string);
-    result = result.filter(p => p.v2_score != null && p.v2_score >= min);
-  }
-  if (filters.v2ScoreMax) {
-    const max = parseFloat(filters.v2ScoreMax as string);
-    result = result.filter(p => p.v2_score != null && p.v2_score <= max);
-  }
-
-  // V3 Score range filter (omits patents without v3_score)
-  if (filters.v3ScoreMin) {
-    const min = parseFloat(filters.v3ScoreMin as string);
-    result = result.filter(p => p.v3_score != null && p.v3_score >= min);
-  }
-  if (filters.v3ScoreMax) {
-    const max = parseFloat(filters.v3ScoreMax as string);
-    result = result.filter(p => p.v3_score != null && p.v3_score <= max);
-  }
-
-  // Affiliate citations range filter
-  if (filters.affiliateCitesMin) {
-    const min = parseFloat(filters.affiliateCitesMin as string);
-    result = result.filter(p => (p.affiliate_citations ?? 0) >= min);
-  }
-  if (filters.affiliateCitesMax) {
-    const max = parseFloat(filters.affiliateCitesMax as string);
-    result = result.filter(p => (p.affiliate_citations ?? 0) <= max);
-  }
-
-  // Neutral citations range filter
-  if (filters.neutralCitesMin) {
-    const min = parseFloat(filters.neutralCitesMin as string);
-    result = result.filter(p => (p.neutral_citations ?? 0) >= min);
-  }
-  if (filters.neutralCitesMax) {
-    const max = parseFloat(filters.neutralCitesMax as string);
-    result = result.filter(p => (p.neutral_citations ?? 0) <= max);
-  }
-
-  return result;
-}
-
-/**
- * Apply sorting to patents array
- */
-function applySorting(patents: Patent[], sortBy: string, descending: boolean): Patent[] {
-  const sorted = [...patents];
-
-  sorted.sort((a, b) => {
-    let aVal = (a as any)[sortBy];
-    let bVal = (b as any)[sortBy];
-
-    // Handle string comparison
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      return descending
-        ? bVal.localeCompare(aVal)
-        : aVal.localeCompare(bVal);
-    }
-
-    // Handle numeric comparison
-    aVal = aVal ?? 0;
-    bVal = bVal ?? 0;
-    return descending ? bVal - aVal : aVal - bVal;
-  });
-
-  return sorted;
-}
-
-/**
  * GET /api/patents/enrichment-summary
  * Portfolio enrichment coverage broken down by tier
  */
-router.get('/enrichment-summary', (_req: Request, res: Response) => {
+router.get('/enrichment-summary', async (_req: Request, res: Response) => {
   try {
     const tierSize = Math.min(10000, Math.max(500, parseInt(_req.query.tierSize as string) || 5000));
+    const portfolioId = _req.query.portfolioId as string | undefined;
+    const forceRefresh = _req.query.forceRefresh === 'true';
 
-    const patents = loadPatents();
+    // When forceRefresh, sync DB flags from file cache first
+    if (forceRefresh) {
+      await repairEnrichmentFlags();
+    }
 
-    // Sort by score descending (same as the CLI script)
-    const sorted = [...patents].sort((a, b) => b.score - a.score);
+    const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
 
-    // Load enrichment cache sets (uses TTL-based cache)
-    const { llmSet, prosSet, iprSet, familySet } = getEnrichmentCacheSets();
+    // Sort by score descending, then by grant date descending (newest first as tiebreaker)
+    // This matches the sort order used in analyzeGaps() for consistent tier assignment
+    const sorted = [...patents].sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      // When scores are equal (including both 0/null), sort by grant date descending
+      const da = a.grant_date || '';
+      const db = b.grant_date || '';
+      return db.localeCompare(da);
+    });
+
+    // IPR/family now use DB flags (hasIprData, hasFamilyData) — no dir scans needed
 
     // Helper functions
     function median(values: number[]): number {
@@ -872,6 +625,7 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
         prosecution: number; prosecutionPct: number;
         ipr: number; iprPct: number;
         family: number; familyPct: number;
+        xml: number; xmlPct: number;
       };
       topAffiliates: Array<{ name: string; count: number; pct: number }>;
       topSuperSectors: Array<{ name: string; count: number; pct: number }>;
@@ -888,10 +642,23 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
       const fc = tierPatents.map(p => p.forward_citations ?? 0);
       const cc = tierPatents.map(p => p.competitor_citations ?? 0);
 
-      const llmCount = ids.filter(id => llmSet.has(id)).length;
-      const prosCount = ids.filter(id => prosSet.has(id)).length;
-      const iprCount = ids.filter(id => iprSet.has(id)).length;
-      const familyCount = ids.filter(id => familySet.has(id)).length;
+      // All enrichment flags now from Postgres
+      // LLM: use quarantine to exclude LLM-ineligible patents (no abstract, no sector)
+      const llmEligible = tierPatents.filter(p => !(p.quarantine as any)?.llm);
+      const llmCount = llmEligible.filter(p => p.has_llm_data).length;
+      const llmDenominator = llmEligible.length || 1;
+      const prosCount = tierPatents.filter(p => p.has_prosecution_data).length;
+      const iprCount = tierPatents.filter(p => p.has_ipr_data).length;
+      const familyCount = tierPatents.filter(p => p.has_family_data).length;
+      // XML: use quarantine to exclude ineligible patents
+      const xmlEligible = tierPatents.filter(p => !(p.quarantine as any)?.xml);
+      const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
+      const xmlDenominator = xmlEligible.length || 1; // avoid division by zero
+      const tierQuarantineCounts = {
+        total: tierPatents.filter(p => p.is_quarantined).length,
+        xml: tierPatents.filter(p => (p.quarantine as any)?.xml).length,
+        llm: tierPatents.filter(p => (p.quarantine as any)?.llm).length,
+      };
 
       // Affiliate breakdown
       const affCounts: Record<string, number> = {};
@@ -941,28 +708,47 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
         },
         enrichment: {
           llm: llmCount,
-          llmPct: Math.round(llmCount / tierPatents.length * 1000) / 10,
+          llmPct: Math.round(llmCount / llmDenominator * 1000) / 10,
           prosecution: prosCount,
           prosecutionPct: Math.round(prosCount / tierPatents.length * 1000) / 10,
           ipr: iprCount,
           iprPct: Math.round(iprCount / tierPatents.length * 1000) / 10,
           family: familyCount,
           familyPct: Math.round(familyCount / tierPatents.length * 1000) / 10,
+          xml: xmlCount,
+          xmlPct: Math.round(xmlCount / xmlDenominator * 1000) / 10,
         },
+        quarantineCounts: tierQuarantineCounts,
         topAffiliates,
         topSuperSectors,
       });
     }
 
+    // Count totals scoped to the patent list
+    const llmEligibleAll = patents.filter(p => !(p.quarantine as any)?.llm);
+    const llmTotal = llmEligibleAll.filter(p => p.has_llm_data).length;
+    const prosTotal = patents.filter(p => p.has_prosecution_data).length;
+    const iprTotal = patents.filter(p => p.has_ipr_data).length;
+    const familyTotal = patents.filter(p => p.has_family_data).length;
+    const xmlEligibleAll = patents.filter(p => !(p.quarantine as any)?.xml);
+    const xmlTotal = xmlEligibleAll.filter(p => p.has_xml_data).length;
+    const totalQuarantineCounts = {
+      total: patents.filter(p => p.is_quarantined).length,
+      xml: patents.filter(p => (p.quarantine as any)?.xml).length,
+      llm: patents.filter(p => (p.quarantine as any)?.llm).length,
+    };
+
     res.json({
       totalPatents: sorted.length,
       tierSize,
       enrichmentTotals: {
-        llm: llmSet.size,
-        prosecution: prosSet.size,
-        ipr: iprSet.size,
-        family: familySet.size,
+        llm: llmTotal,
+        prosecution: prosTotal,
+        ipr: iprTotal,
+        family: familyTotal,
+        xml: xmlTotal,
       },
+      quarantineCounts: totalQuarantineCounts,
       tiers,
     });
   } catch (error) {
@@ -975,14 +761,19 @@ router.get('/enrichment-summary', (_req: Request, res: Response) => {
  * GET /api/patents/sector-enrichment
  * Enrichment coverage broken down by super-sector (for top N patents per sector)
  */
-router.get('/sector-enrichment', (_req: Request, res: Response) => {
+router.get('/sector-enrichment', async (_req: Request, res: Response) => {
   try {
     // topPerSector: 0 = all patents, otherwise limit to that number
     const rawTopPerSector = parseInt(_req.query.topPerSector as string);
     const topPerSector = rawTopPerSector === 0 ? Infinity : Math.max(100, rawTopPerSector || 500);
+    const portfolioId = _req.query.portfolioId as string | undefined;
+    const forceRefresh = _req.query.forceRefresh === 'true';
 
-    const patents = loadPatents();
-    const { llmSet, prosSet, iprSet, familySet } = getEnrichmentCacheSets();
+    if (forceRefresh) {
+      await repairEnrichmentFlags();
+    }
+
+    const patents = await patentDataService.getPatentsForEnrichment(portfolioId);
 
     // Group by super_sector
     const bySector: Record<string, typeof patents> = {};
@@ -995,25 +786,44 @@ router.get('/sector-enrichment', (_req: Request, res: Response) => {
     // Build sector summaries
     const sectors = Object.entries(bySector)
       .map(([name, sectorPatents]) => {
-        // Sort by score descending, take top N (or all if topPerSector is Infinity)
-        const sorted = [...sectorPatents].sort((a, b) => b.score - a.score);
+        // Sort by score descending, then grant date descending (matches analyzeGaps order)
+        const sorted = [...sectorPatents].sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          const aDate = a.grant_date || '';
+          const bDate = b.grant_date || '';
+          return bDate.localeCompare(aDate);
+        });
         const top = topPerSector === Infinity ? sorted : sorted.slice(0, topPerSector);
         const ids = top.map(p => p.patent_id);
 
-        const llmCount = ids.filter(id => llmSet.has(id)).length;
-        const prosCount = ids.filter(id => prosSet.has(id)).length;
-        const iprCount = ids.filter(id => iprSet.has(id)).length;
-        const familyCount = ids.filter(id => familySet.has(id)).length;
+        // All enrichment flags now from Postgres
+        // LLM: use quarantine to exclude LLM-ineligible patents
+        const llmEligible = top.filter(p => !(p.quarantine as any)?.llm);
+        const llmCount = llmEligible.filter(p => p.has_llm_data).length;
+        const llmDenominator = llmEligible.length || 1;
+        const prosCount = top.filter(p => p.has_prosecution_data).length;
+        const iprCount = top.filter(p => p.has_ipr_data).length;
+        const familyCount = top.filter(p => p.has_family_data).length;
+        const xmlEligible = top.filter(p => !(p.quarantine as any)?.xml);
+        const xmlCount = xmlEligible.filter(p => p.has_xml_data).length;
+        const xmlDenominator = xmlEligible.length || 1;
 
         const checked = top.length;
         const scoreMin = top[top.length - 1]?.score ?? 0;
         const scoreMax = top[0]?.score ?? 0;
 
         // Gaps (patents needing enrichment)
-        const llmGap = ids.filter(id => !llmSet.has(id));
-        const prosGap = ids.filter(id => !prosSet.has(id));
-        const iprGap = ids.filter(id => !iprSet.has(id));
-        const familyGap = ids.filter(id => !familySet.has(id));
+        const llmGap = llmEligible.filter(p => !p.has_llm_data).length;
+        const prosGap = top.filter(p => !p.has_prosecution_data).length;
+        const iprGap = top.filter(p => !p.has_ipr_data).length;
+        const familyGap = top.filter(p => !p.has_family_data).length;
+        const xmlGap = xmlEligible.filter(p => !p.has_xml_data).length;
+
+        const sectorQuarantineCounts = {
+          total: top.filter(p => p.is_quarantined).length,
+          xml: top.filter(p => (p.quarantine as any)?.xml).length,
+          llm: top.filter(p => (p.quarantine as any)?.llm).length,
+        };
 
         return {
           name,
@@ -1022,29 +832,30 @@ router.get('/sector-enrichment', (_req: Request, res: Response) => {
           scoreRange: `${scoreMin.toFixed(1)} – ${scoreMax.toFixed(1)}`,
           enrichment: {
             llm: llmCount,
-            llmPct: Math.round(llmCount / checked * 1000) / 10,
+            llmPct: Math.round(llmCount / llmDenominator * 1000) / 10,
             prosecution: prosCount,
             prosecutionPct: Math.round(prosCount / checked * 1000) / 10,
             ipr: iprCount,
             iprPct: Math.round(iprCount / checked * 1000) / 10,
             family: familyCount,
             familyPct: Math.round(familyCount / checked * 1000) / 10,
+            xml: xmlCount,
+            xmlPct: Math.round(xmlCount / xmlDenominator * 1000) / 10,
           },
           gaps: {
-            llm: llmGap.length,
-            prosecution: prosGap.length,
-            ipr: iprGap.length,
-            family: familyGap.length,
+            llm: llmGap,
+            prosecution: prosGap,
+            ipr: iprGap,
+            family: familyGap,
+            xml: xmlGap,
           },
+          quarantineCounts: sectorQuarantineCounts,
         };
       })
       .sort((a, b) => b.totalPatents - a.totalPatents);
 
-    // Overall totals
-    const totalPatents = patents.length;
-
     res.json({
-      totalPatents,
+      totalPatents: patents.length,
       topPerSector,
       sectors,
     });
@@ -1057,8 +868,7 @@ router.get('/sector-enrichment', (_req: Request, res: Response) => {
 /**
  * GET /api/patents
  * List patents with pagination, filtering, and sorting
- * Optional: focusAreaId query param to filter to a focus area's patents
- *   and merge membership metadata (fa_membership_type, fa_match_score)
+ * Optional: portfolioId, focusAreaId query params
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -1068,93 +878,46 @@ router.get('/', async (req: Request, res: Response) => {
       sortBy = 'score',
       descending = 'true',
       focusAreaId,
-      ...filters
+      portfolioId,
+      ...rawFilters
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string));
     const limitNum = Math.min(500, Math.max(1, parseInt(limit as string)));
     const isDescending = descending === 'true';
 
-    // Load and filter patents
-    let patents = loadPatents();
-
-    // Focus-area scoping: restrict to patents in the focus area
-    let faMetadata: Map<string, { membershipType: string; matchScore: number | null }> | null = null;
-    if (focusAreaId && typeof focusAreaId === 'string') {
-      const faPatents = await prisma.focusAreaPatent.findMany({
-        where: { focusAreaId: focusAreaId },
-        select: { patentId: true, membershipType: true, matchScore: true }
-      });
-      faMetadata = new Map(
-        faPatents.map(fp => [fp.patentId, { membershipType: fp.membershipType, matchScore: fp.matchScore }])
-      );
-      const faPatentIds = new Set(faPatents.map(fp => fp.patentId));
-
-      // Filter portfolio patents to those in the focus area
-      const portfolioInFa = patents.filter(p => faPatentIds.has(p.patent_id));
-      const portfolioPatentIds = new Set(portfolioInFa.map(p => p.patent_id));
-
-      // Resolve non-portfolio patents from cache sources
-      const missingIds = [...faPatentIds].filter(id => !portfolioPatentIds.has(id));
-      if (missingIds.length > 0) {
-        const resolved = resolvePatents(missingIds);
-        const resolvedAsPatents = [...resolved.values()].map(rp => ({
-          patent_id: rp.patent_id,
-          patent_title: rp.patent_title,
-          title: rp.patent_title,
-          patent_date: rp.patent_date,
-          date: rp.patent_date,
-          assignee: rp.assignee,
-          abstract: rp.abstract || '',
-          affiliate: rp.affiliate || 'Unknown',
-          super_sector: rp.super_sector || 'Unknown',
-          primary_sector: rp.primary_sector || 'general',
-          cpc_codes: rp.cpc_codes || [],
-          forward_citations: rp.forward_citations || 0,
-          remaining_years: rp.remaining_years || 0,
-          score: 0,
-          v2_score: 0,
-          v3_score: 0,
-          in_portfolio: false,
-          data_source: rp.data_source,
-        }));
-        patents = [...portfolioInFa, ...resolvedAsPatents];
-      } else {
-        patents = portfolioInFa;
+    // Map query string filters to typed PatentFilters
+    const filters: PatentFilters = {};
+    for (const [key, val] of Object.entries(rawFilters)) {
+      if (val === undefined || val === '') continue;
+      if (Array.isArray(val)) {
+        (filters as any)[key] = val;
+      } else if (typeof val === 'string') {
+        // Numeric fields
+        if (key.endsWith('Min') || key.endsWith('Max')) {
+          (filters as any)[key] = parseFloat(val);
+        } else if (key === 'affiliates' || key === 'superSectors' || key === 'assignees' ||
+                   key === 'primarySectors' || key === 'competitorNames' || key === 'cpcCodes' ||
+                   key === 'subSectors') {
+          (filters as any)[key] = [val];
+        } else {
+          (filters as any)[key] = val;
+        }
       }
     }
 
-    patents = applyFilters(patents, filters as Record<string, string>);
+    // Look up active snapshot scores for this portfolio
+    const snapshotScores = await getActiveSnapshotScores(portfolioId as string | undefined);
 
-    // Get total before pagination
-    const total = patents.length;
-
-    // Sort
-    patents = applySorting(patents, sortBy as string, isDescending);
-
-    // Paginate
-    const startIndex = (pageNum - 1) * limitNum;
-    const paginatedPatents = patents.slice(startIndex, startIndex + limitNum);
-
-    // Merge focus-area metadata if present
-    const data = faMetadata
-      ? paginatedPatents.map(p => {
-          const meta = faMetadata!.get(p.patent_id);
-          return {
-            ...p,
-            fa_membership_type: meta?.membershipType ?? null,
-            fa_match_score: meta?.matchScore ?? null
-          };
-        })
-      : paginatedPatents;
-
-    res.json({
-      data,
-      total,
-      page: pageNum,
-      rowsPerPage: limitNum,
-      totalPages: Math.ceil(total / limitNum)
+    const result = await patentDataService.getPatents({
+      portfolioId: portfolioId as string | undefined,
+      focusAreaId: focusAreaId as string | undefined,
+      pagination: { page: pageNum, limit: limitNum, sortBy: sortBy as string, descending: isDescending },
+      filters,
+      snapshotScores: { v2: snapshotScores.v2Scores, v3: snapshotScores.v3Scores },
     });
+
+    res.json(result);
   } catch (error) {
     console.error('Error loading patents:', error);
     res.status(500).json({ error: 'Failed to load patents' });
@@ -1165,60 +928,11 @@ router.get('/', async (req: Request, res: Response) => {
  * GET /api/patents/stats
  * Get portfolio statistics
  */
-router.get('/stats', (_req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    // Calculate statistics
-    const active = patents.filter(p => p.remaining_years > 0);
-    const expired = patents.filter(p => p.remaining_years <= 0);
-
-    // Group by affiliate (normalized entity)
-    const affiliateCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
-    });
-
-    // Top affiliates
-    const topAffiliates = Object.entries(affiliateCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name, count]) => ({ name, count }));
-
-    // Group by super-sector
-    const superSectorCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      superSectorCounts[p.super_sector] = (superSectorCounts[p.super_sector] || 0) + 1;
-    });
-
-    // Super-sector breakdown
-    const bySuperSector = Object.entries(superSectorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-
-    // Legacy: top assignees for backward compatibility
-    const assigneeCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      const assignee = p.assignee.split(',')[0].trim();
-      assigneeCounts[assignee] = (assigneeCounts[assignee] || 0) + 1;
-    });
-    const topAssignees = Object.entries(assigneeCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name, count]) => ({ name, count }));
-
-    res.json({
-      total: patents.length,
-      active: active.length,
-      expired: expired.length,
-      topAffiliates,
-      topAssignees, // Legacy, kept for backward compatibility
-      bySuperSector,
-      dateRange: {
-        oldest: patents[patents.length - 1]?.patent_date,
-        newest: patents[0]?.patent_date
-      }
-    });
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const stats = await patentDataService.getPatentStats(portfolioId);
+    res.json(stats);
   } catch (error) {
     console.error('Error getting stats:', error);
     res.status(500).json({ error: 'Failed to get statistics' });
@@ -1229,19 +943,10 @@ router.get('/stats', (_req: Request, res: Response) => {
  * GET /api/patents/affiliates
  * Get list of affiliates (normalized entities) with patent counts
  */
-router.get('/affiliates', (_req: Request, res: Response) => {
+router.get('/affiliates', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    const affiliateCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
-    });
-
-    const affiliates = Object.entries(affiliateCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const affiliates = await patentDataService.getFilterOptions('affiliate', portfolioId);
     res.json(affiliates);
   } catch (error) {
     console.error('Error getting affiliates:', error);
@@ -1253,19 +958,10 @@ router.get('/affiliates', (_req: Request, res: Response) => {
  * GET /api/patents/super-sectors
  * Get list of super-sectors with patent counts
  */
-router.get('/super-sectors', (_req: Request, res: Response) => {
+router.get('/super-sectors', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    const sectorCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      sectorCounts[p.super_sector] = (sectorCounts[p.super_sector] || 0) + 1;
-    });
-
-    const superSectors = Object.entries(sectorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const superSectors = await patentDataService.getFilterOptions('superSector', portfolioId);
     res.json(superSectors);
   } catch (error) {
     console.error('Error getting super-sectors:', error);
@@ -1277,20 +973,10 @@ router.get('/super-sectors', (_req: Request, res: Response) => {
  * GET /api/patents/primary-sectors
  * Get list of primary sectors with patent counts
  */
-router.get('/primary-sectors', (_req: Request, res: Response) => {
+router.get('/primary-sectors', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    const sectorCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      const sector = p.primary_sector || 'unknown';
-      sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
-    });
-
-    const sectors = Object.entries(sectorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const sectors = await patentDataService.getFilterOptions('primarySector', portfolioId);
     res.json(sectors);
   } catch (error) {
     console.error('Error getting primary sectors:', error);
@@ -1302,19 +988,10 @@ router.get('/primary-sectors', (_req: Request, res: Response) => {
  * GET /api/patents/assignees
  * Get list of unique assignees (raw USPTO names) for filtering
  */
-router.get('/assignees', (_req: Request, res: Response) => {
+router.get('/assignees', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    const assigneeCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      assigneeCounts[p.assignee] = (assigneeCounts[p.assignee] || 0) + 1;
-    });
-
-    const assignees = Object.entries(assigneeCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const assignees = await patentDataService.getFilterOptions('assignee', portfolioId);
     res.json(assignees);
   } catch (error) {
     console.error('Error getting assignees:', error);
@@ -1330,22 +1007,10 @@ router.get('/assignees', (_req: Request, res: Response) => {
  * GET /api/patents/competitor-names
  * Get list of unique competitor names with citation counts
  */
-router.get('/competitor-names', (_req: Request, res: Response) => {
+router.get('/competitor-names', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    const competitorCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      const competitors = p.competitor_names || [];
-      competitors.forEach(name => {
-        competitorCounts[name] = (competitorCounts[name] || 0) + 1;
-      });
-    });
-
-    const competitorNames = Object.entries(competitorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-
+    const portfolioId = req.query.portfolioId as string | undefined;
+    const competitorNames = await patentDataService.getCompetitorNames(portfolioId);
     res.json(competitorNames);
   } catch (error) {
     console.error('Error getting competitor names:', error);
@@ -1358,43 +1023,18 @@ router.get('/competitor-names', (_req: Request, res: Response) => {
  * Get list of unique CPC codes with patent counts
  * Optional query param: level=section|class|subclass|group (default: subclass)
  */
-router.get('/cpc-codes', (req: Request, res: Response) => {
+router.get('/cpc-codes', async (req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-    const level = (req.query.level as string) || 'subclass';
+    const level = (req.query.level as string || 'subclass') as 'section' | 'class' | 'subclass' | 'group';
+    const portfolioId = req.query.portfolioId as string | undefined;
 
-    // CPC level extraction
-    // Examples: H04L63/00 -> H (section), H04 (class), H04L (subclass), H04L63 (group)
-    function extractLevel(cpc: string, lvl: string): string {
-      switch (lvl) {
-        case 'section': return cpc.slice(0, 1);      // H
-        case 'class': return cpc.slice(0, 3);        // H04
-        case 'subclass': return cpc.slice(0, 4);     // H04L
-        case 'group': return cpc.split('/')[0];      // H04L63
-        default: return cpc.slice(0, 4);
-      }
-    }
+    const cpcCounts = await patentDataService.getCpcCodeCounts(level, portfolioId);
 
-    const cpcCounts: Record<string, number> = {};
-    patents.forEach(p => {
-      const cpcs = p.cpc_codes || [];
-      const seen = new Set<string>();
-      cpcs.forEach(cpc => {
-        const key = extractLevel(cpc, level);
-        if (!seen.has(key)) {
-          seen.add(key);
-          cpcCounts[key] = (cpcCounts[key] || 0) + 1;
-        }
-      });
-    });
-
-    const cpcCodes = Object.entries(cpcCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([code, count]) => ({
-        code,
-        count,
-        description: resolveCpcDescription(code)
-      }));
+    const cpcCodes = cpcCounts.map(({ code, count }) => ({
+      code,
+      count,
+      description: resolveCpcDescription(code),
+    }));
 
     res.json(cpcCodes);
   } catch (error) {
@@ -1407,29 +1047,10 @@ router.get('/cpc-codes', (req: Request, res: Response) => {
  * GET /api/patents/sub-sectors
  * Get list of unique sub-sectors with patent counts
  */
-router.get('/sub-sectors', (_req: Request, res: Response) => {
+router.get('/sub-sectors', async (_req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
-
-    const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
-    patents.forEach(p => {
-      const subSector = (p as any).primary_sub_sector_name;
-      if (subSector) {
-        if (!subSectorCounts[subSector]) {
-          subSectorCounts[subSector] = { count: 0, sector: p.primary_sector };
-        }
-        subSectorCounts[subSector].count++;
-      }
-    });
-
-    const subSectors = Object.entries(subSectorCounts)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([name, data]) => ({
-        name,
-        count: data.count,
-        sector: data.sector
-      }));
-
+    const portfolioId = _req.query.portfolioId as string | undefined;
+    const subSectors = await patentDataService.getSubSectorCounts(portfolioId);
     res.json(subSectors);
   } catch (error) {
     console.error('Error getting sub-sectors:', error);
@@ -1443,101 +1064,19 @@ router.get('/sub-sectors', (_req: Request, res: Response) => {
  */
 router.get('/filter-options', async (_req: Request, res: Response) => {
   try {
-    const patents = loadPatents();
+    const portfolioId = _req.query.portfolioId as string | undefined;
+    const filterOptions = await patentDataService.getAllFilterOptions(portfolioId);
 
-    // Affiliates
-    const affiliateCounts: Record<string, number> = {};
-    // Super-sectors
-    const superSectorCounts: Record<string, number> = {};
-    // Primary sectors
-    const primarySectorCounts: Record<string, number> = {};
-    // Competitor names
-    const competitorCounts: Record<string, number> = {};
-    // CPC codes (subclass level)
-    const cpcCounts: Record<string, number> = {};
-    // Sub-sectors
-    const subSectorCounts: Record<string, { count: number; sector?: string }> = {};
-    // Score range
-    let scoreMin = Infinity, scoreMax = -Infinity;
-    // Years range
-    let yearsMin = Infinity, yearsMax = -Infinity;
-    // Counts
-    let withLlmData = 0, withCompetitors = 0, expired = 0;
-
-    patents.forEach(p => {
-      // Affiliates
-      affiliateCounts[p.affiliate] = (affiliateCounts[p.affiliate] || 0) + 1;
-      // Super-sectors
-      superSectorCounts[p.super_sector] = (superSectorCounts[p.super_sector] || 0) + 1;
-      // Primary sectors
-      const sector = p.primary_sector || 'unknown';
-      primarySectorCounts[sector] = (primarySectorCounts[sector] || 0) + 1;
-      // Competitors
-      (p.competitor_names || []).forEach(name => {
-        competitorCounts[name] = (competitorCounts[name] || 0) + 1;
-      });
-      // CPC codes (subclass)
-      const seen = new Set<string>();
-      (p.cpc_codes || []).forEach(cpc => {
-        const key = cpc.slice(0, 4);
-        if (!seen.has(key)) {
-          seen.add(key);
-          cpcCounts[key] = (cpcCounts[key] || 0) + 1;
-        }
-      });
-      // Sub-sectors
-      const subSector = (p as any).primary_sub_sector_name;
-      if (subSector) {
-        if (!subSectorCounts[subSector]) {
-          subSectorCounts[subSector] = { count: 0, sector: p.primary_sector };
-        }
-        subSectorCounts[subSector].count++;
-      }
-      // Score range
-      if (p.score < scoreMin) scoreMin = p.score;
-      if (p.score > scoreMax) scoreMax = p.score;
-      // Years range
-      if (p.remaining_years < yearsMin) yearsMin = p.remaining_years;
-      if (p.remaining_years > yearsMax) yearsMax = p.remaining_years;
-      // LLM data
-      if (p.has_llm_data) withLlmData++;
-      // Competitors
-      if ((p.competitor_count ?? 0) > 0) withCompetitors++;
-      // Expired
-      if (p.remaining_years <= 0) expired++;
-    });
+    // Add CPC descriptions
+    const cpcCodesWithDesc = filterOptions.cpcCodes.map(({ code, count }) => ({
+      code,
+      count,
+      description: resolveCpcDescription(code),
+    }));
 
     res.json({
-      affiliates: Object.entries(affiliateCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({ name, count })),
-      superSectors: Object.entries(superSectorCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({ name, count })),
-      primarySectors: Object.entries(primarySectorCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({ name, count })),
-      competitorNames: Object.entries(competitorCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 100)  // Top 100 competitors
-        .map(([name, count]) => ({ name, count })),
-      cpcCodes: Object.entries(cpcCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 100)  // Top 100 CPC subclasses
-        .map(([code, count]) => ({ code, count, description: resolveCpcDescription(code) })),
-      subSectors: Object.entries(subSectorCounts)
-        .sort((a, b) => b[1].count - a[1].count)
-        .map(([name, data]) => ({ name, count: data.count, sector: data.sector })),
-      ranges: {
-        score: { min: scoreMin === Infinity ? 0 : scoreMin, max: scoreMax === -Infinity ? 100 : scoreMax },
-        years: { min: yearsMin === Infinity ? 0 : yearsMin, max: yearsMax === -Infinity ? 20 : yearsMax }
-      },
-      counts: {
-        total: patents.length,
-        withLlmData,
-        withCompetitors,
-        expired
-      }
+      ...filterOptions,
+      cpcCodes: cpcCodesWithDesc,
     });
   } catch (error) {
     console.error('Error getting filter options:', error);
@@ -1577,7 +1116,7 @@ router.get('/cpc-descriptions', (req: Request, res: Response) => {
  * Get preview data for multiple patents at once
  * Body: { patentIds: string[] }
  */
-router.post('/batch-preview', (req: Request, res: Response) => {
+router.post('/batch-preview', async (req: Request, res: Response) => {
   try {
     const { patentIds } = req.body;
 
@@ -1587,10 +1126,9 @@ router.post('/batch-preview', (req: Request, res: Response) => {
 
     // Limit to 100 patents per request
     const limitedIds = patentIds.slice(0, 100);
-    const patents = loadPatents();
+    const patentMap = await patentDataService.getPatentsByIds(limitedIds);
 
     const previews: Record<string, PatentPreview | null> = {};
-    const patentMap = new Map(patents.map(p => [p.patent_id, p]));
 
     for (const id of limitedIds) {
       const patent = patentMap.get(id);
@@ -1598,13 +1136,13 @@ router.post('/batch-preview', (req: Request, res: Response) => {
         previews[id] = {
           patent_id: patent.patent_id,
           patent_title: patent.patent_title,
-          abstract: loadAbstract(patent.patent_id),
+          abstract: patent.abstract || loadAbstract(id),
           patent_date: patent.patent_date,
           assignee: patent.assignee,
           affiliate: patent.affiliate,
           super_sector: patent.super_sector,
           primary_sector: patent.primary_sector,
-          cpc_codes: (patent as any).cpc_codes || [],
+          cpc_codes: patent.cpc_codes || [],
           forward_citations: patent.forward_citations,
           remaining_years: patent.remaining_years,
           score: patent.score,
@@ -1658,21 +1196,45 @@ interface PatentPreview {
  * Additionally accepts `columns` (comma-separated field names) to control output.
  * Returns all matching patents (no pagination).
  */
-router.get('/export', (req: Request, res: Response) => {
+router.get('/export', async (req: Request, res: Response) => {
   try {
     const {
       sortBy = 'score',
       descending = 'true',
       columns: columnParam,
-      ...filters
+      portfolioId,
+      ...filterParams
     } = req.query;
 
     const isDescending = descending === 'true';
 
-    // Load, filter, sort
-    let patents = loadPatents();
-    patents = applyFilters(patents, filters as Record<string, string>);
-    patents = applySorting(patents, sortBy as string, isDescending);
+    // Parse filters from query params
+    const filters: PatentFilters = {};
+    if (filterParams.search) filters.search = filterParams.search as string;
+    if (filterParams.affiliates) filters.affiliates = Array.isArray(filterParams.affiliates) ? filterParams.affiliates as string[] : [filterParams.affiliates as string];
+    if (filterParams.assignees) filters.assignees = Array.isArray(filterParams.assignees) ? filterParams.assignees as string[] : [filterParams.assignees as string];
+    if (filterParams.superSectors) filters.superSectors = Array.isArray(filterParams.superSectors) ? filterParams.superSectors as string[] : [filterParams.superSectors as string];
+    if (filterParams.primarySectors) filters.primarySectors = Array.isArray(filterParams.primarySectors) ? filterParams.primarySectors as string[] : [filterParams.primarySectors as string];
+    if (filterParams.subSectors) filters.subSectors = Array.isArray(filterParams.subSectors) ? filterParams.subSectors as string[] : [filterParams.subSectors as string];
+    if (filterParams.competitorNames) filters.competitorNames = Array.isArray(filterParams.competitorNames) ? filterParams.competitorNames as string[] : [filterParams.competitorNames as string];
+    if (filterParams.cpcCodes) filters.cpcCodes = Array.isArray(filterParams.cpcCodes) ? filterParams.cpcCodes as string[] : [filterParams.cpcCodes as string];
+    if (filterParams.dateStart) filters.dateStart = filterParams.dateStart as string;
+    if (filterParams.dateEnd) filters.dateEnd = filterParams.dateEnd as string;
+    if (filterParams.scoreMin) filters.scoreMin = parseFloat(filterParams.scoreMin as string);
+    if (filterParams.scoreMax) filters.scoreMax = parseFloat(filterParams.scoreMax as string);
+    if (filterParams.hasLlmData) filters.hasLlmData = filterParams.hasLlmData as string;
+    if (filterParams.isExpired) filters.isExpired = filterParams.isExpired as string;
+    if (filterParams.activeOnly) filters.activeOnly = filterParams.activeOnly as string;
+    if (filterParams.hasCompetitorCites) filters.hasCompetitorCites = filterParams.hasCompetitorCites as string;
+
+    const exportSnapshotScores = await getActiveSnapshotScores(portfolioId as string | undefined);
+    const patents = await patentDataService.getAllPatents({
+      portfolioId: portfolioId as string | undefined,
+      filters,
+      sortBy: sortBy as string,
+      descending: isDescending,
+      snapshotScores: { v2: exportSnapshotScores.v2Scores, v3: exportSnapshotScores.v3Scores },
+    });
 
     // Determine columns to export
     const allColumns = [
@@ -1695,7 +1257,6 @@ router.get('/export', (req: Request, res: Response) => {
       { field: 'score', label: 'Base Score' },
       { field: 'v2_score', label: 'v2 Score' },
       { field: 'v3_score', label: 'v3 Score' },
-      { field: 'consensus_score', label: 'Consensus' },
       { field: 'cpc_codes', label: 'CPC Codes' },
       { field: 'eligibility_score', label: 'Eligibility' },
       { field: 'validity_score', label: 'Validity' },
@@ -1718,11 +1279,13 @@ router.get('/export', (req: Request, res: Response) => {
       { field: 'llm_standards_relevance', label: 'Standards' },
       { field: 'llm_market_segment', label: 'Market Segment' },
       { field: 'llm_detection_method', label: 'Detection Method' },
+      { field: 'is_quarantined', label: 'Quarantined' },
+      { field: 'patent_id_numeric', label: 'Patent Number (Numeric)' },
     ];
 
     let exportColumns = allColumns;
     if (columnParam && typeof columnParam === 'string') {
-      const requestedFields = columnParam.split(',').map(s => s.trim());
+      const requestedFields = (columnParam as string).split(',').map(s => s.trim());
       exportColumns = requestedFields.map(field => {
         const known = allColumns.find(c => c.field === field);
         return known || { field, label: field };
@@ -1772,18 +1335,20 @@ router.get('/export', (req: Request, res: Response) => {
  *   aggregations: [{ field, op }],    // Operations: count, sum, avg, min, max
  *   explodeArrays?: boolean,          // If true, explode array fields (e.g., competitor_names)
  *   filters?: Record<string, any>,    // Same filters as GET /api/patents
+ *   portfolioId?: string,             // Optional portfolio scope
  *   sortBy?: string,                  // Sort by aggregation result field
  *   sortDesc?: boolean,               // Sort descending
  *   limit?: number                    // Limit results
  * }
  */
-router.post('/aggregate', (req: Request, res: Response) => {
+router.post('/aggregate', async (req: Request, res: Response) => {
   try {
     const {
       groupBy,
       aggregations = [],
       explodeArrays = false,
       filters = {},
+      portfolioId,
       sortBy = 'count',
       sortDesc = true,
       limit = 100
@@ -1796,23 +1361,21 @@ router.post('/aggregate', (req: Request, res: Response) => {
     // Normalize groupBy to array
     const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
 
-    // Load and filter patents
-    let patents = loadPatents();
-    patents = applyFilters(patents, filters);
+    // Load patents from Postgres with snapshot scores
+    const aggSnapshotScores = await getActiveSnapshotScores(portfolioId);
+    const patents = await patentDataService.getAllPatents({
+      portfolioId,
+      filters,
+      snapshotScores: { v2: aggSnapshotScores.v2Scores, v3: aggSnapshotScores.v3Scores },
+    });
 
     // Fields that are arrays and can be exploded
     const arrayFields = new Set(['competitor_names', 'cpc_codes']);
 
     // Build groups
-    interface AggGroup {
-      key: Record<string, string>;
-      patents: typeof patents;
-    }
-
-    const groups = new Map<string, AggGroup>();
+    const groups = new Map<string, { key: Record<string, string>; patents: typeof patents }>();
 
     for (const patent of patents) {
-      // Get group key values
       const keyValues: Record<string, string>[] = [{}];
 
       for (const field of groupByFields) {
@@ -1820,9 +1383,7 @@ router.post('/aggregate', (req: Request, res: Response) => {
         const newKeyValues: Record<string, string>[] = [];
 
         if (explodeArrays && arrayFields.has(field) && Array.isArray(val)) {
-          // Explode: create a row for each array element
           if (val.length === 0) {
-            // No values - use placeholder
             for (const existing of keyValues) {
               newKeyValues.push({ ...existing, [field]: '(none)' });
             }
@@ -1834,7 +1395,6 @@ router.post('/aggregate', (req: Request, res: Response) => {
             }
           }
         } else {
-          // Normal: single value or array as string
           const strVal = Array.isArray(val) ? val.join(', ') : String(val ?? '(none)');
           for (const existing of keyValues) {
             newKeyValues.push({ ...existing, [field]: strVal });
@@ -1845,7 +1405,6 @@ router.post('/aggregate', (req: Request, res: Response) => {
         keyValues.push(...newKeyValues);
       }
 
-      // Add patent to each group
       for (const keyObj of keyValues) {
         const keyStr = JSON.stringify(keyObj);
         if (!groups.has(keyStr)) {
@@ -1855,11 +1414,8 @@ router.post('/aggregate', (req: Request, res: Response) => {
       }
     }
 
-    // Compute aggregations for each group
-    interface AggResult {
-      [key: string]: string | number;
-    }
-
+    // Compute aggregations
+    interface AggResult { [key: string]: string | number; }
     const results: AggResult[] = [];
 
     for (const group of groups.values()) {
@@ -1907,7 +1463,6 @@ router.post('/aggregate', (req: Request, res: Response) => {
       return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
 
-    // Limit results
     const limitedResults = results.slice(0, limit);
 
     res.json({
@@ -1925,16 +1480,17 @@ router.post('/aggregate', (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/patents/aggregate/export
+ * POST /api/patents/aggregate/export
  * Export aggregation results as CSV
  */
-router.post('/aggregate/export', (req: Request, res: Response) => {
+router.post('/aggregate/export', async (req: Request, res: Response) => {
   try {
     const {
       groupBy,
       aggregations = [],
       explodeArrays = false,
       filters = {},
+      portfolioId,
       sortBy = 'count',
       sortDesc = true
     } = req.body;
@@ -1943,12 +1499,14 @@ router.post('/aggregate/export', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'groupBy is required' });
     }
 
-    // Normalize groupBy to array
     const groupByFields = Array.isArray(groupBy) ? groupBy : [groupBy];
 
-    // Load and filter patents
-    let patents = loadPatents();
-    patents = applyFilters(patents, filters);
+    const aggExpSnapshotScores = await getActiveSnapshotScores(portfolioId);
+    const patents = await patentDataService.getAllPatents({
+      portfolioId,
+      filters,
+      snapshotScores: { v2: aggExpSnapshotScores.v2Scores, v3: aggExpSnapshotScores.v3Scores },
+    });
 
     // Same grouping logic as /aggregate
     const arrayFields = new Set(['competitor_names', 'cpc_codes']);
@@ -1994,10 +1552,7 @@ router.post('/aggregate/export', (req: Request, res: Response) => {
     }
 
     // Compute aggregations
-    interface AggResult {
-      [key: string]: string | number;
-    }
-
+    interface AggResult { [key: string]: string | number; }
     const results: AggResult[] = [];
 
     for (const group of groups.values()) {
@@ -2045,7 +1600,6 @@ router.post('/aggregate/export', (req: Request, res: Response) => {
       return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
 
-    // Build CSV
     if (results.length === 0) {
       return res.status(400).json({ error: 'No results to export' });
     }
@@ -2077,27 +1631,95 @@ router.post('/aggregate/export', (req: Request, res: Response) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Quarantine endpoints (must be before /:id routes to avoid param conflicts)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/patents/quarantine-summary
+ * Get quarantine summary grouped by reason, optionally scoped to a portfolio.
+ */
+router.get('/quarantine-summary', async (req: Request, res: Response) => {
+  try {
+    const portfolioId = req.query.portfolioId as string | undefined;
+
+    const where: Record<string, any> = { isQuarantined: true };
+    if (portfolioId) {
+      where.portfolios = { some: { portfolioId } };
+    }
+
+    const patents = await prisma.patent.findMany({
+      where,
+      select: {
+        patentId: true,
+        title: true,
+        grantDate: true,
+        assignee: true,
+        affiliate: true,
+        quarantine: true,
+        hasXmlData: true,
+      },
+    });
+
+    // Group by reason
+    const groups: Record<string, Array<{
+      patentId: string; title: string; grantDate: string | null;
+      assignee: string; affiliate: string | null;
+    }>> = {};
+
+    for (const p of patents) {
+      const q = p.quarantine as Record<string, string> | null;
+      if (!q) continue;
+      for (const [coverageType, reason] of Object.entries(q)) {
+        const key = `${coverageType}:${reason}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push({
+          patentId: p.patentId,
+          title: p.title,
+          grantDate: p.grantDate,
+          assignee: p.assignee,
+          affiliate: p.affiliate,
+        });
+      }
+    }
+
+    const summary = Object.entries(groups)
+      .map(([key, patents]) => {
+        const [coverageType, reason] = key.split(':');
+        return { coverageType, reason, count: patents.length, patents };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      totalQuarantined: patents.length,
+      groups: summary,
+    });
+  } catch (error) {
+    console.error('Error getting quarantine summary:', error);
+    res.status(500).json({ error: 'Failed to get quarantine summary' });
+  }
+});
+
 /**
  * GET /api/patents/:id/preview
  * Get lightweight preview data for a single patent
  */
-router.get('/:id/preview', (req: Request, res: Response) => {
+router.get('/:id/preview', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const patents = loadPatents();
 
-    const patent = patents.find(p => p.patent_id === id);
+    const patent = await patentDataService.getPatent(id);
     if (patent) {
       const preview: PatentPreview = {
         patent_id: patent.patent_id,
         patent_title: patent.patent_title,
-        abstract: loadAbstract(patent.patent_id),
+        abstract: patent.abstract || loadAbstract(id),
         patent_date: patent.patent_date,
         assignee: patent.assignee,
         affiliate: patent.affiliate,
         super_sector: patent.super_sector,
         primary_sector: patent.primary_sector,
-        cpc_codes: (patent as any).cpc_codes || [],
+        cpc_codes: patent.cpc_codes || [],
         forward_citations: patent.forward_citations,
         remaining_years: patent.remaining_years,
         score: patent.score,
@@ -2129,16 +1751,14 @@ router.get('/:id/preview', (req: Request, res: Response) => {
  * GET /api/patents/:id
  * Get single patent details
  */
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const patents = loadPatents();
 
-    // Try portfolio first (richest data)
-    const patent = patents.find(p => p.patent_id === id);
+    // Try Postgres first (source of truth)
+    const patent = await patentDataService.getPatent(id);
     if (patent) {
-      const abstract = loadAbstract(id);
-      return res.json({ ...patent, abstract, in_portfolio: true });
+      return res.json({ ...patent, in_portfolio: true });
     }
 
     // Fall back to other cache sources via patent-fetch-service
@@ -2156,9 +1776,9 @@ router.get('/:id', (req: Request, res: Response) => {
 
 /**
  * GET /api/patents/:id/citations
- * Get citation data for a patent (from cache)
+ * Get citation data for a patent (from cache + Postgres)
  */
-router.get('/:id/citations', (req: Request, res: Response) => {
+router.get('/:id/citations', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -2187,21 +1807,27 @@ router.get('/:id/citations', (req: Request, res: Response) => {
       return;
     }
 
-    // Look up patent details for citing patent IDs from the candidates cache
-    const allPatents = loadPatents();
-    const patentMap = new Map(allPatents.map(p => [p.patent_id, p]));
-
+    // Look up patent details for citing patent IDs from Postgres
     const citingPatentIds: string[] = forwardCitations.citing_patent_ids || [];
+    const patentMap = await patentDataService.getPatentsMini(citingPatentIds);
+
     const citingPatents = citingPatentIds.map(citingId => {
       const p = patentMap.get(citingId);
+      if (p) {
+        return {
+          ...p,
+          in_portfolio: true,
+          has_cached_data: true,
+        };
+      }
       return {
         patent_id: citingId,
-        patent_title: p?.patent_title || '',
-        assignee: p?.assignee || '',
-        patent_date: p?.patent_date || '',
-        affiliate: p ? normalizeAffiliate(p.assignee) : '',
-        in_portfolio: !!p,
-        has_cached_data: !!p || hasPatentData(citingId),
+        patent_title: '',
+        assignee: '',
+        patent_date: '',
+        affiliate: '',
+        in_portfolio: false,
+        has_cached_data: hasPatentData(citingId),
       };
     });
 
@@ -2256,6 +1882,36 @@ router.get('/:id/prosecution', (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error getting prosecution data:', error);
     res.status(500).json({ error: 'Failed to get prosecution data' });
+  }
+});
+
+/**
+ * GET /api/patents/:id/prosecution-detail
+ * Get claim-level prosecution analysis for a patent (from prosecution-analysis cache)
+ */
+router.get('/:id/prosecution-detail', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const cachePath = `./cache/prosecution-analysis/${id}.json`;
+
+    if (!fs.existsSync(cachePath)) {
+      res.json({
+        patent_id: id,
+        cached: false,
+        message: 'Prosecution detail analysis not yet available for this patent.',
+      });
+      return;
+    }
+
+    const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+    res.json({
+      patent_id: id,
+      cached: true,
+      ...data,
+    });
+  } catch (error) {
+    console.error('Error getting prosecution detail:', error);
+    res.status(500).json({ error: 'Failed to get prosecution detail' });
   }
 });
 
@@ -2324,7 +1980,7 @@ router.get('/:id/llm', (req: Request, res: Response) => {
  * Get backward citations (parent patents) for a patent
  * Sources: cache/patent-families/parents/ and cache/patent-families/parent-details/
  */
-router.get('/:id/backward-citations', (req: Request, res: Response) => {
+router.get('/:id/backward-citations', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -2344,14 +2000,20 @@ router.get('/:id/backward-citations', (req: Request, res: Response) => {
     const parentsData = JSON.parse(fs.readFileSync(parentsPath, 'utf-8'));
     const parentIds: string[] = parentsData.parent_patent_ids || [];
 
-    // Load portfolio data for in_portfolio checking
-    const allPatents = loadPatents();
-    const patentMap = new Map(allPatents.map(p => [p.patent_id, p]));
+    // Look up portfolio patents from Postgres
+    const patentMap = await patentDataService.getPatentsMini(parentIds);
 
     // Enrich parent patents with details
     const parentPatents = parentIds.map(parentId => {
-      // Check if parent is in portfolio
       const portfolioPatent = patentMap.get(parentId);
+
+      if (portfolioPatent) {
+        return {
+          ...portfolioPatent,
+          in_portfolio: true,
+          has_cached_data: true,
+        };
+      }
 
       // Try to load parent details from cache
       const detailPath = path.join(process.cwd(), 'cache/patent-families/parent-details', `${parentId}.json`);
@@ -2364,12 +2026,12 @@ router.get('/:id/backward-citations', (req: Request, res: Response) => {
 
       return {
         patent_id: parentId,
-        patent_title: portfolioPatent?.patent_title || details?.patent_title || '',
-        assignee: portfolioPatent?.assignee || details?.assignee || '',
-        patent_date: portfolioPatent?.patent_date || details?.patent_date || '',
-        affiliate: portfolioPatent ? normalizeAffiliate(portfolioPatent.assignee) : '',
-        in_portfolio: !!portfolioPatent,
-        has_cached_data: !!portfolioPatent || !!details || hasPatentData(parentId),
+        patent_title: details?.patent_title || '',
+        assignee: details?.assignee || '',
+        patent_date: details?.patent_date || '',
+        affiliate: '',
+        in_portfolio: false,
+        has_cached_data: !!details || hasPatentData(parentId),
       };
     });
 
@@ -2485,12 +2147,12 @@ router.get('/:id/cpc-designation', (req: Request, res: Response) => {
  * POST /api/patents/analyze-cpc-cooccurrence
  * Analyze CPC co-occurrence patterns in the portfolio
  * Used for grouping related CPCs under dominant inventive codes
- * Body: { minCooccurrence?: number }
+ * Body: { minCooccurrence?: number, portfolioId?: string }
  */
 router.post('/analyze-cpc-cooccurrence', async (_req: Request, res: Response) => {
   try {
-    const { minCooccurrence = 10 } = _req.body;
-    const patents = loadPatents();
+    const { minCooccurrence = 10, portfolioId } = _req.body;
+    const patents = await patentDataService.getAllPatents({ portfolioId });
 
     console.log(`[CPC Co-occurrence] Analyzing ${patents.length} patents (minCooccurrence: ${minCooccurrence})`);
 
@@ -2527,6 +2189,40 @@ router.post('/analyze-cpc-cooccurrence', async (_req: Request, res: Response) =>
 });
 
 /**
+ * POST /api/patents/set-enrichment-flag
+ * Set a DB enrichment flag for a batch of patents.
+ * Called by scripts (prosecution, IPR, LLM, family) after writing cache files.
+ */
+router.post('/set-enrichment-flag', async (req: Request, res: Response) => {
+  try {
+    const { patentIds, flag } = req.body;
+    const validFlags = ['hasLlmData', 'hasProsecutionData', 'hasProsecutionDetail', 'hasIprData', 'hasFamilyData', 'hasXmlData'] as const;
+    type ValidFlag = typeof validFlags[number];
+
+    if (!Array.isArray(patentIds) || patentIds.length === 0) {
+      return res.status(400).json({ error: 'patentIds must be a non-empty array' });
+    }
+    if (!validFlags.includes(flag as ValidFlag)) {
+      return res.status(400).json({ error: `flag must be one of: ${validFlags.join(', ')}` });
+    }
+
+    const result = await prisma.patent.updateMany({
+      where: { patentId: { in: patentIds }, [flag]: false },
+      data: { [flag]: true },
+    });
+
+    if (result.count > 0) {
+      invalidateEnrichmentCache();
+    }
+
+    res.json({ success: true, updated: result.count });
+  } catch (error) {
+    console.error('Error setting enrichment flag:', error);
+    res.status(500).json({ error: 'Failed to set enrichment flag' });
+  }
+});
+
+/**
  * POST /api/patents/invalidate-cache
  * Invalidate the enrichment cache (call after jobs complete)
  */
@@ -2537,6 +2233,137 @@ router.post('/invalidate-cache', (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Error invalidating cache:', error);
     res.status(500).json({ error: 'Failed to invalidate cache' });
+  }
+});
+
+/**
+ * POST /api/patents/:id/quarantine
+ * Quarantine a patent for a specific coverage type.
+ */
+router.post('/:id/quarantine', async (req: Request, res: Response) => {
+  try {
+    const patentId = req.params.id;
+    const { coverageType, reason } = req.body;
+
+    if (!coverageType || !reason) {
+      return res.status(400).json({ error: 'coverageType and reason are required' });
+    }
+
+    const patent = await prisma.patent.findUnique({
+      where: { patentId },
+      select: { quarantine: true },
+    });
+
+    if (!patent) {
+      return res.status(404).json({ error: 'Patent not found' });
+    }
+
+    const existing = (patent.quarantine as Record<string, string>) || {};
+    const updated = { ...existing, [coverageType]: reason };
+
+    await prisma.patent.update({
+      where: { patentId },
+      data: { quarantine: updated, isQuarantined: true },
+    });
+
+    res.json({ success: true, quarantine: updated });
+  } catch (error) {
+    console.error('Error quarantining patent:', error);
+    res.status(500).json({ error: 'Failed to quarantine patent' });
+  }
+});
+
+/**
+ * DELETE /api/patents/:id/quarantine
+ * Remove quarantine for a specific coverage type.
+ */
+router.delete('/:id/quarantine', async (req: Request, res: Response) => {
+  try {
+    const patentId = req.params.id;
+    const { coverageType } = req.body;
+
+    if (!coverageType) {
+      return res.status(400).json({ error: 'coverageType is required' });
+    }
+
+    const patent = await prisma.patent.findUnique({
+      where: { patentId },
+      select: { quarantine: true },
+    });
+
+    if (!patent) {
+      return res.status(404).json({ error: 'Patent not found' });
+    }
+
+    const existing = (patent.quarantine as Record<string, string>) || {};
+    delete existing[coverageType];
+
+    const isQuarantined = Object.keys(existing).length > 0;
+
+    await prisma.patent.update({
+      where: { patentId },
+      data: {
+        quarantine: Object.keys(existing).length > 0 ? existing : null,
+        isQuarantined,
+      },
+    });
+
+    res.json({ success: true, quarantine: isQuarantined ? existing : null, isQuarantined });
+  } catch (error) {
+    console.error('Error unquarantining patent:', error);
+    res.status(500).json({ error: 'Failed to unquarantine patent' });
+  }
+});
+
+/**
+ * POST /api/patents/bulk-quarantine
+ * Bulk quarantine or unquarantine patents.
+ */
+router.post('/bulk-quarantine', async (req: Request, res: Response) => {
+  try {
+    const { patentIds, coverageType, reason, action } = req.body;
+
+    if (!patentIds?.length || !coverageType || !action) {
+      return res.status(400).json({ error: 'patentIds, coverageType, and action are required' });
+    }
+
+    if (action !== 'quarantine' && action !== 'unquarantine') {
+      return res.status(400).json({ error: 'action must be "quarantine" or "unquarantine"' });
+    }
+
+    const patents = await prisma.patent.findMany({
+      where: { patentId: { in: patentIds } },
+      select: { patentId: true, quarantine: true },
+    });
+
+    let updated = 0;
+    for (const p of patents) {
+      const existing = (p.quarantine as Record<string, string>) || {};
+
+      if (action === 'quarantine') {
+        existing[coverageType] = reason || 'manual';
+        await prisma.patent.update({
+          where: { patentId: p.patentId },
+          data: { quarantine: existing, isQuarantined: true },
+        });
+      } else {
+        delete existing[coverageType];
+        const isQuarantined = Object.keys(existing).length > 0;
+        await prisma.patent.update({
+          where: { patentId: p.patentId },
+          data: {
+            quarantine: Object.keys(existing).length > 0 ? existing : null,
+            isQuarantined,
+          },
+        });
+      }
+      updated++;
+    }
+
+    res.json({ success: true, updated });
+  } catch (error) {
+    console.error('Error in bulk quarantine:', error);
+    res.status(500).json({ error: 'Failed to bulk quarantine' });
   }
 });
 

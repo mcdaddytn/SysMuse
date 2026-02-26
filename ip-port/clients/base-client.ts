@@ -186,6 +186,58 @@ export class BaseAPIClient {
   }
 
   /**
+   * POST with form-urlencoded body to an absolute URL (for DS-API fallback).
+   * DS-API uses Solr/Lucene criteria syntax with form-urlencoded parameters.
+   */
+  protected async postFormUrlEncoded<T>(
+    absoluteUrl: string,
+    params: Record<string, string>
+  ): Promise<T> {
+    if (this.rateLimiter) {
+      await this.rateLimiter.waitIfNeeded();
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.config.timeout);
+
+    try {
+      const body = new URLSearchParams(params).toString();
+      console.log(`[API Request] POST ${absoluteUrl} (form-urlencoded)`);
+
+      const response = await fetch(absoluteUrl, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const error: APIError = new Error(
+          `DS-API Error: ${response.status} ${response.statusText}`
+        );
+        error.statusCode = response.status;
+        error.endpoint = absoluteUrl;
+        try { error.response = JSON.parse(errorText); } catch { error.response = errorText; }
+        throw error;
+      }
+
+      return await response.json() as T;
+    } catch (error: unknown) {
+      clearTimeout(timeout);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`DS-API request timeout: ${absoluteUrl}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Retry a request with exponential backoff
    */
   protected async retryRequest<T>(

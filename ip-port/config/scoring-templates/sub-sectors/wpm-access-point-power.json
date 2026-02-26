@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wpm-access-point-power",
+  "name": "Access Point & Infrastructure Power Saving",
+  "description": "Sub-sector template for AP/infrastructure power saving patents including small cell dormancy, base station sleep modes, lean carrier operation, network-side energy saving, and traffic-adaptive power management.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W52/04*",
+  "sectorName": "wireless-power-mgmt",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-power-mgmt",
+  "version": 1,
+  "contextDescription": "Network-side energy saving is increasingly important as 5G densification drives up infrastructure power consumption. Small cell dormancy, lean carrier operation, and cell (de)activation reduce base station energy use. 3GPP Rel-18 introduced network energy saving study items. O-RAN Alliance has energy saving use cases (carrier shutdown, MIMO layer adaptation). This area is relevant for base station vendors (Ericsson, Nokia, Samsung) and O-RAN equipment providers. Broadcom supplies ASICs for small cells and base station baseband — infrastructure power patents have chip-level licensing potential.",
+  "scoringGuidance": [
+    "Small cell dormancy patents target the densification trend — millions of small cells need power management.",
+    "Traffic-adaptive power scaling patents are immediately deployable and have broad network applicability.",
+    "O-RAN energy saving alignment increases patent value as networks adopt open interfaces.",
+    "Cell activation latency is a key trade-off — patents that minimize wake-up delay while saving power are premium.",
+    "Multi-cell coordination patents are high-value for centralized RAN and cloud-RAN architectures."
+  ],
+  "questions": [
+    {
+      "fieldName": "network_sleep_mechanism",
+      "displayName": "Network Sleep Mechanism",
+      "question": "What network-side sleep mechanism does this patent address? Score 8-10 for novel small cell dormancy, lean carrier operation, or advanced AP sleep state design. 5-7 for improved cell DTX or component carrier shutdown. 3-4 for basic AP power-down procedures. 1-2 for no specific network sleep mechanism.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Small cell dormancy and lean carrier operation are the primary network energy saving mechanisms in 5G."
+    },
+    {
+      "fieldName": "traffic_adaptive_power",
+      "displayName": "Traffic-Adaptive Power",
+      "question": "Does this patent enable power scaling based on traffic load, time-of-day patterns, or demand prediction? Score 8-10 for predictive/ML-based traffic-aware power management. 5-7 for threshold-based or reactive traffic adaptation. 3-4 for basic load-dependent power states. 1-2 for static power management.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Traffic-adaptive power saves the most energy in real deployments — off-peak hours often have 10x lower load."
+    },
+    {
+      "fieldName": "cell_activation_latency",
+      "displayName": "Cell Activation Latency",
+      "question": "Does the patent address wake-up speed versus power savings trade-off? Score 8-10 for sub-10ms cell activation or novel fast-wake techniques. 5-7 for improved activation with latency awareness. 3-4 for basic activation procedures. 1-2 for no activation latency consideration.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Fast cell activation is critical — too-slow wake-up causes service interruption or call drops."
+    },
+    {
+      "fieldName": "multi_cell_coordination",
+      "displayName": "Multi-Cell Coordination",
+      "question": "Does this patent coordinate sleep/wake across multiple cells, sectors, or layers? Score 8-10 for coordinated multi-cell energy management or inter-site sleep orchestration. 5-7 for coverage-aware sleep with neighbor cell consideration. 3-4 for single-cell sleep with awareness of neighbors. 1-2 for isolated single-cell power management.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Coordinated sleep requires inter-cell signaling and is more complex — higher patent value."
+    },
+    {
+      "fieldName": "o_ran_alignment",
+      "displayName": "O-RAN Alignment",
+      "question": "Does this patent align with O-RAN energy saving use cases or open interface architectures? Score 8-10 for explicit O-RAN energy saving framework or RIC-based power control. 5-7 for approaches compatible with disaggregated RAN. 3-4 for general network architecture awareness. 1-2 for no O-RAN or open-interface relevance.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "O-RAN energy saving is a key use case for the RAN Intelligent Controller (RIC) — growing standardization."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "Is this infrastructure power saving observable through network signaling? Score 8-10 for behavior visible in cell (de)activation signaling (SCell dormancy indication, SIB updates). 5-7 for behavior inferable from cell availability patterns or network KPIs. 3-4 for internal base station power management. 1-2 for algorithm-level optimization only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Cell activation/deactivation is signaled to UEs — observable in broadcast signaling and RRC messages."
+    }
+  ]
+}

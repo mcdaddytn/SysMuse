@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "memory-interface",
+  "name": "Memory Interface & Timing",
+  "description": "Sub-sector template for memory interface patents (CPC G11C7*, G11C8*) covering access timing, addressing, bus protocols, and I/O circuits.",
+  "level": "sub_sector",
+  "subSectorPattern": "G11C7*,G11C8*",
+  "sectorName": "memory-storage",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "memory-storage",
+  "version": 1,
+  "contextDescription": "Memory interface patents cover the critical path between processors and memory. Key areas include I/O buffers, timing calibration, signal integrity (DQ/DQS training), command/address decoding, and memory bus protocols. Every DDR, HBM, LPDDR, and GDDR interface relies on these circuits. High-value targets include memory vendors (Samsung, SK Hynix, Micron), controller IP vendors (Synopsys, Cadence), and all SoC/processor vendors (Intel, AMD, Apple, Qualcomm) that implement memory controllers.",
+  "scoringGuidance": [
+    "DDR timing calibration patents read on every processor and memory chip.",
+    "Signal integrity (write leveling, read training) patents are mandatory for DDR4/5.",
+    "High-bandwidth memory (HBM) interface patents target AI accelerator and GPU vendors.",
+    "LPDDR interface patents target all mobile SoC vendors.",
+    "Memory controller patents are broader than memory-side patents — they read on processor vendors."
+  ],
+  "questions": [
+    {
+      "fieldName": "interface_standard",
+      "displayName": "Interface Standard",
+      "question": "What memory interface standard does this patent relate to? Score by market volume: 1-3 for legacy/niche, 4-6 for current-gen (DDR4, LPDDR4), 7-10 for next-gen or multi-standard (DDR5, HBM, LPDDR5).",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the memory interface standard and its current market relevance."
+    },
+    {
+      "fieldName": "timing_calibration",
+      "displayName": "Timing Calibration",
+      "question": "Does this patent cover timing calibration, training, or signal integrity (write leveling, DQ training, DBI)? These are mandatory techniques that every implementation must use.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Mandatory training sequences are very hard to design around. Assess if this is required by the standard."
+    },
+    {
+      "fieldName": "controller_vs_phy",
+      "displayName": "Controller vs PHY Scope",
+      "question": "Does this patent cover the memory controller side (reads on processor/SoC vendors) or the memory PHY/device side (reads on DRAM vendors), or both? Controller-side patents have more potential targets.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify whether this targets the controller, PHY, or memory device side."
+    },
+    {
+      "fieldName": "bandwidth_efficiency",
+      "displayName": "Bandwidth/Efficiency",
+      "question": "Does this patent improve memory bandwidth, latency, or power efficiency? These are the key competitive metrics for memory interfaces.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify specific bandwidth, latency, or power improvements."
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "wi-traffic-qos",
+  "name": "Traffic Management & QoS",
+  "description": "Sub-sector template for traffic management, QoS (Quality of Service), and congestion control patents in wireless networks. Covers QoS flow management, network slicing resource allocation, congestion control, and traffic prioritization.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W28/*",
+  "sectorName": "wireless-infrastructure",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-infrastructure",
+  "version": 1,
+  "contextDescription": "Traffic management and QoS ensure that different traffic types (voice, video, IoT, URLLC) get appropriate network resources. 5G network slicing enables dedicated virtual networks with guaranteed QoS. Every operator implements QoS — it's fundamental to cellular service differentiation. Key targets: infrastructure vendors (Ericsson, Nokia, Samsung), core network vendors (Mavenir, Affirmed/Microsoft), and cloud-native core providers. Network slicing is the key 5G innovation enabling new business models (enterprise slices, IoT slices).",
+  "scoringGuidance": [
+    "QoS is mandatory in every cellular network — 5QI values are standardized by 3GPP.",
+    "Network slicing patents are the highest-value — they enable new 5G business models.",
+    "Congestion control patents affect user experience during peak traffic — high operator value.",
+    "End-to-end QoS (RAN + transport + core) patents have broader scope than RAN-only.",
+    "Policy-based traffic management (PCRF/PCF) patents affect every subscriber session."
+  ],
+  "questions": [
+    {
+      "fieldName": "network_slicing",
+      "displayName": "Network Slicing",
+      "question": "Does this patent address 5G network slicing (slice creation, resource isolation, SLA enforcement)? Score 8-10 for novel slice management or dynamic slice resource allocation, 5-7 for slice-aware QoS, 3-4 for general resource partitioning, 1-2 for no slicing aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Network slicing is the defining 5G infrastructure feature — high SEP and commercial value."
+    },
+    {
+      "fieldName": "qos_mechanism",
+      "displayName": "QoS Mechanism",
+      "question": "What QoS mechanism does this patent implement? Score 8-10 for novel QoS flow management or 5QI-based differentiation, 5-7 for bearer/flow-level QoS improvements, 3-4 for basic priority queuing, 1-2 for best-effort only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "5G QoS uses flows (not bearers) — 5QI values define QoS characteristics."
+    },
+    {
+      "fieldName": "congestion_control",
+      "displayName": "Congestion Control",
+      "question": "Does this patent address congestion detection, prevention, or management? Score 8-10 for predictive congestion management (AI-based), 5-7 for reactive congestion control, 3-4 for basic overload protection, 1-2 for no congestion aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Congestion during peak events (sports, concerts) affects millions of users."
+    },
+    {
+      "fieldName": "e2e_scope",
+      "displayName": "End-to-End Scope",
+      "question": "Does this patent address end-to-end QoS (spanning RAN, transport, and core network)? Score 8-10 for cross-domain QoS orchestration, 5-7 for RAN+core integration, 3-4 for single domain, 1-2 for very narrow scope.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "End-to-end QoS patents have broader licensing scope than single-domain."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP QoS/slicing procedures (TS 23.501/23.502)? Score 8-10 for direct implementation of standardized QoS behavior, 5-7 for standard-compatible, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "3GPP defines QoS architecture and network slicing — SEP-aligned patents have broad reach."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this QoS/traffic management innovation? Score 8-10 for observable in network behavior (QoS differentiation, slice isolation), 5-7 for detectable in network configuration, 3-4 for internal policy logic, 1-2 for conceptual only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "QoS differentiation is observable — different traffic classes get different treatment."
+    }
+  ]
+}

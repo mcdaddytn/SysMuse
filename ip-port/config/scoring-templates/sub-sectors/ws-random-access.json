@@ -1,0 +1,92 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "ws-random-access",
+  "name": "Random Access Procedures",
+  "description": "Sub-sector template for random access (RACH) patents. Covers preamble design, contention resolution, beam-based RACH for 5G NR, 2-step and 4-step random access, and timing advance procedures.",
+  "level": "sub_sector",
+  "subSectorPattern": "H04W74/*",
+  "sectorName": "wireless-scheduling",
+  "superSectorName": "WIRELESS",
+  "inheritsFrom": "wireless-scheduling",
+  "version": 1,
+  "contextDescription": "Random access is the first procedure any device performs to connect to a cellular network. Every LTE/5G device must implement RACH. In 5G NR, beam-based random access adds complexity — the UE must select the correct beam and preamble. Key targets include Qualcomm (modem IP), Apple (baseband), Intel (former modem), Samsung, and MediaTek. The 3GPP specifications (TS 38.321, TS 38.213) define mandatory RACH procedures. High-value innovations include 2-step RACH (reduced latency), beam failure recovery via RACH, and preamble sequence design for massive connectivity (IoT).",
+  "scoringGuidance": [
+    "Random access is exercised every time a device connects, re-connects, or performs handover — extremely high infringement frequency.",
+    "2-step RACH (Type 2) patents are particularly valuable for URLLC and reduced latency applications.",
+    "Beam failure recovery using RACH is critical for mmWave 5G — highly detectable via signaling analysis.",
+    "Preamble design patents covering Zadoff-Chu sequences or new 5G NR preamble formats have broad reach.",
+    "Contention-free random access patents affect handover performance directly."
+  ],
+  "questions": [
+    {
+      "fieldName": "rach_type",
+      "displayName": "RACH Procedure Type",
+      "question": "Which random access procedure type does this patent address? Score 8-10 for 2-step RACH (Type 2) or novel RACH procedure variants, 5-7 for improvements to 4-step RACH (contention-based or contention-free), 3-4 for general random access concepts, 1-2 for unrelated.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "2-step RACH is the newest and highest-value variant. Identify which step(s) of the RACH procedure are addressed."
+    },
+    {
+      "fieldName": "beam_rach",
+      "displayName": "Beam-Based RACH",
+      "question": "Does this patent address beam-based random access for 5G NR (SSB-to-RACH-occasion mapping, beam failure recovery)? Score 8-10 for novel beam selection or beam failure recovery via RACH, 5-7 for beam-aware RACH resource configuration, 3-4 for general beamforming with RACH mention, 1-2 for no beam aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Beam-based RACH is unique to 5G NR and is mandatory for mmWave deployments."
+    },
+    {
+      "fieldName": "preamble_design",
+      "displayName": "Preamble Sequence Design",
+      "question": "Does this patent address RACH preamble design (Zadoff-Chu sequences, preamble groups, restricted sets)? Score 8-10 for novel preamble sequence design or preamble resource allocation, 5-7 for preamble selection optimization, 3-4 for general preamble usage, 1-2 for no preamble aspect.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Preamble design is standardized in 3GPP — SEP potential is high."
+    },
+    {
+      "fieldName": "sep_alignment",
+      "displayName": "SEP Alignment",
+      "question": "How closely does this patent align with 3GPP standard RACH procedures (TS 38.321/38.213)? Score 8-10 for direct implementation of standardized RACH behavior, 5-7 for enabling standard compliance, 3-4 for standard-adjacent, 1-2 for proprietary.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.14,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RACH is one of the most standardized procedures — SEP-aligned patents have enormous licensing scope."
+    },
+    {
+      "fieldName": "massive_connectivity",
+      "displayName": "Massive Connectivity / IoT",
+      "question": "Does this patent address random access for massive device connectivity (IoT, mMTC)? Score 8-10 for novel overload control or grant-free access for massive IoT, 5-7 for RACH congestion management, 3-4 for general scalability, 1-2 for single-device RACH only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "IoT massive connectivity is a growing use case — billions of devices attempting RACH simultaneously."
+    },
+    {
+      "fieldName": "latency_reduction",
+      "displayName": "Latency Reduction",
+      "question": "Does this patent reduce random access latency (fewer steps, faster contention resolution, RACH-less handover)? Score 8-10 for sub-1ms RACH or RACH-less connection methods, 5-7 for reduced-step RACH, 3-4 for general latency improvement, 1-2 for no latency focus.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "URLLC requires ultra-low latency random access — high value for 5G-Advanced."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Implementation Detectability",
+      "question": "How detectable is this RACH innovation in a commercial product? Score 8-10 for behavior observable in over-the-air signaling (RACH preambles, RAR messages), 5-7 for behavior inferable from connection timing or conformance testing, 3-4 for internal baseband processing, 1-2 for algorithm-level only.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "RACH signaling is observable over the air — preamble transmission and RAR reception are detectable."
+    }
+  ]
+}

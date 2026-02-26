@@ -2,20 +2,95 @@
   "$schema": "../scoring-template.schema.json",
   "id": "semiconductor",
   "name": "Semiconductor Scoring",
-  "description": "Scoring template for Semiconductor super-sector patents. Includes manufacturing relevance and chip integration metrics.",
+  "description": "Scoring template for Semiconductor super-sector patents. Reweighted for litigation targeting: emphasizes design-around difficulty, claim breadth, and implementation clarity. Manufacturing/integration metrics demoted.",
   "level": "super_sector",
   "superSectorName": "SEMICONDUCTOR",
   "inheritsFrom": "portfolio-default",
   "isDefault": true,
-  "version": 1,
+  "version": 2,
+  "scoringGuidance": [
+    "Semiconductor patents span analog/mixed-signal circuits, device physics, packaging, memory, and manufacturing processes.",
+    "Litigation reweighting (v2): core IP strength metrics (design-around difficulty, claim breadth, implementation clarity) weighted up; manufacturing-specific and integration metrics weighted down.",
+    "For analog circuits: high design-around difficulty is common (fundamental circuit topologies are hard to avoid). Focus on whether claims cover the specific implementation or the broader circuit function."
+  ],
   "questions": [
+    {
+      "fieldName": "technical_novelty",
+      "displayName": "Technical Novelty",
+      "question": "Rate the technical novelty of this patent's core innovation. Consider: How different is this from prior art? Does it represent a significant departure from existing approaches?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this technically novel or incremental."
+    },
+    {
+      "fieldName": "claim_breadth",
+      "displayName": "Claim Breadth",
+      "question": "Rate the breadth of the patent claims based on the actual claim language provided. Consider: (1) How many independent claims exist? (2) How broad are the independent claims — do they use functional language, means-plus-function, or specific structural terms? (3) Do dependent claims cover meaningful alternative implementations? (4) Could the claims capture a competitor's implementation that achieves similar functionality through different means?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Analyze the specific claim language. Identify the broadest independent claim and explain what scope it covers."
+    },
+    {
+      "fieldName": "design_around_difficulty",
+      "displayName": "Design-Around Difficulty",
+      "question": "How difficult would it be for a competitor to design around this patent while achieving similar functionality?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.25,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Explain what makes this hard or easy to design around."
+    },
+    {
+      "fieldName": "market_relevance",
+      "displayName": "Market Relevance",
+      "question": "Rate the relevance of this technology to current market needs and industry trends.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Describe the market context and relevance."
+    },
+    {
+      "fieldName": "implementation_clarity",
+      "displayName": "Implementation Clarity",
+      "question": "How clearly does the patent describe the implementation? Could infringement be easily detected in a product?",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.20,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess detectability and clarity of implementation."
+    },
+    {
+      "fieldName": "standards_relevance",
+      "displayName": "Standards Relevance",
+      "question": "Is this patent related to any industry standards (IEEE, 3GPP, IETF, etc.)? Rate its standards essentiality.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any standards relationships."
+    },
+    {
+      "fieldName": "unique_value",
+      "displayName": "Unique/Hidden Value",
+      "question": "Beyond the standard metrics above, does this patent have unique or overlooked value that isn't captured by typical analysis? Consider: unusual claim scope, emerging technology applicability, underappreciated market timing, strategic defensive value, or any 'dark horse' characteristics that could make this patent more valuable than it appears.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.05,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify any unique characteristics, hidden strengths, or overlooked value that distinguishes this patent from others in its sector. What makes this a potential 'dark horse' that standard analysis might miss? Be specific about what unique value exists and why it matters."
+    },
     {
       "fieldName": "manufacturing_relevance",
       "displayName": "Manufacturing Relevance",
       "question": "How relevant is this to semiconductor manufacturing processes? Consider lithography, etching, deposition, packaging, and process nodes.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.15,
+      "weight": 0.05,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify manufacturing processes and node relevance."
     },
@@ -25,7 +100,7 @@
       "question": "How easily can this be integrated into chip designs? Consider area, power, design complexity, and IP licensing potential.",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.10,
+      "weight": 0.05,
       "requiresReasoning": true,
       "reasoningPrompt": "Describe integration considerations and constraints."
     },
@@ -35,7 +110,7 @@
       "question": "How broadly applicable is this patent across different process nodes and technology generations?",
       "answerType": "numeric",
       "scale": { "min": 1, "max": 10 },
-      "weight": 0.10,
+      "weight": 0.05,
       "requiresReasoning": true,
       "reasoningPrompt": "Identify applicable process nodes and technology generations."
     }

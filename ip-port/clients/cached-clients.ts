@@ -807,3 +807,213 @@ export async function fetchPatentsBatch(
 
   return { patents, cached, fetched, failed };
 }
+
+// =============================================================================
+// CACHED OFFICE ACTION REJECTION CLIENT
+// =============================================================================
+
+import {
+  OARejectionClient,
+  createOARejectionClient,
+} from './odp-office-action-rejection-client.js';
+import type { OARejectionApiResponse } from '../types/office-action-types.js';
+
+export class CachedOARejectionClient {
+  private client: OARejectionClient;
+  private useCache: boolean;
+
+  constructor(client?: OARejectionClient, useCache: boolean = true) {
+    this.client = client || createOARejectionClient();
+    this.useCache = useCache;
+  }
+
+  async getRejections(applicationNumber: string): Promise<OARejectionApiResponse> {
+    const requestType = 'oa-rejections';
+
+    if (this.useCache) {
+      const cached = await getApiCache<OARejectionApiResponse>('oa-rejection', requestType, applicationNumber);
+      if (cached) return cached;
+    }
+
+    const result = await this.client.getRejections(applicationNumber);
+
+    if (result.totalRecords > 0 && this.useCache) {
+      await setApiCache({
+        endpoint: 'oa-rejection',
+        requestType,
+        requestKey: applicationNumber,
+        data: result,
+        statusCode: 200,
+      });
+    }
+
+    return result;
+  }
+
+  async getRejectionsByPatent(patentNumber: string): Promise<OARejectionApiResponse> {
+    const requestType = 'oa-rejections-by-patent';
+
+    if (this.useCache) {
+      const cached = await getApiCache<OARejectionApiResponse>('oa-rejection', requestType, patentNumber);
+      if (cached) return cached;
+    }
+
+    const result = await this.client.getRejectionsByPatent(patentNumber);
+
+    if (result.totalRecords > 0 && this.useCache) {
+      await setApiCache({
+        endpoint: 'oa-rejection',
+        requestType,
+        requestKey: patentNumber,
+        data: result,
+        statusCode: 200,
+      });
+    }
+
+    return result;
+  }
+}
+
+export function createCachedOARejectionClient(useCache: boolean = true): CachedOARejectionClient {
+  return new CachedOARejectionClient(undefined, useCache);
+}
+
+// =============================================================================
+// CACHED OFFICE ACTION TEXT CLIENT
+// =============================================================================
+
+import {
+  OATextClient,
+  createOATextClient,
+} from './odp-office-action-text-client.js';
+import type { OATextApiResponse } from '../types/office-action-types.js';
+
+export class CachedOATextClient {
+  private client: OATextClient;
+  private useCache: boolean;
+
+  constructor(client?: OATextClient, useCache: boolean = true) {
+    this.client = client || createOATextClient();
+    this.useCache = useCache;
+  }
+
+  async getOfficeActionText(applicationNumber: string): Promise<OATextApiResponse> {
+    const requestType = 'oa-text';
+
+    if (this.useCache) {
+      const cached = await getApiCache<OATextApiResponse>('oa-text', requestType, applicationNumber);
+      if (cached) return cached;
+    }
+
+    const result = await this.client.getOfficeActionText(applicationNumber);
+
+    if (result.totalRecords > 0 && this.useCache) {
+      await setApiCache({
+        endpoint: 'oa-text',
+        requestType,
+        requestKey: applicationNumber,
+        data: result,
+        statusCode: 200,
+      });
+    }
+
+    return result;
+  }
+
+  async getOfficeActionTextByPatent(patentNumber: string): Promise<OATextApiResponse> {
+    const requestType = 'oa-text-by-patent';
+
+    if (this.useCache) {
+      const cached = await getApiCache<OATextApiResponse>('oa-text', requestType, patentNumber);
+      if (cached) return cached;
+    }
+
+    const result = await this.client.getOfficeActionTextByPatent(patentNumber);
+
+    if (result.totalRecords > 0 && this.useCache) {
+      await setApiCache({
+        endpoint: 'oa-text',
+        requestType,
+        requestKey: patentNumber,
+        data: result,
+        statusCode: 200,
+      });
+    }
+
+    return result;
+  }
+}
+
+export function createCachedOATextClient(useCache: boolean = true): CachedOATextClient {
+  return new CachedOATextClient(undefined, useCache);
+}
+
+// =============================================================================
+// CACHED ENRICHED CITATION CLIENT
+// =============================================================================
+
+import {
+  EnrichedCitationClient,
+  createEnrichedCitationClient,
+} from './odp-enriched-citation-client.js';
+import type { EnrichedCitationApiResponse } from '../types/office-action-types.js';
+
+export class CachedEnrichedCitationClient {
+  private client: EnrichedCitationClient;
+  private useCache: boolean;
+
+  constructor(client?: EnrichedCitationClient, useCache: boolean = true) {
+    this.client = client || createEnrichedCitationClient();
+    this.useCache = useCache;
+  }
+
+  async getCitations(applicationNumber: string): Promise<EnrichedCitationApiResponse> {
+    const requestType = 'enriched-citations';
+
+    if (this.useCache) {
+      const cached = await getApiCache<EnrichedCitationApiResponse>('enriched-citations', requestType, applicationNumber);
+      if (cached) return cached;
+    }
+
+    const result = await this.client.getCitations(applicationNumber);
+
+    if (result.totalRecords > 0 && this.useCache) {
+      await setApiCache({
+        endpoint: 'enriched-citations',
+        requestType,
+        requestKey: applicationNumber,
+        data: result,
+        statusCode: 200,
+      });
+    }
+
+    return result;
+  }
+
+  async getCitationsByPatent(patentNumber: string): Promise<EnrichedCitationApiResponse> {
+    const requestType = 'enriched-citations-by-patent';
+
+    if (this.useCache) {
+      const cached = await getApiCache<EnrichedCitationApiResponse>('enriched-citations', requestType, patentNumber);
+      if (cached) return cached;
+    }
+
+    const result = await this.client.getCitationsByPatent(patentNumber);
+
+    if (result.totalRecords > 0 && this.useCache) {
+      await setApiCache({
+        endpoint: 'enriched-citations',
+        requestType,
+        requestKey: patentNumber,
+        data: result,
+        statusCode: 200,
+      });
+    }
+
+    return result;
+  }
+}
+
+export function createCachedEnrichedCitationClient(useCache: boolean = true): CachedEnrichedCitationClient {
+  return new CachedEnrichedCitationClient(undefined, useCache);
+}

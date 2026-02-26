@@ -1,0 +1,62 @@
+{
+  "$schema": "../scoring-template.schema.json",
+  "id": "memory-reliability",
+  "name": "Memory ECC & Reliability",
+  "description": "Sub-sector template for memory reliability patents (CPC G11C29*) covering error correction, repair, redundancy, and built-in self-test for memory.",
+  "level": "sub_sector",
+  "subSectorPattern": "G11C29*",
+  "sectorName": "memory-storage",
+  "superSectorName": "SEMICONDUCTOR",
+  "inheritsFrom": "memory-storage",
+  "version": 1,
+  "contextDescription": "Memory reliability patents cover error detection/correction and repair mechanisms. Key areas include ECC (SEC-DED, chipkill), memory BIST, redundancy repair (row/column), soft error mitigation, and endurance management. These are essential for enterprise servers, data centers, automotive, and any safety-critical application. High-value targets include server memory vendors (Samsung, SK Hynix, Micron), server processor vendors (Intel, AMD), automotive SoC vendors (NXP, Renesas, Infineon), and embedded memory IP vendors.",
+  "scoringGuidance": [
+    "ECC patents are mandatory for enterprise DRAM — every server uses them.",
+    "Memory BIST patents read on all chips with embedded SRAM (virtually every SoC).",
+    "Redundancy repair patents target DRAM and NAND flash manufacturers directly.",
+    "Soft error (SER) mitigation patents are critical for automotive and aerospace.",
+    "In-field repair patents are increasingly important as process nodes shrink."
+  ],
+  "questions": [
+    {
+      "fieldName": "ecc_method",
+      "displayName": "ECC Method",
+      "question": "What error correction method does this patent cover? Score by breadth: 1-3 for specialized codes, 4-6 for standard SEC-DED, 7-10 for advanced methods (chipkill, symbol ECC, adaptive ECC) or novel approaches.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.12,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify the ECC approach and whether it goes beyond standard implementations."
+    },
+    {
+      "fieldName": "bist_repair",
+      "displayName": "BIST & Repair",
+      "question": "Does this patent cover memory built-in self-test or redundancy repair? BIST is in every chip with embedded memory. Repair directly impacts yield and cost.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Assess BIST/repair coverage and its impact on manufacturing yield."
+    },
+    {
+      "fieldName": "enterprise_automotive",
+      "displayName": "Enterprise/Automotive Applicability",
+      "question": "Is this patent relevant to enterprise server or automotive memory reliability requirements? These markets have strict reliability mandates and premium pricing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.10,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Identify enterprise or automotive reliability requirements addressed."
+    },
+    {
+      "fieldName": "runtime_vs_manufacture",
+      "displayName": "Runtime vs Manufacturing",
+      "question": "Does this patent address runtime error handling (in-field, online repair) or manufacturing-time repair? Runtime solutions are harder to design around and more valuable for ongoing licensing.",
+      "answerType": "numeric",
+      "scale": { "min": 1, "max": 10 },
+      "weight": 0.08,
+      "requiresReasoning": true,
+      "reasoningPrompt": "Distinguish between manufacturing-time and runtime reliability techniques."
+    }
+  ]
+}

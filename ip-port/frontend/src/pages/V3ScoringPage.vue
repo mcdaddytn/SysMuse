@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
+import PortfolioSelector from '@/components/PortfolioSelector.vue';
+import { usePortfolioStore } from '@/stores/portfolio';
 import {
   v2EnhancedApi,
   snapshotApi,
@@ -22,6 +24,7 @@ import type {
 
 const router = useRouter();
 const $q = useQuasar();
+const portfolioStore = usePortfolioStore();
 
 // LocalStorage keys
 const V3_PRESETS_KEY = 'v3-consensus-custom-presets';
@@ -256,7 +259,7 @@ async function recalculate() {
       }
 
       const config = buildV2ConfigFromPreset(role.v2PresetId);
-      const response = await v2EnhancedApi.getScores(config, previousRankings.value);
+      const response = await v2EnhancedApi.getScores(config, previousRankings.value, portfolioStore.selectedPortfolioId);
 
       // Map to consensus format
       patents.value = response.data.map(p => ({
@@ -288,7 +291,7 @@ async function recalculate() {
         if (role.consensusWeight <= 0) continue;
 
         const config = buildV2ConfigFromPreset(role.v2PresetId);
-        const response = await v2EnhancedApi.getScores(config, []);
+        const response = await v2EnhancedApi.getScores(config, [], portfolioStore.selectedPortfolioId);
 
         const scoreMap = new Map<string, { score: number; data: V2EnhancedScoredPatent }>();
         for (const p of response.data) {
@@ -479,9 +482,10 @@ function resetRankMovements() {
 async function loadSavedScores() {
   savedScoresLoading.value = true;
   try {
+    const pid = portfolioStore.selectedPortfolioId;
     const [allSnapshots, activeSnapshots] = await Promise.all([
-      snapshotApi.list(),
-      snapshotApi.getActive(),
+      snapshotApi.list(pid),
+      snapshotApi.getActive(pid),
     ]);
     // Filter to V3 only
     savedScores.value = allSnapshots.filter(s => s.scoreType === 'V3');
@@ -521,11 +525,14 @@ async function saveScores() {
       config,
       scores,
       setActive: setAsActive.value,
+      portfolioId: portfolioStore.selectedPortfolioId,
     });
 
     $q.notify({
       type: 'positive',
-      message: `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
+      message: snapshot.replaced
+        ? `Replaced "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`
+        : `Saved "${snapshot.name}" with ${snapshot.patentCount.toLocaleString()} scores`,
       caption: setAsActive.value ? 'Set as active V3 scores' : undefined,
     });
 
@@ -690,6 +697,13 @@ watch([topN, llmEnhancedOnly], () => {
   hasUnsavedChanges.value = true;
 });
 
+// Reload when portfolio changes
+watch(() => portfolioStore.selectedPortfolioId, () => {
+  previousRankings.value = [];
+  recalculate();
+  loadSavedScores();
+});
+
 // Watch view mode changes
 watch(viewMode, () => {
   if (viewMode.value === 'individual' && !selectedIndividualRoleId.value && roles.value.length > 0) {
@@ -731,6 +745,7 @@ onMounted(async () => {
   <q-page padding>
     <div class="row items-center q-mb-md">
       <div class="text-h5">V3 Consensus Scoring</div>
+      <PortfolioSelector class="q-mx-md" />
       <q-badge color="primary" class="q-ml-md">
         {{ total.toLocaleString() }} patents
       </q-badge>

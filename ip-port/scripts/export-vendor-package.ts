@@ -38,6 +38,85 @@ function csvRow(values: (string | number | boolean | null | undefined)[]): strin
   return values.map(escapeCSV).join(',');
 }
 
+// ─── Parse Collective Strategy for Patent Mappings ───────────────────────────
+
+interface PatentMappings {
+  techCluster: Map<string, string>;   // patentId -> "A", "B", "C", etc.
+  claimChain: Map<string, string>;    // patentId -> "1", "2", "3", etc.
+}
+
+function parseCollectiveStrategy(mdContent: string): PatentMappings {
+  const techCluster = new Map<string, string>();
+  const claimChain = new Map<string, string>();
+
+  // Parse Technology Clusters (### Cluster A:, ### Cluster B:, etc.)
+  const clusterRegex = /###\s+Cluster\s+([A-Z]):[^\n]*\n\*\*Patents:\*\*\s*([^\n]+)/gi;
+  let match;
+  while ((match = clusterRegex.exec(mdContent)) !== null) {
+    const clusterLetter = match[1];
+    const patentsStr = match[2];
+    // Extract patent numbers (7-8 digit numbers)
+    const patentNums = patentsStr.match(/\d{7,8}/g) || [];
+    for (const num of patentNums) {
+      techCluster.set(num, clusterLetter);
+    }
+  }
+
+  // Parse Claim Chain Packages (### Package 1:, ### Package 2:, etc.)
+  const packageRegex = /###\s+Package\s+(\d+):[^\n]*\n\*\*Patents:\*\*\s*([^\n]+)/gi;
+  while ((match = packageRegex.exec(mdContent)) !== null) {
+    const packageNum = match[1];
+    const patentsStr = match[2];
+    // Extract patent numbers (7-8 digit numbers)
+    const patentNums = patentsStr.match(/\d{7,8}/g) || [];
+    for (const num of patentNums) {
+      // A patent can belong to multiple packages, comma-separate them
+      const existing = claimChain.get(num);
+      if (existing) {
+        claimChain.set(num, `${existing},${packageNum}`);
+      } else {
+        claimChain.set(num, packageNum);
+      }
+    }
+  }
+
+  return { techCluster, claimChain };
+}
+
+// ─── Company Website Lookup ──────────────────────────────────────────────────
+
+async function buildCompanyWebsiteMap(): Promise<Map<string, string>> {
+  const companies = await prisma.company.findMany({
+    where: { website: { not: null } },
+    select: { name: true, displayName: true, website: true },
+  });
+
+  const websiteMap = new Map<string, string>();
+  for (const c of companies) {
+    if (c.website) {
+      // Map both slug and display name (lowercase) to website
+      websiteMap.set(c.name.toLowerCase(), c.website);
+      websiteMap.set(c.displayName.toLowerCase(), c.website);
+    }
+  }
+  return websiteMap;
+}
+
+function findCompanyWebsite(companyName: string, websiteMap: Map<string, string>): string {
+  // Try exact lowercase match
+  const lower = companyName.toLowerCase();
+  if (websiteMap.has(lower)) return websiteMap.get(lower)!;
+
+  // Try partial match (e.g., "Skyworks Solutions" -> "skyworks")
+  for (const [key, url] of websiteMap) {
+    if (lower.includes(key) || key.includes(lower)) {
+      return url;
+    }
+  }
+
+  return '';
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 async function main() {
@@ -496,19 +575,42 @@ async function writeAssessmentExports(superSector: string, outputDir: string) {
     }
   }
 
+  // Load collective strategy for tech cluster and claim chain mappings
+  const collectiveTemplate = tier1FA.promptTemplates.find(
+    (t: any) => t.executionMode === 'COLLECTIVE'
+  );
+  let patentMappings: PatentMappings = { techCluster: new Map(), claimChain: new Map() };
+  if (collectiveTemplate) {
+    const collectivePath = path.join(cacheBase, collectiveTemplate.id, '_collective.json');
+    if (fs.existsSync(collectivePath)) {
+      const result = JSON.parse(fs.readFileSync(collectivePath, 'utf-8'));
+      const mdContent = result.rawText || result.response || '';
+      patentMappings = parseCollectiveStrategy(mdContent);
+      console.log(`  → Parsed collective strategy: ${patentMappings.techCluster.size} cluster mappings, ${patentMappings.claimChain.size} chain mappings`);
+    }
+  }
+
+  // Load company websites for target URL lookup
+  const websiteMap = await buildCompanyWebsiteMap();
+  console.log(`  → Loaded ${websiteMap.size / 2} company websites`);
+
   // Write vendor-friendly targets CSV (PatentId with US prefix + B2 suffix, target columns, notes)
+  // Now includes TechCluster and ClaimChain columns
   if (perPatentTemplate) {
     const resultDir = path.join(cacheBase, perPatentTemplate.id);
     if (fs.existsSync(resultDir)) {
       const files = fs.readdirSync(resultDir).filter(f => f.endsWith('.json') && f !== '_collective.json');
 
-      // First pass: find max target count across all patents
+      // Extended entry type with cluster/chain info and per-target products
       type TargetEntry = {
         patentId: string;
         title: string;
         litScore: string;
         strategy: string;
+        techCluster: string;
+        claimChain: string;
         targets: string[];
+        targetProducts: Map<string, string>;  // target -> product string
         notes: string;
       };
       const entries: TargetEntry[] = [];
@@ -546,24 +648,23 @@ async function writeAssessmentExports(superSector: string, outputDir: string) {
           .filter((t: string) => t.length > 0 && t.length < 50 && !/^(and|or|as|the|with|other|various)\b/i.test(t));
         if (targets.length > maxTargets) maxTargets = targets.length;
 
-        // Build notes: associate each target company with their specific products
+        // Build notes and target-specific products
         const productStr = (data.target_products || '') as string;
         const notesParts: string[] = [];
+        const targetProducts = new Map<string, string>();
 
         // Parse products and try to associate with targets
-        // Products are typically "Company ProductName, Company ProductName2, ..."
         for (const target of targets) {
-          // Find product mentions containing this company name
           const companyProducts = productStr
             .split(/,\s*(?=[A-Z])/)
             .filter((p: string) => p.toLowerCase().includes(target.toLowerCase()) && !ownerPatterns.test(p))
             .map((p: string) => p.trim());
           if (companyProducts.length > 0) {
             notesParts.push(`${target}: ${companyProducts.join(', ')}`);
+            targetProducts.set(target, companyProducts.join(', '));
           }
         }
 
-        // If we couldn't associate, just include all products as-is
         if (notesParts.length === 0 && productStr.trim()) {
           notesParts.push(productStr.trim());
         }
@@ -573,7 +674,10 @@ async function writeAssessmentExports(superSector: string, outputDir: string) {
           title: titleMap.get(patentId) || '',
           litScore: data.overall_litigation_score ?? '',
           strategy: data.assertion_strategy ?? '',
+          techCluster: patentMappings.techCluster.get(patentId) || '',
+          claimChain: patentMappings.claimChain.get(patentId) || '',
           targets,
+          targetProducts,
           notes: notesParts.join('; '),
         });
       }
@@ -581,9 +685,9 @@ async function writeAssessmentExports(superSector: string, outputDir: string) {
       // Ensure at least 5 target columns
       maxTargets = Math.max(maxTargets, 5);
 
-      // Build CSV
+      // Build vendor-targets.csv (wide format with TechCluster and ClaimChain)
       const targetHeaders = Array.from({ length: maxTargets }, (_, i) => `Target${i + 1}`);
-      const headers = ['PatentId', 'Title', 'LitScore', 'Strategy', ...targetHeaders, 'Notes'];
+      const headers = ['PatentId', 'Title', 'LitScore', 'Strategy', 'TechCluster', 'ClaimChain', ...targetHeaders, 'Notes'];
       const rows = [headers.join(',')];
 
       // Sort by litigation score descending
@@ -596,23 +700,48 @@ async function writeAssessmentExports(superSector: string, outputDir: string) {
           e.title,
           e.litScore,
           e.strategy,
+          e.techCluster,
+          e.claimChain,
           ...targetCells,
           e.notes,
         ]));
       }
 
       fs.writeFileSync(path.join(outputDir, 'vendor-targets.csv'), rows.join('\n'));
-      console.log(`  → vendor-targets.csv: ${entries.length} patents, ${maxTargets} target columns`);
+      console.log(`  → vendor-targets.csv: ${entries.length} patents, ${maxTargets} target columns (with TechCluster, ClaimChain)`);
+
+      // Build vendor-targets-pivot.csv (long format: one row per patent-target)
+      const pivotHeaders = ['PatentId', 'LitScore', 'Strategy', 'TechCluster', 'ClaimChain', 'Target', 'TargetProduct', 'TargetUrl'];
+      const pivotRows = [pivotHeaders.join(',')];
+
+      for (const e of entries) {
+        for (const target of e.targets) {
+          const targetProduct = e.targetProducts.get(target) || '';
+          const targetUrl = findCompanyWebsite(target, websiteMap);
+          pivotRows.push(csvRow([
+            `US${e.patentId}B2`,
+            e.litScore,
+            e.strategy,
+            e.techCluster,
+            e.claimChain,
+            target,
+            targetProduct,
+            targetUrl,
+          ]));
+        }
+      }
+
+      fs.writeFileSync(path.join(outputDir, 'vendor-targets-pivot.csv'), pivotRows.join('\n'));
+      const pivotCount = pivotRows.length - 1;
+      console.log(`  → vendor-targets-pivot.csv: ${pivotCount} rows (patent-target pairs)`);
     }
   }
 
-  const collectiveTemplate = tier1FA.promptTemplates.find(
-    (t: any) => t.executionMode === 'COLLECTIVE'
-  );
+  // Write collective strategy markdown (collectiveTemplate already loaded above)
   if (collectiveTemplate) {
-    const collectivePath = path.join(cacheBase, collectiveTemplate.id, '_collective.json');
-    if (fs.existsSync(collectivePath)) {
-      const result = JSON.parse(fs.readFileSync(collectivePath, 'utf-8'));
+    const collectivePathMd = path.join(cacheBase, collectiveTemplate.id, '_collective.json');
+    if (fs.existsSync(collectivePathMd)) {
+      const result = JSON.parse(fs.readFileSync(collectivePathMd, 'utf-8'));
       const content = result.rawText || result.response || JSON.stringify(result, null, 2);
       fs.writeFileSync(path.join(outputDir, 'collective-strategy.md'), content);
       console.log('  → collective-strategy.md');

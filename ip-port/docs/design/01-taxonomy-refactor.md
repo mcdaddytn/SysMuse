@@ -186,15 +186,77 @@ The new association table is populated alongside them:
 
 When we're confident the association table is correct and the system is stable, we can optionally stop maintaining the denormalized fields and read everything from the association table via join. But this is a Phase 4 optimization, not a near-term requirement.
 
-### Portfolio-Specific vs. Global Taxonomy
+### Taxonomy Scope: Named Taxonomies, Portfolio Groups, and Multi-Taxonomy
 
-The `SectorRule` model already supports `scope: PORTFOLIO` for portfolio-specific rule overrides. The design question is: do we need separate taxonomies per portfolio, or is one global taxonomy with portfolio-specific rule tweaks sufficient?
+The design is not a binary choice between "one global taxonomy" and "per-portfolio taxonomies." The system evolves through a spectrum of flexibility.
 
-**What the analysis will tell us:** The Portfolio Comparison module computes Jaccard similarity on CPC subclass sets between portfolios. If similarity is high (>0.6), one taxonomy works and portfolio-specific rules are occasional overrides. If low (<0.3), we may need portfolio-specific sub-sector definitions.
+**Level 0 (Current):** One unnamed taxonomy for everything. All portfolios share the same super-sector/sector/sub-sector structure. This is where we are today.
 
-**Current design position:** One global taxonomy with portfolio-specific rule overrides. Each portfolio has a "default taxonomy" setting (initially always the global one). In the future, a portfolio could have its own taxonomy that diverges from global — but this is a significant complexity increase deferred until analysis proves it's needed.
+**Level 1 (Near-term):** Named taxonomies. The current taxonomy becomes a named entity (e.g., "broadcom-tech-v1") rather than an implicit global. Each portfolio has a `defaultTaxonomyId` setting pointing to this named taxonomy. All portfolios still share it, but the naming makes the relationship explicit and opens the door for alternatives.
 
-**Named sub-sectors across portfolios:** An interesting possibility — sub-sectors could have the same names (like "displays") but different CPC rules per portfolio. This lets the concept of "displays technology" exist globally while the specific CPC mapping varies. The sector name is the semantic anchor; the rules are the implementation.
+**Level 2 (When needed):** Multiple named taxonomies coexist. When we import a company in a very different tech area (say, biotech), we create a new named taxonomy ("biotech-v1") with its own hierarchy tailored to that domain. The biotech portfolio and its competitors use "biotech-v1" while broadcom portfolios continue with "broadcom-tech-v1". This is tech-area-focused rather than portfolio-specific — taxonomies describe technology domains, not individual companies.
+
+**Level 3 (Portfolio groups):** Portfolios are organized into logical groups that share a taxonomy. Instead of global-vs-portfolio, we have: "semiconductor group" (broadcom, intel, qualcomm, mediatek) sharing one taxonomy, "cloud/networking group" (cisco, juniper) sharing another, with overlap allowed — a portfolio can appear in multiple groups. The group is the natural scope for competitive analysis and taxonomy management.
+
+**Level 4 (Multi-taxonomy per patent):** A single patent can be classified under multiple taxonomy types simultaneously. Beyond primary/secondary/tertiary associations within one taxonomy, a patent could have a "technology taxonomy" classification AND a "market segment taxonomy" classification independently. This is useful for evaluating candidate taxonomies against each other during refactoring — run both, compare scores, and decide which to keep.
+
+**Level 5 (Taxonomy evolution tools):** Features to merge, split, and compare taxonomies. If two portfolio groups have independently developed taxonomies with overlapping areas, a merge tool can identify shared CPC territory, propose a combined taxonomy, and simulate the reclassification impact before committing.
+
+```prisma
+// Schema addition for named taxonomies (Phase 3+)
+model TaxonomyDefinition {
+  id              String   @id @default(cuid())
+  name            String   @unique        // "broadcom-tech-v1", "biotech-v1"
+  displayName     String   @map("display_name")
+  description     String?
+  
+  // How many hierarchy levels does this taxonomy use?
+  depth           Int      @default(3)    // 3 = super-sector/sector/sub-sector
+  levelNames      String[] @default(["super-sector", "sector", "sub-sector"]) @map("level_names")
+  
+  // Scope
+  isGlobal        Boolean  @default(false) @map("is_global")
+  
+  version         Int      @default(1)
+  isActive        Boolean  @default(true) @map("is_active")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("taxonomy_definitions")
+}
+
+// Portfolio group for shared taxonomy scope
+model PortfolioGroup {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  displayName     String   @map("display_name")
+  description     String?
+  
+  // Default taxonomy for this group
+  defaultTaxonomyId String? @map("default_taxonomy_id")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("portfolio_groups")
+}
+
+model PortfolioGroupMembership {
+  id              String   @id @default(cuid())
+  portfolioId     String   @map("portfolio_id")
+  groupId         String   @map("group_id")
+  
+  @@unique([portfolioId, groupId])
+  @@map("portfolio_group_memberships")
+}
+```
+
+**Pragmatic path:** We implement Level 0→1 immediately (just naming the existing taxonomy and adding the `defaultTaxonomyId` field to Portfolio). Level 2 is triggered when we actually import a company outside the current taxonomy's domain. Level 3-5 are designed into the schema now but built only when needed. The `PatentTaxonomyAssociation` table already accommodates all levels by referencing the taxonomy's sector hierarchy — different taxonomies simply have different sector trees.
+
+**Named sub-sectors across taxonomies:** The same conceptual sub-sector (like "displays") can exist in multiple named taxonomies with different CPC rules. The sector name is the semantic anchor; the rules are the implementation that varies by taxonomy context. This is especially useful when two portfolio groups overlap in some technology areas but diverge in others.
+
+**What the analysis will tell us:** The Portfolio Comparison module computes Jaccard similarity on CPC subclass sets. High similarity (>0.6) means portfolios can share a taxonomy. Low similarity (<0.3) suggests they belong to different portfolio groups with different taxonomies. The discriminating CPC analysis identifies which technology areas drive the divergence.
 
 ### Taxonomy Depth
 
@@ -287,10 +349,16 @@ secondary_sector       → POSTGRES, patent_taxonomy_associations (rank=2, join 
 
 ### New Tables (Phase 3)
 - `PatentTaxonomyAssociation` — multi-classification join table (schema above)
+- `TaxonomyDefinition` — named taxonomy entities (Level 1 of scope spectrum)
+
+### New Tables (Phase 4+)
+- `PortfolioGroup` — logical groupings of portfolios sharing a taxonomy
+- `PortfolioGroupMembership` — many-to-many between portfolios and groups
 
 ### Modified Tables
 - `SuperSector` — add explicit CPC prefix rules (additive)
 - `Sector`, `SubSector` — add prefix code field for naming convention (additive)
+- `Portfolio` — add `defaultTaxonomyId` field (additive, nullable)
 - None destructively modified — denormalized fields kept for backward compatibility
 
 ### New Enum Values
@@ -309,6 +377,8 @@ secondary_sector       → POSTGRES, patent_taxonomy_associations (rank=2, join 
 - Create Claude Code taxonomy-analysis skill
 
 ### Phase 2 (After Analysis — Low Risk Additions)
+- Add `TaxonomyDefinition` table; seed current taxonomy as a named entity
+- Add `defaultTaxonomyId` to Portfolio (all portfolios point to the one taxonomy)
 - Add catch-all "General" categories at every level
 - Add prefix naming convention
 - Add explicit super-sector rules
@@ -322,10 +392,17 @@ secondary_sector       → POSTGRES, patent_taxonomy_associations (rank=2, join 
 - Update Patent Summary filtering to support primary/secondary/tertiary
 - Taxonomy Management GUI: view multi-classification, manage rules, preview refactoring
 
-### Phase 4 (Advanced — Higher Risk)
+### Phase 4 (Named Taxonomies & Portfolio Groups — Higher Risk)
+- `PortfolioGroup` and `PortfolioGroupMembership` tables
+- Support for creating a second named taxonomy (triggered by importing divergent tech-area portfolios)
+- Portfolio group management in admin UI
 - Score-driven refactoring: analyze LLM scores across associations
-- Portfolio-specific taxonomy variants
 - Deeper hierarchy support (4+ levels)
+
+### Phase 5 (Taxonomy Evolution — Advanced)
+- Multiple taxonomy types per patent (technology + market-segment)
+- Taxonomy comparison tools: classify under two taxonomies, compare scores
+- Taxonomy merge/split tools for combining portfolio-group taxonomies
 - Auto-refactoring suggestions based on CPC distribution analysis
 - Goal-seeking taxonomy optimization with LLM budget constraints
 
@@ -339,7 +416,11 @@ secondary_sector       → POSTGRES, patent_taxonomy_associations (rank=2, join 
 
 - **When does taxonomy refactoring invalidate scores?** Moving a patent from one sector to another invalidates sector-level LLM scores (questions are different). Portfolio-level scores are unaffected. The revAIQ convention handles this — sector version increments, patent's revAIQ shows it needs sector-level re-scoring.
 
-- **Portfolio-specific vs. global taxonomy?** Deferred to analysis results. Current design: one global taxonomy, portfolio-specific rule overrides. If Jaccard similarity between major portfolios is low, revisit.
+- **Portfolio-specific vs. global taxonomy?** Replaced by the named-taxonomy model (Level 0-5 spectrum). Near-term: name the existing taxonomy, add `defaultTaxonomyId` to Portfolio. Trigger for Level 2: importing a company whose tech area is clearly outside the current taxonomy. The Portfolio Comparison analysis reveals when divergence is sufficient to warrant a separate taxonomy.
+
+- **Portfolio groups — when to create?** When we have 3+ portfolios that clearly share a technology domain but differ from other portfolios in the system. The semiconductor group (broadcom, intel, qualcomm) is the natural first group. Competitive analysis and enrichment scope naturally at the group level.
+
+- **Multi-taxonomy per patent — when useful?** Two concrete use cases: (1) evaluating a candidate taxonomy against the current one during refactoring — classify patents under both, compare scores, decide which is better; (2) a technology taxonomy plus a market-segment taxonomy providing orthogonal views. Both are Phase 4+ capabilities.
 
 - **3rd party data (Patlytics etc.)?** Can import external classification data as `source: 'EXTERNAL'` associations. Useful for training the system and filling gaps where CPC rules alone are insufficient.
 

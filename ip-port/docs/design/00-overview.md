@@ -26,9 +26,11 @@ Concrete problems being solved:
 
 3. **Analysis before commitment**: Before refactoring taxonomy, scoring, or versioning, we build analysis services (see `taxonomy-analysis-service-detail.md`) that run against existing data to answer design questions with evidence. The analysis results inform which changes to make and in what order.
 
-4. **Pragmatic generalization**: Schema additions support the general case (multiple taxonomies, arbitrary score types, multiple entity types) while implementation targets current capabilities (one taxonomy, current score types, patents only). New Prisma models can describe the general structure; existing denormalized fields on the Patent model continue to serve the fast path.
+4. **Pragmatic generalization**: Schema additions support the general case (multiple named taxonomies, arbitrary score types, portfolio groups, multiple entity types) while implementation targets current capabilities. The taxonomy scope evolves through a spectrum: unnamed global → named taxonomy → multiple named taxonomies → portfolio groups → multi-taxonomy per patent → taxonomy evolution tools. We start at Level 0 and advance only when concrete need arises.
 
-5. **Claude Code as a first-class consumer**: Every new service exposes REST endpoints suitable for Claude Code skills. During refactor, Claude Code runs regression tests, taxonomy analysis, and scoring validation against live data.
+5. **Claude Code as a first-class consumer**: Every new service exposes REST endpoints suitable for Claude Code skills. During refactor, Claude Code runs regression tests, taxonomy analysis, and scoring validation against live data. Longer autonomous sessions — implementing a feature, testing against a reference instance, iterating on fixes — are a primary design goal (see `06-migration-plan.md`).
+
+6. **Parallel instances for safety**: A reference instance (second laptop or same-machine different ports) running a tagged release with a database snapshot provides ground truth for regression testing. Claude Code compares primary vs. reference query results to verify changes are safe. Frequent tagging ensures any state can be recreated. See `06-migration-plan.md` for the full parallel-instance architecture.
 
 ## Component Relationships
 
@@ -89,7 +91,7 @@ At each stage, scores from the previous stage drive enrichment decisions for the
 ## Implementation Roadmap
 
 ### Phase 1: Foundation (Current)
-Non-breaking additions to support analysis and future phases.
+Non-breaking additions to support analysis and future phases. Establish regression infrastructure.
 
 | Deliverable | Document | Risk |
 |-------------|----------|------|
@@ -98,7 +100,9 @@ Non-breaking additions to support analysis and future phases.
 | Taxonomy Analysis Service | `taxonomy-analysis-service-detail.md` | None — read-only |
 | LLM Currency Analysis Service | `hmda-v2-phase1-implementation.md` | None — read-only |
 | Materialized view (mv_patent_summary) | `hmda-v2-phase1-implementation.md` | Low — feature-flagged |
-| Claude Code data query skill | `06-migration-plan.md` | None — new skill |
+| Claude Code data query + regression skills | `06-migration-plan.md` | None — new skills |
+| Reference instance setup (second laptop or same-machine) | `06-migration-plan.md` | None — infrastructure |
+| Tag `v-pre-refactor` and `v-phase-1-complete` | `06-migration-plan.md` | None |
 
 ### Phase 2: Scoring & Snapshots Enhancement
 Generalize scoring, improve snapshots, add versioning groundwork.
@@ -108,33 +112,39 @@ Generalize scoring, improve snapshots, add versioning groundwork.
 | Formula definitions in DB | `02-scoring-framework.md` | Low — additive tables |
 | Weight profiles in DB | `02-scoring-framework.md` | Low — replaces JSON files |
 | Enhanced snapshot schema | `04-snapshots.md` | Medium — new tables, migration |
-| Snapshot normalization service | `04-snapshots.md` | Medium — new logic |
-| Question version tracking | `05-enrichment.md` | Low — additive tables |
+| Snapshot normalization service (Strategies 1-2) | `04-snapshots.md` | Medium — new logic |
+| Question version tracking tables | `05-enrichment.md` | Low — additive tables |
+| Named taxonomy entity (`TaxonomyDefinition`) | `01-taxonomy.md` | Low — additive |
 
-### Phase 3: Taxonomy Generalization
-Based on Phase 1 analysis results.
+### Phase 3: Taxonomy Multi-Classification
+Based on Phase 1 analysis results. Driven by what the data shows.
 
 | Deliverable | Document | Risk |
 |-------------|----------|------|
-| Multiple taxonomy associations | `01-taxonomy.md` | Medium — schema + migration |
-| Classification confidence scoring | `01-taxonomy.md` | Low — new service |
-| Taxonomy management GUI enhancements | `01-taxonomy.md` | Medium — UI changes |
-| Enrichment at any taxonomy level | `05-enrichment.md` | Medium — service changes |
+| `PatentTaxonomyAssociation` table + migration | `01-taxonomy.md` | Medium — schema + data migration |
+| Multi-classification algorithm (rank 1-3) | `01-taxonomy.md` | Medium — new service |
+| Classification confidence scoring | `01-taxonomy.md` | Low — analytical |
+| Catch-all General categories + prefix naming | `01-taxonomy.md` | Low — additive |
+| Enrichment with multi-classification question batching | `05-enrichment.md` | Medium — service changes |
+| Taxonomy Management GUI enhancements | `01-taxonomy.md` | Medium — UI changes |
 
-### Phase 4: Full Data Service Layer
-Replace scattered queries with unified access.
+### Phase 4: Data Service Layer + Named Taxonomies
+Replace scattered queries with unified access. Enable taxonomy scope evolution.
 
 | Deliverable | Document | Risk |
 |-------------|----------|------|
 | Storage Coordinator + adapters | `hmda-v2-architecture.md` | Medium — refactor |
 | Query Builder with execution planning | `hmda-v2-architecture.md` | Medium — refactor |
 | Swap existing routes to DataService | `hmda-v2-architecture.md` | Higher — behavior change |
+| Portfolio groups + group-scoped taxonomies | `01-taxonomy.md` | Medium — new feature |
 | Dynamic view generation from formulas | `hmda-v2-architecture.md` | Medium — new feature |
 
 ### Phase 5: Advanced Features
 | Deliverable | Document | Risk |
 |-------------|----------|------|
 | Goal-seeking enrichment loops | `05-enrichment.md` | Medium |
+| Multi-taxonomy per patent (comparison mode) | `01-taxonomy.md` | Medium |
+| Taxonomy merge/split/comparison tools | `01-taxonomy.md` | Medium |
 | Product entity support | Future design doc | Higher |
 | Contextual gravity (Focus Areas) | Future design doc | Medium |
 | Normative view manipulation | `02-scoring-framework.md` | Higher |

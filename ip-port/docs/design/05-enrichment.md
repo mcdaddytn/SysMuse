@@ -1,170 +1,212 @@
-# Data Enrichment & Auto-Calculation
+# 05 — Data Enrichment & Auto-Calculation
 
 ## Current State
 
-<!-- Describe current enrichment pipeline -->
-Enrichment is a nice feature with a lot of options to choose what we should spend resources on.  But versioning is not robust enough and we must be able to choose topN within whatever category to enrich but only enrich the ones that are not up to date (and the current binary rendition of this is not enought - we need versioning).
+Enrichment runs are scoped to portfolio or super-sector, selecting topN patents by current score (base score or V2) and running LLM structured questions on those that lack LLM data or are marked stale. Job tracking uses the `BatchJob` table with status, progress, model, and batch mode fields.
 
+Enrichment types: LLM scoring, prosecution history, IPR data, XML extraction, family expansion, citation classification.
+
+Current limitations: binary staleness (has_llm_data flag), fixed scoping (portfolio or super-sector only), no automatic snapshot creation after enrichment, no cost-aware budgeting.
 
 ## Problems with Current Approach
 
-<!-- What's not working? Limitations? -->
-When we run topN enrichment, we must consider which of the topN are already up to date and which need to be enriched - and reflect that in the numbers so we can see the scope and cost of the operation being proposed.  We currently have a notion of stale LLM data - a binary condition, but really we want a notion of whether LLM data is up to the version latest version available contextually, based on what is beign enriched.  So if within sectors.
+1. **Binary staleness**: `hasLlmData` and `isStale` don't capture which version of questions was run or which model was used. Adding a question invalidates everything, even if only one new metric is missing.
 
-Also we can expand enrichment beyond just portfolio level and super-sector level (which is a bit contrived anyway since tied to our one taxonomy currently in used - in the future more taxonomies are possible).  So what if we want to enrich just one sector and enhance LLM questions at sector or sub-sector level - this flexibility will help us be more aggresive about continuing to evolve our structured LLM questions and scoring without being afraid of invalidating data.
+2. **Fixed scoping**: Can only enrich "top N across portfolio" or "top N in super-sector." Cannot target a specific sector or sub-sector for iterative question development.
 
-Now we do not need to implement enrichment beyond current choices of by portfolio and by super-sector right away - but we should be evolving our system toward that capability - and these services and GUI should handle the general case - of making the proper filters, finding topN on current available scoring, and enriching to bring data to highest quality available.
+3. **No enrichment-scoring feedback loop**: Enrichment uses an existing score to pick topN, but that score may be stale relative to the questions being asked. The chicken-and-egg: we need scores to pick patents to enrich, but enrichment changes the scores.
 
-Now we have an interesting chicken and egg problem where a score we might use for enrichment is being updated by enrichment.  
+4. **No cost awareness**: The system doesn't estimate LLM costs before running, doesn't budget across enrichment campaigns, and doesn't factor in model cost differences.
 
-Lets say we are trying to find the best patents in the VIDEO super-sector using the v2 score (which is portfolio level LLM questions weighed through user intervention).  But we just added a few portfolio level questions which will affect the v2 score (and this is a real scenario because we added some new portfolio questions and have not re-run LLM questions or rescored).  One simple but costly solution is just rerun all patents through new questions - but in practice it is not only expensive but time consuming and even then not compreshensive because there area always patents with incomplete data (old patents, ones for which we had problems enriching data for any number of reasons), etc.  So our system has a number of facilities to handle this through evolving structured questions, flexibile scoring, scoring snapshots, and normalization.
+5. **Manual snapshot management**: After enrichment completes, the user must manually create and activate snapshots. No auto-snapshot to immediately leverage new data.
 
-So a tangible example of this - we just added new portfolio questions and we are interested in the VIDEO sector for portfolioA.  Assume we currently have scored this portfolio up to the top 5000 overall before, and 1200 of those happen to be in the VIDEO super-sector - so before changing portfolio questions, top 1000 of VIDEO would have been fully enriched.  So we capture a snapshot of scores of the top 5000 overall and push the scoring set as default so they can be used for ranking.
-
-But now we want to see the new questions and we are prioritizing VIDEO.  So we can select top 1000 under video super-sector and enrich them.  The system should know based on versioning, that current scores are out of date and can run on the top 1000.
-After that run we have top 1000 VIDEO patents with the new scoring and 200 with the old scoring (as well as the rest of the original 5000 in other super-sectors out of date with regard to LLM question versioning).  We are interested in how the top 1000 might be re-ranked with the new questions so we can bump the scoring weights up for the new questions and recalculate the scoring snapshot.  Now that snapshot should be aware (and this is a new feature - changed from old behavior).  The snapshot should be limited by the system to have all of the data (or at least this should be recommended and a warning if otherwise) that is up to date.  Once we have the new top 1000 snapshot of VIDEO, that is nice and we can analyze the new data.  But now we realize are questions are good (as opposed to we might want to iterate, change questions and run on top 1000 again to save time and money as we evolve questions).  But when we have decided the scores and data are good, we want to apply more widely.  Now we want to start with the most important patents to us which might still be VIDEO, but we have 200 with out of date scores.  One option would just be to enrich top 2000 VIDEO - but we do not have that many in video - so we may as well start enriching general sectors, maybe top 3000 overall (which might take care of missing 200 of video or many at least).  So either we can enrich top 3000 overall using a different measure (like base_score - but that would completely change the set of patents we are enriching), or we can expand our scoring snapshot for top 3000 (and this is where the new functionality comes in).  We would want to apply a normalization to the scores that do not have the new questions so they can be reranked so we can tell which are in the new top 3000 based on v2 score (a much more accurate score for our purposes than base score).
-
-So we can apply a normalization that is fair in that it will still keep the previously highly ranked video patents high - while ranking old patents roughly how they were (but without the nuance of the new questions).  So we might add a small weight to the new questions and apply a normalization expanding the pure snapshot of top 1000 VIDEO (which is all consistent to version) to a new top 3000 overall snapshot that has mixed versions.  The normalization might take into consideration the average values of the new questions - but instead of assigning the average to all the patents missing the score - it might be normalized down by the relative previous v2 score of those patents relative to the average previous v2 score of all the patents in the top 1000 VIDEO snapshot - so the rankings remain relatively stable for the rest of the top 3000 that we now want to update with new LLM questions.  
-
-Then we can run new questions on the top 3000, rescore, create a new snapshot and push it and everything is up to date.  That would be a reaonable workflow to try and incrementally enrich patents with LLM data as we evolve questions.  And this sequence  could be done automatically in a loop (run new questions on small snapshot, normalize within larger snapshot, reenrich until some goal has been reached, top N are up to date for a given super-sector, overall, etc.).  We can work towards this type of iterative loop that can better evaluate evolving scoring and evolving questions to enrich better candidates and use our budget more prudently.
-
-This auto-looping feature can be a future enhancement, but we want to build our snapshots to be aware of versions and when we have mixed snapshots with normalization we want to do it consciously for the purposes of having working scores that help further enrichment.  We want to be able to do it manually before automatically and build our snapshotting and normalization for this purpose - I am afraid of just normalizing scores within snapshots and artifically boosting patents that should not be because we are unaware of the implications and mechanics of the normalization.  So we should simplify the normalization and implement pragmatic algorithims based on previous snapshot data, aggregates of data from different scoring versions with the goal of only reranking patents substantially when we have new information - but allowing potential good patents to bubble up to get the enrichment needed so they can differentiate themselves.
-
-When we have this working well, we can apply all the way down through taxonomies so we can actively change questions at lowest levels and rerun without worrying too much about how reruns will affect other areas of the portfolio.  If substantial changes are made only at sector and below levels - we can concentrate reruns there - and thus improve portfolio across the breadth of the taxonomy - improving scoring and questions at lower levels.  Only when question changes bubble up to portfolio and higher taxonomical levels like super-sector do we need larger reruns to get all up to date - but that can happen when we are satisfied questions are stable for awhile at that level.
-
-
-This is a complicated set of steps so we want to have enrichment handle this.
-
-**
-Perhaps enrichment can use scoring snapshots without pushing them as default.  Instead of just selecting the score an using current - can use different scoring snapshots
-
-We might want a best of auto-snapshot feature to be created to do the best snapshot at any level based on the latest data - we can have system suggest best settings.  Also we can auto-create snapshots after enrichment that update and then do desired normalization as first step to iterative versions of this (maybe have iteration up to N times part of enrichment, and shoot for smaller goals first, redo it with tolerances, leaving space for bubble ups from normalization)  In other words, patents in the top N that score worse with new questions can dip below other patents to get new questions answered
-**
-
-So our scoring/reranking/snapshot/enrichment should
-- incorporate new data and within the up to date snapshot, lets the new stars rise, and previously highly ranked fall a bit
-- let the normalization let the best of the previous (which should be close to same relative ranking as before) rise about patents that fell out of the topN with new data - so they get a chance to rise legitimately with new data included
-
-When we select a snapshot size that is larger than consistently scored group, a popup should show previous scores and the normalization actions that will happen.  We might want to test normalization and make sure it creates an effective mix of new and old - we can do a test normalization or a goal seek to interchange some number of old and new.
-
-In terms of current changes that have been made and not tested, we made some enhancements to normalization.  I am afraid we might have focused too much on adding a few mathematical variations, rather than the practical implications of normalization - it will lower some patents' rankings and raise others for the purposes of further enrichment during the critical enrichment pipeline which is meant to allocate attention on deserving patents, bubbling up good ones, and bubbling down less promising ones.  Perhaps rather than focusing on different mathematical variants, we can use simple techniques that use old score snapshots to achieve this.  We might event let the user specify a desired overlap or bubble-up range during a snapshot normalization - to ensure an overlap happens so that some patents that have already been enriched to the latest version move down in rankings and some move up in rankings - so that they can get the latest data and be more fairly scored subsequently.  If we do this in a iterative goal-seeking enrichment (with parameters to control the overlap, max number of iterations, max budget - or LLM enrichment operations), this might be much better than 
-
-And we might have automatic snapshot creation that uses common sense techniques - or at least smart defaults when we choose to create new scoring snapshots manually - so that patents with LLM questions behind the most current, get mixed in fairly.
-
-Lets explore this design a bit to come up with something practical and useful - this is some of the most important stuff to improve currently.  We are in a difficult position of having spent a lot of time and money on LLM enrichment with the desire to continue to improve it - but we must have a robust way to incrementally improve.
-
-And we should generalize enrichment beyond just super-sector to run at other taxonomical levels - like scoring, taxonomy, etc. we should generalize what was previously artificially constrained to portfolio and super-sector level scores - we are essentially changing this to use any scoring snapshots available at a given level.  So if we want to enrich a sub-sector or sector iteratviely and improve questions, we might use sector specific scoring (that incorporates the latest questions being iterated) to thus give us a method to evolve the structured LLM questions and related scoring.
-
-And as we add other data types to the systems (products, etc.) we might have similar enrichment pipelines involving different data sources relevant to those entities.  This is for future development - but we should consider in our schema, service, and GUI design that we want these services and components reusable.
-
-
-***
-left off here
-***
-
-
-## Proposed Changes
-
-### Enrichment Pipeline
-
-<!-- Overall data enrichment flow -->
+## Enrichment Pipeline
 
 ```
-Raw Patent Data
-    → Basic Enrichment (XML parsing, CPC codes)
-    → Citation Enrichment (forward/backward citations)
-    → Competitor Enrichment (competitor citations, density)
-    → LLM Enrichment (structured question scoring)
-    → Score Calculation (weighted composite scores)
-    → Snapshot Creation
+Select Score for Ranking
+  │  (base_score, portfolio score, or snapshot)
+  ▼
+Select Scope
+  │  (portfolio, super-sector, sector, sub-sector)
+  ▼
+Select TopN
+  │  (how many patents to target)
+  ▼
+Currency Check (revAIQ comparison)
+  │  → How many of topN need enrichment?
+  │  → Which specific questions are missing?
+  │  → Estimated cost (tokens × price)
+  ▼
+User Confirms Scope & Budget
+  ▼
+Execute Enrichment Jobs
+  │  → Batch LLM calls with all relevant questions per patent
+  │  → Track progress in BatchJob table
+  │  → Record model and question versions
+  ▼
+Post-Enrichment Auto-Snapshot (optional)
+  │  → Create fresh snapshot of enriched patents
+  │  → Offer merge with broader active snapshot
+  ▼
+Scoring & Ranking Available
 ```
 
-### Auto-Calculation
+## Version-Aware Enrichment
 
-<!-- What gets calculated automatically and when -->
+### Using revAIQ for Enrichment Planning
 
-We can have auto-calculation of snapshots after enrichment as an option (and we might do this in a loop with a goal seeking enrichment algorithm).  Since we know what has been enriched, we can certainly rescore based on current weights v2, v3, taxonomy level scores, etc. as appropriate and allow the user to select but also set good defaults based on context.
+The Currency Service (see `hmda-v2-architecture.md`, Section 6) replaces binary staleness with precise version tracking. When the user requests "enrich top 500 in VIDEO":
 
-We may also which to reset snapshots after the user changes weights - those are the two major times where we want to recalculate scoring and snapshots - 1) after users change weights either in basic scoring (what is now v2 - slider based), or consensus scoring (what is now v3), and 2) LLM enrichment (or other enrichment that fills metrics used for scoring - right now after basic patents view import, this is only LLM enrichment that creates new parameters for scoring).  Another exception might be when we import new competitors we might recalculate base scores, but generally we do this at the beginning before importing patents.  So we want options to auto-calculate scores and snapshots after enrichment.  Possibly after importing new competitors and/or affiliates if it affected scores - we might want option to auto-recalculate those.  We may need to add base score to the snapshot capability, not sure if that is in place - in order to implement auto-recalc of that score.
+1. Get latest revAIQ for VIDEO's taxonomy path (e.g., "3.2.1.4")
+2. For each patent in the topN (ranked by selected score):
+   - Check patent's current revAIQ
+   - Compute gap: which levels need updating?
+3. Present to user: "Of top 500 VIDEO patents, 320 are current, 180 need portfolio questions v3, 45 need sector questions v1"
+4. Estimate cost based on questions needed per patent × model pricing
+5. User confirms; only out-of-date patents are enriched
 
-But then when the user is recalculating with sliders - we might want some options on how to create wider snapshots that combine data with different LLM question revisions, using a few different normalization options including the goal seek/overlap method - and the ability to select the top N within whatever score used for ranking (base, portfolio (v2 or v3), or taxonomy based scoring where appropriate - note this will affect scores that are only usable within the taxonomical subsets for now - later we might renormalize taxonomy scores across the portfolio to be used more widely).  
+This avoids re-running LLM questions on patents that already have current data, saving significant cost.
 
-So in one sense the user is initiating re-calc and pushing of snapshots after changing weights - but we have some auto-recalc features to help them fill out the snapshots across heterogeneous versions of scoring parameters.
+### The Chicken-and-Egg Solution
 
+The enrichment-scoring feedback loop is resolved through snapshot-based ranking:
 
-### Auto-Normalization
+**Scenario**: New portfolio questions added. We want to enrich VIDEO sector patents.
 
-<!-- When normalization is applied automatically -->
-The current understanding from our last session (which produced changes we have not yet tested) is much different than what is presented here.  We should simplify the math options implemented in favor of simple math utilizing aggregate snapshots taking before the auto-normalization and then using simple methods to create the bubble overlap we want - of just to apply averages on new or changed LLM metrics that are newly present since last calculation, to have reasonable defaults used for when non zero weights are assigned to new or changed questions.  The user will need help guiding through this process and can select how large the snapshot should be (top N or which type of score ) and basic parameters to help preserve what was learned in previous scoring and ranking while allowing new data to influence the ranking, but not dominate the scoring on patents for which the data does not exist yet - that is the focus of our normalization efforts.
+1. **Start with existing snapshot** as ranking basis (this is stale but usable)
+2. **Enrich top 1000 VIDEO** with new questions → creates fresh snapshot of 1000
+3. **Score the fresh 1000** using current formula with new question weights
+4. **Merge with broader snapshot** (Strategy 2 from `04-snapshots.md`):
+   - Fresh 1000 VIDEO patents get their actual new scores
+   - Remaining 200 VIDEO patents get aggregate-preserving estimates
+   - Other super-sectors maintain their previous relative positions
+5. **Activate merged snapshot** → now the system has reasonable rankings everywhere, with high-quality scores for the area we care about
+6. **Repeat if needed**: enrich next batch using the merged snapshot for ranking
 
+The key insight: we always have a "good enough" snapshot for ranking purposes. Fresh data goes into it as it arrives, and normalization fills gaps for patents we haven't reached yet.
 
-### TopN Rerun Goals
+### Enrichment at Any Taxonomy Level
 
-<!-- How the system ensures top patents have fresh LLM data -->
-This is discussed above.
+The system should support enrichment scoped to any level:
 
-### Batch Job Management
+| Scope | Use Case | Available Questions |
+|-------|----------|-------------------|
+| Portfolio-wide | Initial enrichment, broad rescoring | Portfolio questions only |
+| Super-sector | Technology area focus | Portfolio + super-sector questions |
+| Sector | Detailed sector analysis | Portfolio + super-sector + sector questions |
+| Sub-sector | Fine-grained question iteration | All inherited questions |
 
-<!-- How enrichment jobs are queued, tracked, resumed -->
-What we have in place is reasonable I think , but will be enhanced by our snapshot, normalization improvements and the ability to be more generic in our enrichment (not limited to portfolio and super-sector).  Initial implementations can keep the options we have now (we do not need to add enrichmnt down to sector/sub-sector initially or allow other taxonomies - but this should be figured into our design to have more flexibility when we do want to handle this.
+For initial implementation, we keep the current options (portfolio and super-sector). Sector and sub-sector scoping is added when the taxonomy generalization (Phase 3) is complete.
 
-### Staleness Handling
-<!-- What triggers re-enrichment -->
-We have discussed a revAIQ (revision of AI questions) type field rather than staleness boolean, tracking what version of questions a patent is up to date with relating to one taxonomy (if the patent has primary, secondary, tertiary taxonomical classficiations - which won't be implemented immediately but coming soon) the system needs to track version that has been run previously so we know what to rerun when requested.  The user will trigger re-enrichment, but the system figures out which in the topN will be prioritized and how that topN is calculated through the enhanecments suggested in these documents.
+## Auto-Calculation & Auto-Snapshot
 
-We will also need to record model used - this can also be used to determine latest if data is at maximal quality.  We might have multiple factors considered in our revisions including model, version within portfolio and any taxonomy factors (which taxonomy and what version of questions).  For multiple taxonomy associations, this becomes more complicated and we will often need to figure out per patent what the 'staleness' state is or what is needed to bring to maximal quality.  The patents can be grouped in snapshot subsets always where we are up to date in many factors.
+### Triggers for Auto-Calculation
 
-***
-Question on whether we really want version down to individual sub-sector, different Qs combinations with their own versions.  Or we can have a version across the whole portfolio - take a snapshot of all sub-sector questions as of that time.
+| Event | Action |
+|-------|--------|
+| LLM enrichment completes | Auto-snapshot enriched patents; offer merge with active snapshot |
+| User changes weights | Recalculate using active snapshot's patent set; offer to save new snapshot |
+| Competitor import changes | Recalculate base scores (citation analysis affected); offer snapshot refresh |
+| Taxonomy refactoring | Mark affected patents as stale at appropriate revAIQ level |
 
-Perhaps the way to do this, is whenever we modify any sector or sub-sector, we increment the version across the whole portfolio but at that level (for example sub-sector level).  Then we can change and refactor other sub-sectors, we just know when the last calculation was done, not necessarily which sub-sectors have been updated.  We can edit many sub-sectors and rerun them in current version, just at some point, we need to lock down current version so we increment again (maybe when we do more than one change to a given sub-sector in combination with other ones.
+### Auto-Snapshot Settings
 
-***
+Configurable per-portfolio (or global):
+- **After enrichment**: Always / Ask / Never
+- **After weight change**: Always / Ask / Never
+- **Merge method**: Zero-weight infill (safest) / Aggregate-preserving / Ask each time
+- **Auto-activate**: Never (always ask the user before activating)
 
-*** LEFT OFF HERE ***
+## Multiple Taxonomy Association Impact
 
-**
-Need to figure out how to handle versioning across multiple updates of taxonomy and also model combinations.
+When a patent has multiple taxonomy associations (Phase 3), enrichment batches all questions from all classification paths:
 
-Maybe sub-sectors can have old versions and just increment when they actually change, so many will appear stale - only ones that have been changed more recently will have newer versions - but when an old one changes, it can either be incremented at that level of come up to the latest.
+```
+Patent X: primary=video-codec, secondary=wireless-transmission
 
-Any given overall version
+LLM question batch for Patent X:
+  ├── Portfolio questions (6)
+  ├── VIDEO_STREAMING super-sector questions (2)
+  ├── video-codec sector questions (3)
+  ├── WIRELESS super-sector questions (2)     ← from secondary classification
+  └── wireless-transmission sector questions (2) ← from secondary classification
+  Total: 15 questions in one LLM call
+```
 
-portfolio.super-sector.sector.sub-sector 
+This maximizes the value of each LLM call (base context is the same regardless of question count) and ensures all taxonomy paths have current data.
 
-can be recorded at each taxonomic level where the last Qs run came from and any given update will have questions changed just sparsely at different levels.
+The revAIQ tracking handles this naturally: each taxonomy path has its own version string, and the currency check evaluates each path independently.
 
-It is imperative then that we have one taxonomy type per portfolio to only have one version.
+## Cost Management
 
-Maybe we just decide when to freeze a version, and before we do that - if we do not freeze and we change it - we invalidate existing scores - or we need to recalculate and determine what is stale.
+### Estimation Before Enrichment
 
-Maybe we can use dates modified along with revAIQ to help short this out.  We can set in patent associated table containing scores, updated date and version.  If the version itself mod date does not match mod date in patents, we need to invalidate or determine what changed and if it affects patent.
+Before confirming an enrichment run, the system shows:
 
-Or maybe at the end of dot notation version with portfolio and taxonomy, we have an extra minor revisions (could be a letter), for changes along the way.
+- Number of patents needing enrichment (based on revAIQ gaps)
+- Average tokens per patent (from `LlmResponseCache` historical data)
+- Estimated total tokens and cost at selected model's pricing
+- Comparison: cost with cheaper model vs. better model
 
-When we do sector/sub-sector expansion we may go through a few refactors, but it will not affect other sectors if they have not been modified (although might if we need to renormalize based on values in other sectors).
+### Budget Controls (Future)
 
+- Per-enrichment-run budget cap
+- Per-portfolio monthly budget
+- Auto-downgrade to cheaper model when budget is tight
+- Rate limiting to stay within API throttles
 
+## Batch Job Management
 
-**
+Current job tracking via `BatchJob` is adequate. Enhancements:
 
+- **Group awareness**: Jobs in the same enrichment campaign share a `groupId`
+- **Concurrency limits**: System-level setting for max concurrent LLM jobs (respecting API throttling)
+- **Resume on failure**: Failed jobs can be retried without re-processing already-completed patents
+- **Post-job hooks**: Configurable actions after job completion (auto-snapshot, notification, next-job trigger)
 
+## Iterative Goal-Seeking Enrichment (Phase 5)
+
+An advanced enrichment mode that automatically iterates to improve topN quality:
+
+```
+Parameters:
+  - target: top 500 VIDEO patents
+  - overlap: 50 (how many to evaluate from below the boundary)
+  - maxIterations: 3
+  - budgetCap: 200 LLM calls per iteration
+
+Loop:
+  1. Enrich top 500 VIDEO with current questions
+  2. Score and rank all 500
+  3. Enrich next 50 below the boundary (patents 501-550)
+  4. Score all 550
+  5. Did any from 501-550 score higher than any in 500? If yes:
+     - Swap in the higher-scoring patents
+     - Update the boundary
+     - Repeat from step 3
+  6. Stop when no swaps occur or iteration limit reached
+```
+
+This is the automated version of the manual process described above. It requires all foundational pieces (revAIQ tracking, auto-snapshot, merge normalization) to be working first.
 
 ## Data Model Changes
 
-<!-- Schema changes needed -->
+### Phase 1 (Analysis Only — No Schema Changes)
+- LLM Currency Analysis Service queries existing fields
+- No new tables needed
 
-```prisma
-// Example schema changes
-```
+### Phase 2 (Version Tracking)
+- `QuestionVersion` table: current version at each taxonomy level
+- `PatentQuestionCurrency` table: per-patent revAIQ tracking
+- Enhanced `BatchJob` with post-completion hooks
 
-## Job Types
+### Phase 3 (Taxonomy-Level Enrichment)
+- Enrichment scoping expanded beyond portfolio/super-sector
+- Multi-taxonomy-association question batching
 
-<!-- Different enrichment job types -->
-In the future we will have enrichment jobs for sector, sub-sector, also for secondary and tertiary classifications (and more possible) - these will all be combined into the LLM questions asked for each patent (batch together all possible questioned needed for all taxonomical associations in one shot).  Also, we will have other types of taxonomies and very flexible association with patents and other objects in the future.  With all that said, we will keep what we have now for initial implementation, but design towards ultimate flexibility in this area.
+## Open Questions
 
-
-## Priority & Scheduling
-<!-- How jobs are prioritized -->
-We may want to look at concurrency of jobs like LLM enrichment and others where there is a throttling limit.  Currently we can queue jobs and set some limits - but really the system should have a notion (and perhaps this is within admin settings) of the upper throttling limits imposed by the apis we use or self-imposed for cost control (like with LLM jobs).  While we can queue many jobs, our system should manage the limits to make sure they work within throttling constraints.  We can do a bit of design iteration on this and keep it simple to start, but the system needs improvement in this area.
-
+- **Enrichment priority across super-sectors**: When doing portfolio-wide enrichment, should patents in already-well-enriched super-sectors be deprioritized? Or always use the selected score for ranking regardless of enrichment coverage?
+- **Partial question runs**: If a patent needs 15 questions but only 3 are new, should we re-run all 15 or just the new 3? Re-running all provides consistency (same model, same context) but costs more. Running only new questions saves cost but may produce inconsistent reasoning.
+- **Model downgrade strategy**: When to use Haiku vs. Sonnet vs. Opus? Initial data gathering with cheaper models, then upgrade topN to better models? The model comparison analysis will inform this.
+- **LLM question batch size limits**: At what point does combining too many questions in one LLM call degrade answer quality? Empirical testing needed.

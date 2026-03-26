@@ -1,83 +1,186 @@
-# Generalized Weighted Scoring Framework
+# 02 — Generalized Weighted Scoring Framework
 
 ## Current State
 
-<!-- Describe current v2-enhanced scoring approach -->
+The system has three score types: **base score** (quantitative metrics only, system-wide), **V2 enhanced score** (portfolio-level, weighted formula across quantitative + LLM metrics with user-controllable sliders), and **V3 consensus score** (multi-profile weighted average of V2 scores).
 
-We might want to rename v2 scoring and v3 scoring, to "User Scoring" and "Consensus Scoring" or "Team Scoring"
-And then we will have levels including portfolio, and taxonomical levels (currently super-sector, sector, sub-sector), but more levels and different named taxonomies might be available moving forward.
+Current V2 formula: `score = Σ(normalize(metric_i) × weight_i) × year_multiplier × 100`
 
-Note we need to have generalied views of these scores within the Sectors page (which should be renamed to Taxonomy Scores or Taxonomy Ranking).
+Normalization functions: `min(1, cc/20)` for citations, `min(1, sqrt(adj_fc)/30)` for adjusted citations, `min(1, years/15)` for remaining years, `(score-1)/4` for LLM 1-5 scales.
 
-We wish our scoring formulas to be more flexible, beyond weighted additive formulas, we want to have subterms, multiplicative factors and more options beyond linear, sqrt, log, etc.  We can introduce constants like offsets, multipliers, divisors, exponents, etc. to individual metrics (numeric fields returned by LLM questions or calculated simply from uspto or other data), to add more flexibility.  For example, instead of sqrt as one curve on a metric, we might change to n-root and have n be > 1.0 and <=4.0 or some range so that we can have square root, cube root, or other reasonable variations.  The same with log (can have base 10, natural log, etc.).  Whatever scoring formulas allowed, we still want user control limited (once formulas for a given score are established - which is an admin function) to sliders affecting weights - so the user has a simple mechanism to affect rankings.  We will continue to use consensus scoring as well (where multiple users can affect weights and vote collectively on ranking), and also allow normative view manipulation in the future (where user can just change the rankign directly and from there we can change the weight sliders and identify error if that is not sufficient to rank as the user desires in the manually set normative view - and this might trigger restructuring of formulas, introduction of new metrics, or further negotiation between users to agree on a result.
-
-The current scoring has a base score - which is a portfolio or actually system wide score (we can decide whether to vary at portfolio level) to prioritize and rank patents based on minimal and free information from uspto apis, etc.
-
-The formula can change (more below) in advanced versions, but OK for now
-
-v2 score - really if portfolio level score
-v3 score - is consensus score of v2, theoretically can have super-sector, sector, and sub-sector consensus scores also - or any further taxonomical scores we design, there can be user scores (single user weights), or consensus scoring (multiple user weights with profiles).
-
-
-When we add new structured questions to any level - and there are initially no weights for these (since user set weights based on previous questions), we can start with 0 weights for new questions.  If we make them non-zero, we will need to perform some type of normalization to mix snapshots - this is discussed in other areas of these docs.
-
-
+Weight presets are stored in `config/user-weight-profiles.json`. Scoring templates for LLM questions live in `config/scoring-templates/`.
 
 ## Problems with Current Approach
 
-The system works reasonably well but mostly has issues when we wish to get more detail about patents through additional structured LLM questions.  When that happens, it can cause a number of issues
-- current scoring formulas do not consider new metrics returned by LLM questions
-- typically new questions apply to taxonomical levels (e.g., sector) rather than portfolio wide, and we need scoring to be more flexible to apply at different levels (globally, portfolio level, or any taxonomical level, currently super-sector, sector, or sub-sector)
-- running new LLM jobs will often invalidate old scores if questions are added or changed, and our system does not track versioning sufficiently to handle this gracefully.
+1. **V2/V3 naming obscures the real pattern**: V2 is portfolio-level scoring with user weights. V3 is consensus scoring of V2. The same slider+weight paradigm could apply at any taxonomy level but is hardcoded to portfolio scope.
+2. **Fixed normalization functions**: Each metric has a hardcoded normalization. No way to experiment with nth-root vs. log vs. sigmoid without code changes.
+3. **No grouped terms**: All metrics are in one flat weighted sum. No way to group citation metrics, group LLM metrics, or set an overall weight for "portfolio questions" vs. "sector questions."
+4. **New LLM questions break scoring**: Adding a question means adding a new metric with no weight — the user must manually assign weights and existing snapshots become stale.
+5. **Formulas live in code, not data**: The scoring formula is implemented in TypeScript, not stored as a configurable structure.
 
+## Proposed Changes — Naming
 
-## Proposed Changes
+| Current Name | New Name | Scope |
+|-------------|----------|-------|
+| Base Score | Base Score (unchanged) | System-wide |
+| V2 Score | Portfolio Score (or User Score) | Per-portfolio |
+| V3 Score | Consensus Score | Any score type |
+| (new) | Taxonomy Score | Per super-sector, sector, or sub-sector |
 
-We make scoring a more general service and GUI that can apply to different levels (portfolio, super-sector, sector, sub-sector for now - but the notion of taxonomy will also be expanded).  Our current "v2" scores are really portfolio level scores - but we can apply the same scoring paradigm (using LLM questions to establish metrics that can be input to formulas with weights that can be manipulated by the user).  We should have the GUI and service around scoring be able to apply to any type of score in the system that uses this paradigm.
+The scoring GUI becomes a general page that can compute and display any score type. The page adapts its available metrics and sliders based on the selected scope.
 
-In the future, we will allow much more flexibile scoring formulas beyond simple weighted coefficients controlled by user multiplied to a LLM or other type of generated metric.  We might have multiplicative factors, subterms, offsets, variable exponents, etc.  We do not need to implement this right away - and we want to maintain current compatibility, but as we are redesigning, we should keep future design in mind.
+## Formula Engine (HMDA v2)
 
+Formulas are stored as structured data in the `FormulaDefinition` table (see `hmda-v2-architecture.md`, Section 4). Key design elements:
+
+### Formula Structure
+
+A formula is a tree of terms producing a single numeric value:
+
+```
+FormulaStructure
+  ├── terms: FormulaTerm[]
+  │   ├── MetricTerm      — attribute × weight × scaling
+  │   ├── GroupTerm        — sub-expression with group weight
+  │   └── ConstantTerm     — fixed value × weight
+  ├── multipliers          — applied after summation (e.g., year_multiplier)
+  └── outputScale          — e.g., 100 for 0-100 range
+```
 
 ### Metric Types
 
-<!-- Different types of metrics: quantitative, LLM-derived, computed -->
-Yes - we have quantitative (e.g., number of citations), LLM-derived (e.g., design around difficulty), computed (e.g. competitor citations - takes into consideration number of competitiors and number of citations, also another type would be v2 score itself as that is a weighted formula on metrics).  In the future we may have subterms (which could be defined as intermediate metrics or computed metrics dependent on others).  So we may want to consider that now in the redesign, although we will be maintaining current functionality for the initial refactor in this area (although we will be immediately enhancing scoring snapshots and normalization).
+| Type | Source | Examples | Registry Category |
+|------|--------|----------|-------------------|
+| Quantitative | USPTO/PatentsView APIs | forward_citations, remaining_years | CORE, ENRICHMENT |
+| LLM-derived | Structured question responses | eligibility_score, claim_breadth | LLM_METRIC |
+| Computed | Derived from other fields | competitor_density, adjusted_fc | COMPUTED |
+| Intermediate | Output of a sub-formula | citation_group_score | COMPUTED (depends on others) |
 
+All metrics are registered in the Attribute Registry with their storage location, data type, and range constraints.
+
+### Scaling Functions
+
+Current: hardcoded `linear`, `sqrt`. Proposed configurable options:
+
+| Function | Parameters | Use Case |
+|----------|-----------|----------|
+| linear | min, max | Simple normalization to 0-1 |
+| nroot | n (1.0-4.0), max | Diminishing returns: sqrt (n=2), cube root (n=3) |
+| log | base (e, 10, 2), max | Heavy diminishing returns for high-range metrics |
+| sigmoid | midpoint, steepness | S-curve for binary-ish scoring |
+| step | thresholds[], values[] | Discrete bucketing |
+| raw | (none) | No transformation |
+
+Each metric in a formula term specifies its scaling function and parameters. The parameters are admin-controlled constants, not user-adjustable.
+
+### Grouped Terms
+
+Grouped terms allow hierarchical formula organization:
+
+```
+Overall Score = 
+  0.50 × [Portfolio Questions Group]
+    0.25 × normalize(eligibility_score)
+    0.25 × normalize(validity_score)
+    0.25 × normalize(claim_breadth)
+    0.25 × normalize(enforcement_clarity)
+  + 0.20 × [Citation Group]
+    0.60 × normalize(competitor_citations)
+    0.40 × normalize(adjusted_forward_citations)
+  + 0.20 × [Sector Questions Group]
+    (sector-specific LLM metrics)
+  + 0.10 × [Lifecycle]
+    1.00 × normalize(remaining_years)
+  × year_multiplier
+  × 100
+```
+
+Users control weights at two levels: group-level weights (what fraction of the score comes from each group) and within-group weights (relative importance of metrics within a group). This separation makes normalization across taxonomy levels cleaner — changing sector questions only affects the sector group weight, not the entire formula.
 
 ### Weight Profiles
 
-<!-- How weights are defined, scoped, applied -->
-Weights might be expanded in the future to be more flexibily applied within more general formulas rather than being constrained to be a coefficient of a simple metric.  We have weights at "v2" level which are really just portfolio level scores - but we might also have super-sector, sector, sub-sector scores using the same types of weights (although more will be available since more questions at those levels returning metrics).  The same paradigm could apply and we could use the same GUI and services to implement scores at any level using the weight profiles and the slider GUI paradigm.  The "v2 score" notion is a bit of a misnomer - we can keep the name for initial refactor, but really that is a portfolio level score, and we might apply the same GUI to other scores and rename the page for general scoring (and v3 scoring really just means consensus scoring added to another score - in this case v2 or the portfolio score).
+```prisma
+// From hmda-v2-architecture.md
+model WeightProfile {
+  id              String   @id @default(cuid())
+  formulaDefId    String   @map("formula_def_id")
+  name            String                  // "executive", "litigation", "default"
+  displayName     String   @map("display_name")
+  userId          String?  @map("user_id")
+  weights         Json                    // Record<string, number>
+  consensusWeight Float?   @map("consensus_weight")
+  isDefault       Boolean  @default(false)
+  
+  @@unique([formulaDefId, name])
+}
+```
 
+Weight profiles replace `config/user-weight-profiles.json`. Each profile stores a complete set of weight values keyed by the `weightKey` in the formula's metric/group terms. Multiple users can have their own profiles for the same formula.
 
-### Scoring Algorithm
+### Adding New Metrics
 
-<!-- The general formula/approach for computing scores -->
-For now, we will keep the same type of formulas but in the future we may add a number of new options to how weights are applied, the types of metrics and scaling (can expand from linear, sqrt, etc. to general n-root with n being supplied as a constant parameter for the metric, an additive offset where appropriate, etc.) - we will be designing a more general formula management system where we have a mixture of parameterized weights that can be controlled by sliders (or other types of controls if appropriate) mixed with the metrics returned in various ways and constants tied to the metrics that can only be modified in an administrative sense (not controlled normally by user - but may be changed occasionally to affect the formulas by a system admin).
+When a new structured question is added to a scoring template:
 
-We might also evolve to have grouped terms of weights combined with metrics from LLM questions or other system metrics.  The grouped terms can have overall coefficients - this might make normalization much easier.  For example, for a multi-level hierarchy, we can have some portion of the overall score from the sub-sector level vs. the sector level.  If we had grouped terms for portfolio questions, super-sector, sector, then sub-sector - it would be easier to set overall weights of each sets of questions and create an overall score (for example, we might weight all portfolio questions at .5, super-sector at .2, sector at .1, sub-sector at .1 - and within each term have the specific structured questions at that level).  Then we could easily set the weights of portfolio vs. super-sector and others and separately within groups set relative weights of each questions.  This is only one such use of grouped terms.  Another use might be to get a good represenation of citation weights since that might involve competitive vs. non-competitive citations, etc. - and it might make sense to have it all within a single term that can be weighed by the user.  So evolving towards grouped terms as part of our calcs (i.e., adding parenthesis to the formulas) will have many uses.
+1. The `syncTemplateAttributes` function (see `hmda-v2-phase1-implementation.md`) registers the new metric in the Attribute Registry
+2. Existing formula definitions are NOT automatically modified — the new metric has no term in the formula
+3. An admin explicitly adds the new metric as a term in the appropriate group, with a default weight of 0
+4. Users see the new slider at weight 0 — scores are unchanged until they choose to assign weight
+5. Snapshot normalization handles the transition period when some patents have the new metric scored and others don't
 
+This is the critical design choice: **new questions start at weight 0** to avoid disrupting existing scores. Users opt in to new metrics by adjusting weights.
 
-### Extensibility
+## Scoring at Different Taxonomy Levels
 
-<!-- How new metrics can be added -->
-When new LLM questions are added, new metrics generally arise as the number returning questions.  We might also add other metrics from other data , like USPTO data, for example, we might want inventiveCPCCount, additiveCPCCount, etc. applied to each patent - and this can be pulled from patent enrichment data.  In the future we will have GUI features to add LLM questions or to refactor current structured questions - so this will become a dynamic change - for now it is only done with code revisions and/or metadata (e.g., structured questions json) changes - which show up as revisions in the source tree.
+The same formula engine serves all scope levels:
 
+| Scope | Available Metrics | Typical Use |
+|-------|------------------|-------------|
+| System-wide | Quantitative only | Base score — no LLM data needed |
+| Portfolio | Portfolio LLM questions + quantitative | Primary ranking across all patents |
+| Super-sector | Portfolio + super-sector questions | Comparison within a technology area |
+| Sector | Portfolio + super-sector + sector questions | Detailed sector analysis |
+| Sub-sector | All inherited questions | Fine-grained within-group ranking |
 
-## Data Model Changes
+Each scope has its own `FormulaDefinition` with scope type and value. The formula at sector level can include metrics from portfolio questions (inherited) plus sector-specific questions, each in their own group terms.
 
-<!-- Schema changes needed -->
-Changes should be made to support more flexible taxonomy, the possibility of other entities for product and other documents (in the future we might score e-discovery or other types of documents with a similar paradigm).  Scores will need to be more flexibile in the future allowing more formula variations.  We must expand our snapshot capabilities to better leverage existing scores as changes happen naturally (we do not always want to invalidate existing data we have paid for with LLM fees and some hard work to arrange and calibrate - we will have expanded snapshots and normalization to help leverage existing scores).  Our schema must better support this and have excellent versioning of scores, structured questions, and the ability to invalidate - or more precisely to track revisions of scores and questions - so like a source control system, we know how far behind a given area of scores might be - and we will know how to get data in sync when necessary or to best leverage out of sync data to make reasonsable comparisons.  We will be developing a more comprehensive versioning contention in the near term to be able to make these calculations and rather than have a notion of "staleness" we may have revAIQ (revision of AI questions) and have a convention like 1.2.1.4 for each structured question inheritance tree (portfolio.super-sector.sector.sub-sector) or something similar where we can have awareness at what level questions have changed that would require rescoring, new snapshots, etc.
+## Formula SQL Generation
 
-
-## API Design
-
-<!-- Key endpoints and their behavior -->
-These will need to be modified as needed to support more flexibility in the system, and in the near term enhance our snapshot ability and the ability to apply scoring screens to other scores besides just portfolio level.
-
+For hot-path queries (Patent Summary, Aggregates), the Formula Engine generates materialized views that embed the formula directly in SQL. This means filtering and sorting by computed scores happens entirely in Postgres without application-level computation. See `hmda-v2-architecture.md`, Section 4.4.
 
 ## UI Considerations
 
-<!-- How the scoring UI should work -->
-We should have more general use of the scoring screens.  The current v2 scoring page can just be a general scoring page that can apply to scoring at various levels (portfolio which is really the current v2, super-sector, sector, or sub-sector with the latter 3 having enhanced metrics from more LLM questions).  And in the future our taxonomy may be more dynamic and include more levels (and different names for taxonomy levels, super-sector, sector, and sub-sector are just one naming convention).  Also names of scores might be enhanced or changes (v2 is just portfolio level scoring and v3 is consensus portfolio scoring currently), but those scoring pages can be applied to other scores - and ultimately we will be able to have as many scores as we want as multiple taxonomies will be supported - we can expand how many levels each taxonomy spans - and each patent or other system entity might have primary, secondary, tertiary and beyond associations with any taxonomy (a good example if the multiple CPC codes applied to each patent from which our current taxonomy is derived - we could be assigning multiple taxonomies).  So we should leverage our existing scoring pages and just change them to be able to apply to different configured scores in the system - in the future we might allow this to be added via admin or other GUI function - more scores might be added dynamically to the system.
+The scoring page works identically regardless of scope:
 
+1. User selects score type (portfolio, sector, sub-sector) and scope value
+2. Page loads the corresponding FormulaDefinition and the user's WeightProfile
+3. Group-level sliders appear at the top; within-group metric sliders appear below
+4. Changes to any slider trigger recalculation (debounced) using the Formula Engine
+5. "Save Snapshot" persists results with full provenance
+
+For consensus scoring, the same page shows multiple profiles with individual weights, and the consensus result is a weighted combination.
+
+## Data Model Changes
+
+### New Tables (Phase 2)
+- `FormulaDefinition` — formula structure, scope, constants
+- `WeightProfile` — user-specific weight sets per formula
+
+### Registry Integration (Phase 1)
+- All scoring-relevant attributes registered with `isFilterable`, `isSortable`, `isAggregatable` flags
+- LLM metric attributes registered with `rangeMin`/`rangeMax` for normalization bounds
+
+### Migration
+- Seed current V2 formula structure as a `FormulaDefinition` with `scopeType: 'PORTFOLIO'`
+- Convert `config/user-weight-profiles.json` entries to `WeightProfile` rows
+- Existing scoring code continues to work during transition
+
+## Future: Normative View Manipulation
+
+An advanced feature where users directly rearrange patent rankings, and the system reverse-engineers weight changes that produce the desired ranking — or identifies when the current formula cannot achieve the desired ranking (suggesting new metrics or formula restructuring). This requires the grouped-term formula structure to be in place first.
+
+## Open Questions
+
+- **Rename V2/V3 now or later?** Renaming is cosmetic but reduces confusion. Can be done in UI labels without changing code identifiers initially.
+- **How many group levels?** Current proposal is one level of grouping (flat groups within the formula). Nested groups (groups within groups) add complexity — defer unless needed.
+- **Auto-populate new metrics at weight > 0?** Current design starts new metrics at weight 0. Alternative: start at a small weight (0.05) to immediately show effect. Risk: disrupts existing rankings. Recommendation: keep at 0.
+- **Cross-scope score composition**: When a patent has both a portfolio score and a sector score, how do they compose into a single ranking? Options: keep separate, define a meta-formula that combines them, or let the user choose which to display. Deferred to Phase 3.

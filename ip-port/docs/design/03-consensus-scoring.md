@@ -1,75 +1,194 @@
-# Consensus Scoring (Generalized v3)
+# 03 — Consensus Scoring & Structured Questions
 
 ## Current State
 
-<!-- Describe current v3/LLM scoring approach -->
-The current consensus scoring is just applied at portfolio level and allows multiple profiles saved from v2 scores to have a weighted average consensus score from multiple participants.  In the future we will have multiple logins, and each user will only have access to one role in the consensus scoring (except someone at scoring admin level) - or might not have the ability to contribute to certain consensus scores.  But for now, we are just expanding from only having portfolio level scores that can be calculated using the v2 scoring (slider GUI weight manipulation) and v3 scoring (multiple profile weights against v2 weight profiles) to having the same scoring paradigms (and the GUI pages) apply to other scores like taxonomic level scores.  By making these pages more generic and dynamic (for example if doing a sector level score - we could use sector level metrics as well).
+Consensus scoring (V3) applies at portfolio level: multiple named weight profiles (each a saved V2 slider configuration) are combined into a weighted average consensus score. Currently limited to portfolio-level scores with a single user managing multiple profiles.
 
-Note much of what is described here applies to scoring in general - these questions just happen to be in the consensus-scoring doc - but consensus scoring is relatively simple and will not change much - but the information here is relevant to the greater refactoring effort.
-
+Structured questions are defined in JSON template files (`config/scoring-templates/`) with inheritance from portfolio → super-sector → sector → sub-sector. Each question specifies a `fieldName`, answer type (numeric/categorical/text), scale, default weight, and optional reasoning prompt. Answers are stored in the `PatentScore` EAV table (portfolio-level) and `PatentSubSectorScore` JSON metrics column (taxonomy-level).
 
 ## Problems with Current Approach
 
-The current page works reasonably well but will be more generally applied.  And since we have scoring snapshots and weight profiles related to v2, v3, these will need to be more generalized to handle different types of scores.  But the way consensus v3 scoring applies currently to v2 scoring (and both are variations of portfolio level scoring), we should have the consensus screen offer a variant to any weighted metric score that uses the v2-like slider paradigm.  We are just making this page and service more generically useful.
+1. **Consensus limited to portfolio scope**: The same multi-profile consensus mechanism should apply to any score type (sector scores, sub-sector scores).
+2. **No visibility into question structure**: Users cannot see which questions produce which metrics without reading JSON files. A read-only display of the question → metric → formula chain is needed.
+3. **Question versioning is informal**: Template versions exist on `ScoringTemplate` but the relationship between template version, question changes, and score validity is not systematically tracked.
+4. **Single user manages all profiles**: Future multi-user systems need per-user profiles with role-based access to consensus participation.
 
-<!-- What's not working? Limitations? -->
-Currently limited to portfolio scoring, will expand to other scores (defined at system level what will be allowed to be edited and tracked).  We will at first not allow scores to be added through admin screens - but in the future that may happen, we should just start designing towards that.  We might have greyed out options on scores that are available in the admin screens - to just demonstrate that the system considers these as flexible dynamic scores and in the future we can add more as we can also add to our taxonomies - and also later have more scorable objects in the system (like products), so we will have permutations of possible scores (taxonomy A on products at each level of the taxonomy or a subset of levels).
+## Consensus Scoring Design
 
+Consensus scoring is a layer on top of any weighted score. It takes N weight profiles and produces a combined score:
 
-## Proposed Changes
+```
+consensus_score(patent) = Σ(profile_weight_j × score(patent, weights_j)) / Σ(profile_weight_j)
+```
 
-### Structured Questions
-<!-- How questions are defined and structured -->
-We should have enhanced versioning of structured questions and for now a read-only display should be added so we can see what is in system (we already have prompt template screens that show question format prompts), we might adapt this so we can demo the feature to show the questions and how they translate to metrics, reasoning fields, and end up in scoring formulas.  Initially, this will be read only to demonstrate the feature without adding the complexity of user creating new questions on the fly.
+Where `score(patent, weights_j)` is the formula evaluated with profile j's weights, and `profile_weight_j` is how much that profile counts in the consensus.
 
+This design applies identically to portfolio scores, sector scores, or any FormulaDefinition-based score. The `WeightProfile` model (see `02-scoring-framework.md`) already supports this via the `consensusWeight` field.
+
+### Consensus Workflow
+
+1. Each participant saves their weight profile for a given formula
+2. Admin assigns consensus weights to each profile (or uses equal weights)
+3. System evaluates the formula once per profile per patent, then combines
+4. Results are saved as a consensus snapshot with provenance tracking
+
+## Structured Questions
+
+### Question Definition
+
+Questions are the bridge between LLM analysis and scoring metrics. Each question:
+
+- Belongs to a taxonomy level (portfolio, super-sector, sector, or sub-sector)
+- Produces one or more metric fields (numeric rating, text reasoning, categorical value)
+- Has a `fieldName` that becomes the metric's name in the scoring formula
+- Can inherit from parent levels and be customized with append/prepend text
+
+### Question → Metric → Score Chain
+
+```
+Question Definition (ScoringTemplate.questions[])
+  │
+  ├── fieldName: "technical_novelty"
+  ├── question: "Rate the technical novelty..."
+  ├── answerType: "numeric", scale: {min: 1, max: 5}
+  ├── requiresReasoning: true
+  │
+  ▼ LLM evaluates per patent
+  │
+Metric Storage
+  │
+  ├── PatentScore EAV: fieldName="technical_novelty", rating=4, reasoning="..."
+  │   (stored in Postgres, registered in Attribute Registry as LLM_METRIC)
+  │
+  ▼ Formula references metric by attribute name
+  │
+FormulaDefinition term
+  │
+  ├── attribute: "technical_novelty"
+  ├── weightKey: "w_technical_novelty"
+  ├── scaling: { type: "linear", min: 1, max: 5 }
+  │
+  ▼ User controls weight via slider
+  │
+WeightProfile
+  │
+  └── weights: { "w_technical_novelty": 0.15, ... }
+```
 
 ### Question Inheritance
 
-<!-- How questions inherit from parent levels (portfolio → super-sector → sector → sub-sector) -->
+```
+Portfolio Template
+  ├── eligibility_score
+  ├── validity_score
+  ├── claim_breadth
+  ├── enforcement_clarity
+  ├── design_around_difficulty
+  └── market_relevance_score
+
+  └── WIRELESS Super-Sector Template (inheritsFrom: portfolio)
+      ├── (inherits all 6 portfolio questions)
+      ├── standards_relevance          ← new at this level
+      └── spectrum_efficiency          ← new at this level
+
+      └── wireless-transmission Sector Template (inheritsFrom: wireless)
+          ├── (inherits all 8 above)
+          ├── mimo_applicability       ← new at this level
+          └── beamforming_relevance    ← new at this level
+```
+
+When a patent in the wireless-transmission sector is scored, the LLM receives all 10 questions in one batch. The append/prepend feature allows a sector-level template to add context to an inherited question: "Rate the market relevance of this patent **specifically for wireless communication markets**."
+
+### Attribute Registry Auto-Registration
+
+When new questions are added to templates, `syncTemplateAttributes()` (see `hmda-v2-phase1-implementation.md`) automatically creates registry entries:
+
+- A `LLM_METRIC` entry for the numeric rating
+- An `LLM_TEXT` entry for the reasoning field
+- An `LLM_CLASS` entry for categorical answers
+
+This ensures the Query Builder, materialized views, and introspection API immediately know about new metrics without manual registry updates.
+
+## Question Versioning
+
+### The revAIQ Convention
+
+Each patent's LLM data has a "currency" expressed as a dot-separated version string tracking question versions at each taxonomy level:
 
 ```
-Portfolio Questions
-    └── Super-Sector Questions (inherit + extend)
-        └── Sector Questions (inherit + extend)
-            └── Sub-Sector Questions (inherit + extend)
+revAIQ = portfolio.superSector.sector.subSector
+Example: 3.2.1.4
 ```
 
-This is a powerful feature and will be extended in the future to more general taxonomies.  Taxonomies can have any number of levels and multiple taxonomies may be applied to a given object type like patents.  We can have multiple taxonomies of a single type (like our current super-sector/sector/sub-sector system) or different taxonomies and either can have multiple associations to a system object like patents.  For now, we will just being migrating the schema for more flexibility and work towards having multiple taxonomical associations of the same type (super-sector/sector/sub-sector) to patents.
+- Portfolio questions at version 3
+- Super-sector questions at version 2
+- Sector questions at version 1
+- Sub-sector questions at version 4
 
+**Per-taxonomy-path**: The revAIQ applies to a specific path through the taxonomy. Patent X classified under `WIRELESS/wireless-transmission/mimo-basic` has one revAIQ, and its secondary classification under `NETWORKING/protocol-stack` would have a different revAIQ.
 
-### Append/Prepend Text
+**Versioning rules**: Incrementing a higher level resets lower levels. Changing portfolio questions → new portfolio version, lower levels reset. Changing only sub-sector questions → only sub-sector version increments.
 
-<!-- How inherited questions can be customized at lower levels -->
-The feature to have a question asked at a higher level, but allow prepend or appended text is useful to allow more detail to be asked at lower levels of taxonomy but have a metric that applies at a higher level and can be scored at a higher level.  We will continue to support this and it will be more general as taxonomies become more general.
+### What's Tracked Today (Phase 1 — No Schema Changes)
 
+The existing schema already captures some version information:
+- `PatentScore.templateId`, `llmModel`, `scoredAt`
+- `PatentSubSectorScore.templateVersion`, `questionFingerprint`, `llmModel`
 
-### Question Versioning
+The LLM Currency Analysis Service (see `hmda-v2-phase1-implementation.md`) queries these fields to understand current state: which models are in use, which template versions are deployed, staleness distribution by sector.
 
-<!-- How question changes are tracked -->
-We will need to have better versioning and track changes of questions at every level of the taxonomy, currently portolio->super-sector->sector->sub-sector, but in the future if we have deeper hierarchies our inheritance and versioning will need to track it.  I think we could have a convention like 1.1.2.3 which would be portfolio.super-sector.sector.sub-sector - and for deeper hierarchies would have more terms and dots separating.  And this version will apply to each instance of the lowest level of the hieararchy.  So 1.1.2.3 for sub-sector video/streaming/codecs will be different then for video/streaming/cdns.  If we change CDN questions that version may become 1.1.2.4 - so we would know to invalidate or mark as past revisions on those scores and snapshots (the CDN scores within the snapshot will be invalidated).  But the 1.1.2 portion might apply to video/streaming and only when those questions are changed we would get 1.1.3.1 (can reset the lowest ones) and we need to invalidate from the sector on down.  When portfolio level questions are changes everything is invalided - but we will use snapshots to not throw away old scores - but to normalize them to keep using them temporarily for ranking until eventually all scores are made fresh.  We want to encourage the changing of questions as needed and not be apprehensive about rescoring - we will have facilities in our snapshot capability to help with this.
+### What's Added (Phase 2)
 
+- `QuestionVersion` table: tracks current version number at each taxonomy level
+- `PatentQuestionCurrency` table: records per-patent what revAIQ has been applied
+- Currency Service: computes gaps between patent's revAIQ and latest available
 
-### Scoring from Answers
+See `hmda-v2-architecture.md`, Section 6 for full schema.
 
-<!-- How LLM answers map to numeric scores -->
-As currently done, we can continue - the wording of the LLM question can dictate what numerics to return on the "rating" type fields, and "reasoning" text fields can be returned that explain the rating.  We can be specific in how rating is specified (1 means irrelevant, 5 means highly relevant, etc.).
+### Open Versioning Questions
 
+These are resolved through experimentation, not upfront design:
 
-## Data Model Changes
+1. **Granularity**: Do we version per-instance (each sub-sector has its own version) or per-level (all sub-sectors share one version number)? Per-instance is more precise but complex. Per-level is simpler but marks unchanged sub-sectors as stale. The LLM Currency Analysis Service will show how often we change questions at fine-grained levels.
 
-<!-- Schema changes needed -->
-In general, we are abstracting scoring more and associating more freely with patents, different taxonomical levels, and differnt object types (e.g. products) in the future, so we should refactor schema incrementally as needed as we move through the corresponding feature enhancements.
+2. **Model as a version dimension**: Is LLM model (e.g., sonnet vs. opus) a separate axis or part of revAIQ? The model comparison analysis (`getModelComparisonOverlap()`) will show whether model differences are significant enough to warrant tracking.
 
-
-## Template File Structure
-
-<!-- How JSON templates are organized -->
-This can continue to evolve as we add more taxonomy flexibility and the ability to have different questions for different portfolios, etc. - for now we have one taxonomy for everything in the system, but that will become more flexible as we go, and we may need more flexibility in this structure - also we will need the new versioning to be reflected in our templates and throughout the system.
-
+3. **Freezing**: When to "freeze" a version and start a new one? Current thinking: freeze when you want to create a clean snapshot, not automatically on every question edit.
 
 ## LLM Integration
 
-<!-- How prompts are constructed, responses parsed -->
-One future enhancement will be when patents are given multiple taxonomy associations - we might ask even more questions in a given LLM round trip to best use resources.  Currently we are combining portfolio questions with those at every level of taxonomy - but in the future if the patent has three taxonomical classifications associated, we might union all of the questions in one LLM roundtrip.  This flexibility is a strength of the system as we maximize the utility of every LLM call and we will continue to expand that feature.
+### Prompt Construction
 
+For a given patent, the LLM prompt includes:
 
+1. Patent context (title, abstract, claims if available)
+2. Union of all questions from the patent's taxonomy path(s)
+3. Each question formatted with its answer type and scale
+4. Reasoning requirements where specified
+
+With multiple taxonomy associations (Phase 3), the question set is the union across all classification paths, deduplicated by `fieldName`. This maximizes value per LLM call.
+
+### Response Parsing
+
+LLM responses are parsed into:
+- Numeric ratings → `PatentScore.rating` or `PatentSubSectorScore.metrics`
+- Text reasoning → `PatentScore.reasoning`
+- Categorical values → `PatentScore.textValue`
+
+The parsed values are simultaneously written to the EAV table and the JSON cache file for redundancy.
+
+## Read-Only Question Viewer (Phase 2)
+
+A new UI component showing:
+- The complete question inheritance tree for any taxonomy path
+- Which questions produce which metrics
+- Which metrics feed into which formulas with what weights
+- Current revAIQ status for any patent
+
+This is initially read-only — users can view the question structure and understand how scores are computed, but cannot modify questions through the UI. Question editing remains a code/config change tracked in version control.
+
+## Open Questions
+
+- **Question editing GUI**: When to allow users to create/modify questions through the UI? Deferred to a later phase — the complexity of dynamic question management plus versioning tracking is significant.
+- **Consensus at taxonomy levels**: Should sector-level scoring support consensus? Technically yes (same mechanism), but is there a use case currently? Probably not until multi-user access is implemented.
+- **Question deactivation**: Can a question be "retired" without breaking existing formulas? The formula would need to handle missing metrics gracefully (already does — missing metrics contribute 0). But the UI should hide retired question sliders.

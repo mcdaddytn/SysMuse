@@ -389,6 +389,30 @@ TaxonomyConfig {
 }
 ```
 
+### 5. Open Questions for Future Exploration
+
+**Handling patents that don't fill 3 associations:**
+- Some patents may only legitimately map to 1-2 sectors
+- Non-inventive CPCs may contribute associations but should be weighted lower
+- Options for unfilled slots:
+  - Leave null (requires null-handling in filters)
+  - Duplicate primary (ensures filter inclusion, but may skew counts)
+  - Use lower-confidence associations from additional CPCs
+
+**High-value patents needing 4+ associations (8%):**
+- Consider special handling for top-tier patents
+- May warrant additional LLM questions beyond standard 3
+- Could be flagged for manual review or expanded analysis
+- Cost/benefit: More LLM calls vs. capturing full inventive scope
+
+**Weighting strategy:**
+- Inventive CPC → high weight
+- Additional CPC → lower weight
+- Multiple inventive CPCs to same sector → reinforced confidence
+- Cross-domain associations → may warrant separate LLM question templates
+
+**Target:** 3 privileged associations as sweet spot for current portfolio. Revisit if analysis of larger/different portfolios suggests otherwise.
+
 ---
 
 ## Additive Schema Considerations (Non-Destructive)

@@ -285,6 +285,112 @@ To avoid confusion with the current 3-level taxonomy (super-sector → sector �
 
 ---
 
+## Privileged Association Analysis
+
+**Goal:** Determine optimal number of indexed/filterable classification associations per patent.
+
+### Coverage Curve (Top 2000 Patents)
+
+| N Associations | Sector Coverage | Marginal Gain | Super-Sector Coverage |
+|----------------|-----------------|---------------|----------------------|
+| 1 (current) | **49.6%** | - | 68.4% |
+| 2 | **79.6%** | +30.0% | 96.7% |
+| **3 (optimal)** | **92.7%** | +13.0% | 99.8% |
+| 4 | 97.3% | +4.6% | 99.9% |
+| 5 | 98.8% | +1.6% | 100% |
+
+**Recommendation: 3 privileged associations (primary, secondary, tertiary)**
+- Captures 92.7% of sector associations vs 49.6% with single
+- Clear diminishing returns beyond N=3
+- 99.8% super-sector coverage
+
+### Distribution Analysis
+
+| Patents needing... | Count | % of Top Patents |
+|-------------------|-------|------------------|
+| 1+ associations | 959 | 82.5% |
+| 2+ associations | 580 | 49.9% |
+| **3+ associations** | 252 | **21.7%** |
+| 4+ associations | 89 | 7.7% |
+
+**Key insight:** ~22% of high-value patents genuinely require 3 associations, but only ~8% need a 4th.
+
+### Natural Sector Clusters (Co-occurrence Based)
+
+Analysis identified 7 clusters of frequently co-occurring sectors:
+
+| Cluster | Sectors | Internal Overlap | Notes |
+|---------|---------|------------------|-------|
+| **Video+Imaging** | cameras-sensors, video-codec | **42%** | Cross-super-sector (IMAGING↔VIDEO_STREAMING) |
+| Recognition | image-processing, recognition-biometrics | 31% | Same super-sector (IMAGING) |
+| Wireless Core | wireless-infrastructure, wireless-mobility, wireless-scheduling | 31% | Same super-sector (WIRELESS) |
+| Video Delivery | video-client-processing, video-server-cdn | 31% | Same super-sector (VIDEO_STREAMING) |
+| Computing | computing-systems, data-retrieval | 36% | Same super-sector (COMPUTING) |
+| Security | network-auth-access, network-secure-compute | 33% | Same super-sector (SECURITY) |
+| Memory | magnetics-inductors, memory-storage | 33% | Same super-sector (SEMICONDUCTOR) |
+
+**If sectors were clustered:**
+- N=3 coverage improves from 92.7% to 95.7%
+- Only 8 sectors affected (47/55 remain distinct)
+
+### Top Sectors by Patent Count (High-Value Sample)
+
+| Sector | Patents | Top Co-occurrence |
+|--------|---------|-------------------|
+| cameras-sensors | 183 | video-codec (42%) |
+| image-processing | 158 | recognition-biometrics (31%) |
+| wireless-scheduling | 143 | wireless-infrastructure (24%) |
+| recognition-biometrics | 110 | image-processing (31%) |
+| computing-ui | 96 | image-processing (14%) |
+
+---
+
+## Design Recommendations
+
+### 1. Implement 3 Privileged Associations
+
+```
+Patent {
+  primaryClassification    // Current single assignment
+  secondaryClassification  // 2nd most relevant (inventive CPC weighted)
+  tertiaryClassification   // 3rd most relevant
+
+  // All associations (unlimited, not indexed for filtering)
+  allClassifications[]
+}
+```
+
+### 2. Classification Assignment Algorithm
+
+```
+For each patent:
+  1. Map all inventive CPCs to taxonomy sectors
+  2. Weight by CPC count per sector (more CPCs = higher weight)
+  3. Rank sectors by weight
+  4. Assign top 3 to privileged slots
+  5. Store remainder in allClassifications
+```
+
+### 3. Consider Optional Clustering Mode
+
+For broader portfolios or initial exploration:
+- Merge high-overlap sectors (J > 0.30)
+- Reduces multi-association needs
+- Configurable per analysis context
+
+### 4. Flexible Depth Configuration
+
+```
+TaxonomyConfig {
+  privilegedAssociationCount: 3    // Default, adjustable 2-5
+  classificationLevels: 3          // super-sector, sector, sub-sector
+  enableClustering: boolean        // Use merged clusters
+  clusterThreshold: 0.30           // Min Jaccard for auto-merge
+}
+```
+
+---
+
 ## Additive Schema Considerations (Non-Destructive)
 
 These could be implemented to support further analysis without breaking existing functionality:

@@ -163,9 +163,20 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 | ObjectClassifications | 84,321 |
 | Patents with pragmatic fields | 84,321 |
 
+### Multi-Classification Backfill (2026-03-28)
+| Classification | Count | Coverage |
+|---------------|-------|----------|
+| Primary | 84,321 | 100% |
+| Secondary | 43,823 | 52% |
+| Tertiary | 23,777 | 28% |
+
+**Implementation files:**
+- `src/api/services/multi-classification-service.ts` - Core algorithm
+- `scripts/populate-multi-classifications.ts` - Backfill script
+
 ### Implementation Phase (Next)
-- [ ] Multi-classification assignment algorithm
-- [ ] Populate privileged associations for existing patents
+- [x] Multi-classification assignment algorithm
+- [x] Populate privileged associations for existing patents
 - [ ] Cross-classification query support
 - [ ] GUI updates for secondary/tertiary classification filters
 - [ ] Background recalculation job system
@@ -225,4 +236,4 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
-*Last Updated: 2026-03-28*
+*Last Updated: 2026-03-28 (Multi-classification backfill complete)*

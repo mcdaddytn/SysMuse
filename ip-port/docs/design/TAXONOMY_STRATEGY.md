@@ -31,7 +31,7 @@ Our taxonomy is **not constrained to CPC hierarchy levels**. Instead:
 1. **Each taxonomy level is a logical grouping** chosen for analytical utility
 2. **Rules can use any CPC pattern** at any taxonomy level
 3. **Lower levels inherit parent constraints** - a sub-sector's patterns must be subsets of its parent sector's patterns
-4. **Cluster sizes should be reasonable** - each sub-sector should contain enough patents for meaningful analysis
+4. **Cluster sizes should be reasonable** - configurable targets guide automated refactoring
 
 ### Hierarchy Constraint Model
 
@@ -45,26 +45,127 @@ Sub-sector (L3):    CPC patterns [H04L45/0*, H04L45/1*]  ← must be subset of p
 
 **Key insight**: Sub-sectors can map to MULTIPLE CPC patterns, not just one CPC code.
 
-### Naming Convention
+---
 
-To ensure uniqueness and enable filtering, all nodes use prefixed naming:
+## Taxonomy Level Metadata
 
+Each TaxonomyType defines level metadata including target sizing:
+
+```typescript
+interface TaxonomyLevelMetadata {
+  level: number;
+  name: string;           // "Super-sector", "Sector", "Sub-sector"
+  prefix: string;         // Abbreviation for naming convention
+
+  // Target sizing (for automated refactoring guidance)
+  targetCount?: {
+    min: number;          // e.g., 10 super-sectors minimum
+    max: number;          // e.g., 15 super-sectors maximum
+  };
+  targetClusterSize?: {
+    min: number;          // e.g., 50 patents minimum per sub-sector
+    max: number;          // e.g., 2000 patents maximum per sub-sector
+    optimal: number;      // e.g., 200-500 patents ideal
+  };
+  targetPortfolioPercent?: {
+    min: number;          // e.g., each sector should have ≥1% of portfolio
+    max: number;          // e.g., no sector should exceed 15% of portfolio
+  };
+}
 ```
-Level 1: {SUPER_SECTOR}
-Level 2: {super_sector}-{sector}
-Level 3: {super_sector}-{sector}-{subsector}
 
-Examples:
-  NETWORKING
-  NETWORKING-switching
-  NETWORKING-switching-layer2
-  NETWORKING-switching-layer3-routing
+### v2 Target Configuration
+
+| Level | Name | Target Count | Target Cluster Size | Notes |
+|-------|------|--------------|---------------------|-------|
+| 1 | Super-sector | 10-15 | 5,000-15,000 | Broad domains |
+| 2 | Sector | 50-80 | 500-3,000 | Major tech areas |
+| 3 | Sub-sector | 200-500 | 50-500 | Specific clusters |
+
+These targets are **suggestions for automated refactoring tools**, not hard constraints. Analysis scripts can flag clusters that are undersized (merge candidates) or oversized (split candidates).
+
+---
+
+## Naming Convention (Prefixed, Globally Unique)
+
+Per `01-taxonomy-refactor.md`, use abbreviated prefixes that compound at each level:
+
+### Level Prefixes
+```
+Super-sector → 3-letter code
+  COMPUTING  → CMP
+  WIRELESS   → WRL
+  NETWORKING → NET
+  IMAGING    → IMG
+  SECURITY   → SEC
+  etc.
 ```
 
-Benefits:
-- **Unique names** across entire taxonomy
-- **Hierarchical parsing** - can extract parent from child name
-- **Filter-friendly** - UI can filter by prefix patterns
+### Node Naming Pattern
+```
+Level 1: {CODE}
+  NET (Networking)
+  CMP (Computing)
+
+Level 2: {PARENT_PREFIX}/{sector-slug}
+  NET/switching
+  NET/protocols
+  CMP/computing-ui
+  CMP/computing-runtime
+
+Level 3: {PARENT_PREFIX_COMPOUND}/{subsector-slug}
+  NETSW/layer2-switching     (NET + SW from "switching")
+  NETSW/sdn-control
+  NETPR/tcp-optimization     (NET + PR from "protocols")
+  CMPUI/displays
+```
+
+### Benefits
+- **Globally unique** - "displays" under COMPUTING is `CMPUI/displays`, under IMAGING is `IMGPR/displays`
+- **Compact** - Abbreviated prefixes keep names manageable
+- **Filter-friendly** - UI can filter by prefix without showing full hierarchy
+- **Parseable** - Can extract parent relationship from prefix
+
+### Storage
+- Database stores the prefixed `code` as the unique identifier
+- `name` field stores human-readable display name
+- Prefix convention is defined in TaxonomyType level metadata
+
+---
+
+## Default Taxonomy Selection
+
+The system supports multiple taxonomy versions running in parallel:
+
+```typescript
+interface TaxonomyType {
+  id: string;
+  code: string;           // 'patent-classification-v1', 'patent-classification-v2'
+  name: string;
+  isDefault: boolean;     // Only one can be default at a time
+  levelMetadata: TaxonomyLevelMetadata[];
+  // ...
+}
+```
+
+### Behavior
+- **Default taxonomy** is used by:
+  - GUI filters and displays
+  - API queries without explicit taxonomy parameter
+  - New patent classification
+
+- **Non-default taxonomies** remain accessible for:
+  - Historical comparison
+  - Regression testing
+  - Parallel analysis
+
+### Switching Default
+```
+POST /api/admin/taxonomy/:typeId/set-default
+```
+- Validates taxonomy has classifications
+- Updates `isDefault` flags
+- Triggers cache invalidation for GUI
 
 ---
 
@@ -87,95 +188,91 @@ Benefits:
 - Validate that v2 captures same patents with better granularity
 
 ### Phase 4: Transition
-- Once validated, make v2 the primary taxonomy
+- Set v2 as default taxonomy
 - Keep v1 available for historical comparison
+- Update enrichment pipeline for v2 structure
 
 ---
 
-## v2 Sub-sector Design Guidelines
+## Service Layer Requirements
 
-### Target Structure
-| Level | Target Count | Purpose |
-|-------|--------------|---------|
-| L1 Super-sectors | 10-15 | High-level domains |
-| L2 Sectors | 50-80 | Major technology areas |
-| L3 Sub-sectors | 200-500 | Specific technology clusters |
+Before v2, build services to understand the data:
 
-### Sub-sector Sizing
-- **Minimum**: 50 patents (avoid over-fragmentation)
-- **Maximum**: 2,000 patents (avoid catch-all buckets)
-- **Optimal**: 200-500 patents per sub-sector
+### TaxonomyAnalysisService
+```typescript
+// CPC distribution within a sector
+analyzeCpcDistribution(sectorId: string): CpcDistributionReport
 
-### Rule Design
-Each sub-sector should have:
-1. **Primary patterns** - CPC prefixes that strongly indicate this sub-sector
-2. **Exclusion patterns** - CPCs that should NOT map here (handled by exclusion rules)
-3. **Priority weighting** - Higher priority for more specific patterns
+// Suggest sub-sector boundaries based on clustering
+suggestSubsectorBoundaries(sectorId: string, targetCount: number): SubsectorSuggestion[]
 
-Example:
+// Validate naming convention compliance
+validateNamingConvention(taxonomyTypeId: string): ValidationReport
+
+// Compare coverage between taxonomies
+compareTaxonomyCoverage(v1TypeId: string, v2TypeId: string): CoverageComparison
 ```
-Sub-sector: NETWORKING-switching-sdn
-Primary patterns: H04L41/0803, H04L41/0816, H04L41/0893
-Exclusion: None (parent sector handles)
-Description: Software-defined networking control plane
+
+### CrossClassificationQueryService
+```typescript
+// Find patents by secondary/tertiary associations
+findByAssociation(params: {
+  taxonomyNodeId: string;
+  associationRanks?: number[];  // [1,2,3] or [2,3] for non-primary only
+  minConfidence?: number;
+}): Patent[]
+
+// Find patents spanning multiple super-sectors
+findCrossDomain(params: {
+  superSectorIds: string[];     // Must span ALL of these
+  associationRanks?: number[];
+}): Patent[]
 ```
+
+---
+
+## Future Considerations
+
+When implementing v2 fully:
+
+1. **Structured Questions** - May need new questions tailored to sub-sector granularity
+2. **Snapshots** - Score snapshots should track taxonomy version used
+3. **Enrichment Pipeline** - LLM scoring across all taxonomical associations
+4. **Model Tiers** - Use cheaper models for broad runs, expensive for top patents
+5. **Incremental Rollout** - Can design one super-sector at a time as pilot
 
 ---
 
 ## Implementation Plan
 
-### Schema Changes
-None required - the abstract taxonomy model already supports this:
-- `TaxonomyType` - create `patent-classification-v2`
-- `TaxonomyNode` - create new nodes with prefixed codes
-- `TaxonomyRule` - create rules targeting L3 nodes
+### Immediate (Service Layer)
+- [ ] Cross-classification query endpoints
+- [ ] Taxonomy analysis service (CPC distribution, cluster sizing)
+- [ ] Naming convention validator
 
-### New Components Needed
+### v2 Pilot
+- [ ] Pick one super-sector for pilot (suggest: NETWORKING)
+- [ ] Design sub-sector structure with new naming convention
+- [ ] Create v2 TaxonomyType with level metadata
+- [ ] Import pilot nodes and rules
+- [ ] Run parallel classification and compare
 
-1. **Taxonomy Design Tool** (scripts)
-   - Analyze CPC distribution within sectors
-   - Suggest sub-sector boundaries based on clustering
-   - Generate rule candidates
-
-2. **Naming Convention Validator**
-   - Ensure all codes follow `{parent}-{name}` pattern
-   - Validate uniqueness across taxonomy
-
-3. **Coverage Analyzer**
-   - Compare v1 vs v2 classification coverage
-   - Identify patents that change classification
-   - Flag potential issues (orphans, collisions)
-
-### API Endpoints (Future)
-
-```
-GET /api/taxonomy/types
-GET /api/taxonomy/:typeId/nodes
-GET /api/taxonomy/:typeId/rules
-POST /api/admin/taxonomy/:typeId/validate
-POST /api/admin/taxonomy/:typeId/analyze-coverage
-```
+### Infrastructure
+- [ ] Default taxonomy selection API
+- [ ] GUI taxonomy switcher
+- [ ] Background recalculation job system
 
 ---
 
 ## Open Questions
 
-1. **Sector boundaries**: Should v2 have the same 64 sectors, or should we also refactor L2?
-2. **Catch-all handling**: How to handle CPCs that don't match any specific sub-sector?
-3. **Cross-taxonomy comparison**: How to map v1 classifications to v2 for validation?
-4. **Incremental rollout**: Can we migrate one super-sector at a time?
-
----
-
-## Next Steps
-
-1. [ ] Design sub-sector structure for ONE super-sector (pilot)
-2. [ ] Build CPC clustering analysis tool
-3. [ ] Implement naming convention validator
-4. [ ] Create v2 TaxonomyType and pilot nodes
-5. [ ] Run parallel classification and compare results
+1. **Sector boundaries**: Should v2 have the same 64 sectors, or also refactor L2?
+2. **Catch-all handling**: Each level needs a "General" node for unmatched patents
+3. **Abbreviation collisions**: How to handle if sector slugs produce same 2-letter prefix?
+4. **Incremental migration**: Can we migrate super-sectors one at a time?
 
 ---
 
 *Created: 2026-03-28*
+*Updated: 2026-03-28 (naming convention, level metadata, default taxonomy)*
 *Status: Design Phase*

@@ -191,17 +191,20 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 **Strategy documented:** `docs/design/TAXONOMY_STRATEGY.md`
 - v1 preserved for regression testing
 - v2 will have logical sub-sectors (200-500, not 31K)
-- Naming convention: `{supersector}-{sector}-{subsector}`
+- Naming convention with abbreviated prefixes: `NET/switching` → `NETSW/sdn-control`
+- Level metadata with target sizing (count ranges, cluster sizes, portfolio %)
+- Default taxonomy selection for GUI switching between v1/v2
 
 ### Implementation Phase (Updated Roadmap)
 
-**Immediate (API & Query Support):**
-- [ ] Cross-classification query support
-- [ ] GUI updates for secondary/tertiary filters
+**Immediate (Service Layer & APIs):**
+- [ ] Cross-classification query service
+- [ ] Taxonomy analysis service (CPC distribution, cluster sizing)
 - [ ] Naming convention validator
+- [ ] GUI updates for secondary/tertiary filters
 
-**Taxonomy v2 Design:**
-- [ ] Pilot sub-sector design (one super-sector)
+**Taxonomy v2 Pilot:**
+- [ ] Pick super-sector for pilot (NETWORKING suggested)
 - [ ] CPC clustering analysis tool
 - [ ] Create v2 TaxonomyType structure
 - [ ] Parallel classification comparison

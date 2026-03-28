@@ -191,7 +191,7 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 **Strategy documented:** `docs/design/TAXONOMY_STRATEGY.md`
 - v1 preserved for regression testing
 - v2 will have logical sub-sectors (200-500, not 31K)
-- Naming convention with abbreviated prefixes: `NET/switching` → `NETSW/sdn-control`
+- Naming convention with delimited prefixes: `NET/SWIT/switching` → `NET/SWIT/SDNC/sdn-control`
 - Level metadata with target sizing (count ranges, cluster sizes, portfolio %)
 - Default taxonomy selection for GUI switching between v1/v2
 

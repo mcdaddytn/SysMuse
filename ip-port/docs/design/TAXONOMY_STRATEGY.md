@@ -86,50 +86,58 @@ These targets are **suggestions for automated refactoring tools**, not hard cons
 
 ---
 
-## Naming Convention (Prefixed, Globally Unique)
+## Naming Convention (Delimited Prefixes, Globally Unique)
 
-Per `01-taxonomy-refactor.md`, use abbreviated prefixes that compound at each level:
+Use abbreviated prefixes at each level, joined by `/` delimiter. This scales cleanly to any hierarchy depth.
 
-### Level Prefixes
-```
-Super-sector → 3-letter code
-  COMPUTING  → CMP
-  WIRELESS   → WRL
-  NETWORKING → NET
-  IMAGING    → IMG
-  SECURITY   → SEC
-  etc.
-```
+### Prefix Length by Level
+| Level | Prefix Length | Example |
+|-------|---------------|---------|
+| L1 (Super-sector) | 3 letters | NET, CMP, WRL |
+| L2 (Sector) | 4 letters | SWIT, PROT, UIUX |
+| L3 (Sub-sector) | 4 letters | SDNC, TCPO, DISP |
+| L4+ (if needed) | 4 letters | ... |
 
 ### Node Naming Pattern
 ```
-Level 1: {CODE}
-  NET (Networking)
-  CMP (Computing)
+Level 1: {L1_PREFIX}
+  NET                              (Networking)
+  CMP                              (Computing)
 
-Level 2: {PARENT_PREFIX}/{sector-slug}
-  NET/switching
-  NET/protocols
-  CMP/computing-ui
-  CMP/computing-runtime
+Level 2: {L1_PREFIX}/{L2_PREFIX}/{slug}
+  NET/SWIT/switching               (Switching & Routing)
+  NET/PROT/protocols               (Protocol Stack)
+  CMP/UIUX/computing-ui            (User Interface)
 
-Level 3: {PARENT_PREFIX_COMPOUND}/{subsector-slug}
-  NETSW/layer2-switching     (NET + SW from "switching")
-  NETSW/sdn-control
-  NETPR/tcp-optimization     (NET + PR from "protocols")
-  CMPUI/displays
+Level 3: {L1_PREFIX}/{L2_PREFIX}/{L3_PREFIX}/{slug}
+  NET/SWIT/SDNC/sdn-control        (SDN Control Plane)
+  NET/SWIT/L2SW/layer2-switching   (Layer 2 Switching)
+  NET/PROT/TCPO/tcp-optimization   (TCP Optimization)
+  CMP/UIUX/DISP/displays           (Display Systems)
 ```
 
 ### Benefits
-- **Globally unique** - "displays" under COMPUTING is `CMPUI/displays`, under IMAGING is `IMGPR/displays`
-- **Compact** - Abbreviated prefixes keep names manageable
-- **Filter-friendly** - UI can filter by prefix without showing full hierarchy
-- **Parseable** - Can extract parent relationship from prefix
+- **Globally unique** - "displays" is `CMP/UIUX/DISP/displays`, never collides
+- **Scalable** - Delimiter-based, works for 5+ level hierarchies
+- **Parseable** - Split on `/` to get hierarchy path
+- **Filter-friendly** - Prefix match `NET/SWIT/*` for all switching sub-sectors
+- **Readable** - Each segment is meaningful
+
+### Parsing Example
+```typescript
+const code = "NET/SWIT/SDNC/sdn-control";
+const parts = code.split("/");
+// parts = ["NET", "SWIT", "SDNC", "sdn-control"]
+// L1 prefix: NET
+// L2 prefix: SWIT
+// L3 prefix: SDNC
+// slug: sdn-control
+```
 
 ### Storage
-- Database stores the prefixed `code` as the unique identifier
+- Database stores the full prefixed `code` as the unique identifier
 - `name` field stores human-readable display name
-- Prefix convention is defined in TaxonomyType level metadata
+- Prefix abbreviations defined in TaxonomyType level metadata
 
 ---
 

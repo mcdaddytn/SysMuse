@@ -88,56 +88,70 @@ These targets are **suggestions for automated refactoring tools**, not hard cons
 
 ## Naming Convention (Delimited Prefixes, Globally Unique)
 
-Use abbreviated prefixes at each level, joined by `/` delimiter. This scales cleanly to any hierarchy depth.
+Each node has a **slug** (human-readable name) and an **abbreviation** (for building prefix chains). The code format keeps the current level's full slug at the end for readability, with parent abbreviations as the prefix.
 
-### Prefix Length by Level
-| Level | Prefix Length | Example |
-|-------|---------------|---------|
-| L1 (Super-sector) | 3 letters | NET, CMP, WRL |
-| L2 (Sector) | 4 letters | SWIT, PROT, UIUX |
-| L3 (Sub-sector) | 4 letters | SDNC, TCPO, DISP |
-| L4+ (if needed) | 4 letters | ... |
+### Structure
+| Level | Slug | Abbreviation | Code |
+|-------|------|--------------|------|
+| 1 | networking | NET | `networking` |
+| 2 | switching | SWIT | `NET/switching` |
+| 3 | sdn-control | SDNCT | `NET/SWIT/sdn-control` |
+| 4 | algorithms | ALGOR | `NET/SWIT/SDNCT/algorithms` |
+| 5 | ip-distribution | IPDST | `NET/SWIT/SDNCT/ALGOR/ip-distribution` |
 
-### Node Naming Pattern
+### Code Format
 ```
-Level 1: {L1_PREFIX}
-  NET                              (Networking)
-  CMP                              (Computing)
+Level 1: {slug}
+  networking
+  computing
+  wireless
 
-Level 2: {L1_PREFIX}/{L2_PREFIX}/{slug}
-  NET/SWIT/switching               (Switching & Routing)
-  NET/PROT/protocols               (Protocol Stack)
-  CMP/UIUX/computing-ui            (User Interface)
+Level 2: {L1_ABBREV}/{slug}
+  NET/switching
+  NET/protocols
+  CMP/computing-ui
 
-Level 3: {L1_PREFIX}/{L2_PREFIX}/{L3_PREFIX}/{slug}
-  NET/SWIT/SDNC/sdn-control        (SDN Control Plane)
-  NET/SWIT/L2SW/layer2-switching   (Layer 2 Switching)
-  NET/PROT/TCPO/tcp-optimization   (TCP Optimization)
-  CMP/UIUX/DISP/displays           (Display Systems)
+Level 3: {L1_ABBREV}/{L2_ABBREV}/{slug}
+  NET/SWIT/sdn-control
+  NET/SWIT/layer2-switching
+  NET/PROT/tcp-optimization
+
+Level 4+: {parent_abbrev_chain}/{slug}
+  NET/SWIT/SDNCT/algorithms
+  NET/SWIT/SDNCT/ALGOR/ip-distribution
 ```
+
+### Abbreviation Guidelines
+- **L1**: 3 letters (NET, CMP, WRL, IMG, SEC)
+- **L2+**: 4-5 letters, no strict length constraint
+- **Uniqueness**: Must be unique within the level (GUI can auto-suggest)
+- **Readable**: Abbreviation should be recognizable from slug
 
 ### Benefits
-- **Globally unique** - "displays" is `CMP/UIUX/DISP/displays`, never collides
-- **Scalable** - Delimiter-based, works for 5+ level hierarchies
-- **Parseable** - Split on `/` to get hierarchy path
-- **Filter-friendly** - Prefix match `NET/SWIT/*` for all switching sub-sectors
-- **Readable** - Each segment is meaningful
+- **Readable codes** - Full slug at end makes filtering intuitive
+- **Globally unique** - Prefix chain prevents collisions
+- **Scalable** - Works cleanly for 5+ level hierarchies
+- **Parseable** - Split on `/` to get hierarchy; last element is slug
+- **Mouse-over friendly** - Can show full hierarchy on hover
 
 ### Parsing Example
 ```typescript
-const code = "NET/SWIT/SDNC/sdn-control";
+const code = "NET/SWIT/sdn-control";
 const parts = code.split("/");
-// parts = ["NET", "SWIT", "SDNC", "sdn-control"]
-// L1 prefix: NET
-// L2 prefix: SWIT
-// L3 prefix: SDNC
-// slug: sdn-control
+// parts = ["NET", "SWIT", "sdn-control"]
+// Parent abbrevs: ["NET", "SWIT"]
+// Current slug: "sdn-control"
+
+// To get full path, look up each abbrev's slug:
+// NET -> "networking", SWIT -> "switching"
+// Full path: networking > switching > sdn-control
 ```
 
 ### Storage
-- Database stores the full prefixed `code` as the unique identifier
-- `name` field stores human-readable display name
-- Prefix abbreviations defined in TaxonomyType level metadata
+- `code`: Full prefixed code (e.g., `NET/SWIT/sdn-control`)
+- `name`: Human-readable display name (e.g., "SDN Control Plane")
+- `abbreviation`: This node's abbreviation (e.g., `SDNCT`) - stored for building child prefixes
+- Abbreviation uniqueness enforced at each level within parent
 
 ---
 

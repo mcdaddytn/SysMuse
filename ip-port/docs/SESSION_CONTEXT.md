@@ -174,11 +174,39 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - `src/api/services/multi-classification-service.ts` - Core algorithm
 - `scripts/populate-multi-classifications.ts` - Backfill script
 
-### Implementation Phase (Next)
-- [x] Multi-classification assignment algorithm
-- [x] Populate privileged associations for existing patents
+### Taxonomy Structure Finding (2026-03-28)
+
+**Current v1 taxonomy has a structural issue:**
+- Level 3 = 31,025 individual CPC codes (not logical sub-sectors)
+- All 188 rules target level 2 only
+- No classification happens at level 3
+
+**Divergence Analysis Results:**
+| Level | 2+ unique | 3 unique |
+|-------|-----------|----------|
+| L1 (Super-sectors) | 31.9% | 4.3% |
+| L2 (Sectors) | 52.0% | 28.2% |
+| L3 (Sub-sectors) | 0% | 0% |
+
+**Strategy documented:** `docs/design/TAXONOMY_STRATEGY.md`
+- v1 preserved for regression testing
+- v2 will have logical sub-sectors (200-500, not 31K)
+- Naming convention: `{supersector}-{sector}-{subsector}`
+
+### Implementation Phase (Updated Roadmap)
+
+**Immediate (API & Query Support):**
 - [ ] Cross-classification query support
-- [ ] GUI updates for secondary/tertiary classification filters
+- [ ] GUI updates for secondary/tertiary filters
+- [ ] Naming convention validator
+
+**Taxonomy v2 Design:**
+- [ ] Pilot sub-sector design (one super-sector)
+- [ ] CPC clustering analysis tool
+- [ ] Create v2 TaxonomyType structure
+- [ ] Parallel classification comparison
+
+**Infrastructure:**
 - [ ] Background recalculation job system
 - [ ] Tiered portfolio promotion workflow
 

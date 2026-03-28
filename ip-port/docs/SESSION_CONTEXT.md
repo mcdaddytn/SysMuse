@@ -195,21 +195,51 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - Level metadata with target sizing (count ranges, cluster sizes, portfolio %)
 - Default taxonomy selection for GUI switching between v1/v2
 
+### v2 Taxonomy Pilot Results (2026-03-28)
+
+**Pilot scope:** SDN_NETWORK > network-switching (6,604 patents)
+
+**v2 Sub-sector Distribution (ALL portfolios):**
+| Sub-sector | Patents | % |
+|------------|---------|---|
+| SDN/SWIT/routing | 2,287 | 34.6% |
+| SDN/SWIT/traffic-qos | 1,782 | 27.0% |
+| SDN/SWIT/packet-switching | 1,150 | 17.4% |
+| SDN/SWIT/general | 489 | 7.4% |
+| SDN/SWIT/network-interconnect | 470 | 7.1% |
+| SDN/SWIT/ethernet-lan | 426 | 6.5% |
+
+**Broadcom-specific:**
+| Sub-sector | Patents | % |
+|------------|---------|---|
+| SDN/SWIT/routing | 1,058 | 30.8% |
+| SDN/SWIT/traffic-qos | 915 | 26.7% |
+| SDN/SWIT/packet-switching | 691 | 20.1% |
+| SDN/SWIT/general | 266 | 7.8% |
+| SDN/SWIT/ethernet-lan | 260 | 7.6% |
+| SDN/SWIT/network-interconnect | 240 | 7.0% |
+
+**Multi-classification stats:**
+- 65.9% of Broadcom patents have 2+ sub-sectors
+- Average 1.99 classifications per patent
+
+**Files created:**
+- `scripts/run-v2-pilot-classification.ts` - Classification script
+- `scripts/analyze-broadcom-v2.cjs` - Broadcom analysis
+- Portfolio group: `pg_v2_pilot` for v2 classifications
+
 ### Implementation Phase (Updated Roadmap)
 
-**Immediate (Service Layer & APIs):**
-- [ ] Cross-classification query service
-- [ ] Taxonomy analysis service (CPC distribution, cluster sizing)
-- [ ] Naming convention validator
+**Completed:**
+- [x] Cross-classification query service (`src/api/services/cross-classification-service.ts`)
+- [x] Classification API routes (`src/api/routes/classifications.routes.ts`)
+- [x] Naming convention documented (`docs/design/TAXONOMY_STRATEGY.md`)
+- [x] v2 TaxonomyType structure created
+- [x] v2 pilot classification run and analyzed
+
+**Next Steps:**
 - [ ] GUI updates for secondary/tertiary filters
-
-**Taxonomy v2 Pilot:**
-- [ ] Pick super-sector for pilot (NETWORKING suggested)
-- [ ] CPC clustering analysis tool
-- [ ] Create v2 TaxonomyType structure
-- [ ] Parallel classification comparison
-
-**Infrastructure:**
+- [ ] Expand v2 to other sectors (network-management, network-protocols)
 - [ ] Background recalculation job system
 - [ ] Tiered portfolio promotion workflow
 

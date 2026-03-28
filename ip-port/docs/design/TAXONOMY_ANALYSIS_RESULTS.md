@@ -415,6 +415,94 @@ TaxonomyConfig {
 
 ---
 
+## Portfolio Group Architecture (Key Design Direction)
+
+**Core Insight:** Rather than global taxonomy/settings, the system should manage **Portfolio Groups** - scoped sets of portfolios that share characteristics, technology areas, and analysis parameters.
+
+### What is a Portfolio Group?
+
+A Portfolio Group represents:
+- A collection of related portfolios (e.g., companies competing in similar tech areas)
+- Shared taxonomy configuration and classification rules
+- Common weighting, threshold, and association parameters
+- Cross-portfolio analysis and comparison context
+
+**Example:** A "Smartphone Video Codec Competitors" group might include Qualcomm, Apple, Samsung, and MediaTek portfolios - all analyzed with the same taxonomy settings for fair comparison.
+
+### Admin-Configurable Parameters per Portfolio Group
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `privilegedAssociationCount` | Number of indexed/filterable slots | 3 |
+| `inventiveCpcWeight` | Weight multiplier for inventive CPCs | 1.0 |
+| `additionalCpcWeight` | Weight multiplier for additional CPCs | 0.3 |
+| `primaryAssociationWeight` | Relative weight of primary slot | 1.0 |
+| `secondaryAssociationWeight` | Relative weight of secondary slot | 0.7 |
+| `tertiaryAssociationWeight` | Relative weight of tertiary slot | 0.4 |
+| `reinforcementBonus` | Bonus when multiple CPCs map to same sector | 0.2 |
+| `clusteringEnabled` | Whether to merge high-overlap sectors | false |
+| `clusterThreshold` | Jaccard threshold for auto-merge | 0.30 |
+| `llmModelTier` | Quality tier for LLM analysis | "standard" |
+| `llmQuestionsPerAssociation` | Number of LLM questions per slot | 3 |
+
+### CPC-to-Taxonomy Mapping Rules
+
+Each Portfolio Group owns its taxonomy configuration:
+- Which CPC prefixes map to which sectors
+- Indexing code filters (Y-section, 2xxx-scheme exclusions)
+- Custom sector groupings or splits
+- Rules can be dynamically updated when assigning new patents
+
+**Implications:**
+- Refactoring CPC mappings triggers recalculation of affected Portfolio Group
+- Different Portfolio Groups can use different taxonomy versions
+- Enables A/B testing of taxonomy approaches
+
+### Tiered Analysis Strategy
+
+**Problem:** 8% of high-value patents benefit from 4+ associations, but expanding privileged slots for entire portfolio is expensive (more LLM calls, slower queries).
+
+**Solution:** Tiered Portfolio Groups
+
+```
+Portfolio Group: "Broadcom & Competitors (Screening)"
+├── ~100K patents
+├── privilegedAssociations: 3
+├── llmModelTier: "standard"
+├── Purpose: Initial screening, identify high-value patents
+
+Portfolio Group: "Broadcom Elite (Deep Analysis)"
+├── ~2K patents (promoted from screening)
+├── privilegedAssociations: 5
+├── llmModelTier: "premium"
+├── Additional LLM questions per association
+├── Purpose: Deep analysis of top patents
+```
+
+**Workflow:**
+1. Large portfolio enters screening group
+2. Analysis identifies high-value patents
+3. Promote best patents to elite group (move or duplicate)
+4. Elite group has richer analysis parameters
+5. Cycle continues as analysis narrows focus
+
+This elegantly solves the 8% problem:
+- Most patents get efficient 3-slot analysis
+- High-value patents get promoted to groups with more associations
+- Resources concentrated where they matter most
+
+### Background Recalculation
+
+Portfolio Group settings changes (or taxonomy refactors) can trigger:
+- Background recalculation of classifications
+- Gradual re-evaluation with updated LLM models
+- Continuous fine-tuning of weighting parameters
+- Pattern discovery feeding back into taxonomy improvements
+
+**Design consideration:** Changes should be queued/scheduled rather than blocking, with progress tracking in admin UI.
+
+---
+
 ## Additive Schema Considerations (Non-Destructive)
 
 These could be implemented to support further analysis without breaking existing functionality:

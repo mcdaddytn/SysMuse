@@ -1,8 +1,10 @@
-# Session Context — March 27, 2026
+# Session Context — March 28, 2026
 
-## Current Focus: Taxonomy Analysis & Refactor Planning
+## Current Focus: Implementation Phase
 
-We are in the **analysis phase** of a major refactor, gathering data to inform taxonomy and multi-classification schema design.
+We have completed the **schema design phase** and **data migration**. The abstract taxonomy model is now live with the Portfolio Group architecture.
+
+**Migration completed:** 2026-03-28
 
 ### Pre-Refactor State Tagged
 
@@ -36,6 +38,25 @@ Safe rollback point. Database state has been exported and verified on separate m
 | 4 | 97.3% | +4.6% (diminishing) |
 
 **Decision:** Target 3 privileged associations (primary, secondary, tertiary) with configurable expansion for high-value patents.
+
+### Portfolio Group Architecture (Key Decision)
+
+Replaces the concept of "global" taxonomy/settings:
+
+- **Portfolio Group** = scoped set of related portfolios (competitors, tech areas)
+- Each group has its own taxonomy configuration, weights, thresholds
+- Admin-configurable parameters per group:
+  - Privileged association count (default 3)
+  - CPC weighting (inventive vs additional)
+  - Association weighting (primary vs secondary vs tertiary)
+  - LLM model tier and question count
+  - Clustering thresholds
+
+**Tiered Analysis Strategy:**
+- Large screening groups (~100K patents) with standard settings
+- Elite groups (~2K patents) with more associations, better models
+- Promote high-value patents from screening to elite groups
+- Elegantly solves the "8% need 4+ associations" problem
 
 ### Open Questions (Noted for Future)
 
@@ -83,37 +104,72 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 
 ## Design Documentation
 
-Primary design document: `docs/design/TAXONOMY_ANALYSIS_RESULTS.md`
+| Document | Purpose |
+|----------|---------|
+| `docs/design/TAXONOMY_ANALYSIS_RESULTS.md` | Analysis findings, coverage curves, cluster recommendations |
+| `docs/design/SCHEMA_TAXONOMY_ABSTRACTION.md` | **Abstract taxonomy model - pure vs pragmatic pattern** |
+| `docs/design/SCHEMA_PORTFOLIO_GROUPS.md` | Portfolio Groups using abstract taxonomy references |
 
-Contains:
-- Coverage curves with data
-- Distribution analysis
-- Cluster recommendations
-- Schema proposals (additive, non-breaking)
-- Open questions for future exploration
+### Schema Design (In Progress)
+
+**Key Design Decision:** Abstract taxonomy model to avoid hardcoded level names (super-sector, sector, sub-sector).
+
+`SCHEMA_TAXONOMY_ABSTRACTION.md` defines:
+- **TaxonomyType** - Classification system definition (object type, max depth, level labels)
+- **TaxonomyNode** - Hierarchical nodes with self-referential parent
+- **ObjectClassification** - Links objects to nodes with rank (1=primary, 2=secondary...)
+- **TaxonomyRule** - Replaces SectorRule with taxonomy-agnostic rules
+- **Pure vs Pragmatic pattern** - Normalized hierarchy + flattened fields for efficiency
+
+`SCHEMA_PORTFOLIO_GROUPS.md` defines:
+- **PortfolioGroup** - Scoped portfolio collection with config JSON
+- **PortfolioGroupMember** - Portfolio ↔ Group junction
+- **Tiered analysis strategy** - Screening → Elite promotion workflow
+- References abstract `TaxonomyNode`, not hardcoded levels
 
 ---
 
-## Refactor Roadmap (Not Scheduled)
+## Refactor Roadmap
 
-### Analysis Phase (Current) ✓
+### Analysis Phase ✓ Complete
 - [x] Basic CPC coverage analysis
 - [x] Indexing code identification
 - [x] High-value patent divergence
 - [x] Association coverage curves
 - [x] Sector clustering analysis
+- [x] Portfolio Group architecture concept
 
-### Schema Design Phase (Next)
-- [ ] Multi-classification junction table design
-- [ ] CPC association count fields on Patent
-- [ ] Alternate taxonomy framework schema
-- [ ] CPC co-occurrence table for data-driven refinement
+### Schema Design Phase ✓ Complete
+- [x] PortfolioGroup entity and relationships
+- [x] Admin-configurable parameters (embedded JSON config)
+- [x] Multi-classification junction table (ObjectClassification)
+- [x] Abstract taxonomy model (TaxonomyType, TaxonomyNode)
+- [x] Pure vs pragmatic schema pattern documented
+- [x] Create clean Prisma schema (v2) with abstract model
+- [x] Write data migration script
+- [x] Test migration on dev database (dry-run)
+- [x] Apply migration and validate
 
-### Implementation Phase (Future)
+### Migration Results (2026-03-28)
+| Entity | Count |
+|--------|-------|
+| TaxonomyTypes | 1 |
+| TaxonomyNodes (level 1) | 12 |
+| TaxonomyNodes (level 2) | 64 |
+| TaxonomyNodes (level 3) | 31,025 |
+| TaxonomyRules | 188 |
+| PortfolioGroups | 1 |
+| PortfolioGroupMembers | 24 |
+| ObjectClassifications | 84,321 |
+| Patents with pragmatic fields | 84,321 |
+
+### Implementation Phase (Next)
 - [ ] Multi-classification assignment algorithm
 - [ ] Populate privileged associations for existing patents
 - [ ] Cross-classification query support
 - [ ] GUI updates for secondary/tertiary classification filters
+- [ ] Background recalculation job system
+- [ ] Tiered portfolio promotion workflow
 
 ---
 
@@ -169,4 +225,4 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
-*Last Updated: 2026-03-27*
+*Last Updated: 2026-03-28*

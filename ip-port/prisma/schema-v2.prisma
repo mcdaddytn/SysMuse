@@ -1,0 +1,1732 @@
+// IP-Port Schema v2
+// Abstract Taxonomy Model with Portfolio Groups
+// Created: 2026-03-28
+//
+// Key Changes from v1:
+// - Abstract TaxonomyType/TaxonomyNode replaces hardcoded SuperSector/Sector/SubSector
+// - PortfolioGroup for scoped analysis settings
+// - ObjectClassification for multi-classification support
+// - Generic level names (primaryLevel1, etc.) instead of hardcoded sector terminology
+// - Includes unified scoring models that exist in DB but were missing from v1 schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS - CORE
+// =============================================================================
+
+enum AccessLevel {
+  VIEWER
+  ANALYST
+  MANAGER
+  ADMIN
+}
+
+enum CompetitorDiscoverySource {
+  MANUAL
+  CITATION_OVERLAP
+  TERM_EXTRACTION
+  LLM_SUGGESTED
+  HYBRID_CLUSTER
+}
+
+enum PatentSource {
+  CANDIDATES_FILE
+  PATENTSVIEW_IMPORT
+  MANUAL
+  FAMILY_EXPANSION
+}
+
+enum WorkflowStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  ERROR
+  CANCELLED
+}
+
+enum ScoreType {
+  V2
+  V3
+  LLM
+}
+
+// =============================================================================
+// ENUMS - TAXONOMY & CLASSIFICATION
+// =============================================================================
+
+enum TaxonomyRuleType {
+  CPC_PREFIX // CPC code starts with expression
+  CPC_SUBGROUP // Exact CPC subgroup match
+  KEYWORD // Title/abstract contains keyword
+  PHRASE // Exact phrase match
+  KEYWORD_AND // All space-separated keywords must appear
+  BOOLEAN // Complex boolean expression
+}
+
+enum TaxonomyRuleScope {
+  GLOBAL // Universal rule (all portfolio groups)
+  PORTFOLIO_GROUP // Portfolio-group-specific override
+}
+
+// =============================================================================
+// ENUMS - PORTFOLIO GROUPS
+// =============================================================================
+
+enum PortfolioGroupTier {
+  SCREENING // Large groups, standard settings (3 associations, standard LLM)
+  STANDARD // Default tier
+  ELITE // Small groups, enhanced settings (5+ associations, premium LLM)
+  CUSTOM // Custom configuration
+}
+
+enum PortfolioGroupStatus {
+  ACTIVE
+  ARCHIVED
+  RECALCULATING
+}
+
+enum RecalculationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETE
+  FAILED
+}
+
+// =============================================================================
+// ENUMS - UNIFIED SCORING
+// =============================================================================
+
+enum MetricAggregateScope {
+  PORTFOLIO
+  TAXONOMY_LEVEL1 // New name
+  TAXONOMY_LEVEL2 // New name
+  TAXONOMY_LEVEL3 // New name
+  SUPER_SECTOR // Legacy - kept for migration
+  SECTOR // Legacy - kept for migration
+  SUB_SECTOR // Legacy - kept for migration
+}
+
+enum MetricLayer {
+  BASE
+  PORTFOLIO
+  TAXONOMY_LEVEL1
+  TAXONOMY_LEVEL2
+  TAXONOMY_LEVEL3
+  SUPER_SECTOR // Legacy - kept for migration
+  SECTOR // Legacy - kept for migration
+  SUB_SECTOR // Legacy - kept for migration
+}
+
+enum SnapshotScope {
+  PORTFOLIO
+  TAXONOMY_LEVEL1
+  TAXONOMY_LEVEL2
+  TAXONOMY_LEVEL3
+  SUPER_SECTOR // Legacy - kept for migration
+  SECTOR // Legacy - kept for migration
+  SUB_SECTOR // Legacy - kept for migration
+}
+
+enum WeightProfileScope {
+  GLOBAL
+  TAXONOMY_LEVEL1
+  TAXONOMY_LEVEL2
+  TAXONOMY_LEVEL3
+  PORTFOLIO
+  SUPER_SECTOR // Legacy - kept for migration
+  SECTOR // Legacy - kept for migration
+  SUB_SECTOR // Legacy - kept for migration
+}
+
+// =============================================================================
+// ENUMS - FOCUS AREAS
+// =============================================================================
+
+enum FocusGroupStatus {
+  DRAFT
+  NEEDS_REVIEW
+  FORMALIZED
+  ARCHIVED
+}
+
+enum FocusGroupSource {
+  MANUAL
+  GRID_FILTER
+  LLM_SUGGESTION
+  SEARCH_TERM
+}
+
+enum FocusAreaStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum SearchScopeType {
+  PORTFOLIO
+  TAXONOMY_LEVEL2 // New name
+  TAXONOMY_LEVEL1 // New name
+  COMPOUND
+  PATENT_FAMILY
+  SECTOR // Legacy - kept for migration
+  SUPER_SECTOR // Legacy - kept for migration
+}
+
+enum MembershipType {
+  SEARCH_MATCH
+  MANUAL
+  LLM_SUGGESTED
+  INHERITED
+}
+
+enum SearchTermType {
+  KEYWORD
+  KEYWORD_AND
+  PHRASE
+  PROXIMITY
+  WILDCARD
+  BOOLEAN
+}
+
+enum SearchTermSource {
+  MANUAL
+  FREQUENCY_ANALYSIS
+  PHRASE_HIGHLIGHT
+  LLM_SUGGESTION
+}
+
+// =============================================================================
+// ENUMS - FACETS & PROMPTS
+// =============================================================================
+
+enum FacetType {
+  ATOMIC
+  DERIVED
+}
+
+enum FacetDataType {
+  NUMERIC
+  CATEGORICAL
+  TEXT
+  BOOLEAN
+}
+
+enum NormalizationType {
+  NONE
+  MINMAX
+  ZSCORE
+  PERCENTILE
+}
+
+enum FacetExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  ERROR
+}
+
+enum PromptTemplateType {
+  FREE_FORM
+  STRUCTURED
+}
+
+enum PromptExecutionMode {
+  PER_PATENT
+  COLLECTIVE
+}
+
+enum PromptTemplateStatus {
+  DRAFT
+  RUNNING
+  COMPLETE
+  ERROR
+}
+
+// =============================================================================
+// ENUMS - CPC (kept for backward compatibility)
+// =============================================================================
+
+enum CpcLevel {
+  SECTION
+  CLASS
+  SUBCLASS
+  GROUP
+  SUBGROUP
+}
+
+enum CpcSource {
+  XML
+  EPO_API
+  MANUAL
+  LLM_INFERRED
+}
+
+// =============================================================================
+// API & LLM CACHE
+// =============================================================================
+
+model ApiRequestCache {
+  id           Int      @id @default(autoincrement())
+  endpoint     String   @db.VarChar(50)
+  requestType  String   @map("request_type") @db.VarChar(50)
+  requestKey   String   @map("request_key") @db.VarChar(100)
+  filePath     String   @map("file_path") @db.VarChar(255)
+  fileSize     Int?     @map("file_size")
+  statusCode   Int      @default(200) @map("status_code")
+  errorMessage String?  @map("error_message") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([endpoint, requestType, requestKey])
+  @@index([endpoint, requestType])
+  @@map("api_request_cache")
+}
+
+model LlmResponseCache {
+  id           Int      @id @default(autoincrement())
+  promptType   String   @map("prompt_type") @db.VarChar(50)
+  entityKey    String   @map("entity_key") @db.VarChar(100)
+  model        String   @db.VarChar(50)
+  filePath     String   @map("file_path") @db.VarChar(255)
+  fileSize     Int?     @map("file_size")
+  inputTokens  Int?     @map("input_tokens")
+  outputTokens Int?     @map("output_tokens")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([promptType, entityKey, model])
+  @@index([promptType])
+  @@map("llm_response_cache")
+}
+
+// =============================================================================
+// USER & AUTH
+// =============================================================================
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  passwordHash String?     @map("password_hash")
+  accessLevel  AccessLevel @default(ANALYST) @map("access_level")
+  isActive     Boolean     @default(true) @map("is_active")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  lastLoginAt  DateTime?   @map("last_login_at")
+
+  focusGroups FocusGroup[]
+  focusAreas  FocusArea[]
+
+  @@map("users")
+}
+
+// =============================================================================
+// ABSTRACT TAXONOMY MODEL
+// Replaces hardcoded SuperSector/Sector/SubSector with flexible hierarchy
+// =============================================================================
+
+model TaxonomyType {
+  id String @id @default(cuid())
+
+  name        String  @unique // "patent-cpc-tech", "product-market"
+  displayName String  @map("display_name") // "Technology Classification"
+  description String?
+
+  // What this taxonomy classifies
+  objectType String @map("object_type") // "patent", "product", "company"
+
+  // Hierarchy configuration
+  maxDepth    Int      @map("max_depth") // 3, 4, 5...
+  levelLabels String[] @map("level_labels") // ["Super-Sector", "Sector", "Sub-Sector"]
+
+  // How classifications are determined
+  ruleType String @map("rule_type") // "cpc-based", "keyword-based", "manual"
+
+  // Status
+  isActive  Boolean @default(true) @map("is_active")
+  isDefault Boolean @default(false) @map("is_default")
+  version   Int     @default(1)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  nodes           TaxonomyNode[]
+  rules           TaxonomyRule[]
+  portfolioGroups PortfolioGroup[]
+
+  @@index([objectType])
+  @@index([isDefault])
+  @@map("taxonomy_types")
+}
+
+model TaxonomyNode {
+  id String @id @default(cuid())
+
+  taxonomyTypeId String       @map("taxonomy_type_id")
+  taxonomyType   TaxonomyType @relation(fields: [taxonomyTypeId], references: [id])
+
+  // Hierarchy
+  parentId String?        @map("parent_id")
+  parent   TaxonomyNode?  @relation("NodeHierarchy", fields: [parentId], references: [id])
+  children TaxonomyNode[] @relation("NodeHierarchy")
+
+  level Int // 0=root, 1, 2, 3...
+  path  String // Materialized path: "VIDEO_STREAMING/video-codec"
+
+  // Identity
+  code        String // Unique identifier within taxonomy
+  name        String // Display name
+  description String?
+
+  // Extensible metadata (cpcPrefixes, damagesTier, etc.)
+  metadata Json?
+
+  // Stats (cached)
+  childCount  Int @default(0) @map("child_count")
+  objectCount Int @default(0) @map("object_count")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  classifications ObjectClassification[]
+  rules           TaxonomyRule[]
+
+  @@unique([taxonomyTypeId, code])
+  @@index([taxonomyTypeId])
+  @@index([parentId])
+  @@index([level])
+  @@index([path])
+  @@map("taxonomy_nodes")
+}
+
+model TaxonomyRule {
+  id String @id @default(cuid())
+
+  taxonomyTypeId String       @map("taxonomy_type_id")
+  taxonomyType   TaxonomyType @relation(fields: [taxonomyTypeId], references: [id])
+
+  targetNodeId String       @map("target_node_id")
+  targetNode   TaxonomyNode @relation(fields: [targetNodeId], references: [id])
+
+  ruleType   TaxonomyRuleType @map("rule_type")
+  expression String
+
+  priority    Int     @default(0)
+  isExclusion Boolean @default(false) @map("is_exclusion")
+
+  scope            TaxonomyRuleScope @default(GLOBAL)
+  portfolioGroupId String?           @map("portfolio_group_id")
+  portfolioGroup   PortfolioGroup?   @relation(fields: [portfolioGroupId], references: [id])
+
+  isActive    Boolean @default(true) @map("is_active")
+  matchCount  Int     @default(0) @map("match_count")
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([taxonomyTypeId])
+  @@index([targetNodeId])
+  @@index([scope, portfolioGroupId])
+  @@map("taxonomy_rules")
+}
+
+// =============================================================================
+// PORTFOLIO GROUPS
+// Scoped collections of portfolios with shared analysis parameters
+// =============================================================================
+
+model PortfolioGroup {
+  id String @id @default(cuid())
+
+  name        String  @unique
+  displayName String  @map("display_name")
+  description String?
+
+  // Which taxonomy this group uses
+  taxonomyTypeId String       @map("taxonomy_type_id")
+  taxonomyType   TaxonomyType @relation(fields: [taxonomyTypeId], references: [id])
+
+  // Tier for tiered analysis strategy
+  tier PortfolioGroupTier @default(STANDARD)
+
+  // Analysis parameters (embedded JSON - see PortfolioGroupConfig in design docs)
+  config Json
+
+  // Status
+  status PortfolioGroupStatus @default(ACTIVE)
+
+  // Recalculation tracking
+  lastRecalculatedAt  DateTime?            @map("last_recalculated_at")
+  recalculationStatus RecalculationStatus? @map("recalculation_status")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  members         PortfolioGroupMember[]
+  classifications ObjectClassification[]
+  rules           TaxonomyRule[]
+
+  @@index([taxonomyTypeId])
+  @@index([tier])
+  @@index([status])
+  @@map("portfolio_groups")
+}
+
+model PortfolioGroupMember {
+  id String @id @default(cuid())
+
+  portfolioGroupId String         @map("portfolio_group_id")
+  portfolioGroup   PortfolioGroup @relation(fields: [portfolioGroupId], references: [id], onDelete: Cascade)
+
+  portfolioId String    @map("portfolio_id")
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  addedAt DateTime @default(now()) @map("added_at")
+  addedBy String?  @map("added_by")
+
+  classifiedCount Int @default(0) @map("classified_count")
+
+  @@unique([portfolioGroupId, portfolioId])
+  @@index([portfolioGroupId])
+  @@index([portfolioId])
+  @@map("portfolio_group_members")
+}
+
+// =============================================================================
+// OBJECT CLASSIFICATION
+// Multi-classification support using abstract taxonomy
+// =============================================================================
+
+model ObjectClassification {
+  id String @id @default(cuid())
+
+  // Scope
+  portfolioGroupId String         @map("portfolio_group_id")
+  portfolioGroup   PortfolioGroup @relation(fields: [portfolioGroupId], references: [id], onDelete: Cascade)
+
+  // Object being classified (polymorphic)
+  objectType String @map("object_type") // "patent", "product"
+  objectId   String @map("object_id")
+
+  // Classification target
+  taxonomyNodeId String       @map("taxonomy_node_id")
+  taxonomyNode   TaxonomyNode @relation(fields: [taxonomyNodeId], references: [id])
+
+  // Privileged association rank (1=primary, 2=secondary, etc.)
+  associationRank Int @map("association_rank")
+
+  // Scoring
+  weight     Float  @default(1.0)
+  confidence Float?
+
+  // Provenance
+  sourceCodes          String[] @map("source_codes")
+  inventiveSourceCount Int      @default(0) @map("inventive_source_count")
+
+  // Assignment metadata
+  assignedAt    DateTime @default(now()) @map("assigned_at")
+  assignedBy    String   @map("assigned_by")
+  configVersion Int      @map("config_version")
+
+  @@unique([portfolioGroupId, objectId, associationRank])
+  @@index([portfolioGroupId])
+  @@index([objectType, objectId])
+  @@index([taxonomyNodeId])
+  @@index([associationRank])
+  @@map("object_classifications")
+}
+
+// =============================================================================
+// COMPANIES, PORTFOLIOS & AFFILIATES
+// =============================================================================
+
+model Company {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  displayName String  @map("display_name")
+  description String?
+  website     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  affiliates    Affiliate[]
+  portfolios    Portfolio[]
+  competitorsOf CompetitorRelationship[] @relation("CompetitorFrom")
+  competitorTo  CompetitorRelationship[] @relation("CompetitorTo")
+
+  @@map("companies")
+}
+
+model CompetitorRelationship {
+  id              String                    @id @default(cuid())
+  companyId       String                    @map("company_id")
+  company         Company                   @relation("CompetitorFrom", fields: [companyId], references: [id], onDelete: Cascade)
+  competitorId    String                    @map("competitor_id")
+  competitor      Company                   @relation("CompetitorTo", fields: [competitorId], references: [id], onDelete: Cascade)
+  sectors         String[]
+  discoverySource CompetitorDiscoverySource @default(MANUAL) @map("discovery_source")
+  strength        Float?
+  notes           String?
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+
+  @@unique([companyId, competitorId])
+  @@index([companyId])
+  @@index([competitorId])
+  @@map("competitor_relationships")
+}
+
+model Portfolio {
+  id             String  @id @default(cuid())
+  name           String  @unique
+  displayName    String  @map("display_name")
+  description    String?
+  companyId      String  @map("company_id")
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  patentCount    Int     @default(0) @map("patent_count")
+  affiliateCount Int     @default(0) @map("affiliate_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patents          PortfolioPatent[]
+  scoreSnapshots   ScoreSnapshot[]
+  batchJobs        BatchJob[]
+  groupMemberships PortfolioGroupMember[]
+  unifiedSnapshots UnifiedSnapshot[]
+  sectorRules      SectorRule[] // Legacy relation for migration
+
+  @@index([companyId])
+  @@map("portfolios")
+}
+
+model Affiliate {
+  id           String             @id @default(cuid())
+  companyId    String             @map("company_id")
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  displayName  String             @map("display_name")
+  isActive     Boolean            @default(true) @map("is_active")
+  acquiredYear Int?               @map("acquired_year")
+  notes        String?
+  description  String?
+  parentId     String?            @map("parent_id")
+  parent       Affiliate?         @relation("AffiliateHierarchy", fields: [parentId], references: [id])
+  children     Affiliate[]        @relation("AffiliateHierarchy")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  patterns     AffiliatePattern[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("affiliates")
+}
+
+model AffiliatePattern {
+  id          String    @id @default(cuid())
+  affiliateId String    @map("affiliate_id")
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  pattern     String
+  isExact     Boolean   @default(false) @map("is_exact")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([affiliateId, pattern])
+  @@index([affiliateId])
+  @@map("affiliate_patterns")
+}
+
+model PortfolioPatent {
+  id          String       @id @default(cuid())
+  portfolioId String       @map("portfolio_id")
+  portfolio   Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  patentId    String       @map("patent_id")
+  patent      Patent       @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  source      PatentSource @default(CANDIDATES_FILE)
+  addedAt     DateTime     @default(now()) @map("added_at")
+
+  @@unique([portfolioId, patentId])
+  @@index([portfolioId])
+  @@index([patentId])
+  @@map("portfolio_patents")
+}
+
+// =============================================================================
+// PATENT DATA
+// Core patent entity with both legacy and new abstract classification fields
+// =============================================================================
+
+model Patent {
+  id         String   @id @default(cuid())
+  patentId   String   @unique @map("patent_id")
+  title      String   @default("")
+  abstract   String?  @db.Text
+  grantDate  String?  @map("grant_date")
+  filingDate String?  @map("filing_date")
+  assignee   String   @default("")
+  inventors  String[] @default([])
+
+  // Computed/derived fields
+  forwardCitations Int     @default(0) @map("forward_citations")
+  remainingYears   Float?  @map("remaining_years")
+  isExpired        Boolean @default(false) @map("is_expired")
+  baseScore        Float?  @map("base_score")
+
+  // Affiliate matching
+  affiliate String?
+
+  // LEGACY pragmatic fields (kept for backward compatibility during migration)
+  // TODO: Deprecate after migration to abstract model
+  superSector          String? @map("super_sector")
+  primarySector        String? @map("primary_sector")
+  primaryCpc           String? @map("primary_cpc")
+  primarySubSectorId   String? @map("primary_sub_sector_id")
+  primarySubSectorName String? @map("primary_sub_sector_name")
+
+  // NEW pragmatic fields (abstract level names, synced from ObjectClassification)
+  primaryLevel1       String? @map("primary_level1")
+  primaryLevel2       String? @map("primary_level2")
+  primaryLevel3       String? @map("primary_level3")
+  primaryLevel1NodeId String? @map("primary_level1_node_id")
+  primaryLevel2NodeId String? @map("primary_level2_node_id")
+  primaryLevel3NodeId String? @map("primary_level3_node_id")
+
+  // Source code stats
+  inventiveSourceCount  Int? @map("inventive_source_count")
+  additionalSourceCount Int? @map("additional_source_count")
+  mappedSourceCount     Int? @map("mapped_source_count")
+  unmappedSourceCount   Int? @map("unmapped_source_count")
+
+  // Multi-classification indicators
+  potentialNodeCount Int?     @map("potential_node_count")
+  crossLevel1        Boolean? @map("cross_level1")
+
+  // Enrichment tracking
+  hasLlmData           Boolean @default(false) @map("has_llm_data")
+  hasCitationData      Boolean @default(false) @map("has_citation_data")
+  hasProsecutionData   Boolean @default(false) @map("has_prosecution_data")
+  hasXmlData           Boolean @default(false) @map("has_xml_data")
+  hasIprData           Boolean @default(false) @map("has_ipr_data")
+  hasFamilyData        Boolean @default(false) @map("has_family_data")
+  hasProsecutionDetail Boolean @default(false) @map("has_prosecution_detail")
+
+  // Quarantine
+  isQuarantined   Boolean @default(false) @map("is_quarantined")
+  quarantine      Json?
+  patentIdNumeric Int?    @map("patent_id_numeric")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  portfolios          PortfolioPatent[]
+  cpcCodes            PatentCpc[]
+  citations           PatentCitationAnalysis?
+  prosecution         PatentProsecution?
+  prosecutionTimeline ProsecutionTimeline?
+  scores              PatentScore[]
+  compositeScores     PatentCompositeScore[]
+
+  @@index([primarySector])
+  @@index([superSector])
+  @@index([primaryLevel1])
+  @@index([primaryLevel2])
+  @@index([assignee])
+  @@index([baseScore])
+  @@index([isExpired])
+  @@index([isQuarantined])
+  @@map("patents")
+}
+
+model PatentCpc {
+  id          String  @id @default(cuid())
+  patentId    String  @map("patent_id")
+  patent      Patent  @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  cpcCode     String  @map("cpc_code")
+  isInventive Boolean @default(false) @map("is_inventive")
+
+  @@unique([patentId, cpcCode])
+  @@index([patentId])
+  @@index([cpcCode])
+  @@map("patent_cpc_codes")
+}
+
+model PatentCitationAnalysis {
+  id                       String   @id @default(cuid())
+  patentId                 String   @unique @map("patent_id")
+  patent                   Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  competitorCitations      Int      @default(0) @map("competitor_citations")
+  affiliateCitations       Int      @default(0) @map("affiliate_citations")
+  neutralCitations         Int      @default(0) @map("neutral_citations")
+  competitorNames          String[] @map("competitor_names")
+  adjustedForwardCitations Float?   @map("adjusted_forward_citations")
+  competitorDensity        Float?   @map("competitor_density")
+  classifiedAt             DateTime @default(now()) @map("classified_at")
+
+  @@map("patent_citation_analyses")
+}
+
+model PatentProsecution {
+  id                      String  @id @default(cuid())
+  patentId                String  @unique @map("patent_id")
+  patent                  Patent  @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  applicationNumber       String? @map("application_number")
+  officeActionsCount      Int     @default(0) @map("office_actions_count")
+  nonFinalRejections      Int     @default(0) @map("non_final_rejections")
+  finalRejections         Int     @default(0) @map("final_rejections")
+  allowances              Int     @default(0)
+  prosecutionQualityScore Int?    @map("prosecution_quality_score")
+  prosecutionCategory     String? @map("prosecution_category")
+
+  @@map("patent_prosecution")
+}
+
+model PatentScore {
+  id          String   @id @default(cuid())
+  patentId    String   @map("patent_id")
+  patent      Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  fieldName   String   @map("field_name")
+  displayName String?  @map("display_name")
+  rating      Int?
+  floatValue  Float?   @map("float_value")
+  textValue   String?  @map("text_value")
+  reasoning   String?  @db.Text
+  source      String   @default("llm")
+  templateId  String?  @map("template_id")
+  llmModel    String?  @map("llm_model")
+  scoredAt    DateTime @default(now()) @map("scored_at")
+  isStale     Boolean  @default(false) @map("is_stale")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([patentId, fieldName])
+  @@index([patentId])
+  @@index([fieldName])
+  @@index([rating])
+  @@map("patent_scores")
+}
+
+model PatentCompositeScore {
+  id         String   @id @default(cuid())
+  patentId   String   @map("patent_id")
+  patent     Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  scoreName  String   @map("score_name")
+  value      Float
+  rank       Int?
+  percentile Float?
+  config     Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([patentId, scoreName])
+  @@index([patentId])
+  @@index([scoreName])
+  @@index([value])
+  @@map("patent_composite_scores")
+}
+
+model ProsecutionTimeline {
+  id                String   @id @default(cuid())
+  patentId          String   @unique @map("patent_id")
+  patent            Patent   @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+  applicationNum    String   @map("application_num")
+  totalActions      Int      @map("total_actions")
+  totalRejections   Int      @map("total_rejections")
+  totalRCEs         Int      @default(0) @map("total_rces")
+  timeToGrantMonths Int?     @map("time_to_grant_months")
+  prosecutionScore  Float    @map("prosecution_score")
+  officeActions     Json     @map("office_actions")
+  responses         Json
+  citedPriorArt     Json     @map("cited_prior_art")
+  narrowedClaims    Json     @map("narrowed_claims")
+  estoppelArguments Json     @map("estoppel_arguments")
+  survivedBases     Json     @map("survived_bases")
+  analyzedAt        DateTime @map("analyzed_at")
+  llmModel          String   @map("llm_model")
+  documentCount     Int      @map("document_count")
+
+  @@index([patentId])
+  @@map("prosecution_timelines")
+}
+
+// =============================================================================
+// UNIFIED SCORING SYSTEM
+// Models that exist in DB but were missing from v1 schema
+// =============================================================================
+
+model MetricAggregate {
+  id                 String               @id @default(cuid())
+  scopeType          MetricAggregateScope @map("scope_type")
+  scopeId            String?              @map("scope_id")
+  portfolioId        String?              @map("portfolio_id")
+  metricName         String               @map("metric_name")
+  metricLayer        MetricLayer          @map("metric_layer")
+  count              Int
+  mean               Float
+  stdDev             Float                @map("std_dev")
+  min                Float
+  max                Float
+  p25                Float
+  median             Float
+  p75                Float
+  normalizationBasis Float?               @map("normalization_basis")
+  normalizationScale Float?               @map("normalization_scale")
+  templateVersionId  String?              @map("template_version_id")
+  calculatedAt       DateTime             @map("calculated_at")
+  createdAt          DateTime             @default(now()) @map("created_at")
+
+  @@unique([scopeType, scopeId, portfolioId, metricName, metricLayer])
+  @@index([scopeType, scopeId])
+  @@index([portfolioId])
+  @@index([metricName])
+  @@index([metricLayer])
+  @@map("metric_aggregates")
+}
+
+model PatentMetric {
+  id                String                  @id @default(cuid())
+  patentId          String                  @map("patent_id")
+  metricName        String                  @map("metric_name")
+  metricLayer       MetricLayer             @map("metric_layer")
+  value             Float
+  reasoning         String?
+  confidence        Float?
+  templateVersionId String?                 @map("template_version_id")
+  templateVersion   ScoringTemplateVersion? @relation(fields: [templateVersionId], references: [id])
+  questionHash      String?                 @map("question_hash")
+  sectorId          String?                 @map("sector_id")
+  subSectorId       String?                 @map("sub_sector_id")
+  llmModel          String?                 @map("llm_model")
+  executedAt        DateTime                @map("executed_at")
+  isCurrent         Boolean                 @default(true) @map("is_current")
+  supersededById    String?                 @map("superseded_by_id")
+  supersededBy      PatentMetric?           @relation("PatentMetricSupersession", fields: [supersededById], references: [id])
+  supersedes        PatentMetric[]          @relation("PatentMetricSupersession")
+  createdAt         DateTime                @default(now()) @map("created_at")
+
+  @@unique([patentId, metricName, sectorId, subSectorId, isCurrent])
+  @@index([patentId])
+  @@index([metricName])
+  @@index([metricLayer])
+  @@index([sectorId])
+  @@index([subSectorId])
+  @@index([templateVersionId])
+  @@index([isCurrent])
+  @@map("patent_metrics")
+}
+
+model ScoringTemplateVersion {
+  id                  String                   @id @default(cuid())
+  templateId          String                   @map("template_id")
+  template            ScoringTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version             Int
+  questions           Json
+  questionFingerprint String                   @map("question_fingerprint")
+  questionHash        String                   @map("question_hash")
+  parentVersionId     String?                  @map("parent_version_id")
+  parentVersion       ScoringTemplateVersion?  @relation("TemplateVersionInheritance", fields: [parentVersionId], references: [id])
+  childVersions       ScoringTemplateVersion[] @relation("TemplateVersionInheritance")
+  mergedQuestions     Json                     @map("merged_questions")
+  mergedFingerprint   String                   @map("merged_fingerprint")
+  inheritanceChain    Json?                    @map("inheritance_chain")
+  changeSummary       String?                  @map("change_summary")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+
+  patentMetrics   PatentMetric[]
+  subSectorScores PatentSubSectorScore[]
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@index([questionFingerprint])
+  @@map("scoring_template_versions")
+}
+
+model WeightProfile {
+  id              String             @id @default(cuid())
+  name            String
+  description     String?
+  scopeType       WeightProfileScope @default(GLOBAL) @map("scope_type")
+  scopeId         String?            @map("scope_id")
+  weights         Json
+  scaling         Json?
+  invert          Json?
+  requiredMetrics String[]           @map("required_metrics")
+  optionalMetrics String[]           @map("optional_metrics")
+  version         Int                @default(1)
+  isActive        Boolean            @default(true) @map("is_active")
+  isDefault       Boolean            @default(false) @map("is_default")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  snapshots UnifiedSnapshot[]
+
+  @@unique([name, scopeType, scopeId])
+  @@index([scopeType, scopeId])
+  @@index([isActive])
+  @@map("weight_profiles")
+}
+
+model UnifiedSnapshot {
+  id                    String            @id @default(cuid())
+  name                  String
+  description           String?
+  scopeType             SnapshotScope     @map("scope_type")
+  scopeId               String?           @map("scope_id")
+  portfolioId           String?           @map("portfolio_id")
+  portfolio             Portfolio?        @relation(fields: [portfolioId], references: [id])
+  weightProfileId       String?           @map("weight_profile_id")
+  weightProfile         WeightProfile?    @relation(fields: [weightProfileId], references: [id])
+  weightConfig          Json              @map("weight_config")
+  templateVersions      Json              @map("template_versions")
+  metricsCoverage       Json?             @map("metrics_coverage")
+  patentCount           Int               @map("patent_count")
+  versionTag            String?           @map("version_tag")
+  isActive              Boolean           @default(false) @map("is_active")
+  supersededById        String?           @map("superseded_by_id")
+  supersededBy          UnifiedSnapshot?  @relation("SnapshotSupersession", fields: [supersededById], references: [id])
+  supersedes            UnifiedSnapshot[] @relation("SnapshotSupersession")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  aggregateVersions     Json?             @map("aggregate_versions")
+  freshnessScore        Float?            @map("freshness_score")
+  metricsAvailable      String[]          @map("metrics_available")
+  metricsMissing        String[]          @map("metrics_missing")
+  metricsUsed           String[]          @map("metrics_used")
+  normalizationConfig   Json?             @map("normalization_config")
+  normalizationStrategy String?           @map("normalization_strategy")
+  stalePatentCount      Int               @default(0) @map("stale_patent_count")
+
+  entries SnapshotEntry[]
+
+  @@index([scopeType, scopeId])
+  @@index([portfolioId])
+  @@index([isActive])
+  @@index([versionTag])
+  @@map("unified_snapshots")
+}
+
+model SnapshotEntry {
+  id                   String          @id @default(cuid())
+  snapshotId           String          @map("snapshot_id")
+  snapshot             UnifiedSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  patentId             String          @map("patent_id")
+  compositeScore       Float           @map("composite_score")
+  rank                 Int
+  metricValues         Json            @map("metric_values")
+  metricContributions  Json?           @map("metric_contributions")
+  normalizationApplied Boolean         @default(false) @map("normalization_applied")
+  originalValues       Json?           @map("original_values")
+
+  @@unique([snapshotId, patentId])
+  @@index([snapshotId])
+  @@index([patentId])
+  @@index([compositeScore])
+  @@index([rank])
+  @@map("snapshot_entries")
+}
+
+// =============================================================================
+// SCORING TEMPLATES (updated to include versions relation)
+// =============================================================================
+
+model ScoringTemplate {
+  id             String            @id @default(cuid())
+  superSectorId  String?           @map("super_sector_id")
+  sectorId       String?           @map("sector_id")
+  subSectorId    String?           @map("sub_sector_id")
+  name           String
+  description    String?
+  questions      Json
+  inheritsFromId String?           @map("inherits_from_id")
+  inheritsFrom   ScoringTemplate?  @relation("TemplateInheritance", fields: [inheritsFromId], references: [id])
+  inheritedBy    ScoringTemplate[] @relation("TemplateInheritance")
+  isActive       Boolean           @default(true) @map("is_active")
+  isDefault      Boolean           @default(false) @map("is_default")
+  version        Int               @default(1)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  scores   PatentSubSectorScore[]
+  versions ScoringTemplateVersion[]
+
+  @@index([superSectorId])
+  @@index([sectorId])
+  @@index([subSectorId])
+  @@index([isDefault])
+  @@map("scoring_templates")
+}
+
+model PatentSubSectorScore {
+  id                       String                  @id @default(cuid())
+  patentId                 String                  @map("patent_id")
+  subSectorId              String                  @map("sub_sector_id")
+  metrics                  Json
+  compositeScore           Float                   @map("composite_score")
+  rankInSubSector          Int?                    @map("rank_in_sub_sector")
+  normalizedScore          Float?                  @map("normalized_score")
+  rankInSector             Int?                    @map("rank_in_sector")
+  templateId               String?                 @map("template_id")
+  template                 ScoringTemplate?        @relation(fields: [templateId], references: [id])
+  templateVersion          Int                     @map("template_version")
+  templateConfigId         String?                 @map("template_config_id")
+  scoringTemplateVersionId String?                 @map("scoring_template_version_id")
+  scoringTemplateVersion   ScoringTemplateVersion? @relation(fields: [scoringTemplateVersionId], references: [id])
+  llmModel                 String?                 @map("llm_model")
+  tokensUsed               Int?                    @map("tokens_used")
+  withClaims               Boolean                 @default(false) @map("with_claims")
+  questionFingerprint      String?                 @map("question_fingerprint")
+  isStale                  Boolean                 @default(false) @map("is_stale")
+  staleReason              String?                 @map("stale_reason")
+  executedAt               DateTime                @map("executed_at")
+  createdAt                DateTime                @default(now()) @map("created_at")
+  updatedAt                DateTime                @updatedAt @map("updated_at")
+
+  @@unique([patentId, subSectorId])
+  @@index([subSectorId])
+  @@index([patentId])
+  @@index([compositeScore])
+  @@index([normalizedScore])
+  @@index([isStale])
+  @@map("patent_sub_sector_scores")
+}
+
+// =============================================================================
+// SCORE SNAPSHOTS (legacy, kept for backward compatibility)
+// =============================================================================
+
+model ScoreSnapshot {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?
+  scoreType    ScoreType  @map("score_type")
+  portfolioId  String?    @map("portfolio_id")
+  portfolio    Portfolio? @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  config       Json
+  isActive     Boolean    @default(false) @map("is_active")
+  patentCount  Int        @default(0) @map("patent_count")
+  llmDataCount Int        @default(0) @map("llm_data_count")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  scores PatentScoreEntry[]
+
+  @@index([scoreType])
+  @@index([isActive])
+  @@index([portfolioId])
+  @@map("score_snapshots")
+}
+
+model PatentScoreEntry {
+  id                String        @id @default(cuid())
+  snapshotId        String        @map("snapshot_id")
+  snapshot          ScoreSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  patentId          String        @map("patent_id")
+  score             Float
+  rank              Int
+  rawMetrics        Json?         @map("raw_metrics")
+  normalizedMetrics Json?         @map("normalized_metrics")
+
+  @@unique([snapshotId, patentId])
+  @@index([snapshotId])
+  @@index([patentId])
+  @@index([score])
+  @@index([rank])
+  @@map("patent_score_entries")
+}
+
+// =============================================================================
+// CPC CODES (kept for backward compatibility and reference data)
+// =============================================================================
+
+model CpcCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  level          CpcLevel
+  parentCode     String?   @map("parent_code")
+  title          String
+  titleLong      String?   @map("title_long")
+  sectorId       String?   @map("sector_id")
+  superSectorId  String?   @map("super_sector_id")
+  source         CpcSource @default(XML)
+  notAllocatable Boolean   @default(false) @map("not_allocatable")
+  dateRevised    String?   @map("date_revised")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([parentCode])
+  @@index([level])
+  @@index([sectorId])
+  @@map("cpc_codes")
+}
+
+// =============================================================================
+// BATCH JOBS
+// =============================================================================
+
+model BatchJob {
+  id                  String     @id @default(cuid())
+  groupId             String?    @map("group_id")
+  targetType          String     @map("target_type")
+  targetValue         String     @map("target_value")
+  coverageType        String     @map("coverage_type")
+  status              String     @default("pending")
+  pid                 Int?
+  logFile             String?    @map("log_file")
+  error               String?
+  totalPatents        Int        @default(0) @map("total_patents")
+  completedPatents    Int        @default(0) @map("completed_patents")
+  estimatedRate       Float?     @map("estimated_rate")
+  actualRate          Float?     @map("actual_rate")
+  estimatedCompletion DateTime?  @map("estimated_completion")
+  model               String?
+  batchMode           Boolean?   @map("batch_mode")
+  anthropicBatchId    String?    @map("anthropic_batch_id")
+  useClaims           Boolean    @default(false) @map("use_claims")
+  settings            Json?      @map("settings")
+  portfolioId         String?    @map("portfolio_id")
+  portfolio           Portfolio? @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
+  portfolioName       String?    @map("portfolio_name")
+  startedAt           DateTime?  @map("started_at")
+  completedAt         DateTime?  @map("completed_at")
+  createdAt           DateTime   @default(now()) @map("created_at")
+
+  @@index([groupId])
+  @@index([status])
+  @@index([coverageType])
+  @@index([portfolioId])
+  @@index([createdAt])
+  @@map("batch_jobs")
+}
+
+// =============================================================================
+// FOCUS GROUPS & FOCUS AREAS
+// =============================================================================
+
+model FocusGroup {
+  id            String           @id @default(cuid())
+  name          String
+  description   String?
+  ownerId       String           @map("owner_id")
+  owner         User             @relation(fields: [ownerId], references: [id])
+  status        FocusGroupStatus @default(DRAFT)
+  sourceType    FocusGroupSource @default(MANUAL) @map("source_type")
+  sourceFilters Json?            @map("source_filters")
+  parentId      String?          @map("parent_id")
+  parent        FocusGroup?      @relation("FocusGroupHierarchy", fields: [parentId], references: [id])
+  children      FocusGroup[]     @relation("FocusGroupHierarchy")
+  patentIds     String[]         @map("patent_ids")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  formalizedAs  FocusArea?
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("focus_groups")
+}
+
+model FocusArea {
+  id                String          @id @default(cuid())
+  name              String
+  description       String?
+  ownerId           String          @map("owner_id")
+  owner             User            @relation(fields: [ownerId], references: [id])
+  status            FocusAreaStatus @default(ACTIVE)
+  sourceGroupId     String?         @unique @map("source_group_id")
+  sourceGroup       FocusGroup?     @relation(fields: [sourceGroupId], references: [id])
+  parentId          String?         @map("parent_id")
+  parent            FocusArea?      @relation("FocusAreaHierarchy", fields: [parentId], references: [id])
+  children          FocusArea[]     @relation("FocusAreaHierarchy")
+  superSector       String?         @map("super_sector")
+  primarySector     String?         @map("primary_sector")
+  searchScopeType   SearchScopeType @default(PORTFOLIO) @map("search_scope_type")
+  searchScopeConfig Json?           @map("search_scope_config")
+  patentCount       Int             @default(0) @map("patent_count")
+  lastCalculatedAt  DateTime?       @map("last_calculated_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  searchTerms     SearchTerm[]
+  patents         FocusAreaPatent[]
+  facetDefs       FacetDefinition[]
+  promptTemplates PromptTemplate[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([superSector])
+  @@map("focus_areas")
+}
+
+model FocusAreaPatent {
+  id             String         @id @default(cuid())
+  focusAreaId    String         @map("focus_area_id")
+  focusArea      FocusArea      @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+  patentId       String         @map("patent_id")
+  membershipType MembershipType @default(SEARCH_MATCH) @map("membership_type")
+  matchedTermIds String[]       @map("matched_term_ids")
+  matchScore     Float?         @map("match_score")
+  manualInclude  Boolean?       @map("manual_include")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  @@unique([focusAreaId, patentId])
+  @@index([focusAreaId])
+  @@index([patentId])
+  @@map("focus_area_patents")
+}
+
+model SearchTerm {
+  id                String           @id @default(cuid())
+  focusAreaId       String           @map("focus_area_id")
+  focusArea         FocusArea        @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+  termType          SearchTermType   @default(KEYWORD) @map("term_type")
+  expression        String
+  sourceType        SearchTermSource @default(MANUAL) @map("source_type")
+  sourcePatentIds   String[]         @map("source_patent_ids")
+  hitCountPortfolio Int?             @map("hit_count_portfolio")
+  hitCountScope     Int?             @map("hit_count_scope")
+  hitCountSector    Int?             @map("hit_count_sector")
+  hitCountFocusArea Int?             @map("hit_count_focus_area")
+  hitCountsJson     Json?            @map("hit_counts_json")
+  isActive          Boolean          @default(true) @map("is_active")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([focusAreaId])
+  @@map("search_terms")
+}
+
+model FacetDefinition {
+  id               String               @id @default(cuid())
+  focusAreaId      String               @map("focus_area_id")
+  focusArea        FocusArea            @relation(fields: [focusAreaId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  facetType        FacetType            @default(ATOMIC) @map("facet_type")
+  dataType         FacetDataType        @default(NUMERIC) @map("data_type")
+  rangeMin         Float?               @map("range_min")
+  rangeMax         Float?               @map("range_max")
+  options          String[]
+  llmPrompt        String?              @map("llm_prompt")
+  llmContextFields String[]             @map("llm_context_fields")
+  llmModel         String?              @map("llm_model")
+  formula          String?
+  inputFacetIds    String[]             @map("input_facet_ids")
+  normalization    NormalizationType?   @default(NONE)
+  normalizeScope   String?              @map("normalize_scope")
+  status           FacetExecutionStatus @default(PENDING)
+  completedCount   Int                  @default(0) @map("completed_count")
+  totalCount       Int                  @default(0) @map("total_count")
+  lastRunAt        DateTime?            @map("last_run_at")
+  errorMessage     String?              @map("error_message")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  values FacetValue[]
+
+  @@index([focusAreaId])
+  @@index([facetType])
+  @@map("facet_definitions")
+}
+
+model FacetValue {
+  id           String          @id @default(cuid())
+  facetDefId   String          @map("facet_def_id")
+  facetDef     FacetDefinition @relation(fields: [facetDefId], references: [id], onDelete: Cascade)
+  patentId     String          @map("patent_id")
+  numericValue Float?          @map("numeric_value")
+  textValue    String?         @map("text_value")
+  booleanValue Boolean?        @map("boolean_value")
+  confidence   Float?
+  source       String?
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@unique([facetDefId, patentId])
+  @@index([facetDefId])
+  @@index([patentId])
+  @@map("facet_values")
+}
+
+// =============================================================================
+// PROMPT TEMPLATES & LLM WORKFLOW
+// =============================================================================
+
+model PromptTemplate {
+  id             String               @id @default(cuid())
+  name           String
+  description    String?
+  templateType   PromptTemplateType   @default(FREE_FORM) @map("template_type")
+  objectType     String               @default("patent") @map("object_type")
+  promptText     String?              @map("prompt_text")
+  questions      Json?
+  executionMode  PromptExecutionMode  @default(PER_PATENT) @map("execution_mode")
+  contextFields  String[]             @map("context_fields")
+  llmModel       String               @default("claude-sonnet-4-20250514") @map("llm_model")
+  delimiterStart String               @default("<<") @map("delimiter_start")
+  delimiterEnd   String               @default(">>") @map("delimiter_end")
+  focusAreaId    String?              @map("focus_area_id")
+  focusArea      FocusArea?           @relation(fields: [focusAreaId], references: [id], onDelete: SetNull)
+  status         PromptTemplateStatus @default(DRAFT)
+  completedCount Int                  @default(0) @map("completed_count")
+  totalCount     Int                  @default(0) @map("total_count")
+  lastRunAt      DateTime?            @map("last_run_at")
+  errorMessage   String?              @map("error_message")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  jobs LlmJob[]
+
+  @@index([focusAreaId])
+  @@index([objectType])
+  @@map("prompt_templates")
+}
+
+model LlmWorkflow {
+  id           String         @id @default(cuid())
+  name         String
+  description  String?
+  workflowType String         @default("custom") @map("workflow_type")
+  scopeType    String         @map("scope_type")
+  scopeId      String?        @map("scope_id")
+  config       Json?
+  status       WorkflowStatus @default(PENDING)
+  finalResult  Json?          @map("final_result")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  jobs LlmJob[]
+
+  @@index([scopeType, scopeId])
+  @@index([status])
+  @@map("llm_workflows")
+}
+
+model LlmJob {
+  id           String         @id @default(cuid())
+  workflowId   String?        @map("workflow_id")
+  workflow     LlmWorkflow?   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  templateId   String         @map("template_id")
+  template     PromptTemplate @relation(fields: [templateId], references: [id])
+  targetType   String         @map("target_type")
+  targetIds    String[]       @map("target_ids")
+  targetData   Json?          @map("target_data")
+  status       WorkflowStatus @default(PENDING)
+  priority     Int            @default(0)
+  retryCount   Int            @default(0) @map("retry_count")
+  maxRetries   Int            @default(3) @map("max_retries")
+  roundNumber  Int?           @map("round_number")
+  clusterIndex Int?           @map("cluster_index")
+  sortScore    Float?         @map("sort_score")
+  result       Json?
+  tokensUsed   Int?           @map("tokens_used")
+  errorMessage String?        @map("error_message")
+  startedAt    DateTime?      @map("started_at")
+  completedAt  DateTime?      @map("completed_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  dependsOn  LlmJobDependency[] @relation("downstream")
+  dependedBy LlmJobDependency[] @relation("upstream")
+
+  @@index([workflowId])
+  @@index([status])
+  @@index([templateId])
+  @@map("llm_jobs")
+}
+
+model LlmJobDependency {
+  id              String  @id @default(cuid())
+  upstreamJobId   String  @map("upstream_job_id")
+  upstreamJob     LlmJob  @relation("upstream", fields: [upstreamJobId], references: [id], onDelete: Cascade)
+  downstreamJobId String  @map("downstream_job_id")
+  downstreamJob   LlmJob  @relation("downstream", fields: [downstreamJobId], references: [id], onDelete: Cascade)
+  outputField     String? @map("output_field")
+  inputField      String? @map("input_field")
+
+  @@unique([upstreamJobId, downstreamJobId])
+  @@index([upstreamJobId])
+  @@index([downstreamJobId])
+  @@map("llm_job_dependencies")
+}
+
+model EntityAnalysisResult {
+  id          String   @id @default(cuid())
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  templateId  String?  @map("template_id")
+  jobId       String?  @map("job_id")
+  objectType  String?  @map("object_type")
+  objectId    String?  @map("object_id")
+  result      Json
+  resultType  String   @map("result_type")
+  fieldValues Json?    @map("field_values")
+  model       String?
+  tokensUsed  Int?     @map("tokens_used")
+  promptSent  String?  @map("prompt_sent") @db.Text
+  executedAt  DateTime @map("executed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([entityType, entityId, objectId])
+  @@index([templateId])
+  @@index([jobId])
+  @@map("entity_analysis_results")
+}
+
+// =============================================================================
+// PATENT FAMILY EXPLORATION
+// =============================================================================
+
+model PatentFamilyExploration {
+  id                  String         @id @default(cuid())
+  seedPatentId        String         @map("seed_patent_id")
+  seedPatentIds       String[]       @default([]) @map("seed_patent_ids")
+  name                String?
+  description         String?
+  maxAncestorDepth    Int            @default(2) @map("max_ancestor_depth")
+  maxDescendantDepth  Int            @default(2) @map("max_descendant_depth")
+  includeSiblings     Boolean        @default(true) @map("include_siblings")
+  includeCousins      Boolean        @default(false) @map("include_cousins")
+  limitToSectors      String[]       @map("limit_to_sectors")
+  limitToCpcPrefixes  String[]       @map("limit_to_cpc_prefixes")
+  limitToFocusAreas   String[]       @map("limit_to_focus_areas")
+  requireInPortfolio  Boolean        @default(false) @map("require_in_portfolio")
+  version             Int            @default(1)
+  weights             Json?
+  membershipThreshold Float?         @map("membership_threshold")
+  expansionThreshold  Float?         @map("expansion_threshold")
+  portfolioWeighting  Json?          @map("portfolio_weighting")
+  seedAggregate       Json?          @map("seed_aggregate")
+  currentGeneration   Int            @default(0) @map("current_generation")
+  memberCount         Int            @default(0) @map("member_count")
+  candidateCount      Int            @default(0) @map("candidate_count")
+  status              WorkflowStatus @default(PENDING)
+  discoveredCount     Int            @default(0) @map("discovered_count")
+  errorMessage        String?        @map("error_message")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  members        PatentFamilyMember[]
+  expansionSteps PatentFamilyExpansionStep[]
+
+  @@index([seedPatentId])
+  @@map("patent_family_explorations")
+}
+
+model PatentFamilyMember {
+  id               String                  @id @default(cuid())
+  explorationId    String                  @map("exploration_id")
+  exploration      PatentFamilyExploration @relation(fields: [explorationId], references: [id], onDelete: Cascade)
+  patentId         String                  @map("patent_id")
+  status           String                  @default("candidate")
+  relationToSeed   String                  @map("relation_to_seed")
+  generationDepth  Int                     @map("generation_depth")
+  discoveredVia    String[]                @default([]) @map("discovered_via")
+  discoveredAtStep Int?                    @map("discovered_at_step")
+  dimensionScores  Json?                   @map("dimension_scores")
+  compositeScore   Float?                  @map("composite_score")
+  dataCompleteness Float?                  @map("data_completeness")
+  inPortfolio      Boolean                 @default(false) @map("in_portfolio")
+  title            String?
+  assignee         String?
+  sector           String?
+  superSector      String?                 @map("super_sector")
+  filingDate       String?                 @map("filing_date")
+  remainingYears   Float?                  @map("remaining_years")
+  isCompetitor     Boolean                 @default(false) @map("is_competitor")
+  competitorName   String?                 @map("competitor_name")
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  @@unique([explorationId, patentId])
+  @@index([explorationId])
+  @@index([explorationId, status])
+  @@index([compositeScore])
+  @@index([patentId])
+  @@map("patent_family_members")
+}
+
+model PatentFamilyExpansionStep {
+  id                  String                  @id @default(cuid())
+  explorationId       String                  @map("exploration_id")
+  exploration         PatentFamilyExploration @relation(fields: [explorationId], references: [id], onDelete: Cascade)
+  stepNumber          Int                     @map("step_number")
+  direction           String
+  generationDepth     Int                     @map("generation_depth")
+  candidatesEvaluated Int                     @map("candidates_evaluated")
+  autoIncluded        Int                     @default(0) @map("auto_included")
+  expansionZone       Int                     @default(0) @map("expansion_zone")
+  autoRejected        Int                     @default(0) @map("auto_rejected")
+  userAccepted        Int                     @default(0) @map("user_accepted")
+  userExcluded        Int                     @default(0) @map("user_excluded")
+  weightsUsed         Json                    @map("weights_used")
+  thresholdsUsed      Json                    @map("thresholds_used")
+  createdAt           DateTime                @default(now()) @map("created_at")
+
+  @@index([explorationId])
+  @@map("patent_family_expansion_steps")
+}
+
+// =============================================================================
+// LEGACY MODELS (kept for migration, will be removed after data migration)
+// =============================================================================
+
+model SuperSector {
+  id String @id @default(cuid())
+
+  name        String  @unique // e.g., "SECURITY"
+  displayName String  @map("display_name") // e.g., "Security"
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sectors Sector[]
+
+  @@map("super_sectors")
+}
+
+model Sector {
+  id String @id @default(cuid())
+
+  name        String  @unique // e.g., "video-codec"
+  displayName String  @map("display_name") // e.g., "Video Codec"
+  description String?
+
+  superSectorId String?      @map("super_sector_id")
+  superSector   SuperSector? @relation(fields: [superSectorId], references: [id])
+
+  // CPC mapping (from sectorMappings config)
+  cpcPrefixes String[] @map("cpc_prefixes")
+
+  // Metadata
+  damagesTier   String? @map("damages_tier") // "Very High", "High", "Medium", "Low"
+  damagesRating Int?    @map("damages_rating") // Numeric 1-4 (Low=1, Medium=2, High=3, Very High=4)
+  facets        Json? // Scoring multipliers from sector-facets.json
+  patentCount   Int     @default(0) @map("patent_count") // Cached count
+
+  // Sector management — targets for refactoring
+  targetMinSize Int? @map("target_min_size")
+  targetMaxSize Int? @map("target_max_size") // Default guidance: 500
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  rules      SectorRule[]
+  subSectors SubSector[]
+
+  @@index([superSectorId])
+  @@map("sectors")
+}
+
+model SectorRule {
+  id       String @id @default(cuid())
+  sectorId String @map("sector_id")
+  sector   Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  ruleType   SectorRuleType @default(CPC_PREFIX) @map("rule_type")
+  expression String // CPC prefix, keyword, phrase, boolean expr
+
+  priority    Int     @default(0) // Higher = evaluated first
+  isExclusion Boolean @default(false) @map("is_exclusion")
+
+  scope       SectorRuleScope @default(LIBRARY)
+  portfolioId String?         @map("portfolio_id") // Non-null for portfolio overrides
+  portfolio   Portfolio?      @relation(fields: [portfolioId], references: [id])
+
+  description String?
+  isActive    Boolean @default(true) @map("is_active")
+  matchCount  Int     @default(0) @map("match_count")
+
+  promotedFrom String?   @map("promoted_from")
+  promotedAt   DateTime? @map("promoted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sectorId])
+  @@index([ruleType])
+  @@index([scope, portfolioId])
+  @@map("sector_rules")
+}
+
+enum SectorRuleType {
+  CPC_PREFIX // CPC code starts with expression
+  CPC_SUBGROUP // Exact CPC subgroup match
+  KEYWORD // Title/abstract contains keyword
+  PHRASE // Exact phrase match
+  KEYWORD_AND // All space-separated keywords must appear
+  BOOLEAN // Complex boolean expression
+}
+
+enum SectorRuleScope {
+  LIBRARY // Universal rule (all portfolios)
+  PORTFOLIO // Portfolio-specific override
+}
+
+model SubSector {
+  id String @id @default(cuid())
+
+  // Parent sector relationship
+  sectorId String @map("sector_id")
+  sector   Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  // Identity
+  name        String // e.g., "hypervisors-2021" or "H04L45/586"
+  displayName String  @map("display_name")
+  description String?
+
+  // Primary grouping criterion
+  groupingType SubSectorGroupingType @default(CPC_SUBGROUP) @map("grouping_type")
+
+  // CPC-based grouping (most common)
+  cpcCode   String? @map("cpc_code") // Full CPC subgroup code
+  cpcPrefix String? @map("cpc_prefix") // Or a prefix pattern
+
+  // Date-based grouping (for splitting large CPC groups)
+  dateRangeStart String? @map("date_range_start") // YYYY or YYYY-MM-DD
+  dateRangeEnd   String? @map("date_range_end")
+
+  // Combined: CPC + date (for secondary splits)
+  parentCpcCode String? @map("parent_cpc_code") // If date-split from a CPC group
+
+  // Status
+  status SubSectorStatus @default(PROSPECTIVE)
+
+  // Cached stats
+  patentCount Int @default(0) @map("patent_count")
+
+  // Flags for user attention
+  needsReview  Boolean @default(false) @map("needs_review") // Above threshold, needs intervention
+  reviewReason String? @map("review_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([sectorId, name])
+  @@index([sectorId])
+  @@index([status])
+  @@index([cpcCode])
+  @@map("sub_sectors")
+}
+
+enum SubSectorGroupingType {
+  CPC_SUBGROUP // Full CPC subgroup code (e.g., H04L63/1416)
+  CPC_GROUP // CPC group (e.g., H04L63/14)
+  CPC_PREFIX // CPC prefix pattern
+  DATE_RANGE // Date-based split of a CPC group
+  CUSTOM // User-defined custom grouping
+}
+
+enum SubSectorStatus {
+  PROSPECTIVE // Generated but not applied
+  APPLIED // Applied to patent assignments
+  ARCHIVED // No longer active
+}

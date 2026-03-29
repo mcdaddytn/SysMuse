@@ -1,10 +1,16 @@
-# Session Context — March 28, 2026
+# Session Context — March 29, 2026
 
-## Current Focus: Implementation Phase
+## Current Focus: Scoring Framework Generalization
 
-We have completed the **schema design phase** and **data migration**. The abstract taxonomy model is now live with the Portfolio Group architecture.
+**Taxonomy refactor is complete.** The v2 taxonomy (293 sub-sectors) provides a working classification hierarchy. Existing LLM scores (80-99% coverage across sectors) provide regression test data.
 
-**Migration completed:** 2026-03-28
+**Next up: Generalized Scoring Framework (doc 02).** The current V2/V3 scoring system works but is hardcoded. We need to implement the formula engine, grouped terms, and weight profiles in DB so that the existing scoring formulas can be expressed in the new framework while enabling configurable sub-terms, taxonomy-level scoring, and snapshot normalization.
+
+**Key constraint:** The new scoring framework must reproduce current V2/V3 scoring results exactly. Existing scores serve as regression baseline — implement new framework, seed current formula as a FormulaDefinition, verify identical outputs, then extend.
+
+**Previous milestone (2026-03-28):** Schema design + data migration complete. Abstract taxonomy model live with Portfolio Group architecture.
+
+**Previous milestone (2026-03-29):** Full v2 taxonomy generated with consolidation pipeline. Doc reorganization to align with 00-06 design series.
 
 ### Pre-Refactor State Tagged
 
@@ -364,11 +370,37 @@ Ran the generalized refactor pipeline across all 54 sectors (2 SDN sectors were 
 - [x] **Full v2 taxonomy generated (293 sub-sectors, 56 sectors)**
 
 **Next implementation priorities (aligned with 00-06 design docs):**
-- [ ] Scoring framework generalization (02-scoring-framework.md) — formula engine, grouped terms, weight profiles in DB
-- [ ] Snapshot enhancement (04-snapshots.md) — provenance tracking, normalization strategies, auto-snapshot
-- [ ] revAIQ question versioning (03-consensus-scoring.md) — track question currency per patent per taxonomy path
-- [ ] Enrichment pipeline upgrade (05-enrichment.md) — version-aware enrichment, cost estimation, mixed-model normalization
-- [ ] Taxonomy-question integration loop (07-taxonomy-question-integration.md) — iterative refinement design
+
+1. **Scoring Framework (02-scoring-framework.md)** — START HERE
+   - [ ] Understand current V2 formula implementation in code (find the TypeScript scoring logic)
+   - [ ] Design FormulaDefinition schema that can express the current formula exactly
+   - [ ] Implement formula engine that evaluates FormulaDefinition structures
+   - [ ] Seed current V2 formula as a FormulaDefinition row
+   - [ ] Verify new engine produces identical scores to existing code (regression test)
+   - [ ] Add grouped terms support (portfolio questions group, citation group, sector group)
+   - [ ] Add configurable scaling functions (nroot, log, sigmoid, step)
+   - [ ] Migrate weight profiles from JSON config to WeightProfile table
+   - [ ] Wire scoring page to read formula from DB instead of hardcoded logic
+
+2. **Snapshot Enhancement (04-snapshots.md)** — builds on scoring framework
+   - [ ] Enhanced snapshot schema with provenance (creation method, source snapshots, normalization)
+   - [ ] revAIQ currency tracking per snapshot entry
+   - [ ] Normalization strategies (zero-weight infill, aggregate-preserving expansion)
+   - [ ] Auto-snapshot after enrichment
+
+3. **revAIQ Question Versioning (03-consensus-scoring.md)** — enables cost-effective re-scoring
+   - [ ] QuestionVersion table tracking current version at each taxonomy level
+   - [ ] PatentQuestionCurrency table for per-patent revAIQ tracking
+   - [ ] Currency service computing gaps between patent state and latest available
+
+4. **Enrichment Pipeline (05-enrichment.md)** — version-aware, cost-managed
+   - [ ] Use revAIQ to skip already-current patents
+   - [ ] Mixed-model normalization (overlap-based cross-model correction)
+   - [ ] Cost estimation before enrichment runs
+
+5. **Taxonomy-Question Loop (07-taxonomy-question-integration.md)** — iterative optimization
+   - [ ] Design and document the feedback loop in more detail
+   - [ ] Integrate with scoring framework for differentiation evaluation
 
 **Deferred (documented but lower priority):**
 - [ ] Wire refactor services into batch_jobs + API routes (operationalize taxonomy refactor)
@@ -422,6 +454,7 @@ Key scoring-related work ahead:
 ```
 Branch: main
 Recent commits:
+  - 6a3df40 Reorganize docs: archive old queues, add taxonomy-question integration design notes
   - 2bb0b68 Add consolidation to taxonomy refactor pipeline, generate full v2 taxonomy
   - 9df770f Add generalized taxonomy refactor system (services + design doc)
   - 30c1bf3 Add v2 sub-sectors for network-management
@@ -456,4 +489,4 @@ Recent commits:
 
 ---
 
-*Last Updated: 2026-03-29 (full v2 taxonomy with consolidation, doc reorganization, priority alignment with 00-06 design docs)*
+*Last Updated: 2026-03-29 (scoring framework as next priority, v2 taxonomy complete, docs reorganized to 00-07 design series)*

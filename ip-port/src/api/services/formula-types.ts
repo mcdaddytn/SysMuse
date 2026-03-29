@@ -46,6 +46,9 @@ export interface MetricTerm {
   /** Key into WeightProfile.weights (same as attribute by convention) */
   weightKey: string;
 
+  /** Human-readable name for frontend display (optional — derived from attribute if absent) */
+  displayName?: string;
+
   /** Normalization/scaling function */
   scaling: ScalingConfig;
 
@@ -168,4 +171,18 @@ export interface FormulaResult {
 
   /** Weight renormalization factor (for sparseHandling='renormalize') */
   renormFactor?: number;
+
+  /** Per-group score breakdown (for grouped formulas) */
+  groupScores?: Record<string, GroupScoreDetail>;
+}
+
+export interface GroupScoreDetail {
+  /** Group's contribution to the base score (before multipliers) */
+  score: number;
+  /** Group-level weight */
+  weight: number;
+  /** How many terms contributed */
+  termsUsed: number;
+  /** Total terms in the group */
+  totalTerms: number;
 }

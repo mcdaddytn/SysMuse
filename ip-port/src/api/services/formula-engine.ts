@@ -21,6 +21,7 @@ import type {
   MultiplierFn,
   SparseHandling,
   FormulaResult,
+  GroupScoreDetail,
 } from './formula-types.js';
 
 // =============================================================================
@@ -154,11 +155,18 @@ interface TermResult {
   rawWeight: number;
   isSparse: boolean;
   isAvailable: boolean;
+  /** Which group this term belongs to (null for top-level ungrouped terms) */
+  groupName: string | null;
+  /** Per-group sparse handling override (null = use top-level) */
+  groupSparseHandling: SparseHandling | null;
+  /** The group-level weight (for group score reporting) */
+  groupWeight: number;
 }
 
 /**
  * Flatten a term tree into a list of (attribute, weight, normalizedValue) tuples.
  * Group terms apply their group weight as a multiplier on inner weights.
+ * Each result is tagged with its parent group for per-group sparse handling and score reporting.
  */
 function flattenTerms(
   terms: FormulaTerm[],
@@ -166,6 +174,7 @@ function flattenTerms(
   rawMetrics: Record<string, number | undefined>,
   scalingOverrides?: Record<string, ScalingConfig>,
   groupMultiplier: number = 1,
+  parentGroup: { name: string; sparseHandling: SparseHandling | null; weight: number } | null = null,
 ): TermResult[] {
   const results: TermResult[] = [];
 
@@ -193,6 +202,9 @@ function flattenTerms(
           rawWeight,
           isSparse,
           isAvailable,
+          groupName: parentGroup?.name ?? null,
+          groupSparseHandling: parentGroup?.sparseHandling ?? null,
+          groupWeight: parentGroup?.weight ?? 1,
         });
         break;
       }
@@ -200,6 +212,11 @@ function flattenTerms(
       case 'group': {
         const groupWeight = weights[term.weightKey] ?? 1;
         const effectiveGroupMultiplier = groupMultiplier * groupWeight;
+        const groupContext = {
+          name: term.name,
+          sparseHandling: term.sparseHandling ?? null,
+          weight: groupWeight,
+        };
 
         if (term.normalize) {
           // Inner weights are relative — normalize them to sum to 1 within the group
@@ -219,10 +236,10 @@ function flattenTerms(
                 adjustedWeights[key] = (adjustedWeights[key] ?? 0) / innerWeightSum;
               }
             }
-            results.push(...flattenTerms(term.terms, adjustedWeights, rawMetrics, scalingOverrides, effectiveGroupMultiplier));
+            results.push(...flattenTerms(term.terms, adjustedWeights, rawMetrics, scalingOverrides, effectiveGroupMultiplier, groupContext));
           }
         } else {
-          results.push(...flattenTerms(term.terms, weights, rawMetrics, scalingOverrides, effectiveGroupMultiplier));
+          results.push(...flattenTerms(term.terms, weights, rawMetrics, scalingOverrides, effectiveGroupMultiplier, groupContext));
         }
         break;
       }
@@ -236,6 +253,9 @@ function flattenTerms(
           rawWeight,
           isSparse: false,
           isAvailable: true,
+          groupName: parentGroup?.name ?? null,
+          groupSparseHandling: parentGroup?.sparseHandling ?? null,
+          groupWeight: parentGroup?.weight ?? 1,
         });
         break;
       }
@@ -267,107 +287,167 @@ export function evaluateFormula(
   // 1. Flatten the term tree
   const termResults = flattenTerms(structure.terms, weights, rawMetrics, scalingOverrides);
 
-  // 2. Compute total and available weight sums
-  let totalWeight = 0;
-  let availableWeight = 0;
+  // 2. Check if any groups have their own sparse handling
+  const hasGroupSparseOverrides = termResults.some(tr => tr.groupSparseHandling != null);
+
+  // 3. Collect normalized metrics and metrics used
   const normalizedMetrics: Record<string, number> = {};
   const metricsUsed: string[] = [];
-
   for (const tr of termResults) {
     if (tr.rawWeight <= 0) continue;
-    totalWeight += tr.rawWeight;
-
-    if (tr.isSparse && !tr.isAvailable) {
-      // Sparse metric missing — skip for available weight
-      continue;
-    }
-
-    availableWeight += tr.rawWeight;
+    if (tr.isSparse && !tr.isAvailable) continue;
     normalizedMetrics[tr.attribute] = tr.normalizedValue;
     metricsUsed.push(tr.attribute);
   }
 
-  // 3. Compute weighted sum based on sparse handling
+  // 4. Compute weighted sum
   let baseScore = 0;
   let renormFactor: number | undefined;
+  let groupScores: Record<string, GroupScoreDetail> | undefined;
 
-  switch (structure.sparseHandling) {
-    case 'renormalize': {
-      // V2 Enhanced pattern (matches scoreWithCustomConfig exactly):
-      //   1. Normalize weights to sum to 1: normW_i = w_i / totalWeight
-      //   2. Compute availableNormWeight = Σ(normW_i) for available metrics only
-      //   3. renormFactor = 1 / availableNormWeight
-      //   4. baseScore = Σ(normalized_i × normW_i × renormFactor)
-      //
-      // This redistributes missing metric weights proportionally among available metrics.
-      if (totalWeight > 0) {
-        let availableNormWeight = 0;
-        for (const tr of termResults) {
-          if (tr.rawWeight <= 0) continue;
-          if (tr.isSparse && !tr.isAvailable) continue;
-          availableNormWeight += tr.rawWeight / totalWeight;
-        }
+  if (hasGroupSparseOverrides) {
+    // Per-group evaluation: partition terms by group, evaluate each with its sparse handling.
+    // Each group computes its own internal weighted average (0-1), then the group-level
+    // weight determines how much that group contributes to the total score.
+    const groups = new Map<string | null, TermResult[]>();
+    for (const tr of termResults) {
+      const key = tr.groupName;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(tr);
+    }
 
-        if (availableNormWeight > 0) {
-          renormFactor = 1 / availableNormWeight;
+    // Compute total group weight sum for normalization
+    let totalGroupWeight = 0;
+    const groupWeightMap = new Map<string | null, number>();
+    for (const [groupName, groupTerms] of groups) {
+      const gWeight = groupTerms[0]?.groupWeight ?? 1;
+      groupWeightMap.set(groupName, gWeight);
+      totalGroupWeight += gWeight;
+    }
+
+    groupScores = {};
+    for (const [groupName, groupTerms] of groups) {
+      const sparseMode = groupTerms[0]?.groupSparseHandling ?? structure.sparseHandling;
+      const groupContribution = computeGroupScore(groupTerms, sparseMode);
+      const gWeight = groupWeightMap.get(groupName) ?? 1;
+      const normalizedGroupWeight = totalGroupWeight > 0 ? gWeight / totalGroupWeight : 0;
+
+      // Group contribution to base score = group's internal average × its share of total weight
+      baseScore += groupContribution.score * normalizedGroupWeight;
+
+      if (groupName != null) {
+        groupScores[groupName] = {
+          score: Math.round(groupContribution.score * 10000) / 10000,
+          weight: gWeight,
+          termsUsed: groupContribution.termsUsed,
+          totalTerms: groupTerms.filter(t => t.rawWeight > 0).length,
+        };
+      }
+    }
+  } else {
+    // No per-group overrides — use top-level sparse handling (Phase 1 behavior)
+    let totalWeight = 0;
+    let availableWeight = 0;
+
+    for (const tr of termResults) {
+      if (tr.rawWeight <= 0) continue;
+      totalWeight += tr.rawWeight;
+      if (tr.isSparse && !tr.isAvailable) continue;
+      availableWeight += tr.rawWeight;
+    }
+
+    switch (structure.sparseHandling) {
+      case 'renormalize': {
+        if (totalWeight > 0) {
+          let availableNormWeight = 0;
           for (const tr of termResults) {
             if (tr.rawWeight <= 0) continue;
             if (tr.isSparse && !tr.isAvailable) continue;
-            const normalizedWeight = tr.rawWeight / totalWeight;
-            baseScore += tr.normalizedValue * normalizedWeight * renormFactor;
+            availableNormWeight += tr.rawWeight / totalWeight;
+          }
+
+          if (availableNormWeight > 0) {
+            renormFactor = 1 / availableNormWeight;
+            for (const tr of termResults) {
+              if (tr.rawWeight <= 0) continue;
+              if (tr.isSparse && !tr.isAvailable) continue;
+              const normalizedWeight = tr.rawWeight / totalWeight;
+              baseScore += tr.normalizedValue * normalizedWeight * renormFactor;
+            }
           }
         }
+        break;
       }
-      break;
-    }
 
-    case 'zero': {
-      // LLM Composite pattern:
-      //   Only include metrics with valid values AND weight > 0
-      //   score = Σ(norm_i × w_i) / Σ(w_i for included)
-      if (availableWeight > 0) {
-        let weightedSum = 0;
-        let includedWeight = 0;
-        for (const tr of termResults) {
-          if (tr.rawWeight <= 0) continue;
-          if (!tr.isAvailable) continue;
-          weightedSum += tr.normalizedValue * tr.rawWeight;
-          includedWeight += tr.rawWeight;
+      case 'zero': {
+        if (availableWeight > 0) {
+          let weightedSum = 0;
+          let includedWeight = 0;
+          for (const tr of termResults) {
+            if (tr.rawWeight <= 0) continue;
+            if (!tr.isAvailable) continue;
+            weightedSum += tr.normalizedValue * tr.rawWeight;
+            includedWeight += tr.rawWeight;
+          }
+          baseScore = includedWeight > 0 ? weightedSum / includedWeight : 0;
         }
-        baseScore = includedWeight > 0 ? weightedSum / includedWeight : 0;
+        break;
       }
-      break;
+
+      case 'skip': {
+        const allAvailable = termResults.every(tr =>
+          tr.rawWeight <= 0 || tr.isAvailable
+        );
+        if (!allAvailable) {
+          return {
+            score: 0,
+            baseScore: 0,
+            normalizedMetrics,
+            metricsUsed: [],
+            multiplierValues: {},
+            renormFactor: undefined,
+          };
+        }
+        if (totalWeight > 0) {
+          let weightedSum = 0;
+          for (const tr of termResults) {
+            if (tr.rawWeight <= 0) continue;
+            weightedSum += tr.normalizedValue * tr.rawWeight;
+          }
+          baseScore = weightedSum / totalWeight;
+        }
+        break;
+      }
     }
 
-    case 'skip': {
-      // If any required (non-sparse) metric is missing, score is 0
-      const allAvailable = termResults.every(tr =>
-        tr.rawWeight <= 0 || tr.isAvailable
-      );
-      if (!allAvailable) {
-        return {
-          score: 0,
-          baseScore: 0,
-          normalizedMetrics,
-          metricsUsed: [],
-          multiplierValues: {},
-          renormFactor: undefined,
+    // Even without per-group sparse overrides, report group scores if groups exist
+    const groupNames = new Set(termResults.map(tr => tr.groupName).filter(n => n != null));
+    if (groupNames.size > 0) {
+      groupScores = {};
+      for (const gn of groupNames) {
+        const gTerms = termResults.filter(tr => tr.groupName === gn);
+        const gUsed = gTerms.filter(tr => tr.rawWeight > 0 && !(tr.isSparse && !tr.isAvailable));
+        const gTotal = gTerms.filter(tr => tr.rawWeight > 0);
+        // Approximate group contribution: sum of (normalizedValue * normalizedWeight * renormFactor) for group terms
+        let gScore = 0;
+        for (const tr of gUsed) {
+          if (structure.sparseHandling === 'renormalize' && totalWeight > 0 && renormFactor) {
+            gScore += tr.normalizedValue * (tr.rawWeight / totalWeight) * renormFactor;
+          } else if (structure.sparseHandling === 'zero' && availableWeight > 0) {
+            gScore += tr.normalizedValue * tr.rawWeight / availableWeight;
+          }
+        }
+        groupScores[gn!] = {
+          score: Math.round(gScore * 10000) / 10000,
+          weight: gTerms[0]?.groupWeight ?? 1,
+          termsUsed: gUsed.length,
+          totalTerms: gTotal.length,
         };
       }
-      // All present — same as zero handling
-      if (totalWeight > 0) {
-        let weightedSum = 0;
-        for (const tr of termResults) {
-          if (tr.rawWeight <= 0) continue;
-          weightedSum += tr.normalizedValue * tr.rawWeight;
-        }
-        baseScore = weightedSum / totalWeight;
-      }
-      break;
     }
   }
 
-  // 4. Apply multipliers
+  // 5. Apply multipliers
   const multiplierValues: Record<string, number> = {};
   let multiplierProduct = 1;
 
@@ -380,7 +460,7 @@ export function evaluateFormula(
     }
   }
 
-  // 5. Final score
+  // 6. Final score
   const finalScore = baseScore * multiplierProduct * structure.outputScale;
 
   return {
@@ -390,7 +470,83 @@ export function evaluateFormula(
     metricsUsed,
     multiplierValues,
     renormFactor,
+    ...(groupScores && Object.keys(groupScores).length > 0 && { groupScores }),
   };
+}
+
+/**
+ * Compute the score contribution for a group of terms with a specific sparse handling mode.
+ */
+function computeGroupScore(
+  terms: TermResult[],
+  sparseHandling: SparseHandling,
+): { score: number; termsUsed: number } {
+  let totalWeight = 0;
+  let availableWeight = 0;
+  let termsUsed = 0;
+
+  for (const tr of terms) {
+    if (tr.rawWeight <= 0) continue;
+    totalWeight += tr.rawWeight;
+    if (tr.isSparse && !tr.isAvailable) continue;
+    availableWeight += tr.rawWeight;
+    termsUsed++;
+  }
+
+  let score = 0;
+
+  switch (sparseHandling) {
+    case 'renormalize': {
+      if (totalWeight > 0) {
+        let availableNormWeight = 0;
+        for (const tr of terms) {
+          if (tr.rawWeight <= 0) continue;
+          if (tr.isSparse && !tr.isAvailable) continue;
+          availableNormWeight += tr.rawWeight / totalWeight;
+        }
+        if (availableNormWeight > 0) {
+          const renorm = 1 / availableNormWeight;
+          for (const tr of terms) {
+            if (tr.rawWeight <= 0) continue;
+            if (tr.isSparse && !tr.isAvailable) continue;
+            score += tr.normalizedValue * (tr.rawWeight / totalWeight) * renorm;
+          }
+        }
+      }
+      break;
+    }
+
+    case 'zero': {
+      if (availableWeight > 0) {
+        let weightedSum = 0;
+        let includedWeight = 0;
+        for (const tr of terms) {
+          if (tr.rawWeight <= 0) continue;
+          if (!tr.isAvailable) continue;
+          weightedSum += tr.normalizedValue * tr.rawWeight;
+          includedWeight += tr.rawWeight;
+        }
+        score = includedWeight > 0 ? weightedSum / includedWeight : 0;
+      }
+      break;
+    }
+
+    case 'skip': {
+      const allAvailable = terms.every(tr => tr.rawWeight <= 0 || tr.isAvailable);
+      if (!allAvailable) return { score: 0, termsUsed: 0 };
+      if (totalWeight > 0) {
+        let weightedSum = 0;
+        for (const tr of terms) {
+          if (tr.rawWeight <= 0) continue;
+          weightedSum += tr.normalizedValue * tr.rawWeight;
+        }
+        score = weightedSum / totalWeight;
+      }
+      break;
+    }
+  }
+
+  return { score, termsUsed };
 }
 
 // =============================================================================
@@ -401,13 +557,14 @@ export function evaluateFormula(
 export function metricTerm(
   attribute: string,
   scaling: ScalingConfig,
-  opts?: { weightKey?: string; sparseGroup?: string; invert?: boolean },
+  opts?: { weightKey?: string; sparseGroup?: string; invert?: boolean; displayName?: string },
 ): MetricTerm {
   return {
     type: 'metric',
     attribute,
     weightKey: opts?.weightKey ?? attribute,
     scaling,
+    ...(opts?.displayName && { displayName: opts.displayName }),
     ...(opts?.sparseGroup && { sparseGroup: opts.sparseGroup }),
     ...(opts?.invert && { invert: opts.invert }),
   };

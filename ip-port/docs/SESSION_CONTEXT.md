@@ -195,37 +195,48 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - Level metadata with target sizing (count ranges, cluster sizes, portfolio %)
 - Default taxonomy selection for GUI switching between v1/v2
 
-### v2 Taxonomy Pilot Results (2026-03-28)
+### v2 Taxonomy Pilot - REFINED (2026-03-28)
 
 **Pilot scope:** SDN_NETWORK > network-switching (6,604 patents)
+**Target sizes:** 100-1000 overall, <500 per portfolio (Broadcom)
 
-**v2 Sub-sector Distribution (ALL portfolios):**
-| Sub-sector | Patents | % |
-|------------|---------|---|
-| SDN/SWIT/routing | 2,287 | 34.6% |
-| SDN/SWIT/traffic-qos | 1,782 | 27.0% |
-| SDN/SWIT/packet-switching | 1,150 | 17.4% |
-| SDN/SWIT/general | 489 | 7.4% |
-| SDN/SWIT/network-interconnect | 470 | 7.1% |
-| SDN/SWIT/ethernet-lan | 426 | 6.5% |
+**Initial pilot** had 6 sub-sectors, but routing/traffic-qos/packet-switching were too large (1000+ Broadcom each).
 
-**Broadcom-specific:**
-| Sub-sector | Patents | % |
-|------------|---------|---|
-| SDN/SWIT/routing | 1,058 | 30.8% |
-| SDN/SWIT/traffic-qos | 915 | 26.7% |
-| SDN/SWIT/packet-switching | 691 | 20.1% |
-| SDN/SWIT/general | 266 | 7.8% |
-| SDN/SWIT/ethernet-lan | 260 | 7.6% |
-| SDN/SWIT/network-interconnect | 240 | 7.0% |
+**Refined to 30 sub-sectors** based on CPC analysis:
+- Routing: 11 sub-sectors (table-lookup, topology, multipath, shortest-path, addr-proc, etc.)
+- Traffic-QoS: 8 sub-sectors (scheduling-priority, scheduling-core, bw-reservation, admission, etc.)
+- Packet-Switching: 8 sub-sectors (ports, crossbar, fabric, multicast, buffer-addr, etc.)
+- Existing: 3 sub-sectors (ethernet-lan, network-interconnect, general)
 
-**Multi-classification stats:**
-- 65.9% of Broadcom patents have 2+ sub-sectors
-- Average 1.99 classifications per patent
+**Final Broadcom Distribution (all <500 target met):**
+| Sub-sector | Broadcom | Status |
+|------------|----------|--------|
+| ethernet-lan | 402 | ✓ |
+| network-interconnect | 376 | ✓ |
+| general | 246 | ✓ |
+| routing-table-lookup | 200 | ✓ |
+| qos-bw-reservation | 191 | ✓ |
+| pkt-ports | 186 | ✓ |
+| ... (24 more, all <160) | | ✓ |
+
+**Classification stats:**
+- Total sub-sectors: 30
+- Total rules: 83
+- Classifications created: 13,860
+- Multi-classification rate: 69.4%
+- Avg classifications/patent: 2.16
+
+**Key design decisions:**
+1. Priority-based matching (first match wins, higher priority = more specific)
+2. H04L45/47/49 rules (priority 70-85) take precedence over H04L12 (priority 60)
+3. Catch-all sub-sectors for each category (routing-general, qos-other, pkt-other, general)
 
 **Files created:**
-- `scripts/run-v2-pilot-classification.ts` - Classification script
+- `scripts/setup-v2-refined.ts` - Creates 32 nodes and 83 rules
+- `scripts/run-v2-pilot-classification.ts` - Priority-based classification
 - `scripts/analyze-broadcom-v2.cjs` - Broadcom analysis
+- `scripts/analyze-subsector-cpc-dist.cjs` - CPC distribution analysis
+- `docs/design/V2_REFINED_SUBSECTORS.md` - Design documentation
 - Portfolio group: `pg_v2_pilot` for v2 classifications
 
 ### Implementation Phase (Updated Roadmap)
@@ -236,10 +247,12 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - [x] Naming convention documented (`docs/design/TAXONOMY_STRATEGY.md`)
 - [x] v2 TaxonomyType structure created
 - [x] v2 pilot classification run and analyzed
+- [x] Refined sub-sectors for network-switching (30 sub-sectors, all within target)
 
 **Next Steps:**
+- [ ] **Expand v2 to network-management sector** ← NEXT
+- [ ] Expand v2 to network-protocols sector
 - [ ] GUI updates for secondary/tertiary filters
-- [ ] Expand v2 to other sectors (network-management, network-protocols)
 - [ ] Background recalculation job system
 - [ ] Tiered portfolio promotion workflow
 
@@ -261,12 +274,10 @@ That work is preserved but paused while we focus on taxonomy/schema analysis.
 
 ```
 Branch: main
-Behind origin: 6 commits (can fast-forward when ready)
-Local commits since v1.0-pre-refactor:
-  - f87042f Added sys overview and data arch docs
-  - 8e66e5a Add comprehensive taxonomy coverage analysis scripts
-  - 5643639 Add high-value patent CPC divergence analysis
-  - 1bfddf5 Add association coverage and clustering analysis
+Local commits (unpushed):
+  - f45f583 Implement refined v2 sub-sectors for network-switching
+  - 971a5ac Add v2 taxonomy pilot classification scripts and results
+  - (plus earlier commits)
 ```
 
 Phase 3C work archived in branch: `phase-3c-archive`
@@ -297,4 +308,4 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
-*Last Updated: 2026-03-28 (Multi-classification backfill complete)*
+*Last Updated: 2026-03-28 (v2 refined sub-sectors for network-switching complete)*

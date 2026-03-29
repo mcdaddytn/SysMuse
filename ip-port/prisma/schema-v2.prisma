@@ -56,6 +56,15 @@ enum ScoreType {
   V2
   V3
   LLM
+  FORMULA
+}
+
+enum FormulaScopeType {
+  SYSTEM
+  PORTFOLIO
+  TAXONOMY_LEVEL1
+  TAXONOMY_LEVEL2
+  TAXONOMY_LEVEL3
 }
 
 // =============================================================================
@@ -473,9 +482,10 @@ model PortfolioGroup {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  members         PortfolioGroupMember[]
-  classifications ObjectClassification[]
-  rules           TaxonomyRule[]
+  members            PortfolioGroupMember[]
+  classifications    ObjectClassification[]
+  rules              TaxonomyRule[]
+  formulaDefinitions FormulaDefinition[]
 
   @@index([taxonomyTypeId])
   @@index([tier])
@@ -952,28 +962,83 @@ model ScoringTemplateVersion {
   @@map("scoring_template_versions")
 }
 
+// =============================================================================
+// GENERALIZED SCORING FRAMEWORK
+// FormulaDefinition stores scoring formulas as structured JSON trees.
+// WeightProfile stores named weight configurations applied to a formula.
+// =============================================================================
+
+model FormulaDefinition {
+  id               String           @id @default(cuid())
+
+  // Identity
+  name             String                          // "v2-enhanced", "llm-composite-portfolio"
+  displayName      String           @map("display_name")
+  description      String?
+
+  // Scope — what level this formula applies at
+  scopeType        FormulaScopeType @map("scope_type")
+  scopeId          String?          @map("scope_id")  // null for SYSTEM/PORTFOLIO; taxonomy node ID for levels
+
+  // The formula tree (FormulaStructure JSON — see formula-types.ts)
+  structure        Json
+
+  // Version tracking
+  version          Int              @default(1)
+  isActive         Boolean          @default(true) @map("is_active")
+
+  // Portfolio group scoping (null = available to all)
+  portfolioGroupId String?          @map("portfolio_group_id")
+  portfolioGroup   PortfolioGroup?  @relation(fields: [portfolioGroupId], references: [id])
+
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  weightProfiles   WeightProfile[]
+
+  @@unique([name, portfolioGroupId])
+  @@map("formula_definitions")
+  @@index([scopeType])
+  @@index([isActive])
+  @@index([portfolioGroupId])
+}
+
 model WeightProfile {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   name            String
   description     String?
-  scopeType       WeightProfileScope @default(GLOBAL) @map("scope_type")
-  scopeId         String?            @map("scope_id")
+  scopeType       WeightProfileScope  @default(GLOBAL) @map("scope_type")
+  scopeId         String?             @map("scope_id")
   weights         Json
   scaling         Json?
   invert          Json?
-  requiredMetrics String[]           @map("required_metrics")
-  optionalMetrics String[]           @map("optional_metrics")
-  version         Int                @default(1)
-  isActive        Boolean            @default(true) @map("is_active")
-  isDefault       Boolean            @default(false) @map("is_default")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  requiredMetrics String[]            @map("required_metrics")
+  optionalMetrics String[]            @map("optional_metrics")
+  version         Int                 @default(1)
+  isActive        Boolean             @default(true) @map("is_active")
+  isDefault       Boolean             @default(false) @map("is_default")
+  isBuiltIn       Boolean             @default(false) @map("is_built_in")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  // Link to formula definition (null for legacy profiles)
+  formulaDefId    String?             @map("formula_def_id")
+  formulaDef      FormulaDefinition?  @relation(fields: [formulaDefId], references: [id])
+
+  // For consensus scoring — weight of this profile in consensus
+  consensusWeight Float?              @map("consensus_weight")
+
+  // Per-user (null = shared/builtin)
+  userId          String?             @map("user_id")
 
   snapshots UnifiedSnapshot[]
 
   @@unique([name, scopeType, scopeId])
   @@index([scopeType, scopeId])
   @@index([isActive])
+  @@index([formulaDefId])
+  @@index([userId])
   @@map("weight_profiles")
 }
 

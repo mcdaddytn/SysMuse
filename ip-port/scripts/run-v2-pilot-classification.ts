@@ -121,12 +121,14 @@ async function main() {
     const scores = new Map<string, { nodeId: string; nodeCode: string; weight: number; sources: string[] }>();
 
     for (const cpc of cpcs) {
-      // Find matching rules
+      // Find the HIGHEST PRIORITY matching rule for this CPC
+      // Rules are already sorted by priority desc, so first match wins
+      let bestMatch: typeof v2Rules[0] | null = null;
+
       for (const rule of v2Rules) {
         if (rule.isExclusion) continue;
 
         // CPC matching: expression like "H04L12/28" or "H04L45/"
-        // CPC codes in DB may be stored as "H04L12/28" or "H04L1228"
         const normalizedCpc = cpc.cpcCode.replace(/\//g, '');
         const normalizedExpr = rule.expression.replace(/\//g, '');
 
@@ -136,24 +138,31 @@ async function main() {
             : normalizedCpc === normalizedExpr;
 
         if (matches) {
-          const cpcWeight = cpc.isInventive ? 1.0 : 0.3;
-          const priorityMultiplier = 1.0 + rule.priority * 0.01;
-          const weight = cpcWeight * priorityMultiplier;
+          // First match is highest priority (rules sorted by priority desc)
+          bestMatch = rule;
+          break;
+        }
+      }
 
-          const existing = scores.get(rule.targetNodeId);
-          if (existing) {
-            existing.weight += weight;
-            if (!existing.sources.includes(cpc.cpcCode)) {
-              existing.sources.push(cpc.cpcCode);
-            }
-          } else {
-            scores.set(rule.targetNodeId, {
-              nodeId: rule.targetNodeId,
-              nodeCode: rule.targetNode.code,
-              weight,
-              sources: [cpc.cpcCode],
-            });
+      // Only add weight to the best matching rule's target
+      if (bestMatch) {
+        const cpcWeight = cpc.isInventive ? 1.0 : 0.3;
+        const priorityMultiplier = 1.0 + bestMatch.priority * 0.01;
+        const weight = cpcWeight * priorityMultiplier;
+
+        const existing = scores.get(bestMatch.targetNodeId);
+        if (existing) {
+          existing.weight += weight;
+          if (!existing.sources.includes(cpc.cpcCode)) {
+            existing.sources.push(cpc.cpcCode);
           }
+        } else {
+          scores.set(bestMatch.targetNodeId, {
+            nodeId: bestMatch.targetNodeId,
+            nodeCode: bestMatch.targetNode.code,
+            weight,
+            sources: [cpc.cpcCode],
+          });
         }
       }
     }

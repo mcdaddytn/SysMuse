@@ -323,38 +323,97 @@ Replaced ad-hoc per-sector scripts with generalized services:
 - Supports iterative refinement with convergence detection
 - Designed for future structured question refactor loop integration
 
+### Full v2 Taxonomy Generated (2026-03-29)
+
+Ran the generalized refactor pipeline across all 54 sectors (2 SDN sectors were already done manually). The pipeline includes a new **consolidation phase** that merges undersized sub-sectors via agglomerative clustering by CPC prefix similarity.
+
+| Metric | Value |
+|--------|-------|
+| Super-sectors (L1) | 12 |
+| Sectors (L2) | 56 |
+| Sub-sectors (L3) | 293 |
+| Rules | 3,693 |
+| Classifications | 173,789 |
+| Unique patents classified | 77,432 / 84,321 (91.8%) |
+| Converged sectors | 26/54 |
+
+**Key implementation details:**
+- Agglomerative merging: CPC prefix similarity drives merge decisions, smallest pairs first
+- Empty node cleanup after consolidation
+- General bucket review: reclassifies catch-all patents when broader rules emerge
+- Sector-size-aware targets: small sectors (<200 patents) → 2-5 sub-sectors; large sectors → 5-25
+- Split phase for oversized sub-sectors (limited but functional)
+- Convergence detection: stops when violations plateau between iterations
+- `skipDuplicates` on classification inserts for cross-sector patent overlap
+
+**Files:**
+- `src/api/services/taxonomy-refactor-service.ts` — Full pipeline with consolidation
+- `src/api/services/taxonomy-proposer-service.ts` — Proposal generation + collision handling
+- `scripts/run-v2-full-refactor.ts` — Runner script
+- `scripts/run-v2-classify-missing.ts` — Classification backfill utility
+
 ### Implementation Phase (Updated Roadmap)
 
 **Completed:**
-- [x] Cross-classification query service (`src/api/services/cross-classification-service.ts`)
-- [x] Classification API routes (`src/api/routes/classifications.routes.ts`)
-- [x] Naming convention documented (`docs/design/TAXONOMY_STRATEGY.md`)
+- [x] Cross-classification query service
+- [x] Classification API routes
 - [x] v2 TaxonomyType structure created
-- [x] v2 pilot classification run and analyzed
-- [x] Refined sub-sectors for network-switching (30 sub-sectors, all within target)
-- [x] v2 sub-sectors for network-management (18 sub-sectors, all within target)
-- [x] **Generalized taxonomy refactor services (analyzer, proposer, orchestrator)**
-- [x] **Taxonomy refactor system design doc**
+- [x] v2 pilot (network-switching: 30, network-management: 18 sub-sectors)
+- [x] Generalized taxonomy refactor services (analyzer, proposer, orchestrator)
+- [x] **Consolidation phase (agglomerative merge, split, general review)**
+- [x] **Full v2 taxonomy generated (293 sub-sectors, 56 sectors)**
 
-**Next Steps:**
-- [ ] Wire refactor services into batch_jobs for background execution
-- [ ] API routes for triggering and monitoring refactor operations
-- [ ] Complete remaining sectors using generalized services
-- [ ] Run full v1→v2 taxonomy refactor as uninterrupted batch
-- [ ] GUI for editing RefactorSpec parameters
-- [ ] Structured question refactor integration (design forward)
+**Next implementation priorities (aligned with 00-06 design docs):**
+- [ ] Scoring framework generalization (02-scoring-framework.md) — formula engine, grouped terms, weight profiles in DB
+- [ ] Snapshot enhancement (04-snapshots.md) — provenance tracking, normalization strategies, auto-snapshot
+- [ ] revAIQ question versioning (03-consensus-scoring.md) — track question currency per patent per taxonomy path
+- [ ] Enrichment pipeline upgrade (05-enrichment.md) — version-aware enrichment, cost estimation, mixed-model normalization
+- [ ] Taxonomy-question integration loop (07-taxonomy-question-integration.md) — iterative refinement design
+
+**Deferred (documented but lower priority):**
+- [ ] Wire refactor services into batch_jobs + API routes (operationalize taxonomy refactor)
+- [ ] Interactive mode for taxonomy refactor (intervention points for user review)
+- [ ] Claim-level prosecution enrichment (requires data source research — see note in 07 doc)
+- [ ] Product entity as first-class citizen (needed for vendor heat map import)
 
 ---
 
-## Previous Session Context (February 25)
+## Priority Design Documents
 
-The previous session focused on vendor package generation (VIDEO, WIRELESS, SEMICONDUCTOR). Key artifacts:
+The **00-06 design doc series** under `docs/design/` is the current design system. All implementation should reference these docs. Older development queues (V3-V6) and superseded design docs have been archived to `docs/archive/`.
 
-- Vendor exports in `output/vendor-exports/`
-- Focus area prompts in `cache/focus-area-prompts/`
-- Known issue: WIRELESS collective template missing `{{focusArea.patentData}}`
+| Document | Focus Area | Status |
+|----------|-----------|--------|
+| `00-overview.md` | System vision, phased roadmap, architecture | Reference |
+| `01-taxonomy-refactor.md` | Multi-classification, named taxonomies, portfolio groups | Partially implemented (v2 taxonomy done, multi-assoc done) |
+| `02-scoring-framework.md` | Formula engine, grouped terms, weight profiles, scaling functions | **NEXT PRIORITY** |
+| `03-consensus-scoring.md` | Structured questions, revAIQ versioning, question inheritance | **NEXT PRIORITY** |
+| `04-snapshots.md` | Provenance, normalization strategies, snapshot lifecycle | **NEXT PRIORITY** |
+| `05-enrichment.md` | Version-aware enrichment, cost management, auto-snapshot | Near-term |
+| `06-migration-plan.md` | Phased migration, regression testing, Claude Code skills | Reference |
+| `07-taxonomy-question-integration.md` | Taxonomy↔question optimization loop (design notes) | **NEW** — design insights |
 
-That work is preserved but paused while we focus on taxonomy/schema analysis.
+### What's NOT in 00-06 (tracked separately)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Prosecution enrichment | Deferred | Needs data source research; may need paid data |
+| Product entity | Deferred | Blocked by vendor data format clarity |
+| Vendor integration/export | Paused | Vendor packages exist; product entity needed for import |
+| Tournament scoring | Archived | Alternative workflow, not current priority |
+
+---
+
+## LLM Scoring State
+
+Most sectors have existing v2 LLM scores from prior scoring runs. Coverage is 80-99% across sectors. These scores use old taxonomy (pre-v2-subsectors) and old question versions but are usable as baseline rankings.
+
+Key scoring-related work ahead:
+- Generalized formula engine with configurable sub-terms and grouped weights
+- Mixed-model normalization (Haiku/Sonnet/Opus scores comparable)
+- Snapshot management with revAIQ tracking (which patents are current vs stale)
+- Per-portfolio-group configurable scoring surfaced for user weighting
+- Incremental re-scoring as taxonomy and questions evolve
 
 ---
 
@@ -363,20 +422,10 @@ That work is preserved but paused while we focus on taxonomy/schema analysis.
 ```
 Branch: main
 Recent commits:
-  - 28d13ec Updated SESSION_CONTEXT.MD before remote sess
-  - 37a5232 Update SESSION_CONTEXT.md with v2 refined sub-sectors status
-  - f45f583 Implement refined v2 sub-sectors for network-switching
-  - 971a5ac Add v2 taxonomy pilot classification scripts and results
-
-Recent uncommitted:
-  - src/api/services/taxonomy-analyzer-service.ts (generalized CPC analysis)
-  - src/api/services/taxonomy-proposer-service.ts (generalized sub-sector generation)
-  - src/api/services/taxonomy-refactor-service.ts (orchestrator)
-  - docs/design/TAXONOMY_REFACTOR_SYSTEM.md (system design)
-  - docs/SESSION_CONTEXT.md (this file)
+  - 2bb0b68 Add consolidation to taxonomy refactor pipeline, generate full v2 taxonomy
+  - 9df770f Add generalized taxonomy refactor system (services + design doc)
+  - 30c1bf3 Add v2 sub-sectors for network-management
 ```
-
-Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
@@ -395,13 +444,16 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 | Data | Path |
 |------|------|
+| **Priority design docs** | `docs/design/00-*.md` through `07-*.md` |
+| Supporting design docs | `docs/design/SCHEMA_*.md`, `TAXONOMY_*.md` |
+| Archived docs | `docs/archive/`, `docs/design/archive/` |
 | Analysis output | `output/*.json` |
-| Design docs | `docs/design/` |
-| Analysis scripts | `scripts/analyze-*.ts` |
+| Scripts | `scripts/` |
 | Taxonomy config | `config/sector-taxonomy-cpc-only.json` |
+| Scoring templates | `config/scoring-templates/` |
 | LLM cache | `cache/llm-scores/` |
 | Patent XMLs | `$USPTO_PATENT_GRANT_XML_DIR` |
 
 ---
 
-*Last Updated: 2026-03-29 (generalized taxonomy refactor services and design doc)*
+*Last Updated: 2026-03-29 (full v2 taxonomy with consolidation, doc reorganization, priority alignment with 00-06 design docs)*

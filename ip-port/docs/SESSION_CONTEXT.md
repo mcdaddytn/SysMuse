@@ -271,7 +271,7 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - `scripts/analyze-network-mgmt-cpc.cjs` - CPC distribution analysis
 - `docs/design/V2_NETWORK_MANAGEMENT_SUBSECTORS.md` - Design documentation
 
-### v2 Combined Pilot Summary (2026-03-28)
+### v2 Combined Pilot Summary (2026-03-29)
 
 | Metric | Switching | Management | Combined |
 |--------|-----------|------------|----------|
@@ -279,6 +279,22 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 | Rules | 83 | 190 | 273 |
 | Unique patents | 6,218 | 5,333 | 9,653 |
 | Classifications | 11,687 | 10,987 | 22,674 |
+
+### Lessons from Ad-Hoc Refactoring (2026-03-29)
+
+The two sector refactors (switching, management) followed the same manual process:
+1. Analyze CPC distribution with a one-off script
+2. Design sub-sectors based on CPC groupings and portfolio sizes
+3. Create a setup script to insert nodes + rules
+4. Run classification script
+5. Validate portfolio distribution, iterate on rules
+
+**Key learnings to carry into generalized tooling:**
+- CPC codes have parallel numbering schemes (e.g., H04L41/08xx ≠ H04L41/8xx) — rule generation must handle both 3-digit and 4-digit subgroup formats
+- Priority-based matching (first match wins) works well; catch-all rules at low priority prevent gaps
+- Overlap between v1 sectors causes classification conflicts when scripts clear/recreate per-sector — a unified classification pass across all rules would be cleaner
+- Management needed 190 rules vs switching's 83, reflecting more complex CPC structure — rule count varies significantly by sector
+- The analyze → design → classify → validate cycle is consistent and can be formalized
 
 ### Implementation Phase (Updated Roadmap)
 
@@ -292,7 +308,8 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - [x] **v2 sub-sectors for network-management (18 sub-sectors, all within target)**
 
 **Next Steps:**
-- [ ] **Expand v2 to network-protocols sector** ← NEXT
+- [ ] **Generalize taxonomy refactor tooling** — move from ad-hoc per-sector scripts to reusable code callable outside Claude Code sessions. Design doc incoming.
+- [ ] Continue v2 sub-sector expansion to remaining sectors (network-protocols, etc.)
 - [ ] GUI updates for secondary/tertiary filters
 - [ ] Background recalculation job system
 - [ ] Tiered portfolio promotion workflow
@@ -315,10 +332,18 @@ That work is preserved but paused while we focus on taxonomy/schema analysis.
 
 ```
 Branch: main
-Local commits (unpushed):
+Recent commits:
+  - 28d13ec Updated SESSION_CONTEXT.MD before remote sess
+  - 37a5232 Update SESSION_CONTEXT.md with v2 refined sub-sectors status
   - f45f583 Implement refined v2 sub-sectors for network-switching
   - 971a5ac Add v2 taxonomy pilot classification scripts and results
-  - (plus earlier commits)
+
+Uncommitted (to be committed this session):
+  - scripts/setup-v2-network-mgmt.ts (setup 19 nodes + 190 rules)
+  - scripts/run-v2-mgmt-classification.ts (classification script)
+  - scripts/analyze-network-mgmt-cpc.cjs (CPC analysis)
+  - docs/design/V2_NETWORK_MANAGEMENT_SUBSECTORS.md (design doc)
+  - docs/SESSION_CONTEXT.md (this file)
 ```
 
 Phase 3C work archived in branch: `phase-3c-archive`
@@ -349,4 +374,4 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
-*Last Updated: 2026-03-28 (v2 sub-sectors for network-management complete)*
+*Last Updated: 2026-03-29 (v2 sub-sectors for network-management complete, lessons documented for generalized tooling)*

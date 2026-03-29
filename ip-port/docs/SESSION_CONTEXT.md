@@ -109,6 +109,7 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 | `docs/design/TAXONOMY_ANALYSIS_RESULTS.md` | Analysis findings, coverage curves, cluster recommendations |
 | `docs/design/SCHEMA_TAXONOMY_ABSTRACTION.md` | **Abstract taxonomy model - pure vs pragmatic pattern** |
 | `docs/design/SCHEMA_PORTFOLIO_GROUPS.md` | Portfolio Groups using abstract taxonomy references |
+| `docs/design/TAXONOMY_REFACTOR_SYSTEM.md` | **Parameterized taxonomy refactor system — RefactorSpec, services, future optimization loop** |
 
 ### Schema Design (In Progress)
 
@@ -296,6 +297,32 @@ The two sector refactors (switching, management) followed the same manual proces
 - Management needed 190 rules vs switching's 83, reflecting more complex CPC structure — rule count varies significantly by sector
 - The analyze → design → classify → validate cycle is consistent and can be formalized
 
+### Generalized Taxonomy Refactor System (2026-03-29)
+
+Replaced ad-hoc per-sector scripts with generalized services:
+
+| Service | Replaces | Purpose |
+|---------|----------|---------|
+| `taxonomy-analyzer-service.ts` | `analyze-*-cpc.cjs` scripts | CPC distribution, portfolio sizing, dual numbering detection |
+| `taxonomy-proposer-service.ts` | `setup-v2-*.ts` scripts | Sub-sector proposal generation, node/rule creation |
+| `taxonomy-refactor-service.ts` | Manual script orchestration | Full analyze→propose→classify→validate loop |
+
+**Design doc:** `docs/design/TAXONOMY_REFACTOR_SYSTEM.md` — covers:
+- `RefactorSpec` — parameterized transformation specification
+- `InputScope` — filtering (portfolios, sectors, topN, diversity samples)
+- `HierarchySpec` — depth, level targets, naming conventions
+- `ClassificationSpec` — associations, weighting, quality goals
+- `ExecutionSpec` — iterations, convergence, LLM budget, interactive mode
+- `QuestionStrategySpec` — future structured question integration
+- Bottom-up refactor with bubble-up to reshape higher levels
+- Integration with existing batch_jobs infrastructure
+
+**Key design decisions:**
+- Uses existing `multi-classification-service.ts` weight formula (priority * 0.1, not the 0.01 from scripts)
+- Filters Y-section indexing codes (scripts didn't)
+- Supports iterative refinement with convergence detection
+- Designed for future structured question refactor loop integration
+
 ### Implementation Phase (Updated Roadmap)
 
 **Completed:**
@@ -305,14 +332,17 @@ The two sector refactors (switching, management) followed the same manual proces
 - [x] v2 TaxonomyType structure created
 - [x] v2 pilot classification run and analyzed
 - [x] Refined sub-sectors for network-switching (30 sub-sectors, all within target)
-- [x] **v2 sub-sectors for network-management (18 sub-sectors, all within target)**
+- [x] v2 sub-sectors for network-management (18 sub-sectors, all within target)
+- [x] **Generalized taxonomy refactor services (analyzer, proposer, orchestrator)**
+- [x] **Taxonomy refactor system design doc**
 
 **Next Steps:**
-- [ ] **Generalize taxonomy refactor tooling** — move from ad-hoc per-sector scripts to reusable code callable outside Claude Code sessions. Design doc incoming.
-- [ ] Continue v2 sub-sector expansion to remaining sectors (network-protocols, etc.)
-- [ ] GUI updates for secondary/tertiary filters
-- [ ] Background recalculation job system
-- [ ] Tiered portfolio promotion workflow
+- [ ] Wire refactor services into batch_jobs for background execution
+- [ ] API routes for triggering and monitoring refactor operations
+- [ ] Complete remaining sectors using generalized services
+- [ ] Run full v1→v2 taxonomy refactor as uninterrupted batch
+- [ ] GUI for editing RefactorSpec parameters
+- [ ] Structured question refactor integration (design forward)
 
 ---
 
@@ -338,11 +368,11 @@ Recent commits:
   - f45f583 Implement refined v2 sub-sectors for network-switching
   - 971a5ac Add v2 taxonomy pilot classification scripts and results
 
-Uncommitted (to be committed this session):
-  - scripts/setup-v2-network-mgmt.ts (setup 19 nodes + 190 rules)
-  - scripts/run-v2-mgmt-classification.ts (classification script)
-  - scripts/analyze-network-mgmt-cpc.cjs (CPC analysis)
-  - docs/design/V2_NETWORK_MANAGEMENT_SUBSECTORS.md (design doc)
+Recent uncommitted:
+  - src/api/services/taxonomy-analyzer-service.ts (generalized CPC analysis)
+  - src/api/services/taxonomy-proposer-service.ts (generalized sub-sector generation)
+  - src/api/services/taxonomy-refactor-service.ts (orchestrator)
+  - docs/design/TAXONOMY_REFACTOR_SYSTEM.md (system design)
   - docs/SESSION_CONTEXT.md (this file)
 ```
 
@@ -374,4 +404,4 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
-*Last Updated: 2026-03-29 (v2 sub-sectors for network-management complete, lessons documented for generalized tooling)*
+*Last Updated: 2026-03-29 (generalized taxonomy refactor services and design doc)*

@@ -194,25 +194,38 @@ export async function createFromProposal(
   }
 
   // 2. Create nodes
-  const nodeIdMap = new Map<string, string>();
+  const nodeIdMap = new Map<string, string>();       // codes from THIS proposal
+  const allNodeIdMap = new Map<string, string>();    // all existing + new (for rule target lookup)
 
-  // Load existing nodes (for parent references)
+  // Load existing nodes (for parent references and rule target lookup)
   const existingNodes = await prisma.taxonomyNode.findMany({
     where: { taxonomyTypeId },
     select: { id: true, code: true, path: true },
   });
   for (const n of existingNodes) {
-    nodeIdMap.set(n.code, n.id);
+    allNodeIdMap.set(n.code, n.id);
   }
 
   let nodesCreated = 0;
   for (const sub of proposal.subsectors) {
-    const parentId = nodeIdMap.get(proposal.parentNodeCode) || parentNodeId;
+    const parentId = allNodeIdMap.get(proposal.parentNodeCode) || parentNodeId;
 
     if (dryRun) {
-      nodeIdMap.set(sub.code, `dry-run-${sub.code}`);
+      const dryId = `dry-run-${sub.code}`;
+      nodeIdMap.set(sub.code, dryId);
+      allNodeIdMap.set(sub.code, dryId);
       nodesCreated++;
       continue;
+    }
+
+    // Check if node already exists (e.g., from a previous partial run)
+    const existingNode = await prisma.taxonomyNode.findFirst({
+      where: { taxonomyTypeId, code: sub.code },
+    });
+    if (existingNode) {
+      nodeIdMap.set(sub.code, existingNode.id);
+      allNodeIdMap.set(sub.code, existingNode.id);
+      continue; // Already exists, skip creation
     }
 
     // Build path from parent
@@ -235,16 +248,17 @@ export async function createFromProposal(
       },
     });
     nodeIdMap.set(sub.code, created.id);
+    allNodeIdMap.set(sub.code, created.id);
     nodesCreated++;
   }
 
   // 3. Create rules
   let rulesCreated = 0;
   for (const rule of proposal.rules) {
-    const targetNodeId = nodeIdMap.get(rule.targetCode);
+    const targetNodeId = allNodeIdMap.get(rule.targetCode);
     if (!targetNodeId) {
       // If target doesn't exist, map to general catch-all
-      const generalId = nodeIdMap.get(proposal.catchAllNodeCode);
+      const generalId = allNodeIdMap.get(proposal.catchAllNodeCode);
       if (!generalId) continue;
     }
 
@@ -253,8 +267,8 @@ export async function createFromProposal(
       continue;
     }
 
-    const finalTargetId = nodeIdMap.get(rule.targetCode)
-      || nodeIdMap.get(proposal.catchAllNodeCode);
+    const finalTargetId = allNodeIdMap.get(rule.targetCode)
+      || allNodeIdMap.get(proposal.catchAllNodeCode);
     if (!finalTargetId) continue;
 
     await prisma.taxonomyRule.create({

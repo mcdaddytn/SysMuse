@@ -239,6 +239,47 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - `docs/design/V2_REFINED_SUBSECTORS.md` - Design documentation
 - Portfolio group: `pg_v2_pilot` for v2 classifications
 
+### v2 Network-Management Sub-sectors (2026-03-28)
+
+**Scope:** SDN_NETWORK > network-management (4,978 patents classified)
+**Target sizes:** <500 per portfolio (Broadcom)
+
+**18 sub-sectors** across 5 CPC domains:
+
+| Category | Sub-sectors | Largest Broadcom |
+|----------|-------------|-----------------|
+| Config Management | 4 (provision, sdn-nfv, automation, policy) | config-sdn-nfv: 101 |
+| Monitoring | 4 (metrics-qos, active-probe, capture-flow, reporting) | mon-metrics-qos: 128 |
+| NFV/Virtualization | 2 (orchestration, vnf-sfc) | nfv-vnf-sfc: 59 |
+| Topology/Analysis | 2 (topology-discovery, network-analysis) | topology-discovery: 88 |
+| Fault/Service/ML/Addr | 6 (fault-alarm, service-sla, ml-ai, general, addr-*) | fault-alarm: 60 |
+
+**All Broadcom sub-sectors under 130 — well within <500 target.**
+
+**Classification stats:**
+- Total sub-sectors: 18
+- Total rules: 190
+- Classifications created: 11,691
+- Multi-classification rate: 79.0%
+- Avg classifications/patent: 2.35
+
+**Key finding:** CPC codes H04L41/08xx (4-digit) and H04L41/8xx (3-digit) are **different CPC groups**. The 3-digit H04L41/8xx series (SDN/VM/ML management) requires separate rules from the 4-digit H04L41/08xx series (configuration management). Same applies to H04L43.
+
+**Files created:**
+- `scripts/setup-v2-network-mgmt.ts` - Creates 19 nodes and 190 rules
+- `scripts/run-v2-mgmt-classification.ts` - Priority-based classification
+- `scripts/analyze-network-mgmt-cpc.cjs` - CPC distribution analysis
+- `docs/design/V2_NETWORK_MANAGEMENT_SUBSECTORS.md` - Design documentation
+
+### v2 Combined Pilot Summary (2026-03-28)
+
+| Metric | Switching | Management | Combined |
+|--------|-----------|------------|----------|
+| L3 Sub-sectors | 30 | 18 | 48 |
+| Rules | 83 | 190 | 273 |
+| Unique patents | 6,218 | 5,333 | 9,653 |
+| Classifications | 11,687 | 10,987 | 22,674 |
+
 ### Implementation Phase (Updated Roadmap)
 
 **Completed:**
@@ -248,10 +289,10 @@ If clustered: N=3 coverage improves from 92.7% to 95.7%.
 - [x] v2 TaxonomyType structure created
 - [x] v2 pilot classification run and analyzed
 - [x] Refined sub-sectors for network-switching (30 sub-sectors, all within target)
+- [x] **v2 sub-sectors for network-management (18 sub-sectors, all within target)**
 
 **Next Steps:**
-- [ ] **Expand v2 to network-management sector** ← NEXT
-- [ ] Expand v2 to network-protocols sector
+- [ ] **Expand v2 to network-protocols sector** ← NEXT
 - [ ] GUI updates for secondary/tertiary filters
 - [ ] Background recalculation job system
 - [ ] Tiered portfolio promotion workflow
@@ -308,4 +349,4 @@ Phase 3C work archived in branch: `phase-3c-archive`
 
 ---
 
-*Last Updated: 2026-03-28 (v2 refined sub-sectors for network-switching complete)*
+*Last Updated: 2026-03-28 (v2 sub-sectors for network-management complete)*

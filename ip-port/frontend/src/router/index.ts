@@ -26,6 +26,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Base Score Rankings' }
       },
       {
+        path: 'scoring',
+        name: 'scoring',
+        component: () => import('@/pages/GeneralizedScoringPage.vue'),
+        meta: { title: 'Scoring' }
+      },
+      {
         path: 'v2-scoring',
         name: 'v2-scoring',
         component: () => import('@/pages/V2ScoringPage.vue'),

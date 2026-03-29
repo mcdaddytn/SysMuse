@@ -42,6 +42,7 @@ const navItems = computed(() => [
   { label: 'Focus Areas', icon: 'filter_center_focus', to: '/focus-areas', show: true },
   { label: 'Family Explorer', icon: 'account_tree', to: '/patent-families', show: true },
   { divider: true, show: true },
+  { label: 'Scoring', icon: 'functions', to: '/scoring', show: true },
   { label: 'Base Score', icon: 'leaderboard', to: '/base-scoring', show: true },
   { label: 'v2 Scoring', icon: 'score', to: '/v2-scoring', show: true },
   { label: 'v3 Scoring', icon: 'how_to_vote', to: '/v3-scoring', show: true },

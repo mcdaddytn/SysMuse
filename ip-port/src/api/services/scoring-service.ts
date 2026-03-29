@@ -685,7 +685,7 @@ function loadCandidates(): any[] {
  * Load candidates from Postgres for a specific portfolio.
  * Returns objects with the same shape as the JSON file candidates.
  */
-async function loadCandidatesFromPostgres(portfolioId: string): Promise<any[]> {
+export async function loadCandidatesFromPostgres(portfolioId: string): Promise<any[]> {
   const patents = await prisma.patent.findMany({
     where: {
       portfolios: { some: { portfolioId } },
@@ -738,7 +738,7 @@ export function clearScoringCache(): void {
 /**
  * Build PatentMetrics from candidate + classification + LLM + API data
  */
-function buildMetrics(
+export function buildMetrics(
   candidate: any,
   classification: CitationClassification | null,
   llmScores: LlmScores | null,

@@ -1,18 +1,22 @@
 # Session Context — March 29, 2026
 
-## Current Focus: Scoring Framework — Phase 1 Complete, Phase 2 Next
+## Current Focus: Scoring Framework — Phase 2 Complete
 
-**Scoring Framework Phase 1 is complete.** The generalized formula engine (`FormulaDefinition` + `FormulaWeightProfile` in DB, `evaluateFormula()` engine) reproduces both existing scoring systems with exact parity (36/36 regression tests, 0.000000 diff). Two formula definitions seeded (v2-enhanced, llm-composite-portfolio) with 8 weight profiles.
+**Scoring Framework Phase 1+2 are complete.** The system now supports:
+- DB-driven formula engine with exact regression parity (36/36 tests, 0.000000 diff)
+- Taxonomy-scoped formulas with grouped terms (portfolio, super-sector, sector, sub-sector groups)
+- Per-group sparse handling (portfolio group uses renormalize, taxonomy groups use zero)
+- On-demand formula generation from scoring template JSONs
+- Backend portfolio evaluation + consensus scoring endpoints
+- Generalized scoring page with dynamic group/metric sliders at `/scoring`
 
-**Next up: Phase 2 — Grouped Terms + Taxonomy-Scoped Formulas.** The engine supports `GroupTerm` in its type system but no seeded formulas use it yet. Next steps: build taxonomy-scoped formulas with separated term groups (portfolio questions vs sector questions vs citation metrics), move consensus scoring to backend, and wire the frontend scoring pages to use the formula engine.
+**Next up:** Stabilize the generalized scoring page with real data testing, then decide between snapshot enhancements (doc 04), question versioning (doc 03), or enrichment pipeline improvements (doc 05).
 
-**Key constraint:** Existing endpoints and frontend are untouched. The `?engine=formula` adapter on `/api/scores/v2-enhanced` enables side-by-side verification. Frontend migration happens after Phase 2 formula features are stable.
-
-**Previous milestone (2026-03-28):** Schema design + data migration complete. Abstract taxonomy model live with Portfolio Group architecture.
-
-**Previous milestone (2026-03-29):** Full v2 taxonomy generated with consolidation pipeline. Doc reorganization to align with 00-06 design series.
-
-**Current milestone (2026-03-29):** Formula engine Phase 1 complete — schema, engine, seed, API, regression tests all passing.
+**Previous milestones:**
+- (2026-03-28): Schema design + data migration. Abstract taxonomy model + Portfolio Groups.
+- (2026-03-29): Full v2 taxonomy generated (293 sub-sectors). Doc reorganization to 00-07 series.
+- (2026-03-29): Formula engine Phase 1 — schema, engine, seed, API, regression tests.
+- (2026-03-29): Formula engine Phase 2 — grouped terms, taxonomy formulas, metric resolver, consensus, generalized scoring page.
 
 ### Pre-Refactor State Tagged
 
@@ -373,7 +377,7 @@ Ran the generalized refactor pipeline across all 54 sectors (2 SDN sectors were 
 
 **Next implementation priorities (aligned with 00-06 design docs):**
 
-1. **Scoring Framework (02-scoring-framework.md)** — PHASE 1 COMPLETE
+1. **Scoring Framework (02-scoring-framework.md)** — PHASE 2 COMPLETE
    - [x] Understand current V2 formula implementation in code
    - [x] Design FormulaDefinition schema that can express the current formula exactly
    - [x] Implement formula engine that evaluates FormulaDefinition structures
@@ -382,11 +386,14 @@ Ran the generalized refactor pipeline across all 54 sectors (2 SDN sectors were 
    - [x] Add configurable scaling functions (linear, sqrt, log, nroot, range, sigmoid, step, raw)
    - [x] Migrate weight profiles to WeightProfile table (8 profiles linked to 2 formulas)
    - [x] Wire `?engine=formula` adapter on v2-enhanced endpoint for verification
-   - [ ] Add grouped terms support (portfolio questions group, citation group, sector group)
-   - [ ] Build taxonomy-scoped formulas (sector/sub-sector with inherited question groups)
-   - [ ] Move consensus scoring to backend endpoint using multiple WeightProfiles
-   - [ ] Wire scoring page to read formula from DB instead of hardcoded logic
+   - [x] Add grouped terms support (portfolio, super-sector, sector, sub-sector groups)
+   - [x] Build taxonomy-scoped formula generator from scoring templates
+   - [x] Metric resolver loading from PatentSubSectorScore + quantitative + API sources
+   - [x] Backend consensus scoring endpoint
+   - [x] Backend portfolio evaluation endpoint (`/evaluate-portfolio`)
+   - [x] Generalized scoring page with dynamic group sliders + consensus mode
    - [ ] SQL materialized view generation from formula structures
+   - [ ] Retire old V2/V3 scoring pages (after validation)
 
 2. **Snapshot Enhancement (04-snapshots.md)** — builds on scoring framework
    - [ ] Enhanced snapshot schema with provenance (creation method, source snapshots, normalization)
@@ -424,9 +431,9 @@ The **00-06 design doc series** under `docs/design/` is the current design syste
 |----------|-----------|--------|
 | `00-overview.md` | System vision, phased roadmap, architecture | Reference |
 | `01-taxonomy-refactor.md` | Multi-classification, named taxonomies, portfolio groups | Partially implemented (v2 taxonomy done, multi-assoc done) |
-| `02-scoring-framework.md` | Formula engine, grouped terms, weight profiles, scaling functions | **Phase 1 complete** — engine + schema + seed + regression |
-| `03-consensus-scoring.md` | Structured questions, revAIQ versioning, question inheritance | **NEXT PRIORITY** |
-| `04-snapshots.md` | Provenance, normalization strategies, snapshot lifecycle | **NEXT PRIORITY** |
+| `02-scoring-framework.md` | Formula engine, grouped terms, weight profiles, scaling functions | **Phase 2 complete** — grouped terms, taxonomy formulas, gen scoring page |
+| `03-consensus-scoring.md` | Structured questions, revAIQ versioning, question inheritance | Near-term |
+| `04-snapshots.md` | Provenance, normalization strategies, snapshot lifecycle | Near-term |
 | `05-enrichment.md` | Version-aware enrichment, cost management, auto-snapshot | Near-term |
 | `06-migration-plan.md` | Phased migration, regression testing, Claude Code skills | Reference |
 | `07-taxonomy-question-integration.md` | Taxonomy↔question optimization loop (design notes) | **NEW** — design insights |
@@ -444,33 +451,39 @@ The **00-06 design doc series** under `docs/design/` is the current design syste
 
 ## Scoring Framework State
 
-### Phase 1 Complete — Formula Engine
+### Phase 1 — Formula Engine (complete)
 
 | Component | File | Status |
 |-----------|------|--------|
 | FormulaDefinition model | `prisma/schema-v2.prisma` | Live in DB |
 | WeightProfile extended | `prisma/schema-v2.prisma` | `formulaDefId`, `consensusWeight`, `userId`, `isBuiltIn` added |
-| Formula types | `src/api/services/formula-types.ts` | FormulaStructure, MetricTerm, GroupTerm, ScalingConfig, etc. |
-| Formula engine | `src/api/services/formula-engine.ts` | `evaluateFormula()` with 7 scaling fns, multipliers, 3 sparse modes |
-| API routes | `src/api/routes/formulas.routes.ts` | CRUD + `/evaluate` endpoint |
+| Formula types | `src/api/services/formula-types.ts` | FormulaStructure, MetricTerm, GroupTerm, ScalingConfig, GroupScoreDetail |
+| Formula engine | `src/api/services/formula-engine.ts` | `evaluateFormula()` with 7 scaling fns, multipliers, 3 sparse modes, per-group handling |
+| API routes | `src/api/routes/formulas.routes.ts` | CRUD + `/evaluate` + `/evaluate-portfolio` + `/consensus` + `/generate` + `/scopes` |
 | Seed script | `prisma/seed-formulas.ts` | 2 formulas, 8 profiles seeded |
 | Regression tests | `scripts/test-formula-engine.ts` | 36/36 pass, 0.000000 diff |
 | V2 adapter | `src/api/routes/scores.routes.ts` | `?engine=formula` on `/v2-enhanced` |
 
-**Seeded formulas:**
-- `v2-enhanced` (PORTFOLIO scope): 13 terms (5 quantitative + 6 LLM + 2 API), year multiplier, renormalize sparse handling
-- `llm-composite-portfolio` (PORTFOLIO scope): 7 LLM terms (1-10 scale), zero sparse handling
+### Phase 2 — Taxonomy Formulas + Generalized Page (complete)
 
-**Seeded weight profiles:** default, litigation, licensing, defensive, quick_wins, executive, aggressive_litigator, llm-default
+| Component | File | Status |
+|-----------|------|--------|
+| Formula generator | `src/api/services/formula-generator.ts` | Reads scoring templates, builds grouped FormulaStructures per taxonomy scope |
+| Metric resolver | `src/api/services/metric-resolver.ts` | Loads quantitative + LLM + API metrics from DB for formula evaluation |
+| Generation tests | `scripts/test-formula-generation.ts` | 22/22 pass — grouped formulas, per-group scoring verified |
+| Frontend API client | `frontend/src/services/formula-api.ts` | Full API client for formula endpoints |
+| Generalized scoring page | `frontend/src/pages/GeneralizedScoringPage.vue` | Dynamic group sliders, consensus mode, profile management |
+| Nav integration | `frontend/src/layouts/MainLayout.vue` | "Scoring" link at `/scoring` |
 
-### Phase 2 — Remaining Work
-- Grouped terms (portfolio questions group, citation group, sector questions group)
-- Taxonomy-scoped formulas with inherited question groups
-- Consensus scoring backend
-- Frontend migration to formula engine
+**Seeded formulas:** v2-enhanced (PORTFOLIO), llm-composite-portfolio (PORTFOLIO). Taxonomy formulas generated on-demand via `/generate`.
+
+**Design**: Each taxonomy level's questions form a separate group. Portfolio group always has base 7 LLM + 5 quantitative + 2 API. Super-sector/sector/sub-sector groups contain only NEW fieldNames introduced at that level. Group weights (user-controllable) default to 0.80/0.10/0.05/0.05.
+
+### Remaining Scoring Work
+- SQL materialized view generation from formula structures
+- Retire old V2/V3 scoring pages after validation
 - Mixed-model normalization (Haiku/Sonnet/Opus scores comparable)
 - Snapshot management with revAIQ tracking
-- SQL materialized view generation
 
 ---
 
@@ -479,10 +492,10 @@ The **00-06 design doc series** under `docs/design/` is the current design syste
 ```
 Branch: main
 Recent commits:
-  - (pending) Add generalized formula engine with regression-tested scoring parity
+  - (pending) Add taxonomy-scoped formulas, metric resolver, consensus, generalized scoring page
+  - Add generalized formula engine with regression-tested scoring parity
   - 5932334 Update SESSION_CONTEXT with scoring framework as next priority
   - 6a3df40 Reorganize docs: archive old queues, add taxonomy-question integration design notes
-  - 2bb0b68 Add consolidation to taxonomy refactor pipeline, generate full v2 taxonomy
 ```
 
 ---
@@ -514,4 +527,4 @@ Recent commits:
 
 ---
 
-*Last Updated: 2026-03-29 (formula engine Phase 1 complete, v2 taxonomy complete, docs reorganized to 00-07 design series)*
+*Last Updated: 2026-03-29 (scoring framework Phase 2 complete — grouped terms, taxonomy formulas, generalized scoring page)*

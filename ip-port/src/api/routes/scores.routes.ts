@@ -28,6 +28,8 @@ import {
   V2EnhancedConfig,
 } from '../services/scoring-service.js';
 import { normalizeAffiliate } from '../utils/affiliate-normalizer.js';
+import { evaluateFormula } from '../services/formula-engine.js';
+import type { FormulaStructure, ScalingConfig } from '../services/formula-types.js';
 import { clearPatentsCache, invalidateEnrichmentCache, clearAndReloadSnapshotScores } from './patents.routes.js';
 
 const router = Router();
@@ -484,6 +486,41 @@ router.post('/v2-enhanced', async (req: Request, res: Response) => {
       prevRankMap = new Map(
         previousRankings.map((r: { patent_id: string; rank: number }) => [r.patent_id, r.rank])
       );
+    }
+
+    // ?engine=formula uses the new FormulaDefinition-based engine for side-by-side verification.
+    // Default (no param or engine=legacy) uses the existing scoreWithCustomConfig().
+    if (req.query.engine === 'formula') {
+      const formula = await prisma.formulaDefinition.findFirst({
+        where: { name: 'v2-enhanced', isActive: true },
+      });
+      if (!formula) {
+        return res.status(500).json({ error: 'v2-enhanced formula definition not found. Run seed-formulas.ts first.' });
+      }
+
+      // Use existing data loading, then evaluate through formula engine
+      const scored = await scoreWithCustomConfig(config, prevRankMap, portfolioId || undefined);
+
+      // Re-score each patent through the formula engine using the raw_metrics from scoreWithCustomConfig
+      const structure = formula.structure as unknown as FormulaStructure;
+      const formulaScored = scored.map((patent: any) => {
+        const rawMetrics: Record<string, number | undefined> = { ...patent.raw_metrics };
+        const formulaResult = evaluateFormula(structure, config.weights, rawMetrics);
+        return {
+          ...patent,
+          formula_score: formulaResult.score,
+          formula_base_score: formulaResult.baseScore,
+          score_match: Math.abs(formulaResult.score - patent.score) < 0.02,
+        };
+      });
+
+      return res.json({
+        data: formulaScored,
+        total: formulaScored.length,
+        config: { weights: config.weights, scaling: config.scaling, invert: config.invert, topN: config.topN, llmEnhancedOnly: config.llmEnhancedOnly },
+        engine: 'formula',
+        matchRate: formulaScored.filter((p: any) => p.score_match).length / (formulaScored.length || 1),
+      });
     }
 
     const scored = await scoreWithCustomConfig(config, prevRankMap, portfolioId || undefined);

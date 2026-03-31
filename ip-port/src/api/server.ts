@@ -23,6 +23,8 @@ import cpcRouter from './routes/cpc.routes.js';
 import scoringTemplatesRouter from './routes/scoring-templates.routes.js';
 import portfoliosRouter from './routes/portfolios.routes.js';
 import companiesRouter from './routes/companies.routes.js';
+import classificationsRouter from './routes/classifications.routes.js';
+import formulasRouter from './routes/formulas.routes.js';
 import { startBatchPolling } from './services/llm-scoring-service.js';
 
 dotenv.config();
@@ -69,6 +71,8 @@ app.use('/api/cpc', cpcRouter);
 app.use('/api/scoring-templates', scoringTemplatesRouter);
 app.use('/api/portfolios', portfoliosRouter);
 app.use('/api/companies', companiesRouter);
+app.use('/api/classifications', classificationsRouter);
+app.use('/api/formulas', formulasRouter);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

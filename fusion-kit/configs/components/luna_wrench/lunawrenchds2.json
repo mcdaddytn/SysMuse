@@ -1,0 +1,17 @@
+{
+    "radius": 21.0,
+    "rimWidth": 5.0,
+    "rectWidth": 2.0,
+    "rectLength": 4.5,
+    "numRects": 4,
+    "radius2": 22.0,
+    "rimWidth2": 4.0,
+    "rectWidth2": 0.8,
+    "rectLength2": 1.5,
+    "numRects2": 16,
+    "handleLength": 110.0,
+    "handleWidth": 36.0,
+    "height": 5.0,
+    "handleFilletRadius": 0.5,	
+    "sketchOnly": "False"
+}

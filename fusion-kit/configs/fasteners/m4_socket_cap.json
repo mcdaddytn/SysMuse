@@ -1,0 +1,16 @@
+{
+    "_description": "M4 Socket Cap Head Bolt with Hex Nut",
+    "_units": "mm",
+    "_mcmaster_bolt": "91290A120 (M4x20)",
+    "_mcmaster_nut": "90592A086 (M4 Hex)",
+
+    "ScrewDiameter": 4.2,
+    "ScrewHeadDiameter": 7.7,
+    "ScrewHeadDepth": 5.0,
+    "NutWidth": 9.0,
+    "NutThickness": 3.2,
+
+    "available_lengths_mm": [8, 10, 12, 16, 20, 25, 30, 35, 40, 45, 50],
+
+    "notes": "ScrewDiameter is clearance hole (actual M4 bolt is 4.0mm). NutThickness is standard M4 hex nut per ISO 4032."
+}

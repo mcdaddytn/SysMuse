@@ -1,22 +1,30 @@
-# Session Context — March 29, 2026
+# Session Context — April 1, 2026
 
-## Current Focus: Scoring Framework — Phase 2 Complete
+## Current Focus: Scoring Feedback Pending, Infrastructure Complete
 
-**Scoring Framework Phase 1+2 are complete.** The system now supports:
-- DB-driven formula engine with exact regression parity (36/36 tests, 0.000000 diff)
+**Scoring Framework Phase 1+2 complete. revAIQ question versioning complete. Enrichment planner complete.** The system now supports:
+- DB-driven formula engine with exact regression parity (78/78 tests across 3 suites)
 - Taxonomy-scoped formulas with grouped terms (portfolio, super-sector, sector, sub-sector groups)
-- Per-group sparse handling (portfolio group uses renormalize, taxonomy groups use zero)
 - On-demand formula generation from scoring template JSONs
-- Backend portfolio evaluation + consensus scoring endpoints
+- Backend portfolio evaluation + consensus scoring + enrichment planning endpoints
 - Generalized scoring page with dynamic group/metric sliders at `/scoring`
+- revAIQ question version tracking (114 versions seeded, 43K currency records backfilled)
+- Currency-aware enrichment planning with cost estimates
 
-**Next up:** Stabilize the generalized scoring page with real data testing, then decide between snapshot enhancements (doc 04), question versioning (doc 03), or enrichment pipeline improvements (doc 05).
+**Waiting on:** User feedback on generalized scoring page UI — requirements for modifications are being compiled.
+
+**Next priorities (after scoring feedback):**
+- Scoring page UI refinements based on user requirements
+- Snapshot enhancements (doc 04) — save/load/activate from generalized scoring page
+- Enrichment pipeline integration — wire enrichment planner into batch job UI
 
 **Previous milestones:**
 - (2026-03-28): Schema design + data migration. Abstract taxonomy model + Portfolio Groups.
 - (2026-03-29): Full v2 taxonomy generated (293 sub-sectors). Doc reorganization to 00-07 series.
 - (2026-03-29): Formula engine Phase 1 — schema, engine, seed, API, regression tests.
 - (2026-03-29): Formula engine Phase 2 — grouped terms, taxonomy formulas, metric resolver, consensus, generalized scoring page.
+- (2026-04-01): revAIQ question versioning — QuestionVersion + PatentQuestionCurrency + currency service + backfill.
+- (2026-04-01): Enrichment planner — revAIQ-based gap analysis + cost estimation.
 
 ### Pre-Refactor State Tagged
 
@@ -401,15 +409,21 @@ Ran the generalized refactor pipeline across all 54 sectors (2 SDN sectors were 
    - [ ] Normalization strategies (zero-weight infill, aggregate-preserving expansion)
    - [ ] Auto-snapshot after enrichment
 
-3. **revAIQ Question Versioning (03-consensus-scoring.md)** — enables cost-effective re-scoring
-   - [ ] QuestionVersion table tracking current version at each taxonomy level
-   - [ ] PatentQuestionCurrency table for per-patent revAIQ tracking
-   - [ ] Currency service computing gaps between patent state and latest available
+3. **revAIQ Question Versioning (03-consensus-scoring.md)** — COMPLETE
+   - [x] QuestionVersion table tracking current version at each taxonomy level (114 versions)
+   - [x] PatentQuestionCurrency table for per-patent revAIQ tracking (43K records backfilled)
+   - [x] Currency service: gap analysis, version sync, bump, recording
+   - [x] Currency API routes (/api/currency/*)
+   - [x] Hook into savePatentScore for automatic currency recording
+   - [x] Default equal weights in formula generator (1/N when weight omitted)
 
-4. **Enrichment Pipeline (05-enrichment.md)** — version-aware, cost-managed
-   - [ ] Use revAIQ to skip already-current patents
+4. **Enrichment Pipeline (05-enrichment.md)** — PLANNING LAYER COMPLETE
+   - [x] Currency-aware enrichment planner with cost estimation
+   - [x] Prioritized batches (never-scored, stale-portfolio, stale-taxonomy)
+   - [x] API endpoint: GET /api/currency/plan/:portfolioId/:taxonomyPath
+   - [ ] Wire enrichment planner into batch job GUI
    - [ ] Mixed-model normalization (overlap-based cross-model correction)
-   - [ ] Cost estimation before enrichment runs
+   - [ ] Post-enrichment auto-snapshot
 
 5. **Taxonomy-Question Loop (07-taxonomy-question-integration.md)** — iterative optimization
    - [ ] Design and document the feedback loop in more detail
@@ -432,9 +446,9 @@ The **00-06 design doc series** under `docs/design/` is the current design syste
 | `00-overview.md` | System vision, phased roadmap, architecture | Reference |
 | `01-taxonomy-refactor.md` | Multi-classification, named taxonomies, portfolio groups | Partially implemented (v2 taxonomy done, multi-assoc done) |
 | `02-scoring-framework.md` | Formula engine, grouped terms, weight profiles, scaling functions | **Phase 2 complete** — grouped terms, taxonomy formulas, gen scoring page |
-| `03-consensus-scoring.md` | Structured questions, revAIQ versioning, question inheritance | Near-term |
-| `04-snapshots.md` | Provenance, normalization strategies, snapshot lifecycle | Near-term |
-| `05-enrichment.md` | Version-aware enrichment, cost management, auto-snapshot | Near-term |
+| `03-consensus-scoring.md` | Structured questions, revAIQ versioning, question inheritance | **revAIQ complete** — versioning + currency + backfill |
+| `04-snapshots.md` | Provenance, normalization strategies, snapshot lifecycle | **NEXT PRIORITY** |
+| `05-enrichment.md` | Version-aware enrichment, cost management, auto-snapshot | **Planning layer complete** — planner + cost estimates |
 | `06-migration-plan.md` | Phased migration, regression testing, Claude Code skills | Reference |
 | `07-taxonomy-question-integration.md` | Taxonomy↔question optimization loop (design notes) | **NEW** — design insights |
 
@@ -479,11 +493,26 @@ The **00-06 design doc series** under `docs/design/` is the current design syste
 
 **Design**: Each taxonomy level's questions form a separate group. Portfolio group always has base 7 LLM + 5 quantitative + 2 API. Super-sector/sector/sub-sector groups contain only NEW fieldNames introduced at that level. Group weights (user-controllable) default to 0.80/0.10/0.05/0.05.
 
-### Remaining Scoring Work
+### revAIQ Question Versioning (complete)
+
+| Component | File | Status |
+|-----------|------|--------|
+| QuestionVersion model | `prisma/schema-v2.prisma` | 114 rows seeded from templates |
+| PatentQuestionCurrency model | `prisma/schema-v2.prisma` | 43,841 records backfilled |
+| Currency service | `src/api/services/currency-service.ts` | Version tracking, gap analysis, sync, bump |
+| Currency API | `src/api/routes/currency.routes.ts` | versions, gaps, patent, plan, sync, bump |
+| Enrichment planner | `src/api/services/enrichment-planner.ts` | revAIQ-based planning + cost estimates |
+| Currency tests | `scripts/test-currency.ts` | 20/20 pass |
+| Backfill script | `scripts/backfill-patent-currency.ts` | Populates currency from existing scores |
+| Seed script | `prisma/seed-question-versions.ts` | Syncs versions from template files |
+
+### Remaining Work
+- Scoring page UI refinements (awaiting user requirements)
+- Snapshot enhancements (doc 04) — provenance, normalization, lifecycle
 - SQL materialized view generation from formula structures
-- Retire old V2/V3 scoring pages after validation
+- Wire enrichment planner into batch job GUI
 - Mixed-model normalization (Haiku/Sonnet/Opus scores comparable)
-- Snapshot management with revAIQ tracking
+- Retire old V2/V3 scoring pages after validation
 
 ---
 
@@ -492,10 +521,12 @@ The **00-06 design doc series** under `docs/design/` is the current design syste
 ```
 Branch: main
 Recent commits:
-  - (pending) Add taxonomy-scoped formulas, metric resolver, consensus, generalized scoring page
-  - Add generalized formula engine with regression-tested scoring parity
+  - 10267bd Add enrichment planner with revAIQ-based gap analysis and cost estimation
+  - 06b02cf Add revAIQ question versioning, currency tracking, and default equal weights
+  - 6f7fb0a Add metric resolver, backend endpoints, and generalized scoring page
+  - 1620025 Implemented steps 1, 2 of formula engine
+  - f294207 Add generalized formula engine with regression-tested scoring parity
   - 5932334 Update SESSION_CONTEXT with scoring framework as next priority
-  - 6a3df40 Reorganize docs: archive old queues, add taxonomy-question integration design notes
 ```
 
 ---
@@ -527,4 +558,4 @@ Recent commits:
 
 ---
 
-*Last Updated: 2026-03-29 (scoring framework Phase 2 complete — grouped terms, taxonomy formulas, generalized scoring page)*
+*Last Updated: 2026-04-01 (revAIQ complete, enrichment planner complete, scoring page awaiting UI feedback)*

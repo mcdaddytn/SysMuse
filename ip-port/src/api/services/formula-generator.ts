@@ -81,6 +81,39 @@ function findNewFieldNames(
 }
 
 /**
+ * Apply default equal weights to questions that have weight=0 or undefined.
+ * If ALL questions at a level lack weights, assign 1/N to each.
+ * If SOME have explicit weights and some don't, the weightless ones get
+ * equal share of the remaining weight (1 - sum_of_explicit) / count_of_weightless.
+ */
+function applyDefaultEqualWeights(questions: TemplateQuestion[]): TemplateQuestion[] {
+  if (questions.length === 0) return questions;
+
+  const hasWeight = questions.filter(q => q.weight > 0);
+  const noWeight = questions.filter(q => !q.weight || q.weight <= 0);
+
+  if (noWeight.length === 0) return questions; // All have explicit weights
+
+  if (hasWeight.length === 0) {
+    // All lack weights — assign equal 1/N
+    const equalWeight = 1 / questions.length;
+    return questions.map(q => ({ ...q, weight: equalWeight }));
+  }
+
+  // Some have weights, some don't — give weightless ones equal share of remainder
+  const explicitSum = hasWeight.reduce((s, q) => s + q.weight, 0);
+  const remainder = Math.max(0, 1 - explicitSum);
+  const perQuestion = noWeight.length > 0 ? remainder / noWeight.length : 0;
+
+  return questions.map(q => {
+    if (!q.weight || q.weight <= 0) {
+      return { ...q, weight: perQuestion };
+    }
+    return q;
+  });
+}
+
+/**
  * Build MetricTerms for LLM questions (1-10 scale by default).
  */
 function buildLlmTerms(questions: TemplateQuestion[]): MetricTerm[] {
@@ -160,7 +193,8 @@ export function generateFormulaForScope(
   const superSectorQuestions = superSectorTemplate
     ? extractNumericQuestions(superSectorTemplate.questions)
     : [];
-  const superNewQuestions = findNewFieldNames(superSectorQuestions, portfolioFieldNames);
+  const superNewQuestionsRaw = findNewFieldNames(superSectorQuestions, portfolioFieldNames);
+  const superNewQuestions = applyDefaultEqualWeights(superNewQuestionsRaw);
   const superFieldNames = new Set(superNewQuestions.map(q => q.fieldName));
 
   // 3. Load sector template (if applicable)
@@ -172,7 +206,7 @@ export function generateFormulaForScope(
     if (sectorTemplate) {
       const sectorQuestions = extractNumericQuestions(sectorTemplate.questions);
       const parentFields = new Set([...portfolioFieldNames, ...superFieldNames]);
-      sectorNewQuestions = findNewFieldNames(sectorQuestions, parentFields);
+      sectorNewQuestions = applyDefaultEqualWeights(findNewFieldNames(sectorQuestions, parentFields));
       for (const q of sectorNewQuestions) sectorFieldNames.add(q.fieldName);
     }
   }
@@ -185,7 +219,7 @@ export function generateFormulaForScope(
       const subSectorTemplate = JSON.parse(fs.readFileSync(subSectorPath, 'utf-8'));
       const subSectorQuestions = extractNumericQuestions(subSectorTemplate.questions);
       const parentFields = new Set([...portfolioFieldNames, ...superFieldNames, ...sectorFieldNames]);
-      subSectorNewQuestions = findNewFieldNames(subSectorQuestions, parentFields);
+      subSectorNewQuestions = applyDefaultEqualWeights(findNewFieldNames(subSectorQuestions, parentFields));
     }
   }
 

@@ -65,6 +65,7 @@ export interface ScoreCalculationResult {
   withClaims?: boolean;           // Whether claims were included in scoring context
   llmModel?: string;              // Model used for scoring (e.g., "claude-sonnet-4-20250514")
   tokensUsed?: number;            // Total tokens (input + output) used
+  taxonomyPath?: string;          // e.g., "WIRELESS/rf-acoustic/amplifiers" — for revAIQ tracking
 }
 
 // ============================================================================
@@ -429,6 +430,17 @@ export async function savePatentScore(
     where: { patentId: result.patentId, hasLlmData: false },
     data: { hasLlmData: true },
   });
+
+  // Record revAIQ currency if taxonomy path is provided
+  if (result.taxonomyPath) {
+    try {
+      const { recordPatentCurrency } = await import('./currency-service.js');
+      await recordPatentCurrency(result.patentId, result.taxonomyPath, result.llmModel);
+    } catch (err) {
+      // Non-fatal: log and continue — currency tracking is additive
+      console.warn(`[savePatentScore] Failed to record currency for ${result.patentId}: ${err}`);
+    }
+  }
 }
 
 // ============================================================================

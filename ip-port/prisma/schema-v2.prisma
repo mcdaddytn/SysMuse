@@ -963,6 +963,69 @@ model ScoringTemplateVersion {
 }
 
 // =============================================================================
+// REVAIQ — QUESTION VERSION TRACKING
+// Tracks which version of structured questions applies at each taxonomy level.
+// PatentQuestionCurrency records per-patent what revAIQ has been applied.
+// =============================================================================
+
+model QuestionVersion {
+  id                   String   @id @default(cuid())
+
+  // Which taxonomy scope this version applies to
+  level                String                // 'portfolio' | 'super_sector' | 'sector' | 'sub_sector'
+  scopeId              String   @map("scope_id")  // template config ID (e.g., "wireless", "rf-acoustic")
+
+  // Version tracking — monotonically increasing per (level, scopeId)
+  version              Int
+
+  // What this version contains
+  questionFingerprint  String   @map("question_fingerprint")   // sorted fieldNames of NEW questions at this level
+  questionCount        Int      @map("question_count")         // number of questions at this level
+  templateConfigId     String   @map("template_config_id")     // JSON template file ID
+  templateFileVersion  Int      @map("template_file_version")  // "version" field from JSON file
+
+  // Change metadata
+  changeSummary        String?  @map("change_summary")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@unique([level, scopeId, version])
+  @@index([level, scopeId])
+  @@map("question_versions")
+}
+
+model PatentQuestionCurrency {
+  id                   String   @id @default(cuid())
+
+  patentId             String   @map("patent_id")
+
+  // The taxonomy path this currency applies to
+  taxonomyPath         String   @map("taxonomy_path")  // e.g., "WIRELESS/rf-acoustic/amplifiers"
+
+  // revAIQ — dot-separated version string per level
+  revAIQ               String   @map("rev_aiq")        // e.g., "2.4.1.1"
+
+  // Individual level versions (for easy querying)
+  portfolioVersion     Int      @map("portfolio_version")
+  superSectorVersion   Int      @map("super_sector_version")
+  sectorVersion        Int      @map("sector_version")
+  subSectorVersion     Int      @map("sub_sector_version")
+
+  // LLM model used when this currency was established
+  llmModel             String?  @map("llm_model")
+
+  // When this currency was established
+  scoredAt             DateTime @map("scored_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([patentId, taxonomyPath])
+  @@index([patentId])
+  @@index([taxonomyPath])
+  @@index([revAIQ])
+  @@map("patent_question_currency")
+}
+
+// =============================================================================
 // GENERALIZED SCORING FRAMEWORK
 // FormulaDefinition stores scoring formulas as structured JSON trees.
 // WeightProfile stores named weight configurations applied to a formula.

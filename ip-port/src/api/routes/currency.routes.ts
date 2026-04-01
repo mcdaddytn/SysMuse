@@ -17,6 +17,7 @@ import {
   bumpVersion,
   syncVersionsFromTemplates,
 } from '../services/currency-service.js';
+import { planEnrichment } from '../services/enrichment-planner.js';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -145,6 +146,29 @@ router.post('/bump', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error: any) {
     console.error('Error bumping version:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
+// Enrichment Planning
+// =============================================================================
+
+/** Plan an enrichment run using revAIQ gap analysis */
+router.get('/plan/:portfolioId/:taxonomyPath(*)', async (req: Request, res: Response) => {
+  try {
+    const topN = req.query.topN ? parseInt(req.query.topN as string) : undefined;
+    const includePatentIds = req.query.includePatentIds === 'true';
+
+    const plan = await planEnrichment(
+      req.params.portfolioId,
+      req.params.taxonomyPath,
+      { topN, includePatentIds },
+    );
+
+    res.json(plan);
+  } catch (error: any) {
+    console.error('Error planning enrichment:', error);
     res.status(500).json({ error: error.message });
   }
 });

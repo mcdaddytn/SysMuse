@@ -1,0 +1,19 @@
+{
+    "RectEdgeX": 74,
+    "RectEdgeY": 78,
+    "ObjectDepth": 40,
+    "CircleDiameter": 32,
+    "CircleExt": 4,
+    "ScrewDiameter": 4.2,
+    "ScrewHeadDiameter": 7.7,
+    "ScrewHeadDepth": 5,
+    "NutWidth": 9,
+    "InnerBoltLength": 17,
+    "OrientWide": "False",	
+    "NumClampBolts": 2,
+    "NumInnerBolts": 2,
+    "NumOuterBolts": 4,
+    "OuterXOffset": 14,
+    "OuterYOffset": 22,	
+    "NutThickness": 4
+}

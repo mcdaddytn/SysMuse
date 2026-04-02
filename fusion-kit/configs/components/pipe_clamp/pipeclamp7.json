@@ -1,0 +1,13 @@
+{
+    "SquareEdge": 78,
+    "ObjectDepth": 26,
+    "CircleDiameter": 35,
+    "CircleExt": 6,
+    "ScrewDiameter": 4.2,
+    "ScrewHeadDiameter": 7.7,
+    "ScrewHeadDepth": 5,
+    "NutWidth": 9,
+    "InnerBoltLength": 17,
+    "OrientWide": "False",	
+    "NutThickness": 4
+}

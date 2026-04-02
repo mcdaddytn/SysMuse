@@ -1,0 +1,43 @@
+{
+    "_description": "Camera mount kit for 1.25in PVC pipe scaffolding",
+    "_units": "mm",
+    "kit_name": "camera_pvc_mount_v1",
+
+    "components": [
+        {
+            "id": "pipe_clamp",
+            "type": "PipeClamp",
+            "config": "configs/components/pipe_clamp/pipeclamp_pvc125.json",
+            "description": "Clamp for 1.25in PVC pipe (OD 42.16mm)"
+        },
+        {
+            "id": "mounting_plate",
+            "type": "MountingPlate",
+            "config": "configs/components/mounting_plate/camera_plate_standard.json",
+            "description": "Flat plate with 1/4-20 camera mount hole"
+        }
+    ],
+
+    "assembly_steps": [
+        {
+            "action": "position",
+            "component": "mounting_plate",
+            "on_surface": "pipe_clamp.top",
+            "offset_mm": [0, 0, 0]
+        },
+        {
+            "action": "fasten",
+            "fastener": "configs/fasteners/m4_socket_cap.json",
+            "from": "pipe_clamp.outer_bolt_pattern",
+            "to": "mounting_plate.bolt_pattern"
+        }
+    ],
+
+    "export": {
+        "stl_per_body": true,
+        "step_assembly": true,
+        "bom": true
+    },
+
+    "notes": "Phase 4 feature — assembly_steps not yet implemented. Components can be built individually."
+}

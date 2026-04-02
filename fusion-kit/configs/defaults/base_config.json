@@ -1,0 +1,43 @@
+{
+    "configUnits": "mm",
+    "fusionUnits": "cm",
+
+    "logFilePath": "~/Documents/dev/fusionkit/logs",
+    "objectStatePath": "~/Documents/dev/fusionkit/state",
+    "exportPath": "~/Downloads",
+
+    "boolParams": ["SketchOnly", "OrientWide", "sketchOnly"],
+    "intParams": ["NumClampBolts", "NumInnerBolts", "NumOuterBolts", "numRects", "numRects2"],
+    "coordinateParams": [
+        "SquareEdge", "RectEdgeX", "RectEdgeY", "ObjectDepth",
+        "CircleDiameter", "CircleExt",
+        "ScrewDiameter", "ScrewHeadDiameter", "ScrewHeadDepth",
+        "NutWidth", "NutThickness", "InnerBoltLength",
+        "OuterXOffset", "OuterYOffset",
+        "NotchDepth", "NotchLength", "NotchHeight",
+        "radius", "rimWidth", "rectWidth", "rectLength", "height",
+        "radius2", "rimWidth2", "rectWidth2", "rectLength2",
+        "handleLength", "handleWidth", "handleFilletRadius",
+        "length", "cylinder_diameter",
+        "top_hole_diameter", "bottom_hole_diameter", "top_hole_depth"
+    ],
+
+    "defaultValues": {
+        "NumClampBolts": 2,
+        "NumInnerBolts": 0,
+        "NumOuterBolts": 0,
+        "CircleExt": 0,
+        "OrientWide": false,
+        "SketchOnly": false,
+        "NotchDepth": 0,
+        "NotchLength": 0
+    },
+
+    "defaultFastener": {
+        "ScrewDiameter": 4.2,
+        "ScrewHeadDiameter": 7.7,
+        "ScrewHeadDepth": 5,
+        "NutWidth": 9,
+        "NutThickness": 4
+    }
+}

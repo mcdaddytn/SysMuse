@@ -1,0 +1,9 @@
+{
+    "radius": 22.0,
+    "rimWidth": 4.0,
+    "rectWidth": 0.8,
+    "rectLength": 1.5,
+    "numRects": 16,
+    "height": 5.0,
+    "sketchOnly": "False"
+}

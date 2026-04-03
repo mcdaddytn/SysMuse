@@ -133,6 +133,9 @@ function formatWeight(w: number): string {
             </template>
             <span v-else class="text-grey-6">-</span>
           </div>
+          <div v-if="metricsMap.get(q.fieldName)?.reasoning" class="reasoning-text text-grey-5">
+            {{ metricsMap.get(q.fieldName)!.reasoning }}
+          </div>
         </div>
       </div>
 
@@ -191,6 +194,7 @@ function formatWeight(w: number): string {
 .question-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   font-size: 0.95em;
   padding: 2px 0;
@@ -213,5 +217,19 @@ function formatWeight(w: number): string {
 .question-score {
   min-width: 45px;
   text-align: right;
+}
+
+.reasoning-text {
+  width: 100%;
+  font-size: 0.78em;
+  line-height: 1.3;
+  border-left: 2px solid #555;
+  padding-left: 6px;
+  margin: 2px 0 4px 0;
+  max-height: 2.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 </style>

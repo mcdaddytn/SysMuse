@@ -520,10 +520,20 @@ async function discoverAffiliates() {
 async function acceptAffiliateSuggestion(suggestion: AffiliateSuggestion) {
   if (!selectedCompanyId.value) return;
   try {
+    // Resolve parent slug to parentId if provided
+    let parentId: string | undefined;
+    if (suggestion.parent && companyDetail.value) {
+      const parentAffiliate = companyDetail.value.affiliates.find(
+        a => a.name === suggestion.parent
+      );
+      if (parentAffiliate) parentId = parentAffiliate.id;
+    }
+
     await companyApi.addAffiliate(selectedCompanyId.value, {
       name: suggestion.name,
       displayName: suggestion.displayName,
       acquiredYear: suggestion.acquiredYear || undefined,
+      parentId,
       notes: suggestion.notes || undefined,
       description: suggestion.description || undefined,
       patterns: suggestion.patterns,
@@ -582,10 +592,17 @@ async function acceptSelectedCompetitors() {
 async function acceptSelectedAffiliates() {
   acceptingBulk.value = true;
   try {
-    const indices = [...selectedAffiliateIdxs.value].sort((a, b) => b - a);
-    for (const idx of indices) {
-      const s = affiliateSuggestions.value[idx];
-      if (s) await acceptAffiliateSuggestion(s);
+    // Sort parents-first so parentId lookups succeed for children
+    const selected = [...selectedAffiliateIdxs.value]
+      .map(idx => affiliateSuggestions.value[idx])
+      .filter(Boolean);
+    const parentFirst = selected.sort((a, b) => {
+      const aIsParent = !a.parent ? 0 : 1;
+      const bIsParent = !b.parent ? 0 : 1;
+      return aIsParent - bIsParent;
+    });
+    for (const s of parentFirst) {
+      await acceptAffiliateSuggestion(s);
     }
     selectedAffiliateIdxs.value = new Set();
   } finally {
@@ -1175,7 +1192,12 @@ onMounted(() => loadCompanies());
                 <q-checkbox :model-value="selectedAffiliateIdxs.has(i)" @update:model-value="toggleAffiliateIdx(i)" dense />
               </q-item-section>
               <q-item-section>
-                <q-item-label class="text-weight-medium">{{ s.displayName }}</q-item-label>
+                <q-item-label class="text-weight-medium">
+                  {{ s.displayName }}
+                  <q-badge v-if="s.parent" color="blue-grey-7" class="q-ml-sm" dense>
+                    &larr; {{ s.parent }}
+                  </q-badge>
+                </q-item-label>
                 <q-item-label caption>
                   <span v-if="s.acquiredYear" class="q-mr-sm">Acquired {{ s.acquiredYear }}</span>
                   <span v-if="s.patterns.length">Patterns: {{ s.patterns.join(', ') }}</span>

@@ -374,7 +374,13 @@ router.post('/:id/discover-affiliates', async (req: Request, res: Response) => {
     const company = await prisma.company.findUnique({
       where: { id: req.params.id },
       include: {
-        affiliates: { include: { patterns: true } },
+        affiliates: {
+          include: {
+            patterns: true,
+            parent: { select: { name: true, displayName: true } },
+            children: { select: { name: true, displayName: true } },
+          },
+        },
       },
     });
     if (!company) {
@@ -384,10 +390,16 @@ router.post('/:id/discover-affiliates', async (req: Request, res: Response) => {
     const { companyName } = req.body;
     const nameToSearch = companyName || company.displayName;
 
-    const existingAffiliates = company.affiliates.map(a => ({
-      name: a.displayName,
-      patterns: a.patterns.map(p => p.pattern),
-    }));
+    // Build hierarchy context for existing affiliates
+    const existingAffiliates = company.affiliates.map(a => {
+      const parts = [`${a.displayName} (slug: ${a.name})`];
+      if (a.description) parts.push(`focus: ${a.description}`);
+      if ((a as any).parent) parts.push(`parent: ${(a as any).parent.displayName}`);
+      const children = (a as any).children as Array<{ displayName: string }>;
+      if (children?.length) parts.push(`children: ${children.map((c: { displayName: string }) => c.displayName).join(', ')}`);
+      parts.push(`patterns: ${a.patterns.map(p => p.pattern).join(', ')}`);
+      return parts.join(' | ');
+    });
 
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
     const client = new Anthropic();
@@ -400,26 +412,32 @@ router.post('/:id/discover-affiliates', async (req: Request, res: Response) => {
         role: 'user',
         content: `I need to find all USPTO assignee name variants and subsidiaries for "${nameToSearch}" to import their patent portfolio.
 
-Search the web for "${nameToSearch}" subsidiaries, acquisitions, and patent assignee information. Then:
+Search the web for "${nameToSearch}" subsidiaries, acquisitions, and patent assignee information.
+
+IMPORTANT — RECURSIVE TRAVERSAL: For each configured affiliate below, also search for THEIR prior acquisitions and subsidiaries before they were acquired. For example, if "Avago Technologies" is already configured, search for companies Avago acquired (Emulex, PLX Technology, CyOptics, etc.) and include those with parent="avago-technologies". If "VMware" is configured, search for VMware's acquisitions (Nicira, Carbon Black, etc.) with parent="vmware".
 
 For the parent company and each known subsidiary/acquisition:
 1. List the exact assignee name strings used in USPTO records (e.g., "Netflix, Inc.", "Netflix Inc", "NETFLIX INC")
 2. Include any subsidiaries, acquired companies, or divisions that file patents separately
 3. For acquisitions, include the year acquired if known
 
-Already configured affiliates: ${existingAffiliates.length ? existingAffiliates.map(a => `${a.name} (patterns: ${a.patterns.join(', ')})`).join('; ') : 'None'}
+Already configured affiliates (with hierarchy context):
+${existingAffiliates.length ? existingAffiliates.map(a => `  - ${a}`).join('\n') : '  None'}
 
 Return a JSON array of NEW entities not already configured:
 [{
   "name": "slug-name",
   "displayName": "Human Readable Name",
   "acquiredYear": 2019,
+  "parent": "parent-slug-or-null",
   "patterns": ["Pattern 1", "Pattern 2"],
   "notes": "Brief context about this entity",
   "description": "1-2 sentence description of this entity's technology focus areas and what types of patents it files"
 }]
 
-For the parent company itself (if not already configured), use acquiredYear: null.
+The "parent" field should be the slug name of the IMMEDIATE parent entity that acquired this company. Set to null if the entity is a direct subsidiary of "${nameToSearch}" itself. For example, if Emulex was acquired by Avago (slug "avago-technologies"), set parent to "avago-technologies", NOT to the top-level company.
+
+For the parent company itself (if not already configured), use acquiredYear: null and parent: null.
 Include all known assignee name variants as separate patterns.
 Return raw JSON array, no markdown.`,
       }],

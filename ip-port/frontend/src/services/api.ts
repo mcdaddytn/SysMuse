@@ -3183,6 +3183,7 @@ export interface AffiliateSuggestion {
   name: string;
   displayName: string;
   acquiredYear: number | null;
+  parent: string | null;
   patterns: string[];
   notes: string;
   description?: string;

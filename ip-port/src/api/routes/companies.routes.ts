@@ -229,7 +229,24 @@ Only return NEW companies not in the known list. Return raw JSON array, no markd
     } catch {
       // Try to extract JSON array from response text (model may include preamble)
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      if (jsonMatch) {
+        try {
+          suggestions = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Try to repair: strip trailing incomplete objects and re-parse
+          let cleaned = jsonMatch[0];
+          // Find the last complete object (ending with })
+          const lastBrace = cleaned.lastIndexOf('}');
+          if (lastBrace > 0) {
+            cleaned = cleaned.substring(0, lastBrace + 1) + ']';
+            try { suggestions = JSON.parse(cleaned); } catch { suggestions = []; }
+          } else {
+            suggestions = [];
+          }
+        }
+      } else {
+        suggestions = [];
+      }
     }
 
     res.json({ suggestions, companyName: nameToSearch, existingCount: existingNames.length });
@@ -462,7 +479,23 @@ Return raw JSON array, no markdown.`,
     } catch {
       // Try to extract JSON array from response text (model may include preamble)
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      suggestions = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+      if (jsonMatch) {
+        try {
+          suggestions = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Try to repair: strip trailing incomplete objects and re-parse
+          let cleaned = jsonMatch[0];
+          const lastBrace = cleaned.lastIndexOf('}');
+          if (lastBrace > 0) {
+            cleaned = cleaned.substring(0, lastBrace + 1) + ']';
+            try { suggestions = JSON.parse(cleaned); } catch { suggestions = []; }
+          } else {
+            suggestions = [];
+          }
+        }
+      } else {
+        suggestions = [];
+      }
     }
 
     res.json({ suggestions, companyName: nameToSearch, existingCount: existingAffiliates.length });

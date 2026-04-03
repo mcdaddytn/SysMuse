@@ -60,6 +60,20 @@ Features added to the `stable-demo` branch that should be reapplied to the refac
 
 ---
 
+## Bugfix: Robust JSON Fallback Parsing
+
+**Commit:** `97033d9` — "Add robust JSON fallback parsing for LLM discovery endpoints"
+
+**Files changed:**
+- `src/api/routes/companies.routes.ts` (both discover-affiliates and discover-competitors endpoints)
+
+**What changed:**
+- When the LLM produces slightly malformed JSON (common with very long responses listing 100+ existing competitors), the regex-extracted JSON also failed to parse, causing a 500 error. Added a repair step that truncates at the last complete object (`}`) before re-parsing. Applied to both discovery endpoints for consistency.
+
+**How to reapply:** Replace the simple `jsonMatch ? JSON.parse(jsonMatch[0]) : []` fallback with the nested try/catch repair logic.
+
+---
+
 ## Notes
 
 - All features are on the `stable-demo` branch

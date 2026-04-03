@@ -43,7 +43,7 @@ const competitorSearch = ref('');
 // Discover competitors
 const discovering = ref(false);
 const discoveringData = ref(false);
-const discoverSuggestions = ref<Array<{ name: string; slug: string; sectors: string[]; notes: string; strength?: number; citationCount?: number; patentsCited?: number; variants?: string[] }>>([]);
+const discoverSuggestions = ref<Array<{ name: string; slug: string; sectors: string[]; competingDivisions?: string[]; notes: string; strength?: number; citationCount?: number; patentsCited?: number; variants?: string[] }>>([]);
 const showDiscoverDialog = ref(false);
 const discoverSource = ref<'llm' | 'data'>('llm');
 const discoverDataStats = ref<{ totalCiting: number; withData: number; withoutData: number } | null>(null);
@@ -373,7 +373,7 @@ async function discoverCompetitorsFromData() {
   }
 }
 
-async function acceptCompetitorSuggestion(suggestion: { name: string; slug: string; sectors: string[]; strength?: number; notes?: string }) {
+async function acceptCompetitorSuggestion(suggestion: { name: string; slug: string; sectors: string[]; competingDivisions?: string[]; strength?: number; notes?: string }) {
   if (!selectedCompanyId.value) return;
   try {
     // Create the company if it doesn't exist
@@ -387,13 +387,17 @@ async function acceptCompetitorSuggestion(suggestion: { name: string; slug: stri
       if (!found) throw new Error('Could not find or create company');
       company = found;
     }
-    // Create competitor relationship
+    // Create competitor relationship — merge competingDivisions into sectors
     const source = discoverSource.value === 'data' ? 'CITATION_DATA' : 'LLM_SUGGESTED';
+    const allSectors = [...new Set([...(suggestion.sectors || []), ...(suggestion.competingDivisions || [])])];
+    const notesWithDivisions = suggestion.competingDivisions?.length
+      ? `${suggestion.notes || ''}${suggestion.notes ? ' | ' : ''}Competes with: ${suggestion.competingDivisions.join(', ')}`
+      : suggestion.notes;
     await companyApi.addCompetitor(selectedCompanyId.value, {
       competitorId: company.id,
-      sectors: suggestion.sectors,
+      sectors: allSectors,
       discoverySource: source,
-      notes: suggestion.notes || undefined,
+      notes: notesWithDivisions || undefined,
     });
     discoverSuggestions.value = discoverSuggestions.value.filter(s => s.slug !== suggestion.slug);
     await loadCompetitors(selectedCompanyId.value);
@@ -1153,6 +1157,9 @@ onMounted(() => loadCompanies());
                   <template v-else>
                     Sectors: {{ s.sectors?.join(', ') || 'General' }}
                   </template>
+                </q-item-label>
+                <q-item-label v-if="s.competingDivisions?.length" caption class="text-blue-6">
+                  Competes with: {{ s.competingDivisions.join(', ') }}
                 </q-item-label>
                 <q-item-label caption v-if="s.notes" class="text-grey-6">{{ s.notes }}</q-item-label>
                 <q-item-label v-if="s.variants?.length" caption class="text-grey-5">

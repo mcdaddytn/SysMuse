@@ -3351,7 +3351,7 @@ export const companyApi = {
   },
 
   async discoverCompetitors(companyId: string, companyName?: string): Promise<{
-    suggestions: Array<{ name: string; slug: string; sectors: string[]; notes: string }>;
+    suggestions: Array<{ name: string; slug: string; sectors: string[]; competingDivisions?: string[]; notes: string }>;
     companyName: string;
     existingCount: number;
   }> {

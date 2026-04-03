@@ -180,6 +180,7 @@ router.post('/:id/discover-competitors', async (req: Request, res: Response) => 
       where: { id: req.params.id },
       include: {
         competitorsOf: { include: { competitor: true } },
+        affiliates: { select: { displayName: true, description: true } },
       },
     });
     if (!company) {
@@ -191,6 +192,13 @@ router.post('/:id/discover-competitors', async (req: Request, res: Response) => 
 
     const existingNames = company.competitorsOf.map(r => r.competitor.displayName);
 
+    // Build division context from affiliates with descriptions
+    const affiliatesWithDesc = company.affiliates.filter(a => a.description);
+    let divisionContext = '';
+    if (affiliatesWithDesc.length > 0) {
+      divisionContext = `\n\n${nameToSearch} operates through multiple divisions/subsidiaries, each with distinct technology focus areas:\n${affiliatesWithDesc.map(a => `  - ${a.displayName}: ${a.description}`).join('\n')}\n\nIMPORTANT: Find competitors FOR EACH division/subsidiary listed above. For example, if one division focuses on virtualization, find virtualization competitors. If another focuses on enterprise security, find enterprise security competitors. Include a "competingDivisions" array in each result indicating which division(s) each competitor competes with.`;
+    }
+
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
     const client = new Anthropic();
 
@@ -200,11 +208,13 @@ router.post('/:id/discover-competitors', async (req: Request, res: Response) => 
       tools: [{ type: 'web_search_20250305', name: 'web_search' } as any],
       messages: [{
         role: 'user',
-        content: `Search the web for competitors of "${nameToSearch}" in the technology/patent space. Focus on companies that would have overlapping patent portfolios — companies working in the same technology areas, filing similar patents, or competing in the same markets.
+        content: `Search the web for competitors of "${nameToSearch}" in the technology/patent space. Focus on companies that would have overlapping patent portfolios — companies working in the same technology areas, filing similar patents, or competing in the same markets.${divisionContext}
 
 Already known competitors: ${existingNames.slice(0, 30).join(', ')}${existingNames.length > 30 ? ` (and ${existingNames.length - 30} more)` : ''}
 
-Return JSON array: [{ "name": "Company Name", "slug": "company-slug", "sectors": ["sector1"], "notes": "1-2 sentences: what technology areas they compete in, what types of patent overlap exists" }]
+Return JSON array: [{ "name": "Company Name", "slug": "company-slug", "sectors": ["sector1"], "competingDivisions": ["Division Name 1", "Division Name 2"], "notes": "1-2 sentences: what technology areas they compete in, what types of patent overlap exists" }]
+
+The "competingDivisions" field should list the specific ${nameToSearch} divisions/subsidiaries this company competes with. If division info is not available, omit the field or set to an empty array.
 
 Only return NEW companies not in the known list. Return raw JSON array, no markdown.`,
       }],

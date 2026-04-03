@@ -580,6 +580,14 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     const newPatentIds: string[] = [];
     const seenPatentIds = new Set<string>();
 
+    // Pre-load existing patent IDs in this portfolio so we can skip them
+    // and spend the maxPatents budget only on genuinely new patents
+    const existingLinks = await prisma.portfolioPatent.findMany({
+      where: { portfolioId },
+      select: { patentId: true },
+    });
+    const existingPatentIds = new Set(existingLinks.map(l => l.patentId));
+
     const patentFields = [
       'patent_id', 'patent_title', 'patent_abstract', 'patent_date', 'patent_type',
       'patent_num_times_cited_by_us_patents',
@@ -620,6 +628,12 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
               if (seenPatentIds.size >= maxPatents) break;
               const patentId = p.patent_id;
               if (seenPatentIds.has(patentId)) continue;
+
+              // Skip patents already in this portfolio — don't count against budget
+              if (existingPatentIds.has(patentId)) {
+                alreadyExists++;
+                continue;
+              }
               seenPatentIds.add(patentId);
 
               try {
@@ -674,21 +688,16 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
                   }).catch(() => {}); // Ignore race conditions
                 }
 
-                // Link to portfolio
-                const link = await prisma.portfolioPatent.upsert({
-                  where: { portfolioId_patentId: { portfolioId, patentId } },
-                  update: {},
-                  create: {
+                // Link to portfolio (we already filtered out existing links above)
+                await prisma.portfolioPatent.create({
+                  data: {
                     portfolioId,
                     patentId,
                     source: 'PATENTSVIEW_IMPORT',
                   },
                 });
-
-                if (link) {
-                  newPatentIds.push(patentId);
-                  imported++;
-                }
+                newPatentIds.push(patentId);
+                imported++;
               } catch {
                 alreadyExists++;
               }

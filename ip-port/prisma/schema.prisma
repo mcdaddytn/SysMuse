@@ -115,6 +115,7 @@ enum CompetitorDiscoverySource {
 enum PatentSource {
   CANDIDATES_FILE     // Loaded from output/portfolio-candidates-*.json
   PATENTSVIEW_IMPORT  // Imported via PatentsView API
+  BULK_DATA_IMPORT    // Imported from USPTO bulk grant XML files
   MANUAL              // Manually added
   FAMILY_EXPANSION    // Discovered via family exploration
 }

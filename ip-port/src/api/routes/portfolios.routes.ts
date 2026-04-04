@@ -571,9 +571,6 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Portfolio not found' });
     }
 
-    const { createPatentsViewClient } = await import('../../../clients/patentsview-client.js');
-    const pvClient = createPatentsViewClient();
-
     let imported = 0;
     let alreadyExists = 0;
     let failed = 0;
@@ -588,127 +585,116 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     });
     const existingPatentIds = new Set(existingLinks.map(l => l.patentId));
 
-    const patentFields = [
-      'patent_id', 'patent_title', 'patent_abstract', 'patent_date', 'patent_type',
-      'patent_num_times_cited_by_us_patents',
-      'assignees.assignee_organization',
-      'inventors.inventor_name_first', 'inventors.inventor_name_last',
-      'cpc_current.cpc_group_id', 'cpc_current.cpc_subgroup_id',
-      'application.filing_date',
-    ];
-
     // Import utilities for computing derived fields inline
     const { calculateRemainingYears, calculateBaseScore } = await import('../services/patent-hydration-service.js');
     const { getPrimarySectorAsync, getSuperSectorAsync } = await import('../utils/sector-mapper.js');
 
+    // Collect all unique patterns from active affiliates
+    const allPatterns = portfolio.company.affiliates.flatMap(a => a.patterns.map(p => p.pattern));
+    // Build affiliate lookup: pattern → affiliate name (for the affiliate field)
+    const patternToAffiliate = new Map<string, string>();
     for (const affiliate of portfolio.company.affiliates) {
       for (const pat of affiliate.patterns) {
+        patternToAffiliate.set(pat.pattern.toLowerCase(), affiliate.name);
+      }
+    }
+
+    // Use bulk data search (PatentsView API shut down March 2026)
+    const { searchBulkPatents } = await import('../services/bulk-patent-search-service.js');
+
+    console.log(`[Import] Searching bulk data for ${allPatterns.length} patterns (max ${maxPatents} patents)...`);
+
+    for await (const batch of searchBulkPatents({
+      patterns: allPatterns,
+      cpcPrefixes: cpcPrefixes?.length ? cpcPrefixes : undefined,
+      maxPatents,
+      onProgress: (msg) => console.log(`[Import] ${msg}`),
+    })) {
+      for (const p of batch) {
         if (seenPatentIds.size >= maxPatents) break;
+        const patentId = p.patent_id;
+        if (seenPatentIds.has(patentId)) continue;
+
+        // Skip patents already in this portfolio — don't count against budget
+        if (existingPatentIds.has(patentId)) {
+          alreadyExists++;
+          continue;
+        }
+        seenPatentIds.add(patentId);
+
         try {
-          const queryParts: Record<string, unknown>[] = [
-            { _contains: { 'assignees.assignee_organization': pat.pattern } },
-          ];
+          // Compute all derived fields from search data
+          const assigneeOrg = p.assignees?.[0]?.assignee_organization || '';
+          const inventors = (p.inventors || []).map(
+            (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
+          ).filter(Boolean);
+          const cpcCodes = (p.cpc_current || [])
+            .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
+            .filter(Boolean);
+          const filingDate = p.application?.[0]?.filing_date || null;
+          const grantDate = p.patent_date || null;
+          const forwardCitations = p.patent_num_times_cited_by_us_patents || 0;
+          const dateForExpiry = filingDate || grantDate;
+          const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
+          const primaryCpc = cpcCodes[0] || null;
+          const primarySector = await getPrimarySectorAsync(cpcCodes, p.patent_title, p.patent_abstract) || null;
+          const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
+          const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
 
-          if (cpcPrefixes?.length) {
-            const cpcOr = cpcPrefixes.map((prefix: string) => ({
-              _begins: { 'cpc_current.cpc_group_id': prefix },
-            }));
-            queryParts.push(cpcOr.length === 1 ? cpcOr[0] : { _or: cpcOr });
+          // Determine which affiliate this patent belongs to
+          const affiliateName = patternToAffiliate.get(assigneeOrg.toLowerCase())
+            || [...patternToAffiliate.entries()].find(([pat]) => assigneeOrg.toLowerCase().includes(pat))?.[1]
+            || assigneeOrg;
+
+          const patentData = {
+            title: p.patent_title || '',
+            abstract: p.patent_abstract || null,
+            grantDate,
+            filingDate,
+            assignee: assigneeOrg,
+            affiliate: affiliateName,
+            inventors,
+            forwardCitations,
+            remainingYears,
+            isExpired,
+            baseScore,
+            primarySector,
+            superSector,
+            primaryCpc,
+          };
+
+          // Upsert Patent row with full data
+          await prisma.patent.upsert({
+            where: { patentId },
+            create: { patentId, ...patentData },
+            update: patentData,
+          });
+
+          // Upsert CPC codes from search results
+          for (const code of cpcCodes) {
+            await prisma.patentCpc.upsert({
+              where: { patentId_cpcCode: { patentId, cpcCode: code } },
+              create: { patentId, cpcCode: code },
+              update: {},
+            }).catch(() => {}); // Ignore race conditions
           }
 
-          const query = queryParts.length === 1 ? queryParts[0] : { _and: queryParts };
-
-          // Paginate through all results
-          const pageSize = 100;
-          for await (const patents of pvClient.searchPaginated(
-            { query, fields: patentFields, sort: [{ patent_date: 'desc' }] },
-            pageSize
-          )) {
-            for (const p of patents) {
-              if (seenPatentIds.size >= maxPatents) break;
-              const patentId = p.patent_id;
-              if (seenPatentIds.has(patentId)) continue;
-
-              // Skip patents already in this portfolio — don't count against budget
-              if (existingPatentIds.has(patentId)) {
-                alreadyExists++;
-                continue;
-              }
-              seenPatentIds.add(patentId);
-
-              try {
-                // Compute all derived fields from search data
-                const assigneeOrg = p.assignees?.[0]?.assignee_organization || '';
-                const inventors = (p.inventors || []).map(
-                  (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
-                ).filter(Boolean);
-                const cpcCodes = (p.cpc_current || p.cpcs || [])
-                  .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
-                  .filter(Boolean);
-                const filingDate = p.application?.[0]?.filing_date || null;
-                const grantDate = p.patent_date || null;
-                const forwardCitations = p.patent_num_times_cited_by_us_patents || 0;
-                const dateForExpiry = filingDate || grantDate;
-                const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
-                const primaryCpc = cpcCodes[0] || null;
-                const primarySector = await getPrimarySectorAsync(cpcCodes, p.patent_title, p.patent_abstract) || null;
-                const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
-                const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
-
-                const patentData = {
-                  title: p.patent_title || '',
-                  abstract: p.patent_abstract || null,
-                  grantDate,
-                  filingDate,
-                  assignee: assigneeOrg,
-                  affiliate: affiliate.name,
-                  inventors,
-                  forwardCitations,
-                  remainingYears,
-                  isExpired,
-                  baseScore,
-                  primarySector,
-                  superSector,
-                  primaryCpc,
-                };
-
-                // Upsert Patent row with full data
-                await prisma.patent.upsert({
-                  where: { patentId },
-                  create: { patentId, ...patentData },
-                  update: patentData,
-                });
-
-                // Upsert CPC codes from search results
-                for (const code of cpcCodes) {
-                  await prisma.patentCpc.upsert({
-                    where: { patentId_cpcCode: { patentId, cpcCode: code } },
-                    create: { patentId, cpcCode: code },
-                    update: {},
-                  }).catch(() => {}); // Ignore race conditions
-                }
-
-                // Link to portfolio (we already filtered out existing links above)
-                await prisma.portfolioPatent.create({
-                  data: {
-                    portfolioId,
-                    patentId,
-                    source: 'PATENTSVIEW_IMPORT',
-                  },
-                });
-                newPatentIds.push(patentId);
-                imported++;
-              } catch {
-                alreadyExists++;
-              }
-            }
-            if (seenPatentIds.size >= maxPatents) break;
-          }
-        } catch (err) {
-          console.warn(`[Import] Error for pattern "${pat.pattern}":`, (err as Error).message);
-          failed++;
+          // Link to portfolio
+          await prisma.portfolioPatent.create({
+            data: {
+              portfolioId,
+              patentId,
+              source: 'BULK_DATA_IMPORT',
+            },
+          });
+          newPatentIds.push(patentId);
+          imported++;
+        } catch (insertErr: any) {
+          console.error(`[Import] Insert error for patent ${patentId}:`, insertErr?.message || insertErr);
+          alreadyExists++;
         }
       }
+      if (seenPatentIds.size >= maxPatents) break;
     }
 
     // Update portfolio patent count

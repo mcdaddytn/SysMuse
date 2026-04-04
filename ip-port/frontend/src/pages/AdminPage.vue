@@ -807,7 +807,7 @@ onMounted(() => loadCompanies());
                 <q-item-section side class="row no-wrap items-center q-gutter-xs">
                   <q-btn flat dense round icon="download" size="xs" color="primary"
                     @click="openImportDialog(p)">
-                    <q-tooltip>Import Patents from PatentsView</q-tooltip>
+                    <q-tooltip>Import Portfolio Patents</q-tooltip>
                   </q-btn>
                   <q-btn flat dense round icon="description" size="xs" color="accent"
                     :loading="extracting"
@@ -1293,7 +1293,7 @@ onMounted(() => loadCompanies());
         <q-card-section class="text-h6">Import Patents: {{ importPortfolioName }}</q-card-section>
         <q-card-section>
           <div class="text-caption text-grey q-mb-md">
-            Imports patents from PatentsView using this company's affiliate patterns.
+            Imports patents from USPTO bulk data using this company's affiliate patterns.
           </div>
           <q-input v-model="importCpcPrefixes" label="CPC Prefixes (comma-separated)" dense outlined class="q-mb-sm"
             hint="Leave empty for all patents, or filter e.g. H04N, H04L" />

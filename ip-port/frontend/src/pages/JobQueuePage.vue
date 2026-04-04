@@ -8,7 +8,7 @@ import {
   patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi, quarantineApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
   type BatchJob, type BatchJobSettings, type BatchJobsResponse, type CoverageType, type TargetType, type SortStrategy, type GapsResponse,
-  type BatchJobMetadata, type HydrationResult, type ScoreSnapshot,
+  type BatchJobMetadata, type ScoreSnapshot,
   type QuarantineSummary, type QuarantineGroup
 } from '@/services/api';
 
@@ -827,14 +827,13 @@ function formatLlmDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleString();
 }
 
-// ─── Portfolio Info Bar (Hydrate / Import) ────────────────────────────────────
+// ─── Portfolio Info Bar (Import) ──────────────────────────────────────────────
 const portfolioPatentCount = ref(0);
 const portfolioBareCount = ref(0);
 const portfolioInfoLoading = ref(false);
-const hydrating = ref(false);
-const hydrationResult = ref<HydrationResult | null>(null);
 const importing = ref(false);
 const importResult = ref<{ imported: number; totalInPortfolio: number } | null>(null);
+const importError = ref<string | null>(null);
 const showImportDialog = ref(false);
 const importMaxPatents = ref(1000);
 const importMaxOptions = [
@@ -878,30 +877,13 @@ async function loadPortfolioInfo() {
   }
 }
 
-async function doHydrate() {
-  const pid = portfolioStore.selectedPortfolioId;
-  if (!pid) return;
-  hydrating.value = true;
-  hydrationResult.value = null;
-  try {
-    hydrationResult.value = await portfolioApi.hydratePatents(pid);
-    // Reload enrichment data after hydration
-    loadEnrichmentSummary();
-    loadSectorEnrichment();
-    loadPortfolioInfo();
-  } catch (err) {
-    console.error('Hydration failed:', err);
-  } finally {
-    hydrating.value = false;
-  }
-}
-
 async function doImport() {
   const pid = portfolioStore.selectedPortfolioId;
   if (!pid) return;
   showImportDialog.value = false;
   importing.value = true;
   importResult.value = null;
+  importError.value = null;
   try {
     const result = await portfolioApi.importPatents(pid, { maxPatents: importMaxPatents.value || undefined });
     importResult.value = { imported: result.imported, totalInPortfolio: result.totalInPortfolio };
@@ -909,8 +891,9 @@ async function doImport() {
     loadEnrichmentSummary();
     loadSectorEnrichment();
     loadPortfolioInfo();
-  } catch (err) {
+  } catch (err: any) {
     console.error('Import failed:', err);
+    importError.value = err?.response?.data?.error || err?.message || 'Unknown error';
   } finally {
     importing.value = false;
   }
@@ -918,8 +901,8 @@ async function doImport() {
 
 // ─── Watch portfolio selection ────────────────────────────────────────────────
 watch(() => portfolioStore.selectedPortfolioId, () => {
-  hydrationResult.value = null;
   importResult.value = null;
+  importError.value = null;
   loadEnrichmentSummary();
   loadSectorEnrichment();
   loadPortfolioInfo();
@@ -951,7 +934,7 @@ const QUARANTINE_REASON_META: Record<string, { label: string; icon: string; colo
   'pre-2005': { label: 'Pre-2005 Grant', icon: 'history', color: 'blue-grey', retryable: false, remedy: 'No bulk XML available for pre-2005 patents' },
   'recent-no-bulk': { label: 'Recent — No Bulk Data', icon: 'schedule', color: 'orange', retryable: true, remedy: 'Bulk XML not yet published — check back after next USPTO release' },
   'extraction-failed': { label: 'USPTO Bulk Extraction Failed', icon: 'error_outline', color: 'red', retryable: true, remedy: 'Re-run XML extraction or check bulk ZIP coverage' },
-  'no-abstract': { label: 'No Abstract', icon: 'description', color: 'amber', retryable: true, remedy: 'Run Hydrate on the portfolio to fetch abstract from PatentsView' },
+  'no-abstract': { label: 'No Abstract', icon: 'description', color: 'amber', retryable: true, remedy: 'Re-import portfolio patents to fetch missing abstracts from USPTO bulk data' },
   'no-sector': { label: 'No Sector Assigned', icon: 'category', color: 'amber', retryable: true, remedy: 'Run Sector Assignment on the portfolio' },
   'manual': { label: 'Manually Quarantined', icon: 'person', color: 'grey', retryable: false, remedy: 'Manually quarantined by user' },
 };
@@ -1101,31 +1084,20 @@ onUnmounted(() => {
           </span>
           <q-btn
             flat dense
-            color="primary"
-            icon="cloud_download"
-            label="Hydrate Patents"
-            :loading="hydrating"
-            @click="doHydrate"
-          >
-            <q-tooltip>Fetch missing patent data (title, abstract, CPC codes) from PatentsView API</q-tooltip>
-          </q-btn>
-          <q-btn
-            flat dense
             color="secondary"
             icon="add_circle"
-            label="Import from PatentsView"
+            label="Import Portfolio Patents"
             :loading="importing"
             @click="showImportDialog = true"
           >
-            <q-tooltip>Search PatentsView by company affiliates and import new patents</q-tooltip>
+            <q-tooltip>Search USPTO bulk data by company affiliates and import new patents</q-tooltip>
           </q-btn>
           <q-spinner v-if="portfolioInfoLoading" size="xs" color="grey" />
-          <q-chip v-if="hydrationResult" dense color="positive" text-color="white" icon="check">
-            {{ hydrationResult.hydrated }} hydrated, {{ hydrationResult.alreadyComplete }} already complete
-            <span v-if="hydrationResult.notFound > 0">, {{ hydrationResult.notFound }} not found</span>
-          </q-chip>
           <q-chip v-if="importResult" dense color="positive" text-color="white" icon="check">
             {{ importResult.imported }} imported ({{ importResult.totalInPortfolio }} total)
+          </q-chip>
+          <q-chip v-if="importError" dense color="negative" text-color="white" icon="error">
+            Import failed: {{ importError }}
           </q-chip>
         </div>
       </q-card-section>
@@ -2311,9 +2283,9 @@ onUnmounted(() => {
     <q-dialog v-model="showImportDialog">
       <q-card style="min-width: 350px">
         <q-card-section>
-          <div class="text-h6">Import from PatentsView</div>
+          <div class="text-h6">Import Portfolio Patents</div>
           <div class="text-caption text-grey-7 q-mt-xs">
-            Searches PatentsView by company affiliates and imports new patents into the portfolio.
+            Searches USPTO bulk data by company affiliates and imports new patents into the portfolio.
           </div>
         </q-card-section>
         <q-card-section>

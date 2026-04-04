@@ -36,7 +36,9 @@ model IndexedPatent {
   // Relations
   cpcCodes IndexedPatentCpc[]
 
-  @@index([assignee(ops: raw("text_pattern_ops"))], type: BTree, map: "idx_indexed_patents_assignee_prefix")
+  // Expression index for fast case-insensitive prefix matching:
+  // CREATE INDEX idx_indexed_patents_assignee_lower ON indexed_patents (lower(assignee) text_pattern_ops);
+  // Prisma cannot define expression indexes, so this is created in scripts/create-uspto-db.ts
   @@index([grantDate], map: "idx_indexed_patents_grant_date")
   @@index([cpcSection], map: "idx_indexed_patents_cpc_section")
   @@index([xmlSource], map: "idx_indexed_patents_xml_source")

@@ -68,6 +68,18 @@ async function main() {
     process.exit(1);
   }
 
+  // Create expression index that Prisma cannot define declaratively
+  console.log('\nCreating expression index for assignee prefix search...');
+  try {
+    execSync(
+      `docker exec ${DOCKER_CONTAINER} psql -U ${DB_USER} -d ${DB_NAME} -c "CREATE INDEX IF NOT EXISTS idx_indexed_patents_assignee_lower ON indexed_patents (lower(assignee) text_pattern_ops);"`,
+      { encoding: 'utf-8', stdio: 'inherit' }
+    );
+    console.log('Assignee prefix index ready.');
+  } catch {
+    console.warn('Warning: could not create assignee index (table may not exist yet).');
+  }
+
   console.log('\nUSPTO index database is ready.');
 }
 

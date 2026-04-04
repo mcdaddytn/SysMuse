@@ -1,0 +1,85 @@
+// USPTO Bulk Data Index Schema
+// Separate database from app DB for independent backup/restore.
+// Indexes ~5.5M patents from weekly USPTO bulk grant XML files.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/uspto-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("USPTO_DATABASE_URL")
+}
+
+// =============================================================================
+// INDEXED PATENTS — core patent data extracted from bulk XML (~5.5M rows)
+// =============================================================================
+
+model IndexedPatent {
+  patentId        String   @id @map("patent_id") @db.VarChar(15)
+  patentIdNumeric Int?     @map("patent_id_numeric")
+  title           String   @default("") @db.Text
+  abstract        String?  @db.Text
+  grantDate       DateTime? @map("grant_date") @db.Date
+  filingDate      DateTime? @map("filing_date") @db.Date
+  assignee        String   @default("") @db.Text
+  inventors       String[] @default([])
+  patentType      String   @default("utility") @map("patent_type") @db.VarChar(10)
+  kindCode        String?  @map("kind_code") @db.VarChar(5)
+  primaryCpc      String?  @map("primary_cpc") @db.VarChar(20)
+  cpcSection      String?  @map("cpc_section") @db.Char(1)
+  forwardCitations Int     @default(0) @map("forward_citations")
+  xmlSource       String   @map("xml_source") @db.VarChar(20)
+  indexedAt        DateTime @default(now()) @map("indexed_at")
+
+  // Relations
+  cpcCodes IndexedPatentCpc[]
+
+  @@index([assignee(ops: raw("text_pattern_ops"))], type: BTree, map: "idx_indexed_patents_assignee_prefix")
+  @@index([grantDate], map: "idx_indexed_patents_grant_date")
+  @@index([cpcSection], map: "idx_indexed_patents_cpc_section")
+  @@index([xmlSource], map: "idx_indexed_patents_xml_source")
+  @@index([patentIdNumeric], map: "idx_indexed_patents_id_numeric")
+  @@map("indexed_patents")
+}
+
+// =============================================================================
+// INDEXED PATENT CPCs — all CPC codes per patent (~16M rows)
+// =============================================================================
+
+model IndexedPatentCpc {
+  id          Int     @id @default(autoincrement())
+  patentId    String  @map("patent_id") @db.VarChar(15)
+  cpcCode     String  @map("cpc_code") @db.VarChar(20)
+  cpcSection  String? @map("cpc_section") @db.Char(1)
+  cpcClass    String? @map("cpc_class") @db.VarChar(4)
+  isInventive Boolean @default(false) @map("is_inventive")
+  position    Int     @default(0) @db.SmallInt
+
+  // Relations
+  patent IndexedPatent @relation(fields: [patentId], references: [patentId], onDelete: Cascade)
+
+  @@unique([patentId, cpcCode])
+  @@index([patentId], map: "idx_indexed_patent_cpcs_patent_id")
+  @@index([cpcCode], map: "idx_indexed_patent_cpcs_cpc_code")
+  @@index([cpcSection], map: "idx_indexed_patent_cpcs_cpc_section")
+  @@index([cpcClass], map: "idx_indexed_patent_cpcs_cpc_class")
+  @@map("indexed_patent_cpcs")
+}
+
+// =============================================================================
+// INDEX METADATA — tracks indexing progress per weekly file
+// =============================================================================
+
+model IndexMetadata {
+  xmlSource     String   @id @map("xml_source") @db.VarChar(20)
+  year          Int      @db.SmallInt
+  xmlSize       BigInt?  @map("xml_size")
+  patentCount   Int      @default(0) @map("patent_count")
+  filteredCount Int      @default(0) @map("filtered_count")
+  indexedAt      DateTime @default(now()) @map("indexed_at")
+  status        String   @default("complete") @db.VarChar(20)
+
+  @@map("index_metadata")
+}

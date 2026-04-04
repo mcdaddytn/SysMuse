@@ -547,177 +547,49 @@ router.post('/:id/hydrate', async (req: Request, res: Response) => {
 // Uses company affiliates for pattern matching
 // =============================================================================
 
-/** POST /api/portfolios/:id/import-patents — import patents via manifest search + XML hydration */
+/** POST /api/portfolios/:id/import-patents — import patents from USPTO index database */
 router.post('/:id/import-patents', async (req: Request, res: Response) => {
   try {
-    const { cpcPrefixes, maxPatents = 1000 } = req.body;
+    const { maxPatents = 1000, cpcPrefixes: cpcSections } = req.body;
     const portfolioId = req.params.id;
 
-    // Verify portfolio exists, get company affiliates
+    // Verify portfolio exists
     const portfolio = await prisma.portfolio.findUnique({
       where: { id: portfolioId },
-      include: {
-        company: {
-          include: {
-            affiliates: {
-              where: { isActive: true },
-              include: { patterns: true },
-            },
-          },
-        },
-      },
+      select: { id: true, name: true },
     });
     if (!portfolio) {
       return res.status(404).json({ error: 'Portfolio not found' });
     }
 
-    let imported = 0;
-    let alreadyExists = 0;
-    let failed = 0;
-    const newPatentIds: string[] = [];
-    const seenPatentIds = new Set<string>();
+    const { importPatents } = await import('../services/uspto-import-service.js');
 
-    // Pre-load existing patent IDs in this portfolio so we can skip them
-    const existingLinks = await prisma.portfolioPatent.findMany({
-      where: { portfolioId },
-      select: { patentId: true },
-    });
-    const existingPatentIds = new Set(existingLinks.map(l => l.patentId));
-
-    // Import utilities
-    const { calculateRemainingYears, calculateBaseScore } = await import('../services/patent-hydration-service.js');
-    const { getPrimarySectorAsync, getSuperSectorAsync } = await import('../utils/sector-mapper.js');
-    const { searchManifests, hydrateFromXml } = await import('../services/manifest-search-service.js');
-    const { releaseForwardCounts } = await import('../services/manifest-builder-service.js');
-
-    // Collect all unique patterns from active affiliates
-    const allPatterns = portfolio.company.affiliates.flatMap(a => a.patterns.map(p => p.pattern));
-    const patternToAffiliate = new Map<string, string>();
-    for (const affiliate of portfolio.company.affiliates) {
-      for (const pat of affiliate.patterns) {
-        patternToAffiliate.set(pat.pattern.toLowerCase(), affiliate.name);
-      }
-    }
-
-    console.log(`[Import] Searching manifests for ${allPatterns.length} patterns (max ${maxPatents} patents)...`);
-
-    // Phase 1: Fast manifest search — collect all matches
-    const allMatches: import('../services/manifest-search-service.js').ManifestMatch[] = [];
-
-    for await (const batch of searchManifests({
-      patterns: allPatterns,
-      cpcPrefixes: cpcPrefixes?.length ? cpcPrefixes : undefined,
+    const result = await importPatents({
+      portfolioId,
       maxPatents,
+      cpcSections,
       onProgress: (msg) => console.log(`[Import] ${msg}`),
-    })) {
-      for (const match of batch) {
-        if (seenPatentIds.has(match.patent_id)) continue;
-        if (existingPatentIds.has(match.patent_id)) {
-          alreadyExists++;
-          continue;
-        }
-        seenPatentIds.add(match.patent_id);
-        allMatches.push(match);
-        if (allMatches.length >= maxPatents) break;
-      }
-      if (allMatches.length >= maxPatents) break;
-    }
-
-    console.log(`[Import] Found ${allMatches.length} new matches, ${alreadyExists} already exist. Hydrating from XML...`);
-
-    // Phase 2: Selective XML hydration — read title/abstract/inventors only for matched patents
-    const hydrated = await hydrateFromXml(allMatches, (msg) => console.log(`[Import] ${msg}`));
-
-    // Release forward counts cache
-    releaseForwardCounts();
-
-    console.log(`[Import] Hydrated ${hydrated.size}/${allMatches.length} patents. Upserting to database...`);
-
-    // Phase 3: Upsert to database
-    for (const match of allMatches) {
-      const patentId = match.patent_id;
-      const p = hydrated.get(patentId);
-
-      try {
-        const assigneeOrg = p?.assignees?.[0]?.assignee_organization || match.assignee;
-        const inventors = (p?.inventors || []).map(
-          (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
-        ).filter(Boolean);
-        const cpcCodes = (p?.cpc_current || [])
-          .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
-          .filter(Boolean);
-        const filingDate = p?.application?.[0]?.filing_date || match.filing_date;
-        const grantDate = p?.patent_date || match.grant_date;
-        const forwardCitations = match.forward_citations;
-        const dateForExpiry = filingDate || grantDate;
-        const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
-        const primaryCpc = cpcCodes[0] || match.primary_cpc || null;
-        const primarySector = await getPrimarySectorAsync(cpcCodes, p?.patent_title || '', p?.patent_abstract) || null;
-        const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
-        const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
-
-        const affiliateName = patternToAffiliate.get(assigneeOrg.toLowerCase())
-          || [...patternToAffiliate.entries()].find(([pat]) => assigneeOrg.toLowerCase().includes(pat))?.[1]
-          || assigneeOrg;
-
-        const patentData = {
-          title: p?.patent_title || '',
-          abstract: p?.patent_abstract || null,
-          grantDate,
-          filingDate,
-          assignee: assigneeOrg,
-          affiliate: affiliateName,
-          inventors,
-          forwardCitations,
-          remainingYears,
-          isExpired,
-          baseScore,
-          primarySector,
-          superSector,
-          primaryCpc,
-        };
-
-        await prisma.patent.upsert({
-          where: { patentId },
-          create: { patentId, ...patentData },
-          update: patentData,
-        });
-
-        for (const code of cpcCodes) {
-          await prisma.patentCpc.upsert({
-            where: { patentId_cpcCode: { patentId, cpcCode: code } },
-            create: { patentId, cpcCode: code },
-            update: {},
-          }).catch(() => {});
-        }
-
-        await prisma.portfolioPatent.create({
-          data: { portfolioId, patentId, source: 'BULK_DATA_IMPORT' },
-        });
-        newPatentIds.push(patentId);
-        imported++;
-      } catch (insertErr: any) {
-        console.error(`[Import] Insert error for patent ${patentId}:`, insertErr?.message || insertErr);
-        failed++;
-      }
-    }
-
-    // Update portfolio patent count
-    const patentCount = await prisma.portfolioPatent.count({ where: { portfolioId } });
-    await prisma.portfolio.update({ where: { id: portfolioId }, data: { patentCount } });
+    });
 
     // Run sector reassignment as safety net
-    if (newPatentIds.length > 0) {
+    if (result.imported > 0) {
       import('../services/sector-assignment-service.js').then(({ reassignPortfolioPatents }) =>
         reassignPortfolioPatents({ portfolioId })
-      ).then((result) => {
-        console.log(`[Import] Auto-sector assignment: ${result.assigned} assigned, ${result.noMatch} unmatched`);
+      ).then((sectorResult) => {
+        console.log(`[Import] Auto-sector assignment: ${sectorResult.assigned} assigned, ${sectorResult.noMatch} unmatched`);
       }).catch(err =>
         console.error('[Import] Background sector-assignment failed:', err)
       );
     }
 
-    res.json({ imported, alreadyExists, failed, totalInPortfolio: patentCount });
+    res.json({
+      imported: result.imported,
+      alreadyExists: result.alreadyExisted,
+      falsePositives: result.falsePositives,
+      failed: result.failed,
+      totalInPortfolio: result.portfolioTotal,
+      elapsedSeconds: result.elapsedSeconds,
+    });
   } catch (err: unknown) {
     console.error('[Portfolios] Import error:', err);
     res.status(500).json({ error: (err as Error).message });
@@ -790,6 +662,85 @@ router.get('/manifests/status', async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     console.error('[Portfolios] Manifest status error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
+// USPTO INDEX DATABASE
+// =============================================================================
+
+// In-memory index job tracking
+const indexJobs = new Map<string, {
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  logs: string[];
+  result?: any;
+  error?: string;
+}>();
+
+/** GET /api/portfolios/uspto-index/status — report USPTO index database coverage */
+router.get('/uspto-index/status', async (req: Request, res: Response) => {
+  try {
+    const { getIndexStatus } = await import('../services/uspto-index-service.js');
+    const startYear = req.query.startYear ? parseInt(req.query.startYear as string) : undefined;
+    const endYear = req.query.endYear ? parseInt(req.query.endYear as string) : undefined;
+    const status = await getIndexStatus(startYear, endYear);
+
+    const job = indexJobs.get('index-run');
+
+    res.json({
+      ...status,
+      indexJob: job ? {
+        status: job.status,
+        startedAt: job.startedAt,
+        logs: job.logs.slice(-20),
+        result: job.result,
+        error: job.error,
+      } : null,
+    });
+  } catch (err: unknown) {
+    console.error('[USPTO Index] Status error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/portfolios/uspto-index/run — trigger indexing (background job) */
+router.post('/uspto-index/run', async (req: Request, res: Response) => {
+  try {
+    const { startYear, endYear, force } = req.body || {};
+    const jobKey = 'index-run';
+
+    const existing = indexJobs.get(jobKey);
+    if (existing?.status === 'running') {
+      return res.json({ status: 'running', message: 'Indexing already in progress', logs: existing.logs.slice(-20) });
+    }
+
+    const job = { status: 'running' as const, startedAt: new Date().toISOString(), logs: [] as string[] };
+    indexJobs.set(jobKey, job);
+
+    res.json({ status: 'started', message: 'Indexing started in background' });
+
+    // Run in background
+    const { indexAll } = await import('../services/uspto-index-service.js');
+    indexAll({
+      startYear: startYear || new Date().getFullYear(),
+      endYear: endYear || 2015,
+      force: force || false,
+      onProgress: (msg) => {
+        job.logs.push(msg);
+        console.log(`[USPTO Index] ${msg}`);
+      },
+    }).then(result => {
+      (job as any).status = 'completed';
+      (job as any).result = result;
+    }).catch(err => {
+      (job as any).status = 'failed';
+      (job as any).error = (err as Error).message;
+      console.error('[USPTO Index] Build error:', err);
+    });
+  } catch (err: unknown) {
+    console.error('[USPTO Index] Run error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

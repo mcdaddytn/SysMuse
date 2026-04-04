@@ -443,3 +443,115 @@ export async function extractPatentXmls(
   log(`Done: ${result.extracted} extracted, ${result.alreadyExist} already existed, ${result.notFound} not found`);
   return result;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source-based extraction (used by import pipeline)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Extract patent XMLs using xml_source keys from the index database.
+ * Bypasses the grant date → publication Tuesday computation entirely.
+ *
+ * @param sourceToPatentIds Map of xmlSource (e.g. "ipg240102") → patent IDs
+ */
+export async function extractPatentXmlsBySource(
+  sourceToPatentIds: Map<string, string[]>,
+  progressCallback?: (message: string) => void,
+): Promise<ExtractionResult> {
+  const bulkDataDir = getBulkDataDir();
+  const exportDir = getExportDir();
+  const log = progressCallback || (() => {});
+
+  // Count totals and filter out patents whose XML already exists
+  let totalRequested = 0;
+  let preExisting = 0;
+  const filteredMap = new Map<string, string[]>();
+
+  for (const [source, patentIds] of sourceToPatentIds) {
+    totalRequested += patentIds.length;
+    const needsExtraction: string[] = [];
+    for (const id of patentIds) {
+      if (findPatentXmlPath(exportDir, id)) {
+        preExisting++;
+      } else {
+        needsExtraction.push(id);
+      }
+    }
+    if (needsExtraction.length > 0) {
+      filteredMap.set(source, needsExtraction);
+    }
+  }
+
+  log(`${totalRequested} patents total, ${preExisting} already have XML, ${totalRequested - preExisting} need extraction`);
+  log(`Organized into ${filteredMap.size} weekly ZIP files`);
+
+  const result: ExtractionResult = {
+    totalRequested,
+    extracted: 0,
+    alreadyExist: preExisting,
+    notFound: 0,
+    errors: [],
+    weeklyBreakdown: [],
+  };
+
+  const sortedSources = [...filteredMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  let weekNum = 0;
+
+  for (const [xmlSource, patentIds] of sortedSources) {
+    weekNum++;
+    const zipFilename = `${xmlSource}.zip`;
+    log(`[${weekNum}/${sortedSources.length}] ${zipFilename} (${patentIds.length} patents)`);
+
+    const weekResult = {
+      zipFile: zipFilename,
+      patentCount: patentIds.length,
+      extracted: 0,
+      alreadyExist: 0,
+      notFound: 0,
+    };
+
+    try {
+      const zipPath = findZipFile(bulkDataDir, zipFilename);
+      if (!zipPath) {
+        log(`  ZIP not found: ${zipFilename}`);
+        weekResult.notFound = patentIds.length;
+        result.notFound += patentIds.length;
+        result.errors.push(`ZIP not found: ${zipFilename} (${patentIds.length} patents)`);
+        result.weeklyBreakdown.push(weekResult);
+        continue;
+      }
+
+      log(`  Extracting XML from ZIP...`);
+      const xmlPath = await extractXmlFromZip(zipPath);
+      const xmlSize = (fs.statSync(xmlPath).size / (1024 * 1024)).toFixed(1);
+      log(`  XML ready: ${xmlSize} MB`);
+
+      // Build target set with both raw and normalized IDs
+      const targetSet = new Set(patentIds.map(normalizeDocNumber));
+      for (const id of patentIds) targetSet.add(id);
+
+      const { extracted, alreadyExist } = await extractIndividualPatents(xmlPath, targetSet, exportDir);
+
+      weekResult.extracted = extracted.length;
+      weekResult.alreadyExist = alreadyExist.length;
+      weekResult.notFound = patentIds.length - extracted.length - alreadyExist.length;
+
+      result.extracted += extracted.length;
+      result.alreadyExist += alreadyExist.length;
+      result.notFound += weekResult.notFound;
+
+      log(`  Extracted: ${extracted.length}, already exist: ${alreadyExist.length}, not found: ${weekResult.notFound}`);
+    } catch (err) {
+      const msg = `Error processing ${zipFilename}: ${(err as Error).message}`;
+      log(`  ${msg}`);
+      result.errors.push(msg);
+      weekResult.notFound = patentIds.length;
+      result.notFound += patentIds.length;
+    }
+
+    result.weeklyBreakdown.push(weekResult);
+  }
+
+  log(`Done: ${result.extracted} extracted, ${result.alreadyExist} already existed, ${result.notFound} not found`);
+  return result;
+}

@@ -40,6 +40,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
+    "db:generate:uspto": "prisma generate --schema=prisma/uspto/schema.prisma",
+    "db:push:uspto": "prisma db push --schema=prisma/uspto/schema.prisma",
     "cache:stats": "tsx services/cache-service.ts stats",
     "cache:sync": "tsx services/cache-service.ts sync",
     "cache:test": "tsx scripts/test-cached-clients.ts",

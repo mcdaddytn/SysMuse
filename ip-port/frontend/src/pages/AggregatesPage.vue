@@ -359,6 +359,7 @@ async function runAggregation() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        portfolioId: portfolioStore.selectedPortfolioId,
         groupBy: selectedGroupBy.value,
         aggregations: aggregations.value,
         explodeArrays: explodeArrays.value,
@@ -392,6 +393,7 @@ async function exportCSV() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        portfolioId: portfolioStore.selectedPortfolioId,
         groupBy: selectedGroupBy.value,
         aggregations: aggregations.value,
         explodeArrays: explodeArrays.value,

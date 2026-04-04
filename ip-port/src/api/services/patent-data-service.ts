@@ -792,18 +792,42 @@ export async function getAllPatents(options: {
   const scoreSortField = getScoreSortField(sortBy);
   const orderBy = buildOrderBy(sortBy, descending, scoreSortField);
 
-  const patents = await prisma.patent.findMany({
-    where,
-    include: {
-      cpcCodes: { select: { cpcCode: true, isInventive: true } },
-      citations: true,
-      scores: true,
-      compositeScores: true,
-    },
-    orderBy,
-  });
+  // Load in batches to avoid Prisma napi string size limit (~50K rows)
+  const BATCH_SIZE = 20000;
+  const include = {
+    cpcCodes: { select: { cpcCode: true, isInventive: true } },
+    citations: true,
+    scores: true,
+    compositeScores: true,
+  };
 
-  let data = patents.map(mapPatentToDTO);
+  let allPatents: any[] = [];
+  let cursor: string | undefined;
+
+  // First batch (no cursor)
+  let batch = await prisma.patent.findMany({
+    where,
+    include,
+    orderBy: { patentId: 'asc' },
+    take: BATCH_SIZE,
+  });
+  allPatents.push(...batch);
+
+  // Subsequent batches using cursor pagination
+  while (batch.length === BATCH_SIZE) {
+    cursor = batch[batch.length - 1].patentId;
+    batch = await prisma.patent.findMany({
+      where,
+      include,
+      orderBy: { patentId: 'asc' },
+      take: BATCH_SIZE,
+      skip: 1,
+      cursor: { patentId: cursor },
+    });
+    allPatents.push(...batch);
+  }
+
+  let data = allPatents.map(mapPatentToDTO);
 
   // Overlay active snapshot scores (portfolio-scoped)
   if (snapshotScores) {

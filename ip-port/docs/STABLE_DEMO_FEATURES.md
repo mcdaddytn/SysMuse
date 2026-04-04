@@ -74,6 +74,27 @@ Features added to the `stable-demo` branch that should be reapplied to the refac
 
 ---
 
+## Feature 5: USPTO Bulk Data Patent Import (PatentsView Replacement)
+
+**Commit:** `a7fcb05` — "Replace PatentsView API with USPTO bulk XML data search"
+
+**Files changed:**
+- `src/api/services/bulk-patent-search-service.ts` (NEW — bulk data search service)
+- `src/api/routes/portfolios.routes.ts` (import-patents endpoint)
+- `prisma/schema.prisma` (BULK_DATA_IMPORT enum value)
+
+**What changed:**
+- **New service:** `bulk-patent-search-service.ts` provides `searchBulkPatents()` async generator that streams weekly USPTO grant XML files (~1GB each) from the GLSSD2 drive. Scans from most recent weekly file backwards, matching assignee patterns against `<orgname>` fields. Uses exact-match for short patterns (<=8 chars) to prevent false positives (e.g., "Frame" matching "Secureframe"). Returns PatentsView-compatible `BulkPatentResult` objects.
+- **Import route:** Replaced PatentsView API pagination loop with bulk data search. Collects all affiliate patterns, builds a pattern-to-affiliate lookup map, and processes results identically to the old flow (upsert patent, CPC codes, portfolio link, sector assignment).
+- **Schema:** Added `BULK_DATA_IMPORT` to `PatentSource` enum.
+- **Space estimation:** `estimateExtractionSpace()` utility reports extraction needs. Years 2015-2025 are fully extracted on GLSSD2 (~0GB needed). Years 2005-2014 would need ~282GB additional.
+
+**Why:** PatentsView API returned 410 Gone as of March 20, 2026 — migrated to USPTO Open Data Portal which does not yet support assignee-based patent search.
+
+**How to reapply:** Copy `bulk-patent-search-service.ts` and replace the PatentsView import loop in the import-patents endpoint. Add the enum value to the schema.
+
+---
+
 ## Notes
 
 - All features are on the `stable-demo` branch

@@ -93,12 +93,11 @@ export async function importPatents(options: ImportOptions): Promise<ImportResul
   const results = await searchByAssignee({
     patterns: allPatterns,
     cpcSections,
-    maxPatents: maxPatents + existingPatentIds.size,
     excludeIds: existingPatentIds,
     onProgress,
   });
 
-  // Trim to max
+  // Trim to requested max
   const newPatents = results.slice(0, maxPatents);
   const alreadyExisted = existingPatentIds.size;
 

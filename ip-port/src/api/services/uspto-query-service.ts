@@ -59,12 +59,17 @@ export async function searchByAssignee(
 
   const usptoDb = getUsptoPrisma();
 
-  // Build WHERE clause for assignee prefix matching
-  // Each pattern becomes: assignee ILIKE 'pattern%'
+  // Build WHERE clause for assignee prefix matching with word boundary.
+  // Each pattern becomes: assignee ~* '^pattern([^a-z0-9]|$)'
+  // This prevents "lsi" from matching "LSIS Co." or "pivotal" from matching "Pivotal Commware".
   const assigneeConditions = patterns.map(
-    (_, i) => `ip.assignee ILIKE $${i + 1}`
+    (_, i) => `ip.assignee ~* $${i + 1}`
   );
-  const assigneeParams = patterns.map(p => `${p}%`);
+  const assigneeParams = patterns.map(p => {
+    // Escape regex special characters in the pattern
+    const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return `^${escaped}([^a-z0-9]|$)`;
+  });
 
   // CPC section filter
   let cpcFilter = '';

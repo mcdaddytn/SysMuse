@@ -547,7 +547,7 @@ router.post('/:id/hydrate', async (req: Request, res: Response) => {
 // Uses company affiliates for pattern matching
 // =============================================================================
 
-/** POST /api/portfolios/:id/import-patents — import patents from PatentsView */
+/** POST /api/portfolios/:id/import-patents — import patents via manifest search + XML hydration */
 router.post('/:id/import-patents', async (req: Request, res: Response) => {
   try {
     const { cpcPrefixes, maxPatents = 1000 } = req.body;
@@ -578,20 +578,20 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     const seenPatentIds = new Set<string>();
 
     // Pre-load existing patent IDs in this portfolio so we can skip them
-    // and spend the maxPatents budget only on genuinely new patents
     const existingLinks = await prisma.portfolioPatent.findMany({
       where: { portfolioId },
       select: { patentId: true },
     });
     const existingPatentIds = new Set(existingLinks.map(l => l.patentId));
 
-    // Import utilities for computing derived fields inline
+    // Import utilities
     const { calculateRemainingYears, calculateBaseScore } = await import('../services/patent-hydration-service.js');
     const { getPrimarySectorAsync, getSuperSectorAsync } = await import('../utils/sector-mapper.js');
+    const { searchManifests, hydrateFromXml } = await import('../services/manifest-search-service.js');
+    const { releaseForwardCounts } = await import('../services/manifest-builder-service.js');
 
     // Collect all unique patterns from active affiliates
     const allPatterns = portfolio.company.affiliates.flatMap(a => a.patterns.map(p => p.pattern));
-    // Build affiliate lookup: pattern → affiliate name (for the affiliate field)
     const patternToAffiliate = new Map<string, string>();
     for (const affiliate of portfolio.company.affiliates) {
       for (const pat of affiliate.patterns) {
@@ -599,110 +599,114 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
       }
     }
 
-    // Use bulk data search (PatentsView API shut down March 2026)
-    const { searchBulkPatents } = await import('../services/bulk-patent-search-service.js');
+    console.log(`[Import] Searching manifests for ${allPatterns.length} patterns (max ${maxPatents} patents)...`);
 
-    console.log(`[Import] Searching bulk data for ${allPatterns.length} patterns (max ${maxPatents} patents)...`);
+    // Phase 1: Fast manifest search — collect all matches
+    const allMatches: import('../services/manifest-search-service.js').ManifestMatch[] = [];
 
-    for await (const batch of searchBulkPatents({
+    for await (const batch of searchManifests({
       patterns: allPatterns,
       cpcPrefixes: cpcPrefixes?.length ? cpcPrefixes : undefined,
       maxPatents,
       onProgress: (msg) => console.log(`[Import] ${msg}`),
     })) {
-      for (const p of batch) {
-        if (seenPatentIds.size >= maxPatents) break;
-        const patentId = p.patent_id;
-        if (seenPatentIds.has(patentId)) continue;
-
-        // Skip patents already in this portfolio — don't count against budget
-        if (existingPatentIds.has(patentId)) {
+      for (const match of batch) {
+        if (seenPatentIds.has(match.patent_id)) continue;
+        if (existingPatentIds.has(match.patent_id)) {
           alreadyExists++;
           continue;
         }
-        seenPatentIds.add(patentId);
-
-        try {
-          // Compute all derived fields from search data
-          const assigneeOrg = p.assignees?.[0]?.assignee_organization || '';
-          const inventors = (p.inventors || []).map(
-            (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
-          ).filter(Boolean);
-          const cpcCodes = (p.cpc_current || [])
-            .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
-            .filter(Boolean);
-          const filingDate = p.application?.[0]?.filing_date || null;
-          const grantDate = p.patent_date || null;
-          const forwardCitations = p.patent_num_times_cited_by_us_patents || 0;
-          const dateForExpiry = filingDate || grantDate;
-          const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
-          const primaryCpc = cpcCodes[0] || null;
-          const primarySector = await getPrimarySectorAsync(cpcCodes, p.patent_title, p.patent_abstract) || null;
-          const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
-          const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
-
-          // Determine which affiliate this patent belongs to
-          const affiliateName = patternToAffiliate.get(assigneeOrg.toLowerCase())
-            || [...patternToAffiliate.entries()].find(([pat]) => assigneeOrg.toLowerCase().includes(pat))?.[1]
-            || assigneeOrg;
-
-          const patentData = {
-            title: p.patent_title || '',
-            abstract: p.patent_abstract || null,
-            grantDate,
-            filingDate,
-            assignee: assigneeOrg,
-            affiliate: affiliateName,
-            inventors,
-            forwardCitations,
-            remainingYears,
-            isExpired,
-            baseScore,
-            primarySector,
-            superSector,
-            primaryCpc,
-          };
-
-          // Upsert Patent row with full data
-          await prisma.patent.upsert({
-            where: { patentId },
-            create: { patentId, ...patentData },
-            update: patentData,
-          });
-
-          // Upsert CPC codes from search results
-          for (const code of cpcCodes) {
-            await prisma.patentCpc.upsert({
-              where: { patentId_cpcCode: { patentId, cpcCode: code } },
-              create: { patentId, cpcCode: code },
-              update: {},
-            }).catch(() => {}); // Ignore race conditions
-          }
-
-          // Link to portfolio
-          await prisma.portfolioPatent.create({
-            data: {
-              portfolioId,
-              patentId,
-              source: 'BULK_DATA_IMPORT',
-            },
-          });
-          newPatentIds.push(patentId);
-          imported++;
-        } catch (insertErr: any) {
-          console.error(`[Import] Insert error for patent ${patentId}:`, insertErr?.message || insertErr);
-          alreadyExists++;
-        }
+        seenPatentIds.add(match.patent_id);
+        allMatches.push(match);
+        if (allMatches.length >= maxPatents) break;
       }
-      if (seenPatentIds.size >= maxPatents) break;
+      if (allMatches.length >= maxPatents) break;
+    }
+
+    console.log(`[Import] Found ${allMatches.length} new matches, ${alreadyExists} already exist. Hydrating from XML...`);
+
+    // Phase 2: Selective XML hydration — read title/abstract/inventors only for matched patents
+    const hydrated = await hydrateFromXml(allMatches, (msg) => console.log(`[Import] ${msg}`));
+
+    // Release forward counts cache
+    releaseForwardCounts();
+
+    console.log(`[Import] Hydrated ${hydrated.size}/${allMatches.length} patents. Upserting to database...`);
+
+    // Phase 3: Upsert to database
+    for (const match of allMatches) {
+      const patentId = match.patent_id;
+      const p = hydrated.get(patentId);
+
+      try {
+        const assigneeOrg = p?.assignees?.[0]?.assignee_organization || match.assignee;
+        const inventors = (p?.inventors || []).map(
+          (inv: any) => `${inv.inventor_name_first || ''} ${inv.inventor_name_last || ''}`.trim()
+        ).filter(Boolean);
+        const cpcCodes = (p?.cpc_current || [])
+          .map((c: any) => c.cpc_subgroup_id || c.cpc_group_id || '')
+          .filter(Boolean);
+        const filingDate = p?.application?.[0]?.filing_date || match.filing_date;
+        const grantDate = p?.patent_date || match.grant_date;
+        const forwardCitations = match.forward_citations;
+        const dateForExpiry = filingDate || grantDate;
+        const { remainingYears, isExpired } = calculateRemainingYears(dateForExpiry);
+        const primaryCpc = cpcCodes[0] || match.primary_cpc || null;
+        const primarySector = await getPrimarySectorAsync(cpcCodes, p?.patent_title || '', p?.patent_abstract) || null;
+        const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
+        const baseScore = calculateBaseScore({ forwardCitations, remainingYears, grantDate, primarySector });
+
+        const affiliateName = patternToAffiliate.get(assigneeOrg.toLowerCase())
+          || [...patternToAffiliate.entries()].find(([pat]) => assigneeOrg.toLowerCase().includes(pat))?.[1]
+          || assigneeOrg;
+
+        const patentData = {
+          title: p?.patent_title || '',
+          abstract: p?.patent_abstract || null,
+          grantDate,
+          filingDate,
+          assignee: assigneeOrg,
+          affiliate: affiliateName,
+          inventors,
+          forwardCitations,
+          remainingYears,
+          isExpired,
+          baseScore,
+          primarySector,
+          superSector,
+          primaryCpc,
+        };
+
+        await prisma.patent.upsert({
+          where: { patentId },
+          create: { patentId, ...patentData },
+          update: patentData,
+        });
+
+        for (const code of cpcCodes) {
+          await prisma.patentCpc.upsert({
+            where: { patentId_cpcCode: { patentId, cpcCode: code } },
+            create: { patentId, cpcCode: code },
+            update: {},
+          }).catch(() => {});
+        }
+
+        await prisma.portfolioPatent.create({
+          data: { portfolioId, patentId, source: 'BULK_DATA_IMPORT' },
+        });
+        newPatentIds.push(patentId);
+        imported++;
+      } catch (insertErr: any) {
+        console.error(`[Import] Insert error for patent ${patentId}:`, insertErr?.message || insertErr);
+        failed++;
+      }
     }
 
     // Update portfolio patent count
     const patentCount = await prisma.portfolioPatent.count({ where: { portfolioId } });
     await prisma.portfolio.update({ where: { id: portfolioId }, data: { patentCount } });
 
-    // Sectors are computed inline during import. Run reassignment as safety net
-    // to catch any patents that may have been missed or need rule-based overrides.
+    // Run sector reassignment as safety net
     if (newPatentIds.length > 0) {
       import('../services/sector-assignment-service.js').then(({ reassignPortfolioPatents }) =>
         reassignPortfolioPatents({ portfolioId })
@@ -716,6 +720,76 @@ router.post('/:id/import-patents', async (req: Request, res: Response) => {
     res.json({ imported, alreadyExists, failed, totalInPortfolio: patentCount });
   } catch (err: unknown) {
     console.error('[Portfolios] Import error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// =============================================================================
+// MANIFEST BUILD / STATUS
+// =============================================================================
+
+// In-memory manifest build job tracking
+const manifestBuildJobs = new Map<string, {
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  logs: string[];
+  result?: any;
+  error?: string;
+}>();
+
+/** POST /api/portfolios/manifests/build — trigger manifest build (background job) */
+router.post('/manifests/build', async (req: Request, res: Response) => {
+  try {
+    const { startYear, endYear, force } = req.body || {};
+    const jobKey = 'manifest-build';
+
+    const existing = manifestBuildJobs.get(jobKey);
+    if (existing?.status === 'running') {
+      return res.json({ status: 'running', message: 'Manifest build already in progress', logs: existing.logs });
+    }
+
+    const job = { status: 'running' as const, startedAt: new Date().toISOString(), logs: [] as string[] };
+    manifestBuildJobs.set(jobKey, job);
+
+    res.json({ status: 'started', message: 'Manifest build started in background' });
+
+    // Run in background
+    import('../services/manifest-builder-service.js').then(async ({ buildAllManifests, buildForwardCounts }) => {
+      try {
+        const log = (msg: string) => { job.logs.push(msg); console.log(`[ManifestBuild] ${msg}`); };
+        const buildResult = await buildAllManifests({ startYear, endYear, force, onProgress: log });
+        const fcResult = await buildForwardCounts({ startYear, endYear, onProgress: log });
+        job.status = 'completed';
+        (job as any).result = { manifests: buildResult, forwardCounts: fcResult };
+      } catch (err) {
+        job.status = 'failed';
+        (job as any).error = (err as Error).message;
+        console.error('[ManifestBuild] Job failed:', err);
+      }
+    });
+  } catch (err: unknown) {
+    console.error('[Portfolios] Manifest build error:', err);
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** GET /api/portfolios/manifests/status — report manifest coverage */
+router.get('/manifests/status', async (req: Request, res: Response) => {
+  try {
+    const { getManifestStatus } = await import('../services/manifest-builder-service.js');
+    const startYear = req.query.startYear ? parseInt(req.query.startYear as string) : undefined;
+    const endYear = req.query.endYear ? parseInt(req.query.endYear as string) : undefined;
+    const status = getManifestStatus(startYear, endYear);
+
+    const jobKey = 'manifest-build';
+    const job = manifestBuildJobs.get(jobKey);
+
+    res.json({
+      ...status,
+      buildJob: job ? { status: job.status, startedAt: job.startedAt, logs: job.logs, result: (job as any).result, error: (job as any).error } : null,
+    });
+  } catch (err: unknown) {
+    console.error('[Portfolios] Manifest status error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 });

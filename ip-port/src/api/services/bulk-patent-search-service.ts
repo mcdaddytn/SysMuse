@@ -54,7 +54,12 @@ const BULKDATA_DIR = process.env.USPTO_PATENT_GRANT_XML_DIR
   ? path.resolve(process.env.USPTO_PATENT_GRANT_XML_DIR, '..', 'bulkdata')
   : '';
 
-function formatXmlDate(yyyymmdd: string): string | null {
+/** Return the resolved BULKDATA_DIR path (may be empty if env var is unset). */
+export function getBulkDataDir(): string {
+  return BULKDATA_DIR;
+}
+
+export function formatXmlDate(yyyymmdd: string): string | null {
   if (!yyyymmdd || yyyymmdd.length !== 8) return null;
   return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
@@ -62,7 +67,7 @@ function formatXmlDate(yyyymmdd: string): string | null {
 /**
  * Get all weekly XML files sorted most-recent-first for the given year range.
  */
-function getWeeklyXmlFiles(startYear: number, endYear: number): Array<{ year: number; zipPath: string; dirPath: string; xmlName: string }> {
+export function getWeeklyXmlFiles(startYear: number, endYear: number): Array<{ year: number; zipPath: string; dirPath: string; xmlName: string }> {
   const files: Array<{ year: number; zipPath: string; dirPath: string; xmlName: string }> = [];
 
   for (let year = startYear; year >= endYear; year--) {
@@ -91,7 +96,7 @@ function getWeeklyXmlFiles(startYear: number, endYear: number): Array<{ year: nu
 /**
  * Ensure a weekly XML is extracted from its ZIP. Returns path to the large XML.
  */
-function ensureExtracted(file: { zipPath: string; dirPath: string; xmlName: string }): string | null {
+export function ensureExtracted(file: { zipPath: string; dirPath: string; xmlName: string }): string | null {
   const xmlPath = path.join(file.dirPath, `${file.xmlName}.xml`);
 
   // Already extracted
@@ -120,6 +125,19 @@ function ensureExtracted(file: { zipPath: string; dirPath: string; xmlName: stri
   // Look for any .xml file in the directory
   const xmlFiles = fs.readdirSync(file.dirPath).filter(f => f.endsWith('.xml'));
   return xmlFiles.length > 0 ? path.join(file.dirPath, xmlFiles[0]) : null;
+}
+
+/**
+ * Check if an organization name matches any assignee pattern.
+ * Short patterns (<=8 chars) require exact match; longer patterns use contains.
+ */
+export function matchesAssigneePattern(org: string, patterns: string[]): boolean {
+  const orgLower = org.toLowerCase();
+  return patterns.some(p => {
+    const patLower = p.toLowerCase();
+    if (p.length <= 8) return orgLower === patLower;
+    return orgLower.includes(patLower);
+  });
 }
 
 /**
@@ -162,21 +180,7 @@ function parsePatentBlock(xmlText: string, patterns: string[], cpcPrefixes?: str
   }
 
   // Verify actual assignee match against ALL patterns (not just the pre-check one).
-  // Use exact-match for short patterns (<=8 chars) to avoid false positives
-  // like "Frame" matching "Secureframe, Inc.". Longer patterns use contains.
-  const assigneeMatchResult = assignees.some(a => {
-    const orgLower = a.assignee_organization.toLowerCase();
-    return patterns.some(p => {
-      const patLower = p.toLowerCase();
-      if (p.length <= 8) {
-        // Short pattern: exact match only
-        return orgLower === patLower;
-      }
-      // Longer pattern: substring match (as PatentsView _contains did)
-      return orgLower.includes(patLower);
-    });
-  });
-  if (!assigneeMatchResult) return null;
+  if (!assignees.some(a => matchesAssigneePattern(a.assignee_organization, patterns))) return null;
 
   // Extract CPC codes
   const cpcCodes: Array<{ cpc_group_id: string; cpc_subgroup_id: string }> = [];

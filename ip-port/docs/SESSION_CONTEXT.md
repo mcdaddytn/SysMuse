@@ -1,4 +1,4 @@
-# Session Context — February 25, 2026
+# Session Context — April 3, 2026
 
 ## CRITICAL: WIRELESS Collective Strategy Has Hallucinated Patent Numbers
 
@@ -148,9 +148,78 @@ Key characteristics:
 
 ---
 
-## Current Focus: SEMICONDUCTOR Vendor Package Analysis
+## Current Focus: Manifest-Based Patent Import System (April 2026)
 
-We are building a vendor package for **SEMICONDUCTOR**, following the corrected VIDEO workflow.
+Replaced the slow raw-XML-scan patent import with a **manifest + forward citation** system.
+The old import scanned ~1GB weekly XMLs line-by-line (~15s/file). A 50-patent Nutanix import
+took ~10 minutes. The new system pre-computes lightweight manifests (~3MB each) and an inverted
+forward-citation index, cutting search to seconds.
+
+### Architecture
+
+```
+GLSSD2/data/uspto/bulkdata/
+  2025/
+    ipg251230/
+      ipg251230.xml              (existing ~1GB raw XML)
+      ipg251230.manifest.json    (~3.4MB manifest)
+    ...
+  forward-counts.ndjson          (inverted backward→forward citation index)
+  manifest-meta.json             (build state tracking)
+```
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `src/api/services/manifest-builder-service.ts` | Build manifests + forward counts from bulk XML |
+| `src/api/services/manifest-search-service.ts` | Fast manifest search + selective XML hydration |
+| `scripts/build-manifests.ts` | CLI for one-time/incremental manifest build |
+
+### Modified Files
+
+| File | Changes |
+|------|---------|
+| `src/api/services/bulk-patent-search-service.ts` | Exported shared helpers, added `getBulkDataDir()`, `matchesAssigneePattern()` |
+| `src/api/routes/portfolios.routes.ts` | Rewired `import-patents` to manifest search + hydration; added `POST /manifests/build`, `GET /manifests/status` |
+
+### Build Status (as of April 3, 2026)
+
+- **2025 manifests**: 52/52 built (6.5 min total, ~7s each)
+- **2015-2024 manifests**: NOT YET BUILT — requires ~1-2 hour unattended build
+- **Forward counts**: 4.2M cited patents from 2025 data only (99MB NDJSON)
+- **Search test**: 59 Nutanix patents found in 4.6s across all 2025 weeks
+
+### Build Command (for remaining years)
+
+```bash
+npx tsx scripts/build-manifests.ts --start-year 2025 --end-year 2015
+```
+
+Skips already-built 2025 manifests. Builds ~520 more for 2015-2024, then rebuilds
+forward counts with full data. Estimated: ~1.5-2 hours.
+
+### Forward Citations: What Changed
+
+The old `patent_num_times_cited_by_us_patents` field actually stored **backward** citation
+counts (how many patents THIS patent cites). The new system computes true **forward** counts
+(how many later patents cite THIS patent) by inverting the backward citation graph across all
+manifests. The base score formula weights citations at 40%, so this correction matters.
+
+**Note**: Existing ~30K Broadcom patents keep their PatentsView-derived counts (close enough).
+Only new imports get the corrected forward counts.
+
+### What's Next
+
+1. Run full manifest build (2015-2025) — unattended ~1.5-2 hours
+2. Test a real import via the API endpoint to verify end-to-end
+3. Import new Broadcom affiliates with correct forward citations
+
+---
+
+## Previous Focus: SEMICONDUCTOR Vendor Package Analysis
+
+Vendor package for **SEMICONDUCTOR**, following the corrected VIDEO workflow.
 
 ### What Was Completed
 
@@ -259,4 +328,4 @@ We are building a vendor package for **SEMICONDUCTOR**, following the corrected 
 
 ---
 
-*Last Updated: 2026-02-25*
+*Last Updated: 2026-04-03*

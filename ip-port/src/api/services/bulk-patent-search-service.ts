@@ -129,10 +129,10 @@ export function ensureExtracted(file: { zipPath: string; dirPath: string; xmlNam
 
 /**
  * Check if an organization name matches any assignee pattern.
- * Uses prefix matching: the org must start with the pattern (case-insensitive),
- * or match exactly. This prevents false positives like "Frame, Inc." matching
- * "Secureframe, Inc." while still allowing "Avago" to match
- * "Avago Technologies General IP (Singapore) Pte. Ltd."
+ * Uses prefix matching with word boundary: the org must start with the pattern
+ * (case-insensitive) AND the character after the match must be non-alphanumeric
+ * (space, comma, period, etc.) or end of string. This prevents false positives
+ * like "LSIS Co." matching "LSI" or "Pivotal Commware" matching "Pivotal".
  */
 export function matchesAssigneePattern(org: string, patterns: string[]): boolean {
   const orgLower = org.toLowerCase();
@@ -140,8 +140,11 @@ export function matchesAssigneePattern(org: string, patterns: string[]): boolean
     const patLower = p.toLowerCase();
     // Exact match always works
     if (orgLower === patLower) return true;
-    // Prefix match: org must start with pattern
-    if (orgLower.startsWith(patLower)) return true;
+    // Prefix match with word boundary
+    if (orgLower.startsWith(patLower)) {
+      const nextChar = orgLower[patLower.length];
+      if (!nextChar || /[^a-z0-9]/.test(nextChar)) return true;
+    }
     return false;
   });
 }

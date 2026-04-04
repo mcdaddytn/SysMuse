@@ -333,9 +333,14 @@ function matchAffiliate(
   const exact = patternToAffiliate.get(orgLower);
   if (exact) return exact;
 
-  // Prefix match
+  // Prefix match with word boundary: the character after the pattern must be
+  // a non-alphanumeric char (space, comma, period, etc.) or end of string.
+  // This prevents "lsi" from matching "lsis co." or "pivotal" matching "pivotalcommware".
   for (const [pattern, name] of patternToAffiliate) {
-    if (orgLower.startsWith(pattern)) return name;
+    if (orgLower.startsWith(pattern)) {
+      const nextChar = orgLower[pattern.length];
+      if (!nextChar || /[^a-z0-9]/.test(nextChar)) return name;
+    }
   }
 
   return assigneeOrg;

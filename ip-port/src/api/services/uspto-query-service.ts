@@ -50,7 +50,6 @@ export async function searchByAssignee(
   const {
     patterns,
     cpcSections,
-    maxPatents = 50000,
     excludeIds,
     onProgress,
   } = options;
@@ -59,17 +58,15 @@ export async function searchByAssignee(
 
   const usptoDb = getUsptoPrisma();
 
-  // Build WHERE clause for assignee prefix matching with word boundary.
-  // Each pattern becomes: assignee ~* '^pattern([^a-z0-9]|$)'
-  // This prevents "lsi" from matching "LSIS Co." or "pivotal" from matching "Pivotal Commware".
+  // Build WHERE clause for assignee prefix matching.
+  // Uses lower(assignee) LIKE 'pattern%' to leverage the text_pattern_ops index
+  // on lower(assignee). ILIKE cannot use this index type.
+  // False positives (e.g. "LSIS Co." matching "lsi%") are filtered post-query
+  // by matchesAssigneePattern() which enforces word boundaries.
   const assigneeConditions = patterns.map(
-    (_, i) => `ip.assignee ~* $${i + 1}`
+    (_, i) => `lower(ip.assignee) LIKE $${i + 1}`
   );
-  const assigneeParams = patterns.map(p => {
-    // Escape regex special characters in the pattern
-    const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return `^${escaped}([^a-z0-9]|$)`;
-  });
+  const assigneeParams = patterns.map(p => `${p.toLowerCase()}%`);
 
   // CPC section filter
   let cpcFilter = '';
@@ -98,8 +95,6 @@ export async function searchByAssignee(
     FROM indexed_patents ip
     WHERE (${assigneeConditions.join(' OR ')})
     ${cpcFilter}
-    ORDER BY ip.grant_date DESC
-    LIMIT ${maxPatents}
   `;
 
   onProgress?.(`Querying USPTO index for ${patterns.length} assignee patterns...`);
@@ -108,12 +103,13 @@ export async function searchByAssignee(
 
   onProgress?.(`  Found ${patents.length} patents`);
 
-  // Filter out excluded IDs
+  // Filter out excluded IDs and sort newest-first
   let filtered = patents;
   if (excludeIds && excludeIds.size > 0) {
     filtered = patents.filter(p => !excludeIds.has(p.patent_id));
     onProgress?.(`  After excluding existing: ${filtered.length}`);
   }
+  filtered.sort((a, b) => (b.grant_date || '').localeCompare(a.grant_date || ''));
 
   // Load CPC codes for matched patents in batches
   const patentIds = filtered.map(p => p.patent_id);

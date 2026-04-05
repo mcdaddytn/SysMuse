@@ -73,9 +73,45 @@ The `create-from-patents` route (MANUAL import) still fetches from PatentsView A
 
 ---
 
+## Recent Changes (continued)
+
+### 6. Affiliate Prefix Matching Word Boundary Fix
+**Files:** `uspto-import-service.ts`, `bulk-patent-search-service.ts`
+
+**Problem:** Simple `startsWith()` matching caused false positives: "LSI" matched "LSIS Co., Ltd" (Korean company), "Pivotal" matched "Pivotal Commware", etc. LSI had 807/1063 false positives; Pivotal had 59/65.
+
+**Fix:** Added word-boundary check — after a prefix match, the next character must be non-alphanumeric (space, comma, etc.) or end-of-string. Also removed overly-broad bare "LSI" and "Pivotal" patterns from affiliate DB.
+
+### 7. Query Performance Fix (168s → 1s)
+**File:** `uspto-query-service.ts`
+
+**Problem:** `ILIKE` cannot use btree `text_pattern_ops` indexes. Assignee search on 5.5M rows took 168s.
+
+**Fix:** Created expression index `lower(assignee) text_pattern_ops` and changed SQL to `lower(ip.assignee) LIKE 'pattern%'`. Query dropped to 1.0s. Also removed SQL `LIMIT` (was being consumed by false positives before post-filter).
+
+### 8. Pre-2015 USPTO Index Data
+Indexed 2005-2014: 522 files, 2,339,109 patents in 24 minutes. Forward citations recomputed in 13 minutes. Total index: 5,585,299 patents across 1,096 files.
+
+### 9. Full Broadcom Import
+Imported 5,887 new pre-2015 patents via CLI, 5,869 XMLs extracted. Portfolio total: 36,727.
+
+### 10. Filter Options Scoped to Portfolio + Alphabetized
+**Files:** `FlexFilterBuilder.vue`, `PortfolioPage.vue`, `AggregatesPage.vue`, `patent-data-service.ts`
+
+**Problem:** FlexFilterBuilder fetched filter options (affiliates, competitors, sectors, etc.) without `portfolioId`, showing values from all portfolios. Options were sorted by count (descending), making them hard to find.
+
+**Fix:**
+- Added `portfolioId` prop to FlexFilterBuilder, passed to API call as query param
+- Both parent pages (PortfolioPage, AggregatesPage) now pass `portfolioStore.selectedPortfolioId`
+- Filter options reload when portfolio changes
+- All filter option lists sorted alphabetically instead of by count
+
+---
+
 ## Key Architecture Notes
 
-- **USPTO Index DB**: 3.25M patents, 574 files, 2015-2025, with forward citations computed. Located at `prisma/uspto/schema.prisma`.
+- **USPTO Index DB**: 5.58M patents, 1,096 files, 2005-2025, with forward citations computed. Located at `prisma/uspto/schema.prisma`.
 - **`xml_source` field** on `IndexedPatent` maps to weekly ZIP filename (e.g., `ipg240102` → `ipg240102.zip`)
-- **Affiliate matching** uses `matchAffiliate()` in `uspto-import-service.ts` — prefix-matches assignee against `AffiliatePattern` table
+- **Affiliate matching** uses `matchAffiliate()` in `uspto-import-service.ts` — prefix-matches assignee against `AffiliatePattern` table, with word-boundary enforcement
 - **Prisma batch size limit**: Keep `findMany` with relations under ~20K rows per batch to avoid napi serialization failures
+- **Expression index**: `lower(assignee) text_pattern_ops` on `indexed_patents` for fast case-insensitive prefix matching; created in `scripts/create-uspto-db.ts` since Prisma cannot define expression indexes

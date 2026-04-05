@@ -5,6 +5,7 @@ import { useSuperSectors } from '@/composables/useSuperSectors';
 // Props
 const props = defineProps<{
   modelValue: Record<string, unknown>;
+  portfolioId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -93,7 +94,9 @@ function getFilterDef(key: string): FilterField | undefined {
 async function loadFilterOptions() {
   loadingOptions.value = true;
   try {
-    const res = await fetch('/api/patents/filter-options');
+    const params = new URLSearchParams();
+    if (props.portfolioId) params.set('portfolioId', props.portfolioId);
+    const res = await fetch(`/api/patents/filter-options?${params}`);
     if (res.ok) {
       filterOptions.value = await res.json();
     }
@@ -267,6 +270,11 @@ function clearAll() {
 }
 
 const { getSectorColor } = useSuperSectors();
+
+// Reload filter options when portfolioId changes
+watch(() => props.portfolioId, () => {
+  loadFilterOptions();
+});
 
 // Lifecycle
 onMounted(() => {

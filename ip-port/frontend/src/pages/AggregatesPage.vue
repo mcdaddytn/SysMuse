@@ -712,6 +712,7 @@ onMounted(async () => {
         <div class="text-subtitle2 q-mb-sm">Filters</div>
         <FlexFilterBuilder
           :model-value="filters"
+          :portfolio-id="portfolioStore.selectedPortfolioId"
           @update:model-value="onFiltersUpdate"
         />
       </q-card-section>

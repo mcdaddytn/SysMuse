@@ -395,7 +395,7 @@ export async function getFilterOptions(
   }
 
   return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -420,7 +420,7 @@ export async function getCompetitorNames(portfolioId?: string) {
   }
 
   return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ name, count }));
 }
 
@@ -971,7 +971,7 @@ export async function getSubSectorCounts(portfolioId?: string): Promise<Array<{
   }
 
   return Object.entries(counts)
-    .sort((a, b) => b[1].count - a[1].count)
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, data]) => ({ name, count: data.count, sector: data.sector }));
 }
 
@@ -1081,24 +1081,24 @@ export async function getAllFilterOptions(portfolioId?: string) {
 
   return {
     affiliates: Object.entries(affiliateCounts)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([name, count]) => ({ name, count })),
     superSectors: Object.entries(superSectorCounts)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([name, count]) => ({ name, count })),
     primarySectors: Object.entries(primarySectorCounts)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([name, count]) => ({ name, count })),
     competitorNames: Object.entries(competitorCounts)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .slice(0, 100)
       .map(([name, count]) => ({ name, count })),
     cpcCodes: Object.entries(cpcCounts)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .slice(0, 100)
       .map(([code, count]) => ({ code, count })),
     subSectors: Object.entries(subSectorCounts)
-      .sort((a, b) => b[1].count - a[1].count)
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([name, data]) => ({ name, count: data.count, sector: data.sector })),
     ranges: {
       score: { min: scoreMin === Infinity ? 0 : scoreMin, max: scoreMax === -Infinity ? 100 : scoreMax },

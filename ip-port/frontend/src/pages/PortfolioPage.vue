@@ -394,6 +394,7 @@ onMounted(async () => {
           <q-card-section class="q-py-sm">
             <FlexFilterBuilder
               :model-value="flexFilters"
+              :portfolio-id="portfolioStore.selectedPortfolioId"
               @update:model-value="onFlexFiltersUpdate"
             />
           </q-card-section>

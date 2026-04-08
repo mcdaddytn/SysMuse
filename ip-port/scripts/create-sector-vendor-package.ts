@@ -9,8 +9,9 @@
  *   5. Executes both templates (LLM jobs)
  *   6. Exports vendor package (vendor-targets.csv, collective-strategy.md, etc.)
  *
- * Usage: npx tsx scripts/create-sector-vendor-package.ts <SECTOR_NAME> [--top=N] [--skip-llm] [--export-only]
+ * Usage: npx tsx scripts/create-sector-vendor-package.ts <SECTOR_NAME> [--top=N] [--cpc=PREFIX1,PREFIX2] [--skip-llm] [--export-only]
  * Example: npx tsx scripts/create-sector-vendor-package.ts computing-runtime --top=35
+ * Example: npx tsx scripts/create-sector-vendor-package.ts semiconductor --top=35 --cpc=H01L23,H01L24,H01L25 --label=packaging
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -19,6 +20,18 @@ import * as path from 'path';
 
 const prisma = new PrismaClient();
 const BROADCOM_PORTFOLIO_NAME = 'broadcom-core';
+
+// Broadcom affiliates and subsidiaries — MUST be excluded from assertion targets
+const BROADCOM_AFFILIATES = [
+  'Broadcom', 'Avago', 'VMware', 'Symantec', 'CA Technologies',
+  'Carbon Black', 'Nicira', 'VeloCloud', 'Blue Coat', 'Brocade',
+  'LSI', 'Pivotal', 'Heptio', 'Emulex', 'NetLogic', 'PLX Technology',
+  'SandForce', 'Lastline', 'Nyansa', 'Avi Networks', 'Agere',
+  'CloudHealth', 'Cyoptics', 'AirWatch', 'Foundry Networks',
+];
+const AFFILIATE_PATTERN = new RegExp(
+  BROADCOM_AFFILIATES.map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i'
+);
 
 // ─── Parse Collective Strategy for Patent Mappings ───────────────────────────
 
@@ -90,11 +103,13 @@ function findCompanyWebsite(companyName: string, websiteMap: Map<string, string>
 const args = process.argv.slice(2);
 const sectorName = args.find(a => !a.startsWith('--'));
 const topN = parseInt(args.find(a => a.startsWith('--top='))?.split('=')[1] || '35');
+const cpcFilter = args.find(a => a.startsWith('--cpc='))?.split('=')[1]?.split(',').map(c => c.trim()).filter(c => c) || null;
+const cpcLabel = args.find(a => a.startsWith('--label='))?.split('=')[1] || null;
 const skipLlm = args.includes('--skip-llm');
 const exportOnly = args.includes('--export-only');
 
 if (!sectorName) {
-  console.error('Usage: npx tsx scripts/create-sector-vendor-package.ts <SECTOR_NAME> [--top=N] [--skip-llm] [--export-only]');
+  console.error('Usage: npx tsx scripts/create-sector-vendor-package.ts <SECTOR_NAME> [--top=N] [--cpc=PREFIX1,PREFIX2] [--label=NAME] [--skip-llm] [--export-only]');
   process.exit(1);
 }
 
@@ -125,12 +140,12 @@ const ASSESSMENT_QUESTIONS = [
   },
   {
     fieldName: 'target_products',
-    question: 'List specific competitor products or product categories that likely implement this patented technology. Be concrete — name specific products, product families, or product lines.',
+    question: 'List specific competitor products or product categories that likely implement this patented technology. Be concrete — name specific products, product families, or product lines. IMPORTANT: Do NOT list any Broadcom or Broadcom-subsidiary products. The following are all Broadcom affiliates and must be EXCLUDED: VMware, Symantec, CA Technologies, Carbon Black, Nicira, VeloCloud, Blue Coat, Brocade, LSI, Avago, Pivotal, Heptio, Emulex, NetLogic, PLX Technology, SandForce, Lastline, Nyansa, Avi Networks, Agere, CloudHealth, Cyoptics, AirWatch, Marvell.',
     answerType: 'text_array'
   },
   {
     fieldName: 'target_companies',
-    question: 'Which companies are primary assertion targets for this patent? Consider: (1) Who manufactures products implementing this technology? (2) Who has the largest market share / highest volumes? (3) Who is most likely already using this technology?',
+    question: 'Which companies are primary assertion targets for this patent? IMPORTANT EXCLUSIONS: Do NOT list Broadcom or any Broadcom subsidiary/affiliate. The following are ALL Broadcom affiliates — EXCLUDE every one: VMware, Symantec, CA Technologies, Carbon Black, Nicira, VeloCloud, Blue Coat, Brocade, LSI, Avago, Pivotal, Heptio, Emulex, NetLogic, PLX Technology, SandForce, Lastline, Nyansa, Avi Networks, Agere, CloudHealth, Cyoptics, AirWatch, Marvell. TARGETING RULES: You MUST list at least 5 smaller/mid-size companies (under $10B revenue) BEFORE listing any large company. Large companies (Cisco, Intel, Samsung, Qualcomm, Apple, Google, Microsoft, Amazon, Oracle, IBM) likely already have cross-licensing with Broadcom — list at most 2 of these and ONLY after the smaller targets. The best assertion targets are specialized companies with $200M-$5B revenue in this specific technology niche. Think about who the niche players, emerging competitors, and specialized vendors are in this technology area.',
     answerType: 'text_array'
   },
   {
@@ -169,6 +184,10 @@ Patent Count: <<focusArea.patentCount>>
 
 CRITICAL INSTRUCTION: You MUST reference ONLY the patents listed below by their exact patent_id. Do NOT invent, fabricate, or hallucinate patent numbers. Every patent ID you mention MUST appear in the data below. If you are unsure about a patent, omit it rather than guess.
 
+CRITICAL EXCLUSION: The following companies are ALL Broadcom subsidiaries/affiliates and must NEVER be listed as competitors or assertion targets: VMware, Symantec, CA Technologies, Carbon Black, Nicira, VeloCloud, Blue Coat, Brocade, LSI, Avago, Pivotal, Heptio, Emulex, NetLogic, PLX Technology, SandForce, Lastline, Nyansa, Avi Networks, Agere, CloudHealth, Cyoptics, AirWatch, Marvell. If any of these appear in the patent data as assignees or citations, they are part of Broadcom's own portfolio — do NOT treat them as competitors.
+
+TARGETING RULES: The most valuable assertion targets are SMALLER specialized companies ($200M-$5B revenue) that are unlikely to have existing cross-licensing with Broadcom. You MUST focus primarily on these niche and mid-size players. Large conglomerates (Cisco, Intel, Samsung, Qualcomm, Apple, Google, Microsoft, Amazon, Oracle, IBM) likely already have cross-licensing agreements with Broadcom — include at most 2-3 of these as secondary targets. For every large company mentioned, you must also identify at least 2 smaller specialized competitors in the same space. Think about: pure-play vendors, emerging companies, specialized hardware/software makers, and regional leaders in this technology area.
+
 Patent data for all <<focusArea.patentCount>> patents in this focus area:
 <<focusArea.patentData>>
 
@@ -179,21 +198,22 @@ Group the patents into technology clusters — sets of patents covering the same
 - Cluster name and description
 - Patent IDs in the cluster (MUST be from the list above)
 - Why these patents reinforce each other
-- Combined coverage strength
+- Combined coverage strength (rate as: Very High, High, Medium, Low)
 
 ## 2. Claim Chain Strategy
 Which patents should be asserted TOGETHER for maximum impact? Identify 3-5 assertion packages of 3-6 patents each. For each package:
 - Patent IDs (MUST be from the list above)
 - The combined claim coverage
-- Which competitors are most exposed
+- Which competitors are most exposed (EXCLUDING Broadcom affiliates listed above)
 - Estimated damages basis
 
 ## 3. Competitor Vulnerability Matrix
-For each major competitor that appears in the patent data above:
+For each major competitor that appears in the patent data above (EXCLUDING all Broadcom affiliates listed above):
 - Number of patents likely infringed
 - Most impactful patents against this competitor (by patent_id from the list above)
 - Vulnerability level (HIGH/MEDIUM/LOW)
 - Recommended assertion priority
+IMPORTANT: List at least 6-8 companies. At least 5 MUST be smaller/mid-size specialists ($200M-$5B revenue). Include at most 2-3 large companies. For each company, note their approximate annual revenue. Smaller specialized companies without existing Broadcom cross-licensing are the highest-priority targets.
 
 ## 4. Top 10 Patents Ranked by Litigation Potential
 Rank the 10 strongest litigation candidates with reasoning:
@@ -216,7 +236,7 @@ For each prong: expected outcomes, timeline, risk factors.
 - Prosecution history concerns
 - Forum selection recommendations
 
-Be specific. Reference patents by their exact patent_id from the data above. Reference specific claim elements from the claims data provided. Cite specific competitor products.`;
+Be specific. Reference patents by their exact patent_id from the data above. Reference specific claim elements from the claims data provided. Cite specific competitor products (NEVER Broadcom affiliates).`;
 }
 
 // ─── CSV Helpers ──────────────────────────────────────────────────────────────
@@ -252,9 +272,14 @@ async function resilientFetch(url: string, options?: RequestInit, maxRetries = 5
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+// Derive package naming from --label (e.g., --label=packaging → "Semiconductor Packaging")
+const packageSlug = cpcLabel ? `${sectorName}-${cpcLabel}` : sectorName!;
+
 async function main() {
-  console.log(`\n=== Sector Vendor Package: ${sectorName} ===`);
-  console.log(`Top N: ${topN}, Skip LLM: ${skipLlm}, Export Only: ${exportOnly}\n`);
+  console.log(`\n=== Sector Vendor Package: ${packageSlug} ===`);
+  console.log(`Top N: ${topN}, Skip LLM: ${skipLlm}, Export Only: ${exportOnly}`);
+  if (cpcFilter) console.log(`CPC Filter: ${cpcFilter.join(', ')}${cpcLabel ? ` (label: ${cpcLabel})` : ''}`);
+  console.log();
 
   // Validate sector exists
   const sector = await prisma.sector.findFirst({ where: { name: sectorName } });
@@ -281,8 +306,25 @@ async function main() {
     },
     select: { patentId: true }
   });
-  const broadcomIds = broadcomPatents.map(p => p.patentId);
+  let broadcomIds = broadcomPatents.map(p => p.patentId);
   console.log(`Broadcom patents in sector: ${broadcomIds.length}`);
+
+  // Optional CPC filter — narrow to patents matching any of the CPC prefixes
+  if (cpcFilter && cpcFilter.length > 0) {
+    const allWithCpc = await prisma.patent.findMany({
+      where: { patentId: { in: broadcomIds } },
+      select: { patentId: true, cpcCodes: { select: { cpcCode: true } } }
+    });
+    const filteredIds = new Set<string>();
+    for (const p of allWithCpc) {
+      if (p.cpcCodes.some(c => cpcFilter.some(prefix => c.cpcCode.startsWith(prefix)))) {
+        filteredIds.add(p.patentId);
+      }
+    }
+    const originalCount = broadcomIds.length;
+    broadcomIds = broadcomIds.filter(id => filteredIds.has(id));
+    console.log(`CPC filter (${cpcFilter.join(',')}): ${originalCount} → ${broadcomIds.length} patents`);
+  }
 
   // Get scores and rank
   const allScores = await prisma.patentSubSectorScore.findMany({
@@ -346,11 +388,18 @@ async function main() {
   // ── Step 1: Create Focus Area ──
   console.log('\n--- Step 1: Creating Focus Area ---');
 
+  // Build display name for this package (e.g., "Semiconductor Packaging" if --label=packaging)
+  const baseDisplayName = sector.displayName || sectorName;
+  const packageDisplayName = cpcLabel
+    ? `${baseDisplayName} ${cpcLabel.charAt(0).toUpperCase() + cpcLabel.slice(1)}`
+    : baseDisplayName;
+
   // Check for existing FA
+  const faSearchName = `${packageDisplayName} Crown Jewels`;
   const existingFA = await prisma.focusArea.findFirst({
     where: {
       primarySector: sectorName,
-      name: { contains: 'Crown' }
+      name: faSearchName
     }
   });
 
@@ -365,8 +414,8 @@ async function main() {
 
     const fa = await prisma.focusArea.create({
       data: {
-        name: `${sector.displayName || sectorName} Crown Jewels`,
-        description: `Top ${topN} highest-scoring broadcom patents in ${sector.displayName || sectorName} for litigation vendor assessment`,
+        name: faSearchName,
+        description: `Top ${topN} highest-scoring broadcom patents in ${packageDisplayName}${cpcFilter ? ` (CPC: ${cpcFilter.join(', ')})` : ''} for litigation vendor assessment`,
         superSector: ssName,
         primarySector: sectorName,
         ownerId: 'default-user',
@@ -427,12 +476,12 @@ async function main() {
     assessmentTemplate = await prisma.promptTemplate.create({
       data: {
         focusAreaId,
-        name: `${sector.displayName || sectorName} Litigation Assessment`,
-        description: `Per-patent litigation assessment for top ${sectorName} patents`,
+        name: `${packageDisplayName} Litigation Assessment`,
+        description: `Per-patent litigation assessment for top ${packageSlug} patents`,
         templateType: 'STRUCTURED',
         executionMode: 'PER_PATENT',
         questions: ASSESSMENT_QUESTIONS,
-        contextFields: ['patent_id', 'title', 'abstract', 'claims', 'grant_date', 'assignee', 'cpc_codes', 'forward_citations'],
+        contextFields: ['patent_id', 'title', 'abstract', 'claims', 'grant_date', 'assignee', 'cpc_codes', 'forward_citations', 'competitor_citations', 'competitor_names'],
         llmModel: 'claude-sonnet-4-20250514',
         status: 'DRAFT',
         completedCount: 0,
@@ -458,12 +507,12 @@ async function main() {
     collectiveTemplate = await prisma.promptTemplate.create({
       data: {
         focusAreaId,
-        name: `${sector.displayName || sectorName} Collective Litigation Strategy`,
-        description: `Cross-patent litigation strategy for top ${sectorName} patents`,
+        name: `${packageDisplayName} Collective Litigation Strategy`,
+        description: `Cross-patent litigation strategy for top ${packageSlug} patents`,
         templateType: 'FREE_FORM',
         executionMode: 'COLLECTIVE',
-        promptText: buildCollectivePrompt(sector.displayName || sectorName),
-        contextFields: ['patent_id', 'title', 'abstract', 'claims', 'grant_date', 'assignee', 'cpc_codes', 'forward_citations'],
+        promptText: buildCollectivePrompt(packageDisplayName),
+        contextFields: ['patent_id', 'title', 'abstract', 'claims', 'grant_date', 'assignee', 'cpc_codes', 'forward_citations', 'competitor_citations', 'competitor_names'],
         llmModel: 'claude-sonnet-4-20250514',
         status: 'DRAFT',
         completedCount: 0,
@@ -539,7 +588,7 @@ async function main() {
 
 async function exportVendorPackage(focusAreaId: string, sectorName: string, sectorDisplayName: string) {
   const date = new Date().toISOString().split('T')[0];
-  const outputDir = path.resolve(`./output/vendor-exports/${sectorName}-${date}`);
+  const outputDir = path.resolve(`./output/vendor-exports/${packageSlug}-${date}`);
   fs.mkdirSync(outputDir, { recursive: true });
 
   const fa = await prisma.focusArea.findUnique({
@@ -601,7 +650,7 @@ async function exportVendorPackage(focusAreaId: string, sectorName: string, sect
         const data = result.response || result.fields || {};
         const patentId = result.patentId || file.replace('.json', '');
 
-        const ownerPatterns = /\b(broadcom|avago)\b/i;
+        const ownerPatterns = AFFILIATE_PATTERN;
         const targetStr = (data.target_companies || '') as string;
         const rawTargets = targetStr.split(/,\s*/).map((t: string) => t.trim())
           .filter((t: string) => t.length > 0 && !ownerPatterns.test(t));

@@ -1,7 +1,7 @@
 {
-  "version": "5.3",
-  "description": "Categorized competitor list with discovery strategy provenance - 131 companies including expanded product-based discovery from sector analysis",
-  "lastUpdated": "2026-01-19",
+  "version": "6.0",
+  "description": "Categorized competitor list with discovery strategy provenance - 147 companies including neutral citation mining discoveries",
+  "lastUpdated": "2026-04-06",
   "discoveryStrategies": {
     "manual-initial": {
       "name": "Manual Initial List",
@@ -349,6 +349,18 @@
         "script": "scripts/mine-all-citations.ts"
       },
       "notes": "These companies cite our patents but were not discovered through the original patent-based competitor identification"
+    },
+    "neutral-citation-mining-v1": {
+      "name": "Neutral Citation Mining - Phase 1",
+      "description": "Companies discovered by mining neutral citation assignees from citing-patent-details cache",
+      "type": "citation-mining",
+      "dateAdded": "2026-04-06",
+      "parameters": {
+        "method": "Neutral citation frequency analysis + sector concentration + market research",
+        "sourcePatents": 28445,
+        "neutralCompaniesFound": 8360,
+        "script": "scripts/mine-neutral-citations.ts"
+      }
     }
   },
   "categories": {
@@ -639,15 +651,19 @@
           ]
         },
         {
-          "name": "FireEye",
+          "name": "Musarubra (Trellix)",
           "patterns": [
+            "Musarubra",
+            "MUSARUBRA",
+            "Trellix",
             "FireEye",
-            "Mandiant",
-            "Trellix"
+            "Mandiant"
           ],
           "discoveredBy": [
-            "citation-overlap-broadcom-streaming"
-          ]
+            "citation-overlap-broadcom-streaming",
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Parent company of FireEye/Mandiant/Trellix - rebranded 2022"
         },
         {
           "name": "SentinelOne",
@@ -846,6 +862,59 @@
             "SIEM",
             "penetration testing"
           ]
+        },
+        {
+          "name": "Lookout",
+          "patterns": [
+            "Lookout"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Mobile security platform - discovered via neutral citation mining"
+        },
+        {
+          "name": "ExtraHop Networks",
+          "patterns": [
+            "ExtraHop"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Network detection and response (NDR) - discovered via neutral citation mining"
+        },
+        {
+          "name": "ReliaQuest",
+          "patterns": [
+            "ReliaQuest",
+            "RELIAQUEST"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Security operations platform - discovered via neutral citation mining"
+        },
+        {
+          "name": "Kaspersky",
+          "patterns": [
+            "Kaspersky"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Endpoint security and antivirus - discovered via neutral citation mining"
+        },
+        {
+          "name": "Open Text",
+          "patterns": [
+            "Open Text",
+            "OPEN TEXT",
+            "OpenText"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Enterprise information management and security - discovered via neutral citation mining"
         }
       ]
     },
@@ -1064,6 +1133,37 @@
             "PostgreSQL",
             "cloud-native"
           ]
+        },
+        {
+          "name": "Nutanix",
+          "patterns": [
+            "Nutanix"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Hyperconverged infrastructure - competes with VMware"
+        },
+        {
+          "name": "Commvault",
+          "patterns": [
+            "Commvault"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Data protection and management - competes with Veritas"
+        },
+        {
+          "name": "Box",
+          "patterns": [
+            "Box, Inc",
+            "\\bBox\\b"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Enterprise content management and cloud storage"
         }
       ]
     },
@@ -1174,6 +1274,48 @@
             "edge computing",
             "WAF"
           ]
+        },
+        {
+          "name": "CommScope",
+          "patterns": [
+            "CommScope",
+            "COMMSCOPE"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Network infrastructure - competes with Ruckus (acquired by CommScope)"
+        },
+        {
+          "name": "Ubiquiti",
+          "patterns": [
+            "Ubiquiti"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Wireless networking equipment - competes with Ruckus"
+        },
+        {
+          "name": "SONOS",
+          "patterns": [
+            "Sonos",
+            "SONOS"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Wireless audio and smart home networking"
+        },
+        {
+          "name": "BlackBerry",
+          "patterns": [
+            "BlackBerry"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Enterprise security and IoT - QNX embedded systems"
         }
       ]
     },
@@ -1292,6 +1434,26 @@
             "BLE",
             "WiFi chipset"
           ]
+        },
+        {
+          "name": "Rambus",
+          "patterns": [
+            "Rambus"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Memory interface and security IP - chip-level patent licensing"
+        },
+        {
+          "name": "Silicon Laboratories",
+          "patterns": [
+            "Silicon Lab"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "IoT and wireless semiconductor - Bluetooth, Zigbee, Z-Wave"
         }
       ]
     },
@@ -2040,18 +2202,78 @@
           ]
         }
       ]
+    },
+    "emergingTargets": {
+      "description": "Small/mid companies discovered via neutral citation mining - high sector concentration",
+      "enabled": true,
+      "companies": [
+        {
+          "name": "Kandou Labs",
+          "patterns": [
+            "Kandou"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "High-speed interconnect IP - signal processing, wireless-tx, analog sectors"
+        },
+        {
+          "name": "KEYSSA",
+          "patterns": [
+            "KEYSSA",
+            "Keyssa"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Contactless connector technology - wireless-tx, mimo-antenna sectors"
+        },
+        {
+          "name": "Energous",
+          "patterns": [
+            "Energous"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Wireless power technology - power-mgmt, antennas sectors"
+        },
+        {
+          "name": "ParkerVision",
+          "patterns": [
+            "ParkerVision"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "RF technology and patent licensing - wireless-tx, video-client sectors"
+        },
+        {
+          "name": "BitSight Technologies",
+          "patterns": [
+            "BitSight",
+            "Bitsight"
+          ],
+          "discoveredBy": [
+            "neutral-citation-mining-v1"
+          ],
+          "notes": "Security ratings platform - threat, secure-compute sectors"
+        }
+      ]
     }
   },
   "excludePatterns": [
     "Broadcom",
     "LSI Logic",
     "LSI Corporation",
+    "\\bLSI\\b",
     "Avago",
     "Symantec",
     "NortonLifeLock",
     "VMware",
     "VMWare",
     "Brocade",
+    "Foundry Networks",
     "CA, Inc",
     "CA Technologies",
     "Computer Associates",
@@ -2062,7 +2284,18 @@
     "Tanzu",
     "Avi Networks",
     "Lastline",
-    "Nyansa"
+    "Nyansa",
+    "Nicira",
+    "VeloCloud",
+    "Heptio",
+    "Emulex",
+    "NetLogic",
+    "PLX Technology",
+    "SandForce",
+    "CloudHealth",
+    "Cyoptics",
+    "AirWatch",
+    "Agere Systems"
   ],
   "notes": {
     "patternMatching": "Patterns are matched case-insensitively against assignee names",

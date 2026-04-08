@@ -437,6 +437,30 @@ export function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData
     }
   }
 
+  // Enrich with citation classification data (competitor/affiliate/neutral breakdown)
+  const citClassDir = path.join(process.cwd(), 'cache/citation-classification');
+  if (fs.existsSync(citClassDir)) {
+    for (const pid of patentIds) {
+      const citPath = path.join(citClassDir, `${pid}.json`);
+      if (fs.existsSync(citPath)) {
+        try {
+          const citData = JSON.parse(fs.readFileSync(citPath, 'utf-8'));
+          const existing = result.get(pid) || { patent_id: pid };
+          result.set(pid, {
+            ...existing,
+            competitor_citations: citData.competitor_citations ?? 0,
+            competitor_names: (citData.competitor_names || []).join(', '),
+            competitor_count: citData.competitor_count ?? 0,
+            affiliate_citations: citData.affiliate_citations ?? 0,
+            neutral_citations: citData.neutral_citations ?? 0,
+          });
+        } catch {
+          // skip invalid citation classification files
+        }
+      }
+    }
+  }
+
   return result;
 }
 

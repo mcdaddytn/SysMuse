@@ -295,6 +295,27 @@ const PROFILES: ScoringProfile[] = [
       prosecution_quality_score: 0.07,
     },
   },
+  {
+    id: 'niche_finder',
+    displayName: 'Niche Finder',
+    description: 'De-emphasizes known-competitor bias to surface hidden gems in niche sectors. Weights quality metrics and total citations over competitor-specific signals.',
+    category: 'niche',
+    weights: {
+      competitor_citations: 0.05,       // Way down from 0.22 — avoids circular bias toward known competitors
+      adjusted_forward_citations: 0.20, // Way up — includes ALL citations, not just known competitors
+      years_remaining: 0.08,
+      competitor_count: 0.02,
+      competitor_density: 0.02,         // Low — niche sectors may not have many known competitors yet
+      eligibility_score: 0.08,
+      validity_score: 0.15,             // Quality matters for niche — strong patents survive IPR
+      claim_breadth: 0.12,              // Broad claims more valuable in unexplored competitive space
+      enforcement_clarity: 0.12,
+      design_around_difficulty: 0.08,
+      market_relevance_score: 0.03,
+      ipr_risk_score: 0.03,
+      prosecution_quality_score: 0.02,
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -565,7 +565,7 @@ async function main(): Promise<void> {
 
   // Find xlsx files
   let files = fs.readdirSync(config.sourceDir)
-    .filter(f => f.endsWith('.xlsx') && !f.startsWith('._') && !f.startsWith('~$'))
+    .filter(f => (f.endsWith('.xlsx') || f.endsWith('.xlsm')) && !f.startsWith('._') && !f.startsWith('~$'))
     .sort();
 
   if (config.singleFile) {

@@ -108,6 +108,66 @@ Imported 5,887 new pre-2015 patents via CLI, 5,869 XMLs extracted. Portfolio tot
 
 ---
 
+## Recent Changes (April 6-8, 2026)
+
+### 11. Competitive Landscape Expansion — 20 New Competitors + Affiliate Fixes
+**File:** `config/competitors.json` (v5.3 → v6.0)
+
+- Added 13 missing Broadcom affiliate exclude patterns (Nicira, VeloCloud, Heptio, Foundry Networks, Emulex, NetLogic, PLX Technology, SandForce, CloudHealth, Cyoptics, AirWatch, Agere Systems, \bLSI\b)
+- Added 20 new competitor companies discovered via neutral citation mining across 5 categories (emergingTargets, cybersecurity, enterprise, networking, semiconductor)
+- Added discovery strategy `neutral-citation-mining-v1` documenting the methodology
+- Updated FireEye → Musarubra (Trellix) with merged patterns
+- Total companies: 147
+
+### 12. Vendor Package Script Enhancements
+**File:** `scripts/create-sector-vendor-package.ts`
+
+- **CPC filter** (`--cpc=PREFIX1,PREFIX2`): Narrows patent selection within a sector by CPC code prefixes. Enables sub-sector packaging without taxonomy changes.
+- **Label flag** (`--label=NAME`): Custom naming for CPC-filtered packages (Focus Areas, templates, export directories)
+- **Affiliate exclusion in LLM prompts**: CRITICAL EXCLUSION and TARGETING RULES added to per-patent assessment questions and collective strategy prompt
+- **Competitor citation context**: contextFields now include `competitor_citations` and `competitor_names`
+- **Smaller company targeting**: LLM prompts now emphasize $200M-$5B revenue targets over large cross-licensed companies
+- **Fixed Marvell misclassification**: Replaced Marvell (a competitor) with Foundry Networks in BROADCOM_AFFILIATES
+
+### 13. Citation Re-classification
+Re-classified 29,474 patents with expanded competitor config:
+- 136,890 competitor citations (42.8%)
+- 45,965 affiliate citations (14.4%)
+- 136,986 neutral citations (42.8%)
+
+### 14. Targeted LLM Enrichment
+**File:** `scripts/enrich-specific-patents.ts` (new)
+
+Batch enrichment of 85 patents missing LLM cache files across 3 sectors (network-multiplexing, wireless-power-mgmt, wireless-infrastructure). Calls Claude Sonnet directly with concurrency=5. Produces `cache/llm-scores/{patentId}.json`.
+
+### 15. 35 Vendor Packages Generated
+Generated comprehensive vendor packages across all scored sectors:
+
+**Standard sector packages (22):** network-multiplexing, wireless-power-mgmt, wireless-infrastructure, video-server-cdn, video-codec, computing-auth-boot, wireless-scheduling, wireless-mobility, test-measurement, network-error-control, video-broadcast, power-management, video-storage, computing-data-protection, wireless-mimo-antenna, semiconductor-modern, semiconductor-manufacturing, audio, radar-sensing, antennas, wireless-services, lithography, telephony, pcb-packaging, 3d-stereo-depth, cameras-sensors, ai-ml, display-control, image-processing
+
+**CPC-filtered semiconductor sub-packages (6):** semiconductor-interconnect (H01L23/48-52), semiconductor-bonding (H01L24), semiconductor-thermal-emi (H01L23/28-42,55x), semiconductor-multichip (H01L25), semiconductor-fabrication (H01L21), semiconductor-devices (H01L29/27)
+
+**Totals:** 1,226 patents, 19,169 patent-target pairs across 35 packages. All outputs in `output/vendor-exports/{sector}-2026-04-06/`.
+
+### 16. Niche Scoring & Neutral Citation Mining
+**Files:** `scripts/score-niche-sectors.ts`, `scripts/mine-neutral-citations.ts` (new)
+
+- Niche Finder scoring profile added to scoring-service.ts (no competitor citation boost)
+- Identified 72 hidden gem patents underweighted by Aggressive Litigator profile
+- Mined 8,360 neutral citation companies from citing-patent-details cache
+
+### 17. Supporting Scripts
+New utility scripts created during this work:
+- `scripts/create-opportunity-package.ts` — Target-specific opportunity packages
+- `scripts/find-missing-vendor-packages.ts` — Identifies sectors without packages
+- `scripts/create-missing-vendor-packages.ts` — Batch package creation
+- `scripts/map-broadcom-target-overlap.ts` — Competitor patent overlap analysis
+- `scripts/process-product-docs.ts` — Product document processing
+- `scripts/summarize-product-docs.ts` — Product document summarization
+- `src/api/services/product-doc-service.ts` — Product document service
+
+---
+
 ## Key Architecture Notes
 
 - **USPTO Index DB**: 5.58M patents, 1,096 files, 2005-2025, with forward citations computed. Located at `prisma/uspto/schema.prisma`.

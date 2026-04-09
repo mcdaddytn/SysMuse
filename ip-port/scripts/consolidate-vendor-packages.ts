@@ -124,6 +124,71 @@ const COMPANY_ALIASES: Record<string, string> = {
   'check point software': 'check-point',
   'fortinet': 'fortinet',
   'citrix systems': 'citrix',
+  'cisco systems': 'cisco',
+  'cisco systems inc': 'cisco',
+  'juniper networks': 'juniper',
+  'juniper': 'juniper',
+  'arista networks': 'arista',
+  'palo alto networks': 'palo-alto-networks',
+  'extreme networks': 'extreme-networks',
+  'nutanix inc': 'nutanix',
+  'lg electronics': 'lg',
+  'lg': 'lg',
+  'samsung electronics': 'samsung',
+  'samsung': 'samsung',
+  'sony corporation': 'sony',
+  'sony semiconductor solutions': 'sony',
+  'panasonic semiconductor solutions': 'panasonic',
+  'panasonic': 'panasonic',
+  'intel corporation': 'intel',
+  'amd': 'amd',
+  'advanced micro devices': 'amd',
+  'ibm': 'ibm',
+  'international business machines': 'ibm',
+  'apple inc': 'apple',
+  'amazon web services': 'amazon',
+  'aws': 'amazon',
+  'nokia corporation': 'nokia',
+  'nokia': 'nokia',
+  'ericsson': 'ericsson',
+  'nxp semiconductors': 'nxp',
+  'nxp': 'nxp',
+  'stmicroelectronics': 'stmicroelectronics',
+  'st microelectronics': 'stmicroelectronics',
+  'infineon technologies': 'infineon',
+  'infineon': 'infineon',
+  'renesas electronics': 'renesas',
+  'renesas': 'renesas',
+  'huawei': 'huawei',
+  'huawei technologies': 'huawei',
+  'zte corporation': 'zte',
+  'zte': 'zte',
+  'oppo': 'oppo',
+  'vivo': 'vivo',
+  'xiaomi': 'xiaomi',
+  'oracle corporation': 'oracle',
+  'oracle': 'oracle',
+  'microsoft corporation': 'microsoft',
+  'cypress semiconductor': 'cypress',
+  'asml': 'asml',
+  'asml holding': 'asml',
+  'tokyo electron': 'tokyo-electron',
+  'tokyo electron limited': 'tokyo-electron',
+  'applied materials': 'applied-materials',
+  'lam research': 'lam-research',
+  'kla corporation': 'kla',
+  'kla-tencor': 'kla',
+  'amkor technology': 'amkor',
+  'ase group': 'ase',
+  'advanced semiconductor engineering': 'ase',
+  'jcet group': 'jcet',
+  'powertech technology': 'powertech',
+  'siliconware precision': 'spil',
+  'spil': 'spil',
+  'unisoc': 'unisoc',
+  'unisoc communications': 'unisoc',
+  'unisoc/spreadtrum': 'unisoc',
+  'spreadtrum': 'unisoc',
 };
 
 interface CompanyInfo {
@@ -275,7 +340,11 @@ function buildCompanyNormalizer() {
       }
     }
 
-    const hasProductDocs = productDirSlugs.has(slug!);
+    // Check product docs: try alias slug, original slug, and stripped slug
+    const rawSlug = slugify(rawName);
+    const stripped = rawName.replace(COMPANY_SUFFIXES, '').trim();
+    const strippedSlug = slugify(stripped);
+    const hasProductDocs = productDirSlugs.has(slug!) || productDirSlugs.has(rawSlug) || productDirSlugs.has(strippedSlug);
 
     const result: NormalizedCompany = { slug: slug!, hasProductDocs, competitorCategory };
     cache.set(key, result);
@@ -844,8 +913,8 @@ function generateOverview(
   }
   lines.push(``);
 
-  // ── Top 20 Patents by Litigation Score ──
-  lines.push(`## Top 20 Patents by Litigation Score`);
+  // ── Top 50 Patents by Litigation Score ──
+  lines.push(`## Top 50 Patents by Litigation Score`);
   lines.push(``);
 
   // Aggregate LitScore across sectors for each patent
@@ -861,17 +930,79 @@ function generateOverview(
     entry.targetCount++;
   }
 
-  const topByScore = [...patentScores.entries()]
-    .sort((a, b) => b[1].maxScore - a[1].maxScore || b[1].targetCount - a[1].targetCount)
-    .slice(0, 20);
+  const allByScore = [...patentScores.entries()]
+    .sort((a, b) => b[1].maxScore - a[1].maxScore || b[1].targetCount - a[1].targetCount);
 
   lines.push(`| Rank | PatentId | LitScore | Sectors | Targets |`);
   lines.push(`|------|----------|----------|---------|---------|`);
-  for (let i = 0; i < topByScore.length; i++) {
-    const [pid, data] = topByScore[i];
+  for (let i = 0; i < Math.min(50, allByScore.length); i++) {
+    const [pid, data] = allByScore[i];
     lines.push(`| ${i + 1} | ${pid} | ${data.maxScore} | ${[...data.sectors].join(', ')} | ${data.targetCount} |`);
   }
   lines.push(``);
+
+  // ── Top Patents by Super-Sector ──
+  const SUPER_SECTOR_MAP: Record<string, string[]> = {
+    'SECURITY': ['network-threat-protection', 'network-auth-access', 'network-crypto', 'network-secure-compute', 'wireless-security', 'computing-os-security', 'computing-data-protection', 'computing-auth-boot'],
+    'NETWORKING': ['network-switching', 'network-management', 'network-protocols', 'network-signal-processing', 'network-multiplexing', 'network-error-control', 'streaming-multimedia', 'telephony'],
+    'WIRELESS': ['wireless-scheduling', 'wireless-power-mgmt', 'wireless-mimo-antenna', 'wireless-transmission', 'wireless-mobility', 'wireless-infrastructure', 'wireless-services', 'rf-acoustic', 'antennas', 'radar-sensing'],
+    'VIDEO_STREAMING': ['video-codec', 'video-drm-conditional', 'video-client-processing', 'video-server-cdn', 'video-broadcast', 'video-storage', 'display-control'],
+    'COMPUTING': ['computing-systems', 'computing-runtime', 'computing-ui', 'data-retrieval', 'fintech-business', 'power-management'],
+    'SEMICONDUCTOR': ['semiconductor', 'semiconductor-modern', 'semiconductor-bonding', 'semiconductor-devices', 'semiconductor-fabrication', 'semiconductor-interconnect', 'semiconductor-manufacturing', 'semiconductor-multichip', 'semiconductor-thermal-emi', 'analog-circuits', 'memory-storage', 'test-measurement', 'pcb-packaging', 'magnetics-inductors', 'lithography', 'audio'],
+    'IMAGING': ['image-processing', '3d-stereo-depth', 'cameras-sensors', 'optics', 'recognition-biometrics'],
+  };
+
+  // Build reverse map: sector → super-sector
+  const sectorToSuper = new Map<string, string>();
+  for (const [superSector, sectors] of Object.entries(SUPER_SECTOR_MAP)) {
+    for (const s of sectors) sectorToSuper.set(s, superSector);
+  }
+
+  // Only show super-sectors that have packages in our data
+  const activeSuperSectors = new Set<string>();
+  for (const pkg of packages) {
+    const ss = sectorToSuper.get(pkg.sector);
+    if (ss) activeSuperSectors.add(ss);
+  }
+
+  lines.push(`## Top Patents by Super-Sector`);
+  lines.push(``);
+
+  for (const superSector of ['SEMICONDUCTOR', 'NETWORKING', 'SECURITY', 'WIRELESS', 'VIDEO_STREAMING', 'COMPUTING', 'IMAGING']) {
+    if (!activeSuperSectors.has(superSector)) continue;
+
+    const ssSectors = new Set(SUPER_SECTOR_MAP[superSector] || []);
+
+    // Filter patents to those in this super-sector
+    const ssPatents = new Map<string, { maxScore: number; sectors: Set<string>; targetCount: number }>();
+    for (const row of pivotRows) {
+      if (!ssSectors.has(row.sector)) continue;
+      const score = parseFloat(row.litScore) || 0;
+      if (!ssPatents.has(row.patentId)) {
+        ssPatents.set(row.patentId, { maxScore: score, sectors: new Set(), targetCount: 0 });
+      }
+      const entry = ssPatents.get(row.patentId)!;
+      if (score > entry.maxScore) entry.maxScore = score;
+      entry.sectors.add(row.sector);
+      entry.targetCount++;
+    }
+
+    const ssTopPatents = [...ssPatents.entries()]
+      .sort((a, b) => b[1].maxScore - a[1].maxScore || b[1].targetCount - a[1].targetCount)
+      .slice(0, 15);
+
+    if (ssTopPatents.length === 0) continue;
+
+    lines.push(`### ${superSector} (${ssPatents.size} patents across ${[...new Set([...ssPatents.values()].flatMap(v => [...v.sectors]))].length} sectors)`);
+    lines.push(``);
+    lines.push(`| Rank | PatentId | LitScore | Sectors | Targets |`);
+    lines.push(`|------|----------|----------|---------|---------|`);
+    for (let i = 0; i < ssTopPatents.length; i++) {
+      const [pid, data] = ssTopPatents[i];
+      lines.push(`| ${i + 1} | ${pid} | ${data.maxScore} | ${[...data.sectors].join(', ')} | ${data.targetCount} |`);
+    }
+    lines.push(``);
+  }
 
   // ── Per-Sector Summary Table ──
   lines.push(`## Per-Sector Summary`);
@@ -893,15 +1024,68 @@ function generateOverview(
   }
   lines.push(``);
 
-  // ── Top 20 Targets by Patent Exposure ──
-  lines.push(`## Top 20 Targets by Patent Exposure`);
+  // ── Targets by Patent Exposure (Full Ranking) ──
+  // Tier 1: Top 20 (detailed)
+  lines.push(`## Targets by Patent Exposure`);
   lines.push(``);
-  lines.push(`| Company | Slug | Sectors | Patents | Docs | Category |`);
-  lines.push(`|---------|------|---------|---------|------|----------|`);
-  for (const t of targetSummaries.slice(0, 20)) {
-    lines.push(`| ${t.company} | ${t.slug} | ${t.sectorCount} | ${t.totalPatentsExposed} | ${t.hasProductDocs} | ${t.competitorCategory} |`);
+  lines.push(`### Tier 1: Top 20 Targets`);
+  lines.push(``);
+  lines.push(`| Rank | Company | Slug | Sectors | Patents | Docs | Category |`);
+  lines.push(`|------|---------|------|---------|---------|------|----------|`);
+  for (let i = 0; i < Math.min(20, targetSummaries.length); i++) {
+    const t = targetSummaries[i];
+    lines.push(`| ${i + 1} | ${t.company} | ${t.slug} | ${t.sectorCount} | ${t.totalPatentsExposed} | ${t.hasProductDocs} | ${t.competitorCategory} |`);
   }
   lines.push(``);
+
+  // Tier 2: Ranks 21-50 (actionable mid-tier — likely better assertion targets)
+  if (targetSummaries.length > 20) {
+    lines.push(`### Tier 2: Ranks 21-50 (Mid-Size Assertion Targets)`);
+    lines.push(``);
+    lines.push(`| Rank | Company | Slug | Sectors | Patents | Docs | Category |`);
+    lines.push(`|------|---------|------|---------|---------|------|----------|`);
+    for (let i = 20; i < Math.min(50, targetSummaries.length); i++) {
+      const t = targetSummaries[i];
+      lines.push(`| ${i + 1} | ${t.company} | ${t.slug} | ${t.sectorCount} | ${t.totalPatentsExposed} | ${t.hasProductDocs} | ${t.competitorCategory} |`);
+    }
+    lines.push(``);
+  }
+
+  // Tier 3: Ranks 51-100
+  if (targetSummaries.length > 50) {
+    lines.push(`### Tier 3: Ranks 51-100`);
+    lines.push(``);
+    lines.push(`| Rank | Company | Slug | Sectors | Patents | Docs | Category |`);
+    lines.push(`|------|---------|------|---------|---------|------|----------|`);
+    for (let i = 50; i < Math.min(100, targetSummaries.length); i++) {
+      const t = targetSummaries[i];
+      lines.push(`| ${i + 1} | ${t.company} | ${t.slug} | ${t.sectorCount} | ${t.totalPatentsExposed} | ${t.hasProductDocs} | ${t.competitorCategory} |`);
+    }
+    lines.push(``);
+  }
+
+  // Tier 4: Ranks 101-200 (compact)
+  if (targetSummaries.length > 100) {
+    lines.push(`### Tier 4: Ranks 101-200`);
+    lines.push(``);
+    lines.push(`| Rank | Company | Sectors | Patents | Docs | Category |`);
+    lines.push(`|------|---------|---------|---------|------|----------|`);
+    for (let i = 100; i < Math.min(200, targetSummaries.length); i++) {
+      const t = targetSummaries[i];
+      lines.push(`| ${i + 1} | ${t.company} | ${t.sectorCount} | ${t.totalPatentsExposed} | ${t.hasProductDocs} | ${t.competitorCategory} |`);
+    }
+    lines.push(``);
+  }
+
+  // Summary of remaining targets
+  if (targetSummaries.length > 200) {
+    const remaining = targetSummaries.slice(200);
+    const avgPatents = (remaining.reduce((sum, t) => sum + t.totalPatentsExposed, 0) / remaining.length).toFixed(1);
+    lines.push(`### Remaining Targets (${remaining.length} companies, avg ${avgPatents} patents exposed)`);
+    lines.push(``);
+    lines.push(`*${remaining.length} additional targets with ${remaining[0].totalPatentsExposed}-${remaining[remaining.length - 1].totalPatentsExposed} patents exposed each. See target-summary.csv for full list.*`);
+    lines.push(``);
+  }
 
   return lines.join('\n');
 }

@@ -166,6 +166,35 @@ New utility scripts created during this work:
 - `scripts/summarize-product-docs.ts` — Product document summarization
 - `src/api/services/product-doc-service.ts` — Product document service
 
+### 18. Cross-Package Consolidation & Gap Analysis
+**Files:** `scripts/consolidate-vendor-packages.ts`, `scripts/find-product-docs.ts` (new)
+
+**Phase A — consolidate-vendor-packages.ts:**
+Standalone filesystem-only script that reads all 44 sector vendor packages from `output/vendor-exports/*-2026-04-06/`, parses collective strategies (technology clusters, claim chains, vulnerability matrix, top patents), merges all pivot CSVs, normalizes company names (4-tier matching against product cache, competitors.json, companies.json, plus hardcoded aliases), and generates:
+
+- `all-patent-targets.csv` — 18,492 merged patent-target pairs with sector attribution
+- `target-summary.csv` — 1,672 normalized unique targets with patent exposure counts, product doc status, competitor category
+- `package-overview.md` — Cross-package narrative: Very High/High clusters table, HIGH vulnerability targets, top patents by lit score, per-sector summary, top targets by exposure
+
+**Phase B — find-product-docs.ts:**
+Reads Phase A output, identifies targets missing product documentation (1,540 of 1,672 = 92%), gathers product context from pivot data, generates focused search queries per target. Outputs:
+
+- `gap-targets.csv` — Top 50 gap targets ranked by patent exposure
+- `search-queries.csv` — 126 search queries (2-3 per target, using sector tech areas and known product mentions)
+- `evidence-summary.md` — Per-target evidence summary with Tier 1/2/3 framework
+- `product-doc-urls.csv` / `youtube-videos.csv` — Empty templates for interactive URL collection
+- Supports `--update-cache` flag to write found URLs into `cache/patlytics/products/` for download pipeline integration
+
+**Key findings:**
+- Top gap targets by patent exposure: HPE (157), CommScope (103), Unisoc (96), Lattice Semiconductor (88), ASE (76)
+- 158 Very High or High strength technology clusters across 44 sectors
+- Wireless sectors dominate top-20 patents by LitScore (scores of 8 with 15-29 targets each)
+
+**Next steps:**
+- Extend overview rankings beyond top 20 (targets, patents) and add per-super-sector top patent lists
+- Begin interactive web search for product documentation on gap targets
+- Feed found URLs into download pipeline
+
 ---
 
 ## Key Architecture Notes

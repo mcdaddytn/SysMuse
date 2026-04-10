@@ -1,8 +1,15 @@
 /**
- * Score the calibration control group — exact same docs Patlytics scored.
+ * V3 Infringement Scoring — Control Group Calibration
  *
- * Reads the control group manifest, runs Pass 1 + Pass 2 on each pair,
- * and outputs a same-document calibration comparison.
+ * Runs the 10-component template-based infringement scoring against the
+ * calibration control group (same docs Patlytics scored).
+ *
+ * Key changes from v2:
+ * - 10 weighted component questions on 1-5 scale (not binary YES/PARTIAL/NO)
+ * - Template inheritance: default → super-sector (terminology, guidance)
+ * - Full LLM I/O capture for auditing
+ * - Per-component correlation analysis vs Patlytics
+ * - Two-pass blending: 0.3 × pass1 + 0.7 × pass2
  *
  * Usage:
  *   npx tsx scripts/score-control-group.ts [options]
@@ -10,6 +17,8 @@
  *     --pass1-only        Only run screening pass
  *     --dry-run           Show pairs without scoring
  *     --force             Re-score even if cached
+ *     --skip-quarantined  Skip quarantined docs (default: on)
+ *     --include-quarantined  Force-include quarantined docs (for comparison)
  */
 
 import * as dotenv from 'dotenv';
@@ -28,12 +37,19 @@ import {
 const anthropic = new Anthropic();
 
 const CONTROL_DIR = path.resolve('./cache/calibration-control');
-const RESULTS_DIR = path.join(CONTROL_DIR, 'results');
+const RESULTS_DIR = path.join(CONTROL_DIR, 'results-v3');
+const LLM_IO_DIR = path.resolve('./cache/infringement-llm-io');
+const TEMPLATES_DIR = path.resolve('./config/infringement-templates');
+const SUPER_SECTORS_CONFIG = path.resolve('./config/super-sectors.json');
+const QUARANTINE_RESULTS_PATH = path.resolve('./cache/doc-quality-screening/results.json');
 const XML_DIR = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY = 2000;
 const MAX_DOC_TEXT_LENGTH = 300_000;
 const MIN_TEXT_BYTES = 500;
+const PASS1_DOC_CHARS = 15_000;
+const PASS2_THRESHOLD = 0.25;
+const MODEL = 'claude-sonnet-4-20250514';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +65,38 @@ interface ManifestPair {
   textPath: string;
 }
 
+interface QuestionDef {
+  fieldName: string;
+  displayName: string;
+  weight: number;
+  question: string;
+  scale: { min: number; max: number };
+  anchors: Record<string, string>;
+  reasoningPrompt: string;
+}
+
+interface InfringementTemplate {
+  id: string;
+  name: string;
+  version: number;
+  scoringGuidance: string[];
+  questions: QuestionDef[];
+  terminologyMappings?: Array<{ patentTerm: string; productTerms: string[] }>;
+  necessaryImplicationGuidance?: string;
+  inheritanceChain: string[];
+}
+
+interface ComponentScore {
+  score: number;         // 1-5 raw
+  normalized: number;    // 0.0-1.0
+  reasoning: string;
+}
+
+interface PassResult {
+  compositeScore: number;
+  components: Record<string, ComponentScore>;
+}
+
 interface ControlResult {
   patentId: string;
   companySlug: string;
@@ -56,16 +104,15 @@ interface ControlResult {
   docSlug: string;
   documentName: string;
   patlyticsScore: number;
-  pass1Score: number;
-  pass1Rationale: string;
-  pass2RawScore: number | null;
-  finalScore: number | null;
-  narrative: string | null;
-  strongestClaim: number | null;
-  keyGaps: string[] | null;
+  superSector: string | null;
+  templateVersion: number;
+  pass1: PassResult;
+  pass2: PassResult | null;
+  finalScore: number;
   textLength: number;
   model: string;
   scoredAt: string;
+  llmIoPath: string;
 }
 
 interface Config {
@@ -73,28 +120,171 @@ interface Config {
   pass1Only: boolean;
   dryRun: boolean;
   force: boolean;
+  skipQuarantined: boolean;
 }
 
 function parseArgs(): Config {
   const args = process.argv.slice(2);
+  const includeQuarantined = args.includes('--include-quarantined');
   return {
     concurrency: (() => { const i = args.indexOf('--concurrency'); return i >= 0 ? parseInt(args[i + 1], 10) : 5; })(),
     pass1Only: args.includes('--pass1-only'),
     dryRun: args.includes('--dry-run'),
     force: args.includes('--force'),
+    skipQuarantined: !includeQuarantined, // default on unless --include-quarantined
   };
+}
+
+// ── Quarantine Loading ───────────────────────────────────────────────────
+
+interface QuarantineInfo {
+  quarantinedPaths: Set<string>;
+  reasonByPath: Map<string, string>;
+}
+
+function loadQuarantineResults(): QuarantineInfo | null {
+  if (!fs.existsSync(QUARANTINE_RESULTS_PATH)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(QUARANTINE_RESULTS_PATH, 'utf-8'));
+    const quarantinedPaths = new Set<string>();
+    const reasonByPath = new Map<string, string>();
+    for (const r of data.results) {
+      if (r.quarantined) {
+        quarantinedPaths.add(r.textPath);
+        reasonByPath.set(r.textPath, r.reason);
+      }
+    }
+    return { quarantinedPaths, reasonByPath };
+  } catch {
+    return null;
+  }
 }
 
 function ensureDir(d: string) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }
 
+// ── Template Loading ──────────────────────────────────────────────────────
+
+function loadDefaultTemplate(): any {
+  return JSON.parse(fs.readFileSync(path.join(TEMPLATES_DIR, 'default.json'), 'utf-8'));
+}
+
+function loadSuperSectorTemplate(superSectorKey: string): any | null {
+  const dir = path.join(TEMPLATES_DIR, 'super-sectors');
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  for (const file of files) {
+    const t = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
+    if (t.superSectorKey === superSectorKey) return t;
+  }
+  return null;
+}
+
+function resolveTemplate(superSectorKey: string | null): InfringementTemplate {
+  const base = loadDefaultTemplate();
+  const questions: QuestionDef[] = [...base.questions];
+  const scoringGuidance: string[] = [...(base.scoringGuidance || [])];
+  const inheritanceChain: string[] = [base.id];
+  let terminologyMappings = undefined;
+  let necessaryImplicationGuidance = undefined;
+
+  if (superSectorKey) {
+    const ssTemplate = loadSuperSectorTemplate(superSectorKey);
+    if (ssTemplate) {
+      inheritanceChain.push(ssTemplate.id);
+      scoringGuidance.push(...(ssTemplate.scoringGuidance || []));
+      terminologyMappings = ssTemplate.terminologyMappings;
+      necessaryImplicationGuidance = ssTemplate.necessaryImplicationGuidance;
+
+      // Apply question overrides (weight changes, reasoning prompt changes)
+      if (ssTemplate.questionOverrides) {
+        for (const override of ssTemplate.questionOverrides) {
+          const idx = questions.findIndex(q => q.fieldName === override.fieldName);
+          if (idx >= 0) {
+            if (override.weight !== undefined) questions[idx] = { ...questions[idx], weight: override.weight };
+            if (override.reasoningPrompt) questions[idx] = { ...questions[idx], reasoningPrompt: override.reasoningPrompt };
+          }
+        }
+      }
+    }
+  }
+
+  // Normalize weights to sum to 1.0
+  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+  if (totalWeight > 0 && Math.abs(totalWeight - 1.0) > 0.01) {
+    for (const q of questions) {
+      q.weight = Math.round((q.weight / totalWeight) * 1000) / 1000;
+    }
+  }
+
+  return {
+    id: inheritanceChain[inheritanceChain.length - 1],
+    name: base.name,
+    version: base.version,
+    scoringGuidance,
+    questions,
+    terminologyMappings,
+    necessaryImplicationGuidance,
+    inheritanceChain,
+  };
+}
+
+// ── Super-Sector Resolution ────────────────────────────────────────────────
+
+let _superSectorConfig: any = null;
+function getSuperSectorConfig(): any {
+  if (!_superSectorConfig) {
+    _superSectorConfig = JSON.parse(fs.readFileSync(SUPER_SECTORS_CONFIG, 'utf-8'));
+  }
+  return _superSectorConfig;
+}
+
+/** Map CPC class/subclass to super-sector using heuristic + config */
+function resolveSuperSector(patentId: string): string | null {
+  try {
+    const patentPath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
+    if (!fs.existsSync(patentPath)) return null;
+    const patent = JSON.parse(fs.readFileSync(patentPath, 'utf-8'));
+    const cpcs: string[] = (patent.cpc_current || []).map((c: any) => c.cpc_group_id || c.cpc_subclass_id || '');
+
+    // Simple CPC subclass → super-sector heuristic
+    const subclasses = new Set(cpcs.map(c => c.substring(0, 4)));
+    if (subclasses.has('H04L')) {
+      // Could be SDN or security — check for security-specific groups
+      const securityGroups = cpcs.some(c => c.startsWith('H04L9/') || c.startsWith('H04L63/'));
+      return securityGroups ? 'SECURITY' : 'SDN_NETWORK';
+    }
+    if (subclasses.has('H04W')) return 'WIRELESS';
+    if (subclasses.has('H04N')) return 'VIDEO_STREAMING';
+    if (subclasses.has('H01L') || subclasses.has('H01S')) return 'SEMICONDUCTOR';
+    if (subclasses.has('G06F') || subclasses.has('G06Q')) return 'COMPUTING';
+    if (subclasses.has('G06K') || subclasses.has('G06V') || subclasses.has('G06T')) return 'IMAGING';
+    if (subclasses.has('H04B')) return 'WIRELESS';
+    if (subclasses.has('G10L') || subclasses.has('H04R')) return 'AUDIO';
+    if (subclasses.has('G11C') || subclasses.has('G11B')) return 'COMPUTING';
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ── LLM ────────────────────────────────────────────────────────────────────
 
-async function callLLM(prompt: string, maxTokens: number = 4096): Promise<string> {
+interface LLMCallResult {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+}
+
+async function callLLM(prompt: string, maxTokens: number = 4096): Promise<LLMCallResult> {
+  const start = Date.now();
   let response: Anthropic.Messages.Message | undefined;
+
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: MODEL,
         max_tokens: maxTokens,
         temperature: 0,
         messages: [{ role: 'user', content: prompt }],
@@ -110,22 +300,59 @@ async function callLLM(prompt: string, maxTokens: number = 4096): Promise<string
     }
   }
   if (!response) throw new Error('No response');
-  return response.content.filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text').map(b => b.text).join('');
+
+  const text = response.content
+    .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+
+  return {
+    text,
+    inputTokens: response.usage?.input_tokens || 0,
+    outputTokens: response.usage?.output_tokens || 0,
+    durationMs: Date.now() - start,
+  };
 }
 
 function parseJSON(text: string): any {
-  // Try direct parse first
   try { return JSON.parse(text); } catch {}
-  // Try markdown fenced JSON
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) try { return JSON.parse(fenced[1]); } catch {}
-  // Try to find JSON object in text (model sometimes adds reasoning before JSON)
   const jsonStart = text.indexOf('{');
   const jsonEnd = text.lastIndexOf('}');
   if (jsonStart >= 0 && jsonEnd > jsonStart) {
     try { return JSON.parse(text.substring(jsonStart, jsonEnd + 1)); } catch {}
   }
   throw new Error(`JSON parse failed: ${text.substring(0, 200)}`);
+}
+
+// ── LLM I/O Capture ────────────────────────────────────────────────────────
+
+function saveLLMIO(
+  companySlug: string,
+  productSlug: string,
+  patentId: string,
+  passName: string,
+  prompt: string,
+  result: LLMCallResult,
+  parsed: any,
+): void {
+  const dir = path.join(LLM_IO_DIR, companySlug, productSlug, patentId);
+  ensureDir(dir);
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+
+  // Save prompt as readable text
+  fs.writeFileSync(path.join(dir, `${ts}-${passName}-prompt.txt`), prompt);
+
+  // Save response as structured JSON
+  fs.writeFileSync(path.join(dir, `${ts}-${passName}-response.json`), JSON.stringify({
+    rawText: result.text,
+    parsed,
+    model: MODEL,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    durationMs: result.durationMs,
+  }, null, 2));
 }
 
 // ── Patent Loading ─────────────────────────────────────────────────────────
@@ -149,71 +376,115 @@ function formatClaims(claims: PatentClaim[], max: number = 5): string {
   return claims.slice(0, max).map(c => `Claim ${c.number}: ${c.text}`).join('\n\n');
 }
 
-// ── Prompts ────────────────────────────────────────────────────────────────
+// ── Prompt Construction ────────────────────────────────────────────────────
 
-const PASS1_PROMPT = `You are a patent infringement screening analyst assessing whether a product's described capabilities align with patent claims.
+function buildInfringementPrompt(
+  template: InfringementTemplate,
+  claimsText: string,
+  patentAbstract: string | null,
+  docText: string,
+  passName: string,
+): string {
+  const parts: string[] = [];
 
-CRITICAL CONTEXT: Patent claims use abstract, functional language (e.g., "network operating system," "flow entries," "managed switching elements"). Product documentation uses concrete implementation language (e.g., "cloud management console," "routing policies," "network devices"). Your job is to see through terminology differences and assess FUNCTIONAL alignment.
+  // System instruction
+  parts.push(`You are a patent infringement analyst. Assess whether a product's capabilities align with patent claims by scoring ${template.questions.length} specific dimensions.`);
 
-A product that manages network state via policies IS functionally equivalent to one that uses "flow tables," even if the term "flow table" never appears. A cloud service that centralizes network control IS a form of "network operating system." Focus on WHAT the system does, not what it's CALLED.
+  // Scoring guidance
+  if (template.scoringGuidance.length > 0) {
+    parts.push('\n## Scoring Guidelines\n');
+    parts.push(template.scoringGuidance.map(g => `- ${g}`).join('\n'));
+  }
 
-Scoring guidelines — use the FULL range:
-- 0.80-1.0: The product clearly implements the core method/system described in the claims. Most claim functions are present even if described differently.
-- 0.60-0.79: Strong functional overlap. The product operates in the same technology domain and implements most of the claimed functions, though some specifics differ or aren't fully documented.
-- 0.40-0.59: Moderate overlap. The product shares the technology domain and implements some claimed functions, but significant architectural differences or gaps exist.
-- 0.20-0.39: Weak overlap. Tangential technology area, few functional parallels.
-- 0.00-0.19: No meaningful functional overlap.
-
-Respond as JSON (no markdown fencing):
-{
-  "score": 0.XX,
-  "rationale": "2-3 sentence explanation of functional alignment and key gaps"
-}`;
-
-const PASS2_PROMPT = `You are a patent infringement analyst. Determine whether the product described in this documentation practices the claimed invention.
-
-CRITICAL CONTEXT ON TERMINOLOGY:
-Patent claims use formal, abstract language. Product documentation uses practical, implementation-specific language. These describe the SAME things differently:
-- Patent: "network operating system" → Product: "management platform," "control plane," "orchestrator"
-- Patent: "flow entries/flow tables" → Product: "routing rules," "forwarding policies," "ACLs," "route tables"
-- Patent: "managed switching elements" → Product: "switches," "routers," "network devices," "nodes"
-- Patent: "logical datapath set" → Product: "virtual network," "VRF," "tenant network," "overlay"
-This applies across ALL technology domains, not just networking.
-
-ANALYSIS STEPS:
-1. First, identify what the patent claims are fundamentally about (the core method/system).
-2. Then assess: Does this product implement that core method/system?
-3. For each claim element, determine disclosure:
-   - DISCLOSED: The document describes this function/component (even with different terminology)
-   - PARTIALLY: The product would necessarily include this as part of its described architecture, OR a functional equivalent exists
-   - NOT_DISCLOSED: No evidence and no reasonable inference possible
-
-SCORING — HOW TO WEIGHT ELEMENTS:
-- DISCLOSED elements count fully toward the score
-- PARTIALLY elements count at 60-80% (they represent real functional alignment)
-- NOT_DISCLOSED elements count at 0%
-- If most elements are PARTIALLY with a few DISCLOSED: score should be 0.60-0.80
-- If most elements are PARTIALLY with some NOT_DISCLOSED: score should be 0.40-0.65
-- Only score below 0.20 if the product has NO functional relationship to the patent
-
-AFTER element analysis, step back and assess: "Would someone skilled in the art, reading this product documentation, recognize that this product likely practices the claimed invention?" If yes, your score should be at least 0.60 even if specific implementation details aren't documented.
-
-Respond as JSON (no markdown fencing):
-{
-  "score": 0.XX,
-  "claimAnalysis": [
-    {
-      "claimNumber": 1,
-      "elements": [
-        { "element": "...", "status": "DISCLOSED|PARTIALLY|NOT_DISCLOSED", "evidence": "..." }
-      ],
-      "claimScore": 0.XX
+  // Terminology mappings
+  if (template.terminologyMappings && template.terminologyMappings.length > 0) {
+    parts.push('\n## Terminology Mappings (Patent → Product)\n');
+    parts.push('Patent claims use formal language. Product docs use implementation language. Use these mappings:');
+    for (const m of template.terminologyMappings) {
+      parts.push(`- "${m.patentTerm}" = ${m.productTerms.map(t => `"${t}"`).join(', ')}`);
     }
-  ],
-  "narrative": "2-4 sentence summary of functional alignment between the product and patent claims.",
-  "strongestClaim": 1,
-  "keyGaps": ["List of claim elements with NO functional equivalent in the documentation"]
-}`;
+  }
+
+  // Necessary implication guidance
+  if (template.necessaryImplicationGuidance) {
+    parts.push('\n## Necessary Implication Guidance\n');
+    parts.push(template.necessaryImplicationGuidance);
+  }
+
+  // Patent info
+  parts.push('\n## Patent Claims\n');
+  parts.push(claimsText);
+  if (patentAbstract) {
+    parts.push(`\nPatent Abstract: ${patentAbstract}`);
+  }
+
+  // Product documentation
+  parts.push(`\n## Product Documentation${passName === 'pass1' ? ' (first 15K chars)' : ''}\n`);
+  parts.push(docText);
+
+  // Questions
+  parts.push('\n## Scoring Questions\n');
+  parts.push('For each question below, provide a score (1-5) and 2-3 sentences of reasoning.\n');
+
+  for (let i = 0; i < template.questions.length; i++) {
+    const q = template.questions[i];
+    parts.push(`### ${i + 1}. ${q.displayName} (fieldName: "${q.fieldName}", weight: ${q.weight})`);
+    parts.push(`Question: ${q.question}`);
+    parts.push('Anchors:');
+    for (const [score, desc] of Object.entries(q.anchors)) {
+      parts.push(`  ${score} = ${desc}`);
+    }
+    parts.push(`Reasoning guidance: ${q.reasoningPrompt}`);
+    parts.push('');
+  }
+
+  // Response format
+  parts.push('## Response Format\n');
+  parts.push('Respond as JSON (no markdown fencing):');
+  parts.push('{');
+  const fieldExamples = template.questions.map(q =>
+    `  "${q.fieldName}": { "score": <1-5>, "reasoning": "<2-3 sentences>" }`
+  );
+  parts.push(fieldExamples.join(',\n'));
+  parts.push('}');
+
+  return parts.join('\n');
+}
+
+// ── Score Computation ──────────────────────────────────────────────────────
+
+function computePassResult(
+  parsed: Record<string, { score: number; reasoning: string }>,
+  questions: QuestionDef[],
+): PassResult {
+  const components: Record<string, ComponentScore> = {};
+  let weightedSum = 0;
+  let totalWeight = 0;
+
+  for (const q of questions) {
+    const raw = parsed[q.fieldName];
+    if (!raw || typeof raw.score !== 'number') {
+      components[q.fieldName] = { score: 0, normalized: 0, reasoning: 'Not scored by LLM' };
+      continue;
+    }
+
+    const score = Math.max(1, Math.min(5, Math.round(raw.score)));
+    const normalized = (score - 1) / 4; // 1→0.00, 2→0.25, 3→0.50, 4→0.75, 5→1.00
+    components[q.fieldName] = {
+      score,
+      normalized,
+      reasoning: raw.reasoning || '',
+    };
+    weightedSum += normalized * q.weight;
+    totalWeight += q.weight;
+  }
+
+  const compositeScore = totalWeight > 0
+    ? Math.round((weightedSum / totalWeight) * 1000) / 1000
+    : 0;
+
+  return { compositeScore, components };
+}
 
 // ── Scoring ────────────────────────────────────────────────────────────────
 
@@ -229,13 +500,20 @@ async function scorePair(pair: ManifestPair, config: Config): Promise<ControlRes
   const claimsText = formatClaims(claims, 5);
   const abstract = loadPatentAbstract(pair.patentId);
   const docText = fs.readFileSync(textPath, 'utf-8');
-  const abstractPart = abstract ? `\nPatent Abstract: ${abstract}\n` : '';
 
-  // Pass 1
-  const p1Prompt = `${PASS1_PROMPT}\n\n--- PATENT CLAIMS ---\n${claimsText}\n${abstractPart}\n--- PRODUCT DOCUMENTATION (first 15K chars) ---\n${docText.substring(0, 15000)}\n--- END ---`;
-  const p1Response = parseJSON(await callLLM(p1Prompt, 1024));
-  const pass1Score = typeof p1Response.score === 'number' ? p1Response.score : 0;
-  const pass1Rationale = p1Response.rationale || '';
+  // Resolve super-sector and template
+  const superSector = resolveSuperSector(pair.patentId);
+  const template = resolveTemplate(superSector);
+
+  // ── Pass 1: 10 questions against first 15K chars ──
+  const p1DocText = docText.substring(0, PASS1_DOC_CHARS);
+  const p1Prompt = buildInfringementPrompt(template, claimsText, abstract, p1DocText, 'pass1');
+  const p1Response = await callLLM(p1Prompt, 4096);
+  const p1Parsed = parseJSON(p1Response.text);
+  const pass1 = computePassResult(p1Parsed, template.questions);
+
+  // Save LLM I/O
+  saveLLMIO(pair.companySlug, pair.productSlug, pair.patentId, 'pass1', p1Prompt, p1Response, p1Parsed);
 
   const result: ControlResult = {
     patentId: pair.patentId,
@@ -244,33 +522,33 @@ async function scorePair(pair: ManifestPair, config: Config): Promise<ControlRes
     docSlug: pair.docSlug,
     documentName: pair.documentName,
     patlyticsScore: pair.patlyticsScore,
-    pass1Score,
-    pass1Rationale,
-    pass2RawScore: null,
-    finalScore: null,
-    narrative: null,
-    strongestClaim: null,
-    keyGaps: null,
+    superSector,
+    templateVersion: template.version,
+    pass1,
+    pass2: null,
+    finalScore: pass1.compositeScore,
     textLength: docText.length,
-    model: 'claude-sonnet-4-20250514',
+    model: MODEL,
     scoredAt: new Date().toISOString(),
+    llmIoPath: path.join(LLM_IO_DIR, pair.companySlug, pair.productSlug, pair.patentId),
   };
 
-  // Pass 2 if above threshold or if Patlytics scored it high (always do Pass 2 for control group)
+  // ── Pass 2: full doc if pass1 >= threshold (always run for control group) ──
   if (!config.pass1Only) {
     const truncDoc = docText.length > MAX_DOC_TEXT_LENGTH
       ? docText.substring(0, MAX_DOC_TEXT_LENGTH) + '\n\n[... truncated ...]'
       : docText;
-    const p2Prompt = `${PASS2_PROMPT}\n\n--- PATENT CLAIMS ---\n${formatClaims(claims, 10)}\n${abstractPart}\n--- PRODUCT DOCUMENTATION ---\n${truncDoc}\n--- END ---`;
-    const p2Response = parseJSON(await callLLM(p2Prompt, 8192));
-    const p2Score = typeof p2Response.score === 'number' ? p2Response.score : pass1Score;
-    result.pass2RawScore = p2Score;
-    // Use max of Pass 1 and Pass 2 — Pass 2 adds detail but shouldn't penalize
-    // when it over-focuses on literal claim element matching
-    result.finalScore = Math.max(pass1Score, p2Score);
-    result.narrative = p2Response.narrative || '';
-    result.strongestClaim = p2Response.strongestClaim || null;
-    result.keyGaps = p2Response.keyGaps || [];
+    const allClaimsText = formatClaims(claims, 10);
+    const p2Prompt = buildInfringementPrompt(template, allClaimsText, abstract, truncDoc, 'pass2');
+    const p2Response = await callLLM(p2Prompt, 8192);
+    const p2Parsed = parseJSON(p2Response.text);
+    const pass2 = computePassResult(p2Parsed, template.questions);
+
+    saveLLMIO(pair.companySlug, pair.productSlug, pair.patentId, 'pass2', p2Prompt, p2Response, p2Parsed);
+
+    result.pass2 = pass2;
+    // Blend: 0.3 × pass1 + 0.7 × pass2
+    result.finalScore = Math.round((pass1.compositeScore * 0.3 + pass2.compositeScore * 0.7) * 1000) / 1000;
   }
 
   return result;
@@ -289,49 +567,182 @@ function pearson(xs: number[], ys: number[]): number {
   return d === 0 ? 0 : num / d;
 }
 
-function printAnalysis(results: ControlResult[]) {
+function spearman(xs: number[], ys: number[]): number {
+  const n = xs.length;
+  if (n < 3) return 0;
+  const rank = (arr: number[]) => {
+    const sorted = [...arr].map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
+    const ranks = new Array(n);
+    for (let i = 0; i < n; i++) ranks[sorted[i].i] = i + 1;
+    return ranks;
+  };
+  return pearson(rank(xs), rank(ys));
+}
+
+function printMetricBlock(label: string, results: ControlResult[]) {
   const ps = results.map(r => r.patlyticsScore);
-  const p1s = results.map(r => r.pass1Score);
-  const finals = results.map(r => r.finalScore ?? r.pass1Score);
+  const p1s = results.map(r => r.pass1.compositeScore);
+  const finals = results.map(r => r.finalScore);
 
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`SAME-DOCUMENT CALIBRATION (N=${results.length})`);
-  console.log(`${'='.repeat(60)}`);
-
-  console.log(`\nPatlytics mean: ${(ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(3)}`);
+  console.log(`\n--- ${label} (N=${results.length}) ---`);
+  console.log(`Patlytics mean: ${(ps.reduce((a, b) => a + b, 0) / ps.length).toFixed(3)}`);
   console.log(`Pass 1 mean:    ${(p1s.reduce((a, b) => a + b, 0) / p1s.length).toFixed(3)}`);
   console.log(`Final mean:     ${(finals.reduce((a, b) => a + b, 0) / finals.length).toFixed(3)}`);
 
   const rP1 = pearson(ps, p1s);
   const rFinal = pearson(ps, finals);
+  const sP1 = spearman(ps, p1s);
+  const sFinal = spearman(ps, finals);
   const maeP1 = p1s.reduce((s, v, i) => s + Math.abs(v - ps[i]), 0) / ps.length;
   const maeFinal = finals.reduce((s, v, i) => s + Math.abs(v - ps[i]), 0) / ps.length;
   const biasP1 = p1s.reduce((s, v, i) => s + (v - ps[i]), 0) / ps.length;
   const biasFinal = finals.reduce((s, v, i) => s + (v - ps[i]), 0) / ps.length;
 
   console.log(`\n${'Metric'.padEnd(25)} ${'Pass 1'.padStart(10)} ${'Final'.padStart(10)}`);
-  console.log(`${'─'.repeat(45)}`);
+  console.log(`${'─'.repeat(48)}`);
   console.log(`${'Pearson r'.padEnd(25)} ${rP1.toFixed(4).padStart(10)} ${rFinal.toFixed(4).padStart(10)}`);
+  console.log(`${'Spearman ρ'.padEnd(25)} ${sP1.toFixed(4).padStart(10)} ${sFinal.toFixed(4).padStart(10)}`);
   console.log(`${'MAE'.padEnd(25)} ${maeP1.toFixed(4).padStart(10)} ${maeFinal.toFixed(4).padStart(10)}`);
-  console.log(`${'Bias (internal-patlytics)'.padEnd(25)} ${(biasP1 >= 0 ? '+' : '') + biasP1.toFixed(4)} ${(biasFinal >= 0 ? '+' : '') + biasFinal.toFixed(4)}`);
+  console.log(`${'Bias'.padEnd(25)} ${(biasP1 >= 0 ? '+' : '') + biasP1.toFixed(4)} ${(biasFinal >= 0 ? '+' : '') + biasFinal.toFixed(4)}`);
 
-  // Count how often max(P1,P2) lifted the score vs just using P2
-  const withP2 = results.filter(r => r.pass2RawScore !== null && r.pass2RawScore !== undefined);
-  if (withP2.length > 0) {
-    const lifted = withP2.filter(r => r.pass1Score > r.pass2RawScore!);
-    console.log(`\nPass 2 overcorrection: ${lifted.length}/${withP2.length} (${((lifted.length/withP2.length)*100).toFixed(0)}%) pairs where Pass 1 > Pass 2 raw`);
-    console.log(`  (max(P1,P2) strategy lifted these to use Pass 1 score instead)`);
+  const uniqueScores = new Set(finals.map(f => f.toFixed(3)));
+  console.log(`\nUnique final scores: ${uniqueScores.size} (target: ≥10 for good discrimination)`);
+
+  const within25 = finals.filter((f, i) => Math.abs(f - ps[i]) <= 0.25).length;
+  const within15 = finals.filter((f, i) => Math.abs(f - ps[i]) <= 0.15).length;
+  console.log(`Within 0.25 of Patlytics: ${within25}/${results.length} (${((within25 / results.length) * 100).toFixed(0)}%)`);
+  console.log(`Within 0.15 of Patlytics: ${within15}/${results.length} (${((within15 / results.length) * 100).toFixed(0)}%)`);
+}
+
+function printAnalysis(results: ControlResult[], quarantine?: QuarantineInfo | null) {
+  console.log(`\n${'='.repeat(70)}`);
+  console.log(`V3 COMPONENT-BASED CALIBRATION`);
+  console.log(`${'='.repeat(70)}`);
+
+  // If quarantine data is available, show both full and clean sets
+  if (quarantine && quarantine.quarantinedPaths.size > 0) {
+    const cleanResults = results.filter(r => {
+      // Match by textPath from the control result
+      const textPath = path.join(
+        CONTROL_DIR, 'texts', r.companySlug, r.productSlug, `${r.docSlug}.txt`
+      );
+      return !quarantine.quarantinedPaths.has(textPath);
+    });
+    const quarantinedResults = results.filter(r => {
+      const textPath = path.join(
+        CONTROL_DIR, 'texts', r.companySlug, r.productSlug, `${r.docSlug}.txt`
+      );
+      return quarantine.quarantinedPaths.has(textPath);
+    });
+
+    printMetricBlock('Full Set (all scored pairs)', results);
+
+    if (cleanResults.length > 0 && cleanResults.length < results.length) {
+      printMetricBlock('Clean Set (quarantined excluded)', cleanResults);
+
+      console.log(`\n  Quarantined pairs excluded from clean set: ${quarantinedResults.length}`);
+      const reasonCounts = new Map<string, number>();
+      for (const r of quarantinedResults) {
+        const textPath = path.join(
+          CONTROL_DIR, 'texts', r.companySlug, r.productSlug, `${r.docSlug}.txt`
+        );
+        const reason = quarantine.reasonByPath.get(textPath) || 'unknown';
+        reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1);
+      }
+      for (const [reason, count] of [...reasonCounts.entries()].sort((a, b) => b[1] - a[1])) {
+        console.log(`    ${reason}: ${count}`);
+      }
+    }
+  } else {
+    printMetricBlock('All Pairs', results);
   }
 
-  // Detail table
-  console.log(`\n${'Patent'.padEnd(10)} ${'Company'.padEnd(22)} ${'Patlytics'.padStart(9)} ${'Pass1'.padStart(7)} ${'P2raw'.padStart(7)} ${'Final'.padStart(7)} ${'Δ'.padStart(6)} ${'TextKB'.padStart(7)}`);
-  console.log('─'.repeat(78));
-  const sorted = [...results].sort((a, b) => Math.abs(b.patlyticsScore - (b.finalScore ?? b.pass1Score)) - Math.abs(a.patlyticsScore - (a.finalScore ?? a.pass1Score)));
+  const ps = results.map(r => r.patlyticsScore);
+
+  // ── Per-Component Correlation Analysis ──
+  console.log(`\n${'='.repeat(70)}`);
+  console.log('PER-COMPONENT CORRELATION ANALYSIS');
+  console.log(`${'='.repeat(70)}`);
+
+  // Get all component field names from the first result
+  const fieldNames = Object.keys(results[0].pass1.components);
+  const passToUse = results[0].pass2 ? 'pass2' : 'pass1';
+
+  console.log(`\n${'Component'.padEnd(30)} ${'Weight'.padStart(6)} ${'r'.padStart(8)} ${'Mean'.padStart(6)} ${'StdDev'.padStart(8)} ${'1s'.padStart(4)} ${'2s'.padStart(4)} ${'3s'.padStart(4)} ${'4s'.padStart(4)} ${'5s'.padStart(4)}`);
+  console.log('─'.repeat(90));
+
+  for (const fieldName of fieldNames) {
+    const scores = results.map(r => {
+      const pass = passToUse === 'pass2' && r.pass2 ? r.pass2 : r.pass1;
+      return pass.components[fieldName]?.score || 0;
+    });
+
+    // Correlation of this component vs Patlytics
+    const r = pearson(ps, scores);
+
+    // Distribution
+    const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const variance = scores.reduce((a, b) => a + (b - mean) ** 2, 0) / scores.length;
+    const stdDev = Math.sqrt(variance);
+    const dist = [0, 0, 0, 0, 0];
+    for (const s of scores) {
+      if (s >= 1 && s <= 5) dist[s - 1]++;
+    }
+
+    // Look up weight
+    const template = resolveTemplate(null);
+    const q = template.questions.find(q => q.fieldName === fieldName);
+    const weight = q ? q.weight : 0;
+
+    console.log(
+      `${fieldName.padEnd(30)} ${weight.toFixed(2).padStart(6)} ${r.toFixed(4).padStart(8)} ${mean.toFixed(2).padStart(6)} ${stdDev.toFixed(2).padStart(8)} ${String(dist[0]).padStart(4)} ${String(dist[1]).padStart(4)} ${String(dist[2]).padStart(4)} ${String(dist[3]).padStart(4)} ${String(dist[4]).padStart(4)}`
+    );
+  }
+
+  // ── Detail Table ──
+  console.log(`\n${'='.repeat(70)}`);
+  console.log('PAIR DETAILS (sorted by |Δ|)');
+  console.log(`${'='.repeat(70)}`);
+
+  console.log(`\n${'Patent'.padEnd(10)} ${'Company'.padEnd(22)} ${'SS'.padEnd(8)} ${'Patlytics'.padStart(9)} ${'Pass1'.padStart(7)} ${'Pass2'.padStart(7)} ${'Final'.padStart(7)} ${'Δ'.padStart(6)} ${'TextKB'.padStart(7)} ${'Q'.padStart(3)}`);
+  console.log('─'.repeat(93));
+  const sorted = [...results].sort((a, b) =>
+    Math.abs(b.patlyticsScore - b.finalScore) - Math.abs(a.patlyticsScore - a.finalScore)
+  );
   for (const r of sorted) {
-    const final = r.finalScore ?? r.pass1Score;
-    const delta = final - r.patlyticsScore;
-    const p2raw = r.pass2RawScore !== null && r.pass2RawScore !== undefined ? r.pass2RawScore.toFixed(2) : 'n/a';
-    console.log(`${r.patentId.padEnd(10)} ${r.companySlug.substring(0, 21).padEnd(22)} ${r.patlyticsScore.toFixed(2).padStart(9)} ${r.pass1Score.toFixed(2).padStart(7)} ${p2raw.padStart(7)} ${(r.finalScore !== null ? r.finalScore.toFixed(2) : 'n/a').padStart(7)} ${(delta >= 0 ? '+' : '') + delta.toFixed(2)} ${(r.textLength / 1024).toFixed(0).padStart(6)}K`);
+    const delta = r.finalScore - r.patlyticsScore;
+    const p2 = r.pass2 ? r.pass2.compositeScore.toFixed(2) : 'n/a';
+    const ss = (r.superSector || '?').substring(0, 7);
+    const textPath = path.join(
+      CONTROL_DIR, 'texts', r.companySlug, r.productSlug, `${r.docSlug}.txt`
+    );
+    const isQ = quarantine?.quarantinedPaths.has(textPath) ? '!' : '';
+    console.log(
+      `${r.patentId.padEnd(10)} ${r.companySlug.substring(0, 21).padEnd(22)} ${ss.padEnd(8)} ${r.patlyticsScore.toFixed(2).padStart(9)} ${r.pass1.compositeScore.toFixed(2).padStart(7)} ${p2.padStart(7)} ${r.finalScore.toFixed(2).padStart(7)} ${(delta >= 0 ? '+' : '') + delta.toFixed(2)} ${(r.textLength / 1024).toFixed(0).padStart(6)}K ${isQ.padStart(3)}`
+    );
+  }
+
+  // ── Worst Misses ──
+  console.log(`\n${'='.repeat(70)}`);
+  console.log('TOP 10 WORST MISSES (for calibration iteration)');
+  console.log(`${'='.repeat(70)}`);
+  const worst = sorted.slice(0, 10);
+  for (const r of worst) {
+    const delta = r.finalScore - r.patlyticsScore;
+    const pass = r.pass2 || r.pass1;
+    const textPath = path.join(
+      CONTROL_DIR, 'texts', r.companySlug, r.productSlug, `${r.docSlug}.txt`
+    );
+    const qTag = quarantine?.quarantinedPaths.has(textPath)
+      ? ` [QUARANTINED: ${quarantine.reasonByPath.get(textPath)}]` : '';
+    console.log(`\n  ${r.patentId} × ${r.companySlug} (Δ=${(delta >= 0 ? '+' : '') + delta.toFixed(2)})${qTag}`);
+    console.log(`    Patlytics=${r.patlyticsScore.toFixed(2)} Final=${r.finalScore.toFixed(2)} SS=${r.superSector || '?'}`);
+    // Show component scores for worst misses
+    const components = Object.entries(pass.components)
+      .sort((a, b) => b[1].score - a[1].score);
+    for (const [name, comp] of components) {
+      console.log(`    ${name.padEnd(35)} ${comp.score}/5 (${comp.normalized.toFixed(2)})`);
+    }
   }
 }
 
@@ -352,16 +763,58 @@ async function main() {
   // Filter to pairs with extracted text
   pairs = pairs.filter(p => fs.existsSync(p.textPath) && fs.statSync(p.textPath).size >= MIN_TEXT_BYTES);
 
-  console.log(`=== Control Group Scoring ===`);
+  // Load quarantine data
+  const quarantine = loadQuarantineResults();
+  let quarantineExcluded = 0;
+  const quarantineReasonCounts = new Map<string, number>();
+
+  if (config.skipQuarantined && quarantine) {
+    const before = pairs.length;
+    pairs = pairs.filter(p => {
+      if (quarantine.quarantinedPaths.has(p.textPath)) {
+        const reason = quarantine.reasonByPath.get(p.textPath) || 'unknown';
+        quarantineReasonCounts.set(reason, (quarantineReasonCounts.get(reason) || 0) + 1);
+        return false;
+      }
+      return true;
+    });
+    quarantineExcluded = before - pairs.length;
+  }
+
+  console.log(`=== V3 Control Group Scoring ===`);
   console.log(`Pairs with text: ${pairs.length}`);
+  if (quarantineExcluded > 0) {
+    console.log(`Excluded ${quarantineExcluded} quarantined pairs:`);
+    for (const [reason, count] of [...quarantineReasonCounts.entries()].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${reason}: ${count}`);
+    }
+  } else if (config.skipQuarantined && !quarantine) {
+    console.log(`Quarantine: no results.json found (run screen-doc-quality.ts first)`);
+  } else if (!config.skipQuarantined) {
+    console.log(`Quarantine: disabled (--include-quarantined)`);
+  }
   console.log(`Concurrency: ${config.concurrency}`);
+  console.log(`Template: ${TEMPLATES_DIR}/default.json`);
+  console.log(`LLM I/O: ${LLM_IO_DIR}/`);
   if (config.pass1Only) console.log('MODE: Pass 1 only');
   if (config.dryRun) console.log('MODE: DRY RUN');
 
   if (config.dryRun) {
+    // Show pairs with super-sector resolution
     for (const p of pairs) {
+      const ss = resolveSuperSector(p.patentId) || '?';
       const size = fs.statSync(p.textPath).size;
-      console.log(`  ${p.patentId} × ${p.companySlug}/${p.docSlug.substring(0, 30)}: P=${p.patlyticsScore.toFixed(2)} (${(size / 1024).toFixed(0)}K)`);
+      console.log(`  ${p.patentId} × ${p.companySlug}/${p.docSlug.substring(0, 30)}: P=${p.patlyticsScore.toFixed(2)} SS=${ss} (${(size / 1024).toFixed(0)}K)`);
+    }
+    // Super-sector distribution
+    const ssDist = new Map<string, number>();
+    for (const p of pairs) {
+      const ss = resolveSuperSector(p.patentId) || 'UNKNOWN';
+      ssDist.set(ss, (ssDist.get(ss) || 0) + 1);
+    }
+    console.log('\nSuper-sector distribution:');
+    for (const [ss, count] of [...ssDist.entries()].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${ss}: ${count} pairs`);
     }
     return;
   }
@@ -376,27 +829,29 @@ async function main() {
     if (before !== pairs.length) console.log(`Filtered to ${pairs.length} unscored (${before - pairs.length} cached)`);
   }
 
-  if (pairs.length === 0) { console.log('All pairs already scored.'); return; }
+  if (pairs.length === 0) {
+    console.log('All pairs already scored. Loading cached results for analysis...');
+  }
 
   ensureDir(RESULTS_DIR);
   const results: ControlResult[] = [];
   let completed = 0, failed = 0;
 
+  // Score uncached pairs
   for (let i = 0; i < pairs.length; i += config.concurrency) {
     const batch = pairs.slice(i, i + config.concurrency);
     console.log(`\n--- Batch ${Math.floor(i / config.concurrency) + 1}/${Math.ceil(pairs.length / config.concurrency)} ---`);
 
     const promises = batch.map(async (pair) => {
       try {
-        console.log(`  ${pair.patentId} × ${pair.companySlug}/${pair.docSlug.substring(0, 30)} (P=${pair.patlyticsScore.toFixed(2)})`);
+        const ss = resolveSuperSector(pair.patentId) || '?';
+        console.log(`  ${pair.patentId} × ${pair.companySlug}/${pair.docSlug.substring(0, 25)} (P=${pair.patlyticsScore.toFixed(2)} SS=${ss})`);
         const result = await scorePair(pair, config);
         if (!result) { console.log(`    Skipped`); return; }
 
-        const final = result.finalScore ?? result.pass1Score;
-        const delta = final - pair.patlyticsScore;
-        console.log(`    P1=${result.pass1Score.toFixed(2)} F=${result.finalScore !== null ? result.finalScore.toFixed(2) : 'n/a'} Δ=${(delta >= 0 ? '+' : '') + delta.toFixed(2)}`);
+        const delta = result.finalScore - pair.patlyticsScore;
+        console.log(`    P1=${result.pass1.compositeScore.toFixed(2)} F=${result.finalScore.toFixed(2)} Δ=${(delta >= 0 ? '+' : '') + delta.toFixed(2)}`);
 
-        // Cache result
         const rp = path.join(RESULTS_DIR, `${pair.companySlug}_${pair.docSlug}_${pair.patentId}.json`);
         fs.writeFileSync(rp, JSON.stringify(result, null, 2));
         results.push(result);
@@ -409,7 +864,7 @@ async function main() {
     await Promise.all(promises);
   }
 
-  // Load any previously cached results too
+  // Load all cached results (including from previous runs)
   if (fs.existsSync(RESULTS_DIR)) {
     for (const f of fs.readdirSync(RESULTS_DIR)) {
       if (!f.endsWith('.json')) continue;
@@ -420,8 +875,11 @@ async function main() {
     }
   }
 
-  console.log(`\nCompleted: ${completed}, Failed: ${failed}`);
-  printAnalysis(results);
+  console.log(`\nCompleted: ${completed}, Failed: ${failed}, Total results: ${results.length}`);
+
+  if (results.length > 0) {
+    printAnalysis(results, quarantine);
+  }
 }
 
 main().catch(err => { console.error('Fatal:', err); process.exit(1); });

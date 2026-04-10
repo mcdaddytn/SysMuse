@@ -1,0 +1,35 @@
+{
+  "id": "infringement-wireless",
+  "name": "Wireless & RF Infringement",
+  "description": "Infringement scoring overrides for Wireless & RF patents. Adds RF/protocol terminology and standards-based necessary implication guidance.",
+  "level": "super_sector",
+  "superSectorKey": "WIRELESS",
+  "inheritsFrom": "infringement-default",
+  "version": 1,
+  "scoringGuidance": [
+    "Wireless patents frequently cover 3GPP/IEEE 802.11 standard-essential features. If a product claims LTE/5G/Wi-Fi compliance, it necessarily implements mandatory standard features.",
+    "RF component patents (filters, amplifiers, antenna arrays) use physical-layer terminology that maps to specific hardware blocks in any wireless device.",
+    "MIMO and beamforming patents apply broadly — any modern wireless product with multiple antennas inherently practices some MIMO techniques.",
+    "Power management in wireless devices is standards-mandated. DRX, power control, and sleep modes are required by 3GPP specifications."
+  ],
+  "terminologyMappings": [
+    { "patentTerm": "user equipment", "productTerms": ["mobile device", "handset", "UE", "client device", "station", "STA"] },
+    { "patentTerm": "base station", "productTerms": ["eNodeB", "gNodeB", "access point", "cell tower", "radio unit", "RAN"] },
+    { "patentTerm": "resource blocks", "productTerms": ["subcarriers", "frequency resources", "PRBs", "RBs", "OFDM symbols"] },
+    { "patentTerm": "channel state information", "productTerms": ["CSI", "CQI", "channel feedback", "SINR report", "PMI"] },
+    { "patentTerm": "beam management", "productTerms": ["beamforming", "beam sweeping", "beam tracking", "spatial filtering"] },
+    { "patentTerm": "scheduling grant", "productTerms": ["DCI", "uplink grant", "resource allocation", "scheduling assignment"] },
+    { "patentTerm": "random access procedure", "productTerms": ["RACH", "preamble transmission", "contention resolution", "initial access"] },
+    { "patentTerm": "discontinuous reception", "productTerms": ["DRX", "sleep mode", "power saving", "wake-up signal"] },
+    { "patentTerm": "carrier aggregation", "productTerms": ["CA", "dual connectivity", "multi-band", "spectrum aggregation"] },
+    { "patentTerm": "handover", "productTerms": ["handoff", "cell reselection", "mobility management", "roaming"] }
+  ],
+  "necessaryImplicationGuidance": "Any LTE/5G device necessarily implements: (1) OFDMA resource allocation, (2) HARQ retransmission, (3) power control loops, (4) DRX for battery management, (5) random access procedures. Any Wi-Fi device necessarily implements: (1) CSMA/CA, (2) beacon processing, (3) association/authentication, (4) power save polling.",
+  "questionOverrides": [
+    {
+      "fieldName": "standards_alignment",
+      "weight": 0.08,
+      "reasoningPrompt": "Wireless patents are frequently standards-essential. Identify specific 3GPP/IEEE specs referenced and whether the product claims compliance with those specs."
+    }
+  ]
+}

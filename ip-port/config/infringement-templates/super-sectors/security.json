@@ -1,0 +1,29 @@
+{
+  "id": "infringement-security",
+  "name": "Security Infringement",
+  "description": "Infringement scoring overrides for Security patents. Covers network security, authentication, cryptography, and secure computing.",
+  "level": "super_sector",
+  "superSectorKey": "SECURITY",
+  "inheritsFrom": "infringement-default",
+  "version": 1,
+  "scoringGuidance": [
+    "Security patents often describe generic mechanisms (authentication, encryption, access control) that map to widely-deployed product features.",
+    "Products claiming compliance with security standards (FIPS, Common Criteria, SOC2) necessarily implement specific cryptographic and access control mechanisms.",
+    "Firewall and IDS/IPS patents use abstract terms like 'packet inspection' and 'policy enforcement' that map to concrete product features in every network security product.",
+    "Authentication patents may apply broadly — any product with login, SSO, or MFA inherently implements authentication flows described in many patents."
+  ],
+  "terminologyMappings": [
+    { "patentTerm": "authentication server", "productTerms": ["identity provider", "IdP", "RADIUS server", "auth service", "IAM"] },
+    { "patentTerm": "access control list", "productTerms": ["ACL", "security policy", "firewall rules", "permission rules", "RBAC policy"] },
+    { "patentTerm": "intrusion detection", "productTerms": ["IDS", "threat detection", "anomaly detection", "security monitoring", "SIEM"] },
+    { "patentTerm": "secure channel", "productTerms": ["TLS", "SSL", "encrypted tunnel", "VPN", "IPsec", "HTTPS"] },
+    { "patentTerm": "digital certificate", "productTerms": ["X.509 certificate", "SSL cert", "PKI certificate", "credential"] },
+    { "patentTerm": "cryptographic key", "productTerms": ["encryption key", "secret key", "session key", "API key", "token"] },
+    { "patentTerm": "packet inspection", "productTerms": ["DPI", "deep packet inspection", "traffic analysis", "payload inspection", "content filtering"] },
+    { "patentTerm": "security token", "productTerms": ["JWT", "OAuth token", "session token", "bearer token", "SAML assertion"] },
+    { "patentTerm": "secure boot", "productTerms": ["trusted boot", "measured boot", "boot integrity", "UEFI secure boot"] },
+    { "patentTerm": "sandbox", "productTerms": ["isolation", "container", "secure enclave", "TEE", "trusted execution environment"] }
+  ],
+  "necessaryImplicationGuidance": "Any enterprise security product necessarily implements: (1) authentication/authorization, (2) encrypted communications (TLS/IPsec), (3) logging/audit trails, (4) policy management. Any firewall/NGFW necessarily implements: (1) stateful packet inspection, (2) rule matching engines, (3) session tracking, (4) NAT. Any VPN product necessarily implements: (1) tunnel establishment, (2) key exchange, (3) encapsulation/decapsulation.",
+  "questionOverrides": []
+}

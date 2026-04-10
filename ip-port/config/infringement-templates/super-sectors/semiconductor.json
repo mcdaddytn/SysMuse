@@ -1,0 +1,38 @@
+{
+  "id": "infringement-semiconductor",
+  "name": "Semiconductor Infringement",
+  "description": "Infringement scoring overrides for Semiconductor patents. Emphasizes hardware necessary-implication and chip architecture analysis.",
+  "level": "super_sector",
+  "superSectorKey": "SEMICONDUCTOR",
+  "inheritsFrom": "infringement-default",
+  "version": 1,
+  "scoringGuidance": [
+    "Semiconductor patents describe circuit-level implementations that are rarely visible in product documentation. Heavily weight necessary implication.",
+    "If a product uses a specific chip or SoC, published datasheets and block diagrams provide strong evidence of internal architecture.",
+    "Process-level patents (FinFET, gate-all-around, etc.) apply to any product fabricated on the relevant process node.",
+    "Memory and interconnect patents apply broadly — any modern SoC necessarily includes cache hierarchies, bus protocols, and memory controllers."
+  ],
+  "terminologyMappings": [
+    { "patentTerm": "integrated circuit", "productTerms": ["chip", "SoC", "ASIC", "processor", "die"] },
+    { "patentTerm": "semiconductor substrate", "productTerms": ["wafer", "silicon", "die", "chip"] },
+    { "patentTerm": "bus interface", "productTerms": ["PCIe", "AXI", "AMBA", "interconnect", "fabric"] },
+    { "patentTerm": "clock recovery", "productTerms": ["PLL", "CDR", "clock data recovery", "SerDes"] },
+    { "patentTerm": "voltage regulator", "productTerms": ["PMIC", "LDO", "buck converter", "power supply"] },
+    { "patentTerm": "memory controller", "productTerms": ["DDR controller", "DRAM controller", "memory interface", "PHY"] },
+    { "patentTerm": "cache hierarchy", "productTerms": ["L1/L2/L3 cache", "cache coherence", "snoop filter", "MESI protocol"] },
+    { "patentTerm": "signal conditioning", "productTerms": ["equalization", "pre-emphasis", "de-emphasis", "analog front-end"] }
+  ],
+  "necessaryImplicationGuidance": "Any modern SoC necessarily includes: (1) clock distribution network, (2) power management unit, (3) bus interconnect fabric, (4) cache hierarchy, (5) memory controller. Any wireless SoC necessarily includes: (1) ADC/DAC, (2) PLL/synthesizer, (3) PA driver, (4) baseband processor. Product datasheets and block diagrams are strong evidence of internal architecture even when full schematics are unavailable.",
+  "questionOverrides": [
+    {
+      "fieldName": "necessary_implication",
+      "weight": 0.18,
+      "reasoningPrompt": "Hardware patents heavily depend on necessary implication. Identify which undocumented circuit blocks must exist based on the product's described functionality and any referenced chips/SoCs."
+    },
+    {
+      "fieldName": "document_quality",
+      "weight": 0.05,
+      "reasoningPrompt": "Semiconductor product docs are often sparse. Datasheets, block diagrams, and reference designs provide strong evidence. Note what documentation types are available."
+    }
+  ]
+}

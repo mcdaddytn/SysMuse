@@ -235,6 +235,57 @@ Built a complete internal infringement scoring engine to replace/supplement Patl
 - `cache/calibration-control/` — 100-pair control group with manifest, docs, texts, results
 - `cache/product-summaries-v2/` — Sector-agnostic product summaries
 
+### 20. Doc Quality Screening & Quarantine System
+**Files created:** `scripts/screen-doc-quality.ts` (new)
+**Files modified:** `scripts/score-control-group.ts`, `scripts/build-control-group.ts`
+
+**Doc Quality Screener** (`screen-doc-quality.ts`):
+- Heuristic-based screening with 6 ordered rules: extraction_failed → stub_extraction → video_stub → paywall_stub → junk_html → thin_content
+- Junk HTML detection via pattern matching (navigation, cookie banners, sidebar content) with configurable threshold (default 30%)
+- CLI flags: `--control-only`, `--all`, `--threshold`, `--verbose`
+- Outputs: `cache/doc-quality-screening/results.json` + `quarantine-report.md`
+
+**Quarantine-Aware Scoring** (`score-control-group.ts` modifications):
+- Loads quarantine results and filters pairs before scoring
+- Shows Full Set vs Clean Set metrics side-by-side
+- `--skip-quarantined` (default on) and `--include-quarantined` flags
+- Detail table shows `!` flag for quarantined pairs
+
+### 21. Expanded Calibration Set with Super-Sector Quotas
+**File modified:** `scripts/build-control-group.ts`
+
+**Major enhancements to control group builder:**
+- **Super-sector quota system**: Configurable per-sector targets with priority ordering. Default quotas: SEMICONDUCTOR=28, COMPUTING=32, SECURITY=28, WIRELESS=18, NETWORKING=22, VIDEO_STREAMING=16
+- **Patent→sector→super-sector mapping**: Uses vendor-exports CSVs + score-history directories with prefix-based sector classification
+- **GLSSD2 local doc lookup**: Checks `/Volumes/GLSSD2/data/products/docs/` before downloading, copies locally. Avoids expired CDN dependency.
+- **File type detection**: Magic bytes (`%PDF-`) + extension check to correctly identify PDF vs HTML when copying from GLSSD2. Fixed 41 extraction failures caused by HTML files copied as .pdf.
+- **URL priority flipped**: Raw vendor URLs tried first, CDN fallback second (CDN links expired Apr 9, 2026)
+- **Score threshold lowered**: Default 0.35 (was 0.40)
+- **Overflow allocation**: Unfilled WIRELESS slots overflow to SEMICONDUCTOR/COMPUTING/SECURITY (not to VIDEO_STREAMING/NETWORKING)
+
+### 22. Bulk Product Document Download
+**File used:** `scripts/download-patlytics-docs.ts`
+
+- Downloaded 4,355 product docs via raw vendor URLs (93% success rate)
+- Expanded from 2.1GB/102 companies to 11GB/220 companies on GLSSD2
+- 319 failures: 215 HTTP 403 (auth-walled portals), 40 network errors, 25 HTTP 406, 17 HTTP 404
+- Remaining viable downloads: ~138 across priority sectors (all failed, not pending)
+
+### 23. Calibration Results — Expanded Set (N=101 clean pairs)
+- Pearson r: 0.226 (vs 0.218 on original 60-pair clean set)
+- Spearman ρ: 0.211
+- MAE: 0.198 (vs 0.159 — more varied pairs are harder)
+- Bias: -0.042 (system slightly conservative vs Patlytics)
+- Within 0.25: 73% (vs 88%)
+- Key issue: SEMICONDUCTOR pairs score low (LLM very conservative on chip/RF docs)
+- Worst misses: Cortex XDR (6K doc, Δ=-0.87), Intel CXL (10K, Δ=-0.73), AMD EPYC (103K, Δ=-0.57)
+
+**Identified Next Steps for Calibration Improvement:**
+1. **Integrate product doc summarization into scoring pipeline** — v2 summarizer exists but is disconnected from `score-infringement.ts`. Multi-doc products (avg 12.9 docs/product) need summarization to fit context windows.
+2. **Patent-taxonomy-guided summarization** — Use patent super-sector/sector to drive what summarization extracts. Aggregate all correlated patents' taxonomy for a product before summarizing.
+3. **Per-sector scoring question refinement** — Existing super-sector templates have terminology mappings and necessary-implication guidance. Consider adding sector-level (not just super-sector) template detail.
+4. **Ad-hoc testing on SEMICONDUCTOR pairs** — Try variants of questions, summarization, and scoring weights before framework changes.
+
 ---
 
 ## Key Architecture Notes

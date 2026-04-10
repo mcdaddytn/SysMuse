@@ -1,0 +1,29 @@
+{
+  "id": "infringement-sdn-network",
+  "name": "SDN & Network Infringement",
+  "description": "Infringement scoring overrides for SDN & Network Infrastructure patents. Adds networking-specific terminology mappings and necessary-implication guidance.",
+  "level": "super_sector",
+  "superSectorKey": "SDN_NETWORK",
+  "inheritsFrom": "infringement-default",
+  "version": 1,
+  "scoringGuidance": [
+    "SDN and networking patents use highly abstract terminology. 'Network operating system' = 'controller', 'management platform', 'orchestrator'. 'Flow entries' = 'routing rules', 'forwarding policies', 'ACLs', 'route tables'. 'Managed switching elements' = 'switches', 'routers', 'network devices', 'nodes'.",
+    "Any product that centralizes network control necessarily maintains topology state, generates forwarding rules, and handles controller-to-device communication — even if undocumented.",
+    "Products implementing OpenFlow, NETCONF, or similar protocols necessarily practice many SDN architectural elements.",
+    "Cloud networking products (VPCs, WANs, SD-WAN) are inherently SDN implementations even if they don't use the term 'SDN'."
+  ],
+  "terminologyMappings": [
+    { "patentTerm": "network operating system", "productTerms": ["controller", "management platform", "control plane", "orchestrator", "NOS"] },
+    { "patentTerm": "flow entries", "productTerms": ["routing rules", "forwarding policies", "ACLs", "route tables", "flow rules"] },
+    { "patentTerm": "flow tables", "productTerms": ["routing tables", "forwarding tables", "FIB", "RIB"] },
+    { "patentTerm": "managed switching elements", "productTerms": ["switches", "routers", "network devices", "nodes", "data plane elements"] },
+    { "patentTerm": "logical datapath set", "productTerms": ["virtual network", "VRF", "tenant network", "overlay", "VPC"] },
+    { "patentTerm": "control channel", "productTerms": ["management interface", "control connection", "southbound API", "OpenFlow channel"] },
+    { "patentTerm": "forwarding element", "productTerms": ["data plane", "packet processor", "ASIC", "forwarding engine"] },
+    { "patentTerm": "network hypervisor", "productTerms": ["network virtualization platform", "overlay controller", "NSX", "ACI"] },
+    { "patentTerm": "topology discovery", "productTerms": ["network discovery", "LLDP", "device inventory", "network map"] },
+    { "patentTerm": "policy engine", "productTerms": ["rule engine", "intent engine", "policy framework", "access control engine"] }
+  ],
+  "necessaryImplicationGuidance": "Any SDN controller that manages network devices necessarily: (1) maintains a topology graph/database, (2) computes and installs forwarding rules, (3) handles controller-device communication protocols, (4) provides an API for policy expression. Any cloud networking product necessarily: (1) virtualizes network resources, (2) maintains isolation between tenants, (3) implements packet encapsulation/decapsulation.",
+  "questionOverrides": []
+}

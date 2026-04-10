@@ -1,0 +1,27 @@
+{
+  "id": "infringement-computing",
+  "name": "Computing & Data Infringement",
+  "description": "Infringement scoring overrides for Computing & Data patents. Covers software architecture, databases, cloud computing, and general-purpose computing.",
+  "level": "super_sector",
+  "superSectorKey": "COMPUTING",
+  "inheritsFrom": "infringement-default",
+  "version": 1,
+  "scoringGuidance": [
+    "Software patents describe methods and systems at a high abstraction level. Focus on whether the product implements the same algorithmic steps or system architecture.",
+    "Cloud service documentation often reveals more about internal architecture than traditional product docs — API references, architecture guides, and white papers are valuable.",
+    "Database and data retrieval patents use formal terms that map to well-known query processing, indexing, and storage patterns in every database product.",
+    "Virtualization and container patents apply broadly — any cloud or enterprise product using VMs or containers inherently practices many computing patents."
+  ],
+  "terminologyMappings": [
+    { "patentTerm": "processing unit", "productTerms": ["CPU", "processor", "compute instance", "worker", "execution engine"] },
+    { "patentTerm": "data store", "productTerms": ["database", "storage", "repository", "cache", "data lake", "key-value store"] },
+    { "patentTerm": "query processor", "productTerms": ["query engine", "SQL engine", "search engine", "query optimizer"] },
+    { "patentTerm": "virtual machine", "productTerms": ["VM", "instance", "container", "execution environment", "sandbox"] },
+    { "patentTerm": "application programming interface", "productTerms": ["API", "REST endpoint", "GraphQL endpoint", "SDK", "service interface"] },
+    { "patentTerm": "distributed system", "productTerms": ["microservices", "cluster", "service mesh", "distributed architecture"] },
+    { "patentTerm": "load balancer", "productTerms": ["traffic distributor", "reverse proxy", "ingress controller", "request router"] },
+    { "patentTerm": "message queue", "productTerms": ["event bus", "pub/sub", "Kafka", "message broker", "streaming platform"] }
+  ],
+  "necessaryImplicationGuidance": "Any cloud service necessarily implements: (1) resource scheduling, (2) multi-tenancy isolation, (3) API gateway/authentication, (4) monitoring/logging. Any database product necessarily implements: (1) query parsing/optimization, (2) indexing, (3) transaction management, (4) buffer/cache management.",
+  "questionOverrides": []
+}

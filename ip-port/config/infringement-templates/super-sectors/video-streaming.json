@@ -1,0 +1,35 @@
+{
+  "id": "infringement-video-streaming",
+  "name": "Video & Streaming Infringement",
+  "description": "Infringement scoring overrides for Video & Streaming patents. Covers video codecs, streaming protocols, DRM, and media processing.",
+  "level": "super_sector",
+  "superSectorKey": "VIDEO_STREAMING",
+  "inheritsFrom": "infringement-default",
+  "version": 1,
+  "scoringGuidance": [
+    "Video codec patents are frequently standards-essential (H.264/AVC, H.265/HEVC, H.266/VVC, AV1). Any product supporting these codecs necessarily implements patented techniques.",
+    "Streaming products implementing DASH, HLS, or CMAF necessarily implement adaptive bitrate, segmentation, and manifest-based delivery.",
+    "DRM patents apply to any product implementing Widevine, FairPlay, or PlayReady — the underlying mechanisms are well-documented.",
+    "Video processing patents (scaling, deinterlacing, noise reduction) apply to any display or playback product."
+  ],
+  "terminologyMappings": [
+    { "patentTerm": "encoding unit", "productTerms": ["encoder", "transcoder", "codec engine", "compression engine"] },
+    { "patentTerm": "prediction block", "productTerms": ["coding unit", "CU", "macroblock", "CTU", "prediction unit"] },
+    { "patentTerm": "transform coefficient", "productTerms": ["DCT coefficient", "frequency coefficient", "quantized coefficient"] },
+    { "patentTerm": "entropy coding", "productTerms": ["CABAC", "CAVLC", "arithmetic coding", "variable length coding"] },
+    { "patentTerm": "adaptive bitrate", "productTerms": ["ABR", "quality adaptation", "bitrate ladder", "adaptive streaming"] },
+    { "patentTerm": "content delivery", "productTerms": ["CDN", "edge cache", "origin server", "media server"] },
+    { "patentTerm": "digital rights management", "productTerms": ["DRM", "content protection", "Widevine", "FairPlay", "PlayReady"] },
+    { "patentTerm": "manifest file", "productTerms": ["MPD", "m3u8 playlist", "DASH manifest", "HLS playlist"] },
+    { "patentTerm": "frame buffer", "productTerms": ["display buffer", "video memory", "render target", "framebuffer"] },
+    { "patentTerm": "motion vector", "productTerms": ["motion estimation", "temporal prediction", "inter prediction", "motion compensation"] }
+  ],
+  "necessaryImplicationGuidance": "Any H.264/H.265 decoder necessarily implements: (1) entropy decoding, (2) inverse transform, (3) motion compensation, (4) deblocking filter, (5) reference picture management. Any adaptive streaming client necessarily implements: (1) manifest parsing, (2) segment fetching, (3) buffer management, (4) bandwidth estimation, (5) quality switching logic.",
+  "questionOverrides": [
+    {
+      "fieldName": "standards_alignment",
+      "weight": 0.08,
+      "reasoningPrompt": "Video codec patents are often standards-essential. Identify if the patent covers techniques required by H.264, H.265, H.266, VP9, AV1, DASH, or HLS specifications."
+    }
+  ]
+}

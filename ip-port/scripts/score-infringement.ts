@@ -1,11 +1,16 @@
 /**
- * Two-pass internal infringement scoring engine.
+ * V3 Two-pass internal infringement scoring engine.
  *
- * Pass 1 (screening):  patent claims + product tech summary → preliminary score
- * Pass 2 (deep):       ALL independent claims + full product doc text → final score + narrative
+ * Uses 10-component template-based scoring (1-5 scale) with sector-specific
+ * terminology mappings and guidance. Templates resolve: default → super-sector.
+ *
+ * Pass 1 (screening):  patent claims + 15K doc chars → 10 component scores
+ * Pass 2 (deep):       ALL independent claims + full doc → 10 component scores
+ * Final:               0.3 × pass1 + 0.7 × pass2
  *
  * Results cached to: cache/infringement-scores/{company}/{product}/{patentId}.json
- * Also updates product cache: document.patentScores[patentId] with sourceFile="internal-v1"
+ * LLM I/O saved to: cache/infringement-llm-io/{company}/{product}/{patentId}/
+ * Also updates product cache: document.patentScores[patentId]
  *
  * Usage:
  *   npx tsx scripts/score-infringement.ts [options]
@@ -19,12 +24,15 @@
  *   # Bulk: all patent-target pairs from vendor summary that have product docs
  *   --from-targets <csv-path>
  *
+ *   # Filter by super-sector (used with --from-targets)
+ *   --super-sector <key>  e.g., SDN_NETWORK, WIRELESS, SECURITY
+ *
  *   # Calibration mode: only score pairs that have existing Patlytics scores
  *   --calibrate
  *
  *   # Options
  *   --pass1-only           Only run screening pass
- *   --min-pass1 <n>        Threshold for Pass 2 (default: 0.30)
+ *   --min-pass1 <n>        Threshold for Pass 2 (default: 0.25)
  *   --concurrency <n>      Parallel LLM calls (default: 3)
  *   --dry-run              Show pairs without scoring
  *   --force                Re-score even if cached
@@ -57,25 +65,50 @@ const anthropic = new Anthropic();
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const SCORES_DIR = path.resolve('./cache/infringement-scores');
+const LLM_IO_DIR = path.resolve('./cache/infringement-llm-io');
 const SUMMARIES_V2_DIR = path.resolve('./cache/product-summaries-v2');
+const TEMPLATES_DIR = path.resolve('./config/infringement-templates');
+const SUPER_SECTORS_CONFIG = path.resolve('./config/super-sectors.json');
 const XML_DIR = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
-const SOURCE_VERSION = 'internal-v1';
-const MAX_DOC_TEXT_LENGTH = 300_000; // ~75K tokens for deep analysis
+const SOURCE_VERSION = 'internal-v3';
+const MAX_DOC_TEXT_LENGTH = 300_000;
+const PASS1_DOC_CHARS = 15_000;
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY = 2000;
+const MODEL = 'claude-sonnet-4-20250514';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface ClaimElementAnalysis {
-  element: string;
-  status: 'DISCLOSED' | 'PARTIALLY' | 'NOT_DISCLOSED';
-  evidence: string;
+interface QuestionDef {
+  fieldName: string;
+  displayName: string;
+  weight: number;
+  question: string;
+  scale: { min: number; max: number };
+  anchors: Record<string, string>;
+  reasoningPrompt: string;
 }
 
-interface ClaimAnalysis {
-  claimNumber: number;
-  elements: ClaimElementAnalysis[];
-  claimScore: number;
+interface InfringementTemplate {
+  id: string;
+  name: string;
+  version: number;
+  scoringGuidance: string[];
+  questions: QuestionDef[];
+  terminologyMappings?: Array<{ patentTerm: string; productTerms: string[] }>;
+  necessaryImplicationGuidance?: string;
+  inheritanceChain: string[];
+}
+
+interface ComponentScore {
+  score: number;
+  normalized: number;
+  reasoning: string;
+}
+
+interface PassResult {
+  compositeScore: number;
+  components: Record<string, ComponentScore>;
 }
 
 interface InfringementScore {
@@ -84,16 +117,19 @@ interface InfringementScore {
   productSlug: string;
   documentSlug: string;
   documentName: string;
-  pass1Score: number;
+  superSector: string | null;
+  templateVersion: number;
+  pass1: PassResult;
   pass1Rationale: string;
-  finalScore: number | null;
-  claimAnalysis: ClaimAnalysis[] | null;
+  pass2: PassResult | null;
+  finalScore: number;
   narrative: string | null;
   strongestClaim: number | null;
   keyGaps: string[] | null;
   model: string;
   sourceVersion: string;
   scoredAt: string;
+  llmIoPath: string;
 }
 
 interface ScoringPair {
@@ -106,6 +142,7 @@ interface ScoringPair {
   docSlug: string;
   textPath: string;
   summaryPath: string | null;
+  sector: string | null;
 }
 
 interface Config {
@@ -113,6 +150,7 @@ interface Config {
   company: string | null;
   product: string | null;
   sector: string | null;
+  superSector: string | null;
   fromTargets: string | null;
   calibrate: boolean;
   pass1Only: boolean;
@@ -131,10 +169,11 @@ function parseArgs(): Config {
     company: null,
     product: null,
     sector: null,
+    superSector: null,
     fromTargets: null,
     calibrate: false,
     pass1Only: false,
-    minPass1: 0.30,
+    minPass1: 0.25,
     concurrency: 3,
     dryRun: false,
     force: false,
@@ -146,6 +185,7 @@ function parseArgs(): Config {
     else if (arg === '--company' && args[i + 1]) config.company = args[++i];
     else if (arg === '--product' && args[i + 1]) config.product = args[++i];
     else if (arg === '--sector' && args[i + 1]) config.sector = args[++i];
+    else if (arg === '--super-sector' && args[i + 1]) config.superSector = args[++i];
     else if (arg === '--from-targets' && args[i + 1]) config.fromTargets = args[++i];
     else if (arg === '--calibrate') config.calibrate = true;
     else if (arg === '--pass1-only') config.pass1Only = true;
@@ -186,24 +226,123 @@ function writeScoreCache(score: InfringementScore): void {
   fs.writeFileSync(filePath, JSON.stringify(score, null, 2));
 }
 
-function loadProductSummary(companySlug: string, productSlug: string, docSlug: string): any | null {
-  const filePath = path.join(SUMMARIES_V2_DIR, companySlug, productSlug, `${docSlug}.json`);
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  } catch {
-    return null;
-  }
+// ── Template Loading ──────────────────────────────────────────────────────
+
+function loadDefaultTemplate(): any {
+  return JSON.parse(fs.readFileSync(path.join(TEMPLATES_DIR, 'default.json'), 'utf-8'));
 }
+
+function loadSuperSectorTemplate(superSectorKey: string): any | null {
+  const dir = path.join(TEMPLATES_DIR, 'super-sectors');
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  for (const file of files) {
+    const t = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
+    if (t.superSectorKey === superSectorKey) return t;
+  }
+  return null;
+}
+
+function resolveTemplate(superSectorKey: string | null): InfringementTemplate {
+  const base = loadDefaultTemplate();
+  const questions: QuestionDef[] = [...base.questions];
+  const scoringGuidance: string[] = [...(base.scoringGuidance || [])];
+  const inheritanceChain: string[] = [base.id];
+  let terminologyMappings = undefined;
+  let necessaryImplicationGuidance = undefined;
+
+  if (superSectorKey) {
+    const ssTemplate = loadSuperSectorTemplate(superSectorKey);
+    if (ssTemplate) {
+      inheritanceChain.push(ssTemplate.id);
+      scoringGuidance.push(...(ssTemplate.scoringGuidance || []));
+      terminologyMappings = ssTemplate.terminologyMappings;
+      necessaryImplicationGuidance = ssTemplate.necessaryImplicationGuidance;
+
+      if (ssTemplate.questionOverrides) {
+        for (const override of ssTemplate.questionOverrides) {
+          const idx = questions.findIndex(q => q.fieldName === override.fieldName);
+          if (idx >= 0) {
+            if (override.weight !== undefined) questions[idx] = { ...questions[idx], weight: override.weight };
+            if (override.reasoningPrompt) questions[idx] = { ...questions[idx], reasoningPrompt: override.reasoningPrompt };
+          }
+        }
+      }
+    }
+  }
+
+  // Normalize weights to sum to 1.0
+  const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+  if (totalWeight > 0 && Math.abs(totalWeight - 1.0) > 0.01) {
+    for (const q of questions) {
+      q.weight = Math.round((q.weight / totalWeight) * 1000) / 1000;
+    }
+  }
+
+  return {
+    id: inheritanceChain[inheritanceChain.length - 1],
+    name: base.name,
+    version: base.version,
+    scoringGuidance,
+    questions,
+    terminologyMappings,
+    necessaryImplicationGuidance,
+    inheritanceChain,
+  };
+}
+
+// ── Super-Sector Resolution ────────────────────────────────────────────────
+
+let _superSectorConfig: any = null;
+function getSuperSectorConfig(): any {
+  if (!_superSectorConfig) {
+    _superSectorConfig = JSON.parse(fs.readFileSync(SUPER_SECTORS_CONFIG, 'utf-8'));
+  }
+  return _superSectorConfig;
+}
+
+/** Map sector name → super-sector key using config/super-sectors.json */
+function sectorToSuperSector(sectorName: string): string | null {
+  const config = getSuperSectorConfig();
+  for (const [key, ss] of Object.entries(config.superSectors) as [string, any][]) {
+    if (ss.sectors.includes(sectorName)) return key;
+  }
+  return config.unmappedSectorDefault || null;
+}
+
+/** Map CPC codes to super-sector using heuristic */
+function cpcToSuperSector(patentId: string): string | null {
+  try {
+    const patentPath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
+    if (!fs.existsSync(patentPath)) return null;
+    const patent = JSON.parse(fs.readFileSync(patentPath, 'utf-8'));
+    const cpcs: string[] = (patent.cpc_current || []).map((c: any) => c.cpc_group_id || c.cpc_subclass_id || '');
+
+    const subclasses = new Set(cpcs.map(c => c.substring(0, 4)));
+    if (subclasses.has('H04L')) {
+      const securityGroups = cpcs.some(c => c.startsWith('H04L9/') || c.startsWith('H04L63/'));
+      return securityGroups ? 'SECURITY' : 'SDN_NETWORK';
+    }
+    if (subclasses.has('H04W')) return 'WIRELESS';
+    if (subclasses.has('H04N')) return 'VIDEO_STREAMING';
+    if (subclasses.has('H01L') || subclasses.has('H01S')) return 'SEMICONDUCTOR';
+    if (subclasses.has('G06F') || subclasses.has('G06Q')) return 'COMPUTING';
+    if (subclasses.has('G06K') || subclasses.has('G06V') || subclasses.has('G06T')) return 'IMAGING';
+    if (subclasses.has('H04B')) return 'WIRELESS';
+    if (subclasses.has('G10L') || subclasses.has('H04R')) return 'AUDIO';
+    return null;
+  } catch { return null; }
+}
+
+// ── Patent Loading ─────────────────────────────────────────────────────────
 
 function loadPatentAbstract(patentId: string): string | null {
   try {
     const cachePath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
     if (fs.existsSync(cachePath)) {
-      const data = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-      return data.patent_abstract || null;
+      return JSON.parse(fs.readFileSync(cachePath, 'utf-8')).patent_abstract || null;
     }
-  } catch { /* ignore */ }
+  } catch {}
   return null;
 }
 
@@ -211,19 +350,22 @@ function loadPatentClaims(patentId: string): PatentClaim[] {
   if (!XML_DIR) return [];
   const xmlPath = findXmlPath(patentId, XML_DIR);
   if (!xmlPath) return [];
-  const claimsData = parsePatentClaims(xmlPath);
-  return claimsData.independentClaims;
+  return parsePatentClaims(xmlPath).independentClaims;
 }
 
 function formatClaimsForPrompt(claims: PatentClaim[], maxClaims: number = 5): string {
-  const selected = claims.slice(0, maxClaims);
-  return selected.map(c => `Claim ${c.number}: ${c.text}`).join('\n\n');
+  return claims.slice(0, maxClaims).map(c => `Claim ${c.number}: ${c.text}`).join('\n\n');
+}
+
+function loadProductSummary(companySlug: string, productSlug: string, docSlug: string): any | null {
+  const filePath = path.join(SUMMARIES_V2_DIR, companySlug, productSlug, `${docSlug}.json`);
+  if (!fs.existsSync(filePath)) return null;
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch { return null; }
 }
 
 function formatSummaryForPrompt(summary: any): string {
   const s = summary?.summary;
-  if (!s) return '(No technical summary available)';
-
+  if (!s) return '';
   const parts: string[] = [];
   if (s.executiveSummary) parts.push(`Overview: ${s.executiveSummary}`);
   if (s.implementedTechnologies?.length) {
@@ -235,22 +377,26 @@ function formatSummaryForPrompt(summary: any): string {
   if (s.standards?.length) parts.push(`Standards: ${s.standards.join(', ')}`);
   if (s.protocols?.length) parts.push(`Protocols: ${s.protocols.join(', ')}`);
   if (s.architectureComponents?.length) parts.push(`Architecture: ${s.architectureComponents.join(', ')}`);
-  if (s.signalProcessing?.length) parts.push(`Signal Processing: ${s.signalProcessing.join(', ')}`);
-  if (s.dataHandling?.length) parts.push(`Data Handling: ${s.dataHandling.join(', ')}`);
-  if (s.securityFeatures?.length) parts.push(`Security: ${s.securityFeatures.join(', ')}`);
-
   return parts.join('\n');
 }
 
 // ── LLM Calls ──────────────────────────────────────────────────────────────
 
-async function callLLM(prompt: string, model: string = 'claude-sonnet-4-20250514', maxTokens: number = 4096): Promise<string> {
+interface LLMCallResult {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+}
+
+async function callLLM(prompt: string, maxTokens: number = 4096): Promise<LLMCallResult> {
+  const start = Date.now();
   let response: Anthropic.Messages.Message | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       response = await anthropic.messages.create({
-        model,
+        model: MODEL,
         max_tokens: maxTokens,
         temperature: 0,
         messages: [{ role: 'user', content: prompt }],
@@ -268,22 +414,20 @@ async function callLLM(prompt: string, model: string = 'claude-sonnet-4-20250514
       throw err;
     }
   }
-
   if (!response) throw new Error('No response from LLM');
 
-  return response.content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
-    .map(b => b.text)
-    .join('');
+  return {
+    text: response.content.filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text').map(b => b.text).join(''),
+    inputTokens: response.usage?.input_tokens || 0,
+    outputTokens: response.usage?.output_tokens || 0,
+    durationMs: Date.now() - start,
+  };
 }
 
 function parseJSON(text: string): any {
-  // Try direct parse
   try { return JSON.parse(text); } catch {}
-  // Try markdown fenced JSON
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced) try { return JSON.parse(fenced[1]); } catch {}
-  // Try to find JSON object in text (model sometimes adds reasoning before JSON)
   const jsonStart = text.indexOf('{');
   const jsonEnd = text.lastIndexOf('}');
   if (jsonStart >= 0 && jsonEnd > jsonStart) {
@@ -292,138 +436,123 @@ function parseJSON(text: string): any {
   throw new Error(`Failed to parse LLM JSON: ${text.substring(0, 200)}`);
 }
 
-// ── Pass 1: Summary-Based Screening ────────────────────────────────────────
+// ── LLM I/O Capture ────────────────────────────────────────────────────────
 
-const PASS1_PROMPT = `You are a patent infringement screening analyst assessing whether a product's described capabilities align with patent claims.
-
-CRITICAL CONTEXT: Patent claims use abstract, functional language (e.g., "network operating system," "flow entries," "managed switching elements"). Product documentation uses concrete implementation language (e.g., "cloud management console," "routing policies," "network devices"). Your job is to see through terminology differences and assess FUNCTIONAL alignment.
-
-A product that manages network state via policies IS functionally equivalent to one that uses "flow tables," even if the term "flow table" never appears. A cloud service that centralizes network control IS a form of "network operating system." Focus on WHAT the system does, not what it's CALLED.
-
-Scoring guidelines — use the FULL range:
-- 0.80-1.0: The product clearly implements the core method/system described in the claims. Most claim functions are present even if described differently.
-- 0.60-0.79: Strong functional overlap. The product operates in the same technology domain and implements most of the claimed functions, though some specifics differ or aren't fully documented.
-- 0.40-0.59: Moderate overlap. The product shares the technology domain and implements some claimed functions, but significant architectural differences or gaps exist.
-- 0.20-0.39: Weak overlap. Tangential technology area, few functional parallels.
-- 0.00-0.19: No meaningful functional overlap.
-
-Respond as JSON (no markdown fencing):
-{
-  "score": 0.XX,
-  "rationale": "2-3 sentence explanation of functional alignment and key gaps"
-}`;
-
-async function runPass1(
-  claims: string,
-  productSummary: string,
-  patentAbstract: string | null
-): Promise<{ score: number; rationale: string }> {
-  const abstractSection = patentAbstract
-    ? `\nPatent Abstract: ${patentAbstract}\n`
-    : '';
-
-  const prompt = `${PASS1_PROMPT}
-
---- PATENT CLAIMS ---
-${claims}
-${abstractSection}
---- PRODUCT TECHNICAL SUMMARY ---
-${productSummary}
---- END ---`;
-
-  const responseText = await callLLM(prompt, 'claude-sonnet-4-20250514', 1024);
-  const result = parseJSON(responseText);
-  return {
-    score: typeof result.score === 'number' ? result.score : 0,
-    rationale: result.rationale || '',
-  };
+function saveLLMIO(
+  companySlug: string,
+  productSlug: string,
+  patentId: string,
+  passName: string,
+  prompt: string,
+  result: LLMCallResult,
+  parsed: any,
+): void {
+  const dir = path.join(LLM_IO_DIR, companySlug, productSlug, patentId);
+  ensureDir(dir);
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  fs.writeFileSync(path.join(dir, `${ts}-${passName}-prompt.txt`), prompt);
+  fs.writeFileSync(path.join(dir, `${ts}-${passName}-response.json`), JSON.stringify({
+    rawText: result.text,
+    parsed,
+    model: MODEL,
+    inputTokens: result.inputTokens,
+    outputTokens: result.outputTokens,
+    durationMs: result.durationMs,
+  }, null, 2));
 }
 
-// ── Pass 2: Full-Text Deep Analysis ────────────────────────────────────────
+// ── Prompt Construction ────────────────────────────────────────────────────
 
-const PASS2_PROMPT = `You are a patent infringement analyst. Determine whether the product described in this documentation practices the claimed invention.
+function buildInfringementPrompt(
+  template: InfringementTemplate,
+  claimsText: string,
+  patentAbstract: string | null,
+  docText: string,
+  passName: string,
+): string {
+  const parts: string[] = [];
 
-CRITICAL CONTEXT ON TERMINOLOGY:
-Patent claims use formal, abstract language. Product documentation uses practical, implementation-specific language. These describe the SAME things differently:
-- Patent: "network operating system" → Product: "management platform," "control plane," "orchestrator"
-- Patent: "flow entries/flow tables" → Product: "routing rules," "forwarding policies," "ACLs," "route tables"
-- Patent: "managed switching elements" → Product: "switches," "routers," "network devices," "nodes"
-- Patent: "logical datapath set" → Product: "virtual network," "VRF," "tenant network," "overlay"
-This applies across ALL technology domains, not just networking.
+  parts.push(`You are a patent infringement analyst. Assess whether a product's capabilities align with patent claims by scoring ${template.questions.length} specific dimensions.`);
 
-ANALYSIS STEPS:
-1. First, identify what the patent claims are fundamentally about (the core method/system).
-2. Then assess: Does this product implement that core method/system?
-3. For each claim element, determine disclosure:
-   - DISCLOSED: The document describes this function/component (even with different terminology)
-   - PARTIALLY: The product would necessarily include this as part of its described architecture, OR a functional equivalent exists
-   - NOT_DISCLOSED: No evidence and no reasonable inference possible
+  if (template.scoringGuidance.length > 0) {
+    parts.push('\n## Scoring Guidelines\n');
+    parts.push(template.scoringGuidance.map(g => `- ${g}`).join('\n'));
+  }
 
-SCORING — HOW TO WEIGHT ELEMENTS:
-- DISCLOSED elements count fully toward the score
-- PARTIALLY elements count at 60-80% (they represent real functional alignment)
-- NOT_DISCLOSED elements count at 0%
-- If most elements are PARTIALLY with a few DISCLOSED: score should be 0.60-0.80
-- If most elements are PARTIALLY with some NOT_DISCLOSED: score should be 0.40-0.65
-- Only score below 0.20 if the product has NO functional relationship to the patent
-
-AFTER element analysis, step back and assess: "Would someone skilled in the art, reading this product documentation, recognize that this product likely practices the claimed invention?" If yes, your score should be at least 0.60 even if specific implementation details aren't documented.
-
-Respond as JSON (no markdown fencing):
-{
-  "score": 0.XX,
-  "claimAnalysis": [
-    {
-      "claimNumber": 1,
-      "elements": [
-        { "element": "...", "status": "DISCLOSED|PARTIALLY|NOT_DISCLOSED", "evidence": "..." }
-      ],
-      "claimScore": 0.XX
+  if (template.terminologyMappings && template.terminologyMappings.length > 0) {
+    parts.push('\n## Terminology Mappings (Patent → Product)\n');
+    parts.push('Patent claims use formal language. Product docs use implementation language. Use these mappings:');
+    for (const m of template.terminologyMappings) {
+      parts.push(`- "${m.patentTerm}" = ${m.productTerms.map(t => `"${t}"`).join(', ')}`);
     }
-  ],
-  "narrative": "2-4 sentence summary of functional alignment between the product and patent claims.",
-  "strongestClaim": 1,
-  "keyGaps": ["List of claim elements with NO functional equivalent in the documentation"]
-}`;
+  }
 
-async function runPass2(
-  claims: string,
-  fullDocText: string,
-  patentAbstract: string | null
-): Promise<{
-  score: number;
-  claimAnalysis: ClaimAnalysis[];
-  narrative: string;
-  strongestClaim: number;
-  keyGaps: string[];
-}> {
-  // Truncate doc text if needed
-  const truncatedDoc = fullDocText.length > MAX_DOC_TEXT_LENGTH
-    ? fullDocText.substring(0, MAX_DOC_TEXT_LENGTH) + '\n\n[... document truncated ...]'
-    : fullDocText;
+  if (template.necessaryImplicationGuidance) {
+    parts.push('\n## Necessary Implication Guidance\n');
+    parts.push(template.necessaryImplicationGuidance);
+  }
 
-  const abstractSection = patentAbstract
-    ? `\nPatent Abstract: ${patentAbstract}\n`
-    : '';
+  parts.push('\n## Patent Claims\n');
+  parts.push(claimsText);
+  if (patentAbstract) {
+    parts.push(`\nPatent Abstract: ${patentAbstract}`);
+  }
 
-  const prompt = `${PASS2_PROMPT}
+  parts.push(`\n## Product Documentation${passName === 'pass1' ? ' (first 15K chars)' : ''}\n`);
+  parts.push(docText);
 
---- PATENT CLAIMS ---
-${claims}
-${abstractSection}
---- PRODUCT DOCUMENTATION ---
-${truncatedDoc}
---- END ---`;
+  parts.push('\n## Scoring Questions\n');
+  parts.push('For each question below, provide a score (1-5) and 2-3 sentences of reasoning.\n');
 
-  const responseText = await callLLM(prompt, 'claude-sonnet-4-20250514', 8192);
-  const result = parseJSON(responseText);
+  for (let i = 0; i < template.questions.length; i++) {
+    const q = template.questions[i];
+    parts.push(`### ${i + 1}. ${q.displayName} (fieldName: "${q.fieldName}", weight: ${q.weight})`);
+    parts.push(`Question: ${q.question}`);
+    parts.push('Anchors:');
+    for (const [score, desc] of Object.entries(q.anchors)) {
+      parts.push(`  ${score} = ${desc}`);
+    }
+    parts.push(`Reasoning guidance: ${q.reasoningPrompt}`);
+    parts.push('');
+  }
+
+  parts.push('## Response Format\n');
+  parts.push('Respond as JSON (no markdown fencing):');
+  parts.push('{');
+  parts.push(template.questions.map(q =>
+    `  "${q.fieldName}": { "score": <1-5>, "reasoning": "<2-3 sentences>" }`
+  ).join(',\n'));
+  parts.push('}');
+
+  return parts.join('\n');
+}
+
+// ── Score Computation ──────────────────────────────────────────────────────
+
+function computePassResult(
+  parsed: Record<string, { score: number; reasoning: string }>,
+  questions: QuestionDef[],
+): PassResult {
+  const components: Record<string, ComponentScore> = {};
+  let weightedSum = 0;
+  let totalWeight = 0;
+
+  for (const q of questions) {
+    const raw = parsed[q.fieldName];
+    if (!raw || typeof raw.score !== 'number') {
+      components[q.fieldName] = { score: 0, normalized: 0, reasoning: 'Not scored by LLM' };
+      continue;
+    }
+    const score = Math.max(1, Math.min(5, Math.round(raw.score)));
+    const normalized = (score - 1) / 4;
+    components[q.fieldName] = { score, normalized, reasoning: raw.reasoning || '' };
+    weightedSum += normalized * q.weight;
+    totalWeight += q.weight;
+  }
 
   return {
-    score: typeof result.score === 'number' ? result.score : 0,
-    claimAnalysis: result.claimAnalysis || [],
-    narrative: result.narrative || '',
-    strongestClaim: result.strongestClaim || 1,
-    keyGaps: result.keyGaps || [],
+    compositeScore: totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 1000) / 1000 : 0,
+    components,
   };
 }
 
@@ -445,13 +574,11 @@ function discoverCalibrationPairs(): ScoringPair[] {
       const docSlug = slugify(doc.documentName || docBase);
       const textPath = (doc as any).extractedTextPath ||
         path.join(path.dirname(doc.localPath), `${docBase}.txt`);
-
       if (!fs.existsSync(textPath)) continue;
 
       const summaryFile = path.join(SUMMARIES_V2_DIR, product.companySlug, product.productSlug, `${docSlug}.json`);
 
       for (const patentId of Object.keys(doc.patentScores)) {
-        // Only include if the existing score is from Patlytics (no sourceFile or not internal-v1)
         const existing = doc.patentScores[patentId];
         if (existing.sourceFile === SOURCE_VERSION) continue;
 
@@ -465,11 +592,11 @@ function discoverCalibrationPairs(): ScoringPair[] {
           docSlug,
           textPath,
           summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+          sector: null,
         });
       }
     }
   }
-
   return pairs;
 }
 
@@ -489,7 +616,6 @@ function discoverPairsForPatentProduct(
     const docSlug = slugify(doc.documentName || docBase);
     const textPath = (doc as any).extractedTextPath ||
       path.join(path.dirname(doc.localPath), `${docBase}.txt`);
-
     if (!fs.existsSync(textPath)) continue;
 
     const summaryFile = path.join(SUMMARIES_V2_DIR, companySlug, productSlug, `${docSlug}.json`);
@@ -504,18 +630,17 @@ function discoverPairsForPatentProduct(
       docSlug,
       textPath,
       summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+      sector: null,
     });
   }
-
   return pairs;
 }
 
-function discoverPairsFromTargets(csvPath: string): ScoringPair[] {
+function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | null): ScoringPair[] {
   const pairs: ScoringPair[] = [];
   const content = fs.readFileSync(csvPath, 'utf-8');
   const lines = content.split('\n').filter(l => l.trim());
 
-  // Parse CSV header — support multiple column name formats
   const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
   const findCol = (...names: string[]) => {
     for (const n of names) { const i = header.indexOf(n); if (i >= 0) return i; }
@@ -524,13 +649,26 @@ function discoverPairsFromTargets(csvPath: string): ScoringPair[] {
   const patentIdx = findCol('patent_id', 'PatentId', 'patentId');
   const companyIdx = findCol('company_slug', 'target_company_slug', 'Target');
   const productIdx = findCol('product_slug', 'target_product_slug', 'TargetProduct');
+  const sectorIdx = findCol('Sector', 'sector', 'sector_name');
 
   if (patentIdx === -1 || companyIdx === -1) {
     console.error(`CSV must have patent_id/PatentId and company_slug/Target columns. Found: ${header.join(', ')}`);
     return pairs;
   }
 
-  // Load all product caches once upfront, indexed by company slug
+  // Build super-sector lookup if filtering
+  let sectorToSS: Map<string, string> | null = null;
+  if (superSectorFilter) {
+    sectorToSS = new Map();
+    const ssConfig = getSuperSectorConfig();
+    for (const [key, ss] of Object.entries(ssConfig.superSectors) as [string, any][]) {
+      for (const sector of ss.sectors) {
+        sectorToSS.set(sector, key);
+      }
+    }
+  }
+
+  // Load all product caches once
   console.log('Loading product caches...');
   const allProducts = getAllProductCaches();
   const productsByCompany = new Map<string, ProductCache[]>();
@@ -541,24 +679,31 @@ function discoverPairsFromTargets(csvPath: string): ScoringPair[] {
   }
   console.log(`  Loaded ${allProducts.length} products across ${productsByCompany.size} companies`);
 
-  // Build a map of company+product → available docs (with text files)
   const productDocsMap = new Map<string, ScoringPair[]>();
+  let filteredBySuperSector = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
     const rawPatentId = cols[patentIdx];
     const rawCompany = cols[companyIdx];
     const rawProduct = productIdx !== -1 ? cols[productIdx] : null;
+    const sectorName = sectorIdx !== -1 ? cols[sectorIdx] : null;
 
     if (!rawPatentId || !rawCompany) continue;
 
-    // Normalize patent ID: "US10396716B2" → "10396716"
+    // Super-sector filter
+    if (superSectorFilter && sectorToSS && sectorName) {
+      const pairSS = sectorToSS.get(sectorName);
+      if (pairSS !== superSectorFilter) {
+        filteredBySuperSector++;
+        continue;
+      }
+    }
+
     const patentId = normalizePatentId(rawPatentId).patentId;
-    // Slugify company name: "Skyworks Solutions" → "skyworks-solutions"
     const companySlug = slugify(rawCompany);
     const productSlug = rawProduct ? slugify(rawProduct) : null;
 
-    // Find available docs for this company/product
     const cacheKey = productSlug ? `${companySlug}/${productSlug}` : companySlug;
 
     if (!productDocsMap.has(cacheKey)) {
@@ -574,13 +719,12 @@ function discoverPairsFromTargets(csvPath: string): ScoringPair[] {
           const docSlug = slugify(doc.documentName || docBase);
           const textPath = (doc as any).extractedTextPath ||
             path.join(path.dirname(doc.localPath), `${docBase}.txt`);
-
           if (!fs.existsSync(textPath)) continue;
 
           const summaryFile = path.join(SUMMARIES_V2_DIR, product.companySlug, product.productSlug, `${docSlug}.json`);
 
           docPairs.push({
-            patentId: '', // Will be filled per patent
+            patentId: '',
             companySlug: product.companySlug,
             companyName: product.companyName,
             productSlug: product.productSlug,
@@ -589,6 +733,7 @@ function discoverPairsFromTargets(csvPath: string): ScoringPair[] {
             docSlug,
             textPath,
             summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+            sector: null,
           });
         }
       }
@@ -597,15 +742,18 @@ function discoverPairsFromTargets(csvPath: string): ScoringPair[] {
 
     const docTemplates = productDocsMap.get(cacheKey) || [];
     for (const template of docTemplates) {
-      pairs.push({ ...template, patentId });
+      pairs.push({ ...template, patentId, sector: sectorName || null });
     }
+  }
+
+  if (superSectorFilter) {
+    console.log(`  Filtered out ${filteredBySuperSector} pairs not in ${superSectorFilter}`);
   }
 
   return pairs;
 }
 
 function discoverPairsForSectorCompany(sector: string, companySlug: string): ScoringPair[] {
-  // Load patents in the sector
   const sectorScoresDir = path.resolve('./cache/patent-sector-scores');
   const sectorFile = path.join(sectorScoresDir, `${sector}.json`);
 
@@ -631,7 +779,6 @@ function discoverPairsForSectorCompany(sector: string, companySlug: string): Sco
       const docSlug = slugify(doc.documentName || docBase);
       const textPath = (doc as any).extractedTextPath ||
         path.join(path.dirname(doc.localPath), `${docBase}.txt`);
-
       if (!fs.existsSync(textPath)) continue;
 
       const summaryFile = path.join(SUMMARIES_V2_DIR, product.companySlug, product.productSlug, `${docSlug}.json`);
@@ -647,60 +794,76 @@ function discoverPairsForSectorCompany(sector: string, companySlug: string): Sco
           docSlug,
           textPath,
           summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+          sector,
         });
       }
     }
   }
-
   return pairs;
 }
 
 // ── Scoring Pipeline ───────────────────────────────────────────────────────
 
-const MIN_DOC_TEXT_BYTES = 500; // Skip stub files (YouTube pages, Scribd paywalls, etc.)
+const MIN_DOC_TEXT_BYTES = 500;
 
-async function scorePair(
-  pair: ScoringPair,
-  config: Config
-): Promise<InfringementScore | null> {
-  // Skip docs with too little text (stubs, failed extractions)
+async function scorePair(pair: ScoringPair, config: Config): Promise<InfringementScore | null> {
   try {
     const stat = fs.statSync(pair.textPath);
     if (stat.size < MIN_DOC_TEXT_BYTES) {
       console.log(`    Skipping ${pair.docSlug} — text too small (${stat.size} bytes)`);
       return null;
     }
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 
-  // Load patent claims
   const claims = loadPatentClaims(pair.patentId);
   if (claims.length === 0) {
     console.log(`    No claims found for patent ${pair.patentId}, skipping`);
     return null;
   }
 
+  // Resolve super-sector: from sector name (CSV), or CPC codes
+  let superSector: string | null = null;
+  if (pair.sector) {
+    superSector = sectorToSuperSector(pair.sector);
+  }
+  if (!superSector) {
+    superSector = cpcToSuperSector(pair.patentId);
+  }
+
+  const template = resolveTemplate(superSector);
   const claimsText = formatClaimsForPrompt(claims, 5);
   const abstract = loadPatentAbstract(pair.patentId);
 
-  // Load product summary for Pass 1
-  const summary = pair.summaryPath ? loadProductSummary(pair.companySlug, pair.productSlug, pair.docSlug) : null;
-  const summaryText = summary
-    ? formatSummaryForPrompt(summary)
-    : null;
-
-  // Use doc text for Pass 1 (15K chars provides good signal); append summary if available
+  // Build doc text for Pass 1: product summary (if available) + first 15K of doc
   const rawText = fs.readFileSync(pair.textPath, 'utf-8');
-  let pass1Input = rawText.substring(0, 15_000);
-  if (summaryText) {
-    pass1Input = `${summaryText}\n\n--- DOCUMENT TEXT (first 15K chars) ---\n${pass1Input}`;
+  let pass1DocText = rawText.substring(0, PASS1_DOC_CHARS);
+
+  // Optionally prepend product summary
+  if (pair.summaryPath) {
+    const summary = loadProductSummary(pair.companySlug, pair.productSlug, pair.docSlug);
+    const summaryText = formatSummaryForPrompt(summary);
+    if (summaryText) {
+      pass1DocText = `${summaryText}\n\n--- Document Text (first 15K chars) ---\n${pass1DocText}`;
+    }
   }
 
-  // Pass 1: Screening
+  // ── Pass 1 ──
   console.log(`    Pass 1: ${pair.patentId} × ${pair.documentName}`);
-  const pass1 = await runPass1(claimsText, pass1Input, abstract);
-  console.log(`      Score: ${pass1.score.toFixed(2)} — ${pass1.rationale.substring(0, 80)}`);
+  const p1Prompt = buildInfringementPrompt(template, claimsText, abstract, pass1DocText, 'pass1');
+  const p1Response = await callLLM(p1Prompt, 4096);
+  const p1Parsed = parseJSON(p1Response.text);
+  const pass1 = computePassResult(p1Parsed, template.questions);
+
+  saveLLMIO(pair.companySlug, pair.productSlug, pair.patentId, 'pass1', p1Prompt, p1Response, p1Parsed);
+  console.log(`      P1=${pass1.compositeScore.toFixed(2)} (SS=${superSector || '?'})`);
+
+  // Build pass1 rationale from top components
+  const topComponents = Object.entries(pass1.components)
+    .sort((a, b) => b[1].normalized - a[1].normalized)
+    .slice(0, 3);
+  const pass1Rationale = topComponents.map(([name, c]) =>
+    `${name}=${c.score}/5`
+  ).join(', ');
 
   const result: InfringementScore = {
     patentId: pair.patentId,
@@ -708,34 +871,52 @@ async function scorePair(
     productSlug: pair.productSlug,
     documentSlug: pair.docSlug,
     documentName: pair.documentName,
-    pass1Score: pass1.score,
-    pass1Rationale: pass1.rationale,
-    finalScore: null,
-    claimAnalysis: null,
+    superSector,
+    templateVersion: template.version,
+    pass1,
+    pass1Rationale,
+    pass2: null,
+    finalScore: pass1.compositeScore,
     narrative: null,
     strongestClaim: null,
     keyGaps: null,
-    model: 'claude-sonnet-4-20250514',
+    model: MODEL,
     sourceVersion: SOURCE_VERSION,
     scoredAt: new Date().toISOString(),
+    llmIoPath: path.join(LLM_IO_DIR, pair.companySlug, pair.productSlug, pair.patentId),
   };
 
-  // Pass 2: Deep analysis if above threshold
-  if (!config.pass1Only && pass1.score >= config.minPass1) {
-    console.log(`    Pass 2: Deep analysis (pass1 ${pass1.score.toFixed(2)} >= ${config.minPass1})`);
-    const allClaimsText = formatClaimsForPrompt(claims, 10); // More claims for deep analysis
-    const fullDocText = fs.readFileSync(pair.textPath, 'utf-8');
+  // ── Pass 2: deep analysis if above threshold ──
+  if (!config.pass1Only && pass1.compositeScore >= config.minPass1) {
+    console.log(`    Pass 2: Deep analysis (pass1 ${pass1.compositeScore.toFixed(2)} >= ${config.minPass1})`);
+    const allClaimsText = formatClaimsForPrompt(claims, 10);
+    const truncDoc = rawText.length > MAX_DOC_TEXT_LENGTH
+      ? rawText.substring(0, MAX_DOC_TEXT_LENGTH) + '\n\n[... document truncated ...]'
+      : rawText;
 
-    const pass2 = await runPass2(allClaimsText, fullDocText, abstract);
-    // Use max of Pass 1 and Pass 2 — Pass 2 adds detail but shouldn't penalize
-    // when it over-focuses on literal claim element matching
-    result.finalScore = Math.max(pass1.score, pass2.score);
-    result.claimAnalysis = pass2.claimAnalysis;
-    result.narrative = pass2.narrative;
-    result.strongestClaim = pass2.strongestClaim;
-    result.keyGaps = pass2.keyGaps;
+    const p2Prompt = buildInfringementPrompt(template, allClaimsText, abstract, truncDoc, 'pass2');
+    const p2Response = await callLLM(p2Prompt, 8192);
+    const p2Parsed = parseJSON(p2Response.text);
+    const pass2 = computePassResult(p2Parsed, template.questions);
 
-    console.log(`      P2: ${pass2.score.toFixed(2)}, Final: ${result.finalScore.toFixed(2)} — ${pass2.narrative.substring(0, 80)}`);
+    saveLLMIO(pair.companySlug, pair.productSlug, pair.patentId, 'pass2', p2Prompt, p2Response, p2Parsed);
+
+    result.pass2 = pass2;
+    // Blend: 0.3 × pass1 + 0.7 × pass2
+    result.finalScore = Math.round((pass1.compositeScore * 0.3 + pass2.compositeScore * 0.7) * 1000) / 1000;
+
+    // Extract narrative from holistic assessment
+    const holistic = pass2.components['overall_infringement_likelihood'];
+    result.narrative = holistic?.reasoning || null;
+
+    // Extract key gaps from claim element coverage reasoning
+    const coverage = pass2.components['claim_element_coverage'];
+    if (coverage?.reasoning) {
+      const gapMatch = coverage.reasoning.match(/missing|not found|absent|gap|lack/i);
+      if (gapMatch) result.keyGaps = [coverage.reasoning];
+    }
+
+    console.log(`      P2=${pass2.compositeScore.toFixed(2)}, Final=${result.finalScore.toFixed(2)}`);
   }
 
   return result;
@@ -747,7 +928,6 @@ function updateProductCache(score: InfringementScore): void {
   const product = readProductCache(score.companySlug, score.productSlug);
   if (!product) return;
 
-  // Find the matching document
   for (const doc of product.documents) {
     const docBase = doc.localPath ? path.basename(doc.localPath, path.extname(doc.localPath)) : '';
     const docSlug = slugify(doc.documentName || docBase);
@@ -755,12 +935,9 @@ function updateProductCache(score: InfringementScore): void {
     if (docSlug === score.documentSlug) {
       if (!doc.patentScores) doc.patentScores = {};
 
-      const effectiveScore = score.finalScore ?? score.pass1Score;
-      const effectiveNarrative = score.narrative ?? score.pass1Rationale;
-
       doc.patentScores[score.patentId] = {
-        score: effectiveScore,
-        narrative: effectiveNarrative,
+        score: score.finalScore,
+        narrative: score.narrative ?? score.pass1Rationale,
         sourceFile: SOURCE_VERSION,
       } as DocumentPatentScore;
 
@@ -775,16 +952,19 @@ function updateProductCache(score: InfringementScore): void {
 async function main() {
   const config = parseArgs();
 
-  console.log('=== Internal Infringement Scoring Engine ===');
+  console.log('=== V3 Internal Infringement Scoring Engine ===');
   console.log(`XML Dir: ${XML_DIR || '(not set)'}`);
   console.log(`Pass 1 threshold: ${config.minPass1}`);
   console.log(`Concurrency: ${config.concurrency}`);
+  console.log(`Templates: ${TEMPLATES_DIR}/`);
+  console.log(`LLM I/O: ${LLM_IO_DIR}/`);
   if (config.pass1Only) console.log('MODE: Pass 1 only (screening)');
   if (config.dryRun) console.log('MODE: DRY RUN');
   if (config.force) console.log('MODE: FORCE (re-score all)');
   if (config.calibrate) console.log('MODE: CALIBRATION (Patlytics-scored pairs only)');
+  if (config.superSector) console.log(`FILTER: Super-sector = ${config.superSector}`);
 
-  // Discover pairs to score
+  // Discover pairs
   let pairs: ScoringPair[] = [];
 
   if (config.calibrate) {
@@ -797,14 +977,14 @@ async function main() {
     pairs = discoverPairsForSectorCompany(config.sector, config.company);
     console.log(`\nPairs for sector ${config.sector} × ${config.company}: ${pairs.length}`);
   } else if (config.fromTargets) {
-    pairs = discoverPairsFromTargets(config.fromTargets);
+    pairs = discoverPairsFromTargets(config.fromTargets, config.superSector);
     console.log(`\nPairs from targets CSV: ${pairs.length}`);
   } else {
     console.error('\nError: Specify --calibrate, --patent+--company+--product, --sector+--company, or --from-targets');
     process.exit(1);
   }
 
-  // Filter out already-cached pairs (unless --force)
+  // Filter cached
   if (!config.force) {
     const before = pairs.length;
     pairs = pairs.filter(p => !readScoreCache(p.companySlug, p.productSlug, p.patentId));
@@ -820,15 +1000,21 @@ async function main() {
 
   if (config.dryRun) {
     const byCompany = new Map<string, number>();
+    const bySuperSector = new Map<string, number>();
     for (const p of pairs) {
       byCompany.set(p.companyName, (byCompany.get(p.companyName) || 0) + 1);
+      const ss = p.sector ? (sectorToSuperSector(p.sector) || 'UNKNOWN') : (cpcToSuperSector(p.patentId) || 'UNKNOWN');
+      bySuperSector.set(ss, (bySuperSector.get(ss) || 0) + 1);
     }
     console.log('\nPairs by company:');
     for (const [company, count] of [...byCompany.entries()].sort((a, b) => b[1] - a[1])) {
       console.log(`  ${company}: ${count} pairs`);
     }
+    console.log('\nPairs by super-sector:');
+    for (const [ss, count] of [...bySuperSector.entries()].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${ss}: ${count} pairs`);
+    }
 
-    // Estimate costs
     const pass1Cost = pairs.length * 0.01;
     const estimatedPass2 = Math.round(pairs.length * 0.3);
     const pass2Cost = estimatedPass2 * 0.05;
@@ -854,14 +1040,11 @@ async function main() {
         const result = await scorePair(pair, config);
         if (!result) return;
 
-        // Save to cache
         writeScoreCache(result);
-
-        // Update product cache
         updateProductCache(result);
 
         completed++;
-        if (result.finalScore !== null) pass2Count++;
+        if (result.pass2 !== null) pass2Count++;
       } catch (err) {
         console.error(`    Failed ${pair.patentId}×${pair.docSlug}: ${err instanceof Error ? err.message : err}`);
         failed++;

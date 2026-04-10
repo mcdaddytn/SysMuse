@@ -1,0 +1,166 @@
+{
+  "id": "infringement-default",
+  "name": "Infringement Default",
+  "description": "Default infringement scoring template. 10 component questions scored 1-5 to assess whether a product practices a patent's claims.",
+  "level": "default",
+  "version": 1,
+  "scoringGuidance": [
+    "Score each question on a 1-5 scale using the provided anchor definitions.",
+    "Always provide 2-3 sentences of reasoning citing specific evidence from the patent claims and product documentation.",
+    "Patent claims use abstract, formal language. Product docs use concrete, practical language. See through terminology differences — focus on WHAT the system does, not what it's CALLED.",
+    "If the product documentation is thin or vague, score document_quality accordingly but do not let thin docs contaminate your assessment of functional alignment.",
+    "Consider necessary implications: if a product describes feature X, what components must exist to support X even if undocumented?"
+  ],
+  "questions": [
+    {
+      "fieldName": "functional_alignment",
+      "displayName": "Core Functional Alignment",
+      "weight": 0.20,
+      "question": "Does the product perform the core function(s) described in the patent claims? Assess whether the product's primary capabilities align with what the patent claims describe, regardless of terminology.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "No functional relationship. The product operates in a completely different domain or solves an unrelated problem.",
+        "2": "Tangential overlap. The product shares the general technology area but does not implement the core claimed method or system.",
+        "3": "Partial alignment. The product implements some of the claimed functions but with significant architectural differences or missing core elements.",
+        "4": "Strong alignment. The product implements the core method/system described in the claims, though some specifics differ or use alternative approaches.",
+        "5": "Direct alignment. The product clearly implements the core claimed invention — the patent reads on what this product does."
+      },
+      "reasoningPrompt": "Identify the core function(s) from the patent claims and explain how the product's capabilities relate to them."
+    },
+    {
+      "fieldName": "claim_element_coverage",
+      "displayName": "Claim Element Coverage",
+      "weight": 0.18,
+      "question": "What fraction of the strongest independent claim's elements are practiced by the product? Break down the claim into elements and assess each.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "0-20% of elements practiced. Most claim elements have no counterpart in the product.",
+        "2": "20-40% of elements practiced. A few elements are present but the majority are missing.",
+        "3": "40-60% of elements practiced. About half the elements are present or have functional equivalents.",
+        "4": "60-80% of elements practiced. Most elements are present; only 1-2 elements are missing or unconfirmed.",
+        "5": "80-100% of elements practiced. Essentially all claim elements are present in the product (even if described differently)."
+      },
+      "reasoningPrompt": "List the key elements of the strongest claim and note which are practiced, partially practiced, or missing."
+    },
+    {
+      "fieldName": "necessary_implication",
+      "displayName": "Necessary Implication",
+      "weight": 0.12,
+      "question": "Are undocumented claim elements necessarily implied by the product's described architecture? If a product implements feature X, certain supporting components must exist even if not explicitly documented.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "No reasonable inferences possible. The missing elements are independent and cannot be implied from documented features.",
+        "2": "Weak inference. One could speculate that some elements exist, but there is no strong architectural necessity.",
+        "3": "Moderate inference. Some undocumented elements are likely present as part of standard implementations in this domain.",
+        "4": "Strong inference. The described architecture necessarily includes most undocumented elements — they are inherent in how such systems work.",
+        "5": "Near-certain inference. The product's described features cannot function without the undocumented elements; their existence is a technical necessity."
+      },
+      "reasoningPrompt": "Identify which undocumented claim elements are necessarily implied by the product's described architecture and explain why."
+    },
+    {
+      "fieldName": "architectural_similarity",
+      "displayName": "Architecture Similarity",
+      "weight": 0.12,
+      "question": "Do the structural patterns (layers, components, data flows, control planes) in the product match the patent's claimed architecture? This is separate from individual element coverage — it assesses overall system design similarity.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "Completely different architecture. The product uses a fundamentally different system design.",
+        "2": "Some shared patterns. The product has a few similar components but the overall architecture diverges.",
+        "3": "Moderate similarity. The product and patent share the same general architectural pattern but differ in key structural aspects.",
+        "4": "High similarity. The system design closely mirrors the patent's architecture — same layers, similar components, comparable data flows.",
+        "5": "Near-identical architecture. The product's system design matches the patent's claimed architecture in structure, flow, and component relationships."
+      },
+      "reasoningPrompt": "Compare the patent's architectural claims (system components, data flows, control relationships) with the product's described architecture."
+    },
+    {
+      "fieldName": "terminology_mapping",
+      "displayName": "Terminology Mapping",
+      "weight": 0.10,
+      "question": "Can patent claim terms be mapped to specific terms used in the product documentation? Strong mappings indicate the product and patent are describing the same things with different words.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "No mappable terms. The patent and product use completely different vocabularies with no semantic overlap.",
+        "2": "Few mappings. Only 1-2 patent terms can be loosely mapped to product terminology.",
+        "3": "Moderate mappings. Several patent terms have plausible product counterparts, but some key terms have no clear match.",
+        "4": "Strong mappings. Most patent claim terms can be mapped to specific product documentation terms with reasonable confidence.",
+        "5": "Comprehensive mappings. Nearly every patent claim term has a clear counterpart in the product documentation."
+      },
+      "reasoningPrompt": "List specific patent-to-product term mappings (e.g., patent 'flow entries' = product 'routing rules'). Note any unmappable terms."
+    },
+    {
+      "fieldName": "document_quality",
+      "displayName": "Document Technical Depth",
+      "weight": 0.08,
+      "question": "How deep, relevant, and technically detailed is the available product documentation for assessing infringement? This measures documentation quality, not infringement likelihood.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "Minimal or irrelevant documentation. Marketing-only content, or documentation covers unrelated product features. Under 2K chars.",
+        "2": "Shallow documentation. Brief technical overview with limited implementation detail. 2-5K chars.",
+        "3": "Moderate documentation. Covers the product's relevant features but lacks architectural depth or implementation specifics. 5-20K chars.",
+        "4": "Good documentation. Detailed technical content covering architecture, features, and some implementation specifics relevant to the patent. 20-100K chars.",
+        "5": "Excellent documentation. Comprehensive technical specification with detailed architecture diagrams, protocol descriptions, and implementation details. 100K+ chars."
+      },
+      "reasoningPrompt": "Assess the documentation's technical depth, relevance to the patent's technology area, and what information is missing."
+    },
+    {
+      "fieldName": "standards_alignment",
+      "displayName": "Standards Alignment",
+      "weight": 0.05,
+      "question": "Does the product implement the same industry standards (IEEE, 3GPP, IETF, MPEG, etc.) that the patent addresses? Standards alignment suggests shared technical requirements.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "No standards overlap. The patent and product address different standards or neither involves standards.",
+        "2": "Tangential standards. The product and patent involve the same standards body but different specifications.",
+        "3": "Related standards. The product implements a standard that is in the same family as the patent's target standard.",
+        "4": "Same standard. Both the product and patent target the same standard specification.",
+        "5": "Standards essential. The patent appears to cover a feature that is mandatory for compliance with a standard the product implements."
+      },
+      "reasoningPrompt": "Identify any standards referenced in the patent claims and whether the product documentation mentions implementing those same standards."
+    },
+    {
+      "fieldName": "implementation_detectability",
+      "displayName": "Evidence Detectability",
+      "weight": 0.05,
+      "question": "Could infringement be established solely from this documentation? Consider whether the docs provide enough detail to construct a claim chart.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "No evidence. The documentation provides no information useful for establishing infringement.",
+        "2": "Weak evidence. A few claim elements can be mapped but major gaps would require additional sources.",
+        "3": "Partial evidence. Some claim elements can be mapped to specific doc passages, but a claim chart would have significant holes.",
+        "4": "Strong evidence. Most claim elements can be mapped to specific passages; a preliminary claim chart is feasible.",
+        "5": "Comprehensive evidence. The documentation provides enough detail to draft a solid claim chart for at least one independent claim."
+      },
+      "reasoningPrompt": "Assess whether the documentation provides enough specificity to map claim elements to product features for a claim chart."
+    },
+    {
+      "fieldName": "scope_of_infringement",
+      "displayName": "Breadth of Infringement",
+      "weight": 0.05,
+      "question": "How many independent claims might be practiced by this product? More claims practiced means broader infringement and stronger leverage.",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "No claims likely practiced. The product does not appear to practice any independent claim.",
+        "2": "One claim partially practiced. One independent claim has partial overlap but gaps exist.",
+        "3": "One claim likely practiced. At least one independent claim appears to be fully practiced.",
+        "4": "Multiple claims likely practiced. 2-3 independent claims appear to be practiced.",
+        "5": "Broad infringement. Most or all independent claims appear to be practiced, or one method + one system claim are both practiced."
+      },
+      "reasoningPrompt": "Estimate how many independent claims the product might practice and note which claim types (method, system, apparatus) are implicated."
+    },
+    {
+      "fieldName": "overall_infringement_likelihood",
+      "displayName": "Holistic Assessment",
+      "weight": 0.05,
+      "question": "Stepping back from the individual analyses above: would a patent attorney consider this product a viable target for a claim chart and potential infringement assertion?",
+      "scale": { "min": 1, "max": 5 },
+      "anchors": {
+        "1": "Not viable. A patent attorney would not pursue this — no meaningful connection between the patent and product.",
+        "2": "Unlikely viable. Some surface-level similarity but too many gaps or differences for a credible assertion.",
+        "3": "Possibly viable. Enough overlap to warrant deeper investigation but not enough for a confident assertion.",
+        "4": "Likely viable. Strong enough connection that a patent attorney would recommend building a claim chart.",
+        "5": "Highly viable. Clear candidate for assertion — a patent attorney would prioritize this pairing."
+      },
+      "reasoningPrompt": "Give your overall professional assessment of whether this patent-product pair merits further infringement analysis."
+    }
+  ]
+}

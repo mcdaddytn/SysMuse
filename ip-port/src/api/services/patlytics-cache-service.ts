@@ -36,6 +36,7 @@ export interface PatentCache {
 export interface DocumentPatentScore {
   score: number;
   narrative: string | null;
+  sourceFile?: string;  // e.g. "internal-v1" for internal scoring, or Patlytics source slug
 }
 
 export interface ProductDocument {

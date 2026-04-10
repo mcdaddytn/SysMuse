@@ -197,6 +197,46 @@ Reads Phase A output, identifies targets missing product documentation (1,540 of
 
 ---
 
+## Recent Changes (April 9-10, 2026)
+
+### 19. Internal Infringement Heatmap System
+
+Built a complete internal infringement scoring engine to replace/supplement Patlytics vendor analysis.
+
+**New scripts created:**
+- `scripts/score-infringement.ts` — Production two-pass scoring engine (Pass 1: screening with 15K chars, Pass 2: deep claim-element analysis with full doc text)
+- `scripts/score-control-group.ts` — Calibration test harness for prompt iteration
+- `scripts/build-control-group.ts` — Builds calibration set using exact Patlytics documents
+- `scripts/analyze-calibration.ts` — Computes Pearson r, MAE, bias between internal and Patlytics scores
+- `scripts/calibrate-infringement.ts` — Calibration reporting
+- `scripts/summarize-product-docs-v2.ts` — Sector-agnostic product doc summarization
+- `scripts/export-infringement-heatmap.ts` — Export results as heatmap CSVs
+
+**Calibration Results (v2 prompts, N=77):**
+- High-scoring group (52%, score >= 0.72): MAE = 0.063, Bias = +0.039 — excellent calibration
+- Low-scoring group (48%, score <= 0.25): MAE = 0.629, Bias = -0.629 — intentionally conservative
+- Overall: Our system is more conservative than Patlytics — when we score high, it correlates well with Patlytics; when we score low, Patlytics often scores higher due to "technology relevance" scoring vs our "claim-specific functional alignment"
+- This is acceptable: high-scoring candidates are reliable for enforcement prioritization
+
+**Key v2 Prompt Innovations:**
+- Functional equivalence matching: LLM instructed to match on WHAT systems do, not terminology (e.g., "flow tables" ≈ "routing policies")
+- max(Pass1, Pass2) scoring strategy: Prevents Pass 2 from over-penalizing literal claim element mismatches
+- temperature=0 for determinism
+- Improved JSON parser handles LLM reasoning prefix before JSON output
+
+**Production Batch Setup:**
+- `--from-targets` mode reads `all-patent-targets.csv` (18,492 pairs), normalizes patent IDs (US10396716B2 → 10396716), slugifies company names
+- Dry run shows 17,030 pairs discovered, 16,449 uncached
+- Estimated cost: ~$411 ($206 with Batch API)
+- Results cached to `cache/infringement-scores/{company}/{product}/{patentId}.json`
+
+**Cache structure:**
+- `cache/infringement-scores/` — 545+ scored pairs from calibration runs
+- `cache/calibration-control/` — 100-pair control group with manifest, docs, texts, results
+- `cache/product-summaries-v2/` — Sector-agnostic product summaries
+
+---
+
 ## Key Architecture Notes
 
 - **USPTO Index DB**: 5.58M patents, 1,096 files, 2005-2025, with forward citations computed. Located at `prisma/uspto/schema.prisma`.

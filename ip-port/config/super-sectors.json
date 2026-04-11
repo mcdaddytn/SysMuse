@@ -1,6 +1,6 @@
 {
   "description": "Super-sector groupings for portfolio-level views - comprehensive mapping",
-  "version": "4.0",
+  "version": "4.1",
   "created": "2026-01-21",
   "notes": "Comprehensive mapping covering all sector names from both v1 and v2 schemes",
 
@@ -104,7 +104,8 @@
         "infra-bridge",
         "infra-bus",
         "infra-framing",
-        "infra-powerline"
+        "infra-powerline",
+        "telephony"
       ],
       "damagesTier": "High"
     },
@@ -137,7 +138,9 @@
         "multiplexing",
         "synchronization",
         "signal-processing",
-        "signal-conversion"
+        "signal-conversion",
+        "antennas",
+        "radar-sensing"
       ],
       "damagesTier": "High"
     },
@@ -160,7 +163,8 @@
         "stream-drm",
         "stream-interactive",
         "stream-server",
-        "stream-user"
+        "stream-user",
+        "display-control"
       ],
       "damagesTier": "High"
     },
@@ -178,7 +182,8 @@
         "memory-management",
         "io-interfaces",
         "storage-media",
-        "general"
+        "general",
+        "power-management"
       ],
       "damagesTier": "Medium"
     },
@@ -206,16 +211,25 @@
         "image-processing",
         "cameras-sensors",
         "3d-stereo-depth",
-        "optics"
+        "optics",
+        "recognition-biometrics"
       ],
       "damagesTier": "Medium"
     },
 
     "SEMICONDUCTOR": {
-      "displayName": "Semiconductor",
-      "description": "Chip design, circuits, and hardware",
+      "displayName": "Semiconductor & Hardware",
+      "description": "Chip design, circuits, memory, test, packaging, and hardware",
       "sectors": [
-        "semiconductor"
+        "semiconductor",
+        "semiconductor-modern",
+        "analog-circuits",
+        "memory-storage",
+        "test-measurement",
+        "pcb-packaging",
+        "magnetics-inductors",
+        "lithography",
+        "semiconductor-manufacturing"
       ],
       "damagesTier": "High"
     },

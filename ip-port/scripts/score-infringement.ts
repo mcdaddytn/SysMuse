@@ -31,8 +31,13 @@
  *   --calibrate
  *
  *   # Options
+ *   --max-docs-per-product <n>  Cap docs per product (0 = no limit, default)
+ *   --pass0-only           Run pass0 summary screening only (no pass1/pass2)
+ *   --pass0                Enable pass0 as screening gate before pass1+pass2
+ *   --pass0-threshold <n>  Pairs below this skip pass1+pass2 (default: 0.10)
  *   --pass1-only           Only run screening pass
  *   --min-pass1 <n>        Threshold for Pass 2 (default: 0.25)
+ *   --multi-doc            Aggregate all GLSSD2 docs for pass2 (richer evidence)
  *   --concurrency <n>      Parallel LLM calls (default: 3)
  *   --dry-run              Show pairs without scoring
  *   --force                Re-score even if cached
@@ -69,6 +74,7 @@ const LLM_IO_DIR = path.resolve('./cache/infringement-llm-io');
 const SUMMARIES_V2_DIR = path.resolve('./cache/product-summaries-v2');
 const TEMPLATES_DIR = path.resolve('./config/infringement-templates');
 const SUPER_SECTORS_CONFIG = path.resolve('./config/super-sectors.json');
+const GLSSD2_BASE = '/Volumes/GLSSD2/data/products/docs';
 const XML_DIR = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
 const SOURCE_VERSION = 'internal-v3';
 const MAX_DOC_TEXT_LENGTH = 300_000;
@@ -119,6 +125,7 @@ interface InfringementScore {
   documentName: string;
   superSector: string | null;
   templateVersion: number;
+  pass0?: PassResult | null;
   pass1: PassResult;
   pass1Rationale: string;
   pass2: PassResult | null;
@@ -153,11 +160,16 @@ interface Config {
   superSector: string | null;
   fromTargets: string | null;
   calibrate: boolean;
+  pass0Only: boolean;
+  pass0: boolean;
+  pass0Threshold: number;
   pass1Only: boolean;
   minPass1: number;
+  maxDocsPerProduct: number;
   concurrency: number;
   dryRun: boolean;
   force: boolean;
+  multiDoc: boolean;
 }
 
 // ── CLI Parsing ────────────────────────────────────────────────────────────
@@ -172,11 +184,16 @@ function parseArgs(): Config {
     superSector: null,
     fromTargets: null,
     calibrate: false,
+    pass0Only: false,
+    pass0: false,
+    pass0Threshold: 0.10,
     pass1Only: false,
     minPass1: 0.25,
+    maxDocsPerProduct: 0,
     concurrency: 3,
     dryRun: false,
     force: false,
+    multiDoc: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -188,11 +205,16 @@ function parseArgs(): Config {
     else if (arg === '--super-sector' && args[i + 1]) config.superSector = args[++i];
     else if (arg === '--from-targets' && args[i + 1]) config.fromTargets = args[++i];
     else if (arg === '--calibrate') config.calibrate = true;
+    else if (arg === '--pass0-only') config.pass0Only = true;
+    else if (arg === '--pass0') config.pass0 = true;
+    else if (arg === '--pass0-threshold' && args[i + 1]) config.pass0Threshold = parseFloat(args[++i]);
     else if (arg === '--pass1-only') config.pass1Only = true;
     else if (arg === '--min-pass1' && args[i + 1]) config.minPass1 = parseFloat(args[++i]);
+    else if (arg === '--max-docs-per-product' && args[i + 1]) config.maxDocsPerProduct = parseInt(args[++i], 10);
     else if (arg === '--concurrency' && args[i + 1]) config.concurrency = parseInt(args[++i], 10);
     else if (arg === '--dry-run') config.dryRun = true;
     else if (arg === '--force') config.force = true;
+    else if (arg === '--multi-doc') config.multiDoc = true;
   }
 
   return config;
@@ -204,6 +226,20 @@ function ensureDir(dirPath: string): void {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
+}
+
+/** Cap docs per product by file size (prefer richest docs). Returns the capped array. */
+function capDocsBySize<T extends { textPath: string }>(docs: T[], maxDocs: number): T[] {
+  if (maxDocs <= 0 || docs.length <= maxDocs) return docs;
+  return docs
+    .map(d => {
+      let size = 0;
+      try { size = fs.statSync(d.textPath).size; } catch {}
+      return { doc: d, size };
+    })
+    .sort((a, b) => b.size - a.size)
+    .slice(0, maxDocs)
+    .map(d => d.doc);
 }
 
 function scoreCachePath(companySlug: string, productSlug: string, patentId: string): string {
@@ -291,7 +327,17 @@ function resolveTemplate(superSectorKey: string | null): InfringementTemplate {
   };
 }
 
-// ── Super-Sector Resolution ────────────────────────────────────────────────
+// ── Super-Sector Resolution (taxonomy-driven) ────────────────────────────
+
+const SECTOR_TAXONOMY_CONFIG = path.resolve('./config/sector-taxonomy-cpc-only.json');
+
+let _taxonomyConfig: any = null;
+function getTaxonomyConfig(): any {
+  if (!_taxonomyConfig) {
+    _taxonomyConfig = JSON.parse(fs.readFileSync(SECTOR_TAXONOMY_CONFIG, 'utf-8'));
+  }
+  return _taxonomyConfig;
+}
 
 let _superSectorConfig: any = null;
 function getSuperSectorConfig(): any {
@@ -310,26 +356,48 @@ function sectorToSuperSector(sectorName: string): string | null {
   return config.unmappedSectorDefault || null;
 }
 
-/** Map CPC codes to super-sector using heuristic */
+/** Map CPC codes → sector (longest prefix match) → super-sector using taxonomy config */
 function cpcToSuperSector(patentId: string): string | null {
   try {
     const patentPath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
     if (!fs.existsSync(patentPath)) return null;
     const patent = JSON.parse(fs.readFileSync(patentPath, 'utf-8'));
     const cpcs: string[] = (patent.cpc_current || []).map((c: any) => c.cpc_group_id || c.cpc_subclass_id || '');
+    if (cpcs.length === 0) return null;
 
-    const subclasses = new Set(cpcs.map(c => c.substring(0, 4)));
-    if (subclasses.has('H04L')) {
-      const securityGroups = cpcs.some(c => c.startsWith('H04L9/') || c.startsWith('H04L63/'));
-      return securityGroups ? 'SECURITY' : 'SDN_NETWORK';
+    const taxonomy = getTaxonomyConfig();
+
+    // Build flat list of (cpcPrefix, sectorKey) sorted by prefix length desc
+    const prefixMap: Array<{ prefix: string; sector: string }> = [];
+    for (const [sectorKey, sectorData] of Object.entries(taxonomy.sectors) as [string, any][]) {
+      for (const prefix of sectorData.cpcPrefixes || []) {
+        prefixMap.push({ prefix: prefix.replace(/\/$/, ''), sector: sectorKey });
+      }
     }
-    if (subclasses.has('H04W')) return 'WIRELESS';
-    if (subclasses.has('H04N')) return 'VIDEO_STREAMING';
-    if (subclasses.has('H01L') || subclasses.has('H01S')) return 'SEMICONDUCTOR';
-    if (subclasses.has('G06F') || subclasses.has('G06Q')) return 'COMPUTING';
-    if (subclasses.has('G06K') || subclasses.has('G06V') || subclasses.has('G06T')) return 'IMAGING';
-    if (subclasses.has('H04B')) return 'WIRELESS';
-    if (subclasses.has('G10L') || subclasses.has('H04R')) return 'AUDIO';
+    prefixMap.sort((a, b) => b.prefix.length - a.prefix.length);
+
+    // Longest CPC prefix match across all patent CPC codes
+    let bestSector: string | null = null;
+    let bestPrefixLen = 0;
+    for (const cpc of cpcs) {
+      const normalized = cpc.replace(/\//g, '');
+      for (const { prefix, sector } of prefixMap) {
+        const normalizedPrefix = prefix.replace(/\//g, '');
+        if (normalized.startsWith(normalizedPrefix) && normalizedPrefix.length > bestPrefixLen) {
+          bestSector = sector;
+          bestPrefixLen = normalizedPrefix.length;
+        }
+      }
+    }
+
+    if (!bestSector) return null;
+
+    // Look up super-sector from super-sectors.json (matches template system keys)
+    const ssConfig = getSuperSectorConfig();
+    for (const [ssKey, ssData] of Object.entries(ssConfig.superSectors) as [string, any][]) {
+      if (ssData.sectors.includes(bestSector)) return ssKey;
+    }
+
     return null;
   } catch { return null; }
 }
@@ -377,6 +445,111 @@ function formatSummaryForPrompt(summary: any): string {
   if (s.standards?.length) parts.push(`Standards: ${s.standards.join(', ')}`);
   if (s.protocols?.length) parts.push(`Protocols: ${s.protocols.join(', ')}`);
   if (s.architectureComponents?.length) parts.push(`Architecture: ${s.architectureComponents.join(', ')}`);
+  if (s.interfaces?.length) parts.push(`Interfaces: ${s.interfaces.join(', ')}`);
+  if (s.signalProcessing?.length) parts.push(`Signal Processing: ${s.signalProcessing.join(', ')}`);
+  if (s.dataHandling?.length) parts.push(`Data Handling: ${s.dataHandling.join(', ')}`);
+  if (s.securityFeatures?.length) parts.push(`Security: ${s.securityFeatures.join(', ')}`);
+  return parts.join('\n');
+}
+
+// ── Multi-Doc Aggregation (GLSSD2) ──────────────────────────────────────────
+
+interface DocSource {
+  filename: string;
+  path: string;
+  type: 'txt' | 'html';
+  size: number;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function readDocText(doc: DocSource): string {
+  const raw = fs.readFileSync(doc.path, 'utf-8');
+  if (doc.type === 'html') return stripHtml(raw);
+  return raw;
+}
+
+/** Find all readable doc files for a product from GLSSD2. */
+function findGlssd2Docs(companySlug: string, productSlug: string): DocSource[] {
+  const docs: DocSource[] = [];
+  const glssd2Dir = path.join(GLSSD2_BASE, companySlug, productSlug);
+  if (!fs.existsSync(glssd2Dir)) return docs;
+
+  const seen = new Set<string>();
+  const files = fs.readdirSync(glssd2Dir).filter(f => !f.startsWith('._'));
+  for (const file of files) {
+    const fullPath = path.join(glssd2Dir, file);
+    const ext = path.extname(file).toLowerCase();
+    if (ext === '.txt') {
+      docs.push({ filename: file, path: fullPath, type: 'txt', size: fs.statSync(fullPath).size });
+      seen.add(file);
+    } else if (ext === '.html') {
+      docs.push({ filename: file, path: fullPath, type: 'html', size: fs.statSync(fullPath).size });
+      seen.add(file);
+    } else if (ext === '.pdf') {
+      const txtSibling = fullPath.replace(/\.pdf$/, '.txt');
+      if (fs.existsSync(txtSibling) && !seen.has(file.replace(/\.pdf$/, '.txt'))) {
+        docs.push({ filename: file.replace(/\.pdf$/, '.txt'), path: txtSibling, type: 'txt', size: fs.statSync(txtSibling).size });
+        seen.add(file.replace(/\.pdf$/, '.txt'));
+      }
+    }
+  }
+
+  return docs;
+}
+
+/** Aggregate all product docs into a single text blob for pass2 */
+function aggregateProductDocs(docs: DocSource[], primaryTextPath: string, maxTotalLength: number = MAX_DOC_TEXT_LENGTH): string {
+  const parts: string[] = [];
+  let totalLen = 0;
+  const primaryBasename = path.basename(primaryTextPath);
+
+  // Put the primary doc first
+  for (const doc of docs) {
+    if (doc.filename === primaryBasename || doc.path === primaryTextPath) continue;
+    // Process non-primary docs below
+  }
+
+  // Start with primary doc text
+  if (fs.existsSync(primaryTextPath)) {
+    const primaryText = fs.readFileSync(primaryTextPath, 'utf-8');
+    const header = `\n--- Primary Document ---\n`;
+    parts.push(header + primaryText);
+    totalLen += header.length + primaryText.length;
+  }
+
+  // Add supplementary docs
+  for (const doc of docs) {
+    if (doc.filename === primaryBasename || doc.path === primaryTextPath) continue;
+    const text = readDocText(doc);
+    if (text.length < 100) continue;
+
+    const header = `\n--- Supplementary: ${doc.filename} (${(doc.size / 1024).toFixed(1)}KB) ---\n`;
+    if (totalLen + text.length + header.length > maxTotalLength) {
+      const remaining = maxTotalLength - totalLen - header.length - 50;
+      if (remaining > 500) {
+        parts.push(header + text.substring(0, remaining) + '\n[... truncated ...]');
+      }
+      break;
+    }
+
+    parts.push(header + text);
+    totalLen += header.length + text.length;
+  }
+
   return parts.join('\n');
 }
 
@@ -498,7 +671,8 @@ function buildInfringementPrompt(
     parts.push(`\nPatent Abstract: ${patentAbstract}`);
   }
 
-  parts.push(`\n## Product Documentation${passName === 'pass1' ? ' (first 15K chars)' : ''}\n`);
+  const docLabel = passName === 'pass0' ? ' (summary only)' : passName === 'pass1' ? ' (first 15K chars)' : '';
+  parts.push(`\n## Product Documentation${docLabel}\n`);
   parts.push(docText);
 
   parts.push('\n## Scoring Questions\n');
@@ -603,7 +777,8 @@ function discoverCalibrationPairs(): ScoringPair[] {
 function discoverPairsForPatentProduct(
   patentId: string,
   companySlug: string,
-  productSlug: string
+  productSlug: string,
+  maxDocsPerProduct: number = 0,
 ): ScoringPair[] {
   const pairs: ScoringPair[] = [];
   const product = readProductCache(companySlug, productSlug);
@@ -633,10 +808,10 @@ function discoverPairsForPatentProduct(
       sector: null,
     });
   }
-  return pairs;
+  return capDocsBySize(pairs, maxDocsPerProduct);
 }
 
-function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | null): ScoringPair[] {
+function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | null, maxDocsPerProduct: number = 0): ScoringPair[] {
   const pairs: ScoringPair[] = [];
   const content = fs.readFileSync(csvPath, 'utf-8');
   const lines = content.split('\n').filter(l => l.trim());
@@ -711,6 +886,9 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
       if (productSlug) products = products.filter(p => p.productSlug === productSlug);
 
       const docPairs: ScoringPair[] = [];
+      const seenDocKeys = new Set<string>();
+
+      // 1) Patlytics product cache docs
       for (const product of products) {
         for (const doc of product.documents) {
           if (doc.downloadStatus !== 'completed' || !doc.localPath) continue;
@@ -720,6 +898,10 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
           const textPath = (doc as any).extractedTextPath ||
             path.join(path.dirname(doc.localPath), `${docBase}.txt`);
           if (!fs.existsSync(textPath)) continue;
+
+          const docKey = `${product.companySlug}/${product.productSlug}/${docSlug}`;
+          if (seenDocKeys.has(docKey)) continue;
+          seenDocKeys.add(docKey);
 
           const summaryFile = path.join(SUMMARIES_V2_DIR, product.companySlug, product.productSlug, `${docSlug}.json`);
 
@@ -737,7 +919,56 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
           });
         }
       }
-      productDocsMap.set(cacheKey, docPairs);
+
+      // 2) GLSSD2 docs (supplements Patlytics cache)
+      if (fs.existsSync(GLSSD2_BASE)) {
+        const glssd2CompanyDir = path.join(GLSSD2_BASE, companySlug);
+        if (fs.existsSync(glssd2CompanyDir)) {
+          let glssd2Products: string[];
+          try {
+            glssd2Products = fs.readdirSync(glssd2CompanyDir).filter(d => {
+              if (d.startsWith('.') || d.startsWith('._')) return false;
+              try { return fs.statSync(path.join(glssd2CompanyDir, d)).isDirectory(); } catch { return false; }
+            });
+          } catch { glssd2Products = []; }
+          if (productSlug) glssd2Products = glssd2Products.filter(d => d === productSlug);
+
+          for (const gProductSlug of glssd2Products) {
+            const gProductDir = path.join(glssd2CompanyDir, gProductSlug);
+            let files: string[];
+            try { files = fs.readdirSync(gProductDir).filter(f => !f.startsWith('._')); } catch { continue; }
+
+            for (const file of files) {
+              const ext = path.extname(file).toLowerCase();
+              if (ext !== '.txt' && ext !== '.html') continue;
+
+              const fullPath = path.join(gProductDir, file);
+              const gDocBase = path.basename(file, ext);
+              const gDocSlug = slugify(gDocBase);
+              const docKey = `${companySlug}/${gProductSlug}/${gDocSlug}`;
+              if (seenDocKeys.has(docKey)) continue;
+              seenDocKeys.add(docKey);
+
+              const summaryFile = path.join(SUMMARIES_V2_DIR, companySlug, gProductSlug, `${gDocSlug}.json`);
+
+              docPairs.push({
+                patentId: '',
+                companySlug,
+                companyName: rawCompany,
+                productSlug: gProductSlug,
+                productName: gProductSlug,
+                documentName: gDocBase,
+                docSlug: gDocSlug,
+                textPath: fullPath,
+                summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+                sector: null,
+              });
+            }
+          }
+        }
+      }
+
+      productDocsMap.set(cacheKey, capDocsBySize(docPairs, maxDocsPerProduct));
     }
 
     const docTemplates = productDocsMap.get(cacheKey) || [];
@@ -753,7 +984,7 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
   return pairs;
 }
 
-function discoverPairsForSectorCompany(sector: string, companySlug: string): ScoringPair[] {
+function discoverPairsForSectorCompany(sector: string, companySlug: string, maxDocsPerProduct: number = 0): ScoringPair[] {
   const sectorScoresDir = path.resolve('./cache/patent-sector-scores');
   const sectorFile = path.join(sectorScoresDir, `${sector}.json`);
 
@@ -772,6 +1003,8 @@ function discoverPairsForSectorCompany(sector: string, companySlug: string): Sco
     const product = readProductCache(pm.companySlug, pm.productSlug);
     if (!product) continue;
 
+    // Collect docs for this product, then cap
+    let productDocs: Array<{ docSlug: string; documentName: string; textPath: string; summaryPath: string | null }> = [];
     for (const doc of product.documents) {
       if (doc.downloadStatus !== 'completed' || !doc.localPath) continue;
 
@@ -782,7 +1015,17 @@ function discoverPairsForSectorCompany(sector: string, companySlug: string): Sco
       if (!fs.existsSync(textPath)) continue;
 
       const summaryFile = path.join(SUMMARIES_V2_DIR, product.companySlug, product.productSlug, `${docSlug}.json`);
+      productDocs.push({
+        docSlug,
+        documentName: doc.documentName,
+        textPath,
+        summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+      });
+    }
 
+    productDocs = capDocsBySize(productDocs, maxDocsPerProduct);
+
+    for (const doc of productDocs) {
       for (const patentId of patentIds) {
         pairs.push({
           patentId,
@@ -791,9 +1034,9 @@ function discoverPairsForSectorCompany(sector: string, companySlug: string): Sco
           productSlug: product.productSlug,
           productName: product.productName,
           documentName: doc.documentName,
-          docSlug,
-          textPath,
-          summaryPath: fs.existsSync(summaryFile) ? summaryFile : null,
+          docSlug: doc.docSlug,
+          textPath: doc.textPath,
+          summaryPath: doc.summaryPath,
           sector,
         });
       }
@@ -834,20 +1077,92 @@ async function scorePair(pair: ScoringPair, config: Config): Promise<Infringemen
   const claimsText = formatClaimsForPrompt(claims, 5);
   const abstract = loadPatentAbstract(pair.patentId);
 
-  // Build doc text for Pass 1: product summary (if available) + first 15K of doc
   const rawText = fs.readFileSync(pair.textPath, 'utf-8');
-  let pass1DocText = rawText.substring(0, PASS1_DOC_CHARS);
 
-  // Optionally prepend product summary
-  if (pair.summaryPath) {
+  // ── Pass 0: summary-only screening (cheap pre-filter) ──
+  let pass0Result: PassResult | null = null;
+
+  if ((config.pass0 || config.pass0Only) && pair.summaryPath) {
     const summary = loadProductSummary(pair.companySlug, pair.productSlug, pair.docSlug);
     const summaryText = formatSummaryForPrompt(summary);
+
     if (summaryText) {
-      pass1DocText = `${summaryText}\n\n--- Document Text (first 15K chars) ---\n${pass1DocText}`;
+      console.log(`    Pass 0: ${pair.patentId} × ${pair.documentName} (summary screen)`);
+      const p0Prompt = buildInfringementPrompt(template, claimsText, abstract, summaryText, 'pass0');
+      const p0Response = await callLLM(p0Prompt, 4096);
+      const p0Parsed = parseJSON(p0Response.text);
+      pass0Result = computePassResult(p0Parsed, template.questions);
+
+      saveLLMIO(pair.companySlug, pair.productSlug, pair.patentId, 'pass0', p0Prompt, p0Response, p0Parsed);
+      console.log(`      P0=${pass0Result.compositeScore.toFixed(2)} (SS=${superSector || '?'})`);
+
+      if (config.pass0Only) {
+        // Return pass0 as the final score — no pass1/pass2
+        const topComp = Object.entries(pass0Result.components)
+          .sort((a, b) => b[1].normalized - a[1].normalized)
+          .slice(0, 3)
+          .map(([name, c]) => `${name}=${c.score}/5`).join(', ');
+        return {
+          patentId: pair.patentId,
+          companySlug: pair.companySlug,
+          productSlug: pair.productSlug,
+          documentSlug: pair.docSlug,
+          documentName: pair.documentName,
+          superSector,
+          templateVersion: template.version,
+          pass0: pass0Result,
+          pass1: pass0Result,
+          pass1Rationale: `pass0-only: ${topComp}`,
+          pass2: null,
+          finalScore: pass0Result.compositeScore,
+          narrative: null,
+          strongestClaim: null,
+          keyGaps: null,
+          model: MODEL,
+          sourceVersion: SOURCE_VERSION,
+          scoredAt: new Date().toISOString(),
+          llmIoPath: path.join(LLM_IO_DIR, pair.companySlug, pair.productSlug, pair.patentId),
+        };
+      }
+
+      if (pass0Result.compositeScore < config.pass0Threshold) {
+        console.log(`      Pass0 filtered (${pass0Result.compositeScore.toFixed(2)} < ${config.pass0Threshold})`);
+        return {
+          patentId: pair.patentId,
+          companySlug: pair.companySlug,
+          productSlug: pair.productSlug,
+          documentSlug: pair.docSlug,
+          documentName: pair.documentName,
+          superSector,
+          templateVersion: template.version,
+          pass0: pass0Result,
+          pass1: pass0Result,
+          pass1Rationale: 'pass0-filtered',
+          pass2: null,
+          finalScore: pass0Result.compositeScore,
+          narrative: null,
+          strongestClaim: null,
+          keyGaps: null,
+          model: MODEL,
+          sourceVersion: SOURCE_VERSION,
+          scoredAt: new Date().toISOString(),
+          llmIoPath: path.join(LLM_IO_DIR, pair.companySlug, pair.productSlug, pair.patentId),
+        };
+      }
+      // Pass0 passed threshold — fall through to pass1
+    } else {
+      console.log(`    Skipped pass0 (no summary text) for ${pair.docSlug}`);
     }
+  } else if ((config.pass0 || config.pass0Only) && !pair.summaryPath) {
+    if (config.pass0Only) {
+      console.log(`    Skipped pass0-only (no summary) for ${pair.docSlug}`);
+      return null;
+    }
+    console.log(`    Skipped pass0 (no summary) for ${pair.docSlug}`);
   }
 
-  // ── Pass 1 ──
+  // ── Pass 1: first 15K of doc ──
+  const pass1DocText = rawText.substring(0, PASS1_DOC_CHARS);
   console.log(`    Pass 1: ${pair.patentId} × ${pair.documentName}`);
   const p1Prompt = buildInfringementPrompt(template, claimsText, abstract, pass1DocText, 'pass1');
   const p1Response = await callLLM(p1Prompt, 4096);
@@ -873,6 +1188,7 @@ async function scorePair(pair: ScoringPair, config: Config): Promise<Infringemen
     documentName: pair.documentName,
     superSector,
     templateVersion: template.version,
+    pass0: pass0Result,
     pass1,
     pass1Rationale,
     pass2: null,
@@ -890,11 +1206,26 @@ async function scorePair(pair: ScoringPair, config: Config): Promise<Infringemen
   if (!config.pass1Only && pass1.compositeScore >= config.minPass1) {
     console.log(`    Pass 2: Deep analysis (pass1 ${pass1.compositeScore.toFixed(2)} >= ${config.minPass1})`);
     const allClaimsText = formatClaimsForPrompt(claims, 10);
-    const truncDoc = rawText.length > MAX_DOC_TEXT_LENGTH
-      ? rawText.substring(0, MAX_DOC_TEXT_LENGTH) + '\n\n[... document truncated ...]'
-      : rawText;
 
-    const p2Prompt = buildInfringementPrompt(template, allClaimsText, abstract, truncDoc, 'pass2');
+    // Build pass2 doc text: multi-doc aggregation or single-doc
+    let pass2DocText: string;
+    if (config.multiDoc) {
+      const glssd2Docs = findGlssd2Docs(pair.companySlug, pair.productSlug);
+      if (glssd2Docs.length > 1) {
+        pass2DocText = aggregateProductDocs(glssd2Docs, pair.textPath, MAX_DOC_TEXT_LENGTH);
+        console.log(`      Multi-doc: ${glssd2Docs.length} docs aggregated (${(pass2DocText.length / 1024).toFixed(0)}KB)`);
+      } else {
+        pass2DocText = rawText.length > MAX_DOC_TEXT_LENGTH
+          ? rawText.substring(0, MAX_DOC_TEXT_LENGTH) + '\n\n[... document truncated ...]'
+          : rawText;
+      }
+    } else {
+      pass2DocText = rawText.length > MAX_DOC_TEXT_LENGTH
+        ? rawText.substring(0, MAX_DOC_TEXT_LENGTH) + '\n\n[... document truncated ...]'
+        : rawText;
+    }
+
+    const p2Prompt = buildInfringementPrompt(template, allClaimsText, abstract, pass2DocText, 'pass2');
     const p2Response = await callLLM(p2Prompt, 8192);
     const p2Parsed = parseJSON(p2Response.text);
     const pass2 = computePassResult(p2Parsed, template.questions);
@@ -958,10 +1289,13 @@ async function main() {
   console.log(`Concurrency: ${config.concurrency}`);
   console.log(`Templates: ${TEMPLATES_DIR}/`);
   console.log(`LLM I/O: ${LLM_IO_DIR}/`);
+  if (config.pass0Only) console.log('MODE: Pass 0 only (summary screening)');
+  else if (config.pass0) console.log(`MODE: Pass 0 gate (threshold: ${config.pass0Threshold})`);
   if (config.pass1Only) console.log('MODE: Pass 1 only (screening)');
   if (config.dryRun) console.log('MODE: DRY RUN');
   if (config.force) console.log('MODE: FORCE (re-score all)');
   if (config.calibrate) console.log('MODE: CALIBRATION (Patlytics-scored pairs only)');
+  if (config.maxDocsPerProduct > 0) console.log(`DOC CAP: max ${config.maxDocsPerProduct} docs per product`);
   if (config.superSector) console.log(`FILTER: Super-sector = ${config.superSector}`);
 
   // Discover pairs
@@ -971,13 +1305,13 @@ async function main() {
     pairs = discoverCalibrationPairs();
     console.log(`\nCalibration pairs found: ${pairs.length}`);
   } else if (config.patent && config.company && config.product) {
-    pairs = discoverPairsForPatentProduct(config.patent, config.company, config.product);
+    pairs = discoverPairsForPatentProduct(config.patent, config.company, config.product, config.maxDocsPerProduct);
     console.log(`\nPairs for patent ${config.patent} × ${config.company}/${config.product}: ${pairs.length}`);
   } else if (config.sector && config.company) {
-    pairs = discoverPairsForSectorCompany(config.sector, config.company);
+    pairs = discoverPairsForSectorCompany(config.sector, config.company, config.maxDocsPerProduct);
     console.log(`\nPairs for sector ${config.sector} × ${config.company}: ${pairs.length}`);
   } else if (config.fromTargets) {
-    pairs = discoverPairsFromTargets(config.fromTargets, config.superSector);
+    pairs = discoverPairsFromTargets(config.fromTargets, config.superSector, config.maxDocsPerProduct);
     console.log(`\nPairs from targets CSV: ${pairs.length}`);
   } else {
     console.error('\nError: Specify --calibrate, --patent+--company+--product, --sector+--company, or --from-targets');
@@ -1030,6 +1364,9 @@ async function main() {
   let completed = 0;
   let failed = 0;
   let pass2Count = 0;
+  let pass0Screened = 0;
+  let pass0Filtered = 0;
+  let pass0NoSummary = 0;
 
   for (let i = 0; i < pairs.length; i += config.concurrency) {
     const batch = pairs.slice(i, i + config.concurrency);
@@ -1038,7 +1375,16 @@ async function main() {
     const promises = batch.map(async (pair) => {
       try {
         const result = await scorePair(pair, config);
-        if (!result) return;
+        if (!result) {
+          if ((config.pass0 || config.pass0Only) && !pair.summaryPath) pass0NoSummary++;
+          return;
+        }
+
+        // Track pass0 stats
+        if (result.pass0) {
+          pass0Screened++;
+          if (result.pass1Rationale === 'pass0-filtered') pass0Filtered++;
+        }
 
         writeScoreCache(result);
         updateProductCache(result);
@@ -1056,6 +1402,9 @@ async function main() {
 
   console.log('\n=== Scoring Complete ===');
   console.log(`Completed: ${completed} (${pass2Count} went to Pass 2)`);
+  if (config.pass0 || config.pass0Only) {
+    console.log(`Pass0: screened ${pass0Screened}, filtered ${pass0Filtered} (below ${config.pass0Threshold}), ${pass0NoSummary} skipped (no summary)`);
+  }
   console.log(`Failed:    ${failed}`);
   console.log(`Total:     ${pairs.length}`);
 }

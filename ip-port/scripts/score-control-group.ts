@@ -39,6 +39,7 @@ const anthropic = new Anthropic();
 const CONTROL_DIR = path.resolve('./cache/calibration-control');
 const RESULTS_DIR = path.join(CONTROL_DIR, 'results-v3');
 const LLM_IO_DIR = path.resolve('./cache/infringement-llm-io');
+const SUMMARIES_V2_DIR = path.resolve('./cache/product-summaries-v2');
 const TEMPLATES_DIR = path.resolve('./config/infringement-templates');
 const SUPER_SECTORS_CONFIG = path.resolve('./config/super-sectors.json');
 const QUARANTINE_RESULTS_PATH = path.resolve('./cache/doc-quality-screening/results.json');
@@ -228,7 +229,17 @@ function resolveTemplate(superSectorKey: string | null): InfringementTemplate {
   };
 }
 
-// ── Super-Sector Resolution ────────────────────────────────────────────────
+// ── Super-Sector Resolution (taxonomy-driven) ────────────────────────────
+
+const SECTOR_TAXONOMY_CONFIG = path.resolve('./config/sector-taxonomy-cpc-only.json');
+
+let _taxonomyConfig: any = null;
+function getTaxonomyConfig(): any {
+  if (!_taxonomyConfig) {
+    _taxonomyConfig = JSON.parse(fs.readFileSync(SECTOR_TAXONOMY_CONFIG, 'utf-8'));
+  }
+  return _taxonomyConfig;
+}
 
 let _superSectorConfig: any = null;
 function getSuperSectorConfig(): any {
@@ -238,34 +249,82 @@ function getSuperSectorConfig(): any {
   return _superSectorConfig;
 }
 
-/** Map CPC class/subclass to super-sector using heuristic + config */
+/** Map CPC codes → sector (longest prefix match) → super-sector using taxonomy config */
 function resolveSuperSector(patentId: string): string | null {
   try {
     const patentPath = path.join(process.cwd(), 'cache/api/patentsview/patent', `${patentId}.json`);
     if (!fs.existsSync(patentPath)) return null;
     const patent = JSON.parse(fs.readFileSync(patentPath, 'utf-8'));
     const cpcs: string[] = (patent.cpc_current || []).map((c: any) => c.cpc_group_id || c.cpc_subclass_id || '');
+    if (cpcs.length === 0) return null;
 
-    // Simple CPC subclass → super-sector heuristic
-    const subclasses = new Set(cpcs.map(c => c.substring(0, 4)));
-    if (subclasses.has('H04L')) {
-      // Could be SDN or security — check for security-specific groups
-      const securityGroups = cpcs.some(c => c.startsWith('H04L9/') || c.startsWith('H04L63/'));
-      return securityGroups ? 'SECURITY' : 'SDN_NETWORK';
+    const taxonomy = getTaxonomyConfig();
+
+    // Build flat list of (cpcPrefix, sectorKey) sorted by prefix length desc (most specific first)
+    const prefixMap: Array<{ prefix: string; sector: string }> = [];
+    for (const [sectorKey, sectorData] of Object.entries(taxonomy.sectors) as [string, any][]) {
+      for (const prefix of sectorData.cpcPrefixes || []) {
+        // Normalize: remove trailing slash for matching
+        prefixMap.push({ prefix: prefix.replace(/\/$/, ''), sector: sectorKey });
+      }
     }
-    if (subclasses.has('H04W')) return 'WIRELESS';
-    if (subclasses.has('H04N')) return 'VIDEO_STREAMING';
-    if (subclasses.has('H01L') || subclasses.has('H01S')) return 'SEMICONDUCTOR';
-    if (subclasses.has('G06F') || subclasses.has('G06Q')) return 'COMPUTING';
-    if (subclasses.has('G06K') || subclasses.has('G06V') || subclasses.has('G06T')) return 'IMAGING';
-    if (subclasses.has('H04B')) return 'WIRELESS';
-    if (subclasses.has('G10L') || subclasses.has('H04R')) return 'AUDIO';
-    if (subclasses.has('G11C') || subclasses.has('G11B')) return 'COMPUTING';
+    prefixMap.sort((a, b) => b.prefix.length - a.prefix.length);
+
+    // Find best matching sector: longest CPC prefix match across all patent CPC codes
+    let bestSector: string | null = null;
+    let bestPrefixLen = 0;
+    for (const cpc of cpcs) {
+      const normalized = cpc.replace(/\//g, '');
+      for (const { prefix, sector } of prefixMap) {
+        const normalizedPrefix = prefix.replace(/\//g, '');
+        if (normalized.startsWith(normalizedPrefix) && normalizedPrefix.length > bestPrefixLen) {
+          bestSector = sector;
+          bestPrefixLen = normalizedPrefix.length;
+        }
+      }
+    }
+
+    if (!bestSector) return null;
+
+    // Look up super-sector from super-sectors.json (matches template system keys)
+    const ssConfig = getSuperSectorConfig();
+    for (const [ssKey, ssData] of Object.entries(ssConfig.superSectors) as [string, any][]) {
+      if (ssData.sectors.includes(bestSector)) return ssKey;
+    }
 
     return null;
   } catch {
     return null;
   }
+}
+
+// ── Product Summary Loading ─────────────────────────────────────────────────
+
+function loadProductSummary(companySlug: string, productSlug: string, docSlug: string): any | null {
+  const filePath = path.join(SUMMARIES_V2_DIR, companySlug, productSlug, `${docSlug}.json`);
+  if (!fs.existsSync(filePath)) return null;
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch { return null; }
+}
+
+function formatSummaryForPrompt(summary: any): string {
+  const s = summary?.summary;
+  if (!s) return '';
+  const parts: string[] = [];
+  if (s.executiveSummary) parts.push(`Overview: ${s.executiveSummary}`);
+  if (s.implementedTechnologies?.length) {
+    parts.push('Key Technologies:');
+    for (const t of s.implementedTechnologies) {
+      parts.push(`  - ${t.feature} [${t.category}]: ${t.claimRelevantDetail}`);
+    }
+  }
+  if (s.standards?.length) parts.push(`Standards: ${s.standards.join(', ')}`);
+  if (s.protocols?.length) parts.push(`Protocols: ${s.protocols.join(', ')}`);
+  if (s.architectureComponents?.length) parts.push(`Architecture: ${s.architectureComponents.join(', ')}`);
+  if (s.interfaces?.length) parts.push(`Interfaces: ${s.interfaces.join(', ')}`);
+  if (s.signalProcessing?.length) parts.push(`Signal Processing: ${s.signalProcessing.join(', ')}`);
+  if (s.dataHandling?.length) parts.push(`Data Handling: ${s.dataHandling.join(', ')}`);
+  if (s.securityFeatures?.length) parts.push(`Security: ${s.securityFeatures.join(', ')}`);
+  return parts.join('\n');
 }
 
 // ── LLM ────────────────────────────────────────────────────────────────────
@@ -505,7 +564,7 @@ async function scorePair(pair: ManifestPair, config: Config): Promise<ControlRes
   const superSector = resolveSuperSector(pair.patentId);
   const template = resolveTemplate(superSector);
 
-  // ── Pass 1: 10 questions against first 15K chars ──
+  // ── Pass 1: 10 questions against first 15K chars (no summary — pass0 handles screening) ──
   const p1DocText = docText.substring(0, PASS1_DOC_CHARS);
   const p1Prompt = buildInfringementPrompt(template, claimsText, abstract, p1DocText, 'pass1');
   const p1Response = await callLLM(p1Prompt, 4096);

@@ -601,10 +601,14 @@ function aggregateProductDocs(docs: DocSource[], primaryTextPath: string, maxTot
     // Process non-primary docs below
   }
 
-  // Start with primary doc text
+  // Start with primary doc text (cap at 75% of budget to leave room for supplementary docs)
+  const primaryBudget = Math.floor(maxTotalLength * 0.75);
   if (fs.existsSync(primaryTextPath)) {
     let primaryText = fs.readFileSync(primaryTextPath, 'utf-8');
     if (primaryTextPath.endsWith('.html')) primaryText = stripHtml(primaryText);
+    if (primaryText.length > primaryBudget) {
+      primaryText = primaryText.substring(0, primaryBudget) + '\n\n[... primary document truncated ...]';
+    }
     const header = `\n--- Primary Document ---\n`;
     parts.push(header + primaryText);
     totalLen += header.length + primaryText.length;

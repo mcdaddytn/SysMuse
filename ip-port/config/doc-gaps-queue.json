@@ -1,0 +1,35 @@
+{
+  "_comment": "Products that need better docs before scoring. Grouped by blocking reason.",
+  "_updatedAt": "2026-04-12",
+  "youtube_transcript_needed": [
+    {"company": "apple", "product": "iphone-15", "videoCount": 1, "notes": "Only NFC docs available otherwise (3 files via apple-inc alias)"},
+    {"company": "google", "product": "google-tv-streamer-4k", "videoCount": 2, "notes": "Single non-YouTube doc exists (1.5M guide)"},
+    {"company": "netflix", "product": "video-encoding-system-ves", "videoCount": 1, "notes": "No other docs"}
+  ],
+  "paywall_docs_needed": [
+    {"company": "analog-devices", "product": "adrv9009", "source": "scribd", "notes": "Only Scribd page available"}
+  ],
+  "bot_blocked_retry": [
+    {"company": "docker-inc", "product": "docker-desktop", "notes": "Empty download — only product for company"},
+    {"company": "qualcomm", "product": "qpm6585", "notes": "WAF-blocked JS shell"},
+    {"company": "qualcomm", "product": "qxm108x", "notes": "WAF-blocked JS shell"},
+    {"company": "sonicwall", "product": "gen-7-nsa-series-firewalls", "notes": "Incapsula blocked"},
+    {"company": "sonicwall", "product": "secure-mobile-access-sma", "notes": "Incapsula blocked"}
+  ],
+  "slideshare_js_shell": [
+    {"company": "amd", "product": "amd-ryzen-processors", "notes": "SlideShare stubs"},
+    {"company": "ericsson", "product": "rbs-6000-series", "notes": "SlideShare stub"},
+    {"company": "xilinx", "product": "alveo-u200-u250", "notes": "AMD docs portal JS shell"},
+    {"company": "xilinx", "product": "versal-acap", "notes": "AMD docs portal JS shell"},
+    {"company": "xilinx", "product": "zynq-ultrascale", "notes": "AMD docs portal JS shell"}
+  ],
+  "no_source_docs_fintech": [
+    {"company": "adyen", "notes": "LLM summary only, no source doc"},
+    {"company": "affirm", "notes": "LLM summary only"},
+    {"company": "klarna", "notes": "LLM summary only"},
+    {"company": "paypal", "product": "braintree", "notes": "LLM summary only"},
+    {"company": "shopify", "notes": "LLM summary only"},
+    {"company": "square", "notes": "LLM summary only"},
+    {"company": "stripe", "notes": "LLM summary only"}
+  ]
+}

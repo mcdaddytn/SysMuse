@@ -236,7 +236,7 @@ async function summarizeDoc(
     try {
       response = await anthropic.messages.create({
         model: MODEL,
-        max_tokens: 4096,
+        max_tokens: 8192,
         temperature: 0,
         messages: [{
           role: 'user',
@@ -265,6 +265,10 @@ ${truncated}
   }
 
   if (!response) throw new Error('No response from LLM');
+
+  if (response.stop_reason === 'max_tokens') {
+    console.log(`    WARNING: response truncated at max_tokens`);
+  }
 
   const responseText = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
@@ -379,6 +383,8 @@ function discoverGlssd2DocTasks(config: Config): SumTask[] {
       for (const file of files) {
         const ext = path.extname(file).toLowerCase();
         if (ext !== '.txt' && ext !== '.html') continue;
+        // Skip YouTube page scrapes
+        if (file.toLowerCase().includes('youtube')) continue;
 
         const fullPath = path.join(productDir, file);
         let stat: fs.Stats;
@@ -393,7 +399,12 @@ function discoverGlssd2DocTasks(config: Config): SumTask[] {
         // Quality pre-screen
         try {
           let text = fs.readFileSync(fullPath, 'utf-8');
-          if (ext === '.html') text = stripHtml(text);
+          // Detect YouTube HTML by content markers
+          if (ext === '.html') {
+            const head = text.substring(0, 5000);
+            if (['WIZ_global_data', 'youtube_web', 'ytInitialPlayerResponse', 'ytInitialData'].some(m => head.includes(m))) continue;
+            text = stripHtml(text);
+          }
           if (text.length < MIN_TEXT_BYTES) continue;
           const junkRatio = computeJunkLineRatio(text);
           if (junkRatio > 0.30) continue;

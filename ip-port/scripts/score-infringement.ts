@@ -74,12 +74,14 @@ const LLM_IO_DIR = path.resolve('./cache/infringement-llm-io');
 const SUMMARIES_V2_DIR = path.resolve('./cache/product-summaries-v2');
 const TEMPLATES_DIR = path.resolve('./config/infringement-templates');
 const SUPER_SECTORS_CONFIG = path.resolve('./config/super-sectors.json');
+const SLUG_ALIASES_CONFIG = path.resolve('./config/company-slug-aliases.json');
 const GLSSD2_BASE = '/Volumes/GLSSD2/data/products/docs';
 const XML_DIR = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
 const SOURCE_VERSION = 'internal-v3';
 const MAX_DOC_TEXT_LENGTH = 300_000;
 const PASS1_DOC_CHARS = 15_000;
 const MAX_RETRIES = 3;
+const JUNK_LINE_THRESHOLD = 0.30; // Skip docs where >30% of lines are junk
 const RETRY_BASE_DELAY = 2000;
 const MODEL = 'claude-sonnet-4-20250514';
 
@@ -137,6 +139,14 @@ interface InfringementScore {
   sourceVersion: string;
   scoredAt: string;
   llmIoPath: string;
+  docContext?: {
+    selectedDocPath: string;
+    selectedDocSize: number;
+    selectedDocType: 'txt' | 'html';
+    hasSummary: boolean;
+    availableDocs: Array<{ slug: string; size: number; type: string }>;
+    skippedDocs?: Array<{ slug: string; reason: string }>;
+  };
 }
 
 interface ScoringPair {
@@ -218,6 +228,27 @@ function parseArgs(): Config {
   }
 
   return config;
+}
+
+// ── Company Slug Aliases ──────────────────────────────────────────────────
+
+let _slugAliases: Record<string, string[]> | null = null;
+function getSlugAliases(): Record<string, string[]> {
+  if (!_slugAliases) {
+    try {
+      _slugAliases = JSON.parse(fs.readFileSync(SLUG_ALIASES_CONFIG, 'utf-8'));
+    } catch {
+      _slugAliases = {};
+    }
+  }
+  return _slugAliases!;
+}
+
+/** Get all GLSSD2 directory slugs to check for a given company slug. */
+function getCompanySlugs(companySlug: string): string[] {
+  const aliases = getSlugAliases();
+  if (aliases[companySlug]) return aliases[companySlug];
+  return [companySlug];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -476,34 +507,81 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+// ── Junk Detection ──────────────────────────────────────────────────────────
+
+const JUNK_PATTERNS = [
+  /sign\s*in|log\s*in|log\s*out|sign\s*up/i,
+  /cookie\s*(policy|consent|preferences|notice)/i,
+  /terms\s+of\s+(use|service)/i,
+  /privacy\s+policy/i,
+  /copyright\s+©?\s*\d{4}/i,
+  /subscribe|newsletter|follow\s+us\s+on/i,
+  /breadcrumb|sidebar|footer|header/i,
+  /download\s+(free|now|save|share|print|embed)/i,
+  /about\s+scribd|join\s+our\s+team|adchoices/i,
+  /^\s*\d+[KMB]?\s+views?\s/i,
+  /^\s*\d+\s+ratings?\s/i,
+  /share\s+this\s+document/i,
+];
+
+const YOUTUBE_MARKERS = [
+  'WIZ_global_data',
+  'youtube_web',
+  'ytInitialPlayerResponse',
+  'ytInitialData',
+];
+
+function computeJunkLineRatio(text: string): number {
+  const lines = text.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length === 0) return 1;
+  let junkLines = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length < 3) { junkLines++; continue; }
+    if (JUNK_PATTERNS.some(p => p.test(trimmed))) junkLines++;
+  }
+  return junkLines / lines.length;
+}
+
+function isYouTubeHtml(rawContent: string): boolean {
+  const head = rawContent.substring(0, 5000);
+  return YOUTUBE_MARKERS.some(m => head.includes(m));
+}
+
 function readDocText(doc: DocSource): string {
   const raw = fs.readFileSync(doc.path, 'utf-8');
   if (doc.type === 'html') return stripHtml(raw);
   return raw;
 }
 
-/** Find all readable doc files for a product from GLSSD2. */
+/** Find all readable doc files for a product from GLSSD2, checking alias slugs. */
 function findGlssd2Docs(companySlug: string, productSlug: string): DocSource[] {
   const docs: DocSource[] = [];
-  const glssd2Dir = path.join(GLSSD2_BASE, companySlug, productSlug);
-  if (!fs.existsSync(glssd2Dir)) return docs;
-
   const seen = new Set<string>();
-  const files = fs.readdirSync(glssd2Dir).filter(f => !f.startsWith('._'));
-  for (const file of files) {
-    const fullPath = path.join(glssd2Dir, file);
-    const ext = path.extname(file).toLowerCase();
-    if (ext === '.txt') {
-      docs.push({ filename: file, path: fullPath, type: 'txt', size: fs.statSync(fullPath).size });
-      seen.add(file);
-    } else if (ext === '.html') {
-      docs.push({ filename: file, path: fullPath, type: 'html', size: fs.statSync(fullPath).size });
-      seen.add(file);
-    } else if (ext === '.pdf') {
-      const txtSibling = fullPath.replace(/\.pdf$/, '.txt');
-      if (fs.existsSync(txtSibling) && !seen.has(file.replace(/\.pdf$/, '.txt'))) {
-        docs.push({ filename: file.replace(/\.pdf$/, '.txt'), path: txtSibling, type: 'txt', size: fs.statSync(txtSibling).size });
-        seen.add(file.replace(/\.pdf$/, '.txt'));
+
+  const aliasSlugs = getCompanySlugs(companySlug);
+  for (const aliasSlug of aliasSlugs) {
+    const glssd2Dir = path.join(GLSSD2_BASE, aliasSlug, productSlug);
+    if (!fs.existsSync(glssd2Dir)) continue;
+
+    const files = fs.readdirSync(glssd2Dir).filter(f => !f.startsWith('._'));
+    for (const file of files) {
+      if (file.toLowerCase().includes('youtube')) continue;
+      if (seen.has(file)) continue;
+      const fullPath = path.join(glssd2Dir, file);
+      const ext = path.extname(file).toLowerCase();
+      if (ext === '.txt') {
+        docs.push({ filename: file, path: fullPath, type: 'txt', size: fs.statSync(fullPath).size });
+        seen.add(file);
+      } else if (ext === '.html') {
+        docs.push({ filename: file, path: fullPath, type: 'html', size: fs.statSync(fullPath).size });
+        seen.add(file);
+      } else if (ext === '.pdf') {
+        const txtSibling = fullPath.replace(/\.pdf$/, '.txt');
+        if (fs.existsSync(txtSibling) && !seen.has(file.replace(/\.pdf$/, '.txt'))) {
+          docs.push({ filename: file.replace(/\.pdf$/, '.txt'), path: txtSibling, type: 'txt', size: fs.statSync(txtSibling).size });
+          seen.add(file.replace(/\.pdf$/, '.txt'));
+        }
       }
     }
   }
@@ -525,7 +603,8 @@ function aggregateProductDocs(docs: DocSource[], primaryTextPath: string, maxTot
 
   // Start with primary doc text
   if (fs.existsSync(primaryTextPath)) {
-    const primaryText = fs.readFileSync(primaryTextPath, 'utf-8');
+    let primaryText = fs.readFileSync(primaryTextPath, 'utf-8');
+    if (primaryTextPath.endsWith('.html')) primaryText = stripHtml(primaryText);
     const header = `\n--- Primary Document ---\n`;
     parts.push(header + primaryText);
     totalLen += header.length + primaryText.length;
@@ -920,10 +999,13 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
         }
       }
 
-      // 2) GLSSD2 docs (supplements Patlytics cache)
+      // 2) GLSSD2 docs (supplements Patlytics cache) — check all alias slugs
       if (fs.existsSync(GLSSD2_BASE)) {
-        const glssd2CompanyDir = path.join(GLSSD2_BASE, companySlug);
-        if (fs.existsSync(glssd2CompanyDir)) {
+        const aliasSlugs = getCompanySlugs(companySlug);
+        for (const aliasSlug of aliasSlugs) {
+          const glssd2CompanyDir = path.join(GLSSD2_BASE, aliasSlug);
+          if (!fs.existsSync(glssd2CompanyDir)) continue;
+
           let glssd2Products: string[];
           try {
             glssd2Products = fs.readdirSync(glssd2CompanyDir).filter(d => {
@@ -941,6 +1023,8 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
             for (const file of files) {
               const ext = path.extname(file).toLowerCase();
               if (ext !== '.txt' && ext !== '.html') continue;
+              // Skip YouTube page scrapes (raw HTML with no real content)
+              if (file.toLowerCase().includes('youtube')) continue;
 
               const fullPath = path.join(gProductDir, file);
               const gDocBase = path.basename(file, ext);
@@ -949,7 +1033,11 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
               if (seenDocKeys.has(docKey)) continue;
               seenDocKeys.add(docKey);
 
-              const summaryFile = path.join(SUMMARIES_V2_DIR, companySlug, gProductSlug, `${gDocSlug}.json`);
+              // Check for summary under both the canonical slug and the alias slug
+              let summaryFile = path.join(SUMMARIES_V2_DIR, companySlug, gProductSlug, `${gDocSlug}.json`);
+              if (!fs.existsSync(summaryFile) && aliasSlug !== companySlug) {
+                summaryFile = path.join(SUMMARIES_V2_DIR, aliasSlug, gProductSlug, `${gDocSlug}.json`);
+              }
 
               docPairs.push({
                 patentId: '',
@@ -1077,7 +1165,29 @@ async function scorePair(pair: ScoringPair, config: Config): Promise<Infringemen
   const claimsText = formatClaimsForPrompt(claims, 5);
   const abstract = loadPatentAbstract(pair.patentId);
 
-  const rawText = fs.readFileSync(pair.textPath, 'utf-8');
+  const rawFileContent = fs.readFileSync(pair.textPath, 'utf-8');
+
+  // Strip HTML for .html files; detect and skip YouTube/junk pages
+  const isHtml = pair.textPath.endsWith('.html');
+  if (isHtml) {
+    if (isYouTubeHtml(rawFileContent)) {
+      console.log(`    Skipping ${pair.docSlug} — YouTube HTML page`);
+      return null;
+    }
+    // Check junk ratio on raw HTML (has line structure) before stripping
+    const junkRatio = computeJunkLineRatio(rawFileContent);
+    if (junkRatio > JUNK_LINE_THRESHOLD) {
+      console.log(`    Skipping ${pair.docSlug} — junk HTML (${(junkRatio * 100).toFixed(0)}% junk lines)`);
+      return null;
+    }
+  }
+
+  const rawText = isHtml ? stripHtml(rawFileContent) : rawFileContent;
+
+  if (rawText.length < MIN_DOC_TEXT_BYTES) {
+    console.log(`    Skipping ${pair.docSlug} — stripped text too small (${rawText.length} chars)`);
+    return null;
+  }
 
   // ── Pass 0: summary-only screening (cheap pre-filter) ──
   let pass0Result: PassResult | null = null;
@@ -1180,6 +1290,21 @@ async function scorePair(pair: ScoringPair, config: Config): Promise<Infringemen
     `${name}=${c.score}/5`
   ).join(', ');
 
+  // ── Doc context: capture what docs were available at scoring time ──
+  const allAvailableDocs = findGlssd2Docs(pair.companySlug, pair.productSlug);
+  const selectedDocExt = path.extname(pair.textPath).toLowerCase().replace('.', '') as 'txt' | 'html';
+  const docContext: InfringementScore['docContext'] = {
+    selectedDocPath: pair.textPath,
+    selectedDocSize: fs.statSync(pair.textPath).size,
+    selectedDocType: selectedDocExt === 'html' ? 'html' : 'txt',
+    hasSummary: !!pair.summaryPath,
+    availableDocs: allAvailableDocs.map(d => ({
+      slug: slugify(path.basename(d.filename, path.extname(d.filename))),
+      size: d.size,
+      type: d.type,
+    })),
+  };
+
   const result: InfringementScore = {
     patentId: pair.patentId,
     companySlug: pair.companySlug,
@@ -1200,6 +1325,7 @@ async function scorePair(pair: ScoringPair, config: Config): Promise<Infringemen
     sourceVersion: SOURCE_VERSION,
     scoredAt: new Date().toISOString(),
     llmIoPath: path.join(LLM_IO_DIR, pair.companySlug, pair.productSlug, pair.patentId),
+    docContext,
   };
 
   // ── Pass 2: deep analysis if above threshold ──

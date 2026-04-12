@@ -548,6 +548,19 @@ function isYouTubeHtml(rawContent: string): boolean {
   return YOUTUBE_MARKERS.some(m => head.includes(m));
 }
 
+/** Quick content-based check for YouTube/junk HTML files. Reads first 5KB. */
+function isSkippableHtmlFile(filePath: string): boolean {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(5000);
+    const bytesRead = fs.readSync(fd, buf, 0, 5000, 0);
+    fs.closeSync(fd);
+    const head = buf.toString('utf-8', 0, bytesRead);
+    if (YOUTUBE_MARKERS.some(m => head.includes(m))) return true;
+    return false;
+  } catch { return false; }
+}
+
 function readDocText(doc: DocSource): string {
   const raw = fs.readFileSync(doc.path, 'utf-8');
   if (doc.type === 'html') return stripHtml(raw);
@@ -574,6 +587,7 @@ function findGlssd2Docs(companySlug: string, productSlug: string): DocSource[] {
         docs.push({ filename: file, path: fullPath, type: 'txt', size: fs.statSync(fullPath).size });
         seen.add(file);
       } else if (ext === '.html') {
+        if (isSkippableHtmlFile(fullPath)) continue;
         docs.push({ filename: file, path: fullPath, type: 'html', size: fs.statSync(fullPath).size });
         seen.add(file);
       } else if (ext === '.pdf') {
@@ -1027,10 +1041,12 @@ function discoverPairsFromTargets(csvPath: string, superSectorFilter: string | n
             for (const file of files) {
               const ext = path.extname(file).toLowerCase();
               if (ext !== '.txt' && ext !== '.html') continue;
-              // Skip YouTube page scrapes (raw HTML with no real content)
+              // Skip YouTube page scrapes (by filename or content markers)
               if (file.toLowerCase().includes('youtube')) continue;
 
               const fullPath = path.join(gProductDir, file);
+              if (ext === '.html' && isSkippableHtmlFile(fullPath)) continue;
+
               const gDocBase = path.basename(file, ext);
               const gDocSlug = slugify(gDocBase);
               const docKey = `${companySlug}/${gProductSlug}/${gDocSlug}`;

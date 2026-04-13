@@ -14,6 +14,7 @@
  *     --dry-run            Show what would be extracted
  *     --concurrency <n>    Parallel requests (default: 2, be gentle)
  *     --delay <ms>         Delay between requests (default: 2000)
+ *     --max-videos <n>     Limit to N videos per run (0 = unlimited, default: 0)
  *     --output-dir <path>  Where to save transcripts (default: GLSSD2 alongside originals)
  */
 
@@ -47,6 +48,7 @@ interface Config {
   dryRun: boolean;
   concurrency: number;
   delay: number;
+  maxVideos: number;
   outputDir: string;
 }
 
@@ -57,6 +59,7 @@ function parseArgs(): Config {
     dryRun: false,
     concurrency: 2,
     delay: 2000,
+    maxVideos: 0,
     outputDir: GLSSD2_BASE,
   };
 
@@ -66,6 +69,7 @@ function parseArgs(): Config {
       case '--dry-run': config.dryRun = true; break;
       case '--concurrency': config.concurrency = parseInt(args[++i]); break;
       case '--delay': config.delay = parseInt(args[++i]); break;
+      case '--max-videos': config.maxVideos = parseInt(args[++i]); break;
       case '--output-dir': config.outputDir = args[++i]; break;
     }
   }
@@ -213,6 +217,7 @@ async function main() {
   if (config.company) console.log(`Company: ${config.company}`);
   console.log(`Concurrency: ${config.concurrency}`);
   console.log(`Delay: ${config.delay}ms`);
+  if (config.maxVideos > 0) console.log(`Max videos: ${config.maxVideos}`);
   if (config.dryRun) console.log('MODE: DRY RUN');
 
   // Discover videos
@@ -255,9 +260,14 @@ async function main() {
   }
 
   // Fetch transcripts
-  const toFetch = [...uniqueVideos.keys()].filter(
+  let toFetch = [...uniqueVideos.keys()].filter(
     id => !fs.existsSync(path.join(TRANSCRIPT_CACHE, `${id}.txt`))
   );
+
+  if (config.maxVideos > 0 && toFetch.length > config.maxVideos) {
+    console.log(`\nLimiting to ${config.maxVideos} of ${toFetch.length} uncached videos`);
+    toFetch = toFetch.slice(0, config.maxVideos);
+  }
 
   let succeeded = 0;
   let failed = 0;

@@ -295,3 +295,89 @@ Built a complete internal infringement scoring engine to replace/supplement Patl
 - **Affiliate matching** uses `matchAffiliate()` in `uspto-import-service.ts` — prefix-matches assignee against `AffiliatePattern` table, with word-boundary enforcement
 - **Prisma batch size limit**: Keep `findMany` with relations under ~20K rows per batch to avoid napi serialization failures
 - **Expression index**: `lower(assignee) text_pattern_ops` on `indexed_patents` for fast case-insensitive prefix matching; created in `scripts/create-uspto-db.ts` since Prisma cannot define expression indexes
+
+---
+
+## Recent Changes (April 10-13, 2026)
+
+### 24. Batch Scoring Pipeline Enhancements
+**Files created:** `scripts/preflight-batch.ts`, `scripts/summarize-production-docs.ts`, `scripts/summarize-control-group-docs.ts`, `scripts/test-scoring-variants.ts`
+**Files modified:** `scripts/score-infringement.ts`, `scripts/score-control-group.ts`
+
+**Score Engine Upgrades (`score-infringement.ts`):**
+- `--pass0` flag: Summary-based pre-screening before pass1 (reduces unnecessary pass1 calls)
+- `--pass0-threshold <n>`: Minimum pass0 score to proceed to pass1 (default: 0.10)
+- `--multi-doc`: Aggregates multiple product docs for pass2 deep analysis
+- `--max-docs-per-product <n>`: Caps docs per product to control pair explosion
+- `--from-targets <csv>`: Reads target CSVs with Target/TargetProduct/Patent columns
+- `--force`: Re-scores even if cached score file exists
+- CPC→super-sector resolution FIXED: reads `sector-taxonomy-cpc-only.json` with longest-prefix matching, then maps via `super-sectors.json`
+- `formatSummaryForPrompt()` FIXED: now includes interfaces, signalProcessing, dataHandling, securityFeatures
+
+**Preflight (`preflight-batch.ts`):**
+- Dry-run cost estimator for scoring batches
+- Shows pair counts, doc coverage, estimated costs per super-sector
+- `--max-docs-per-product` support for cost estimation
+
+**Summarizer (`summarize-production-docs.ts`):**
+- Haiku-based product doc summarization (~$0.002/doc vs $0.02 Sonnet)
+- `--model <id>` flag for model override
+- Structured JSON extraction of product capabilities
+
+**Scoring Variant Test Harness (`test-scoring-variants.ts`):**
+- Tests baseline/summary/multi-doc/patent-guided scoring variants
+- Multi-doc helps networking products with rich doc sets (Panorama err 0.170→0.076)
+- Summary helps moderate overscoring and boost thin-doc pass1 scores
+
+### 25. YouTube HTML Contamination Fixes
+**Files modified:** `scripts/score-infringement.ts`, `scripts/extract-youtube-transcripts.ts`
+
+- Content-based YouTube HTML detection and filtering in doc discovery
+- Fixed junk HTML contamination affecting scoring quality
+- Added `--max-videos` flag to transcript extractor for batch limiting
+- Slug aliases for company name matching
+
+### 26. Production Scoring Batches (April 12-13, 2026)
+Ran 6 scoring batches totaling 1,575 pairs, ~$48:
+
+| Batch | Description | Pairs | Pass2 | High (>=0.65) | Top Score |
+|-------|-------------|------:|------:|--------------:|----------:|
+| D | Mid-cap stale rescore (Cisco, Juniper, Arista, HPE) | 352 | 311 | 229 | 0.994 |
+| E | Mega-cap stale rescore | 159 | 130 | 97 | 0.980 |
+| F1 | Security: Fortinet+CrowdStrike+SonicWall | 350 | 106 | 45 | 0.933 |
+| F2 | Security: McAfee+SentinelOne+Splunk+Ping+Zscaler | 363 | 94 | 44 | 0.956 |
+| G1 | Wireless: Mavenir+Parallel+Sierra | 48 | 14 | 6 | 0.864 |
+| G2 | Wireless: Cambium+Ubiquiti+Baicells+Airspan+JMA+Ruckus | 303 | 129 | 35 | 0.951 |
+
+**Key findings:**
+- 59 power patents hitting 3+ companies
+- US10749736 broadest: 9 companies
+- Ping Identity surprise star: 23 high-signal pairs
+- AWS 100% hit rate (14/14 >= 0.65)
+- Cisco CBR-8 #1 pair globally at 0.994
+
+### 27. Vendor Summary Package (April 13, 2026)
+**Output:** `output/vendor-summary-2026-04-13/`
+
+Generated comprehensive scoring summary with 5 files:
+- `portfolio-scoring-summary.md` — 991-line report: executive summary, super-sector/sector aggregates, top 20 patents & targets per super-sector, global top 50 pairs, 59 power patents, 146-company leaderboard, taxonomy gap analysis, enhancement roadmap
+- `all-current-scores.csv` — 3,764 v3 score rows
+- `company-exposure-summary.csv` — 147 companies with actionable counts, hit rates
+- `top-pairs-by-sector.csv` — Top 10 pairs per sector
+- `enhancement-roadmap.csv` — 7 prioritized action items
+
+**Portfolio totals:** 3,763 current v3 scores, 542 actionable (>=0.65, 14.4%), across 146 companies.
+
+### Identified Taxonomy Issues
+1. **SEMICONDUCTOR missing 6 sectors**: semiconductor-bonding, -devices, -fabrication, -interconnect, -multichip, -thermal-emi NOT in `super-sectors.json` — 313 patents default to COMPUTING
+2. **COMPUTING hollowed**: computing-runtime, computing-systems, computing-ui moved to VIRTUALIZATION
+3. **Config drift**: `sector-taxonomy-cpc-only.json` uses "NETWORKING", `super-sectors.json` uses "SDN_NETWORK"
+
+### Enhancement Roadmap (prioritized)
+1. Fix Taxonomy — Add 6 missing semiconductor sectors ($0, config change)
+2. Re-score 582 stale v1 pairs (~$12)
+3. Score 85 unscored companies with docs (~$34 full, strategic sampling first)
+4. Expand 41 companies with <5 pairs (~$12)
+5. Fix Config Drift — NETWORKING/SDN_NETWORK alignment ($0)
+6. Review COMPUTING/VIRTUALIZATION taxonomy ($0)
+7. Expand AUDIO coverage (~$2)

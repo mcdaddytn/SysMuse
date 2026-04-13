@@ -25,7 +25,7 @@
  *   --from-targets <csv-path>
  *
  *   # Filter by super-sector (used with --from-targets)
- *   --super-sector <key>  e.g., SDN_NETWORK, WIRELESS, SECURITY
+ *   --super-sector <key>  e.g., NETWORKING, WIRELESS, SECURITY
  *
  *   # Calibration mode: only score pairs that have existing Patlytics scores
  *   --calibrate
@@ -378,13 +378,14 @@ function getSuperSectorConfig(): any {
   return _superSectorConfig;
 }
 
-/** Map sector name → super-sector key using config/super-sectors.json */
+/** Map sector name → super-sector key using config/super-sectors.json.
+ *  Returns null for unrecognized sectors so CPC-based fallback can fire. */
 function sectorToSuperSector(sectorName: string): string | null {
   const config = getSuperSectorConfig();
   for (const [key, ss] of Object.entries(config.superSectors) as [string, any][]) {
     if (ss.sectors.includes(sectorName)) return key;
   }
-  return config.unmappedSectorDefault || null;
+  return null;
 }
 
 /** Map CPC codes → sector (longest prefix match) → super-sector using taxonomy config */
@@ -1483,7 +1484,7 @@ async function main() {
     const bySuperSector = new Map<string, number>();
     for (const p of pairs) {
       byCompany.set(p.companyName, (byCompany.get(p.companyName) || 0) + 1);
-      const ss = p.sector ? (sectorToSuperSector(p.sector) || 'UNKNOWN') : (cpcToSuperSector(p.patentId) || 'UNKNOWN');
+      const ss = (p.sector ? sectorToSuperSector(p.sector) : null) || cpcToSuperSector(p.patentId) || 'UNKNOWN';
       bySuperSector.set(ss, (bySuperSector.get(ss) || 0) + 1);
     }
     console.log('\nPairs by company:');

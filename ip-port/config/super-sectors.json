@@ -1,6 +1,6 @@
 {
   "description": "Super-sector groupings for portfolio-level views - comprehensive mapping",
-  "version": "4.1",
+  "version": "4.2",
   "created": "2026-01-21",
   "notes": "Comprehensive mapping covering all sector names from both v1 and v2 schemes",
 
@@ -41,11 +41,8 @@
 
     "VIRTUALIZATION": {
       "displayName": "Virtualization & Cloud",
-      "description": "Virtual machines, hypervisors, containers, cloud orchestration, and configuration",
+      "description": "Virtual machines, hypervisors, containers, cloud orchestration, and configuration (legacy v1 sectors only)",
       "sectors": [
-        "computing-runtime",
-        "computing-systems",
-        "computing-ui",
         "virtualization",
         "vm-deployment",
         "vm-emulation",
@@ -76,7 +73,7 @@
       "damagesTier": "High"
     },
 
-    "SDN_NETWORK": {
+    "NETWORKING": {
       "displayName": "SDN & Network Infrastructure",
       "description": "Software-defined networking, routing, switching, QoS, and network infrastructure",
       "sectors": [
@@ -171,8 +168,11 @@
 
     "COMPUTING": {
       "displayName": "Computing & Data",
-      "description": "General computing, databases, software engineering, and data retrieval",
+      "description": "General computing, runtime, systems, databases, software engineering, and data retrieval",
       "sectors": [
+        "computing-runtime",
+        "computing-systems",
+        "computing-ui",
         "data-retrieval",
         "fintech-business",
         "computing",
@@ -223,6 +223,12 @@
       "sectors": [
         "semiconductor",
         "semiconductor-modern",
+        "semiconductor-bonding",
+        "semiconductor-devices",
+        "semiconductor-fabrication",
+        "semiconductor-interconnect",
+        "semiconductor-multichip",
+        "semiconductor-thermal-emi",
         "analog-circuits",
         "memory-storage",
         "test-measurement",

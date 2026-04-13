@@ -296,8 +296,8 @@ function generateStrengths(
       strengths.push('Deep SECURITY concentration - targets high-value enterprise security market with clear product targets');
     } else if (sectorName === 'WIRELESS') {
       strengths.push('Strong WIRELESS presence - mobile/IoT market with high-volume device targets');
-    } else if (sectorName === 'SDN_NETWORK') {
-      strengths.push('SDN_NETWORK focus - targets cloud infrastructure and networking equipment vendors');
+    } else if (sectorName === 'NETWORKING') {
+      strengths.push('NETWORKING focus - targets cloud infrastructure and networking equipment vendors');
     }
   }
 
@@ -493,7 +493,7 @@ function generateReport(data: BatchOutput, analyses: BatchAnalysis[]): string {
     let rationale = '';
     if (sector === 'SECURITY') rationale = 'Portfolio strength, clear enterprise targets';
     else if (sector === 'WIRELESS') rationale = 'Mobile/IoT device volume';
-    else if (sector === 'SDN_NETWORK') rationale = 'Cloud infrastructure growth';
+    else if (sector === 'NETWORKING') rationale = 'Cloud infrastructure growth';
     else if (sector === 'COMPUTING') rationale = 'Broad applicability';
     else if (sector === 'VIRTUALIZATION') rationale = 'Enterprise cloud infrastructure';
     else if (sector === 'VIDEO_STREAMING') rationale = 'Consumer electronics targets';

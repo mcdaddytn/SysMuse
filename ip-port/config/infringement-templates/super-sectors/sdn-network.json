@@ -3,7 +3,7 @@
   "name": "SDN & Network Infringement",
   "description": "Infringement scoring overrides for SDN & Network Infrastructure patents. Adds networking-specific terminology mappings and necessary-implication guidance.",
   "level": "super_sector",
-  "superSectorKey": "SDN_NETWORK",
+  "superSectorKey": "NETWORKING",
   "inheritsFrom": "infringement-default",
   "version": 1,
   "scoringGuidance": [

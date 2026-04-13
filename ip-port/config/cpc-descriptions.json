@@ -206,7 +206,7 @@
     "_comment": "Primary CPC codes associated with each super-sector",
     "SECURITY": ["H04L63", "H04L9", "G06F21", "H04K", "H04W12"],
     "VIRTUALIZATION": ["G06F9", "G06F11", "H04L41", "H04L43"],
-    "SDN_NETWORK": ["H04L45", "H04L47", "H04L49", "H04L12", "H04L67", "H04L69"],
+    "NETWORKING": ["H04L45", "H04L47", "H04L49", "H04L12", "H04L67", "H04L69"],
     "WIRELESS": ["H04W", "H04B", "H04B7", "H04J"],
     "VIDEO_STREAMING": ["H04N", "H04N19", "H04N21", "H04L65"],
     "COMPUTING": ["G06F", "G06F16", "G06Q"],

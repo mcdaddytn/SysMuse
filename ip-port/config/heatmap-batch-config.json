@@ -46,7 +46,7 @@
       "excludeSuperSectors": ["SECURITY"],
       "targetPatentsPerSuperSector": {
         "WIRELESS": 20,
-        "SDN_NETWORK": 20,
+        "NETWORKING": 20,
         "VIRTUALIZATION": 15,
         "VIDEO_STREAMING": 12,
         "COMPUTING": 10,
@@ -67,7 +67,7 @@
 
   "sectorRotationOrder": [
     "WIRELESS",
-    "SDN_NETWORK",
+    "NETWORKING",
     "VIRTUALIZATION",
     "VIDEO_STREAMING",
     "COMPUTING",

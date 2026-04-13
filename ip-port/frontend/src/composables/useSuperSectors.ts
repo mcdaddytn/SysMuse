@@ -29,7 +29,7 @@ const COLOR_BY_NAME: Record<string, string> = {
   WIRELESS: 'teal-7',
   AI_ML: 'green-7',
   VIRTUALIZATION: 'purple-7',
-  SDN_NETWORK: 'blue-7',
+  NETWORKING: 'blue-7',
   FAULT_TOLERANCE: 'amber-7',
   AUDIO: 'pink-7',
 };
